@@ -106,7 +106,7 @@ data class StabRecord(
  *   - Peek at next physical record; if same type, drop `\` and concatenate.
  *   - Repeat until no more `\` or different type.
  *   - Continuation records are consumed (not yielded separately).
- * - Truncated tail (size % 12 != 0) is logged and skipped.
+ * - Truncated tail (size % 12 != 0): callers should check [Result.truncatedTail] and log/handle as appropriate.
  */
 class StabReader(
     private val stab: ByteArray,
@@ -116,6 +116,10 @@ class StabReader(
     data class Result(
         val records: List<StabRecord>,
         val recordCount: Int,
+        /**
+         * Number of unprocessed bytes at the end of the `.stab` section due to truncation
+         * (size % 12 != 0). Callers should check this value and log/handle as appropriate.
+         */
         val truncatedTail: Int,
     )
 
@@ -132,7 +136,8 @@ class StabReader(
 
         while (buf.remaining() >= STAB_RECORD_SIZE) {
             val recordIndex = physicalIndex
-            val (nStrx, nType, nOther, nDesc, nValue) = decodeRecord(buf)
+            val header = decodeRecord(buf)
+            val (nStrx, nType, nOther, nDesc, nValue) = header
             physicalIndex++
 
             val type = StabType.fromCode(nType)
@@ -156,26 +161,28 @@ class StabReader(
             }
 
             // Extract base name
-            var name = cstring(stabstr, cuOff + nStrx)
+            val cuEnd = if (cuSize > 0) cuOff + cuSize else stabstr.size
+            var name = cstring(stabstr, cuOff + nStrx, cuEnd)
 
             // Handle continuation chains
             if (type in TYPES_WITH_CONTINUATION && name.endsWith("\\")) {
                 name = name.dropLast(1) // Drop trailing backslash
 
-                // Merge continuation records
+                // Merge continuation records.
+                // Spec says continuation records carry 0 in non-string fields; we trust this without asserting (gcc-conformant input only).
                 while (buf.remaining() >= STAB_RECORD_SIZE) {
                     val peekPos = buf.position()
-                    val (contStrx, contType, _, _, _) = decodeRecord(buf)
+                    val contHeader = decodeRecord(buf)
 
                     // Check if continuation is for the same type
-                    if (StabType.fromCode(contType) != type) {
+                    if (StabType.fromCode(contHeader.type) != type) {
                         // Not a continuation; back up
                         buf.position(peekPos)
                         break
                     }
 
                     // It's a continuation; consume it
-                    val contName = cstring(stabstr, cuOff + contStrx)
+                    val contName = cstring(stabstr, cuOff + contHeader.strx, cuEnd)
                     // Drop trailing backslash if present before concatenating
                     name +=
                         if (contName.endsWith("\\")) {
@@ -206,9 +213,6 @@ class StabReader(
         }
 
         val truncatedTail = buf.remaining()
-        if (truncatedTail > 0) {
-            // Log warning: truncated tail present
-        }
 
         return Result(
             records = records,
@@ -217,25 +221,26 @@ class StabReader(
         )
     }
 
-    private fun decodeRecord(buf: ByteBuffer): Tuple5<Int, Int, Int, Int, Long> {
+    private fun decodeRecord(buf: ByteBuffer): RawHeader {
         val nStrx = buf.int
         val nType = buf.get().toInt() and 0xFF
         val nOther = buf.get().toInt() and 0xFF
         val nDesc = buf.short.toInt() and 0xFFFF
         val nValue = buf.int.toLong()
-        return Tuple5(nStrx, nType, nOther, nDesc, nValue)
+        return RawHeader(nStrx, nType, nOther, nDesc, nValue)
     }
 
     private fun cstring(
         bytes: ByteArray,
         start: Int,
+        endExclusive: Int,
     ): String {
-        if (start < 0 || start >= bytes.size) {
+        if (start < 0 || start >= endExclusive) {
             return ""
         }
-        // Find NUL terminator starting from 'start'
+        // Find NUL terminator starting from 'start', bounded by endExclusive
         var idx = start
-        while (idx < bytes.size && bytes[idx] != 0.toByte()) {
+        while (idx < endExclusive && bytes[idx] != 0.toByte()) {
             idx++
         }
         val len = idx - start
@@ -263,12 +268,12 @@ class StabReader(
 }
 
 /**
- * Simple 5-tuple type for destructuring record fields.
+ * Raw stab record header fields, before type interpretation.
  */
-private data class Tuple5<A, B, C, D, E>(
-    val a: A,
-    val b: B,
-    val c: C,
-    val d: D,
-    val e: E,
+private data class RawHeader(
+    val strx: Int,
+    val type: Int,
+    val other: Int,
+    val desc: Int,
+    val value: Long,
 )
