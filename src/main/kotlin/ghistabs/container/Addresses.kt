@@ -4,7 +4,6 @@ import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.SourceType
 import ghidra.program.model.symbol.Symbol
-import ghidra.program.model.symbol.SymbolIterator
 import ghidra.program.model.symbol.SymbolTable
 
 /**
@@ -63,6 +62,9 @@ internal class SymbolTableAdapter(
  * Creates `IMPORTED` labels at stab-derived addresses when no symbol exists.
  * Never re-parses the PE/ELF/COFF symbol table directly — Ghidra has already
  * populated the symbol table.
+ *
+ * **Transactional requirement:** Callers must hold a Program transaction before invoking
+ * [recordFromStab], since it may call `labelStore.createLabel()`, which mutates Program state.
  */
 class AddressResolver(
     private val labelStore: LabelStore,
@@ -80,13 +82,15 @@ class AddressResolver(
      * create an `IMPORTED` label.
      *
      * Idempotent: subsequent calls with the same (name, addr) are no-ops.
+     *
+     * **Transactional requirement:** Caller must hold a Program transaction, since
+     * [labelStore.createLabel] mutates Program state.
      */
     fun recordFromStab(
         name: String,
         addr: Address,
     ) {
         if (name.isBlank()) {
-            stabMap.putIfAbsent(name, addr)
             return
         }
         val existing = stabMap[name]
