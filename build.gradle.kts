@@ -4,6 +4,8 @@ plugins {
 
 dependencies {
     implementation(kotlin("stdlib"))
+    testImplementation("org.junit.jupiter:junit-jupiter:5.11.3")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
 repositories {
@@ -14,6 +16,13 @@ kotlin {
     jvmToolchain(21)
 }
 
+tasks.test {
+    useJUnitPlatform()
+    testLogging {
+        events("passed", "skipped", "failed")
+    }
+}
+
 val ghidraInstallDir =
     System.getenv("GHIDRA_INSTALL_DIR") ?: project.properties["GHIDRA_INSTALL_DIR"]?.toString() ?: "/opt/ghidra"
 
@@ -21,7 +30,6 @@ apply(from = File(ghidraInstallDir).canonicalPath + "/support/buildExtension.gra
 
 tasks.register("distributeExtension") {
     group = "Ghidra"
-//    apply(from = File(ghidraInstallDir).canonicalPath + "/support/buildExtension.gradle")
     dependsOn(":buildExtension")
 }
 
