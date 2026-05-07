@@ -1,5 +1,8 @@
 package ghistabs.container
 
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+
 /**
  * On-disk size in bytes of a single stab record (Sun a.out / PE-COFF / ELF).
  * Independent of host endianness.
@@ -89,4 +92,183 @@ data class StabRecord(
     val desc: Int,
     val value: Long,
     val name: String,
+)
+
+/**
+ * Reads stab records from raw `.stab` and `.stabstr` byte arrays.
+ * Handles per-CU offset tracking and `\`-continuation merging.
+ *
+ * Algorithm:
+ * - Maintains `cuOff` (current CU start in stabstr) and `cuSize` (current CU stabstr size).
+ * - When N_UNDF record is encountered: advance `cuOff += cuSize; cuSize = n_value`.
+ * - For name-bearing records: compute `nameStart = cuOff + n_strx`; read NUL-terminated string.
+ * - If type is in TYPES_WITH_CONTINUATION and string ends in `\`:
+ *   - Peek at next physical record; if same type, drop `\` and concatenate.
+ *   - Repeat until no more `\` or different type.
+ *   - Continuation records are consumed (not yielded separately).
+ * - Truncated tail (size % 12 != 0) is logged and skipped.
+ */
+class StabReader(
+    private val stab: ByteArray,
+    private val stabstr: ByteArray,
+    private val littleEndian: Boolean = true,
+) {
+    data class Result(
+        val records: List<StabRecord>,
+        val recordCount: Int,
+        val truncatedTail: Int,
+    )
+
+    fun readAll(): Result {
+        val records = mutableListOf<StabRecord>()
+        val buf =
+            ByteBuffer.wrap(stab).apply {
+                order(if (littleEndian) ByteOrder.LITTLE_ENDIAN else ByteOrder.BIG_ENDIAN)
+            }
+
+        var cuOff = 0
+        var cuSize = 0
+        var physicalIndex = 0
+
+        while (buf.remaining() >= STAB_RECORD_SIZE) {
+            val recordIndex = physicalIndex
+            val (nStrx, nType, nOther, nDesc, nValue) = decodeRecord(buf)
+            physicalIndex++
+
+            val type = StabType.fromCode(nType)
+
+            // Handle N_UNDF: CU header record
+            if (type == StabType.N_UNDF) {
+                cuOff += cuSize
+                cuSize = nValue.toInt()
+                records.add(
+                    StabRecord(
+                        recordIndex = recordIndex,
+                        type = type,
+                        rawType = nType,
+                        other = nOther,
+                        desc = nDesc,
+                        value = nValue,
+                        name = "",
+                    ),
+                )
+                continue
+            }
+
+            // Extract base name
+            var name = cstring(stabstr, cuOff + nStrx)
+
+            // Handle continuation chains
+            if (type in TYPES_WITH_CONTINUATION && name.endsWith("\\")) {
+                name = name.dropLast(1) // Drop trailing backslash
+
+                // Merge continuation records
+                while (buf.remaining() >= STAB_RECORD_SIZE) {
+                    val peekPos = buf.position()
+                    val (contStrx, contType, _, _, _) = decodeRecord(buf)
+
+                    // Check if continuation is for the same type
+                    if (StabType.fromCode(contType) != type) {
+                        // Not a continuation; back up
+                        buf.position(peekPos)
+                        break
+                    }
+
+                    // It's a continuation; consume it
+                    val contName = cstring(stabstr, cuOff + contStrx)
+                    // Drop trailing backslash if present before concatenating
+                    name +=
+                        if (contName.endsWith("\\")) {
+                            contName.dropLast(1)
+                        } else {
+                            contName
+                        }
+                    physicalIndex++
+
+                    // Stop if no more backslashes
+                    if (!contName.endsWith("\\")) {
+                        break
+                    }
+                }
+            }
+
+            records.add(
+                StabRecord(
+                    recordIndex = recordIndex,
+                    type = type,
+                    rawType = nType,
+                    other = nOther,
+                    desc = nDesc,
+                    value = nValue,
+                    name = name,
+                ),
+            )
+        }
+
+        val truncatedTail = buf.remaining()
+        if (truncatedTail > 0) {
+            // Log warning: truncated tail present
+        }
+
+        return Result(
+            records = records,
+            recordCount = physicalIndex,
+            truncatedTail = truncatedTail,
+        )
+    }
+
+    private fun decodeRecord(buf: ByteBuffer): Tuple5<Int, Int, Int, Int, Long> {
+        val nStrx = buf.int
+        val nType = buf.get().toInt() and 0xFF
+        val nOther = buf.get().toInt() and 0xFF
+        val nDesc = buf.short.toInt() and 0xFFFF
+        val nValue = buf.int.toLong()
+        return Tuple5(nStrx, nType, nOther, nDesc, nValue)
+    }
+
+    private fun cstring(
+        bytes: ByteArray,
+        start: Int,
+    ): String {
+        if (start < 0 || start >= bytes.size) {
+            return ""
+        }
+        // Find NUL terminator starting from 'start'
+        var idx = start
+        while (idx < bytes.size && bytes[idx] != 0.toByte()) {
+            idx++
+        }
+        val len = idx - start
+        return if (len > 0) String(bytes, start, len, Charsets.UTF_8) else ""
+    }
+
+    companion object {
+        /**
+         * Read .stab and .stabstr from a Ghidra Program. Returns null if either block is missing.
+         * Pure read — does not mutate the program.
+         */
+        fun fromProgram(program: ghidra.program.model.listing.Program): Result? {
+            val mem = program.memory
+            val stabBlock = mem.getBlock(".stab") ?: return null
+            val stabstrBlock = mem.getBlock(".stabstr") ?: return null
+            val stab = ByteArray(stabBlock.size.toInt())
+            val stabstr = ByteArray(stabstrBlock.size.toInt())
+            stabBlock.getBytes(stabBlock.start, stab)
+            stabstrBlock.getBytes(stabstrBlock.start, stabstr)
+            // x86 PE / x86 ELF: little-endian.
+            val littleEndian = !program.memory.isBigEndian
+            return StabReader(stab, stabstr, littleEndian).readAll()
+        }
+    }
+}
+
+/**
+ * Simple 5-tuple type for destructuring record fields.
+ */
+private data class Tuple5<A, B, C, D, E>(
+    val a: A,
+    val b: B,
+    val c: C,
+    val d: D,
+    val e: E,
 )
