@@ -235,7 +235,7 @@ class StabReader(
         start: Int,
         endExclusive: Int,
     ): String {
-        if (start < 0 || start >= endExclusive) {
+        if (start !in 0 until endExclusive) {
             return ""
         }
         // Find NUL terminator starting from 'start', bounded by endExclusive
