@@ -5,6 +5,8 @@ plugins {
 dependencies {
     implementation(kotlin("stdlib"))
     testImplementation("org.junit.jupiter:junit-jupiter:5.11.3")
+    testImplementation("org.mockito.kotlin:mockito-kotlin:5.4.0")
+    testImplementation("org.mockito:mockito-core:5.14.2")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
