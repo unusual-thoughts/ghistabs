@@ -20,6 +20,8 @@ class ClassBuilder(
     private val sink: BookmarkSink,
     /** All struct ASTs harvested in Pass A, indexed by name. */
     private val structAstsByName: Map<String, TypeDecl.Struct>,
+    /** All type ASTs indexed by TypeId for inheritance resolution. */
+    private val typeAstsById: Map<ghistabs.parser.TypeId, TypeAst>? = null,
 ) {
     private val source = SourceType.IMPORTED
     private val symtab = program.symbolTable
@@ -41,7 +43,7 @@ class ClassBuilder(
 
         // 2. Insert {vfptr} first if class is polymorphic.
         val isPoly = body.hasVTablePointerMarker || body.methods.any { it.virt == VirtKind.VIRTUAL }
-        if (isPoly) ensureVfptrFirstField(structDt, name)
+        if (isPoly) ensureVfptrFirstField(structDt, name, category)
 
         // 3. Create or upgrade the GhidraClass namespace.
         val ns = ensureClassNamespace(name)
@@ -82,13 +84,14 @@ class ClassBuilder(
     private fun ensureVfptrFirstField(
         structDt: Structure,
         className: String,
+        category: CategoryPath,
     ) {
         val vfptrName = ClassUtils.VFPTR // "{vfptr}"
         if (structDt.numComponents > 0 && structDt.getComponent(0).fieldName == vfptrName) return
         val vtableType =
-            dtm.getDataType(CategoryPath.ROOT, "${className}_vtable")
+            dtm.getDataType(category, "${className}_vtable")
                 ?: StructureDataType(
-                    CategoryPath.ROOT,
+                    category,
                     "${className}_vtable",
                     0,
                     dtm,
@@ -130,22 +133,30 @@ class ClassBuilder(
         if (sig is TypeDecl.FunctionT) {
             val ret = typeRegistry.dataTypeFor(sig.ret)
             if (ret != null) func.setReturnType(ret, source)
-            val params =
-                sig.params.mapIndexed { i, p ->
-                    ghidra.program.model.listing.ParameterImpl(
-                        "arg$i",
-                        typeRegistry.dataTypeFor(p) ?: ghidra.program.model.data.Undefined4DataType.dataType,
-                        program,
-                        source,
-                    )
-                }
-            if (params.isNotEmpty()) {
+
+            // Only replace parameters if all types resolve to non-null. This prevents
+            // overwriting better Phase 4 assignments.
+            val paramTypes = sig.params.map { typeRegistry.dataTypeFor(it) }
+            val allResolved = paramTypes.all { it != null }
+
+            if (allResolved && paramTypes.isNotEmpty()) {
+                val params =
+                    paramTypes.mapIndexed { i, pdt ->
+                        ghidra.program.model.listing.ParameterImpl(
+                            "arg$i",
+                            pdt ?: ghidra.program.model.data.Undefined4DataType.dataType,
+                            program,
+                            source,
+                        )
+                    }
                 func.replaceParameters(
                     params,
                     ghidra.program.model.listing.Function.FunctionUpdateType.DYNAMIC_STORAGE_FORMAL_PARAMS,
                     true,
                     source,
                 )
+            } else if (paramTypes.any { it == null }) {
+                sink.log("method-param-unresolved", "$className::${m.name}: some parameter types unresolved; keeping Phase 4 assignment")
             }
         }
     }
@@ -170,6 +181,8 @@ class ClassBuilder(
         mangled: String,
         className: String,
     ): String? {
+        // Match Itanium-ABI ctor/dtor encoding: _ZN…C[123]Ev?… or _ZN…D[012]Ev?…
+        // The variant digit is followed by parameter encoding (E, Ev, etc).
         val ctorRe = Regex("""C([123])E[a-zA-Z_0-9$]*$""")
         val dtorRe = Regex("""D([012])E[a-zA-Z_0-9$]*$""")
         ctorRe.find(mangled)?.let { return "${className}_C${it.groupValues[1]}" }
@@ -221,6 +234,12 @@ class ClassBuilder(
         // 3. Resolve _ZTV<class> address.
         val mangledItanium = "_ZTV" + itaniumMangleClassName(className)
         val mangledGcc2 = "_vt\$$className"
+
+        // If class name contains template args, log the limitation before trying resolution
+        if ('<' in className) {
+            sink.log("vtable-templated-skip", "class '$className' has template args; _ZTV lookup unsupported in v1")
+        }
+
         val addr =
             resolver.resolve(mangledItanium) ?: resolver.resolve(mangledGcc2) ?: run {
                 sink.log("vtable-unresolved", "no _ZTV symbol for $className")
@@ -244,7 +263,11 @@ class ClassBuilder(
                         ghidra.program.model.listing.CodeUnit.PLATE_COMMENT,
                         "virtual ${m.name}; ${className}_vtable offset $off",
                     )
+                } else {
+                    sink.log("vtable-virtual-unresolved", "no Function at $mAddr for virtual method ${m.name} in $className")
                 }
+            } else {
+                sink.log("vtable-virtual-unresolved", "virtual method '${m.name}' in $className: no mangled symbol or unresolved address")
             }
             off += ptrSize
         }
@@ -304,12 +327,21 @@ class ClassBuilder(
     }
 
     private fun resolveBaseAst(typeDecl: TypeDecl): TypeDecl.Struct? {
-        // Extract the name from the TypeDecl. For Ref, we need to look it up.
-        // For now, we handle the simple cases that appear in the corpus.
         return when (typeDecl) {
             is TypeDecl.Ref -> {
-                // TypeDecl.Ref(id) — we'd need a byId-to-name lookup. For v1, we punt.
-                null
+                // Look up by TypeId using the byId map
+                val ast = typeAstsById?.get(typeDecl.id) ?: return null
+                ast.body as? TypeDecl.Struct
+            }
+
+            is TypeDecl.XRef -> {
+                // Cross-reference by tagName: look in structAstsByName
+                structAstsByName[typeDecl.tagName]
+            }
+
+            is TypeDecl.InlineDef -> {
+                // Inline definition: extract the struct body directly
+                typeDecl.body as? TypeDecl.Struct
             }
 
             else -> {
