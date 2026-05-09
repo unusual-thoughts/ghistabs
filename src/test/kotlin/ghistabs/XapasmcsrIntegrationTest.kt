@@ -1,13 +1,9 @@
 package ghistabs
 
 import ghidra.app.util.importer.MessageLog
-import ghidra.program.model.address.Address
 import ghidra.program.model.address.AddressSpace
-import ghidra.program.model.listing.BookmarkManager
+import ghidra.program.model.listing.*
 import ghidra.program.model.listing.Function
-import ghidra.program.model.listing.FunctionManager
-import ghidra.program.model.listing.Listing
-import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.SymbolTable
 import ghidra.util.task.TaskMonitor
 import ghistabs.container.StabRecord
@@ -15,8 +11,8 @@ import ghistabs.container.StabType
 import ghistabs.importer.ImportContext
 import ghistabs.importer.StabsImporter
 import ghistabs.importer.StabsOptions
-import org.junit.jupiter.api.Assertions.*
-import org.junit.jupiter.api.Assumptions.*
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
@@ -62,16 +58,16 @@ class XapasmcsrIntegrationTest {
         // - Should have records
         assertTrue(records.isNotEmpty(), "Synthetic corpus should have records")
         // - Should have at least one compilation unit (N_SO)
-        val compilationUnits = records.filter { it.type == ghistabs.container.StabType.N_SO }
+        val compilationUnits = records.filter { it.type == StabType.N_SO }
         assertTrue(compilationUnits.isNotEmpty(), "Synthetic corpus should have at least one compilation unit")
         // - Should have struct/class definitions
-        val typeDefinitions = records.filter { it.type == ghistabs.container.StabType.N_LSYM }
+        val typeDefinitions = records.filter { it.type == StabType.N_LSYM }
         assertTrue(typeDefinitions.size >= 3, "Synthetic corpus should have at least 3 type definitions")
         // - Should have functions
-        val functions = records.filter { it.type == ghistabs.container.StabType.N_FUN }
+        val functions = records.filter { it.type == StabType.N_FUN }
         assertTrue(functions.isNotEmpty(), "Synthetic corpus should have at least one function")
         // - Should have global variables
-        val globals = records.filter { it.type == ghistabs.container.StabType.N_GSYM }
+        val globals = records.filter { it.type == StabType.N_GSYM }
         assertTrue(globals.isNotEmpty(), "Synthetic corpus should have at least one global variable")
     }
 
@@ -168,9 +164,25 @@ class XapasmcsrIntegrationTest {
             // Struct 3: Color (enum-like)
             StabRecord(3, StabType.N_LSYM, 0x100, 0, 0, 0, "Color:t(0,4)=eRED:0,GREEN:1,BLUE:2,;"),
             // Class 1: Shape (with virtual method)
-            StabRecord(4, StabType.N_LSYM, 0x100, 0, 0, 0, "Shape:Tt(0,5)=s16_vptr$:(0,6),0,32;area:p(0,2),;display:p(0,2),;;"),
+            StabRecord(
+                4,
+                StabType.N_LSYM,
+                0x100,
+                0,
+                0,
+                0,
+                "Shape:Tt(0,5)=s16_vptr$:(0,6),0,32;area:p(0,2),;display:p(0,2),;;",
+            ),
             // Class 2: Rectangle (inherits from Shape)
-            StabRecord(5, StabType.N_LSYM, 0x100, 0, 0, 0, "Rectangle:Tt(0,7)=s24!0,(0,5);width:(0,2),64,32;height:(0,2),96,32;;"),
+            StabRecord(
+                5,
+                StabType.N_LSYM,
+                0x100,
+                0,
+                0,
+                0,
+                "Rectangle:Tt(0,7)=s24!0,(0,5);width:(0,2),64,32;height:(0,2),96,32;;",
+            ),
             // Functions with parameters and locals
             StabRecord(6, StabType.N_FUN, 0x400, 0, 0, 0, "main:F(0,2)"),
             StabRecord(7, StabType.N_PSYM, 0x400, 0, 0, 0, "argc:p(0,2)"),

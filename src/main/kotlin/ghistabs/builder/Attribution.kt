@@ -29,7 +29,7 @@ object Attribution {
         definingCUs: Set<String>,
     ): CategoryPath {
         // 1. Check if ANY definingCU path matches STD_MARKERS
-        val stdMatch = definingCUs.mapNotNull { stdBasename(it) }.firstOrNull()
+        val stdMatch = definingCUs.firstNotNullOfOrNull { stdBasename(it) }
         if (stdMatch != null) {
             return CategoryPath("/std/$stdMatch")
         }
@@ -52,7 +52,7 @@ object Attribution {
         }
 
         // Otherwise: canonical CU is lex-first basename
-        val canonicalCu = basename(definingCUs.sorted().first())
+        val canonicalCu = basename(definingCUs.minOf { it })
         return CategoryPath("/$canonicalCu/instantiations")
     }
 
@@ -86,13 +86,13 @@ object Attribution {
         val endIdx = current.indexOf('/')
         val segment = if (endIdx == -1) current else current.substring(0, endIdx)
         val noExt = segment.substringBeforeLast('.')
-        return if (noExt.isNotEmpty()) noExt else segment.ifEmpty { null }
+        return noExt.ifEmpty { segment.ifEmpty { null } }
     }
 
     private fun basename(path: String): String {
         // Drop directory prefix and extension
         val name = path.substringAfterLast('/')
         val noExt = name.substringBeforeLast('.')
-        return if (noExt.isEmpty()) name else noExt
+        return noExt.ifEmpty { name }
     }
 }

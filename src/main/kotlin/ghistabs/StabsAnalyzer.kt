@@ -8,6 +8,7 @@ import ghidra.framework.options.Options
 import ghidra.program.model.address.AddressSetView
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
+import ghistabs.StabsAnalyzer.Companion.STABS_DONE_OPTION
 import ghistabs.importer.ImportContext
 import ghistabs.importer.StabsImporter
 import ghistabs.importer.StabsOptions
@@ -83,14 +84,11 @@ class StabsAnalyzer :
     }
 
     companion object {
-        @JvmField
-        val STABS_DONE_OPTION: String = "Stabs Imported"
+        const val STABS_DONE_OPTION: String = "Stabs Imported"
 
-        @JvmField
-        val OPT_PLATE_COMMENTS: String = "Apply scope plate comments"
+        const val OPT_PLATE_COMMENTS: String = "Apply scope plate comments"
 
-        @JvmField
-        val OPT_VTABLES: String = "Synthesise vtable structs"
+        const val OPT_VTABLES: String = "Synthesise vtable structs"
 
         @JvmStatic
         fun isStabsDone(program: Program): Boolean = program.getOptions(Program.PROGRAM_INFO).getBoolean(STABS_DONE_OPTION, false)
