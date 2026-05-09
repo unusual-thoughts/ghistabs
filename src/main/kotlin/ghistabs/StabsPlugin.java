@@ -1,100 +1,63 @@
 package ghistabs;
 
 import docking.ActionContext;
-import docking.ComponentProvider;
 import docking.action.DockingAction;
-import docking.action.ToolBarData;
-import ghidra.app.ExamplesPluginPackage;
+import docking.action.MenuData;
 import ghidra.app.plugin.PluginCategoryNames;
 import ghidra.app.plugin.ProgramPlugin;
-import ghidra.framework.plugintool.Plugin;
+import ghidra.app.plugin.core.analysis.AutoAnalysisManager;
+import ghidra.framework.main.AnalyzerPluginPackage;
 import ghidra.framework.plugintool.PluginInfo;
 import ghidra.framework.plugintool.PluginTool;
 import ghidra.framework.plugintool.util.PluginStatus;
-import ghidra.util.HelpLocation;
+import ghidra.program.model.listing.Program;
 import ghidra.util.Msg;
-import resources.Icons;
-
-import javax.swing.*;
-import java.awt.*;
 
 /**
- * Provide class-level documentation that describes what this plugin does.
+ * Adds a 'Tools > Stabs > Re-import' action that clears the persistent done-flag
+ * and re-runs the StabsAnalyzer on the current program.
  */
 @PluginInfo(
-        status = PluginStatus.STABLE,
-        packageName = ExamplesPluginPackage.NAME,
-        category = PluginCategoryNames.EXAMPLES,
-        shortDescription = "Plugin short description goes here.",
-        description = "Plugin long description goes here."
+    status = PluginStatus.STABLE,
+    packageName = AnalyzerPluginPackage.NAME,
+    category = PluginCategoryNames.ANALYSIS,
+    shortDescription = "Re-run the STABS importer on the current program.",
+    description = "Adds a 'Tools > Stabs > Re-import' action that clears the persistent done-flag and re-runs the StabsAnalyzer."
 )
 public class StabsPlugin extends ProgramPlugin {
 
-    MyProvider provider;
-
-    /**
-     * Plugin constructor.
-     *
-     * @param tool The plugin tool that this plugin is added to.
-     */
     public StabsPlugin(PluginTool tool) {
         super(tool);
-
-        // Customize provider (or remove if a provider is not desired)
-        String pluginName = getName();
-        provider = new MyProvider(this, pluginName);
-
-        // Customize help (or remove if help is not desired)
-        String topicName = this.getClass().getPackage().getName();
-        String anchorName = "HelpAnchor";
-        provider.setHelpLocation(new HelpLocation(topicName, anchorName));
-    }
-
-    @Override
-    public void init() {
-        super.init();
-
-        // Acquire services if necessary
-    }
-
-    // If provider is desired, it is recommended to move it to its own file
-    private static class MyProvider extends ComponentProvider {
-
-        private JPanel panel;
-        private DockingAction action;
-
-        public MyProvider(Plugin plugin, String owner) {
-            super(plugin.getTool(), "Stabs Provider", owner);
-            buildPanel();
-            createActions();
-        }
-
-        // Customize GUI
-        private void buildPanel() {
-            panel = new JPanel(new BorderLayout());
-            JTextArea textArea = new JTextArea(5, 25);
-            textArea.setEditable(false);
-            panel.add(new JScrollPane(textArea));
-            setVisible(true);
-        }
-
-        // Customize actions
-        private void createActions() {
-            action = new DockingAction("My Action", getOwner()) {
-                @Override
-                public void actionPerformed(ActionContext context) {
-                    Msg.showInfo(getClass(), panel, "Custom Action", "Hello!");
+        DockingAction reimport = new DockingAction("Stabs Re-import", getName()) {
+            @Override
+            public void actionPerformed(ActionContext context) {
+                Program program = getCurrentProgram();
+                if (program == null) {
+                    Msg.showInfo(getClass(), null, "Stabs Re-import", "No program is open.");
+                    return;
                 }
-            };
-            action.setToolBarData(new ToolBarData(Icons.ADD_ICON, null));
-            action.setEnabled(true);
-            action.markHelpUnnecessary();
-            dockingTool.addLocalAction(this, action);
-        }
+                int tx = program.startTransaction("Stabs: clear done flag (re-import)");
+                try {
+                    program.getOptions(Program.PROGRAM_INFO)
+                        .setBoolean(StabsAnalyzer.STABS_DONE_OPTION, false);
+                } finally {
+                    program.endTransaction(tx, true);
+                }
+                AutoAnalysisManager mgr = AutoAnalysisManager.getAnalysisManager(program);
+                StabsAnalyzer analyzer = new StabsAnalyzer();
+                mgr.scheduleOneTimeAnalysis(analyzer, program.getMemory());
+            }
 
-        @Override
-        public JComponent getComponent() {
-            return panel;
-        }
+            @Override
+            public boolean isEnabledForContext(ActionContext context) {
+                Program p = getCurrentProgram();
+                if (p == null) return false;
+                return p.getMemory().getBlock(".stab") != null
+                    && p.getMemory().getBlock(".stabstr") != null;
+            }
+        };
+        reimport.setMenuBarData(new MenuData(new String[] { "&Tools", "Stabs", "&Re-import" }, null, "Stabs"));
+        reimport.setEnabled(true);
+        tool.addAction(reimport);
     }
 }
