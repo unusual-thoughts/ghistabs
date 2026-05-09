@@ -2,7 +2,7 @@ package ghistabs.builder
 
 import ghidra.program.model.data.*
 import ghidra.program.model.gclass.ClassUtils
-import ghidra.program.model.listing.Function
+import ghidra.program.model.listing.CommentType
 import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Namespace
@@ -122,7 +122,7 @@ class ClassBuilder(
             }
 
         // 1. Re-parent.
-        func.setParentNamespace(ns)
+        func.parentNamespace = ns
 
         // 2. Choose the in-class display name:
         val displayName = displayNameFor(mangled, className) ?: m.name
@@ -144,7 +144,7 @@ class ClassBuilder(
                     paramTypes.mapIndexed { i, pdt ->
                         ghidra.program.model.listing.ParameterImpl(
                             "arg$i",
-                            pdt ?: ghidra.program.model.data.Undefined4DataType.dataType,
+                            pdt ?: Undefined4DataType.dataType,
                             program,
                             source,
                         )
@@ -156,7 +156,10 @@ class ClassBuilder(
                     source,
                 )
             } else if (paramTypes.any { it == null }) {
-                sink.log("method-param-unresolved", "$className::${m.name}: some parameter types unresolved; keeping Phase 4 assignment")
+                sink.log(
+                    "method-param-unresolved",
+                    "$className::${m.name}: some parameter types unresolved; keeping Phase 4 assignment",
+                )
             }
         }
     }
@@ -224,8 +227,8 @@ class ClassBuilder(
         while (vtable.numComponents > 0) vtable.delete(0)
         for (m in virtuals) {
             val fnDt =
-                ghidra.program.model.data.PointerDataType.getPointer(
-                    ghidra.program.model.data.Undefined4DataType.dataType, // generic FN ptr
+                PointerDataType.getPointer(
+                    Undefined4DataType.dataType, // generic FN ptr
                     dtm,
                 )
             vtable.add(fnDt, ptrSize, m.name, "virtual ${m.name}")
@@ -260,14 +263,20 @@ class ClassBuilder(
                 if (func != null) {
                     program.listing.setComment(
                         func.entryPoint,
-                        ghidra.program.model.listing.CodeUnit.PLATE_COMMENT,
+                        CommentType.PLATE,
                         "virtual ${m.name}; ${className}_vtable offset $off",
                     )
                 } else {
-                    sink.log("vtable-virtual-unresolved", "no Function at $mAddr for virtual method ${m.name} in $className")
+                    sink.log(
+                        "vtable-virtual-unresolved",
+                        "no Function at $mAddr for virtual method ${m.name} in $className",
+                    )
                 }
             } else {
-                sink.log("vtable-virtual-unresolved", "virtual method '${m.name}' in $className: no mangled symbol or unresolved address")
+                sink.log(
+                    "vtable-virtual-unresolved",
+                    "virtual method '${m.name}' in $className: no mangled symbol or unresolved address",
+                )
             }
             off += ptrSize
         }
