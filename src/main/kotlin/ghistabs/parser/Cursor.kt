@@ -110,6 +110,76 @@ internal class Cursor(
         return src.substring(start, pos)
     }
 
+    /**
+     * Read the symbol name up to (but not including) the descriptor-separator `:`.
+     * C++ names in template arguments may contain `::` scope operators; these are
+     * included in the name. Only a single `:` (not followed by another `:`) terminates.
+     */
+    fun readSymbolName(): String {
+        val sb = StringBuilder()
+        while (!eof) {
+            if (src[pos] == ':') {
+                if (pos + 1 < src.length && src[pos + 1] == ':') {
+                    sb.append(':')
+                    pos++
+                    sb.append(':')
+                    pos++
+                } else {
+                    break
+                }
+            } else {
+                sb.append(src[pos])
+                pos++
+            }
+        }
+        return sb.toString()
+    }
+
+    /**
+     * Read an XRef tag name, which may contain `::` inside C++ template arguments.
+     * Rules:
+     *  - `::` INSIDE angle-bracket depth > 0 → include both colons in name
+     *  - `::` at depth 0 OR single `:` at any depth → stop (terminator is the first `:`)
+     */
+    fun readXRefTagName(): String {
+        val sb = StringBuilder()
+        var depth = 0
+        while (!eof) {
+            val ch = src[pos]
+            when {
+                ch == '<' -> {
+                    sb.append(ch)
+                    pos++
+                    depth++
+                }
+
+                ch == '>' -> {
+                    sb.append(ch)
+                    pos++
+                    if (depth > 0) depth--
+                }
+
+                ch == ':' && pos + 1 < src.length && src[pos + 1] == ':' && depth > 0 -> {
+                    sb.append(':')
+                    pos++
+                    sb.append(':')
+                    pos++
+                }
+
+                ch == ':' -> {
+                    break
+                }
+
+                // single ':' or '::' at depth 0 — stop before it
+                else -> {
+                    sb.append(ch)
+                    pos++
+                }
+            }
+        }
+        return sb.toString()
+    }
+
     fun snapshot(): Int = pos
 
     fun restore(saved: Int) {
