@@ -1,3 +1,6 @@
+# Stab descriptor strings provided by the user from actual Cygwin GCC 3.4.4 output.
+# These are the strings that previously failed to parse (issue #2).
+#
 long long int:t(0,6)=@s64;r(0,6);01000000000000000000000;0777777777777777777777;
 long long unsigned int:t(0,7)=@s64;r(0,7);0000000000000;01777777777777777777777;
 short int:t(0,8)=@s16;r(0,8);-32768;32767;
