@@ -15,6 +15,7 @@ import ghistabs.container.StabType
 import ghistabs.parser.Parser
 import ghistabs.parser.StabsParseException
 import ghistabs.parser.SymbolDecl
+import ghistabs.parser.TypeDecl
 
 class StabsImporter(
     internal val ctx: ImportContext,
@@ -61,7 +62,7 @@ class StabsImporter(
         val txC = ctx.program.startTransaction("Stabs: apply symbols")
         val applyResult =
             try {
-                applyAllSymbols(symbolsByCu, openFunctions, typeRegistry)
+                applyAllSymbols(typeAsts, symbolsByCu, openFunctions, typeRegistry)
             } finally {
                 ctx.program.endTransaction(txC, true)
             }
@@ -73,6 +74,7 @@ class StabsImporter(
             typesMaterialised = typeAsts.size,
             functionsApplied = applyResult.functions,
             globalsApplied = applyResult.globals,
+            classesApplied = applyResult.classes,
         )
     }
 
@@ -215,6 +217,7 @@ class StabsImporter(
     }
 
     internal fun applyAllSymbols(
+        typeAsts: List<TypeAst>,
         symbolsByCu: Map<String, List<HarvestedSymbol>>,
         openFunctions: List<OpenFunction>,
         typeRegistry: TypeRegistry,
@@ -223,6 +226,7 @@ class StabsImporter(
         val funcMgr = ctx.program.functionManager
         var functions = 0
         var globals = 0
+        var classes = 0
 
         for (open in openFunctions) {
             try {
@@ -290,7 +294,36 @@ class StabsImporter(
             }
         }
 
-        return ApplyResult(functions, globals)
+        // Classes + vtables.
+        if (ctx.options.applyVtables) {
+            val structAstsByName =
+                typeAsts
+                    .mapNotNull { ast ->
+                        val body = ast.body as? TypeDecl.Struct ?: return@mapNotNull null
+                        ast.name to body
+                    }.toMap()
+            val classBuilder =
+                ghistabs.builder.ClassBuilder(
+                    ctx.program,
+                    typeRegistry,
+                    ctx.resolver,
+                    ctx.sink,
+                    structAstsByName,
+                )
+            for (ast in typeAsts) {
+                val body = ast.body as? TypeDecl.Struct ?: continue
+                if (body.methods.isEmpty() && !body.hasVTablePointerMarker) continue
+                try {
+                    val category = Attribution.categoryFor(ast.name, setOf(ast.cuFile))
+                    classBuilder.build(ast.name, body, category)
+                    classes++
+                } catch (t: Throwable) {
+                    ctx.sink.log("class-apply-error", "${ast.name}: ${t.message}")
+                }
+            }
+        }
+
+        return ApplyResult(functions, globals, classes)
     }
 
     private fun applyLocal(
@@ -449,5 +482,6 @@ class StabsImporter(
     internal data class ApplyResult(
         val functions: Int,
         val globals: Int,
+        val classes: Int = 0,
     )
 }
