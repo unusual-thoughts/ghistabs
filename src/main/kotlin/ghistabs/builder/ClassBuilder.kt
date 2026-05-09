@@ -236,7 +236,7 @@ class ClassBuilder(
 
         // 3. Resolve _ZTV<class> address.
         val mangledItanium = "_ZTV" + itaniumMangleClassName(className)
-        val mangledGcc2 = "_vt\$$className"
+        val mangledGcc2 = $$"_vt$$$className"
 
         // If class name contains template args, log the limitation before trying resolution
         if ('<' in className) {

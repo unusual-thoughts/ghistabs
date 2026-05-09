@@ -49,13 +49,12 @@ class StabsPlugin(
                 }
 
                 override fun isEnabledForContext(context: ActionContext?): Boolean {
-                    val p = getCurrentProgram()
-                    if (p == null) return false
+                    val p = getCurrentProgram() ?: return false
                     return p.memory.getBlock(".stab") != null &&
                         p.memory.getBlock(".stabstr") != null
                 }
             }
-        reimport.menuBarData = MenuData(arrayOf<String>("&Tools", "Stabs", "&Re-import"), null, "Stabs")
+        reimport.menuBarData = MenuData(arrayOf("&Tools", "Stabs", "&Re-import"), null, "Stabs")
         reimport.isEnabled = true
         tool.addAction(reimport)
     }

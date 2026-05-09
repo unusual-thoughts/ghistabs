@@ -499,9 +499,8 @@ class Parser(
      */
     private fun parseXRef(): TypeDecl.XRef {
         c.consume('x')
-        val kindChar = c.advance()
         val kind =
-            when (kindChar) {
+            when (val kindChar = c.advance()) {
                 's' -> AggrKind.STRUCT
                 'u' -> AggrKind.UNION
                 'c', 'Y' -> AggrKind.CLASS
@@ -592,7 +591,8 @@ class Parser(
     /**
      * Read a trailing register number (after `:P`, `:r`, etc.).
      * Format: type-info followed by `;` and register number.
+     *
+     * Register number comes from n_value in the stab record, not the descriptor string.
      */
-    // Register number comes from n_value in the stab record, not the descriptor string.
     private fun readTrailingReg(): Int = 0
 }

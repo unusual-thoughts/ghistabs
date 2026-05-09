@@ -3,26 +3,17 @@ package ghistabs.importer
 import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.address.Address
 import ghidra.program.model.address.AddressSpace
-import ghidra.program.model.data.DataTypeManager
-import ghidra.program.model.listing.BookmarkManager
+import ghidra.program.model.listing.*
 import ghidra.program.model.listing.Function
-import ghidra.program.model.listing.FunctionManager
-import ghidra.program.model.listing.Listing
-import ghidra.program.model.listing.Program
-import ghidra.program.model.symbol.SourceType
-import ghidra.program.model.symbol.Symbol
 import ghidra.program.model.symbol.SymbolTable
 import ghidra.util.task.TaskMonitor
 import ghistabs.container.StabRecord
 import ghistabs.container.StabType
-import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
-import org.mockito.kotlin.argThat
 import org.mockito.kotlin.doNothing
-import org.mockito.kotlin.doReturn
 import org.mockito.kotlin.mock
-import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 
 class SymbolApplyTest {

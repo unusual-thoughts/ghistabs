@@ -85,7 +85,7 @@ class StabsImporter(
         openFunctions: MutableList<OpenFunction>,
     ): Int {
         var parseErrors = 0
-        var currentCu: String = "<unknown>"
+        var currentCu = "<unknown>"
         var currentFunction: OpenFunction? = null
 
         for ((i, rec) in records.withIndex()) {
@@ -155,9 +155,7 @@ class StabsImporter(
                                     )
                             }
 
-                            else -> {
-                                Unit
-                            }
+                            else -> {}
                         }
                     } catch (e: StabsParseException) {
                         parseErrors++
@@ -191,9 +189,7 @@ class StabsImporter(
                                     )
                             }
 
-                            else -> {
-                                Unit
-                            }
+                            else -> {}
                         }
                     } catch (e: StabsParseException) {
                         parseErrors++
@@ -205,9 +201,8 @@ class StabsImporter(
                     currentFunction?.scopeBrackets?.add(rec.type to rec.value)
                 }
 
-                else -> {
-                    Unit
-                } // ignore N_SLINE, N_OPT, etc.
+                else -> {}
+                // ignore N_SLINE, N_OPT, etc.
             }
         }
         return parseErrors
@@ -245,7 +240,7 @@ class StabsImporter(
                 val existing = funcMgr.getFunctionAt(open.addr)
                 val func =
                     existing
-                        ?: funcMgr.createFunction(open.name, open.addr, /* body */ null, source)
+                        ?: funcMgr.createFunction(open.name, open.addr, null, source)
                         ?: continue
 
                 // Apply return type from the parsed signature.
@@ -417,9 +412,7 @@ class StabsImporter(
                     }
                 }
 
-                else -> {
-                    Unit
-                }
+                else -> {}
             }
         }
         return pairs

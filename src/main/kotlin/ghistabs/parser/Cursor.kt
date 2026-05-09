@@ -145,28 +145,27 @@ internal class Cursor(
         val sb = StringBuilder()
         var depth = 0
         while (!eof) {
-            val ch = src[pos]
-            when {
-                ch == '<' -> {
+            when (val ch = src[pos]) {
+                '<' -> {
                     sb.append(ch)
                     pos++
                     depth++
                 }
 
-                ch == '>' -> {
+                '>' -> {
                     sb.append(ch)
                     pos++
                     if (depth > 0) depth--
                 }
 
-                ch == ':' && pos + 1 < src.length && src[pos + 1] == ':' && depth > 0 -> {
+                ':' if pos + 1 < src.length && src[pos + 1] == ':' && depth > 0 -> {
                     sb.append(':')
                     pos++
                     sb.append(':')
                     pos++
                 }
 
-                ch == ':' -> {
+                ':' -> {
                     break
                 }
 
