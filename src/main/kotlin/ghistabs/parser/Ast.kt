@@ -92,6 +92,12 @@ sealed interface TypeDecl {
         val inner: TypeDecl,
     ) : TypeDecl
 
+    /** Inline type definition: `(cu,n)=<body>` where the binding `(cu,n)` is preserved for Phase 3. */
+    data class InlineDef(
+        val id: TypeId,
+        val body: TypeDecl,
+    ) : TypeDecl
+
     /** Builtin form `(0,N)` resolved by id only — content provided by BuiltinTable in Phase 3. */
     data object Builtin : TypeDecl
 }
