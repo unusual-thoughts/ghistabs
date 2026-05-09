@@ -23,7 +23,7 @@ class Parser(
      * Mirror of gdb/stabsread.c:define_symbol.
      */
     fun parseSymbol(): SymbolDecl {
-        val name = c.readUntilAny(charArrayOf(':'))
+        val name = c.readSymbolName()
         c.consume(':')
         val descriptor = c.peekOrNull()
 
@@ -95,6 +95,7 @@ class Parser(
      */
     private fun parseTagged(name: String): SymbolDecl.TaggedType {
         c.consume('T')
+        c.consumeIf('t') // GCC emits Tt for combined tagged-type+typedef (e.g. typedef struct foo {} foo)
         val id = c.parseTypeId()
         c.consume('=')
         val body = parseType()
@@ -243,34 +244,51 @@ class Parser(
                 Pair(false, null)
             }
 
-        // Parse fields and methods until ;;
+        // Parse fields and methods.
+        // Each field is terminated by ';'. The list itself is terminated by a bare ';'
+        // (so the struct ends with field-terminator + struct-terminator = ";;").
+        // After consuming each field's ';', peek: if the next char is ';' that's the
+        // struct terminator — exit without consuming it (consumed below).
         val fields = mutableListOf<FieldDecl>()
         val methods = mutableListOf<MethodDecl>()
 
-        while (!c.startsWith(";;")) {
-            if (c.eof) throw StabsParseException(c.pos, c.src, "unexpected eof parsing struct fields")
-
+        while (c.peekOrNull() != ';' && !c.eof) {
             val name = c.readUntilAny(charArrayOf(':', '/'))
 
             when {
                 c.startsWith("::") -> {
-                    // Method: name::<method-block>;
+                    // Method: name::<overload1>[<overload2>...];
+                    // GCC emits multiple overloads consecutively: after each overload's virt
+                    // char (without a trailing ';'), the next overload TypeId follows immediately.
                     c.advance()
                     c.advance()
-                    val method = parseMethodBlock(name)
-                    methods.add(method)
+                    methods.add(parseMethodBlock(name))
+                    while (c.peekOrNull().let { it == '(' || (it != null && it.isDigit()) }) {
+                        methods.add(parseMethodBlock(name))
+                    }
                 }
 
                 c.startsWith(":/") -> {
-                    // Static field: name:/<access><type>:_Z...;
+                    // Field with access specifier: name:/<access><type>...
+                    // Static:     name:/<access><type>:<mangled>;
+                    // Non-static: name:/<access><type>,<offset>,<size>;
                     c.advance()
                     c.advance()
                     val access = parseAccess(if (!c.eof) c.advance() else '2')
                     val type = parseType()
-                    c.consume(':')
-                    val mangled = c.readUntilAny(charArrayOf(';'))
-                    c.consume(';')
-                    fields.add(FieldDecl(name, type, 0, 0, isStatic = true))
+                    if (c.peekOrNull() == ',') {
+                        c.consume(',')
+                        val offsetBits = c.parseInt()
+                        c.consume(',')
+                        val sizeBits = c.parseInt()
+                        c.consume(';')
+                        fields.add(FieldDecl(name, type, offsetBits, sizeBits, isStatic = false))
+                    } else {
+                        c.consume(':')
+                        val mangled = c.readUntilAny(charArrayOf(';'))
+                        c.consume(';')
+                        fields.add(FieldDecl(name, type, 0, 0, isStatic = true))
+                    }
                 }
 
                 c.startsWith(":") -> {
@@ -302,8 +320,7 @@ class Parser(
             }
         }
 
-        c.consume(';')
-        c.consume(';')
+        c.consume(';') // struct terminator
 
         return TypeDecl.Struct(
             kind = kind,
@@ -333,9 +350,9 @@ class Parser(
             val access = parseAccess(c.advance().toString()[0])
             val offsetBits = c.parseInt()
             c.consume(',')
-            val baseTypeId = c.parseTypeId()
+            val baseType = parseType() // handles (cu,n) ref and (cu,n)=<inline-def> forms
             c.consume(';')
-            bases.add(BaseDecl(TypeDecl.Ref(baseTypeId), virt, access, offsetBits))
+            bases.add(BaseDecl(baseType, virt, access, offsetBits))
         }
 
         return bases
@@ -343,43 +360,28 @@ class Parser(
 
     /**
      * Parse a method block (after `::` in struct).
-     * Format: `(<count>=#<cls>,<ret>;<params>;):_Z<mangled>;<access><modifier><virt>[*<voff>;<vthistype>;]`
+     * GCC 3.4.4 format: `(cu,n)[=#cls,ret,p1,...,pN;]:mangled;<access><modifier><virt>[*<voff>;<vthistype>;]`
+     *
+     * The type-id is parsed via parseType() which handles both the inline-definition form
+     * `(cu,n)=<type>` and the back-reference form `(cu,n)`.
      *
      * Mirror of gdb/stabsread.c:read_member_functions.
      */
     private fun parseMethodBlock(name: String): MethodDecl {
-        c.consume('(')
-        val methodCount = c.parseInt()
-        c.consume(')')
-        c.consume('=')
-        c.consume('#')
-        val clsType = parseType()
-        c.consume(',')
-        val retType = parseType()
-        c.consume(';')
-
-        val paramTypes = mutableListOf<TypeDecl>()
-        while (c.peekOrNull() != ')') {
-            paramTypes.add(parseType())
-            c.consumeIf(';')
-        }
-
-        c.consume(')')
+        val signature = parseType()
 
         val mangled =
-            if (c.startsWith(":_Z")) {
-                c.advance() // consume :
-                c.advance() // consume _
-                c.advance() // consume Z
+            if (!c.eof && c.peekOrNull() == ':') {
+                c.advance()
                 val mangledName = c.readUntilAny(charArrayOf(';'))
                 c.consume(';')
-                "_Z" + mangledName
+                mangledName
             } else {
                 null
             }
 
         val access = parseAccess(if (!c.eof && c.peekOrNull()?.isDigit() == true) c.advance() else '2')
-        val modifier = c.advance()
+        val modifier = if (!c.eof) c.advance() else 'A'
         val isConst = modifier == 'C'
         val isVolatile = modifier == 'V'
 
@@ -390,7 +392,7 @@ class Parser(
                     c.advance()
                     vtableOffsetBits = c.parseInt()
                     c.consume(';')
-                    val vthistype = parseType()
+                    parseType() // vthistype (consumed, not stored)
                     c.consume(';')
                     VirtKind.VIRTUAL
                 }
@@ -400,6 +402,11 @@ class Parser(
                     VirtKind.NORMAL
                 }
 
+                c.peekOrNull() == '?' -> {
+                    c.advance()
+                    VirtKind.PURE_VIRTUAL
+                }
+
                 else -> {
                     VirtKind.NORMAL
                 }
@@ -407,7 +414,6 @@ class Parser(
 
         c.consumeIf(';')
 
-        val signature = TypeDecl.Method(clsType, retType, paramTypes)
         return MethodDecl(
             name = name,
             mangled = mangled,
@@ -451,6 +457,10 @@ class Parser(
     private fun parseRange(): TypeDecl.Range {
         c.consume('r')
         val typeId = c.parseTypeId()
+        // GCC may define the base type inline: r(cu,n)=<inner-type>;lo;hi;
+        if (c.consumeIf('=')) {
+            parseType() // parse and discard the inline base-type definition
+        }
         c.consume(';')
         val min = c.parseRangeBound()
         c.consume(';')
@@ -492,7 +502,7 @@ class Parser(
                 'c', 'Y' -> AggrKind.CLASS
                 else -> throw StabsParseException(c.pos - 1, c.src, "unknown cross-ref kind '$kindChar'")
             }
-        val tagName = c.readUntilAny(charArrayOf(':'))
+        val tagName = c.readXRefTagName() // skips :: inside <>, stops at single ':' at depth 0
         c.consume(':')
         return TypeDecl.XRef(kind, tagName)
     }
@@ -521,23 +531,10 @@ class Parser(
     private fun parseArray(): TypeDecl.Array {
         c.consume('a')
         val indexType = parseType()
-        c.consume(';')
+        // parseRange (the typical index type) already consumes its own trailing ';',
+        // so NO separator between index type and element type.
         val elementType = parseType()
-
-        // Optional range bounds (not always present)
-        val length =
-            if (c.peekOrNull() == ';') {
-                c.advance()
-                val min = c.parseRangeBound()
-                c.consume(';')
-                val max = c.parseRangeBound()
-                c.consume(';')
-                max - min + 1
-            } else {
-                null
-            }
-
-        return TypeDecl.Array(elementType, length, indexType)
+        return TypeDecl.Array(elementType, null, indexType)
     }
 
     /**
@@ -564,12 +561,10 @@ class Parser(
         val clsType = parseType()
         c.consume(',')
         val retType = parseType()
-        c.consume(';')
 
         val params = mutableListOf<TypeDecl>()
-        while (!c.startsWith(";")) {
+        while (c.consumeIf(',')) {
             params.add(parseType())
-            c.consumeIf(';')
         }
 
         c.consume(';')
@@ -593,11 +588,6 @@ class Parser(
      * Read a trailing register number (after `:P`, `:r`, etc.).
      * Format: type-info followed by `;` and register number.
      */
-    private fun readTrailingReg(): Int {
-        // Consume the type descriptor
-        parseType()
-        c.consume(';')
-        val reg = c.parseInt().toInt()
-        return reg
-    }
+    // Register number comes from n_value in the stab record, not the descriptor string.
+    private fun readTrailingReg(): Int = 0
 }
