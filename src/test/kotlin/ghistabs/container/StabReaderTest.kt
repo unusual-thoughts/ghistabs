@@ -1,6 +1,6 @@
 package ghistabs.container
 
-import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -145,7 +145,8 @@ class StabReaderTest {
         // CU1: "apple\0xyz\0" (6 + 4 = 10 bytes)
         // CU2: "banana\0x\0" (7 + 2 = 9 bytes, but CU2 size is 8, so we'll use only first 8)
         val stabstr = ByteArray(18)
-        val cu1Str = "apple".toByteArray(Charsets.UTF_8) + byteArrayOf(0) + "xyz".toByteArray(Charsets.UTF_8) + byteArrayOf(0)
+        val cu1Str =
+            "apple".toByteArray(Charsets.UTF_8) + byteArrayOf(0) + "xyz".toByteArray(Charsets.UTF_8) + byteArrayOf(0)
         val cu2Str = "banana".toByteArray(Charsets.UTF_8) + byteArrayOf(0, 0)
         cu1Str.copyInto(stabstr, 0)
         cu2Str.copyInto(stabstr, 10)
@@ -197,7 +198,7 @@ class StabReaderTest {
 
         var stab = Fixture.stabSection(listOf(undfRec, lsymRec))
         // Append 5 bogus bytes
-        stab = stab + byteArrayOf(0, 1, 2, 3, 4)
+        stab += byteArrayOf(0, 1, 2, 3, 4)
 
         val stabstr = Fixture.stabstrSection(listOf("var"))
 

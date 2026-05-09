@@ -2,7 +2,9 @@ package ghistabs.builder
 
 import ghidra.program.model.data.*
 import ghistabs.importer.BookmarkSink
-import ghistabs.parser.*
+import ghistabs.parser.AggrKind
+import ghistabs.parser.TypeDecl
+import ghistabs.parser.TypeId
 
 @JvmInline
 value class ContentHash(
@@ -72,7 +74,10 @@ value class ContentHash(
                     is TypeDecl.Struct -> {
                         var sh = h * 31 + decl.kind.hashCode().toLong()
                         sh = sh * 31 + decl.sizeBytes
-                        sh = decl.fields.fold(sh) { acc, f -> acc * 31 + f.name.hashCode().toLong() * 31 + hashDecl(f.type) }
+                        sh =
+                            decl.fields.fold(sh) { acc, f ->
+                                acc * 31 + f.name.hashCode().toLong() * 31 + hashDecl(f.type)
+                            }
                         sh = decl.methods.fold(sh) { acc, m -> acc * 31 + m.name.hashCode().toLong() }
                         sh
                     }
@@ -329,7 +334,7 @@ class TypeRegistry(
 
             is TypeDecl.FunctionT -> {
                 val fd = FunctionDefinitionDataType(category, ast.name, dtm)
-                fd.setReturnType(dataTypeFor(body.ret) ?: VoidDataType())
+                fd.returnType = dataTypeFor(body.ret) ?: VoidDataType()
                 val params =
                     body.params
                         .mapIndexed { i, p ->
@@ -341,8 +346,9 @@ class TypeRegistry(
 
             is TypeDecl.Method -> {
                 val fd = FunctionDefinitionDataType(category, ast.name, dtm)
-                fd.setReturnType(dataTypeFor(body.ret) ?: VoidDataType())
-                val thisParam = ParameterDefinitionImpl("this", dataTypeFor(body.cls) ?: Undefined4DataType.dataType, null)
+                fd.returnType = dataTypeFor(body.ret) ?: VoidDataType()
+                val thisParam =
+                    ParameterDefinitionImpl("this", dataTypeFor(body.cls) ?: Undefined4DataType.dataType, null)
                 val otherParams =
                     body.params.mapIndexed { i, p ->
                         ParameterDefinitionImpl("arg$i", dataTypeFor(p) ?: Undefined4DataType.dataType, null)

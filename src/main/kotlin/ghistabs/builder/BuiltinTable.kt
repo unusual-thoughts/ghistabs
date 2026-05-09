@@ -28,15 +28,15 @@ object BuiltinTable {
                         if (decl.inner is TypeDecl.Range) {
                             val range = decl.inner
                             val signed = range.min < 0
-                            return when {
-                                sizeBits == 8 && signed -> SignedByteDataType()
-                                sizeBits == 8 && !signed -> ByteDataType()
-                                sizeBits == 16 && signed -> ShortDataType()
-                                sizeBits == 16 && !signed -> UnsignedShortDataType()
-                                sizeBits == 32 && signed -> IntegerDataType()
-                                sizeBits == 32 && !signed -> UnsignedIntegerDataType()
-                                sizeBits == 64 && signed -> LongLongDataType()
-                                sizeBits == 64 && !signed -> UnsignedLongLongDataType()
+                            return when (sizeBits) {
+                                8 if signed -> SignedByteDataType()
+                                8 -> ByteDataType()
+                                16 if signed -> ShortDataType()
+                                16 -> UnsignedShortDataType()
+                                32 if signed -> IntegerDataType()
+                                32 -> UnsignedIntegerDataType()
+                                64 if signed -> LongLongDataType()
+                                64 -> UnsignedLongLongDataType()
                                 else -> null
                             }
                         }
@@ -49,63 +49,27 @@ object BuiltinTable {
                 val sizeBits = widthBits(decl.min, decl.max)
                 val signed = decl.min < 0
 
-                when {
-                    sizeBits == 0 -> {
-                        VoidDataType()
-                    }
-
-                    sizeBits == 8 && signed && decl.min == -128L && decl.max == 127L -> {
-                        CharDataType()
-                    }
-
-                    sizeBits == 8 && signed -> {
-                        SignedByteDataType()
-                    }
-
-                    sizeBits == 8 && !signed -> {
-                        ByteDataType()
-                    }
-
-                    sizeBits == 16 && signed -> {
-                        ShortDataType()
-                    }
-
-                    sizeBits == 16 && !signed -> {
-                        UnsignedShortDataType()
-                    }
-
-                    sizeBits == 32 && signed -> {
-                        IntegerDataType()
-                    }
-
-                    sizeBits == 32 && !signed -> {
-                        UnsignedIntegerDataType()
-                    }
-
-                    sizeBits == 64 && signed -> {
-                        LongLongDataType()
-                    }
-
-                    sizeBits == 64 && !signed -> {
-                        UnsignedLongLongDataType()
-                    }
-
-                    else -> {
-                        null
-                    }
+                when (sizeBits) {
+                    0 -> VoidDataType()
+                    8 if signed && decl.min == -128L && decl.max == 127L -> CharDataType()
+                    8 if signed -> SignedByteDataType()
+                    8 -> ByteDataType()
+                    16 if signed -> ShortDataType()
+                    16 -> UnsignedShortDataType()
+                    32 if signed -> IntegerDataType()
+                    32 -> UnsignedIntegerDataType()
+                    64 if signed -> LongLongDataType()
+                    64 -> UnsignedLongLongDataType()
+                    else -> null
                 }
             }
 
             is TypeDecl.Complex -> {
                 when (decl.rCode) {
                     3 -> Complex8DataType()
-
                     4 -> Complex16DataType()
-
                     5 -> Complex32DataType()
-
-                    // long double complex = 32 bytes
-                    else -> null
+                    else -> null // long double complex = 32 bytes
                 }
             }
 
