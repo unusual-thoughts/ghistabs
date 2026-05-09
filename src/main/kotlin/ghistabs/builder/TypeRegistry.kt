@@ -123,6 +123,7 @@ class TypeRegistry(
     private val sink: BookmarkSink,
 ) {
     private val byId: MutableMap<TypeId, DataType> = mutableMapOf()
+    private val placeholders: MutableMap<TypeId, DataType> = mutableMapOf()
     private val byHash: MutableMap<Pair<String, ContentHash>, DataType> = mutableMapOf()
     private val byPath: MutableMap<Pair<CategoryPath, String>, ContentHash> = mutableMapOf()
     private val conflictCount: MutableMap<String, Int> = mutableMapOf()
@@ -134,28 +135,15 @@ class TypeRegistry(
         val byName = asts.groupBy { it.name }
         val tx = dtm.startTransaction("ghidra-stabs build types")
         try {
-            // Pre-seed placeholders for all ASTs before resolving bodies (forward-ref handling)
+            // Pre-seed placeholders in a SEPARATE map so forward refs within the batch
+            // resolve to the placeholder during body materialization. byId is reserved
+            // for fully-resolved types so that resolve() doesn't short-circuit.
             for (ast in asts) {
-                if (byId.containsKey(ast.id)) continue
+                if (placeholders.containsKey(ast.id) || byId.containsKey(ast.id)) continue
                 val defCUs = byName[ast.name]?.map { it.cuFile }?.toSet() ?: setOf(ast.cuFile)
                 val category = attribution(ast.name, defCUs)
-                val ph: DataType =
-                    when (ast.body) {
-                        is TypeDecl.Struct -> {
-                            if (ast.body.kind == AggrKind.UNION) {
-                                UnionDataType(category, ast.name, dtm)
-                            } else {
-                                StructureDataType(category, ast.name, ast.body.sizeBytes.toInt(), dtm)
-                            }
-                        }
-
-                        else -> {
-                            StructureDataType(category, ast.name, 0, dtm)
-                        }
-                    }
-                byId[ast.id] = ph
+                placeholders[ast.id] = makePlaceholder(ast.body, category, ast.name)
             }
-            // Then resolve all
             for (ast in asts) {
                 resolve(ast, byName, attribution)
             }
@@ -166,12 +154,13 @@ class TypeRegistry(
 
     fun dataTypeFor(decl: TypeDecl): DataType? =
         when (decl) {
+            // Check byId first (fully resolved), then placeholders (cycle-breaking)
             is TypeDecl.Ref -> {
-                byId[decl.id]
+                byId[decl.id] ?: placeholders[decl.id]
             }
 
             is TypeDecl.InlineDef -> {
-                byId[decl.id] ?: dataTypeFor(decl.body)
+                byId[decl.id] ?: placeholders[decl.id] ?: dataTypeFor(decl.body)
             }
 
             is TypeDecl.Builtin, is TypeDecl.Range, is TypeDecl.Complex, is TypeDecl.WithSizeAttr -> {
@@ -206,58 +195,53 @@ class TypeRegistry(
             } // Struct, Enum, FunctionT, Method, XRef must have been registered via materialiseAll
         }
 
+    private fun makePlaceholder(
+        body: TypeDecl,
+        category: CategoryPath,
+        name: String,
+    ): DataType =
+        when (body) {
+            is TypeDecl.Struct -> {
+                if (body.kind == AggrKind.UNION) {
+                    UnionDataType(category, name, dtm)
+                } else {
+                    StructureDataType(category, name, body.sizeBytes.toInt(), dtm)
+                }
+            }
+
+            else -> {
+                StructureDataType(category, name, 0, dtm)
+            }
+        }
+
     private fun resolve(
         ast: TypeAst,
         byName: Map<String, List<TypeAst>>,
         attribution: (String, Set<String>) -> CategoryPath,
     ): DataType {
-        // 1. Check if already resolved
+        // 1. Already fully resolved?
         byId[ast.id]?.let { return it }
 
-        // 2. Compute content hash
+        // 2. Compute content hash for cross-CU dedup
         val hash = ContentHash.of(ast.body)
 
-        // 3. Check for cross-CU dedup
-        val hashKey = ast.name to hash
-        byHash[hashKey]?.let { existing ->
+        // 3. Cross-CU dedup: same name + same body seen before?
+        byHash[ast.name to hash]?.let { existing ->
             byId[ast.id] = existing
             return existing
         }
 
-        // 4. Compute category (pre-computed in materialiseAll, but recompute for safety)
+        // 4. Compute category
         val definingCUs = byName[ast.name]?.map { it.cuFile }?.toSet() ?: setOf(ast.cuFile)
         val category = attribution(ast.name, definingCUs)
 
-        // 5. Reuse the placeholder pre-seeded in materialiseAll
-        val placeholder =
-            byId[ast.id] ?: run {
-                val ph: DataType =
-                    when (ast.body) {
-                        is TypeDecl.Struct -> {
-                            if (ast.body.kind == AggrKind.UNION) {
-                                UnionDataType(category, ast.name, dtm)
-                            } else {
-                                StructureDataType(category, ast.name, ast.body.sizeBytes.toInt(), dtm)
-                            }
-                        }
+        // 5. Reuse pre-seeded placeholder (or create one if resolve() is called directly)
+        val placeholder = placeholders.getOrPut(ast.id) { makePlaceholder(ast.body, category, ast.name) }
 
-                        else -> {
-                            StructureDataType(category, ast.name, 0, dtm)
-                        }
-                    }
-                byId[ast.id] = ph
-                ph
-            }
-
-        // 6. Materialise body
+        // 6. Materialise body — references back to ast.id will resolve via placeholders[ast.id]
         val materialised = materialiseBody(ast, category, placeholder)
 
-        // 7. Update byId if materialised is different
-        if (materialised !== placeholder) {
-            byId[ast.id] = materialised
-        }
-
-        // 8. Register with conflict handling
+        // 7. Register with conflict handling and record as fully resolved
         val canonical = registerWithConflict(materialised, ast.name, hash, category)
         byId[ast.id] = canonical
         byHash[ast.name to hash] = canonical
