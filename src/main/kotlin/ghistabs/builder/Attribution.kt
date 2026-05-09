@@ -63,32 +63,30 @@ object Attribution {
             name !in BUILTIN_NAMES
 
     private fun stdBasename(path: String): String? {
-        // Find the STD_MARKERS match and return the last non-empty segment after it
         val match = STD_MARKERS.find(path) ?: return null
-        // The matched segment is something like "/c++/" or "/mingw/"
-        // After the match, we may have version info (3.4.4) or directly the filename
-        val startIdx = match.range.last + 1 // position after the marker
+        val startIdx = match.range.last + 1
         if (startIdx >= path.length) return null
+        var current = path.substring(startIdx)
 
-        val remainder = path.substring(startIdx)
-        // Skip version numbers: look for path segments that start with digits and skip to the next segment
-        var current = remainder
-        while (current.isNotEmpty() && current[0].isDigit()) {
-            // Skip until next '/' or end
-            val idx = current.indexOf('/')
-            if (idx == -1) {
-                // Only a version segment, no actual basename after
-                return null
+        // Skip version-number segments and known intermediate dirs
+        val skipNames = setOf("bits", "ext", "tr1", "tr2", "debug", "profile", "parallel")
+        while (current.isNotEmpty()) {
+            val slash = current.indexOf('/')
+            if (slash == -1) break // last segment = basename
+            val segment = current.substring(0, slash)
+            val rest = current.substring(slash + 1)
+            // Skip if pure digits/dots (version) or a known intermediate dir
+            if (segment.all { it.isDigit() || it == '.' } || segment in skipNames) {
+                current = rest
+            } else {
+                break
             }
-            current = current.substring(idx + 1)
         }
-
-        // Now extract the first non-version segment
+        // current is now either the final path segment or starts with the target dir
         val endIdx = current.indexOf('/')
         val segment = if (endIdx == -1) current else current.substring(0, endIdx)
-        // Remove extension
         val noExt = segment.substringBeforeLast('.')
-        return if (noExt.isNotEmpty()) noExt else segment
+        return if (noExt.isNotEmpty()) noExt else segment.ifEmpty { null }
     }
 
     private fun basename(path: String): String {

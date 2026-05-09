@@ -66,13 +66,15 @@ value class ContentHash(
                     }
 
                     is TypeDecl.Enum -> {
-                        h * 31 + decl.members.fold(0L) { acc, p -> acc * 31 + p.first.hashCode().toLong() + p.second }
+                        decl.members.fold(h * 31) { acc, p -> acc * 31 + p.first.hashCode().toLong() * 31 + p.second }
                     }
 
                     is TypeDecl.Struct -> {
-                        h * 31 + decl.kind.hashCode().toLong() + decl.sizeBytes +
-                            decl.fields.fold(0L) { acc, f -> acc * 31 + f.name.hashCode().toLong() + hashDecl(f.type) } +
-                            decl.methods.fold(0L) { acc, m -> acc * 31 + m.name.hashCode().toLong() }
+                        var sh = h * 31 + decl.kind.hashCode().toLong()
+                        sh = sh * 31 + decl.sizeBytes
+                        sh = decl.fields.fold(sh) { acc, f -> acc * 31 + f.name.hashCode().toLong() * 31 + hashDecl(f.type) }
+                        sh = decl.methods.fold(sh) { acc, m -> acc * 31 + m.name.hashCode().toLong() }
+                        sh
                     }
 
                     is TypeDecl.FunctionT -> {
@@ -122,6 +124,7 @@ class TypeRegistry(
 ) {
     private val byId: MutableMap<TypeId, DataType> = mutableMapOf()
     private val byHash: MutableMap<Pair<String, ContentHash>, DataType> = mutableMapOf()
+    private val byPath: MutableMap<Pair<CategoryPath, String>, ContentHash> = mutableMapOf()
     private val conflictCount: MutableMap<String, Int> = mutableMapOf()
 
     fun materialiseAll(
@@ -129,8 +132,35 @@ class TypeRegistry(
         attribution: (String, Set<String>) -> CategoryPath = { name, cus -> Attribution.categoryFor(name, cus) },
     ) {
         val byName = asts.groupBy { it.name }
-        for (ast in asts) {
-            resolve(ast, byName, attribution)
+        val tx = dtm.startTransaction("ghidra-stabs build types")
+        try {
+            // Pre-seed placeholders for all ASTs before resolving bodies (forward-ref handling)
+            for (ast in asts) {
+                if (byId.containsKey(ast.id)) continue
+                val defCUs = byName[ast.name]?.map { it.cuFile }?.toSet() ?: setOf(ast.cuFile)
+                val category = attribution(ast.name, defCUs)
+                val ph: DataType =
+                    when (ast.body) {
+                        is TypeDecl.Struct -> {
+                            if (ast.body.kind == AggrKind.UNION) {
+                                UnionDataType(category, ast.name, dtm)
+                            } else {
+                                StructureDataType(category, ast.name, ast.body.sizeBytes.toInt(), dtm)
+                            }
+                        }
+
+                        else -> {
+                            StructureDataType(category, ast.name, 0, dtm)
+                        }
+                    }
+                byId[ast.id] = ph
+            }
+            // Then resolve all
+            for (ast in asts) {
+                resolve(ast, byName, attribution)
+            }
+        } finally {
+            dtm.endTransaction(tx, true)
         }
     }
 
@@ -194,50 +224,45 @@ class TypeRegistry(
             return existing
         }
 
-        // 4. Compute category
+        // 4. Compute category (pre-computed in materialiseAll, but recompute for safety)
         val definingCUs = byName[ast.name]?.map { it.cuFile }?.toSet() ?: setOf(ast.cuFile)
         val category = attribution(ast.name, definingCUs)
 
-        // 5. Create placeholder (struct/union for aggregates, struct for others)
+        // 5. Reuse the placeholder pre-seeded in materialiseAll
         val placeholder =
-            when (ast.body) {
-                is TypeDecl.Struct -> {
-                    if (ast.body.kind == AggrKind.UNION) {
-                        UnionDataType(category, ast.name, dtm)
-                    } else {
-                        StructureDataType(category, ast.name, 0, dtm)
-                    }
-                }
+            byId[ast.id] ?: run {
+                val ph: DataType =
+                    when (ast.body) {
+                        is TypeDecl.Struct -> {
+                            if (ast.body.kind == AggrKind.UNION) {
+                                UnionDataType(category, ast.name, dtm)
+                            } else {
+                                StructureDataType(category, ast.name, ast.body.sizeBytes.toInt(), dtm)
+                            }
+                        }
 
-                else -> {
-                    StructureDataType(category, ast.name, 0, dtm)
-                }
+                        else -> {
+                            StructureDataType(category, ast.name, 0, dtm)
+                        }
+                    }
+                byId[ast.id] = ph
+                ph
             }
 
-        // 6. Register placeholder BEFORE recursing
-        byId[ast.id] = placeholder
-
-        // 7. Materialise body
+        // 6. Materialise body
         val materialised = materialiseBody(ast, category, placeholder)
 
-        // 8. Update byId if materialised is different
+        // 7. Update byId if materialised is different
         if (materialised !== placeholder) {
             byId[ast.id] = materialised
         }
 
-        // 9. Add to DTM
-        try {
-            dtm.addDataType(materialised, DataTypeConflictHandler.KEEP_HANDLER)
-        } catch (e: Exception) {
-            sink.log("dtm-add-error", "Failed to add ${ast.name} to DTM: ${e.message}")
-        }
+        // 8. Register with conflict handling
+        val canonical = registerWithConflict(materialised, ast.name, hash, category)
+        byId[ast.id] = canonical
+        byHash[ast.name to hash] = canonical
 
-        // 10. Register in byHash
-        val finalName = materialised.name
-        val finalCat = materialised.categoryPath.toString()
-        byHash[ast.name to hash] = materialised
-
-        return materialised
+        return canonical
     }
 
     private fun materialiseBody(
@@ -287,12 +312,12 @@ class TypeRegistry(
             }
 
             is TypeDecl.Struct -> {
-                // Use the appropriate type (struct or union)
-                var struct: Composite =
+                // Reuse the placeholder cast to the right type
+                val struct: Composite =
                     if (body.kind == AggrKind.UNION) {
-                        UnionDataType(category, ast.name, dtm)
+                        placeholder as Union
                     } else {
-                        placeholder as StructureDataType
+                        placeholder as Structure
                     }
 
                 for (field in body.fields) {
@@ -300,13 +325,19 @@ class TypeRegistry(
                     val ft = dataTypeFor(field.type) ?: Undefined4DataType.dataType
                     val len = if (ft.length <= 0) 4 else ft.length
                     try {
-                        if (struct is Structure) {
-                            struct.replaceAtOffset((field.offsetBits / 8).toInt(), ft, len, field.name, null)
-                        } else if (struct is Union) {
-                            (struct as Union).add(ft, field.name, null)
+                        when (struct) {
+                            is Structure -> {
+                                struct.replaceAtOffset((field.offsetBits / 8).toInt(), ft, len, field.name, null)
+                            }
+
+                            is Union -> {
+                                struct.add(ft, field.name, null)
+                            }
+
+                            else -> {}
                         }
                     } catch (e: Exception) {
-                        sink.log("field-layout", "Failed to add field '${field.name}' to '${ast.name}': ${e.message}")
+                        sink.log("field-layout", "Failed to add '${field.name}' to '${ast.name}': ${e.message}")
                     }
                 }
                 struct
@@ -354,9 +385,32 @@ class TypeRegistry(
         dt: DataType,
         name: String,
         hash: ContentHash,
-        cuPath: String,
+        category: CategoryPath,
     ): DataType {
-        // Not used in this version; we use DTM's KEEP_HANDLER instead
-        return dt
+        val existing = dtm.getDataType(category, name)
+        if (existing == null) {
+            byPath[category to name] = hash
+            return dtm.addDataType(dt, DataTypeConflictHandler.KEEP_HANDLER)
+        }
+        // Same hash → idempotent
+        val existingHash = byPath[category to name]
+        if (existingHash == hash) {
+            return existing
+        }
+        // Different body → find a free _N slot
+        var n = (conflictCount[name] ?: 1) + 1
+        while (true) {
+            val candidate = "${name}_$n"
+            if (dtm.getDataType(category, candidate) == null) break
+            n++
+            if (n > 1000) error("cannot allocate conflict suffix for '$name'")
+        }
+        conflictCount[name] = n
+        // Clone and rename
+        val copy = dt.copy(dtm)
+        copy.name = "${name}_$n"
+        sink.log("type-conflict", "Two definitions of '$name' with different bodies; second renamed to '${name}_$n'")
+        byPath[category to "${name}_$n"] = hash
+        return dtm.addDataType(copy, DataTypeConflictHandler.KEEP_HANDLER)
     }
 }
