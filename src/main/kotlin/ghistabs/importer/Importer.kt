@@ -1,7 +1,7 @@
 package ghistabs.importer
 
 import ghidra.program.model.data.Undefined4DataType
-import ghidra.program.model.listing.CodeUnit
+import ghidra.program.model.listing.CommentType
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.LocalVariableImpl
 import ghidra.program.model.listing.ParameterImpl
@@ -146,10 +146,18 @@ class StabsImporter(
                 StabType.N_PSYM, StabType.N_RSYM -> {
                     val open = currentFunction ?: continue
                     try {
-                        val decl = Parser(rec.name).parseSymbol()
-                        when (decl) {
-                            is SymbolDecl.StackParam, is SymbolDecl.RegParam -> open.params += ParamRecord(decl, rec.value)
-                            else -> Unit
+                        when (val decl = Parser(rec.name).parseSymbol()) {
+                            is SymbolDecl.StackParam, is SymbolDecl.RegParam -> {
+                                open.params +=
+                                    ParamRecord(
+                                        decl,
+                                        rec.value,
+                                    )
+                            }
+
+                            else -> {
+                                Unit
+                            }
                         }
                     } catch (e: StabsParseException) {
                         parseErrors++
@@ -160,8 +168,7 @@ class StabsImporter(
                 StabType.N_LSYM -> {
                     val open = currentFunction
                     try {
-                        val decl = Parser(rec.name).parseSymbol()
-                        when (decl) {
+                        when (val decl = Parser(rec.name).parseSymbol()) {
                             is SymbolDecl.TaggedType -> {
                                 typeAsts += TypeAst(decl.id, decl.name, decl.body, currentCu)
                             }
@@ -176,7 +183,12 @@ class StabsImporter(
 
                             is SymbolDecl.StaticVar -> {
                                 // Function-scope static variables get their actual address from rec.value
-                                symbolsByCu.getOrPut(currentCu) { mutableListOf() } += HarvestedSymbol(decl, rec.type, rec.value)
+                                symbolsByCu.getOrPut(currentCu) { mutableListOf() } +=
+                                    HarvestedSymbol(
+                                        decl,
+                                        rec.type,
+                                        rec.value,
+                                    )
                             }
 
                             else -> {
@@ -373,7 +385,7 @@ class StabsImporter(
             try {
                 val addr = func.entryPoint.add(openOff)
                 val text = "Stabs scope locals: " + localsInScope.joinToString(", ") { it.decl.name }
-                ctx.program.listing.setComment(addr, CodeUnit.PLATE_COMMENT, text)
+                ctx.program.listing.setComment(addr, CommentType.PLATE, text)
             } catch (e: Exception) {
                 ctx.sink.log("scope-comment-error", "Failed to set scope comment: ${e.message}")
             }
