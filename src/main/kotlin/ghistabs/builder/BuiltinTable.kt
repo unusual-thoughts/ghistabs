@@ -126,20 +126,12 @@ object BuiltinTable {
 
             // void/zero-size
             min == 0L -> {
-                // unsigned: max = 2^n - 1
-                (
-                    64 -
-                        java.lang.Long
-                            .numberOfLeadingZeros(max + 1)
-                            .toInt()
-                ).coerceAtLeast(8).let {
-                    // round up to 8/16/32/64
-                    when {
-                        it <= 8 -> 8
-                        it <= 16 -> 16
-                        it <= 32 -> 32
-                        else -> 64
-                    }
+                // unsigned: max is 2^n - 1 (use unsigned comparison)
+                when {
+                    java.lang.Long.compareUnsigned(max, 0xFFL) <= 0 -> 8
+                    java.lang.Long.compareUnsigned(max, 0xFFFFL) <= 0 -> 16
+                    java.lang.Long.compareUnsigned(max, 0xFFFFFFFF) <= 0 -> 32
+                    else -> 64
                 }
             }
 
