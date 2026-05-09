@@ -19,11 +19,21 @@ kotlin {
 }
 
 tasks.test {
-    useJUnitPlatform()
+    useJUnitPlatform { excludeTags("integration") }
     testLogging {
         events("passed", "skipped", "failed")
     }
 }
+
+val integrationTest =
+    tasks.register<Test>("integrationTest") {
+        description = "Real-binary tests against ADK fixtures"
+        group = "verification"
+        useJUnitPlatform { includeTags("integration") }
+        testClassesDirs = sourceSets["test"].output.classesDirs
+        classpath = sourceSets["test"].runtimeClasspath
+        shouldRunAfter("test")
+    }
 
 val ghidraInstallDir =
     System.getenv("GHIDRA_INSTALL_DIR") ?: project.properties["GHIDRA_INSTALL_DIR"]?.toString() ?: "/opt/ghidra"
