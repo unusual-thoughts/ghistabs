@@ -350,6 +350,7 @@ class Parser(
     private fun parseMethodBlock(name: String): MethodDecl {
         c.consume('(')
         val methodCount = c.parseInt()
+        c.consume(')')
         c.consume('=')
         c.consume('#')
         val clsType = parseType()
@@ -358,15 +359,12 @@ class Parser(
         c.consume(';')
 
         val paramTypes = mutableListOf<TypeDecl>()
-        while (!c.startsWith(");")) {
+        while (c.peekOrNull() != ')') {
             paramTypes.add(parseType())
-            if (!c.startsWith(");")) {
-                c.consumeIf(';')
-            }
+            c.consumeIf(';')
         }
 
         c.consume(')')
-        c.consume(';')
 
         val mangled =
             if (c.startsWith(":_Z")) {
