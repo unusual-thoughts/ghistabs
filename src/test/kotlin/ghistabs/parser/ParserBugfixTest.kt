@@ -25,7 +25,11 @@ class ParserBugfixTest {
         val corpusFile = File(resourceUrl.toURI())
         assertTrue(corpusFile.exists(), "corpus file must exist")
 
-        val lines = corpusFile.readLines().filter { it.isNotEmpty() }
+        val lines =
+            corpusFile
+                .readLines()
+                .filter { it.isNotEmpty() }
+                .filterNot { it.startsWith("#") } // Skip comment lines
         assertTrue(lines.isNotEmpty(), "corpus must have at least one line")
 
         // Each line must parse successfully
@@ -85,6 +89,63 @@ class ParserBugfixTest {
                         if (ptr.pointee is TypeDecl.Ref) {
                             val ref = ptr.pointee as TypeDecl.Ref
                             assertEquals(TypeId(0, 30), ref.id, "Ref should be to (0,30) (the type itself)")
+                        }
+                    }
+                }
+            }
+
+        // Should complete in less than 1 second
+        assertTrue(duration.inWholeMilliseconds < 1000, "Parse should complete in <1s, took ${duration.inWholeMilliseconds}ms")
+    }
+
+    /**
+     * Struct with self-pointer field via inline typedef.
+     * Tests recursive type handling where the field type is an inline typedef
+     * that resolves to the containing struct.
+     */
+    @Test
+    fun testStructSelfPointerRecursion() {
+        val input = "Node:T(0,1)=s8next:(0,2)=*(0,1),0,32;val:(0,3)=(0,1),32,32;;"
+
+        val duration =
+            measureTime {
+                val symbol =
+                    assertDoesNotThrow({
+                        Parser(input).parseSymbol()
+                    }, "Struct with self-pointer field should parse without exception")
+
+                assertNotNull(symbol, "Parse result should not be null")
+                if (symbol is SymbolDecl.TaggedType) {
+                    val struct = symbol.body
+                    if (struct is TypeDecl.Struct) {
+                        // Should have 2 fields
+                        assertEquals(2, struct.fields.size, "Struct should have 2 fields")
+
+                        // First field 'next' should have type InlineDef wrapping Pointer(Ref(TypeId(0,1)))
+                        val nextField = struct.fields[0]
+                        assertEquals("next", nextField.name, "First field should be named 'next'")
+                        if (nextField.type is TypeDecl.InlineDef) {
+                            val inlineDef = nextField.type as TypeDecl.InlineDef
+                            assertEquals(TypeId(0, 2), inlineDef.id, "Inline def id should be (0,2)")
+                            if (inlineDef.body is TypeDecl.Pointer) {
+                                val ptr = inlineDef.body as TypeDecl.Pointer
+                                if (ptr.pointee is TypeDecl.Ref) {
+                                    val ref = ptr.pointee as TypeDecl.Ref
+                                    assertEquals(TypeId(0, 1), ref.id, "Pointer should reference (0,1) (self-reference)")
+                                }
+                            }
+                        }
+
+                        // Second field 'val' should have type InlineDef(0,3) wrapping Ref(0,1)
+                        val valField = struct.fields[1]
+                        assertEquals("val", valField.name, "Second field should be named 'val'")
+                        if (valField.type is TypeDecl.InlineDef) {
+                            val inlineDef = valField.type as TypeDecl.InlineDef
+                            assertEquals(TypeId(0, 3), inlineDef.id, "Inline def id should be (0,3)")
+                            if (inlineDef.body is TypeDecl.Ref) {
+                                val ref = inlineDef.body as TypeDecl.Ref
+                                assertEquals(TypeId(0, 1), ref.id, "Body should be Ref to (0,1)")
+                            }
                         }
                     }
                 }

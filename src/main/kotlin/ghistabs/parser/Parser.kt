@@ -9,6 +9,11 @@ package ghistabs.parser
  * - [parseTypeBody]: Parse a type descriptor (used internally and by tests).
  *
  * All other methods are private productions — one method per grammar rule.
+ *
+ * **Trailing Input:** This parser is lenient with trailing input after a complete symbol.
+ * If the input string contains multiple stab records or trailing terminators, they are
+ * silently ignored. This is intentional — the caller is responsible for processing
+ * multiple records or filtering trailing input as needed.
  */
 class Parser(
     src: String,
@@ -200,8 +205,8 @@ class Parser(
                 val saved = c.snapshot()
                 val id = c.parseTypeId()
                 if (c.consumeIf('=')) {
-                    // Inline definition: parse the body recursively
-                    parseType()
+                    // Inline definition: parse the body recursively and wrap in InlineDef
+                    TypeDecl.InlineDef(id, parseType())
                 } else {
                     // Forward reference
                     TypeDecl.Ref(id)
@@ -285,7 +290,7 @@ class Parser(
                         fields.add(FieldDecl(name, type, offsetBits, sizeBits, isStatic = false))
                     } else {
                         c.consume(':')
-                        val mangled = c.readUntilAny(charArrayOf(';'))
+                        c.readUntilAny(charArrayOf(';')) // mangled symbol; discarded — captured by COFF symbol table
                         c.consume(';')
                         fields.add(FieldDecl(name, type, 0, 0, isStatic = true))
                     }
@@ -309,7 +314,7 @@ class Parser(
                     val access = parseAccess(if (!c.eof) c.advance() else '2')
                     val type = parseType()
                     c.consume(':')
-                    val mangled = c.readUntilAny(charArrayOf(';'))
+                    c.readUntilAny(charArrayOf(';')) // mangled symbol; discarded — captured by COFF symbol table
                     c.consume(';')
                     fields.add(FieldDecl(name, type, 0, 0, isStatic = true))
                 }
@@ -346,8 +351,8 @@ class Parser(
 
         val bases = mutableListOf<BaseDecl>()
         repeat(count) {
-            val virt = c.advance().toString()[0] == '1'
-            val access = parseAccess(c.advance().toString()[0])
+            val virt = c.advance() == '1'
+            val access = parseAccess(c.advance())
             val offsetBits = c.parseInt()
             c.consume(',')
             val baseType = parseType() // handles (cu,n) ref and (cu,n)=<inline-def> forms

@@ -103,10 +103,14 @@ class ParserClassTest {
                                     name = "doIt",
                                     mangled = "_ZN3Qux4doItEi",
                                     signature =
-                                        TypeDecl.Method(
-                                            cls = TypeDecl.Ref(TypeId(0, 9)),
-                                            ret = TypeDecl.Ref(TypeId(0, 1)),
-                                            params = listOf(TypeDecl.Ref(TypeId(0, 2))),
+                                        TypeDecl.InlineDef(
+                                            id = TypeId(0, 10),
+                                            body =
+                                                TypeDecl.Method(
+                                                    cls = TypeDecl.Ref(TypeId(0, 9)),
+                                                    ret = TypeDecl.Ref(TypeId(0, 1)),
+                                                    params = listOf(TypeDecl.Ref(TypeId(0, 2))),
+                                                ),
                                         ),
                                     access = Access.PUBLIC,
                                     virt = VirtKind.NORMAL,
@@ -141,10 +145,14 @@ class ParserClassTest {
                                     name = "doIt",
                                     mangled = "_ZN3Qux4doItEi",
                                     signature =
-                                        TypeDecl.Method(
-                                            cls = TypeDecl.Ref(TypeId(0, 9)),
-                                            ret = TypeDecl.Ref(TypeId(0, 1)),
-                                            params = listOf(TypeDecl.Ref(TypeId(0, 2))),
+                                        TypeDecl.InlineDef(
+                                            id = TypeId(0, 10),
+                                            body =
+                                                TypeDecl.Method(
+                                                    cls = TypeDecl.Ref(TypeId(0, 9)),
+                                                    ret = TypeDecl.Ref(TypeId(0, 1)),
+                                                    params = listOf(TypeDecl.Ref(TypeId(0, 2))),
+                                                ),
                                         ),
                                     access = Access.PUBLIC,
                                     virt = VirtKind.VIRTUAL,
