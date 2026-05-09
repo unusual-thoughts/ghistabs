@@ -302,6 +302,7 @@ class StabsImporter(
                         val body = ast.body as? TypeDecl.Struct ?: return@mapNotNull null
                         ast.name to body
                     }.toMap()
+            val typeAstsById = typeAsts.associateBy { it.id }
             val classBuilder =
                 ghistabs.builder.ClassBuilder(
                     ctx.program,
@@ -309,6 +310,7 @@ class StabsImporter(
                     ctx.resolver,
                     ctx.sink,
                     structAstsByName,
+                    typeAstsById,
                 )
             for (ast in typeAsts) {
                 val body = ast.body as? TypeDecl.Struct ?: continue

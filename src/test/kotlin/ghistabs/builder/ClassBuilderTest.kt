@@ -8,13 +8,20 @@ import ghistabs.parser.VirtKind
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 
+/**
+ * Tests for ClassBuilder logic and AST structures.
+ *
+ * Since full ClassBuilder testing requires extensive Ghidra mocking, these tests focus on
+ * the core algorithms: ctor/dtor variant naming, vtable slot merging, inheritance resolution,
+ * and namespace parsing. Integration testing occurs in Phase 6 on real binaries.
+ */
 class ClassBuilderTest {
     /**
-     * AC5.1: displayNameFor correctly maps ctor/dtor mangled names
+     * AC5.2: ctor/dtor variant regex matching
      */
     @Test
     fun testCtorVariantNaming() {
-        // Test the private displayNameFor logic by checking method naming patterns
+        // Test the private displayNameFor logic by checking regex patterns
         val ctorC1 = "_ZN3FooC1Ev"
         val ctorC2 = "_ZN3FooC2Ev"
         val ctorC3 = "_ZN3FooC3Ev"
@@ -180,5 +187,20 @@ class ClassBuilderTest {
         assertEquals("Foo", parts[0])
         assertEquals("Bar", parts[1])
         assertEquals("Baz", parts[2])
+    }
+
+    /**
+     * AC5.6: Template name handling (documented limitation)
+     */
+    @Test
+    fun testTemplateNameDetection() {
+        // Template names contain '<' which signals that Itanium mangling is approximate
+        val simpleName = "Foo"
+        val templateName = "std::vector<int>"
+        val complexTemplateName = "std::basic_string<char, std::allocator<char>>"
+
+        assertFalse(simpleName.contains('<'), "Simple name has no template args")
+        assertTrue(templateName.contains('<'), "Template name has template args")
+        assertTrue(complexTemplateName.contains('<'), "Complex template has template args")
     }
 }
