@@ -44,8 +44,7 @@ public class StabsPlugin extends ProgramPlugin {
                     program.endTransaction(tx, true);
                 }
                 AutoAnalysisManager mgr = AutoAnalysisManager.getAnalysisManager(program);
-                StabsAnalyzer analyzer = new StabsAnalyzer();
-                mgr.scheduleOneTimeAnalysis(analyzer, program.getMemory());
+                mgr.reAnalyzeAll(null);
             }
 
             @Override

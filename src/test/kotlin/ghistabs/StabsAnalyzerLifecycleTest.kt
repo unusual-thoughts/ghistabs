@@ -12,10 +12,11 @@ import org.mockito.kotlin.whenever
  *
  * AC1.3 (first run): After marking done, the done-flag is persisted.
  * AC1.4 (re-import): Clearing the done-flag allows re-analysis.
- * AC1.5 (no-stabs): Tested with integration tests on real binaries.
+ * AC1.5 (no-stabs): Tested with integration tests on real binaries via bouniafbouniafIntegrationTest.
+ * AC1.3 (idempotence): Tested via IdempotenceTest which verifies parsing is consistent across runs.
  *
- * Note: Full lifecycle testing (canAnalyze with memory blocks) is tested via
- * integration tests on real binaries to avoid complex Ghidra mocking.
+ * Note: Full canAnalyze logic testing with memory blocks is complex to mock across Ghidra versions.
+ * It is covered by integration tests (bouniafbouniafIntegrationTest) which use real binaries.
  */
 class StabsAnalyzerLifecycleTest {
     /**
