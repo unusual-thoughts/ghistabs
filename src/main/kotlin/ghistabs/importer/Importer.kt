@@ -17,7 +17,7 @@ import ghistabs.parser.StabsParseException
 import ghistabs.parser.SymbolDecl
 
 class StabsImporter(
-    private val ctx: ImportContext,
+    internal val ctx: ImportContext,
 ) {
     fun run(): PassResult {
         val readerResult =
@@ -221,7 +221,6 @@ class StabsImporter(
     ): ApplyResult {
         val source = SourceType.IMPORTED
         val funcMgr = ctx.program.functionManager
-        val listing = ctx.program.listing
         var functions = 0
         var globals = 0
 
@@ -281,8 +280,8 @@ class StabsImporter(
             for (h in syms) {
                 try {
                     when (val d = h.decl) {
-                        is SymbolDecl.Global -> applyGlobal(d, typeRegistry, source).let { if (it) globals++ }
-                        is SymbolDecl.StaticVar -> applyStatic(d, h.rawValue, typeRegistry, source).let { if (it) globals++ }
+                        is SymbolDecl.Global -> applyGlobal(d, typeRegistry).let { if (it) globals++ }
+                        is SymbolDecl.StaticVar -> applyStatic(d, h.rawValue, typeRegistry).let { if (it) globals++ }
                         else -> Unit
                     }
                 } catch (t: Throwable) {
@@ -316,10 +315,10 @@ class StabsImporter(
                 }
 
                 is SymbolDecl.RegLocal -> {
-                    // For now, treat register locals as stack locals at offset 0
-                    // The register mapping question is deferred (see plan)
-                    val lv = LocalVariableImpl(decl.name, dt, 0, ctx.program, source)
-                    func.addLocalVariable(lv, source)
+                    ctx.sink.log(
+                        "regparam-deferred",
+                        "Register local '${decl.name}' in function deferred (register mapping not implemented)",
+                    )
                 }
             }
         } catch (e: Exception) {
@@ -382,7 +381,6 @@ class StabsImporter(
     private fun applyGlobal(
         decl: SymbolDecl.Global,
         typeRegistry: TypeRegistry,
-        source: SourceType,
     ): Boolean {
         val addr =
             ctx.resolver.resolve(decl.name) ?: run {
@@ -405,7 +403,6 @@ class StabsImporter(
         decl: SymbolDecl.StaticVar,
         rawAddr: Long,
         typeRegistry: TypeRegistry,
-        source: SourceType,
     ): Boolean {
         val addr =
             ctx.program.addressFactory.defaultAddressSpace

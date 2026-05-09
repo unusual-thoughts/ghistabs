@@ -184,4 +184,22 @@ class ParserBugfixTest {
             }, "Line ${lineNum + 1} should parse: ${line.take(100)}")
         }
     }
+
+    @Test
+    fun testGoldenCorpusPack() {
+        val resourceUrl = javaClass.classLoader.getResource("corpus/bouniaf-stabs.txt")
+        val corpusFile = if (resourceUrl != null) File(resourceUrl.toURI()) else File("")
+
+        Assumptions.assumeTrue(corpusFile.exists(), "Golden corpus file not present (Ghidra not available)")
+
+        val lines = corpusFile.readLines()
+        assertTrue(lines.size >= 1000, "Corpus should have at least 1000 descriptor lines, got ${lines.size}")
+
+        // Parse each line; none should throw
+        for ((lineNum, line) in lines.withIndex()) {
+            assertDoesNotThrow({
+                Parser(line).parseSymbol()
+            }, "Line ${lineNum + 1} should parse: ${line.take(100)}")
+        }
+    }
 }
