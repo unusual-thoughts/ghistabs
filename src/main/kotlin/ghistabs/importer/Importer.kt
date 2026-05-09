@@ -27,46 +27,16 @@ class StabsImporter(
             }
 
         val records = readerResult.records
-        ctx.monitor.initialize(records.size.toLong())
-        ctx.monitor.message = "Stabs: parsing"
-
-        // Pass A — parse + harvest
-        val typeAsts = mutableListOf<TypeAst>()
-        val symbolsByCu = mutableMapOf<String, MutableList<HarvestedSymbol>>()
-        val openFunctions = mutableListOf<OpenFunction>()
-        val parseErrors = passAHarvest(records, typeAsts, symbolsByCu, openFunctions)
-
-        // Pass B — materialise types
-        val typeRegistry = TypeRegistry(ctx.dtm, ctx.sink)
-        val txB = ctx.program.startTransaction("Stabs: materialise types")
-        try {
-            typeRegistry.materialiseAll(typeAsts) { name, cus ->
-                Attribution.categoryFor(name, cus)
-            }
-        } finally {
-            ctx.program.endTransaction(txB, true)
-        }
-
-        // Pass C — apply symbols
-        val txC = ctx.program.startTransaction("Stabs: apply symbols")
-        val applyResult =
-            try {
-                applyAllSymbols(symbolsByCu, openFunctions, typeRegistry)
-            } finally {
-                ctx.program.endTransaction(txC, true)
-            }
-
-        return PassResult(
-            recordsRead = readerResult.recordCount,
-            recordsParsed = records.size - parseErrors,
-            parseErrors = parseErrors,
-            typesMaterialised = typeAsts.size,
-            functionsApplied = applyResult.functions,
-            globalsApplied = applyResult.globals,
-        )
+        val result = runOnRecords(records, readerResult.recordCount)
+        return result.copy(recordsRead = readerResult.recordCount)
     }
 
-    internal fun runWithRecords(records: List<StabRecord>): PassResult {
+    internal fun runWithRecords(records: List<StabRecord>): PassResult = runOnRecords(records, records.size)
+
+    private fun runOnRecords(
+        records: List<StabRecord>,
+        recordCount: Int,
+    ): PassResult {
         ctx.monitor.initialize(records.size.toLong())
         ctx.monitor.message = "Stabs: parsing"
 
@@ -97,7 +67,7 @@ class StabsImporter(
             }
 
         return PassResult(
-            recordsRead = records.size,
+            recordsRead = recordCount,
             recordsParsed = records.size - parseErrors,
             parseErrors = parseErrors,
             typesMaterialised = typeAsts.size,
@@ -198,10 +168,13 @@ class StabsImporter(
                                 typeAsts += TypeAst(decl.id, decl.name, decl.body, currentCu)
                             }
 
-                            is SymbolDecl.StackLocal, is SymbolDecl.RegLocal, is SymbolDecl.StaticVar -> {
-                                open?.locals?.add(
-                                    LocalRecord(decl, rec.value),
-                                )
+                            is SymbolDecl.StackLocal, is SymbolDecl.RegLocal -> {
+                                open?.locals?.add(LocalRecord(decl, rec.value))
+                            }
+
+                            is SymbolDecl.StaticVar -> {
+                                // Function-scope static variables get their actual address from rec.value
+                                symbolsByCu.getOrPut(currentCu) { mutableListOf() } += HarvestedSymbol(decl, rec.type, rec.value)
                             }
 
                             else -> {
@@ -281,14 +254,13 @@ class StabsImporter(
                             source,
                         )
                     }
-                if (params.isNotEmpty()) {
-                    func.replaceParameters(
-                        params,
-                        Function.FunctionUpdateType.DYNAMIC_STORAGE_FORMAL_PARAMS,
-                        true,
-                        source,
-                    )
-                }
+                // Always apply parameters (even if empty) to explicitly set function signature
+                func.replaceParameters(
+                    params,
+                    Function.FunctionUpdateType.DYNAMIC_STORAGE_FORMAL_PARAMS,
+                    true,
+                    source,
+                )
 
                 // Apply locals.
                 for (loc in open.locals) {
@@ -300,7 +272,7 @@ class StabsImporter(
 
                 functions++
             } catch (t: Throwable) {
-                ctx.sink.log("apply-error", "function ${open.name} @ ${open.addr}: ${t.message}")
+                ctx.sink.bookmark("apply-error", open.addr, "function ${open.name}: ${t.message}")
             }
         }
 
@@ -333,7 +305,6 @@ class StabsImporter(
             when (decl) {
                 is SymbolDecl.StackLocal -> typeRegistry.dataTypeFor(decl.type) ?: Undefined4DataType.dataType
                 is SymbolDecl.RegLocal -> typeRegistry.dataTypeFor(decl.type) ?: Undefined4DataType.dataType
-                is SymbolDecl.StaticVar -> typeRegistry.dataTypeFor(decl.type) ?: Undefined4DataType.dataType
                 else -> return
             }
         try {
@@ -347,12 +318,6 @@ class StabsImporter(
                 is SymbolDecl.RegLocal -> {
                     // For now, treat register locals as stack locals at offset 0
                     // The register mapping question is deferred (see plan)
-                    val lv = LocalVariableImpl(decl.name, dt, 0, ctx.program, source)
-                    func.addLocalVariable(lv, source)
-                }
-
-                is SymbolDecl.StaticVar -> {
-                    // Static locals stay as locals, not globals
                     val lv = LocalVariableImpl(decl.name, dt, 0, ctx.program, source)
                     func.addLocalVariable(lv, source)
                 }
@@ -370,12 +335,11 @@ class StabsImporter(
         // the locals whose record appears inside the bracket range and
         // attach a plate comment at the LBRAC address.
         val pairs = computePairs(open.scopeBrackets, open.locals)
-        for ((openOff, closeOff, localsInScope) in pairs) {
+        for ((openOff, _, localsInScope) in pairs) {
             try {
                 val addr = func.entryPoint.add(openOff)
                 val text = "Stabs scope locals: " + localsInScope.joinToString(", ") { it.decl.name }
-                // 3 is CodeUnit.PLATE_COMMENT constant value
-                ctx.program.listing.setComment(addr, 3, text)
+                ctx.program.listing.setComment(addr, CodeUnit.PLATE_COMMENT, text)
             } catch (e: Exception) {
                 ctx.sink.log("scope-comment-error", "Failed to set scope comment: ${e.message}")
             }
@@ -386,6 +350,9 @@ class StabsImporter(
         scopeBrackets: List<Pair<StabType, Long>>,
         locals: List<LocalRecord>,
     ): List<Triple<Long, Long, List<LocalRecord>>> {
+        // For now, pair LBRAC/RBRAC and list all locals (simplified approach).
+        // A complete implementation would track local positions in the stab stream
+        // and filter to those appearing between bracket pairs.
         val pairs = mutableListOf<Triple<Long, Long, List<LocalRecord>>>()
         val stack = mutableListOf<Pair<Int, Long>>() // (scopeBracket index, offset)
 
@@ -399,8 +366,7 @@ class StabsImporter(
                     if (stack.isNotEmpty()) {
                         val (openIdx, openOff) = stack.removeAt(stack.size - 1)
                         val closeOff = bracket.second
-                        // Find locals that fall within this bracket range
-                        // For v1, we just collect all locals (a simplification)
+                        // Collect all locals (simplified: should filter by position in stab stream)
                         pairs.add(Triple(openOff, closeOff, locals.toList()))
                     }
                 }
@@ -425,6 +391,8 @@ class StabsImporter(
             }
         val dt = typeRegistry.dataTypeFor(decl.type) ?: return false
         try {
+            // Clear any existing code units before creating data to avoid conflicts
+            ctx.program.listing.clearCodeUnits(addr, addr.add((dt.length - 1).toLong()), false)
             ctx.program.listing.createData(addr, dt)
         } catch (e: Exception) {
             ctx.sink.log("apply-error", "Failed to create global data at $addr: ${e.message}")
@@ -444,6 +412,8 @@ class StabsImporter(
                 .getAddress(rawAddr)
         val dt = typeRegistry.dataTypeFor(decl.type) ?: return false
         try {
+            // Clear any existing code units before creating data to avoid conflicts
+            ctx.program.listing.clearCodeUnits(addr, addr.add((dt.length - 1).toLong()), false)
             ctx.program.listing.createData(addr, dt)
         } catch (e: Exception) {
             ctx.sink.log("apply-error", "Failed to create static data at $addr: ${e.message}")

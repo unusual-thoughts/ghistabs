@@ -18,8 +18,11 @@ import ghistabs.container.StabType
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
+import org.mockito.kotlin.argThat
+import org.mockito.kotlin.doNothing
 import org.mockito.kotlin.doReturn
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 
 class SymbolApplyTest {
@@ -39,10 +42,20 @@ class SymbolApplyTest {
         whenever(program.addressFactory).thenReturn(addressFactory)
 
         // Function manager
-        whenever(program.functionManager).thenReturn(mock<FunctionManager>())
+        val funcMgr = mock<FunctionManager>()
+        // getFunctionAt returns null by default (no pre-existing function)
+        whenever(funcMgr.getFunctionAt(any())).thenReturn(null)
+        // createFunction returns a mock Function
+        val mockFunc = mock<Function>()
+        whenever(funcMgr.createFunction(any(), any(), any(), any())).thenReturn(mockFunc)
+        whenever(program.functionManager).thenReturn(funcMgr)
 
         // Listing
-        whenever(program.listing).thenReturn(mock<Listing>())
+        val listing = mock<Listing>()
+        // clearCodeUnits is void, so we use doNothing
+        doNothing().whenever(listing).clearCodeUnits(any(), any(), any())
+        whenever(listing.createData(any(), any())).thenReturn(null)
+        whenever(program.listing).thenReturn(listing)
 
         // Bookmark manager
         whenever(program.bookmarkManager).thenReturn(mock<BookmarkManager>())
@@ -83,8 +96,9 @@ class SymbolApplyTest {
 
         val result = importer.runWithRecords(records)
 
-        // Should harvest the global symbol without crashing
-        assertNotNull(result)
+        // Should harvest the global symbol without parse errors
+        assertEquals(0, result.parseErrors, "Should have no parse errors")
+        assertEquals(2, result.recordsParsed, "Should parse both N_SO and N_GSYM records")
     }
 
     /**
@@ -104,9 +118,9 @@ class SymbolApplyTest {
 
         val result = importer.runWithRecords(records)
 
-        // Should report parse error and continue processing
-        assertEquals(1, result.parseErrors, "Should have 1 parse error")
-        assertTrue(result.recordsParsed >= 3, "Should parse at least 3 records despite error")
+        // Should report parse error but continue processing surrounding records
+        assertEquals(1, result.parseErrors, "Should have 1 parse error from malformed record")
+        assertEquals(3, result.recordsParsed, "Should parse 3 records successfully (4 total - 1 error)")
     }
 }
 
