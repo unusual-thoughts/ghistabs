@@ -29,13 +29,22 @@ import org.mockito.kotlin.whenever
  *
  * AC6.4: Re-running the importer (with done-flag cleared) on a fully-imported program
  * produces no duplicate types, no duplicate symbols, and byte-identical DTM/symbol state.
+ *
+ * Note: Full DTM state idempotence (verifying no duplicate type entries in Ghidra's
+ * DTM across multiple importer runs) requires an integration test with a real Ghidra
+ * program and DTM. With mocks, we verify that the importer's *parsing logic* is
+ * idempotent: same input → same count of records parsed, same error count, same
+ * number of types materialized.
  */
 class IdempotenceTest {
     /**
-     * AC6.4: Second run produces same type count as first run.
+     * AC6.4 (parsing idempotence): Second run with same input produces identical result counts.
+     *
+     * Tests that the parsing and counting logic is idempotent. With mock DTM/symbol state,
+     * we cannot verify true DTM state idempotence; that is deferred to integration tests.
      */
     @Test
-    fun testSecondRunProducesSameTypeCount() {
+    fun testSecondRunProducesSameParseResults() {
         val importer = buildImporter()
 
         // Simple fixture: 1 N_SO, 1 N_LSYM global, 1 type definition
@@ -51,11 +60,40 @@ class IdempotenceTest {
         // Second run (simulates cleared done-flag)
         val result2 = importer.runWithRecords(records)
 
-        // Both runs should process the same number of records
-        assertEquals(result1.recordsParsed, result2.recordsParsed, "Record count should match")
-        assertEquals(result1.parseErrors, result2.parseErrors, "Parse errors should match")
-        // Type count might be different due to DTM reset, but the structure should be idempotent
+        // Both runs should produce identical parse results
+        assertEquals(result1.recordsParsed, result2.recordsParsed, "Record count should match between runs")
+        assertEquals(result1.parseErrors, result2.parseErrors, "Parse error count should match between runs")
+        assertEquals(result1.typesMaterialised, result2.typesMaterialised, "Type count should match between runs")
+
         // The key is that no exceptions are raised on second run
+        assertTrue(result1.recordsParsed > 0, "First run should parse at least the N_SO record")
+    }
+
+    /**
+     * AC6.4 (robustness): Importer handles repeated runs without exceptions.
+     *
+     * Verifies that calling the importer multiple times with identical input
+     * does not raise exceptions, even though mock DTM doesn't track state.
+     */
+    @Test
+    fun testRepeatedRunsDoNotThrow() {
+        val importer = buildImporter()
+
+        val records =
+            listOf(
+                StabRecord(0, StabType.N_SO, 0, 0, 0, 0, "test.cpp"),
+                StabRecord(1, StabType.N_LSYM, 0x100, 0, 0, 0, "g_var:G(0,1);"),
+                StabRecord(2, StabType.N_GSYM, 0x200, 0, 0, 0, "g_global:G(0,1);"),
+            )
+
+        // Run three times without exception
+        val result1 = importer.runWithRecords(records)
+        val result2 = importer.runWithRecords(records)
+        val result3 = importer.runWithRecords(records)
+
+        // All three runs should succeed with consistent results
+        assertEquals(result1.parseErrors, result2.parseErrors)
+        assertEquals(result2.parseErrors, result3.parseErrors)
     }
 
     private fun buildImporter(): StabsImporter {
@@ -107,108 +145,4 @@ class IdempotenceTest {
         val ctx = ImportContext(program, log, monitor, options)
         return StabsImporter(ctx)
     }
-}
-
-private data class FakeAddress(
-    val addrOffset: Long,
-) : Address {
-    override fun getOffset(): Long = addrOffset
-
-    override fun getAddressSpace(): AddressSpace = error("not implemented in test")
-
-    override fun hasSameAddressSpace(addr: Address?): Boolean = error("not implemented in test")
-
-    override fun compareTo(other: Address?): Int = addrOffset.compareTo((other as FakeAddress).addrOffset)
-
-    override fun getNewAddress(offset: Long): Address = FakeAddress(offset)
-
-    override fun getNewAddress(
-        offset: Long,
-        isAddressableWordOffset: Boolean,
-    ): Address = error("not implemented in test")
-
-    override fun getNewTruncatedAddress(
-        offset: Long,
-        isAddressableWordOffset: Boolean,
-    ): Address = error("not implemented in test")
-
-    override fun getPointerSize(): Int = error("not implemented in test")
-
-    override fun next(): Address = error("not implemented in test")
-
-    override fun previous(): Address = error("not implemented in test")
-
-    override fun getOffsetAsBigInteger(): java.math.BigInteger = error("not implemented in test")
-
-    override fun getUnsignedOffset(): Long = error("not implemented in test")
-
-    override fun getAddressableWordOffset(): Long = error("not implemented in test")
-
-    override fun getSize(): Int = error("not implemented in test")
-
-    override fun subtract(address: Address?): Long = error("not implemented in test")
-
-    override fun subtract(offset: Long): Address = error("not implemented in test")
-
-    override fun subtractWrap(offset: Long): Address = error("not implemented in test")
-
-    override fun subtractWrapSpace(offset: Long): Address = error("not implemented in test")
-
-    override fun subtractNoWrap(offset: Long): Address = error("not implemented in test")
-
-    override fun addWrap(offset: Long): Address = error("not implemented in test")
-
-    override fun addWrapSpace(offset: Long): Address = error("not implemented in test")
-
-    override fun addNoWrap(offset: Long): Address = error("not implemented in test")
-
-    override fun addNoWrap(offset: java.math.BigInteger?): Address = error("not implemented in test")
-
-    override fun add(offset: Long): Address = FakeAddress(addrOffset + offset)
-
-    override fun isSuccessor(address: Address?): Boolean = error("not implemented in test")
-
-    override fun getPhysicalAddress(): Address = error("not implemented in test")
-
-    override fun isMemoryAddress(): Boolean = error("not implemented in test")
-
-    override fun isLoadedMemoryAddress(): Boolean = error("not implemented in test")
-
-    override fun isNonLoadedMemoryAddress(): Boolean = error("not implemented in test")
-
-    override fun isStackAddress(): Boolean = error("not implemented in test")
-
-    override fun isUniqueAddress(): Boolean = error("not implemented in test")
-
-    override fun isConstantAddress(): Boolean = error("not implemented in test")
-
-    override fun isHashAddress(): Boolean = error("not implemented in test")
-
-    override fun isRegisterAddress(): Boolean = error("not implemented in test")
-
-    override fun isVariableAddress(): Boolean = error("not implemented in test")
-
-    override fun isExternalAddress(): Boolean = error("not implemented in test")
-
-    override fun getAddress(addressString: String?): Address = error("not implemented in test")
-
-    override fun toString(includeAddressSpace: Boolean): String = "0x${addrOffset.toString(16)}"
-
-    override fun toString(
-        showAddressSpace: Boolean,
-        includeAddressSpace: Boolean,
-    ): String = "0x${addrOffset.toString(16)}"
-
-    override fun toString(
-        padWithZeros: Boolean,
-        minHexDigits: Int,
-    ): String = "0x${addrOffset.toString(16)}"
-
-    override fun toString(addressString: String?): String = "0x${addrOffset.toString(16)}"
-
-    override fun toString(): String = "0x${addrOffset.toString(16)}"
-
-    override fun equals(other: Any?): Boolean = (this === other) || (other is FakeAddress && addrOffset == other.addrOffset)
-
-    override fun hashCode(): Int = addrOffset.hashCode()
 }

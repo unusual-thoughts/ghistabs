@@ -26,7 +26,7 @@ class StabsAnalyzer :
         AnalyzerType.BYTE_ANALYZER,
     ) {
     init {
-        priority = AnalysisPriority(100) // LATER priority
+        priority = AnalysisPriority(200) // LATER priority (higher number = later execution)
         setDefaultEnablement(true)
         setSupportsOneTimeAnalysis()
     }
@@ -69,7 +69,7 @@ class StabsAnalyzer :
         monitor ?: return false
         if (isStabsDone(program)) return true // idempotent re-trigger; treat as success.
 
-        val opts = program.getOptions(Program.PROGRAM_INFO).getOptions(name)
+        val opts = program.getOptions(Program.ANALYSIS_PROPERTIES).getOptions(name)
         val stabsOptions =
             StabsOptions(
                 applyPlateComments = opts.getBoolean(OPT_PLATE_COMMENTS, true),
