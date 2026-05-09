@@ -77,12 +77,12 @@ class ParserPrimitiveTest {
 
     @Test
     fun testComplexDouble() {
-        val input = "complex double:t(0,17)=R3;16;0;"
+        val input = "complex double:t(0,17)=R4;16;0;"
         val expected =
             SymbolDecl.Typedef(
                 name = "complex double",
                 id = TypeId(0, 17),
-                body = TypeDecl.Complex(rCode = 3, sizeBytes = 16),
+                body = TypeDecl.Complex(rCode = 4, sizeBytes = 16),
             )
         assertEquals(expected, Parser(input).parseSymbol())
     }

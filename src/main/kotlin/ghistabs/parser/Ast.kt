@@ -8,7 +8,7 @@ data class TypeId(
 
 enum class Access { PRIVATE, PROTECTED, PUBLIC }
 
-enum class VirtKind { NORMAL, STATIC, VIRTUAL }
+enum class VirtKind { NORMAL, STATIC, VIRTUAL, PURE_VIRTUAL }
 
 enum class AggrKind { STRUCT, UNION, CLASS }
 
@@ -114,7 +114,7 @@ data class BaseDecl(
 data class MethodDecl(
     val name: String,
     val mangled: String?,
-    val signature: TypeDecl.Method,
+    val signature: TypeDecl,
     val access: Access,
     val virt: VirtKind,
     val isConst: Boolean,

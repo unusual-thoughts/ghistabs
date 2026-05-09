@@ -106,8 +106,15 @@ class ParserBugfixTest {
 
         Assumptions.assumeTrue(corpusFile.exists(), "Golden corpus file not present (Ghidra not available)")
 
-        val lines = corpusFile.readLines().filter { it.isNotEmpty() }
-        assertTrue(lines.size >= 1000, "Corpus should have at least 1000 lines, got ${lines.size}")
+        // Skip N_SO source-file path lines (e.g. "E:/work/cc/...", or Unix paths ending in "/")
+        // These are filename records emitted by the stabs_stats dump, not symbol descriptors.
+        val lines =
+            corpusFile
+                .readLines()
+                .filter { it.isNotEmpty() }
+                .filterNot { it.matches(Regex("^[A-Za-z]:/.*")) } // Windows drive-letter paths
+                .filterNot { it.endsWith("/") } // Unix directory paths
+        assertTrue(lines.size >= 1000, "Corpus should have at least 1000 descriptor lines, got ${lines.size}")
 
         // Parse each line; none should throw
         for ((lineNum, line) in lines.withIndex()) {

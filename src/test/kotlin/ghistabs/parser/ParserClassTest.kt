@@ -86,7 +86,7 @@ class ParserClassTest {
 
     @Test
     fun testMethodWithMangledSymbol() {
-        val input = "Qux:T(0,9)=s4doIt::(1)=#(0,9),(0,1);(0,2);):_ZN3Qux4doItEi;2A.;;;"
+        val input = "Qux:T(0,9)=s4doIt::(0,10)=#(0,9),(0,1),(0,2);:_ZN3Qux4doItEi;2A.;;"
         val expected =
             SymbolDecl.TaggedType(
                 name = "Qux",
@@ -124,7 +124,7 @@ class ParserClassTest {
 
     @Test
     fun testVirtualMethod() {
-        val input = "Qux:T(0,9)=s4doIt::(1)=#(0,9),(0,1);(0,2);):_ZN3Qux4doItEi;2A*0;(0,9);;;;"
+        val input = "Qux:T(0,9)=s4doIt::(0,10)=#(0,9),(0,1),(0,2);:_ZN3Qux4doItEi;2A*0;(0,9);;;"
         val expected =
             SymbolDecl.TaggedType(
                 name = "Qux",
