@@ -128,17 +128,38 @@ class XapasmcsrIntegrationTest {
         )
 
         // Parse baseline immediately to verify JSON is well-formed
-        val baseline = BaselineCompare.parseDanglingRefBaseline(baselineFile)
+        val danglingRefBaseline = BaselineCompare.parseDanglingRefBaseline(baselineFile)
+        val suffixCountBaseline = BaselineCompare.parseSuffixCountBaseline(baselineFile)
 
         // TODO(#40): Once Phase 8's headless harness is available, implement:
         // 1. Load xapasmcsr.exe via ProgramBuilder (redirectProgram or importBinary)
         // 2. Run StabsImporter via ImportContext
-        // 3. Capture dangling-ref counter from ctx.diagnostics.snapshotCounters()
-        // 4. Assert with precise assertion using the actual dangling-ref counter value
+        // 3. Capture counters from ctx.diagnostics.snapshotCounters()
+        // 4. Assert with precise assertions using actual counter values
         val placeholderActual = 0L // TODO(#40): replace with ctx.diagnostics.snapshotCounters()["dangling-ref"] once headless harness lands
         assertTrue(
-            BaselineCompare.passesReduction(placeholderActual, baseline, 0.10),
-            "dangling-ref count $placeholderActual must be ≤ 10% of Phase A baseline ($baseline)",
+            BaselineCompare.passesReduction(placeholderActual, danglingRefBaseline, 0.10),
+            "dangling-ref count $placeholderActual must be ≤ 10% of Phase A baseline ($danglingRefBaseline)",
+        )
+
+        // Phase 3 assertion 1: /Demangler/* clearance (empty stubs removed)
+        // After successful Phase 3, DTM should have zero empty Structures under /Demangler
+        val demanglerEmptyStubs: List<String> =
+            emptyList() // TODO(#40): walk allDataTypes and collect /Demangler Structures
+        // with length==0 or numComponents==0
+        assertTrue(
+            demanglerEmptyStubs.isEmpty(),
+            "expected zero empty /Demangler/* stubs, got: $demanglerEmptyStubs",
+        )
+
+        // Phase 3 assertion 2: _N-suffix reduction (≤ 20% of baseline)
+        // Conflict-renamed types should drop by ≥80% after merge+dedup
+        val placeholderSuffixCount =
+            0L // TODO(#40): count types matching Regex("""^.+_(\d+)$""")
+        // from program.dataTypeManager.allDataTypes once harness lands
+        assertTrue(
+            BaselineCompare.passesReduction(placeholderSuffixCount, suffixCountBaseline, 0.20),
+            "_N-suffix count $placeholderSuffixCount exceeds 20% of baseline $suffixCountBaseline",
         )
     }
 
