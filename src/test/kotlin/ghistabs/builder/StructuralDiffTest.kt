@@ -51,10 +51,10 @@ class StructuralDiffTest {
         val plan = (result as StructDiffResult.GapMergeable).mergePlan
         assertEquals(2, plan.size, "Should have 2 merge ops (fieldA from left to right, fieldB from right to left)")
         // One op should place fieldB at offset 4
-        val fieldBOp = plan.find { !it.sourceFromLeft && it.targetOffsetBytes == 4 }
+        val fieldBOp = plan.find { !it.sourceFromLeft && it.sourceComponent.offsetBytes == 4 }
         assertTrue(fieldBOp != null, "Should have merge op for fieldB at offset 4")
         // One op should place fieldA at offset 0
-        val fieldAOp = plan.find { it.sourceFromLeft && it.targetOffsetBytes == 0 }
+        val fieldAOp = plan.find { it.sourceFromLeft && it.sourceComponent.offsetBytes == 0 }
         assertTrue(fieldAOp != null, "Should have merge op for fieldA at offset 0")
     }
 
@@ -165,7 +165,7 @@ class StructuralDiffTest {
 
         val plan = (result as StructDiffResult.GapMergeable).mergePlan
         assertEquals(1, plan.size, "Should have 1 merge op for the extended field")
-        assertEquals(12, plan[0].targetOffsetBytes, "Extended field at byte 12")
+        assertEquals(12, plan[0].sourceComponent.offsetBytes, "Extended field at byte 12")
         assertFalse(plan[0].sourceFromLeft, "Extended field comes from right")
     }
 

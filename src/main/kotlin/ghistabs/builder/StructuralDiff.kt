@@ -30,13 +30,11 @@ sealed class StructDiffResult {
 /**
  * Represents a field from one side that should be merged into the other.
  * sourceFromLeft: true means the field comes from the left side, false means right side.
- * sourceComponent: the actual component being merged.
- * targetOffsetBytes: the byte offset in the target struct where this should appear.
+ * sourceComponent: the actual component being merged (includes offsetBytes for target position).
  */
 data class MergeOp(
     val sourceFromLeft: Boolean,
     val sourceComponent: ComponentRecord,
-    val targetOffsetBytes: Int,
 )
 
 /**
@@ -160,11 +158,13 @@ object StructuralDiff {
                 )
             }
 
-            mergeOps.add(MergeOp(fromLeft, component, component.offsetBytes))
+            mergeOps.add(MergeOp(fromLeft, component))
         }
 
         // 6. Return result
-        return if (mergeOps.isEmpty()) {
+        // If lengths differ but no merge ops are needed, still return GapMergeable (with empty plan)
+        // so the caller can reconcile the lengths. NEVER return Identical if lengths differ.
+        return if (mergeOps.isEmpty() && leftLengthBytes == rightLengthBytes) {
             StructDiffResult.Identical
         } else {
             StructDiffResult.GapMergeable(mergeOps)
