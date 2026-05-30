@@ -1,6 +1,7 @@
 package ghistabs.diag
 
 import ghistabs.diag.BaselineCompare.parseDanglingRefBaseline
+import ghistabs.diag.BaselineCompare.parseSuffixCountBaseline
 import ghistabs.diag.BaselineCompare.passesReduction
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -84,6 +85,42 @@ class BaselineCompareTest {
         // Even if actual == baseline, threshold is typically much smaller,
         // so this should fail for default ratio
         assertFalse(passesReduction(100L, 100L, 0.10))
+    }
+
+    @Test
+    fun `parse valid suffix count baseline JSON`() {
+        val tempFile = createTempFileWithContent("""{"_N-suffix-count": 54321}""")
+        val result = parseSuffixCountBaseline(tempFile)
+        assertEquals(54321L, result)
+    }
+
+    @Test
+    fun `parse suffix count baseline with whitespace`() {
+        val tempFile =
+            createTempFileWithContent(
+                """
+                {
+                  "_N-suffix-count"  :  11111
+                }
+                """.trimIndent(),
+            )
+        val result = parseSuffixCountBaseline(tempFile)
+        assertEquals(11111L, result)
+    }
+
+    @Test
+    fun `parse suffix count fails with missing key`() {
+        val tempFile = createTempFileWithContent("""{"other-key": 123}""")
+        assertThrows(IllegalArgumentException::class.java) {
+            parseSuffixCountBaseline(tempFile)
+        }
+    }
+
+    @Test
+    fun `parse suffix count with zero value`() {
+        val tempFile = createTempFileWithContent("""{"_N-suffix-count": 0}""")
+        val result = parseSuffixCountBaseline(tempFile)
+        assertEquals(0L, result)
     }
 
     private fun createTempFileWithContent(content: String): File {
