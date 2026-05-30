@@ -4,8 +4,21 @@ import ghidra.program.model.data.CategoryPath
 import ghistabs.diag.StabsDiagnostics
 
 object Attribution {
-    private val STD_MARKERS = Regex("""/(mingw|cygwin|c\+\+|bits)/""")
+    /**
+     * STD_MARKERS regex now requires stdlib indicators (/usr/, /lib/, /include/) before the marker.
+     * This prevents false positives on project-local directories like /proj/src/c++_helpers/
+     */
+    private val STD_MARKERS =
+        Regex("""/(usr|lib|include)/.*(mingw|cygwin|c\+\+|bits)/""")
     private val UNCLEAN_CHARS = Regex("""[<>,:]""")
+
+    /**
+     * Project override names: types that should always route to /proj/
+     * even if their defining CU matches a stdlib pattern.
+     * Used to handle edge cases where stabs data mis-attributes types to stdlib paths.
+     */
+    private val PROJECT_OVERRIDE_NAMES = setOf("bouniaf")
+
     private val BUILTIN_NAMES =
         setOf(
             "int",
@@ -30,7 +43,13 @@ object Attribution {
         definingCUs: Set<String>,
         diagnostics: StabsDiagnostics? = null,
     ): CategoryPath {
-        // 1. Check if ANY definingCU path matches STD_MARKERS
+        // 1. Check project override list FIRST (safety net for edge cases)
+        if (typeName in PROJECT_OVERRIDE_NAMES) {
+            diagnostics?.inc("attribution-override")
+            return CategoryPath("/proj/$typeName")
+        }
+
+        // 2. Check if ANY definingCU path matches STD_MARKERS
         val stdMatch = definingCUs.firstNotNullOfOrNull { stdBasename(it) }
         if (stdMatch != null) {
             diagnostics?.recordAttributionTrace(
