@@ -130,14 +130,15 @@ class XapasmcsrIntegrationTest {
         // Parse baseline immediately to verify JSON is well-formed
         val baseline = BaselineCompare.parseDanglingRefBaseline(baselineFile)
 
-        // TODO: Once Phase 8's headless harness is available, implement:
+        // TODO(#40): Once Phase 8's headless harness is available, implement:
         // 1. Load xapasmcsr.exe via ProgramBuilder (redirectProgram or importBinary)
         // 2. Run StabsImporter via ImportContext
         // 3. Capture dangling-ref counter from ctx.diagnostics.snapshotCounters()
-        // 4. Assert with precise assertion:
+        // 4. Assert with precise assertion using the actual dangling-ref counter value
+        val placeholderActual = 0L // TODO(#40): replace with ctx.diagnostics.snapshotCounters()["dangling-ref"] once headless harness lands
         assertTrue(
-            BaselineCompare.passesReduction(0L, baseline, 0.10),
-            "dangling-ref count must be ≤ 10% of Phase A baseline ($baseline)",
+            BaselineCompare.passesReduction(placeholderActual, baseline, 0.10),
+            "dangling-ref count $placeholderActual must be ≤ 10% of Phase A baseline ($baseline)",
         )
     }
 
