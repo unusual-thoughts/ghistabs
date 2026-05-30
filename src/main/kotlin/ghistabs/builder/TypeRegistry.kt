@@ -1,6 +1,21 @@
 package ghistabs.builder
 
-import ghidra.program.model.data.*
+import ghidra.program.model.data.ArrayDataType
+import ghidra.program.model.data.CategoryPath
+import ghidra.program.model.data.Composite
+import ghidra.program.model.data.DataType
+import ghidra.program.model.data.DataTypeConflictHandler
+import ghidra.program.model.data.DataTypeManager
+import ghidra.program.model.data.EnumDataType
+import ghidra.program.model.data.FunctionDefinitionDataType
+import ghidra.program.model.data.ParameterDefinitionImpl
+import ghidra.program.model.data.PointerDataType
+import ghidra.program.model.data.Structure
+import ghidra.program.model.data.StructureDataType
+import ghidra.program.model.data.Undefined4DataType
+import ghidra.program.model.data.Union
+import ghidra.program.model.data.UnionDataType
+import ghidra.program.model.data.VoidDataType
 import ghistabs.diag.GapRecord
 import ghistabs.importer.BookmarkSink
 import ghistabs.parser.AggrKind
@@ -222,7 +237,7 @@ class TypeRegistry(
                     StructureDataType(category, name, 0, dtm)
                 }
             }
-        ctx?.diagnostics?.recordPlaceholder(name, category.toString(), reason)
+        ctx.diagnostics.recordPlaceholder(name, category.toString(), reason)
         return dt
     }
 
@@ -342,13 +357,13 @@ class TypeRegistry(
 
                 // Record gaps for this struct
                 if (struct is Structure) {
-                    val componentRecords = mutableListOf<Pair<String, Pair<Int, Int>>>()
+                    val componentRecords: MutableList<Pair<String, Pair<Int, Int>>> = mutableListOf()
                     for (component in struct.components) {
-                        componentRecords.add(component.fieldName to (component.offset to component.length))
+                        componentRecords.add(Pair(component.fieldName, Pair(component.offset, component.length)))
                     }
                     val gaps = computeGaps(componentRecords, body.sizeBytes.toInt())
                     val qualifiedName = "$category/${ast.name}"
-                    ctx?.diagnostics?.recordStructGaps(qualifiedName, gaps)
+                    ctx.diagnostics.recordStructGaps(qualifiedName, gaps)
                 }
 
                 struct
@@ -388,7 +403,7 @@ class TypeRegistry(
                 // Back-reference — should already be in byId from a prior resolve
                 byId[body.id] ?: run {
                     sink.log("dangling-ref", "Dangling ref to (${body.id.cu},${body.id.n}) in '${ast.name}'")
-                    ctx?.diagnostics?.recordUnresolvedRef("(${body.id.cu},${body.id.n})", ast.name, ast.cuFile)
+                    ctx.diagnostics.recordUnresolvedRef("(${body.id.cu},${body.id.n})", ast.name, ast.cuFile)
                     Undefined4DataType.dataType
                 }
             }
@@ -423,7 +438,7 @@ class TypeRegistry(
         val copy = dt.copy(dtm)
         copy.name = "${name}_$n"
         sink.log("type-conflict", "Two definitions of '$name' with different bodies; second renamed to '${name}_$n'")
-        ctx?.diagnostics?.recordDedup(kind = "rename", name = name, detail = "renamed-to-${name}_$n")
+        ctx.diagnostics.recordDedup(kind = "rename", name = name, detail = "renamed-to-${name}_$n")
         byPath[category to "${name}_$n"] = hash
         return dtm.addDataType(copy, DataTypeConflictHandler.KEEP_HANDLER)
     }

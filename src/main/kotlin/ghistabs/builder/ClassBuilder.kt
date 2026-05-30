@@ -1,6 +1,11 @@
 package ghistabs.builder
 
-import ghidra.program.model.data.*
+import ghidra.program.model.data.CategoryPath
+import ghidra.program.model.data.DataTypeConflictHandler
+import ghidra.program.model.data.PointerDataType
+import ghidra.program.model.data.Structure
+import ghidra.program.model.data.StructureDataType
+import ghidra.program.model.data.Undefined4DataType
 import ghidra.program.model.gclass.ClassUtils
 import ghidra.program.model.listing.CommentType
 import ghidra.program.model.listing.GhidraClass
@@ -216,7 +221,7 @@ class ClassBuilder(
         // inheritance, surfaces as a question for MI in Open Questions).
         val virtuals = mergeVtableSlots(inherited, ownVirtuals)
         if (virtuals.isEmpty()) {
-            ctx?.diagnostics?.recordVtable(className, "skipped", reason = "no-virtuals")
+            ctx.diagnostics.recordVtable(className, "skipped", reason = "no-virtuals")
             return
         }
 
@@ -251,7 +256,7 @@ class ClassBuilder(
         val addr =
             resolver.resolve(mangledItanium) ?: resolver.resolve(mangledGcc2) ?: run {
                 sink.log("vtable-unresolved", "no _ZTV symbol for $className")
-                ctx?.diagnostics?.recordVtable(className, "failed", reason = "unresolved-_ZTV-symbol")
+                ctx.diagnostics.recordVtable(className, "failed", reason = "unresolved-_ZTV-symbol")
                 return
             }
 
@@ -259,7 +264,7 @@ class ClassBuilder(
         program.listing.clearCodeUnits(addr, addr.add(vtable.length.toLong() - 1), false)
         program.listing.createData(addr, vtable)
         sink.bookmark("vtable", addr, "applied $vtableName")
-        ctx?.diagnostics?.recordVtable(className, "applied")
+        ctx.diagnostics.recordVtable(className, "applied")
 
         // 5. Plate-comment each virtual method.
         var off = 0L
@@ -278,7 +283,7 @@ class ClassBuilder(
                         "vtable-virtual-unresolved",
                         "no Function at $mAddr for virtual method ${m.name} in $className",
                     )
-                    ctx?.diagnostics?.recordVtable(className, "failed", reason = "virtual-method-unresolved")
+                    ctx.diagnostics.recordVtable(className, "failed", reason = "virtual-method-unresolved")
                 }
             } else {
                 sink.log(
