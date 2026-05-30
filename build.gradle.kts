@@ -9,6 +9,14 @@ dependencies {
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
+// Add Ghidra test JARs for integration tests (AbstractGhidraHeadlessIntegrationTest)
+val ghidraInstallDirForTests =
+    System.getenv("GHIDRA_INSTALL_DIR") ?: project.properties["GHIDRA_INSTALL_DIR"]?.toString() ?: "/opt/ghidra"
+
+dependencies {
+    testImplementation(fileTree(mapOf("dir" to "$ghidraInstallDirForTests/Ghidra/Features/Base/lib", "include" to "Base.jar")))
+}
+
 repositories {
     mavenCentral()
 }
@@ -28,6 +36,9 @@ tasks.test {
     testLogging {
         events("passed", "skipped", "failed")
     }
+    // Exclude integration test classes from unit test run to avoid loading
+    // AbstractGhidraHeadlessIntegrationTest during classpath scanning
+    exclude("**/integration/**")
 }
 
 val integrationTest =
