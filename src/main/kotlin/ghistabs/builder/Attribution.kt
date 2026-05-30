@@ -6,10 +6,12 @@ import ghistabs.diag.StabsDiagnostics
 object Attribution {
     /**
      * STD_MARKERS regex now requires stdlib indicators (/usr/, /lib/, /include/) before the marker.
+     * The (/ [^/]+)? allows zero or one intermediate directory between prefix and marker.
      * This prevents false positives on project-local directories like /proj/src/c++_helpers/
+     * while still matching real stdlib paths like /usr/include/c++/ and /usr/local/mingw/
      */
     private val STD_MARKERS =
-        Regex("""/(usr|lib|include)/.*(mingw|cygwin|c\+\+|bits)/""")
+        Regex("""/(usr|lib|include)(/[^/]+)?/(mingw|cygwin|c\+\+|bits)/""")
     private val UNCLEAN_CHARS = Regex("""[<>,:]""")
 
     /**
