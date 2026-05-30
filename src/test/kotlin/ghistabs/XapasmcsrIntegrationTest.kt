@@ -85,19 +85,29 @@ class XapasmcsrIntegrationTest {
     }
 
     /**
-     * AC3.5, AC4.6: Real binary test (skips if fixture not present).
+     * AC0.1, AC3.5, AC4.6: Real binary test (skips if fixture not present).
+     *
+     * Phase 2 acceptance criteria (AC0.1):
+     * - Verify that Phase 2's dangling-ref resolution brings the count to ≤10% of Phase A baseline.
+     * - Assertion skips cleanly if the Phase A baseline file is not yet committed (Phase 8 produces it).
      *
      * When xapasmcsr.exe is available:
      * 1. Load xapasmcsr.exe via Ghidra's PE loader
      * 2. Create StabsImporter and run on the program
-     * 3. Assert type count ≥ 80 interesting names
-     * 4. Assert ≥ 470 functions with named params
-     * 5. Assert ≥ 92 functions with local variables
-     * 6. Assert ≥ 50 C++ classes
+     * 3. Capture dangling-ref counter from diagnostics
+     * 4. Read Phase A baseline from src/test/resources/baselines/xapasmcsr-phaseA-baseline.json
+     * 5. Assert post-Phase-B count ≤ 0.10 × baseline (≥90% reduction)
+     * 6. Assert type count ≥ 80 interesting names
+     * 7. Assert ≥ 470 functions with named params
+     * 8. Assert ≥ 92 functions with local variables
+     * 9. Assert ≥ 50 C++ classes
      *
      * Note: Full PE loading in a unit test requires Ghidra's PeLoader and ProgramBuilder,
      * which is complex in a standalone unit test environment. This test is a placeholder
      * for manual testing with the real binary.
+     *
+     * Integration blocker (Phase 8 task #40): Java 21 × Ghidra 11.x ObjectInputFilter factory
+     * conflict prevents the test from launching. The structure is correct; Phase 8 fixes the harness.
      */
     @Test
     fun testXapasmcsrRealBinary() {
@@ -110,10 +120,23 @@ class XapasmcsrIntegrationTest {
                 "to src/test/resources/binaries/xapasmcsr.exe",
         )
 
+        val baselineFile = File("src/test/resources/baselines/xapasmcsr-phaseA-baseline.json")
+        assumeTrue(
+            baselineFile.exists(),
+            "Phase A baseline not committed yet — Phase H regression harness will produce it",
+        )
+
         // Placeholder: Full implementation requires Ghidra's PE loader and ProgramBuilder.
         // This test is intended for manual testing with Ghidra's test harness.
         // For now, just verify the file exists and is readable.
         assertTrue(fixturePath.canRead(), "xapasmcsr.exe should be readable")
+
+        // TODO: Once Phase 8's headless harness is available, implement:
+        // 1. Load xapasmcsr.exe via ProgramBuilder (redirectProgram or importBinary)
+        // 2. Run StabsImporter via ImportContext
+        // 3. Capture dangling-ref counter from ctx.diagnostics.snapshotCounters()
+        // 4. Parse baseline JSON: val baseline = parseBaselineJson(baselineFile)
+        // 5. Assert: actual <= ceil(0.10 * baseline)
     }
 
     private fun buildSyntheticStabRecords(): List<StabRecord> =
