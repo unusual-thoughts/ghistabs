@@ -156,4 +156,51 @@ class IncludeContext(
         // Local type: return as-is.
         return localId
     }
+
+    /**
+     * Canonicalizes all TypeIds within a TypeDecl tree (refs, inline defs, etc.).
+     * Recursively walks the TypeDecl structure and rewrites TypeIds via canonicalTypeId().
+     */
+    fun canonicalizeTypeDecl(decl: TypeDecl): TypeDecl =
+        when (decl) {
+            is TypeDecl.Ref -> TypeDecl.Ref(canonicalTypeId(decl.id))
+            is TypeDecl.Range -> TypeDecl.Range(canonicalTypeId(decl.of), decl.min, decl.max)
+            is TypeDecl.Pointer -> TypeDecl.Pointer(canonicalizeTypeDecl(decl.pointee))
+            is TypeDecl.Reference -> TypeDecl.Reference(canonicalizeTypeDecl(decl.referent))
+            is TypeDecl.Const -> TypeDecl.Const(canonicalizeTypeDecl(decl.inner))
+            is TypeDecl.Volatile -> TypeDecl.Volatile(canonicalizeTypeDecl(decl.inner))
+            is TypeDecl.Array ->
+                TypeDecl.Array(
+                    canonicalizeTypeDecl(decl.element),
+                    decl.length,
+                    decl.indexType?.let { canonicalizeTypeDecl(it) },
+                )
+            is TypeDecl.Enum -> decl // Enums have no TypeId references
+            is TypeDecl.Struct ->
+                TypeDecl.Struct(
+                    decl.kind,
+                    decl.sizeBytes,
+                    decl.bases.map { BaseDecl(canonicalizeTypeDecl(it.type), it.isVirtual, it.access, it.offsetBits) },
+                    decl.fields.map { FieldDecl(it.name, canonicalizeTypeDecl(it.type), it.offsetBits, it.sizeBits, it.isStatic) },
+                    decl.methods,
+                    decl.hasVTablePointerMarker,
+                    decl.vtableTargetTypeId?.let { canonicalTypeId(it) },
+                )
+            is TypeDecl.FunctionT ->
+                TypeDecl.FunctionT(
+                    canonicalizeTypeDecl(decl.ret),
+                    decl.params.map { canonicalizeTypeDecl(it) },
+                )
+            is TypeDecl.Method ->
+                TypeDecl.Method(
+                    canonicalizeTypeDecl(decl.cls),
+                    canonicalizeTypeDecl(decl.ret),
+                    decl.params.map { canonicalizeTypeDecl(it) },
+                )
+            is TypeDecl.Complex -> decl
+            is TypeDecl.XRef -> decl
+            is TypeDecl.WithSizeAttr -> TypeDecl.WithSizeAttr(decl.sizeBits, canonicalizeTypeDecl(decl.inner))
+            is TypeDecl.InlineDef -> TypeDecl.InlineDef(canonicalTypeId(decl.id), canonicalizeTypeDecl(decl.body))
+            TypeDecl.Builtin -> decl
+        }
 }

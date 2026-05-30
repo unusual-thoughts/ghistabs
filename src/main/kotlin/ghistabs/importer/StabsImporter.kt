@@ -12,6 +12,8 @@ import ghistabs.builder.TypeRegistry
 import ghistabs.container.StabReader
 import ghistabs.container.StabRecord
 import ghistabs.container.StabType
+import ghistabs.parser.IncludeContext
+import ghistabs.parser.LogSink
 import ghistabs.parser.Parser
 import ghistabs.parser.StabsParseException
 import ghistabs.parser.SymbolDecl
@@ -19,7 +21,14 @@ import ghistabs.parser.TypeDecl
 
 class StabsImporter(
     internal val ctx: ImportContext,
-) {
+) : LogSink {
+    override fun log(
+        tag: String,
+        message: String,
+    ) {
+        ctx.sink.log(tag, message)
+    }
+
     fun run(): PassResult {
         val readerResult = StabReader.fromProgram(ctx.program)
         if (readerResult == null) {
@@ -91,14 +100,42 @@ class StabsImporter(
         var parseErrors = 0
         var currentCu = "<unknown>"
         var currentFunction: OpenFunction? = null
+        var currentInclude: IncludeContext? = null
 
         for ((i, rec) in records.withIndex()) {
             ctx.monitor.checkCancelled()
             ctx.monitor.incrementProgress(1)
 
             when (rec.type) {
-                StabType.N_SO, StabType.N_SOL -> {
-                    if (rec.name.isNotEmpty()) currentCu = rec.name
+                StabType.N_SO -> {
+                    if (rec.name.isNotEmpty()) {
+                        currentCu = rec.name
+                        currentInclude = IncludeContext(rec.name, this)
+                        currentInclude.openSource(rec.name)
+                    }
+                }
+
+                StabType.N_SOL -> {
+                    if (rec.name.isNotEmpty()) {
+                        currentCu = rec.name
+                        currentInclude?.switchSource(rec.name)
+                    }
+                }
+
+                StabType.N_BINCL -> {
+                    val filename = rec.name.ifEmpty { "<unknown>" }
+                    val checksum = rec.value
+                    currentInclude?.beginInclude(filename, checksum)
+                }
+
+                StabType.N_EINCL -> {
+                    currentInclude?.endInclude()
+                }
+
+                StabType.N_EXCL -> {
+                    val filename = rec.name.ifEmpty { "<unknown>" }
+                    val checksum = rec.value
+                    currentInclude?.reMountExcluded(filename, checksum)
                 }
 
                 StabType.N_FUN -> {
@@ -172,11 +209,15 @@ class StabsImporter(
                     try {
                         when (val decl = Parser(rec.name).parseSymbol()) {
                             is SymbolDecl.TaggedType -> {
-                                typeAsts += TypeAst(decl.id, decl.name, decl.body, currentCu)
+                                val canonicalId = currentInclude?.canonicalTypeId(decl.id) ?: decl.id
+                                val canonicalBody = currentInclude?.canonicalizeTypeDecl(decl.body) ?: decl.body
+                                typeAsts += TypeAst(canonicalId, decl.name, canonicalBody, currentCu)
                             }
 
                             is SymbolDecl.Typedef -> {
-                                typeAsts += TypeAst(decl.id, decl.name, decl.body, currentCu)
+                                val canonicalId = currentInclude?.canonicalTypeId(decl.id) ?: decl.id
+                                val canonicalBody = currentInclude?.canonicalizeTypeDecl(decl.body) ?: decl.body
+                                typeAsts += TypeAst(canonicalId, decl.name, canonicalBody, currentCu)
                             }
 
                             is SymbolDecl.StackLocal, is SymbolDecl.RegLocal -> {
