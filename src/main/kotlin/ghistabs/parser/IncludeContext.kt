@@ -11,6 +11,33 @@ interface LogSink {
 }
 
 /**
+ * Global registry for header files shared across multiple CUs via BINCL/EXCL.
+ * Maintains canonical CU integer mapping to avoid hashCode() collisions.
+ */
+class HeaderRegistry {
+    /** (filename, checksum) → HeaderFile for cross-CU BINCL/EXCL sharing. */
+    val globalByFilenameChecksum: MutableMap<Pair<String, Long>, HeaderFile> = mutableMapOf()
+
+    /** Canonical CU integers: (filename, checksum) key → unique integer (collision-free). */
+    private val canonicalCuByKey: MutableMap<String, Int> = mutableMapOf()
+
+    /**
+     * Allocates a canonical CU integer for a header key (string form of (filename, checksum)).
+     * Uses a counter to ensure no collisions, unlike hashCode().
+     */
+    fun allocateCanonicalCu(key: String): Int =
+        canonicalCuByKey.getOrPut(key) {
+            canonicalCuByKey.size + 1
+        }
+
+    /** Clear all registries (for test isolation). */
+    fun clear() {
+        globalByFilenameChecksum.clear()
+        canonicalCuByKey.clear()
+    }
+}
+
+/**
  * Represents one BINCL-or-source-file entity. Two CUs that include or EXCL the same
  * (filename, checksum) share a single HeaderFile instance.
  */
@@ -46,17 +73,11 @@ data class HeaderFile(
 class IncludeContext(
     val cuFile: String,
     private val sink: LogSink,
+    val registry: HeaderRegistry = HeaderRegistry(),
 ) {
     private val fileNumToHeader: MutableMap<Int, HeaderFile> = mutableMapOf()
     private val includeStack: ArrayDeque<HeaderFile> = ArrayDeque()
     private var nextFileNum: Int = 1
-
-    companion object {
-        /** Global registry: (filename, checksum) → HeaderFile for cross-CU sharing. */
-        object HeaderRegistry {
-            val globalByFilenameChecksum: MutableMap<Pair<String, Long>, HeaderFile> = mutableMapOf()
-        }
-    }
 
     /**
      * Start of CU: allocates fileNum=1 and registers the CU's own source header.
@@ -92,7 +113,7 @@ class IncludeContext(
         val fileNum = nextFileNum++
         val key = filename to checksum
         val header =
-            HeaderRegistry.globalByFilenameChecksum.getOrPut(key) {
+            registry.globalByFilenameChecksum.getOrPut(key) {
                 HeaderFile(filename, checksum, originatingCu = cuFile)
             }
         fileNumToHeader[fileNum] = header
@@ -102,10 +123,13 @@ class IncludeContext(
 
     /**
      * N_EINCL: pops the include stack. No fileNum change.
+     * Logs a warning if stack is empty (unbalanced N_EINCL).
      */
     fun endInclude() {
         if (includeStack.isNotEmpty()) {
             includeStack.pop()
+        } else {
+            sink.log("einc-unbalanced", "endInclude with empty stack")
         }
     }
 
@@ -113,6 +137,8 @@ class IncludeContext(
      * N_EXCL: allocates fileNum for a header that was previously INCLUDed (or will be later, in the case
      * of a forward EXCL). If the (filename, checksum) is already known globally, reuses it. Otherwise,
      * allocates a placeholder header with originatingCu = "<unknown>". Does NOT push includeStack.
+     * The placeholder is registered ONLY in the local fileNumToHeader, NOT in the global registry,
+     * so a later real BINCL gets its own slot and the forward-EXCL CU's types diverge from it.
      * Returns fileNum.
      */
     fun reMountExcluded(
@@ -122,13 +148,12 @@ class IncludeContext(
         val fileNum = nextFileNum++
         val key = filename to checksum
         val header =
-            HeaderRegistry.globalByFilenameChecksum.getOrElse(key) {
-                // Forward EXCL before BINCL: create placeholder
-                sink.log("forward-excl", "$filename checksum=0x${checksum.toString(16)}")
-                HeaderFile(filename, checksum, originatingCu = "<unknown>").also {
-                    HeaderRegistry.globalByFilenameChecksum[key] = it
+            registry.globalByFilenameChecksum[key]
+                ?: run {
+                    // Forward EXCL before BINCL: create placeholder, store only locally
+                    sink.log("forward-excl", "$filename checksum=0x${checksum.toString(16)}")
+                    HeaderFile(filename, checksum, originatingCu = "<unknown>")
                 }
-            }
         fileNumToHeader[fileNum] = header
         return fileNum
     }
@@ -154,8 +179,8 @@ class IncludeContext(
 
         // If this is a BINCL-originated header (not the CU's own source), canonicalize.
         if (header.checksum != 0L || header.originatingCu != cuFile) {
-            // Use the header's canonical key as the CU identifier (as an integer hash).
-            val canonicalCu = header.canonicalKey().hashCode()
+            // Use the header's canonical key, mapped to a collision-free integer via the registry.
+            val canonicalCu = registry.allocateCanonicalCu(header.canonicalKey())
             return TypeId(canonicalCu, localId.n)
         }
 
@@ -188,7 +213,18 @@ class IncludeContext(
                     decl.sizeBytes,
                     decl.bases.map { BaseDecl(canonicalizeTypeDecl(it.type), it.isVirtual, it.access, it.offsetBits) },
                     decl.fields.map { FieldDecl(it.name, canonicalizeTypeDecl(it.type), it.offsetBits, it.sizeBits, it.isStatic) },
-                    decl.methods,
+                    decl.methods.map {
+                        MethodDecl(
+                            it.name,
+                            it.mangled,
+                            canonicalizeTypeDecl(it.signature),
+                            it.access,
+                            it.virt,
+                            it.isConst,
+                            it.isVolatile,
+                            it.vtableOffsetBits,
+                        )
+                    },
                     decl.hasVTablePointerMarker,
                     decl.vtableTargetTypeId?.let { canonicalTypeId(it) },
                 )
