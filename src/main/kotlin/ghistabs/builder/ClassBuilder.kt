@@ -9,6 +9,7 @@ import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
 import ghistabs.container.AddressResolver
 import ghistabs.importer.BookmarkSink
+import ghistabs.importer.ImportContext
 import ghistabs.parser.MethodDecl
 import ghistabs.parser.TypeDecl
 import ghistabs.parser.VirtKind
@@ -22,6 +23,7 @@ class ClassBuilder(
     private val structAstsByName: Map<String, TypeDecl.Struct>,
     /** All type ASTs indexed by TypeId for inheritance resolution. */
     private val typeAstsById: Map<ghistabs.parser.TypeId, TypeAst>? = null,
+    private val ctx: ImportContext? = null,
 ) {
     private val source = SourceType.IMPORTED
     private val symtab = program.symbolTable
@@ -213,7 +215,10 @@ class ClassBuilder(
         // signature name; cheap heuristic — sufficient for Cygwin gcc 3.4.4 single
         // inheritance, surfaces as a question for MI in Open Questions).
         val virtuals = mergeVtableSlots(inherited, ownVirtuals)
-        if (virtuals.isEmpty()) return
+        if (virtuals.isEmpty()) {
+            ctx?.diagnostics?.recordVtable(className, "skipped", reason = "no-virtuals")
+            return
+        }
 
         // 2. Build / look up <Class>_vtable struct.
         val vtableName = "${className}_vtable"
@@ -246,6 +251,7 @@ class ClassBuilder(
         val addr =
             resolver.resolve(mangledItanium) ?: resolver.resolve(mangledGcc2) ?: run {
                 sink.log("vtable-unresolved", "no _ZTV symbol for $className")
+                ctx?.diagnostics?.recordVtable(className, "failed", reason = "unresolved-_ZTV-symbol")
                 return
             }
 
@@ -253,6 +259,7 @@ class ClassBuilder(
         program.listing.clearCodeUnits(addr, addr.add(vtable.length.toLong() - 1), false)
         program.listing.createData(addr, vtable)
         sink.bookmark("vtable", addr, "applied $vtableName")
+        ctx?.diagnostics?.recordVtable(className, "applied")
 
         // 5. Plate-comment each virtual method.
         var off = 0L
@@ -271,12 +278,14 @@ class ClassBuilder(
                         "vtable-virtual-unresolved",
                         "no Function at $mAddr for virtual method ${m.name} in $className",
                     )
+                    ctx?.diagnostics?.recordVtable(className, "failed", reason = "virtual-method-unresolved")
                 }
             } else {
                 sink.log(
                     "vtable-virtual-unresolved",
                     "virtual method '${m.name}' in $className: no mangled symbol or unresolved address",
                 )
+                ctx?.diagnostics?.recordVtable(className, "failed", reason = "virtual-method-unresolved")
             }
             off += ptrSize
         }
