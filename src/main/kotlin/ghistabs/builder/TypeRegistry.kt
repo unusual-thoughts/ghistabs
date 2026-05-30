@@ -467,9 +467,18 @@ class TypeRegistry(
         }
         // Different body → try merge if both are Structures
         if (dt is Structure && existing is Structure) {
-            tryDetectMergeOpportunity(existing, dt, name)
+            val mergeResult = tryExecuteMerge(existing, dt, name, category, hash)
+            if (mergeResult != null) {
+                return mergeResult
+            }
         }
         // Fall back to renaming: find a free _N slot
+        // EXCEPT for Structures in conflict: drop them entirely (no _N renaming)
+        if (dt is Structure && existing is Structure) {
+            // Already tried merge and it failed; log as dropped
+            sink.log("dedup-dropped", "Structure '$name': structural conflict, dropped")
+            return existing
+        }
         var n = (conflictCount[name] ?: 1) + 1
         while (true) {
             val candidate = "${name}_$n"
@@ -488,21 +497,73 @@ class TypeRegistry(
     }
 
     /**
-     * Detect if two structures could be merged via byte-coverage algorithm.
-     * Logs diagnostic but does NOT perform the merge (deferred to Kind 2 tests).
+     * Try to merge two structures via byte-coverage algorithm.
+     * Returns the merged structure if successful, null if conflict or identical.
      */
-    private fun tryDetectMergeOpportunity(
+    private fun tryExecuteMerge(
         existing: Structure,
         incoming: Structure,
         name: String,
-    ) {
+        category: CategoryPath,
+        incomingHash: ContentHash,
+    ): DataType? {
         val existingComp = existing.toComponentRecords()
         val incomingComp = incoming.toComponentRecords()
         val result = StructuralDiff.diff(existingComp, existing.length, incomingComp, incoming.length)
-        if (result is StructDiffResult.GapMergeable) {
-            val opCount = result.mergePlan.size
-            diagnostics.recordDedup(kind = "merge", name = name, detail = "gap-mergeable-$opCount-ops")
-            sink.log("dedup-merge", "Structure '$name' is gap-mergeable with $opCount merge ops")
+
+        return when (result) {
+            StructDiffResult.Identical -> {
+                // Same structure layout, already idempotent
+                existing
+            }
+
+            is StructDiffResult.GapMergeable -> {
+                // Execute the merge plan
+                val incomingByOffset = incomingComp.associateBy { it.offsetBytes }
+                val existingByOffset = existingComp.associateBy { it.offsetBytes }
+
+                for (op in result.mergePlan) {
+                    val sourceComponent = op.sourceComponent
+                    val targetOffset = op.targetOffsetBytes
+
+                    // Fetch the actual DataTypeComponent from the source side
+                    val sourceDataTypeComponent =
+                        if (op.sourceFromLeft) {
+                            // Source is from existing
+                            existing.components.find { it.offset == sourceComponent.offsetBytes }
+                        } else {
+                            // Source is from incoming
+                            incoming.components.find { it.offset == sourceComponent.offsetBytes }
+                        }
+
+                    if (sourceDataTypeComponent != null) {
+                        try {
+                            existing.replaceAtOffset(
+                                targetOffset,
+                                sourceDataTypeComponent.dataType,
+                                sourceDataTypeComponent.length,
+                                sourceDataTypeComponent.fieldName,
+                                sourceDataTypeComponent.comment,
+                            )
+                        } catch (e: Exception) {
+                            sink.log("merge-failed", "Could not apply merge to '$name' at offset $targetOffset: ${e.message}")
+                            return null
+                        }
+                    }
+                }
+
+                // Update hash to reflect the new merged content
+                byPath[category to name] = incomingHash
+                diagnostics.recordDedup(kind = "merge", name = name, detail = "merged ${result.mergePlan.size} fields")
+                sink.log("dedup-merged", "$name: ${result.mergePlan.size} fields merged")
+                existing
+            }
+
+            is StructDiffResult.Conflicting -> {
+                // Structural conflict: drop the new one (don't merge)
+                diagnostics.recordDedup(kind = "drop", name = name, result.reason)
+                null
+            }
         }
     }
 
