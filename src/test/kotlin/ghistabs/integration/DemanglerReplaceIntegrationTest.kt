@@ -78,9 +78,10 @@ class DemanglerReplaceIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
         val ctx =
             ImportContext(
                 program,
-                null,
+                ghidra.app.util.importer
+                    .MessageLog(),
                 ConsoleTaskMonitor(),
-                null,
+                ghistabs.importer.StabsOptions(),
             )
 
         // Note: In a real scenario, TypeRegistry would be populated by StabsImporter.
@@ -132,9 +133,10 @@ class DemanglerReplaceIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
         val ctx =
             ImportContext(
                 program,
-                null,
+                ghidra.app.util.importer
+                    .MessageLog(),
                 ConsoleTaskMonitor(),
-                null,
+                ghistabs.importer.StabsOptions(),
             )
 
         // Run DemanglerReplacer (should skip gracefully since stub is absent)
