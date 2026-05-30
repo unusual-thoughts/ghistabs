@@ -32,10 +32,10 @@ private val STD_MARKERS = Regex("""/(usr|lib|include)/.*(mingw|cygwin|c\+\+|bits
 **Rationale:** The original regex matched stdlib indicators anywhere in a path. A project-local directory like `/proj/src/c++_helpers/foo.cpp` would incorrectly match because of the `c++` segment. The tightened regex now requires the indicator to be preceded by a standard stdlib path prefix (`/usr/`, `/lib/`, or `/include/`), preventing false positives on project code.
 
 **Examples:**
-- ✓ Matches: `/usr/include/c++/3.4.4/string` (stdlib)
-- ✗ Rejects: `/proj/src/c++_helpers/foo.cpp` (project code)
-- ✓ Matches: `/lib/mingw/stdint.h` (stdlib)
-- ✓ Matches: `/include/cygwin/types.h` (stdlib)
+- [x] Matches: `/usr/include/c++/3.4.4/string` (stdlib)
+- [ ] Rejects: `/proj/src/c++_helpers/foo.cpp` (project code)
+- [x] Matches: `/lib/mingw/stdint.h` (stdlib)
+- [x] Matches: `/include/cygwin/types.h` (stdlib)
 
 ### 2. PROJECT_OVERRIDE_NAMES List (Branch C)
 
@@ -97,6 +97,14 @@ All five existing tests continue to pass.
 - **stabs-importer-fixes.AC3.1** ✓ — `XapArgInst` is placed under `/proj/XapArgInst` (not `/std/include/...`) via the override list.
 - **stabs-importer-fixes.AC3.2** ✓ — Genuine stdlib types (e.g., `std::basic_string`, `std::pair`) continue to land under `/std/...`; the regex tightening and override list do not create false negatives.
 
+## Known Testing-Convention Deviation
+
+The test file `AttributionTest.kt` imports `ghidra.program.model.data.CategoryPath` directly. Per `testing-convention.md`, this violates the Kind 1 (pure unit test) classification because it imports Ghidra types. This is a pre-existing deviation that was accepted before Phase 4.
+
+**Rationale:** The `Attribution.categoryFor()` function returns `CategoryPath` directly, making it impractical to write a pure Kind 1 test without refactoring the function's core to return a String and adapting at the boundary. A full refactor is tracked as future work but beyond the scope of Phase 4.
+
+**Mitigation:** A comment has been added to the test file acknowledging the deviation and directing future maintainers to the refactoring task.
+
 ## Future Work
 
 Once issue #40 is resolved and the integration test harness can execute:
@@ -105,6 +113,11 @@ Once issue #40 is resolved and the integration test harness can execute:
 2. Inspect `build/test-output/xapargInst-attribution-trace.txt` to confirm the fix.
 3. If additional types are discovered with the same issue, add them to `PROJECT_OVERRIDE_NAMES`.
 4. If the trace reveals that the regex tightening alone is insufficient, keep the override list and document the trade-off.
+
+**Refactoring:** Consider extracting a pure-String core of `Attribution.categoryFor()` to enable Kind 1 testing without Ghidra imports. This would require:
+- New function `categoryForStr(typeName, definingCUs): String` (pure, no imports)
+- Wrapper `categoryFor()` that adapts String to `CategoryPath` (Kind 2 with Ghidra)
+- Move test logic to a pure Kind 1 test of `categoryForStr()`
 
 ## Summary
 
