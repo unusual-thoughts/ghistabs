@@ -5,6 +5,10 @@ import ghistabs.diag.StabsDiagnostics
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 
+// NOTE: This file imports ghidra.program.model.data.CategoryPath because Attribution.categoryFor
+// returns CategoryPath directly. Per testing-convention.md this is a Kind 1 violation; tracked
+// for future refactor (extract pure-string core from Attribution, adapt to CategoryPath at the boundary).
+// Until then, this file is treated as a tolerated exception.
 class AttributionTest {
     @Test fun testCppStdBasename() {
         val cat = Attribution.categoryFor("basic_string", setOf("/usr/include/c++/3.4.4/string"))
