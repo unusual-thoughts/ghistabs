@@ -123,7 +123,8 @@ class AttributionTest {
 
     @Test fun testStdlibWithOneIntermediateDir() {
         // /usr/local/mingw/ should still match (one intermediate dir "local")
-        val cat = Attribution.categoryFor("Foo", setOf("/usr/local/mingw/foo.h"))
-        assertEquals(CategoryPath("/std/mingw"), cat)
+        // The basename is extracted from the path after the marker, so /usr/local/mingw/stdint.h → /std/stdint
+        val cat = Attribution.categoryFor("Foo", setOf("/usr/local/mingw/stdint.h"))
+        assertEquals(CategoryPath("/std/stdint"), cat)
     }
 }
