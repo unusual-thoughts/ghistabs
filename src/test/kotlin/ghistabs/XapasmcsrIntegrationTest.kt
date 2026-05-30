@@ -2,8 +2,11 @@ package ghistabs
 
 import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.address.AddressSpace
-import ghidra.program.model.listing.*
+import ghidra.program.model.listing.BookmarkManager
 import ghidra.program.model.listing.Function
+import ghidra.program.model.listing.FunctionManager
+import ghidra.program.model.listing.Listing
+import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.SymbolTable
 import ghidra.util.task.TaskMonitor
 import ghistabs.container.StabRecord
@@ -11,6 +14,7 @@ import ghistabs.container.StabType
 import ghistabs.importer.ImportContext
 import ghistabs.importer.StabsImporter
 import ghistabs.importer.StabsOptions
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
@@ -69,6 +73,23 @@ class XapasmcsrIntegrationTest {
         // - Should have global variables
         val globals = records.filter { it.type == StabType.N_GSYM }
         assertTrue(globals.isNotEmpty(), "Synthetic corpus should have at least one global variable")
+
+        // Verify diagnostics infrastructure is wired: build importer and emit summary
+        val importer = buildImporterForSyntheticTest()
+        val ctx = importer.ctx
+        ctx.diagnostics.writeSummary(ctx.sink)
+
+        val logOutput = ctx.log.toString()
+
+        // Assert exactly one diagnostics header is emitted
+        val headerCount = logOutput.split("=== diagnostics ===").size - 1
+        assertEquals(1, headerCount, "Should emit exactly one diagnostics block header")
+
+        // Assert the log contains the diagnostics header line in proper format
+        assertTrue(
+            logOutput.contains("[Stabs] diagnostics: === diagnostics ==="),
+            "Should contain diagnostics header with [Stabs] prefix",
+        )
     }
 
     /**
