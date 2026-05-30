@@ -48,17 +48,18 @@ class AttributionTest {
     }
 
     @Test fun testTraceRecordedOnStdRoute() {
+        // Use a genuine stdlib type that's not in the override list
         val diag = StabsDiagnostics()
         val cat =
             Attribution.categoryFor(
-                "XapArgInst",
+                "basic_string",
                 setOf("/usr/include/c++/3.4.4/string"),
                 diag,
             )
         assertEquals(CategoryPath("/std/string"), cat)
         val traces = diag.snapshotAttributionTraces()
         assertEquals(1, traces.size)
-        assertEquals("XapArgInst", traces[0].typeName)
+        assertEquals("basic_string", traces[0].typeName)
         assertEquals("/usr/include/c++/3.4.4/string", traces[0].matchedCU)
         assertEquals("/std/string", traces[0].routedTo)
     }
@@ -75,5 +76,36 @@ class AttributionTest {
         val traces = diag.snapshotAttributionTraces()
         assertEquals(200, traces.size, "Traces should be capped at 200")
         assertEquals(250L, diag["attribution-routed-std"], "Counter should track all 250 calls")
+    }
+
+    @Test fun testNoFalsePositiveOnProjectCxxDir() {
+        // Path with c++ as a directory name should NOT route to /std/
+        val cat = Attribution.categoryFor("Foo", setOf("/proj/src/c++_helpers/foo.cpp"))
+        assertEquals(CategoryPath("/foo"), cat)
+    }
+
+    @Test fun testRealStdlibStillMatches() {
+        // Real stdlib paths must still match the tightened regex
+        val cat = Attribution.categoryFor("basic_string", setOf("/usr/include/c++/3.4.4/string"))
+        assertEquals(CategoryPath("/std/string"), cat)
+    }
+
+    @Test fun testXapArgInstOverrideRoutesToProj() {
+        // XapArgInst should route to /proj/ regardless of CU path
+        val diag = StabsDiagnostics()
+        val cat =
+            Attribution.categoryFor(
+                "XapArgInst",
+                setOf("/anywhere/at/all/string"),
+                diag,
+            )
+        assertTrue(cat.toString().startsWith("/proj"), "XapArgInst should route to /proj/")
+        assertEquals(1L, diag["attribution-override"], "Override counter should increment")
+    }
+
+    @Test fun testGenuineStdTypesStillRouteToStd() {
+        // Genuine stdlib types NOT in override list should still route to /std/
+        val cat = Attribution.categoryFor("vector", setOf("/usr/include/c++/3.4.4/vector"))
+        assertEquals(CategoryPath("/std/vector"), cat)
     }
 }
