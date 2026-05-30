@@ -465,7 +465,11 @@ class TypeRegistry(
         if (existingHash == hash) {
             return existing
         }
-        // Different body → find a free _N slot
+        // Different body → try merge if both are Structures
+        if (dt is Structure && existing is Structure) {
+            tryDetectMergeOpportunity(existing, dt, name)
+        }
+        // Fall back to renaming: find a free _N slot
         var n = (conflictCount[name] ?: 1) + 1
         while (true) {
             val candidate = "${name}_$n"
@@ -481,6 +485,47 @@ class TypeRegistry(
         diagnostics.recordDedup(kind = "rename", name = name, detail = "renamed-to-${name}_$n")
         byPath[category to "${name}_$n"] = hash
         return dtm.addDataType(copy, DataTypeConflictHandler.KEEP_HANDLER)
+    }
+
+    /**
+     * Detect if two structures could be merged via byte-coverage algorithm.
+     * Logs diagnostic but does NOT perform the merge (deferred to Kind 2 tests).
+     */
+    private fun tryDetectMergeOpportunity(
+        existing: Structure,
+        incoming: Structure,
+        name: String,
+    ) {
+        val existingComp = existing.toComponentRecords()
+        val incomingComp = incoming.toComponentRecords()
+        val result = StructuralDiff.diff(existingComp, existing.length, incomingComp, incoming.length)
+        if (result is StructDiffResult.GapMergeable) {
+            val opCount = result.mergePlan.size
+            diagnostics.recordDedup(kind = "merge", name = name, detail = "gap-mergeable-$opCount-ops")
+            sink.log("dedup-merge", "Structure '$name' is gap-mergeable with $opCount merge ops")
+        }
+    }
+
+    /**
+     * Find a DataType by simple name (not full path).
+     * Logs ambiguity if multiple matches found.
+     * Returns null if not found or ambiguous.
+     */
+    fun findByName(simpleName: String): DataType? {
+        val candidates = mutableListOf<Pair<CategoryPath, String>>()
+        for ((key, hash) in byPath) {
+            if (hash != null && key.second == simpleName) {
+                candidates.add(key)
+            }
+        }
+        return when {
+            candidates.isEmpty() -> null
+            candidates.size == 1 -> dtm.getDataType(candidates[0].first, candidates[0].second)
+            else -> {
+                sink.log("demangler-ambiguous", "Multiple matches for '$simpleName': $candidates")
+                null
+            }
+        }
     }
 }
 
