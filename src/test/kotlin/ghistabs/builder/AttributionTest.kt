@@ -1,6 +1,7 @@
 package ghistabs.builder
 
 import ghidra.program.model.data.CategoryPath
+import ghistabs.diag.StabsDiagnostics
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 
@@ -44,5 +45,35 @@ class AttributionTest {
     @Test fun testMultiCUBuiltinNameUnclean() {
         val cat = Attribution.categoryFor("int", setOf("/proj/a.cpp", "/proj/b.cpp"))
         assertEquals(CategoryPath("/a/instantiations"), cat)
+    }
+
+    @Test fun testTraceRecordedOnStdRoute() {
+        val diag = StabsDiagnostics()
+        val cat =
+            Attribution.categoryFor(
+                "XapArgInst",
+                setOf("/usr/include/c++/3.4.4/string"),
+                diag,
+            )
+        assertEquals(CategoryPath("/std/string"), cat)
+        val traces = diag.snapshotAttributionTraces()
+        assertEquals(1, traces.size)
+        assertEquals("XapArgInst", traces[0].typeName)
+        assertEquals("/usr/include/c++/3.4.4/string", traces[0].matchedCU)
+        assertEquals("/std/string", traces[0].routedTo)
+    }
+
+    @Test fun testTraceCappedAt200() {
+        val diag = StabsDiagnostics()
+        repeat(250) { i ->
+            Attribution.categoryFor(
+                "Type$i",
+                setOf("/usr/include/c++/3.4.4/string$i"),
+                diag,
+            )
+        }
+        val traces = diag.snapshotAttributionTraces()
+        assertEquals(200, traces.size, "Traces should be capped at 200")
+        assertEquals(250L, diag["attribution-routed-std"], "Counter should track all 250 calls")
     }
 }

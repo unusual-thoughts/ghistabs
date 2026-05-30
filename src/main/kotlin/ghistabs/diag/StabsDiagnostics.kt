@@ -26,6 +26,20 @@ data class GapRecord(
 )
 
 /**
+ * AttributionTrace represents a decision to route a type to a /std/ category.
+ * typeName: The name of the type being attributed.
+ * definingCUs: All compilation units that define this type.
+ * matchedCU: The specific CU that matched STD_MARKERS.
+ * routedTo: The category path chosen (e.g., "/std/string").
+ */
+data class AttributionTrace(
+    val typeName: String,
+    val definingCUs: Set<String>,
+    val matchedCU: String,
+    val routedTo: String,
+)
+
+/**
  * Run-scoped diagnostic aggregator for the Stabs importer.
  * Records counters, examples, and structural gaps detected during analysis.
  *
@@ -39,6 +53,7 @@ class StabsDiagnostics {
     private val counters: LinkedHashMap<String, Long> = linkedMapOf()
     private val examples: MutableMap<String, MutableList<String>> = linkedMapOf()
     private val gapCensus: MutableMap<String, List<GapRecord>> = linkedMapOf()
+    private val attributionTraces: MutableList<AttributionTrace> = mutableListOf()
 
     private var isSealed = false
 
@@ -175,12 +190,40 @@ class StabsDiagnostics {
     }
 
     /**
+     * Record an attribution trace (type routed to /std/).
+     * Stores up to 200 traces; further traces increment counter only.
+     */
+    fun recordAttributionTrace(
+        typeName: String,
+        definingCUs: Set<String>,
+        matchedCU: String,
+        routedTo: String,
+    ) {
+        if (attributionTraces.size < 200) {
+            attributionTraces.add(
+                AttributionTrace(
+                    typeName = typeName,
+                    definingCUs = definingCUs,
+                    matchedCU = matchedCU,
+                    routedTo = routedTo,
+                ),
+            )
+        }
+        inc("attribution-routed-std")
+    }
+
+    /**
+     * Snapshot attribution traces for inspection.
+     */
+    fun snapshotAttributionTraces(): List<AttributionTrace> = attributionTraces.toList()
+
+    /**
      * Emit a complete diagnostic summary to the sink.
      *
      * Output format:
      * 1. Header line: "[Stabs] diagnostics: === diagnostics ==="
-     * 2. Counter lines: "[Stabs] diagnostics: <name> = <value>" for each counter
-     * 3. Example sections: "[Stabs] diagnostics: <category> top examples:" followed by indented lines
+     * 2. Counter lines: "[Stabs] diagnostics: name = value" for each counter
+     * 3. Example sections: "[Stabs] diagnostics: category top examples:" followed by indented lines
      * 4. Gap census section: per-struct gaps with offset/length and adjacent field names
      *
      * Idempotence contract: After the first call, subsequent calls are no-ops (sealed).
