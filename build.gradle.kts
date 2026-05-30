@@ -19,6 +19,12 @@ kotlin {
     jvmToolchain(21)
 }
 
+ktlint {
+    additionalEditorconfig.set(
+        mapOf("ktlint_standard_no-wildcard-imports" to "disabled"),
+    )
+}
+
 tasks.test {
     useJUnitPlatform { excludeTags("integration") }
     testLogging {
