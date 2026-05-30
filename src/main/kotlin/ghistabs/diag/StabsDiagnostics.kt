@@ -1,6 +1,15 @@
 package ghistabs.diag
 
-import ghistabs.importer.BookmarkSink
+/**
+ * Narrow interface for diagnostic output (emits strings with a category tag).
+ * Implemented by BookmarkSink, but also by test doubles for pure unit tests.
+ */
+interface DiagnosticSink {
+    fun log(
+        category: String,
+        message: String,
+    )
+}
 
 /**
  * GapRecord represents a gap between struct fields.
@@ -177,7 +186,7 @@ class StabsDiagnostics {
      * Idempotence contract: After the first call, subsequent calls are no-ops (sealed).
      * The sink receives output ONLY on the first call.
      */
-    fun writeSummary(sink: BookmarkSink) {
+    fun writeSummary(sink: DiagnosticSink) {
         if (isSealed) {
             return // Already emitted; suppress output
         }

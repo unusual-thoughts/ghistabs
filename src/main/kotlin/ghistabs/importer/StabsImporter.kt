@@ -49,7 +49,7 @@ class StabsImporter(
         val parseErrors = passAHarvest(records, typeAsts, symbolsByCu, openFunctions)
 
         // Pass B — materialise types
-        val typeRegistry = TypeRegistry(ctx.dtm, ctx.sink, ctx)
+        val typeRegistry = TypeRegistry(ctx.dtm, ctx.sink, ctx.diagnostics)
         val txB = ctx.program.startTransaction("Stabs: materialise types")
         try {
             typeRegistry.materialiseAll(typeAsts) { name, cus ->
