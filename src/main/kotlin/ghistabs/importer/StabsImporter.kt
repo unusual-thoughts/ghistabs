@@ -104,6 +104,10 @@ class StabsImporter(
         var currentCu = "<unknown>"
         var currentFunction: OpenFunction? = null
         var currentInclude: IncludeContext? = null
+        // Allocate ONE shared HeaderRegistry for all per-CU IncludeContext instances.
+        // This ensures cross-CU dedup: two CUs with the same (filename, checksum) BINCL
+        // get the SAME HeaderFile instance via the shared registry.
+        val sharedHeaderRegistry = ghistabs.parser.HeaderRegistry()
 
         for ((i, rec) in records.withIndex()) {
             ctx.monitor.checkCancelled()
@@ -113,7 +117,7 @@ class StabsImporter(
                 StabType.N_SO -> {
                     if (rec.name.isNotEmpty()) {
                         currentCu = rec.name
-                        currentInclude = IncludeContext(rec.name, this)
+                        currentInclude = IncludeContext(rec.name, this, sharedHeaderRegistry)
                         currentInclude.openSource(rec.name)
                         includesByFile[rec.name] = currentInclude
                     }
