@@ -32,7 +32,7 @@ class ImportContext(
 ) {
     val dtm: DataTypeManager = program.dataTypeManager
     val symtab: SymbolTable = program.symbolTable
-    val sink: BookmarkSink = BookmarkSink(program, log)
-    val resolver: AddressResolver = AddressResolver(program)
     val diagnostics: StabsDiagnostics = StabsDiagnostics()
+    val sink: BookmarkSink = BookmarkSink(program, log).apply { setDiagnostics(diagnostics) }
+    val resolver: AddressResolver = AddressResolver(program)
 }

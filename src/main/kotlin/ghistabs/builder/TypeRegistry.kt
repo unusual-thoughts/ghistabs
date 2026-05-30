@@ -127,7 +127,7 @@ data class TypeAst(
 class TypeRegistry(
     private val dtm: DataTypeManager,
     private val sink: BookmarkSink,
-    private val ctx: ghistabs.importer.ImportContext? = null,
+    private val ctx: ghistabs.importer.ImportContext,
 ) {
     private val byId: MutableMap<TypeId, DataType> = mutableMapOf()
     private val placeholders: MutableMap<TypeId, DataType> = mutableMapOf()
@@ -208,19 +208,20 @@ class TypeRegistry(
         name: String,
         reason: String = "fwd-decl",
     ): DataType {
-        val dt = when (body) {
-            is TypeDecl.Struct -> {
-                if (body.kind == AggrKind.UNION) {
-                    UnionDataType(category, name, dtm)
-                } else {
-                    StructureDataType(category, name, body.sizeBytes.toInt(), dtm)
+        val dt =
+            when (body) {
+                is TypeDecl.Struct -> {
+                    if (body.kind == AggrKind.UNION) {
+                        UnionDataType(category, name, dtm)
+                    } else {
+                        StructureDataType(category, name, body.sizeBytes.toInt(), dtm)
+                    }
+                }
+
+                else -> {
+                    StructureDataType(category, name, 0, dtm)
                 }
             }
-
-            else -> {
-                StructureDataType(category, name, 0, dtm)
-            }
-        }
         ctx?.diagnostics?.recordPlaceholder(name, category.toString(), reason)
         return dt
     }
@@ -237,6 +238,9 @@ class TypeRegistry(
         val hash = ContentHash.of(ast.body)
 
         // 3. Cross-CU dedup: same name + same body seen before?
+        // NOTE: Gap census is best-effort per first-materialization.
+        // Duplicate structs (found here) skip gap computation and reuse the canonical type.
+        // This is acceptable since truly identical structures have identical gaps anyway.
         byHash[ast.name to hash]?.let { existing ->
             byId[ast.id] = existing
             return existing
@@ -343,7 +347,7 @@ class TypeRegistry(
                         componentRecords.add(component.fieldName to (component.offset to component.length))
                     }
                     val gaps = computeGaps(componentRecords, body.sizeBytes.toInt())
-                    val qualifiedName = "${category}/${ast.name}"
+                    val qualifiedName = "$category/${ast.name}"
                     ctx?.diagnostics?.recordStructGaps(qualifiedName, gaps)
                 }
 

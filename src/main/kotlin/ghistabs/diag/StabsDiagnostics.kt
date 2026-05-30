@@ -28,8 +28,8 @@ data class GapRecord(
  */
 class StabsDiagnostics {
     private val counters: LinkedHashMap<String, Long> = linkedMapOf()
-    private val examples: MutableMap<String, MutableList<String>> = mutableMapOf()
-    private val gapCensus: MutableMap<String, List<GapRecord>> = mutableMapOf()
+    private val examples: MutableMap<String, MutableList<String>> = linkedMapOf()
+    private val gapCensus: MutableMap<String, List<GapRecord>> = linkedMapOf()
 
     private var isSealed = false
 

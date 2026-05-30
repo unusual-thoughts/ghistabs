@@ -21,11 +21,12 @@ class StabsImporter(
     internal val ctx: ImportContext,
 ) {
     fun run(): PassResult {
-        val readerResult =
-            StabReader.fromProgram(ctx.program) ?: run {
-                ctx.sink.log("no-stabs", "No .stab/.stabstr block found; skipping import.")
-                return PassResult()
-            }
+        val readerResult = StabReader.fromProgram(ctx.program)
+        if (readerResult == null) {
+            ctx.sink.log("no-stabs", "No .stab/.stabstr block found; skipping import.")
+            ctx.diagnostics.writeSummary(ctx.sink)
+            return PassResult()
+        }
 
         val records = readerResult.records
         val result = runOnRecords(records, readerResult.recordCount)
@@ -435,10 +436,11 @@ class StabsImporter(
                 ctx.diagnostics.recordGlobal(decl.name, "skipped", dtKind = "unknown", reason = "unresolved-symbol")
                 return false
             }
-        val dt = typeRegistry.dataTypeFor(decl.type) ?: run {
-            ctx.diagnostics.recordGlobal(addr.toString(), "skipped", dtKind = "unknown", reason = "no-resolved-type")
-            return false
-        }
+        val dt =
+            typeRegistry.dataTypeFor(decl.type) ?: run {
+                ctx.diagnostics.recordGlobal(addr.toString(), "skipped", dtKind = "unknown", reason = "no-resolved-type")
+                return false
+            }
         val dtKind = classifyDataType(dt)
         try {
             // Clear any existing code units before creating data to avoid conflicts
@@ -453,8 +455,8 @@ class StabsImporter(
         return true
     }
 
-    private fun classifyDataType(dt: ghidra.program.model.data.DataType): String {
-        return when (dt) {
+    private fun classifyDataType(dt: ghidra.program.model.data.DataType): String =
+        when (dt) {
             is ghidra.program.model.data.Structure -> "Structure"
             is ghidra.program.model.data.Union -> "Union"
             is ghidra.program.model.data.Array -> "Array"
@@ -463,7 +465,6 @@ class StabsImporter(
             is ghidra.program.model.data.Enum -> "Enum"
             else -> dt.displayName
         }
-    }
 
     private fun applyStatic(
         decl: SymbolDecl.StaticVar,

@@ -19,7 +19,7 @@ import org.mockito.kotlin.whenever
 class TypeRegistryTest : GhidraTestBase() {
     private fun newReg(): Pair<MockDtmTracker, TypeRegistry> {
         val tracker = MockDtmTracker()
-        val dtm: DataTypeManager = mock()
+        val dtm: ghidra.program.model.data.ProgramBasedDataTypeManager = mock()
 
         // Configure mock to track added types
         whenever(dtm.addDataType(any(), any())).thenAnswer { invocation ->
@@ -41,8 +41,16 @@ class TypeRegistryTest : GhidraTestBase() {
         val bm = mock<ghidra.program.model.listing.BookmarkManager>()
         whenever(program.bookmarkManager).thenReturn(bm)
         whenever(bm.setBookmark(any(), any(), any(), any())).then { }
-        val sink = BookmarkSink(program, MessageLog())
-        return Pair(tracker, TypeRegistry(dtm, sink))
+
+        // Add mocks for ImportContext dependencies
+        whenever(program.dataTypeManager).thenReturn(dtm)
+        whenever(program.symbolTable).thenReturn(mock<ghidra.program.model.symbol.SymbolTable>())
+
+        val log = MessageLog()
+        val monitor = mock<ghidra.util.task.TaskMonitor>()
+        val sink = BookmarkSink(program, log)
+        val ctx = ghistabs.importer.ImportContext(program, log, monitor)
+        return Pair(tracker, TypeRegistry(dtm, sink, ctx))
     }
 
     /**

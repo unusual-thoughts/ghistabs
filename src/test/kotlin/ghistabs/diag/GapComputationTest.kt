@@ -75,18 +75,20 @@ class GapComputationTest {
 
     @Test
     fun `single component with no trailing gap returns no gaps`() {
-        val components = listOf(
-            ComponentRecord("field0", 0, 4),
-        )
+        val components =
+            listOf(
+                ComponentRecord("field0", 0, 4),
+            )
         val gaps = computeGaps(components, 4)
         assertTrue(gaps.isEmpty())
     }
 
     @Test
     fun `single component with trailing gap reports gap`() {
-        val components = listOf(
-            ComponentRecord("field0", 0, 4),
-        )
+        val components =
+            listOf(
+                ComponentRecord("field0", 0, 4),
+            )
         val gaps = computeGaps(components, 8)
         assertEquals(1, gaps.size)
         assertEquals(4 * 8, gaps[0].offsetBits)
@@ -97,10 +99,11 @@ class GapComputationTest {
 
     @Test
     fun `gap between two consecutive fields`() {
-        val components = listOf(
-            ComponentRecord("field0", 0, 4),
-            ComponentRecord("field1", 8, 4),
-        )
+        val components =
+            listOf(
+                ComponentRecord("field0", 0, 4),
+                ComponentRecord("field1", 8, 4),
+            )
         val gaps = computeGaps(components, 12)
         assertEquals(1, gaps.size)
         assertEquals(4 * 8, gaps[0].offsetBits)
@@ -111,10 +114,11 @@ class GapComputationTest {
 
     @Test
     fun `multiple gaps and trailing gap`() {
-        val components = listOf(
-            ComponentRecord("field0", 0, 4),
-            ComponentRecord("field1", 8, 4),
-        )
+        val components =
+            listOf(
+                ComponentRecord("field0", 0, 4),
+                ComponentRecord("field1", 8, 4),
+            )
         val gaps = computeGaps(components, 16)
         assertEquals(2, gaps.size)
         // Gap between fields
@@ -131,22 +135,24 @@ class GapComputationTest {
 
     @Test
     fun `fully packed struct returns no gaps`() {
-        val components = listOf(
-            ComponentRecord("field0", 0, 4),
-            ComponentRecord("field1", 4, 4),
-            ComponentRecord("field2", 8, 4),
-        )
+        val components =
+            listOf(
+                ComponentRecord("field0", 0, 4),
+                ComponentRecord("field1", 4, 4),
+                ComponentRecord("field2", 8, 4),
+            )
         val gaps = computeGaps(components, 12)
         assertTrue(gaps.isEmpty())
     }
 
     @Test
     fun `unsorted components are sorted before gap computation`() {
-        val components = listOf(
-            ComponentRecord("field2", 8, 2),
-            ComponentRecord("field0", 0, 4),
-            ComponentRecord("field1", 6, 2),
-        )
+        val components =
+            listOf(
+                ComponentRecord("field2", 8, 2),
+                ComponentRecord("field0", 0, 4),
+                ComponentRecord("field1", 6, 2),
+            )
         val gaps = computeGaps(components, 10)
         assertEquals(1, gaps.size)
         // Gap between field0 (ends at 4) and field1 (starts at 6)
