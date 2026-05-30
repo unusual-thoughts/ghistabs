@@ -150,11 +150,15 @@ class TypeRegistry(
     private val byHash: MutableMap<Pair<String, ContentHash>, DataType> = mutableMapOf()
     private val byPath: MutableMap<Pair<CategoryPath, String>, ContentHash> = mutableMapOf()
     private val conflictCount: MutableMap<String, Int> = mutableMapOf()
+    private var rawByIdSnapshot: Map<TypeId, TypeAst> = emptyMap()
 
     fun materialiseAll(
-        asts: List<TypeAst>,
+        rawTypesById: Map<TypeId, TypeAst>,
         attribution: (String, Set<String>) -> CategoryPath = { name, cus -> Attribution.categoryFor(name, cus) },
     ) {
+        // Snapshot for cross-batch fallback in dataTypeFor
+        rawByIdSnapshot = rawTypesById
+        val asts = rawTypesById.values.toList()
         val byName = asts.groupBy { it.name }
         val tx = dtm.startTransaction("ghidra-stabs build types")
         try {
@@ -177,13 +181,24 @@ class TypeRegistry(
 
     fun dataTypeFor(decl: TypeDecl): DataType? =
         when (decl) {
-            // Check byId first (fully resolved), then placeholders (cycle-breaking)
+            // Check byId first (fully resolved), then placeholders (cycle-breaking),
+            // then rawByIdSnapshot (fallback for forward refs to not-yet-resolved types)
             is TypeDecl.Ref -> {
-                byId[decl.id] ?: placeholders[decl.id]
+                byId[decl.id]
+                    ?: placeholders[decl.id]
+                    ?: rawByIdSnapshot[decl.id]?.let { ast ->
+                        makePlaceholder(ast.body, CategoryPath("/stabs"), ast.name)
+                            .also { placeholders[decl.id] = it }
+                    }
             }
 
             is TypeDecl.InlineDef -> {
-                byId[decl.id] ?: placeholders[decl.id] ?: dataTypeFor(decl.body)
+                byId[decl.id]
+                    ?: placeholders[decl.id]
+                    ?: rawByIdSnapshot[decl.id]?.let { ast ->
+                        makePlaceholder(ast.body, CategoryPath("/stabs"), ast.name)
+                            .also { placeholders[decl.id] = it }
+                    } ?: dataTypeFor(decl.body)
             }
 
             is TypeDecl.Builtin, is TypeDecl.Range, is TypeDecl.Complex, is TypeDecl.WithSizeAttr -> {
