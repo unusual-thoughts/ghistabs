@@ -20,6 +20,7 @@ import ghistabs.diag.GapRecord
 import ghistabs.diag.StabsDiagnostics
 import ghistabs.importer.BookmarkSink
 import ghistabs.parser.AggrKind
+import ghistabs.parser.IncludeContext
 import ghistabs.parser.TypeDecl
 import ghistabs.parser.TypeId
 
@@ -151,6 +152,11 @@ class TypeRegistry(
     private val byPath: MutableMap<Pair<CategoryPath, String>, ContentHash> = mutableMapOf()
     private val conflictCount: MutableMap<String, Int> = mutableMapOf()
     private var rawByIdSnapshot: Map<TypeId, TypeAst> = emptyMap()
+    private var includeContextsByFile: Map<String, IncludeContext> = emptyMap()
+
+    fun setIncludeContexts(contexts: Map<String, IncludeContext>) {
+        includeContextsByFile = contexts
+    }
 
     fun materialiseAll(
         rawTypesById: Map<TypeId, TypeAst>,
@@ -418,8 +424,26 @@ class TypeRegistry(
             is TypeDecl.Ref -> {
                 // Back-reference — should already be in byId from a prior resolve
                 byId[body.id] ?: run {
-                    sink.log("dangling-ref", "Dangling ref to (${body.id.cu},${body.id.n}) in '${ast.name}'")
-                    diagnostics.recordUnresolvedRef("(${body.id.cu},${body.id.n})", ast.name, ast.cuFile)
+                    val refKey = "(${body.id.cu},${body.id.n})"
+
+                    // Classify the dangling ref using the pure classifier
+                    val includeCtx = includeContextsByFile[ast.cuFile]
+                    val knownFileNums = includeCtx?.getAllFileNums() ?: emptySet()
+                    val knownTypeIds = rawByIdSnapshot.keys
+
+                    val classification =
+                        ResolverDecision.classifyRef(
+                            body.id,
+                            ast.id.cu,
+                            knownTypeIds,
+                            knownFileNums,
+                        )
+
+                    // Log with classification tag appended
+                    sink.log("dangling-ref", "Dangling ref to $refKey in '${ast.name}' [${classification.tag}]")
+                    diagnostics.recordUnresolvedRef(refKey, ast.name, ast.cuFile)
+                    diagnostics.inc("dangling-ref-${classification.tag}")
+
                     Undefined4DataType.dataType
                 }
             }
