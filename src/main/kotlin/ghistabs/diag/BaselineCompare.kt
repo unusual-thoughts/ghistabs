@@ -29,6 +29,26 @@ object BaselineCompare {
     }
 
     /**
+     * Parses the _N-suffix-count baseline from a JSON file.
+     * Expects: {"_N-suffix-count": <Long>}
+     *
+     * @throws IllegalArgumentException if the file does not contain a valid "_N-suffix-count" key
+     */
+    fun parseSuffixCountBaseline(file: File): Long {
+        val content = file.readText()
+
+        // Match "_N-suffix-count": <number> with optional whitespace
+        val regex = """"_N-suffix-count"\s*:\s*(\d+)""".toRegex()
+        val match =
+            regex.find(content)
+                ?: throw IllegalArgumentException(
+                    "No valid '_N-suffix-count' key found in baseline file: ${file.absolutePath}",
+                )
+
+        return match.groupValues[1].toLong()
+    }
+
+    /**
      * Checks if actual count passes a reduction threshold relative to baseline.
      * True iff actual <= ceil(baseline * ratio).
      * Default ratio is 0.10 for 90% reduction.
