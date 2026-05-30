@@ -63,19 +63,19 @@ object Attribution {
             return CategoryPath("/std/$stdMatch")
         }
 
-        // 2. Single CU ending with .h/.hpp/.hh/.H (header)
+        // 3. Single CU ending with .h/.hpp/.hh/.H (header)
         if (definingCUs.size == 1) {
             val cu = definingCUs.single()
             if (cu.endsWith(".h") || cu.endsWith(".hpp") || cu.endsWith(".hh") || cu.endsWith(".H")) {
                 return CategoryPath("/" + basename(cu))
             }
-            // 3. Single CU with .c/.cpp/.cc extension
+            // 4. Single CU with .c/.cpp/.cc extension
             if (cu.endsWith(".c") || cu.endsWith(".cpp") || cu.endsWith(".cc")) {
                 return CategoryPath("/" + basename(cu))
             }
         }
 
-        // 4. Multi-CU decision tree
+        // 5. Multi-CU decision tree
         if (isClean(typeName)) {
             return CategoryPath("/headers-untracked/$typeName.h")
         }
