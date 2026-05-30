@@ -381,4 +381,73 @@ class StabsDiagnosticsTest {
             "Should NOT have first definition's gap at offset 32 (last-definition-wins semantics)",
         )
     }
+
+    /**
+     * Test recordDedup counters for merge, drop, and rename kinds.
+     * Each kind increments a counter named "dedup-$kind".
+     */
+    @Test
+    fun testRecordDedupMergeCounter() {
+        val diag = StabsDiagnostics()
+
+        diag.recordDedup("merge", "MyStruct", "merged 3 fields")
+
+        assertEquals(1, diag["dedup-merge"], "Should have dedup-merge counter == 1")
+    }
+
+    @Test
+    fun testRecordDedupDropCounter() {
+        val diag = StabsDiagnostics()
+
+        diag.recordDedup("drop", "MyStruct", "structural conflict: disagreement at byte 0")
+
+        assertEquals(1, diag["dedup-drop"], "Should have dedup-drop counter == 1")
+    }
+
+    @Test
+    fun testRecordDedupRenameCounter() {
+        val diag = StabsDiagnostics()
+
+        diag.recordDedup("rename", "MyStruct", "renamed-to-MyStruct_1")
+
+        assertEquals(1, diag["dedup-rename"], "Should have dedup-rename counter == 1")
+    }
+
+    /**
+     * Test that multiple dedup operations increment their respective counters.
+     */
+    @Test
+    fun testMultipleDedupCounters() {
+        val diag = StabsDiagnostics()
+
+        diag.recordDedup("merge", "TypeA", "merged 2 fields")
+        diag.recordDedup("merge", "TypeB", "merged 1 field")
+        diag.recordDedup("drop", "TypeC", "conflict")
+        diag.recordDedup("rename", "TypeD", "renamed-to-TypeD_1")
+
+        assertEquals(2, diag["dedup-merge"], "Should have dedup-merge == 2")
+        assertEquals(1, diag["dedup-drop"], "Should have dedup-drop == 1")
+        assertEquals(1, diag["dedup-rename"], "Should have dedup-rename == 1")
+    }
+
+    /**
+     * Test that dedup counters appear in writeSummary output.
+     */
+    @Test
+    fun testDedupCountersInSummary() {
+        val diag = StabsDiagnostics()
+        val sink = CapturingSink()
+
+        diag.recordDedup("merge", "StructA", "merged 2 fields")
+        diag.recordDedup("drop", "StructB", "conflict")
+        diag.recordDedup("rename", "StructC", "renamed")
+
+        diag.writeSummary(sink)
+
+        val output = sink.capturedOutput()
+
+        assertTrue(output.contains("dedup-merge = 1"), "Summary should contain dedup-merge counter")
+        assertTrue(output.contains("dedup-drop = 1"), "Summary should contain dedup-drop counter")
+        assertTrue(output.contains("dedup-rename = 1"), "Summary should contain dedup-rename counter")
+    }
 }
