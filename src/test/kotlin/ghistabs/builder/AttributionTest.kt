@@ -108,4 +108,18 @@ class AttributionTest {
         val cat = Attribution.categoryFor("vector", setOf("/usr/include/c++/3.4.4/vector"))
         assertEquals(CategoryPath("/std/vector"), cat)
     }
+
+    @Test fun testNoFalsePositiveOnUsrLocalProj() {
+        // A CU path like /usr/local/myproj/c++_helpers/foo.cpp should NOT route to /std/
+        // because there are two intermediate dirs after /usr/: "local" and "myproj"
+        // The regex /(usr|lib|include)(/[^/]+)?/(mingw|cygwin|c\+\+|bits)/ only allows one
+        val cat = Attribution.categoryFor("Foo", setOf("/usr/local/myproj/c++_helpers/foo.cpp"))
+        assertEquals(CategoryPath("/foo"), cat)
+    }
+
+    @Test fun testStdlibWithOneIntermediateDir() {
+        // /usr/local/mingw/ should still match (one intermediate dir "local")
+        val cat = Attribution.categoryFor("Foo", setOf("/usr/local/mingw/foo.h"))
+        assertEquals(CategoryPath("/std/mingw"), cat)
+    }
 }
