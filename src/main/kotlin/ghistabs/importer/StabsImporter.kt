@@ -67,6 +67,9 @@ class StabsImporter(
                 ctx.program.endTransaction(txC, true)
             }
 
+        // Emit end-of-run diagnostics summary
+        ctx.diagnostics.writeSummary(ctx.sink)
+
         return PassResult(
             recordsRead = recordCount,
             recordsParsed = records.size - parseErrors,
