@@ -7,7 +7,15 @@ dist/
 .kotlin/
 
 # Vendored runtime jars (downloaded by buildExtension.gradle)
-lib/*.jar
+lib/
+gradle/wrapper/
+
+# BFG repo cleaner artifacts
+..bfg-report/
+.bfg-report/
+
+# OS artifacts
+os/
 
 # IDE
 .idea/
