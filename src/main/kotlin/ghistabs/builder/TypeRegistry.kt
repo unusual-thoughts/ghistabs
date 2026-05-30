@@ -1,6 +1,7 @@
 package ghistabs.builder
 
 import ghidra.program.model.data.*
+import ghistabs.diag.GapRecord
 import ghistabs.importer.BookmarkSink
 import ghistabs.parser.AggrKind
 import ghistabs.parser.TypeDecl
@@ -126,6 +127,7 @@ data class TypeAst(
 class TypeRegistry(
     private val dtm: DataTypeManager,
     private val sink: BookmarkSink,
+    private val ctx: ghistabs.importer.ImportContext? = null,
 ) {
     private val byId: MutableMap<TypeId, DataType> = mutableMapOf()
     private val placeholders: MutableMap<TypeId, DataType> = mutableMapOf()
@@ -204,8 +206,9 @@ class TypeRegistry(
         body: TypeDecl,
         category: CategoryPath,
         name: String,
-    ): DataType =
-        when (body) {
+        reason: String = "fwd-decl",
+    ): DataType {
+        val dt = when (body) {
             is TypeDecl.Struct -> {
                 if (body.kind == AggrKind.UNION) {
                     UnionDataType(category, name, dtm)
@@ -218,6 +221,9 @@ class TypeRegistry(
                 StructureDataType(category, name, 0, dtm)
             }
         }
+        ctx?.diagnostics?.recordPlaceholder(name, category.toString(), reason)
+        return dt
+    }
 
     private fun resolve(
         ast: TypeAst,
@@ -241,7 +247,7 @@ class TypeRegistry(
         val category = attribution(ast.name, definingCUs)
 
         // 5. Reuse pre-seeded placeholder (or create one if resolve() is called directly)
-        val placeholder = placeholders.getOrPut(ast.id) { makePlaceholder(ast.body, category, ast.name) }
+        val placeholder = placeholders.getOrPut(ast.id) { makePlaceholder(ast.body, category, ast.name, "ref-stub") }
 
         // 6. Materialise body — references back to ast.id will resolve via placeholders[ast.id]
         val materialised = materialiseBody(ast, category, placeholder)
@@ -329,6 +335,18 @@ class TypeRegistry(
                         sink.log("field-layout", "Failed to add '${field.name}' to '${ast.name}': ${e.message}")
                     }
                 }
+
+                // Record gaps for this struct
+                if (struct is Structure) {
+                    val componentRecords = mutableListOf<Pair<String, Pair<Int, Int>>>()
+                    for (component in struct.components) {
+                        componentRecords.add(component.fieldName to (component.offset to component.length))
+                    }
+                    val gaps = computeGaps(componentRecords, body.sizeBytes.toInt())
+                    val qualifiedName = "${category}/${ast.name}"
+                    ctx?.diagnostics?.recordStructGaps(qualifiedName, gaps)
+                }
+
                 struct
             }
 
@@ -366,6 +384,7 @@ class TypeRegistry(
                 // Back-reference — should already be in byId from a prior resolve
                 byId[body.id] ?: run {
                     sink.log("dangling-ref", "Dangling ref to (${body.id.cu},${body.id.n}) in '${ast.name}'")
+                    ctx?.diagnostics?.recordUnresolvedRef("(${body.id.cu},${body.id.n})", ast.name, ast.cuFile)
                     Undefined4DataType.dataType
                 }
             }
@@ -400,7 +419,69 @@ class TypeRegistry(
         val copy = dt.copy(dtm)
         copy.name = "${name}_$n"
         sink.log("type-conflict", "Two definitions of '$name' with different bodies; second renamed to '${name}_$n'")
+        ctx?.diagnostics?.recordDedup(kind = "rename", name = name, detail = "renamed-to-${name}_$n")
         byPath[category to "${name}_$n"] = hash
         return dtm.addDataType(copy, DataTypeConflictHandler.KEEP_HANDLER)
     }
+}
+
+/**
+ * Pure function to compute gaps in a struct's field layout.
+ * Takes component records and total struct size, returns list of gaps.
+ *
+ * @param componentRecords List of fields with offset and length in bytes
+ * @param totalLengthBytes Total size of struct in bytes
+ * @return List of gaps; empty if fully packed or no components
+ */
+fun computeGaps(
+    componentRecords: List<Pair<String, Pair<Int, Int>>>,
+    totalLengthBytes: Int,
+): List<GapRecord> {
+    if (componentRecords.isEmpty()) return emptyList()
+
+    val gaps = mutableListOf<GapRecord>()
+    // Sort by offset
+    val sorted = componentRecords.sortedBy { it.second.first }
+
+    // Check for gaps between consecutive fields
+    for (i in 0 until sorted.size - 1) {
+        val (currName, currMetrics) = sorted[i]
+        val (nextName, nextMetrics) = sorted[i + 1]
+        val currOffset = currMetrics.first
+        val currLength = currMetrics.second
+        val nextOffset = nextMetrics.first
+        val currEnd = currOffset + currLength
+
+        if (currEnd < nextOffset) {
+            val gapStart = currEnd
+            val gapLength = nextOffset - currEnd
+            gaps.add(
+                GapRecord(
+                    offsetBits = (gapStart * 8).toLong(),
+                    lengthBits = (gapLength * 8).toLong(),
+                    prevField = currName,
+                    nextField = nextName,
+                ),
+            )
+        }
+    }
+
+    // Check for trailing gap
+    val lastRecord = sorted.last()
+    val lastOffset = lastRecord.second.first
+    val lastLength = lastRecord.second.second
+    val lastEnd = lastOffset + lastLength
+    if (lastEnd < totalLengthBytes) {
+        val trailingGapLength = totalLengthBytes - lastEnd
+        gaps.add(
+            GapRecord(
+                offsetBits = (lastEnd * 8).toLong(),
+                lengthBits = (trailingGapLength * 8).toLong(),
+                prevField = lastRecord.first,
+                nextField = null,
+            ),
+        )
+    }
+
+    return gaps
 }

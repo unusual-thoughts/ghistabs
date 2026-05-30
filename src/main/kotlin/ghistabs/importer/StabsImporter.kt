@@ -48,7 +48,7 @@ class StabsImporter(
         val parseErrors = passAHarvest(records, typeAsts, symbolsByCu, openFunctions)
 
         // Pass B — materialise types
-        val typeRegistry = TypeRegistry(ctx.dtm, ctx.sink)
+        val typeRegistry = TypeRegistry(ctx.dtm, ctx.sink, ctx)
         val txB = ctx.program.startTransaction("Stabs: materialise types")
         try {
             typeRegistry.materialiseAll(typeAsts) { name, cus ->
@@ -321,6 +321,7 @@ class StabsImporter(
                     ctx.sink,
                     structAstsByName,
                     typeAstsById,
+                    ctx,
                 )
             for (ast in typeAsts) {
                 val body = ast.body as? TypeDecl.Struct ?: continue
@@ -382,6 +383,9 @@ class StabsImporter(
         for ((openOff, _, localsInScope) in pairs) {
             try {
                 val addr = func.entryPoint.add(openOff)
+                if (localsInScope.isEmpty()) {
+                    ctx.diagnostics.recordEmptyScope(addr.toString(), func.name)
+                }
                 val text = "Stabs scope locals: " + localsInScope.joinToString(", ") { it.decl.name }
                 ctx.program.listing.setComment(addr, CommentType.PLATE, text)
             } catch (e: Exception) {
@@ -428,18 +432,37 @@ class StabsImporter(
         val addr =
             ctx.resolver.resolve(decl.name) ?: run {
                 ctx.sink.log("unresolved-symbol", "global ${decl.name}")
+                ctx.diagnostics.recordGlobal(decl.name, "skipped", dtKind = "unknown", reason = "unresolved-symbol")
                 return false
             }
-        val dt = typeRegistry.dataTypeFor(decl.type) ?: return false
+        val dt = typeRegistry.dataTypeFor(decl.type) ?: run {
+            ctx.diagnostics.recordGlobal(addr.toString(), "skipped", dtKind = "unknown", reason = "no-resolved-type")
+            return false
+        }
+        val dtKind = classifyDataType(dt)
         try {
             // Clear any existing code units before creating data to avoid conflicts
             ctx.program.listing.clearCodeUnits(addr, addr.add((dt.length - 1).toLong()), false)
             ctx.program.listing.createData(addr, dt)
+            ctx.diagnostics.recordGlobal(addr.toString(), "applied", dtKind = dtKind)
         } catch (e: Exception) {
             ctx.sink.log("apply-error", "Failed to create global data at $addr: ${e.message}")
+            ctx.diagnostics.recordGlobal(addr.toString(), "skipped", dtKind = dtKind, reason = "create-data-failed")
             return false
         }
         return true
+    }
+
+    private fun classifyDataType(dt: ghidra.program.model.data.DataType): String {
+        return when (dt) {
+            is ghidra.program.model.data.Structure -> "Structure"
+            is ghidra.program.model.data.Union -> "Union"
+            is ghidra.program.model.data.Array -> "Array"
+            is ghidra.program.model.data.Pointer -> "Pointer"
+            is ghidra.program.model.data.FunctionDefinition -> "FunctionDefinition"
+            is ghidra.program.model.data.Enum -> "Enum"
+            else -> dt.displayName
+        }
     }
 
     private fun applyStatic(
