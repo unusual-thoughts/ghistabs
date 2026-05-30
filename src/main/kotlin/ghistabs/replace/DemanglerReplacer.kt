@@ -1,10 +1,14 @@
 package ghistabs.replace
 
+import ghidra.program.model.data.Array
 import ghidra.program.model.data.DataType
 import ghidra.program.model.data.DataTypeDependencyException
+import ghidra.program.model.data.Pointer
 import ghidra.program.model.data.Structure
+import ghidra.program.model.data.TypeDef
 import ghistabs.builder.TypeRegistry
 import ghistabs.importer.ImportContext
+import java.util.ArrayDeque
 
 /**
  * Adapter that uses Ghidra's DataTypeManager to execute demangler stub replacements.
@@ -22,6 +26,18 @@ class DemanglerReplacer(
         val stubs = mutableListOf<StubRecord>()
         val replacements = mutableMapOf<String, Pair<ReplacementRecord, DataType>>()
         val stubDtByPath = mutableMapOf<String, DataType>()
+
+        // Precompute name-to-DataTypes index to avoid O(N²) registry.findByName lookups
+        val nameIndex: Map<String, List<DataType>> =
+            run {
+                val map = mutableMapOf<String, MutableList<DataType>>()
+                val it = dtm.allDataTypes
+                while (it.hasNext()) {
+                    val d = it.next()
+                    map.getOrPut(d.name) { mutableListOf() }.add(d)
+                }
+                map
+            }
 
         // Iterate all data types in DTM
         val allDts = dtm.allDataTypes
@@ -41,9 +57,11 @@ class DemanglerReplacer(
                 stubDtByPath[dt.pathName] = dt
             }
 
-            // Collect potential replacements (from registry, structures with content)
-            val candidate = registry.findByName(dt.name) ?: continue
-            if (candidate !== dt) continue
+            // Collect potential replacements (from name index, structures with content)
+            // Use nameIndex instead of registry.findByName to avoid O(N²) behavior
+            val candidates = nameIndex[dt.name] ?: continue
+            val candidate = if (candidates.size == 1) candidates[0] else null
+            if (candidate == null || candidate !== dt) continue
 
             // Collect dependencies for cycle detection
             val deps = collectDependsOnPaths(dt)
@@ -58,8 +76,15 @@ class DemanglerReplacer(
                 replacements.mapValues { it.value.first },
             )
 
-        // Log all skips
+        // Log all skips with per-kind counters
         for (skip in skips) {
+            val counterKey =
+                when (skip) {
+                    is Skip.NoReplacement -> "demangler-skip-no-replacement"
+                    is Skip.WouldBeCycle -> "demangler-skip-cycle"
+                    is Skip.StubAlreadyMissing -> "demangler-skip-already-missing"
+                }
+            ctx.diagnostics.inc(counterKey)
             ctx.sink.log("demangler-skip", skip.reason)
         }
 
@@ -88,17 +113,64 @@ class DemanglerReplacer(
     }
 
     /**
-     * Collect all data type paths that a given DataType depends on.
-     * For Structures, walks components and collects their dtPathName;
-     * for others, returns empty set.
+     * Collect all data type paths that a given DataType depends on, transitively.
+     * Walks Structure components, Pointer targets, Array element types, and TypeDef bases.
+     * Uses BFS to detect cycles via visited set. Excludes self.
+     *
+     * @param dt the DataType to analyze
+     * @return the set of all transitive dependency paths (excludes dt's own pathName)
      */
     private fun collectDependsOnPaths(dt: DataType): Set<String> {
-        if (dt !is Structure) return emptySet()
+        val visited = mutableSetOf<String>()
+        val queue = ArrayDeque<DataType>()
+        queue.add(dt)
 
-        val deps = mutableSetOf<String>()
-        for (component in dt.components) {
-            deps.add(component.dataType.pathName)
+        while (queue.isNotEmpty()) {
+            val cur = queue.removeFirst()
+            // Mark visited by pathName to detect cycles
+            if (!visited.add(cur.pathName)) {
+                // Already visited, skip
+                continue
+            }
+
+            // Walk dependencies of current type
+            when (cur) {
+                is Structure -> {
+                    // Add all component data types
+                    for (component in cur.components) {
+                        val childDt = component.dataType
+                        if (!visited.contains(childDt.pathName)) {
+                            queue.add(childDt)
+                        }
+                    }
+                }
+                is Pointer -> {
+                    // Add pointed-to type if it exists
+                    val target = cur.dataType
+                    if (target != null && !visited.contains(target.pathName)) {
+                        queue.add(target)
+                    }
+                }
+                is Array -> {
+                    // Add element type
+                    val elemDt = cur.dataType
+                    if (!visited.contains(elemDt.pathName)) {
+                        queue.add(elemDt)
+                    }
+                }
+                is TypeDef -> {
+                    // Add base type
+                    val baseDt = cur.baseDataType
+                    if (!visited.contains(baseDt.pathName)) {
+                        queue.add(baseDt)
+                    }
+                }
+                // Primitive types and others have no dependencies
+            }
         }
-        return deps
+
+        // Exclude self from results
+        visited.remove(dt.pathName)
+        return visited
     }
 }

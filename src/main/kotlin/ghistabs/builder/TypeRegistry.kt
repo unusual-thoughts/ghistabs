@@ -475,8 +475,7 @@ class TypeRegistry(
         // Fall back to renaming: find a free _N slot
         // EXCEPT for Structures in conflict: drop them entirely (no _N renaming)
         if (dt is Structure && existing is Structure) {
-            // Already tried merge and it failed; log as dropped
-            sink.log("dedup-dropped", "Structure '$name': structural conflict, dropped")
+            // Already tried merge and it failed; was logged via recordDedup in tryExecuteMerge
             return existing
         }
         var n = (conflictCount[name] ?: 1) + 1
@@ -524,7 +523,6 @@ class TypeRegistry(
 
                 for (op in result.mergePlan) {
                     val sourceComponent = op.sourceComponent
-                    val targetOffset = op.targetOffsetBytes
 
                     // Fetch the actual DataTypeComponent from the source side
                     val sourceDataTypeComponent =
@@ -539,14 +537,17 @@ class TypeRegistry(
                     if (sourceDataTypeComponent != null) {
                         try {
                             existing.replaceAtOffset(
-                                targetOffset,
+                                sourceComponent.offsetBytes,
                                 sourceDataTypeComponent.dataType,
                                 sourceDataTypeComponent.length,
                                 sourceDataTypeComponent.fieldName,
                                 sourceDataTypeComponent.comment,
                             )
-                        } catch (e: Exception) {
-                            sink.log("merge-failed", "Could not apply merge to '$name' at offset $targetOffset: ${e.message}")
+                        } catch (e: IllegalArgumentException) {
+                            sink.log(
+                                "merge-failed",
+                                "Could not apply merge to '$name' at offset ${sourceComponent.offsetBytes}: ${e.message}",
+                            )
                             return null
                         }
                     }
@@ -569,8 +570,14 @@ class TypeRegistry(
 
     /**
      * Find a DataType by simple name (not full path).
-     * Logs ambiguity if multiple matches found.
-     * Returns null if not found or ambiguous.
+     * Conservative: returns null if not found OR if ambiguous (multiple matches).
+     * Logs ambiguity with a numeric counter for surfacing unresolved ambiguities.
+     *
+     * This is used by DemanglerReplacer to locate replacement types for demangler stubs.
+     * Ambiguity is logged and counted but NOT resolved heuristically (too risky for type safety).
+     *
+     * @param simpleName the unqualified type name to search for
+     * @return the unique DataType if exactly one match, null if not found or ambiguous
      */
     fun findByName(simpleName: String): DataType? {
         val candidates = mutableListOf<Pair<CategoryPath, String>>()
@@ -583,7 +590,9 @@ class TypeRegistry(
             candidates.isEmpty() -> null
             candidates.size == 1 -> dtm.getDataType(candidates[0].first, candidates[0].second)
             else -> {
+                // Multiple matches: ambiguous. Log and count.
                 sink.log("demangler-ambiguous", "Multiple matches for '$simpleName': $candidates")
+                diagnostics.inc("demangler-ambiguous")
                 null
             }
         }
