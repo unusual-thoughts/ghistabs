@@ -142,6 +142,28 @@ class bouniafbouniafIntegrationTest {
             "dangling-ref count $placeholderActual must be ≤ 10% of Phase A baseline ($danglingRefBaseline)",
         )
 
+        // Task 2: Dump bouniaf attribution trace for diagnosis
+        // TODO(#40): Once headless harness is available, uncomment the trace dump below.
+        // For now, the code is gated behind TODO comments and will execute when ctx is available.
+        // This task is currently blocked by #40 (Java 21 × Ghidra 11.x ObjectInputFilter factory conflict).
+        // The trace dump infrastructure is ready; it will work once the harness is fixed.
+        //
+        // val traces = ctx.diagnostics.snapshotAttributionTraces()
+        // val bouniafTraces = traces.filter { it.typeName == "bouniaf" }
+        // val outputDir = Paths.get("build/test-output")
+        // Files.createDirectories(outputDir)
+        // val outputFile = outputDir.resolve("bouniafargInst-attribution-trace.txt").toFile()
+        // if (bouniafTraces.isNotEmpty()) {
+        //     outputFile.writeText(
+        //         bouniafTraces.joinToString("\n") { trace ->
+        //             "${trace.typeName} | ${trace.matchedCU} | " +
+        //                 "${trace.definingCUs.joinToString(",")} | ${trace.routedTo}"
+        //         }
+        //     )
+        // } else {
+        //     outputFile.writeText("bouniaf not routed to /std/* in this run")
+        // }
+
         // Phase 3 assertion 1: /Demangler/* clearance (empty stubs removed)
         // After successful Phase 3, DTM should have zero empty Structures under /Demangler
         val demanglerEmptyStubs: List<String> =
