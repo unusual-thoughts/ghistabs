@@ -197,9 +197,25 @@ class IncludeContextTest {
         val ctx1 = IncludeContext("cu1.cpp", sink, registry)
         ctx1.openSource("cu1.cpp")
 
-        // Create two different headers
-        val fileNum1a = ctx1.beginInclude("header_a.h", 0x111L)
-        val fileNum1b = ctx1.beginInclude("header_b.h", 0x222L)
+        // Use two filenames whose String.hashCode() values collide.
+        // Classic collision: "Aa".hashCode() == "BB".hashCode() == 2112
+        // Create canonical keys that contain these substrings so the keys themselves collide.
+        // Canonical key format: "{filename}_{checksum.toString(16)}" (see HeaderFile.canonicalKey())
+        // We use filenames "Aa" and "BB" with the same checksum to create colliding keys.
+        val filenameA = "Aa"
+        val filenameB = "BB"
+        val sameChecksum = 0xDEADBEEFL
+
+        // FIRST: Verify that the filenames actually collide in hashCode()
+        assertEquals(
+            filenameA.hashCode(),
+            filenameB.hashCode(),
+            "Test setup error: filenames must have colliding hashCodes",
+        )
+
+        // Create two different headers with colliding filename hashes
+        val fileNum1a = ctx1.beginInclude(filenameA, sameChecksum)
+        val fileNum1b = ctx1.beginInclude(filenameB, sameChecksum)
 
         // Canonicalize two refs from different headers
         val typeId1a = TypeId(fileNum1a, 7)
@@ -208,8 +224,12 @@ class IncludeContextTest {
         val canonical1a = ctx1.canonicalTypeId(typeId1a)
         val canonical1b = ctx1.canonicalTypeId(typeId1b)
 
-        // Different canonical CU integers (collision-free)
-        assertTrue(canonical1a.cu != canonical1b.cu)
+        // Despite the hashCode collision, canonicalCu integers must be collision-free
+        // because HeaderRegistry.allocateCanonicalCu uses a counter, not hashCode().
+        assertTrue(
+            canonical1a.cu != canonical1b.cu,
+            "I1 fix FAILED: canonicalCu integers must be collision-free even when filename hashCodes collide",
+        )
     }
 
     @Test
@@ -259,5 +279,70 @@ class IncludeContextTest {
         assertEquals(42, canonicalizedRef.id.n)
         // The CU should be the canonical integer for the header, not the original fileNum
         assertTrue(canonicalizedRef.id.cu > 0)
+    }
+
+    @Test
+    fun `regression C1 shared HeaderRegistry ensures cross-CU dedup`() {
+        // This test verifies the critical C1 fix: when multiple CUs share the same
+        // registry, they must get the SAME HeaderFile instance for the same (filename, checksum).
+        // Without the fix, each CU instantiates its own IncludeContext with IncludeContext(name, sink)
+        // using the default HeaderRegistry(), creating isolated registries and breaking dedup.
+        //
+        // This test constructs two CUs with EXPLICIT shared registry (simulating the fixed production code)
+        // and verifies identity. Then it separately constructs two CUs with SEPARATE registries
+        // (simulating the pre-fix bug) and verifies they diverge.
+
+        // === Part 1: WITH shared registry (correct behavior) ===
+        val sharedRegistry = HeaderRegistry()
+        val cu1WithShared = IncludeContext("cu1.cpp", sink, sharedRegistry)
+        cu1WithShared.openSource("cu1.cpp")
+        val cu1HeaderFileNum = cu1WithShared.beginInclude("shared.h", 0xABCDL)
+        val cu1Header = cu1WithShared.headerForFileNum(cu1HeaderFileNum)
+
+        val cu2WithShared = IncludeContext("cu2.cpp", sink, sharedRegistry)
+        cu2WithShared.openSource("cu2.cpp")
+        val cu2HeaderFileNum = cu2WithShared.beginInclude("shared.h", 0xABCDL)
+        val cu2Header = cu2WithShared.headerForFileNum(cu2HeaderFileNum)
+
+        // CRITICAL: With shared registry, both CUs get the SAME HeaderFile instance
+        assertTrue(
+            cu1Header === cu2Header,
+            "C1 fix FAILED: CUs with shared registry must get same HeaderFile instance",
+        )
+
+        // === Part 2: WITHOUT shared registry (pre-fix bug) ===
+        val cu1PrivateRegistry = HeaderRegistry()
+        val cu1WithPrivate = IncludeContext("cu1.cpp", sink, cu1PrivateRegistry)
+        cu1WithPrivate.openSource("cu1.cpp")
+        val cu1PrivHeaderFileNum = cu1WithPrivate.beginInclude("shared.h", 0xABCDL)
+        val cu1PrivHeader = cu1WithPrivate.headerForFileNum(cu1PrivHeaderFileNum)
+
+        val cu2PrivateRegistry = HeaderRegistry()
+        val cu2WithPrivate = IncludeContext("cu2.cpp", sink, cu2PrivateRegistry)
+        cu2WithPrivate.openSource("cu2.cpp")
+        val cu2PrivHeaderFileNum = cu2WithPrivate.beginInclude("shared.h", 0xABCDL)
+        val cu2PrivHeader = cu2WithPrivate.headerForFileNum(cu2PrivHeaderFileNum)
+
+        // WITHOUT shared registry (pre-fix), the two CUs get DIFFERENT HeaderFile instances
+        // (even though the canonical keys are identical). This demonstrates the bug.
+        assertTrue(
+            cu1PrivHeader !== cu2PrivHeader,
+            "Pre-fix bug verification: CUs with separate registries get different HeaderFile instances",
+        )
+        assertEquals(cu1PrivHeader!!.filename, cu2PrivHeader!!.filename)
+        assertEquals(cu1PrivHeader.checksum, cu2PrivHeader.checksum)
+
+        // === Verify canonical TypeIds are stable across shared registry ===
+        val typeIdInCu1 = TypeId(cu1HeaderFileNum, 99)
+        val typeIdInCu2 = TypeId(cu2HeaderFileNum, 99)
+
+        val canonicalInCu1 = cu1WithShared.canonicalTypeId(typeIdInCu1)
+        val canonicalInCu2 = cu2WithShared.canonicalTypeId(typeIdInCu2)
+
+        assertEquals(
+            canonicalInCu1,
+            canonicalInCu2,
+            "C1 fix: canonical TypeIds for same (filename, checksum) must be identical across CUs",
+        )
     }
 }
