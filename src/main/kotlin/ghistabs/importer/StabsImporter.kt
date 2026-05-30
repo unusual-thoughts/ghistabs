@@ -61,7 +61,7 @@ class StabsImporter(
         val typeRegistry = TypeRegistry(ctx.dtm, ctx.sink, ctx.diagnostics)
         val txB = ctx.program.startTransaction("Stabs: materialise types")
         try {
-            typeRegistry.materialiseAll(typeAsts) { name, cus ->
+            typeRegistry.materialiseAll(typeAsts.associateBy { it.id }) { name, cus ->
                 Attribution.categoryFor(name, cus)
             }
         } finally {
