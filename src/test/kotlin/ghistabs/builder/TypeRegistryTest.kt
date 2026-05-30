@@ -4,13 +4,15 @@ import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.data.CategoryPath
 import ghidra.program.model.data.DataType
 import ghidra.program.model.data.DataTypeConflictHandler
-import ghidra.program.model.data.DataTypeManager
 import ghistabs.importer.BookmarkSink
 import ghistabs.parser.AggrKind
 import ghistabs.parser.FieldDecl
 import ghistabs.parser.TypeDecl
 import ghistabs.parser.TypeId
-import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.Assertions.assertDoesNotThrow
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
 import org.mockito.kotlin.mock
