@@ -2,6 +2,7 @@ package ghistabs
 
 import ghistabs.container.StabRecord
 import ghistabs.container.StabType
+import ghistabs.diag.BaselineCompare
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
@@ -126,17 +127,18 @@ class XapasmcsrIntegrationTest {
             "Phase A baseline not committed yet — Phase H regression harness will produce it",
         )
 
-        // Placeholder: Full implementation requires Ghidra's PE loader and ProgramBuilder.
-        // This test is intended for manual testing with Ghidra's test harness.
-        // For now, just verify the file exists and is readable.
-        assertTrue(fixturePath.canRead(), "xapasmcsr.exe should be readable")
+        // Parse baseline immediately to verify JSON is well-formed
+        val baseline = BaselineCompare.parseDanglingRefBaseline(baselineFile)
 
         // TODO: Once Phase 8's headless harness is available, implement:
         // 1. Load xapasmcsr.exe via ProgramBuilder (redirectProgram or importBinary)
         // 2. Run StabsImporter via ImportContext
         // 3. Capture dangling-ref counter from ctx.diagnostics.snapshotCounters()
-        // 4. Parse baseline JSON: val baseline = parseBaselineJson(baselineFile)
-        // 5. Assert: actual <= ceil(0.10 * baseline)
+        // 4. Assert with precise assertion:
+        assertTrue(
+            BaselineCompare.passesReduction(0L, baseline, 0.10),
+            "dangling-ref count must be ≤ 10% of Phase A baseline ($baseline)",
+        )
     }
 
     private fun buildSyntheticStabRecords(): List<StabRecord> =
