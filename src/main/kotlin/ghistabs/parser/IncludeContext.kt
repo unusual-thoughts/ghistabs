@@ -139,6 +139,12 @@ class IncludeContext(
     fun headerForFileNum(fileNum: Int): HeaderFile? = fileNumToHeader[fileNum]
 
     /**
+     * Get all known file numbers in this CU's context.
+     * Used for ref classification during materialization.
+     */
+    fun getAllFileNums(): Set<Int> = fileNumToHeader.keys
+
+    /**
      * Rewrites a local TypeId into a canonical form stable across CUs that share the same header.
      * For types defined inside a BINCL (header.originatingCu != cuFile), returns a TypeId keyed off
      * the header's canonical key. For local types, leaves TypeId as-is (but disambiguated by CU).

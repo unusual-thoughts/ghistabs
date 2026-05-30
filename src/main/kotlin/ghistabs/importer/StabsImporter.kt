@@ -55,10 +55,12 @@ class StabsImporter(
         val typeAsts = mutableListOf<TypeAst>()
         val symbolsByCu = mutableMapOf<String, MutableList<HarvestedSymbol>>()
         val openFunctions = mutableListOf<OpenFunction>()
-        val parseErrors = passAHarvest(records, typeAsts, symbolsByCu, openFunctions)
+        val includesByFile = mutableMapOf<String, IncludeContext>()
+        val parseErrors = passAHarvest(records, typeAsts, symbolsByCu, openFunctions, includesByFile)
 
         // Pass B — materialise types
         val typeRegistry = TypeRegistry(ctx.dtm, ctx.sink, ctx.diagnostics)
+        typeRegistry.setIncludeContexts(includesByFile)
         val txB = ctx.program.startTransaction("Stabs: materialise types")
         try {
             typeRegistry.materialiseAll(typeAsts.associateBy { it.id }) { name, cus ->
@@ -96,6 +98,7 @@ class StabsImporter(
         typeAsts: MutableList<TypeAst>,
         symbolsByCu: MutableMap<String, MutableList<HarvestedSymbol>>,
         openFunctions: MutableList<OpenFunction>,
+        includesByFile: MutableMap<String, IncludeContext> = mutableMapOf(),
     ): Int {
         var parseErrors = 0
         var currentCu = "<unknown>"
@@ -112,6 +115,7 @@ class StabsImporter(
                         currentCu = rec.name
                         currentInclude = IncludeContext(rec.name, this)
                         currentInclude.openSource(rec.name)
+                        includesByFile[rec.name] = currentInclude
                     }
                 }
 
