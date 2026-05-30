@@ -350,4 +350,46 @@ class StabsDiagnosticsTest {
         assertEquals(3, diag["foo-tag"], "foo-tag counter should be 3 after 3 log calls")
         assertEquals(1, diag["bar-tag"], "bar-tag counter should be 1 after 1 log call")
     }
+
+    /**
+     * Test recordStructGaps overwrite semantics: last definition wins.
+     * Subsequent calls with the same struct name will overwrite the
+     * previously recorded gaps list.
+     */
+    @Test
+    fun testRecordStructGapsLastDefinitionWins() {
+        val diag = StabsDiagnostics()
+        val messageLog = MessageLog()
+        val mockProgram: Program = mock()
+        val sink = BookmarkSink(mockProgram, messageLog)
+
+        val gapsA =
+            listOf(
+                GapRecord(offsetBits = 32, lengthBits = 32, prevField = "a", nextField = "b"),
+            )
+        val gapsB =
+            listOf(
+                GapRecord(offsetBits = 64, lengthBits = 16, prevField = "x", nextField = "y"),
+            )
+
+        // First definition
+        diag.recordStructGaps("test/MyStruct", gapsA)
+
+        // Overwrite with second definition
+        diag.recordStructGaps("test/MyStruct", gapsB)
+
+        diag.writeSummary(sink)
+
+        val output = messageLog.toString()
+
+        // Verify that the LAST definition's gaps appear in output, not the first
+        assertTrue(
+            output.contains("test/MyStruct: gap @+64 bits len=16 between x..y"),
+            "Should have last definition's gap at offset 64 (last-definition-wins semantics)",
+        )
+        assertTrue(
+            !output.contains("test/MyStruct: gap @+32 bits len=32"),
+            "Should NOT have first definition's gap at offset 32 (last-definition-wins semantics)",
+        )
+    }
 }
