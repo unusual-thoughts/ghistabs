@@ -1,28 +1,11 @@
 package ghistabs
 
-import ghidra.app.util.importer.MessageLog
-import ghidra.program.model.address.AddressSpace
-import ghidra.program.model.listing.BookmarkManager
-import ghidra.program.model.listing.Function
-import ghidra.program.model.listing.FunctionManager
-import ghidra.program.model.listing.Listing
-import ghidra.program.model.listing.Program
-import ghidra.program.model.symbol.SymbolTable
-import ghidra.util.task.TaskMonitor
 import ghistabs.container.StabRecord
 import ghistabs.container.StabType
-import ghistabs.importer.ImportContext
-import ghistabs.importer.StabsImporter
-import ghistabs.importer.StabsOptions
-import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
-import org.mockito.kotlin.any
-import org.mockito.kotlin.doNothing
-import org.mockito.kotlin.mock
-import org.mockito.kotlin.whenever
 import java.io.File
 
 /**
@@ -55,78 +38,49 @@ class XapasmcsrIntegrationTest {
      */
     @Test
     fun testSyntheticCorpusCreation() {
-        // Build synthetic stab records without running importer (to avoid complex mocking)
+        // Build synthetic stab records to verify corpus structure.
+        // This test verifies that the synthetic corpus (defined in buildSyntheticStabRecords)
+        // has the right shape for Phase 8 to consume in real Ghidra headless integration tests.
+        // End-to-end importer testing is deferred to Phase 8's AbstractGhidraHeadlessIntegrationTest
+        // suite, which cannot be done with mocks per testing-convention.md.
         val records = buildSyntheticStabRecords()
 
         // Verify basic expectations from the synthetic corpus:
-        // - Should have records
         assertTrue(records.isNotEmpty(), "Synthetic corpus should have records")
-        // - Should have at least one compilation unit (N_SO)
+
+        // Should have at least one compilation unit (N_SO)
         val compilationUnits = records.filter { it.type == StabType.N_SO }
-        assertTrue(compilationUnits.isNotEmpty(), "Synthetic corpus should have at least one compilation unit")
-        // - Should have struct/class definitions
+        assertTrue(
+            compilationUnits.isNotEmpty(),
+            "Synthetic corpus should have at least one compilation unit (N_SO)",
+        )
+
+        // Should have struct/class definitions (N_LSYM)
         val typeDefinitions = records.filter { it.type == StabType.N_LSYM }
-        assertTrue(typeDefinitions.size >= 3, "Synthetic corpus should have at least 3 type definitions")
-        // - Should have functions
+        assertTrue(
+            typeDefinitions.size >= 3,
+            "Synthetic corpus should have at least 3 type definitions (N_LSYM)",
+        )
+
+        // Should have PaddedStruct for gap-census testing (used by Phase 8 regression suite)
+        val paddedStructDef = typeDefinitions.find { it.name.contains("PaddedStruct") }
+        assertTrue(
+            paddedStructDef != null,
+            "Synthetic corpus should include PaddedStruct for gap-census test fixture",
+        )
+
+        // Should have functions (N_FUN)
         val functions = records.filter { it.type == StabType.N_FUN }
-        assertTrue(functions.isNotEmpty(), "Synthetic corpus should have at least one function")
-        // - Should have global variables
+        assertTrue(
+            functions.isNotEmpty(),
+            "Synthetic corpus should have at least one function (N_FUN)",
+        )
+
+        // Should have global variables (N_GSYM)
         val globals = records.filter { it.type == StabType.N_GSYM }
-        assertTrue(globals.isNotEmpty(), "Synthetic corpus should have at least one global variable")
-
-        // Verify diagnostics infrastructure is wired by checking that diagnostics
-        // are properly written even when parsing/type materialization fails gracefully.
-        // We'll create a minimal test that just verifies the diagnostics writeSummary
-        // is called and produces expected output format.
-        val importer = buildImporterForSyntheticTest()
-        val ctx = importer.ctx
-
-        // Instead of running the full pipeline (which requires Ghidra infrastructure),
-        // we'll directly test that diagnostics can be recorded and written.
-        ctx.diagnostics.recordPlaceholder("TestType", "/test", "fwd-decl")
-        ctx.diagnostics.recordUnresolvedRef("(0,1)", "TestRef", "test.cpp")
-        ctx.diagnostics.recordStructGaps("test/MyStruct", emptyList()) // No gaps
-
-        // Write diagnostics and capture output
-        ctx.diagnostics.writeSummary(ctx.sink)
-        val logOutput = ctx.log.toString()
-
-        // Task 11 assertions: verify diagnostics block is emitted with proper format
         assertTrue(
-            logOutput.isNotEmpty(),
-            "Log should contain output after writing diagnostics",
-        )
-
-        // Assert the log contains the diagnostics header line in proper format
-        assertTrue(
-            logOutput.contains("[Stabs] diagnostics: === diagnostics ==="),
-            "Should contain diagnostics header with [Stabs] prefix",
-        )
-
-        // Assert exactly one diagnostics header is emitted (idempotence contract)
-        val headerCount = logOutput.split("=== diagnostics ===").size - 1
-        assertEquals(1, headerCount, "Should emit exactly one diagnostics block header")
-
-        // Verify lines after header follow counter format
-        val lines = logOutput.split("\n").filter { it.isNotBlank() }
-        val headerLineIndex = lines.indexOfFirst { it.contains("=== diagnostics ===") }
-        assertTrue(headerLineIndex >= 0, "Diagnostics header line should exist")
-
-        // Assert at least one counter line after header (format: "[Stabs] diagnostics: <name> = <number>")
-        val counterLines =
-            lines.drop(headerLineIndex + 1).takeWhile { line ->
-                line.matches(Regex(""".*diagnostics:\s+\w[\w-]*\s+=\s+\d+.*"""))
-            }
-        assertTrue(
-            counterLines.isNotEmpty(),
-            "Should have at least one counter line after diagnostics header",
-        )
-
-        // Verify expected counters appear based on our recorded diagnostics
-        // Note: Only counters with non-zero values are emitted
-        assertTrue(
-            logOutput.contains("placeholder-created"),
-            "Placeholder counter should appear after recordPlaceholder was called.\nLog output:\n$logOutput",
+            globals.isNotEmpty(),
+            "Synthetic corpus should have at least one global variable (N_GSYM)",
         )
     }
 
@@ -160,68 +114,6 @@ class XapasmcsrIntegrationTest {
         // This test is intended for manual testing with Ghidra's test harness.
         // For now, just verify the file exists and is readable.
         assertTrue(fixturePath.canRead(), "xapasmcsr.exe should be readable")
-    }
-
-    private fun buildImporterForSyntheticTest(): StabsImporter {
-        // Build program with all necessary mocks
-        val program = mock<Program>()
-
-        // Address factory
-        val addrSpace = mock<AddressSpace>()
-        whenever(addrSpace.getAddress(any<Long>())).thenAnswer { inv ->
-            FakeAddress(inv.getArgument(0))
-        }
-        val addressFactory = mock<ghidra.program.model.address.AddressFactory>()
-        whenever(addressFactory.defaultAddressSpace).thenReturn(addrSpace)
-        whenever(program.addressFactory).thenReturn(addressFactory)
-
-        // Function manager
-        val funcMgr = mock<FunctionManager>()
-        whenever(funcMgr.getFunctionAt(any())).thenReturn(null)
-        val mockFunc = mock<Function>()
-        whenever(funcMgr.createFunction(any(), any(), any(), any())).thenReturn(mockFunc)
-        whenever(program.functionManager).thenReturn(funcMgr)
-
-        // Listing
-        val listing = mock<Listing>()
-        doNothing().whenever(listing).clearCodeUnits(any(), any(), any())
-        whenever(listing.createData(any(), any())).thenReturn(null)
-        whenever(program.listing).thenReturn(listing)
-
-        // Bookmark manager
-        whenever(program.bookmarkManager).thenReturn(mock<BookmarkManager>())
-
-        // Symbol table
-        val symtab = mock<SymbolTable>()
-        val emptySymbols: Array<ghidra.program.model.symbol.Symbol> = arrayOf()
-        whenever(symtab.getSymbols(any<ghidra.program.model.address.Address>())).thenReturn(emptySymbols)
-        val mockSymbol = mock<ghidra.program.model.symbol.Symbol>()
-        whenever(mockSymbol.name).thenReturn("")
-        whenever(mockSymbol.address).thenReturn(FakeAddress(0))
-        whenever(symtab.createLabel(any(), any(), any())).thenReturn(mockSymbol)
-        whenever(program.symbolTable).thenReturn(symtab)
-
-        // Data type manager - use a mock directly and mock key methods
-        val mockDtm: ghidra.program.model.data.ProgramBasedDataTypeManager = mock()
-        whenever(mockDtm.startTransaction(any())).thenReturn(0)
-        whenever(mockDtm.endTransaction(any(), any())).thenReturn(true)
-        whenever(mockDtm.addDataType(any(), any())).thenReturn(null)
-        whenever(mockDtm.getDataType(any<ghidra.program.model.data.CategoryPath>(), any())).thenReturn(null)
-        whenever(mockDtm.createCategory(any())).thenAnswer { invocation ->
-            mock<ghidra.program.model.data.Category>()
-        }
-        whenever(program.dataTypeManager).thenReturn(mockDtm)
-
-        // Transactions
-        whenever(program.startTransaction(any())).thenReturn(0)
-        whenever(program.endTransaction(any(), any())).thenReturn(true)
-
-        // Create context and importer
-        val log = MessageLog()
-        val monitor = mock<TaskMonitor>()
-        val options = StabsOptions()
-        val ctx = ImportContext(program, log, monitor, options)
-        return StabsImporter(ctx)
     }
 
     private fun buildSyntheticStabRecords(): List<StabRecord> =
