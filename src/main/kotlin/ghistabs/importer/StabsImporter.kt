@@ -65,7 +65,7 @@ class StabsImporter(
         val txB = ctx.program.startTransaction("Stabs: materialise types")
         try {
             typeRegistry.materialiseAll(typeAsts.associateBy { it.id }) { name, cus ->
-                Attribution.categoryFor(name, cus)
+                Attribution.categoryFor(name, cus, ctx.diagnostics)
             }
         } finally {
             ctx.program.endTransaction(txB, true)
@@ -381,7 +381,7 @@ class StabsImporter(
                 val body = ast.body as? TypeDecl.Struct ?: continue
                 if (body.methods.isEmpty() && !body.hasVTablePointerMarker) continue
                 try {
-                    val category = Attribution.categoryFor(ast.name, setOf(ast.cuFile))
+                    val category = Attribution.categoryFor(ast.name, setOf(ast.cuFile), ctx.diagnostics)
                     classBuilder.build(ast.name, body, category)
                     classes++
                 } catch (t: Throwable) {
