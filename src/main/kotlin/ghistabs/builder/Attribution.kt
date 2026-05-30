@@ -1,6 +1,7 @@
 package ghistabs.builder
 
 import ghidra.program.model.data.CategoryPath
+import ghistabs.diag.StabsDiagnostics
 
 object Attribution {
     private val STD_MARKERS = Regex("""/(mingw|cygwin|c\+\+|bits)/""")
@@ -27,10 +28,17 @@ object Attribution {
     fun categoryFor(
         typeName: String,
         definingCUs: Set<String>,
+        diagnostics: StabsDiagnostics? = null,
     ): CategoryPath {
         // 1. Check if ANY definingCU path matches STD_MARKERS
         val stdMatch = definingCUs.firstNotNullOfOrNull { stdBasename(it) }
         if (stdMatch != null) {
+            diagnostics?.recordAttributionTrace(
+                typeName = typeName,
+                definingCUs = definingCUs,
+                matchedCU = definingCUs.first { stdBasename(it) != null },
+                routedTo = "/std/$stdMatch",
+            )
             return CategoryPath("/std/$stdMatch")
         }
 
