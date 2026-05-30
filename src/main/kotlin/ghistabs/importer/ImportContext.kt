@@ -6,6 +6,7 @@ import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.SymbolTable
 import ghidra.util.task.TaskMonitor
 import ghistabs.container.AddressResolver
+import ghistabs.diag.StabsDiagnostics
 
 data class StabsOptions(
     val createImportedLabels: Boolean = true,
@@ -33,4 +34,5 @@ class ImportContext(
     val symtab: SymbolTable = program.symbolTable
     val sink: BookmarkSink = BookmarkSink(program, log)
     val resolver: AddressResolver = AddressResolver(program)
+    val diagnostics: StabsDiagnostics = StabsDiagnostics()
 }
