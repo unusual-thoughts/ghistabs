@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import java.io.File
+import java.nio.file.Paths
 
 /**
  * Integration tests against bouniafbouniaf.exe real binary and synthetic corpus.
@@ -143,26 +144,16 @@ class bouniafbouniafIntegrationTest {
         )
 
         // Task 2: Dump bouniaf attribution trace for diagnosis
-        // TODO(#40): Once headless harness is available, uncomment the trace dump below.
-        // For now, the code is gated behind TODO comments and will execute when ctx is available.
-        // This task is currently blocked by #40 (Java 21 × Ghidra 11.x ObjectInputFilter factory conflict).
-        // The trace dump infrastructure is ready; it will work once the harness is fixed.
-        //
-        // val traces = ctx.diagnostics.snapshotAttributionTraces()
-        // val bouniafTraces = traces.filter { it.typeName == "bouniaf" }
-        // val outputDir = Paths.get("build/test-output")
-        // Files.createDirectories(outputDir)
-        // val outputFile = outputDir.resolve("bouniafargInst-attribution-trace.txt").toFile()
-        // if (bouniafTraces.isNotEmpty()) {
-        //     outputFile.writeText(
-        //         bouniafTraces.joinToString("\n") { trace ->
-        //             "${trace.typeName} | ${trace.matchedCU} | " +
-        //                 "${trace.definingCUs.joinToString(",")} | ${trace.routedTo}"
-        //         }
-        //     )
-        // } else {
-        //     outputFile.writeText("bouniaf not routed to /std/* in this run")
-        // }
+        // TODO(#40): Once headless harness is available, this call will execute with real traces.
+        val placeholderTraces: List<ghistabs.diag.AttributionTrace> =
+            emptyList() // TODO(#40): replace with ctx.diagnostics.snapshotAttributionTraces()
+        ghistabs.diag.AttributionTraceDump
+            .writeTraceArtifact(
+                typeName = "bouniaf",
+                traces = placeholderTraces,
+                outDir = Paths.get("build/test-output"),
+                filename = "bouniafargInst-attribution-trace.txt",
+            )
 
         // Phase 3 assertion 1: /Demangler/* clearance (empty stubs removed)
         // After successful Phase 3, DTM should have zero empty Structures under /Demangler
