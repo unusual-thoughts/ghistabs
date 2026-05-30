@@ -160,7 +160,7 @@ class TypeRegistry(
 
     fun materialiseAll(
         rawTypesById: Map<TypeId, TypeAst>,
-        attribution: (String, Set<String>) -> CategoryPath = { name, cus -> Attribution.categoryFor(name, cus) },
+        attribution: (String, Set<String>) -> CategoryPath,
     ) {
         // Snapshot for cross-batch fallback in dataTypeFor
         rawByIdSnapshot = rawTypesById
