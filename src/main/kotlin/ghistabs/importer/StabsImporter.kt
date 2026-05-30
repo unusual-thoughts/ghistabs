@@ -18,6 +18,7 @@ import ghistabs.parser.Parser
 import ghistabs.parser.StabsParseException
 import ghistabs.parser.SymbolDecl
 import ghistabs.parser.TypeDecl
+import ghistabs.replace.DemanglerReplacer
 
 class StabsImporter(
     internal val ctx: ImportContext,
@@ -287,6 +288,9 @@ class StabsImporter(
         var functions = 0
         var globals = 0
         var classes = 0
+
+        // Run demangler stub replacement before applying symbols
+        DemanglerReplacer(ctx, typeRegistry).run()
 
         for (open in openFunctions) {
             try {
