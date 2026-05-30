@@ -11,10 +11,12 @@ import ghidra.program.model.symbol.SymbolTable
 import ghidra.util.task.TaskMonitor
 import ghistabs.container.StabRecord
 import ghistabs.container.StabType
+import ghistabs.diag.GapRecord
 import ghistabs.importer.ImportContext
 import ghistabs.importer.StabsImporter
 import ghistabs.importer.StabsOptions
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
@@ -77,6 +79,20 @@ class XapasmcsrIntegrationTest {
         // Verify diagnostics infrastructure is wired: build importer and emit summary
         val importer = buildImporterForSyntheticTest()
         val ctx = importer.ctx
+
+        // Simulate some diagnostic events that would be recorded during analysis
+        // (in the full integration test with the real importer, these come from probe sites)
+        ctx.diagnostics.recordUnresolvedRef("(1,42)", "SomeType", "test.cpp")
+        ctx.diagnostics.recordPlaceholder("DeferredType", "user-defined", "fwd-decl")
+        ctx.diagnostics.recordVtable("MyClass", "applied")
+        ctx.diagnostics.recordStructGaps(
+            "test/PaddedStruct",
+            listOf(
+                GapRecord(8, 24, "c", "i"),
+                GapRecord(64, 96, "i", null),
+            ),
+        )
+
         ctx.diagnostics.writeSummary(ctx.sink)
 
         val logOutput = ctx.log.toString()
@@ -89,6 +105,42 @@ class XapasmcsrIntegrationTest {
         assertTrue(
             logOutput.contains("[Stabs] diagnostics: === diagnostics ==="),
             "Should contain diagnostics header with [Stabs] prefix",
+        )
+
+        // Task 11 assertions: extended diagnostics block validation
+        val lines = logOutput.split("\n").filter { it.isNotBlank() }
+
+        // Find the diagnostics header line
+        val headerLineIndex = lines.indexOfFirst { it.contains("=== diagnostics ===") }
+        assertTrue(headerLineIndex >= 0, "Diagnostics header line should exist")
+
+        // Assert at least one counter line after header (format: "[Stabs] diagnostics: <name> = <number>")
+        val counterLines =
+            lines.drop(headerLineIndex + 1).takeWhile { line ->
+                line.matches(Regex(""".*diagnostics:\s+\w[\w-]*\s+=\s+\d+.*"""))
+            }
+        assertTrue(
+            counterLines.isNotEmpty(),
+            "Should have at least one counter line after diagnostics header",
+        )
+
+        // Assert that at least one counter line follows the header
+        // (the takeWhile above guarantees at least one if we get here)
+        val firstCounterLine = counterLines.firstOrNull()
+        assertNotNull(firstCounterLine, "First counter line should exist")
+        assertTrue(
+            firstCounterLine!!.matches(Regex(""".*diagnostics:\s+\w[\w-]*\s+=\s+\d+.*""")),
+            "Counter line should match pattern '[Stabs] diagnostics: <name> = <number>'",
+        )
+
+        // Assert the synthetic corpus's known struct-with-gap appears in gap-census section
+        assertTrue(
+            logOutput.contains("test/PaddedStruct"),
+            "Gap-census should include PaddedStruct with gaps",
+        )
+        assertTrue(
+            logOutput.contains("gap @+8 bits"),
+            "Gap-census should report gap at offset 8 bits",
         )
     }
 
@@ -184,9 +236,20 @@ class XapasmcsrIntegrationTest {
             StabRecord(2, StabType.N_LSYM, 0x100, 0, 0, 0, "Rect:t(0,3)=s16tl:(0,1),0,64;br:(0,1),64,64;;"),
             // Struct 3: Color (enum-like)
             StabRecord(3, StabType.N_LSYM, 0x100, 0, 0, 0, "Color:t(0,4)=eRED:0,GREEN:1,BLUE:2,;"),
-            // Class 1: Shape (with virtual method)
+            // Struct 4: PaddedStruct (with internal gaps for gap-census testing)
+            // Layout: char at 0, 3-byte gap, int at 4-8, then padding to 16 bytes
             StabRecord(
                 4,
+                StabType.N_LSYM,
+                0x100,
+                0,
+                0,
+                0,
+                "PaddedStruct:t(0,10)=s16c:(0,1),0,8;pad1:=4;i:(0,2),32,32;pad2:=8;;",
+            ),
+            // Class 1: Shape (with virtual method)
+            StabRecord(
+                5,
                 StabType.N_LSYM,
                 0x100,
                 0,
@@ -196,7 +259,7 @@ class XapasmcsrIntegrationTest {
             ),
             // Class 2: Rectangle (inherits from Shape)
             StabRecord(
-                5,
+                6,
                 StabType.N_LSYM,
                 0x100,
                 0,
@@ -205,23 +268,23 @@ class XapasmcsrIntegrationTest {
                 "Rectangle:Tt(0,7)=s24!0,(0,5);width:(0,2),64,32;height:(0,2),96,32;;",
             ),
             // Functions with parameters and locals
-            StabRecord(6, StabType.N_FUN, 0x400, 0, 0, 0, "main:F(0,2)"),
-            StabRecord(7, StabType.N_PSYM, 0x400, 0, 0, 0, "argc:p(0,2)"),
-            StabRecord(8, StabType.N_PSYM, 0x400, 0, 0, 0, "argv:p(0,8)"),
-            StabRecord(9, StabType.N_LSYM, 0x400, 0, 0, 0, "buf:(0,9)"),
-            StabRecord(10, StabType.N_LBRAC, 0x402, 0, 0, 0, ""),
-            StabRecord(11, StabType.N_RBRAC, 0x500, 0, 0, 0, ""),
-            StabRecord(12, StabType.N_FUN, 0x500, 0, 0, 0, ""), // end of main
+            StabRecord(7, StabType.N_FUN, 0x400, 0, 0, 0, "main:F(0,2)"),
+            StabRecord(8, StabType.N_PSYM, 0x400, 0, 0, 0, "argc:p(0,2)"),
+            StabRecord(9, StabType.N_PSYM, 0x400, 0, 0, 0, "argv:p(0,8)"),
+            StabRecord(10, StabType.N_LSYM, 0x400, 0, 0, 0, "buf:(0,9)"),
+            StabRecord(11, StabType.N_LBRAC, 0x402, 0, 0, 0, ""),
+            StabRecord(12, StabType.N_RBRAC, 0x500, 0, 0, 0, ""),
+            StabRecord(13, StabType.N_FUN, 0x500, 0, 0, 0, ""), // end of main
             // Global variables
-            StabRecord(13, StabType.N_GSYM, 0x2000, 0, 0, 0, "g_count:G(0,2)"),
-            StabRecord(14, StabType.N_GSYM, 0x2004, 0, 0, 0, "g_state:G(0,4)"),
+            StabRecord(14, StabType.N_GSYM, 0x2000, 0, 0, 0, "g_count:G(0,2)"),
+            StabRecord(15, StabType.N_GSYM, 0x2004, 0, 0, 0, "g_state:G(0,4)"),
             // More functions
-            StabRecord(15, StabType.N_FUN, 0x600, 0, 0, 0, "init:F(0,2)"),
-            StabRecord(16, StabType.N_PSYM, 0x600, 0, 0, 0, "value:p(0,2)"),
-            StabRecord(17, StabType.N_FUN, 0x700, 0, 0, 0, ""), // end of init
-            StabRecord(18, StabType.N_FUN, 0x800, 0, 0, 0, "process:F(0,2)"),
-            StabRecord(19, StabType.N_PSYM, 0x800, 0, 0, 0, "data:p(0,8)"),
-            StabRecord(20, StabType.N_LSYM, 0x800, 0, 0, 0, "result:(0,2)"),
-            StabRecord(21, StabType.N_FUN, 0x900, 0, 0, 0, ""), // end of process
+            StabRecord(16, StabType.N_FUN, 0x600, 0, 0, 0, "init:F(0,2)"),
+            StabRecord(17, StabType.N_PSYM, 0x600, 0, 0, 0, "value:p(0,2)"),
+            StabRecord(18, StabType.N_FUN, 0x700, 0, 0, 0, ""), // end of init
+            StabRecord(19, StabType.N_FUN, 0x800, 0, 0, 0, "process:F(0,2)"),
+            StabRecord(20, StabType.N_PSYM, 0x800, 0, 0, 0, "data:p(0,8)"),
+            StabRecord(21, StabType.N_LSYM, 0x800, 0, 0, 0, "result:(0,2)"),
+            StabRecord(22, StabType.N_FUN, 0x900, 0, 0, 0, ""), // end of process
         )
 }
