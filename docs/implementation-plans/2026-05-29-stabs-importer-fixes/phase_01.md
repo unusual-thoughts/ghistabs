@@ -277,26 +277,37 @@ Where `dtKind` discriminates primitive/structure/array/etc. — use Ghidra's cla
 
 <!-- START_SUBCOMPONENT_C (task 11) -->
 <!-- START_TASK_11 -->
-### Task 11: Phase 1 integration test — diagnostics block end-to-end
+### Task 11: Phase 1 synthetic-corpus test — verify stab record structure
 
-**Verifies:** stabs-importer-fixes.AC11.1, stabs-importer-fixes.AC11.2 (end-to-end emission)
+**Verifies:** stabs-importer-fixes.AC11.1, stabs-importer-fixes.AC11.2 (corpus structure, NOT end-to-end importer)
+
+**Design note:**
+End-to-end probe-firing verification (running the importer on real records and asserting on the resulting `MessageLog` counters) is **deferred to Phase 8's real Ghidra headless integration suite** via `AbstractGhidraHeadlessIntegrationTest`. The testing convention (see `testing-convention.md`) strictly forbids mocks of heavy Ghidra types (`Program`, `DataTypeManager`, etc.), which means the synthetic-corpus test cannot extend to running the importer pipeline — that would require complex mocking in violation of the convention. Instead, Phase 1's integration test verifies that the corpus itself is well-formed, with the importer integration covered by Phase 8's regression baselines which assert each diagnostic counter is present with the right bounds.
 
 **Files:**
-- Modify: `src/test/kotlin/ghistabs/XapasmcsrIntegrationTest.kt:52-72` (synthetic-corpus test that always runs)
+- Modify: `src/test/kotlin/ghistabs/XapasmcsrIntegrationTest.kt:56-132` (synthetic-corpus test)
+  - Delete the entire `buildImporterForSyntheticTest()` function (lines 165-225) — it's mock-heavy and forbidden by convention.
+  - Simplify `testSyntheticCorpusCreation()` to assert structural expectations only.
 
 **Implementation:**
-Extend the synthetic-corpus assertion block:
-1. Run the analyzer (already done in the existing test).
-2. Capture the `MessageLog` contents.
-3. Assert exactly one line equals `[Stabs] diagnostics: === diagnostics ===`.
-4. Assert at least one counter line of form `[Stabs] diagnostics: <name> = <number>` follows.
-5. Assert the synthetic corpus's known struct-with-gap (use one with deliberate padding) appears in the gap-census section, OR — if the synthetic corpus has no gap structs — add one to the corpus generator (lines 156-205) and assert it appears.
+Rewrite `testSyntheticCorpusCreation()`:
+1. Call `records = buildSyntheticStabRecords()`.
+2. Assert non-empty records list.
+3. Assert at least one N_SO (compilation unit) record exists.
+4. Assert at least one N_LSYM (type definition) record exists — specifically, verify the `PaddedStruct` record is present for Phase 8 to consume (its gap census is the gap-census test fixture).
+5. Assert at least one N_FUN (function) record exists.
+6. Assert at least one N_GSYM (global variable) record exists.
+7. Add a comment block referencing testing-convention.md explaining that importer assertions are Phase 8's responsibility, and this test only verifies the corpus shape.
+
+Remove all Mockito imports and all Ghidra `Program`/`DataTypeManager`/`Function` imports from this test file.
 
 **Verification:**
 - Run: `./gradlew test --tests "ghistabs.XapasmcsrIntegrationTest"`
 - Expected: passes.
+- Run: `./gradlew ktlintFormat && ./gradlew ktlintCheck`
+- Expected: no violations after removing mock code.
 
-**Commit:** `test(diag): assert diagnostics block in integration test`
+**Commit:** `test(diag): simplify integration test to corpus structure checks only`
 <!-- END_TASK_11 -->
 <!-- END_SUBCOMPONENT_C -->
 
