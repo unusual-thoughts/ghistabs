@@ -23,7 +23,7 @@ class ClassBuilder(
     private val structAstsByName: Map<String, TypeDecl.Struct>,
     /** All type ASTs indexed by TypeId for inheritance resolution. */
     private val typeAstsById: Map<ghistabs.parser.TypeId, TypeAst>? = null,
-    private val ctx: ImportContext? = null,
+    private val ctx: ImportContext,
 ) {
     private val source = SourceType.IMPORTED
     private val symtab = program.symbolTable

@@ -6,9 +6,7 @@ import ghistabs.importer.BookmarkSink
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
-import org.mockito.kotlin.any
 import org.mockito.kotlin.mock
-import org.mockito.kotlin.whenever
 
 /**
  * Pure unit tests for StabsDiagnostics.
@@ -326,5 +324,30 @@ class StabsDiagnosticsTest {
         assertTrue(output.contains("counter-a = 1"))
         assertTrue(output.contains("counter-b = 0"))
         assertTrue(output.contains("counter-c = 3"))
+    }
+
+    /**
+     * Test tag→counter auto-bump contract: BookmarkSink.log() and bookmark()
+     * calls increment the corresponding counter in diagnostics.
+     *
+     * This verifies the Phase 8 regression harness contract: counter values
+     * read directly from StabsDiagnostics match the number of log/bookmark calls.
+     */
+    @Test
+    fun testBookmarkSinkAutoIncCounters() {
+        val diag = StabsDiagnostics()
+        val messageLog = MessageLog()
+        val mockProgram: Program = mock()
+        val sink = BookmarkSink(mockProgram, messageLog, diag)
+
+        // Simulate probe-site log calls
+        sink.log("foo-tag", "first message")
+        sink.log("foo-tag", "second message")
+        sink.log("bar-tag", "a message")
+        sink.log("foo-tag", "third message")
+
+        // Verify counter increments match log call count
+        assertEquals(3, diag["foo-tag"], "foo-tag counter should be 3 after 3 log calls")
+        assertEquals(1, diag["bar-tag"], "bar-tag counter should be 1 after 1 log call")
     }
 }
