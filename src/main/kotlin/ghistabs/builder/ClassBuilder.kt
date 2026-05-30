@@ -290,7 +290,7 @@ class ClassBuilder(
                     "vtable-virtual-unresolved",
                     "virtual method '${m.name}' in $className: no mangled symbol or unresolved address",
                 )
-                ctx?.diagnostics?.recordVtable(className, "failed", reason = "virtual-method-unresolved")
+                ctx.diagnostics.recordVtable(className, "failed", reason = "virtual-method-unresolved")
             }
             off += ptrSize
         }
