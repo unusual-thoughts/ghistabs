@@ -4,6 +4,7 @@ import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.data.CategoryPath
 import ghidra.program.model.data.DataType
 import ghidra.program.model.data.DataTypeConflictHandler
+import ghistabs.diag.StabsDiagnostics
 import ghistabs.importer.BookmarkSink
 import ghistabs.parser.AggrKind
 import ghistabs.parser.FieldDecl
@@ -44,15 +45,12 @@ class TypeRegistryTest : GhidraTestBase() {
         whenever(program.bookmarkManager).thenReturn(bm)
         whenever(bm.setBookmark(any(), any(), any(), any())).then { }
 
-        // Add mocks for ImportContext dependencies
         whenever(program.dataTypeManager).thenReturn(dtm)
-        whenever(program.symbolTable).thenReturn(mock<ghidra.program.model.symbol.SymbolTable>())
 
         val log = MessageLog()
-        val monitor = mock<ghidra.util.task.TaskMonitor>()
         val sink = BookmarkSink(program, log)
-        val ctx = ghistabs.importer.ImportContext(program, log, monitor)
-        return Pair(tracker, TypeRegistry(dtm, sink, ctx))
+        val diagnostics = StabsDiagnostics()
+        return Pair(tracker, TypeRegistry(dtm, sink, diagnostics))
     }
 
     /**

@@ -4,6 +4,7 @@ import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.address.Address
 import ghidra.program.model.listing.BookmarkType
 import ghidra.program.model.listing.Program
+import ghistabs.diag.DiagnosticSink
 import ghistabs.diag.StabsDiagnostics
 
 /**
@@ -23,7 +24,7 @@ class BookmarkSink(
     private val program: Program,
     private val messageLog: MessageLog,
     private var diagnostics: StabsDiagnostics? = null,
-) {
+) : DiagnosticSink {
     fun setDiagnostics(diag: StabsDiagnostics) {
         this.diagnostics = diag
     }
@@ -43,7 +44,7 @@ class BookmarkSink(
         messageLog.appendMsg("[Stabs] $category at $addr: $message")
     }
 
-    fun log(
+    override fun log(
         category: String,
         message: String,
     ) {
