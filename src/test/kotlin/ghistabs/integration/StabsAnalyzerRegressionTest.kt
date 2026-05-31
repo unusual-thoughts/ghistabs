@@ -79,7 +79,7 @@ class StabsAnalyzerRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
 
     @AfterEach
     fun tearDown() {
-        program.release(this)
+        if (::program.isInitialized) program.release(this)
         loadResults?.close()
         env?.dispose()
     }
