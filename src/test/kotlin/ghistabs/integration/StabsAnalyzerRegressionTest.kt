@@ -51,13 +51,13 @@ class StabsAnalyzerRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
         val monitor = TaskMonitor.DUMMY
 
         try {
-            loadResults =
-                ProgramLoader
-                    .builder()
-                    .source(fixture)
-                    .log(log)
-                    .monitor(monitor)
-                    .load()
+            loadResults = ProgramLoader
+                .builder()
+                .source(fixture)
+                .compiler("mingw")
+                .log(log)
+                .monitor(monitor)
+                .load()
 
             program = loadResults!!.getPrimaryDomainObject(this)
             usedRealBinary = true
