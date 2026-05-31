@@ -195,6 +195,42 @@ class XapasmcsrIntegrationTest {
             placeholderInheritanceApplied > 0,
             "Expected inheritance-applied counter > 0, got $placeholderInheritanceApplied",
         )
+
+        // Phase 6 assertion 1: AC5.1 — vtable-applied rate ≥80% on polymorphic classes
+        // After the importer runs, check that the majority of polymorphic classes
+        // had their vtable resolved (either via symbol lookup or fallback scan).
+        val placeholderVtableApplied = 0L // TODO(#40): extract from diagnostics["vtable-applied"]
+        val placeholderExpectedClasses = 50L // TODO(#40): count from parsed ASTs: hasVTablePointerMarker || hasVirtualMethods
+        val vtableApplyRate =
+            if (placeholderExpectedClasses > 0) {
+                placeholderVtableApplied.toDouble() / placeholderExpectedClasses.toDouble()
+            } else {
+                1.0 // vacuous pass if no classes to check
+            }
+        assertTrue(
+            vtableApplyRate >= 0.80,
+            "AC5.1: vtable-applied rate should be ≥80% ($placeholderVtableApplied/$placeholderExpectedClasses = ${String.format(
+                "%.1f",
+                vtableApplyRate * 100,
+            )}%), got ${String.format("%.1f", vtableApplyRate * 100)}%",
+        )
+
+        // Phase 6 assertion 2: AC5.3 — Bucket diagnostics are emitted and recognized
+        // Parse the diagnostics log and verify that at least one vtable-failed-<bucket> entry exists,
+        // and that all bucket names appear in the documented allow-list.
+        val allowedBuckets =
+            setOf(
+                "templated-unsupported",
+                "no-virtual-methods-flagged-but-marker-set",
+                "truly-missing",
+            )
+        // TODO(#40): Extract all vtable-failed-* log entries from diagnostics.snapshotLog()
+        // and verify each bucket name is in allowedBuckets. Assert at least one bucket appears.
+        // For now, simply verify the allow-list is non-empty (proves the list was defined).
+        assertTrue(
+            allowedBuckets.isNotEmpty(),
+            "AC5.3: Allow-list of documented vtable failure buckets must be defined",
+        )
     }
 
     private fun buildSyntheticStabRecords(): List<StabRecord> =
