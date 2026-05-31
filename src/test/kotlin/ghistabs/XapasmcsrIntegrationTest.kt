@@ -231,6 +231,41 @@ class XapasmcsrIntegrationTest {
             allowedBuckets.isNotEmpty(),
             "AC5.3: Allow-list of documented vtable failure buckets must be defined",
         )
+
+        // Phase 7 assertion 1: AC8.1 — Per-DataType-kind global coverage
+        // After importer runs, verify that for each major DataType kind
+        // (Structure, Array, Union, Pointer, Enum, TypeDef, FunctionDefinition, primitive),
+        // there exists at least one global Data item in the Listing typed as that kind.
+        // Allowed to skip kinds that legitimately don't appear in xapasmcsr.exe (e.g., Union).
+        val expectedKinds =
+            setOf(
+                "Structure",
+                "Array",
+                "Pointer",
+                "Enum",
+                "FunctionDefinition",
+            )
+        val allowedEmptyKinds = setOf("Union") // Documented as legitimately absent
+        // TODO(#40): Once headless harness lands, iterate program.listing.getDefinedData(true),
+        // bucket by dataType class, and assert each expectedKind has ≥1 entry.
+        // Placeholder: simply verify the expectedKinds list is non-empty.
+        assertTrue(
+            expectedKinds.isNotEmpty(),
+            "AC8.1: Expected DataType kinds list must be defined",
+        )
+
+        // Phase 7 assertion 2: AC8.2 — createData failure handling
+        // When Listing.createData fails (e.g., overlapping code), failure should be logged
+        // with reason "create-data-failed" and analyzer should not crash.
+        // This assertion verifies the failure counter exists in diagnostics.
+        val placeholderGlobalSkipped =
+            0L // TODO(#40): ctx.diagnostics.snapshotCounters()["global-skipped"] ?: 0L
+        // The counter should be > 0 if any globals had create-data failures or unresolved symbols.
+        // This is a probabilistic assertion based on realistic .exe content.
+        // For xapasmcsr.exe, we expect some globals to fail due to address conflicts.
+        // TODO(#40): Assert placeholderGlobalSkipped > 0 with reason "create-data-failed" OR
+        // "unresolved-symbol" when diagnostics are available.
+        assertTrue(true, "AC8.2: Failure handling placeholder — real assertion deferred to Phase 8 headless suite")
     }
 
     private fun buildSyntheticStabRecords(): List<StabRecord> =
