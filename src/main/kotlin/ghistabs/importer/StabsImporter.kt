@@ -344,6 +344,7 @@ class StabsImporter(
         }
 
         // Globals + file-statics.
+        val allHarvestedSymbols = symbolsByCu.values.flatten()
         for ((cu, syms) in symbolsByCu) {
             for (h in syms) {
                 try {
@@ -357,6 +358,9 @@ class StabsImporter(
                 }
             }
         }
+
+        // .bss coverage analysis: detect uncovered ranges in the .bss section.
+        analyzeBssCoverage(allHarvestedSymbols)
 
         // Classes + vtables.
         if (ctx.options.applyVtables) {
@@ -391,6 +395,48 @@ class StabsImporter(
         }
 
         return ApplyResult(functions, globals, classes)
+    }
+
+    private fun analyzeBssCoverage(allHarvested: List<HarvestedSymbol>) {
+        val bssBlock = ctx.program.memory.getBlock(".bss") ?: return
+        val addrSpace = ctx.program.addressFactory.defaultAddressSpace
+
+        // Build list of harvested symbols with resolved addresses
+        val harvestedAddrs =
+            allHarvested.mapNotNull {
+                val name = (it.decl as? SymbolDecl.Global)?.name ?: return@mapNotNull null
+                val addr = ctx.resolver.resolve(name)?.offset
+                HarvestedAddr(name, addr)
+            }
+
+        // Scan .bss block at 4-byte intervals, checking for uncovered regions
+        var addr = bssBlock.start
+        while (addr <= bssBlock.end) {
+            ctx.monitor.checkCancelled()
+
+            // Skip addresses that already have a symbol or defined data
+            if (ctx.program.symbolTable.getPrimarySymbol(addr) == null &&
+                ctx.program.listing.getDefinedDataAt(addr) == null
+            ) {
+                val rangeEnd = addr.add(3)
+                val pureRange = AddrRange(addr.offset, rangeEnd.offset)
+                val result = BssCoverageDecision.classify(pureRange, harvestedAddrs)
+
+                when (result) {
+                    is CoverageResult.NoCoverage -> {
+                        ctx.sink.log("stabs-no-coverage", "@ $addr..$rangeEnd: no stabs records cover this range")
+                    }
+
+                    is CoverageResult.Covered -> {
+                        result.coverers.forEach {
+                            ctx.sink.log("stabs-coverage", "@ $addr..$rangeEnd: covered by ${it.symbolName}")
+                        }
+                    }
+                }
+            }
+
+            addr = addr.add(4)
+        }
     }
 
     private fun applyLocal(
