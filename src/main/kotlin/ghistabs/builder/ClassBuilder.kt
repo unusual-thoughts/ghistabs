@@ -6,6 +6,7 @@ import ghidra.program.model.data.DataTypeConflictHandler
 import ghidra.program.model.data.PointerDataType
 import ghidra.program.model.data.Structure
 import ghidra.program.model.data.StructureDataType
+import ghidra.program.model.data.Undefined1DataType
 import ghidra.program.model.data.Undefined4DataType
 import ghidra.program.model.gclass.ClassUtils
 import ghidra.program.model.listing.CommentType
@@ -52,8 +53,13 @@ class ClassBuilder(
                 }
 
         // 2. Insert {vfptr} first if class is polymorphic.
-        val isPoly = body.hasVTablePointerMarker || body.methods.any { it.virt == VirtKind.VIRTUAL }
-        if (isPoly) ensureVfptrFirstField(structDt, name, category)
+        val isPoly =
+            body.hasVTablePointerMarker ||
+                body.methods.any { it.virt == VirtKind.VIRTUAL } ||
+                body.fields.any {
+                    it.name.startsWith("_vptr$") || it.name.startsWith("_vptr.") || it.name == "_vptr"
+                }
+        if (isPoly) ensureVfptrFirstField(structDt, body, name, category)
 
         // 3. Create or upgrade the GhidraClass namespace.
         val ns = ensureClassNamespace(name)
@@ -93,11 +99,81 @@ class ClassBuilder(
 
     private fun ensureVfptrFirstField(
         structDt: Structure,
+        body: TypeDecl.Struct,
         className: String,
         category: CategoryPath,
     ) {
         val vfptrName = ClassUtils.VFPTR // "{vfptr}"
-        if (structDt.numComponents > 0 && structDt.getComponent(0).fieldName == vfptrName) return
+
+        // Collect parser-emitted _vptr field offset if present
+        val parserVptrOffset =
+            body.fields
+                .firstOrNull {
+                    it.name.startsWith("_vptr$") || it.name.startsWith("_vptr.") || it.name == "_vptr"
+                }?.let { (it.offsetBits / 8).toInt() }
+
+        // Snapshot existing component at target offset
+        val targetOffset = parserVptrOffset ?: 0
+        val existingComp = runCatching { structDt.getComponentAt(targetOffset) }.getOrNull()
+        val snapshot =
+            existingComp?.let {
+                FirstComponentSnapshot(
+                    fieldName = it.fieldName,
+                    offsetBytes = it.offset,
+                    isUndefined = it.dataType is Undefined1DataType,
+                )
+            }
+
+        // Decide what to do with vfptr placement
+        val action =
+            VfptrDecision.chooseVfptrAction(
+                hasPolymorphicBaseSubobject = hasPolymorphicBaseSubobject(body),
+                parserVptrOffsetBytes = parserVptrOffset,
+                componentAtTargetOffset = snapshot,
+                canonicalVfptrFieldName = vfptrName,
+            )
+
+        when (action) {
+            is VfptrAction.SkipInheritedFromBase -> ctx.diagnostics.inc("vfptr-inherited-from-base")
+            is VfptrAction.AlreadyCanonical -> return
+            is VfptrAction.Insert -> {
+                val ptrToVtable = ensureVtableTypeAndPointer(className, category)
+                structDt.insertAtOffset(
+                    action.offsetBytes,
+                    ptrToVtable,
+                    ptrToVtable.length,
+                    vfptrName,
+                    "vtable pointer",
+                )
+                ctx.diagnostics.inc("vfptr-inserted")
+            }
+
+            is VfptrAction.Replace -> {
+                val ptrToVtable = ensureVtableTypeAndPointer(className, category)
+                structDt.replaceAtOffset(
+                    action.offsetBytes,
+                    ptrToVtable,
+                    ptrToVtable.length,
+                    vfptrName,
+                    "vtable pointer (was: ${action.wasFieldName})",
+                )
+                ctx.diagnostics.inc("vfptr-normalized")
+            }
+
+            is VfptrAction.CollisionAt -> {
+                sink.log(
+                    "vfptr-collision",
+                    "$className: cannot place {vfptr} at +${action.offsetBytes} (occupied by ${action.occupantFieldName})",
+                )
+                ctx.diagnostics.inc("vfptr-collision")
+            }
+        }
+    }
+
+    private fun ensureVtableTypeAndPointer(
+        className: String,
+        category: CategoryPath,
+    ): ghidra.program.model.data.DataType {
         val vtableType =
             dtm.getDataType(category, "${className}_vtable")
                 ?: StructureDataType(
@@ -106,8 +182,7 @@ class ClassBuilder(
                     0,
                     dtm,
                 ).let { dtm.addDataType(it, DataTypeConflictHandler.KEEP_HANDLER) }
-        val ptrToVtable = PointerDataType.getPointer(vtableType, dtm)
-        structDt.insertAtOffset(0, ptrToVtable, ptrToVtable.length, vfptrName, "vtable pointer")
+        return PointerDataType.getPointer(vtableType, dtm)
     }
 
     private fun reparentMethod(
