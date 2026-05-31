@@ -26,14 +26,6 @@ dependencies {
             ),
         ),
     )
-    testImplementation(
-        fileTree(
-            mapOf(
-                "dir" to "$ghidraInstallDirForTests/Ghidra/Framework/Test",
-                "include" to listOf("**/lib/*.jar"),
-            ),
-        ),
-    )
 }
 
 repositories {

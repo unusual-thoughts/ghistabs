@@ -20,7 +20,7 @@ testImplementation(fileTree(mapOf("dir" to "$ghidraInstallDirForTests/Ghidra/Fea
 
 This includes `AbstractGhidraHeadlessIntegrationTest` and `TestEnv` from Base.jar.
 
-Legacy glob patterns for non-existent Test/ directories are retained in the gradle config for forward compatibility with potential future Ghidra versions that may organize test artifacts differently:
+Additional test JARs from `Ghidra/Test` directory:
 
 ```kotlin
 testImplementation(
@@ -31,15 +31,9 @@ testImplementation(
         ),
     ),
 )
-testImplementation(
-    fileTree(
-        mapOf(
-            "dir" to "$ghidraInstallDirForTests/Ghidra/Framework/Test",
-            "include" to listOf("**/lib/*.jar"),
-        ),
-    ),
-)
 ```
+
+This ensures integration test fixtures from IntegrationTest and DebuggerIntegrationTest modules are available if needed.
 
 ## How to Update for New Ghidra Versions
 
