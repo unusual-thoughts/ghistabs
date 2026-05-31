@@ -1,0 +1,88 @@
+{
+    "schema": 1,
+    "source": "Phase A baseline from stabs.log with 499 [Stabs] lines",
+    "phaseA": {
+        "local-var-error": 331,
+        "type-conflict": 94,
+        "dangling-ref": 69
+    },
+    "counters": {
+        "local-var-error": {
+            "min": 0,
+            "max": 35
+        },
+        "local-var-skipped-dup-param": {
+            "min": 50,
+            "max": 200
+        },
+        "local-var-skipped-dup-local": {
+            "min": 20,
+            "max": 200
+        },
+        "local-var-add-success": {
+            "min": 100,
+            "max": 100000
+        },
+        "type-conflict": {
+            "min": 0,
+            "max": 25
+        },
+        "dedup-merge": {
+            "min": 0,
+            "max": 50
+        },
+        "dedup-drop": {
+            "min": 0,
+            "max": 30
+        },
+        "dangling-ref": {
+            "min": 0,
+            "max": 8
+        },
+        "dangling-ref-truly-missing": {
+            "min": 0,
+            "max": 8
+        },
+        "replaced-demangler": {
+            "min": 0,
+            "max": 1000
+        },
+        "inheritance-applied": {
+            "min": 0,
+            "max": 500
+        },
+        "vtable-applied": {
+            "min": 0,
+            "max": 50
+        },
+        "vfptr-inherited-from-base": {
+            "min": 0,
+            "max": 200
+        },
+        "vfptr-normalized": {
+            "min": 0,
+            "max": 200
+        },
+        "empty-scope": {
+            "min": 0,
+            "max": 0
+        },
+        "apply-error-other": {
+            "min": 0,
+            "max": 5
+        },
+        "apply-error-entrypoint-mismatch": {
+            "min": 0,
+            "max": 0
+        },
+        "global-applied": {
+            "min": 1,
+            "max": 100000
+        },
+        "global-skipped": {
+            "min": 0,
+            "max": 100
+        }
+    },
+    "notes": "Targets derive from per-AC reductions vs phaseA values. Bands intentionally wide on counters with no measured baseline; tighten over 3 stable runs. empty-scope=0 enforces AC6.1; apply-error-entrypoint-mismatch=0 enforces the design's suspected top-bucket elimination after the getFunctionContaining snap."
+}
