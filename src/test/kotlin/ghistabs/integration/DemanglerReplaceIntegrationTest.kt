@@ -36,9 +36,9 @@ class DemanglerReplaceIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
         // Add memory blocks
         builder.createMemory(".text", "0x400000", 512)
         builder.createMemory(".data", "0x401000", 256)
-        // Add stab sections (minimal, for compliance with integration test structure)
-        builder.createUninitializedMemory(".stab", "0x402000", 4)
-        builder.createUninitializedMemory(".stabstr", "0x403000", 4)
+        // Add stab sections with initialized (zero-filled) memory
+        builder.createMemory(".stab", "0x402000", 4)
+        builder.createMemory(".stabstr", "0x403000", 4)
     }
 
     @AfterEach
@@ -62,17 +62,25 @@ class DemanglerReplaceIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
         val program = builder.program
         val dtm = program.dataTypeManager
 
-        // Seed /Demangler/Foo as empty structure (stub)
-        val stubPath = CategoryPath("/Demangler")
-        val stubDt =
-            StructureDataType(stubPath, "Foo", 0)
-        dtm.addDataType(stubDt, DataTypeConflictHandler.KEEP_HANDLER)
+        // Seed /Demangler/Foo as empty structure (stub) within a transaction
+        val txId = program.startTransaction("setup-test")
+        try {
+            val stubPath = CategoryPath("/Demangler")
+            val stubDt = StructureDataType(stubPath, "Foo", 0)
+            dtm.addDataType(stubDt, DataTypeConflictHandler.KEEP_HANDLER)
 
-        // Seed /proj/Foo as non-empty structure with one int32 field (replacement)
-        val projPath = CategoryPath("/proj")
-        val projDt = StructureDataType(projPath, "Foo", 4)
-        projDt.add(dtm.getDataType("/int"), 4, "fieldA", "first int")
-        dtm.addDataType(projDt, DataTypeConflictHandler.KEEP_HANDLER)
+            // Seed /proj/Foo as non-empty structure with one int32 field (replacement)
+            val projPath = CategoryPath("/proj")
+            val projDt = StructureDataType(projPath, "Foo", 4)
+            // Resolve the int type before adding to avoid null
+            val intType = dtm.getDataType(CategoryPath("/"), "int")
+            if (intType != null) {
+                projDt.add(intType, 4, "fieldA", "first int")
+            }
+            dtm.addDataType(projDt, DataTypeConflictHandler.KEEP_HANDLER)
+        } finally {
+            program.endTransaction(txId, true)
+        }
 
         // Create ImportContext (minimal setup for DemanglerReplacer)
         val ctx =
@@ -95,10 +103,12 @@ class DemanglerReplaceIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
         DemanglerReplacer(ctx, registry).run()
 
         // Assert /Demangler/Foo is gone (null)
+        val stubPath = CategoryPath("/Demangler")
         val stubAfter = dtm.getDataType(stubPath, "Foo")
         assertNull(stubAfter, "/Demangler/Foo should be removed after replacement")
 
         // Assert /proj/Foo still exists and is non-empty
+        val projPath = CategoryPath("/proj")
         val projAfter = dtm.getDataType(projPath, "Foo")
         assertTrue(projAfter != null, "/proj/Foo should still exist")
         if (projAfter != null) {
@@ -123,11 +133,20 @@ class DemanglerReplaceIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
         val program = builder.program
         val dtm = program.dataTypeManager
 
-        // Seed only /proj/Foo (no stub)
-        val projPath = CategoryPath("/proj")
-        val projDt = StructureDataType(projPath, "Foo", 4)
-        projDt.add(dtm.getDataType("/int"), 4, "fieldA", null)
-        dtm.addDataType(projDt, DataTypeConflictHandler.KEEP_HANDLER)
+        // Seed only /proj/Foo (no stub) within a transaction
+        val txId = program.startTransaction("setup-test")
+        try {
+            val projPath = CategoryPath("/proj")
+            val projDt = StructureDataType(projPath, "Foo", 4)
+            // Resolve the int type first to avoid null when adding
+            val intType = dtm.getDataType(CategoryPath("/"), "int")
+            if (intType != null) {
+                projDt.add(intType, 4, "fieldA", null)
+            }
+            dtm.addDataType(projDt, DataTypeConflictHandler.KEEP_HANDLER)
+        } finally {
+            program.endTransaction(txId, true)
+        }
 
         // Create ImportContext
         val ctx =
@@ -145,6 +164,7 @@ class DemanglerReplaceIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
         DemanglerReplacer(ctx, registry).run()
 
         // Assert /proj/Foo still exists
+        val projPath = CategoryPath("/proj")
         val projAfter = dtm.getDataType(projPath, "Foo")
         assertTrue(projAfter != null, "/proj/Foo should still exist after idempotent run")
     }
