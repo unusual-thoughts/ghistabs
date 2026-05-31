@@ -79,8 +79,10 @@ class BaseInsertionPlannerTest {
         assertEquals(2, ops.size, "Expected 2 InsertOps")
         assertEquals(0, ops[0].offsetBytes, "First op should be at offset 0")
         assertEquals("_base_Base0", ops[0].fieldName)
+        assertEquals("public base", ops[0].comment)
         assertEquals(8, ops[1].offsetBytes, "Second op should be at offset 8")
         assertEquals("_base_Base1", ops[1].fieldName)
+        assertEquals("public base", ops[1].comment)
     }
 
     /**
@@ -205,6 +207,7 @@ class BaseInsertionPlannerTest {
 
         assertEquals(1, ops.size, "Only 1 valid base should be in output")
         assertEquals("_base_Good", ops[0].fieldName)
+        assertEquals("public base", ops[0].comment)
         assertEquals(0, ops[0].offsetBytes)
     }
 }
