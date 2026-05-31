@@ -1,5 +1,6 @@
 package ghistabs.integration
 
+import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.program.model.data.Array
 import ghidra.program.model.data.Enum
 import ghidra.program.model.data.FunctionDefinition
@@ -39,7 +40,7 @@ class StabsAnalyzerRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
     private val baselineFile = File("src/test/resources/baselines/bouniafbouniaf-baseline.json")
 
     private var env: TestEnv? = null
-    private var program: Program? = null
+    private lateinit var program: Program
 
     @BeforeEach
     fun setUp() {
@@ -50,14 +51,18 @@ class StabsAnalyzerRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
 
         try {
             env = TestEnv()
-            // Use reflection to call env.openProgram(fixture) since this method is part of the
-            // Ghidra test harness API that may vary across Ghidra versions
+            // Call env.openProgram(fixture) directly
             @Suppress("UNCHECKED_CAST")
             val method = env!!::class.java.getMethod("openProgram", File::class.java)
             program = (method.invoke(env!!, fixture) as Program)
-        } catch (e: Exception) {
-            // If TestEnv fixture loading fails due to issue #40, skip gracefully
-            assumeTrue(false, "TestEnv fixture loading failed (issue #40): ${e.message}")
+        } catch (e: IllegalStateException) {
+            // If JVM initialization fails due to issue #40 (ObjectInputFilter conflict),
+            // skip gracefully
+            if (e.message?.contains("filter factory") == true) {
+                assumeTrue(false, "TestEnv fixture loading failed (issue #40): ${e.message}")
+            } else {
+                throw e
+            }
         }
     }
 
@@ -68,8 +73,7 @@ class StabsAnalyzerRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
 
     @Test
     fun countersWithinBaseline() {
-        val prog = program ?: return
-        val messageLog = capturedMessageLog(prog)
+        val messageLog = capturedMessageLog(program)
         val tagCounts = parseTagFrequencies(messageLog)
         val baseline = BaselineLoader.load(baselineFile)
 
@@ -87,9 +91,8 @@ class StabsAnalyzerRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
 
     @Test
     fun bouniafNotUnderStdInclude() {
-        val prog = program ?: return
         val bouniaf =
-            prog.dataTypeManager.allDataTypes
+            program.dataTypeManager.allDataTypes
                 .asSequence()
                 .firstOrNull { it.name == "bouniaf" }
         Assertions.assertNotNull(bouniaf, "bouniaf not found in DTM at all")
@@ -101,9 +104,8 @@ class StabsAnalyzerRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
 
     @Test
     fun bouniafHasBaseField() {
-        val prog = program ?: return
         val cls =
-            prog.dataTypeManager.allDataTypes
+            program.dataTypeManager.allDataTypes
                 .asSequence()
                 .firstOrNull { it.name == "bouniaf" && it is Structure } as? Structure
         Assertions.assertNotNull(cls, "bouniaf not found")
@@ -116,9 +118,8 @@ class StabsAnalyzerRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
 
     @Test
     fun atLeastOneVtableStructApplied() {
-        val prog = program ?: return
         val any =
-            prog.dataTypeManager.allDataTypes
+            program.dataTypeManager.allDataTypes
                 .asSequence()
                 .filterIsInstance<Structure>()
                 .any { it.name.endsWith("_vtable") && it.numComponents > 0 }
@@ -127,27 +128,17 @@ class StabsAnalyzerRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
 
     @Test
     fun bss0x46702cNamedOrDocumented() {
-        val prog = program ?: return
-        val addr = prog.addressFactory.defaultAddressSpace.getAddress(0x46702cL)
-        val named = prog.symbolTable.getPrimarySymbol(addr) != null
-        val messageLog = capturedMessageLog(prog)
+        val addr = program.addressFactory.defaultAddressSpace.getAddress(0x46702cL)
+        val named = program.symbolTable.getPrimarySymbol(addr) != null
+        val messageLog = capturedMessageLog(program)
         val documented = messageLog.contains("stabs-no-coverage") && messageLog.contains("0x46702c")
         Assertions.assertTrue(named || documented, "0x46702c neither named nor documented as stabs-no-coverage")
     }
 
     @Test
-    fun applyErrorInvalidInputBucketDocumented() {
-        val prog = program ?: return
-        val tagCounts = parseTagFrequencies(capturedMessageLog(prog))
-        val n = tagCounts.getOrDefault("apply-error-invalid-input", 0L)
-        Assertions.assertTrue(n >= 0, "Counter present and well-defined")
-    }
-
-    @Test
     fun globalsCoverEachDataTypeKind() {
-        val prog = program ?: return
         val seenKinds = mutableSetOf<String>()
-        prog.listing.getDefinedData(true).forEach { data ->
+        program.listing.getDefinedData(true).forEach { data ->
             seenKinds +=
                 when (val dt = data.dataType) {
                     is Structure -> "Structure"
@@ -174,16 +165,8 @@ class StabsAnalyzerRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
             .mapValues { it.value.toLong() }
 
     private fun capturedMessageLog(prog: Program): String =
-        try {
-            @Suppress("UNCHECKED_CAST")
-            val managerClass = Class.forName("ghidra.app.services.AutoAnalysisManager")
-            val getAnalysisManagerMethod = managerClass.getDeclaredMethod("getAnalysisManager", Program::class.java)
-            val analysisManager = getAnalysisManagerMethod.invoke(null, prog)
-            val messageLogField = analysisManager!!::class.java.getDeclaredField("messageLog")
-            messageLogField.isAccessible = true
-            messageLogField.get(analysisManager).toString()
-        } catch (e: Exception) {
-            // Fallback if MessageLog is unavailable
-            ""
-        }
+        AutoAnalysisManager
+            .getAnalysisManager(prog)
+            .messageLog
+            .toString()
 }
