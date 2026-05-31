@@ -1,5 +1,6 @@
 package ghistabs.builder
 
+import ghidra.program.model.address.Address
 import ghidra.program.model.data.CategoryPath
 import ghidra.program.model.data.DataTypeConflictHandler
 import ghidra.program.model.data.PointerDataType
@@ -12,6 +13,7 @@ import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
+import ghidra.program.model.symbol.Symbol
 import ghistabs.container.AddressResolver
 import ghistabs.importer.BookmarkSink
 import ghistabs.importer.ImportContext
@@ -244,21 +246,15 @@ class ClassBuilder(
             vtable.add(fnDt, ptrSize, m.name, "virtual ${m.name}")
         }
 
-        // 3. Resolve _ZTV<class> address.
-        val mangledItanium = "_ZTV" + itaniumMangleClassName(className)
-        val mangledGcc2 = $$"_vt$$$className"
+        // 3. Resolve _ZTV<class> address with fallbacks.
+        val candidates = VtableSymbolCandidates.mangledZtvCandidates(className)
 
         // If class name contains template args, log the limitation before trying resolution
         if ('<' in className) {
             sink.log("vtable-templated-skip", "class '$className' has template args; _ZTV lookup unsupported in v1")
         }
 
-        val addr =
-            resolver.resolve(mangledItanium) ?: resolver.resolve(mangledGcc2) ?: run {
-                sink.log("vtable-unresolved", "no _ZTV symbol for $className")
-                ctx.diagnostics.recordVtable(className, "failed", reason = "unresolved-_ZTV-symbol")
-                return
-            }
+        val addr = resolveVtableAddress(className, body, candidates) ?: return
 
         // 4. Apply data at the address.
         program.listing.clearCodeUnits(addr, addr.add(vtable.length.toLong() - 1), false)
@@ -294,6 +290,67 @@ class ClassBuilder(
             }
             off += ptrSize
         }
+    }
+
+    /**
+     * Resolve the address of a vtable struct for [className], trying multiple
+     * fallback strategies:
+     * 1. Direct resolution via AddressResolver using [candidates] list
+     * 2. Symbol-table scan for _ZTV-prefixed symbols that decode to className
+     * 3. Memory scan of .rdata block for matching symbols
+     *
+     * Returns the resolved address or null (caller handles the bail-out and bucketing).
+     */
+    private fun resolveVtableAddress(
+        className: String,
+        body: TypeDecl.Struct,
+        candidates: List<String>,
+    ): Address? {
+        // Step 1: Try direct resolver lookup
+        candidates.mapNotNull { resolver.resolve(it) }.firstOrNull()?.let { return it }
+
+        // Step 2: Fallback to symbol-table scan
+        try {
+            val symtab = program.symbolTable
+            (symtab.getSymbolIterator() as Iterable<Symbol>)
+                .asSequence()
+                .firstOrNull { sym ->
+                    val n = sym.name
+                    (n.startsWith("_ZTV") || n.startsWith("__ZTV")) &&
+                        VtableSymbolCandidates.itaniumDecodesToClass(n, className)
+                }?.let { return it.address }
+        } catch (e: Exception) {
+            sink.log("vtable-symbol-scan-error", "exception scanning symbol table for $className: ${e.message}")
+        }
+
+        // Step 3: Fallback to .rdata memory scan
+        try {
+            val rdataBlock = program.memory.getBlock(".rdata") ?: return null
+            val symtab = program.symbolTable
+            (symtab.getSymbolIterator(rdataBlock.start, true) as Iterable<Symbol>)
+                .asSequence()
+                .takeWhile { it.address < rdataBlock.end }
+                .firstOrNull { sym ->
+                    val n = sym.name
+                    (n.startsWith("_ZTV") || n.startsWith("__ZTV")) &&
+                        VtableSymbolCandidates.itaniumDecodesToClass(n, className)
+                }?.let { return it.address }
+        } catch (e: Exception) {
+            sink.log("vtable-rdata-scan-error", "exception scanning .rdata for $className: ${e.message}")
+        }
+
+        // All resolution attempts failed: bucket the failure
+        val failureBucket =
+            when {
+                '<' in className -> "templated-unsupported"
+                body.hasVTablePointerMarker && body.methods.none { it.virt == VirtKind.VIRTUAL } ->
+                    "no-virtual-methods-flagged-but-marker-set"
+                else -> "truly-missing"
+            }
+        ctx.diagnostics.recordVtable(className, "failed", failureBucket)
+        sink.log("vtable-failed-$failureBucket", "class '$className': vtable not found (tried ${candidates.joinToString()})")
+
+        return null
     }
 
     /**
