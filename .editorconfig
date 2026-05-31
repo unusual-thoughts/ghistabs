@@ -1,0 +1,4 @@
+[*.{kt,kts}]
+# ktlint_standard = disabled # Disable all rules from the `standard` rule set provided by KtLint
+ktlint_standard_no-wildcard-imports = disabled
+ktlint_code_style = intellij_idea

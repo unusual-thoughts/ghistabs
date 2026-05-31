@@ -6,10 +6,7 @@ package ghistabs.importer
  * @property symbolName The name of the symbol.
  * @property resolvedAddr The resolved address, or null if unresolved.
  */
-data class HarvestedAddr(
-    val symbolName: String,
-    val resolvedAddr: Long?,
-)
+data class HarvestedAddr(val symbolName: String, val resolvedAddr: Long?)
 
 /**
  * Range of addresses (inclusive on both ends).
@@ -17,10 +14,9 @@ data class HarvestedAddr(
  * @property start The start address (inclusive).
  * @property endInclusive The end address (inclusive).
  */
-data class AddrRange(
-    val start: Long,
-    val endInclusive: Long,
-)
+data class AddrRange(val start: Long, val endInclusive: Long) {
+    operator fun contains(addr: Long) = addr in start..endInclusive
+}
 
 /**
  * Result of coverage analysis for an address range.
@@ -29,17 +25,12 @@ sealed class CoverageResult {
     /**
      * The range has no coverage from any harvested symbols.
      */
-    data class NoCoverage(
-        val range: AddrRange,
-    ) : CoverageResult()
+    data class NoCoverage(val range: AddrRange) : CoverageResult()
 
     /**
      * The range is covered by one or more harvested symbols.
      */
-    data class Covered(
-        val range: AddrRange,
-        val coverers: List<HarvestedAddr>,
-    ) : CoverageResult()
+    data class Covered(val range: AddrRange, val coverers: List<HarvestedAddr>) : CoverageResult()
 }
 
 /**
@@ -54,12 +45,8 @@ object BssCoverageDecision {
      * @param harvest The list of harvested symbols with their addresses.
      * @return NoCoverage if no symbols resolve within the range, Covered otherwise.
      */
-    fun classify(
-        range: AddrRange,
-        harvest: List<HarvestedAddr>,
-    ): CoverageResult {
-        val matching =
-            harvest.filter { it.resolvedAddr != null && it.resolvedAddr in range.start..range.endInclusive }
+    fun classify(range: AddrRange, harvest: List<HarvestedAddr>): CoverageResult {
+        val matching = harvest.filter { it.resolvedAddr != null && it.resolvedAddr in range }
         return if (matching.isEmpty()) {
             CoverageResult.NoCoverage(range)
         } else {

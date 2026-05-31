@@ -1,6 +1,5 @@
 package ghistabs.diag
 
-import ghistabs.diag.AttributionTrace
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -18,15 +17,14 @@ class AttributionTraceDumpTest {
 
     @Test
     fun testFormatForTypeOneMatch() {
-        val traces =
-            listOf(
-                AttributionTrace(
-                    typeName = "Bar",
-                    matchedCU = "/usr/include/c++/3.4.4/string",
-                    definingCUs = setOf("/usr/include/c++/3.4.4/string"),
-                    routedTo = "/std/string",
-                ),
-            )
+        val traces = listOf(
+            AttributionTrace(
+                typeName = "Bar",
+                matchedCU = "/usr/include/c++/3.4.4/string",
+                definingCUs = setOf("/usr/include/c++/3.4.4/string"),
+                routedTo = "/std/string",
+            ),
+        )
         val result = AttributionTraceDump.formatForType("Bar", traces)
         assertTrue(result.contains("Bar | matched=/usr/include/c++/3.4.4/string"))
         assertTrue(result.contains("routedTo=/std/string"))
@@ -35,21 +33,20 @@ class AttributionTraceDumpTest {
 
     @Test
     fun testFormatForTypeMultipleMatches() {
-        val traces =
-            listOf(
-                AttributionTrace(
-                    typeName = "Baz",
-                    matchedCU = "/usr/include/c++/3.4.4/string",
-                    definingCUs = setOf("/usr/include/c++/3.4.4/string"),
-                    routedTo = "/std/string",
-                ),
-                AttributionTrace(
-                    typeName = "Baz",
-                    matchedCU = "/usr/include/c++/3.4.4/vector",
-                    definingCUs = setOf("/usr/include/c++/3.4.4/vector"),
-                    routedTo = "/std/vector",
-                ),
-            )
+        val traces = listOf(
+            AttributionTrace(
+                typeName = "Baz",
+                matchedCU = "/usr/include/c++/3.4.4/string",
+                definingCUs = setOf("/usr/include/c++/3.4.4/string"),
+                routedTo = "/std/string",
+            ),
+            AttributionTrace(
+                typeName = "Baz",
+                matchedCU = "/usr/include/c++/3.4.4/vector",
+                definingCUs = setOf("/usr/include/c++/3.4.4/vector"),
+                routedTo = "/std/vector",
+            ),
+        )
         val result = AttributionTraceDump.formatForType("Baz", traces)
         val lines = result.split("\n")
         assertEquals(2, lines.size, "Should have two lines for two matches")
@@ -58,19 +55,16 @@ class AttributionTraceDumpTest {
     }
 
     @Test
-    fun testWriteTraceArtifactCreatesDir(
-        @TempDir tempDir: Path,
-    ) {
+    fun testWriteTraceArtifactCreatesDir(@TempDir tempDir: Path) {
         val outDir = tempDir.resolve("deep/nested/path")
-        val traces =
-            listOf(
-                AttributionTrace(
-                    typeName = "Test",
-                    matchedCU = "/usr/include/c++/3.4.4/string",
-                    definingCUs = setOf("/usr/include/c++/3.4.4/string"),
-                    routedTo = "/std/string",
-                ),
-            )
+        val traces = listOf(
+            AttributionTrace(
+                typeName = "Test",
+                matchedCU = "/usr/include/c++/3.4.4/string",
+                definingCUs = setOf("/usr/include/c++/3.4.4/string"),
+                routedTo = "/std/string",
+            ),
+        )
         AttributionTraceDump.writeTraceArtifact(
             typeName = "Test",
             traces = traces,
@@ -85,9 +79,7 @@ class AttributionTraceDumpTest {
     }
 
     @Test
-    fun testWriteTraceArtifactEmptyTracesWritesNotRoutedMessage(
-        @TempDir tempDir: Path,
-    ) {
+    fun testWriteTraceArtifactEmptyTracesWritesNotRoutedMessage(@TempDir tempDir: Path) {
         val outDir = tempDir.resolve("output")
         val traces = emptyList<AttributionTrace>()
         AttributionTraceDump.writeTraceArtifact(

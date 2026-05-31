@@ -1,13 +1,10 @@
 package ghistabs.parser
 
-import java.util.ArrayDeque
+import java.util.*
 
 /** Interface for logging sink used by IncludeContext. */
 interface LogSink {
-    fun log(
-        tag: String,
-        message: String,
-    )
+    fun log(tag: String, message: String)
 }
 
 /**
@@ -25,10 +22,9 @@ class HeaderRegistry {
      * Allocates a canonical CU integer for a header key (string form of (filename, checksum)).
      * Uses a counter to ensure no collisions, unlike hashCode().
      */
-    fun allocateCanonicalCu(key: String): Int =
-        canonicalCuByKey.getOrPut(key) {
-            canonicalCuByKey.size + 1
-        }
+    fun allocateCanonicalCu(key: String): Int = canonicalCuByKey.getOrPut(key) {
+        canonicalCuByKey.size + 1
+    }
 
     /** Clear all registries (for test isolation). */
     fun clear() {
@@ -50,12 +46,11 @@ data class HeaderFile(
      * Canonical identifier for this header: used for stable TypeId rewriting across CUs.
      * Derives from (filename, checksum) for BINCL headers, or the CU name for source files.
      */
-    fun canonicalKey(): String =
-        when {
-            originatingCu == "<unknown>" -> "unknown_${filename}_$checksum"
-            checksum != 0L -> "${filename}_${checksum.toString(16)}"
-            else -> originatingCu
-        }
+    fun canonicalKey(): String = when {
+        originatingCu == "<unknown>" -> "unknown_${filename}_$checksum"
+        checksum != 0L -> "${filename}_${checksum.toString(16)}"
+        else -> originatingCu
+    }
 }
 
 /**
@@ -106,16 +101,12 @@ class IncludeContext(
      * (if we've seen this (filename, checksum) before) or creates a new one and registers globally.
      * Pushes onto includeStack. Returns fileNum.
      */
-    fun beginInclude(
-        filename: String,
-        checksum: Long,
-    ): Int {
+    fun beginInclude(filename: String, checksum: Long): Int {
         val fileNum = nextFileNum++
         val key = filename to checksum
-        val header =
-            registry.globalByFilenameChecksum.getOrPut(key) {
-                HeaderFile(filename, checksum, originatingCu = cuFile)
-            }
+        val header = registry.globalByFilenameChecksum.getOrPut(key) {
+            HeaderFile(filename, checksum, originatingCu = cuFile)
+        }
         fileNumToHeader[fileNum] = header
         includeStack.push(header)
         return fileNum
@@ -141,19 +132,14 @@ class IncludeContext(
      * so a later real BINCL gets its own slot and the forward-EXCL CU's types diverge from it.
      * Returns fileNum.
      */
-    fun reMountExcluded(
-        filename: String,
-        checksum: Long,
-    ): Int {
+    fun reMountExcluded(filename: String, checksum: Long): Int {
         val fileNum = nextFileNum++
         val key = filename to checksum
-        val header =
-            registry.globalByFilenameChecksum[key]
-                ?: run {
-                    // Forward EXCL before BINCL: create placeholder, store only locally
-                    sink.log("forward-excl", "$filename checksum=0x${checksum.toString(16)}")
-                    HeaderFile(filename, checksum, originatingCu = "<unknown>")
-                }
+        val header = registry.globalByFilenameChecksum[key] ?: run {
+            // Forward EXCL before BINCL: create placeholder, store only locally
+            sink.log("forward-excl", "$filename checksum=0x${checksum.toString(16)}")
+            HeaderFile(filename, checksum, originatingCu = "<unknown>")
+        }
         fileNumToHeader[fileNum] = header
         return fileNum
     }
@@ -192,57 +178,64 @@ class IncludeContext(
      * Canonicalizes all TypeIds within a TypeDecl tree (refs, inline defs, etc.).
      * Recursively walks the TypeDecl structure and rewrites TypeIds via canonicalTypeId().
      */
-    fun canonicalizeTypeDecl(decl: TypeDecl): TypeDecl =
-        when (decl) {
-            is TypeDecl.Ref -> TypeDecl.Ref(canonicalTypeId(decl.id))
-            is TypeDecl.Range -> TypeDecl.Range(canonicalTypeId(decl.of), decl.min, decl.max)
-            is TypeDecl.Pointer -> TypeDecl.Pointer(canonicalizeTypeDecl(decl.pointee))
-            is TypeDecl.Reference -> TypeDecl.Reference(canonicalizeTypeDecl(decl.referent))
-            is TypeDecl.Const -> TypeDecl.Const(canonicalizeTypeDecl(decl.inner))
-            is TypeDecl.Volatile -> TypeDecl.Volatile(canonicalizeTypeDecl(decl.inner))
-            is TypeDecl.Array ->
-                TypeDecl.Array(
-                    canonicalizeTypeDecl(decl.element),
-                    decl.length,
-                    decl.indexType?.let { canonicalizeTypeDecl(it) },
+    fun canonicalizeTypeDecl(decl: TypeDecl): TypeDecl = when (decl) {
+        is TypeDecl.Ref -> TypeDecl.Ref(canonicalTypeId(decl.id))
+        is TypeDecl.Range -> TypeDecl.Range(canonicalTypeId(decl.of), decl.min, decl.max)
+        is TypeDecl.Pointer -> TypeDecl.Pointer(canonicalizeTypeDecl(decl.pointee))
+        is TypeDecl.Reference -> TypeDecl.Reference(canonicalizeTypeDecl(decl.referent))
+        is TypeDecl.Const -> TypeDecl.Const(canonicalizeTypeDecl(decl.inner))
+        is TypeDecl.Volatile -> TypeDecl.Volatile(canonicalizeTypeDecl(decl.inner))
+        is TypeDecl.Array -> TypeDecl.Array(
+            canonicalizeTypeDecl(decl.element),
+            decl.length,
+            decl.indexType?.let { canonicalizeTypeDecl(it) },
+        )
+
+        is TypeDecl.Enum -> decl // Enums have no TypeId references
+        is TypeDecl.Struct -> TypeDecl.Struct(
+            decl.kind,
+            decl.sizeBytes,
+            decl.bases.map { BaseDecl(canonicalizeTypeDecl(it.type), it.isVirtual, it.access, it.offsetBits) },
+            decl.fields.map {
+                FieldDecl(
+                    it.name,
+                    canonicalizeTypeDecl(it.type),
+                    it.offsetBits,
+                    it.sizeBits,
+                    it.isStatic,
                 )
-            is TypeDecl.Enum -> decl // Enums have no TypeId references
-            is TypeDecl.Struct ->
-                TypeDecl.Struct(
-                    decl.kind,
-                    decl.sizeBytes,
-                    decl.bases.map { BaseDecl(canonicalizeTypeDecl(it.type), it.isVirtual, it.access, it.offsetBits) },
-                    decl.fields.map { FieldDecl(it.name, canonicalizeTypeDecl(it.type), it.offsetBits, it.sizeBits, it.isStatic) },
-                    decl.methods.map {
-                        MethodDecl(
-                            it.name,
-                            it.mangled,
-                            canonicalizeTypeDecl(it.signature),
-                            it.access,
-                            it.virt,
-                            it.isConst,
-                            it.isVolatile,
-                            it.vtableOffsetBits,
-                        )
-                    },
-                    decl.hasVTablePointerMarker,
-                    decl.vtableTargetTypeId?.let { canonicalTypeId(it) },
+            },
+            decl.methods.map {
+                MethodDecl(
+                    it.name,
+                    it.mangled,
+                    canonicalizeTypeDecl(it.signature),
+                    it.access,
+                    it.virt,
+                    it.isConst,
+                    it.isVolatile,
+                    it.vtableOffsetBits,
                 )
-            is TypeDecl.FunctionT ->
-                TypeDecl.FunctionT(
-                    canonicalizeTypeDecl(decl.ret),
-                    decl.params.map { canonicalizeTypeDecl(it) },
-                )
-            is TypeDecl.Method ->
-                TypeDecl.Method(
-                    canonicalizeTypeDecl(decl.cls),
-                    canonicalizeTypeDecl(decl.ret),
-                    decl.params.map { canonicalizeTypeDecl(it) },
-                )
-            is TypeDecl.Complex -> decl
-            is TypeDecl.XRef -> decl
-            is TypeDecl.WithSizeAttr -> TypeDecl.WithSizeAttr(decl.sizeBits, canonicalizeTypeDecl(decl.inner))
-            is TypeDecl.InlineDef -> TypeDecl.InlineDef(canonicalTypeId(decl.id), canonicalizeTypeDecl(decl.body))
-            TypeDecl.Builtin -> decl
-        }
+            },
+            decl.hasVTablePointerMarker,
+            decl.vtableTargetTypeId?.let { canonicalTypeId(it) },
+        )
+
+        is TypeDecl.FunctionT -> TypeDecl.FunctionT(
+            canonicalizeTypeDecl(decl.ret),
+            decl.params.map { canonicalizeTypeDecl(it) },
+        )
+
+        is TypeDecl.Method -> TypeDecl.Method(
+            canonicalizeTypeDecl(decl.cls),
+            canonicalizeTypeDecl(decl.ret),
+            decl.params.map { canonicalizeTypeDecl(it) },
+        )
+
+        is TypeDecl.Complex -> decl
+        is TypeDecl.XRef -> decl
+        is TypeDecl.WithSizeAttr -> TypeDecl.WithSizeAttr(decl.sizeBits, canonicalizeTypeDecl(decl.inner))
+        is TypeDecl.InlineDef -> TypeDecl.InlineDef(canonicalTypeId(decl.id), canonicalizeTypeDecl(decl.body))
+        TypeDecl.Builtin -> decl
+    }
 }

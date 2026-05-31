@@ -1,8 +1,6 @@
 package ghistabs.builder
 
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertFalse
-import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 
 class VtableSymbolCandidatesTest {
@@ -13,7 +11,7 @@ class VtableSymbolCandidatesTest {
             listOf(
                 "_ZTV10CLexStream",
                 "__ZTV10CLexStream",
-                "_vt\$CLexStream\$",
+                $$"_vt$CLexStream$",
                 "CLexStream::vtable",
             ),
             candidates,

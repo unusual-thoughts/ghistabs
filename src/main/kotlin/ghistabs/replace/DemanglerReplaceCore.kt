@@ -24,20 +24,12 @@ data class ReplaceOp(
 /**
  * Reason why a stub was skipped (not replaced).
  */
-sealed class Skip(
-    open val reason: String,
-) {
-    data class NoReplacement(
-        val name: String,
-    ) : Skip("no-replacement-for-$name")
+sealed class Skip(open val reason: String) {
+    data class NoReplacement(val name: String) : Skip("no-replacement-for-$name")
 
-    data class WouldBeCycle(
-        val name: String,
-    ) : Skip("would-be-cycle-$name")
+    data class WouldBeCycle(val name: String) : Skip("would-be-cycle-$name")
 
-    data class StubAlreadyMissing(
-        val path: String,
-    ) : Skip("already-replaced-$path")
+    data class StubAlreadyMissing(val path: String) : Skip("already-replaced-$path")
 }
 
 /**

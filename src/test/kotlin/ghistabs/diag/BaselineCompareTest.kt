@@ -3,10 +3,7 @@ package ghistabs.diag
 import ghistabs.diag.BaselineCompare.parseDanglingRefBaseline
 import ghistabs.diag.BaselineCompare.parseSuffixCountBaseline
 import ghistabs.diag.BaselineCompare.passesReduction
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertFalse
-import org.junit.jupiter.api.Assertions.assertThrows
-import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import java.io.File
 
@@ -24,14 +21,13 @@ class BaselineCompareTest {
 
     @Test
     fun `parse baseline with whitespace padding`() {
-        val tempFile =
-            createTempFileWithContent(
-                """
+        val tempFile = createTempFileWithContent(
+            """
                 {
                   "dangling-ref"  :  98765
                 }
-                """.trimIndent(),
-            )
+            """.trimIndent(),
+        )
         val result = parseDanglingRefBaseline(tempFile)
         assertEquals(98765L, result)
     }
@@ -96,14 +92,13 @@ class BaselineCompareTest {
 
     @Test
     fun `parse suffix count baseline with whitespace`() {
-        val tempFile =
-            createTempFileWithContent(
-                """
+        val tempFile = createTempFileWithContent(
+            """
                 {
                   "_N-suffix-count"  :  11111
                 }
-                """.trimIndent(),
-            )
+            """.trimIndent(),
+        )
         val result = parseSuffixCountBaseline(tempFile)
         assertEquals(11111L, result)
     }

@@ -18,13 +18,9 @@ data class ComponentRecord(
 sealed class StructDiffResult {
     object Identical : StructDiffResult()
 
-    data class GapMergeable(
-        val mergePlan: List<MergeOp>,
-    ) : StructDiffResult()
+    data class GapMergeable(val mergePlan: List<MergeOp>) : StructDiffResult()
 
-    data class Conflicting(
-        val reason: String,
-    ) : StructDiffResult()
+    data class Conflicting(val reason: String) : StructDiffResult()
 }
 
 /**
@@ -32,10 +28,7 @@ sealed class StructDiffResult {
  * sourceFromLeft: true means the field comes from the left side, false means right side.
  * sourceComponent: the actual component being merged (includes offsetBytes for target position).
  */
-data class MergeOp(
-    val sourceFromLeft: Boolean,
-    val sourceComponent: ComponentRecord,
-)
+data class MergeOp(val sourceFromLeft: Boolean, val sourceComponent: ComponentRecord)
 
 /**
  * Pure structural diff implementation.
@@ -89,10 +82,8 @@ object StructuralDiff {
             val rightComponent = rightCoverage.getOrNull(i)
 
             when {
-                leftComponent == null && rightComponent == null -> {
-                    // Gap on both sides, continue
-                    continue
-                }
+                // Gap on both sides, continue
+                leftComponent == null && rightComponent == null -> continue
 
                 leftComponent != null && rightComponent == null -> {
                     // Left defines, right is gap — candidate for merge into right
@@ -175,13 +166,13 @@ object StructuralDiff {
      * Build a byte-coverage array where each position maps to the ComponentRecord
      * that covers that byte, or null if no component covers it.
      */
-    private fun buildCoverage(
-        components: List<ComponentRecord>,
-        lengthBytes: Int,
-    ): Array<ComponentRecord?> {
+    private fun buildCoverage(components: List<ComponentRecord>, lengthBytes: Int): Array<ComponentRecord?> {
         val coverage = arrayOfNulls<ComponentRecord>(lengthBytes)
         for (component in components) {
-            for (byte in component.offsetBytes until minOf(component.offsetBytes + component.lengthBytes, lengthBytes)) {
+            for (byte in component.offsetBytes until minOf(
+                component.offsetBytes + component.lengthBytes,
+                lengthBytes,
+            )) {
                 coverage[byte] = component
             }
         }

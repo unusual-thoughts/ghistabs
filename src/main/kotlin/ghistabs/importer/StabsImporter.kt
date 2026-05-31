@@ -12,23 +12,11 @@ import ghistabs.builder.TypeRegistry
 import ghistabs.container.StabReader
 import ghistabs.container.StabRecord
 import ghistabs.container.StabType
-import ghistabs.parser.IncludeContext
-import ghistabs.parser.LogSink
-import ghistabs.parser.Parser
-import ghistabs.parser.StabsParseException
-import ghistabs.parser.SymbolDecl
-import ghistabs.parser.TypeDecl
+import ghistabs.parser.*
 import ghistabs.replace.DemanglerReplacer
 
-class StabsImporter(
-    internal val ctx: ImportContext,
-) : LogSink {
-    override fun log(
-        tag: String,
-        message: String,
-    ) {
-        ctx.sink.log(tag, message)
-    }
+class StabsImporter(internal val ctx: ImportContext) : LogSink {
+    override fun log(tag: String, message: String) = ctx.sink.log(tag, message)
 
     fun run(): PassResult {
         val readerResult = StabReader.fromProgram(ctx.program)
@@ -38,17 +26,13 @@ class StabsImporter(
             return PassResult()
         }
 
-        val records = readerResult.records
-        val result = runOnRecords(records, readerResult.recordCount)
+        val result = runOnRecords(readerResult.records, readerResult.recordCount)
         return result.copy(recordsRead = readerResult.recordCount)
     }
 
-    internal fun runWithRecords(records: List<StabRecord>): PassResult = runOnRecords(records, records.size)
+    internal fun runWithRecords(records: List<StabRecord>) = runOnRecords(records, records.size)
 
-    private fun runOnRecords(
-        records: List<StabRecord>,
-        recordCount: Int,
-    ): PassResult {
+    private fun runOnRecords(records: List<StabRecord>, recordCount: Int): PassResult {
         ctx.monitor.initialize(records.size.toLong())
         ctx.monitor.message = "Stabs: parsing"
 
@@ -108,27 +92,23 @@ class StabsImporter(
         // Allocate ONE shared HeaderRegistry for all per-CU IncludeContext instances.
         // This ensures cross-CU dedup: two CUs with the same (filename, checksum) BINCL
         // get the SAME HeaderFile instance via the shared registry.
-        val sharedHeaderRegistry = ghistabs.parser.HeaderRegistry()
+        val sharedHeaderRegistry = HeaderRegistry()
 
         for ((i, rec) in records.withIndex()) {
             ctx.monitor.checkCancelled()
             ctx.monitor.incrementProgress(1)
 
             when (rec.type) {
-                StabType.N_SO -> {
-                    if (rec.name.isNotEmpty()) {
-                        currentCu = rec.name
-                        currentInclude = IncludeContext(rec.name, this, sharedHeaderRegistry)
-                        currentInclude.openSource(rec.name)
-                        includesByFile[rec.name] = currentInclude
-                    }
+                StabType.N_SO if (rec.name.isNotEmpty()) -> {
+                    currentCu = rec.name
+                    currentInclude = IncludeContext(rec.name, this, sharedHeaderRegistry)
+                    currentInclude.openSource(rec.name)
+                    includesByFile[rec.name] = currentInclude
                 }
 
-                StabType.N_SOL -> {
-                    if (rec.name.isNotEmpty()) {
-                        currentCu = rec.name
-                        currentInclude?.switchSource(rec.name)
-                    }
+                StabType.N_SOL if (rec.name.isNotEmpty()) -> {
+                    currentCu = rec.name
+                    currentInclude?.switchSource(rec.name)
                 }
 
                 StabType.N_BINCL -> {
@@ -137,9 +117,7 @@ class StabsImporter(
                     currentInclude?.beginInclude(filename, checksum)
                 }
 
-                StabType.N_EINCL -> {
-                    currentInclude?.endInclude()
-                }
+                StabType.N_EINCL -> currentInclude?.endInclude()
 
                 StabType.N_EXCL -> {
                     val filename = rec.name.ifEmpty { "<unknown>" }
@@ -147,43 +125,38 @@ class StabsImporter(
                     currentInclude?.reMountExcluded(filename, checksum)
                 }
 
-                StabType.N_FUN -> {
-                    val addrSpace = ctx.program.addressFactory.defaultAddressSpace
-                    if (rec.name.isEmpty()) {
-                        // End-of-function marker: rec.value = function size relative to start.
-                        currentFunction?.let { it.sizeBytes = rec.value }
-                        currentFunction = null
-                    } else {
-                        val addr = addrSpace.getAddress(rec.value)
-                        // Pull mangled name from before the colon.
-                        val mangled = rec.name.substringBefore(':')
-                        ctx.resolver.recordFromStab(mangled, addr)
-                        try {
-                            val decl = Parser(rec.name).parseSymbol() as? SymbolDecl.Function
-                            if (decl != null) {
-                                val open =
-                                    OpenFunction(
-                                        name = mangled,
-                                        addr = addr,
-                                        decl = decl,
-                                        cu = currentCu,
-                                        locals = mutableListOf(),
-                                        params = mutableListOf(),
-                                        scopeBrackets = mutableListOf(),
-                                    )
-                                openFunctions += open
-                                currentFunction = open
-                            }
-                        } catch (e: StabsParseException) {
-                            parseErrors++
-                            ctx.sink.log("parse-error", "@$i '${rec.name.take(80)}': ${e.message}")
+                StabType.N_FUN -> if (rec.name.isEmpty()) {
+                    // End-of-function marker: rec.value = function size relative to start.
+                    currentFunction?.let { it.sizeBytes = rec.value }
+                    currentFunction = null
+                } else {
+                    val addr = ctx.program.addressFactory.defaultAddressSpace.getAddress(rec.value)
+                    // Pull mangled name from before the colon.
+                    val mangled = rec.name.substringBefore(':')
+                    ctx.resolver.recordFromStab(mangled, addr)
+                    try {
+                        val decl = Parser(rec.name).parseSymbol() as? SymbolDecl.Function
+                        if (decl != null) {
+                            val open =
+                                OpenFunction(
+                                    name = mangled,
+                                    addr = addr,
+                                    decl = decl,
+                                    cu = currentCu,
+                                    locals = mutableListOf(),
+                                    params = mutableListOf(),
+                                    scopeBrackets = mutableListOf(),
+                                )
+                            openFunctions += open
+                            currentFunction = open
                         }
+                    } catch (e: StabsParseException) {
+                        parseErrors++
+                        ctx.sink.log("parse-error", "@$i '${rec.name.take(80)}': ${e.message}")
                     }
                 }
 
-                StabType.N_GSYM -> {
-                    harvestSymbol(rec, currentCu, symbolsByCu) { parseErrors++ }
-                }
+                StabType.N_GSYM -> harvestSymbol(rec, currentCu, symbolsByCu) { parseErrors++ }
 
                 StabType.N_STSYM, StabType.N_LCSYM -> {
                     val addrSpace = ctx.program.addressFactory.defaultAddressSpace
@@ -213,50 +186,47 @@ class StabsImporter(
                     }
                 }
 
-                StabType.N_LSYM -> {
-                    val open = currentFunction
-                    try {
-                        when (val decl = Parser(rec.name).parseSymbol()) {
-                            is SymbolDecl.TaggedType -> {
-                                val canonicalId = currentInclude?.canonicalTypeId(decl.id) ?: decl.id
-                                val canonicalBody = currentInclude?.canonicalizeTypeDecl(decl.body) ?: decl.body
-                                typeAsts += TypeAst(canonicalId, decl.name, canonicalBody, currentCu)
-                            }
-
-                            is SymbolDecl.Typedef -> {
-                                val canonicalId = currentInclude?.canonicalTypeId(decl.id) ?: decl.id
-                                val canonicalBody = currentInclude?.canonicalizeTypeDecl(decl.body) ?: decl.body
-                                typeAsts += TypeAst(canonicalId, decl.name, canonicalBody, currentCu)
-                            }
-
-                            is SymbolDecl.StackLocal, is SymbolDecl.RegLocal -> {
-                                open?.locals?.add(LocalRecord(decl, rec.value, i))
-                            }
-
-                            is SymbolDecl.StaticVar -> {
-                                // Function-scope static variables get their actual address from rec.value
-                                symbolsByCu.getOrPut(currentCu) { mutableListOf() } +=
-                                    HarvestedSymbol(
-                                        decl,
-                                        rec.type,
-                                        rec.value,
-                                    )
-                            }
-
-                            else -> {}
+                StabType.N_LSYM -> try {
+                    when (val decl = Parser(rec.name).parseSymbol()) {
+                        is SymbolDecl.TaggedType -> {
+                            val canonicalId = currentInclude?.canonicalTypeId(decl.id) ?: decl.id
+                            val canonicalBody = currentInclude?.canonicalizeTypeDecl(decl.body) ?: decl.body
+                            typeAsts += TypeAst(canonicalId, decl.name, canonicalBody, currentCu)
                         }
-                    } catch (e: StabsParseException) {
-                        parseErrors++
-                        ctx.sink.log("parse-error", "lsym @$i: ${e.message}")
+
+                        is SymbolDecl.Typedef -> {
+                            val canonicalId = currentInclude?.canonicalTypeId(decl.id) ?: decl.id
+                            val canonicalBody = currentInclude?.canonicalizeTypeDecl(decl.body) ?: decl.body
+                            typeAsts += TypeAst(canonicalId, decl.name, canonicalBody, currentCu)
+                        }
+
+                        is SymbolDecl.StackLocal, is SymbolDecl.RegLocal -> {
+                            currentFunction?.locals?.add(LocalRecord(decl, rec.value, i))
+                        }
+
+                        is SymbolDecl.StaticVar -> {
+                            // Function-scope static variables get their actual address from rec.value
+                            symbolsByCu.getOrPut(currentCu) { mutableListOf() } +=
+                                HarvestedSymbol(
+                                    decl,
+                                    rec.type,
+                                    rec.value,
+                                )
+                        }
+
+                        else -> {}
                     }
+                } catch (e: StabsParseException) {
+                    parseErrors++
+                    ctx.sink.log("parse-error", "lsym @$i: ${e.message}")
                 }
 
-                StabType.N_LBRAC, StabType.N_RBRAC -> {
-                    currentFunction?.scopeBrackets?.add(Triple(rec.type, rec.value, i))
-                }
+                StabType.N_LBRAC, StabType.N_RBRAC -> currentFunction?.scopeBrackets?.add(
+                    Triple(rec.type, rec.value, i),
+                )
 
-                else -> {}
                 // ignore N_SLINE, N_OPT, etc.
+                else -> {}
             }
         }
         return parseErrors
@@ -294,38 +264,38 @@ class StabsImporter(
 
         for (open in openFunctions) {
             try {
-                val func =
-                    funcMgr.getFunctionAt(open.addr)
-                        ?: funcMgr.getFunctionContaining(open.addr)?.also {
-                            ctx.diagnostics.inc("entrypoint-snapped")
-                        }
-                        ?: run {
-                            ctx.diagnostics.inc("apply-error-no-function")
-                            ctx.sink.log("apply-error-no-function", "no Function at or containing ${open.addr} for ${open.name}")
-                            continue
-                        }
+                val func = funcMgr.getFunctionAt(open.addr)
+                    ?: funcMgr.getFunctionContaining(open.addr)?.also {
+                        ctx.diagnostics.inc("entrypoint-snapped")
+                    }
+                    ?: run {
+                        ctx.diagnostics.inc("apply-error-no-function")
+                        ctx.sink.log(
+                            "apply-error-no-function",
+                            "no Function at or containing ${open.addr} for ${open.name}",
+                        )
+                        continue
+                    }
 
                 // Apply return type from the parsed signature.
                 val retDt = typeRegistry.dataTypeFor(open.decl.signature)
                 if (retDt != null) func.setReturnType(retDt, source)
 
                 // Build parameters from the recorded N_PSYM / N_RSYM records.
-                val params =
-                    open.params.mapIndexed { i, p ->
-                        val pdecl = p.decl
-                        val (pname, pdt) =
-                            when (pdecl) {
-                                is SymbolDecl.StackParam -> pdecl.name to typeRegistry.dataTypeFor(pdecl.type)
-                                is SymbolDecl.RegParam -> pdecl.name to typeRegistry.dataTypeFor(pdecl.type)
-                                else -> "arg$i" to null
-                            }
-                        ParameterImpl(
-                            pname,
-                            pdt ?: Undefined4DataType.dataType,
-                            ctx.program,
-                            source,
-                        )
+                val params = open.params.mapIndexed { i, p ->
+                    val pdecl = p.decl
+                    val (pname, pdt) = when (pdecl) {
+                        is SymbolDecl.StackParam -> pdecl.name to typeRegistry.dataTypeFor(pdecl.type)
+                        is SymbolDecl.RegParam -> pdecl.name to typeRegistry.dataTypeFor(pdecl.type)
+                        else -> "arg$i" to null
                     }
+                    ParameterImpl(
+                        pname,
+                        pdt ?: Undefined4DataType.dataType,
+                        ctx.program,
+                        source,
+                    )
+                }
                 // Always apply parameters (even if empty) to explicitly set function signature
                 func.replaceParameters(
                     params,
@@ -372,23 +342,21 @@ class StabsImporter(
 
         // Classes + vtables.
         if (ctx.options.applyVtables) {
-            val structAstsByName =
-                typeAsts
-                    .mapNotNull { ast ->
-                        val body = ast.body as? TypeDecl.Struct ?: return@mapNotNull null
-                        ast.name to body
-                    }.toMap()
+            val structAstsByName = typeAsts
+                .mapNotNull { ast ->
+                    val body = ast.body as? TypeDecl.Struct ?: return@mapNotNull null
+                    ast.name to body
+                }.toMap()
             val typeAstsById = typeAsts.associateBy { it.id }
-            val classBuilder =
-                ghistabs.builder.ClassBuilder(
-                    ctx.program,
-                    typeRegistry,
-                    ctx.resolver,
-                    ctx.sink,
-                    structAstsByName,
-                    typeAstsById,
-                    ctx,
-                )
+            val classBuilder = ghistabs.builder.ClassBuilder(
+                ctx.program,
+                typeRegistry,
+                ctx.resolver,
+                ctx.sink,
+                structAstsByName,
+                typeAstsById,
+                ctx,
+            )
             for (ast in typeAsts) {
                 val body = ast.body as? TypeDecl.Struct ?: continue
                 if (body.methods.isEmpty() && !body.hasVTablePointerMarker) continue
@@ -410,12 +378,11 @@ class StabsImporter(
         val addrSpace = ctx.program.addressFactory.defaultAddressSpace
 
         // Build list of harvested symbols with resolved addresses
-        val harvestedAddrs =
-            allHarvested.mapNotNull {
-                val name = (it.decl as? SymbolDecl.Global)?.name ?: return@mapNotNull null
-                val addr = ctx.resolver.resolve(name)?.offset
-                HarvestedAddr(name, addr)
-            }
+        val harvestedAddrs = allHarvested.mapNotNull {
+            val name = (it.decl as? SymbolDecl.Global)?.name ?: return@mapNotNull null
+            val addr = ctx.resolver.resolve(name)?.offset
+            HarvestedAddr(name, addr)
+        }
 
         // Scan .bss block at 4-byte intervals, checking for uncovered regions
         var addr = bssBlock.start
@@ -428,17 +395,12 @@ class StabsImporter(
             ) {
                 val rangeEnd = addr.add(3)
                 val pureRange = AddrRange(addr.offset, rangeEnd.offset)
-                val result = BssCoverageDecision.classify(pureRange, harvestedAddrs)
-
-                when (result) {
-                    is CoverageResult.NoCoverage -> {
+                when (val result = BssCoverageDecision.classify(pureRange, harvestedAddrs)) {
+                    is CoverageResult.NoCoverage ->
                         ctx.sink.log("stabs-no-coverage", "@ $addr..$rangeEnd: no stabs records cover this range")
-                    }
 
-                    is CoverageResult.Covered -> {
-                        result.coverers.forEach {
-                            ctx.sink.log("stabs-coverage", "@ $addr..$rangeEnd: covered by ${it.symbolName}")
-                        }
+                    is CoverageResult.Covered -> result.coverers.forEach {
+                        ctx.sink.log("stabs-coverage", "@ $addr..$rangeEnd: covered by ${it.symbolName}")
                     }
                 }
             }
@@ -454,12 +416,11 @@ class StabsImporter(
         source: SourceType,
     ) {
         val decl = loc.decl
-        val dt =
-            when (decl) {
-                is SymbolDecl.StackLocal -> typeRegistry.dataTypeFor(decl.type) ?: Undefined4DataType.dataType
-                is SymbolDecl.RegLocal -> typeRegistry.dataTypeFor(decl.type) ?: Undefined4DataType.dataType
-                else -> return
-            }
+        val dt = when (decl) {
+            is SymbolDecl.StackLocal -> typeRegistry.dataTypeFor(decl.type) ?: Undefined4DataType.dataType
+            is SymbolDecl.RegLocal -> typeRegistry.dataTypeFor(decl.type) ?: Undefined4DataType.dataType
+            else -> return
+        }
         try {
             when (decl) {
                 is SymbolDecl.StackLocal -> {
@@ -470,10 +431,12 @@ class StabsImporter(
                             ctx.diagnostics.inc("local-var-skipped-dup-param")
                             return // benign N_PSYM+N_LSYM 'this' duplication
                         }
+
                         SkipReason.DuplicateLocalName -> {
                             ctx.diagnostics.inc("local-var-skipped-dup-local")
                             return // flat-locals model can't disambiguate sibling scopes
                         }
+
                         null -> {}
                     }
                     val stackOffset = loc.rawValue.toInt()
@@ -482,12 +445,10 @@ class StabsImporter(
                     ctx.diagnostics.inc("local-var-add-success")
                 }
 
-                is SymbolDecl.RegLocal -> {
-                    ctx.sink.log(
-                        "regparam-deferred",
-                        "Register local '${decl.name}' in function deferred (register mapping not implemented)",
-                    )
-                }
+                is SymbolDecl.RegLocal -> ctx.sink.log(
+                    "regparam-deferred",
+                    "Register local '${decl.name}' in function deferred (register mapping not implemented)",
+                )
             }
         } catch (e: Exception) {
             // local-var-error counter auto-bumps via BookmarkSink tag→counter contract
@@ -495,10 +456,7 @@ class StabsImporter(
         }
     }
 
-    private fun applyScopeComments(
-        func: Function,
-        open: OpenFunction,
-    ) {
+    private fun applyScopeComments(func: Function, open: OpenFunction) {
         // Pair LBRAC (open) with matching RBRAC (close). For each pair, list
         // the locals whose record appears inside the bracket range and
         // attach a plate comment at the LBRAC address.
@@ -518,21 +476,21 @@ class StabsImporter(
         }
     }
 
-    private fun applyGlobal(
-        decl: SymbolDecl.Global,
-        typeRegistry: TypeRegistry,
-    ): Boolean {
-        val addr =
-            ctx.resolver.resolve(decl.name) ?: run {
-                ctx.sink.log("unresolved-symbol", "global ${decl.name}")
-                ctx.diagnostics.recordGlobal(decl.name, "skipped", dtKind = "unknown", reason = "unresolved-symbol")
-                return false
-            }
-        val dt =
-            typeRegistry.dataTypeFor(decl.type) ?: run {
-                ctx.diagnostics.recordGlobal(addr.toString(), "skipped", dtKind = "unknown", reason = "no-resolved-type")
-                return false
-            }
+    private fun applyGlobal(decl: SymbolDecl.Global, typeRegistry: TypeRegistry): Boolean {
+        val addr = ctx.resolver.resolve(decl.name) ?: run {
+            ctx.sink.log("unresolved-symbol", "global ${decl.name}")
+            ctx.diagnostics.recordGlobal(decl.name, "skipped", dtKind = "unknown", reason = "unresolved-symbol")
+            return false
+        }
+        val dt = typeRegistry.dataTypeFor(decl.type) ?: run {
+            ctx.diagnostics.recordGlobal(
+                addr.toString(),
+                "skipped",
+                dtKind = "unknown",
+                reason = "no-resolved-type",
+            )
+            return false
+        }
         val dtKind = classifyDataType(dt)
         try {
             // Clear any existing code units before creating data to avoid conflicts
@@ -547,26 +505,20 @@ class StabsImporter(
         return true
     }
 
-    private fun classifyDataType(dt: ghidra.program.model.data.DataType): String =
-        when (dt) {
-            is ghidra.program.model.data.Structure -> "Structure"
-            is ghidra.program.model.data.Union -> "Union"
-            is ghidra.program.model.data.Array -> "Array"
-            is ghidra.program.model.data.Pointer -> "Pointer"
-            is ghidra.program.model.data.FunctionDefinition -> "FunctionDefinition"
-            is ghidra.program.model.data.Enum -> "Enum"
-            else -> dt.displayName
-        }
+    private fun classifyDataType(dt: ghidra.program.model.data.DataType): String = when (dt) {
+        is ghidra.program.model.data.Structure -> "Structure"
+        is ghidra.program.model.data.Union -> "Union"
+        is ghidra.program.model.data.Array -> "Array"
+        is ghidra.program.model.data.Pointer -> "Pointer"
+        is ghidra.program.model.data.FunctionDefinition -> "FunctionDefinition"
+        is ghidra.program.model.data.Enum -> "Enum"
+        else -> dt.displayName
+    }
 
-    private fun applyStatic(
-        decl: SymbolDecl.StaticVar,
-        rawAddr: Long,
-        typeRegistry: TypeRegistry,
-    ): Boolean {
-        val addr =
-            ctx.program.addressFactory.defaultAddressSpace
-                .getAddress(rawAddr)
+    private fun applyStatic(decl: SymbolDecl.StaticVar, rawAddr: Long, typeRegistry: TypeRegistry): Boolean {
+        val addr = ctx.program.addressFactory.defaultAddressSpace.getAddress(rawAddr)
         val dt = typeRegistry.dataTypeFor(decl.type) ?: return false
+
         try {
             // Clear any existing code units before creating data to avoid conflicts
             ctx.program.listing.clearCodeUnits(addr, addr.add((dt.length - 1).toLong()), false)
