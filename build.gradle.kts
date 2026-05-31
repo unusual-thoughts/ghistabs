@@ -16,6 +16,24 @@ val ghidraInstallDirForTests =
 
 dependencies {
     testImplementation(fileTree(mapOf("dir" to "$ghidraInstallDirForTests/Ghidra/Features/Base/lib", "include" to "Base.jar")))
+    // Add Ghidra Test JARs for AbstractGhidraHeadlessIntegrationTest.
+    // Resolves test harness dependencies from standard Ghidra installation paths.
+    testImplementation(
+        fileTree(
+            mapOf(
+                "dir" to "$ghidraInstallDirForTests/Ghidra/Test",
+                "include" to listOf("**/lib/*.jar"),
+            ),
+        ),
+    )
+    testImplementation(
+        fileTree(
+            mapOf(
+                "dir" to "$ghidraInstallDirForTests/Ghidra/Framework/Test",
+                "include" to listOf("**/lib/*.jar"),
+            ),
+        ),
+    )
 }
 
 repositories {
@@ -50,6 +68,11 @@ val integrationTest =
         testClassesDirs = sourceSets["test"].output.classesDirs
         classpath = sourceSets["test"].runtimeClasspath
         shouldRunAfter("test")
+        // Workaround for Java 21 × Ghidra 11.x ObjectInputFilter conflict (issue #40):
+        // Attempt to set a permissive jdk.serialFilter to allow Ghidra test harness initialization.
+        // If this still fails, tests will skip gracefully via assumeTrue(fixture.exists()).
+        forkEvery = 1
+        jvmArgs("-Djdk.serialFilter=*")
     }
 
 val ghidraInstallDir =
