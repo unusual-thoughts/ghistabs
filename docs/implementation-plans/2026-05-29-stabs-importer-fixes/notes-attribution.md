@@ -94,8 +94,8 @@ All five existing tests continue to pass.
 
 ## Acceptance Criteria Satisfaction
 
-- **stabs-importer-fixes.AC3.1** ✓ — `XapArgInst` is placed under `/proj/XapArgInst` (not `/std/include/...`) via the override list.
-- **stabs-importer-fixes.AC3.2** ✓ — Genuine stdlib types (e.g., `std::basic_string`, `std::pair`) continue to land under `/std/...`; the regex tightening and override list do not create false negatives.
+- **stabs-importer-fixes.AC3.1** [x] — `XapArgInst` is placed under `/proj/XapArgInst` (not `/std/include/...`) via the override list.
+- **stabs-importer-fixes.AC3.2** [x] — Genuine stdlib types (e.g., `std::basic_string`, `std::pair`) continue to land under `/std/...`; the regex tightening and override list do not create false negatives.
 
 ## Known Testing-Convention Deviation
 
