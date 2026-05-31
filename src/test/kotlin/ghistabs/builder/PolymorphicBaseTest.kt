@@ -215,4 +215,62 @@ class PolymorphicBaseTest {
         val result = ClassBuilderHelpers.hasPolymorphicBaseSubobject(derived, structAstsByName)
         assertTrue(result)
     }
+
+    @Test
+    fun `TypeDecl_Ref base - resolved via typeAstsById map`() {
+        // Base is polymorphic (has virtual method)
+        val baseTypeId = TypeId(0, 99)
+        val base =
+            TypeDecl.Struct(
+                kind = AggrKind.CLASS,
+                sizeBytes = 8L,
+                bases = emptyList(),
+                fields = emptyList(),
+                methods =
+                    listOf(
+                        MethodDecl(
+                            name = "virtualMethod",
+                            mangled = "_ZN4BaseC1Ev",
+                            signature = TypeDecl.FunctionT(ret = TypeDecl.Builtin, params = emptyList()),
+                            access = Access.PUBLIC,
+                            virt = VirtKind.VIRTUAL,
+                            isConst = false,
+                            isVolatile = false,
+                            vtableOffsetBits = null,
+                        ),
+                    ),
+                hasVTablePointerMarker = false,
+                vtableTargetTypeId = null,
+            )
+
+        // Derived references Base via TypeDecl.Ref (by TypeId)
+        val derived =
+            TypeDecl.Struct(
+                kind = AggrKind.CLASS,
+                sizeBytes = 12L,
+                bases =
+                    listOf(
+                        BaseDecl(
+                            type = TypeDecl.Ref(baseTypeId),
+                            isVirtual = false,
+                            access = Access.PUBLIC,
+                            offsetBits = 0L,
+                        ),
+                    ),
+                fields = emptyList(),
+                methods = emptyList(),
+                hasVTablePointerMarker = false,
+                vtableTargetTypeId = null,
+            )
+
+        // TypeAst wrapping the base struct
+        val baseTypeAst = TypeAst(baseTypeId, "Base", base, "test.c")
+
+        val structAstsByName = mapOf<String, TypeDecl.Struct>()
+        val typeAstsById = mapOf(baseTypeId to baseTypeAst)
+
+        // Should resolve base via typeAstsById and detect polymorphism
+        val result = ClassBuilderHelpers.hasPolymorphicBaseSubobject(derived, structAstsByName, typeAstsById)
+        assertTrue(result)
+    }
 }
