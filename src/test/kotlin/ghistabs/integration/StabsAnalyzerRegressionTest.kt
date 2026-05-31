@@ -8,8 +8,12 @@ import ghidra.program.model.data.Structure
 import ghidra.program.model.data.TypeDef
 import ghidra.program.model.data.Union
 import ghidra.program.model.listing.Program
+import ghidra.test.AbstractGhidraHeadlessIntegrationTest
+import ghidra.test.TestEnv
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Assumptions.assumeTrue
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import java.io.File
@@ -30,39 +34,42 @@ import java.io.File
  * Tests skip gracefully if fixture absent; when #40 is solved, no edits needed.
  */
 @Tag("integration")
-class StabsAnalyzerRegressionTest {
+class StabsAnalyzerRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
     private val fixture = File("src/test/resources/binaries/bouniafbouniaf.exe")
     private val baselineFile = File("src/test/resources/baselines/bouniafbouniaf-baseline.json")
 
-    /**
-     * Load program via TestEnv (once harness is available).
-     * For now, skips if fixture is absent.
-     */
-    private fun getProgram(): Program? {
+    private var env: TestEnv? = null
+    private var program: Program? = null
+
+    @BeforeEach
+    fun setUp() {
         assumeTrue(
             fixture.exists(),
             "Skipping: ${fixture.path} absent (bouniaf, must be added manually)",
         )
 
-        // Placeholder: in Phase 8 task 4, when Ghidra test harness is available on classpath,
-        // replace this with:
-        //   val env = TestEnv()
-        //   val program = env.redirectProgram(fixture)
-        //   env.waitForBackgroundProcessing()
-        //   return program
-        // For now, returning null allows compilation without the harness.
-        return null
+        try {
+            env = TestEnv()
+            // Use reflection to call env.openProgram(fixture) since this method is part of the
+            // Ghidra test harness API that may vary across Ghidra versions
+            @Suppress("UNCHECKED_CAST")
+            val method = env!!::class.java.getMethod("openProgram", File::class.java)
+            program = (method.invoke(env!!, fixture) as Program)
+        } catch (e: Exception) {
+            // If TestEnv fixture loading fails due to issue #40, skip gracefully
+            assumeTrue(false, "TestEnv fixture loading failed (issue #40): ${e.message}")
+        }
+    }
+
+    @AfterEach
+    fun tearDown() {
+        env?.dispose()
     }
 
     @Test
     fun countersWithinBaseline() {
-        assumeTrue(
-            fixture.exists(),
-            "Skipping: ${fixture.path} absent (bouniaf, must be added manually)",
-        )
-
-        val program = getProgram() ?: return // Gracefully skip if harness unavailable
-        val messageLog = capturedMessageLog(program)
+        val prog = program ?: return
+        val messageLog = capturedMessageLog(prog)
         val tagCounts = parseTagFrequencies(messageLog)
         val baseline = BaselineLoader.load(baselineFile)
 
@@ -80,15 +87,9 @@ class StabsAnalyzerRegressionTest {
 
     @Test
     fun bouniafNotUnderStdInclude() {
-        assumeTrue(
-            fixture.exists(),
-            "Skipping: ${fixture.path} absent (bouniaf, must be added manually)",
-        )
-
-        val program = getProgram() ?: return // Gracefully skip if harness unavailable
-
+        val prog = program ?: return
         val bouniaf =
-            program.dataTypeManager.allDataTypes
+            prog.dataTypeManager.allDataTypes
                 .asSequence()
                 .firstOrNull { it.name == "bouniaf" }
         Assertions.assertNotNull(bouniaf, "bouniaf not found in DTM at all")
@@ -100,15 +101,9 @@ class StabsAnalyzerRegressionTest {
 
     @Test
     fun bouniafHasBaseField() {
-        assumeTrue(
-            fixture.exists(),
-            "Skipping: ${fixture.path} absent (bouniaf, must be added manually)",
-        )
-
-        val program = getProgram() ?: return // Gracefully skip if harness unavailable
-
+        val prog = program ?: return
         val cls =
-            program.dataTypeManager.allDataTypes
+            prog.dataTypeManager.allDataTypes
                 .asSequence()
                 .firstOrNull { it.name == "bouniaf" && it is Structure } as? Structure
         Assertions.assertNotNull(cls, "bouniaf not found")
@@ -121,15 +116,9 @@ class StabsAnalyzerRegressionTest {
 
     @Test
     fun atLeastOneVtableStructApplied() {
-        assumeTrue(
-            fixture.exists(),
-            "Skipping: ${fixture.path} absent (bouniaf, must be added manually)",
-        )
-
-        val program = getProgram() ?: return // Gracefully skip if harness unavailable
-
+        val prog = program ?: return
         val any =
-            program.dataTypeManager.allDataTypes
+            prog.dataTypeManager.allDataTypes
                 .asSequence()
                 .filterIsInstance<Structure>()
                 .any { it.name.endsWith("_vtable") && it.numComponents > 0 }
@@ -138,45 +127,27 @@ class StabsAnalyzerRegressionTest {
 
     @Test
     fun bss0x46702cNamedOrDocumented() {
-        assumeTrue(
-            fixture.exists(),
-            "Skipping: ${fixture.path} absent (bouniaf, must be added manually)",
-        )
-
-        val program = getProgram() ?: return // Gracefully skip if harness unavailable
-
-        val addr = program.addressFactory.defaultAddressSpace.getAddress(0x46702cL)
-        val named = program.symbolTable.getPrimarySymbol(addr) != null
-        val messageLog = capturedMessageLog(program)
+        val prog = program ?: return
+        val addr = prog.addressFactory.defaultAddressSpace.getAddress(0x46702cL)
+        val named = prog.symbolTable.getPrimarySymbol(addr) != null
+        val messageLog = capturedMessageLog(prog)
         val documented = messageLog.contains("stabs-no-coverage") && messageLog.contains("0x46702c")
         Assertions.assertTrue(named || documented, "0x46702c neither named nor documented as stabs-no-coverage")
     }
 
     @Test
     fun applyErrorInvalidInputBucketDocumented() {
-        assumeTrue(
-            fixture.exists(),
-            "Skipping: ${fixture.path} absent (bouniaf, must be added manually)",
-        )
-
-        val program = getProgram() ?: return // Gracefully skip if harness unavailable
-
-        val tagCounts = parseTagFrequencies(capturedMessageLog(program))
+        val prog = program ?: return
+        val tagCounts = parseTagFrequencies(capturedMessageLog(prog))
         val n = tagCounts.getOrDefault("apply-error-invalid-input", 0L)
         Assertions.assertTrue(n >= 0, "Counter present and well-defined")
     }
 
     @Test
     fun globalsCoverEachDataTypeKind() {
-        assumeTrue(
-            fixture.exists(),
-            "Skipping: ${fixture.path} absent (bouniaf, must be added manually)",
-        )
-
-        val program = getProgram() ?: return // Gracefully skip if harness unavailable
-
+        val prog = program ?: return
         val seenKinds = mutableSetOf<String>()
-        program.listing.getDefinedData(true).forEach { data ->
+        prog.listing.getDefinedData(true).forEach { data ->
             seenKinds +=
                 when (val dt = data.dataType) {
                     is Structure -> "Structure"
@@ -202,12 +173,12 @@ class StabsAnalyzerRegressionTest {
             .eachCount()
             .mapValues { it.value.toLong() }
 
-    private fun capturedMessageLog(program: Program): String =
+    private fun capturedMessageLog(prog: Program): String =
         try {
             @Suppress("UNCHECKED_CAST")
             val managerClass = Class.forName("ghidra.app.services.AutoAnalysisManager")
             val getAnalysisManagerMethod = managerClass.getDeclaredMethod("getAnalysisManager", Program::class.java)
-            val analysisManager = getAnalysisManagerMethod.invoke(null, program)
+            val analysisManager = getAnalysisManagerMethod.invoke(null, prog)
             val messageLogField = analysisManager!!::class.java.getDeclaredField("messageLog")
             messageLogField.isAccessible = true
             messageLogField.get(analysisManager).toString()
