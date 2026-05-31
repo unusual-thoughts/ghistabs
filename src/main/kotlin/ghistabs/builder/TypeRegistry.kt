@@ -356,6 +356,47 @@ class TypeRegistry(
                         placeholder as Structure
                     }
 
+                // Phase 5: insert base classes as inlined components.
+                if (struct is Structure) {
+                    val resolveBase: (TypeDecl) -> ResolvedBase? = { typeDecl ->
+                        val dt = dataTypeFor(typeDecl)
+                        if (dt == null) {
+                            null
+                        } else {
+                            ResolvedBase(simpleName = dt.name, lengthBytes = dt.length)
+                        }
+                    }
+                    val ops = BaseInsertionPlanner.planBaseInsertions(body.bases, resolveBase)
+                    for (op in ops) {
+                        val baseDt =
+                            dataTypeFor(body.bases.first { (it.offsetBits / 8).toInt() == op.offsetBytes }.type)
+                                ?: continue
+                        try {
+                            struct.replaceAtOffset(
+                                op.offsetBytes,
+                                baseDt,
+                                baseDt.length,
+                                op.fieldName,
+                                op.comment,
+                            )
+                            diagnostics.inc("inheritance-applied")
+                        } catch (e: java.lang.IllegalArgumentException) {
+                            sink.log(
+                                "base-layout",
+                                "Failed to insert base '${op.baseSimpleName}' in '${ast.name}': ${e.message}",
+                            )
+                            diagnostics.inc("inheritance-failed")
+                        } catch (e: java.lang.Exception) {
+                            sink.log(
+                                "base-layout",
+                                "Failed to insert base '${op.baseSimpleName}' in '${ast.name}': ${e.message}",
+                            )
+                            diagnostics.inc("inheritance-failed")
+                        }
+                    }
+                }
+
+                // Existing field loop (unchanged).
                 for (field in body.fields) {
                     if (field.isStatic) continue // Skip static fields
                     val ft = dataTypeFor(field.type) ?: Undefined4DataType.dataType
