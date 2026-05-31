@@ -455,6 +455,19 @@ class StabsImporter(
         try {
             when (decl) {
                 is SymbolDecl.StackLocal -> {
+                    val paramNames = func.parameters.map { it.name }.toSet()
+                    val localNames = func.localVariables.map { it.name }.toSet()
+                    when (LocalVarDedup.shouldSkipLocal(decl.name, paramNames, localNames)) {
+                        SkipReason.DuplicateParamName -> {
+                            ctx.diagnostics.inc("local-var-skipped-dup-param")
+                            return // benign N_PSYM+N_LSYM 'this' duplication
+                        }
+                        SkipReason.DuplicateLocalName -> {
+                            ctx.diagnostics.inc("local-var-skipped-dup-local")
+                            return // flat-locals model can't disambiguate sibling scopes
+                        }
+                        null -> {}
+                    }
                     val stackOffset = loc.rawValue.toInt()
                     val lv = LocalVariableImpl(decl.name, dt, stackOffset, ctx.program, source)
                     func.addLocalVariable(lv, source)
