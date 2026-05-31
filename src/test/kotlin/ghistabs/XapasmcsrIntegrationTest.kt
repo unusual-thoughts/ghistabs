@@ -174,6 +174,27 @@ class XapasmcsrIntegrationTest {
             BaselineCompare.passesReduction(placeholderSuffixCount, suffixCountBaseline, 0.20),
             "_N-suffix count $placeholderSuffixCount exceeds 20% of baseline $suffixCountBaseline",
         )
+
+        // Phase 5 assertion 1: _base_* field presence on known polymorphic classes
+        // After Phase 5, C++ derived structs should have _base_<BaseName> fields.
+        // AC4.1, AC4.2: Locate a known polymorphic class (CLexStream) and verify it has
+        // at least one component starting with "_base_" or "_vbase_".
+        // TODO(#40): walk DTM allDataTypes for Structure named "CLexStream",
+        // check if any component.fieldName startsWith "_base_" or "_vbase_"
+        val placeholderHasBase = false
+        assertTrue(
+            placeholderHasBase,
+            "Expected CLexStream or similar polymorphic class to have _base_/_vbase_ field after Phase 5",
+        )
+
+        // Phase 5 assertion 2: inheritance-applied counter verification
+        // The diagnostics counter should show > 0 bases were successfully inserted.
+        val placeholderInheritanceApplied =
+            0L // TODO(#40): ctx.diagnostics.snapshotCounters()["inheritance-applied"] ?: 0L
+        assertTrue(
+            placeholderInheritanceApplied > 0,
+            "Expected inheritance-applied counter > 0, got $placeholderInheritanceApplied",
+        )
     }
 
     private fun buildSyntheticStabRecords(): List<StabRecord> =
