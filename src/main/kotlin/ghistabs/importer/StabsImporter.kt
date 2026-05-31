@@ -412,6 +412,7 @@ class StabsImporter(
                     val stackOffset = loc.rawValue.toInt()
                     val lv = LocalVariableImpl(decl.name, dt, stackOffset, ctx.program, source)
                     func.addLocalVariable(lv, source)
+                    ctx.diagnostics.inc("local-var-add-success")
                 }
 
                 is SymbolDecl.RegLocal -> {
