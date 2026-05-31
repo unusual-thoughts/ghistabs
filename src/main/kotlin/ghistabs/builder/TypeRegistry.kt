@@ -429,6 +429,19 @@ class TypeRegistry(
                     diagnostics.recordStructGaps(qualifiedName, gaps)
                 }
 
+                // Task 2: Plate-comment summary on the derived struct (base class metadata).
+                if (body.bases.isNotEmpty() && struct is Structure) {
+                    val lines =
+                        body.bases.sortedBy { it.offsetBits }.joinToString("\n") { base ->
+                            val baseName = (dataTypeFor(base.type)?.name) ?: "<unresolved>"
+                            val virt = if (base.isVirtual) " virtual" else ""
+                            "inherits ${base.access.name.lowercase()}$virt $baseName @ +${base.offsetBits / 8}"
+                        }
+                    val existing = struct.description ?: ""
+                    struct.description =
+                        if (existing.isEmpty()) lines else "$existing\n$lines"
+                }
+
                 struct
             }
 
