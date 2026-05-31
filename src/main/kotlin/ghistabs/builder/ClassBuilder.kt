@@ -17,6 +17,7 @@ import ghidra.program.model.symbol.Symbol
 import ghistabs.container.AddressResolver
 import ghistabs.importer.BookmarkSink
 import ghistabs.importer.ImportContext
+import ghistabs.parser.BaseDecl
 import ghistabs.parser.MethodDecl
 import ghistabs.parser.TypeDecl
 import ghistabs.parser.VirtKind
@@ -429,4 +430,67 @@ class ClassBuilder(
             }
         }
     }
+
+    /**
+     * Returns the lowest-offset polymorphic base subobject of `body`, or null if none.
+     * "Polymorphic" = has its own vtable pointer marker, has a virtual method, or
+     * recursively has a polymorphic base. Used to determine whether a derived class
+     * inherits its vfptr slot from a base (no need to insert one) and at what offset.
+     */
+    internal fun firstPolymorphicBase(body: TypeDecl.Struct): BaseDecl? {
+        return body.bases
+            .sortedBy { it.offsetBits }
+            .firstOrNull { base ->
+                val baseStruct = resolveBaseAst(base.type) ?: return@firstOrNull false
+                baseStruct.hasVTablePointerMarker ||
+                    baseStruct.methods.any { it.virt == VirtKind.VIRTUAL } ||
+                    firstPolymorphicBase(baseStruct) != null
+            }
+    }
+
+    internal fun hasPolymorphicBaseSubobject(body: TypeDecl.Struct): Boolean = firstPolymorphicBase(body) != null
+}
+
+/**
+ * Static helpers for polymorphic base detection (extracted for pure unit testing).
+ */
+internal object ClassBuilderHelpers {
+    fun hasPolymorphicBaseSubobject(
+        body: TypeDecl.Struct,
+        structAstsByName: Map<String, TypeDecl.Struct>,
+    ): Boolean = firstPolymorphicBase(body, structAstsByName) != null
+
+    fun firstPolymorphicBase(
+        body: TypeDecl.Struct,
+        structAstsByName: Map<String, TypeDecl.Struct>,
+    ): BaseDecl? {
+        return body.bases
+            .sortedBy { it.offsetBits }
+            .firstOrNull { base ->
+                val baseStruct = resolveBaseAstStatic(base.type, structAstsByName) ?: return@firstOrNull false
+                baseStruct.hasVTablePointerMarker ||
+                    baseStruct.methods.any { it.virt == VirtKind.VIRTUAL } ||
+                    firstPolymorphicBase(baseStruct, structAstsByName) != null
+            }
+    }
+
+    private fun resolveBaseAstStatic(
+        typeDecl: TypeDecl,
+        structAstsByName: Map<String, TypeDecl.Struct>,
+    ): TypeDecl.Struct? =
+        when (typeDecl) {
+            is TypeDecl.XRef -> {
+                // Cross-reference by tagName: look in structAstsByName
+                structAstsByName[typeDecl.tagName]
+            }
+
+            is TypeDecl.InlineDef -> {
+                // Inline definition: extract the struct body directly
+                typeDecl.body as? TypeDecl.Struct
+            }
+
+            else -> {
+                null
+            }
+        }
 }
