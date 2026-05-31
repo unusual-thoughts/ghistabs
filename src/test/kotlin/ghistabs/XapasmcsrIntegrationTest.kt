@@ -249,6 +249,7 @@ class XapasmcsrIntegrationTest {
         // TODO(#40): Once headless harness lands, iterate program.listing.getDefinedData(true),
         // bucket by dataType class, and assert each expectedKind has ≥1 entry.
         // Placeholder: simply verify the expectedKinds list is non-empty.
+        // VACUOUS: real assertion deferred to issue #40
         assertTrue(
             expectedKinds.isNotEmpty(),
             "AC8.1: Expected DataType kinds list must be defined",
@@ -265,6 +266,7 @@ class XapasmcsrIntegrationTest {
         // For xapasmcsr.exe, we expect some globals to fail due to address conflicts.
         // TODO(#40): Assert placeholderGlobalSkipped > 0 with reason "create-data-failed" OR
         // "unresolved-symbol" when diagnostics are available.
+        // VACUOUS: real assertion deferred to issue #40
         assertTrue(true, "AC8.2: Failure handling placeholder — real assertion deferred to Phase 8 headless suite")
     }
 

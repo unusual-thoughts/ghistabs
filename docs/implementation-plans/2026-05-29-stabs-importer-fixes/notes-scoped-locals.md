@@ -4,7 +4,7 @@
 
 ## Wiring (already shipped)
 
-Stack locals are applied via `LocalVariableImpl(name, type, stackOffset, program, source)` + `func.addLocalVariable(...)` at `StabsImporter.kt:355-356`. Register locals are deferred (logged as `regparam-deferred`).
+Stack locals are applied via `LocalVariableImpl(name, type, stackOffset, program, source)` + `func.addLocalVariable(...)` in the `applyLocal` function of StabsImporter. Register locals are deferred (logged as `regparam-deferred`).
 
 ## Actual failure modes (66% of all warnings)
 
@@ -14,7 +14,7 @@ Stack locals are applied via `LocalVariableImpl(name, type, stackOffset, program
 
 Pattern: `A Parameter symbol with name 'this' already exists in namespace <Class>`. Counts: 27 in `Clone`, 23 in `CParser`, 20 in `ParseSymbol`, 18 in `CSymTab`, 16 in `ParseOperand`, 15 in `CRepresentation`, 9 in `ParseInstruction`, 9 in `GetNextTok`.
 
-Root cause: `replaceParameters()` at `StabsImporter.kt:268` has already installed `this` as a parameter from the `N_PSYM` record. GCC then emits `this` AGAIN as an `N_LSYM` local record (gcc-3.4 quirk — see GDB `dbxread.c:process_one_symbol`). `applyLocal` tries to add it via `addLocalVariable`, Ghidra rejects since a parameter with that name exists.
+Root cause: `replaceParameters()` in the `applyAllSymbols` function has already installed `this` as a parameter from the `N_PSYM` record. GCC then emits `this` AGAIN as an `N_LSYM` local record (gcc-3.4 quirk — see GDB `dbxread.c:process_one_symbol`). `applyLocal` tries to add it via `addLocalVariable`, Ghidra rejects since a parameter with that name exists.
 
 ### Mode 2: Loop-var shadow collision
 
