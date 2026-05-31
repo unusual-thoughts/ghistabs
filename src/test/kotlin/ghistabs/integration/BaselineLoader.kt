@@ -38,7 +38,7 @@ object BaselineLoader {
         val counters = mutableMapOf<String, CounterRange>()
 
         // Match: "name": {"min": X, "max": Y}
-        val pattern = """"([a-z-]+)":\s*\{\s*"min":\s*(\d+),\s*"max":\s*(\d+)\s*\}""".toRegex()
+        val pattern = """"([A-Za-z0-9._-]+)":\s*\{\s*"min":\s*(\d+),\s*"max":\s*(\d+)\s*\}""".toRegex()
 
         for (match in pattern.findAll(json)) {
             val name = match.groupValues[1]

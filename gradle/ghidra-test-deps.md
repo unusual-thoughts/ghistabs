@@ -12,7 +12,15 @@ Integration tests in `src/test/kotlin/ghistabs/integration/` require Ghidra Test
 
 Build file: `build.gradle.kts`
 
-Added via `fileTree` glob patterns:
+Added via direct JAR reference to:
+
+```kotlin
+testImplementation(fileTree(mapOf("dir" to "$ghidraInstallDirForTests/Ghidra/Features/Base/lib", "include" to "Base.jar")))
+```
+
+This includes `AbstractGhidraHeadlessIntegrationTest` and `TestEnv` from Base.jar.
+
+Legacy glob patterns for non-existent Test/ directories are retained in the gradle config for forward compatibility with potential future Ghidra versions that may organize test artifacts differently:
 
 ```kotlin
 testImplementation(

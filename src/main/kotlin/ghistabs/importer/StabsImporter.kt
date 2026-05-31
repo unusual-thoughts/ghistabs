@@ -490,6 +490,7 @@ class StabsImporter(
                 }
             }
         } catch (e: Exception) {
+            // local-var-error counter auto-bumps via BookmarkSink tag→counter contract
             ctx.sink.log("local-var-error", "Could not add local '${decl.name}' to ${func.name}: ${e.message}")
         }
     }
