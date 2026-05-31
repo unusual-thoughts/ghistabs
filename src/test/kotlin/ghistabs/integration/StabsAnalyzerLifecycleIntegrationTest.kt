@@ -27,10 +27,10 @@ class StabsAnalyzerLifecycleIntegrationTest : AbstractGhidraHeadlessIntegrationT
     fun setUp() {
         // Create a minimal test program with x86 architecture
         builder = ProgramBuilder("test", ProgramBuilder._X86)
-        // Add memory blocks and stab sections
+        // Add memory blocks and stab sections with initialized (zero-filled) memory
         builder.createMemory(".text", "0x400000", 512)
-        builder.createUninitializedMemory(".stab", "0x401000", 4)
-        builder.createUninitializedMemory(".stabstr", "0x402000", 4)
+        builder.createMemory(".stab", "0x401000", 4)
+        builder.createMemory(".stabstr", "0x402000", 4)
     }
 
     @AfterEach

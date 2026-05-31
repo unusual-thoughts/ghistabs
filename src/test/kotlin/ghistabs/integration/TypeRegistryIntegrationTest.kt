@@ -38,9 +38,9 @@ class TypeRegistryIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         // Add memory blocks
         builder.createMemory(".text", "0x400000", 1024)
         builder.createMemory(".data", "0x401000", 512)
-        // Add stab sections
-        builder.createUninitializedMemory(".stab", "0x402000", 4)
-        builder.createUninitializedMemory(".stabstr", "0x403000", 4)
+        // Add stab sections with initialized (zero-filled) memory
+        builder.createMemory(".stab", "0x402000", 4)
+        builder.createMemory(".stabstr", "0x403000", 4)
     }
 
     @AfterEach

@@ -34,9 +34,10 @@ class ImporterIdempotenceIntegrationTest : AbstractGhidraHeadlessIntegrationTest
         builder = ProgramBuilder("test", ProgramBuilder._X86)
         // Add a memory block for code
         builder.createMemory(".text", "0x400000", 512)
-        // Add stab sections (minimal, no actual stab content - importer will handle gracefully)
-        builder.createUninitializedMemory(".stab", "0x401000", 4)
-        builder.createUninitializedMemory(".stabstr", "0x402000", 4)
+        // Add stab sections with initialized (zero-filled) memory, not uninitialized
+        // The importer needs to be able to read these blocks
+        builder.createMemory(".stab", "0x401000", 4)
+        builder.createMemory(".stabstr", "0x402000", 4)
     }
 
     @AfterEach
