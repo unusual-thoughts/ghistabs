@@ -17,24 +17,16 @@ sealed class VfptrAction {
     object SkipInheritedFromBase : VfptrAction()
 
     /** Insert vfptr at the given offset. */
-    data class Insert(
-        val offsetBytes: Int,
-    ) : VfptrAction()
+    data class Insert(val offsetBytes: Int) : VfptrAction()
 
     /** Replace existing field at offset with vfptr. */
-    data class Replace(
-        val offsetBytes: Int,
-        val wasFieldName: String,
-    ) : VfptrAction()
+    data class Replace(val offsetBytes: Int, val wasFieldName: String) : VfptrAction()
 
     /** Already canonical — field is correct vfptr type/name. */
     object AlreadyCanonical : VfptrAction()
 
     /** Collision with non-vptr field at offset — cannot place vfptr. */
-    data class CollisionAt(
-        val offsetBytes: Int,
-        val occupantFieldName: String,
-    ) : VfptrAction()
+    data class CollisionAt(val offsetBytes: Int, val occupantFieldName: String) : VfptrAction()
 }
 
 /**
@@ -61,30 +53,30 @@ object VfptrDecision {
         if (hasPolymorphicBaseSubobject) return VfptrAction.SkipInheritedFromBase
 
         val targetOffset = parserVptrOffsetBytes ?: 0
-        val existing = componentAtTargetOffset
 
         // If target slot already has the canonical vfptr, we are done.
         if (
-            existing != null &&
-            existing.offsetBytes == targetOffset &&
-            existing.fieldName == canonicalVfptrFieldName
+            componentAtTargetOffset != null &&
+            componentAtTargetOffset.offsetBytes == targetOffset &&
+            componentAtTargetOffset.fieldName == canonicalVfptrFieldName
         ) {
             return VfptrAction.AlreadyCanonical
         }
 
         // If slot is empty or undefined, insert vfptr.
-        if (existing == null || existing.isUndefined) return VfptrAction.Insert(targetOffset)
+        if (componentAtTargetOffset == null || componentAtTargetOffset.isUndefined) {
+            return VfptrAction.Insert(targetOffset)
+        }
 
         // If slot is occupied by a parser-emitted vptr variant, replace it.
-        val isParserEmitted =
-            existing.fieldName?.let {
-                it.startsWith("_vptr$") || it.startsWith("_vptr.") || it == "_vptr"
-            } ?: false
+        val isParserEmitted = componentAtTargetOffset.fieldName?.let {
+            it.startsWith("_vptr$") || it.startsWith("_vptr.") || it == "_vptr"
+        } ?: false
 
         return if (isParserEmitted) {
-            VfptrAction.Replace(targetOffset, existing.fieldName!!)
+            VfptrAction.Replace(targetOffset, componentAtTargetOffset.fieldName)
         } else {
-            VfptrAction.CollisionAt(targetOffset, existing.fieldName ?: "<anon>")
+            VfptrAction.CollisionAt(targetOffset, componentAtTargetOffset.fieldName ?: "<anon>")
         }
     }
 }

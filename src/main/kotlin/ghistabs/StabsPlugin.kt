@@ -24,36 +24,33 @@ import ghidra.util.Msg
     shortDescription = "Re-run the STABS importer on the current program.",
     description = "Adds a 'Tools > Stabs > Re-import' action that clears the persistent done-flag and re-runs the StabsAnalyzer.",
 )
-class StabsPlugin(
-    tool: PluginTool,
-) : ProgramPlugin(tool) {
+class StabsPlugin(tool: PluginTool) : ProgramPlugin(tool) {
     init {
-        val reimport =
-            object : DockingAction("Stabs Re-import", getName()) {
-                override fun actionPerformed(context: ActionContext?) {
-                    val program = getCurrentProgram()
-                    if (program == null) {
-                        Msg.showInfo(javaClass, null, "Stabs Re-import", "No program is open.")
-                        return
-                    }
-                    val tx = program.startTransaction("Stabs: clear done flag (re-import)")
-                    try {
-                        program
-                            .getOptions(Program.PROGRAM_INFO)
-                            .setBoolean(StabsAnalyzer.STABS_DONE_OPTION, false)
-                    } finally {
-                        program.endTransaction(tx, true)
-                    }
-                    val mgr: AutoAnalysisManager = AutoAnalysisManager.getAnalysisManager(program)
-                    mgr.reAnalyzeAll(null)
+        val reimport = object : DockingAction("Stabs Re-import", getName()) {
+            override fun actionPerformed(context: ActionContext?) {
+                val program = getCurrentProgram()
+                if (program == null) {
+                    Msg.showInfo(javaClass, null, "Stabs Re-import", "No program is open.")
+                    return
                 }
-
-                override fun isEnabledForContext(context: ActionContext?): Boolean {
-                    val p = getCurrentProgram() ?: return false
-                    return p.memory.getBlock(".stab") != null &&
-                        p.memory.getBlock(".stabstr") != null
+                val tx = program.startTransaction("Stabs: clear done flag (re-import)")
+                try {
+                    program
+                        .getOptions(Program.PROGRAM_INFO)
+                        .setBoolean(StabsAnalyzer.STABS_DONE_OPTION, false)
+                } finally {
+                    program.endTransaction(tx, true)
                 }
+                val mgr: AutoAnalysisManager = AutoAnalysisManager.getAnalysisManager(program)
+                mgr.reAnalyzeAll(null)
             }
+
+            override fun isEnabledForContext(context: ActionContext?): Boolean {
+                val p = getCurrentProgram() ?: return false
+                return p.memory.getBlock(".stab") != null &&
+                    p.memory.getBlock(".stabstr") != null
+            }
+        }
         reimport.menuBarData = MenuData(arrayOf("&Tools", "Stabs", "&Re-import"), null, "Stabs")
         reimport.isEnabled = true
         tool.addAction(reimport)

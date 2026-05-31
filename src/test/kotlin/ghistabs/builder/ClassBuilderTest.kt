@@ -1,10 +1,6 @@
 package ghistabs.builder
 
-import ghistabs.parser.Access
-import ghistabs.parser.AggrKind
-import ghistabs.parser.MethodDecl
-import ghistabs.parser.TypeDecl
-import ghistabs.parser.VirtKind
+import ghistabs.parser.*
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 
@@ -60,38 +56,29 @@ class ClassBuilderTest {
         val tripleNested = "Foo::Bar::Baz"
 
         // Single name: length + name
-        val singleMangle =
-            when {
-                singleName.contains("::") -> "N" + singleName.split("::").joinToString("") { "${it.length}$it" } + "E"
-                '<' !in singleName -> "${singleName.length}$singleName"
-                else -> singleName
-            }
+        val singleMangle = when {
+            singleName.contains("::") -> "N" + singleName.split("::").joinToString("") { "${it.length}$it" } + "E"
+            '<' !in singleName -> "${singleName.length}$singleName"
+            else -> singleName
+        }
         assertEquals("3Foo", singleMangle)
 
         // Nested: N + length+name per part + E
-        val nestedMangle =
-            when {
-                nestedName.contains("::") && '<' !in nestedName -> {
-                    "N" + nestedName.split("::").joinToString("") { "${it.length}$it" } + "E"
-                }
+        val nestedMangle = when {
+            nestedName.contains("::") && '<' !in nestedName ->
+                "N" + nestedName.split("::").joinToString("") { "${it.length}$it" } + "E"
 
-                else -> {
-                    nestedName
-                }
-            }
+            else -> nestedName
+        }
         assertEquals("N3Foo3BarE", nestedMangle)
 
         // Triple nested
-        val tripleMangle =
-            when {
-                tripleNested.contains("::") && '<' !in tripleNested -> {
-                    "N" + tripleNested.split("::").joinToString("") { "${it.length}$it" } + "E"
-                }
+        val tripleMangle = when {
+            tripleNested.contains("::") && '<' !in tripleNested ->
+                "N" + tripleNested.split("::").joinToString("") { "${it.length}$it" } + "E"
 
-                else -> {
-                    tripleNested
-                }
-            }
+            else -> tripleNested
+        }
         assertEquals("N3Foo3Bar3BazE", tripleMangle)
     }
 
@@ -102,28 +89,26 @@ class ClassBuilderTest {
     fun testClassStructWithMethods() {
         // Verify the AST structure supports what we need
         val methodSig = TypeDecl.FunctionT(TypeDecl.Builtin, emptyList())
-        val method =
-            MethodDecl(
-                name = "bar",
-                mangled = "_ZN3Foo3barEv",
-                signature = methodSig,
-                access = Access.PUBLIC,
-                virt = VirtKind.NORMAL,
-                isConst = false,
-                isVolatile = false,
-                vtableOffsetBits = null,
-            )
+        val method = MethodDecl(
+            name = "bar",
+            mangled = "_ZN3Foo3barEv",
+            signature = methodSig,
+            access = Access.PUBLIC,
+            virt = VirtKind.NORMAL,
+            isConst = false,
+            isVolatile = false,
+            vtableOffsetBits = null,
+        )
 
-        val classStruct =
-            TypeDecl.Struct(
-                kind = AggrKind.CLASS,
-                sizeBytes = 4,
-                bases = emptyList(),
-                fields = emptyList(),
-                methods = listOf(method),
-                hasVTablePointerMarker = false,
-                vtableTargetTypeId = null,
-            )
+        val classStruct = TypeDecl.Struct(
+            kind = AggrKind.CLASS,
+            sizeBytes = 4,
+            bases = emptyList(),
+            fields = emptyList(),
+            methods = listOf(method),
+            hasVTablePointerMarker = false,
+            vtableTargetTypeId = null,
+        )
 
         assertEquals(1, classStruct.methods.size)
         assertEquals("bar", classStruct.methods[0].name)
@@ -136,36 +121,34 @@ class ClassBuilderTest {
      */
     @Test
     fun testVirtualMethodTracking() {
-        val virtualMethod =
-            MethodDecl(
-                name = "draw",
-                mangled = "_ZN3Foo4drawEv",
-                signature = TypeDecl.FunctionT(TypeDecl.Builtin, emptyList()),
-                access = Access.PUBLIC,
-                virt = VirtKind.VIRTUAL,
-                isConst = false,
-                isVolatile = false,
-                vtableOffsetBits = 0L, // First slot
-            )
+        val virtualMethod = MethodDecl(
+            name = "draw",
+            mangled = "_ZN3Foo4drawEv",
+            signature = TypeDecl.FunctionT(TypeDecl.Builtin, emptyList()),
+            access = Access.PUBLIC,
+            virt = VirtKind.VIRTUAL,
+            isConst = false,
+            isVolatile = false,
+            vtableOffsetBits = 0L, // First slot
+        )
 
         assertEquals(VirtKind.VIRTUAL, virtualMethod.virt)
         assertEquals(0L, virtualMethod.vtableOffsetBits)
 
         // Merge test: own virtuals overwrite inherited by name
         val inherited = listOf(virtualMethod)
-        val own =
-            listOf(
-                MethodDecl(
-                    name = "draw",
-                    mangled = "_ZN7Derived4drawEv",
-                    signature = TypeDecl.FunctionT(TypeDecl.Builtin, emptyList()),
-                    access = Access.PUBLIC,
-                    virt = VirtKind.VIRTUAL,
-                    isConst = false,
-                    isVolatile = false,
-                    vtableOffsetBits = 0L,
-                ),
-            )
+        val own = listOf(
+            MethodDecl(
+                name = "draw",
+                mangled = "_ZN7Derived4drawEv",
+                signature = TypeDecl.FunctionT(TypeDecl.Builtin, emptyList()),
+                access = Access.PUBLIC,
+                virt = VirtKind.VIRTUAL,
+                isConst = false,
+                isVolatile = false,
+                vtableOffsetBits = 0L,
+            ),
+        )
 
         val merged = inherited.toMutableList()
         for (m in own) {
@@ -214,15 +197,15 @@ class ClassBuilderTest {
     @Test
     fun testParserEmittedVptrFieldRecognition() {
         // Parser emits _vptr$ prefix for various class names
-        val vptrFieldName1 = "_vptr\$Foo"
+        val vptrFieldName1 = $$"_vptr$Foo"
         val vptrFieldName2 = "_vptr.Bar"
         val vptrFieldName3 = "_vptr"
         val nonVptrFieldName = "m_member"
 
         // Verify the recognition pattern used in VfptrDecision
-        fun isParserEmitted(name: String): Boolean = name.startsWith("_vptr\$") || name.startsWith("_vptr.") || name == "_vptr"
+        fun isParserEmitted(name: String): Boolean = name.startsWith($$"_vptr$") || name.startsWith("_vptr.") || name == "_vptr"
 
-        assertTrue(isParserEmitted(vptrFieldName1), "_vptr\$Foo should be recognized as parser-emitted")
+        assertTrue(isParserEmitted(vptrFieldName1), $$"_vptr$Foo should be recognized as parser-emitted")
         assertTrue(isParserEmitted(vptrFieldName2), "_vptr.Bar should be recognized as parser-emitted")
         assertTrue(isParserEmitted(vptrFieldName3), "_vptr should be recognized as parser-emitted")
         assertFalse(isParserEmitted(nonVptrFieldName), "m_member should not be recognized as parser-emitted")

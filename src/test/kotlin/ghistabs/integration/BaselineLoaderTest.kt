@@ -8,20 +8,17 @@ import java.io.File
 
 class BaselineLoaderTest {
     @Test
-    fun load_parsesCounterRanges(
-        @TempDir tempDir: File,
-    ) {
-        val baselineFile =
-            File(tempDir, "test-baseline.json").apply {
-                writeText(
-                    """{
+    fun load_parsesCounterRanges(@TempDir tempDir: File) {
+        val baselineFile = File(tempDir, "test-baseline.json").apply {
+            writeText(
+                """{
                         "counters": {
                             "local-var-error": {"min": 0, "max": 35},
                             "local-var-skipped-dup-param": {"min": 50, "max": 200}
                         }
                     }""",
-                )
-            }
+            )
+        }
 
         val baseline = BaselineLoader.load(baselineFile)
 
@@ -51,13 +48,12 @@ class BaselineLoaderTest {
     fun load_throwsOnMissingFile() {
         val missingFile = File("/nonexistent/baseline.json")
 
-        val exception =
-            try {
-                BaselineLoader.load(missingFile)
-                null
-            } catch (e: IllegalArgumentException) {
-                e
-            }
+        val exception = try {
+            BaselineLoader.load(missingFile)
+            null
+        } catch (e: IllegalArgumentException) {
+            e
+        }
 
         assertTrue(exception != null, "Should throw IllegalArgumentException for missing file")
     }

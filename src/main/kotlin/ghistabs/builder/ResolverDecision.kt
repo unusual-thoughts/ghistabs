@@ -6,9 +6,7 @@ import ghistabs.parser.TypeId
  * Sealed classification of an unresolved type reference.
  * Tag identifies the classification category for logging and diagnostics.
  */
-sealed class RefClassification(
-    val tag: String,
-) {
+sealed class RefClassification(val tag: String) {
     /** Forward reference within the same CU: defined later in the CU's stream. */
     object ForwardSameCu : RefClassification("forward-same-cu")
 
@@ -58,12 +56,12 @@ object ResolverDecision {
             )
         }
 
-        return when {
-            // Same CU: likely a forward ref to something defined later in the same stream
-            refId.cu == refererCu -> RefClassification.ForwardSameCu
+        // Same CU: likely a forward ref to something defined later in the same stream
+        return when (refId.cu) {
+            refererCu -> RefClassification.ForwardSameCu
 
             // Different CU but in the known include table: should have resolved, but didn't
-            refId.cu in knownFileNums -> RefClassification.CrossCuIncludeMiss
+            in knownFileNums -> RefClassification.CrossCuIncludeMiss
 
             // Not in knownTypeIds, not in known includes: truly missing
             else -> RefClassification.TrulyMissing

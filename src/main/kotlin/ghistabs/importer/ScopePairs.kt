@@ -25,18 +25,12 @@ internal object ScopePairs {
         for ((arrIdx, bracket) in scopeBrackets.withIndex()) {
             val (type, off, recIdx) = bracket
             when (type) {
-                StabType.N_LBRAC -> {
-                    stack.add(Triple(arrIdx, off, recIdx))
-                }
+                StabType.N_LBRAC -> stack.add(Triple(arrIdx, off, recIdx))
 
-                StabType.N_RBRAC -> {
-                    if (stack.isNotEmpty()) {
-                        val (_, openOff, openRec) = stack.removeAt(stack.size - 1)
-                        val closeOff = off
-                        val closeRec = recIdx
-                        val localsInScope = locals.filter { it.recordIndex in openRec..closeRec }
-                        pairs.add(Triple(openOff, closeOff, localsInScope))
-                    }
+                StabType.N_RBRAC if (stack.isNotEmpty()) -> {
+                    val (_, openOff, openRec) = stack.removeAt(stack.size - 1)
+                    val localsInScope = locals.filter { it.recordIndex in openRec..recIdx }
+                    pairs.add(Triple(openOff, off, localsInScope))
                 }
 
                 else -> {}

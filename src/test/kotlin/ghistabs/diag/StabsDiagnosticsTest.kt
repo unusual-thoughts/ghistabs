@@ -24,10 +24,9 @@ class StabsDiagnosticsTest {
             lines.add(category to message)
         }
 
-        fun capturedOutput(): String =
-            lines.joinToString("\n") { (category, msg) ->
-                "[$category] $msg"
-            }
+        fun capturedOutput(): String = lines.joinToString("\n") { (category, msg) ->
+            "[$category] $msg"
+        }
     }
 
     /**
@@ -62,7 +61,10 @@ class StabsDiagnosticsTest {
 
         // Assert example sections exist
         assertTrue(output.contains("unresolved-ref top examples:"), "Should have examples section for unresolved-ref")
-        assertTrue(output.contains("placeholder-created top examples:"), "Should have examples section for placeholder-created")
+        assertTrue(
+            output.contains("placeholder-created top examples:"),
+            "Should have examples section for placeholder-created",
+        )
     }
 
     /**
@@ -106,11 +108,10 @@ class StabsDiagnosticsTest {
         val sink = CapturingSink()
 
         // Record a struct with gaps
-        val gaps =
-            listOf(
-                GapRecord(offsetBits = 32, lengthBits = 32, prevField = "field1", nextField = "field2"),
-                GapRecord(offsetBits = 96, lengthBits = 16, prevField = "field3", nextField = null),
-            )
+        val gaps = listOf(
+            GapRecord(offsetBits = 32, lengthBits = 32, prevField = "field1", nextField = "field2"),
+            GapRecord(offsetBits = 96, lengthBits = 16, prevField = "field3", nextField = null),
+        )
         diag.recordStructGaps("MyCategory/MyStruct", gaps)
 
         // Record a struct without gaps (should not appear in output)
@@ -173,7 +174,16 @@ class StabsDiagnosticsTest {
         val keys = snapshot.keys.toList()
 
         // Verify insertion order is preserved
-        assertEquals(listOf("vtable-applied", "unresolved-ref", "placeholder-created", "dedup-rename", "global-applied"), keys)
+        assertEquals(
+            listOf(
+                "vtable-applied",
+                "unresolved-ref",
+                "placeholder-created",
+                "dedup-rename",
+                "global-applied",
+            ),
+            keys,
+        )
     }
 
     /**
@@ -352,14 +362,12 @@ class StabsDiagnosticsTest {
         val diag = StabsDiagnostics()
         val sink = CapturingSink()
 
-        val gapsA =
-            listOf(
-                GapRecord(offsetBits = 32, lengthBits = 32, prevField = "a", nextField = "b"),
-            )
-        val gapsB =
-            listOf(
-                GapRecord(offsetBits = 64, lengthBits = 16, prevField = "x", nextField = "y"),
-            )
+        val gapsA = listOf(
+            GapRecord(offsetBits = 32, lengthBits = 32, prevField = "a", nextField = "b"),
+        )
+        val gapsB = listOf(
+            GapRecord(offsetBits = 64, lengthBits = 16, prevField = "x", nextField = "y"),
+        )
 
         // First definition
         diag.recordStructGaps("test/MyStruct", gapsA)

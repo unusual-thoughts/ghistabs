@@ -9,9 +9,7 @@ import java.nio.ByteOrder
  */
 const val STAB_RECORD_SIZE: Int = 12
 
-enum class StabType(
-    val code: Int,
-) {
+enum class StabType(val code: Int) {
     UNKNOWN(-1),
     N_UNDF(0x00), // CU header: n_value = stabstr size for this CU
     N_GSYM(0x20),
@@ -55,8 +53,7 @@ enum class StabType(
     ;
 
     companion object {
-        private val byCode: Map<Int, StabType> =
-            entries.filter { it != UNKNOWN }.associateBy { it.code }
+        private val byCode: Map<Int, StabType> = entries.filter { it != UNKNOWN }.associateBy { it.code }
 
         fun fromCode(b: Int): StabType = byCode[b and 0xFF] ?: UNKNOWN
     }
@@ -66,16 +63,15 @@ enum class StabType(
  * The mnemonics that may carry a `\`-continuation tail.
  * Mirrored from parse_image/stabs_stats.py:TYPES_WITH_CONTINUATION.
  */
-val TYPES_WITH_CONTINUATION: Set<StabType> =
-    setOf(
-        StabType.N_GSYM,
-        StabType.N_FUN,
-        StabType.N_STSYM,
-        StabType.N_LCSYM,
-        StabType.N_RSYM,
-        StabType.N_LSYM,
-        StabType.N_PSYM,
-    )
+val TYPES_WITH_CONTINUATION: Set<StabType> = setOf(
+    StabType.N_GSYM,
+    StabType.N_FUN,
+    StabType.N_STSYM,
+    StabType.N_LCSYM,
+    StabType.N_RSYM,
+    StabType.N_LSYM,
+    StabType.N_PSYM,
+)
 
 /**
  * One assembled stab record. `name` has already been extracted from `.stabstr`
@@ -221,20 +217,15 @@ class StabReader(
         )
     }
 
-    private fun decodeRecord(buf: ByteBuffer): RawHeader {
-        val nStrx = buf.int
-        val nType = buf.get().toInt() and 0xFF
-        val nOther = buf.get().toInt() and 0xFF
-        val nDesc = buf.short.toInt() and 0xFFFF
-        val nValue = buf.int.toLong()
-        return RawHeader(nStrx, nType, nOther, nDesc, nValue)
-    }
+    private fun decodeRecord(buf: ByteBuffer) = RawHeader(
+        strx = buf.int,
+        type = buf.get().toInt() and 0xFF,
+        other = buf.get().toInt() and 0xFF,
+        desc = buf.short.toInt() and 0xFFFF,
+        value = buf.int.toLong(),
+    )
 
-    private fun cstring(
-        bytes: ByteArray,
-        start: Int,
-        endExclusive: Int,
-    ): String {
+    private fun cstring(bytes: ByteArray, start: Int, endExclusive: Int): String {
         if (start !in 0 until endExclusive) {
             return ""
         }

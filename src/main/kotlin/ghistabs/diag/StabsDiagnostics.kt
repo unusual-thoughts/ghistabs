@@ -5,10 +5,7 @@ package ghistabs.diag
  * Implemented by BookmarkSink, but also by test doubles for pure unit tests.
  */
 interface DiagnosticSink {
-    fun log(
-        category: String,
-        message: String,
-    )
+    fun log(category: String, message: String)
 }
 
 /**
@@ -61,10 +58,7 @@ class StabsDiagnostics {
      * Increment a named counter by the given amount.
      * If the counter does not exist, it is created with value 0 before incrementing.
      */
-    fun inc(
-        name: String,
-        by: Long = 1,
-    ) {
+    fun inc(name: String, by: Long = 1) {
         val current = counters.getOrDefault(name, 0L)
         counters[name] = current + by
     }
@@ -82,10 +76,7 @@ class StabsDiagnostics {
     /**
      * Record an example for a category, capping at 10 examples per category.
      */
-    fun recordExample(
-        category: String,
-        msg: String,
-    ) {
+    fun recordExample(category: String, msg: String) {
         val bucket = examples.getOrPut(category) { mutableListOf() }
         if (bucket.size < 10) {
             bucket.add(msg)
@@ -96,11 +87,7 @@ class StabsDiagnostics {
      * Record an unresolved type reference.
      * Increments "unresolved-ref" counter and records an example.
      */
-    fun recordUnresolvedRef(
-        refKey: String,
-        referrer: String,
-        cu: String,
-    ) {
+    fun recordUnresolvedRef(refKey: String, referrer: String, cu: String) {
         inc("unresolved-ref")
         recordExample("unresolved-ref", "ref=$refKey in $referrer (cu=$cu)")
     }
@@ -109,11 +96,7 @@ class StabsDiagnostics {
      * Record a placeholder type creation.
      * Increments "placeholder-created" counter and records an example.
      */
-    fun recordPlaceholder(
-        name: String,
-        category: String,
-        reason: String,
-    ) {
+    fun recordPlaceholder(name: String, category: String, reason: String) {
         inc("placeholder-created")
         recordExample("placeholder-created", "name=$name category=$category reason=$reason")
     }
@@ -122,11 +105,7 @@ class StabsDiagnostics {
      * Record a deduplication decision (rename/merge/drop).
      * Increments the appropriate counter (e.g., "dedup-rename") and records an example.
      */
-    fun recordDedup(
-        kind: String,
-        name: String,
-        detail: String,
-    ) {
+    fun recordDedup(kind: String, name: String, detail: String) {
         val counterName = "dedup-$kind"
         inc(counterName)
         recordExample(counterName, "name=$name detail=$detail")
@@ -136,11 +115,7 @@ class StabsDiagnostics {
      * Record a vtable apply/skip/fail outcome.
      * Increments "vtable-applied", "vtable-skipped", or "vtable-failed" and records an example.
      */
-    fun recordVtable(
-        className: String,
-        outcome: String,
-        reason: String? = null,
-    ) {
+    fun recordVtable(className: String, outcome: String, reason: String? = null) {
         val counterName = "vtable-$outcome"
         inc(counterName)
         val detail = if (reason != null) "class=$className reason=$reason" else "class=$className"
@@ -151,11 +126,7 @@ class StabsDiagnostics {
      * Record an apply error during function analysis.
      * Increments "apply-error-$bucket" counter and records an example.
      */
-    fun recordApplyError(
-        funcName: String,
-        bucket: String,
-        detail: String,
-    ) {
+    fun recordApplyError(funcName: String, bucket: String, detail: String) {
         val counterName = "apply-error-$bucket"
         inc(counterName)
         recordExample(counterName, "func=$funcName detail=$detail")
@@ -165,10 +136,7 @@ class StabsDiagnostics {
      * Record an empty scope (locals list with no entries).
      * Increments "empty-scope" counter and records an example.
      */
-    fun recordEmptyScope(
-        addr: String,
-        function: String?,
-    ) {
+    fun recordEmptyScope(addr: String, function: String?) {
         inc("empty-scope")
         val detail = if (function != null) "addr=$addr function=$function" else "addr=$addr"
         recordExample("empty-scope", detail)
@@ -194,10 +162,7 @@ class StabsDiagnostics {
      * Record gaps (holes) in a struct's field layout.
      * Only non-empty gap lists are stored; this effectively filters out fully-packed structs.
      */
-    fun recordStructGaps(
-        qualifiedName: String,
-        gaps: List<GapRecord>,
-    ) {
+    fun recordStructGaps(qualifiedName: String, gaps: List<GapRecord>) {
         if (gaps.isNotEmpty()) {
             gapCensus[qualifiedName] = gaps
         }
@@ -229,7 +194,7 @@ class StabsDiagnostics {
     /**
      * Snapshot attribution traces for inspection.
      */
-    fun snapshotAttributionTraces(): List<AttributionTrace> = attributionTraces.toList()
+    fun snapshotAttributionTraces() = attributionTraces.toList()
 
     /**
      * Emit a complete diagnostic summary to the sink.

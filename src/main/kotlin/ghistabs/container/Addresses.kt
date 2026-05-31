@@ -24,35 +24,18 @@ interface LabelStore {
     /**
      * Create a label at the given address with the given name and source type.
      */
-    fun createLabel(
-        addr: Address,
-        name: String,
-        source: SourceType,
-    ): Symbol
+    fun createLabel(addr: Address, name: String, source: SourceType): Symbol
 }
 
 /**
  * Adapter to expose SymbolTable as a LabelStore.
  */
-internal class SymbolTableAdapter(
-    private val symbolTable: SymbolTable,
-) : LabelStore {
-    override fun getSymbols(addr: Address): List<Symbol> = symbolTable.getSymbols(addr).toList()
+internal class SymbolTableAdapter(private val symbolTable: SymbolTable) : LabelStore {
+    override fun getSymbols(addr: Address) = symbolTable.getSymbols(addr).toList()
 
-    override fun getSymbols(name: String): List<Symbol> {
-        val iterator = symbolTable.getSymbols(name)
-        val result = mutableListOf<Symbol>()
-        while (iterator.hasNext()) {
-            result.add(iterator.next())
-        }
-        return result
-    }
+    override fun getSymbols(name: String) = symbolTable.getSymbols(name).toList()
 
-    override fun createLabel(
-        addr: Address,
-        name: String,
-        source: SourceType,
-    ): Symbol = symbolTable.createLabel(addr, name, source)
+    override fun createLabel(addr: Address, name: String, source: SourceType): Symbol = symbolTable.createLabel(addr, name, source)
 }
 
 /**
@@ -66,9 +49,7 @@ internal class SymbolTableAdapter(
  * **Transactional requirement:** Callers must hold a Program transaction before invoking
  * [recordFromStab], since it may call `labelStore.createLabel()`, which mutates Program state.
  */
-class AddressResolver(
-    private val labelStore: LabelStore,
-) {
+class AddressResolver(private val labelStore: LabelStore) {
     private val stabMap: MutableMap<String, Address> = mutableMapOf()
 
     /**
@@ -86,10 +67,7 @@ class AddressResolver(
      * **Transactional requirement:** Caller must hold a Program transaction, since
      * [labelStore.createLabel] mutates Program state.
      */
-    fun recordFromStab(
-        name: String,
-        addr: Address,
-    ) {
+    fun recordFromStab(name: String, addr: Address) {
         if (name.isBlank()) {
             return
         }

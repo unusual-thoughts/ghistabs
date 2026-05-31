@@ -7,7 +7,7 @@ object VtableSymbolCandidates {
      */
     fun mangledZtvCandidates(className: String): List<String> {
         val itaniumMangled = itaniumMangleClassName(className)
-        val gcc2 = "_vt\$${className}\$"
+        val gcc2 = $$"_vt$$${className}$"
         return listOf(
             "_ZTV$itaniumMangled", // Itanium canonical
             "__ZTV$itaniumMangled", // Cygwin/PE leading-underscore variant
@@ -20,10 +20,7 @@ object VtableSymbolCandidates {
      * True if [symbolName] (with any leading underscore stripped) decodes
      * to the Itanium-mangled form of [className]. Used by the symbol-iterator fallback.
      */
-    fun itaniumDecodesToClass(
-        symbolName: String,
-        className: String,
-    ): Boolean {
+    fun itaniumDecodesToClass(symbolName: String, className: String): Boolean {
         // Strip all leading underscores (handle both _ZTV and __ZTV variants)
         var stripped = symbolName
         while (stripped.startsWith("_")) {

@@ -15,9 +15,7 @@ package ghistabs.parser
  * silently ignored. This is intentional — the caller is responsible for processing
  * multiple records or filtering trailing input as needed.
  */
-class Parser(
-    src: String,
-) {
+class Parser(src: String) {
     private val c = Cursor(src)
 
     /**
@@ -73,17 +71,11 @@ class Parser(
                 SymbolDecl.StaticVar(name, parseType(), isFunctionLocal = true)
             }
 
-            'T' -> {
-                parseTagged(name)
-            }
+            'T' -> parseTagged(name)
 
-            't' -> {
-                parseTypedef(name)
-            }
+            't' -> parseTypedef(name)
 
-            else -> {
-                SymbolDecl.StackLocal(name, parseType())
-            }
+            else -> SymbolDecl.StackLocal(name, parseType())
         }
     }
 
@@ -129,94 +121,63 @@ class Parser(
      *
      * Mirror of gdb/stabsread.c:read_type.
      */
-    private fun parseType(): TypeDecl {
-        val ch = c.peekOrNull()
+    private fun parseType(): TypeDecl = when (val ch = c.peekOrNull()) {
+        'a' -> parseArray()
+        'e' -> parseEnum()
+        'f' -> parseFunctionT()
+        '#' -> parseMethod()
+        'r' -> parseRange()
+        'R' -> parseComplex()
+        'x' -> parseXRef()
+        '@' -> parseSizeAttr()
+        '*' -> {
+            c.advance()
+            TypeDecl.Pointer(parseType())
+        }
 
-        return when {
-            ch == '*' -> {
-                c.advance()
-                TypeDecl.Pointer(parseType())
-            }
+        '&' -> {
+            c.advance()
+            TypeDecl.Reference(parseType())
+        }
 
-            ch == '&' -> {
-                c.advance()
-                TypeDecl.Reference(parseType())
-            }
+        'k' -> {
+            c.advance()
+            TypeDecl.Const(parseType())
+        }
 
-            ch == 'k' -> {
-                c.advance()
-                TypeDecl.Const(parseType())
-            }
+        'B' -> {
+            c.advance()
+            TypeDecl.Volatile(parseType())
+        }
 
-            ch == 'B' -> {
-                c.advance()
-                TypeDecl.Volatile(parseType())
-            }
+        's' -> {
+            c.advance()
+            parseStruct(AggrKind.STRUCT)
+        }
 
-            ch == 'a' -> {
-                parseArray()
-            }
+        'u' -> {
+            c.advance()
+            parseStruct(AggrKind.UNION)
+        }
 
-            ch == 'e' -> {
-                parseEnum()
-            }
+        'Y' -> {
+            c.advance()
+            parseStruct(AggrKind.CLASS)
+        }
 
-            ch == 's' -> {
-                c.advance()
-                parseStruct(AggrKind.STRUCT)
-            }
-
-            ch == 'u' -> {
-                c.advance()
-                parseStruct(AggrKind.UNION)
-            }
-
-            ch == 'Y' -> {
-                c.advance()
-                parseStruct(AggrKind.CLASS)
-            }
-
-            ch == 'f' -> {
-                parseFunctionT()
-            }
-
-            ch == '#' -> {
-                parseMethod()
-            }
-
-            ch == 'r' -> {
-                parseRange()
-            }
-
-            ch == 'R' -> {
-                parseComplex()
-            }
-
-            ch == 'x' -> {
-                parseXRef()
-            }
-
-            ch == '@' -> {
-                parseSizeAttr()
-            }
-
-            ch == '(' || (ch != null && (ch.isDigit() || ch == '-')) -> {
-                // Forward reference or inline definition: (cu,n) or bare n, possibly followed by =
-                val saved = c.snapshot()
-                val id = c.parseTypeId()
-                if (c.consumeIf('=')) {
-                    // Inline definition: parse the body recursively and wrap in InlineDef
-                    TypeDecl.InlineDef(id, parseType())
-                } else {
-                    // Forward reference
-                    TypeDecl.Ref(id)
-                }
-            }
-
-            else -> {
-                throw StabsParseException(c.pos, c.src, "unexpected character '$ch' in type descriptor")
+        else if (ch == '(' || ch == '-' || ch?.isDigit() == null) -> {
+            // Forward reference or inline definition: (cu,n) or bare n, possibly followed by =
+            val id = c.parseTypeId()
+            if (c.consumeIf('=')) {
+                // Inline definition: parse the body recursively and wrap in InlineDef
+                TypeDecl.InlineDef(id, parseType())
+            } else {
+                // Forward reference
+                TypeDecl.Ref(id)
             }
         }
+
+        else -> throw StabsParseException(c.pos, c.src, "unexpected character '$ch' in type descriptor")
     }
 
     // ===== Type productions =====
@@ -231,23 +192,21 @@ class Parser(
         val sizeBytes = c.parseInt()
 
         // Parse optional inheritance section
-        val bases =
-            if (c.consumeIf('!')) {
-                parseInheritanceList()
-            } else {
-                emptyList()
-            }
+        val bases = if (c.consumeIf('!')) {
+            parseInheritanceList()
+        } else {
+            emptyList()
+        }
 
         // Parse optional vtable pointer marker
-        val (hasVTablePointer, vtableTypeId) =
-            if (c.consumeIf('~')) {
-                c.consume('%')
-                val id = c.parseTypeId()
-                c.consume(';')
-                Pair(true, id)
-            } else {
-                Pair(false, null)
-            }
+        val (hasVTablePointer, vtableTypeId) = if (c.consumeIf('~')) {
+            c.consume('%')
+            val id = c.parseTypeId()
+            c.consume(';')
+            Pair(true, id)
+        } else {
+            Pair(false, null)
+        }
 
         // Parse fields and methods.
         // Each field is terminated by ';'. The list itself is terminated by a bare ';'
@@ -375,15 +334,14 @@ class Parser(
     private fun parseMethodBlock(name: String): MethodDecl {
         val signature = parseType()
 
-        val mangled =
-            if (!c.eof && c.peekOrNull() == ':') {
-                c.advance()
-                val mangledName = c.readUntilAny(charArrayOf(';'))
-                c.consume(';')
-                mangledName
-            } else {
-                null
-            }
+        val mangled = if (!c.eof && c.peekOrNull() == ':') {
+            c.advance()
+            val mangledName = c.readUntilAny(charArrayOf(';'))
+            c.consume(';')
+            mangledName
+        } else {
+            null
+        }
 
         val access = parseAccess(if (!c.eof && c.peekOrNull()?.isDigit() == true) c.advance() else '2')
         val modifier = if (!c.eof) c.advance() else 'A'
@@ -391,31 +349,28 @@ class Parser(
         val isVolatile = modifier == 'V'
 
         var vtableOffsetBits: Long? = null
-        val virt =
-            when {
-                c.peekOrNull() == '*' -> {
-                    c.advance()
-                    vtableOffsetBits = c.parseInt()
-                    c.consume(';')
-                    parseType() // vthistype (consumed, not stored)
-                    c.consume(';')
-                    VirtKind.VIRTUAL
-                }
-
-                c.peekOrNull() == '.' -> {
-                    c.advance()
-                    VirtKind.NORMAL
-                }
-
-                c.peekOrNull() == '?' -> {
-                    c.advance()
-                    VirtKind.PURE_VIRTUAL
-                }
-
-                else -> {
-                    VirtKind.NORMAL
-                }
+        val virt = when {
+            c.peekOrNull() == '*' -> {
+                c.advance()
+                vtableOffsetBits = c.parseInt()
+                c.consume(';')
+                parseType() // vthistype (consumed, not stored)
+                c.consume(';')
+                VirtKind.VIRTUAL
             }
+
+            c.peekOrNull() == '.' -> {
+                c.advance()
+                VirtKind.NORMAL
+            }
+
+            c.peekOrNull() == '?' -> {
+                c.advance()
+                VirtKind.PURE_VIRTUAL
+            }
+
+            else -> VirtKind.NORMAL
+        }
 
         c.consumeIf(';')
 
@@ -499,13 +454,12 @@ class Parser(
      */
     private fun parseXRef(): TypeDecl.XRef {
         c.consume('x')
-        val kind =
-            when (val kindChar = c.advance()) {
-                's' -> AggrKind.STRUCT
-                'u' -> AggrKind.UNION
-                'c', 'Y' -> AggrKind.CLASS
-                else -> throw StabsParseException(c.pos - 1, c.src, "unknown cross-ref kind '$kindChar'")
-            }
+        val kind = when (val kindChar = c.advance()) {
+            's' -> AggrKind.STRUCT
+            'u' -> AggrKind.UNION
+            'c', 'Y' -> AggrKind.CLASS
+            else -> throw StabsParseException(c.pos - 1, c.src, "unknown cross-ref kind '$kindChar'")
+        }
         val tagName = c.readXRefTagName() // skips :: inside <>, stops at single ':' at depth 0
         c.consume(':')
         return TypeDecl.XRef(kind, tagName)
@@ -580,13 +534,12 @@ class Parser(
     /**
      * Parse an access specifier: 0=private, 1=protected, 2=public.
      */
-    private fun parseAccess(ch: Char): Access =
-        when (ch) {
-            '0' -> Access.PRIVATE
-            '1' -> Access.PROTECTED
-            '2' -> Access.PUBLIC
-            else -> Access.PUBLIC // default
-        }
+    private fun parseAccess(ch: Char): Access = when (ch) {
+        '0' -> Access.PRIVATE
+        '1' -> Access.PROTECTED
+        '2' -> Access.PUBLIC
+        else -> Access.PUBLIC // default
+    }
 
     /**
      * Read a trailing register number (after `:P`, `:r`, etc.).

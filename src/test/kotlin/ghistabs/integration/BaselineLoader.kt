@@ -5,17 +5,12 @@ import java.io.File
 /**
  * Represents a range of acceptable values for a counter.
  */
-data class CounterRange(
-    val min: Long,
-    val max: Long,
-)
+data class CounterRange(val min: Long, val max: Long)
 
 /**
  * Represents a loaded baseline with counter ranges.
  */
-data class Baseline(
-    val counters: Map<String, CounterRange>,
-)
+data class Baseline(val counters: Map<String, CounterRange>)
 
 /**
  * Loads and parses a baseline JSON file.

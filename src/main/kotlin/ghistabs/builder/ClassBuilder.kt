@@ -1,20 +1,13 @@
 package ghistabs.builder
 
 import ghidra.program.model.address.Address
-import ghidra.program.model.data.CategoryPath
-import ghidra.program.model.data.DataTypeConflictHandler
-import ghidra.program.model.data.PointerDataType
-import ghidra.program.model.data.Structure
-import ghidra.program.model.data.StructureDataType
-import ghidra.program.model.data.Undefined1DataType
-import ghidra.program.model.data.Undefined4DataType
+import ghidra.program.model.data.*
 import ghidra.program.model.gclass.ClassUtils
 import ghidra.program.model.listing.CommentType
 import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
-import ghidra.program.model.symbol.Symbol
 import ghistabs.container.AddressResolver
 import ghistabs.importer.BookmarkSink
 import ghistabs.importer.ImportContext
@@ -39,26 +32,19 @@ class ClassBuilder(
     private val dtm = program.dataTypeManager
 
     /** Materialise a class struct + namespace + (optional) vtable struct + apply at _ZTV. */
-    fun build(
-        name: String,
-        body: TypeDecl.Struct,
-        category: CategoryPath,
-    ) {
+    fun build(name: String, body: TypeDecl.Struct, category: CategoryPath) {
         // 1. Resolve fields recursively.
-        val structDt =
-            (typeRegistry.dataTypeFor(body) as? Structure)
-                ?: run {
-                    sink.log("class-not-struct", "skipping non-struct class '$name'")
-                    return
-                }
+        val structDt = (typeRegistry.dataTypeFor(body) as? Structure) ?: run {
+            sink.log("class-not-struct", "skipping non-struct class '$name'")
+            return
+        }
 
         // 2. Insert {vfptr} first if class is polymorphic.
-        val isPoly =
-            body.hasVTablePointerMarker ||
-                body.methods.any { it.virt == VirtKind.VIRTUAL } ||
-                body.fields.any {
-                    it.name.startsWith("_vptr$") || it.name.startsWith("_vptr.") || it.name == "_vptr"
-                }
+        val isPoly = body.hasVTablePointerMarker ||
+            body.methods.any { it.virt == VirtKind.VIRTUAL } ||
+            body.fields.any {
+                it.name.startsWith("_vptr$") || it.name.startsWith("_vptr.") || it.name == "_vptr"
+            }
         if (isPoly) ensureVfptrFirstField(structDt, body, name, category)
 
         // 3. Create or upgrade the GhidraClass namespace.
@@ -78,21 +64,14 @@ class ClassBuilder(
         for ((i, part) in parts.withIndex()) {
             val isLast = i == parts.lastIndex
             val existing = symtab.getNamespace(part, parent)
-            parent =
-                if (existing != null) {
-                    if (isLast && existing !is GhidraClass) {
-                        ghidra.app.util.NamespaceUtils
-                            .convertNamespaceToClass(existing)
-                    } else {
-                        existing
-                    }
-                } else {
-                    if (isLast) {
-                        symtab.createClass(parent, part, source)
-                    } else {
-                        symtab.createNameSpace(parent, part, source)
-                    }
-                }
+            parent = when (existing) {
+                null if isLast -> symtab.createClass(parent, part, source)
+                null -> symtab.createNameSpace(parent, part, source)
+                else if (isLast && existing !is GhidraClass) ->
+                    ghidra.app.util.NamespaceUtils.convertNamespaceToClass(existing)
+
+                else -> existing
+            }
         }
         return parent as GhidraClass
     }
@@ -106,32 +85,29 @@ class ClassBuilder(
         val vfptrName = ClassUtils.VFPTR // "{vfptr}"
 
         // Collect parser-emitted _vptr field offset if present
-        val parserVptrOffset =
-            body.fields
-                .firstOrNull {
-                    it.name.startsWith("_vptr$") || it.name.startsWith("_vptr.") || it.name == "_vptr"
-                }?.let { (it.offsetBits / 8).toInt() }
+        val parserVptrOffset = body.fields
+            .firstOrNull {
+                it.name.startsWith("_vptr$") || it.name.startsWith("_vptr.") || it.name == "_vptr"
+            }?.let { (it.offsetBits / 8).toInt() }
 
         // Snapshot existing component at target offset
         val targetOffset = parserVptrOffset ?: 0
         val existingComp = runCatching { structDt.getComponentAt(targetOffset) }.getOrNull()
-        val snapshot =
-            existingComp?.let {
-                FirstComponentSnapshot(
-                    fieldName = it.fieldName,
-                    offsetBytes = it.offset,
-                    isUndefined = it.dataType is Undefined1DataType,
-                )
-            }
+        val snapshot = existingComp?.let {
+            FirstComponentSnapshot(
+                fieldName = it.fieldName,
+                offsetBytes = it.offset,
+                isUndefined = it.dataType is Undefined1DataType,
+            )
+        }
 
         // Decide what to do with vfptr placement
-        val action =
-            VfptrDecision.chooseVfptrAction(
-                hasPolymorphicBaseSubobject = hasPolymorphicBaseSubobject(body),
-                parserVptrOffsetBytes = parserVptrOffset,
-                componentAtTargetOffset = snapshot,
-                canonicalVfptrFieldName = vfptrName,
-            )
+        val action = VfptrDecision.chooseVfptrAction(
+            hasPolymorphicBaseSubobject = hasPolymorphicBaseSubobject(body),
+            parserVptrOffsetBytes = parserVptrOffset,
+            componentAtTargetOffset = snapshot,
+            canonicalVfptrFieldName = vfptrName,
+        )
 
         when (action) {
             is VfptrAction.SkipInheritedFromBase -> ctx.diagnostics.inc("vfptr-inherited-from-base")
@@ -160,50 +136,36 @@ class ClassBuilder(
                 ctx.diagnostics.inc("vfptr-normalized")
             }
 
-            is VfptrAction.CollisionAt -> {
-                sink.log(
-                    "vfptr-collision",
-                    "$className: cannot place {vfptr} at +${action.offsetBytes} (occupied by ${action.occupantFieldName})",
-                )
-            }
+            is VfptrAction.CollisionAt -> sink.log(
+                "vfptr-collision",
+                "$className: cannot place {vfptr} at +${action.offsetBytes} (occupied by ${action.occupantFieldName})",
+            )
         }
     }
 
-    private fun ensureVtableTypeAndPointer(
-        className: String,
-        category: CategoryPath,
-    ): ghidra.program.model.data.DataType {
-        val vtableType =
-            dtm.getDataType(category, "${className}_vtable")
-                ?: StructureDataType(
-                    category,
-                    "${className}_vtable",
-                    0,
-                    dtm,
-                ).let { dtm.addDataType(it, DataTypeConflictHandler.KEEP_HANDLER) }
-        return PointerDataType.getPointer(vtableType, dtm)
-    }
+    private fun ensureVtableTypeAndPointer(className: String, category: CategoryPath): DataType = PointerDataType.getPointer(
+        dtm.getDataType(category, "${className}_vtable") ?: StructureDataType(
+            category,
+            "${className}_vtable",
+            0,
+            dtm,
+        ).let { dtm.addDataType(it, DataTypeConflictHandler.KEEP_HANDLER) },
+        dtm,
+    )
 
-    private fun reparentMethod(
-        m: MethodDecl,
-        className: String,
-        ns: GhidraClass,
-    ) {
-        val mangled =
-            m.mangled ?: run {
-                sink.log("method-no-mangled", "$className::${m.name}: stab has no mangled symbol")
-                return
-            }
-        val addr =
-            resolver.resolve(mangled) ?: run {
-                sink.log("unresolved-symbol", "method $mangled (in $className)")
-                return
-            }
-        val func =
-            program.functionManager.getFunctionAt(addr) ?: run {
-                sink.log("unresolved-symbol", "no Function at $addr for $mangled")
-                return
-            }
+    private fun reparentMethod(m: MethodDecl, className: String, ns: GhidraClass) {
+        val mangled = m.mangled ?: run {
+            sink.log("method-no-mangled", "$className::${m.name}: stab has no mangled symbol")
+            return
+        }
+        val addr = resolver.resolve(mangled) ?: run {
+            sink.log("unresolved-symbol", "method $mangled (in $className)")
+            return
+        }
+        val func = program.functionManager.getFunctionAt(addr) ?: run {
+            sink.log("unresolved-symbol", "no Function at $addr for $mangled")
+            return
+        }
 
         // 1. Re-parent.
         func.parentNamespace = ns
@@ -224,15 +186,14 @@ class ClassBuilder(
             val allResolved = paramTypes.all { it != null }
 
             if (allResolved && paramTypes.isNotEmpty()) {
-                val params =
-                    paramTypes.mapIndexed { i, pdt ->
-                        ghidra.program.model.listing.ParameterImpl(
-                            "arg$i",
-                            pdt ?: Undefined4DataType.dataType,
-                            program,
-                            source,
-                        )
-                    }
+                val params = paramTypes.mapIndexed { i, pdt ->
+                    ghidra.program.model.listing.ParameterImpl(
+                        "arg$i",
+                        pdt ?: Undefined4DataType.dataType,
+                        program,
+                        source,
+                    )
+                }
                 func.replaceParameters(
                     params,
                     ghidra.program.model.listing.Function.FunctionUpdateType.DYNAMIC_STORAGE_FORMAL_PARAMS,
@@ -264,10 +225,7 @@ class ClassBuilder(
      * We always suffix because we don't yet know how many variants exist; pruning
      * happens later (or never — the suffixes are harmless).
      */
-    private fun displayNameFor(
-        mangled: String,
-        className: String,
-    ): String? {
+    private fun displayNameFor(mangled: String, className: String): String? {
         // Match Itanium-ABI ctor/dtor encoding: _ZN…C[123]Ev?… or _ZN…D[012]Ev?…
         // The variant digit is followed by parameter encoding (E, Ev, etc).
         val ctorRe = Regex("""C([123])E[a-zA-Z_0-9$]*$""")
@@ -288,10 +246,9 @@ class ClassBuilder(
         //    derived class's vtable starts with base-class entries, in declaration order
         //    of the base list, with overridden slots replaced by the derived method).
         val inherited = collectInheritedVirtuals(body)
-        val ownVirtuals =
-            body.methods
-                .filter { it.virt == VirtKind.VIRTUAL }
-                .sortedBy { it.vtableOffsetBits ?: Long.MAX_VALUE }
+        val ownVirtuals = body.methods
+            .filter { it.virt == VirtKind.VIRTUAL }
+            .sortedBy { it.vtableOffsetBits ?: Long.MAX_VALUE }
         // Merge: inherited slots first (in inheritance order), then any new ones
         // declared in this class. Overrides replace the inherited slot (matched by
         // signature name; cheap heuristic — sufficient for Cygwin gcc 3.4.4 single
@@ -306,18 +263,16 @@ class ClassBuilder(
         val vtableName = "${className}_vtable"
         val ptrSize = program.defaultPointerSize // typically 4 on 32-bit
         val existing = dtm.getDataType(category, vtableName) as? Structure
-        val vtable =
-            existing ?: StructureDataType(category, vtableName, 0, dtm).also {
-                dtm.addDataType(it, DataTypeConflictHandler.KEEP_HANDLER)
-            }
+        val vtable = existing ?: StructureDataType(category, vtableName, 0, dtm).also {
+            dtm.addDataType(it, DataTypeConflictHandler.KEEP_HANDLER)
+        }
         // Clear any old contents (idempotent re-import).
         while (vtable.numComponents > 0) vtable.delete(0)
         for (m in virtuals) {
-            val fnDt =
-                PointerDataType.getPointer(
-                    Undefined4DataType.dataType, // generic FN ptr
-                    dtm,
-                )
+            val fnDt = PointerDataType.getPointer(
+                Undefined4DataType.dataType, // generic FN ptr
+                dtm,
+            )
             vtable.add(fnDt, ptrSize, m.name, "virtual ${m.name}")
         }
 
@@ -376,24 +331,16 @@ class ClassBuilder(
      *
      * Returns the resolved address or null (caller handles the bail-out and bucketing).
      */
-    private fun resolveVtableAddress(
-        className: String,
-        body: TypeDecl.Struct,
-        candidates: List<String>,
-    ): Address? {
+    private fun resolveVtableAddress(className: String, body: TypeDecl.Struct, candidates: List<String>): Address? {
         // Step 1: Try direct resolver lookup
-        candidates.mapNotNull { resolver.resolve(it) }.firstOrNull()?.let { return it }
+        candidates.firstNotNullOfOrNull { resolver.resolve(it) }?.let { return it }
 
         // Step 2: Fallback to symbol-table scan
         try {
-            val symtab = program.symbolTable
-            (symtab.getSymbolIterator() as Iterable<Symbol>)
-                .asSequence()
-                .firstOrNull { sym ->
-                    val n = sym.name
-                    (n.startsWith("_ZTV") || n.startsWith("__ZTV")) &&
-                        VtableSymbolCandidates.itaniumDecodesToClass(n, className)
-                }?.let { return it.address }
+            program.symbolTable.symbolIterator.firstOrNull {
+                (it.name.startsWith("_ZTV") || it.name.startsWith("__ZTV")) &&
+                    VtableSymbolCandidates.itaniumDecodesToClass(it.name, className)
+            }?.let { return it.address }
         } catch (e: IllegalArgumentException) {
             sink.log("vtable-symbol-scan-error", "exception scanning symbol table for $className: ${e.message}")
         }
@@ -402,14 +349,14 @@ class ClassBuilder(
         val rdataBlock = program.memory.getBlock(".rdata")
         if (rdataBlock != null) {
             try {
-                val symtab = program.symbolTable
-                (symtab.getSymbolIterator(rdataBlock.start, true) as Iterable<Symbol>)
+                program.symbolTable
+                    .getSymbolIterator(rdataBlock.start, true)
+                    .asIterable()
                     .asSequence()
                     .takeWhile { it.address < rdataBlock.end }
-                    .firstOrNull { sym ->
-                        val n = sym.name
-                        (n.startsWith("_ZTV") || n.startsWith("__ZTV")) &&
-                            VtableSymbolCandidates.itaniumDecodesToClass(n, className)
+                    .firstOrNull {
+                        (it.name.startsWith("_ZTV") || it.name.startsWith("__ZTV")) &&
+                            VtableSymbolCandidates.itaniumDecodesToClass(it.name, className)
                     }?.let { return it.address }
             } catch (e: IllegalArgumentException) {
                 sink.log("vtable-rdata-scan-error", "exception scanning .rdata for $className: ${e.message}")
@@ -417,15 +364,18 @@ class ClassBuilder(
         }
 
         // All resolution attempts failed: bucket the failure
-        val failureBucket =
-            when {
-                '<' in className -> "templated-unsupported"
-                body.hasVTablePointerMarker && body.methods.none { it.virt == VirtKind.VIRTUAL } ->
-                    "no-virtual-methods-flagged-but-marker-set"
-                else -> "truly-missing"
-            }
+        val failureBucket = when {
+            '<' in className -> "templated-unsupported"
+            body.hasVTablePointerMarker && body.methods.none { it.virt == VirtKind.VIRTUAL } ->
+                "no-virtual-methods-flagged-but-marker-set"
+
+            else -> "truly-missing"
+        }
         ctx.diagnostics.recordVtable(className, "failed", failureBucket)
-        sink.log("vtable-failed-$failureBucket", "class '$className': vtable not found (tried ${candidates.joinToString()})")
+        sink.log(
+            "vtable-failed-$failureBucket",
+            "class '$className': vtable not found (tried ${candidates.joinToString()})",
+        )
 
         return null
     }
@@ -439,9 +389,8 @@ class ClassBuilder(
     private fun collectInheritedVirtuals(body: TypeDecl.Struct): List<MethodDecl> {
         val out = mutableListOf<MethodDecl>()
         for (base in body.bases) {
-            val baseStruct =
-                ClassBuilderHelpers.resolveBaseAstStatic(base.type, structAstsByName, typeAstsById)
-                    ?: continue
+            val baseStruct = ClassBuilderHelpers.resolveBaseAstStatic(base.type, structAstsByName, typeAstsById)
+                ?: continue
             out += baseStruct.methods.filter { it.virt == VirtKind.VIRTUAL }
         }
         return out.sortedBy { it.vtableOffsetBits ?: Long.MAX_VALUE }
@@ -453,10 +402,7 @@ class ClassBuilder(
      * Itanium override matching we'd need parameter-type comparison after
      * type resolution — surfaced as v1.1 work.
      */
-    private fun mergeVtableSlots(
-        inherited: List<MethodDecl>,
-        own: List<MethodDecl>,
-    ): List<MethodDecl> {
+    private fun mergeVtableSlots(inherited: List<MethodDecl>, own: List<MethodDecl>): List<MethodDecl> {
         val result = inherited.toMutableList()
         for (m in own) {
             val idx = result.indexOfFirst { it.name == m.name }
@@ -473,11 +419,9 @@ class ClassBuilder(
      *
      * Delegates to the static ClassBuilderHelpers version which is the single source of truth.
      */
-    internal fun firstPolymorphicBase(body: TypeDecl.Struct): BaseDecl? =
-        ClassBuilderHelpers.firstPolymorphicBase(body, structAstsByName, typeAstsById)
+    internal fun firstPolymorphicBase(body: TypeDecl.Struct): BaseDecl? = ClassBuilderHelpers.firstPolymorphicBase(body, structAstsByName, typeAstsById)
 
-    internal fun hasPolymorphicBaseSubobject(body: TypeDecl.Struct): Boolean =
-        ClassBuilderHelpers.hasPolymorphicBaseSubobject(body, structAstsByName, typeAstsById)
+    internal fun hasPolymorphicBaseSubobject(body: TypeDecl.Struct): Boolean = ClassBuilderHelpers.hasPolymorphicBaseSubobject(body, structAstsByName, typeAstsById)
 }
 
 /**
@@ -494,41 +438,30 @@ internal object ClassBuilderHelpers {
         body: TypeDecl.Struct,
         structAstsByName: Map<String, TypeDecl.Struct>,
         typeAstsById: Map<ghistabs.parser.TypeId, TypeAst>? = null,
-    ): BaseDecl? {
-        return body.bases
-            .sortedBy { it.offsetBits }
-            .firstOrNull { base ->
-                val baseStruct = resolveBaseAstStatic(base.type, structAstsByName, typeAstsById) ?: return@firstOrNull false
-                baseStruct.hasVTablePointerMarker ||
-                    baseStruct.methods.any { it.virt == VirtKind.VIRTUAL } ||
-                    firstPolymorphicBase(baseStruct, structAstsByName, typeAstsById) != null
-            }
-    }
+    ): BaseDecl? = body.bases
+        .sortedBy { it.offsetBits }
+        .firstOrNull { base ->
+            val baseStruct =
+                resolveBaseAstStatic(base.type, structAstsByName, typeAstsById) ?: return@firstOrNull false
+            baseStruct.hasVTablePointerMarker ||
+                baseStruct.methods.any { it.virt == VirtKind.VIRTUAL } ||
+                firstPolymorphicBase(baseStruct, structAstsByName, typeAstsById) != null
+        }
 
     fun resolveBaseAstStatic(
         typeDecl: TypeDecl,
         structAstsByName: Map<String, TypeDecl.Struct>,
         typeAstsById: Map<ghistabs.parser.TypeId, TypeAst>? = null,
-    ): TypeDecl.Struct? =
-        when (typeDecl) {
-            is TypeDecl.Ref -> {
-                // Look up by TypeId using the byId map
-                val ast = typeAstsById?.get(typeDecl.id) ?: return null
-                ast.body as? TypeDecl.Struct
-            }
+    ): TypeDecl.Struct? = when (typeDecl) {
+        // Look up by TypeId using the byId map
+        is TypeDecl.Ref -> typeAstsById?.get(typeDecl.id)?.body as? TypeDecl.Struct
 
-            is TypeDecl.XRef -> {
-                // Cross-reference by tagName: look in structAstsByName
-                structAstsByName[typeDecl.tagName]
-            }
+        // Cross-reference by tagName: look in structAstsByName
+        is TypeDecl.XRef -> structAstsByName[typeDecl.tagName]
 
-            is TypeDecl.InlineDef -> {
-                // Inline definition: extract the struct body directly
-                typeDecl.body as? TypeDecl.Struct
-            }
+        // Inline definition: extract the struct body directly
+        is TypeDecl.InlineDef -> typeDecl.body as? TypeDecl.Struct
 
-            else -> {
-                null
-            }
-        }
+        else -> null
+    }
 }

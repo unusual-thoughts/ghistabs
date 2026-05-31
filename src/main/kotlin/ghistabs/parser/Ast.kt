@@ -1,10 +1,7 @@
 package ghistabs.parser
 
 /** Identifies a type within a CU: (file-number, type-number). */
-data class TypeId(
-    val cu: Int,
-    val n: Int,
-)
+data class TypeId(val cu: Int, val n: Int)
 
 enum class Access { PRIVATE, PROTECTED, PUBLIC }
 
@@ -15,42 +12,22 @@ enum class AggrKind { STRUCT, UNION, CLASS }
 /** Type AST. Sealed; every grammar form has a constructor here. */
 sealed interface TypeDecl {
     /** Forward reference to a type defined elsewhere by id. */
-    data class Ref(
-        val id: TypeId,
-    ) : TypeDecl
+    data class Ref(val id: TypeId) : TypeDecl
 
     /** Sun range descriptor: `r<id>;<min>;<max>;` — encodes integer/char widths. */
-    data class Range(
-        val of: TypeId,
-        val min: Long,
-        val max: Long,
-    ) : TypeDecl
+    data class Range(val of: TypeId, val min: Long, val max: Long) : TypeDecl
 
-    data class Pointer(
-        val pointee: TypeDecl,
-    ) : TypeDecl
+    data class Pointer(val pointee: TypeDecl) : TypeDecl
 
-    data class Reference(
-        val referent: TypeDecl,
-    ) : TypeDecl
+    data class Reference(val referent: TypeDecl) : TypeDecl
 
-    data class Const(
-        val inner: TypeDecl,
-    ) : TypeDecl
+    data class Const(val inner: TypeDecl) : TypeDecl
 
-    data class Volatile(
-        val inner: TypeDecl,
-    ) : TypeDecl
+    data class Volatile(val inner: TypeDecl) : TypeDecl
 
-    data class Array(
-        val element: TypeDecl,
-        val length: Long?,
-        val indexType: TypeDecl?,
-    ) : TypeDecl
+    data class Array(val element: TypeDecl, val length: Long?, val indexType: TypeDecl?) : TypeDecl
 
-    data class Enum(
-        val members: List<Pair<String, Long>>,
-    ) : TypeDecl
+    data class Enum(val members: List<Pair<String, Long>>) : TypeDecl
 
     data class Struct(
         val kind: AggrKind,
@@ -62,41 +39,22 @@ sealed interface TypeDecl {
         val vtableTargetTypeId: TypeId?,
     ) : TypeDecl
 
-    data class FunctionT(
-        val ret: TypeDecl,
-        val params: List<TypeDecl>,
-    ) : TypeDecl
+    data class FunctionT(val ret: TypeDecl, val params: List<TypeDecl>) : TypeDecl
 
     /** Pointer-to-member-function (the `#` descriptor body). */
-    data class Method(
-        val cls: TypeDecl,
-        val ret: TypeDecl,
-        val params: List<TypeDecl>,
-    ) : TypeDecl
+    data class Method(val cls: TypeDecl, val ret: TypeDecl, val params: List<TypeDecl>) : TypeDecl
 
     /** GCC complex/floating: `R<n>;<size>;0;`. n encodes 3=cfloat, 4=cdouble, 5=cldouble per gcc/dbxout. */
-    data class Complex(
-        val rCode: Int,
-        val sizeBytes: Int,
-    ) : TypeDecl
+    data class Complex(val rCode: Int, val sizeBytes: Int) : TypeDecl
 
     /** Cross-reference: `xs<name>:` / `xu<name>:` / `xc<name>:` — incomplete tag. */
-    data class XRef(
-        val kind: AggrKind,
-        val tagName: String,
-    ) : TypeDecl
+    data class XRef(val kind: AggrKind, val tagName: String) : TypeDecl
 
     /** Wrapper carrying an `@s<n>;` size attribute around an inner type. */
-    data class WithSizeAttr(
-        val sizeBits: Int,
-        val inner: TypeDecl,
-    ) : TypeDecl
+    data class WithSizeAttr(val sizeBits: Int, val inner: TypeDecl) : TypeDecl
 
     /** Inline type definition: `(cu,n)=<body>` where the binding `(cu,n)` is preserved for Phase 3. */
-    data class InlineDef(
-        val id: TypeId,
-        val body: TypeDecl,
-    ) : TypeDecl
+    data class InlineDef(val id: TypeId, val body: TypeDecl) : TypeDecl
 
     /** Builtin form `(0,N)` resolved by id only — content provided by BuiltinTable in Phase 3. */
     data object Builtin : TypeDecl
@@ -141,50 +99,25 @@ sealed interface SymbolDecl {
     ) : SymbolDecl
 
     /** `:p` */
-    data class StackParam(
-        override val name: String,
-        val type: TypeDecl,
-    ) : SymbolDecl
+    data class StackParam(override val name: String, val type: TypeDecl) : SymbolDecl
 
     /** `:P` (register param) or `:R` (alt). */
-    data class RegParam(
-        override val name: String,
-        val type: TypeDecl,
-        val regNum: Int,
-    ) : SymbolDecl
+    data class RegParam(override val name: String, val type: TypeDecl, val regNum: Int) : SymbolDecl
 
     /** `:r` register variable. */
-    data class RegLocal(
-        override val name: String,
-        val type: TypeDecl,
-        val regNum: Int,
-    ) : SymbolDecl
+    data class RegLocal(override val name: String, val type: TypeDecl, val regNum: Int) : SymbolDecl
 
     /** Plain stack local (a `:` descriptor with no class letter, or `:V` static-local). */
-    data class StackLocal(
-        override val name: String,
-        val type: TypeDecl,
-    ) : SymbolDecl
+    data class StackLocal(override val name: String, val type: TypeDecl) : SymbolDecl
 
     /** `:T` tagged type (struct/union/class/enum tag). */
-    data class TaggedType(
-        override val name: String,
-        val id: TypeId,
-        val body: TypeDecl,
-    ) : SymbolDecl
+    data class TaggedType(override val name: String, val id: TypeId, val body: TypeDecl) : SymbolDecl
 
     /** `:t` typedef. */
-    data class Typedef(
-        override val name: String,
-        val id: TypeId,
-        val body: TypeDecl,
-    ) : SymbolDecl
+    data class Typedef(override val name: String, val id: TypeId, val body: TypeDecl) : SymbolDecl
 
     /** `:G` */
-    data class Global(
-        override val name: String,
-        val type: TypeDecl,
-    ) : SymbolDecl
+    data class Global(override val name: String, val type: TypeDecl) : SymbolDecl
 
     /** `:S` file-static / `:V` static-local. */
     data class StaticVar(

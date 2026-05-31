@@ -25,15 +25,7 @@ class BookmarkSink(
     private val messageLog: MessageLog,
     private var diagnostics: StabsDiagnostics? = null,
 ) : DiagnosticSink {
-    fun setDiagnostics(diag: StabsDiagnostics) {
-        this.diagnostics = diag
-    }
-
-    fun bookmark(
-        category: String,
-        addr: Address,
-        message: String,
-    ) {
+    fun bookmark(category: String, addr: Address, message: String) {
         diagnostics?.inc(category)
         program.bookmarkManager.setBookmark(
             addr,
@@ -44,10 +36,7 @@ class BookmarkSink(
         messageLog.appendMsg("[Stabs] $category at $addr: $message")
     }
 
-    override fun log(
-        category: String,
-        message: String,
-    ) {
+    override fun log(category: String, message: String) {
         diagnostics?.inc(category)
         messageLog.appendMsg("[Stabs] $category: $message")
     }

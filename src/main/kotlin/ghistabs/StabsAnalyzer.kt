@@ -41,10 +41,7 @@ class StabsAnalyzer :
         return mem.getBlock(".stab") != null && mem.getBlock(".stabstr") != null
     }
 
-    override fun registerOptions(
-        options: Options,
-        program: Program?,
-    ) {
+    override fun registerOptions(options: Options, program: Program?) {
         options.registerOption(
             OPT_PLATE_COMMENTS,
             true,
@@ -71,11 +68,10 @@ class StabsAnalyzer :
         if (isStabsDone(program)) return true // idempotent re-trigger; treat as success.
 
         val opts = program.getOptions(Program.ANALYSIS_PROPERTIES).getOptions(name)
-        val stabsOptions =
-            StabsOptions(
-                applyPlateComments = opts.getBoolean(OPT_PLATE_COMMENTS, true),
-                applyVtables = opts.getBoolean(OPT_VTABLES, true),
-            )
+        val stabsOptions = StabsOptions(
+            applyPlateComments = opts.getBoolean(OPT_PLATE_COMMENTS, true),
+            applyVtables = opts.getBoolean(OPT_VTABLES, true),
+        )
         val ctx = ImportContext(program, log, monitor, stabsOptions)
         val result = StabsImporter(ctx).run()
         log.appendMsg("[Stabs] import complete: $result")
@@ -94,10 +90,7 @@ class StabsAnalyzer :
         fun isStabsDone(program: Program): Boolean = program.getOptions(Program.PROGRAM_INFO).getBoolean(STABS_DONE_OPTION, false)
 
         @JvmStatic
-        fun markStabsDone(
-            program: Program,
-            value: Boolean,
-        ) {
+        fun markStabsDone(program: Program, value: Boolean) {
             val tx = program.startTransaction("Stabs: set done flag")
             try {
                 program.getOptions(Program.PROGRAM_INFO).setBoolean(STABS_DONE_OPTION, value)
