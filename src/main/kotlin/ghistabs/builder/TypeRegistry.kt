@@ -366,11 +366,17 @@ class TypeRegistry(
                             ResolvedBase(simpleName = dt.name, lengthBytes = dt.length)
                         }
                     }
+                    val dataTypeByOffset = mutableMapOf<Int, DataType>()
+                    for (base in body.bases) {
+                        val dt = dataTypeFor(base.type)
+                        if (dt != null) {
+                            dataTypeByOffset[(base.offsetBits / 8).toInt()] = dt
+                        }
+                    }
+
                     val ops = BaseInsertionPlanner.planBaseInsertions(body.bases, resolveBase)
                     for (op in ops) {
-                        val baseDt =
-                            dataTypeFor(body.bases.first { (it.offsetBits / 8).toInt() == op.offsetBytes }.type)
-                                ?: continue
+                        val baseDt = dataTypeByOffset[op.offsetBytes] ?: continue
                         try {
                             struct.replaceAtOffset(
                                 op.offsetBytes,
@@ -381,12 +387,6 @@ class TypeRegistry(
                             )
                             diagnostics.inc("inheritance-applied")
                         } catch (e: java.lang.IllegalArgumentException) {
-                            sink.log(
-                                "base-layout",
-                                "Failed to insert base '${op.baseSimpleName}' in '${ast.name}': ${e.message}",
-                            )
-                            diagnostics.inc("inheritance-failed")
-                        } catch (e: java.lang.Exception) {
                             sink.log(
                                 "base-layout",
                                 "Failed to insert base '${op.baseSimpleName}' in '${ast.name}': ${e.message}",
