@@ -60,11 +60,25 @@ val integrationTest =
         testClassesDirs = sourceSets["test"].output.classesDirs
         classpath = sourceSets["test"].runtimeClasspath
         shouldRunAfter("test")
-        // Workaround for Java 21 × Ghidra 11.x ObjectInputFilter conflict (issue #40):
-        // Attempt to set a permissive jdk.serialFilter to allow Ghidra test harness initialization.
-        // If this still fails, tests will skip gracefully via assumeTrue(fixture.exists()).
+        // JVM args mirror ~/git/ghidra/gradle/javaTestProject.gradle:initTestJVM so Ghidra's
+        // HeadlessGhidraApplicationConfiguration boots cleanly under JDK 21.
         forkEvery = 1
-        jvmArgs("-Djdk.serialFilter=*")
+        jvmArgs(
+            // Ghidra installs its own ObjectInputFilter factory; under JDK 21 it must be
+            // declared at JVM startup, otherwise the BuiltinFilterFactory wins the race.
+            "-Djdk.serialFilterFactory=ghidra.framework.remote.GhidraSerialFilterFactory",
+            "-DSystemUtilities.isTesting=true",
+            "-Djava.awt.headless=true",
+            "-Dfile.encoding=UTF8",
+            "-Duser.country=US",
+            "-Duser.language=en",
+            "--add-opens=java.base/java.util.concurrent=ALL-UNNAMED",
+            "--add-opens=java.desktop/sun.awt=ALL-UNNAMED",
+            "--add-opens=java.desktop/sun.swing=ALL-UNNAMED",
+            "--add-opens=java.desktop/java.awt=ALL-UNNAMED",
+            "--add-opens=java.desktop/javax.swing=ALL-UNNAMED",
+            "--add-opens=java.desktop/javax.swing.text=ALL-UNNAMED",
+        )
     }
 
 val ghidraInstallDir =
