@@ -503,30 +503,34 @@ class TypeRegistry(
             }
 
             is TypeDecl.Ref -> {
-                // Back-reference — should already be in byId from a prior resolve
-                byId[body.id] ?: run {
-                    val refKey = "(${body.id.cu},${body.id.n})"
+                // Same cascade as dataTypeFor: byId -> placeholders -> rawByIdSnapshot -> classify.
+                byId[body.id]
+                    ?: placeholders[body.id]
+                    ?: rawByIdSnapshot[body.id]?.let { raw ->
+                        makePlaceholder(raw.body, CategoryPath("/stabs"), raw.name)
+                            .also { placeholders[body.id] = it }
+                    }
+                    ?: run {
+                        val refKey = "(${body.id.cu},${body.id.n})"
+                        val includeCtx = includeContextsByFile[ast.cuFile]
+                        val knownFileNums = includeCtx?.getAllFileNums() ?: emptySet()
+                        // Truly-missing classifier: rawByIdSnapshot already exhausted above.
+                        val knownTypeIds = emptySet<TypeId>()
 
-                    // Classify the dangling ref using the pure classifier
-                    val includeCtx = includeContextsByFile[ast.cuFile]
-                    val knownFileNums = includeCtx?.getAllFileNums() ?: emptySet()
-                    val knownTypeIds = rawByIdSnapshot.keys
+                        val classification =
+                            ResolverDecision.classifyRef(
+                                body.id,
+                                ast.id.cu,
+                                knownTypeIds,
+                                knownFileNums,
+                            )
 
-                    val classification =
-                        ResolverDecision.classifyRef(
-                            body.id,
-                            ast.id.cu,
-                            knownTypeIds,
-                            knownFileNums,
-                        )
+                        sink.log("dangling-ref", "Dangling ref to $refKey in '${ast.name}' [${classification.tag}]")
+                        diagnostics.recordUnresolvedRef(refKey, ast.name, ast.cuFile)
+                        diagnostics.inc("dangling-ref-${classification.tag}")
 
-                    // Log with classification tag appended
-                    sink.log("dangling-ref", "Dangling ref to $refKey in '${ast.name}' [${classification.tag}]")
-                    diagnostics.recordUnresolvedRef(refKey, ast.name, ast.cuFile)
-                    diagnostics.inc("dangling-ref-${classification.tag}")
-
-                    Undefined4DataType.dataType
-                }
+                        Undefined4DataType.dataType
+                    }
             }
         }
 

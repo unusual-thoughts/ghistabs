@@ -69,7 +69,9 @@ class StabsAnalyzerRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
             program = loadResults!!.getPrimaryDomainObject(this)
             usedRealBinary = true
 
-            // Trigger auto-analysis so StabsAnalyzer runs and populates the messageLog
+            // Trigger auto-analysis to populate symbols/types from the loader, then invoke
+            // StabsAnalyzer directly. (In standalone tests the extension isn't registered with
+            // Ghidra's ClassSearcher, so AutoAnalysisManager doesn't discover it.)
             val mgr = AutoAnalysisManager.getAnalysisManager(program)
             val txId = program.startTransaction("auto-analyze")
             try {
@@ -77,6 +79,13 @@ class StabsAnalyzerRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
                 mgr.waitForAnalysis(null, monitor)
             } finally {
                 program.endTransaction(txId, true)
+            }
+            val stabsAnalyzer = ghistabs.StabsAnalyzer()
+            val txStabs = program.startTransaction("stabs-analyze")
+            try {
+                stabsAnalyzer.added(program, program.memory, monitor, log)
+            } finally {
+                program.endTransaction(txStabs, true)
             }
         } catch (e: Exception) {
             // If loading the real binary fails, skip the test (these tests require real binary data)
