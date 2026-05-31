@@ -153,6 +153,7 @@ class TypeRegistry(
     private val conflictCount: MutableMap<String, Int> = mutableMapOf()
     private var rawByIdSnapshot: Map<TypeId, TypeAst> = emptyMap()
     private var includeContextsByFile: Map<String, IncludeContext> = emptyMap()
+    private var structAstsByName: Map<String, TypeDecl.Struct> = emptyMap()
 
     fun setIncludeContexts(contexts: Map<String, IncludeContext>) {
         includeContextsByFile = contexts
@@ -166,6 +167,15 @@ class TypeRegistry(
         rawByIdSnapshot = rawTypesById
         val asts = rawTypesById.values.toList()
         val byName = asts.groupBy { it.name }
+
+        // Build struct AST map for polymorphic base detection in materialiseBody
+        structAstsByName =
+            asts
+                .mapNotNull { ast ->
+                    val body = ast.body as? TypeDecl.Struct ?: return@mapNotNull null
+                    ast.name to body
+                }.toMap()
+
         val tx = dtm.startTransaction("ghidra-stabs build types")
         try {
             // Pre-seed placeholders in a SEPARATE map so forward refs within the batch
@@ -396,9 +406,26 @@ class TypeRegistry(
                     }
                 }
 
+                // Compute polymorphic base for inherited vfptr gating
+                val polyBase = ClassBuilderHelpers.firstPolymorphicBase(body, structAstsByName)
+
                 // Existing field loop (unchanged).
                 for (field in body.fields) {
                     if (field.isStatic) continue // Skip static fields
+
+                    // Skip parser-emitted _vptr$<class> field if inherited from polymorphic base
+                    val isParserEmittedVptr =
+                        field.name.startsWith("_vptr$") || field.name.startsWith("_vptr.") || field.name == "_vptr"
+                    if (
+                        isParserEmittedVptr &&
+                        polyBase != null &&
+                        field.offsetBits == polyBase.offsetBits
+                    ) {
+                        // Inherited vfptr — the _base_<Base> component already carries it. Skip.
+                        diagnostics.inc("vptr-skipped-inherited")
+                        continue
+                    }
+
                     val ft = dataTypeFor(field.type) ?: Undefined4DataType.dataType
                     val len = if (ft.length <= 0) 4 else ft.length
                     try {
