@@ -148,6 +148,20 @@ class StabsDiagnostics {
     }
 
     /**
+     * Record an apply error during function analysis.
+     * Increments "apply-error-$bucket" counter and records an example.
+     */
+    fun recordApplyError(
+        funcName: String,
+        bucket: String,
+        detail: String,
+    ) {
+        val counterName = "apply-error-$bucket"
+        inc(counterName)
+        recordExample(counterName, "func=$funcName detail=$detail")
+    }
+
+    /**
      * Record an empty scope (locals list with no entries).
      * Increments "empty-scope" counter and records an example.
      */

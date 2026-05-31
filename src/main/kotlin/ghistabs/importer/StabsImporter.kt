@@ -294,11 +294,16 @@ class StabsImporter(
 
         for (open in openFunctions) {
             try {
-                val existing = funcMgr.getFunctionAt(open.addr)
                 val func =
-                    existing
-                        ?: funcMgr.createFunction(open.name, open.addr, null, source)
-                        ?: continue
+                    funcMgr.getFunctionAt(open.addr)
+                        ?: funcMgr.getFunctionContaining(open.addr)?.also {
+                            ctx.diagnostics.inc("entrypoint-snapped")
+                        }
+                        ?: run {
+                            ctx.diagnostics.inc("apply-error-no-function")
+                            ctx.sink.log("apply-error-no-function", "no Function at or containing ${open.addr} for ${open.name}")
+                            continue
+                        }
 
                 // Apply return type from the parsed signature.
                 val retDt = typeRegistry.dataTypeFor(open.decl.signature)
@@ -339,6 +344,9 @@ class StabsImporter(
 
                 functions++
             } catch (t: Throwable) {
+                val bucket = ApplyErrorBucket.bucket(t)
+                ctx.diagnostics.recordApplyError(open.name, bucket, t.message.orEmpty())
+                ctx.sink.log("apply-error-$bucket", "function ${open.name}: ${t.message}")
                 ctx.sink.bookmark("apply-error", open.addr, "function ${open.name}: ${t.message}")
             }
         }
