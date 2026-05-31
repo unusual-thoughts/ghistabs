@@ -17,10 +17,9 @@ class StabReaderTest {
             desc: Int,
             value: Int,
         ): ByteArray {
-            val buf =
-                ByteBuffer.allocate(STAB_RECORD_SIZE).apply {
-                    order(ByteOrder.LITTLE_ENDIAN)
-                }
+            val buf = ByteBuffer.allocate(STAB_RECORD_SIZE).apply {
+                order(ByteOrder.LITTLE_ENDIAN)
+            }
             buf.putInt(strx)
             buf.put(type.toByte())
             buf.put(other.toByte())

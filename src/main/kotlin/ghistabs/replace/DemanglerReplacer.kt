@@ -1,24 +1,17 @@
 package ghistabs.replace
 
+import ghidra.program.model.data.*
 import ghidra.program.model.data.Array
-import ghidra.program.model.data.DataType
-import ghidra.program.model.data.DataTypeDependencyException
-import ghidra.program.model.data.Pointer
-import ghidra.program.model.data.Structure
-import ghidra.program.model.data.TypeDef
 import ghistabs.builder.TypeRegistry
 import ghistabs.importer.ImportContext
-import java.util.ArrayDeque
+import java.util.*
 
 /**
  * Adapter that uses Ghidra's DataTypeManager to execute demangler stub replacements.
  * Pure algorithm (DemanglerReplaceCore) is invoked to decide which stubs to replace;
  * this class handles the Ghidra-side DTM operations.
  */
-class DemanglerReplacer(
-    private val ctx: ImportContext,
-    private val registry: TypeRegistry,
-) {
+class DemanglerReplacer(private val ctx: ImportContext, private val registry: TypeRegistry) {
     fun run() {
         val dtm = ctx.dtm
 
@@ -28,22 +21,9 @@ class DemanglerReplacer(
         val stubDtByPath = mutableMapOf<String, DataType>()
 
         // Precompute name-to-DataTypes index to avoid O(N²) registry.findByName lookups
-        val nameIndex: Map<String, List<DataType>> =
-            run {
-                val map = mutableMapOf<String, MutableList<DataType>>()
-                val it = dtm.allDataTypes
-                while (it.hasNext()) {
-                    val d = it.next()
-                    map.getOrPut(d.name) { mutableListOf() }.add(d)
-                }
-                map
-            }
+        val nameIndex = dtm.allDataTypes.asSequence().groupBy { it.name }
 
-        // Iterate all data types in DTM
-        val allDts = dtm.allDataTypes
-        while (allDts.hasNext()) {
-            val dt = allDts.next()
-
+        for (dt in dtm.allDataTypes) {
             // Collect all stubs under /Demangler
             if (dt.categoryPath.path.startsWith("/Demangler") && dt is Structure) {
                 val isEmptyStructure = dt.length == 0 || dt.numComponents == 0
@@ -65,25 +45,22 @@ class DemanglerReplacer(
 
             // Collect dependencies for cycle detection
             val deps = collectDependsOnPaths(dt)
-            replacements[dt.name] =
-                ReplacementRecord(dt.pathName, dt.name, deps) to dt
+            replacements[dt.name] = ReplacementRecord(dt.pathName, dt.name, deps) to dt
         }
 
         // Use pure core to decide which ops are safe
-        val (ops, skips) =
-            DemanglerReplaceCore.chooseReplaceOps(
-                stubs,
-                replacements.mapValues { it.value.first },
-            )
+        val (ops, skips) = DemanglerReplaceCore.chooseReplaceOps(
+            stubs,
+            replacements.mapValues { it.value.first },
+        )
 
         // Log all skips with per-kind counters
         for (skip in skips) {
-            val counterKey =
-                when (skip) {
-                    is Skip.NoReplacement -> "demangler-skip-no-replacement"
-                    is Skip.WouldBeCycle -> "demangler-skip-cycle"
-                    is Skip.StubAlreadyMissing -> "demangler-skip-already-missing"
-                }
+            val counterKey = when (skip) {
+                is Skip.NoReplacement -> "demangler-skip-no-replacement"
+                is Skip.WouldBeCycle -> "demangler-skip-cycle"
+                is Skip.StubAlreadyMissing -> "demangler-skip-already-missing"
+            }
             ctx.diagnostics.inc(counterKey)
             ctx.sink.log("demangler-skip", skip.reason)
         }
@@ -91,11 +68,10 @@ class DemanglerReplacer(
         // Execute replacements
         for (op in ops) {
             val stubDt = stubDtByPath[op.stubPath] ?: continue
-            val replDt =
-                replacements.values
-                    .firstOrNull { it.first.pathName == op.replacementPath }
-                    ?.second
-                    ?: continue
+            val replDt = replacements.values
+                .firstOrNull { it.first.pathName == op.replacementPath }
+                ?.second
+                ?: continue
 
             // Guard: stub must still exist in DTM
             if (!dtm.contains(stubDt)) continue
@@ -144,6 +120,7 @@ class DemanglerReplacer(
                         }
                     }
                 }
+
                 is Pointer -> {
                     // Add pointed-to type if it exists
                     val target = cur.dataType
@@ -151,6 +128,7 @@ class DemanglerReplacer(
                         queue.add(target)
                     }
                 }
+
                 is Array -> {
                     // Add element type
                     val elemDt = cur.dataType
@@ -158,6 +136,7 @@ class DemanglerReplacer(
                         queue.add(elemDt)
                     }
                 }
+
                 is TypeDef -> {
                     // Add base type
                     val baseDt = cur.baseDataType

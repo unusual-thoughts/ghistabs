@@ -82,14 +82,13 @@ class DemanglerReplaceIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
         }
 
         // Create ImportContext (minimal setup for DemanglerReplacer)
-        val ctx =
-            ImportContext(
-                program,
-                ghidra.app.util.importer
-                    .MessageLog(),
-                ConsoleTaskMonitor(),
-                ghistabs.importer.StabsOptions(),
-            )
+        val ctx = ImportContext(
+            program,
+            ghidra.app.util.importer
+                .MessageLog(),
+            ConsoleTaskMonitor(),
+            ghistabs.importer.StabsOptions(),
+        )
 
         // Note: In a real scenario, TypeRegistry would be populated by StabsImporter.
         // For this test, we construct a minimal TypeRegistry directly.
@@ -144,14 +143,13 @@ class DemanglerReplaceIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
         }
 
         // Create ImportContext
-        val ctx =
-            ImportContext(
-                program,
-                ghidra.app.util.importer
-                    .MessageLog(),
-                ConsoleTaskMonitor(),
-                ghistabs.importer.StabsOptions(),
-            )
+        val ctx = ImportContext(
+            program,
+            ghidra.app.util.importer
+                .MessageLog(),
+            ConsoleTaskMonitor(),
+            ghistabs.importer.StabsOptions(),
+        )
 
         // Run DemanglerReplacer (should skip gracefully since stub is absent)
         val registry = ghistabs.builder.TypeRegistry(ctx.dtm, ctx.sink, ctx.diagnostics)

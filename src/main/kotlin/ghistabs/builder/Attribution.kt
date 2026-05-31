@@ -85,11 +85,10 @@ object Attribution {
         return CategoryPath("/$canonicalCu/instantiations")
     }
 
-    private fun isClean(name: String): Boolean =
-        name.isNotEmpty() &&
-            !UNCLEAN_CHARS.containsMatchIn(name) &&
-            !name.startsWith("_") &&
-            name !in BUILTIN_NAMES
+    private fun isClean(name: String): Boolean = name.isNotEmpty() &&
+        !UNCLEAN_CHARS.containsMatchIn(name) &&
+        !name.startsWith("_") &&
+        name !in BUILTIN_NAMES
 
     private fun stdBasename(path: String): String? {
         val match = STD_MARKERS.find(path) ?: return null

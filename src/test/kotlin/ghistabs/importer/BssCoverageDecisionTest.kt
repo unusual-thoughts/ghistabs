@@ -19,10 +19,9 @@ class BssCoverageDecisionTest {
     @Test
     fun `classify returns Covered for address inside range`() {
         val range = AddrRange(0x1000L, 0x1010L)
-        val harvest =
-            listOf(
-                HarvestedAddr("var1", 0x1008L),
-            )
+        val harvest = listOf(
+            HarvestedAddr("var1", 0x1008L),
+        )
 
         val result = BssCoverageDecision.classify(range, harvest)
 
@@ -36,11 +35,10 @@ class BssCoverageDecisionTest {
     @Test
     fun `classify returns NoCoverage for addresses outside range`() {
         val range = AddrRange(0x1000L, 0x1010L)
-        val harvest =
-            listOf(
-                HarvestedAddr("var1", 0x0F00L),
-                HarvestedAddr("var2", 0x2000L),
-            )
+        val harvest = listOf(
+            HarvestedAddr("var1", 0x0F00L),
+            HarvestedAddr("var2", 0x2000L),
+        )
 
         val result = BssCoverageDecision.classify(range, harvest)
 
@@ -50,12 +48,11 @@ class BssCoverageDecisionTest {
     @Test
     fun `classify filters to only in-range addresses`() {
         val range = AddrRange(0x1000L, 0x1010L)
-        val harvest =
-            listOf(
-                HarvestedAddr("outside1", 0x0FFFL),
-                HarvestedAddr("inside", 0x1005L),
-                HarvestedAddr("outside2", 0x1011L),
-            )
+        val harvest = listOf(
+            HarvestedAddr("outside1", 0x0FFFL),
+            HarvestedAddr("inside", 0x1005L),
+            HarvestedAddr("outside2", 0x1011L),
+        )
 
         val result = BssCoverageDecision.classify(range, harvest)
 
@@ -68,11 +65,10 @@ class BssCoverageDecisionTest {
     @Test
     fun `classify ignores null resolved addresses`() {
         val range = AddrRange(0x1000L, 0x1010L)
-        val harvest =
-            listOf(
-                HarvestedAddr("unresolved", null),
-                HarvestedAddr("inside", 0x1005L),
-            )
+        val harvest = listOf(
+            HarvestedAddr("unresolved", null),
+            HarvestedAddr("inside", 0x1005L),
+        )
 
         val result = BssCoverageDecision.classify(range, harvest)
 

@@ -11,10 +11,9 @@ object LocalVarDedup {
         name: String,
         existingParamNames: Set<String>,
         existingLocalNames: Set<String>,
-    ): SkipReason? =
-        when {
-            name in existingParamNames -> SkipReason.DuplicateParamName
-            name in existingLocalNames -> SkipReason.DuplicateLocalName
-            else -> null
-        }
+    ): SkipReason? = when (name) {
+        in existingParamNames -> SkipReason.DuplicateParamName
+        in existingLocalNames -> SkipReason.DuplicateLocalName
+        else -> null
+    }
 }

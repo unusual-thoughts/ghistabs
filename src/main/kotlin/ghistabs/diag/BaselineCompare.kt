@@ -55,11 +55,7 @@ object BaselineCompare {
      *
      * Special case: if baseline is 0, returns true (no regression possible).
      */
-    fun passesReduction(
-        actual: Long,
-        baseline: Long,
-        ratio: Double = 0.10,
-    ): Boolean {
+    fun passesReduction(actual: Long, baseline: Long, ratio: Double = 0.10): Boolean {
         if (baseline == 0L) {
             return true
         }

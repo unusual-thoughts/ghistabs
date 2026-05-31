@@ -26,7 +26,7 @@ class BaseInsertionPlannerTest {
                 offsetBits = 0L,
             )
 
-        val resolveBase: (TypeDecl) -> ResolvedBase? = { _typeDecl ->
+        val resolveBase: (TypeDecl) -> ResolvedBase? = {
             ResolvedBase(simpleName = "Base", lengthBytes = 8)
         }
 
@@ -70,6 +70,7 @@ class BaseInsertionPlannerTest {
                         ResolvedBase("Base0", 8)
                     }
                 }
+
                 else -> null
             }
         }
@@ -99,7 +100,7 @@ class BaseInsertionPlannerTest {
                 offsetBits = 0L,
             )
 
-        val resolveBase: (TypeDecl) -> ResolvedBase? = { _typeDecl ->
+        val resolveBase: (TypeDecl) -> ResolvedBase? = {
             ResolvedBase(simpleName = "VBase", lengthBytes = 16)
         }
 
@@ -125,7 +126,7 @@ class BaseInsertionPlannerTest {
                 offsetBits = 0L,
             )
 
-        val resolveBase: (TypeDecl) -> ResolvedBase? = { _typeDecl ->
+        val resolveBase: (TypeDecl) -> ResolvedBase? = {
             null // Simulates an unresolved type
         }
 
@@ -140,15 +141,14 @@ class BaseInsertionPlannerTest {
      */
     @Test
     fun testZeroLengthBase() {
-        val baseDecl =
-            BaseDecl(
-                type = TypeDecl.Ref(id = ghistabs.parser.TypeId(cu = 0, n = 15)),
-                isVirtual = false,
-                access = Access.PUBLIC,
-                offsetBits = 0L,
-            )
+        val baseDecl = BaseDecl(
+            type = TypeDecl.Ref(id = ghistabs.parser.TypeId(cu = 0, n = 15)),
+            isVirtual = false,
+            access = Access.PUBLIC,
+            offsetBits = 0L,
+        )
 
-        val resolveBase: (TypeDecl) -> ResolvedBase? = { _typeDecl ->
+        val resolveBase: (TypeDecl) -> ResolvedBase? = {
             ResolvedBase(simpleName = "EmptyBase", lengthBytes = 0)
         }
 
@@ -163,27 +163,24 @@ class BaseInsertionPlannerTest {
      */
     @Test
     fun testMixedValidAndInvalidBases() {
-        val goodBase =
-            BaseDecl(
-                type = TypeDecl.Ref(id = ghistabs.parser.TypeId(cu = 0, n = 1)),
-                isVirtual = false,
-                access = Access.PUBLIC,
-                offsetBits = 0L,
-            )
-        val danglingBase =
-            BaseDecl(
-                type = TypeDecl.Ref(id = ghistabs.parser.TypeId(cu = 0, n = 2)),
-                isVirtual = false,
-                access = Access.PUBLIC,
-                offsetBits = 8L,
-            )
-        val zeroLengthBase =
-            BaseDecl(
-                type = TypeDecl.Ref(id = ghistabs.parser.TypeId(cu = 0, n = 3)),
-                isVirtual = false,
-                access = Access.PUBLIC,
-                offsetBits = 16L,
-            )
+        val goodBase = BaseDecl(
+            type = TypeDecl.Ref(id = ghistabs.parser.TypeId(cu = 0, n = 1)),
+            isVirtual = false,
+            access = Access.PUBLIC,
+            offsetBits = 0L,
+        )
+        val danglingBase = BaseDecl(
+            type = TypeDecl.Ref(id = ghistabs.parser.TypeId(cu = 0, n = 2)),
+            isVirtual = false,
+            access = Access.PUBLIC,
+            offsetBits = 8L,
+        )
+        val zeroLengthBase = BaseDecl(
+            type = TypeDecl.Ref(id = ghistabs.parser.TypeId(cu = 0, n = 3)),
+            isVirtual = false,
+            access = Access.PUBLIC,
+            offsetBits = 16L,
+        )
 
         val resolveBase: (TypeDecl) -> ResolvedBase? = { typeDecl ->
             when (typeDecl) {
@@ -195,15 +192,15 @@ class BaseInsertionPlannerTest {
                         else -> null
                     }
                 }
+
                 else -> null
             }
         }
 
-        val ops =
-            BaseInsertionPlanner.planBaseInsertions(
-                listOf(goodBase, danglingBase, zeroLengthBase),
-                resolveBase,
-            )
+        val ops = BaseInsertionPlanner.planBaseInsertions(
+            listOf(goodBase, danglingBase, zeroLengthBase),
+            resolveBase,
+        )
 
         assertEquals(1, ops.size, "Only 1 valid base should be in output")
         assertEquals("_base_Good", ops[0].fieldName)

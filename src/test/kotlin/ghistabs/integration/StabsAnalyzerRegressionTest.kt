@@ -3,22 +3,15 @@ package ghistabs.integration
 import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.app.util.importer.MessageLog
 import ghidra.app.util.importer.ProgramLoader
+import ghidra.app.util.opinion.LoadResults
+import ghidra.program.model.data.*
 import ghidra.program.model.data.Array
 import ghidra.program.model.data.Enum
-import ghidra.program.model.data.FunctionDefinition
-import ghidra.program.model.data.Pointer
-import ghidra.program.model.data.Structure
-import ghidra.program.model.data.TypeDef
-import ghidra.program.model.data.Union
 import ghidra.program.model.listing.Program
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
-import org.junit.jupiter.api.AfterEach
-import org.junit.jupiter.api.Assertions
+import org.junit.jupiter.api.*
 import org.junit.jupiter.api.Assumptions.assumeTrue
-import org.junit.jupiter.api.BeforeEach
-import org.junit.jupiter.api.Tag
-import org.junit.jupiter.api.Test
 import java.io.File
 
 /**
@@ -42,7 +35,7 @@ class StabsAnalyzerRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
     private val baselineFile = File("src/test/resources/baselines/bouniafbouniaf-baseline.json")
 
     private lateinit var program: Program
-    private var loadResults: ghidra.app.util.opinion.LoadResults<Program>? = null
+    private var loadResults: LoadResults<Program>? = null
     private var usedRealBinary = false
 
     @BeforeEach
@@ -126,10 +119,9 @@ class StabsAnalyzerRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
 
     @Test
     fun bouniafNotUnderStdInclude() {
-        val bouniaf =
-            program.dataTypeManager.allDataTypes
-                .asSequence()
-                .firstOrNull { it.name == "bouniaf" }
+        val bouniaf = program.dataTypeManager.allDataTypes
+            .asSequence()
+            .firstOrNull { it.name == "bouniaf" }
         assumeTrue(bouniaf != null, "Skipping: bouniaf not found in DTM (stabs not processed)")
         Assertions.assertFalse(
             bouniaf!!.categoryPath.path.startsWith("/std/"),
@@ -153,11 +145,10 @@ class StabsAnalyzerRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
 
     @Test
     fun atLeastOneVtableStructApplied() {
-        val any =
-            program.dataTypeManager.allDataTypes
-                .asSequence()
-                .filterIsInstance<Structure>()
-                .any { it.name.endsWith("_vtable") && it.numComponents > 0 }
+        val any = program.dataTypeManager.allDataTypes
+            .asSequence()
+            .filterIsInstance<Structure>()
+            .any { it.name.endsWith("_vtable") && it.numComponents > 0 }
         assumeTrue(any, "Skipping: No *_vtable struct found (stabs not processed or no vtable data)")
     }
 
@@ -197,17 +188,15 @@ class StabsAnalyzerRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
         )
     }
 
-    private fun parseTagFrequencies(log: String): Map<String, Long> =
-        log
-            .lines()
-            .mapNotNull { Regex("""^\[Stabs\] ([a-z-]+):""").find(it)?.groupValues?.get(1) }
-            .groupingBy { it }
-            .eachCount()
-            .mapValues { it.value.toLong() }
+    private fun parseTagFrequencies(log: String): Map<String, Long> = log
+        .lines()
+        .mapNotNull { Regex("""^\[Stabs\] ([a-z-]+):""").find(it)?.groupValues?.get(1) }
+        .groupingBy { it }
+        .eachCount()
+        .mapValues { it.value.toLong() }
 
-    private fun capturedMessageLog(prog: Program): String =
-        AutoAnalysisManager
-            .getAnalysisManager(prog)
-            .messageLog
-            .toString()
+    private fun capturedMessageLog(prog: Program): String = AutoAnalysisManager
+        .getAnalysisManager(prog)
+        .messageLog
+        .toString()
 }

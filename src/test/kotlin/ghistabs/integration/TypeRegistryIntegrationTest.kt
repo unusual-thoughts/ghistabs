@@ -61,31 +61,30 @@ class TypeRegistryIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         val program = builder.program
 
         // Create synthetic records with identical structs from different CUs
-        val records =
-            listOf(
-                StabRecord(0, StabType.N_SO, 0, 0, 0, 0, "file1.cpp"),
-                // Struct definition in CU 0
-                StabRecord(
-                    1,
-                    StabType.N_LSYM,
-                    0x100,
-                    0,
-                    0,
-                    0,
-                    "Point:t(0,1)=s8x:(0,2),0,32;y:(0,2),32,32;;",
-                ),
-                StabRecord(2, StabType.N_SO, 0, 0, 0, 0, "file2.cpp"),
-                // Identical struct definition in CU 1 (should be deduplicated)
-                StabRecord(
-                    3,
-                    StabType.N_LSYM,
-                    0x100,
-                    0,
-                    0,
-                    0,
-                    "Point:t(1,1)=s8x:(1,2),0,32;y:(1,2),32,32;;",
-                ),
-            )
+        val records = listOf(
+            StabRecord(0, StabType.N_SO, 0, 0, 0, 0, "file1.cpp"),
+            // Struct definition in CU 0
+            StabRecord(
+                1,
+                StabType.N_LSYM,
+                0x100,
+                0,
+                0,
+                0,
+                "Point:t(0,1)=s8x:(0,2),0,32;y:(0,2),32,32;;",
+            ),
+            StabRecord(2, StabType.N_SO, 0, 0, 0, 0, "file2.cpp"),
+            // Identical struct definition in CU 1 (should be deduplicated)
+            StabRecord(
+                3,
+                StabType.N_LSYM,
+                0x100,
+                0,
+                0,
+                0,
+                "Point:t(1,1)=s8x:(1,2),0,32;y:(1,2),32,32;;",
+            ),
+        )
 
         // Run importer
         val log = MessageLog()
@@ -113,31 +112,30 @@ class TypeRegistryIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         val program = builder.program
 
         // Create records with conflicting struct names
-        val records =
-            listOf(
-                StabRecord(0, StabType.N_SO, 0, 0, 0, 0, "file1.cpp"),
-                // First Point with 2 fields
-                StabRecord(
-                    1,
-                    StabType.N_LSYM,
-                    0x100,
-                    0,
-                    0,
-                    0,
-                    "Point:t(0,1)=s8x:(0,2),0,32;y:(0,2),32,32;;",
-                ),
-                StabRecord(2, StabType.N_SO, 0, 0, 0, 0, "file2.cpp"),
-                // Different Point with 3 fields (causes conflict)
-                StabRecord(
-                    3,
-                    StabType.N_LSYM,
-                    0x100,
-                    0,
-                    0,
-                    0,
-                    "Point:t(1,1)=s12x:(1,2),0,32;y:(1,2),32,32;z:(1,2),64,32;;",
-                ),
-            )
+        val records = listOf(
+            StabRecord(0, StabType.N_SO, 0, 0, 0, 0, "file1.cpp"),
+            // First Point with 2 fields
+            StabRecord(
+                1,
+                StabType.N_LSYM,
+                0x100,
+                0,
+                0,
+                0,
+                "Point:t(0,1)=s8x:(0,2),0,32;y:(0,2),32,32;;",
+            ),
+            StabRecord(2, StabType.N_SO, 0, 0, 0, 0, "file2.cpp"),
+            // Different Point with 3 fields (causes conflict)
+            StabRecord(
+                3,
+                StabType.N_LSYM,
+                0x100,
+                0,
+                0,
+                0,
+                "Point:t(1,1)=s12x:(1,2),0,32;y:(1,2),32,32;z:(1,2),64,32;;",
+            ),
+        )
 
         // Run importer
         val log = MessageLog()
@@ -161,19 +159,18 @@ class TypeRegistryIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         val program = builder.program
 
         // Create records with structs
-        val records =
-            listOf(
-                StabRecord(0, StabType.N_SO, 0, 0, 0, 0, "test.cpp"),
-                StabRecord(
-                    1,
-                    StabType.N_LSYM,
-                    0x100,
-                    0,
-                    0,
-                    0,
-                    "MyStruct:t(0,1)=s4value:(0,2),0,32;;",
-                ),
-            )
+        val records = listOf(
+            StabRecord(0, StabType.N_SO, 0, 0, 0, 0, "test.cpp"),
+            StabRecord(
+                1,
+                StabType.N_LSYM,
+                0x100,
+                0,
+                0,
+                0,
+                "MyStruct:t(0,1)=s4value:(0,2),0,32;;",
+            ),
+        )
 
         // Run importer
         val log = MessageLog()
@@ -198,20 +195,19 @@ class TypeRegistryIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         val program = builder.program
 
         // Create records with self-referential struct
-        val records =
-            listOf(
-                StabRecord(0, StabType.N_SO, 0, 0, 0, 0, "test.cpp"),
-                // LinkedList with self-pointer (next points to same type)
-                StabRecord(
-                    1,
-                    StabType.N_LSYM,
-                    0x100,
-                    0,
-                    0,
-                    0,
-                    "LinkedList:t(0,1)=s8value:(0,2),0,32;next:*(0,1),32,32;;",
-                ),
-            )
+        val records = listOf(
+            StabRecord(0, StabType.N_SO, 0, 0, 0, 0, "test.cpp"),
+            // LinkedList with self-pointer (next points to same type)
+            StabRecord(
+                1,
+                StabType.N_LSYM,
+                0x100,
+                0,
+                0,
+                0,
+                "LinkedList:t(0,1)=s8value:(0,2),0,32;next:*(0,1),32,32;;",
+            ),
+        )
 
         // Run importer - should not hang
         val log = MessageLog()
@@ -239,30 +235,29 @@ class TypeRegistryIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         val program = builder.program
 
         // Create records with mutually referential structs
-        val records =
-            listOf(
-                StabRecord(0, StabType.N_SO, 0, 0, 0, 0, "test.cpp"),
-                // Node A references Node B
-                StabRecord(
-                    1,
-                    StabType.N_LSYM,
-                    0x100,
-                    0,
-                    0,
-                    0,
-                    "NodeA:t(0,1)=s8value:(0,2),0,32;link:*(0,3),32,32;;",
-                ),
-                // Node B references Node A
-                StabRecord(
-                    2,
-                    StabType.N_LSYM,
-                    0x100,
-                    0,
-                    0,
-                    0,
-                    "NodeB:t(0,3)=s8value:(0,2),0,32;parent:*(0,1),32,32;;",
-                ),
-            )
+        val records = listOf(
+            StabRecord(0, StabType.N_SO, 0, 0, 0, 0, "test.cpp"),
+            // Node A references Node B
+            StabRecord(
+                1,
+                StabType.N_LSYM,
+                0x100,
+                0,
+                0,
+                0,
+                "NodeA:t(0,1)=s8value:(0,2),0,32;link:*(0,3),32,32;;",
+            ),
+            // Node B references Node A
+            StabRecord(
+                2,
+                StabType.N_LSYM,
+                0x100,
+                0,
+                0,
+                0,
+                "NodeB:t(0,3)=s8value:(0,2),0,32;parent:*(0,1),32,32;;",
+            ),
+        )
 
         // Run importer - should not hang
         val log = MessageLog()

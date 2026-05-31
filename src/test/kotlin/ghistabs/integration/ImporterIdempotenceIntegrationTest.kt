@@ -60,13 +60,12 @@ class ImporterIdempotenceIntegrationTest : AbstractGhidraHeadlessIntegrationTest
 
         // First run: parse and materialize
         val log1 = MessageLog()
-        val ctx1 =
-            ImportContext(
-                program,
-                log1,
-                ConsoleTaskMonitor(),
-                StabsOptions(),
-            )
+        val ctx1 = ImportContext(
+            program,
+            log1,
+            ConsoleTaskMonitor(),
+            StabsOptions(),
+        )
         val importer1 = StabsImporter(ctx1)
         val result1 = importer1.run()
 
@@ -78,13 +77,12 @@ class ImporterIdempotenceIntegrationTest : AbstractGhidraHeadlessIntegrationTest
 
         // Second run: parse again with same input
         val log2 = MessageLog()
-        val ctx2 =
-            ImportContext(
-                program,
-                log2,
-                ConsoleTaskMonitor(),
-                StabsOptions(),
-            )
+        val ctx2 = ImportContext(
+            program,
+            log2,
+            ConsoleTaskMonitor(),
+            StabsOptions(),
+        )
         val importer2 = StabsImporter(ctx2)
         val result2 = importer2.run()
 
@@ -93,7 +91,11 @@ class ImporterIdempotenceIntegrationTest : AbstractGhidraHeadlessIntegrationTest
 
         // Assert idempotence: counts should be identical
         assertEquals(result1.parseErrors, result2.parseErrors, "Parse error counts should be identical")
-        assertEquals(result1.typesMaterialised, result2.typesMaterialised, "Type materialization counts should be identical")
+        assertEquals(
+            result1.typesMaterialised,
+            result2.typesMaterialised,
+            "Type materialization counts should be identical",
+        )
         assertEquals(symbolCount1, symbolCount2, "Symbol count should be identical on second run")
     }
 
@@ -118,13 +120,12 @@ class ImporterIdempotenceIntegrationTest : AbstractGhidraHeadlessIntegrationTest
 
             // Create context and run (this should not throw)
             val log = MessageLog()
-            val ctx =
-                ImportContext(
-                    program,
-                    log,
-                    ConsoleTaskMonitor(),
-                    StabsOptions(),
-                )
+            val ctx = ImportContext(
+                program,
+                log,
+                ConsoleTaskMonitor(),
+                StabsOptions(),
+            )
             val importer = StabsImporter(ctx)
 
             // This should complete without exceptions
@@ -157,13 +158,12 @@ class ImporterIdempotenceIntegrationTest : AbstractGhidraHeadlessIntegrationTest
 
         // First run: parse and materialize
         val log1 = MessageLog()
-        val ctx1 =
-            ImportContext(
-                program,
-                log1,
-                ConsoleTaskMonitor(),
-                StabsOptions(),
-            )
+        val ctx1 = ImportContext(
+            program,
+            log1,
+            ConsoleTaskMonitor(),
+            StabsOptions(),
+        )
         val importer1 = StabsImporter(ctx1)
         importer1.run()
 
@@ -181,24 +181,22 @@ class ImporterIdempotenceIntegrationTest : AbstractGhidraHeadlessIntegrationTest
 
         // Second run: parse again with same input, fresh diagnostics
         val log2 = MessageLog()
-        val ctx2 =
-            ImportContext(
-                program,
-                log2,
-                ConsoleTaskMonitor(),
-                StabsOptions(),
-            )
+        val ctx2 = ImportContext(
+            program,
+            log2,
+            ConsoleTaskMonitor(),
+            StabsOptions(),
+        )
         val importer2 = StabsImporter(ctx2)
         importer2.run()
 
         // Snapshot resolver counters after second run
         val counters2 = ctx2.diagnostics.snapshotCounters()
-        val resolverCounters2 =
-            counters2
-                .filterKeys { key ->
-                    key == "dangling-ref" ||
-                        key.startsWith("dangling-ref-")
-                }.toMap()
+        val resolverCounters2 = counters2
+            .filterKeys { key ->
+                key == "dangling-ref" ||
+                    key.startsWith("dangling-ref-")
+            }.toMap()
 
         // Assert idempotence: resolver counters should be identical
         assertEquals(

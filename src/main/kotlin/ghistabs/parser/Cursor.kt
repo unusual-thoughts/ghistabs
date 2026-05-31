@@ -1,19 +1,16 @@
 package ghistabs.parser
 
-internal class Cursor(
-    val src: String,
-) {
+internal class Cursor(val src: String) {
     var pos: Int = 0
         private set
 
-    val eof: Boolean get() = pos >= src.length
+    val eof get() = pos >= src.length
 
-    fun peek(): Char =
-        if (eof) {
-            throw StabsParseException(pos, src, "unexpected end of input")
-        } else {
-            src[pos]
-        }
+    fun peek(): Char = if (eof) {
+        throw StabsParseException(pos, src, "unexpected end of input")
+    } else {
+        src[pos]
+    }
 
     fun peekOrNull(): Char? = if (eof) null else src[pos]
 
@@ -165,9 +162,7 @@ internal class Cursor(
                     pos++
                 }
 
-                ':' -> {
-                    break
-                }
+                ':' -> break
 
                 // single ':' or '::' at depth 0 — stop before it
                 else -> {
@@ -178,8 +173,6 @@ internal class Cursor(
         }
         return sb.toString()
     }
-
-    fun snapshot(): Int = pos
 
     fun restore(saved: Int) {
         pos = saved

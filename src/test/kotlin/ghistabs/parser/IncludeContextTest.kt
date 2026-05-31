@@ -1,8 +1,6 @@
 package ghistabs.parser
 
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertNotNull
-import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
@@ -10,10 +8,7 @@ class IncludeContextTest {
     private class RecordingSink : LogSink {
         val logs = mutableListOf<Pair<String, String>>()
 
-        override fun log(
-            tag: String,
-            message: String,
-        ) {
+        override fun log(tag: String, message: String) {
             logs.add(tag to message)
         }
 
@@ -239,32 +234,30 @@ class IncludeContextTest {
         val headerFileNum = ctx.beginInclude("header.h", 0x123L)
 
         // Create a struct with a method that has a signature referencing a header type
-        val methodWithHeaderRef =
-            MethodDecl(
-                name = "process",
-                mangled = "_Z7processRK6MyType",
-                signature =
-                    TypeDecl.FunctionT(
-                        ret = TypeDecl.Ref(TypeId(headerFileNum, 42)), // Ref to header type
-                        params = emptyList(),
-                    ),
-                access = Access.PUBLIC,
-                virt = VirtKind.NORMAL,
-                isConst = false,
-                isVolatile = false,
-                vtableOffsetBits = null,
-            )
+        val methodWithHeaderRef = MethodDecl(
+            name = "process",
+            mangled = "_Z7processRK6MyType",
+            signature =
+            TypeDecl.FunctionT(
+                ret = TypeDecl.Ref(TypeId(headerFileNum, 42)), // Ref to header type
+                params = emptyList(),
+            ),
+            access = Access.PUBLIC,
+            virt = VirtKind.NORMAL,
+            isConst = false,
+            isVolatile = false,
+            vtableOffsetBits = null,
+        )
 
-        val struct =
-            TypeDecl.Struct(
-                kind = AggrKind.CLASS,
-                sizeBytes = 16,
-                bases = emptyList(),
-                fields = emptyList(),
-                methods = listOf(methodWithHeaderRef),
-                hasVTablePointerMarker = false,
-                vtableTargetTypeId = null,
-            )
+        val struct = TypeDecl.Struct(
+            kind = AggrKind.CLASS,
+            sizeBytes = 16,
+            bases = emptyList(),
+            fields = emptyList(),
+            methods = listOf(methodWithHeaderRef),
+            hasVTablePointerMarker = false,
+            vtableTargetTypeId = null,
+        )
 
         // Canonicalize the struct
         val canonicalized = ctx.canonicalizeTypeDecl(struct) as TypeDecl.Struct

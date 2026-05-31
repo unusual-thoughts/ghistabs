@@ -137,7 +137,8 @@ class bouniafbouniafIntegrationTest {
         // 2. Run StabsImporter via ImportContext
         // 3. Capture counters from ctx.diagnostics.snapshotCounters()
         // 4. Assert with precise assertions using actual counter values
-        val placeholderActual = 0L // TODO(#40): replace with ctx.diagnostics.snapshotCounters()["dangling-ref"] once headless harness lands
+        // TODO(#40): replace with ctx.diagnostics.snapshotCounters()["dangling-ref"] once headless harness lands
+        val placeholderActual = 0L
         assertTrue(
             BaselineCompare.passesReduction(placeholderActual, danglingRefBaseline, 0.10),
             "dangling-ref count $placeholderActual must be ≤ 10% of Phase A baseline ($danglingRefBaseline)",
@@ -147,13 +148,12 @@ class bouniafbouniafIntegrationTest {
         // TODO(#40): Once headless harness is available, this call will execute with real traces.
         val placeholderTraces: List<ghistabs.diag.AttributionTrace> =
             emptyList() // TODO(#40): replace with ctx.diagnostics.snapshotAttributionTraces()
-        ghistabs.diag.AttributionTraceDump
-            .writeTraceArtifact(
-                typeName = "bouniaf",
-                traces = placeholderTraces,
-                outDir = Paths.get("build/test-output"),
-                filename = "bouniafargInst-attribution-trace.txt",
-            )
+        ghistabs.diag.AttributionTraceDump.writeTraceArtifact(
+            typeName = "bouniaf",
+            traces = placeholderTraces,
+            outDir = Paths.get("build/test-output"),
+            filename = "bouniafargInst-attribution-trace.txt",
+        )
 
         // Phase 3 assertion 1: /Demangler/* clearance (empty stubs removed)
         // After successful Phase 3, DTM should have zero empty Structures under /Demangler
@@ -200,19 +200,18 @@ class bouniafbouniafIntegrationTest {
         // After the importer runs, check that the majority of polymorphic classes
         // had their vtable resolved (either via symbol lookup or fallback scan).
         val placeholderVtableApplied = 0L // TODO(#40): extract from diagnostics["vtable-applied"]
-        val placeholderExpectedClasses = 50L // TODO(#40): count from parsed ASTs: hasVTablePointerMarker || hasVirtualMethods
-        val vtableApplyRate =
-            if (placeholderExpectedClasses > 0) {
-                placeholderVtableApplied.toDouble() / placeholderExpectedClasses.toDouble()
-            } else {
-                1.0 // vacuous pass if no classes to check
-            }
+        val placeholderExpectedClasses =
+            50L // TODO(#40): count from parsed ASTs: hasVTablePointerMarker || hasVirtualMethods
+        val vtableApplyRate = if (placeholderExpectedClasses > 0) {
+            placeholderVtableApplied.toDouble() / placeholderExpectedClasses.toDouble()
+        } else {
+            1.0 // vacuous pass if no classes to check
+        }
         assertTrue(
             vtableApplyRate >= 0.80,
-            "AC5.1: vtable-applied rate should be ≥80% ($placeholderVtableApplied/$placeholderExpectedClasses = ${String.format(
-                "%.1f",
-                vtableApplyRate * 100,
-            )}%), got ${String.format("%.1f", vtableApplyRate * 100)}%",
+            "AC5.1: vtable-applied rate should be ≥80% ($placeholderVtableApplied/$placeholderExpectedClasses = ${
+                String.format("%.1f", vtableApplyRate * 100)
+            }%), got ${String.format("%.1f", vtableApplyRate * 100)}%",
         )
 
         // Phase 6 assertion 2: AC5.3 — Bucket diagnostics are emitted and recognized
@@ -237,14 +236,13 @@ class bouniafbouniafIntegrationTest {
         // (Structure, Array, Union, Pointer, Enum, TypeDef, FunctionDefinition, primitive),
         // there exists at least one global Data item in the Listing typed as that kind.
         // Allowed to skip kinds that legitimately don't appear in bouniafbouniaf.exe (e.g., Union).
-        val expectedKinds =
-            setOf(
-                "Structure",
-                "Array",
-                "Pointer",
-                "Enum",
-                "FunctionDefinition",
-            )
+        val expectedKinds = setOf(
+            "Structure",
+            "Array",
+            "Pointer",
+            "Enum",
+            "FunctionDefinition",
+        )
         val allowedEmptyKinds = setOf("Union") // Documented as legitimately absent
         // TODO(#40): Once headless harness lands, iterate program.listing.getDefinedData(true),
         // bucket by dataType class, and assert each expectedKind has ≥1 entry.
@@ -270,65 +268,64 @@ class bouniafbouniafIntegrationTest {
         assertTrue(true, "AC8.2: Failure handling placeholder — real assertion deferred to Phase 8 headless suite")
     }
 
-    private fun buildSyntheticStabRecords(): List<StabRecord> =
-        listOf(
-            // Compilation unit
-            StabRecord(0, StabType.N_SO, 0, 0, 0, 0, "bouniaffile.cpp"),
-            // Struct 1: Point (simple struct with 2 fields)
-            StabRecord(1, StabType.N_LSYM, 0x100, 0, 0, 0, "Point:t(0,1)=s8x:(0,2),0,32;y:(0,2),32,32;;"),
-            // Struct 2: Rect (contains Point)
-            StabRecord(2, StabType.N_LSYM, 0x100, 0, 0, 0, "Rect:t(0,3)=s16tl:(0,1),0,64;br:(0,1),64,64;;"),
-            // Struct 3: Color (enum-like)
-            StabRecord(3, StabType.N_LSYM, 0x100, 0, 0, 0, "Color:t(0,4)=eRED:0,GREEN:1,BLUE:2,;"),
-            // Struct 4: PaddedStruct (with internal gaps for gap-census testing)
-            // Layout: char at 0, 3-byte gap, int at 4-8, then padding to 16 bytes
-            StabRecord(
-                4,
-                StabType.N_LSYM,
-                0x100,
-                0,
-                0,
-                0,
-                "PaddedStruct:t(0,10)=s16c:(0,1),0,8;pad1:=4;i:(0,2),32,32;pad2:=8;;",
-            ),
-            // Class 1: Shape (with virtual method)
-            StabRecord(
-                5,
-                StabType.N_LSYM,
-                0x100,
-                0,
-                0,
-                0,
-                "Shape:Tt(0,5)=s16_vptr$:(0,6),0,32;area:p(0,2),;display:p(0,2),;;",
-            ),
-            // Class 2: Rectangle (inherits from Shape)
-            StabRecord(
-                6,
-                StabType.N_LSYM,
-                0x100,
-                0,
-                0,
-                0,
-                "Rectangle:Tt(0,7)=s24!0,(0,5);width:(0,2),64,32;height:(0,2),96,32;;",
-            ),
-            // Functions with parameters and locals
-            StabRecord(7, StabType.N_FUN, 0x400, 0, 0, 0, "main:F(0,2)"),
-            StabRecord(8, StabType.N_PSYM, 0x400, 0, 0, 0, "argc:p(0,2)"),
-            StabRecord(9, StabType.N_PSYM, 0x400, 0, 0, 0, "argv:p(0,8)"),
-            StabRecord(10, StabType.N_LSYM, 0x400, 0, 0, 0, "buf:(0,9)"),
-            StabRecord(11, StabType.N_LBRAC, 0x402, 0, 0, 0, ""),
-            StabRecord(12, StabType.N_RBRAC, 0x500, 0, 0, 0, ""),
-            StabRecord(13, StabType.N_FUN, 0x500, 0, 0, 0, ""), // end of main
-            // Global variables
-            StabRecord(14, StabType.N_GSYM, 0x2000, 0, 0, 0, "g_count:G(0,2)"),
-            StabRecord(15, StabType.N_GSYM, 0x2004, 0, 0, 0, "g_state:G(0,4)"),
-            // More functions
-            StabRecord(16, StabType.N_FUN, 0x600, 0, 0, 0, "init:F(0,2)"),
-            StabRecord(17, StabType.N_PSYM, 0x600, 0, 0, 0, "value:p(0,2)"),
-            StabRecord(18, StabType.N_FUN, 0x700, 0, 0, 0, ""), // end of init
-            StabRecord(19, StabType.N_FUN, 0x800, 0, 0, 0, "process:F(0,2)"),
-            StabRecord(20, StabType.N_PSYM, 0x800, 0, 0, 0, "data:p(0,8)"),
-            StabRecord(21, StabType.N_LSYM, 0x800, 0, 0, 0, "result:(0,2)"),
-            StabRecord(22, StabType.N_FUN, 0x900, 0, 0, 0, ""), // end of process
-        )
+    private fun buildSyntheticStabRecords(): List<StabRecord> = listOf(
+        // Compilation unit
+        StabRecord(0, StabType.N_SO, 0, 0, 0, 0, "bouniaffile.cpp"),
+        // Struct 1: Point (simple struct with 2 fields)
+        StabRecord(1, StabType.N_LSYM, 0x100, 0, 0, 0, "Point:t(0,1)=s8x:(0,2),0,32;y:(0,2),32,32;;"),
+        // Struct 2: Rect (contains Point)
+        StabRecord(2, StabType.N_LSYM, 0x100, 0, 0, 0, "Rect:t(0,3)=s16tl:(0,1),0,64;br:(0,1),64,64;;"),
+        // Struct 3: Color (enum-like)
+        StabRecord(3, StabType.N_LSYM, 0x100, 0, 0, 0, "Color:t(0,4)=eRED:0,GREEN:1,BLUE:2,;"),
+        // Struct 4: PaddedStruct (with internal gaps for gap-census testing)
+        // Layout: char at 0, 3-byte gap, int at 4-8, then padding to 16 bytes
+        StabRecord(
+            4,
+            StabType.N_LSYM,
+            0x100,
+            0,
+            0,
+            0,
+            "PaddedStruct:t(0,10)=s16c:(0,1),0,8;pad1:=4;i:(0,2),32,32;pad2:=8;;",
+        ),
+        // Class 1: Shape (with virtual method)
+        StabRecord(
+            5,
+            StabType.N_LSYM,
+            0x100,
+            0,
+            0,
+            0,
+            "Shape:Tt(0,5)=s16_vptr$:(0,6),0,32;area:p(0,2),;display:p(0,2),;;",
+        ),
+        // Class 2: Rectangle (inherits from Shape)
+        StabRecord(
+            6,
+            StabType.N_LSYM,
+            0x100,
+            0,
+            0,
+            0,
+            "Rectangle:Tt(0,7)=s24!0,(0,5);width:(0,2),64,32;height:(0,2),96,32;;",
+        ),
+        // Functions with parameters and locals
+        StabRecord(7, StabType.N_FUN, 0x400, 0, 0, 0, "main:F(0,2)"),
+        StabRecord(8, StabType.N_PSYM, 0x400, 0, 0, 0, "argc:p(0,2)"),
+        StabRecord(9, StabType.N_PSYM, 0x400, 0, 0, 0, "argv:p(0,8)"),
+        StabRecord(10, StabType.N_LSYM, 0x400, 0, 0, 0, "buf:(0,9)"),
+        StabRecord(11, StabType.N_LBRAC, 0x402, 0, 0, 0, ""),
+        StabRecord(12, StabType.N_RBRAC, 0x500, 0, 0, 0, ""),
+        StabRecord(13, StabType.N_FUN, 0x500, 0, 0, 0, ""), // end of main
+        // Global variables
+        StabRecord(14, StabType.N_GSYM, 0x2000, 0, 0, 0, "g_count:G(0,2)"),
+        StabRecord(15, StabType.N_GSYM, 0x2004, 0, 0, 0, "g_state:G(0,4)"),
+        // More functions
+        StabRecord(16, StabType.N_FUN, 0x600, 0, 0, 0, "init:F(0,2)"),
+        StabRecord(17, StabType.N_PSYM, 0x600, 0, 0, 0, "value:p(0,2)"),
+        StabRecord(18, StabType.N_FUN, 0x700, 0, 0, 0, ""), // end of init
+        StabRecord(19, StabType.N_FUN, 0x800, 0, 0, 0, "process:F(0,2)"),
+        StabRecord(20, StabType.N_PSYM, 0x800, 0, 0, 0, "data:p(0,8)"),
+        StabRecord(21, StabType.N_LSYM, 0x800, 0, 0, 0, "result:(0,2)"),
+        StabRecord(22, StabType.N_FUN, 0x900, 0, 0, 0, ""), // end of process
+    )
 }

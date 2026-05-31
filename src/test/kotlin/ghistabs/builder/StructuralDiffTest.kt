@@ -1,8 +1,6 @@
 package ghistabs.builder
 
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertFalse
-import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 
 /**
@@ -15,16 +13,14 @@ class StructuralDiffTest {
      */
     @Test
     fun testIdenticalStructs() {
-        val left =
-            listOf(
-                ComponentRecord(0, 4, "field1", "/int", false),
-                ComponentRecord(4, 4, "field2", "/float", false),
-            )
-        val right =
-            listOf(
-                ComponentRecord(0, 4, "field1", "/int", false),
-                ComponentRecord(4, 4, "field2", "/float", false),
-            )
+        val left = listOf(
+            ComponentRecord(0, 4, "field1", "/int", false),
+            ComponentRecord(4, 4, "field2", "/float", false),
+        )
+        val right = listOf(
+            ComponentRecord(0, 4, "field1", "/int", false),
+            ComponentRecord(4, 4, "field2", "/float", false),
+        )
 
         val result = StructuralDiff.diff(left, 8, right, 8)
         assertTrue(result is StructDiffResult.Identical, "Two identical structs should diff as Identical")
@@ -36,14 +32,12 @@ class StructuralDiffTest {
      */
     @Test
     fun testPureGapFillMerge() {
-        val left =
-            listOf(
-                ComponentRecord(0, 4, "fieldA", "/int", false),
-            )
-        val right =
-            listOf(
-                ComponentRecord(4, 4, "fieldB", "/int", false),
-            )
+        val left = listOf(
+            ComponentRecord(0, 4, "fieldA", "/int", false),
+        )
+        val right = listOf(
+            ComponentRecord(4, 4, "fieldB", "/int", false),
+        )
 
         val result = StructuralDiff.diff(left, 8, right, 8)
         assertTrue(result is StructDiffResult.GapMergeable, "Gap-fill scenario should produce GapMergeable")
@@ -63,18 +57,19 @@ class StructuralDiffTest {
      */
     @Test
     fun testSameOffsetDisagreement() {
-        val left =
-            listOf(
-                ComponentRecord(0, 4, "field", "/int", false),
-            )
-        val right =
-            listOf(
-                ComponentRecord(0, 4, "field", "/float", false),
-            )
+        val left = listOf(
+            ComponentRecord(0, 4, "field", "/int", false),
+        )
+        val right = listOf(
+            ComponentRecord(0, 4, "field", "/float", false),
+        )
 
         val result = StructuralDiff.diff(left, 4, right, 4)
         assertTrue(result is StructDiffResult.Conflicting, "Different types at same offset should conflict")
-        assertTrue((result as StructDiffResult.Conflicting).reason.contains("disagreement"), "Reason should mention disagreement")
+        assertTrue(
+            (result as StructDiffResult.Conflicting).reason.contains("disagreement"),
+            "Reason should mention disagreement",
+        )
     }
 
     /**
@@ -85,15 +80,13 @@ class StructuralDiffTest {
      */
     @Test
     fun testShingledOverlapConflict() {
-        val left =
-            listOf(
-                ComponentRecord(0, 4, "fieldA", "/int", false),
-                ComponentRecord(4, 4, "fieldB", "/int", false),
-            )
-        val right =
-            listOf(
-                ComponentRecord(0, 8, "bigField", "/long", false),
-            )
+        val left = listOf(
+            ComponentRecord(0, 4, "fieldA", "/int", false),
+            ComponentRecord(4, 4, "fieldB", "/int", false),
+        )
+        val right = listOf(
+            ComponentRecord(0, 8, "bigField", "/long", false),
+        )
 
         val result = StructuralDiff.diff(left, 8, right, 8)
         assertTrue(result is StructDiffResult.Conflicting, "Shingled overlap should conflict")
@@ -110,14 +103,12 @@ class StructuralDiffTest {
      */
     @Test
     fun testSubsetOverlapConflict() {
-        val left =
-            listOf(
-                ComponentRecord(0, 8, "big", "/long", false),
-            )
-        val right =
-            listOf(
-                ComponentRecord(2, 2, "small", "/short", false),
-            )
+        val left = listOf(
+            ComponentRecord(0, 8, "big", "/long", false),
+        )
+        val right = listOf(
+            ComponentRecord(2, 2, "small", "/short", false),
+        )
 
         val result = StructuralDiff.diff(left, 8, right, 8)
         assertTrue(result is StructDiffResult.Conflicting, "Subset overlap with different components should conflict")
@@ -129,18 +120,19 @@ class StructuralDiffTest {
      */
     @Test
     fun testBitfieldVsPrimitive() {
-        val left =
-            listOf(
-                ComponentRecord(0, 4, "bits", "/bitfield", true),
-            )
-        val right =
-            listOf(
-                ComponentRecord(0, 4, "field", "/int", false),
-            )
+        val left = listOf(
+            ComponentRecord(0, 4, "bits", "/bitfield", true),
+        )
+        val right = listOf(
+            ComponentRecord(0, 4, "field", "/int", false),
+        )
 
         val result = StructuralDiff.diff(left, 4, right, 4)
         assertTrue(result is StructDiffResult.Conflicting, "Bitfield collision with primitive should conflict")
-        assertTrue((result as StructDiffResult.Conflicting).reason.contains("bitfield"), "Reason should mention bitfield")
+        assertTrue(
+            (result as StructDiffResult.Conflicting).reason.contains("bitfield"),
+            "Reason should mention bitfield",
+        )
     }
 
     /**
@@ -150,15 +142,13 @@ class StructuralDiffTest {
      */
     @Test
     fun testLengthExtensionOk() {
-        val left =
-            listOf(
-                ComponentRecord(0, 4, "fieldA", "/int", false),
-            )
-        val right =
-            listOf(
-                ComponentRecord(0, 4, "fieldA", "/int", false),
-                ComponentRecord(12, 4, "fieldB", "/int", false),
-            )
+        val left = listOf(
+            ComponentRecord(0, 4, "fieldA", "/int", false),
+        )
+        val right = listOf(
+            ComponentRecord(0, 4, "fieldA", "/int", false),
+            ComponentRecord(12, 4, "fieldB", "/int", false),
+        )
 
         val result = StructuralDiff.diff(left, 8, right, 16)
         assertTrue(result is StructDiffResult.GapMergeable, "Length extension with same base fields should merge")
@@ -176,15 +166,13 @@ class StructuralDiffTest {
      */
     @Test
     fun testLengthExtensionDisagreement() {
-        val left =
-            listOf(
-                ComponentRecord(4, 4, "field", "/float", false),
-            )
-        val right =
-            listOf(
-                ComponentRecord(4, 4, "field", "/int", false),
-                ComponentRecord(12, 4, "extra", "/int", false),
-            )
+        val left = listOf(
+            ComponentRecord(4, 4, "field", "/float", false),
+        )
+        val right = listOf(
+            ComponentRecord(4, 4, "field", "/int", false),
+            ComponentRecord(12, 4, "extra", "/int", false),
+        )
 
         val result = StructuralDiff.diff(left, 8, right, 16)
         assertTrue(result is StructDiffResult.Conflicting, "Disagreement in overlap region should conflict")

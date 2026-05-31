@@ -1,21 +1,6 @@
 package ghistabs.builder
 
-import ghidra.program.model.data.ArrayDataType
-import ghidra.program.model.data.CategoryPath
-import ghidra.program.model.data.Composite
-import ghidra.program.model.data.DataType
-import ghidra.program.model.data.DataTypeConflictHandler
-import ghidra.program.model.data.DataTypeManager
-import ghidra.program.model.data.EnumDataType
-import ghidra.program.model.data.FunctionDefinitionDataType
-import ghidra.program.model.data.ParameterDefinitionImpl
-import ghidra.program.model.data.PointerDataType
-import ghidra.program.model.data.Structure
-import ghidra.program.model.data.StructureDataType
-import ghidra.program.model.data.Undefined4DataType
-import ghidra.program.model.data.Union
-import ghidra.program.model.data.UnionDataType
-import ghidra.program.model.data.VoidDataType
+import ghidra.program.model.data.*
 import ghistabs.diag.GapRecord
 import ghistabs.diag.StabsDiagnostics
 import ghistabs.importer.BookmarkSink
@@ -25,110 +10,70 @@ import ghistabs.parser.TypeDecl
 import ghistabs.parser.TypeId
 
 @JvmInline
-value class ContentHash(
-    val v: Long,
-) {
+value class ContentHash(val v: Long) {
     companion object {
-        fun of(decl: TypeDecl): ContentHash = ContentHash(hashDecl(decl))
+        fun of(decl: TypeDecl) = ContentHash(hashDecl(decl))
 
         private fun hashDecl(decl: TypeDecl): Long {
-            var h = 0L
-            h = h * 31 +
-                when (decl) {
-                    is TypeDecl.Ref -> 1L
-                    is TypeDecl.Range -> 2L
-                    is TypeDecl.Pointer -> 3L
-                    is TypeDecl.Reference -> 4L
-                    is TypeDecl.Const -> 5L
-                    is TypeDecl.Volatile -> 6L
-                    is TypeDecl.Array -> 7L
-                    is TypeDecl.Enum -> 8L
-                    is TypeDecl.Struct -> 9L
-                    is TypeDecl.FunctionT -> 10L
-                    is TypeDecl.Method -> 11L
-                    is TypeDecl.Complex -> 12L
-                    is TypeDecl.XRef -> 13L
-                    is TypeDecl.WithSizeAttr -> 14L
-                    is TypeDecl.InlineDef -> 15L
-                    TypeDecl.Builtin -> 16L
+            var h = when (decl) {
+                is TypeDecl.Ref -> 1L
+                is TypeDecl.Range -> 2L
+                is TypeDecl.Pointer -> 3L
+                is TypeDecl.Reference -> 4L
+                is TypeDecl.Const -> 5L
+                is TypeDecl.Volatile -> 6L
+                is TypeDecl.Array -> 7L
+                is TypeDecl.Enum -> 8L
+                is TypeDecl.Struct -> 9L
+                is TypeDecl.FunctionT -> 10L
+                is TypeDecl.Method -> 11L
+                is TypeDecl.Complex -> 12L
+                is TypeDecl.XRef -> 13L
+                is TypeDecl.WithSizeAttr -> 14L
+                is TypeDecl.InlineDef -> 15L
+                TypeDecl.Builtin -> 16L
+            }
+
+            h = when (decl) {
+                is TypeDecl.Ref -> h * 31 + decl.id.cu.toLong() * 31 + decl.id.n.toLong()
+                is TypeDecl.Range -> h * 31 + decl.of.cu.toLong() * 31 + decl.of.n.toLong() +
+                    decl.min.hashCode().toLong() * 31 + decl.max.hashCode().toLong()
+
+                is TypeDecl.Pointer -> h * 31 + hashDecl(decl.pointee)
+                is TypeDecl.Reference -> h * 31 + hashDecl(decl.referent)
+                is TypeDecl.Const -> h * 31 + hashDecl(decl.inner)
+                is TypeDecl.Volatile -> h * 31 + hashDecl(decl.inner)
+                is TypeDecl.Array -> h * 31 + hashDecl(decl.element) + (decl.length?.hashCode()?.toLong() ?: 0L) +
+                    (decl.indexType?.let { hashDecl(it) } ?: 0L)
+
+                is TypeDecl.Enum -> decl.members.fold(h * 31) { acc, p ->
+                    acc * 31 + p.first.hashCode().toLong() * 31 + p.second
                 }
 
-            h =
-                when (decl) {
-                    is TypeDecl.Ref -> {
-                        h * 31 + decl.id.cu.toLong() * 31 + decl.id.n.toLong()
-                    }
-
-                    is TypeDecl.Range -> {
-                        h * 31 + decl.of.cu.toLong() * 31 + decl.of.n.toLong() + decl.min.hashCode().toLong() * 31 +
-                            decl.max.hashCode().toLong()
-                    }
-
-                    is TypeDecl.Pointer -> {
-                        h * 31 + hashDecl(decl.pointee)
-                    }
-
-                    is TypeDecl.Reference -> {
-                        h * 31 + hashDecl(decl.referent)
-                    }
-
-                    is TypeDecl.Const -> {
-                        h * 31 + hashDecl(decl.inner)
-                    }
-
-                    is TypeDecl.Volatile -> {
-                        h * 31 + hashDecl(decl.inner)
-                    }
-
-                    is TypeDecl.Array -> {
-                        h * 31 + hashDecl(decl.element) + (decl.length?.hashCode()?.toLong() ?: 0L) +
-                            (decl.indexType?.let { hashDecl(it) } ?: 0L)
-                    }
-
-                    is TypeDecl.Enum -> {
-                        decl.members.fold(h * 31) { acc, p -> acc * 31 + p.first.hashCode().toLong() * 31 + p.second }
-                    }
-
-                    is TypeDecl.Struct -> {
-                        var sh = h * 31 + decl.kind.hashCode().toLong()
-                        sh = sh * 31 + decl.sizeBytes
-                        sh =
-                            decl.fields.fold(sh) { acc, f ->
-                                acc * 31 + f.name.hashCode().toLong() * 31 + hashDecl(f.type)
-                            }
-                        sh = decl.methods.fold(sh) { acc, m -> acc * 31 + m.name.hashCode().toLong() }
-                        sh
-                    }
-
-                    is TypeDecl.FunctionT -> {
-                        h * 31 + hashDecl(decl.ret) + decl.params.fold(0L) { acc, p -> acc * 31 + hashDecl(p) }
-                    }
-
-                    is TypeDecl.Method -> {
-                        h * 31 + hashDecl(decl.cls) + hashDecl(decl.ret) +
-                            decl.params.fold(0L) { acc, p -> acc * 31 + hashDecl(p) }
-                    }
-
-                    is TypeDecl.Complex -> {
-                        h * 31 + decl.rCode.toLong() + decl.sizeBytes.toLong()
-                    }
-
-                    is TypeDecl.XRef -> {
-                        h * 31 + decl.kind.hashCode().toLong() + decl.tagName.hashCode().toLong()
-                    }
-
-                    is TypeDecl.WithSizeAttr -> {
-                        h * 31 + decl.sizeBits.toLong() + hashDecl(decl.inner)
-                    }
-
-                    is TypeDecl.InlineDef -> {
-                        h * 31 + decl.id.cu.toLong() * 31 + decl.id.n.toLong() + hashDecl(decl.body)
-                    }
-
-                    TypeDecl.Builtin -> {
-                        h
-                    }
+                is TypeDecl.Struct -> {
+                    var sh = h * 31 + decl.kind.hashCode().toLong()
+                    sh = sh * 31 + decl.sizeBytes
+                    sh =
+                        decl.fields.fold(sh) { acc, f ->
+                            acc * 31 + f.name.hashCode().toLong() * 31 + hashDecl(f.type)
+                        }
+                    sh = decl.methods.fold(sh) { acc, m -> acc * 31 + m.name.hashCode().toLong() }
+                    sh
                 }
+
+                is TypeDecl.FunctionT -> h * 31 + hashDecl(decl.ret) + decl.params.fold(0L) { acc, p ->
+                    acc * 31 + hashDecl(p)
+                }
+
+                is TypeDecl.Method -> h * 31 + hashDecl(decl.cls) + hashDecl(decl.ret) +
+                    decl.params.fold(0L) { acc, p -> acc * 31 + hashDecl(p) }
+
+                is TypeDecl.Complex -> h * 31 + decl.rCode.toLong() + decl.sizeBytes.toLong()
+                is TypeDecl.XRef -> h * 31 + decl.kind.hashCode().toLong() + decl.tagName.hashCode().toLong()
+                is TypeDecl.WithSizeAttr -> h * 31 + decl.sizeBits.toLong() + hashDecl(decl.inner)
+                is TypeDecl.InlineDef -> h * 31 + decl.id.cu.toLong() * 31 + decl.id.n.toLong() + hashDecl(decl.body)
+                TypeDecl.Builtin -> h
+            }
             return h
         }
     }
@@ -169,12 +114,9 @@ class TypeRegistry(
         val byName = asts.groupBy { it.name }
 
         // Build struct AST map for polymorphic base detection in materialiseBody
-        structAstsByName =
-            asts
-                .mapNotNull { ast ->
-                    val body = ast.body as? TypeDecl.Struct ?: return@mapNotNull null
-                    ast.name to body
-                }.toMap()
+        structAstsByName = asts.mapNotNull { ast ->
+            (ast.body as? TypeDecl.Struct)?.let { ast.name to it }
+        }.toMap()
 
         val tx = dtm.startTransaction("ghidra-stabs build types")
         try {
@@ -195,59 +137,40 @@ class TypeRegistry(
         }
     }
 
-    fun dataTypeFor(decl: TypeDecl): DataType? =
-        when (decl) {
-            // Check byId first (fully resolved), then placeholders (cycle-breaking),
-            // then rawByIdSnapshot (fallback for forward refs to not-yet-resolved types)
-            is TypeDecl.Ref -> {
-                byId[decl.id]
-                    ?: placeholders[decl.id]
-                    ?: rawByIdSnapshot[decl.id]?.let { ast ->
-                        makePlaceholder(ast.body, CategoryPath("/stabs"), ast.name)
-                            .also { placeholders[decl.id] = it }
-                    }
+    fun dataTypeFor(decl: TypeDecl): DataType? = when (decl) {
+        // Check byId first (fully resolved), then placeholders (cycle-breaking),
+        // then rawByIdSnapshot (fallback for forward refs to not-yet-resolved types)
+        is TypeDecl.Ref -> byId[decl.id]
+            ?: placeholders[decl.id]
+            ?: rawByIdSnapshot[decl.id]?.let { ast ->
+                makePlaceholder(ast.body, CategoryPath("/stabs"), ast.name)
+                    .also { placeholders[decl.id] = it }
             }
 
-            is TypeDecl.InlineDef -> {
-                byId[decl.id]
-                    ?: placeholders[decl.id]
-                    ?: rawByIdSnapshot[decl.id]?.let { ast ->
-                        makePlaceholder(ast.body, CategoryPath("/stabs"), ast.name)
-                            .also { placeholders[decl.id] = it }
-                    } ?: dataTypeFor(decl.body)
-            }
+        is TypeDecl.InlineDef -> byId[decl.id]
+            ?: placeholders[decl.id]
+            ?: rawByIdSnapshot[decl.id]?.let { ast ->
+                makePlaceholder(ast.body, CategoryPath("/stabs"), ast.name)
+                    .also { placeholders[decl.id] = it }
+            } ?: dataTypeFor(decl.body)
 
-            is TypeDecl.Builtin, is TypeDecl.Range, is TypeDecl.Complex, is TypeDecl.WithSizeAttr -> {
-                BuiltinTable.resolve(decl, dtm)
-            }
-
-            is TypeDecl.Pointer -> {
-                val inner = dataTypeFor(decl.pointee)
-                PointerDataType(inner ?: Undefined4DataType.dataType, 4, dtm)
-            }
-
-            is TypeDecl.Reference -> {
-                val inner = dataTypeFor(decl.referent)
-                PointerDataType(inner ?: Undefined4DataType.dataType, 4, dtm)
-            }
-
-            is TypeDecl.Const -> {
-                dataTypeFor(decl.inner)
-            }
-
-            is TypeDecl.Volatile -> {
-                dataTypeFor(decl.inner)
-            }
-
-            is TypeDecl.Array -> {
-                val elem = dataTypeFor(decl.element) ?: return null
-                ArrayDataType(elem, (decl.length ?: 0L).toInt().coerceAtLeast(0), elem.length)
-            }
-
-            else -> {
-                null
-            } // Struct, Enum, FunctionT, Method, XRef must have been registered via materialiseAll
+        is TypeDecl.Builtin, is TypeDecl.Range, is TypeDecl.Complex, is TypeDecl.WithSizeAttr -> {
+            BuiltinTable.resolve(decl, dtm)
         }
+
+        is TypeDecl.Pointer -> PointerDataType(dataTypeFor(decl.pointee) ?: Undefined4DataType.dataType, 4, dtm)
+        is TypeDecl.Reference -> PointerDataType(dataTypeFor(decl.referent) ?: Undefined4DataType.dataType, 4, dtm)
+        is TypeDecl.Const -> dataTypeFor(decl.inner)
+        is TypeDecl.Volatile -> dataTypeFor(decl.inner)
+
+        is TypeDecl.Array -> {
+            val elem = dataTypeFor(decl.element) ?: return null
+            ArrayDataType(elem, (decl.length ?: 0L).toInt().coerceAtLeast(0), elem.length)
+        }
+
+        // Struct, Enum, FunctionT, Method, XRef must have been registered via materialiseAll
+        else -> null
+    }
 
     private fun makePlaceholder(
         body: TypeDecl,
@@ -257,17 +180,14 @@ class TypeRegistry(
     ): DataType {
         val dt =
             when (body) {
-                is TypeDecl.Struct -> {
+                is TypeDecl.Struct ->
                     if (body.kind == AggrKind.UNION) {
                         UnionDataType(category, name, dtm)
                     } else {
                         StructureDataType(category, name, body.sizeBytes.toInt(), dtm)
                     }
-                }
 
-                else -> {
-                    StructureDataType(category, name, 0, dtm)
-                }
+                else -> StructureDataType(category, name, 0, dtm)
             }
         diagnostics.recordPlaceholder(name, category.toString(), reason)
         return dt
@@ -288,9 +208,8 @@ class TypeRegistry(
         // NOTE: Gap census is best-effort per first-materialization.
         // Duplicate structs (found here) skip gap computation and reuse the canonical type.
         // This is acceptable since truly identical structures have identical gaps anyway.
-        byHash[ast.name to hash]?.let { existing ->
-            byId[ast.id] = existing
-            return existing
+        byHash[ast.name to hash]?.let {
+            byId[ast.id] = it
         }
 
         // 4. Compute category
@@ -311,228 +230,208 @@ class TypeRegistry(
         return canonical
     }
 
-    private fun materialiseBody(
-        ast: TypeAst,
-        category: CategoryPath,
-        placeholder: DataType,
-    ): DataType =
-        when (val body = ast.body) {
-            is TypeDecl.Builtin, is TypeDecl.Range, is TypeDecl.Complex, is TypeDecl.WithSizeAttr -> {
-                BuiltinTable.resolve(body, dtm) ?: placeholder
-            }
+    private fun materialiseBody(ast: TypeAst, category: CategoryPath, placeholder: DataType): DataType = when (val body = ast.body) {
+        is TypeDecl.Builtin, is TypeDecl.Range, is TypeDecl.Complex, is TypeDecl.WithSizeAttr ->
+            BuiltinTable.resolve(body, dtm) ?: placeholder
 
-            is TypeDecl.Pointer -> {
-                val inner = dataTypeFor(body.pointee)
-                PointerDataType(inner ?: Undefined4DataType.dataType, 4, dtm)
-            }
+        is TypeDecl.Pointer -> PointerDataType(dataTypeFor(body.pointee) ?: Undefined4DataType.dataType, 4, dtm)
 
-            is TypeDecl.Reference -> {
-                val inner = dataTypeFor(body.referent)
-                PointerDataType(inner ?: Undefined4DataType.dataType, 4, dtm)
-            }
+        is TypeDecl.Reference -> PointerDataType(dataTypeFor(body.referent) ?: Undefined4DataType.dataType, 4, dtm)
 
-            is TypeDecl.Const -> {
-                dataTypeFor(body.inner) ?: placeholder
-            }
+        is TypeDecl.Const -> dataTypeFor(body.inner) ?: placeholder
+        is TypeDecl.Volatile -> dataTypeFor(body.inner) ?: placeholder
+        is TypeDecl.InlineDef -> dataTypeFor(body.body) ?: placeholder
 
-            is TypeDecl.Volatile -> {
-                dataTypeFor(body.inner) ?: placeholder
-            }
-
-            is TypeDecl.InlineDef -> {
-                dataTypeFor(body.body) ?: placeholder
-            }
-
-            is TypeDecl.Array -> {
-                val elem = dataTypeFor(body.element) ?: Undefined4DataType.dataType
-                ArrayDataType(elem, (body.length ?: 0L).toInt().coerceAtLeast(0), elem.length)
-            }
-
-            is TypeDecl.Enum -> {
-                val sizeBytes = 4 // GCC default
-                val e = EnumDataType(category, ast.name, sizeBytes, dtm)
-                for ((mname, mval) in body.members) {
-                    e.add(mname, mval)
-                }
-                e
-            }
-
-            is TypeDecl.Struct -> {
-                // Reuse the placeholder cast to the right type
-                val struct: Composite =
-                    if (body.kind == AggrKind.UNION) {
-                        placeholder as Union
-                    } else {
-                        placeholder as Structure
-                    }
-
-                // Phase 5: insert base classes as inlined components.
-                if (struct is Structure) {
-                    val resolveBase: (TypeDecl) -> ResolvedBase? = { typeDecl ->
-                        val dt = dataTypeFor(typeDecl)
-                        if (dt == null) {
-                            null
-                        } else {
-                            ResolvedBase(simpleName = dt.name, lengthBytes = dt.length)
-                        }
-                    }
-                    val dataTypeByOffset = mutableMapOf<Int, DataType>()
-                    for (base in body.bases) {
-                        val dt = dataTypeFor(base.type)
-                        if (dt != null) {
-                            dataTypeByOffset[(base.offsetBits / 8).toInt()] = dt
-                        }
-                    }
-
-                    val ops = BaseInsertionPlanner.planBaseInsertions(body.bases, resolveBase)
-                    for (op in ops) {
-                        val baseDt = dataTypeByOffset[op.offsetBytes] ?: continue
-                        try {
-                            struct.replaceAtOffset(
-                                op.offsetBytes,
-                                baseDt,
-                                baseDt.length,
-                                op.fieldName,
-                                op.comment,
-                            )
-                            diagnostics.inc("inheritance-applied")
-                        } catch (e: java.lang.IllegalArgumentException) {
-                            sink.log(
-                                "base-layout",
-                                "Failed to insert base '${op.baseSimpleName}' in '${ast.name}': ${e.message}",
-                            )
-                            diagnostics.inc("inheritance-failed")
-                        }
-                    }
-                }
-
-                // Compute polymorphic base for inherited vfptr gating
-                val polyBase = ClassBuilderHelpers.firstPolymorphicBase(body, structAstsByName)
-
-                // Existing field loop (unchanged).
-                for (field in body.fields) {
-                    if (field.isStatic) continue // Skip static fields
-
-                    // Skip parser-emitted _vptr$<class> field if inherited from polymorphic base
-                    val isParserEmittedVptr =
-                        field.name.startsWith("_vptr$") || field.name.startsWith("_vptr.") || field.name == "_vptr"
-                    if (
-                        isParserEmittedVptr &&
-                        polyBase != null &&
-                        field.offsetBits == polyBase.offsetBits
-                    ) {
-                        // Inherited vfptr — the _base_<Base> component already carries it. Skip.
-                        diagnostics.inc("vptr-skipped-inherited")
-                        continue
-                    }
-
-                    val ft = dataTypeFor(field.type) ?: Undefined4DataType.dataType
-                    val len = if (ft.length <= 0) 4 else ft.length
-                    try {
-                        when (struct) {
-                            is Structure -> {
-                                struct.replaceAtOffset((field.offsetBits / 8).toInt(), ft, len, field.name, null)
-                            }
-
-                            is Union -> {
-                                struct.add(ft, field.name, null)
-                            }
-
-                            else -> {}
-                        }
-                    } catch (e: Exception) {
-                        sink.log("field-layout", "Failed to add '${field.name}' to '${ast.name}': ${e.message}")
-                    }
-                }
-
-                // Record gaps for this struct
-                if (struct is Structure) {
-                    val componentRecords: MutableList<Pair<String, Pair<Int, Int>>> = mutableListOf()
-                    for (component in struct.components) {
-                        componentRecords.add(Pair(component.fieldName, Pair(component.offset, component.length)))
-                    }
-                    val gaps = computeGaps(componentRecords, body.sizeBytes.toInt())
-                    val qualifiedName = "$category/${ast.name}"
-                    diagnostics.recordStructGaps(qualifiedName, gaps)
-                }
-
-                // Task 2: Plate-comment summary on the derived struct (base class metadata).
-                if (body.bases.isNotEmpty() && struct is Structure) {
-                    val lines =
-                        body.bases.sortedBy { it.offsetBits }.joinToString("\n") { base ->
-                            val baseName = (dataTypeFor(base.type)?.name) ?: "<unresolved>"
-                            val virt = if (base.isVirtual) " virtual" else ""
-                            "inherits ${base.access.name.lowercase()}$virt $baseName @ +${base.offsetBits / 8}"
-                        }
-                    val existing = struct.description ?: ""
-                    struct.description =
-                        if (existing.isEmpty()) lines else "$existing\n$lines"
-                }
-
-                struct
-            }
-
-            is TypeDecl.FunctionT -> {
-                val fd = FunctionDefinitionDataType(category, ast.name, dtm)
-                fd.returnType = dataTypeFor(body.ret) ?: VoidDataType()
-                val params =
-                    body.params
-                        .mapIndexed { i, p ->
-                            ParameterDefinitionImpl("arg$i", dataTypeFor(p) ?: Undefined4DataType.dataType, null)
-                        }.toTypedArray()
-                fd.setArguments(*params)
-                fd
-            }
-
-            is TypeDecl.Method -> {
-                val fd = FunctionDefinitionDataType(category, ast.name, dtm)
-                fd.returnType = dataTypeFor(body.ret) ?: VoidDataType()
-                val thisParam =
-                    ParameterDefinitionImpl("this", dataTypeFor(body.cls) ?: Undefined4DataType.dataType, null)
-                val otherParams =
-                    body.params.mapIndexed { i, p ->
-                        ParameterDefinitionImpl("arg$i", dataTypeFor(p) ?: Undefined4DataType.dataType, null)
-                    }
-                fd.setArguments(*(listOf(thisParam) + otherParams).toTypedArray())
-                fd
-            }
-
-            is TypeDecl.XRef -> {
-                sink.log("xref-stub", "Forward ref to '${body.tagName}'; materialising stub")
-                placeholder
-            }
-
-            is TypeDecl.Ref -> {
-                // Same cascade as dataTypeFor: byId -> placeholders -> rawByIdSnapshot -> classify.
-                byId[body.id]
-                    ?: placeholders[body.id]
-                    ?: rawByIdSnapshot[body.id]?.let { raw ->
-                        makePlaceholder(raw.body, CategoryPath("/stabs"), raw.name)
-                            .also { placeholders[body.id] = it }
-                    }
-                    ?: run {
-                        val refKey = "(${body.id.cu},${body.id.n})"
-                        val includeCtx = includeContextsByFile[ast.cuFile]
-                        val knownFileNums = includeCtx?.getAllFileNums() ?: emptySet()
-                        // Truly-missing classifier: rawByIdSnapshot already exhausted above.
-                        val knownTypeIds = emptySet<TypeId>()
-
-                        val classification =
-                            ResolverDecision.classifyRef(
-                                body.id,
-                                ast.id.cu,
-                                knownTypeIds,
-                                knownFileNums,
-                            )
-
-                        sink.log("dangling-ref", "Dangling ref to $refKey in '${ast.name}' [${classification.tag}]")
-                        diagnostics.recordUnresolvedRef(refKey, ast.name, ast.cuFile)
-                        diagnostics.inc("dangling-ref-${classification.tag}")
-
-                        Undefined4DataType.dataType
-                    }
-            }
+        is TypeDecl.Array -> {
+            val elem = dataTypeFor(body.element) ?: Undefined4DataType.dataType
+            ArrayDataType(elem, (body.length ?: 0L).toInt().coerceAtLeast(0), elem.length)
         }
+
+        is TypeDecl.Enum -> {
+            val sizeBytes = 4 // GCC default
+            val e = EnumDataType(category, ast.name, sizeBytes, dtm)
+            for ((mname, mval) in body.members) {
+                e.add(mname, mval)
+            }
+            e
+        }
+
+        is TypeDecl.Struct -> {
+            // Reuse the placeholder cast to the right type
+            val struct: Composite =
+                if (body.kind == AggrKind.UNION) {
+                    placeholder as Union
+                } else {
+                    placeholder as Structure
+                }
+
+            // Phase 5: insert base classes as inlined components.
+            if (struct is Structure) {
+                val resolveBase: (TypeDecl) -> ResolvedBase? = { typeDecl ->
+                    val dt = dataTypeFor(typeDecl)
+                    if (dt == null) {
+                        null
+                    } else {
+                        ResolvedBase(simpleName = dt.name, lengthBytes = dt.length)
+                    }
+                }
+                val dataTypeByOffset = mutableMapOf<Int, DataType>()
+                for (base in body.bases) {
+                    val dt = dataTypeFor(base.type)
+                    if (dt != null) {
+                        dataTypeByOffset[(base.offsetBits / 8).toInt()] = dt
+                    }
+                }
+
+                val ops = BaseInsertionPlanner.planBaseInsertions(body.bases, resolveBase)
+                for (op in ops) {
+                    val baseDt = dataTypeByOffset[op.offsetBytes] ?: continue
+                    try {
+                        struct.replaceAtOffset(
+                            op.offsetBytes,
+                            baseDt,
+                            baseDt.length,
+                            op.fieldName,
+                            op.comment,
+                        )
+                        diagnostics.inc("inheritance-applied")
+                    } catch (e: java.lang.IllegalArgumentException) {
+                        sink.log(
+                            "base-layout",
+                            "Failed to insert base '${op.baseSimpleName}' in '${ast.name}': ${e.message}",
+                        )
+                        diagnostics.inc("inheritance-failed")
+                    }
+                }
+            }
+
+            // Compute polymorphic base for inherited vfptr gating
+            val polyBase = ClassBuilderHelpers.firstPolymorphicBase(body, structAstsByName)
+
+            // Existing field loop (unchanged).
+            for (field in body.fields) {
+                if (field.isStatic) continue // Skip static fields
+
+                // Skip parser-emitted _vptr$<class> field if inherited from polymorphic base
+                val isParserEmittedVptr =
+                    field.name.startsWith("_vptr$") || field.name.startsWith("_vptr.") || field.name == "_vptr"
+                if (
+                    isParserEmittedVptr &&
+                    polyBase != null &&
+                    field.offsetBits == polyBase.offsetBits
+                ) {
+                    // Inherited vfptr — the _base_<Base> component already carries it. Skip.
+                    diagnostics.inc("vptr-skipped-inherited")
+                    continue
+                }
+
+                val ft = dataTypeFor(field.type) ?: Undefined4DataType.dataType
+                val len = if (ft.length <= 0) 4 else ft.length
+                try {
+                    when (struct) {
+                        is Structure -> {
+                            struct.replaceAtOffset((field.offsetBits / 8).toInt(), ft, len, field.name, null)
+                        }
+
+                        is Union -> {
+                            struct.add(ft, field.name, null)
+                        }
+
+                        else -> {}
+                    }
+                } catch (e: Exception) {
+                    sink.log("field-layout", "Failed to add '${field.name}' to '${ast.name}': ${e.message}")
+                }
+            }
+
+            // Record gaps for this struct
+            if (struct is Structure) {
+                val componentRecords: MutableList<Pair<String, Pair<Int, Int>>> = mutableListOf()
+                for (component in struct.components) {
+                    componentRecords.add(Pair(component.fieldName, Pair(component.offset, component.length)))
+                }
+                val gaps = computeGaps(componentRecords, body.sizeBytes.toInt())
+                val qualifiedName = "$category/${ast.name}"
+                diagnostics.recordStructGaps(qualifiedName, gaps)
+            }
+
+            // Task 2: Plate-comment summary on the derived struct (base class metadata).
+            if (body.bases.isNotEmpty() && struct is Structure) {
+                val lines =
+                    body.bases.sortedBy { it.offsetBits }.joinToString("\n") { base ->
+                        val baseName = (dataTypeFor(base.type)?.name) ?: "<unresolved>"
+                        val virt = if (base.isVirtual) " virtual" else ""
+                        "inherits ${base.access.name.lowercase()}$virt $baseName @ +${base.offsetBits / 8}"
+                    }
+                val existing = struct.description ?: ""
+                struct.description =
+                    if (existing.isEmpty()) lines else "$existing\n$lines"
+            }
+
+            struct
+        }
+
+        is TypeDecl.FunctionT -> {
+            val fd = FunctionDefinitionDataType(category, ast.name, dtm)
+            fd.returnType = dataTypeFor(body.ret) ?: VoidDataType()
+            val params =
+                body.params
+                    .mapIndexed { i, p ->
+                        ParameterDefinitionImpl("arg$i", dataTypeFor(p) ?: Undefined4DataType.dataType, null)
+                    }.toTypedArray()
+            fd.setArguments(*params)
+            fd
+        }
+
+        is TypeDecl.Method -> {
+            val fd = FunctionDefinitionDataType(category, ast.name, dtm)
+            fd.returnType = dataTypeFor(body.ret) ?: VoidDataType()
+            val thisParam =
+                ParameterDefinitionImpl("this", dataTypeFor(body.cls) ?: Undefined4DataType.dataType, null)
+            val otherParams =
+                body.params.mapIndexed { i, p ->
+                    ParameterDefinitionImpl("arg$i", dataTypeFor(p) ?: Undefined4DataType.dataType, null)
+                }
+            fd.setArguments(*(listOf(thisParam) + otherParams).toTypedArray())
+            fd
+        }
+
+        is TypeDecl.XRef -> {
+            sink.log("xref-stub", "Forward ref to '${body.tagName}'; materialising stub")
+            placeholder
+        }
+
+        is TypeDecl.Ref -> {
+            // Same cascade as dataTypeFor: byId -> placeholders -> rawByIdSnapshot -> classify.
+            byId[body.id]
+                ?: placeholders[body.id]
+                ?: rawByIdSnapshot[body.id]?.let { raw ->
+                    makePlaceholder(raw.body, CategoryPath("/stabs"), raw.name)
+                        .also { placeholders[body.id] = it }
+                }
+                ?: run {
+                    val refKey = "(${body.id.cu},${body.id.n})"
+                    val includeCtx = includeContextsByFile[ast.cuFile]
+                    val knownFileNums = includeCtx?.getAllFileNums() ?: emptySet()
+                    // Truly-missing classifier: rawByIdSnapshot already exhausted above.
+                    val knownTypeIds = emptySet<TypeId>()
+
+                    val classification =
+                        ResolverDecision.classifyRef(
+                            body.id,
+                            ast.id.cu,
+                            knownTypeIds,
+                            knownFileNums,
+                        )
+
+                    sink.log("dangling-ref", "Dangling ref to $refKey in '${ast.name}' [${classification.tag}]")
+                    diagnostics.recordUnresolvedRef(refKey, ast.name, ast.cuFile)
+                    diagnostics.inc("dangling-ref-${classification.tag}")
+
+                    Undefined4DataType.dataType
+                }
+        }
+    }
 
     private fun registerWithConflict(
         dt: DataType,
@@ -593,16 +492,12 @@ class TypeRegistry(
     ): DataType? {
         val existingComp = existing.toComponentRecords()
         val incomingComp = incoming.toComponentRecords()
-        val result = StructuralDiff.diff(existingComp, existing.length, incomingComp, incoming.length)
+        return when (val result = StructuralDiff.diff(existingComp, existing.length, incomingComp, incoming.length)) {
+            // Same structure layout, already idempotent
+            StructDiffResult.Identical -> existing
 
-        return when (result) {
-            StructDiffResult.Identical -> {
-                // Same structure layout, already idempotent
-                existing
-            }
-
+            // Execute the merge plan
             is StructDiffResult.GapMergeable -> {
-                // Execute the merge plan
                 val incomingByOffset = incomingComp.associateBy { it.offsetBytes }
                 val existingByOffset = existingComp.associateBy { it.offsetBytes }
 
@@ -666,8 +561,8 @@ class TypeRegistry(
      */
     fun findByName(simpleName: String): DataType? {
         val candidates = mutableListOf<Pair<CategoryPath, String>>()
-        for ((key, hash) in byPath) {
-            if (hash != null && key.second == simpleName) {
+        for ((key, _) in byPath) {
+            if (key.second == simpleName) {
                 candidates.add(key)
             }
         }
@@ -692,10 +587,7 @@ class TypeRegistry(
  * @param totalLengthBytes Total size of struct in bytes
  * @return List of gaps; empty if fully packed or no components
  */
-fun computeGaps(
-    componentRecords: List<Pair<String, Pair<Int, Int>>>,
-    totalLengthBytes: Int,
-): List<GapRecord> {
+fun computeGaps(componentRecords: List<Pair<String, Pair<Int, Int>>>, totalLengthBytes: Int): List<GapRecord> {
     if (componentRecords.isEmpty()) return emptyList()
 
     val gaps = mutableListOf<GapRecord>()
@@ -712,11 +604,10 @@ fun computeGaps(
         val currEnd = currOffset + currLength
 
         if (currEnd < nextOffset) {
-            val gapStart = currEnd
             val gapLength = nextOffset - currEnd
             gaps.add(
                 GapRecord(
-                    offsetBits = (gapStart * 8).toLong(),
+                    offsetBits = (currEnd * 8).toLong(),
                     lengthBits = (gapLength * 8).toLong(),
                     prevField = currName,
                     nextField = nextName,
