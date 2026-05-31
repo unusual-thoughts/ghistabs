@@ -1,6 +1,8 @@
 package ghistabs.integration
 
 import ghidra.app.plugin.core.analysis.AutoAnalysisManager
+import ghidra.app.util.importer.MessageLog
+import ghidra.app.util.importer.ProgramLoader
 import ghidra.program.model.data.Array
 import ghidra.program.model.data.Enum
 import ghidra.program.model.data.FunctionDefinition
@@ -11,6 +13,7 @@ import ghidra.program.model.data.Union
 import ghidra.program.model.listing.Program
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.test.TestEnv
+import ghidra.util.task.TaskMonitor
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Assumptions.assumeTrue
@@ -41,6 +44,7 @@ class StabsAnalyzerRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
 
     private var env: TestEnv? = null
     private lateinit var program: Program
+    private var loadResults: ghidra.app.util.opinion.LoadResults<Program>? = null
 
     @BeforeEach
     fun setUp() {
@@ -51,10 +55,6 @@ class StabsAnalyzerRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
 
         try {
             env = TestEnv()
-            // Call env.openProgram(fixture) directly
-            @Suppress("UNCHECKED_CAST")
-            val method = env!!::class.java.getMethod("openProgram", File::class.java)
-            program = (method.invoke(env!!, fixture) as Program)
         } catch (e: IllegalStateException) {
             // If JVM initialization fails due to issue #40 (ObjectInputFilter conflict),
             // skip gracefully
@@ -64,10 +64,23 @@ class StabsAnalyzerRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
                 throw e
             }
         }
+
+        // Load the binary using ProgramLoader API (not reflection)
+        loadResults =
+            ProgramLoader
+                .builder()
+                .source(fixture)
+                .project(env!!.project)
+                .log(MessageLog())
+                .monitor(TaskMonitor.DUMMY)
+                .load()
+        program = loadResults!!.getPrimaryDomainObject(this)
     }
 
     @AfterEach
     fun tearDown() {
+        program.release(this)
+        loadResults?.close()
         env?.dispose()
     }
 
