@@ -3,19 +3,22 @@ package ghistabs.importer
 import ghistabs.container.StabType
 
 /**
- * Test helper to expose StabsImporter's private functions for unit testing.
- * This enables pure unit tests of the computePairs algorithm without Ghidra dependencies.
+ * Pure scope-pairing logic for matching LBRAC/RBRAC records and filtering locals by recordIndex.
  */
-object StabsImporterTestHelper {
+internal object ScopePairs {
     /**
-     * Mirrors the private computePairs function for testing.
-     * Pairs LBRAC/RBRAC and filters locals by recordIndex.
+     * Pair LBRAC/RBRAC and filter locals by recordIndex.
+     * Locals are included in a scope only if their recordIndex falls within
+     * the bracket pair's recordIndex range (inclusive).
+     *
+     * @param scopeBrackets List of (StabType, offset, recordIndex) triples from stabs stream
+     * @param locals List of local variable records
+     * @return List of (openOffset, closeOffset, localsInScope) triples for each matched bracket pair
      */
-    fun computePairs(
+    fun compute(
         scopeBrackets: List<Triple<StabType, Long, Int>>,
         locals: List<LocalRecord>,
     ): List<Triple<Long, Long, List<LocalRecord>>> {
-        // Mirrors the private implementation in StabsImporter
         val pairs = mutableListOf<Triple<Long, Long, List<LocalRecord>>>()
         val stack = mutableListOf<Triple<Int, Long, Int>>() // (bracketArrayIdx, offset, recordIdx)
 

@@ -434,7 +434,7 @@ class StabsImporter(
         // Pair LBRAC (open) with matching RBRAC (close). For each pair, list
         // the locals whose record appears inside the bracket range and
         // attach a plate comment at the LBRAC address.
-        val pairs = computePairs(open.scopeBrackets, open.locals)
+        val pairs = ScopePairs.compute(open.scopeBrackets, open.locals)
         for ((openOff, _, localsInScope) in pairs) {
             try {
                 val addr = func.entryPoint.add(openOff)
@@ -448,39 +448,6 @@ class StabsImporter(
                 ctx.sink.log("scope-comment-error", "Failed to set scope comment: ${e.message}")
             }
         }
-    }
-
-    private fun computePairs(
-        scopeBrackets: List<Triple<StabType, Long, Int>>,
-        locals: List<LocalRecord>,
-    ): List<Triple<Long, Long, List<LocalRecord>>> {
-        // Pair LBRAC/RBRAC and filter locals by recordIndex.
-        // Locals are included in a scope only if their recordIndex falls within
-        // the bracket pair's recordIndex range (inclusive).
-        val pairs = mutableListOf<Triple<Long, Long, List<LocalRecord>>>()
-        val stack = mutableListOf<Triple<Int, Long, Int>>() // (bracketArrayIdx, offset, recordIdx)
-
-        for ((arrIdx, bracket) in scopeBrackets.withIndex()) {
-            val (type, off, recIdx) = bracket
-            when (type) {
-                StabType.N_LBRAC -> {
-                    stack.add(Triple(arrIdx, off, recIdx))
-                }
-
-                StabType.N_RBRAC -> {
-                    if (stack.isNotEmpty()) {
-                        val (_, openOff, openRec) = stack.removeAt(stack.size - 1)
-                        val closeOff = off
-                        val closeRec = recIdx
-                        val localsInScope = locals.filter { it.recordIndex in openRec..closeRec }
-                        pairs.add(Triple(openOff, closeOff, localsInScope))
-                    }
-                }
-
-                else -> {}
-            }
-        }
-        return pairs
     }
 
     private fun applyGlobal(

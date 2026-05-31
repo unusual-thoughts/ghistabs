@@ -27,7 +27,7 @@ class ComputePairsTest {
             )
 
         // Compute pairs
-        val pairs = StabsImporterTestHelper.computePairs(scopeBrackets, locals)
+        val pairs = ScopePairs.compute(scopeBrackets, locals)
 
         // Should have 2 pairs (inner and outer)
         assertEquals(2, pairs.size)
@@ -63,7 +63,7 @@ class ComputePairsTest {
                 LocalRecord(createDummyLocal("b"), 2000L, 5),
             )
 
-        val pairs = StabsImporterTestHelper.computePairs(scopeBrackets, locals)
+        val pairs = ScopePairs.compute(scopeBrackets, locals)
 
         assertEquals(2, pairs.size)
         // First pair: scope1 gets local "a"
