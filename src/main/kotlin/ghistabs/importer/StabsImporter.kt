@@ -230,7 +230,7 @@ class StabsImporter(
                             }
 
                             is SymbolDecl.StackLocal, is SymbolDecl.RegLocal -> {
-                                open?.locals?.add(LocalRecord(decl, rec.value))
+                                open?.locals?.add(LocalRecord(decl, rec.value, i))
                             }
 
                             is SymbolDecl.StaticVar -> {
@@ -252,7 +252,7 @@ class StabsImporter(
                 }
 
                 StabType.N_LBRAC, StabType.N_RBRAC -> {
-                    currentFunction?.scopeBrackets?.add(rec.type to rec.value)
+                    currentFunction?.scopeBrackets?.add(Triple(rec.type, rec.value, i))
                 }
 
                 else -> {}
@@ -437,8 +437,9 @@ class StabsImporter(
         for ((openOff, _, localsInScope) in pairs) {
             try {
                 val addr = func.entryPoint.add(openOff)
-                if (localsInScope.isEmpty()) {
+                if (!ScopePlateDecision.shouldEmitScopePlate(localsInScope.size)) {
                     ctx.diagnostics.recordEmptyScope(addr.toString(), func.name)
+                    continue
                 }
                 val text = "Stabs scope locals: " + localsInScope.joinToString(", ") { it.decl.name }
                 ctx.program.listing.setComment(addr, CommentType.PLATE, text)
@@ -449,27 +450,29 @@ class StabsImporter(
     }
 
     private fun computePairs(
-        scopeBrackets: List<Pair<StabType, Long>>,
+        scopeBrackets: List<Triple<StabType, Long, Int>>,
         locals: List<LocalRecord>,
     ): List<Triple<Long, Long, List<LocalRecord>>> {
-        // For now, pair LBRAC/RBRAC and list all locals (simplified approach).
-        // A complete implementation would track local positions in the stab stream
-        // and filter to those appearing between bracket pairs.
+        // Pair LBRAC/RBRAC and filter locals by recordIndex.
+        // Locals are included in a scope only if their recordIndex falls within
+        // the bracket pair's recordIndex range (inclusive).
         val pairs = mutableListOf<Triple<Long, Long, List<LocalRecord>>>()
-        val stack = mutableListOf<Pair<Int, Long>>() // (scopeBracket index, offset)
+        val stack = mutableListOf<Triple<Int, Long, Int>>() // (bracketArrayIdx, offset, recordIdx)
 
-        for ((i, bracket) in scopeBrackets.withIndex()) {
-            when (bracket.first) {
+        for ((arrIdx, bracket) in scopeBrackets.withIndex()) {
+            val (type, off, recIdx) = bracket
+            when (type) {
                 StabType.N_LBRAC -> {
-                    stack.add(i to bracket.second)
+                    stack.add(Triple(arrIdx, off, recIdx))
                 }
 
                 StabType.N_RBRAC -> {
                     if (stack.isNotEmpty()) {
-                        val (openIdx, openOff) = stack.removeAt(stack.size - 1)
-                        val closeOff = bracket.second
-                        // Collect all locals (simplified: should filter by position in stab stream)
-                        pairs.add(Triple(openOff, closeOff, locals.toList()))
+                        val (_, openOff, openRec) = stack.removeAt(stack.size - 1)
+                        val closeOff = off
+                        val closeRec = recIdx
+                        val localsInScope = locals.filter { it.recordIndex in openRec..closeRec }
+                        pairs.add(Triple(openOff, closeOff, localsInScope))
                     }
                 }
 
@@ -552,16 +555,11 @@ class StabsImporter(
         val cu: String,
         val locals: MutableList<LocalRecord>,
         val params: MutableList<ParamRecord>,
-        val scopeBrackets: MutableList<Pair<StabType, Long>>,
+        val scopeBrackets: MutableList<Triple<StabType, Long, Int>>,
         var sizeBytes: Long = 0L,
     )
 
     internal data class ParamRecord(
-        val decl: SymbolDecl,
-        val rawValue: Long,
-    )
-
-    internal data class LocalRecord(
         val decl: SymbolDecl,
         val rawValue: Long,
     )
