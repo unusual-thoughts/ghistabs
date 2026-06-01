@@ -5,13 +5,13 @@ import ghistabs.parser.TypeDecl
 import ghistabs.parser.TypeId
 
 object BuiltinTable {
-    fun resolve(decl: TypeDecl, dtm: DataTypeManager): DataType? = when (decl) {
+    fun resolve(decl: TypeDecl): DataType? = when (decl) {
         // _Bool special case: 8-bit unsigned that maps to BooleanDataType
         is TypeDecl.WithSizeAttr if decl.inner is TypeDecl.Ref && decl.inner.id == TypeId(0, -16) -> BooleanDataType()
 
         // For WithSizeAttr with a non-boolean inner, resolve the inner and check for sign
         is TypeDecl.WithSizeAttr -> {
-            val innerResolved = resolve(decl.inner, dtm)
+            val innerResolved = resolve(decl.inner)
             if (innerResolved != null) {
                 return innerResolved
             }

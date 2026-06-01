@@ -8,13 +8,10 @@ import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
-import ghistabs.container.AddressResolver
-import ghistabs.importer.BookmarkSink
+import ghistabs.diag.BookmarkSink
+import ghistabs.importer.AddressResolver
 import ghistabs.importer.ImportContext
-import ghistabs.parser.BaseDecl
-import ghistabs.parser.MethodDecl
-import ghistabs.parser.TypeDecl
-import ghistabs.parser.VirtKind
+import ghistabs.parser.*
 
 class ClassBuilder(
     private val program: Program,
@@ -24,7 +21,7 @@ class ClassBuilder(
     /** All struct ASTs harvested in Pass A, indexed by name. */
     private val structAstsByName: Map<String, TypeDecl.Struct>,
     /** All type ASTs indexed by TypeId for inheritance resolution. */
-    private val typeAstsById: Map<ghistabs.parser.TypeId, TypeAst>? = null,
+    private val typeAstsById: Map<TypeId, TypeAst>? = null,
     private val ctx: ImportContext,
 ) {
     private val source = SourceType.IMPORTED
@@ -435,13 +432,13 @@ internal object ClassBuilderHelpers {
     fun hasPolymorphicBaseSubobject(
         body: TypeDecl.Struct,
         structAstsByName: Map<String, TypeDecl.Struct>,
-        typeAstsById: Map<ghistabs.parser.TypeId, TypeAst>? = null,
+        typeAstsById: Map<TypeId, TypeAst>? = null,
     ): Boolean = firstPolymorphicBase(body, structAstsByName, typeAstsById) != null
 
     fun firstPolymorphicBase(
         body: TypeDecl.Struct,
         structAstsByName: Map<String, TypeDecl.Struct>,
-        typeAstsById: Map<ghistabs.parser.TypeId, TypeAst>? = null,
+        typeAstsById: Map<TypeId, TypeAst>? = null,
     ): BaseDecl? = body.bases
         .sortedBy { it.offsetBits }
         .firstOrNull { base ->
@@ -455,7 +452,7 @@ internal object ClassBuilderHelpers {
     fun resolveBaseAstStatic(
         typeDecl: TypeDecl,
         structAstsByName: Map<String, TypeDecl.Struct>,
-        typeAstsById: Map<ghistabs.parser.TypeId, TypeAst>? = null,
+        typeAstsById: Map<TypeId, TypeAst>? = null,
     ): TypeDecl.Struct? = when (typeDecl) {
         // Look up by TypeId using the byId map
         is TypeDecl.Ref -> typeAstsById?.get(typeDecl.id)?.body as? TypeDecl.Struct

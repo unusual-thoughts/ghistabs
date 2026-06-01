@@ -1,17 +1,73 @@
-package ghistabs.replace
+package ghistabs.importer
 
 import ghidra.program.model.data.*
 import ghidra.program.model.data.Array
 import ghistabs.builder.TypeRegistry
-import ghistabs.importer.ImportContext
 import java.util.*
 
 /**
+ * Pure data records for demangler replacement decision logic.
+ * No Ghidra imports — this is pure data.
+ */
+data class StubRecord(
+    val pathName: String, // e.g. "/Demangler/Foo"
+    val simpleName: String, // e.g. "Foo"
+    val isEmptyStructure: Boolean,
+)
+
+data class ReplacementRecord(
+    val pathName: String, // e.g. "/proj/Foo"
+    val simpleName: String,
+    val dependsOnPathNames: Set<String>, // simulated dependsOn lookup
+)
+
+data class ReplaceOp(val stubPath: String, val replacementPath: String)
+
+/**
+ * Reason why a stub was skipped (not replaced).
+ */
+sealed class Skip(open val reason: String) {
+    data class NoReplacement(val name: String) : Skip("no-replacement-for-$name")
+    data class WouldBeCycle(val name: String) : Skip("would-be-cycle-$name")
+    data class StubAlreadyMissing(val path: String) : Skip("already-replaced-$path")
+}
+
+/**
  * Adapter that uses Ghidra's DataTypeManager to execute demangler stub replacements.
- * Pure algorithm (DemanglerReplaceCore) is invoked to decide which stubs to replace;
- * this class handles the Ghidra-side DTM operations.
  */
 class DemanglerReplacer(private val ctx: ImportContext, private val registry: TypeRegistry) {
+    companion object {
+        /**
+         * Pure algorithm: given stubs and replacements, decide which replacements are safe.
+         */
+        fun decide(
+            stubs: List<StubRecord>,
+            replacements: Map<String, ReplacementRecord>,
+        ): Pair<List<ReplaceOp>, List<Skip>> {
+            val ops = mutableListOf<ReplaceOp>()
+            val skips = mutableListOf<Skip>()
+
+            for (stub in stubs) {
+                if (!stub.isEmptyStructure) continue
+
+                val replacement = replacements[stub.simpleName]
+                if (replacement == null) {
+                    skips.add(Skip.NoReplacement(stub.simpleName))
+                    continue
+                }
+
+                if (stub.pathName in replacement.dependsOnPathNames) {
+                    skips.add(Skip.WouldBeCycle(stub.simpleName))
+                    continue
+                }
+
+                ops.add(ReplaceOp(stub.pathName, replacement.pathName))
+            }
+
+            return ops to skips
+        }
+    }
+
     fun run() {
         val dtm = ctx.dtm
 
@@ -49,7 +105,7 @@ class DemanglerReplacer(private val ctx: ImportContext, private val registry: Ty
         }
 
         // Use pure core to decide which ops are safe
-        val (ops, skips) = DemanglerReplaceCore.chooseReplaceOps(
+        val (ops, skips) = decide(
             stubs,
             replacements.mapValues { it.value.first },
         )

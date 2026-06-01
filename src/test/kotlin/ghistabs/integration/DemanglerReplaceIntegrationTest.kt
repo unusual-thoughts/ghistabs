@@ -6,8 +6,8 @@ import ghidra.program.model.data.DataTypeConflictHandler
 import ghidra.program.model.data.StructureDataType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.ConsoleTaskMonitor
+import ghistabs.importer.DemanglerReplacer
 import ghistabs.importer.ImportContext
-import ghistabs.replace.DemanglerReplacer
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
@@ -87,7 +87,6 @@ class DemanglerReplaceIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
             ghidra.app.util.importer
                 .MessageLog(),
             ConsoleTaskMonitor(),
-            ghistabs.importer.StabsOptions(),
         )
 
         // Note: In a real scenario, TypeRegistry would be populated by StabsImporter.
@@ -148,7 +147,6 @@ class DemanglerReplaceIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
             ghidra.app.util.importer
                 .MessageLog(),
             ConsoleTaskMonitor(),
-            ghistabs.importer.StabsOptions(),
         )
 
         // Run DemanglerReplacer (should skip gracefully since stub is absent)

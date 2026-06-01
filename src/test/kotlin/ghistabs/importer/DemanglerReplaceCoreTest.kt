@@ -1,7 +1,6 @@
-package ghistabs.replace
+package ghistabs.importer
 
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Test
 
 /**
@@ -18,11 +17,11 @@ class DemanglerReplaceCoreTest {
         val fooReplacement = ReplacementRecord("/proj/Foo", "Foo", emptySet())
         val replacements = mapOf("Foo" to fooReplacement)
 
-        val (ops, skips) = DemanglerReplaceCore.chooseReplaceOps(stubs, replacements)
-        assertEquals(1, ops.size, "Should have 1 op")
-        assertEquals(0, skips.size, "Should have 0 skips")
-        assertEquals("/Demangler/Foo", ops[0].stubPath)
-        assertEquals("/proj/Foo", ops[0].replacementPath)
+        val (ops, skips) = DemanglerReplacer.decide(stubs, replacements)
+        Assertions.assertEquals(1, ops.size, "Should have 1 op")
+        Assertions.assertEquals(0, skips.size, "Should have 0 skips")
+        Assertions.assertEquals("/Demangler/Foo", ops[0].stubPath)
+        Assertions.assertEquals("/proj/Foo", ops[0].replacementPath)
     }
 
     /**
@@ -33,10 +32,10 @@ class DemanglerReplaceCoreTest {
         val stubs = listOf(StubRecord("/Demangler/Foo", "Foo", true))
         val replacements = emptyMap<String, ReplacementRecord>()
 
-        val (ops, skips) = DemanglerReplaceCore.chooseReplaceOps(stubs, replacements)
-        assertEquals(0, ops.size, "Should have 0 ops")
-        assertEquals(1, skips.size, "Should have 1 skip")
-        assertTrue(skips[0] is Skip.NoReplacement, "Skip should be NoReplacement")
+        val (ops, skips) = DemanglerReplacer.decide(stubs, replacements)
+        Assertions.assertEquals(0, ops.size, "Should have 0 ops")
+        Assertions.assertEquals(1, skips.size, "Should have 1 skip")
+        Assertions.assertTrue(skips[0] is Skip.NoReplacement, "Skip should be NoReplacement")
     }
 
     /**
@@ -53,10 +52,10 @@ class DemanglerReplaceCoreTest {
             )
         val replacements = mapOf("Foo" to fooReplacement)
 
-        val (ops, skips) = DemanglerReplaceCore.chooseReplaceOps(stubs, replacements)
-        assertEquals(0, ops.size, "Should have 0 ops")
-        assertEquals(1, skips.size, "Should have 1 skip")
-        assertTrue(skips[0] is Skip.WouldBeCycle, "Skip should be WouldBeCycle")
+        val (ops, skips) = DemanglerReplacer.decide(stubs, replacements)
+        Assertions.assertEquals(0, ops.size, "Should have 0 ops")
+        Assertions.assertEquals(1, skips.size, "Should have 1 skip")
+        Assertions.assertTrue(skips[0] is Skip.WouldBeCycle, "Skip should be WouldBeCycle")
     }
 
     /**
@@ -68,9 +67,9 @@ class DemanglerReplaceCoreTest {
         val fooReplacement = ReplacementRecord("/proj/Foo", "Foo", emptySet())
         val replacements = mapOf("Foo" to fooReplacement)
 
-        val (ops, skips) = DemanglerReplaceCore.chooseReplaceOps(stubs, replacements)
-        assertEquals(0, ops.size, "Non-empty stub should not produce op")
-        assertEquals(0, skips.size, "Non-empty stub should not produce skip")
+        val (ops, skips) = DemanglerReplacer.decide(stubs, replacements)
+        Assertions.assertEquals(0, ops.size, "Non-empty stub should not produce op")
+        Assertions.assertEquals(0, skips.size, "Non-empty stub should not produce skip")
     }
 
     /**
@@ -92,10 +91,10 @@ class DemanglerReplaceCoreTest {
             )
         val replacements = mapOf("Foo" to fooRepl, "Baz" to bazRepl)
 
-        val (ops, skips) = DemanglerReplaceCore.chooseReplaceOps(stubs, replacements)
-        assertEquals(1, ops.size, "Should have 1 op (Foo)")
-        assertEquals(2, skips.size, "Should have 2 skips (Bar + Baz)")
-        assertTrue(skips.any { it is Skip.NoReplacement }, "Should have NoReplacement skip")
-        assertTrue(skips.any { it is Skip.WouldBeCycle }, "Should have WouldBeCycle skip")
+        val (ops, skips) = DemanglerReplacer.decide(stubs, replacements)
+        Assertions.assertEquals(1, ops.size, "Should have 1 op (Foo)")
+        Assertions.assertEquals(2, skips.size, "Should have 2 skips (Bar + Baz)")
+        Assertions.assertTrue(skips.any { it is Skip.NoReplacement }, "Should have NoReplacement skip")
+        Assertions.assertTrue(skips.any { it is Skip.WouldBeCycle }, "Should have WouldBeCycle skip")
     }
 }
