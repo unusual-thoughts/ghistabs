@@ -153,17 +153,21 @@ class IncludeContext(val cuFile: String, private val sink: LogSink, val registry
      * the header's canonical key. For local types, leaves TypeId as-is (but disambiguated by CU).
      */
     fun canonicalTypeId(localId: TypeId): TypeId {
-        val header = headerForFileNum(localId.cu) ?: return localId
-
-        // If this is a BINCL-originated header (not the CU's own source), canonicalize.
-        if (header.checksum != 0L || header.originatingCu != cuFile) {
-            // Use the header's canonical key, mapped to a collision-free integer via the registry.
-            val canonicalCu = registry.allocateCanonicalCu(header.canonicalKey())
-            return TypeId(canonicalCu, localId.n)
+        val header = headerForFileNum(localId.cu)
+        // Choose a canonical key:
+        //  - Unknown file (no allocated fileNum): namespace under the CU.
+        //  - BINCL/shared header (checksum != 0 OR shared with a different CU): use header key.
+        //  - Local source file (this CU's own source, checksum = 0, originatingCu == cuFile):
+        //    namespace under the CU. Stabs (file,n) IDs are CU-local; CU1's (1,5) and CU2's (1,5)
+        //    are different types. Without per-CU namespacing they collide in the registry.
+        val key = when {
+            header == null -> cuFile
+            header.checksum != 0L -> header.canonicalKey()
+            header.originatingCu != cuFile -> header.canonicalKey()
+            else -> cuFile
         }
-
-        // Local type: return as-is.
-        return localId
+        val canonicalCu = registry.allocateCanonicalCu(key)
+        return TypeId(canonicalCu, localId.n)
     }
 
     /**

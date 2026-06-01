@@ -37,6 +37,7 @@ class StabsAnalyzerRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
     private lateinit var program: Program
     private var loadResults: LoadResults<Program>? = null
     private var usedRealBinary = false
+    private lateinit var stabsLog: MessageLog
 
     @BeforeEach
     fun setUp() {
@@ -48,6 +49,7 @@ class StabsAnalyzerRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
         // Load the binary using ProgramLoader without TestEnv project infrastructure.
         // ProgramLoader.builder() can load a binary without a project; project parameter is optional.
         val log = MessageLog()
+        stabsLog = log
         val monitor = TaskMonitor.DUMMY
 
         try {
@@ -130,6 +132,38 @@ class StabsAnalyzerRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
     }
 
     @Test
+    fun bouniafFirstComponentIsBase() {
+        val bouniaf =
+            program.dataTypeManager.allDataTypes
+                .asSequence()
+                .firstOrNull { it.name == "bouniaf" && it is Structure } as? Structure
+        assumeTrue(bouniaf != null, "Skipping: bouniaf not found in DTM (stabs not processed)")
+        assumeTrue(bouniaf!!.numComponents > 0, "Skipping: bouniaf has no components")
+        val first = bouniaf.getComponent(0)
+        Assertions.assertEquals(
+            0,
+            first.offset,
+            "bouniaf first component should be at offset 0; got ${first.offset} (${first.fieldName})",
+        )
+        Assertions.assertTrue(
+            first.dataType is Structure,
+            "bouniaf first component '${first.fieldName}' should be a Structure (the parent class); " +
+                "got ${first.dataType::class.simpleName} '${first.dataType.name}'",
+        )
+        val name = first.fieldName ?: ""
+        Assertions.assertTrue(
+            name.startsWith("_base_") && !name.startsWith("_base_unknown_"),
+            "bouniaf first component is '$name' (type=${first.dataType.name}); " +
+                "expected _base_<parent-name> with a resolved parent class",
+        )
+        Assertions.assertEquals(
+            "ExprInst",
+            first.dataType.name,
+            "bouniaf's parent class should be ExprInst; got ${first.dataType.name}",
+        )
+    }
+
+    @Test
     fun bouniafHasBaseField() {
         val cls =
             program.dataTypeManager.allDataTypes
@@ -145,11 +179,11 @@ class StabsAnalyzerRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
 
     @Test
     fun atLeastOneVtableStructApplied() {
-        val any = program.dataTypeManager.allDataTypes
+        val vtables = program.dataTypeManager.allDataTypes
             .asSequence()
             .filterIsInstance<Structure>()
-            .any { it.name.endsWith("_vtable") && it.numComponents > 0 }
-        assumeTrue(any, "Skipping: No *_vtable struct found (stabs not processed or no vtable data)")
+            .filter { it.name.endsWith("_vtable") && it.numComponents > 0 }.toList()
+        assumeTrue(vtables.isNotEmpty(), "Skipping: No *_vtable struct found (stabs not processed or no vtable data)")
     }
 
     @Test
@@ -190,13 +224,14 @@ class StabsAnalyzerRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
 
     private fun parseTagFrequencies(log: String): Map<String, Long> = log
         .lines()
-        .mapNotNull { Regex("""^\[Stabs\] ([a-z-]+):""").find(it)?.groupValues?.get(1) }
+        .mapNotNull { Regex("""\[Stabs\] ([A-Za-z0-9._-]+)(?: at [^:]+)?:""").find(it)?.groupValues?.get(1) }
         .groupingBy { it }
         .eachCount()
         .mapValues { it.value.toLong() }
 
-    private fun capturedMessageLog(prog: Program): String = AutoAnalysisManager
-        .getAnalysisManager(prog)
-        .messageLog
-        .toString()
+    private fun capturedMessageLog(prog: Program): String {
+        val analysisLog = AutoAnalysisManager.getAnalysisManager(prog).messageLog.toString()
+        val stabs = if (::stabsLog.isInitialized) stabsLog.toString() else ""
+        return analysisLog + "\n" + stabs
+    }
 }
