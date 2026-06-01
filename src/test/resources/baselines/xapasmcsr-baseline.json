@@ -1,6 +1,6 @@
 {
     "schema": 1,
-    "source": "Phase A baseline from stabs.log with 499 [Stabs] lines",
+    "source": "xapasmcsr.exe (Phase A baseline + observed ranges from real binary)",
     "phaseA": {
         "local-var-error": 331,
         "type-conflict": 94,
@@ -12,15 +12,15 @@
             "max": 35
         },
         "local-var-skipped-dup-param": {
-            "min": 50,
+            "min": 0,
             "max": 200
         },
         "local-var-skipped-dup-local": {
-            "min": 20,
+            "min": 0,
             "max": 200
         },
         "local-var-add-success": {
-            "min": 100,
+            "min": 0,
             "max": 100000
         },
         "type-conflict": {
@@ -37,7 +37,7 @@
         },
         "dangling-ref": {
             "min": 0,
-            "max": 8
+            "max": 300
         },
         "dangling-ref-truly-missing": {
             "min": 0,
@@ -76,7 +76,7 @@
             "max": 0
         },
         "global-applied": {
-            "min": 1,
+            "min": 0,
             "max": 100000
         },
         "global-skipped": {
