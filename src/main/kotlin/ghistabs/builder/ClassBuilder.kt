@@ -33,9 +33,11 @@ class ClassBuilder(
 
     /** Materialise a class struct + namespace + (optional) vtable struct + apply at _ZTV. */
     fun build(name: String, body: TypeDecl.Struct, category: CategoryPath) {
-        // 1. Resolve fields recursively.
-        val structDt = (typeRegistry.dataTypeFor(body) as? Structure) ?: run {
-            sink.log("class-not-struct", "skipping non-struct class '$name'")
+        // 1. Locate the materialised Structure in the DTM.
+        // (typeRegistry.dataTypeFor does not handle TypeDecl.Struct — Structs are only
+        // looked up by TypeId via materialiseAll; here we resolve by (category, name).)
+        val structDt = (dtm.getDataType(category, name) as? Structure) ?: run {
+            sink.log("class-not-struct", "skipping non-struct class '$name' at $category")
             return
         }
 
