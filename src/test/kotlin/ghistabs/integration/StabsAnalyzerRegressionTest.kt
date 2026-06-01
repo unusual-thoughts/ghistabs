@@ -43,7 +43,7 @@ class StabsAnalyzerRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
     fun setUp() {
         assumeTrue(
             fixture.exists(),
-            "Skipping: ${fixture.path} absent (EULA-restricted, must be added manually)",
+            "Skipping: ${fixture.path} absent, must be added manually",
         )
 
         // Load the binary using ProgramLoader without TestEnv project infrastructure.
@@ -186,6 +186,15 @@ class StabsAnalyzerRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
         Assertions.assertTrue(
             vtables.isNotEmpty(),
             "Expected at least one *_vtable struct with components",
+        )
+        val classesWithVtables = program.dataTypeManager.allDataTypes
+            .asSequence()
+            .filterIsInstance<Structure>()
+            .filter { it.components.any { vtables.contains((it.dataType as? Pointer)?.dataType) } }
+            .toList()
+        Assertions.assertTrue(
+            classesWithVtables.isNotEmpty(),
+            "Expected at least one class with a vtable pointer",
         )
     }
 
