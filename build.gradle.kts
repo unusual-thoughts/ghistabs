@@ -11,6 +11,7 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter:5.11.3")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     testImplementation("junit:junit:4.13.2")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.10.0")
 }
 
 // Add Ghidra test JARs for integration tests (AbstractGhidraHeadlessIntegrationTest)

@@ -1,6 +1,7 @@
 package ghistabs.parser
 
 import ghidra.program.model.listing.Program
+import kotlinx.serialization.Serializable
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
@@ -81,6 +82,7 @@ val TYPES_WITH_CONTINUATION: Set<StabType> = setOf(
  * `recordIndex` is the 0-based index of the FIRST physical record; subsequent
  * continuation records are absorbed and not surfaced.
  */
+@Serializable
 data class StabRecord(
     val recordIndex: Int,
     val type: StabType,
