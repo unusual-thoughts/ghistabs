@@ -4,11 +4,11 @@ import ghidra.app.util.importer.MessageLog
 import ghidra.program.database.ProgramBuilder
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.ConsoleTaskMonitor
-import ghistabs.container.StabRecord
-import ghistabs.container.StabType
 import ghistabs.importer.ImportContext
 import ghistabs.importer.StabsImporter
-import ghistabs.importer.StabsOptions
+import ghistabs.parser.StabReader
+import ghistabs.parser.StabRecord
+import ghistabs.parser.StabType
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -70,9 +70,9 @@ class SymbolApplyIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
 
         // Run importer with synthetic records
         val log = MessageLog()
-        val ctx = ImportContext(program, log, ConsoleTaskMonitor(), StabsOptions())
+        val ctx = ImportContext(program, log, ConsoleTaskMonitor())
         val importer = StabsImporter(ctx)
-        val result = importer.runWithRecords(records)
+        val result = importer.runOnRecords(StabReader.Result(records))
 
         // Verify that the importer processes records without exceptions.
         // With minimal synthetic stabs, globalsApplied may be 0 (no type info),
@@ -131,9 +131,9 @@ class SymbolApplyIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
 
         // Run importer - should complete even with malformed input
         val log = MessageLog()
-        val ctx = ImportContext(program, log, ConsoleTaskMonitor(), StabsOptions())
+        val ctx = ImportContext(program, log, ConsoleTaskMonitor())
         val importer = StabsImporter(ctx)
-        val result = importer.runWithRecords(records)
+        val result = importer.runOnRecords(StabReader.Result(records, recordCount = records.size, truncatedTail = 0))
 
         // Importer should complete without throwing (robustness test)
         assertTrue(result.recordsParsed > 0, "Importer should have parsed some records")

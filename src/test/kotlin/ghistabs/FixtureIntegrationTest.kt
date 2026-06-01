@@ -1,8 +1,8 @@
 package ghistabs
 
-import ghistabs.container.StabRecord
-import ghistabs.container.StabType
 import ghistabs.diag.BaselineCompare
+import ghistabs.parser.StabRecord
+import ghistabs.parser.StabType
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag

@@ -4,11 +4,12 @@ import ghidra.app.util.importer.MessageLog
 import ghidra.program.database.ProgramBuilder
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.ConsoleTaskMonitor
-import ghistabs.container.StabRecord
-import ghistabs.container.StabType
+import ghistabs.StabsOptions
 import ghistabs.importer.ImportContext
 import ghistabs.importer.StabsImporter
-import ghistabs.importer.StabsOptions
+import ghistabs.parser.StabReader
+import ghistabs.parser.StabRecord
+import ghistabs.parser.StabType
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
@@ -90,7 +91,7 @@ class TypeRegistryIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         val log = MessageLog()
         val ctx = ImportContext(program, log, ConsoleTaskMonitor(), StabsOptions())
         val importer = StabsImporter(ctx)
-        val result = importer.runWithRecords(records)
+        val result = importer.runOnRecords(StabReader.Result(records))
 
         // Verify types were materialized (dedup happens internally)
         assertTrue(
@@ -141,7 +142,7 @@ class TypeRegistryIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         val log = MessageLog()
         val ctx = ImportContext(program, log, ConsoleTaskMonitor(), StabsOptions())
         val importer = StabsImporter(ctx)
-        val result = importer.runWithRecords(records)
+        val result = importer.runOnRecords(StabReader.Result(records))
 
         // Importer should complete successfully, handling conflicts internally
         assertTrue(result.typesMaterialised > 0, "Conflict handling should preserve both struct definitions")
@@ -176,7 +177,7 @@ class TypeRegistryIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         val log = MessageLog()
         val ctx = ImportContext(program, log, ConsoleTaskMonitor(), StabsOptions())
         val importer = StabsImporter(ctx)
-        val result = importer.runWithRecords(records)
+        val result = importer.runOnRecords(StabReader.Result(records))
 
         // Verify types were materialized with attribution
         assertTrue(result.typesMaterialised > 0, "Types should be materialized with category attribution")
@@ -213,7 +214,7 @@ class TypeRegistryIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         val log = MessageLog()
         val ctx = ImportContext(program, log, ConsoleTaskMonitor(), StabsOptions())
         val importer = StabsImporter(ctx)
-        val result = importer.runWithRecords(records)
+        val result = importer.runOnRecords(StabReader.Result(records))
 
         // Importer should complete successfully without infinite loop
         assertTrue(
@@ -263,7 +264,7 @@ class TypeRegistryIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         val log = MessageLog()
         val ctx = ImportContext(program, log, ConsoleTaskMonitor(), StabsOptions())
         val importer = StabsImporter(ctx)
-        val result = importer.runWithRecords(records)
+        val result = importer.runOnRecords(StabReader.Result(records))
 
         // Both structures should be materialized without infinite loop
         assertTrue(

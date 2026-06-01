@@ -1,6 +1,6 @@
-package ghistabs.importer
+package ghistabs.diag
 
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Test
 
 class ApplyErrorBucketTest {
@@ -8,20 +8,20 @@ class ApplyErrorBucketTest {
     fun bucket_entrypointInMessageReturnsEntrypointMismatch() {
         val exception = RuntimeException("function entrypoint mismatch")
         val result = ApplyErrorBucket.bucket(exception)
-        assertEquals("entrypoint-mismatch", result)
+        Assertions.assertEquals("entrypoint-mismatch", result)
     }
 
     @Test
     fun bucket_parameterInMessageReturnsParameterMismatch() {
         val exception = RuntimeException("Parameter wrong")
         val result = ApplyErrorBucket.bucket(exception)
-        assertEquals("parameter-mismatch", result)
+        Assertions.assertEquals("parameter-mismatch", result)
     }
 
     @Test
     fun bucket_unknownReturnsOther() {
         val exception = RuntimeException("?")
         val result = ApplyErrorBucket.bucket(exception)
-        assertEquals("other", result)
+        Assertions.assertEquals("other", result)
     }
 }

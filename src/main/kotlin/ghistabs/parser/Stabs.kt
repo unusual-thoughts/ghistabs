@@ -1,5 +1,6 @@
-package ghistabs.container
+package ghistabs.parser
 
+import ghidra.program.model.listing.Program
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
@@ -117,14 +118,15 @@ class StabReader(
          * (size % 12 != 0). Callers should check this value and log/handle as appropriate.
          */
         val truncatedTail: Int,
-    )
+    ) {
+        constructor(records: List<StabRecord>) : this(records, records.size, 0)
+    }
 
     fun readAll(): Result {
         val records = mutableListOf<StabRecord>()
-        val buf =
-            ByteBuffer.wrap(stab).apply {
-                order(if (littleEndian) ByteOrder.LITTLE_ENDIAN else ByteOrder.BIG_ENDIAN)
-            }
+        val buf = ByteBuffer.wrap(stab).apply {
+            order(if (littleEndian) ByteOrder.LITTLE_ENDIAN else ByteOrder.BIG_ENDIAN)
+        }
 
         var cuOff = 0
         var cuSize = 0
@@ -180,12 +182,11 @@ class StabReader(
                     // It's a continuation; consume it
                     val contName = cstring(stabstr, cuOff + contHeader.strx, cuEnd)
                     // Drop trailing backslash if present before concatenating
-                    name +=
-                        if (contName.endsWith("\\")) {
-                            contName.dropLast(1)
-                        } else {
-                            contName
-                        }
+                    name += if (contName.endsWith("\\")) {
+                        contName.dropLast(1)
+                    } else {
+                        contName
+                    }
                     physicalIndex++
 
                     // Stop if no more backslashes
@@ -243,7 +244,7 @@ class StabReader(
          * Read .stab and .stabstr from a Ghidra Program. Returns null if either block is missing.
          * Pure read — does not mutate the program.
          */
-        fun fromProgram(program: ghidra.program.model.listing.Program): Result? {
+        fun fromProgram(program: Program): Result? {
             val mem = program.memory
             val stabBlock = mem.getBlock(".stab") ?: return null
             val stabstrBlock = mem.getBlock(".stabstr") ?: return null

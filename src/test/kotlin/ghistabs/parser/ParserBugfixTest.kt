@@ -80,7 +80,7 @@ class ParserBugfixTest {
                 if (ptr is TypeDecl.Pointer) {
                     // The pointer should reference (0,30), which is the type being defined
                     if (ptr.pointee is TypeDecl.Ref) {
-                        val ref = ptr.pointee as TypeDecl.Ref
+                        val ref = ptr.pointee
                         assertEquals(TypeId(0, 30), ref.id, "Ref should be to (0,30) (the type itself)")
                     }
                 }
@@ -117,12 +117,12 @@ class ParserBugfixTest {
                     val nextField = struct.fields[0]
                     assertEquals("next", nextField.name, "First field should be named 'next'")
                     if (nextField.type is TypeDecl.InlineDef) {
-                        val inlineDef = nextField.type as TypeDecl.InlineDef
+                        val inlineDef = nextField.type
                         assertEquals(TypeId(0, 2), inlineDef.id, "Inline def id should be (0,2)")
                         if (inlineDef.body is TypeDecl.Pointer) {
-                            val ptr = inlineDef.body as TypeDecl.Pointer
+                            val ptr = inlineDef.body
                             if (ptr.pointee is TypeDecl.Ref) {
-                                val ref = ptr.pointee as TypeDecl.Ref
+                                val ref = ptr.pointee
                                 assertEquals(
                                     TypeId(0, 1),
                                     ref.id,
@@ -136,10 +136,10 @@ class ParserBugfixTest {
                     val valField = struct.fields[1]
                     assertEquals("val", valField.name, "Second field should be named 'val'")
                     if (valField.type is TypeDecl.InlineDef) {
-                        val inlineDef = valField.type as TypeDecl.InlineDef
+                        val inlineDef = valField.type
                         assertEquals(TypeId(0, 3), inlineDef.id, "Inline def id should be (0,3)")
                         if (inlineDef.body is TypeDecl.Ref) {
-                            val ref = inlineDef.body as TypeDecl.Ref
+                            val ref = inlineDef.body
                             assertEquals(TypeId(0, 1), ref.id, "Body should be Ref to (0,1)")
                         }
                     }

@@ -7,13 +7,9 @@ import ghidra.program.model.listing.LocalVariableImpl
 import ghidra.program.model.listing.ParameterImpl
 import ghidra.program.model.symbol.SourceType
 import ghistabs.builder.Attribution
-import ghistabs.builder.TypeAst
 import ghistabs.builder.TypeRegistry
-import ghistabs.container.StabReader
-import ghistabs.container.StabRecord
-import ghistabs.container.StabType
+import ghistabs.diag.ApplyErrorBucket
 import ghistabs.parser.*
-import ghistabs.replace.DemanglerReplacer
 
 class StabsImporter(internal val ctx: ImportContext) : LogSink {
     override fun log(tag: String, message: String) = ctx.sink.log(tag, message)
@@ -26,29 +22,23 @@ class StabsImporter(internal val ctx: ImportContext) : LogSink {
             return PassResult()
         }
 
-        val result = runOnRecords(readerResult.records, readerResult.recordCount)
-        return result.copy(recordsRead = readerResult.recordCount)
+        return runOnRecords(readerResult)
     }
 
-    internal fun runWithRecords(records: List<StabRecord>) = runOnRecords(records, records.size)
-
-    private fun runOnRecords(records: List<StabRecord>, recordCount: Int): PassResult {
-        ctx.monitor.initialize(records.size.toLong())
+    internal fun runOnRecords(stabs: StabReader.Result): PassResult {
+        ctx.monitor.initialize(stabs.records.size.toLong())
         ctx.monitor.message = "Stabs: parsing"
 
         // Pass A — parse + harvest
-        val typeAsts = mutableListOf<TypeAst>()
-        val symbolsByCu = mutableMapOf<String, MutableList<HarvestedSymbol>>()
-        val openFunctions = mutableListOf<OpenFunction>()
-        val includesByFile = mutableMapOf<String, IncludeContext>()
-        val parseErrors = passAHarvest(records, typeAsts, symbolsByCu, openFunctions, includesByFile)
+        val harvester = Harvester(ctx.monitor, ctx.sink, ctx.resolver)
+        val harvest = harvester.passA(stabs.records)
 
         // Pass B — materialise types
         val typeRegistry = TypeRegistry(ctx.dtm, ctx.sink, ctx.diagnostics)
-        typeRegistry.setIncludeContexts(includesByFile)
+        typeRegistry.setIncludeContexts(harvester.includesByFile)
         val txB = ctx.program.startTransaction("Stabs: materialise types")
         try {
-            typeRegistry.materialiseAll(typeAsts.associateBy { it.id }) { name, cus ->
+            typeRegistry.materialiseAll(harvest.typeAstsById) { name, cus ->
                 Attribution.categoryFor(name, cus, ctx.diagnostics)
             }
         } finally {
@@ -59,7 +49,7 @@ class StabsImporter(internal val ctx: ImportContext) : LogSink {
         val txC = ctx.program.startTransaction("Stabs: apply symbols")
         val applyResult =
             try {
-                applyAllSymbols(typeAsts, symbolsByCu, openFunctions, typeRegistry)
+                applyAllSymbols(harvest, typeRegistry)
             } finally {
                 ctx.program.endTransaction(txC, true)
             }
@@ -68,191 +58,17 @@ class StabsImporter(internal val ctx: ImportContext) : LogSink {
         ctx.diagnostics.writeSummary(ctx.sink)
 
         return PassResult(
-            recordsRead = recordCount,
-            recordsParsed = records.size - parseErrors,
-            parseErrors = parseErrors,
-            typesMaterialised = typeAsts.size,
+            recordsRead = stabs.recordCount,
+            recordsParsed = stabs.records.size - harvest.parseErrors,
+            parseErrors = harvest.parseErrors,
+            typesMaterialised = harvest.typeAsts.size,
             functionsApplied = applyResult.functions,
             globalsApplied = applyResult.globals,
             classesApplied = applyResult.classes,
         )
     }
 
-    internal fun passAHarvest(
-        records: List<StabRecord>,
-        typeAsts: MutableList<TypeAst>,
-        symbolsByCu: MutableMap<String, MutableList<HarvestedSymbol>>,
-        openFunctions: MutableList<OpenFunction>,
-        includesByFile: MutableMap<String, IncludeContext> = mutableMapOf(),
-    ): Int {
-        var parseErrors = 0
-        var currentCu = "<unknown>"
-        var currentFunction: OpenFunction? = null
-        var currentInclude: IncludeContext? = null
-        // Allocate ONE shared HeaderRegistry for all per-CU IncludeContext instances.
-        // This ensures cross-CU dedup: two CUs with the same (filename, checksum) BINCL
-        // get the SAME HeaderFile instance via the shared registry.
-        val sharedHeaderRegistry = HeaderRegistry()
-
-        for ((i, rec) in records.withIndex()) {
-            ctx.monitor.checkCancelled()
-            ctx.monitor.incrementProgress(1)
-
-            when (rec.type) {
-                StabType.N_SO if (rec.name.isNotEmpty()) -> {
-                    currentCu = rec.name
-                    currentInclude = IncludeContext(rec.name, this, sharedHeaderRegistry)
-                    currentInclude.openSource(rec.name)
-                    includesByFile[rec.name] = currentInclude
-                }
-
-                StabType.N_SOL if (rec.name.isNotEmpty()) -> {
-                    currentCu = rec.name
-                    currentInclude?.switchSource(rec.name)
-                }
-
-                StabType.N_BINCL -> {
-                    val filename = rec.name.ifEmpty { "<unknown>" }
-                    val checksum = rec.value
-                    currentInclude?.beginInclude(filename, checksum)
-                }
-
-                StabType.N_EINCL -> currentInclude?.endInclude()
-
-                StabType.N_EXCL -> {
-                    val filename = rec.name.ifEmpty { "<unknown>" }
-                    val checksum = rec.value
-                    currentInclude?.reMountExcluded(filename, checksum)
-                }
-
-                StabType.N_FUN -> if (rec.name.isEmpty()) {
-                    // End-of-function marker: rec.value = function size relative to start.
-                    currentFunction?.let { it.sizeBytes = rec.value }
-                    currentFunction = null
-                } else {
-                    val addr = ctx.program.addressFactory.defaultAddressSpace.getAddress(rec.value)
-                    // Pull mangled name from before the colon.
-                    val mangled = rec.name.substringBefore(':')
-                    ctx.resolver.recordFromStab(mangled, addr)
-                    try {
-                        val decl = Parser(rec.name).parseSymbol() as? SymbolDecl.Function
-                        if (decl != null) {
-                            val open =
-                                OpenFunction(
-                                    name = mangled,
-                                    addr = addr,
-                                    decl = decl,
-                                    cu = currentCu,
-                                    locals = mutableListOf(),
-                                    params = mutableListOf(),
-                                    scopeBrackets = mutableListOf(),
-                                )
-                            openFunctions += open
-                            currentFunction = open
-                        }
-                    } catch (e: StabsParseException) {
-                        parseErrors++
-                        ctx.sink.log("parse-error", "@$i '${rec.name.take(80)}': ${e.message}")
-                    }
-                }
-
-                StabType.N_GSYM -> harvestSymbol(rec, currentCu, symbolsByCu) { parseErrors++ }
-
-                StabType.N_STSYM, StabType.N_LCSYM -> {
-                    val addrSpace = ctx.program.addressFactory.defaultAddressSpace
-                    val addr = addrSpace.getAddress(rec.value)
-                    val mangled = rec.name.substringBefore(':')
-                    ctx.resolver.recordFromStab(mangled, addr)
-                    harvestSymbol(rec, currentCu, symbolsByCu) { parseErrors++ }
-                }
-
-                StabType.N_PSYM, StabType.N_RSYM -> {
-                    val open = currentFunction ?: continue
-                    try {
-                        when (val decl = Parser(rec.name).parseSymbol()) {
-                            is SymbolDecl.StackParam, is SymbolDecl.RegParam -> {
-                                open.params +=
-                                    ParamRecord(
-                                        decl,
-                                        rec.value,
-                                    )
-                            }
-
-                            else -> {}
-                        }
-                    } catch (e: StabsParseException) {
-                        parseErrors++
-                        ctx.sink.log("parse-error", "param @$i: ${e.message}")
-                    }
-                }
-
-                StabType.N_LSYM -> try {
-                    when (val decl = Parser(rec.name).parseSymbol()) {
-                        is SymbolDecl.TaggedType -> {
-                            val canonicalId = currentInclude?.canonicalTypeId(decl.id) ?: decl.id
-                            val canonicalBody = currentInclude?.canonicalizeTypeDecl(decl.body) ?: decl.body
-                            typeAsts += TypeAst(canonicalId, decl.name, canonicalBody, currentCu)
-                        }
-
-                        is SymbolDecl.Typedef -> {
-                            val canonicalId = currentInclude?.canonicalTypeId(decl.id) ?: decl.id
-                            val canonicalBody = currentInclude?.canonicalizeTypeDecl(decl.body) ?: decl.body
-                            typeAsts += TypeAst(canonicalId, decl.name, canonicalBody, currentCu)
-                        }
-
-                        is SymbolDecl.StackLocal, is SymbolDecl.RegLocal -> {
-                            currentFunction?.locals?.add(LocalRecord(decl, rec.value, i))
-                        }
-
-                        is SymbolDecl.StaticVar -> {
-                            // Function-scope static variables get their actual address from rec.value
-                            symbolsByCu.getOrPut(currentCu) { mutableListOf() } +=
-                                HarvestedSymbol(
-                                    decl,
-                                    rec.type,
-                                    rec.value,
-                                )
-                        }
-
-                        else -> {}
-                    }
-                } catch (e: StabsParseException) {
-                    parseErrors++
-                    ctx.sink.log("parse-error", "lsym @$i: ${e.message}")
-                }
-
-                StabType.N_LBRAC, StabType.N_RBRAC -> currentFunction?.scopeBrackets?.add(
-                    Triple(rec.type, rec.value, i),
-                )
-
-                // ignore N_SLINE, N_OPT, etc.
-                else -> {}
-            }
-        }
-        return parseErrors
-    }
-
-    private fun harvestSymbol(
-        rec: StabRecord,
-        currentCu: String,
-        symbolsByCu: MutableMap<String, MutableList<HarvestedSymbol>>,
-        onError: () -> Unit,
-    ) {
-        try {
-            val decl = Parser(rec.name).parseSymbol()
-            symbolsByCu.getOrPut(currentCu) { mutableListOf() } += HarvestedSymbol(decl, rec.type, rec.value)
-        } catch (e: StabsParseException) {
-            onError()
-            ctx.sink.log("parse-error", "@${rec.recordIndex} '${rec.name.take(80)}': ${e.message}")
-        }
-    }
-
-    internal fun applyAllSymbols(
-        typeAsts: List<TypeAst>,
-        symbolsByCu: Map<String, List<HarvestedSymbol>>,
-        openFunctions: List<OpenFunction>,
-        typeRegistry: TypeRegistry,
-    ): ApplyResult {
+    internal fun applyAllSymbols(harvest: Harvest, typeRegistry: TypeRegistry): ApplyResult {
         val source = SourceType.IMPORTED
         val funcMgr = ctx.program.functionManager
         var functions = 0
@@ -262,7 +78,7 @@ class StabsImporter(internal val ctx: ImportContext) : LogSink {
         // Run demangler stub replacement before applying symbols
         DemanglerReplacer(ctx, typeRegistry).run()
 
-        for (open in openFunctions) {
+        for (open in harvest.openFunctions) {
             try {
                 val func = funcMgr.getFunctionAt(open.addr)
                     ?: funcMgr.getFunctionContaining(open.addr)?.also {
@@ -322,8 +138,7 @@ class StabsImporter(internal val ctx: ImportContext) : LogSink {
         }
 
         // Globals + file-statics.
-        val allHarvestedSymbols = symbolsByCu.values.flatten()
-        for ((cu, syms) in symbolsByCu) {
+        for ((cu, syms) in harvest.symbolsByCu) {
             for (h in syms) {
                 try {
                     when (val d = h.decl) {
@@ -338,26 +153,20 @@ class StabsImporter(internal val ctx: ImportContext) : LogSink {
         }
 
         // .bss coverage analysis: detect uncovered ranges in the .bss section.
-        analyzeBssCoverage(allHarvestedSymbols)
+        analyzeBssCoverage(harvest)
 
         // Classes + vtables.
         if (ctx.options.applyVtables) {
-            val structAstsByName = typeAsts
-                .mapNotNull { ast ->
-                    val body = ast.body as? TypeDecl.Struct ?: return@mapNotNull null
-                    ast.name to body
-                }.toMap()
-            val typeAstsById = typeAsts.associateBy { it.id }
             val classBuilder = ghistabs.builder.ClassBuilder(
                 ctx.program,
                 typeRegistry,
                 ctx.resolver,
                 ctx.sink,
-                structAstsByName,
-                typeAstsById,
+                harvest.structAstsByName,
+                harvest.typeAstsById,
                 ctx,
             )
-            for (ast in typeAsts) {
+            for (ast in harvest.typeAsts) {
                 val body = ast.body as? TypeDecl.Struct ?: continue
                 if (body.methods.isEmpty() && !body.hasVTablePointerMarker) continue
                 try {
@@ -373,12 +182,11 @@ class StabsImporter(internal val ctx: ImportContext) : LogSink {
         return ApplyResult(functions, globals, classes)
     }
 
-    private fun analyzeBssCoverage(allHarvested: List<HarvestedSymbol>) {
+    private fun analyzeBssCoverage(harvest: Harvest) {
         val bssBlock = ctx.program.memory.getBlock(".bss") ?: return
-        val addrSpace = ctx.program.addressFactory.defaultAddressSpace
 
         // Build list of harvested symbols with resolved addresses
-        val harvestedAddrs = allHarvested.mapNotNull {
+        val harvestedAddrs = harvest.allHarvestedSymbols.mapNotNull {
             val name = (it.decl as? SymbolDecl.Global)?.name ?: return@mapNotNull null
             val addr = ctx.resolver.resolve(name)?.offset
             HarvestedAddr(name, addr)
@@ -459,7 +267,9 @@ class StabsImporter(internal val ctx: ImportContext) : LogSink {
         for ((openOff, _, localsInScope) in pairs) {
             try {
                 val addr = func.entryPoint.add(openOff)
-                if (!ScopePlateDecision.shouldEmitScopePlate(localsInScope.size)) {
+
+                // Suppress empty scope comments (when a scope contains no locals).
+                if (localsInScope.isEmpty()) {
                     ctx.diagnostics.recordEmptyScope(addr.toString(), func.name)
                     continue
                 }
@@ -486,7 +296,15 @@ class StabsImporter(internal val ctx: ImportContext) : LogSink {
             )
             return false
         }
-        val dtKind = classifyDataType(dt)
+        val dtKind = when (dt) {
+            is ghidra.program.model.data.Structure -> "Structure"
+            is ghidra.program.model.data.Union -> "Union"
+            is ghidra.program.model.data.Array -> "Array"
+            is ghidra.program.model.data.Pointer -> "Pointer"
+            is ghidra.program.model.data.FunctionDefinition -> "FunctionDefinition"
+            is ghidra.program.model.data.Enum -> "Enum"
+            else -> dt.displayName
+        }
         try {
             // Clear any existing code units before creating data to avoid conflicts
             ctx.program.listing.clearCodeUnits(addr, addr.add((dt.length - 1).toLong()), false)
@@ -500,18 +318,8 @@ class StabsImporter(internal val ctx: ImportContext) : LogSink {
         return true
     }
 
-    private fun classifyDataType(dt: ghidra.program.model.data.DataType): String = when (dt) {
-        is ghidra.program.model.data.Structure -> "Structure"
-        is ghidra.program.model.data.Union -> "Union"
-        is ghidra.program.model.data.Array -> "Array"
-        is ghidra.program.model.data.Pointer -> "Pointer"
-        is ghidra.program.model.data.FunctionDefinition -> "FunctionDefinition"
-        is ghidra.program.model.data.Enum -> "Enum"
-        else -> dt.displayName
-    }
-
     private fun applyStatic(decl: SymbolDecl.StaticVar, rawAddr: Long, typeRegistry: TypeRegistry): Boolean {
-        val addr = ctx.program.addressFactory.defaultAddressSpace.getAddress(rawAddr)
+        val addr = ctx.resolver.buildAddress(rawAddr)
         val dt = typeRegistry.dataTypeFor(decl.type) ?: return false
 
         try {
@@ -524,21 +332,6 @@ class StabsImporter(internal val ctx: ImportContext) : LogSink {
         }
         return true
     }
-
-    internal data class HarvestedSymbol(val decl: SymbolDecl, val recordType: StabType, val rawValue: Long)
-
-    internal data class OpenFunction(
-        val name: String,
-        val addr: ghidra.program.model.address.Address,
-        val decl: SymbolDecl.Function,
-        val cu: String,
-        val locals: MutableList<LocalRecord>,
-        val params: MutableList<ParamRecord>,
-        val scopeBrackets: MutableList<Triple<StabType, Long, Int>>,
-        var sizeBytes: Long = 0L,
-    )
-
-    internal data class ParamRecord(val decl: SymbolDecl, val rawValue: Long)
 
     internal data class ApplyResult(val functions: Int, val globals: Int, val classes: Int = 0)
 }

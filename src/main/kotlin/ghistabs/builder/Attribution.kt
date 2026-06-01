@@ -10,8 +10,7 @@ object Attribution {
      * This prevents false positives on project-local directories like /proj/src/c++_helpers/
      * while still matching real stdlib paths like /usr/include/c++/ and /usr/local/mingw/
      */
-    private val STD_MARKERS =
-        Regex("""/(usr|lib|include)(/[^/]+)?/(mingw|cygwin|c\+\+|bits)/""")
+    private val STD_MARKERS = Regex("""/(usr|lib|include)(/[^/]+)?/(mingw|cygwin|c\+\+|bits)/""")
     private val UNCLEAN_CHARS = Regex("""[<>,:]""")
 
     /**

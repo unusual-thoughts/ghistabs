@@ -1,5 +1,7 @@
 package ghistabs.builder
 
+import ghidra.program.model.data.Structure
+
 /**
  * Pure POKO representing a single component/field in a struct.
  * No Ghidra imports — this is pure data.
@@ -11,6 +13,20 @@ data class ComponentRecord(
     val dtPathName: String, // e.g. "/std/int" — opaque identity string
     val isBitfield: Boolean,
 )
+
+/**
+ * Adapter: convert a Ghidra Structure to a list of ComponentRecords for use by pure algorithms.
+ * This is integration-tested only (Kind 2), never unit-tested.
+ */
+fun Structure.toComponentRecords(): List<ComponentRecord> = components.map { component ->
+    ComponentRecord(
+        offsetBytes = component.offset,
+        lengthBytes = component.length,
+        fieldName = component.fieldName,
+        dtPathName = component.dataType.pathName,
+        isBitfield = component.isBitFieldComponent,
+    )
+}
 
 /**
  * Result of comparing two struct layouts byte-by-byte.

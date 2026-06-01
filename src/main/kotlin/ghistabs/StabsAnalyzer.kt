@@ -8,16 +8,15 @@ import ghidra.framework.options.Options
 import ghidra.program.model.address.AddressSetView
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
-import ghistabs.StabsAnalyzer.Companion.STABS_DONE_OPTION
+import ghistabs.StabsAnalyzer.Companion.OPT_STABS_DONE
 import ghistabs.importer.ImportContext
 import ghistabs.importer.StabsImporter
-import ghistabs.importer.StabsOptions
 
 /**
  * Imports STABS debug info (.stab/.stabstr) into Ghidra: types, function signatures,
  * locals, C++ classes, vtables. Targets PE/ELF binaries produced by Cygwin gcc 3.4.4.
  *
- * Auto-runs once per program (gated by [STABS_DONE_OPTION]); re-runnable via the
+ * Auto-runs once per program (gated by [OPT_STABS_DONE]); re-runnable via the
  * `Tools > Stabs > Re-import` menu action.
  */
 class StabsAnalyzer :
@@ -62,11 +61,8 @@ class StabsAnalyzer :
         monitor ?: return false
         if (isStabsDone(program)) return true // idempotent re-trigger; treat as success.
 
-        val opts = program.getOptions(Program.ANALYSIS_PROPERTIES).getOptions(name)
-        val stabsOptions = StabsOptions(
-            applyPlateComments = opts.getBoolean(OPT_PLATE_COMMENTS, true),
-            applyVtables = opts.getBoolean(OPT_VTABLES, true),
-        )
+        val stabsOptions = StabsOptions(program.getOptions(Program.ANALYSIS_PROPERTIES).getOptions(name))
+
         val ctx = ImportContext(program, log, monitor, stabsOptions)
         val result = StabsImporter(ctx).run()
         log.appendMsg("[Stabs] import complete: $result")
@@ -75,24 +71,32 @@ class StabsAnalyzer :
     }
 
     companion object {
-        const val STABS_DONE_OPTION: String = "Stabs Imported"
-
+        const val OPT_STABS_DONE: String = "Stabs Imported"
         const val OPT_PLATE_COMMENTS: String = "Apply scope plate comments"
-
         const val OPT_VTABLES: String = "Synthesise vtable structs"
 
         @JvmStatic
-        fun isStabsDone(program: Program): Boolean =
-            program.getOptions(Program.PROGRAM_INFO).getBoolean(STABS_DONE_OPTION, false)
+        fun isStabsDone(program: Program) = program.getOptions(Program.PROGRAM_INFO).getBoolean(OPT_STABS_DONE, false)
 
         @JvmStatic
         fun markStabsDone(program: Program, value: Boolean) {
             val tx = program.startTransaction("Stabs: set done flag")
             try {
-                program.getOptions(Program.PROGRAM_INFO).setBoolean(STABS_DONE_OPTION, value)
+                program.getOptions(Program.PROGRAM_INFO).setBoolean(OPT_STABS_DONE, value)
             } finally {
                 program.endTransaction(tx, true)
             }
         }
     }
+}
+
+data class StabsOptions(
+    val createImportedLabels: Boolean = true,
+    val applyPlateComments: Boolean = true,
+    val applyVtables: Boolean = true,
+) {
+    constructor(opts: Options) : this(
+        applyPlateComments = opts.getBoolean(StabsAnalyzer.OPT_PLATE_COMMENTS, true),
+        applyVtables = opts.getBoolean(StabsAnalyzer.OPT_VTABLES, true),
+    )
 }
