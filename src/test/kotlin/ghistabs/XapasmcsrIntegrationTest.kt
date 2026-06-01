@@ -87,30 +87,14 @@ class XapasmcsrIntegrationTest {
     }
 
     /**
-     * AC0.1, AC3.5, AC4.6: Real binary test (skips if fixture not present).
-     *
-     * Phase 2 acceptance criteria (AC0.1):
-     * - Verify that Phase 2's dangling-ref resolution brings the count to ≤10% of Phase A baseline.
-     * - Assertion skips cleanly if the Phase A baseline file is not yet committed (Phase 8 produces it).
-     *
-     * When xapasmcsr.exe is available:
-     * 1. Load xapasmcsr.exe via Ghidra's PE loader
-     * 2. Create StabsImporter and run on the program
-     * 3. Capture dangling-ref counter from diagnostics
-     * 4. Read Phase A baseline from src/test/resources/baselines/xapasmcsr-phaseA-baseline.json
-     * 5. Assert post-Phase-B count ≤ 0.10 × baseline (≥90% reduction)
-     * 6. Assert type count ≥ 80 interesting names
-     * 7. Assert ≥ 470 functions with named params
-     * 8. Assert ≥ 92 functions with local variables
-     * 9. Assert ≥ 50 C++ classes
-     *
-     * Note: Full PE loading in a unit test requires Ghidra's PeLoader and ProgramBuilder,
-     * which is complex in a standalone unit test environment. This test is a placeholder
-     * for manual testing with the real binary.
-     *
-     * Integration blocker (Phase 8 task #40): Java 21 × Ghidra 11.x ObjectInputFilter factory
-     * conflict prevents the test from launching. The structure is correct; Phase 8 fixes the harness.
+     * Vacuous placeholder retained only to mark where real-binary coverage was originally
+     * planned. Every assertion in this test was a `0L`/`emptyList()` stub guarded by
+     * `assumeTrue(false)`. Real-binary coverage now lives in
+     * [ghistabs.integration.StabsAnalyzerRegressionTest] which loads xapasmcsr.exe through
+     * `ProgramLoader` and exercises StabsAnalyzer end-to-end. Kept disabled rather than
+     * deleted so any external reference (issue #40, plan docs) still has a landing site.
      */
+    @org.junit.jupiter.api.Disabled("Superseded by StabsAnalyzerRegressionTest (real-binary harness)")
     @Test
     fun testXapasmcsrRealBinary() {
         val fixturePath = File("src/test/resources/binaries/xapasmcsr.exe")
