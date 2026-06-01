@@ -1,4 +1,4 @@
-package ghistabs.importer
+package ghistabs.diag
 
 object ApplyErrorBucket {
     fun bucket(throwable: Throwable): String {

@@ -8,7 +8,7 @@ import org.junit.jupiter.api.Test
  * Pure unit tests for StabsDiagnostics.
  *
  * Uses a real concrete DiagnosticSink test double (CapturingSink) to capture
- * output and verify diagnostic emission contracts. No Ghidra types, no mockito.
+ * output and verify diagnostic emission contracts. No Ghidra types, no mocks.
  */
 class StabsDiagnosticsTest {
     /**

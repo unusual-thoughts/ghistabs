@@ -1,11 +1,9 @@
-package ghistabs.importer
+package ghistabs.diag
 
 import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.address.Address
 import ghidra.program.model.listing.BookmarkType
 import ghidra.program.model.listing.Program
-import ghistabs.diag.DiagnosticSink
-import ghistabs.diag.StabsDiagnostics
 
 /**
  * Facade over BookmarkManager + MessageLog. Diagnostics with no useful

@@ -1,13 +1,10 @@
 package ghistabs.builder
 
 import ghidra.program.model.data.*
+import ghistabs.diag.BookmarkSink
 import ghistabs.diag.GapRecord
 import ghistabs.diag.StabsDiagnostics
-import ghistabs.importer.BookmarkSink
-import ghistabs.parser.AggrKind
-import ghistabs.parser.IncludeContext
-import ghistabs.parser.TypeDecl
-import ghistabs.parser.TypeId
+import ghistabs.parser.*
 
 @JvmInline
 value class ContentHash(val v: Long) {
@@ -78,8 +75,6 @@ value class ContentHash(val v: Long) {
         }
     }
 }
-
-data class TypeAst(val id: TypeId, val name: String, val body: TypeDecl, val cuFile: String)
 
 class TypeRegistry(
     private val dtm: DataTypeManager,
@@ -162,7 +157,7 @@ class TypeRegistry(
             } ?: dataTypeFor(decl.body)
 
         is TypeDecl.Builtin, is TypeDecl.Range, is TypeDecl.Complex, is TypeDecl.WithSizeAttr -> {
-            BuiltinTable.resolve(decl, dtm)
+            BuiltinTable.resolve(decl)
         }
 
         is TypeDecl.Pointer -> PointerDataType(dataTypeFor(decl.pointee) ?: Undefined4DataType.dataType, 4, dtm)
@@ -236,7 +231,7 @@ class TypeRegistry(
     private fun materialiseBody(ast: TypeAst, category: CategoryPath, placeholder: DataType): DataType =
         when (val body = ast.body) {
             is TypeDecl.Builtin, is TypeDecl.Range, is TypeDecl.Complex, is TypeDecl.WithSizeAttr ->
-                BuiltinTable.resolve(body, dtm) ?: placeholder
+                BuiltinTable.resolve(body) ?: placeholder
 
             is TypeDecl.Pointer -> PointerDataType(dataTypeFor(body.pointee) ?: Undefined4DataType.dataType, 4, dtm)
 

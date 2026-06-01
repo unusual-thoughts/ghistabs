@@ -1,9 +1,6 @@
-package ghistabs.importer
+package ghistabs.parser
 
-import ghistabs.container.StabType
-import ghistabs.parser.SymbolDecl
-import ghistabs.parser.TypeDecl
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Test
 
 class ComputePairsTest {
@@ -28,20 +25,20 @@ class ComputePairsTest {
         val pairs = ScopePairs.compute(scopeBrackets, locals)
 
         // Should have 2 pairs (inner and outer)
-        assertEquals(2, pairs.size)
+        Assertions.assertEquals(2, pairs.size)
 
         // First pair should be inner scope (recordIndex 8..12) with only loc2
         val (innerOpen, innerClose, innerLocals) = pairs[0]
-        assertEquals(200L, innerOpen)
-        assertEquals(300L, innerClose)
-        assertEquals(1, innerLocals.size)
-        assertEquals("loc2", innerLocals[0].decl.name)
+        Assertions.assertEquals(200L, innerOpen)
+        Assertions.assertEquals(300L, innerClose)
+        Assertions.assertEquals(1, innerLocals.size)
+        Assertions.assertEquals("loc2", innerLocals[0].decl.name)
 
         // Second pair should be outer scope (recordIndex 3..20) with all three locals
         val (outerOpen, outerClose, outerLocals) = pairs[1]
-        assertEquals(100L, outerOpen)
-        assertEquals(400L, outerClose)
-        assertEquals(3, outerLocals.size)
+        Assertions.assertEquals(100L, outerOpen)
+        Assertions.assertEquals(400L, outerClose)
+        Assertions.assertEquals(3, outerLocals.size)
     }
 
     @Test
@@ -61,13 +58,13 @@ class ComputePairsTest {
 
         val pairs = ScopePairs.compute(scopeBrackets, locals)
 
-        assertEquals(2, pairs.size)
+        Assertions.assertEquals(2, pairs.size)
         // First pair: scope1 gets local "a"
-        assertEquals(1, pairs[0].third.size)
-        assertEquals("a", pairs[0].third[0].decl.name)
+        Assertions.assertEquals(1, pairs[0].third.size)
+        Assertions.assertEquals("a", pairs[0].third[0].decl.name)
         // Second pair: scope2 gets local "b"
-        assertEquals(1, pairs[1].third.size)
-        assertEquals("b", pairs[1].third[0].decl.name)
+        Assertions.assertEquals(1, pairs[1].third.size)
+        Assertions.assertEquals("b", pairs[1].third[0].decl.name)
     }
 
     private fun createDummyLocal(name: String): SymbolDecl.StackLocal = SymbolDecl.StackLocal(name, TypeDecl.Builtin)

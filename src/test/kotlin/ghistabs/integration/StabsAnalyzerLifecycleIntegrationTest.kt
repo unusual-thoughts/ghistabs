@@ -63,7 +63,7 @@ class StabsAnalyzerLifecycleIntegrationTest : AbstractGhidraHeadlessIntegrationT
         // Verify program state persists (done by checking the internal option)
         val options = program.getOptions(ghidra.program.model.listing.Program.PROGRAM_INFO)
         assertTrue(
-            options.getBoolean(StabsAnalyzer.STABS_DONE_OPTION, false),
+            options.getBoolean(StabsAnalyzer.OPT_STABS_DONE, false),
             "Done-flag should persist in program options",
         )
     }
@@ -95,7 +95,7 @@ class StabsAnalyzerLifecycleIntegrationTest : AbstractGhidraHeadlessIntegrationT
         // Verify program state persists
         val options = program.getOptions(ghidra.program.model.listing.Program.PROGRAM_INFO)
         assertFalse(
-            options.getBoolean(StabsAnalyzer.STABS_DONE_OPTION, true),
+            options.getBoolean(StabsAnalyzer.OPT_STABS_DONE, true),
             "Done-flag should persist as false in program options after clearing",
         )
     }

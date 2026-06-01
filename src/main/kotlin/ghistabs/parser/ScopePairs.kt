@@ -1,6 +1,4 @@
-package ghistabs.importer
-
-import ghistabs.container.StabType
+package ghistabs.parser
 
 /**
  * Pure scope-pairing logic for matching LBRAC/RBRAC records and filtering locals by recordIndex.

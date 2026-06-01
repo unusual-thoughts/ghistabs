@@ -7,7 +7,6 @@ import ghidra.util.task.ConsoleTaskMonitor
 import ghistabs.StabsAnalyzer
 import ghistabs.importer.ImportContext
 import ghistabs.importer.StabsImporter
-import ghistabs.importer.StabsOptions
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -64,7 +63,6 @@ class ImporterIdempotenceIntegrationTest : AbstractGhidraHeadlessIntegrationTest
             program,
             log1,
             ConsoleTaskMonitor(),
-            StabsOptions(),
         )
         val importer1 = StabsImporter(ctx1)
         val result1 = importer1.run()
@@ -81,7 +79,6 @@ class ImporterIdempotenceIntegrationTest : AbstractGhidraHeadlessIntegrationTest
             program,
             log2,
             ConsoleTaskMonitor(),
-            StabsOptions(),
         )
         val importer2 = StabsImporter(ctx2)
         val result2 = importer2.run()
@@ -124,7 +121,6 @@ class ImporterIdempotenceIntegrationTest : AbstractGhidraHeadlessIntegrationTest
                 program,
                 log,
                 ConsoleTaskMonitor(),
-                StabsOptions(),
             )
             val importer = StabsImporter(ctx)
 
@@ -162,7 +158,6 @@ class ImporterIdempotenceIntegrationTest : AbstractGhidraHeadlessIntegrationTest
             program,
             log1,
             ConsoleTaskMonitor(),
-            StabsOptions(),
         )
         val importer1 = StabsImporter(ctx1)
         importer1.run()
@@ -185,7 +180,6 @@ class ImporterIdempotenceIntegrationTest : AbstractGhidraHeadlessIntegrationTest
             program,
             log2,
             ConsoleTaskMonitor(),
-            StabsOptions(),
         )
         val importer2 = StabsImporter(ctx2)
         importer2.run()
