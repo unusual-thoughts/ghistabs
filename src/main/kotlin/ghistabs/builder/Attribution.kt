@@ -40,11 +40,7 @@ object Attribution {
             "ptrdiff_t",
         )
 
-    fun categoryFor(
-        typeName: String,
-        definingCUs: Set<String>,
-        diagnostics: StabsDiagnostics? = null,
-    ): CategoryPath {
+    fun categoryFor(typeName: String, definingCUs: Set<String>, diagnostics: StabsDiagnostics? = null): CategoryPath {
         // 1. Check project override list FIRST (safety net for edge cases)
         if (typeName in PROJECT_OVERRIDE_NAMES) {
             diagnostics?.inc("attribution-override")

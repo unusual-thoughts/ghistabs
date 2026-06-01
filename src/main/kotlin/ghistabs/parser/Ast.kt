@@ -68,12 +68,7 @@ data class FieldDecl(
     val isStatic: Boolean,
 )
 
-data class BaseDecl(
-    val type: TypeDecl,
-    val isVirtual: Boolean,
-    val access: Access,
-    val offsetBits: Long,
-)
+data class BaseDecl(val type: TypeDecl, val isVirtual: Boolean, val access: Access, val offsetBits: Long)
 
 data class MethodDecl(
     val name: String,
@@ -92,11 +87,7 @@ sealed interface SymbolDecl {
     val name: String
 
     /** `:F` / `:f`. Top-level function (file-static if `f`). */
-    data class Function(
-        override val name: String,
-        val isFileStatic: Boolean,
-        val signature: TypeDecl,
-    ) : SymbolDecl
+    data class Function(override val name: String, val isFileStatic: Boolean, val signature: TypeDecl) : SymbolDecl
 
     /** `:p` */
     data class StackParam(override val name: String, val type: TypeDecl) : SymbolDecl
@@ -120,18 +111,11 @@ sealed interface SymbolDecl {
     data class Global(override val name: String, val type: TypeDecl) : SymbolDecl
 
     /** `:S` file-static / `:V` static-local. */
-    data class StaticVar(
-        override val name: String,
-        val type: TypeDecl,
-        val isFunctionLocal: Boolean,
-    ) : SymbolDecl
+    data class StaticVar(override val name: String, val type: TypeDecl, val isFunctionLocal: Boolean) : SymbolDecl
 }
 
-class StabsParseException(
-    val pos: Int,
-    val src: String,
-    msg: String,
-) : RuntimeException("at $pos in '${src.take(120)}': $msg") {
+class StabsParseException(val pos: Int, val src: String, msg: String) :
+    RuntimeException("at $pos in '${src.take(120)}': $msg") {
     /** Returns a one-line excerpt with a `^` caret at `pos`. */
     fun excerpt(): String {
         val start = (pos - 30).coerceAtLeast(0)

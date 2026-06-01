@@ -15,7 +15,14 @@ val ghidraInstallDirForTests =
     System.getenv("GHIDRA_INSTALL_DIR") ?: project.properties["GHIDRA_INSTALL_DIR"]?.toString() ?: "/opt/ghidra"
 
 dependencies {
-    testImplementation(fileTree(mapOf("dir" to "$ghidraInstallDirForTests/Ghidra/Features/Base/lib", "include" to "Base.jar")))
+    testImplementation(
+        fileTree(
+            mapOf(
+                "dir" to "$ghidraInstallDirForTests/Ghidra/Features/Base/lib",
+                "include" to "Base.jar",
+            ),
+        ),
+    )
     // Add Ghidra Test JARs for AbstractGhidraHeadlessIntegrationTest.
     // Resolves test harness dependencies from standard Ghidra installation paths.
     testImplementation(
