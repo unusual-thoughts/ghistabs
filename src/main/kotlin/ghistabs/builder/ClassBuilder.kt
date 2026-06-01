@@ -143,7 +143,7 @@ class ClassBuilder(
         }
     }
 
-    private fun ensureVtableTypeAndPointer(className: String, category: CategoryPath): DataType = PointerDataType.getPointer(
+    private fun ensureVtableTypeAndPointer(className: String, category: CategoryPath) = PointerDataType.getPointer(
         dtm.getDataType(category, "${className}_vtable") ?: StructureDataType(
             category,
             "${className}_vtable",
@@ -419,9 +419,11 @@ class ClassBuilder(
      *
      * Delegates to the static ClassBuilderHelpers version which is the single source of truth.
      */
-    internal fun firstPolymorphicBase(body: TypeDecl.Struct): BaseDecl? = ClassBuilderHelpers.firstPolymorphicBase(body, structAstsByName, typeAstsById)
+    internal fun firstPolymorphicBase(body: TypeDecl.Struct): BaseDecl? =
+        ClassBuilderHelpers.firstPolymorphicBase(body, structAstsByName, typeAstsById)
 
-    internal fun hasPolymorphicBaseSubobject(body: TypeDecl.Struct): Boolean = ClassBuilderHelpers.hasPolymorphicBaseSubobject(body, structAstsByName, typeAstsById)
+    internal fun hasPolymorphicBaseSubobject(body: TypeDecl.Struct): Boolean =
+        ClassBuilderHelpers.hasPolymorphicBaseSubobject(body, structAstsByName, typeAstsById)
 }
 
 /**

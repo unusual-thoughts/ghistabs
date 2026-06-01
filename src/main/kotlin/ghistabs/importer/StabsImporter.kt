@@ -409,12 +409,7 @@ class StabsImporter(internal val ctx: ImportContext) : LogSink {
         }
     }
 
-    private fun applyLocal(
-        func: Function,
-        loc: LocalRecord,
-        typeRegistry: TypeRegistry,
-        source: SourceType,
-    ) {
+    private fun applyLocal(func: Function, loc: LocalRecord, typeRegistry: TypeRegistry, source: SourceType) {
         val decl = loc.decl
         val dt = when (decl) {
             is SymbolDecl.StackLocal -> typeRegistry.dataTypeFor(decl.type) ?: Undefined4DataType.dataType
@@ -530,11 +525,7 @@ class StabsImporter(internal val ctx: ImportContext) : LogSink {
         return true
     }
 
-    internal data class HarvestedSymbol(
-        val decl: SymbolDecl,
-        val recordType: StabType,
-        val rawValue: Long,
-    )
+    internal data class HarvestedSymbol(val decl: SymbolDecl, val recordType: StabType, val rawValue: Long)
 
     internal data class OpenFunction(
         val name: String,
@@ -547,14 +538,7 @@ class StabsImporter(internal val ctx: ImportContext) : LogSink {
         var sizeBytes: Long = 0L,
     )
 
-    internal data class ParamRecord(
-        val decl: SymbolDecl,
-        val rawValue: Long,
-    )
+    internal data class ParamRecord(val decl: SymbolDecl, val rawValue: Long)
 
-    internal data class ApplyResult(
-        val functions: Int,
-        val globals: Int,
-        val classes: Int = 0,
-    )
+    internal data class ApplyResult(val functions: Int, val globals: Int, val classes: Int = 0)
 }

@@ -3,11 +3,7 @@ package ghistabs.builder
 /**
  * Snapshot of a component at a target offset, used for vfptr placement decisions.
  */
-data class FirstComponentSnapshot(
-    val fieldName: String?,
-    val offsetBytes: Int,
-    val isUndefined: Boolean,
-)
+data class FirstComponentSnapshot(val fieldName: String?, val offsetBytes: Int, val isUndefined: Boolean)
 
 /**
  * Action to take on vfptr field placement.

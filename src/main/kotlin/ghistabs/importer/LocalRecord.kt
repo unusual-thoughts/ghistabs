@@ -9,8 +9,4 @@ import ghistabs.parser.SymbolDecl
  * @property rawValue The raw value from the stab record (stack offset for stack locals).
  * @property recordIndex The index of this record in the stabs stream (for scope filtering).
  */
-internal data class LocalRecord(
-    val decl: SymbolDecl,
-    val rawValue: Long,
-    val recordIndex: Int,
-)
+internal data class LocalRecord(val decl: SymbolDecl, val rawValue: Long, val recordIndex: Int)
