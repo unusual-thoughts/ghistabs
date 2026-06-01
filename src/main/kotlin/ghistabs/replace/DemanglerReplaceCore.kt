@@ -16,10 +16,7 @@ data class ReplacementRecord(
     val dependsOnPathNames: Set<String>, // simulated dependsOn lookup
 )
 
-data class ReplaceOp(
-    val stubPath: String,
-    val replacementPath: String,
-)
+data class ReplaceOp(val stubPath: String, val replacementPath: String)
 
 /**
  * Reason why a stub was skipped (not replaced).

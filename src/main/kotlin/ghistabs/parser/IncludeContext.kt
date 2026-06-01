@@ -37,11 +37,7 @@ class HeaderRegistry {
  * Represents one BINCL-or-source-file entity. Two CUs that include or EXCL the same
  * (filename, checksum) share a single HeaderFile instance.
  */
-data class HeaderFile(
-    val filename: String,
-    val checksum: Long,
-    val originatingCu: String,
-) {
+data class HeaderFile(val filename: String, val checksum: Long, val originatingCu: String) {
     /**
      * Canonical identifier for this header: used for stable TypeId rewriting across CUs.
      * Derives from (filename, checksum) for BINCL headers, or the CU name for source files.
@@ -65,11 +61,7 @@ data class HeaderFile(
  * - reMountExcluded: N_EXCL, allocates fileNum for shared header (or placeholder if forward EXCL).
  * - canonicalTypeId: Rewrites local TypeId to stable form across CUs sharing the same header.
  */
-class IncludeContext(
-    val cuFile: String,
-    private val sink: LogSink,
-    val registry: HeaderRegistry = HeaderRegistry(),
-) {
+class IncludeContext(val cuFile: String, private val sink: LogSink, val registry: HeaderRegistry = HeaderRegistry()) {
     private val fileNumToHeader: MutableMap<Int, HeaderFile> = mutableMapOf()
     private val includeStack: ArrayDeque<HeaderFile> = ArrayDeque()
     private var nextFileNum: Int = 1

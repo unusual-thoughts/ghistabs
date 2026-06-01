@@ -203,7 +203,8 @@ class ClassBuilderTest {
         val nonVptrFieldName = "m_member"
 
         // Verify the recognition pattern used in VfptrDecision
-        fun isParserEmitted(name: String): Boolean = name.startsWith($$"_vptr$") || name.startsWith("_vptr.") || name == "_vptr"
+        fun isParserEmitted(name: String): Boolean =
+            name.startsWith($$"_vptr$") || name.startsWith("_vptr.") || name == "_vptr"
 
         assertTrue(isParserEmitted(vptrFieldName1), $$"_vptr$Foo should be recognized as parser-emitted")
         assertTrue(isParserEmitted(vptrFieldName2), "_vptr.Bar should be recognized as parser-emitted")

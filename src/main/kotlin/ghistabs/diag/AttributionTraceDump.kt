@@ -15,12 +15,7 @@ object AttributionTraceDump {
         }
     }
 
-    fun writeTraceArtifact(
-        typeName: String,
-        traces: List<AttributionTrace>,
-        outDir: Path,
-        filename: String,
-    ) {
+    fun writeTraceArtifact(typeName: String, traces: List<AttributionTrace>, outDir: Path, filename: String) {
         Files.createDirectories(outDir)
         Files.writeString(outDir.resolve(filename), formatForType(typeName, traces))
     }

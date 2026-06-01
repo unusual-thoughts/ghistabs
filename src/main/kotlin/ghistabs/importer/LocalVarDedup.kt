@@ -7,13 +7,10 @@ sealed class SkipReason {
 }
 
 object LocalVarDedup {
-    fun shouldSkipLocal(
-        name: String,
-        existingParamNames: Set<String>,
-        existingLocalNames: Set<String>,
-    ): SkipReason? = when (name) {
-        in existingParamNames -> SkipReason.DuplicateParamName
-        in existingLocalNames -> SkipReason.DuplicateLocalName
-        else -> null
-    }
+    fun shouldSkipLocal(name: String, existingParamNames: Set<String>, existingLocalNames: Set<String>): SkipReason? =
+        when (name) {
+            in existingParamNames -> SkipReason.DuplicateParamName
+            in existingLocalNames -> SkipReason.DuplicateLocalName
+            else -> null
+        }
 }

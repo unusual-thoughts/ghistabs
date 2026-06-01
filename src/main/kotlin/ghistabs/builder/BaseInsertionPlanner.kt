@@ -36,30 +36,28 @@ object BaseInsertionPlanner {
      *
      * Sorting ensures correct application order and predictable output.
      */
-    fun planBaseInsertions(
-        bases: List<BaseDecl>,
-        resolveBase: (TypeDecl) -> ResolvedBase?,
-    ): List<InsertOp> = bases.sortedBy { it.offsetBits }.mapNotNull { base ->
-        val resolved = resolveBase(base.type) ?: return@mapNotNull null
-        if (resolved.lengthBytes <= 0) return@mapNotNull null
+    fun planBaseInsertions(bases: List<BaseDecl>, resolveBase: (TypeDecl) -> ResolvedBase?): List<InsertOp> =
+        bases.sortedBy { it.offsetBits }.mapNotNull { base ->
+            val resolved = resolveBase(base.type) ?: return@mapNotNull null
+            if (resolved.lengthBytes <= 0) return@mapNotNull null
 
-        val fieldName = if (base.isVirtual) {
-            "_vbase_${resolved.simpleName}"
-        } else {
-            "_base_${resolved.simpleName}"
+            val fieldName = if (base.isVirtual) {
+                "_vbase_${resolved.simpleName}"
+            } else {
+                "_base_${resolved.simpleName}"
+            }
+
+            val comment = buildString {
+                append(base.access.name.lowercase())
+                if (base.isVirtual) append(" virtual")
+                append(" base")
+            }
+
+            InsertOp(
+                offsetBytes = (base.offsetBits / 8).toInt(),
+                fieldName = fieldName,
+                comment = comment,
+                baseSimpleName = resolved.simpleName,
+            )
         }
-
-        val comment = buildString {
-            append(base.access.name.lowercase())
-            if (base.isVirtual) append(" virtual")
-            append(" base")
-        }
-
-        InsertOp(
-            offsetBytes = (base.offsetBits / 8).toInt(),
-            fieldName = fieldName,
-            comment = comment,
-            baseSimpleName = resolved.simpleName,
-        )
-    }
 }

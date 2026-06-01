@@ -10,13 +10,7 @@ class StabReaderTest {
         /**
          * Build a single stab record's 12 bytes.
          */
-        fun stabRecord(
-            strx: Int,
-            type: Int,
-            other: Int,
-            desc: Int,
-            value: Int,
-        ): ByteArray {
+        fun stabRecord(strx: Int, type: Int, other: Int, desc: Int, value: Int): ByteArray {
             val buf = ByteBuffer.allocate(STAB_RECORD_SIZE).apply {
                 order(ByteOrder.LITTLE_ENDIAN)
             }

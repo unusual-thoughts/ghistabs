@@ -22,7 +22,8 @@ import ghidra.util.Msg
     packageName = CorePluginPackage.NAME,
     category = PluginCategoryNames.ANALYSIS,
     shortDescription = "Re-run the STABS importer on the current program.",
-    description = "Adds a 'Tools > Stabs > Re-import' action that clears the persistent done-flag and re-runs the StabsAnalyzer.",
+    description = "Adds a 'Tools > Stabs > Re-import' action" +
+        "that clears the persistent done-flag and re-runs the StabsAnalyzer.",
 )
 class StabsPlugin(tool: PluginTool) : ProgramPlugin(tool) {
     init {

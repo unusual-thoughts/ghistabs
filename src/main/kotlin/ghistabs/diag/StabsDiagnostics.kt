@@ -15,12 +15,7 @@ interface DiagnosticSink {
  * prevField: Name of field before gap (null if first field)
  * nextField: Name of field after gap (null if trailing gap)
  */
-data class GapRecord(
-    val offsetBits: Long,
-    val lengthBits: Long,
-    val prevField: String?,
-    val nextField: String?,
-)
+data class GapRecord(val offsetBits: Long, val lengthBits: Long, val prevField: String?, val nextField: String?)
 
 /**
  * AttributionTrace represents a decision to route a type to a /std/ category.
@@ -146,12 +141,7 @@ class StabsDiagnostics {
      * Record a global variable apply/skip outcome.
      * Increments "global-applied" or "global-skipped" and records an example.
      */
-    fun recordGlobal(
-        addr: String,
-        outcome: String,
-        dtKind: String,
-        reason: String? = null,
-    ) {
+    fun recordGlobal(addr: String, outcome: String, dtKind: String, reason: String? = null) {
         val counterName = "global-$outcome"
         inc(counterName)
         val detail = if (reason != null) "addr=$addr dtKind=$dtKind reason=$reason" else "addr=$addr dtKind=$dtKind"
@@ -172,12 +162,7 @@ class StabsDiagnostics {
      * Record an attribution trace (type routed to /std/).
      * Stores up to 200 traces; further traces increment counter only.
      */
-    fun recordAttributionTrace(
-        typeName: String,
-        definingCUs: Set<String>,
-        matchedCU: String,
-        routedTo: String,
-    ) {
+    fun recordAttributionTrace(typeName: String, definingCUs: Set<String>, matchedCU: String, routedTo: String) {
         if (attributionTraces.size < 200) {
             attributionTraces.add(
                 AttributionTrace(

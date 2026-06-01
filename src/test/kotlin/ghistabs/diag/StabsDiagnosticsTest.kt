@@ -17,10 +17,7 @@ class StabsDiagnosticsTest {
     private class CapturingSink : DiagnosticSink {
         private val lines = mutableListOf<Pair<String, String>>()
 
-        override fun log(
-            category: String,
-            message: String,
-        ) {
+        override fun log(category: String, message: String) {
             lines.add(category to message)
         }
 

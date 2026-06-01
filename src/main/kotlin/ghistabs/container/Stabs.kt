@@ -261,10 +261,4 @@ class StabReader(
 /**
  * Raw stab record header fields, before type interpretation.
  */
-private data class RawHeader(
-    val strx: Int,
-    val type: Int,
-    val other: Int,
-    val desc: Int,
-    val value: Long,
-)
+private data class RawHeader(val strx: Int, val type: Int, val other: Int, val desc: Int, val value: Long)

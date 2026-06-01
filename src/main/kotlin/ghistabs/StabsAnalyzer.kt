@@ -56,12 +56,7 @@ class StabsAnalyzer :
         )
     }
 
-    override fun added(
-        program: Program?,
-        set: AddressSetView?,
-        monitor: TaskMonitor?,
-        log: MessageLog?,
-    ): Boolean {
+    override fun added(program: Program?, set: AddressSetView?, monitor: TaskMonitor?, log: MessageLog?): Boolean {
         program ?: return false
         log ?: return false
         monitor ?: return false
@@ -87,7 +82,8 @@ class StabsAnalyzer :
         const val OPT_VTABLES: String = "Synthesise vtable structs"
 
         @JvmStatic
-        fun isStabsDone(program: Program): Boolean = program.getOptions(Program.PROGRAM_INFO).getBoolean(STABS_DONE_OPTION, false)
+        fun isStabsDone(program: Program): Boolean =
+            program.getOptions(Program.PROGRAM_INFO).getBoolean(STABS_DONE_OPTION, false)
 
         @JvmStatic
         fun markStabsDone(program: Program, value: Boolean) {

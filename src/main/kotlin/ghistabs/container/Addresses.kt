@@ -35,7 +35,8 @@ internal class SymbolTableAdapter(private val symbolTable: SymbolTable) : LabelS
 
     override fun getSymbols(name: String) = symbolTable.getSymbols(name).toList()
 
-    override fun createLabel(addr: Address, name: String, source: SourceType): Symbol = symbolTable.createLabel(addr, name, source)
+    override fun createLabel(addr: Address, name: String, source: SourceType): Symbol =
+        symbolTable.createLabel(addr, name, source)
 }
 
 /**

@@ -9,11 +9,7 @@ import org.junit.jupiter.api.Test
  * Tests the computeGaps function which identifies holes in struct field layouts.
  */
 class GapComputationTest {
-    data class ComponentRecord(
-        val fieldName: String,
-        val offsetBytes: Int,
-        val lengthBytes: Int,
-    )
+    data class ComponentRecord(val fieldName: String, val offsetBytes: Int, val lengthBytes: Int)
 
     /**
      * Compute gaps in a struct's field layout.

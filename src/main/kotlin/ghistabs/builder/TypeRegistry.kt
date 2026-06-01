@@ -79,12 +79,7 @@ value class ContentHash(val v: Long) {
     }
 }
 
-data class TypeAst(
-    val id: TypeId,
-    val name: String,
-    val body: TypeDecl,
-    val cuFile: String,
-)
+data class TypeAst(val id: TypeId, val name: String, val body: TypeDecl, val cuFile: String)
 
 class TypeRegistry(
     private val dtm: DataTypeManager,
@@ -104,10 +99,7 @@ class TypeRegistry(
         includeContextsByFile = contexts
     }
 
-    fun materialiseAll(
-        rawTypesById: Map<TypeId, TypeAst>,
-        attribution: (String, Set<String>) -> CategoryPath,
-    ) {
+    fun materialiseAll(rawTypesById: Map<TypeId, TypeAst>, attribution: (String, Set<String>) -> CategoryPath) {
         // Snapshot for cross-batch fallback in dataTypeFor
         rawByIdSnapshot = rawTypesById
         val asts = rawTypesById.values.toList()
@@ -180,13 +172,8 @@ class TypeRegistry(
     ): DataType {
         val dt =
             when (body) {
-                is TypeDecl.Struct ->
-                    if (body.kind == AggrKind.UNION) {
-                        UnionDataType(category, name, dtm)
-                    } else {
-                        StructureDataType(category, name, body.sizeBytes.toInt(), dtm)
-                    }
-
+                is TypeDecl.Struct if (body.kind == AggrKind.UNION) -> UnionDataType(category, name, dtm)
+                is TypeDecl.Struct -> StructureDataType(category, name, body.sizeBytes.toInt(), dtm)
                 else -> StructureDataType(category, name, 0, dtm)
             }
         diagnostics.recordPlaceholder(name, category.toString(), reason)
@@ -230,7 +217,9 @@ class TypeRegistry(
         return canonical
     }
 
-    private fun materialiseBody(ast: TypeAst, category: CategoryPath, placeholder: DataType): DataType = when (val body = ast.body) {
+    private fun materialiseBody(
+        ast: TypeAst, category: CategoryPath, placeholder: DataType
+    ): DataType = when (val body = ast.body) {
         is TypeDecl.Builtin, is TypeDecl.Range, is TypeDecl.Complex, is TypeDecl.WithSizeAttr ->
             BuiltinTable.resolve(body, dtm) ?: placeholder
 
@@ -329,13 +318,15 @@ class TypeRegistry(
                 val len = if (ft.length <= 0) 4 else ft.length
                 try {
                     when (struct) {
-                        is Structure -> {
-                            struct.replaceAtOffset((field.offsetBits / 8).toInt(), ft, len, field.name, null)
-                        }
+                        is Structure -> struct.replaceAtOffset(
+                            (field.offsetBits / 8).toInt(),
+                            ft,
+                            len,
+                            field.name,
+                            null
+                        )
 
-                        is Union -> {
-                            struct.add(ft, field.name, null)
-                        }
+                        is Union -> struct.add(ft, field.name, null)
 
                         else -> {}
                     }
@@ -433,12 +424,7 @@ class TypeRegistry(
         }
     }
 
-    private fun registerWithConflict(
-        dt: DataType,
-        name: String,
-        hash: ContentHash,
-        category: CategoryPath,
-    ): DataType {
+    private fun registerWithConflict(dt: DataType, name: String, hash: ContentHash, category: CategoryPath): DataType {
         val existing = dtm.getDataType(category, name)
         if (existing == null) {
             byPath[category to name] = hash
