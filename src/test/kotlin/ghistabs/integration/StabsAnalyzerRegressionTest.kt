@@ -10,6 +10,11 @@ import ghidra.program.model.data.Enum
 import ghidra.program.model.listing.Program
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
+import ghistabs.importer.ImportContext
+import ghistabs.parser.Harvester
+import ghistabs.parser.StabReader
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.encodeToStream
 import org.junit.jupiter.api.*
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import java.io.File
@@ -33,6 +38,7 @@ import java.io.File
 class StabsAnalyzerRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
     private val fixture = File("src/test/resources/binaries/bouniafbouniaf.exe")
     private val baselineFile = File("src/test/resources/baselines/bouniafbouniaf-baseline.json")
+    private val harvestFile = File("src/test/resources/harvests/bouniafbouniaf-harvest.json")
 
     private lateinit var program: Program
     private var loadResults: LoadResults<Program>? = null
@@ -222,6 +228,15 @@ class StabsAnalyzerRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
             missing.isEmpty(),
             "Missing DataType kinds in globals: $missing (saw: $seenKinds)",
         )
+    }
+
+    @Test
+    fun harvestTest() {
+        val ctx = ImportContext(program, MessageLog(), TaskMonitor.DUMMY)
+        val stabs = StabReader.fromProgram(program)!!
+        val harvester = Harvester(TaskMonitor.DUMMY, ctx.sink, ctx.resolver)
+        val harvest = harvester.passA(stabs.records)
+        val jsonList = Json { prettyPrint = true }.encodeToStream(harvest, harvestFile.outputStream())
     }
 
     private fun parseTagFrequencies(log: String): Map<String, Long> = log

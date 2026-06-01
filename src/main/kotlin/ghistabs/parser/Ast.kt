@@ -1,6 +1,11 @@
 package ghistabs.parser
 
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonClassDiscriminator
+
 /** Identifies a type within a CU: (file-number, type-number). */
+@Serializable
 data class TypeId(val cu: Int, val n: Int)
 
 enum class Access { PRIVATE, PROTECTED, PUBLIC }
@@ -10,25 +15,35 @@ enum class VirtKind { NORMAL, STATIC, VIRTUAL, PURE_VIRTUAL }
 enum class AggrKind { STRUCT, UNION, CLASS }
 
 /** Type AST. Sealed; every grammar form has a constructor here. */
+@Serializable
 sealed interface TypeDecl {
     /** Forward reference to a type defined elsewhere by id. */
+    @Serializable
     data class Ref(val id: TypeId) : TypeDecl
 
     /** Sun range descriptor: `r<id>;<min>;<max>;` — encodes integer/char widths. */
+    @Serializable
     data class Range(val of: TypeId, val min: Long, val max: Long) : TypeDecl
 
+    @Serializable
     data class Pointer(val pointee: TypeDecl) : TypeDecl
 
+    @Serializable
     data class Reference(val referent: TypeDecl) : TypeDecl
 
+    @Serializable
     data class Const(val inner: TypeDecl) : TypeDecl
 
+    @Serializable
     data class Volatile(val inner: TypeDecl) : TypeDecl
 
+    @Serializable
     data class Array(val element: TypeDecl, val length: Long?, val indexType: TypeDecl?) : TypeDecl
 
+    @Serializable
     data class Enum(val members: List<Pair<String, Long>>) : TypeDecl
 
+    @Serializable
     data class Struct(
         val kind: AggrKind,
         val sizeBytes: Long,
@@ -39,27 +54,35 @@ sealed interface TypeDecl {
         val vtableTargetTypeId: TypeId?,
     ) : TypeDecl
 
+    @Serializable
     data class FunctionT(val ret: TypeDecl, val params: List<TypeDecl>) : TypeDecl
 
     /** Pointer-to-member-function (the `#` descriptor body). */
+    @Serializable
     data class Method(val cls: TypeDecl, val ret: TypeDecl, val params: List<TypeDecl>) : TypeDecl
 
     /** GCC complex/floating: `R<n>;<size>;0;`. n encodes 3=cfloat, 4=cdouble, 5=cldouble per gcc/dbxout. */
+    @Serializable
     data class Complex(val rCode: Int, val sizeBytes: Int) : TypeDecl
 
     /** Cross-reference: `xs<name>:` / `xu<name>:` / `xc<name>:` — incomplete tag. */
+    @Serializable
     data class XRef(val kind: AggrKind, val tagName: String) : TypeDecl
 
     /** Wrapper carrying an `@s<n>;` size attribute around an inner type. */
+    @Serializable
     data class WithSizeAttr(val sizeBits: Int, val inner: TypeDecl) : TypeDecl
 
     /** Inline type definition: `(cu,n)=<body>` where the binding `(cu,n)` is preserved for Phase 3. */
+    @Serializable
     data class InlineDef(val id: TypeId, val body: TypeDecl) : TypeDecl
 
     /** Builtin form `(0,N)` resolved by id only — content provided by BuiltinTable in Phase 3. */
+    @Serializable
     data object Builtin : TypeDecl
 }
 
+@Serializable
 data class FieldDecl(
     val name: String,
     val type: TypeDecl,
@@ -68,8 +91,10 @@ data class FieldDecl(
     val isStatic: Boolean,
 )
 
+@Serializable
 data class BaseDecl(val type: TypeDecl, val isVirtual: Boolean, val access: Access, val offsetBits: Long)
 
+@Serializable
 data class MethodDecl(
     val name: String,
     val mangled: String?,
@@ -83,34 +108,46 @@ data class MethodDecl(
 )
 
 /** Symbol AST: what one stab record's `name:descriptor` decodes to. */
+@Serializable
+@OptIn(ExperimentalSerializationApi::class)
+@JsonClassDiscriminator("kind")
 sealed interface SymbolDecl {
     val name: String
 
     /** `:F` / `:f`. Top-level function (file-static if `f`). */
+    @Serializable
     data class Function(override val name: String, val isFileStatic: Boolean, val signature: TypeDecl) : SymbolDecl
 
     /** `:p` */
+    @Serializable
     data class StackParam(override val name: String, val type: TypeDecl) : SymbolDecl
 
     /** `:P` (register param) or `:R` (alt). */
+    @Serializable
     data class RegParam(override val name: String, val type: TypeDecl, val regNum: Int) : SymbolDecl
 
     /** `:r` register variable. */
+    @Serializable
     data class RegLocal(override val name: String, val type: TypeDecl, val regNum: Int) : SymbolDecl
 
     /** Plain stack local (a `:` descriptor with no class letter, or `:V` static-local). */
+    @Serializable
     data class StackLocal(override val name: String, val type: TypeDecl) : SymbolDecl
 
     /** `:T` tagged type (struct/union/class/enum tag). */
+    @Serializable
     data class TaggedType(override val name: String, val id: TypeId, val body: TypeDecl) : SymbolDecl
 
     /** `:t` typedef. */
+    @Serializable
     data class Typedef(override val name: String, val id: TypeId, val body: TypeDecl) : SymbolDecl
 
     /** `:G` */
+    @Serializable
     data class Global(override val name: String, val type: TypeDecl) : SymbolDecl
 
     /** `:S` file-static / `:V` static-local. */
+    @Serializable
     data class StaticVar(override val name: String, val type: TypeDecl, val isFunctionLocal: Boolean) : SymbolDecl
 }
 

@@ -5,6 +5,7 @@ import ghidra.util.task.TaskMonitor
 import ghistabs.diag.BookmarkSink
 import ghistabs.importer.AddressResolver
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 
 @Serializable
 data class TypeAst(val id: TypeId, val name: String, val body: TypeDecl, val cuFile: String)
@@ -26,9 +27,19 @@ data class LocalRecord(val decl: SymbolDecl, val rawValue: Long, val recordIndex
 data class HarvestedSymbol(val decl: SymbolDecl, val recordType: StabType, val rawValue: Long)
 
 @Serializable
+data class SerializableAddress(val space: String, val offset: Long) {
+    constructor(addr: Address) : this(addr.addressSpace.name, addr.offset) {
+        address = addr
+    }
+
+    @Transient
+    lateinit var address: Address
+}
+
+@Serializable
 data class OpenFunction(
     val name: String,
-    val addr: Address,
+    val addr: SerializableAddress,
     val decl: SymbolDecl.Function,
     val cu: String,
     val locals: MutableList<LocalRecord>,
@@ -123,7 +134,7 @@ class Harvester(
                             val open =
                                 OpenFunction(
                                     name = mangled,
-                                    addr = addr,
+                                    addr = SerializableAddress(addr),
                                     decl = decl,
                                     cu = currentCu,
                                     locals = mutableListOf(),
@@ -190,7 +201,7 @@ class Harvester(
                         }
 
                         is SymbolDecl.Function, is SymbolDecl.Global, is SymbolDecl.RegParam, is SymbolDecl.StackParam,
-                            -> {
+                        -> {
                         }
                     }
                 } catch (e: StabsParseException) {

@@ -80,8 +80,8 @@ class StabsImporter(internal val ctx: ImportContext) : LogSink {
 
         for (open in harvest.openFunctions) {
             try {
-                val func = funcMgr.getFunctionAt(open.addr)
-                    ?: funcMgr.getFunctionContaining(open.addr)?.also {
+                val func = funcMgr.getFunctionAt(open.addr.address)
+                    ?: funcMgr.getFunctionContaining(open.addr.address)?.also {
                         ctx.diagnostics.inc("entrypoint-snapped")
                     }
                     ?: run {
@@ -133,7 +133,7 @@ class StabsImporter(internal val ctx: ImportContext) : LogSink {
                 val bucket = ApplyErrorBucket.bucket(t)
                 ctx.diagnostics.recordApplyError(open.name, bucket, t.message.orEmpty())
                 ctx.sink.log("apply-error-$bucket", "function ${open.name}: ${t.message}")
-                ctx.sink.bookmark("apply-error", open.addr, "function ${open.name}: ${t.message}")
+                ctx.sink.bookmark("apply-error", open.addr.address, "function ${open.name}: ${t.message}")
             }
         }
 
