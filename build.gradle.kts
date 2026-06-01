@@ -1,3 +1,5 @@
+import java.util.zip.ZipFile
+
 plugins {
     id("org.jetbrains.kotlin.jvm") version "2.3.21"
     id("org.jlleitschuh.gradle.ktlint") version "14.2.0"
@@ -93,10 +95,55 @@ val ghidraInstallDir =
 
 apply(from = File(ghidraInstallDir).canonicalPath + "/support/buildExtension.gradle")
 
-tasks.register("distributeExtension") {
-    group = "Ghidra"
-    dependsOn(":buildExtension")
-}
+tasks.register("installExtension") {
+    group = "ghidra"
+    description = "Build and install the extension into the Ghidra user extensions directory"
+    dependsOn("buildExtension")
 
-// Exclude additional files from the built extension
-// Ex: buildExtension.exclude(".idea/**")
+    val distroPrefix = project.extra["DISTRO_PREFIX"].toString()
+    val releaseName = project.extra["RELEASE_NAME"].toString()
+    val projectName = project.name
+    val buildExtensionZip = (tasks.named("buildExtension").get() as Zip).archiveFile
+
+    doLast {
+        val userDir: File = System.getenv("GHIDRA_USER_DIR")?.let { File(it) } ?: run {
+            val dirName = "${distroPrefix}_$releaseName" // e.g. ghidra_12.0.4_DEV
+            val home = System.getProperty("user.home")
+            val modern = File("$home/.config/ghidra/$dirName")
+            val legacy = File("$home/.ghidra/.$dirName")
+            when {
+                modern.exists() -> modern
+                legacy.exists() -> legacy
+                else -> throw GradleException(
+                    "No Ghidra user dir found at $modern or $legacy. Set GHIDRA_USER_DIR to override.",
+                )
+            }
+        }
+
+        val targetDir = File(userDir, "Extensions")
+        targetDir.mkdirs()
+
+        val zip = buildExtensionZip.get().asFile
+        val installedDir = File(targetDir, projectName)
+        if (installedDir.exists()) {
+            installedDir.deleteRecursively()
+            logger.lifecycle("Removed previous install: $installedDir")
+        }
+
+        ZipFile(zip).use { zf ->
+            for (entry in zf.entries()) {
+                val out = File(targetDir, entry.name)
+                if (entry.isDirectory) {
+                    out.mkdirs()
+                } else {
+                    out.parentFile.mkdirs()
+                    zf.getInputStream(entry).use { input ->
+                        out.outputStream().use { output -> input.copyTo(output) }
+                    }
+                }
+            }
+        }
+        logger.lifecycle("Installed ${zip.name} → $targetDir")
+        logger.lifecycle("Restart Ghidra to load the new build.")
+    }
+}

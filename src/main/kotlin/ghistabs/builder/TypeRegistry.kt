@@ -177,9 +177,7 @@ class TypeRegistry(
 
         // Aggregate bodies — never referenced directly; only meaningful via TypeId.
         // See kdoc above.
-        is TypeDecl.Struct, is TypeDecl.Enum, is TypeDecl.FunctionT,
-        is TypeDecl.Method, is TypeDecl.XRef,
-        -> null
+        is TypeDecl.Struct, is TypeDecl.Enum, is TypeDecl.FunctionT, is TypeDecl.Method, is TypeDecl.XRef -> null
     }
 
     private fun makePlaceholder(
