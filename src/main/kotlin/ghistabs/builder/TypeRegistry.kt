@@ -83,6 +83,14 @@ class TypeRegistry(
 ) {
     private val byId: MutableMap<TypeId, DataType> = mutableMapOf()
     private val placeholders: MutableMap<TypeId, DataType> = mutableMapOf()
+
+    // Some TypeIds host more than one distinct type because gcc reuses local ids
+    // inside BINCL blocks per CU (different content, same canonical id). byId/placeholders
+    // are keyed by TypeId for Ref lookup (single entry wins). These (id, name)-keyed maps
+    // additionally let each named AST materialise on its OWN placeholder/canonical so
+    // every type still lands in the DTM.
+    private val byIdName: MutableMap<Pair<TypeId, String>, DataType> = mutableMapOf()
+    private val placeholdersByIdName: MutableMap<Pair<TypeId, String>, DataType> = mutableMapOf()
     private val byHash: MutableMap<Pair<String, ContentHash>, DataType> = mutableMapOf()
     private val byPath: MutableMap<Pair<CategoryPath, String>, ContentHash> = mutableMapOf()
     private val conflictCount: MutableMap<String, Int> = mutableMapOf()
@@ -94,10 +102,16 @@ class TypeRegistry(
         includeContextsByFile = contexts
     }
 
-    fun materialiseAll(rawTypesById: Map<TypeId, TypeAst>, attribution: (String, Set<String>) -> CategoryPath) {
-        // Snapshot for cross-batch fallback in dataTypeFor
-        rawByIdSnapshot = rawTypesById
-        val asts = rawTypesById.values.toList()
+    fun materialiseAll(typeAsts: List<TypeAst>, attribution: (String, Set<String>) -> CategoryPath) {
+        // gcc reuses local type IDs inside BINCL blocks per-CU: every CU's stab stream
+        // emits its own private types inside e.g. `BINCL project_header.h` using local
+        // file slots that all canonicalise to the same canonical CU. So multiple ASTs
+        // legitimately share an `id` post-canonicalisation but describe DIFFERENT types.
+        // Process every TypeAst; do NOT pre-dedupe by id. Ref resolution still uses
+        // byId (last writer wins) — fine because refs are always emitted IN THE SAME CU
+        // as the type they reference, so all CUs see consistent local→canonical lookups.
+        val asts = typeAsts
+        rawByIdSnapshot = asts.associateBy { it.id }
         val byName = asts.groupBy { it.name }
 
         // Build struct AST map for polymorphic base detection in materialiseBody
@@ -120,7 +134,8 @@ class TypeRegistry(
             // with the real EnumDataType during resolve() and cause it to be renamed to
             // `<name>_2`.
             for (ast in asts) {
-                if (placeholders.containsKey(ast.id) || byId.containsKey(ast.id)) continue
+                val key = ast.id to ast.name
+                if (placeholdersByIdName.containsKey(key) || byIdName.containsKey(key)) continue
                 val defCUs = byName[ast.name]?.map { it.cuFile }?.toSet() ?: setOf(ast.cuFile)
                 val category = attribution(ast.name, defCUs)
                 val raw = makePlaceholder(ast.body, category, ast.name)
@@ -129,7 +144,12 @@ class TypeRegistry(
                 } else {
                     raw
                 }
-                placeholders[ast.id] = placeholder
+                placeholdersByIdName[key] = placeholder
+                // First placeholder per id also goes in placeholders[id] so Ref(id) lookups
+                // during materialisation get something. Later distinct-name ASTs at the
+                // same id keep their own placeholderByIdName but DON'T overwrite the id-keyed
+                // entry — refs by id should remain stable across the batch.
+                placeholders.getOrPut(ast.id) { placeholder }
             }
             for (ast in asts) {
                 resolve(ast, byName, attribution)
@@ -211,8 +231,11 @@ class TypeRegistry(
         byName: Map<String, List<TypeAst>>,
         attribution: (String, Set<String>) -> CategoryPath,
     ): DataType {
-        // 1. Already fully resolved?
-        byId[ast.id]?.let { return it }
+        // 1. Already fully resolved under THIS (id, name)? Different names at the same
+        //    canonical id describe distinct types (gcc reuses local ids inside BINCL blocks
+        //    per CU); each name materialises on its own track.
+        val key = ast.id to ast.name
+        byIdName[key]?.let { return it }
 
         // 2. Compute content hash for cross-CU dedup
         val hash = ContentHash.of(ast.body)
@@ -222,7 +245,8 @@ class TypeRegistry(
         //    would let the resulting empty-vs-real conflict in registerWithConflict
         //    overwrite the canonical (gap census on the duplicate is best-effort).
         byHash[ast.name to hash]?.let {
-            byId[ast.id] = it
+            byIdName[key] = it
+            byId.putIfAbsent(ast.id, it)
             return it
         }
 
@@ -231,14 +255,20 @@ class TypeRegistry(
         val category = attribution(ast.name, definingCUs)
 
         // 5. Reuse pre-seeded placeholder (or create one if resolve() is called directly)
-        val placeholder = placeholders.getOrPut(ast.id) { makePlaceholder(ast.body, category, ast.name, "ref-stub") }
+        val placeholder = placeholdersByIdName.getOrPut(key) {
+            makePlaceholder(ast.body, category, ast.name, "ref-stub")
+        }
 
         // 6. Materialise body — references back to ast.id will resolve via placeholders[ast.id]
         val materialised = materialiseBody(ast, category, placeholder)
 
         // 7. Register with conflict handling and record as fully resolved
         val canonical = registerWithConflict(materialised, ast.name, hash, category)
-        byId[ast.id] = canonical
+        byIdName[key] = canonical
+        // Keep byId stable for Ref lookups: first writer wins. (Later same-id ASTs
+        // with different names still materialise into the DTM via byIdName but don't
+        // hijack Ref(id) resolution.)
+        byId.putIfAbsent(ast.id, canonical)
         byHash[ast.name to hash] = canonical
 
         return canonical
