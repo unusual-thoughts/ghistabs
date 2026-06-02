@@ -107,14 +107,29 @@ class TypeRegistry(
 
         val tx = dtm.startTransaction("ghidra-stabs build types")
         try {
-            // Pre-seed placeholders in a SEPARATE map so forward refs within the batch
-            // resolve to the placeholder during body materialization. byId is reserved
-            // for fully-resolved types so that resolve() doesn't short-circuit.
+            // Pre-seed placeholders so forward refs within the batch resolve during body
+            // materialisation. For Struct/Union bodies we ALSO addDataType the placeholder
+            // up-front: addDataType returns the DTM-resolved instance and later mutations
+            // on it land on the DTM-resident object. Without this, when two ASTs with the
+            // same (name, category) but different bodies both materialise, the second one's
+            // empty-vs-real conflict in registerWithConflict overwrites the first's
+            // components.
+            //
+            // Non-aggregate placeholders (Enum etc.) are NOT pre-added — makePlaceholder
+            // returns a Structure stub for them, and pre-adding it would later conflict
+            // with the real EnumDataType during resolve() and cause it to be renamed to
+            // `<name>_2`.
             for (ast in asts) {
                 if (placeholders.containsKey(ast.id) || byId.containsKey(ast.id)) continue
                 val defCUs = byName[ast.name]?.map { it.cuFile }?.toSet() ?: setOf(ast.cuFile)
                 val category = attribution(ast.name, defCUs)
-                placeholders[ast.id] = makePlaceholder(ast.body, category, ast.name)
+                val raw = makePlaceholder(ast.body, category, ast.name)
+                val placeholder = if (ast.body is TypeDecl.Struct) {
+                    dtm.addDataType(raw, DataTypeConflictHandler.KEEP_HANDLER)
+                } else {
+                    raw
+                }
+                placeholders[ast.id] = placeholder
             }
             for (ast in asts) {
                 resolve(ast, byName, attribution)
@@ -202,12 +217,13 @@ class TypeRegistry(
         // 2. Compute content hash for cross-CU dedup
         val hash = ContentHash.of(ast.body)
 
-        // 3. Cross-CU dedup: same name + same body seen before?
-        // NOTE: Gap census is best-effort per first-materialization.
-        // Duplicate structs (found here) skip gap computation and reuse the canonical type.
-        // This is acceptable since truly identical structures have identical gaps anyway.
+        // 3. Cross-CU dedup: same name + same body seen before? Reuse the canonical
+        //    DataType and STOP — re-materialising the body onto a different placeholder
+        //    would let the resulting empty-vs-real conflict in registerWithConflict
+        //    overwrite the canonical (gap census on the duplicate is best-effort).
         byHash[ast.name to hash]?.let {
             byId[ast.id] = it
+            return it
         }
 
         // 4. Compute category
