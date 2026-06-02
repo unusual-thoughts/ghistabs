@@ -12,21 +12,6 @@ import org.junit.jupiter.api.Test
  */
 class StabsDiagnosticsTest {
     /**
-     * Pure Kotlin test double that captures log() calls into a list.
-     */
-    private class CapturingSink : DiagnosticSink {
-        private val lines = mutableListOf<Pair<String, String>>()
-
-        override fun log(category: String, message: String) {
-            lines.add(category to message)
-        }
-
-        fun capturedOutput(): String = lines.joinToString("\n") { (category, msg) ->
-            "[$category] $msg"
-        }
-    }
-
-    /**
      * AC11.1: After several record* calls, writeSummary produces exactly one
      * === diagnostics === header, one name=value line per counter, and example
      * sections only when buckets are non-empty.

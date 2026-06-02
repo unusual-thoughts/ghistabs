@@ -10,6 +10,8 @@ import ghidra.program.model.data.Enum
 import ghidra.program.model.listing.Program
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
+import ghistabs.diag.CapturingSink
+import ghistabs.diag.defaultContext
 import ghistabs.importer.ImportContext
 import ghistabs.parser.Harvester
 import ghistabs.parser.StabReader
@@ -39,11 +41,12 @@ class StabsAnalyzerRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
     private val fixture = File("src/test/resources/binaries/xapasmcsr.exe")
     private val baselineFile = File("src/test/resources/baselines/xapasmcsr-baseline.json")
     private val harvestFile = File("src/test/resources/harvests/xapasmcsr-harvest.json")
+    private val logFile = File("src/test/resources/logs/xapasmcsr.log")
 
     private lateinit var program: Program
     private var loadResults: LoadResults<Program>? = null
     private var usedRealBinary = false
-    private lateinit var stabsLog: MessageLog
+    private lateinit var context: ImportContext<CapturingSink>
 
     @BeforeEach
     fun setUp() {
@@ -55,7 +58,6 @@ class StabsAnalyzerRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
         // Load the binary using ProgramLoader without TestEnv project infrastructure.
         // ProgramLoader.builder() can load a binary without a project; project parameter is optional.
         val log = MessageLog()
-        stabsLog = log
         val monitor = TaskMonitor.DUMMY
 
         try {
@@ -81,13 +83,15 @@ class StabsAnalyzerRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
             } finally {
                 program.endTransaction(txId, true)
             }
+            context = program.defaultContext()
             val stabsAnalyzer = ghistabs.StabsAnalyzer()
             val txStabs = program.startTransaction("stabs-analyze")
             try {
-                stabsAnalyzer.added(program, program.memory, monitor, log)
+                stabsAnalyzer.run(program, context)
             } finally {
                 program.endTransaction(txStabs, true)
             }
+            logFile.writeText(context.log.capturedOutput())
         } catch (e: Exception) {
             // If loading the real binary fails, skip the test (these tests require real binary data)
             assumeTrue(false, "Failed to load real binary via ProgramLoader: ${e.message}")
@@ -102,8 +106,7 @@ class StabsAnalyzerRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
 
     @Test
     fun countersWithinBaseline() {
-        val messageLog = capturedMessageLog(program)
-        val tagCounts = parseTagFrequencies(messageLog)
+        val tagCounts = context.log.tagFrequencies()
         val baseline = BaselineLoader.load(baselineFile)
 
         // If no stabs were found in the binary, skip the test
@@ -208,17 +211,16 @@ class StabsAnalyzerRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
     fun globalsCoverEachDataTypeKind() {
         val seenKinds = mutableSetOf<String>()
         program.listing.getDefinedData(true).forEach { data ->
-            seenKinds +=
-                when (val dt = data.dataType) {
-                    is Structure -> "Structure"
-                    is Array -> "Array"
-                    is Union -> "Union"
-                    is Pointer -> "Pointer"
-                    is Enum -> "Enum"
-                    is TypeDef -> "TypeDef"
-                    is FunctionDefinition -> "FunctionDefinition"
-                    else -> "Primitive"
-                }
+            seenKinds += when (val dt = data.dataType) {
+                is Structure -> "Structure"
+                is Array -> "Array"
+                is Union -> "Union"
+                is Pointer -> "Pointer"
+                is Enum -> "Enum"
+                is TypeDef -> "TypeDef"
+                is FunctionDefinition -> "FunctionDefinition"
+                else -> "Primitive"
+            }
         }
         // Enum is not required: xapasmcsr.exe may have no enum-typed globals.
         // The other kinds reflect basic global-application coverage.
@@ -232,23 +234,10 @@ class StabsAnalyzerRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
 
     @Test
     fun harvestTest() {
-        val ctx = ImportContext(program, MessageLog(), TaskMonitor.DUMMY)
+        val ctx = program.defaultContext()
         val stabs = StabReader.fromProgram(program)!!
         val harvester = Harvester(TaskMonitor.DUMMY, ctx.sink, ctx.resolver)
         val harvest = harvester.passA(stabs.records)
-        val jsonList = Json { prettyPrint = true }.encodeToStream(harvest, harvestFile.outputStream())
-    }
-
-    private fun parseTagFrequencies(log: String): Map<String, Long> = log
-        .lines()
-        .mapNotNull { Regex("""\[Stabs\] ([A-Za-z0-9._-]+)(?: at [^:]+)?:""").find(it)?.groupValues?.get(1) }
-        .groupingBy { it }
-        .eachCount()
-        .mapValues { it.value.toLong() }
-
-    private fun capturedMessageLog(prog: Program): String {
-        val analysisLog = AutoAnalysisManager.getAnalysisManager(prog).messageLog.toString()
-        val stabs = if (::stabsLog.isInitialized) stabsLog.toString() else ""
-        return analysisLog + "\n" + stabs
+        Json { prettyPrint = true }.encodeToStream(harvest, harvestFile.outputStream())
     }
 }

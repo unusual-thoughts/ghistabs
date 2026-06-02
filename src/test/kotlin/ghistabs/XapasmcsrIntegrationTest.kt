@@ -100,13 +100,10 @@ class XapasmcsrIntegrationTest {
         val fixturePath = File("src/test/resources/binaries/xapasmcsr.exe")
         assumeTrue(
             fixturePath.exists(),
-            "Skipping: xapasmcsr.exe not present. " +
-                "To enable real binary test, copy from " +
-                "~/.wine/drive_c/ADK_Toolkit_1.2.16.22_x64/tools/bin/xapasmcsr.exe " +
-                "to src/test/resources/binaries/xapasmcsr.exe",
+            "Skipping: xapasmcsr.exe not present. ",
         )
 
-        val baselineFile = File("src/test/resources/baselines/xapasmcsr-phaseA-baseline.json")
+        val baselineFile = File("src/test/resources/baselines/xapasmcsr-baseline.json")
         assumeTrue(
             baselineFile.exists(),
             "Phase A baseline not committed yet — Phase H regression harness will produce it",
