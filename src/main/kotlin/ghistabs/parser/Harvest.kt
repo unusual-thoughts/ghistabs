@@ -213,8 +213,38 @@ class Harvester(
                     Triple(rec.type, rec.value, i),
                 )
 
-                // ignore N_SLINE, N_OPT, etc.
-                else -> sink.log("drop-record", "dropping ${rec.type}")
+                // Known-irrelevant for type/symbol harvesting — bumped silently into
+                // diagnostics counters by the caller (no per-record log lines, which
+                // otherwise drown the log under N_SLINE @ 23k records/binary).
+                StabType.N_SLINE, StabType.N_DSLINE, StabType.N_BSLINE, StabType.N_FLINE,
+                StabType.N_OPT, StabType.N_OLEVEL, StabType.N_PARAMS, StabType.N_VERSION,
+                StabType.N_MAIN, StabType.N_PC, StabType.N_M2C, StabType.N_DEFD,
+                StabType.N_SSYM, StabType.N_ENDM, StabType.N_OSO, StabType.N_FNAME,
+                StabType.N_EHDECL, StabType.N_CATCH, StabType.N_LENG,
+                StabType.N_SCOPE, StabType.N_BCOMM, StabType.N_ECOMM, StabType.N_ECOML,
+                StabType.N_ENTRY, StabType.N_MAC_DEFINE, StabType.N_MAC_UNDEF,
+                // Apple/Sun cross-toolchain codes; benign for x86 PE / ELF.
+                StabType.N_ROSYM, StabType.N_BNSYM, StabType.N_ENSYM, StabType.N_OBJ,
+                StabType.N_ALIAS, StabType.N_NSYMS, StabType.N_NOMAP, StabType.N_PATCH,
+                StabType.N_WITH,
+                StabType.N_NBTEXT, StabType.N_NBDATA, StabType.N_NBBSS,
+                StabType.N_NBSTS, StabType.N_NBLCS,
+                -> sink.bump("drop-record-${rec.type.name.removePrefix("N_").lowercase()}")
+
+                // Empty-name forms that already played their role inside StabReader:
+                //   - N_UNDF: cuOff/cuSize were advanced as the record streamed by.
+                //   - empty N_SO: terminates a CU; no scope state to update here.
+                //   - empty N_SOL: ignored (no source filename to switch to).
+                StabType.N_UNDF, StabType.N_SO, StabType.N_SOL ->
+                    sink.bump("drop-record-${rec.type.name.removePrefix("N_").lowercase()}-empty")
+
+                // Hard signal — a stab type the byte-decoder recognises but we have
+                // no harvesting rule for. Log loudly, once per type, with rawType so
+                // the binary's source (compiler/linker) can be identified.
+                StabType.UNKNOWN -> sink.log(
+                    "stab-unknown",
+                    "rawType=0x${"%02X".format(rec.rawType)} @${rec.recordIndex} '${rec.name.take(60)}'",
+                )
             }
         }
         return Harvest(parseErrors, typeAsts, symbolsByCu, openFunctions)

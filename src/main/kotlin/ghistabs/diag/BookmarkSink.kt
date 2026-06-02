@@ -34,4 +34,12 @@ class BookmarkSink(
         }
         messageLog.log(category, message)
     }
+
+    /**
+     * Bump a counter without emitting a log line. Use for high-frequency events
+     * where per-record logging would drown out other diagnostics (e.g. N_SLINE).
+     */
+    fun bump(category: String) {
+        diagnostics?.inc(category)
+    }
 }

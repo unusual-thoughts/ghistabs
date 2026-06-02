@@ -72,12 +72,23 @@ class ProgramAddressResolver(private val program: Program) : StabOnlyAddressReso
 
     /**
      * Resolve a (possibly mangled) symbol name to an address.
-     * Stab-derived map first; falls back to labelStore.getSymbols(name).
-     * Returns null if neither source has it.
+     * Order:
+     *  1. Stab-derived map (recordFromStab).
+     *  2. Ghidra symbol table — exact name.
+     *  3. Ghidra symbol table — `_<name>` (MinGW/cdecl PE convention: externals
+     *     get a leading underscore in the COFF symbol table; stabs records
+     *     carry the un-prefixed C source name).
+     *
+     * Returns null if none of the above resolve.
      */
     override fun resolve(name: String): Address? {
         super.resolve(name)?.let { return it }
-        val syms = program.symbolTable.getSymbols(name)
-        return syms.firstOrNull()?.address
+        program.symbolTable.getSymbols(name).firstOrNull()?.let { return it.address }
+        // PE/Cygwin externals get one extra leading underscore vs. the stabs string:
+        //   - C symbols:  stab says `Foo`        → COFF has `_Foo`
+        //   - C++ symbols stab says `_ZTI4Foo`   → COFF has `__ZTI4Foo`
+        // Try the prefixed form unconditionally.
+        program.symbolTable.getSymbols("_$name").firstOrNull()?.let { return it.address }
+        return null
     }
 }
