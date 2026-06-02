@@ -170,15 +170,24 @@ class StabsImporter(internal val ctx: ImportContext<*>) : LogSink {
             // include of a header that defines the class produces a TypeAst). materialiseAll
             // collapses them into one DataType keyed by the union of defining CUs; ClassBuilder
             // must use the same union for Attribution so its DTM lookup matches.
-            for (ast in harvest.typeAsts) {
-                val body = ast.body as? TypeDecl.Struct ?: continue
+            // Dedupe ASTs by name and use the union of cuFiles for Attribution — the same
+            // signal materialiseAll used when seeding placeholders. Per-AST iteration with
+            // single-cuFile attribution produced N attempted `dtm.getDataType` lookups per
+            // class, only ONE landing on the canonical category (huge `[class-not-struct]`
+            // log spam). Pick the most-detailed body (max methods, then fields) so vtable
+            // construction sees the full method list.
+            for ((name, asts) in harvest.typeAsts.groupBy { it.name }) {
+                val structAsts = asts.mapNotNull { it.body as? TypeDecl.Struct }
+                if (structAsts.isEmpty()) continue
+                val body = structAsts.maxByOrNull { it.methods.size * 100_000 + it.fields.size }!!
                 if (body.methods.isEmpty() && !body.hasVTablePointerMarker) continue
                 try {
-                    val category = Attribution.categoryFor(ast.name, setOf(ast.cuFile), ctx.diagnostics)
-                    classBuilder.build(ast.name, body, category)
+                    val defCUs = asts.map { it.cuFile }.toSet()
+                    val category = Attribution.categoryFor(name, defCUs, ctx.diagnostics)
+                    classBuilder.build(name, body, category)
                     classes++
                 } catch (t: Throwable) {
-                    ctx.sink.log("class-apply-error", "${ast.name}: ${t.message}")
+                    ctx.sink.log("class-apply-error", "$name: ${t.message}")
                 }
             }
         }

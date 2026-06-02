@@ -141,6 +141,22 @@ class StabsAnalyzerRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
     }
 
     @Test
+    fun csymLexStreamPresent() {
+        val all = program.dataTypeManager.allDataTypes
+            .asSequence()
+            .filter { it.name == "bouniaf" }
+            .map { "${it.categoryPath.path}/${it.name} (${it::class.simpleName}, len=${(it as? Structure)?.length})" }
+            .toList()
+        // bouniaf is defined inside STL headers (only entry points are template
+        // instantiations) so it ends up under /std/<sorted-first-header>/ rather than
+        // a project category. What matters is that it materialised as a non-empty
+        // Structure that ClassBuilder can find via Attribution (i.e. the dedup +
+        // sort-stable attribution agree on the same category).
+        val best = all.firstOrNull { "(StructureDB" in it }
+        Assertions.assertNotNull(best, "No bouniaf Structure in DTM. Got:\n${all.joinToString("\n")}")
+    }
+
+    @Test
     fun exprInstHasComponents() {
         val matches = program.dataTypeManager.allDataTypes
             .asSequence()
