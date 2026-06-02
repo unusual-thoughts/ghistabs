@@ -196,29 +196,52 @@ class StabsImporter(internal val ctx: ImportContext<*>) : LogSink {
             HarvestedAddr(name, addr)
         }
 
-        // Scan .bss block at 4-byte intervals, checking for uncovered regions
+        // Scan .bss block at 4-byte intervals, accumulating contiguous no-coverage runs
+        // into a single log entry per range (otherwise a typical .bss produces thousands
+        // of one-per-chunk lines).
         var addr = bssBlock.start
+        var gapStart: ghidra.program.model.address.Address? = null
+        var gapEnd: ghidra.program.model.address.Address? = null
+
+        fun flushGap() {
+            val start = gapStart ?: return
+            val end = gapEnd ?: return
+            ctx.sink.log(
+                "stabs-no-coverage",
+                "@ $start..$end (${end.offset - start.offset + 1} bytes): no stabs records cover this range",
+            )
+            gapStart = null
+            gapEnd = null
+        }
+
         while (addr <= bssBlock.end) {
             ctx.monitor.checkCancelled()
+            val rangeEnd = addr.add(3)
 
-            // Skip addresses that already have a symbol or defined data
-            if (ctx.program.symbolTable.getPrimarySymbol(addr) == null &&
-                ctx.program.listing.getDefinedDataAt(addr) == null
-            ) {
-                val rangeEnd = addr.add(3)
+            val occupied = ctx.program.symbolTable.getPrimarySymbol(addr) != null ||
+                ctx.program.listing.getDefinedDataAt(addr) != null
+            if (occupied) {
+                flushGap()
+            } else {
                 val pureRange = AddrRange(addr.offset, rangeEnd.offset)
                 when (val result = BssCoverageDecision.classify(pureRange, harvestedAddrs)) {
-                    is CoverageResult.NoCoverage ->
-                        ctx.sink.log("stabs-no-coverage", "@ $addr..$rangeEnd: no stabs records cover this range")
+                    is CoverageResult.NoCoverage -> {
+                        if (gapStart == null) gapStart = addr
+                        gapEnd = rangeEnd
+                    }
 
-                    is CoverageResult.Covered -> result.coverers.forEach {
-                        ctx.sink.log("stabs-coverage", "@ $addr..$rangeEnd: covered by ${it.symbolName}")
+                    is CoverageResult.Covered -> {
+                        flushGap()
+                        result.coverers.forEach {
+                            ctx.sink.log("stabs-coverage", "@ $addr..$rangeEnd: covered by ${it.symbolName}")
+                        }
                     }
                 }
             }
 
             addr = addr.add(4)
         }
+        flushGap()
     }
 
     private fun applyLocal(func: Function, loc: LocalRecord, typeRegistry: TypeRegistry, source: SourceType) {
