@@ -46,13 +46,18 @@ object Attribution {
             return CategoryPath("/proj/$typeName")
         }
 
-        // 2. Check if ANY definingCU path matches STD_MARKERS
-        val stdMatch = definingCUs.firstNotNullOfOrNull { stdBasename(it) }
+        // 2. Check if ANY definingCU path matches STD_MARKERS. Sort first — the input is a
+        //    Set whose iteration order isn't stable across callers, and we MUST land on the
+        //    same /std/<header> for every call with the same input or downstream
+        //    `dtm.getDataType(category, name)` lookups in ClassBuilder won't match what
+        //    materialiseAll registered.
+        val sortedDefiningCUs = definingCUs.sorted()
+        val stdMatch = sortedDefiningCUs.firstNotNullOfOrNull { stdBasename(it) }
         if (stdMatch != null) {
             diagnostics?.recordAttributionTrace(
                 typeName = typeName,
                 definingCUs = definingCUs,
-                matchedCU = definingCUs.first { stdBasename(it) != null },
+                matchedCU = sortedDefiningCUs.first { stdBasename(it) != null },
                 routedTo = "/std/$stdMatch",
             )
             return CategoryPath("/std/$stdMatch")
