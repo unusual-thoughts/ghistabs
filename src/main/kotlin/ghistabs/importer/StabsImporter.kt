@@ -38,7 +38,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : LogSink {
         typeRegistry.setIncludeContexts(harvester.includesByFile)
         val txB = ctx.program.startTransaction("Stabs: materialise types")
         try {
-            typeRegistry.materialiseAll(harvest.typeAstsById) { name, cus ->
+            typeRegistry.materialiseAll(harvest.typeAsts) { name, cus ->
                 Attribution.categoryFor(name, cus, ctx.diagnostics)
             }
         } finally {

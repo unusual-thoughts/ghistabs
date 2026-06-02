@@ -141,6 +141,16 @@ class StabsAnalyzerRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
     }
 
     @Test
+    fun cparserMaterialised() {
+        // CParser, Token_Type and EAsm all canonicalise to the same TypeId because
+        // gcc reuses local ids inside BINCL blocks per CU. Each must still reach the DTM.
+        for (name in listOf("CParser", "Token_Type", "EAsm")) {
+            val dt = program.dataTypeManager.allDataTypes.asSequence().firstOrNull { it.name == name }
+            Assertions.assertNotNull(dt, "$name missing from DTM (shared BINCL canonical id collision)")
+        }
+    }
+
+    @Test
     fun csymLexStreamPresent() {
         val all = program.dataTypeManager.allDataTypes
             .asSequence()
