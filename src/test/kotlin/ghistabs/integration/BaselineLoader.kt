@@ -1,47 +1,44 @@
 package ghistabs.integration
 
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 import java.io.File
 
-/**
- * Represents a range of acceptable values for a counter.
- */
+@Serializable
 data class CounterRange(val min: Long, val max: Long)
 
 /**
- * Represents a loaded baseline with counter ranges.
- */
-data class Baseline(val counters: Map<String, CounterRange>)
-
-/**
- * Loads and parses a baseline JSON file.
- * JSON structure:
+ * Acceptable counter ranges loaded from a baseline JSON file.
+ *
+ * Schema (other top-level keys like `schema`, `source`, `phaseA`, `notes` are
+ * accepted and ignored — they're documentation, not gates):
+ * ```
  * {
  *   "counters": {
  *     "counter-name": {"min": 0, "max": 100},
  *     ...
  *   }
  * }
+ * ```
  */
+@Serializable
+data class Baseline(
+    val counters: Map<String, CounterRange> = emptyMap(),
+    // Tolerated-but-unused metadata; declared so kotlinx.serialization doesn't reject the doc.
+    val schema: Int? = null,
+    val source: String? = null,
+    val phaseA: JsonElement? = null,
+    val notes: String? = null,
+)
+
 object BaselineLoader {
+    private val json = Json {
+        ignoreUnknownKeys = true
+    }
+
     fun load(file: File): Baseline {
         require(file.exists()) { "Baseline file not found: ${file.path}" }
-
-        val json = file.readText()
-
-        // Simple regex-based JSON parsing to avoid external JSON dependency.
-        // Extract all counter blocks matching pattern: "counter-name": {"min": N, "max": M}
-        val counters = mutableMapOf<String, CounterRange>()
-
-        // Match: "name": {"min": X, "max": Y}
-        val pattern = """"([A-Za-z0-9._-]+)":\s*\{\s*"min":\s*(\d+),\s*"max":\s*(\d+)\s*\}""".toRegex()
-
-        for (match in pattern.findAll(json)) {
-            val name = match.groupValues[1]
-            val min = match.groupValues[2].toLong()
-            val max = match.groupValues[3].toLong()
-            counters[name] = CounterRange(min, max)
-        }
-
-        return Baseline(counters)
+        return json.decodeFromString(Baseline.serializer(), file.readText())
     }
 }
