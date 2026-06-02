@@ -35,7 +35,7 @@ sealed class Skip(open val reason: String) {
 /**
  * Adapter that uses Ghidra's DataTypeManager to execute demangler stub replacements.
  */
-class DemanglerReplacer(private val ctx: ImportContext, private val registry: TypeRegistry) {
+class DemanglerReplacer(private val ctx: ImportContext<*>, private val registry: TypeRegistry) {
     companion object {
         /**
          * Pure algorithm: given stubs and replacements, decide which replacements are safe.

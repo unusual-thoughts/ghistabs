@@ -1,11 +1,8 @@
 package ghistabs.integration
 
-import ghidra.app.util.importer.MessageLog
 import ghidra.program.database.ProgramBuilder
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghidra.util.task.ConsoleTaskMonitor
-import ghistabs.StabsOptions
-import ghistabs.importer.ImportContext
+import ghistabs.diag.defaultContext
 import ghistabs.importer.StabsImporter
 import ghistabs.parser.StabReader
 import ghistabs.parser.StabRecord
@@ -88,8 +85,7 @@ class TypeRegistryIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         )
 
         // Run importer
-        val log = MessageLog()
-        val ctx = ImportContext(program, log, ConsoleTaskMonitor(), StabsOptions())
+        val ctx = program.defaultContext()
         val importer = StabsImporter(ctx)
         val result = importer.runOnRecords(StabReader.Result(records))
 
@@ -139,8 +135,7 @@ class TypeRegistryIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         )
 
         // Run importer
-        val log = MessageLog()
-        val ctx = ImportContext(program, log, ConsoleTaskMonitor(), StabsOptions())
+        val ctx = program.defaultContext()
         val importer = StabsImporter(ctx)
         val result = importer.runOnRecords(StabReader.Result(records))
 
@@ -174,8 +169,7 @@ class TypeRegistryIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         )
 
         // Run importer
-        val log = MessageLog()
-        val ctx = ImportContext(program, log, ConsoleTaskMonitor(), StabsOptions())
+        val ctx = program.defaultContext()
         val importer = StabsImporter(ctx)
         val result = importer.runOnRecords(StabReader.Result(records))
 
@@ -211,8 +205,7 @@ class TypeRegistryIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         )
 
         // Run importer - should not hang
-        val log = MessageLog()
-        val ctx = ImportContext(program, log, ConsoleTaskMonitor(), StabsOptions())
+        val ctx = program.defaultContext()
         val importer = StabsImporter(ctx)
         val result = importer.runOnRecords(StabReader.Result(records))
 
@@ -261,8 +254,7 @@ class TypeRegistryIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         )
 
         // Run importer - should not hang
-        val log = MessageLog()
-        val ctx = ImportContext(program, log, ConsoleTaskMonitor(), StabsOptions())
+        val ctx = program.defaultContext()
         val importer = StabsImporter(ctx)
         val result = importer.runOnRecords(StabReader.Result(records))
 

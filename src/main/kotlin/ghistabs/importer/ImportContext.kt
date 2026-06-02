@@ -1,12 +1,12 @@
 package ghistabs.importer
 
-import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.data.DataTypeManager
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.SymbolTable
 import ghidra.util.task.TaskMonitor
 import ghistabs.StabsOptions
 import ghistabs.diag.BookmarkSink
+import ghistabs.diag.DiagnosticSink
 import ghistabs.diag.StabsDiagnostics
 
 data class PassResult(
@@ -19,9 +19,9 @@ data class PassResult(
     val classesApplied: Int = 0,
 )
 
-class ImportContext(
+class ImportContext<Log : DiagnosticSink>(
     val program: Program,
-    val log: MessageLog,
+    val log: Log,
     val monitor: TaskMonitor,
     val options: StabsOptions = StabsOptions(),
 ) {

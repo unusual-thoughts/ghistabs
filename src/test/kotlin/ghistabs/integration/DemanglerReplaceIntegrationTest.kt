@@ -5,9 +5,8 @@ import ghidra.program.model.data.CategoryPath
 import ghidra.program.model.data.DataTypeConflictHandler
 import ghidra.program.model.data.StructureDataType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghidra.util.task.ConsoleTaskMonitor
+import ghistabs.diag.defaultContext
 import ghistabs.importer.DemanglerReplacer
-import ghistabs.importer.ImportContext
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
@@ -82,12 +81,7 @@ class DemanglerReplaceIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
         }
 
         // Create ImportContext (minimal setup for DemanglerReplacer)
-        val ctx = ImportContext(
-            program,
-            ghidra.app.util.importer
-                .MessageLog(),
-            ConsoleTaskMonitor(),
-        )
+        val ctx = program.defaultContext()
 
         // Note: In a real scenario, TypeRegistry would be populated by StabsImporter.
         // For this test, we construct a minimal TypeRegistry directly.
@@ -142,12 +136,7 @@ class DemanglerReplaceIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
         }
 
         // Create ImportContext
-        val ctx = ImportContext(
-            program,
-            ghidra.app.util.importer
-                .MessageLog(),
-            ConsoleTaskMonitor(),
-        )
+        val ctx = program.defaultContext()
 
         // Run DemanglerReplacer (should skip gracefully since stub is absent)
         val registry = ghistabs.builder.TypeRegistry(ctx.dtm, ctx.sink, ctx.diagnostics)

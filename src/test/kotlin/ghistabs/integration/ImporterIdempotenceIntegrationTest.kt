@@ -1,11 +1,9 @@
 package ghistabs.integration
 
-import ghidra.app.util.importer.MessageLog
 import ghidra.program.database.ProgramBuilder
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghidra.util.task.ConsoleTaskMonitor
 import ghistabs.StabsAnalyzer
-import ghistabs.importer.ImportContext
+import ghistabs.diag.defaultContext
 import ghistabs.importer.StabsImporter
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -58,12 +56,8 @@ class ImporterIdempotenceIntegrationTest : AbstractGhidraHeadlessIntegrationTest
         val program = builder.program
 
         // First run: parse and materialize
-        val log1 = MessageLog()
-        val ctx1 = ImportContext(
-            program,
-            log1,
-            ConsoleTaskMonitor(),
-        )
+        val ctx1 = program.defaultContext()
+
         val importer1 = StabsImporter(ctx1)
         val result1 = importer1.run()
 
@@ -74,14 +68,10 @@ class ImporterIdempotenceIntegrationTest : AbstractGhidraHeadlessIntegrationTest
         StabsAnalyzer.markStabsDone(program, false)
 
         // Second run: parse again with same input
-        val log2 = MessageLog()
-        val ctx2 = ImportContext(
-            program,
-            log2,
-            ConsoleTaskMonitor(),
-        )
+        val ctx2 = program.defaultContext()
         val importer2 = StabsImporter(ctx2)
         val result2 = importer2.run()
+        val messages = ctx2.log.capturedOutput()
 
         // Get counts after second run
         val symbolCount2 = program.symbolTable.numSymbols
@@ -116,12 +106,7 @@ class ImporterIdempotenceIntegrationTest : AbstractGhidraHeadlessIntegrationTest
             }
 
             // Create context and run (this should not throw)
-            val log = MessageLog()
-            val ctx = ImportContext(
-                program,
-                log,
-                ConsoleTaskMonitor(),
-            )
+            val ctx = program.defaultContext()
             val importer = StabsImporter(ctx)
 
             // This should complete without exceptions
@@ -153,12 +138,7 @@ class ImporterIdempotenceIntegrationTest : AbstractGhidraHeadlessIntegrationTest
         val program = builder.program
 
         // First run: parse and materialize
-        val log1 = MessageLog()
-        val ctx1 = ImportContext(
-            program,
-            log1,
-            ConsoleTaskMonitor(),
-        )
+        val ctx1 = program.defaultContext()
         val importer1 = StabsImporter(ctx1)
         importer1.run()
 
@@ -175,12 +155,7 @@ class ImporterIdempotenceIntegrationTest : AbstractGhidraHeadlessIntegrationTest
         StabsAnalyzer.markStabsDone(program, false)
 
         // Second run: parse again with same input, fresh diagnostics
-        val log2 = MessageLog()
-        val ctx2 = ImportContext(
-            program,
-            log2,
-            ConsoleTaskMonitor(),
-        )
+        val ctx2 = program.defaultContext()
         val importer2 = StabsImporter(ctx2)
         importer2.run()
 

@@ -11,7 +11,7 @@ import ghistabs.builder.TypeRegistry
 import ghistabs.diag.ApplyErrorBucket
 import ghistabs.parser.*
 
-class StabsImporter(internal val ctx: ImportContext) : LogSink {
+class StabsImporter(internal val ctx: ImportContext<*>) : LogSink {
     override fun log(tag: String, message: String) = ctx.sink.log(tag, message)
 
     fun run(): PassResult {
@@ -133,7 +133,7 @@ class StabsImporter(internal val ctx: ImportContext) : LogSink {
                 val bucket = ApplyErrorBucket.bucket(t)
                 ctx.diagnostics.recordApplyError(open.name, bucket, t.message.orEmpty())
                 ctx.sink.log("apply-error-$bucket", "function ${open.name}: ${t.message}")
-                ctx.sink.bookmark("apply-error", open.addr.address, "function ${open.name}: ${t.message}")
+                ctx.sink.log("apply-error", "function ${open.name}: ${t.message}", open.addr.address)
             }
         }
 

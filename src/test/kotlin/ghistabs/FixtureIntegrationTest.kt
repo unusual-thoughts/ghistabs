@@ -100,13 +100,10 @@ class bouniafbouniafIntegrationTest {
         val fixturePath = File("src/test/resources/binaries/bouniafbouniaf.exe")
         assumeTrue(
             fixturePath.exists(),
-            "Skipping: bouniafbouniaf.exe not present. " +
-                "To enable real binary test, copy from " +
-                "~/.wine/drive_c/bouniaf_bouniaf_x64/tools/bin/bouniafbouniaf.exe " +
-                "to src/test/resources/binaries/bouniafbouniaf.exe",
+            "Skipping: bouniafbouniaf.exe not present. ",
         )
 
-        val baselineFile = File("src/test/resources/baselines/bouniafbouniaf-phaseA-baseline.json")
+        val baselineFile = File("src/test/resources/baselines/bouniafbouniaf-baseline.json")
         assumeTrue(
             baselineFile.exists(),
             "Phase A baseline not committed yet — Phase H regression harness will produce it",

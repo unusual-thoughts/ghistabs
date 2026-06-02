@@ -22,7 +22,7 @@ class ClassBuilder(
     private val structAstsByName: Map<String, TypeDecl.Struct>,
     /** All type ASTs indexed by TypeId for inheritance resolution. */
     private val typeAstsById: Map<TypeId, TypeAst>? = null,
-    private val ctx: ImportContext,
+    private val ctx: ImportContext<*>,
 ) {
     private val source = SourceType.IMPORTED
     private val symtab = program.symbolTable
@@ -288,7 +288,7 @@ class ClassBuilder(
         // 4. Apply data at the address.
         program.listing.clearCodeUnits(addr, addr.add(vtable.length.toLong() - 1), false)
         program.listing.createData(addr, vtable)
-        sink.bookmark("vtable", addr, "applied $vtableName")
+        sink.log("vtable", "applied $vtableName", addr)
         ctx.diagnostics.recordVtable(className, "applied")
 
         // 5. Plate-comment each virtual method.
