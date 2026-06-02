@@ -460,8 +460,13 @@ internal object ClassBuilderHelpers {
         // Cross-reference by tagName: look in structAstsByName
         is TypeDecl.XRef -> structAstsByName[typeDecl.tagName]
 
-        // Inline definition: extract the struct body directly
-        is TypeDecl.InlineDef -> typeDecl.body as? TypeDecl.Struct
+        // Inline definition: prefer the materialised AST at this id (real struct body), fall
+        // back to the inline body. The inline body is often a forward XRef stub whose Struct
+        // form lives at typeAstsById[typeDecl.id] — without this fallback, base polymorphism
+        // detection misses inherited vfptrs (e.g. bouniaf → InlineDef(ExprInst id, XRef body)).
+        is TypeDecl.InlineDef -> (typeAstsById?.get(typeDecl.id)?.body as? TypeDecl.Struct)
+            ?: (typeDecl.body as? TypeDecl.Struct)
+            ?: resolveBaseAstStatic(typeDecl.body, structAstsByName, typeAstsById)
 
         else -> null
     }
