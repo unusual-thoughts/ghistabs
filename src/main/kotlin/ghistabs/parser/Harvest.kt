@@ -101,7 +101,11 @@ class Harvester(
                 }
 
                 StabType.N_SOL if (rec.name.isNotEmpty()) -> {
-                    currentCu = rec.name
+                    // N_SOL is a *line-number* source-file switch (gcc uses it to record
+                    // which header an instruction comes from). It does NOT mean subsequent
+                    // type or symbol records belong to that header. Keep `currentCu` pointing
+                    // at the N_SO compilation unit; only the file-num slot needs to advance
+                    // so per-file TypeId namespacing stays correct.
                     currentInclude?.switchSource(rec.name)
                 }
 
