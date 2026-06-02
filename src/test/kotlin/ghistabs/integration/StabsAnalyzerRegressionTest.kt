@@ -141,6 +141,36 @@ class StabsAnalyzerRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
     }
 
     @Test
+    fun exprInstHasComponents() {
+        val matches = program.dataTypeManager.allDataTypes
+            .asSequence()
+            .filterIsInstance<Structure>()
+            .filter { it.name == "ExprInst" }
+            .toList()
+        assumeTrue(matches.isNotEmpty(), "Skipping: ExprInst not found")
+        val best = matches.maxByOrNull { it.numComponents }!!
+        val rendered = matches.joinToString("\n") {
+            "${it.categoryPath.path}/${it.name} len=${it.length} components=${it.numComponents}"
+        }
+        Assertions.assertTrue(
+            best.numComponents > 0,
+            "All ExprInst copies are empty:\n$rendered",
+        )
+        // Surface where each copy lives so we can see if there's a stub-vs-real split.
+        println("ExprInst copies:\n$rendered")
+        // EnumInstToken: TODO item — verify it appears at all.
+        val enumInstAll = program.dataTypeManager.allDataTypes
+            .asSequence()
+            .filter { it.name.startsWith("EnumInstToken") || it.name.startsWith("EnumInstType") }
+            .map { "${it.categoryPath.path}/${it.name} (${it::class.simpleName})" }
+            .toList()
+        Assertions.assertTrue(
+            enumInstAll.any { "EnumInstToken" in it && "Enum" in it.substringAfterLast("(") },
+            "No EnumInstToken Enum in DTM. Related entries:\n${enumInstAll.joinToString("\n")}",
+        )
+    }
+
+    @Test
     fun bouniafFirstComponentIsBase() {
         val bouniaf =
             program.dataTypeManager.allDataTypes
@@ -154,10 +184,21 @@ class StabsAnalyzerRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
             first.offset,
             "bouniaf first component should be at offset 0; got ${first.offset} (${first.fieldName})",
         )
+        val dump = (0 until bouniaf.numComponents).joinToString("\n") {
+            val c = bouniaf.getComponent(it)
+            "  [${c.offset}] ${c.fieldName}: ${c.dataType.name} (${c.dataType::class.simpleName}, len=${c.length})"
+        }
+        val xis = program.dataTypeManager.allDataTypes.asSequence()
+            .filterIsInstance<Structure>()
+            .filter { it.name == "bouniaf" }
+            .map { "${it.categoryPath.path} components=${it.numComponents} len=${it.length}" }
+            .toList()
         Assertions.assertTrue(
             first.dataType is Structure,
             "bouniaf first component '${first.fieldName}' should be a Structure (the parent class); " +
-                "got ${first.dataType::class.simpleName} '${first.dataType.name}'",
+                "got ${first.dataType::class.simpleName} '${first.dataType.name}'\n" +
+                "bouniaf copies in DTM:\n${xis.joinToString("\n")}\n" +
+                "First 5 components of selected bouniaf:\n$dump",
         )
         val name = first.fieldName ?: ""
         Assertions.assertTrue(
