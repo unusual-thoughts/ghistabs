@@ -84,14 +84,14 @@ class StabsImporter(internal val ctx: ImportContext<*>) : LogSink {
                     ?: funcMgr.getFunctionContaining(open.addr.address)?.also {
                         ctx.diagnostics.inc("entrypoint-snapped")
                     }
-                    ?: run {
-                        ctx.diagnostics.inc("apply-error-no-function")
-                        ctx.sink.log(
-                            "apply-error-no-function",
-                            "no Function at or containing ${open.addr} for ${open.name}",
-                        )
-                        continue
-                    }
+                    ?: tryCreateFunctionFromStab(open) ?: run {
+                    ctx.diagnostics.inc("apply-error-no-function")
+                    ctx.sink.log(
+                        "apply-error-no-function",
+                        "no Function at or containing ${open.addr} for ${open.name}",
+                    )
+                    continue
+                }
 
                 // Apply return type from the parsed signature.
                 val retDt = typeRegistry.dataTypeFor(open.decl.signature)
@@ -184,6 +184,23 @@ class StabsImporter(internal val ctx: ImportContext<*>) : LogSink {
         }
 
         return ApplyResult(functions, globals, classes)
+    }
+
+    /**
+     * The stab's N_FUN record asserts a function exists at this address but Ghidra's
+     * auto-analysis didn't discover one (typical for ctors only called from data-driven
+     * init lists like `__static_initialization_and_destruction_0`, or for functions
+     * referenced only via vtable). Force-create the function — the stab is authoritative.
+     * Returns the created Function or null if creation failed (e.g. address is in data).
+     */
+    private fun tryCreateFunctionFromStab(open: OpenFunction): ghidra.program.model.listing.Function? {
+        val addr = open.addr.address
+        val cmd = ghidra.app.cmd.function.CreateFunctionCmd(open.name, addr, null, SourceType.IMPORTED)
+        if (!cmd.applyTo(ctx.program, ctx.monitor)) {
+            return null
+        }
+        ctx.diagnostics.inc("function-created-from-stab")
+        return ctx.program.functionManager.getFunctionAt(addr)
     }
 
     private fun analyzeBssCoverage(harvest: Harvest) {

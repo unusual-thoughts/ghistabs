@@ -158,7 +158,16 @@ class ClassBuilder(
             return
         }
         val addr = resolver.resolve(mangled) ?: run {
-            sink.log("unresolved-symbol", "method $mangled (in $className)")
+            // Compiler-implicit trivial special members (default/copy/move ctor & dtor,
+            // copy/move assignment) appear in every class's stab method list but the
+            // compiler emits no symbol for them when they are trivial. These are not
+            // real "unresolved" failures — bucket them separately so the unresolved
+            // log surfaces actual problems.
+            if (isLikelyImplicitTrivialSpecialMember(mangled)) {
+                ctx.diagnostics.inc("method-implicit-not-emitted")
+            } else {
+                sink.log("unresolved-symbol", "method $mangled (in $className)")
+            }
             return
         }
         val func = program.functionManager.getFunctionAt(addr) ?: run {
@@ -259,6 +268,14 @@ class ClassBuilder(
         }
 
         // 2. Build / look up <Class>_vtable struct.
+        //
+        // Itanium C++ ABI vtable layout (the `_ZTV<class>` symbol points here):
+        //   offset 0:           offset-to-top    (intptr_t, usually 0 for primary table)
+        //   offset ptrSize:     RTTI pointer     (-> _ZTI<class>)
+        //   offset 2*ptrSize:   function pointer array (vptr in objects points HERE)
+        //
+        // Without the two prefix fields, applying the struct at _ZTV makes Ghidra
+        // mis-display the first function pointer over the offset-to-top.
         val vtableName = "${className}_vtable"
         val ptrSize = program.defaultPointerSize // typically 4 on 32-bit
         val existing = dtm.getDataType(category, vtableName) as? Structure
@@ -267,6 +284,16 @@ class ClassBuilder(
         }
         // Clear any old contents (idempotent re-import).
         while (vtable.numComponents > 0) vtable.delete(0)
+
+        val intPtrDt = if (ptrSize == 8) {
+            ghidra.program.model.data.LongLongDataType.dataType
+        } else {
+            ghidra.program.model.data.IntegerDataType.dataType
+        }
+        vtable.add(intPtrDt, ptrSize, "offset_to_top", "offset to top of complete object")
+        val typeinfoPtr = PointerDataType.getPointer(Undefined4DataType.dataType, dtm)
+        vtable.add(typeinfoPtr, ptrSize, "rtti", "_ZTI$className typeinfo pointer")
+
         for (m in virtuals) {
             val fnDt = PointerDataType.getPointer(
                 Undefined4DataType.dataType, // generic FN ptr
@@ -292,7 +319,8 @@ class ClassBuilder(
         ctx.diagnostics.recordVtable(className, "applied")
 
         // 5. Plate-comment each virtual method.
-        var off = 0L
+        // First function pointer sits after the offset-to-top + rtti prefix.
+        var off = (2L * ptrSize)
         for (m in virtuals) {
             val mAddr = m.mangled?.let(resolver::resolve)
             if (mAddr != null) {
@@ -423,6 +451,29 @@ class ClassBuilder(
 
     internal fun hasPolymorphicBaseSubobject(body: TypeDecl.Struct): Boolean =
         ClassBuilderHelpers.hasPolymorphicBaseSubobject(body, structAstsByName, typeAstsById)
+
+    /**
+     * Itanium-mangled compiler-implicit special members the compiler typically omits
+     * when they are trivial. Pattern: `_ZN<class>` followed by `C[123]` (ctor variant),
+     * `D[012]` (dtor variant), or `aSE` (operator=), followed by `v` (void / no params,
+     * i.e. default-constructible) or `RKS_` (const-ref-to-Self, i.e. copy) or
+     * `OS_` (rvalue-ref-to-Self, i.e. move).
+     */
+    private fun isLikelyImplicitTrivialSpecialMember(mangled: String): Boolean {
+        if (!mangled.startsWith("_ZN")) return false
+        return IMPLICIT_SPECIAL_MEMBER_TAIL.containsMatchIn(mangled)
+    }
+
+    companion object {
+        // Itanium tail:  <special-mnemonic> 'E' <params>
+        //   C[123] = constructor variants (in-charge / not-in-charge / allocating)
+        //   D[012] = destructor variants (deleting / in-charge / not-in-charge)
+        //   aS     = operator=
+        //   'E' closes the nested-name; params: 'v' = (), 'RKS_' = (const Self&),
+        //   'OS_' = (Self&&).
+        private val IMPLICIT_SPECIAL_MEMBER_TAIL =
+            Regex("""(?:C[123]|D[012]|aS)E(?:v|RKS_|OS_)$""")
+    }
 }
 
 /**

@@ -310,7 +310,15 @@ class StabsAnalyzerRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
         val ctx = program.defaultContext()
         val stabs = StabReader.fromProgram(program)!!
         val harvester = Harvester(TaskMonitor.DUMMY, ctx.sink, ctx.resolver)
-        val harvest = harvester.passA(stabs.records)
+        // passA writes via AddressResolver.recordFromStab → symbolTable.createLabel, so it
+        // needs a transaction. (We re-run it here to serialize a self-contained harvest
+        // independent of setUp's own pass.)
+        val tx = program.startTransaction("stabs-harvest-dump")
+        val harvest = try {
+            harvester.passA(stabs.records)
+        } finally {
+            program.endTransaction(tx, true)
+        }
         Json { prettyPrint = true }.encodeToStream(harvest, harvestFile.outputStream())
     }
 }
