@@ -253,11 +253,55 @@ class StabsAnalyzerRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
     }
 
     @Test
-    fun mostPolymorphicClassesHaveVtableStruct() {
-        // For every <Name>_vtable that ended up non-empty, the parent class
-        // <Name> should also exist as a Structure with a {vfptr} component
-        // pointing back at that vtable. A wide gap indicates ClassBuilder is
-        // running but its vfptr-insertion pass is failing.
+    fun dcinstVtableMatchesItaniumLayout() {
+        // Prefer the non-empty copy: there may be one stub in /Demangler or /std/<header>
+        // from per-AST iteration and a real one elsewhere.
+        val vtable = program.dataTypeManager.allDataTypes
+            .asSequence()
+            .filterIsInstance<Structure>()
+            .filter { it.name == "bouniaf_vtable" }
+            .maxByOrNull { it.numComponents }
+        assumeTrue(vtable != null, "Skipping: bouniaf_vtable not found")
+        val components = (0 until vtable!!.numComponents).map {
+            val c = vtable.getComponent(it)
+            "[${c.offset}] ${c.fieldName ?: "<unnamed>"}: ${c.dataType.name}"
+        }
+        val dups = program.dataTypeManager.allDataTypes
+            .asSequence().filter { it.name == "bouniaf_vtable" }
+            .map { "${it.categoryPath.path}/${it.name} (len=${(it as Structure).length})" }
+            .toList()
+        val fieldNames = (0 until vtable.numComponents).map { vtable.getComponent(it).fieldName }
+        Assertions.assertEquals(
+            "offset_to_top",
+            fieldNames.getOrNull(0),
+            "Components:\n${components.joinToString("\n")}\n" +
+                "bouniaf_vtable copies in DTM:\n${dups.joinToString("\n")}",
+        )
+        Assertions.assertEquals("rtti", fieldNames.getOrNull(1))
+        // bouniaf's own + inherited (Inst::Get* via ExprInst → bouniaf → Inst chain).
+        // We don't pin the exact order, just that all expected slots are present.
+        val virtuals = fieldNames.drop(2).filterNotNull().toSet()
+        val expected = setOf(
+            "GetInstType", "__comp_dtor", "__deleting_dtor",
+            "Clone", "Dump", "GetSize", "PossibleFunctionReference",
+            "GetOffset", "GetPrevOffset", "GetFullOffset", "GetPrevFullOffset",
+        )
+        val missing = expected - virtuals
+        Assertions.assertTrue(
+            missing.isEmpty(),
+            "bouniaf_vtable missing virtuals: $missing (have: $virtuals)",
+        )
+    }
+
+    @Test
+    fun atLeastOneRootClassHasVtableBackEdge() {
+        // At least one polymorphic class should directly contain a {vfptr} Pointer
+        // pointing at its <Name>_vtable struct. Derived classes correctly *inherit*
+        // their vfptr via a `_base_<Parent>` subobject, so most won't carry the
+        // pointer directly — but the root of every inheritance chain (e.g. Inst on
+        // bouniafbouniaf.exe) must, otherwise the ClassBuilder vfptr-insertion path is
+        // broken end-to-end. (Inheritance coverage is asserted separately by
+        // bouniafHasBaseField and bouniafFirstComponentIsBase.)
         val vtables = program.dataTypeManager.allDataTypes
             .asSequence()
             .filterIsInstance<Structure>()
@@ -271,12 +315,10 @@ class StabsAnalyzerRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
                 .firstOrNull { it.name == className }
             cls != null && cls.components.any { (it.dataType as? Pointer)?.dataType === vt }
         }
-        // Allow some slack: synthesised/external bases legitimately lack a back-edge.
-        val ratio = if (vtables.isNotEmpty()) withMatchingVfptr.toDouble() / vtables.size else 0.0
         Assertions.assertTrue(
-            ratio >= 0.5,
-            "Expected ≥ 50% of *_vtable structs to have a back-edge {vfptr} from their class; " +
-                "got $withMatchingVfptr / ${vtables.size} (${"%.1f".format(ratio * 100)}%)",
+            withMatchingVfptr >= 1,
+            "Expected ≥ 1 *_vtable struct to have a back-edge {vfptr} from its class; " +
+                "got $withMatchingVfptr / ${vtables.size}",
         )
     }
 

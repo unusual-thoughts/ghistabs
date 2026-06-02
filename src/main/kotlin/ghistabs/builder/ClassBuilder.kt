@@ -276,12 +276,19 @@ class ClassBuilder(
         //
         // Without the two prefix fields, applying the struct at _ZTV makes Ghidra
         // mis-display the first function pointer over the offset-to-top.
+        //
+        // CRITICAL: dtm.addDataType returns the DTM-resolved instance; mutating the
+        // local pre-add reference doesn't propagate. Always work through the resolved
+        // reference. (Same caveat in ensureVtableTypeAndPointer.)
         val vtableName = "${className}_vtable"
         val ptrSize = program.defaultPointerSize // typically 4 on 32-bit
         val existing = dtm.getDataType(category, vtableName) as? Structure
-        val vtable = existing ?: StructureDataType(category, vtableName, 0, dtm).also {
-            dtm.addDataType(it, DataTypeConflictHandler.KEEP_HANDLER)
-        }
+        val vtable = existing ?: (
+            dtm.addDataType(
+                StructureDataType(category, vtableName, 0, dtm),
+                DataTypeConflictHandler.KEEP_HANDLER,
+            ) as Structure
+            )
         // Clear any old contents (idempotent re-import).
         while (vtable.numComponents > 0) vtable.delete(0)
 
@@ -408,26 +415,48 @@ class ClassBuilder(
     }
 
     /**
-     * Resolve each base's class struct via TypeRegistry, then collect its
-     * virtual methods (we look up the original AST via a `byName: Map<String, TypeDecl.Struct>`
-     * registry passed into ClassBuilder). Returns inherited methods in declaration
-     * order of `body.bases`.
+     * Recursively gather virtual methods from each base subobject, walking the full
+     * inheritance chain (base of base of base…). Returns the merged list in vtable
+     * slot order: a derived class's vtable contains ALL virtuals visible through the
+     * type, with overrides replacing inherited slots by name (cheap heuristic;
+     * sufficient for non-overloaded virtuals in the Cygwin gcc 3.4.4 corpus —
+     * for full Itanium override matching we'd compare parameter types).
+     *
+     * Without recursion we'd miss virtuals from grand-bases (e.g. bouniaf → ExprInst
+     * → bouniaf → Inst: Inst::GetOffset is in bouniaf's vtable but not in ExprInst's
+     * direct `methods` list).
      */
     private fun collectInheritedVirtuals(body: TypeDecl.Struct): List<MethodDecl> {
         val out = mutableListOf<MethodDecl>()
-        for (base in body.bases) {
-            val baseStruct = ClassBuilderHelpers.resolveBaseAstStatic(base.type, structAstsByName, typeAstsById)
-                ?: continue
-            out += baseStruct.methods.filter { it.virt == VirtKind.VIRTUAL }
-        }
+        val visited = mutableSetOf<TypeDecl.Struct>()
+        gatherTransitive(body, out, visited)
         return out.sortedBy { it.vtableOffsetBits ?: Long.MAX_VALUE }
     }
 
+    private fun gatherTransitive(
+        body: TypeDecl.Struct,
+        out: MutableList<MethodDecl>,
+        visited: MutableSet<TypeDecl.Struct>,
+    ) {
+        for (base in body.bases) {
+            val baseStruct = ClassBuilderHelpers.resolveBaseAstStatic(base.type, structAstsByName, typeAstsById)
+                ?: continue
+            if (!visited.add(baseStruct)) continue
+            // Depth-first: grand-base virtuals come before direct-base's own additions,
+            // matching the order they appear in the derived vtable.
+            gatherTransitive(baseStruct, out, visited)
+            for (m in baseStruct.methods.filter { it.virt == VirtKind.VIRTUAL }) {
+                val idx = out.indexOfFirst { it.name == m.name }
+                if (idx >= 0) out[idx] = m else out += m
+            }
+        }
+    }
+
     /**
-     * Match overrides by simple name (sufficient for non-overloaded virtual
-     * methods, which is the Cygwin gcc 3.4.4 / bouniafbouniaf.exe corpus). For full
-     * Itanium override matching we'd need parameter-type comparison after
-     * type resolution — surfaced as v1.1 work.
+     * Apply derived overrides on top of the inherited slot list (override = same
+     * simple name as an inherited entry). Sufficient for non-overloaded virtuals
+     * in the Cygwin gcc 3.4.4 corpus; full Itanium override matching would need
+     * parameter-type comparison.
      */
     private fun mergeVtableSlots(inherited: List<MethodDecl>, own: List<MethodDecl>): List<MethodDecl> {
         val result = inherited.toMutableList()
