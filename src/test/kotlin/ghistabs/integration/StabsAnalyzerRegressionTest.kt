@@ -208,6 +208,79 @@ class StabsAnalyzerRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
     }
 
     @Test
+    fun demanglerHasNoEmptyStubs() {
+        // /Demangler is the holding category for placeholder structs filled in by
+        // DemanglerReplacer. After import these should all be resolved to real types
+        // (length > 0 or absorbed into another category) — none should remain as
+        // empty Structure stubs.
+        val emptyStubs = program.dataTypeManager.allDataTypes
+            .asSequence()
+            .filterIsInstance<Structure>()
+            .filter { it.categoryPath.path.startsWith("/Demangler") }
+            .filter { it.isZeroLength || it.numComponents == 0 }
+            .map { "${it.categoryPath.path}/${it.name}" }
+            .toList()
+        Assertions.assertTrue(
+            emptyStubs.isEmpty(),
+            "Expected zero empty /Demangler/* stubs, found ${emptyStubs.size}: " +
+                emptyStubs.take(10).joinToString(),
+        )
+    }
+
+    @Test
+    fun fewSuffixedConflictRenames() {
+        // Types renamed to `<name>_<N>` by conflict-dedup should be the exception,
+        // not the rule. A high count signals canonicalisation/dedup regressions like
+        // the cross-CU TypeId collision fixed in 4b21a6c.
+        val suffixed = program.dataTypeManager.allDataTypes
+            .asSequence()
+            .filter { Regex("""^.+_\d+$""").matches(it.name) }
+            .count()
+        Assertions.assertTrue(
+            suffixed < 200,
+            "Suspiciously many _N-suffixed types: $suffixed (expected < 200)",
+        )
+    }
+
+    @Test
+    fun inheritanceWasApplied() {
+        val applied = context.diagnostics.snapshotCounters()["inheritance-applied"] ?: 0L
+        Assertions.assertTrue(
+            applied > 0,
+            "Expected inheritance-applied counter > 0, got $applied " +
+                "(no C++ inheritance edges were materialised)",
+        )
+    }
+
+    @Test
+    fun mostPolymorphicClassesHaveVtableStruct() {
+        // For every <Name>_vtable that ended up non-empty, the parent class
+        // <Name> should also exist as a Structure with a {vfptr} component
+        // pointing back at that vtable. A wide gap indicates ClassBuilder is
+        // running but its vfptr-insertion pass is failing.
+        val vtables = program.dataTypeManager.allDataTypes
+            .asSequence()
+            .filterIsInstance<Structure>()
+            .filter { it.name.endsWith("_vtable") && it.numComponents > 0 }
+            .toList()
+        val withMatchingVfptr = vtables.count { vt ->
+            val className = vt.name.removeSuffix("_vtable")
+            val cls = program.dataTypeManager.allDataTypes
+                .asSequence()
+                .filterIsInstance<Structure>()
+                .firstOrNull { it.name == className }
+            cls != null && cls.components.any { (it.dataType as? Pointer)?.dataType === vt }
+        }
+        // Allow some slack: synthesised/external bases legitimately lack a back-edge.
+        val ratio = if (vtables.isNotEmpty()) withMatchingVfptr.toDouble() / vtables.size else 0.0
+        Assertions.assertTrue(
+            ratio >= 0.5,
+            "Expected ≥ 50% of *_vtable structs to have a back-edge {vfptr} from their class; " +
+                "got $withMatchingVfptr / ${vtables.size} (${"%.1f".format(ratio * 100)}%)",
+        )
+    }
+
+    @Test
     fun globalsCoverEachDataTypeKind() {
         val seenKinds = mutableSetOf<String>()
         program.listing.getDefinedData(true).forEach { data ->
