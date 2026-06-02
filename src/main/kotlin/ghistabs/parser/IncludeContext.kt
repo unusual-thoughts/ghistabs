@@ -154,17 +154,20 @@ class IncludeContext(val cuFile: String, private val sink: LogSink, val registry
      */
     fun canonicalTypeId(localId: TypeId): TypeId {
         val header = headerForFileNum(localId.cu)
-        // Choose a canonical key:
-        //  - Unknown file (no allocated fileNum): namespace under the CU.
-        //  - BINCL/shared header (checksum != 0 OR shared with a different CU): use header key.
-        //  - Local source file (this CU's own source, checksum = 0, originatingCu == cuFile):
-        //    namespace under the CU. Stabs (file,n) IDs are CU-local; CU1's (1,5) and CU2's (1,5)
-        //    are different types. Without per-CU namespacing they collide in the registry.
+        // Choose a canonical key per file:
+        //  - BINCL/shared header (checksum != 0 OR originated in a different CU): the header
+        //    canonical key. Types defined inside this header in different CUs coalesce.
+        //  - Local file (the CU's own N_SO source, any N_SOL sub-source, or an unknown slot
+        //    such as the `(0, n)` gcc references built-ins by): namespace under
+        //    `<cuFile>#file<fileNum>`. Keying ALL local files on plain `cuFile` makes every
+        //    `(file, 3)` in the same CU collapse to one canonical id, so `EnumInstToken:t(2,3)=…`
+        //    in an N_SOL header gets eaten by `long int:t(1,3)=…` via `associateBy` in
+        //    materialiseAll.
         val key = when {
-            header == null -> cuFile
+            header == null -> "$cuFile#file${localId.cu}"
             header.checksum != 0L -> header.canonicalKey()
             header.originatingCu != cuFile -> header.canonicalKey()
-            else -> cuFile
+            else -> "$cuFile#file${localId.cu}"
         }
         val canonicalCu = registry.allocateCanonicalCu(key)
         return TypeId(canonicalCu, localId.n)
