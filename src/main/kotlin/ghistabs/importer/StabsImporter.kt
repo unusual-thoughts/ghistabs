@@ -166,6 +166,10 @@ class StabsImporter(internal val ctx: ImportContext<*>) : LogSink {
                 harvest.typeAstsById,
                 ctx,
             )
+            // Dedupe ASTs by name: many classes appear under multiple cuFiles (each transitive
+            // include of a header that defines the class produces a TypeAst). materialiseAll
+            // collapses them into one DataType keyed by the union of defining CUs; ClassBuilder
+            // must use the same union for Attribution so its DTM lookup matches.
             for (ast in harvest.typeAsts) {
                 val body = ast.body as? TypeDecl.Struct ?: continue
                 if (body.methods.isEmpty() && !body.hasVTablePointerMarker) continue

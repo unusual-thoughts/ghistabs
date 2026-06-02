@@ -30,3 +30,7 @@ Thumbs.db
 
 # Test fixtures (binaries kept locally, never committed)
 src/test/resources/binaries/
+
+# Per-run debug artifacts produced by StabsAnalyzerRegressionTest
+src/test/resources/harvests/
+src/test/resources/logs/
