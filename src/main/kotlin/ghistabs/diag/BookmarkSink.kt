@@ -1,6 +1,5 @@
 package ghistabs.diag
 
-import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.address.Address
 import ghidra.program.model.listing.BookmarkType
 import ghidra.program.model.listing.Program
@@ -20,22 +19,19 @@ import ghidra.program.model.listing.Program
  */
 class BookmarkSink(
     private val program: Program,
-    private val messageLog: MessageLog,
+    private val messageLog: DiagnosticSink,
     private var diagnostics: StabsDiagnostics? = null,
 ) : DiagnosticSink {
-    fun bookmark(category: String, addr: Address, message: String) {
+    override fun log(category: String, message: String, address: Address?) {
         diagnostics?.inc(category)
-        program.bookmarkManager.setBookmark(
-            addr,
-            BookmarkType.WARNING,
-            "Stabs:$category",
-            "[Stabs] $category: $message",
-        )
-        messageLog.appendMsg("[Stabs] $category at $addr: $message")
-    }
-
-    override fun log(category: String, message: String) {
-        diagnostics?.inc(category)
-        messageLog.appendMsg("[Stabs] $category: $message")
+        if (address != null) {
+            program.bookmarkManager.setBookmark(
+                address,
+                BookmarkType.WARNING,
+                "Stabs:$category",
+                "[Stabs] $category: $message",
+            )
+        }
+        messageLog.log(category, message)
     }
 }

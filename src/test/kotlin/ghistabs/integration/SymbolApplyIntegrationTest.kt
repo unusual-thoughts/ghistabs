@@ -1,10 +1,8 @@
 package ghistabs.integration
 
-import ghidra.app.util.importer.MessageLog
 import ghidra.program.database.ProgramBuilder
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghidra.util.task.ConsoleTaskMonitor
-import ghistabs.importer.ImportContext
+import ghistabs.diag.defaultContext
 import ghistabs.importer.StabsImporter
 import ghistabs.parser.StabReader
 import ghistabs.parser.StabRecord
@@ -69,8 +67,7 @@ class SymbolApplyIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         )
 
         // Run importer with synthetic records
-        val log = MessageLog()
-        val ctx = ImportContext(program, log, ConsoleTaskMonitor())
+        val ctx = program.defaultContext()
         val importer = StabsImporter(ctx)
         val result = importer.runOnRecords(StabReader.Result(records))
 
@@ -130,8 +127,7 @@ class SymbolApplyIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         )
 
         // Run importer - should complete even with malformed input
-        val log = MessageLog()
-        val ctx = ImportContext(program, log, ConsoleTaskMonitor())
+        val ctx = program.defaultContext()
         val importer = StabsImporter(ctx)
         val result = importer.runOnRecords(StabReader.Result(records, recordCount = records.size, truncatedTail = 0))
 

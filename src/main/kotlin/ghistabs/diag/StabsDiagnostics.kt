@@ -1,11 +1,24 @@
 package ghistabs.diag
 
+import ghidra.app.util.importer.MessageLog
+import ghidra.program.model.address.Address
+
 /**
  * Narrow interface for diagnostic output (emits strings with a category tag).
  * Implemented by BookmarkSink, but also by test doubles for pure unit tests.
  */
 interface DiagnosticSink {
-    fun log(category: String, message: String)
+    fun log(category: String, message: String, address: Address? = null)
+}
+
+class MessageSinkAdapter(val messageLog: MessageLog) : DiagnosticSink {
+    override fun log(category: String, message: String, address: Address?) {
+        if (address != null) {
+            messageLog.appendMsg("[Stabs] $category at $address: $message")
+        } else {
+            messageLog.appendMsg("[Stabs] $category: $message")
+        }
+    }
 }
 
 /**
