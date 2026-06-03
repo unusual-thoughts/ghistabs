@@ -142,10 +142,18 @@ class ClassBuilder(
         }
     }
 
+    /**
+     * The {vfptr} field in a polymorphic object points at the FUNCTION POINTER ARRAY
+     * inside the vtable record (i.e. `_ZTV<class> + 2*ptrSize`), not at the start of
+     * the record. We model that by giving the function pointer array its own struct
+     * `<Class>_vmethods` and having {vfptr} be `<Class>_vmethods*`. The full vtable
+     * record `<Class>_vtable` (offset_to_top + rtti + embedded vmethods) gets applied
+     * at the `_ZTV` address.
+     */
     private fun ensureVtableTypeAndPointer(className: String, category: CategoryPath) = PointerDataType.getPointer(
-        dtm.getDataType(category, "${className}_vtable") ?: StructureDataType(
+        dtm.getDataType(category, "${className}_vmethods") ?: StructureDataType(
             category,
-            "${className}_vtable",
+            "${className}_vmethods",
             0,
             dtm,
         ).let { dtm.addDataType(it, DataTypeConflictHandler.KEEP_HANDLER) },
@@ -267,31 +275,41 @@ class ClassBuilder(
             return
         }
 
-        // 2. Build / look up <Class>_vtable struct.
-        //
-        // Itanium C++ ABI vtable layout (the `_ZTV<class>` symbol points here):
-        //   offset 0:           offset-to-top    (intptr_t, usually 0 for primary table)
-        //   offset ptrSize:     RTTI pointer     (-> _ZTI<class>)
-        //   offset 2*ptrSize:   function pointer array (vptr in objects points HERE)
-        //
-        // Without the two prefix fields, applying the struct at _ZTV makes Ghidra
-        // mis-display the first function pointer over the offset-to-top.
+        // 2. Build / look up two related structs:
+        //   <Class>_vmethods: just the array of function pointers — what the {vfptr}
+        //                     field in a polymorphic object points to.
+        //   <Class>_vtable:   the full record at the `_ZTV<class>` address — the
+        //                     Itanium ABI prefix (offset_to_top + rtti) followed by
+        //                     an embedded <Class>_vmethods at offset 2*ptrSize.
         //
         // CRITICAL: dtm.addDataType returns the DTM-resolved instance; mutating the
         // local pre-add reference doesn't propagate. Always work through the resolved
-        // reference. (Same caveat in ensureVtableTypeAndPointer.)
+        // reference.
+        val vmethodsName = "${className}_vmethods"
         val vtableName = "${className}_vtable"
         val ptrSize = program.defaultPointerSize // typically 4 on 32-bit
-        val existing = dtm.getDataType(category, vtableName) as? Structure
-        val vtable = existing ?: (
+
+        // a. Populate <Class>_vmethods (the function pointer array)
+        val vmethods = (dtm.getDataType(category, vmethodsName) as? Structure) ?: (
+            dtm.addDataType(
+                StructureDataType(category, vmethodsName, 0, dtm),
+                DataTypeConflictHandler.KEEP_HANDLER,
+            ) as Structure
+            )
+        while (vmethods.numComponents > 0) vmethods.delete(0)
+        for (m in virtuals) {
+            val fnDt = PointerDataType.getPointer(Undefined4DataType.dataType, dtm)
+            vmethods.add(fnDt, ptrSize, m.name, "virtual ${m.name}")
+        }
+
+        // b. Build <Class>_vtable wrapping that.
+        val vtable = (dtm.getDataType(category, vtableName) as? Structure) ?: (
             dtm.addDataType(
                 StructureDataType(category, vtableName, 0, dtm),
                 DataTypeConflictHandler.KEEP_HANDLER,
             ) as Structure
             )
-        // Clear any old contents (idempotent re-import).
         while (vtable.numComponents > 0) vtable.delete(0)
-
         val intPtrDt = if (ptrSize == 8) {
             ghidra.program.model.data.LongLongDataType.dataType
         } else {
@@ -300,14 +318,7 @@ class ClassBuilder(
         vtable.add(intPtrDt, ptrSize, "offset_to_top", "offset to top of complete object")
         val typeinfoPtr = PointerDataType.getPointer(Undefined4DataType.dataType, dtm)
         vtable.add(typeinfoPtr, ptrSize, "rtti", "_ZTI$className typeinfo pointer")
-
-        for (m in virtuals) {
-            val fnDt = PointerDataType.getPointer(
-                Undefined4DataType.dataType, // generic FN ptr
-                dtm,
-            )
-            vtable.add(fnDt, ptrSize, m.name, "virtual ${m.name}")
-        }
+        vtable.add(vmethods, vmethods.length, "vmethods", "virtual function table")
 
         // 3. Resolve _ZTV<class> address with fallbacks.
         val candidates = VtableSymbolCandidates.mangledZtvCandidates(className)
