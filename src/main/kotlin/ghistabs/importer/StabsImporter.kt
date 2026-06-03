@@ -192,7 +192,42 @@ class StabsImporter(internal val ctx: ImportContext<*>) : LogSink {
             }
         }
 
+        // Final pass: demangle any Itanium-mangled IMPORTED labels that remain.
+        // Ghidra's DemanglerAnalyzer is a BYTE_ANALYZER that runs once at
+        // priority ~897 over loader-added symbols; labels we created via
+        // `recordFromStab` were not in that set and so were never demangled.
+        // We replicate the analyzer's per-symbol invocation locally, with
+        // signature/calling-convention application disabled — the stab has
+        // richer signatures than the demangler could derive from the mangled
+        // name, and our `__thiscall` choice (set in ClassBuilder) must win.
+        demangleMangledLabels()
+
         return ApplyResult(functions, globals, classes)
+    }
+
+    private fun demangleMangledLabels() {
+        val options = ghidra.app.util.demangler.DemanglerOptions().apply {
+            setApplySignature(false)
+            setApplyCallingConvention(false)
+            setDoDisassembly(false)
+        }
+        var attempted = 0
+        var demangled = 0
+        for (sym in ctx.program.symbolTable.symbolIterator) {
+            ctx.monitor.checkCancelled()
+            val name = sym.name
+            // Itanium-mangled symbols start with `_Z`; on Cygwin PE/COFF the
+            // loader prepends an extra underscore, giving `__Z`. Either form
+            // is handled by GnuDemangler (it strips a single leading `_`).
+            if (!name.startsWith("_Z") && !name.startsWith("__Z")) continue
+            attempted++
+            val cmd = ghidra.app.cmd.label.DemanglerCmd(sym.address, name, options)
+            if (cmd.applyTo(ctx.program, ctx.monitor) && cmd.result != null) {
+                demangled++
+            }
+        }
+        ctx.diagnostics.inc("demangle-attempted", attempted.toLong())
+        ctx.diagnostics.inc("demangle-applied", demangled.toLong())
     }
 
     /**
