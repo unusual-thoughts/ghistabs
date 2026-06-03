@@ -89,12 +89,20 @@ class DemanglerReplaceIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
         // harness blocker #40 (integrationTest JVM crash).
         // The test is structured to pass if/when that blocker is resolved.
 
-        // Run DemanglerReplacer (this will call replaceDataType)
+        // Run DemanglerReplacer inside a transaction — `dtm.replaceDataType`
+        // (used when a real replacement is found) requires one.
         val registry = ghistabs.builder.TypeRegistry(ctx.dtm, ctx.sink, ctx.diagnostics)
-        // The key assertion is that DemanglerReplacer runs without throwing
-        DemanglerReplacer(ctx, registry).run()
+        val txRun = program.startTransaction("demangler-replace")
+        try {
+            DemanglerReplacer(ctx, registry).run()
+        } finally {
+            program.endTransaction(txRun, true)
+        }
 
-        // Verify that /proj/Foo still exists and is the replacement type
+        // Verify that the stub is gone and the replacement remains.
+        val stubPath = CategoryPath("/Demangler")
+        val stubAfter = dtm.getDataType(stubPath, "Foo")
+        assertTrue(stubAfter == null, "/Demangler/Foo stub should have been replaced; still present: $stubAfter")
         val projPath = CategoryPath("/proj")
         val projAfter = dtm.getDataType(projPath, "Foo")
         assertTrue(projAfter != null, "/proj/Foo (replacement) should still exist after DemanglerReplacer runs")

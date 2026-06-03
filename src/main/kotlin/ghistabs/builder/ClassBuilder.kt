@@ -190,20 +190,40 @@ class ClassBuilder(
         val displayName = displayNameFor(mangled, className) ?: m.name
         if (func.name != displayName) func.setName(displayName, source)
 
-        // 3. Mark thiscall. Calling convention drives the `this` parameter:
-        //    Ghidra auto-injects a hidden `this: <Class>*` first parameter for a
-        //    `__thiscall` function in a GhidraClass namespace, so we don't have
-        //    to declare it. (Default convention would leave the existing
-        //    `int *this` auto-param the disassembler had guessed.)
+        // 3. Mark thiscall. Calling convention drives `this`:
+        //    On x86 PE/Cygwin (`x86win32`) the cspec routes `this` through ECX.
+        //    On x86 MinGW (`x86mingw`) the cspec keeps gcc's convention of
+        //    passing `this` as a regular stack arg. Either way, Ghidra
+        //    auto-injects a parameter literally named `this` when the function
+        //    is in a GhidraClass namespace + thiscall convention.
         runCatching { func.setCallingConvention("__thiscall") }
             .onFailure { sink.log("method-calling-convention", "$className::${m.name}: ${it.message}") }
 
         // 4. Apply prototype from MethodDecl.signature.
-        // The parser emits Method for class members (params excludes the implicit `this`)
-        // and FunctionT for free functions; handle both.
-        val (retDecl, paramDecls) = when (val sig = m.signature) {
-            is TypeDecl.Method -> sig.ret to sig.params
-            is TypeDecl.FunctionT -> sig.ret to sig.params
+        // gcc 3.x stabs encode `#`-form member functions as
+        // `[this_ptr, p1, ..., pN, void_sentinel]`. FunctionT (free functions)
+        // carries no inline params at all (they arrive via N_PSYM records), so
+        // neither implicit `this` nor void sentinel applies there — both
+        // adjustments are Method-only.
+        //
+        // Use the *post-thiscall* function state as ground truth: if Ghidra has
+        // already produced a parameter named "this" at slot 0, the cspec
+        // accepted thiscall and will inject `this` itself, so we strip the
+        // leading stab param. If not (cspec rejected, namespace not a class,
+        // or anything else went wrong), keep all stab params verbatim —
+        // dropping one would be silently wrong.
+        val ghidraInjectedThis = func.getParameter(0)?.name == "this"
+        val retDecl: TypeDecl
+        val paramDecls: List<TypeDecl>
+        when (val sig = m.signature) {
+            is TypeDecl.Method -> {
+                retDecl = sig.ret
+                paramDecls = if (ghidraInjectedThis) sig.params.drop(1) else sig.params
+            }
+            is TypeDecl.FunctionT -> {
+                retDecl = sig.ret
+                paramDecls = sig.params
+            }
             else -> return
         }
         val ret = typeRegistry.dataTypeFor(retDecl)
@@ -211,7 +231,15 @@ class ClassBuilder(
 
         // Only replace parameters if all types resolve. This avoids overwriting
         // better assignments from autoanalysis when stab types are still placeholders.
-        val paramTypes = paramDecls.map { typeRegistry.dataTypeFor(it) }
+        val resolvedParams = paramDecls.map { typeRegistry.dataTypeFor(it) }
+        // Drop trailing void sentinel — Method-only (FunctionT params are
+        // already empty here). Resolved-typecheck so we don't rely on a
+        // hardcoded TypeId for void.
+        val paramTypes = if (m.signature is TypeDecl.Method) {
+            resolvedParams.dropLastWhile { it is VoidDataType }
+        } else {
+            resolvedParams
+        }
         if (paramTypes.any { it == null }) {
             if (paramTypes.isNotEmpty()) {
                 sink.log(
