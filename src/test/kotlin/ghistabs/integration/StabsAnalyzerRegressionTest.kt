@@ -10,6 +10,7 @@ import ghidra.program.model.data.Enum
 import ghidra.program.model.listing.Program
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
+import ghistabs.StabsAnalyzer
 import ghistabs.diag.CapturingSink
 import ghistabs.diag.defaultContext
 import ghistabs.importer.ImportContext
@@ -22,31 +23,48 @@ import org.junit.jupiter.api.Assumptions.assumeTrue
 import java.io.File
 
 /**
+ * Execution-order mode for the regression harness.
+ *
+ * The behaviour of StabsAnalyzer can differ depending on whether it runs as
+ * part of Ghidra's auto-analysis pass (alongside the demangler, decompiler,
+ * etc.) or strictly after it. Both modes are observed in practice (e.g. when
+ * a user re-imports stabs from the Tools menu after an analysis has settled).
+ *
+ *  - [CONCURRENT]: our analyzer is left enabled in the analysis options. It is
+ *    fired by `AutoAnalysisManager.startAnalysis` alongside the demangler.
+ *    Symptom seen on xapasmcsr.exe: many function names stay mangled
+ *    (`_Z11RegToBinary12EnumRegToken`), presumably because the demangler runs
+ *    later but skips symbols whose SourceType we've already promoted.
+ *
+ *  - [AFTER]: our analyzer is disabled in the analysis options before
+ *    `startAnalysis` runs, so auto-analysis (demangler included) settles
+ *    first. We then invoke StabsAnalyzer manually. Symptom seen here:
+ *    `/Demangler/...` placeholder stubs created by Ghidra's demangler are
+ *    sometimes not replaced (e.g. `/Demangler/XapArgRegInst`) — this was
+ *    a DemanglerReplacer candidate-filtering bug, see DemanglerReplacer.
+ */
+enum class Mode { CONCURRENT, AFTER }
+
+/**
  * Regression test harness for StabsAnalyzer on xapasmcsr.exe.
  *
  * Runs full analysis pipeline and validates counters against committed baseline.
  * Skips gracefully if fixture is absent (EULA-restricted, not in repo).
  *
- * When the harness is fully set up (issue #40 resolved), tests:
- * - Import xapasmcsr.exe via TestEnv
- * - Run AutoAnalysisManager (fires StabsAnalyzer.added() via registered analyzer)
- * - Capture MessageLog and validate per-AC spot checks + baseline counter ranges
- *
- * See: gradle/ghidra-test-deps.md and build.gradle.kts integrationTest config.
- * Harness blocker: Java 21 × Ghidra 11.x ObjectInputFilter conflict (issue #40).
- * Tests skip gracefully if fixture absent; when #40 is solved, no edits needed.
+ * Two subclasses pin the [Mode]: [StabsAnalyzerAfterTest] and
+ * [StabsAnalyzerConcurrentTest]. Tests common to both live here; tests that
+ * only make sense (or only fail) in one mode go in the subclass.
  */
 @Tag("integration")
-class StabsAnalyzerRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
+abstract class StabsAnalyzerRegressionTest(private val mode: Mode) : AbstractGhidraHeadlessIntegrationTest() {
     private val fixture = File("src/test/resources/binaries/xapasmcsr.exe")
     private val baselineFile = File("src/test/resources/baselines/xapasmcsr-baseline.json")
     private val harvestFile = File("src/test/resources/harvests/xapasmcsr-harvest.json")
-    private val logFile = File("src/test/resources/logs/xapasmcsr.log")
+    private val logFile = File("src/test/resources/logs/xapasmcsr.${mode.name.lowercase()}.log")
 
-    private lateinit var program: Program
+    protected lateinit var program: Program
     private var loadResults: LoadResults<Program>? = null
-    private var usedRealBinary = false
-    private lateinit var context: ImportContext<CapturingSink>
+    protected lateinit var context: ImportContext<CapturingSink>
 
     @BeforeEach
     fun setUp() {
@@ -55,8 +73,6 @@ class StabsAnalyzerRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
             "Skipping: ${fixture.path} absent, must be added manually",
         )
 
-        // Load the binary using ProgramLoader without TestEnv project infrastructure.
-        // ProgramLoader.builder() can load a binary without a project; project parameter is optional.
         val log = MessageLog()
         val monitor = TaskMonitor.DUMMY
 
@@ -70,31 +86,71 @@ class StabsAnalyzerRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
                 .load()
 
             program = loadResults!!.getPrimaryDomainObject(this)
-            usedRealBinary = true
 
-            // Trigger auto-analysis to populate symbols/types from the loader, then invoke
-            // StabsAnalyzer directly. (In standalone tests the extension isn't registered with
-            // Ghidra's ClassSearcher, so AutoAnalysisManager doesn't discover it.)
             val mgr = AutoAnalysisManager.getAnalysisManager(program)
-            val txId = program.startTransaction("auto-analyze")
-            try {
-                mgr.startAnalysis(monitor)
-                mgr.waitForAnalysis(null, monitor)
-            } finally {
-                program.endTransaction(txId, true)
+            val ourName = StabsAnalyzer().name
+            val options = program.getOptions(Program.ANALYSIS_PROPERTIES)
+
+            // Confirm Ghidra's ClassSearcher actually discovered our analyzer
+            // (build/classes/kotlin/main is on the test classpath). If this
+            // assertion ever fails the test would be silently meaningless.
+            val discovered = mgr.getAnalyzer(ourName)
+            Assertions.assertNotNull(discovered, "StabsAnalyzer not discovered by ClassSearcher")
+            assertInstanceOf<StabsAnalyzer>(discovered)
+
+            when (mode) {
+                Mode.CONCURRENT -> {
+                    // BYTE_ANALYZER auto-fires on byte changes; on a freshly-
+                    // loaded program nothing has "changed" since the loader put
+                    // bytes down, so we explicitly schedule our analyzer for the
+                    // next analysis pass — it then runs at its declared priority
+                    // alongside the demangler.
+                    options.setBoolean(ourName, true)
+                    mgr.scheduleOneTimeAnalysis(discovered!! as StabsAnalyzer, program.memory)
+                    runAutoAnalysis(mgr, monitor)
+                    // The auto-run captured into MessageLog (not our CapturingSink),
+                    // so `context` is mostly an empty shell here; tests that depend
+                    // on counters should belong to the AFTER subclass.
+                    // NOTE: We need to find a proper way to capture logs even in
+                    // that case, without truncation (MessageLog truncates).
+                    context = program.defaultContext()
+                }
+                Mode.AFTER -> {
+                    // Disable our analyzer so auto-analysis (incl. demangler) settles
+                    // without us, then re-run it manually with our CapturingSink.
+                    // `Options.setBoolean` mutates the program options DB and needs
+                    // a transaction.
+                    val txOpt = program.startTransaction("disable-stabs-analyzer")
+                    try {
+                        options.setBoolean(ourName, false)
+                    } finally {
+                        program.endTransaction(txOpt, true)
+                    }
+                    mgr.initializeOptions()
+                    runAutoAnalysis(mgr, monitor)
+                    context = program.defaultContext()
+                    val tx = program.startTransaction("stabs-analyze")
+                    try {
+                        StabsAnalyzer().run(program, context)
+                    } finally {
+                        program.endTransaction(tx, true)
+                    }
+                }
             }
-            context = program.defaultContext()
-            val stabsAnalyzer = ghistabs.StabsAnalyzer()
-            val txStabs = program.startTransaction("stabs-analyze")
-            try {
-                stabsAnalyzer.run(program, context)
-            } finally {
-                program.endTransaction(txStabs, true)
-            }
+            logFile.parentFile.mkdirs()
             logFile.writeText(context.log.capturedOutput())
         } catch (e: Exception) {
-            // If loading the real binary fails, skip the test (these tests require real binary data)
             assumeTrue(false, "Failed to load real binary via ProgramLoader: ${e.message}")
+        }
+    }
+
+    private fun runAutoAnalysis(mgr: AutoAnalysisManager, monitor: TaskMonitor) {
+        val tx = program.startTransaction("auto-analyze")
+        try {
+            mgr.startAnalysis(monitor)
+            mgr.waitForAnalysis(null, monitor)
+        } finally {
+            program.endTransaction(tx, true)
         }
     }
 
@@ -147,6 +203,7 @@ class StabsAnalyzerRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
         // Spot-check via _ZN6DSInst4DumpEPt — DSInst::Dump(unsigned short*).
         val func = program.functionManager
             .getFunctions(true)
+            .iterator()
             .asSequence()
             .firstOrNull { it.name == "Dump" && it.parentNamespace.name == "DSInst" }
         assumeTrue(func != null, "Skipping: DSInst::Dump not found")
@@ -338,16 +395,6 @@ class StabsAnalyzerRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
     }
 
     @Test
-    fun inheritanceWasApplied() {
-        val applied = context.diagnostics.snapshotCounters()["inheritance-applied"] ?: 0L
-        Assertions.assertTrue(
-            applied > 0,
-            "Expected inheritance-applied counter > 0, got $applied " +
-                "(no C++ inheritance edges were materialised)",
-        )
-    }
-
-    @Test
     fun dcinstVtableMatchesItaniumLayout() {
         // Prefer the non-empty copy: there may be one stub in /Demangler or /std/<header>
         // from per-AST iteration and a real one elsewhere.
@@ -468,4 +515,130 @@ class StabsAnalyzerRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
         }
         Json { prettyPrint = true }.encodeToStream(harvest, harvestFile.outputStream())
     }
+
+    // ---- Mangling / execution-order assertions, shared between modes. ----
+
+    /**
+     * `RegToBinary` is a free function (`_Z11RegToBinary12EnumRegToken`) with a
+     * single `reg: EnumRegToken` stack param recorded in the stabs. The function
+     * lookup in [StabsImporter] is by address (not by name) so the param
+     * application must succeed regardless of whether the symbol has been
+     * demangled yet — i.e. it must work in both modes.
+     */
+    @Test
+    fun regToBinaryParamsApplied() {
+        val fm = program.functionManager
+        val candidates = fm.getFunctions(true).iterator().asSequence()
+            .filter { it.name == "RegToBinary" || it.name == "_Z11RegToBinary12EnumRegToken" }
+            .toList()
+        assumeTrue(candidates.isNotEmpty(), "Skipping: RegToBinary not found")
+        val func = candidates.first()
+        Assertions.assertEquals(
+            1,
+            func.parameterCount,
+            "RegToBinary should have its single `reg` stab param applied; got " +
+                "${func.parameterCount} (signature=${func.signature.prototypeString})",
+        )
+        val p = func.getParameter(0)!!
+        Assertions.assertEquals("reg", p.name, "first param should be named 'reg' from the N_PSYM record")
+    }
+
+    /**
+     * Ghidra's demangler should resolve any Itanium-mangled function symbol
+     * to its demangled name (so users see `RegToBinary`, not
+     * `_Z11RegToBinary12EnumRegToken`).
+     *
+     * Currently failing in both modes. Root cause: the demangler is a
+     * BYTE_ANALYZER fired at priority ~897 over the loader-added symbol set.
+     * Our stab-derived labels (`recordFromStab` → `createLabel`) are written
+     * at LOW_PRIORITY (10000), after the demangler has already completed,
+     * and the demangler does not re-run on later-added symbols. Fix is
+     * tracked in TODO.md ("invoke GnuDemangler directly for stab-derived
+     * mangled labels"). Test stays as a regression pin.
+     */
+    @Test
+    @org.junit.jupiter.api.Disabled("Known bug — see TODO.md: GnuDemangler not invoked on stab-derived labels")
+    fun freeFunctionSymbolGetsDemangled() {
+        val fm = program.functionManager
+        val byMangled = fm.getFunctions(true).iterator().asSequence()
+            .firstOrNull { it.name == "_Z11RegToBinary12EnumRegToken" }
+        val byDemangled = fm.getFunctions(true).iterator().asSequence()
+            .firstOrNull { it.name == "RegToBinary" }
+        val candidates = fm.getFunctions(true).iterator().asSequence()
+            .filter { "RegToBinary" in it.name }
+            .map { "${it.entryPoint}: ${it.name} (ns=${it.parentNamespace.name})" }
+            .toList()
+        Assertions.assertNotNull(
+            byDemangled,
+            "RegToBinary should be visible under its demangled name; " +
+                "found mangled instead: ${byMangled?.name}. All candidates: $candidates",
+        )
+    }
+
+    /**
+     * No empty `/Demangler/...` Structure stubs of *known* project types should
+     * remain after the importer finishes. This catches the bug where the
+     * candidate-finding loop in [DemanglerReplacer] failed to identify the real
+     * type because the stub itself polluted the name index.
+     */
+    @Test
+    fun knownDemanglerStubsReplaced() {
+        // Names known to be both demangled (so the demangler creates a stub) and
+        // materialised from stabs (so a real type exists to replace the stub).
+        val knownNames = setOf("XapArgRegInst", "XapArgRegLdStInst", "DCInst")
+        val leftover = program.dataTypeManager.allDataTypes
+            .asSequence()
+            .filter { it.categoryPath.path.startsWith("/Demangler") }
+            .filter { it.name in knownNames }
+            .map { "${it.categoryPath.path}/${it.name}" }
+            .toList()
+        Assertions.assertTrue(
+            leftover.isEmpty(),
+            "Expected /Demangler/{$knownNames} stubs to be replaced, still present: $leftover",
+        )
+    }
 }
+
+class StabsAnalyzerAfterTest : StabsAnalyzerRegressionTest(Mode.AFTER) {
+    /**
+     * AFTER mode: auto-analysis (including the demangler) runs first, then we
+     * run. The demangler creates `/Demangler/<Name>` placeholder stubs for
+     * Itanium-mangled symbols; our [DemanglerReplacer] should resolve those
+     * stubs to the real types we materialised from the stabs.
+     *
+     * Only meaningful in AFTER mode — in CONCURRENT mode the demangler may
+     * still be running while we apply types, so the stub population is racy.
+     */
+    @Test
+    fun noEmptyDemanglerStubsRemain() {
+        val emptyStubs = program.dataTypeManager.allDataTypes
+            .asSequence()
+            .filterIsInstance<ghidra.program.model.data.Structure>()
+            .filter { it.categoryPath.path.startsWith("/Demangler") }
+            .filter { it.isZeroLength || it.numComponents == 0 }
+            .map { "${it.categoryPath.path}/${it.name}" }
+            .toList()
+        Assertions.assertTrue(
+            emptyStubs.isEmpty(),
+            "Expected zero empty /Demangler/... stubs after AFTER-mode import; " +
+                "found ${emptyStubs.size}: ${emptyStubs.take(10).joinToString()}",
+        )
+    }
+
+    /**
+     * `inheritance-applied` counter lives on the CapturingSink-backed context
+     * — only AFTER mode carries that context (CONCURRENT mode's analyzer is
+     * fed `MessageSinkAdapter(MessageLog)` by Ghidra).
+     */
+    @Test
+    fun inheritanceWasApplied() {
+        val applied = context.diagnostics.snapshotCounters()["inheritance-applied"] ?: 0L
+        Assertions.assertTrue(
+            applied > 0,
+            "Expected inheritance-applied counter > 0, got $applied " +
+                "(no C++ inheritance edges were materialised)",
+        )
+    }
+}
+
+class StabsAnalyzerConcurrentTest : StabsAnalyzerRegressionTest(Mode.CONCURRENT)

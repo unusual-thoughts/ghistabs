@@ -7,6 +7,25 @@ All entries verified against the current `xapasmcsr.exe` regression run
 
 ## Open
 
+- [ ] **invoke `GnuDemangler` directly on stab-derived labels**. Pinned by
+  the disabled test `freeFunctionSymbolGetsDemangled`. Root cause: Ghidra's
+  demangler is a `BYTE_ANALYZER` that runs once at priority ~897 over the
+  loader-added symbol set. We now run at `LOW_PRIORITY` (10000, see
+  `StabsAnalyzer.kt`) so labels created via `recordFromStab` only appear
+  after the demangler has finished, and Ghidra does not re-trigger the
+  demangler for later-added symbols. Fix options:
+    1. Call `DemanglerUtil.demangle(name)` in `ProgramAddressResolver.recordFromStab`
+       and create the label under the demangled form when it parses.
+    2. Add a follow-up pass at the end of `StabsImporter.run` that walks
+       all IMPORTED labels starting with `_Z`/`__Z` and demangles each.
+  Symptom on xapasmcsr.exe: `_Z11RegToBinary12EnumRegToken` stays mangled.
+  Behaviour is identical in both AFTER and CONCURRENT modes — initial
+  hypothesis that it was a concurrency race was wrong.
+
+- [ ] **check the logic actual GDB uses to deduplicate / canonicalize
+  types and classes**, see if our algorithm makes sense or if we need to
+  change or simplify it.
+
 ### Likely still broken
 
 - [ ] **`vfptr-collision` on `CLexStream`** —
@@ -20,11 +39,12 @@ All entries verified against the current `xapasmcsr.exe` regression run
   `[vfptr-collision]` entries on the binary, both CLexStream.
 
 - [ ] **demangled method names sometimes replaced by mangled** —
-  observed on some renamed methods; the displayed name for non-ctor/dtor
-  methods comes from `displayNameFor` and falls back to `m.name` when
-  the input mangled name isn't a ctor/dtor pattern, but the user wants
-  the fully demangled form (e.g. `Dump`, not `_ZN6DSInst4DumpEPt`).
-  Plug Ghidra's `GnuDemangler` and use the demangled form as fallback.
+    - issue related to demangler analysis running simultaneously
+    - take with a grain of salt: observed on some renamed methods; the displayed name for non-ctor/dtor
+      methods comes from `displayNameFor` and falls back to `m.name` when
+      the input mangled name isn't a ctor/dtor pattern, but the user wants
+      the fully demangled form (e.g. `Dump`, not `_ZN6DSInst4DumpEPt`).
+      Plug Ghidra's `GnuDemangler` and use the demangled form as fallback.
 
 - [ ] **`[class-apply-error]` on long templated `_Rb_tree<…>` names** (216 entries)
   — Ghidra rejects symbol names with `<`/`>`/space. Each rejected
@@ -84,6 +104,34 @@ All entries verified against the current `xapasmcsr.exe` regression run
 ## Done
 
 ### This session (2026-06-02 → 2026-06-03)
+
+- [x] **`DemanglerReplacer` candidate filter** — when both a `/Demangler/Foo`
+  stub and a real `/proj/Foo` exist, the old `nameIndex` saw 2 matches and
+  rejected both via `candidates.size == 1`, leaving the stub orphaned.
+  Now excludes `/Demangler/...` entries from the index; stubs are matched
+  to non-stub replacements as intended.
+
+- [x] **`StabsAnalyzer` priority** — was `AnalysisPriority(200)` (BLOCK
+  phase, very early). Now `LOW_PRIORITY` (10000) so we run strictly after
+  Ghidra's demangler (897) and every standard analyzer.
+
+- [x] **Regression harness covers both execution-order modes** — the
+  harness now parameterises by [Mode] (CONCURRENT vs AFTER); subclasses
+  `StabsAnalyzerAfterTest` and `StabsAnalyzerConcurrentTest` exercise
+  both. CONCURRENT schedules the analyzer via `mgr.scheduleOneTimeAnalysis`
+  so it actually fires inside `startAnalysis`. Mode-specific tests
+  (counter-driven `inheritanceWasApplied`, demangler-stub residue) live
+  in the AFTER subclass since CONCURRENT runs the analyzer through
+  `MessageSinkAdapter` and loses the CapturingSink counters.
+
+- [x] **strip implicit `this` and trailing void sentinel from Method
+  params** — gcc 3.x `#`-form member function types encode
+  `[this_ptr, p1, ..., pN, void_sentinel]`. Without stripping, Ghidra's
+  `__thiscall` auto-injected `this` collided with the stab's `this`,
+  yielding `(XapArgInst *this, uint this, uint dest)`. Strip leading
+  param only when `func.getParameter(0)?.name == "this"` (i.e. cspec
+  accepted `__thiscall` and injected its own `this`), and trailing void
+  via post-resolution `dropLastWhile { it is VoidDataType }`.
 
 - [x] **`__thiscall` calling convention + `this: <Class>*`** — `0e51c73`.
   `reparentMethod` now handles `TypeDecl.Method` (not just `FunctionT`)

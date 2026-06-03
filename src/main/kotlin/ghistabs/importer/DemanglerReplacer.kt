@@ -76,8 +76,14 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val registry:
         val replacements = mutableMapOf<String, Pair<ReplacementRecord, DataType>>()
         val stubDtByPath = mutableMapOf<String, DataType>()
 
-        // Precompute name-to-DataTypes index to avoid O(N²) registry.findByName lookups
-        val nameIndex = dtm.allDataTypes.asSequence().groupBy { it.name }
+        // Precompute name-to-DataTypes index to find replacement candidates.
+        // Exclude /Demangler/* entries — those are the stubs we want to *replace*,
+        // not candidates to replace anything with. Without this filter, a real
+        // `/proj/XapArgRegInst` paired with a stub `/Demangler/XapArgRegInst`
+        // gives `candidates.size == 2`, both get skipped, and the stub remains.
+        val nameIndex = dtm.allDataTypes.asSequence()
+            .filterNot { it.categoryPath.path.startsWith("/Demangler") }
+            .groupBy { it.name }
 
         for (dt in dtm.allDataTypes) {
             // Collect all stubs under /Demangler
@@ -91,10 +97,10 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val registry:
                     ),
                 )
                 stubDtByPath[dt.pathName] = dt
+                continue
             }
 
-            // Collect potential replacements (from name index, structures with content)
-            // Use nameIndex instead of registry.findByName to avoid O(N²) behavior
+            // Collect potential replacements (non-stub structures with content).
             val candidates = nameIndex[dt.name] ?: continue
             val candidate = if (candidates.size == 1) candidates[0] else null
             if (candidate == null || candidate !== dt) continue
