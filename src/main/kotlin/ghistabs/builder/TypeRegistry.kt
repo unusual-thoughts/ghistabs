@@ -201,8 +201,24 @@ class TypeRegistry(
         is TypeDecl.Volatile -> dataTypeFor(decl.inner)
 
         is TypeDecl.Array -> {
-            val elem = dataTypeFor(decl.element) ?: return null
-            ArrayDataType(elem, (decl.length ?: 0L).toInt().coerceAtLeast(0), elem.length)
+            // For arrays of unresolved element types (e.g. globals whose
+            // element refers to a TypeId not in the registry), fall back to
+            // Undefined1 — better than dropping the array entirely, since the
+            // applied global at least gets the right *footprint* and the user
+            // sees the symbol typed.
+            val elem = dataTypeFor(decl.element) ?: Undefined1DataType.dataType
+            // Length resolution priority:
+            //   1. `decl.length` (explicit element count from the stab)
+            //   2. derive from `indexType` Range as `max - min + 1`
+            //      (gcc stabs frequently omit `length` and only encode the
+            //      array bound via the index Range — e.g. `BranchInstructions`
+            //      = array of EnumInstToken indexed 0..15 → 16 elements)
+            //   3. fall back to 1 so ArrayDataType doesn't throw
+            val rangeLen = (decl.indexType as? TypeDecl.Range)
+                ?.let { it.max - it.min + 1 }
+                ?.takeIf { it > 0 }
+            val numElements = (decl.length ?: rangeLen ?: 1L).toInt().coerceAtLeast(1)
+            ArrayDataType(elem, numElements, elem.length)
         }
 
         // Aggregate bodies — never referenced directly; only meaningful via TypeId.
@@ -288,8 +304,12 @@ class TypeRegistry(
             is TypeDecl.InlineDef -> dataTypeFor(body.body) ?: placeholder
 
             is TypeDecl.Array -> {
-                val elem = dataTypeFor(body.element) ?: Undefined4DataType.dataType
-                ArrayDataType(elem, (body.length ?: 0L).toInt().coerceAtLeast(0), elem.length)
+                val elem = dataTypeFor(body.element) ?: Undefined1DataType.dataType
+                val rangeLen = (body.indexType as? TypeDecl.Range)
+                    ?.let { it.max - it.min + 1 }
+                    ?.takeIf { it > 0 }
+                val numElements = (body.length ?: rangeLen ?: 1L).toInt().coerceAtLeast(1)
+                ArrayDataType(elem, numElements, elem.length)
             }
 
             is TypeDecl.Enum -> {

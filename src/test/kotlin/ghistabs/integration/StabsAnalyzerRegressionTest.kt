@@ -196,6 +196,48 @@ abstract class StabsAnalyzerRegressionTest(private val mode: Mode) : AbstractGhi
         )
     }
 
+    /**
+     * No class method should end up with two parameters both literally named
+     * `this`. The pattern (one typed `<Class>*`, another typed primitively
+     * like `ushort` or `uint`) means we set __thiscall (which prepended an
+     * injected `this`) but failed to evict the leftover param that
+     * autoanalysis had named `this` from its register-storage guess.
+     *
+     * Scans every class method in the program rather than spot-checking one,
+     * because the bug is sporadic — observed on `XapArgRegLdStInst::Dump`
+     * for example, but `DSInst::Dump` was fine.
+     */
+    @Test
+    fun noClassMethodHasDuplicateThis() {
+        val offenders = program.functionManager
+            .getFunctions(true)
+            .iterator()
+            .asSequence()
+            .filter { it.parentNamespace is ghidra.program.model.listing.GhidraClass }
+            .mapNotNull { f ->
+                val thisCount = (0 until f.parameterCount)
+                    .count { f.getParameter(it)?.name == "this" }
+                if (thisCount >= 2) {
+                    f to (0 until f.parameterCount).joinToString {
+                        val p = f.getParameter(it)
+                        "${p?.dataType?.name} ${p?.name}"
+                    }
+                } else {
+                    null
+                }
+            }
+            .take(20)
+            .toList()
+        Assertions.assertTrue(
+            offenders.isEmpty(),
+            "Found ${offenders.size} methods with duplicate `this` parameters " +
+                "(showing first 20):\n" +
+                offenders.joinToString("\n") {
+                    "  ${it.first.parentNamespace.name}::${it.first.name}(${it.second})"
+                },
+        )
+    }
+
     @Test
     fun methodsUseThiscall() {
         // Any class method should be marked __thiscall so Ghidra auto-injects a
@@ -678,6 +720,39 @@ class StabsAnalyzerAfterTest : StabsAnalyzerRegressionTest(Mode.AFTER) {
             emptyStubs.isEmpty(),
             "Expected zero empty /Demangler/... stubs after AFTER-mode import; " +
                 "found ${emptyStubs.size}: ${emptyStubs.take(10).joinToString()}",
+        )
+    }
+
+    /**
+     * `BranchInstructions` is a stab-harvested global typed
+     * `array[0..15] of <enum>`. The element-type Ref couldn't resolve and the
+     * stab encodes the length only via the index Range. The old Array case
+     * returned null on either condition, leaving the global untyped. Now we
+     * derive length from the indexType Range when absent, and fall back to
+     * Undefined1 elements on resolution failure so the global still applies.
+     *
+     * AFTER mode only: in CONCURRENT mode autoanalysis can race our apply
+     * and re-classify the address before/after we touch it.
+     */
+    @Test
+    fun branchInstructionsGlobalIsTyped() {
+        val branchSym = program.symbolTable.symbolIterator.iterator().asSequence()
+            .firstOrNull { it.name == "_BranchInstructions" || it.name == "BranchInstructions" }
+        assumeTrue(branchSym != null, "Skipping: BranchInstructions symbol absent")
+        val data = program.listing.getDataAt(branchSym!!.address)
+        Assertions.assertNotNull(
+            data,
+            "Expected a typed Data at ${branchSym.address} for ${branchSym.name}; got none",
+        )
+        Assertions.assertTrue(
+            data!!.dataType is Array,
+            "BranchInstructions should be an Array; got ${data.dataType::class.simpleName} '${data.dataType.name}'",
+        )
+        val arr = data.dataType as Array
+        Assertions.assertEquals(
+            16,
+            arr.numElements,
+            "BranchInstructions array length should be 16 (Range 0..15 in stab); got ${arr.numElements}",
         )
     }
 

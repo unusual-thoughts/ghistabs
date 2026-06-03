@@ -50,7 +50,7 @@ class ClassBuilder(
         val ns = ensureClassNamespace(name)
 
         // 4. Re-parent member functions.
-        for (m in body.methods) reparentMethod(m, name, ns)
+        for (m in body.methods) reparentMethod(m, name, ns, structDt)
 
         // 5. If polymorphic: build <Class>_vtable struct + apply at _ZTV<class> address.
         if (isPoly) buildAndApplyVtable(name, body, ns, category, structDt)
@@ -167,7 +167,7 @@ class ClassBuilder(
         return PointerDataType.getPointer(struct, dtm)
     }
 
-    private fun reparentMethod(m: MethodDecl, className: String, ns: GhidraClass) {
+    private fun reparentMethod(m: MethodDecl, className: String, ns: GhidraClass, structDt: Structure) {
         val mangled = m.mangled ?: run {
             sink.log("method-no-mangled", "$className::${m.name}: stab has no mangled symbol")
             return
@@ -200,11 +200,21 @@ class ClassBuilder(
         // 3. Mark thiscall. Calling convention drives `this`:
         //    On x86 PE/Cygwin (`x86win32`) the cspec routes `this` through ECX.
         //    On x86 MinGW (`x86mingw`) the cspec keeps gcc's convention of
-        //    passing `this` as a regular stack arg. Either way, Ghidra
-        //    auto-injects a parameter literally named `this` when the function
-        //    is in a GhidraClass namespace + thiscall convention.
-        runCatching { func.setCallingConvention("__thiscall") }
+        //    passing `this` as a regular stack arg. Either way, when the cspec
+        //    accepts `__thiscall` AND the function lives in a GhidraClass
+        //    namespace, Ghidra injects a hidden `this: Class*` first parameter
+        //    at render/display time.
+        //
+        // Track whether thiscall was actually accepted (some cspecs don't have
+        // it) and whether the namespace is a class — those two together are
+        // what decide whether Ghidra will inject `this` for us. Don't rely on
+        // `func.getParameter(0)?.name == "this"` to detect it: for functions
+        // we just force-created from a stab via CreateFunctionCmd, the
+        // parameter list isn't populated until later analysis runs.
+        val thiscallAccepted = runCatching { func.setCallingConvention("__thiscall") }
             .onFailure { sink.log("method-calling-convention", "$className::${m.name}: ${it.message}") }
+            .isSuccess
+        val ghidraInjectsThis = thiscallAccepted && func.parentNamespace is GhidraClass
 
         // 4. Apply prototype from MethodDecl.signature.
         // gcc 3.x stabs encode `#`-form member functions as
@@ -212,20 +222,12 @@ class ClassBuilder(
         // carries no inline params at all (they arrive via N_PSYM records), so
         // neither implicit `this` nor void sentinel applies there — both
         // adjustments are Method-only.
-        //
-        // Use the *post-thiscall* function state as ground truth: if Ghidra has
-        // already produced a parameter named "this" at slot 0, the cspec
-        // accepted thiscall and will inject `this` itself, so we strip the
-        // leading stab param. If not (cspec rejected, namespace not a class,
-        // or anything else went wrong), keep all stab params verbatim —
-        // dropping one would be silently wrong.
-        val ghidraInjectedThis = func.getParameter(0)?.name == "this"
         val retDecl: TypeDecl
         val paramDecls: List<TypeDecl>
         when (val sig = m.signature) {
             is TypeDecl.Method -> {
                 retDecl = sig.ret
-                paramDecls = if (ghidraInjectedThis) sig.params.drop(1) else sig.params
+                paramDecls = if (ghidraInjectsThis) sig.params.drop(1) else sig.params
             }
 
             is TypeDecl.FunctionT -> {
@@ -238,27 +240,57 @@ class ClassBuilder(
         val ret = typeRegistry.dataTypeFor(retDecl)
         if (ret != null) func.setReturnType(ret, source)
 
-        // Only replace parameters if all types resolve. This avoids overwriting
-        // better assignments from autoanalysis when stab types are still placeholders.
+        // Build resolved formal params, falling back to Undefined4 for any
+        // stab-side TypeDecl we couldn't resolve. We used to early-return when
+        // any param type was null and "keep the prior assignment"; that left
+        // Ghidra's auto-guessed signature in place, and combined with the
+        // newly-applied `__thiscall` (which prepends its own `this`), produced
+        // a double-`this` like
+        //   `void XapArgRegLdStInst::Dump(XapArgRegLdStInst *this, ushort this, uint dest)`
+        // (the leading `this` is Ghidra's __thiscall injection; the second
+        // `this` is the leftover guess named by autoanalysis). Always
+        // replacing the formal-param list — even with Undefined4 for slots we
+        // couldn't type — gives a clean `(this, Undefined4 arg0)` instead.
         val resolvedParams = paramDecls.map { typeRegistry.dataTypeFor(it) }
-        // Drop trailing void sentinel — Method-only (FunctionT params are
-        // already empty here). Resolved-typecheck so we don't rely on a
-        // hardcoded TypeId for void.
         val paramTypes = if (m.signature is TypeDecl.Method) {
             resolvedParams.dropLastWhile { it is VoidDataType }
         } else {
             resolvedParams
         }
-        if (paramTypes.any { it == null }) {
+        val unresolvedCount = paramTypes.count { it == null }
+        if (unresolvedCount > 0) {
+            ctx.diagnostics.inc("method-param-unresolved", unresolvedCount.toLong())
             if (paramTypes.isNotEmpty()) {
                 sink.log(
                     "method-param-unresolved",
-                    "$className::${m.name}: some parameter types unresolved; keeping prior assignment",
+                    "$className::${m.name}: $unresolvedCount/${paramTypes.size} stab param types " +
+                        "unresolved; substituting Undefined4 so __thiscall `this` injection isn't " +
+                        "shadowed by leftover autoanalysis params",
                 )
             }
-            return
         }
-        val params = paramTypes.mapIndexed { i, pdt ->
+        // Build the full param list ourselves — explicit `this: Class*`
+        // prefix when applicable, then the formal stab params — and apply via
+        // DYNAMIC_STORAGE_ALL_PARAMS. This sidesteps the ambiguity around
+        // DYNAMIC_STORAGE_FORMAL_PARAMS + __thiscall, which depending on
+        // Ghidra version may or may not auto-prepend `this`, and which would
+        // happily *rename* our `arg0` to `this` when the storage analyzer
+        // placed it in the canonical this-storage slot — yielding the
+        // duplicate-`this` displays we used to see.
+        val classPtr = PointerDataType(structDt, dtm)
+        val explicitThis = if (ghidraInjectsThis) {
+            listOf(
+                ghidra.program.model.listing.ParameterImpl(
+                    "this",
+                    classPtr,
+                    program,
+                    source,
+                ),
+            )
+        } else {
+            emptyList()
+        }
+        val formals = paramTypes.mapIndexed { i, pdt ->
             ghidra.program.model.listing.ParameterImpl(
                 "arg$i",
                 pdt ?: Undefined4DataType.dataType,
@@ -267,8 +299,8 @@ class ClassBuilder(
             )
         }
         func.replaceParameters(
-            params,
-            ghidra.program.model.listing.Function.FunctionUpdateType.DYNAMIC_STORAGE_FORMAL_PARAMS,
+            explicitThis + formals,
+            ghidra.program.model.listing.Function.FunctionUpdateType.DYNAMIC_STORAGE_ALL_PARAMS,
             true,
             source,
         )

@@ -15,7 +15,6 @@ All entries verified against the current `xapasmcsr.exe` regression run
 - STILL `this` duplicate argument on many methods, eg uint __thiscall XapArgRegLdStInst::Dump(XapArgRegLdStInst *
   this,ushort this,uint dest)
 
-- RegToBinary argument should be
 
 - [ ] (partial) **dedup code with RTTIGccClassRecoverer / GccTypeinfo /
   RecoverClassesFromRTTIScript** — `RecoveredClassHelper` lives in
@@ -138,9 +137,9 @@ All entries verified against the current `xapasmcsr.exe` regression run
     - adds a `vftable` label at the `_ZTV<class>` address inside the
       class namespace so the helper's substring filter
       (`vftableSymbol.getName().contains("vftable")`) accepts us.
-  Pinned by new test `dcinstShiftSCompatibility`. Counter
-  `vftable-slot-fallback-untyped` = 8 on xapasmcsr.exe — the rest get
-  typed function-pointer slots.
+      Pinned by new test `dcinstShiftSCompatibility`. Counter
+      `vftable-slot-fallback-untyped` = 8 on xapasmcsr.exe — the rest get
+      typed function-pointer slots.
 
 - [x] **`DemanglerReplacer` candidate filter** — when both a `/Demangler/Foo`
   stub and a real `/proj/Foo` exist, the old `nameIndex` saw 2 matches and
