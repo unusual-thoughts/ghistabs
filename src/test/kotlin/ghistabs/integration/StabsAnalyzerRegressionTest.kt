@@ -263,10 +263,16 @@ class StabsAnalyzerRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
             vtables.isNotEmpty(),
             "Expected at least one *_vtable struct with components",
         )
+        // {vfptr} fields point at <Class>_vmethods (the function pointer array),
+        // not at <Class>_vtable (the full record including offset_to_top + rtti).
+        val vmethods = program.dataTypeManager.allDataTypes
+            .asSequence()
+            .filterIsInstance<Structure>()
+            .filter { it.name.endsWith("_vmethods") && it.numComponents > 0 }.toList()
         val classesWithVtables = program.dataTypeManager.allDataTypes
             .asSequence()
             .filterIsInstance<Structure>()
-            .filter { it.components.any { vtables.contains((it.dataType as? Pointer)?.dataType) } }
+            .filter { it.components.any { vmethods.contains((it.dataType as? Pointer)?.dataType) } }
             .toList()
         Assertions.assertTrue(
             classesWithVtables.isNotEmpty(),
@@ -345,9 +351,18 @@ class StabsAnalyzerRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
                 "DCInst_vtable copies in DTM:\n${dups.joinToString("\n")}",
         )
         Assertions.assertEquals("rtti", fieldNames.getOrNull(1))
+        Assertions.assertEquals("vmethods", fieldNames.getOrNull(2))
+        // The function pointers live inside DCInst_vmethods (what {vfptr} actually points to).
+        val vmethods = program.dataTypeManager.allDataTypes
+            .asSequence()
+            .filterIsInstance<Structure>()
+            .filter { it.name == "DCInst_vmethods" }
+            .maxByOrNull { it.numComponents }
+        Assertions.assertNotNull(vmethods, "DCInst_vmethods not found")
+        val virtuals = (0 until vmethods!!.numComponents).map {
+            vmethods.getComponent(it).fieldName
+        }.filterNotNull().toSet()
         // DCInst's own + inherited (Inst::Get* via ExprInst → XapInst → Inst chain).
-        // We don't pin the exact order, just that all expected slots are present.
-        val virtuals = fieldNames.drop(2).filterNotNull().toSet()
         val expected = setOf(
             "GetInstType", "__comp_dtor", "__deleting_dtor",
             "Clone", "Dump", "GetSize", "PossibleFunctionReference",
@@ -356,36 +371,37 @@ class StabsAnalyzerRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
         val missing = expected - virtuals
         Assertions.assertTrue(
             missing.isEmpty(),
-            "DCInst_vtable missing virtuals: $missing (have: $virtuals)",
+            "DCInst_vmethods missing virtuals: $missing (have: $virtuals)",
         )
     }
 
     @Test
     fun atLeastOneRootClassHasVtableBackEdge() {
         // At least one polymorphic class should directly contain a {vfptr} Pointer
-        // pointing at its <Name>_vtable struct. Derived classes correctly *inherit*
-        // their vfptr via a `_base_<Parent>` subobject, so most won't carry the
-        // pointer directly — but the root of every inheritance chain (e.g. Inst on
-        // xapasmcsr.exe) must, otherwise the ClassBuilder vfptr-insertion path is
-        // broken end-to-end. (Inheritance coverage is asserted separately by
-        // cLexStreamHasBaseField and xapInstFirstComponentIsBase.)
-        val vtables = program.dataTypeManager.allDataTypes
+        // pointing at its <Name>_vmethods struct (the function pointer array — what
+        // a real C++ vptr actually points at, vs. the full <Name>_vtable record that
+        // also has the offset_to_top + rtti Itanium prefix).
+        // Derived classes correctly *inherit* their vfptr via a `_base_<Parent>`
+        // subobject so most won't carry the pointer directly; but the root of every
+        // inheritance chain (e.g. Inst on xapasmcsr.exe) must, otherwise the
+        // ClassBuilder vfptr-insertion path is broken end-to-end.
+        val vmethods = program.dataTypeManager.allDataTypes
             .asSequence()
             .filterIsInstance<Structure>()
-            .filter { it.name.endsWith("_vtable") && it.numComponents > 0 }
+            .filter { it.name.endsWith("_vmethods") && it.numComponents > 0 }
             .toList()
-        val withMatchingVfptr = vtables.count { vt ->
-            val className = vt.name.removeSuffix("_vtable")
+        val withMatchingVfptr = vmethods.count { vm ->
+            val className = vm.name.removeSuffix("_vmethods")
             val cls = program.dataTypeManager.allDataTypes
                 .asSequence()
                 .filterIsInstance<Structure>()
                 .firstOrNull { it.name == className }
-            cls != null && cls.components.any { (it.dataType as? Pointer)?.dataType === vt }
+            cls != null && cls.components.any { (it.dataType as? Pointer)?.dataType === vm }
         }
         Assertions.assertTrue(
             withMatchingVfptr >= 1,
-            "Expected ≥ 1 *_vtable struct to have a back-edge {vfptr} from its class; " +
-                "got $withMatchingVfptr / ${vtables.size}",
+            "Expected ≥ 1 *_vmethods struct to have a back-edge {vfptr} from its class; " +
+                "got $withMatchingVfptr / ${vmethods.size}",
         )
     }
 
