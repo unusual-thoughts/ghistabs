@@ -8,15 +8,21 @@ import ghidra.program.model.address.Address
  * Implemented by BookmarkSink, but also by test doubles for pure unit tests.
  */
 interface DiagnosticSink {
-    fun log(category: String, message: String, address: Address? = null)
+    fun log(category: String, message: String? = null, address: Address? = null)
 }
 
-class MessageSinkAdapter(val messageLog: MessageLog) : DiagnosticSink {
-    override fun log(category: String, message: String, address: Address?) {
-        if (address != null) {
-            messageLog.appendMsg("[Stabs] $category at $address: $message")
-        } else {
-            messageLog.appendMsg("[Stabs] $category: $message")
+object DummySink : DiagnosticSink {
+    override fun log(category: String, message: String?, address: Address?) {}
+}
+
+fun MessageLog.toSink() = object : DiagnosticSink {
+    override fun log(category: String, message: String?, address: Address?) {
+        if (message != null) {
+            if (address != null) {
+                appendMsg("[Stabs] $category at $address: $message")
+            } else {
+                appendMsg("[Stabs] $category: $message")
+            }
         }
     }
 }

@@ -7,14 +7,23 @@ All entries verified against the current `xapasmcsr.exe` regression run
 
 ## Open
 
-- _BranchInstructions global STILL UNTYPED
-    - you claimed to have fixed this already
-    - "BranchInstructions" is inside the harvest
-    - _BranchInstructions probably from PE symbols, leading underscore will be replaced ?
+- [ ] **gcc per-BINCL include-stack vs our flat `fileNumToHeader`**.
+  After the N_GSYM/N_PSYM canonicalisation fix (see Done), every global
+  carrying inline-defined types DOES apply, but cross-CU element refs
+  can still mistype. Concrete case: `BranchInstructions` is a 16-element
+  array (correct length, applied as Data), but the element resolves to
+  a builtin `int` instead of the real `EnumInstToken` enum. `inst.cpp`'s
+  Ref is `(148, 3)` — slot 148 is an N_EXCL placeholder for sourceloc.h.
+  `EnumInstToken` lives at `(143, 3)` in Keywords.cpp — file 143 is an
+  N_SOL-tracked `stl_multiset.h` slot. gcc's intent: walk the BINCL stack
+  to find the right shared (filename, checksum) and look up "type 3" there.
+  Our `headerForFileNum(localId.cu)` returns whichever single slot we
+  allocated; we don't model the include stack. Fix needs a stack-aware
+  resolver or a content-keyed cross-CU type index that doesn't depend on
+  file slot at all.
 
-- STILL `this` duplicate argument on many methods, eg uint __thiscall XapArgRegLdStInst::Dump(XapArgRegLdStInst *
-  this,ushort this,uint dest)
-
+- [ ] need to tally placeholders that were never replaced in the diagnostics (fwd-decl)
+- [ ] is there any point left to rawByIdSnapshot ?
 
 - [ ] (partial) **dedup code with RTTIGccClassRecoverer / GccTypeinfo /
   RecoverClassesFromRTTIScript** — `RecoveredClassHelper` lives in
@@ -123,7 +132,62 @@ All entries verified against the current `xapasmcsr.exe` regression run
 
 ## Done
 
-### This session (2026-06-02 → 2026-06-03)
+### This session (2026-06-02 → 2026-06-04)
+
+- [x] **N_GSYM / N_PSYM / N_RSYM / N_FUN type-decl canonicalisation** —
+  globals (and function params, locals, signatures) were parsed and
+  stored with RAW local-form TypeIds; only N_LSYM TaggedType/Typedef
+  bodies went through `canonicalizeTypeDecl`. Result: a global like
+  `BranchInstructions:G(1,1103)=ar(38,4);0;15;(148,3)` ended up with a
+  `Ref(148, 3)` that never matched any canonical typeAst id, so
+  `dataTypeFor` returned null and the symbol stayed untyped. Now
+  `Harvester.harvestSymbol` and the N_FUN/N_PSYM/N_RSYM/N_LSYM paths
+  apply the same canonicalisation to symbol-side TypeDecls. xapasmcsr.exe:
+  `global-applied` jumped from 56 → 70 (and `BranchInstructions`
+  acquired a 16-element array shape). Element-type resolution still
+  incomplete — see the include-stack TODO above.
+
+- [x] **`canonicalKey()` filename scoping** — the no-checksum branch
+  used `originatingCu` bare, which made every non-checksummed header
+  first seen in the same CU collide. Now `"${originatingCu}#${filename}"`,
+  matching the structure of the checksummed-header form and letting
+  `canonicalTypeId` collapse to a single rule
+  (`header?.canonicalKey() ?: "$cuFile#file${localId.cu}"`).
+
+- [x] **Array TypeDecl: derive length from `indexType.Range` when
+  `decl.length == null`** — gcc routinely omits the explicit length and
+  encodes the array bound only via the index Range
+  (`array of EnumInstToken indexed [0..15]` → 16 elements). Old code
+  returned null on either condition; now elements fall back to
+  `ByteDataType` on unresolved-element and length cascades
+  `decl.length → indexType.max - min + 1 → 1`. `Undefined1` was a worse
+  fallback because Ghidra's data-reference analyzer reliably re-coalesces
+  arrays-of-undefined into individual `undefined4` chunks based on
+  scalar refs in code, even after CONCURRENT-mode apply.
+
+- [x] **CONCURRENT-mode global-apply race** — `applyGlobal` now uses
+  `DataUtilities.createData(..., CLEAR_ALL_CONFLICT_DATA)` instead of
+  `Listing.clearCodeUnits + createData`, so the autoanalysis `undefined4`
+  placeholder we race against in CONCURRENT mode is evicted explicitly.
+
+- [x] **Duplicate `this` parameter on class methods** — the
+  `openFunctions` loop applied gcc's N_PSYM `this` first (typically
+  mistyped, e.g. `int`); the subsequent `ClassBuilder.reparentMethod`
+  set `__thiscall` but Ghidra couldn't fully evict the leftover slot,
+  so display showed `(<Class>* this, <primitive> this, ...)`. Now the
+  openFunctions loop filters out N_PSYM params literally named `this`
+  (calling-convention territory). `reparentMethod` switched to
+  `DYNAMIC_STORAGE_ALL_PARAMS` with an explicit `this: <Class>*`
+  ParameterImpl prepended, so we own the entire param list — no
+  auto-injection guessing.
+
+- [x] **Harvest-side diagnostic counters** —
+  `harvest-records-read/parsed/-parse-errors`, `harvest-functions`,
+  `harvest-symbols`, `harvest-globals`, `harvest-statics`,
+  `harvest-typeAsts` with per-kind breakdown, `harvest-cus`,
+  `harvest-typeAsts-{unique,dup}-by-id`. Surfaces "how much did we even
+  see?" before any apply-side filtering. Counter `vftable-slot-fallback-untyped`
+  + `method-param-unresolved` track signature-resolution health.
 
 - [x] **vftable convention compatibility with shift-S workflow** —
   `ClassBuilder.buildAndApplyVtable` now:
