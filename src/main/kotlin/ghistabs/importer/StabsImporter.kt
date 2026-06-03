@@ -32,6 +32,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : LogSink {
         // Pass A — parse + harvest
         val harvester = Harvester(ctx.monitor, ctx.sink, ctx.resolver)
         val harvest = harvester.passA(stabs.records)
+        recordHarvestCounters(harvest, stabs)
 
         // Pass B — materialise types
         val typeRegistry = TypeRegistry(ctx.dtm, ctx.sink, ctx.diagnostics)
@@ -68,6 +69,37 @@ class StabsImporter(internal val ctx: ImportContext<*>) : LogSink {
         )
     }
 
+    /**
+     * Surface harvest-side population sizes as counters so the end-of-run
+     * `[diagnostics]` block answers "how much did we even see?" before any
+     * apply-side filtering. Lets the user spot e.g. "we harvested 200 globals
+     * but only applied 43" at a glance without running tooling.
+     */
+    private fun recordHarvestCounters(harvest: Harvest, stabs: StabReader.Result) {
+        ctx.diagnostics.inc("harvest-records-read", stabs.recordCount.toLong())
+        ctx.diagnostics.inc("harvest-records-parsed", (stabs.records.size - harvest.parseErrors).toLong())
+        ctx.diagnostics.inc("harvest-parse-errors", harvest.parseErrors.toLong())
+        ctx.diagnostics.inc("harvest-functions", harvest.openFunctions.size.toLong())
+        val allSyms = harvest.symbolsByCu.values.flatten()
+        ctx.diagnostics.inc("harvest-symbols", allSyms.size.toLong())
+        ctx.diagnostics.inc("harvest-globals", allSyms.count { it.decl is SymbolDecl.Global }.toLong())
+        ctx.diagnostics.inc("harvest-statics", allSyms.count { it.decl is SymbolDecl.StaticVar }.toLong())
+        ctx.diagnostics.inc("harvest-typeAsts", harvest.typeAsts.size.toLong())
+        // typeAst breakdown by AST kind — surfaces struct/enum/typedef weights.
+        val byKind = harvest.typeAsts.groupingBy { it.body::class.simpleName ?: "Unknown" }.eachCount()
+        for ((kind, n) in byKind.toSortedMap()) {
+            ctx.diagnostics.inc("harvest-typeAsts-$kind", n.toLong())
+        }
+        // Per-CU count of harvested symbols — top contributors land in the
+        // examples bucket so a single huge CU is visible.
+        ctx.diagnostics.inc("harvest-cus", harvest.symbolsByCu.size.toLong())
+        // Names dropped during harvest (parse error or canonicalisation
+        // collision) versus what reached PassA's output.
+        val uniqueTypeIds = harvest.typeAsts.map { it.id }.toSet().size
+        ctx.diagnostics.inc("harvest-typeAsts-unique-by-id", uniqueTypeIds.toLong())
+        ctx.diagnostics.inc("harvest-typeAsts-dup-by-id", (harvest.typeAsts.size - uniqueTypeIds).toLong())
+    }
+
     internal fun applyAllSymbols(harvest: Harvest, typeRegistry: TypeRegistry): ApplyResult {
         val source = SourceType.IMPORTED
         val funcMgr = ctx.program.functionManager
@@ -98,20 +130,35 @@ class StabsImporter(internal val ctx: ImportContext<*>) : LogSink {
                 if (retDt != null) func.setReturnType(retDt, source)
 
                 // Build parameters from the recorded N_PSYM / N_RSYM records.
-                val params = open.params.mapIndexed { i, p ->
-                    val pdecl = p.decl
-                    val (pname, pdt) = when (pdecl) {
-                        is SymbolDecl.StackParam -> pdecl.name to typeRegistry.dataTypeFor(pdecl.type)
-                        is SymbolDecl.RegParam -> pdecl.name to typeRegistry.dataTypeFor(pdecl.type)
-                        else -> "arg$i" to null
+                //
+                // Filter out any N_PSYM literally named `this`: gcc 3.x emits
+                // `this` as the first N_PSYM for member functions but often
+                // mistypes it (we've seen `int` instead of `<Class>*`). The
+                // class-level pass (`ClassBuilder.reparentMethod`) will set
+                // `__thiscall` and synthesise the typed `this` from the class
+                // struct, which is the authoritative source — N_PSYM `this`
+                // would only collide with that as a leftover slot Ghidra
+                // can't always evict, producing duplicate-`this` signatures.
+                val params = open.params
+                    .filterNot {
+                        val d = it.decl
+                        (d is SymbolDecl.StackParam && d.name == "this") ||
+                            (d is SymbolDecl.RegParam && d.name == "this")
                     }
-                    ParameterImpl(
-                        pname,
-                        pdt ?: Undefined4DataType.dataType,
-                        ctx.program,
-                        source,
-                    )
-                }
+                    .mapIndexed { i, p ->
+                        val pdecl = p.decl
+                        val (pname, pdt) = when (pdecl) {
+                            is SymbolDecl.StackParam -> pdecl.name to typeRegistry.dataTypeFor(pdecl.type)
+                            is SymbolDecl.RegParam -> pdecl.name to typeRegistry.dataTypeFor(pdecl.type)
+                            else -> "arg$i" to null
+                        }
+                        ParameterImpl(
+                            pname,
+                            pdt ?: Undefined4DataType.dataType,
+                            ctx.program,
+                            source,
+                        )
+                    }
                 // Always apply parameters (even if empty) to explicitly set function signature
                 func.replaceParameters(
                     params,
