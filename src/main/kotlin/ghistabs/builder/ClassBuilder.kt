@@ -146,19 +146,26 @@ class ClassBuilder(
      * The {vfptr} field in a polymorphic object points at the FUNCTION POINTER ARRAY
      * inside the vtable record (i.e. `_ZTV<class> + 2*ptrSize`), not at the start of
      * the record. We model that by giving the function pointer array its own struct
-     * `<Class>_vmethods` and having {vfptr} be `<Class>_vmethods*`. The full vtable
-     * record `<Class>_vtable` (offset_to_top + rtti + embedded vmethods) gets applied
+     * `<Class>_vftable` and having {vfptr} be `<Class>_vftable*`. The full vtable
+     * record `<Class>_vtable` (offset_to_top + rtti + embedded vftable) gets applied
      * at the `_ZTV` address.
+     *
+     * The vftable struct lives under `/ClassDataTypes/<Class>/` to match the
+     * convention `RecoveredClassHelper.createVftableStructures` uses, so
+     * `ApplyClassFunctionSignatureUpdatesScript` (shift-S round-trip) can find it.
      */
-    private fun ensureVtableTypeAndPointer(className: String, category: CategoryPath) = PointerDataType.getPointer(
-        dtm.getDataType(category, "${className}_vmethods") ?: StructureDataType(
-            category,
-            "${className}_vmethods",
-            0,
-            dtm,
-        ).let { dtm.addDataType(it, DataTypeConflictHandler.KEEP_HANDLER) },
-        dtm,
-    )
+    private fun ensureVtableTypeAndPointer(
+        className: String,
+        @Suppress("UNUSED_PARAMETER") category: CategoryPath,
+    ): Pointer {
+        val vftableCategory = CategoryPath(CategoryPath(CategoryPath.ROOT, "ClassDataTypes"), className)
+        val name = "${className}_vftable"
+        val struct = dtm.getDataType(vftableCategory, name) ?: dtm.addDataType(
+            StructureDataType(vftableCategory, name, 0, dtm),
+            DataTypeConflictHandler.KEEP_HANDLER,
+        )
+        return PointerDataType.getPointer(struct, dtm)
+    }
 
     private fun reparentMethod(m: MethodDecl, className: String, ns: GhidraClass) {
         val mangled = m.mangled ?: run {
@@ -220,10 +227,12 @@ class ClassBuilder(
                 retDecl = sig.ret
                 paramDecls = if (ghidraInjectedThis) sig.params.drop(1) else sig.params
             }
+
             is TypeDecl.FunctionT -> {
                 retDecl = sig.ret
                 paramDecls = sig.params
             }
+
             else -> return
         }
         val ret = typeRegistry.dataTypeFor(retDecl)
@@ -316,49 +325,61 @@ class ClassBuilder(
         }
 
         // 2. Build / look up two related structs:
-        //   <Class>_vmethods: just the array of function pointers — what the {vfptr}
-        //                     field in a polymorphic object points to.
-        //   <Class>_vtable:   the full record at the `_ZTV<class>` address — the
-        //                     Itanium ABI prefix (offset_to_top + rtti) followed by
-        //                     an embedded <Class>_vmethods at offset 2*ptrSize.
+        //   <Class>_vftable: the array of function pointers — what the {vfptr}
+        //                    field in a polymorphic object points to. Lives under
+        //                    `/ClassDataTypes/<Class>/` with each slot typed as
+        //                    Pointer→FunctionDefinition(<method-signature>) so the
+        //                    decompiler can resolve virtual calls; this matches
+        //                    Ghidra's `RecoveredClassHelper` convention and lets
+        //                    `ApplyClassFunctionSignatureUpdatesScript` (shift-S)
+        //                    operate on our classes.
+        //   <Class>_vtable:  the full record at `_ZTV<class>` — Itanium ABI prefix
+        //                    (offset_to_top + rtti) followed by an embedded
+        //                    <Class>_vftable at offset 2*ptrSize. Our own decoration,
+        //                    sits next to the vftable in the same category.
         //
         // CRITICAL: dtm.addDataType returns the DTM-resolved instance; mutating the
         // local pre-add reference doesn't propagate. Always work through the resolved
         // reference.
-        val vmethodsName = "${className}_vmethods"
+        val classDataTypesRoot = CategoryPath(CategoryPath.ROOT, "ClassDataTypes")
+        val vftableCategory = CategoryPath(classDataTypesRoot, className)
+        val vftableName = "${className}_vftable"
         val vtableName = "${className}_vtable"
         val ptrSize = program.defaultPointerSize // typically 4 on 32-bit
 
-        // a. Populate <Class>_vmethods (the function pointer array)
-        val vmethods = (dtm.getDataType(category, vmethodsName) as? Structure) ?: (
+        // a. Populate <Class>_vftable (the function pointer array).
+        val vftable = (dtm.getDataType(vftableCategory, vftableName) as? Structure) ?: (
             dtm.addDataType(
-                StructureDataType(category, vmethodsName, 0, dtm),
+                StructureDataType(vftableCategory, vftableName, 0, dtm),
                 DataTypeConflictHandler.KEEP_HANDLER,
             ) as Structure
             )
-        while (vmethods.numComponents > 0) vmethods.delete(0)
+        while (vftable.numComponents > 0) vftable.delete(0)
         for (m in virtuals) {
-            val fnDt = PointerDataType.getPointer(Undefined4DataType.dataType, dtm)
-            vmethods.add(fnDt, ptrSize, m.name, "virtual ${m.name}")
+            val slotType = buildVirtualSlotType(m, className, vftableCategory) ?: run {
+                ctx.diagnostics.inc("vftable-slot-fallback-untyped")
+                PointerDataType.getPointer(Undefined4DataType.dataType, dtm)
+            }
+            vftable.add(slotType, ptrSize, m.name, "virtual ${m.name}")
         }
 
         // b. Build <Class>_vtable wrapping that.
-        val vtable = (dtm.getDataType(category, vtableName) as? Structure) ?: (
+        val vtable = (dtm.getDataType(vftableCategory, vtableName) as? Structure) ?: (
             dtm.addDataType(
-                StructureDataType(category, vtableName, 0, dtm),
+                StructureDataType(vftableCategory, vtableName, 0, dtm),
                 DataTypeConflictHandler.KEEP_HANDLER,
             ) as Structure
             )
         while (vtable.numComponents > 0) vtable.delete(0)
         val intPtrDt = if (ptrSize == 8) {
-            ghidra.program.model.data.LongLongDataType.dataType
+            LongLongDataType.dataType
         } else {
-            ghidra.program.model.data.IntegerDataType.dataType
+            IntegerDataType.dataType
         }
         vtable.add(intPtrDt, ptrSize, "offset_to_top", "offset to top of complete object")
         val typeinfoPtr = PointerDataType.getPointer(Undefined4DataType.dataType, dtm)
         vtable.add(typeinfoPtr, ptrSize, "rtti", "_ZTI$className typeinfo pointer")
-        vtable.add(vmethods, vmethods.length, "vmethods", "virtual function table")
+        vtable.add(vftable, vftable.length, "vftable", "virtual function table")
 
         // 3. Resolve _ZTV<class> address with fallbacks.
         val candidates = VtableSymbolCandidates.mangledZtvCandidates(className)
@@ -373,6 +394,15 @@ class ClassBuilder(
         // 4. Apply data at the address.
         program.listing.clearCodeUnits(addr, addr.add(vtable.length.toLong() - 1), false)
         program.listing.createData(addr, vtable)
+        // Add a `vftable` label in the class namespace alongside whatever
+        // demangled `_ZTV<class>` produced. `RecoveredClassHelper` (and
+        // `ApplyClassFunctionSignatureUpdatesScript`) requires a symbol whose
+        // name contains "vftable" at the address of the Data containing the
+        // virtual-function refs — without it the shift-S round-trip can't
+        // locate the vftable. The demangler typically emits `<class>::vtable`
+        // (no f), so this label is what makes us discoverable.
+        runCatching { symtab.createLabel(addr, "vftable", ns, source) }
+            .onFailure { sink.log("vftable-label-failed", "$className at $addr: ${it.message}") }
         sink.log("vtable", "applied $vtableName", addr)
         ctx.diagnostics.recordVtable(className, "applied")
 
@@ -405,6 +435,37 @@ class ClassBuilder(
             }
             off += ptrSize
         }
+    }
+
+    /**
+     * Build the typed function-pointer slot for [m] in `<Class>_vftable`:
+     * `Pointer → FunctionDefinition(<actual signature>)`. Following Ghidra's
+     * `RecoveredClassHelper` convention, the first param `this: Class*` (if
+     * present from `__thiscall` injection) is rewritten to `void*` so the
+     * resulting pointer type is reusable across the inheritance chain
+     * (parent slots can hold pointers to derived overrides).
+     *
+     * Returns null if the method's address can't be resolved or the function
+     * isn't present — caller falls back to a generic `Pointer→Undefined4`.
+     */
+    private fun buildVirtualSlotType(m: MethodDecl, className: String, classCategory: CategoryPath): PointerDataType? {
+        val mAddr = m.mangled?.let(resolver::resolve) ?: return null
+        val func = program.functionManager.getFunctionAt(mAddr) ?: return null
+        val funcDef = FunctionDefinitionDataType(func, false)
+        // Name the FunctionDefinition after the in-class display name, not
+        // the function's possibly-mangled-or-class-namespaced full name.
+        runCatching { funcDef.name = m.name }
+        // Rewrite the auto-injected `this: <Class>*` (from __thiscall) to
+        // void* so this slot's type doesn't pin the pointer to one concrete
+        // class — overrides in derived classes can still share the slot.
+        val args = funcDef.arguments
+        if (args.isNotEmpty() && args[0].name == "this") {
+            val voidPtr = PointerDataType(VoidDataType(), dtm)
+            args[0].dataType = voidPtr
+        }
+        funcDef.categoryPath = classCategory
+        val resolved = dtm.addDataType(funcDef, DataTypeConflictHandler.KEEP_HANDLER) as FunctionDefinition
+        return PointerDataType(resolved, dtm)
     }
 
     /**
