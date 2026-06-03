@@ -1,7 +1,7 @@
 package ghistabs.builder
 
 import ghidra.program.model.data.*
-import ghistabs.diag.BookmarkSink
+import ghistabs.diag.DiagnosticSink
 import ghistabs.diag.GapRecord
 import ghistabs.diag.StabsDiagnostics
 import ghistabs.parser.*
@@ -78,9 +78,9 @@ value class ContentHash(val v: Long) {
 
 class TypeRegistry(
     private val dtm: DataTypeManager,
-    private val sink: BookmarkSink,
+    private val sink: DiagnosticSink,
     private val diagnostics: StabsDiagnostics,
-) {
+) : DiagnosticSink by sink {
     private val byId: MutableMap<TypeId, DataType> = mutableMapOf()
     private val placeholders: MutableMap<TypeId, DataType> = mutableMapOf()
 
@@ -203,10 +203,13 @@ class TypeRegistry(
         is TypeDecl.Array -> {
             // For arrays of unresolved element types (e.g. globals whose
             // element refers to a TypeId not in the registry), fall back to
-            // Undefined1 — better than dropping the array entirely, since the
-            // applied global at least gets the right *footprint* and the user
-            // sees the symbol typed.
-            val elem = dataTypeFor(decl.element) ?: Undefined1DataType.dataType
+            // ByteDataType, NOT `Undefined1`. The latter is type-equivalent
+            // to Ghidra's auto-analysis-placed "this is undefined" bytes, so
+            // a downstream data-reference analyzer that sees scalar refs to
+            // our array happily re-coalesces it into the `undefined4` form
+            // it would have built without us. `byte` is a concrete primitive
+            // and survives the round-trip.
+            val elem = dataTypeFor(decl.element) ?: ByteDataType.dataType
             // Length resolution priority:
             //   1. `decl.length` (explicit element count from the stab)
             //   2. derive from `indexType` Range as `max - min + 1`
@@ -304,7 +307,7 @@ class TypeRegistry(
             is TypeDecl.InlineDef -> dataTypeFor(body.body) ?: placeholder
 
             is TypeDecl.Array -> {
-                val elem = dataTypeFor(body.element) ?: Undefined1DataType.dataType
+                val elem = dataTypeFor(body.element) ?: ByteDataType.dataType
                 val rangeLen = (body.indexType as? TypeDecl.Range)
                     ?.let { it.max - it.min + 1 }
                     ?.takeIf { it > 0 }
@@ -355,7 +358,7 @@ class TypeRegistry(
                             sortedBaseOffsetsBytes.firstOrNull { it > offsetBytes } ?: firstFieldOffsetBytes
                         val inferredSize = nextOffset - offsetBytes
                         if (inferredSize <= 0) {
-                            sink.log(
+                            log(
                                 "base-skipped-zero-size",
                                 "Base of '${ast.name}' at offset $offsetBytes: cannot infer size",
                             )
@@ -366,7 +369,7 @@ class TypeRegistry(
                         val synthDt = ArrayDataType(Undefined1DataType.dataType, inferredSize, 1)
                         dataTypeByOffset[offsetBytes] = synthDt
                         resolvedBaseInfo[offsetBytes] = ResolvedBase(synthName, inferredSize)
-                        sink.log(
+                        log(
                             "base-synthesized",
                             "Base of '${ast.name}' at offset $offsetBytes: " +
                                 "Ref unresolved, synthesised $inferredSize-byte placeholder",
@@ -410,7 +413,7 @@ class TypeRegistry(
                             )
                             diagnostics.inc("inheritance-applied")
                         } catch (e: java.lang.IllegalArgumentException) {
-                            sink.log(
+                            log(
                                 "base-layout",
                                 "Failed to insert base '${op.baseSimpleName}' in '${ast.name}': ${e.message}",
                             )
@@ -456,7 +459,7 @@ class TypeRegistry(
                             else -> {}
                         }
                     } catch (e: Exception) {
-                        sink.log("field-layout", "Failed to add '${field.name}' to '${ast.name}': ${e.message}")
+                        log("field-layout", "Failed to add '${field.name}' to '${ast.name}': ${e.message}")
                     }
                 }
 
@@ -473,12 +476,11 @@ class TypeRegistry(
 
                 // Task 2: Plate-comment summary on the derived struct (base class metadata).
                 if (body.bases.isNotEmpty() && struct is Structure) {
-                    val lines =
-                        body.bases.sortedBy { it.offsetBits }.joinToString("\n") { base ->
-                            val baseName = (dataTypeFor(base.type)?.name) ?: "<unresolved>"
-                            val virt = if (base.isVirtual) " virtual" else ""
-                            "inherits ${base.access.name.lowercase()}$virt $baseName @ +${base.offsetBits / 8}"
-                        }
+                    val lines = body.bases.sortedBy { it.offsetBits }.joinToString("\n") { base ->
+                        val baseName = (dataTypeFor(base.type)?.name) ?: "<unresolved>"
+                        val virt = if (base.isVirtual) " virtual" else ""
+                        "inherits ${base.access.name.lowercase()}$virt $baseName @ +${base.offsetBits / 8}"
+                    }
                     val existing = struct.description ?: ""
                     struct.description =
                         if (existing.isEmpty()) lines else "$existing\n$lines"
@@ -490,11 +492,9 @@ class TypeRegistry(
             is TypeDecl.FunctionT -> {
                 val fd = FunctionDefinitionDataType(category, ast.name, dtm)
                 fd.returnType = dataTypeFor(body.ret) ?: VoidDataType()
-                val params =
-                    body.params
-                        .mapIndexed { i, p ->
-                            ParameterDefinitionImpl("arg$i", dataTypeFor(p) ?: Undefined4DataType.dataType, null)
-                        }.toTypedArray()
+                val params = body.params.mapIndexed { i, p ->
+                    ParameterDefinitionImpl("arg$i", dataTypeFor(p) ?: Undefined4DataType.dataType, null)
+                }.toTypedArray()
                 fd.setArguments(*params)
                 fd
             }
@@ -513,40 +513,38 @@ class TypeRegistry(
             }
 
             is TypeDecl.XRef -> {
-                sink.log("xref-stub", "Forward ref to '${body.tagName}'; materialising stub")
+                log("xref-stub", "Forward ref to '${body.tagName}'; materialising stub")
                 placeholder
             }
 
-            is TypeDecl.Ref -> {
-                // Same cascade as dataTypeFor: byId -> placeholders -> rawByIdSnapshot -> classify.
-                byId[body.id]
-                    ?: placeholders[body.id]
-                    ?: rawByIdSnapshot[body.id]?.let { raw ->
-                        makePlaceholder(raw.body, CategoryPath("/stabs"), raw.name)
-                            .also { placeholders[body.id] = it }
-                    }
-                    ?: run {
-                        val refKey = "(${body.id.cu},${body.id.n})"
-                        val includeCtx = includeContextsByFile[ast.cuFile]
-                        val knownFileNums = includeCtx?.getAllFileNums() ?: emptySet()
-                        // Truly-missing classifier: rawByIdSnapshot already exhausted above.
-                        val knownTypeIds = emptySet<TypeId>()
+            // Same cascade as dataTypeFor: byId -> placeholders -> rawByIdSnapshot -> classify.
+            // FIXME: refactor to avoid code duplication
+            is TypeDecl.Ref -> byId[body.id]
+                ?: placeholders[body.id]
+                ?: rawByIdSnapshot[body.id]?.let { raw ->
+                    makePlaceholder(raw.body, CategoryPath("/stabs"), raw.name)
+                        .also { placeholders[body.id] = it }
+                }
+                ?: run {
+                    val refKey = "(${body.id.cu},${body.id.n})"
+                    val includeCtx = includeContextsByFile[ast.cuFile]
+                    val knownFileNums = includeCtx?.getAllFileNums() ?: emptySet()
+                    // Truly-missing classifier: rawByIdSnapshot already exhausted above.
+                    val knownTypeIds = emptySet<TypeId>()
 
-                        val classification =
-                            ResolverDecision.classifyRef(
-                                body.id,
-                                ast.id.cu,
-                                knownTypeIds,
-                                knownFileNums,
-                            )
+                    val classification = ResolverDecision.classifyRef(
+                        body.id,
+                        ast.id.cu,
+                        knownTypeIds,
+                        knownFileNums,
+                    )
 
-                        sink.log("dangling-ref", "Dangling ref to $refKey in '${ast.name}' [${classification.tag}]")
-                        diagnostics.recordUnresolvedRef(refKey, ast.name, ast.cuFile)
-                        diagnostics.inc("dangling-ref-${classification.tag}")
+                    log("dangling-ref", "Dangling ref to $refKey in '${ast.name}' [${classification.tag}]")
+                    diagnostics.recordUnresolvedRef(refKey, ast.name, ast.cuFile)
+                    diagnostics.inc("dangling-ref-${classification.tag}")
 
-                        Undefined4DataType.dataType
-                    }
-            }
+                    Undefined4DataType.dataType
+                }
         }
 
     private fun registerWithConflict(dt: DataType, name: String, hash: ContentHash, category: CategoryPath): DataType {
@@ -584,7 +582,7 @@ class TypeRegistry(
         // Clone and rename
         val copy = dt.copy(dtm)
         copy.name = "${name}_$n"
-        sink.log("type-conflict", "Two definitions of '$name' with different bodies; second renamed to '${name}_$n'")
+        log("type-conflict", "Two definitions of '$name' with different bodies; second renamed to '${name}_$n'")
         diagnostics.recordDedup(kind = "rename", name = name, detail = "renamed-to-${name}_$n")
         byPath[category to "${name}_$n"] = hash
         return dtm.addDataType(copy, DataTypeConflictHandler.KEEP_HANDLER)
@@ -635,7 +633,7 @@ class TypeRegistry(
                                 sourceDataTypeComponent.comment,
                             )
                         } catch (e: IllegalArgumentException) {
-                            sink.log(
+                            log(
                                 "merge-failed",
                                 "Could not apply merge to '$name' at offset ${sourceComponent.offsetBytes}: ${e.message}",
                             )
@@ -647,7 +645,7 @@ class TypeRegistry(
                 // Update hash to reflect the new merged content
                 byPath[category to name] = incomingHash
                 diagnostics.recordDedup(kind = "merge", name = name, detail = "merged ${result.mergePlan.size} fields")
-                sink.log("dedup-merged", "$name: ${result.mergePlan.size} fields merged")
+                log("dedup-merged", "$name: ${result.mergePlan.size} fields merged")
                 existing
             }
 
@@ -682,7 +680,7 @@ class TypeRegistry(
             candidates.size == 1 -> dtm.getDataType(candidates[0].first, candidates[0].second)
             else -> {
                 // Multiple matches: ambiguous. Log and count.
-                sink.log("demangler-ambiguous", "Multiple matches for '$simpleName': $candidates")
+                log("demangler-ambiguous", "Multiple matches for '$simpleName': $candidates")
                 diagnostics.inc("demangler-ambiguous")
                 null
             }

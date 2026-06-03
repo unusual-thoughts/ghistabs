@@ -10,10 +10,12 @@ import ghistabs.importer.ImportContext
  * Pure Kotlin test double that captures log() calls into a list.
  */
 class CapturingSink : DiagnosticSink {
-    internal val lines = mutableListOf<Triple<String, Address?, String>>()
+    data class LogLine(val tag: String, val address: Address?, val msg: String?)
 
-    override fun log(category: String, message: String, address: Address?) {
-        lines.add(Triple(category, address, message))
+    internal val lines = mutableListOf<LogLine>()
+
+    override fun log(category: String, message: String?, address: Address?) {
+        lines.add(LogLine(tag = category, msg = message, address = address))
     }
 
     fun capturedOutput(): String = lines.joinToString("\n") { (category, addr, msg) ->
@@ -25,7 +27,7 @@ class CapturingSink : DiagnosticSink {
     }
 
     fun tagFrequencies(): Map<String, Long> = lines
-        .groupingBy { it.first }
+        .groupingBy { it.tag }
         .eachCount()
         .mapValues { it.value.toLong() }
 }

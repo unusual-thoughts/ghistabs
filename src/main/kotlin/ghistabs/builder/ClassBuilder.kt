@@ -8,7 +8,7 @@ import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
-import ghistabs.diag.BookmarkSink
+import ghistabs.diag.DiagnosticSink
 import ghistabs.importer.AddressResolver
 import ghistabs.importer.ImportContext
 import ghistabs.parser.*
@@ -17,13 +17,13 @@ class ClassBuilder(
     private val program: Program,
     private val typeRegistry: TypeRegistry,
     private val resolver: AddressResolver,
-    private val sink: BookmarkSink,
+    private val sink: DiagnosticSink,
     /** All struct ASTs harvested in Pass A, indexed by name. */
     private val structAstsByName: Map<String, TypeDecl.Struct>,
     /** All type ASTs indexed by TypeId for inheritance resolution. */
     private val typeAstsById: Map<TypeId, TypeAst>? = null,
     private val ctx: ImportContext<*>,
-) {
+) : DiagnosticSink by sink {
     private val source = SourceType.IMPORTED
     private val symtab = program.symbolTable
     private val dtm = program.dataTypeManager
@@ -34,7 +34,7 @@ class ClassBuilder(
         // (typeRegistry.dataTypeFor does not handle TypeDecl.Struct — Structs are only
         // looked up by TypeId via materialiseAll; here we resolve by (category, name).)
         val structDt = (dtm.getDataType(category, name) as? Structure) ?: run {
-            sink.log("class-not-struct", "skipping non-struct class '$name' at $category")
+            log("class-not-struct", "skipping non-struct class '$name' at $category")
             return
         }
 
@@ -135,7 +135,7 @@ class ClassBuilder(
                 ctx.diagnostics.inc("vfptr-normalized")
             }
 
-            is VfptrAction.CollisionAt -> sink.log(
+            is VfptrAction.CollisionAt -> log(
                 "vfptr-collision",
                 "$className: cannot place {vfptr} at +${action.offsetBytes} (occupied by ${action.occupantFieldName})",
             )
@@ -169,7 +169,7 @@ class ClassBuilder(
 
     private fun reparentMethod(m: MethodDecl, className: String, ns: GhidraClass, structDt: Structure) {
         val mangled = m.mangled ?: run {
-            sink.log("method-no-mangled", "$className::${m.name}: stab has no mangled symbol")
+            log("method-no-mangled", "$className::${m.name}: stab has no mangled symbol")
             return
         }
         val addr = resolver.resolve(mangled) ?: run {
@@ -181,12 +181,12 @@ class ClassBuilder(
             if (isLikelyImplicitTrivialSpecialMember(mangled)) {
                 ctx.diagnostics.inc("method-implicit-not-emitted")
             } else {
-                sink.log("unresolved-symbol", "method $mangled (in $className)")
+                log("unresolved-symbol", "method $mangled (in $className)")
             }
             return
         }
         val func = program.functionManager.getFunctionAt(addr) ?: run {
-            sink.log("unresolved-symbol", "no Function at $addr for $mangled")
+            log("unresolved-symbol", "no Function at $addr for $mangled")
             return
         }
 
@@ -212,7 +212,7 @@ class ClassBuilder(
         // we just force-created from a stab via CreateFunctionCmd, the
         // parameter list isn't populated until later analysis runs.
         val thiscallAccepted = runCatching { func.setCallingConvention("__thiscall") }
-            .onFailure { sink.log("method-calling-convention", "$className::${m.name}: ${it.message}") }
+            .onFailure { log("method-calling-convention", "$className::${m.name}: ${it.message}") }
             .isSuccess
         val ghidraInjectsThis = thiscallAccepted && func.parentNamespace is GhidraClass
 
@@ -261,7 +261,7 @@ class ClassBuilder(
         if (unresolvedCount > 0) {
             ctx.diagnostics.inc("method-param-unresolved", unresolvedCount.toLong())
             if (paramTypes.isNotEmpty()) {
-                sink.log(
+                log(
                     "method-param-unresolved",
                     "$className::${m.name}: $unresolvedCount/${paramTypes.size} stab param types " +
                         "unresolved; substituting Undefined4 so __thiscall `this` injection isn't " +
@@ -418,7 +418,7 @@ class ClassBuilder(
 
         // If class name contains template args, log the limitation before trying resolution
         if ('<' in className) {
-            sink.log("vtable-templated-skip", "class '$className' has template args; _ZTV lookup unsupported in v1")
+            log("vtable-templated-skip", "class '$className' has template args; _ZTV lookup unsupported in v1")
         }
 
         val addr = resolveVtableAddress(className, body, candidates) ?: return
@@ -434,8 +434,8 @@ class ClassBuilder(
         // locate the vftable. The demangler typically emits `<class>::vtable`
         // (no f), so this label is what makes us discoverable.
         runCatching { symtab.createLabel(addr, "vftable", ns, source) }
-            .onFailure { sink.log("vftable-label-failed", "$className at $addr: ${it.message}") }
-        sink.log("vtable", "applied $vtableName", addr)
+            .onFailure { log("vftable-label-failed", "$className at $addr: ${it.message}") }
+        log("vtable", "applied $vtableName", addr)
         ctx.diagnostics.recordVtable(className, "applied")
 
         // 5. Plate-comment each virtual method.
@@ -452,14 +452,14 @@ class ClassBuilder(
                         "virtual ${m.name}; ${className}_vtable offset $off",
                     )
                 } else {
-                    sink.log(
+                    log(
                         "vtable-virtual-unresolved",
                         "no Function at $mAddr for virtual method ${m.name} in $className",
                     )
                     ctx.diagnostics.recordVtable(className, "failed", reason = "virtual-method-unresolved")
                 }
             } else {
-                sink.log(
+                log(
                     "vtable-virtual-unresolved",
                     "virtual method '${m.name}' in $className: no mangled symbol or unresolved address",
                 )
@@ -520,7 +520,7 @@ class ClassBuilder(
                     VtableSymbolCandidates.itaniumDecodesToClass(it.name, className)
             }?.let { return it.address }
         } catch (e: IllegalArgumentException) {
-            sink.log("vtable-symbol-scan-error", "exception scanning symbol table for $className: ${e.message}")
+            log("vtable-symbol-scan-error", "exception scanning symbol table for $className: ${e.message}")
         }
 
         // Step 3: Fallback to .rdata memory scan
@@ -537,7 +537,7 @@ class ClassBuilder(
                             VtableSymbolCandidates.itaniumDecodesToClass(it.name, className)
                     }?.let { return it.address }
             } catch (e: IllegalArgumentException) {
-                sink.log("vtable-rdata-scan-error", "exception scanning .rdata for $className: ${e.message}")
+                log("vtable-rdata-scan-error", "exception scanning .rdata for $className: ${e.message}")
             }
         }
 
@@ -550,7 +550,7 @@ class ClassBuilder(
             else -> "truly-missing"
         }
         ctx.diagnostics.recordVtable(className, "failed", failureBucket)
-        sink.log(
+        log(
             "vtable-failed-$failureBucket",
             "class '$className': vtable not found (tried ${candidates.joinToString()})",
         )

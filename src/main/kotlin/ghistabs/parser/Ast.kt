@@ -6,7 +6,9 @@ import kotlinx.serialization.json.JsonClassDiscriminator
 
 /** Identifies a type within a CU: (file-number, type-number). */
 @Serializable
-data class TypeId(val cu: Int, val n: Int)
+data class TypeId(val cu: Int, val n: Int) {
+    override fun toString() = "($cu,$n)"
+}
 
 enum class Access { PRIVATE, PROTECTED, PUBLIC }
 

@@ -9,7 +9,7 @@ import ghidra.program.model.address.AddressSetView
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
 import ghistabs.StabsAnalyzer.Companion.OPT_STABS_DONE
-import ghistabs.diag.MessageSinkAdapter
+import ghistabs.diag.toSink
 import ghistabs.importer.ImportContext
 import ghistabs.importer.StabsImporter
 
@@ -65,7 +65,7 @@ class StabsAnalyzer :
         if (isStabsDone(program)) return // idempotent re-trigger; treat as success.
 
         val result = StabsImporter(ctx).run()
-        ctx.log.log("done", "import complete: $result")
+        ctx.sink.log("done", "import complete: $result")
         markStabsDone(program, true)
     }
 
@@ -74,7 +74,7 @@ class StabsAnalyzer :
         log ?: return false
         monitor ?: return false
         val options = StabsOptions(program.getOptions(Program.ANALYSIS_PROPERTIES).getOptions(name))
-        run(program, ImportContext(program, MessageSinkAdapter(log), monitor, options))
+        run(program, ImportContext(program, log.toSink(), monitor, options))
         return true
     }
 

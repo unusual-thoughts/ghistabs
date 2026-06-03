@@ -8,6 +8,7 @@ import ghistabs.StabsOptions
 import ghistabs.diag.BookmarkSink
 import ghistabs.diag.DiagnosticSink
 import ghistabs.diag.StabsDiagnostics
+import org.jetbrains.annotations.TestOnly
 
 data class PassResult(
     val recordsRead: Int = 0,
@@ -21,7 +22,7 @@ data class PassResult(
 
 class ImportContext<Log : DiagnosticSink>(
     val program: Program,
-    val log: Log,
+    @get:TestOnly val log: Log,
     val monitor: TaskMonitor,
     val options: StabsOptions = StabsOptions(),
 ) {

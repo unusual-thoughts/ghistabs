@@ -16,6 +16,7 @@ import ghistabs.diag.defaultContext
 import ghistabs.importer.ImportContext
 import ghistabs.parser.Harvester
 import ghistabs.parser.StabReader
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.encodeToStream
 import org.junit.jupiter.api.*
@@ -45,6 +46,10 @@ import java.io.File
  */
 enum class Mode { CONCURRENT, AFTER }
 
+const val BINARY_NAME = "bouniafbouniaf"
+
+fun resourceFile(kind: String, name: String) = File("src/test/resources/${kind}s/$name-$kind.json")
+
 /**
  * Regression test harness for StabsAnalyzer on bouniafbouniaf.exe.
  *
@@ -57,14 +62,16 @@ enum class Mode { CONCURRENT, AFTER }
  */
 @Tag("integration")
 abstract class StabsAnalyzerRegressionTest(private val mode: Mode) : AbstractGhidraHeadlessIntegrationTest() {
-    private val fixture = File("src/test/resources/binaries/bouniafbouniaf.exe")
-    private val baselineFile = File("src/test/resources/baselines/bouniafbouniaf-baseline.json")
-    private val harvestFile = File("src/test/resources/harvests/bouniafbouniaf-harvest.json")
-    private val logFile = File("src/test/resources/logs/bouniafbouniaf.${mode.name.lowercase()}.log")
+    private val fixture = File("src/test/resources/binaries/$BINARY_NAME.exe")
+    private val baselineFile = resourceFile("baseline", BINARY_NAME)
+    private val recordsFile = resourceFile("record", BINARY_NAME)
+    private val harvestFile = resourceFile("harvest", BINARY_NAME)
+    private val logFile = File("src/test/resources/logs/${BINARY_NAME}.${mode.name.lowercase()}.log")
 
     protected lateinit var program: Program
     private var loadResults: LoadResults<Program>? = null
     protected lateinit var context: ImportContext<CapturingSink>
+    private val json by lazy { Json { prettyPrint = true } }
 
     @BeforeEach
     fun setUp() {
@@ -75,6 +82,9 @@ abstract class StabsAnalyzerRegressionTest(private val mode: Mode) : AbstractGhi
 
         val log = MessageLog()
         val monitor = TaskMonitor.DUMMY
+        logFile.parentFile.mkdirs()
+        recordsFile.parentFile.mkdirs()
+        harvestFile.parentFile.mkdirs()
 
         try {
             loadResults = ProgramLoader
@@ -115,6 +125,7 @@ abstract class StabsAnalyzerRegressionTest(private val mode: Mode) : AbstractGhi
                     // that case, without truncation (MessageLog truncates).
                     context = program.defaultContext()
                 }
+
                 Mode.AFTER -> {
                     // Disable our analyzer so auto-analysis (incl. demangler) settles
                     // without us, then re-run it manually with our CapturingSink.
@@ -137,8 +148,12 @@ abstract class StabsAnalyzerRegressionTest(private val mode: Mode) : AbstractGhi
                     }
                 }
             }
-            logFile.parentFile.mkdirs()
-            logFile.writeText(context.log.capturedOutput())
+            // Dump our CapturingSink output (AFTER mode only). For CONCURRENT
+            // mode the analyzer ran via Ghidra's path through
+            // MessageSinkAdapter(log), so also append the MessageLog so the
+            // log file isn't empty there.
+            // FIXME: MessageLog truncates after 500 messages!!
+            logFile.writeText(context.log.capturedOutput() + "\n--- MessageLog ---\n" + log.toString())
         } catch (e: Exception) {
             assumeTrue(false, "Failed to load real binary via ProgramLoader: ${e.message}")
         }
@@ -182,6 +197,78 @@ abstract class StabsAnalyzerRegressionTest(private val mode: Mode) : AbstractGhi
         if (drift.isNotEmpty()) {
             Assertions.fail<Unit>("Baseline drift detected:\n  - " + drift.joinToString("\n  - "))
         }
+    }
+
+    /**
+     * `BranchInstructions` is a stab-harvested global typed
+     * `array[0..15] of <enum>`. The element-type Ref couldn't resolve and the
+     * stab encodes the length only via the index Range. The old Array case
+     * returned null on either condition, leaving the global untyped. Now
+     * `TypeRegistry` derives length from the indexType Range when absent
+     * and falls back to Undefined1 elements on resolution failure.
+     *
+     * Must hold in both modes — CONCURRENT mode races autoanalysis's
+     * `undefined4` placeholders, which `applyGlobal` now evicts via
+     * `DataUtilities.CLEAR_ALL_CONFLICT_DATA`.
+     */
+    @Test
+    fun branchInstructionsGlobalIsTyped() {
+        val branchSyms = program.symbolTable.symbolIterator.iterator().asSequence()
+            .filter { it.name == "_BranchInstructions" || it.name == "BranchInstructions" }
+            .toList()
+        assumeTrue(branchSyms.isNotEmpty(), "Skipping: BranchInstructions symbol absent")
+        val sym = branchSyms.first()
+        val data = program.listing.getDataAt(sym.address)
+        // Diagnostic context surfacing what the actual program state is when
+        // this assertion fails — we want to know whether the address has the
+        // wrong type, multiple symbols, or has been collapsed by a downstream
+        // analyzer post-import.
+        val ctx = buildString {
+            append("Symbol matches for BranchInstructions: ")
+            append(branchSyms.joinToString { "${it.address}::${it.name}" })
+            append("\n")
+            append("Data at ${sym.address}: ")
+            append(
+                if (data == null) {
+                    "<null>"
+                } else {
+                    "${data.dataType::class.simpleName} '${data.dataType.name}' len=${data.length}"
+                },
+            )
+            // Look 16 bytes around to see if the array got fragmented.
+            for (off in 0..16 step 4) {
+                val a = sym.address.add(off.toLong())
+                val d = program.listing.getDataAt(a)
+                append("\n  +$off ($a): ")
+                append(d?.dataType?.name ?: "<no data>")
+            }
+        }
+        Assertions.assertTrue(
+            data?.dataType is Array,
+            "BranchInstructions should be an Array.\n$ctx",
+        )
+        val arr = data!!.dataType as Array
+        Assertions.assertEquals(
+            16,
+            arr.numElements,
+            "BranchInstructions array length should be 16 (Range 0..15 in stab).\n$ctx",
+        )
+        // Ideally the element resolves to the real `EnumInstToken` Enum.
+        // Currently it resolves to a builtin (typically `int`) because gcc
+        // encodes the cross-CU element reference as a Ref into a local
+        // file slot (an N_EXCL placeholder for sourceloc.h in our case)
+        // that our canonicalisation can't unify with the slot where
+        // `EnumInstToken` was actually defined (an N_SOL-tracked
+        // stl_multiset.h slot in Keywords.cpp). Fixing this needs a model
+        // of gcc's per-BINCL include-stack file numbering that our flat
+        // fileNumToHeader doesn't capture. See TODO.md.
+        // For now, assert what we DO get: a 16-element typed array (not
+        // the previous `undefined4` fallback).
+        Assertions.assertNotEquals(
+            "undefined",
+            arr.dataType.name,
+            "BranchInstructions element should be a real type, not undefined.\n$ctx",
+        )
     }
 
     @Test
@@ -601,10 +688,13 @@ abstract class StabsAnalyzerRegressionTest(private val mode: Mode) : AbstractGhi
         )
     }
 
+    @OptIn(ExperimentalSerializationApi::class)
     @Test
     fun harvestTest() {
         val ctx = program.defaultContext()
         val stabs = StabReader.fromProgram(program)!!
+        json.encodeToStream(stabs.records, recordsFile.outputStream())
+
         val harvester = Harvester(TaskMonitor.DUMMY, ctx.sink, ctx.resolver)
         // passA writes via AddressResolver.recordFromStab → symbolTable.createLabel, so it
         // needs a transaction. (We re-run it here to serialize a self-contained harvest
@@ -615,7 +705,7 @@ abstract class StabsAnalyzerRegressionTest(private val mode: Mode) : AbstractGhi
         } finally {
             program.endTransaction(tx, true)
         }
-        Json { prettyPrint = true }.encodeToStream(harvest, harvestFile.outputStream())
+        json.encodeToStream(harvest, harvestFile.outputStream())
     }
 
     // ---- Mangling / execution-order assertions, shared between modes. ----
@@ -711,7 +801,7 @@ class StabsAnalyzerAfterTest : StabsAnalyzerRegressionTest(Mode.AFTER) {
     fun noEmptyDemanglerStubsRemain() {
         val emptyStubs = program.dataTypeManager.allDataTypes
             .asSequence()
-            .filterIsInstance<ghidra.program.model.data.Structure>()
+            .filterIsInstance<Structure>()
             .filter { it.categoryPath.path.startsWith("/Demangler") }
             .filter { it.isZeroLength || it.numComponents == 0 }
             .map { "${it.categoryPath.path}/${it.name}" }
@@ -720,39 +810,6 @@ class StabsAnalyzerAfterTest : StabsAnalyzerRegressionTest(Mode.AFTER) {
             emptyStubs.isEmpty(),
             "Expected zero empty /Demangler/... stubs after AFTER-mode import; " +
                 "found ${emptyStubs.size}: ${emptyStubs.take(10).joinToString()}",
-        )
-    }
-
-    /**
-     * `BranchInstructions` is a stab-harvested global typed
-     * `array[0..15] of <enum>`. The element-type Ref couldn't resolve and the
-     * stab encodes the length only via the index Range. The old Array case
-     * returned null on either condition, leaving the global untyped. Now we
-     * derive length from the indexType Range when absent, and fall back to
-     * Undefined1 elements on resolution failure so the global still applies.
-     *
-     * AFTER mode only: in CONCURRENT mode autoanalysis can race our apply
-     * and re-classify the address before/after we touch it.
-     */
-    @Test
-    fun branchInstructionsGlobalIsTyped() {
-        val branchSym = program.symbolTable.symbolIterator.iterator().asSequence()
-            .firstOrNull { it.name == "_BranchInstructions" || it.name == "BranchInstructions" }
-        assumeTrue(branchSym != null, "Skipping: BranchInstructions symbol absent")
-        val data = program.listing.getDataAt(branchSym!!.address)
-        Assertions.assertNotNull(
-            data,
-            "Expected a typed Data at ${branchSym.address} for ${branchSym.name}; got none",
-        )
-        Assertions.assertTrue(
-            data!!.dataType is Array,
-            "BranchInstructions should be an Array; got ${data.dataType::class.simpleName} '${data.dataType.name}'",
-        )
-        val arr = data.dataType as Array
-        Assertions.assertEquals(
-            16,
-            arr.numElements,
-            "BranchInstructions array length should be 16 (Range 0..15 in stab); got ${arr.numElements}",
         )
     }
 

@@ -19,10 +19,10 @@ import ghidra.program.model.listing.Program
  */
 class BookmarkSink(
     private val program: Program,
-    private val messageLog: DiagnosticSink,
+    private val parent: DiagnosticSink,
     private var diagnostics: StabsDiagnostics? = null,
 ) : DiagnosticSink {
-    override fun log(category: String, message: String, address: Address?) {
+    override fun log(category: String, message: String?, address: Address?) {
         diagnostics?.inc(category)
         if (address != null) {
             program.bookmarkManager.setBookmark(
@@ -32,14 +32,6 @@ class BookmarkSink(
                 "[Stabs] $category: $message",
             )
         }
-        messageLog.log(category, message)
-    }
-
-    /**
-     * Bump a counter without emitting a log line. Use for high-frequency events
-     * where per-record logging would drown out other diagnostics (e.g. N_SLINE).
-     */
-    fun bump(category: String) {
-        diagnostics?.inc(category)
+        parent.log(category, message)
     }
 }

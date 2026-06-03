@@ -1,29 +1,18 @@
 package ghistabs.parser
 
+import ghistabs.diag.CapturingSink
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 class IncludeContextTest {
-    private class RecordingSink : LogSink {
-        val logs = mutableListOf<Pair<String, String>>()
-
-        override fun log(tag: String, message: String) {
-            logs.add(tag to message)
-        }
-
-        fun clear() {
-            logs.clear()
-        }
-    }
-
     private lateinit var registry: HeaderRegistry
-    private lateinit var sink: RecordingSink
+    private lateinit var sink: CapturingSink
 
     @BeforeEach
     fun setUp() {
         registry = HeaderRegistry()
-        sink = RecordingSink()
+        sink = CapturingSink()
     }
 
     @Test
@@ -144,10 +133,10 @@ class IncludeContextTest {
         assertEquals("<unknown>", header.originatingCu)
 
         // Check log was emitted
-        val forwardExclLog = sink.logs.find { it.first == "forward-excl" }
+        val forwardExclLog = sink.lines.find { it.tag == "forward-excl" }
         assertNotNull(forwardExclLog)
-        assertTrue(forwardExclLog!!.second.contains("unknown.h"))
-        assertTrue(forwardExclLog.second.contains("0x456"))
+        assertTrue(forwardExclLog!!.msg!!.contains("unknown.h"))
+        assertTrue(forwardExclLog.msg!!.contains("0x456"))
     }
 
     @Test
@@ -158,7 +147,7 @@ class IncludeContextTest {
         val header1Excl = ctx1.headerForFileNum(fileNum1Excl)
 
         // Verify forward-excl log was emitted exactly once
-        assertEquals(1, sink.logs.filter { it.first == "forward-excl" }.size)
+        assertEquals(1, sink.lines.filter { it.tag == "forward-excl" }.size)
         assertEquals("<unknown>", header1Excl!!.originatingCu)
 
         // Now a later CU with real BINCL should get a different HeaderFile
@@ -182,9 +171,9 @@ class IncludeContextTest {
         ctx.endInclude()
 
         // Check log was emitted
-        val unbalancedLog = sink.logs.find { it.first == "einc-unbalanced" }
+        val unbalancedLog = sink.lines.find { it.tag == "einc-unbalanced" }
         assertNotNull(unbalancedLog)
-        assertTrue(unbalancedLog!!.second.contains("empty stack"))
+        assertTrue(unbalancedLog!!.msg!!.contains("empty stack"))
     }
 
     @Test
