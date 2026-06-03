@@ -1,5 +1,6 @@
 package ghistabs.importer
 
+import ghidra.program.model.address.Address
 import ghidra.program.model.data.Undefined4DataType
 import ghidra.program.model.listing.CommentType
 import ghidra.program.model.listing.Function
@@ -9,15 +10,14 @@ import ghidra.program.model.symbol.SourceType
 import ghistabs.builder.Attribution
 import ghistabs.builder.TypeRegistry
 import ghistabs.diag.ApplyErrorBucket
+import ghistabs.diag.DiagnosticSink
 import ghistabs.parser.*
 
-class StabsImporter(internal val ctx: ImportContext<*>) : LogSink {
-    override fun log(tag: String, message: String) = ctx.sink.log(tag, message)
-
+class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.sink {
     fun run(): PassResult {
         val readerResult = StabReader.fromProgram(ctx.program)
         if (readerResult == null) {
-            ctx.sink.log("no-stabs", "No .stab/.stabstr block found; skipping import.")
+            log("no-stabs", "No .stab/.stabstr block found; skipping import.")
             ctx.diagnostics.writeSummary(ctx.sink)
             return PassResult()
         }
@@ -36,7 +36,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : LogSink {
 
         // Pass B — materialise types
         val typeRegistry = TypeRegistry(ctx.dtm, ctx.sink, ctx.diagnostics)
-        typeRegistry.setIncludeContexts(harvester.includesByFile)
+        typeRegistry.setIncludeContexts(harvest.includesByFile)
         val txB = ctx.program.startTransaction("Stabs: materialise types")
         try {
             typeRegistry.materialiseAll(harvest.typeAsts) { name, cus ->
@@ -118,7 +118,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : LogSink {
                     }
                     ?: tryCreateFunctionFromStab(open) ?: run {
                     ctx.diagnostics.inc("apply-error-no-function")
-                    ctx.sink.log(
+                    log(
                         "apply-error-no-function",
                         "no Function at or containing ${open.addr} for ${open.name}",
                     )
@@ -179,8 +179,8 @@ class StabsImporter(internal val ctx: ImportContext<*>) : LogSink {
             } catch (t: Throwable) {
                 val bucket = ApplyErrorBucket.bucket(t)
                 ctx.diagnostics.recordApplyError(open.name, bucket, t.message.orEmpty())
-                ctx.sink.log("apply-error-$bucket", "function ${open.name}: ${t.message}")
-                ctx.sink.log("apply-error", "function ${open.name}: ${t.message}", open.addr.address)
+                log("apply-error-$bucket", "function ${open.name}: ${t.message}")
+                log("apply-error", "function ${open.name}: ${t.message}", open.addr.address)
             }
         }
 
@@ -194,7 +194,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : LogSink {
                         else -> Unit
                     }
                 } catch (t: Throwable) {
-                    ctx.sink.log("apply-error", "symbol ${h.decl.name} in $cu: ${t.message}")
+                    log("apply-error", "symbol ${h.decl.name} in $cu: ${t.message}")
                 }
             }
         }
@@ -234,7 +234,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : LogSink {
                     classBuilder.build(name, body, category)
                     classes++
                 } catch (t: Throwable) {
-                    ctx.sink.log("class-apply-error", "$name: ${t.message}")
+                    log("class-apply-error", "$name: ${t.message}")
                 }
             }
         }
@@ -284,7 +284,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : LogSink {
      * referenced only via vtable). Force-create the function — the stab is authoritative.
      * Returns the created Function or null if creation failed (e.g. address is in data).
      */
-    private fun tryCreateFunctionFromStab(open: OpenFunction): ghidra.program.model.listing.Function? {
+    private fun tryCreateFunctionFromStab(open: OpenFunction): Function? {
         val addr = open.addr.address
         val cmd = ghidra.app.cmd.function.CreateFunctionCmd(open.name, addr, null, SourceType.IMPORTED)
         if (!cmd.applyTo(ctx.program, ctx.monitor)) {
@@ -308,13 +308,13 @@ class StabsImporter(internal val ctx: ImportContext<*>) : LogSink {
         // into a single log entry per range (otherwise a typical .bss produces thousands
         // of one-per-chunk lines).
         var addr = bssBlock.start
-        var gapStart: ghidra.program.model.address.Address? = null
-        var gapEnd: ghidra.program.model.address.Address? = null
+        var gapStart: Address? = null
+        var gapEnd: Address? = null
 
         fun flushGap() {
             val start = gapStart ?: return
             val end = gapEnd ?: return
-            ctx.sink.log(
+            log(
                 "stabs-no-coverage",
                 "@ $start..$end (${end.offset - start.offset + 1} bytes): no stabs records cover this range",
             )
@@ -341,7 +341,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : LogSink {
                     is CoverageResult.Covered -> {
                         flushGap()
                         result.coverers.forEach {
-                            ctx.sink.log("stabs-coverage", "@ $addr..$rangeEnd: covered by ${it.symbolName}")
+                            log("stabs-coverage", "@ $addr..$rangeEnd: covered by ${it.symbolName}")
                         }
                     }
                 }
@@ -383,14 +383,14 @@ class StabsImporter(internal val ctx: ImportContext<*>) : LogSink {
                     ctx.diagnostics.inc("local-var-add-success")
                 }
 
-                is SymbolDecl.RegLocal -> ctx.sink.log(
+                is SymbolDecl.RegLocal -> log(
                     "regparam-deferred",
                     "Register local '${decl.name}' in function deferred (register mapping not implemented)",
                 )
             }
         } catch (e: Exception) {
             // local-var-error counter auto-bumps via BookmarkSink tag→counter contract
-            ctx.sink.log("local-var-error", "Could not add local '${decl.name}' to ${func.name}: ${e.message}")
+            log("local-var-error", "Could not add local '${decl.name}' to ${func.name}: ${e.message}")
         }
     }
 
@@ -411,16 +411,19 @@ class StabsImporter(internal val ctx: ImportContext<*>) : LogSink {
                 val text = "Stabs scope locals: " + localsInScope.joinToString(", ") { it.decl.name }
                 ctx.program.listing.setComment(addr, CommentType.PLATE, text)
             } catch (e: Exception) {
-                ctx.sink.log("scope-comment-error", "Failed to set scope comment: ${e.message}")
+                log("scope-comment-error", "Failed to set scope comment: ${e.message}")
             }
         }
     }
 
     private fun applyGlobal(decl: SymbolDecl.Global, typeRegistry: TypeRegistry): Boolean {
         val addr = ctx.resolver.resolve(decl.name) ?: run {
-            ctx.sink.log("unresolved-symbol", "global ${decl.name}")
+            log("unresolved-symbol", "global ${decl.name}")
             ctx.diagnostics.recordGlobal(decl.name, "skipped", dtKind = "unknown", reason = "unresolved-symbol")
             return false
+        }
+        if (decl.name == "BranchInstructions") {
+            log("prout")
         }
         val dt = typeRegistry.dataTypeFor(decl.type) ?: run {
             ctx.diagnostics.recordGlobal(
@@ -440,13 +443,36 @@ class StabsImporter(internal val ctx: ImportContext<*>) : LogSink {
             is ghidra.program.model.data.Enum -> "Enum"
             else -> dt.displayName
         }
+        // Use ClearDataMode.CLEAR_ALL_CONFLICT_DATA (via DataUtilities) to
+        // forcibly evict any existing data in the range — including
+        // `undefined4` placeholders that auto-analysis raced us to apply
+        // in CONCURRENT mode. `Listing.clearCodeUnits` alone is enough in
+        // single-threaded transactional code, but the helper is explicit
+        // about its conflict resolution.
         try {
-            // Clear any existing code units before creating data to avoid conflicts
-            ctx.program.listing.clearCodeUnits(addr, addr.add((dt.length - 1).toLong()), false)
-            ctx.program.listing.createData(addr, dt)
+            ghidra.program.model.data.DataUtilities.createData(
+                ctx.program,
+                addr,
+                dt,
+                dt.length,
+                ghidra.program.model.data.DataUtilities.ClearDataMode.CLEAR_ALL_CONFLICT_DATA,
+            )
+            // Verify our type actually stuck. If Ghidra (auto-analyser racing
+            // us, undo path, or data-equivalence collapse) replaced what we
+            // wrote with something else, surface it loudly via a per-kind
+            // counter rather than silently claiming success.
+            val after = ctx.program.listing.getDataAt(addr)
+            val stuck = after != null && after.dataType.name == dt.name
+            if (!stuck) {
+                ctx.diagnostics.inc("global-applied-then-overwritten")
+                log(
+                    "global-applied-then-overwritten",
+                    "$decl.name at $addr: wrote ${dt.name} but readback is ${after?.dataType?.name}",
+                )
+            }
             ctx.diagnostics.recordGlobal(addr.toString(), "applied", dtKind = dtKind)
         } catch (e: Exception) {
-            ctx.sink.log("apply-error", "Failed to create global data at $addr: ${e.message}")
+            log("apply-error", "Failed to create global data at $addr: ${e.message}")
             ctx.diagnostics.recordGlobal(addr.toString(), "skipped", dtKind = dtKind, reason = "create-data-failed")
             return false
         }
@@ -462,7 +488,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : LogSink {
             ctx.program.listing.clearCodeUnits(addr, addr.add((dt.length - 1).toLong()), false)
             ctx.program.listing.createData(addr, dt)
         } catch (e: Exception) {
-            ctx.sink.log("apply-error", "Failed to create static data at $addr: ${e.message}")
+            log("apply-error", "Failed to create static data at $addr: ${e.message}")
             return false
         }
         return true

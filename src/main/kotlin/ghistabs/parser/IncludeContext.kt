@@ -1,18 +1,19 @@
 package ghistabs.parser
 
+import ghistabs.diag.DiagnosticSink
+import ghistabs.diag.DummySink
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 import java.util.*
-
-/** Interface for logging sink used by IncludeContext. */
-interface LogSink {
-    fun log(tag: String, message: String)
-}
 
 /**
  * Global registry for header files shared across multiple CUs via BINCL/EXCL.
  * Maintains canonical CU integer mapping to avoid hashCode() collisions.
  */
+@Serializable
 class HeaderRegistry {
     /** (filename, checksum) → HeaderFile for cross-CU BINCL/EXCL sharing. */
+    @Transient
     val globalByFilenameChecksum: MutableMap<Pair<String, Long>, HeaderFile> = mutableMapOf()
 
     /** Canonical CU integers: (filename, checksum) key → unique integer (collision-free). */
@@ -37,6 +38,7 @@ class HeaderRegistry {
  * Represents one BINCL-or-source-file entity. Two CUs that include or EXCL the same
  * (filename, checksum) share a single HeaderFile instance.
  */
+@Serializable
 data class HeaderFile(val filename: String, val checksum: Long, val originatingCu: String) {
     /**
      * Canonical identifier for this header: used for stable TypeId rewriting across CUs.
@@ -45,7 +47,11 @@ data class HeaderFile(val filename: String, val checksum: Long, val originatingC
     fun canonicalKey(): String = when {
         originatingCu == "<unknown>" -> "unknown_${filename}_$checksum"
         checksum != 0L -> "${filename}_${checksum.toString(16)}"
-        else -> originatingCu
+        // No checksum: scope by (originatingCu, filename). Without the
+        // filename, two different non-checksummed headers first seen in
+        // the same CU would collide. Without `originatingCu`, headers
+        // with the same name first seen in different CUs would collide.
+        else -> "$originatingCu#$filename"
     }
 }
 
@@ -61,8 +67,15 @@ data class HeaderFile(val filename: String, val checksum: Long, val originatingC
  * - reMountExcluded: N_EXCL, allocates fileNum for shared header (or placeholder if forward EXCL).
  * - canonicalTypeId: Rewrites local TypeId to stable form across CUs sharing the same header.
  */
-class IncludeContext(val cuFile: String, private val sink: LogSink, val registry: HeaderRegistry = HeaderRegistry()) {
+@Serializable
+class IncludeContext(
+    val cuFile: String,
+    @Transient private val sink: DiagnosticSink = DummySink,
+    @Transient val registry: HeaderRegistry = HeaderRegistry(),
+) : DiagnosticSink by sink {
     private val fileNumToHeader: MutableMap<Int, HeaderFile> = mutableMapOf()
+
+    @Transient
     private val includeStack: ArrayDeque<HeaderFile> = ArrayDeque()
     private var nextFileNum: Int = 1
 
@@ -112,7 +125,7 @@ class IncludeContext(val cuFile: String, private val sink: LogSink, val registry
         if (includeStack.isNotEmpty()) {
             includeStack.pop()
         } else {
-            sink.log("einc-unbalanced", "endInclude with empty stack")
+            log("einc-unbalanced", "endInclude with empty stack")
         }
     }
 
@@ -129,7 +142,7 @@ class IncludeContext(val cuFile: String, private val sink: LogSink, val registry
         val key = filename to checksum
         val header = registry.globalByFilenameChecksum[key] ?: run {
             // Forward EXCL before BINCL: create placeholder, store only locally
-            sink.log("forward-excl", "$filename checksum=0x${checksum.toString(16)}")
+            log("forward-excl", "$filename checksum=0x${checksum.toString(16)}")
             HeaderFile(filename, checksum, originatingCu = "<unknown>")
         }
         fileNumToHeader[fileNum] = header
@@ -149,26 +162,24 @@ class IncludeContext(val cuFile: String, private val sink: LogSink, val registry
 
     /**
      * Rewrites a local TypeId into a canonical form stable across CUs that share the same header.
-     * For types defined inside a BINCL (header.originatingCu != cuFile), returns a TypeId keyed off
-     * the header's canonical key. For local types, leaves TypeId as-is (but disambiguated by CU).
+     *
+     * Single rule: if there's a known header for this file slot, use the
+     * header's canonical key (which already encodes `(filename, checksum)`
+     * or `(originatingCu, filename)`); otherwise fall back to a per-CU,
+     * per-fileNum bucket (the `(0, n)` builtin-reference slot and
+     * placeholders land here).
+     *
+     * The previous form split the same-cuFile-no-checksum case off into
+     * `cuFile#fileN`, which produced different canonical keys for the
+     * SAME shared header across CUs — e.g. `Keywords.cpp`'s stl_multiset.h
+     * landed at `Keywords.cpp#file143` while `inst.cpp`'s identical entry
+     * for stl_multiset.h landed at `Keywords.cpp` via `canonicalKey()`,
+     * so refs from `inst.cpp` to types defined there (e.g. EnumInstToken
+     * pulled in by BranchInstructions's array element) failed to resolve.
      */
     fun canonicalTypeId(localId: TypeId): TypeId {
         val header = headerForFileNum(localId.cu)
-        // Choose a canonical key per file:
-        //  - BINCL/shared header (checksum != 0 OR originated in a different CU): the header
-        //    canonical key. Types defined inside this header in different CUs coalesce.
-        //  - Local file (the CU's own N_SO source, any N_SOL sub-source, or an unknown slot
-        //    such as the `(0, n)` gcc references built-ins by): namespace under
-        //    `<cuFile>#file<fileNum>`. Keying ALL local files on plain `cuFile` makes every
-        //    `(file, 3)` in the same CU collapse to one canonical id, so `EnumInstToken:t(2,3)=…`
-        //    in an N_SOL header gets eaten by `long int:t(1,3)=…` via `associateBy` in
-        //    materialiseAll.
-        val key = when {
-            header == null -> "$cuFile#file${localId.cu}"
-            header.checksum != 0L -> header.canonicalKey()
-            header.originatingCu != cuFile -> header.canonicalKey()
-            else -> "$cuFile#file${localId.cu}"
-        }
+        val key = header?.canonicalKey() ?: "$cuFile#file${localId.cu}"
         val canonicalCu = registry.allocateCanonicalCu(key)
         return TypeId(canonicalCu, localId.n)
     }

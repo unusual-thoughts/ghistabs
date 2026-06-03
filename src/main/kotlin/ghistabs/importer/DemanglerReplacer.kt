@@ -3,6 +3,7 @@ package ghistabs.importer
 import ghidra.program.model.data.*
 import ghidra.program.model.data.Array
 import ghistabs.builder.TypeRegistry
+import ghistabs.diag.DiagnosticSink
 import java.util.*
 
 /**
@@ -35,7 +36,8 @@ sealed class Skip(open val reason: String) {
 /**
  * Adapter that uses Ghidra's DataTypeManager to execute demangler stub replacements.
  */
-class DemanglerReplacer(private val ctx: ImportContext<*>, private val registry: TypeRegistry) {
+class DemanglerReplacer(private val ctx: ImportContext<*>, private val registry: TypeRegistry) :
+    DiagnosticSink by ctx.sink {
     companion object {
         /**
          * Pure algorithm: given stubs and replacements, decide which replacements are safe.
@@ -124,7 +126,7 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val registry:
                 is Skip.StubAlreadyMissing -> "demangler-skip-already-missing"
             }
             ctx.diagnostics.inc(counterKey)
-            ctx.sink.log("demangler-skip", skip.reason)
+            log("demangler-skip", skip.reason)
         }
 
         // Execute replacements
@@ -142,10 +144,10 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val registry:
                 // updateCategoryPath = false: keep replacement at its real category
                 dtm.replaceDataType(stubDt, replDt, false)
                 ctx.diagnostics.inc("replaced-demangler")
-                ctx.sink.log("replaced-demangler", "${stubDt.pathName} -> ${replDt.pathName}")
+                log("replaced-demangler", "${stubDt.pathName} -> ${replDt.pathName}")
             } catch (e: DataTypeDependencyException) {
                 ctx.diagnostics.inc("replaced-demangler-failed")
-                ctx.sink.log("replaced-demangler-failed", "${stubDt.pathName}: ${e.message}")
+                log("replaced-demangler-failed", "${stubDt.pathName}: ${e.message}")
             }
         }
     }
