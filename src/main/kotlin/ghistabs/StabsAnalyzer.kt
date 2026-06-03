@@ -27,7 +27,12 @@ class StabsAnalyzer :
         AnalyzerType.BYTE_ANALYZER,
     ) {
     init {
-        priority = AnalysisPriority(200) // LATER priority (higher number = later execution)
+        // Run AFTER Ghidra's demangler (priority ~897, i.e.
+        // DATA_TYPE_PROPOGATION.before().before().before()). If we ran earlier
+        // we'd promote function symbols to IMPORTED ahead of the demangler,
+        // which then skips them and leaves names mangled in the listing.
+        // LOW_PRIORITY (10000) keeps us strictly after every standard analyzer.
+        priority = AnalysisPriority.LOW_PRIORITY
         setDefaultEnablement(true)
         setSupportsOneTimeAnalysis()
     }
