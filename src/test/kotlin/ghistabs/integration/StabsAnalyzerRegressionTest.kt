@@ -342,12 +342,12 @@ abstract class StabsAnalyzerRegressionTest(private val mode: Mode) : AbstractGhi
             vtables.isNotEmpty(),
             "Expected at least one *_vtable struct with components",
         )
-        // {vfptr} fields point at <Class>_vmethods (the function pointer array),
+        // {vfptr} fields point at <Class>_vftable (the function pointer array),
         // not at <Class>_vtable (the full record including offset_to_top + rtti).
         val vmethods = program.dataTypeManager.allDataTypes
             .asSequence()
             .filterIsInstance<Structure>()
-            .filter { it.name.endsWith("_vmethods") && it.numComponents > 0 }.toList()
+            .filter { it.name.endsWith("_vftable") && it.numComponents > 0 }.toList()
         val classesWithVtables = program.dataTypeManager.allDataTypes
             .asSequence()
             .filterIsInstance<Structure>()
@@ -394,6 +394,66 @@ abstract class StabsAnalyzerRegressionTest(private val mode: Mode) : AbstractGhi
         )
     }
 
+    /**
+     * Compatibility surface for `ApplyClassFunctionSignatureUpdatesScript`
+     * (shift-S) and `RecoveredClassHelper`:
+     *
+     *  1. The vftable Structure must live under a CategoryPath containing
+     *     the literal `"ClassDataTypes"` segment (the script tests
+     *     `baseDataType.getCategoryPath().getPath().contains("ClassDataTypes")`).
+     *  2. The vtable Data address must carry a Symbol whose name contains
+     *     `"vftable"` (the helper filters refs by
+     *     `vftableSymbol.getName().contains("vftable")`).
+     *  3. Each vftable slot must be a typed function pointer
+     *     (Pointer→FunctionDefinition), not a generic `undefined4*`, so the
+     *     decompiler resolves virtual calls and Ghidra creates data refs
+     *     that the helper can walk back from the virtual function.
+     *
+     * `DCInst` is a good probe class: polymorphic, several virtuals,
+     * inherited slots — exercises all three gates.
+     */
+    @Test
+    fun dcinstShiftSCompatibility() {
+        val vftable = program.dataTypeManager.allDataTypes
+            .asSequence()
+            .filterIsInstance<Structure>()
+            .filter { it.name == "DCInst_vftable" }
+            .maxByOrNull { it.numComponents }
+        assumeTrue(vftable != null, "Skipping: DCInst_vftable not found")
+        // Gate 1: CategoryPath under ClassDataTypes.
+        Assertions.assertTrue(
+            "ClassDataTypes" in vftable!!.categoryPath.path,
+            "DCInst_vftable category '${vftable.categoryPath.path}' " +
+                "must contain 'ClassDataTypes' (RecoveredClassHelper convention)",
+        )
+        // Gate 3: every populated slot is Pointer→FunctionDefinition.
+        val slotTypeSummary = (0 until vftable.numComponents).map { i ->
+            val c = vftable.getComponent(i)
+            val ptr = c.dataType as? Pointer
+            val pointee = ptr?.dataType
+            Triple(c.fieldName ?: "<?>", ptr != null, pointee is FunctionDefinition)
+        }
+        val typedSlots = slotTypeSummary.count { it.third }
+        val totalSlots = slotTypeSummary.size
+        Assertions.assertTrue(
+            typedSlots > 0 && typedSlots >= totalSlots / 2,
+            "DCInst_vftable: only $typedSlots/$totalSlots slots are typed " +
+                "Pointer→FunctionDefinition. Slots: $slotTypeSummary",
+        )
+        // Gate 2: `vftable` symbol at the DTV address. Walk the symbol table
+        // for `_ZTV6DCInst` (Itanium-mangled DTV symbol) and check siblings.
+        val ztv = program.symbolTable.symbolIterator.iterator().asSequence()
+            .firstOrNull { it.name == "_ZTV6DCInst" }
+        assumeTrue(ztv != null, "Skipping: _ZTV6DCInst not resolved")
+        val sibs = program.symbolTable.getSymbols(ztv!!.address).toList()
+        val sibSummary = sibs.map { "${it.parentNamespace.name}::${it.name}" }
+        Assertions.assertTrue(
+            sibs.any { "vftable" in it.name },
+            "DCInst vtable address ${ztv.address} has no symbol containing 'vftable'; " +
+                "symbols there: $sibSummary",
+        )
+    }
+
     @Test
     fun dcinstVtableMatchesItaniumLayout() {
         // Prefer the non-empty copy: there may be one stub in /Demangler or /std/<header>
@@ -420,14 +480,14 @@ abstract class StabsAnalyzerRegressionTest(private val mode: Mode) : AbstractGhi
                 "DCInst_vtable copies in DTM:\n${dups.joinToString("\n")}",
         )
         Assertions.assertEquals("rtti", fieldNames.getOrNull(1))
-        Assertions.assertEquals("vmethods", fieldNames.getOrNull(2))
-        // The function pointers live inside DCInst_vmethods (what {vfptr} actually points to).
+        Assertions.assertEquals("vftable", fieldNames.getOrNull(2))
+        // The function pointers live inside DCInst_vftable (what {vfptr} actually points to).
         val vmethods = program.dataTypeManager.allDataTypes
             .asSequence()
             .filterIsInstance<Structure>()
-            .filter { it.name == "DCInst_vmethods" }
+            .filter { it.name == "DCInst_vftable" }
             .maxByOrNull { it.numComponents }
-        Assertions.assertNotNull(vmethods, "DCInst_vmethods not found")
+        Assertions.assertNotNull(vmethods, "DCInst_vftable not found")
         val virtuals = (0 until vmethods!!.numComponents).map {
             vmethods.getComponent(it).fieldName
         }.filterNotNull().toSet()
@@ -440,14 +500,14 @@ abstract class StabsAnalyzerRegressionTest(private val mode: Mode) : AbstractGhi
         val missing = expected - virtuals
         Assertions.assertTrue(
             missing.isEmpty(),
-            "DCInst_vmethods missing virtuals: $missing (have: $virtuals)",
+            "DCInst_vftable missing virtuals: $missing (have: $virtuals)",
         )
     }
 
     @Test
     fun atLeastOneRootClassHasVtableBackEdge() {
         // At least one polymorphic class should directly contain a {vfptr} Pointer
-        // pointing at its <Name>_vmethods struct (the function pointer array — what
+        // pointing at its <Name>_vftable struct (the function pointer array — what
         // a real C++ vptr actually points at, vs. the full <Name>_vtable record that
         // also has the offset_to_top + rtti Itanium prefix).
         // Derived classes correctly *inherit* their vfptr via a `_base_<Parent>`
@@ -457,10 +517,10 @@ abstract class StabsAnalyzerRegressionTest(private val mode: Mode) : AbstractGhi
         val vmethods = program.dataTypeManager.allDataTypes
             .asSequence()
             .filterIsInstance<Structure>()
-            .filter { it.name.endsWith("_vmethods") && it.numComponents > 0 }
+            .filter { it.name.endsWith("_vftable") && it.numComponents > 0 }
             .toList()
         val withMatchingVfptr = vmethods.count { vm ->
-            val className = vm.name.removeSuffix("_vmethods")
+            val className = vm.name.removeSuffix("_vftable")
             val cls = program.dataTypeManager.allDataTypes
                 .asSequence()
                 .filterIsInstance<Structure>()
@@ -469,7 +529,7 @@ abstract class StabsAnalyzerRegressionTest(private val mode: Mode) : AbstractGhi
         }
         Assertions.assertTrue(
             withMatchingVfptr >= 1,
-            "Expected ≥ 1 *_vmethods struct to have a back-edge {vfptr} from its class; " +
+            "Expected ≥ 1 *_vftable struct to have a back-edge {vfptr} from its class; " +
                 "got $withMatchingVfptr / ${vmethods.size}",
         )
     }

@@ -7,6 +7,27 @@ All entries verified against the current `xapasmcsr.exe` regression run
 
 ## Open
 
+- _BranchInstructions global STILL UNTYPED
+    - you claimed to have fixed this already
+    - "BranchInstructions" is inside the harvest
+    - _BranchInstructions probably from PE symbols, leading underscore will be replaced ?
+
+- STILL `this` duplicate argument on many methods, eg uint __thiscall XapArgRegLdStInst::Dump(XapArgRegLdStInst *
+  this,ushort this,uint dest)
+
+- RegToBinary argument should be
+
+- [ ] (partial) **dedup code with RTTIGccClassRecoverer / GccTypeinfo /
+  RecoverClassesFromRTTIScript** — `RecoveredClassHelper` lives in
+  `ghidra_scripts/classrecovery/` (Ghidra script source, not on Ghidra's
+  compiled classpath) so a compiled extension can't import it. Full
+  delegation would require vendoring ~9 kLOC of script source (Apache-2.0,
+  legal but heavy). Convention-level compatibility is done (see Done
+  below); we keep our own vtable construction.
+- [ ] fix log capture in tests
+    - should we use Msg.debug/info/warn/error etc instead of MessageLog ?
+
+
 - [ ] **invoke `GnuDemangler` directly on stab-derived labels**. Pinned by
   the disabled test `freeFunctionSymbolGetsDemangled`. Root cause: Ghidra's
   demangler is a `BYTE_ANALYZER` that runs once at priority ~897 over the
@@ -18,9 +39,9 @@ All entries verified against the current `xapasmcsr.exe` regression run
        and create the label under the demangled form when it parses.
     2. Add a follow-up pass at the end of `StabsImporter.run` that walks
        all IMPORTED labels starting with `_Z`/`__Z` and demangles each.
-  Symptom on xapasmcsr.exe: `_Z11RegToBinary12EnumRegToken` stays mangled.
-  Behaviour is identical in both AFTER and CONCURRENT modes — initial
-  hypothesis that it was a concurrency race was wrong.
+       Symptom on xapasmcsr.exe: `_Z11RegToBinary12EnumRegToken` stays mangled.
+       Behaviour is identical in both AFTER and CONCURRENT modes — initial
+       hypothesis that it was a concurrency race was wrong.
 
 - [ ] **check the logic actual GDB uses to deduplicate / canonicalize
   types and classes**, see if our algorithm makes sense or if we need to
@@ -104,6 +125,22 @@ All entries verified against the current `xapasmcsr.exe` regression run
 ## Done
 
 ### This session (2026-06-02 → 2026-06-03)
+
+- [x] **vftable convention compatibility with shift-S workflow** —
+  `ClassBuilder.buildAndApplyVtable` now:
+    - puts vftable + vtable structs under
+      `/ClassDataTypes/<Class>/` (matches `RecoveredClassHelper.DTM_CLASS_DATA_FOLDER_NAME`);
+    - renames `<Class>_vmethods` → `<Class>_vftable`;
+    - types each slot as `Pointer → FunctionDefinition(method-signature)`
+      via `buildVirtualSlotType`, with the auto-injected `this: Class*`
+      rewritten to `void*` so the pointer type is reusable across
+      inheritance (same trick `RecoveredClassHelper` uses, L4602);
+    - adds a `vftable` label at the `_ZTV<class>` address inside the
+      class namespace so the helper's substring filter
+      (`vftableSymbol.getName().contains("vftable")`) accepts us.
+  Pinned by new test `dcinstShiftSCompatibility`. Counter
+  `vftable-slot-fallback-untyped` = 8 on xapasmcsr.exe — the rest get
+  typed function-pointer slots.
 
 - [x] **`DemanglerReplacer` candidate filter** — when both a `/Demangler/Foo`
   stub and a real `/proj/Foo` exist, the old `nameIndex` saw 2 matches and
