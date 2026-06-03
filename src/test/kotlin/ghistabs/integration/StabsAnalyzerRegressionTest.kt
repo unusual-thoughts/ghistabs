@@ -544,20 +544,16 @@ abstract class StabsAnalyzerRegressionTest(private val mode: Mode) : AbstractGhi
     }
 
     /**
-     * Ghidra's demangler should resolve any Itanium-mangled function symbol
-     * to its demangled name (so users see `RegToBinary`, not
-     * `_Z11RegToBinary12EnumRegToken`).
-     *
-     * Currently failing in both modes. Root cause: the demangler is a
-     * BYTE_ANALYZER fired at priority ~897 over the loader-added symbol set.
-     * Our stab-derived labels (`recordFromStab` → `createLabel`) are written
-     * at LOW_PRIORITY (10000), after the demangler has already completed,
-     * and the demangler does not re-run on later-added symbols. Fix is
-     * tracked in TODO.md ("invoke GnuDemangler directly for stab-derived
-     * mangled labels"). Test stays as a regression pin.
+     * Ghidra's demangler runs once at priority ~897 over loader-added
+     * symbols; our stab-derived labels (`recordFromStab` → `createLabel`)
+     * appear later and would be missed. [StabsImporter.demangleMangledLabels]
+     * sweeps every IMPORTED `_Z` / `__Z` symbol at the end of the import
+     * with `DemanglerCmd`, with signature/calling-convention application
+     * disabled so our stab-derived prototype and `__thiscall` choice
+     * still win. This test pins the end-to-end name resolution on a
+     * known free function (`RegToBinary`).
      */
     @Test
-    @org.junit.jupiter.api.Disabled("Known bug — see TODO.md: GnuDemangler not invoked on stab-derived labels")
     fun freeFunctionSymbolGetsDemangled() {
         val fm = program.functionManager
         val byMangled = fm.getFunctions(true).iterator().asSequence()
