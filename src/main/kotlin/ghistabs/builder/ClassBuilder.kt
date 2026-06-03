@@ -190,39 +190,51 @@ class ClassBuilder(
         val displayName = displayNameFor(mangled, className) ?: m.name
         if (func.name != displayName) func.setName(displayName, source)
 
-        // 3. Apply prototype from MethodDecl.signature.
-        val sig = m.signature
-        if (sig is TypeDecl.FunctionT) {
-            val ret = typeRegistry.dataTypeFor(sig.ret)
-            if (ret != null) func.setReturnType(ret, source)
+        // 3. Mark thiscall. Calling convention drives the `this` parameter:
+        //    Ghidra auto-injects a hidden `this: <Class>*` first parameter for a
+        //    `__thiscall` function in a GhidraClass namespace, so we don't have
+        //    to declare it. (Default convention would leave the existing
+        //    `int *this` auto-param the disassembler had guessed.)
+        runCatching { func.setCallingConvention("__thiscall") }
+            .onFailure { sink.log("method-calling-convention", "$className::${m.name}: ${it.message}") }
 
-            // Only replace parameters if all types resolve to non-null. This prevents
-            // overwriting better Phase 4 assignments.
-            val paramTypes = sig.params.map { typeRegistry.dataTypeFor(it) }
-            val allResolved = paramTypes.all { it != null }
+        // 4. Apply prototype from MethodDecl.signature.
+        // The parser emits Method for class members (params excludes the implicit `this`)
+        // and FunctionT for free functions; handle both.
+        val (retDecl, paramDecls) = when (val sig = m.signature) {
+            is TypeDecl.Method -> sig.ret to sig.params
+            is TypeDecl.FunctionT -> sig.ret to sig.params
+            else -> return
+        }
+        val ret = typeRegistry.dataTypeFor(retDecl)
+        if (ret != null) func.setReturnType(ret, source)
 
-            if (allResolved && paramTypes.isNotEmpty()) {
-                val params = paramTypes.mapIndexed { i, pdt ->
-                    ghidra.program.model.listing.ParameterImpl(
-                        "arg$i",
-                        pdt ?: Undefined4DataType.dataType,
-                        program,
-                        source,
-                    )
-                }
-                func.replaceParameters(
-                    params,
-                    ghidra.program.model.listing.Function.FunctionUpdateType.DYNAMIC_STORAGE_FORMAL_PARAMS,
-                    true,
-                    source,
-                )
-            } else if (paramTypes.any { it == null }) {
+        // Only replace parameters if all types resolve. This avoids overwriting
+        // better assignments from autoanalysis when stab types are still placeholders.
+        val paramTypes = paramDecls.map { typeRegistry.dataTypeFor(it) }
+        if (paramTypes.any { it == null }) {
+            if (paramTypes.isNotEmpty()) {
                 sink.log(
                     "method-param-unresolved",
-                    "$className::${m.name}: some parameter types unresolved; keeping Phase 4 assignment",
+                    "$className::${m.name}: some parameter types unresolved; keeping prior assignment",
                 )
             }
+            return
         }
+        val params = paramTypes.mapIndexed { i, pdt ->
+            ghidra.program.model.listing.ParameterImpl(
+                "arg$i",
+                pdt ?: Undefined4DataType.dataType,
+                program,
+                source,
+            )
+        }
+        func.replaceParameters(
+            params,
+            ghidra.program.model.listing.Function.FunctionUpdateType.DYNAMIC_STORAGE_FORMAL_PARAMS,
+            true,
+            source,
+        )
     }
 
     /**

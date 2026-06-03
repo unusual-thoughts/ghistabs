@@ -141,6 +141,28 @@ class StabsAnalyzerRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
     }
 
     @Test
+    fun methodsUseThiscall() {
+        // Any class method should be marked __thiscall so Ghidra auto-injects a
+        // `this: <Class>*` first parameter (instead of leaving a guessed `int *this`).
+        // Spot-check via _ZN6DSInst4DumpEPt — DSInst::Dump(unsigned short*).
+        val func = program.functionManager
+            .getFunctions(true)
+            .asSequence()
+            .firstOrNull { it.name == "Dump" && it.parentNamespace.name == "DSInst" }
+        assumeTrue(func != null, "Skipping: DSInst::Dump not found")
+        Assertions.assertEquals("__thiscall", func!!.callingConventionName)
+        val thisParam = func.getParameter(0)
+        Assertions.assertNotNull(thisParam, "DSInst::Dump has no parameters at all")
+        Assertions.assertEquals("this", thisParam!!.name)
+        val thisDtName = (thisParam.dataType as? Pointer)?.dataType?.name
+        Assertions.assertEquals(
+            "DSInst",
+            thisDtName,
+            "DSInst::Dump's `this` should be `DSInst*`; got ${thisParam.dataType.name}",
+        )
+    }
+
+    @Test
     fun cparserMaterialised() {
         // CParser, Token_Type and EAsm all canonicalise to the same TypeId because
         // gcc reuses local ids inside BINCL blocks per CU. Each must still reach the DTM.
