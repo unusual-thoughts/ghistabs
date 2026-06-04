@@ -2,6 +2,8 @@ package ghistabs.diag
 
 import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.address.Address
+import ghistabs.parser.GlobalTypeId
+import ghistabs.parser.SourceFile
 
 /**
  * Narrow interface for diagnostic output (emits strings with a category tag).
@@ -45,8 +47,8 @@ data class GapRecord(val offsetBits: Long, val lengthBits: Long, val prevField: 
  */
 data class AttributionTrace(
     val typeName: String,
-    val definingCUs: Set<String>,
-    val matchedCU: String,
+    val definingCUs: Set<SourceFile>,
+    val matchedCU: SourceFile,
     val routedTo: String,
 )
 
@@ -101,9 +103,9 @@ class StabsDiagnostics {
      * Record an unresolved type reference.
      * Increments "unresolved-ref" counter and records an example.
      */
-    fun recordUnresolvedRef(refKey: String, referrer: String, cu: String) {
+    fun recordUnresolvedRef(refKey: GlobalTypeId?, referrer: String) {
         inc("unresolved-ref")
-        recordExample("unresolved-ref", "ref=$refKey in $referrer (cu=$cu)")
+        recordExample("unresolved-ref", "ref=$refKey in $referrer")
     }
 
     /**
@@ -181,7 +183,12 @@ class StabsDiagnostics {
      * Record an attribution trace (type routed to /std/).
      * Stores up to 200 traces; further traces increment counter only.
      */
-    fun recordAttributionTrace(typeName: String, definingCUs: Set<String>, matchedCU: String, routedTo: String) {
+    fun recordAttributionTrace(
+        typeName: String,
+        definingCUs: Set<SourceFile>,
+        matchedCU: SourceFile,
+        routedTo: String,
+    ) {
         if (attributionTraces.size < 200) {
             attributionTraces.add(
                 AttributionTrace(

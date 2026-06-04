@@ -1,13 +1,55 @@
 package ghistabs.parser
 
 import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.JsonClassDiscriminator
 
 /** Identifies a type within a CU: (file-number, type-number). */
+@Serializable(with = LocalTypeIdAsStringSerializer::class)
+data class LocalTypeId(val file: Int, val n: Int) {
+    override fun toString() = "($file,$n)"
+}
+
 @Serializable
-data class TypeId(val cu: Int, val n: Int) {
-    override fun toString() = "($cu,$n)"
+data class GlobalTypeId(val source: SourceFile, val n: Int)
+
+@Serializable
+sealed class SourceFile : Comparable<SourceFile> {
+    abstract val filename: String
+    abstract val cu: String
+
+    override fun compareTo(other: SourceFile): Int = filename.compareTo(other.filename)
+
+    @Serializable
+    data class HeaderSource(val header: HeaderFile) : SourceFile() {
+        override val filename get() = header.filename
+        override val cu get() = header.originatingCu
+    }
+
+    @Serializable
+    data class CUSource(override val cu: String) : SourceFile() {
+        override val filename get() = cu
+    }
+}
+
+class LocalTypeIdAsStringSerializer : KSerializer<LocalTypeId> {
+    override val descriptor = PrimitiveSerialDescriptor(
+        this::class.java.canonicalName,
+        PrimitiveKind.STRING,
+    )
+
+    override fun serialize(encoder: Encoder, value: LocalTypeId) {
+        encoder.encodeString(value.toString())
+    }
+
+    override fun deserialize(decoder: Decoder): LocalTypeId {
+        TODO("Not yet implemented")
+    }
 }
 
 enum class Access { PRIVATE, PROTECTED, PUBLIC }
@@ -21,11 +63,11 @@ enum class AggrKind { STRUCT, UNION, CLASS }
 sealed interface TypeDecl {
     /** Forward reference to a type defined elsewhere by id. */
     @Serializable
-    data class Ref(val id: TypeId) : TypeDecl
+    data class Ref(val id: LocalTypeId) : TypeDecl
 
     /** Sun range descriptor: `r<id>;<min>;<max>;` — encodes integer/char widths. */
     @Serializable
-    data class Range(val of: TypeId, val min: Long, val max: Long) : TypeDecl
+    data class Range(val of: LocalTypeId, val min: Long, val max: Long) : TypeDecl
 
     @Serializable
     data class Pointer(val pointee: TypeDecl) : TypeDecl
@@ -53,7 +95,7 @@ sealed interface TypeDecl {
         val fields: List<FieldDecl>,
         val methods: List<MethodDecl>,
         val hasVTablePointerMarker: Boolean,
-        val vtableTargetTypeId: TypeId?,
+        val vtableTargetTypeId: LocalTypeId?,
     ) : TypeDecl
 
     @Serializable
@@ -77,11 +119,7 @@ sealed interface TypeDecl {
 
     /** Inline type definition: `(cu,n)=<body>` where the binding `(cu,n)` is preserved for Phase 3. */
     @Serializable
-    data class InlineDef(val id: TypeId, val body: TypeDecl) : TypeDecl
-
-    /** Builtin form `(0,N)` resolved by id only — content provided by BuiltinTable in Phase 3. */
-    @Serializable
-    data object Builtin : TypeDecl
+    data class InlineDef(val id: LocalTypeId, val body: TypeDecl) : TypeDecl
 }
 
 @Serializable
@@ -138,11 +176,11 @@ sealed interface SymbolDecl {
 
     /** `:T` tagged type (struct/union/class/enum tag). */
     @Serializable
-    data class TaggedType(override val name: String, val id: TypeId, val body: TypeDecl) : SymbolDecl
+    data class TaggedType(override val name: String, val id: LocalTypeId, val body: TypeDecl) : SymbolDecl
 
     /** `:t` typedef. */
     @Serializable
-    data class Typedef(override val name: String, val id: TypeId, val body: TypeDecl) : SymbolDecl
+    data class Typedef(override val name: String, val id: LocalTypeId, val body: TypeDecl) : SymbolDecl
 
     /** `:G` */
     @Serializable

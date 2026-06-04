@@ -2,13 +2,14 @@ package ghistabs.parser
 
 import ghidra.program.model.address.Address
 import ghidra.util.task.TaskMonitor
+import ghistabs.builder.TypeResolver
 import ghistabs.diag.DiagnosticSink
 import ghistabs.importer.AddressResolver
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
 
 @Serializable
-data class TypeAst(val id: TypeId, val name: String, val body: TypeDecl, val cuFile: String)
+data class TypeAst(val id: GlobalTypeId, val name: String, val body: TypeDecl)
 
 @Serializable
 data class ParamRecord(val decl: SymbolDecl, val rawValue: Long)
@@ -41,7 +42,7 @@ data class OpenFunction(
     val name: String,
     val addr: SerializableAddress,
     val decl: SymbolDecl.Function,
-    val cu: String,
+    val cu: SourceFile.CUSource,
     val locals: MutableList<LocalRecord>,
     val params: MutableList<ParamRecord>,
     val scopeBrackets: MutableList<Triple<StabType, Long, Int>>,
@@ -49,20 +50,24 @@ data class OpenFunction(
 )
 
 @Serializable
+class FileResolver(private val includesByFile: Map<String, IncludeContext>) {
+    fun knownFileNums(source: SourceFile) = includesByFile[source.cu]?.getAllFileNums() ?: emptySet()
+
+    fun globalIdFor(id: LocalTypeId, source: SourceFile) =
+        includesByFile[source.cu]?.sourceForFileNum(id.file)?.let { GlobalTypeId(it, id.n) }
+}
+
+@Serializable
 data class Harvest(
     val parseErrors: Int,
     val typeAsts: List<TypeAst>,
     val symbolsByCu: Map<String, List<HarvestedSymbol>>,
     val openFunctions: List<OpenFunction>,
-    val includesByFile: Map<String, IncludeContext>,
+    val fileResolver: FileResolver,
     val headerRegistry: HeaderRegistry,
 ) {
-    val typeAstsById get() = typeAsts.associateBy { it.id }
     val allHarvestedSymbols get() = symbolsByCu.values.flatten()
-    val structAstsByName
-        get() = typeAsts.mapNotNull { ast ->
-            (ast.body as? TypeDecl.Struct)?.let { ast.name to it }
-        }.toMap()
+    val typeResolver get() = TypeResolver(typeAsts, fileResolver)
 }
 
 class Harvester(
@@ -77,14 +82,16 @@ class Harvester(
     private var parseErrors = 0
 
     // FIXME: replace with String?; and replace every "<unknown>" with null
-    private lateinit var currentCu: String
+    private lateinit var currentCu: SourceFile.CUSource
     private var currentFunction: OpenFunction? = null
     private var currentInclude: IncludeContext? = null
 
     // Allocate ONE shared HeaderRegistry for all per-CU IncludeContext instances.
     // This ensures cross-CU dedup: two CUs with the same (filename, checksum) BINCL
     // get the SAME HeaderFile instance via the shared registry.
-    val sharedHeaderRegistry = HeaderRegistry()
+    val sharedHeaderRegistry = HeaderRegistry(this)
+
+    fun globalIdFor(id: LocalTypeId) = GlobalTypeId(currentInclude?.sourceForFileNum(id.file) ?: currentCu, id.n)
 
     internal fun passA(records: List<StabRecord>): Harvest {
         for ((i, rec) in records.withIndex()) {
@@ -93,23 +100,16 @@ class Harvester(
 
             when (rec.type) {
                 StabType.N_SO if (rec.name.isNotEmpty()) -> {
-                    currentCu = rec.name
-                    currentInclude = IncludeContext(rec.name, this, sharedHeaderRegistry).apply {
-                        openSource(rec.name)
-                        includesByFile[rec.name] = this
+                    currentCu = SourceFile.CUSource(rec.name)
+                    currentInclude = IncludeContext(rec.name, this, sharedHeaderRegistry).also {
+                        includesByFile[rec.name] = it
                     }
                     if (rec.value != 0L) {
-                        log("file-start", "${rec.name} starts here")
+                        log("file-start", "${rec.name} starts here", address = resolver.buildAddress(rec.value))
                     }
                 }
 
                 StabType.N_SOL if (rec.name.isNotEmpty()) -> {
-                    // N_SOL is a *line-number* source-file switch (gcc uses it to record
-                    // which header an instruction comes from). It does NOT mean subsequent
-                    // type or symbol records belong to that header. Keep `currentCu` pointing
-                    // at the N_SO compilation unit; only the file-num slot needs to advance
-                    // so per-file TypeId namespacing stays correct.
-                    currentInclude?.switchSource(rec.name)
                 }
 
                 StabType.N_BINCL -> {
@@ -123,7 +123,7 @@ class Harvester(
                 StabType.N_EXCL -> {
                     val filename = rec.name.ifEmpty { "<unknown>" }
                     val checksum = rec.value
-                    currentInclude?.reMountExcluded(filename, checksum)
+                    currentInclude?.remount(filename, checksum)
                 }
 
                 StabType.N_FUN -> if (rec.name.isEmpty()) {
@@ -136,16 +136,9 @@ class Harvester(
                     val mangled = rec.name.substringBefore(':')
                     resolver.recordFromStab(mangled, addr)
                     try {
-                        val raw = Parser(rec.name).parseSymbol() as? SymbolDecl.Function
-                        val ctx = currentInclude
-                        val decl = if (raw != null && ctx != null) {
-                            raw.canonicalizeWith(ctx) as SymbolDecl.Function
-                        } else {
-                            raw
-                        }
-                        if (decl != null) {
-                            val open =
-                                OpenFunction(
+                        when (val decl = Parser(rec.name).parseSymbol()) {
+                            is SymbolDecl.Function -> {
+                                val open = OpenFunction(
                                     name = mangled,
                                     addr = SerializableAddress(addr),
                                     decl = decl,
@@ -154,8 +147,11 @@ class Harvester(
                                     params = mutableListOf(),
                                     scopeBrackets = mutableListOf(),
                                 )
-                            openFunctions += open
-                            currentFunction = open
+                                openFunctions += open
+                                currentFunction = open
+                            }
+
+                            else -> log("unexpected-nfun", "@$i: $decl")
                         }
                     } catch (e: StabsParseException) {
                         parseErrors++
@@ -163,22 +159,19 @@ class Harvester(
                     }
                 }
 
-                StabType.N_GSYM -> harvestSymbol(rec, currentCu, currentInclude) { parseErrors++ }
+                StabType.N_GSYM -> harvestSymbol(rec, currentCu) { parseErrors++ }
 
                 StabType.N_STSYM, StabType.N_LCSYM -> {
                     val addr = resolver.buildAddress(rec.value)
                     val mangled = rec.name.substringBefore(':')
                     resolver.recordFromStab(mangled, addr)
-                    harvestSymbol(rec, currentCu, currentInclude) { parseErrors++ }
+                    harvestSymbol(rec, currentCu) { parseErrors++ }
                 }
 
                 StabType.N_PSYM, StabType.N_RSYM -> {
                     val open = currentFunction ?: continue
                     try {
-                        val raw = Parser(rec.name).parseSymbol()
-                        val ctx = currentInclude
-                        val decl = if (ctx != null) raw.canonicalizeWith(ctx) else raw
-                        when (decl) {
+                        when (val decl = Parser(rec.name).parseSymbol()) {
                             is SymbolDecl.StackParam, is SymbolDecl.RegParam -> open.params += ParamRecord(
                                 decl,
                                 rec.value,
@@ -193,12 +186,9 @@ class Harvester(
                 }
 
                 StabType.N_LSYM -> try {
-                    val raw = Parser(rec.name).parseSymbol()
-                    val ctx = currentInclude
-                    val decl = if (ctx != null) raw.canonicalizeWith(ctx) else raw
-                    when (decl) {
-                        is SymbolDecl.TaggedType -> typeAsts += TypeAst(decl.id, decl.name, decl.body, currentCu)
-                        is SymbolDecl.Typedef -> typeAsts += TypeAst(decl.id, decl.name, decl.body, currentCu)
+                    when (val decl = Parser(rec.name).parseSymbol()) {
+                        is SymbolDecl.TaggedType -> typeAsts += TypeAst(globalIdFor(decl.id), decl.name, decl.body)
+                        is SymbolDecl.Typedef -> typeAsts += TypeAst(globalIdFor(decl.id), decl.name, decl.body)
 
                         is SymbolDecl.StackLocal, is SymbolDecl.RegLocal -> {
                             currentFunction?.locals?.add(LocalRecord(decl, rec.value, i))
@@ -206,7 +196,7 @@ class Harvester(
 
                         is SymbolDecl.StaticVar -> {
                             // Function-scope static variables get their actual address from rec.value
-                            symbolsByCu.getOrPut(currentCu) { mutableListOf() } +=
+                            symbolsByCu.getOrPut(currentCu.cu) { mutableListOf() } +=
                                 HarvestedSymbol(decl, rec.type, rec.value)
                         }
 
@@ -256,49 +246,28 @@ class Harvester(
                 )
             }
         }
-        return Harvest(parseErrors, typeAsts, symbolsByCu, openFunctions, includesByFile, sharedHeaderRegistry)
+        return Harvest(
+            parseErrors,
+            typeAsts,
+            symbolsByCu,
+            openFunctions,
+            FileResolver(includesByFile),
+            sharedHeaderRegistry,
+        )
     }
 
-    private fun harvestSymbol(
-        rec: StabRecord,
-        currentCu: String,
-        currentInclude: IncludeContext?,
-        onError: () -> Unit,
-    ) {
+    private fun harvestSymbol(rec: StabRecord, currentCu: SourceFile.CUSource, onError: () -> Unit) {
         try {
             // Canonicalise the symbol's TypeDecl exactly like N_LSYM TaggedType/Typedef
             // bodies. Without this, e.g. an N_GSYM `BranchInstructions:G(1,1103)=ar(1,4);0;15;(148,3)`
             // walks the typeAsts map looking for `(148,3)` — but `(148, 3)` is a raw
             // local file ID that has no entry: the matching typeAst was registered
             // under its canonical (48, 3) key. The global ends up untyped.
-            val raw = Parser(rec.name).parseSymbol()
-            val decl = if (currentInclude != null) raw.canonicalizeWith(currentInclude) else raw
-            symbolsByCu.getOrPut(currentCu) { mutableListOf() } += HarvestedSymbol(decl, rec.type, rec.value)
+            val decl = Parser(rec.name).parseSymbol()
+            symbolsByCu.getOrPut(currentCu.cu) { mutableListOf() } += HarvestedSymbol(decl, rec.type, rec.value)
         } catch (e: StabsParseException) {
             onError()
             log("parse-error", "@${rec.recordIndex} '${rec.name.take(80)}': ${e.message}")
         }
-    }
-
-    /**
-     * Canonicalise the TypeDecl(s) carried inside the SymbolDecl. We only need
-     * to touch types here — the symbol's own name/storage stays as-is.
-     */
-    private fun SymbolDecl.canonicalizeWith(ctx: IncludeContext): SymbolDecl = when (this) {
-        is SymbolDecl.Global -> copy(type = ctx.canonicalizeTypeDecl(type))
-        is SymbolDecl.StaticVar -> copy(type = ctx.canonicalizeTypeDecl(type))
-        is SymbolDecl.Function -> copy(signature = ctx.canonicalizeTypeDecl(signature))
-        is SymbolDecl.StackParam -> copy(type = ctx.canonicalizeTypeDecl(type))
-        is SymbolDecl.RegParam -> copy(type = ctx.canonicalizeTypeDecl(type))
-        is SymbolDecl.StackLocal -> copy(type = ctx.canonicalizeTypeDecl(type))
-        is SymbolDecl.RegLocal -> copy(type = ctx.canonicalizeTypeDecl(type))
-        is SymbolDecl.TaggedType -> copy(
-            id = ctx.canonicalTypeId(id),
-            body = ctx.canonicalizeTypeDecl(body),
-        )
-        is SymbolDecl.Typedef -> copy(
-            id = ctx.canonicalTypeId(id),
-            body = ctx.canonicalizeTypeDecl(body),
-        )
     }
 }
