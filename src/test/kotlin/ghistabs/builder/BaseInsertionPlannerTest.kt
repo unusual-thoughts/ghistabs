@@ -20,7 +20,7 @@ class BaseInsertionPlannerTest {
     fun testSinglePublicBase() {
         val baseDecl =
             BaseDecl(
-                type = TypeDecl.Ref(id = ghistabs.parser.TypeId(cu = 0, n = 1)),
+                type = TypeDecl.Ref(id = ghistabs.parser.LocalTypeId(file = 0, n = 1)),
                 isVirtual = false,
                 access = Access.PUBLIC,
                 offsetBits = 0L,
@@ -48,14 +48,14 @@ class BaseInsertionPlannerTest {
     fun testMultipleBasesOutOfOrder() {
         val base1 =
             BaseDecl(
-                type = TypeDecl.Ref(id = ghistabs.parser.TypeId(cu = 0, n = 1)),
+                type = TypeDecl.Ref(id = ghistabs.parser.LocalTypeId(file = 0, n = 1)),
                 isVirtual = false,
                 access = Access.PUBLIC,
                 offsetBits = 64L, // 8 bytes
             )
         val base0 =
             BaseDecl(
-                type = TypeDecl.Ref(id = ghistabs.parser.TypeId(cu = 0, n = 2)),
+                type = TypeDecl.Ref(id = ghistabs.parser.LocalTypeId(file = 0, n = 2)),
                 isVirtual = false,
                 access = Access.PUBLIC,
                 offsetBits = 0L,
@@ -94,7 +94,7 @@ class BaseInsertionPlannerTest {
     fun testVirtualProtectedBase() {
         val baseDecl =
             BaseDecl(
-                type = TypeDecl.Ref(id = ghistabs.parser.TypeId(cu = 0, n = 5)),
+                type = TypeDecl.Ref(id = ghistabs.parser.LocalTypeId(file = 0, n = 5)),
                 isVirtual = true,
                 access = Access.PROTECTED,
                 offsetBits = 0L,
@@ -120,7 +120,7 @@ class BaseInsertionPlannerTest {
     fun testDanglingBaseRef() {
         val baseDecl =
             BaseDecl(
-                type = TypeDecl.Ref(id = ghistabs.parser.TypeId(cu = 0, n = 10)),
+                type = TypeDecl.Ref(id = ghistabs.parser.LocalTypeId(file = 0, n = 10)),
                 isVirtual = false,
                 access = Access.PUBLIC,
                 offsetBits = 0L,
@@ -142,7 +142,7 @@ class BaseInsertionPlannerTest {
     @Test
     fun testZeroLengthBase() {
         val baseDecl = BaseDecl(
-            type = TypeDecl.Ref(id = ghistabs.parser.TypeId(cu = 0, n = 15)),
+            type = TypeDecl.Ref(id = ghistabs.parser.LocalTypeId(file = 0, n = 15)),
             isVirtual = false,
             access = Access.PUBLIC,
             offsetBits = 0L,
@@ -164,19 +164,19 @@ class BaseInsertionPlannerTest {
     @Test
     fun testMixedValidAndInvalidBases() {
         val goodBase = BaseDecl(
-            type = TypeDecl.Ref(id = ghistabs.parser.TypeId(cu = 0, n = 1)),
+            type = TypeDecl.Ref(id = ghistabs.parser.LocalTypeId(file = 0, n = 1)),
             isVirtual = false,
             access = Access.PUBLIC,
             offsetBits = 0L,
         )
         val danglingBase = BaseDecl(
-            type = TypeDecl.Ref(id = ghistabs.parser.TypeId(cu = 0, n = 2)),
+            type = TypeDecl.Ref(id = ghistabs.parser.LocalTypeId(file = 0, n = 2)),
             isVirtual = false,
             access = Access.PUBLIC,
             offsetBits = 8L,
         )
         val zeroLengthBase = BaseDecl(
-            type = TypeDecl.Ref(id = ghistabs.parser.TypeId(cu = 0, n = 3)),
+            type = TypeDecl.Ref(id = ghistabs.parser.LocalTypeId(file = 0, n = 3)),
             isVirtual = false,
             access = Access.PUBLIC,
             offsetBits = 16L,

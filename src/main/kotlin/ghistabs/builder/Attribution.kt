@@ -2,6 +2,7 @@ package ghistabs.builder
 
 import ghidra.program.model.data.CategoryPath
 import ghistabs.diag.StabsDiagnostics
+import ghistabs.parser.SourceFile
 
 object Attribution {
     /**
@@ -39,7 +40,11 @@ object Attribution {
             "ptrdiff_t",
         )
 
-    fun categoryFor(typeName: String, definingCUs: Set<String>, diagnostics: StabsDiagnostics? = null): CategoryPath {
+    fun categoryFor(
+        typeName: String,
+        defSources: Set<SourceFile>,
+        diagnostics: StabsDiagnostics? = null,
+    ): CategoryPath {
         // 1. Check project override list FIRST (safety net for edge cases)
         if (typeName in PROJECT_OVERRIDE_NAMES) {
             diagnostics?.inc("attribution-override")
@@ -51,27 +56,23 @@ object Attribution {
         //    same /std/<header> for every call with the same input or downstream
         //    `dtm.getDataType(category, name)` lookups in ClassBuilder won't match what
         //    materialiseAll registered.
-        val sortedDefiningCUs = definingCUs.sorted()
-        val stdMatch = sortedDefiningCUs.firstNotNullOfOrNull { stdBasename(it) }
+        val sortedDefiningCUs = defSources.sorted()
+        val stdMatch = sortedDefiningCUs.firstNotNullOfOrNull { stdBasename(it.filename) }
         if (stdMatch != null) {
             diagnostics?.recordAttributionTrace(
                 typeName = typeName,
-                definingCUs = definingCUs,
-                matchedCU = sortedDefiningCUs.first { stdBasename(it) != null },
+                definingCUs = defSources,
+                matchedCU = sortedDefiningCUs.first { stdBasename(it.filename) != null },
                 routedTo = "/std/$stdMatch",
             )
             return CategoryPath("/std/$stdMatch")
         }
 
         // 3. Single CU ending with .h/.hpp/.hh/.H (header)
-        if (definingCUs.size == 1) {
-            val cu = definingCUs.single()
-            if (cu.endsWith(".h") || cu.endsWith(".hpp") || cu.endsWith(".hh") || cu.endsWith(".H")) {
-                return CategoryPath("/" + basename(cu))
-            }
-            // 4. Single CU with .c/.cpp/.cc extension
-            if (cu.endsWith(".c") || cu.endsWith(".cpp") || cu.endsWith(".cc")) {
-                return CategoryPath("/" + basename(cu))
+        if (defSources.size == 1) {
+            return when (val cu = defSources.single()) {
+                is SourceFile.CUSource -> CategoryPath("/" + basename(cu.filename))
+                is SourceFile.HeaderSource -> CategoryPath("/" + basename(cu.filename))
             }
         }
 
@@ -81,7 +82,7 @@ object Attribution {
         }
 
         // Otherwise: canonical CU is lex-first basename
-        val canonicalCu = basename(definingCUs.minOf { it })
+        val canonicalCu = basename(defSources.minOf { it.filename })
         return CategoryPath("/$canonicalCu/instantiations")
     }
 

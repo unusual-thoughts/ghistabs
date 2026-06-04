@@ -88,16 +88,16 @@ internal class Cursor(val src: String) {
     }
 
     /** Read `(cu,n)` or bare `n`. */
-    fun parseTypeId(): TypeId {
+    fun parseTypeId(): LocalTypeId {
         if (consumeIf('(')) {
             val cu = parseInt().toInt()
             consume(',')
             val n = parseInt().toInt()
             consume(')')
-            return TypeId(cu, n)
+            return LocalTypeId(cu, n)
         }
         val n = parseInt().toInt()
-        return TypeId(0, n)
+        return LocalTypeId(0, n)
     }
 
     /** Read up to (but not including) any of the terminator chars. Consumed terminator is left in place. */

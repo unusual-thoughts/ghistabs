@@ -1,6 +1,6 @@
 package ghistabs.builder
 
-import ghistabs.parser.TypeId
+import ghistabs.parser.LocalTypeId
 
 /**
  * Sealed classification of an unresolved type reference.
@@ -44,9 +44,9 @@ object ResolverDecision {
      * @throws IllegalArgumentException if refId is in knownTypeIds (resolved refs must not reach here).
      */
     fun classifyRef(
-        refId: TypeId,
+        refId: LocalTypeId,
         refererCu: Int,
-        knownTypeIds: Set<TypeId>,
+        knownTypeIds: Set<LocalTypeId>,
         knownFileNums: Set<Int>,
     ): RefClassification {
         // If the ref resolves, this is an error — the caller should have checked first.
@@ -57,7 +57,7 @@ object ResolverDecision {
         }
 
         // Same CU: likely a forward ref to something defined later in the same stream
-        return when (refId.cu) {
+        return when (refId.file) {
             refererCu -> RefClassification.ForwardSameCu
 
             // Different CU but in the known include table: should have resolved, but didn't
