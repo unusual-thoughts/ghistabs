@@ -14,16 +14,16 @@ class ParserClassTest {
         val input = "Foo:T(0,5)=s8x:(0,1),0,32;y:(0,1),32,32;;;"
         val expected = SymbolDecl.TaggedType(
             name = "Foo",
-            id = TypeId(0, 5),
+            id = LocalTypeId(0, 5),
             body = TypeDecl.Struct(
                 kind = AggrKind.STRUCT,
                 sizeBytes = 8,
                 bases = emptyList(),
                 fields = listOf(
-                    FieldDecl("x", TypeDecl.Ref(TypeId(0, 1)), offsetBits = 0, sizeBits = 32, isStatic = false),
+                    FieldDecl("x", TypeDecl.Ref(LocalTypeId(0, 1)), offsetBits = 0, sizeBits = 32, isStatic = false),
                     FieldDecl(
                         "y",
-                        TypeDecl.Ref(TypeId(0, 1)),
+                        TypeDecl.Ref(LocalTypeId(0, 1)),
                         offsetBits = 32,
                         sizeBits = 32,
                         isStatic = false,
@@ -42,14 +42,14 @@ class ParserClassTest {
         val input = "Bar:T(0,6)=s4!1,020,(0,5);;;"
         val expected = SymbolDecl.TaggedType(
             name = "Bar",
-            id = TypeId(0, 6),
+            id = LocalTypeId(0, 6),
             body = TypeDecl.Struct(
                 kind = AggrKind.STRUCT,
                 sizeBytes = 4,
                 bases =
                 listOf(
                     BaseDecl(
-                        type = TypeDecl.Ref(TypeId(0, 5)),
+                        type = TypeDecl.Ref(LocalTypeId(0, 5)),
                         isVirtual = false,
                         access = Access.PUBLIC,
                         offsetBits = 0,
@@ -69,7 +69,7 @@ class ParserClassTest {
         val input = "Baz:T(0,7)=s8~%(0,8);;;"
         val expected = SymbolDecl.TaggedType(
             name = "Baz",
-            id = TypeId(0, 7),
+            id = LocalTypeId(0, 7),
             body = TypeDecl.Struct(
                 kind = AggrKind.STRUCT,
                 sizeBytes = 8,
@@ -77,7 +77,7 @@ class ParserClassTest {
                 fields = emptyList(),
                 methods = emptyList(),
                 hasVTablePointerMarker = true,
-                vtableTargetTypeId = TypeId(0, 8),
+                vtableTargetTypeId = LocalTypeId(0, 8),
             ),
         )
         assertEquals(expected, Parser(input).parseSymbol())
@@ -88,7 +88,7 @@ class ParserClassTest {
         val input = "Qux:T(0,9)=s4doIt::(0,10)=#(0,9),(0,1),(0,2);:_ZN3Qux4doItEi;2A.;;"
         val expected = SymbolDecl.TaggedType(
             name = "Qux",
-            id = TypeId(0, 9),
+            id = LocalTypeId(0, 9),
             body = TypeDecl.Struct(
                 kind = AggrKind.STRUCT,
                 sizeBytes = 4,
@@ -99,11 +99,11 @@ class ParserClassTest {
                         name = "doIt",
                         mangled = "_ZN3Qux4doItEi",
                         signature = TypeDecl.InlineDef(
-                            id = TypeId(0, 10),
+                            id = LocalTypeId(0, 10),
                             body = TypeDecl.Method(
-                                cls = TypeDecl.Ref(TypeId(0, 9)),
-                                ret = TypeDecl.Ref(TypeId(0, 1)),
-                                params = listOf(TypeDecl.Ref(TypeId(0, 2))),
+                                cls = TypeDecl.Ref(LocalTypeId(0, 9)),
+                                ret = TypeDecl.Ref(LocalTypeId(0, 1)),
+                                params = listOf(TypeDecl.Ref(LocalTypeId(0, 2))),
                             ),
                         ),
                         access = Access.PUBLIC,
@@ -125,7 +125,7 @@ class ParserClassTest {
         val input = "Qux:T(0,9)=s4doIt::(0,10)=#(0,9),(0,1),(0,2);:_ZN3Qux4doItEi;2A*0;(0,9);;;"
         val expected = SymbolDecl.TaggedType(
             name = "Qux",
-            id = TypeId(0, 9),
+            id = LocalTypeId(0, 9),
             body = TypeDecl.Struct(
                 kind = AggrKind.STRUCT,
                 sizeBytes = 4,
@@ -136,11 +136,11 @@ class ParserClassTest {
                         name = "doIt",
                         mangled = "_ZN3Qux4doItEi",
                         signature = TypeDecl.InlineDef(
-                            id = TypeId(0, 10),
+                            id = LocalTypeId(0, 10),
                             body = TypeDecl.Method(
-                                cls = TypeDecl.Ref(TypeId(0, 9)),
-                                ret = TypeDecl.Ref(TypeId(0, 1)),
-                                params = listOf(TypeDecl.Ref(TypeId(0, 2))),
+                                cls = TypeDecl.Ref(LocalTypeId(0, 9)),
+                                ret = TypeDecl.Ref(LocalTypeId(0, 1)),
+                                params = listOf(TypeDecl.Ref(LocalTypeId(0, 2))),
                             ),
                         ),
                         access = Access.PUBLIC,
@@ -162,7 +162,7 @@ class ParserClassTest {
         val input = "Quux:T(0,11)=s4count:/0(0,1):_ZN4Quux5countE;;;;"
         val expected = SymbolDecl.TaggedType(
             name = "Quux",
-            id = TypeId(0, 11),
+            id = LocalTypeId(0, 11),
             body = TypeDecl.Struct(
                 kind = AggrKind.STRUCT,
                 sizeBytes = 4,
@@ -170,7 +170,7 @@ class ParserClassTest {
                 fields = listOf(
                     FieldDecl(
                         name = "count",
-                        type = TypeDecl.Ref(TypeId(0, 1)),
+                        type = TypeDecl.Ref(LocalTypeId(0, 1)),
                         offsetBits = 0,
                         sizeBits = 0,
                         isStatic = true,

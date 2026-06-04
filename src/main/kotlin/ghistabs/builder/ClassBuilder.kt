@@ -5,31 +5,80 @@ import ghidra.program.model.data.*
 import ghidra.program.model.gclass.ClassUtils
 import ghidra.program.model.listing.CommentType
 import ghidra.program.model.listing.GhidraClass
-import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
 import ghistabs.diag.DiagnosticSink
-import ghistabs.importer.AddressResolver
 import ghistabs.importer.ImportContext
 import ghistabs.parser.*
 
-class ClassBuilder(
-    private val program: Program,
-    private val typeRegistry: TypeRegistry,
-    private val resolver: AddressResolver,
-    private val sink: DiagnosticSink,
-    /** All struct ASTs harvested in Pass A, indexed by name. */
-    private val structAstsByName: Map<String, TypeDecl.Struct>,
+class TypeResolver(typeAsts: List<TypeAst>, private val fileResolver: FileResolver) {
     /** All type ASTs indexed by TypeId for inheritance resolution. */
-    private val typeAstsById: Map<TypeId, TypeAst>? = null,
+    val typeAstsById = typeAsts.associateBy { it.id }
+
+    /** All struct ASTs harvested in Pass A, indexed by name. */
+    val structAstsByName = typeAsts.mapNotNull { ast ->
+        (ast.body as? TypeDecl.Struct)?.let { ast.name to it }
+    }.toMap()
+
+    fun getTypeFor(id: LocalTypeId, src: SourceFile) = fileResolver.globalIdFor(id, src)?.let {
+        typeAstsById[it]
+    }
+
+    inline fun <reified T : TypeDecl> getBodyFor(id: LocalTypeId, src: SourceFile) = getTypeFor(id, src)?.let {
+        it.body as? T
+    }
+
+    fun getStructByName(name: String) = structAstsByName[name]
+}
+
+/**
+ * Static helpers for polymorphic base detection (extracted for pure unit testing).
+ */
+internal class ClassBuilderHelpers(val resolver: TypeResolver) {
+    fun hasPolymorphicBaseSubobject(src: SourceFile, body: TypeDecl.Struct) = firstPolymorphicBase(src, body) != null
+
+    fun firstPolymorphicBase(src: SourceFile, body: TypeDecl.Struct): BaseDecl? = body.bases
+        .sortedBy { it.offsetBits }
+        .firstOrNull { base ->
+            val baseStruct =
+                resolveBaseAstStatic(src, base.type) ?: return@firstOrNull false
+            baseStruct.hasVTablePointerMarker ||
+                baseStruct.methods.any { it.virt == VirtKind.VIRTUAL } ||
+                firstPolymorphicBase(src, baseStruct) != null
+        }
+
+    fun resolveBaseAstStatic(src: SourceFile, typeDecl: TypeDecl): TypeDecl.Struct? = when (typeDecl) {
+        // Look up by TypeId using the byId map
+        is TypeDecl.Ref -> resolver.getBodyFor<TypeDecl.Struct>(typeDecl.id, src)
+
+        // Cross-reference by tagName: look in structAstsByName
+        is TypeDecl.XRef -> resolver.getStructByName(typeDecl.tagName)
+
+        // Inline definition: prefer the materialised AST at this id (real struct body), fall
+        // back to the inline body. The inline body is often a forward XRef stub whose Struct
+        // form lives at typeAstsById[typeDecl.id] — without this fallback, base polymorphism
+        // detection misses inherited vfptrs (e.g. bouniaf → InlineDef(ExprInst id, XRef body)).
+        is TypeDecl.InlineDef -> resolver.getBodyFor<TypeDecl.Struct>(typeDecl.id, src)
+            ?: (typeDecl.body as? TypeDecl.Struct)
+            ?: resolveBaseAstStatic(src, typeDecl.body)
+
+        else -> null
+    }
+}
+
+class ClassBuilder(
+    private val typeRegistry: TypeRegistry,
+    private val typeResolver: TypeResolver,
     private val ctx: ImportContext<*>,
-) : DiagnosticSink by sink {
+) : DiagnosticSink by ctx.sink {
     private val source = SourceType.IMPORTED
+    private val program = ctx.program
+    private val resolver = ctx.resolver
     private val symtab = program.symbolTable
     private val dtm = program.dataTypeManager
 
     /** Materialise a class struct + namespace + (optional) vtable struct + apply at _ZTV. */
-    fun build(name: String, body: TypeDecl.Struct, category: CategoryPath) {
+    fun build(src: SourceFile, name: String, body: TypeDecl.Struct, category: CategoryPath) {
         // 1. Locate the materialised Structure in the DTM.
         // (typeRegistry.dataTypeFor does not handle TypeDecl.Struct — Structs are only
         // looked up by TypeId via materialiseAll; here we resolve by (category, name).)
@@ -44,16 +93,16 @@ class ClassBuilder(
             body.fields.any {
                 it.name.startsWith("_vptr$") || it.name.startsWith("_vptr.") || it.name == "_vptr"
             }
-        if (isPoly) ensureVfptrFirstField(structDt, body, name, category)
+        if (isPoly) ensureVfptrFirstField(src, structDt, body, name, category)
 
         // 3. Create or upgrade the GhidraClass namespace.
         val ns = ensureClassNamespace(name)
 
         // 4. Re-parent member functions.
-        for (m in body.methods) reparentMethod(m, name, ns, structDt)
+        for (m in body.methods) reparentMethod(src, m, name, ns, structDt)
 
         // 5. If polymorphic: build <Class>_vtable struct + apply at _ZTV<class> address.
-        if (isPoly) buildAndApplyVtable(name, body, ns, category, structDt)
+        if (isPoly) buildAndApplyVtable(src, name, body, ns, category, structDt)
     }
 
     private fun ensureClassNamespace(name: String): GhidraClass {
@@ -76,6 +125,7 @@ class ClassBuilder(
     }
 
     private fun ensureVfptrFirstField(
+        src: SourceFile,
         structDt: Structure,
         body: TypeDecl.Struct,
         className: String,
@@ -102,7 +152,7 @@ class ClassBuilder(
 
         // Decide what to do with vfptr placement
         val action = VfptrDecision.chooseVfptrAction(
-            hasPolymorphicBaseSubobject = hasPolymorphicBaseSubobject(body),
+            hasPolymorphicBaseSubobject = hasPolymorphicBaseSubobject(src, body),
             parserVptrOffsetBytes = parserVptrOffset,
             componentAtTargetOffset = snapshot,
             canonicalVfptrFieldName = vfptrName,
@@ -167,7 +217,13 @@ class ClassBuilder(
         return PointerDataType.getPointer(struct, dtm)
     }
 
-    private fun reparentMethod(m: MethodDecl, className: String, ns: GhidraClass, structDt: Structure) {
+    private fun reparentMethod(
+        src: SourceFile,
+        m: MethodDecl,
+        className: String,
+        ns: GhidraClass,
+        structDt: Structure,
+    ) {
         val mangled = m.mangled ?: run {
             log("method-no-mangled", "$className::${m.name}: stab has no mangled symbol")
             return
@@ -237,7 +293,7 @@ class ClassBuilder(
 
             else -> return
         }
-        val ret = typeRegistry.dataTypeFor(retDecl)
+        val ret = typeRegistry.dataTypeFor(retDecl, src)
         if (ret != null) func.setReturnType(ret, source)
 
         // Build resolved formal params, falling back to Undefined4 for any
@@ -251,7 +307,7 @@ class ClassBuilder(
         // `this` is the leftover guess named by autoanalysis). Always
         // replacing the formal-param list — even with Undefined4 for slots we
         // couldn't type — gives a clean `(this, Undefined4 arg0)` instead.
-        val resolvedParams = paramDecls.map { typeRegistry.dataTypeFor(it) }
+        val resolvedParams = paramDecls.map { typeRegistry.dataTypeFor(it, src) }
         val paramTypes = if (m.signature is TypeDecl.Method) {
             resolvedParams.dropLastWhile { it is VoidDataType }
         } else {
@@ -333,6 +389,7 @@ class ClassBuilder(
     }
 
     private fun buildAndApplyVtable(
+        src: SourceFile,
         className: String,
         body: TypeDecl.Struct,
         ns: GhidraClass,
@@ -342,7 +399,7 @@ class ClassBuilder(
         // 1. Walk inheritance chain to gather inherited virtuals first (Itanium ABI 32-bit:
         //    derived class's vtable starts with base-class entries, in declaration order
         //    of the base list, with overridden slots replaced by the derived method).
-        val inherited = collectInheritedVirtuals(body)
+        val inherited = collectInheritedVirtuals(src, body)
         val ownVirtuals = body.methods
             .filter { it.virt == VirtKind.VIRTUAL }
             .sortedBy { it.vtableOffsetBits ?: Long.MAX_VALUE }
@@ -515,7 +572,7 @@ class ClassBuilder(
 
         // Step 2: Fallback to symbol-table scan
         try {
-            program.symbolTable.symbolIterator.firstOrNull {
+            symtab.symbolIterator.firstOrNull {
                 (it.name.startsWith("_ZTV") || it.name.startsWith("__ZTV")) &&
                     VtableSymbolCandidates.itaniumDecodesToClass(it.name, className)
             }?.let { return it.address }
@@ -527,10 +584,8 @@ class ClassBuilder(
         val rdataBlock = program.memory.getBlock(".rdata")
         if (rdataBlock != null) {
             try {
-                program.symbolTable
-                    .getSymbolIterator(rdataBlock.start, true)
+                symtab.getSymbolIterator(rdataBlock.start, true)
                     .asIterable()
-                    .asSequence()
                     .takeWhile { it.address < rdataBlock.end }
                     .firstOrNull {
                         (it.name.startsWith("_ZTV") || it.name.startsWith("__ZTV")) &&
@@ -570,25 +625,26 @@ class ClassBuilder(
      * → bouniaf → Inst: Inst::GetOffset is in bouniaf's vtable but not in ExprInst's
      * direct `methods` list).
      */
-    private fun collectInheritedVirtuals(body: TypeDecl.Struct): List<MethodDecl> {
+    private fun collectInheritedVirtuals(src: SourceFile, body: TypeDecl.Struct): List<MethodDecl> {
         val out = mutableListOf<MethodDecl>()
         val visited = mutableSetOf<TypeDecl.Struct>()
-        gatherTransitive(body, out, visited)
+        gatherTransitive(src, body, out, visited)
         return out.sortedBy { it.vtableOffsetBits ?: Long.MAX_VALUE }
     }
 
     private fun gatherTransitive(
+        src: SourceFile,
         body: TypeDecl.Struct,
         out: MutableList<MethodDecl>,
         visited: MutableSet<TypeDecl.Struct>,
     ) {
         for (base in body.bases) {
-            val baseStruct = ClassBuilderHelpers.resolveBaseAstStatic(base.type, structAstsByName, typeAstsById)
+            val baseStruct = ClassBuilderHelpers(typeResolver).resolveBaseAstStatic(src, base.type)
                 ?: continue
             if (!visited.add(baseStruct)) continue
             // Depth-first: grand-base virtuals come before direct-base's own additions,
             // matching the order they appear in the derived vtable.
-            gatherTransitive(baseStruct, out, visited)
+            gatherTransitive(src, baseStruct, out, visited)
             for (m in baseStruct.methods.filter { it.virt == VirtKind.VIRTUAL }) {
                 val idx = out.indexOfFirst { it.name == m.name }
                 if (idx >= 0) out[idx] = m else out += m
@@ -619,11 +675,11 @@ class ClassBuilder(
      *
      * Delegates to the static ClassBuilderHelpers version which is the single source of truth.
      */
-    internal fun firstPolymorphicBase(body: TypeDecl.Struct): BaseDecl? =
-        ClassBuilderHelpers.firstPolymorphicBase(body, structAstsByName, typeAstsById)
+    internal fun firstPolymorphicBase(src: SourceFile, body: TypeDecl.Struct): BaseDecl? =
+        ClassBuilderHelpers(typeResolver).firstPolymorphicBase(src, body)
 
-    internal fun hasPolymorphicBaseSubobject(body: TypeDecl.Struct): Boolean =
-        ClassBuilderHelpers.hasPolymorphicBaseSubobject(body, structAstsByName, typeAstsById)
+    internal fun hasPolymorphicBaseSubobject(src: SourceFile, body: TypeDecl.Struct): Boolean =
+        ClassBuilderHelpers(typeResolver).hasPolymorphicBaseSubobject(src, body)
 
     /**
      * Itanium-mangled compiler-implicit special members the compiler typically omits
@@ -646,52 +702,5 @@ class ClassBuilder(
         //   'OS_' = (Self&&).
         private val IMPLICIT_SPECIAL_MEMBER_TAIL =
             Regex("""(?:C[123]|D[012]|aS)E(?:v|RKS_|OS_)$""")
-    }
-}
-
-/**
- * Static helpers for polymorphic base detection (extracted for pure unit testing).
- */
-internal object ClassBuilderHelpers {
-    fun hasPolymorphicBaseSubobject(
-        body: TypeDecl.Struct,
-        structAstsByName: Map<String, TypeDecl.Struct>,
-        typeAstsById: Map<TypeId, TypeAst>? = null,
-    ): Boolean = firstPolymorphicBase(body, structAstsByName, typeAstsById) != null
-
-    fun firstPolymorphicBase(
-        body: TypeDecl.Struct,
-        structAstsByName: Map<String, TypeDecl.Struct>,
-        typeAstsById: Map<TypeId, TypeAst>? = null,
-    ): BaseDecl? = body.bases
-        .sortedBy { it.offsetBits }
-        .firstOrNull { base ->
-            val baseStruct =
-                resolveBaseAstStatic(base.type, structAstsByName, typeAstsById) ?: return@firstOrNull false
-            baseStruct.hasVTablePointerMarker ||
-                baseStruct.methods.any { it.virt == VirtKind.VIRTUAL } ||
-                firstPolymorphicBase(baseStruct, structAstsByName, typeAstsById) != null
-        }
-
-    fun resolveBaseAstStatic(
-        typeDecl: TypeDecl,
-        structAstsByName: Map<String, TypeDecl.Struct>,
-        typeAstsById: Map<TypeId, TypeAst>? = null,
-    ): TypeDecl.Struct? = when (typeDecl) {
-        // Look up by TypeId using the byId map
-        is TypeDecl.Ref -> typeAstsById?.get(typeDecl.id)?.body as? TypeDecl.Struct
-
-        // Cross-reference by tagName: look in structAstsByName
-        is TypeDecl.XRef -> structAstsByName[typeDecl.tagName]
-
-        // Inline definition: prefer the materialised AST at this id (real struct body), fall
-        // back to the inline body. The inline body is often a forward XRef stub whose Struct
-        // form lives at typeAstsById[typeDecl.id] — without this fallback, base polymorphism
-        // detection misses inherited vfptrs (e.g. bouniaf → InlineDef(ExprInst id, XRef body)).
-        is TypeDecl.InlineDef -> (typeAstsById?.get(typeDecl.id)?.body as? TypeDecl.Struct)
-            ?: (typeDecl.body as? TypeDecl.Struct)
-            ?: resolveBaseAstStatic(typeDecl.body, structAstsByName, typeAstsById)
-
-        else -> null
     }
 }

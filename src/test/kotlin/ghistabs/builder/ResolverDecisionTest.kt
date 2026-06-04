@@ -1,6 +1,6 @@
 package ghistabs.builder
 
-import ghistabs.parser.TypeId
+import ghistabs.parser.LocalTypeId
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
@@ -15,9 +15,9 @@ class ResolverDecisionTest {
      */
     @Test
     fun testClassifyForwardSameCu() {
-        val refId = TypeId(cu = 1, n = 42)
+        val refId = LocalTypeId(file = 1, n = 42)
         val refererCu = 1
-        val knownTypeIds = setOf(TypeId(1, 10), TypeId(2, 20))
+        val knownTypeIds = setOf(LocalTypeId(1, 10), LocalTypeId(2, 20))
         val knownFileNums = setOf(1, 2, 3)
 
         val result = ResolverDecision.classifyRef(refId, refererCu, knownTypeIds, knownFileNums)
@@ -32,9 +32,9 @@ class ResolverDecisionTest {
      */
     @Test
     fun testClassifyCrossCuIncludeMiss() {
-        val refId = TypeId(cu = 2, n = 42)
+        val refId = LocalTypeId(file = 2, n = 42)
         val refererCu = 1
-        val knownTypeIds = setOf(TypeId(1, 10), TypeId(3, 30))
+        val knownTypeIds = setOf(LocalTypeId(1, 10), LocalTypeId(3, 30))
         val knownFileNums = setOf(1, 2, 3)
 
         val result = ResolverDecision.classifyRef(refId, refererCu, knownTypeIds, knownFileNums)
@@ -48,9 +48,9 @@ class ResolverDecisionTest {
      */
     @Test
     fun testClassifyTrulyMissing() {
-        val refId = TypeId(cu = 99, n = 42)
+        val refId = LocalTypeId(file = 99, n = 42)
         val refererCu = 1
-        val knownTypeIds = setOf(TypeId(1, 10), TypeId(2, 20))
+        val knownTypeIds = setOf(LocalTypeId(1, 10), LocalTypeId(2, 20))
         val knownFileNums = setOf(1, 2, 3)
 
         val result = ResolverDecision.classifyRef(refId, refererCu, knownTypeIds, knownFileNums)
@@ -65,9 +65,9 @@ class ResolverDecisionTest {
      */
     @Test
     fun testErrorOnResolvedRef() {
-        val refId = TypeId(cu = 1, n = 42)
+        val refId = LocalTypeId(file = 1, n = 42)
         val refererCu = 1
-        val knownTypeIds = setOf(refId, TypeId(2, 20)) // refId is already known
+        val knownTypeIds = setOf(refId, LocalTypeId(2, 20)) // refId is already known
         val knownFileNums = setOf(1, 2)
 
         val exception =
@@ -84,9 +84,9 @@ class ResolverDecisionTest {
      */
     @Test
     fun testTrulyMissingWithEmptyKnowns() {
-        val refId = TypeId(cu = 5, n = 42)
+        val refId = LocalTypeId(file = 5, n = 42)
         val refererCu = 1
-        val knownTypeIds = emptySet<TypeId>()
+        val knownTypeIds = emptySet<LocalTypeId>()
         val knownFileNums = emptySet<Int>()
 
         val result = ResolverDecision.classifyRef(refId, refererCu, knownTypeIds, knownFileNums)
@@ -100,9 +100,9 @@ class ResolverDecisionTest {
      */
     @Test
     fun testForwardSameCuWithEmptyFileNums() {
-        val refId = TypeId(cu = 1, n = 42)
+        val refId = LocalTypeId(file = 1, n = 42)
         val refererCu = 1
-        val knownTypeIds = setOf(TypeId(1, 10))
+        val knownTypeIds = setOf(LocalTypeId(1, 10))
         val knownFileNums = emptySet<Int>()
 
         val result = ResolverDecision.classifyRef(refId, refererCu, knownTypeIds, knownFileNums)

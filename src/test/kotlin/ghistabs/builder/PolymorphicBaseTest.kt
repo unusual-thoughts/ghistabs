@@ -26,7 +26,7 @@ class PolymorphicBaseTest {
             bases =
             listOf(
                 BaseDecl(
-                    type = TypeDecl.InlineDef(TypeId(0, 1), base),
+                    type = TypeDecl.InlineDef(LocalTypeId(0, 1), base),
                     isVirtual = false,
                     access = Access.PUBLIC,
                     offsetBits = 0L,
@@ -62,7 +62,7 @@ class PolymorphicBaseTest {
             sizeBytes = 12L,
             bases = listOf(
                 BaseDecl(
-                    type = TypeDecl.InlineDef(TypeId(0, 1), base),
+                    type = TypeDecl.InlineDef(LocalTypeId(0, 1), base),
                     isVirtual = false,
                     access = Access.PUBLIC,
                     offsetBits = 0L,
@@ -98,7 +98,7 @@ class PolymorphicBaseTest {
             sizeBytes = 12L,
             bases = listOf(
                 BaseDecl(
-                    type = TypeDecl.InlineDef(TypeId(0, 1), base),
+                    type = TypeDecl.InlineDef(LocalTypeId(0, 1), base),
                     isVirtual = false,
                     access = Access.PUBLIC,
                     offsetBits = 0L,
@@ -116,7 +116,7 @@ class PolymorphicBaseTest {
             sizeBytes = 16L,
             bases = listOf(
                 BaseDecl(
-                    type = TypeDecl.InlineDef(TypeId(0, 2), middle),
+                    type = TypeDecl.InlineDef(LocalTypeId(0, 2), middle),
                     isVirtual = false,
                     access = Access.PUBLIC,
                     offsetBits = 0L,
@@ -178,7 +178,7 @@ class PolymorphicBaseTest {
             sizeBytes = 12L,
             bases = listOf(
                 BaseDecl(
-                    type = TypeDecl.InlineDef(TypeId(0, 1), base),
+                    type = TypeDecl.InlineDef(LocalTypeId(0, 1), base),
                     isVirtual = false,
                     access = Access.PUBLIC,
                     offsetBits = 0L,
@@ -198,7 +198,7 @@ class PolymorphicBaseTest {
     @Test
     fun `TypeDecl_Ref base - resolved via typeAstsById map`() {
         // Base is polymorphic (has virtual method)
-        val baseTypeId = TypeId(0, 99)
+        val baseTypeId = LocalTypeId(0, 99)
         val base = TypeDecl.Struct(
             kind = AggrKind.CLASS,
             sizeBytes = 8L,

@@ -177,7 +177,9 @@ enum class StabType(val code: Int) {
      */
     N_BINCL(0x82),
 
-    /** Name of a sub-source (`#include`) file. Value is the starting text address of the compilation. */
+    /** Name of a sub-source (`#include`) file. Value is the starting text address of the compilation.
+     * Only used to track line numbers
+     * */
     N_SOL(0x84),
 
     /** Compiler parameters (Apple/Mach-O). String is the parameter name; other fields are zero. */
