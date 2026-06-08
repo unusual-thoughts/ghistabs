@@ -145,7 +145,7 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val registry:
                 dtm.replaceDataType(stubDt, replDt, false)
                 ctx.diagnostics.inc("replaced-demangler")
                 log("replaced-demangler", "${stubDt.pathName} -> ${replDt.pathName}")
-            } catch (e: DataTypeDependencyException) {
+            } catch (e: Exception) {
                 ctx.diagnostics.inc("replaced-demangler-failed")
                 log("replaced-demangler-failed", "${stubDt.pathName}: ${e.message}")
             }

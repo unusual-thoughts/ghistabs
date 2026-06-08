@@ -1,6 +1,9 @@
+@file:Suppress("SERIALIZER_TYPE_INCOMPATIBLE")
+
 package ghistabs.parser
 
 import ghidra.program.model.address.Address
+import ghidra.program.model.symbol.SymbolUtilities
 import ghidra.util.task.TaskMonitor
 import ghistabs.builder.TypeResolver
 import ghistabs.diag.DiagnosticSink
@@ -16,6 +19,7 @@ data class TypeAst(
     val body: TypeDecl<GlobalTypeId>,
 ) {
     val source get() = id.source
+    val ghidraName get() = SymbolUtilities.replaceInvalidChars(name, false)
 }
 
 @Serializable
@@ -57,18 +61,12 @@ data class OpenFunction(
 )
 
 @Serializable
-class FileResolver(private val includesByFile: Map<String, IncludeContext>) {
-    fun knownFileNums(cu: SourceFile.CUSource) = includesByFile[cu.filename]?.getAllFileNums() ?: emptySet()
-
-}
-
-@Serializable
 data class Harvest(
     val parseErrors: Int,
-    val typeAsts: List<TypeAst>,
+    val typeAsts: Map<GlobalTypeId, TypeAst>,
+    val collidingAsts: Map<GlobalTypeId, MutableMap<String, MutableSet<TypeDecl<GlobalTypeId>>>>,
     val symbolsByCu: Map<String, List<HarvestedSymbol>>,
     val openFunctions: List<OpenFunction>,
-    val fileResolver: FileResolver,
     val headerRegistry: HeaderRegistry,
 ) {
     val allHarvestedSymbols get() = symbolsByCu.values.flatten()
@@ -80,7 +78,8 @@ class Harvester(
     private val sink: DiagnosticSink,
     private val resolver: AddressResolver,
 ) : DiagnosticSink by sink {
-    private val typeAsts = mutableListOf<TypeAst>()
+    private val typeAsts = mutableMapOf<GlobalTypeId, TypeAst>()
+    private val collidingAsts = mutableMapOf<GlobalTypeId, MutableMap<String, MutableSet<TypeDecl<GlobalTypeId>>>>()
     private val symbolsByCu = mutableMapOf<String, MutableList<HarvestedSymbol>>()
     private val openFunctions = mutableListOf<OpenFunction>()
     private val includesByFile = mutableMapOf<String, IncludeContext>()
@@ -144,9 +143,6 @@ class Harvester(
                     currentCu = null
                 }
 
-
-                }
-
                 StabType.N_BINCL, StabType.N_EINCL, StabType.N_EXCL -> {}
 
                 StabType.N_FUN -> if (rec.name.isEmpty()) {
@@ -164,7 +160,7 @@ class Harvester(
                                 val open = OpenFunction(
                                     name = mangled,
                                     addr = SerializableAddress(addr),
-                                    decl = SymbolDecl.Function(decl.name, decl.isFileStatic, globalize(decl.type)),
+                                    decl = SymbolDecl.Function(decl.name, decl.isFileStatic, decl.type),
                                     cu = currentCu!!,
                                     locals = mutableListOf(),
                                     params = mutableListOf(),
@@ -173,6 +169,8 @@ class Harvester(
                                 openFunctions += open
                                 currentFunction = open
                             }
+
+                            is SymbolDecl.StaticVar -> harvestSymbol(rec) { parseErrors++ }
 
                             else -> log("unexpected-nfun", "@$i: $decl")
                         }
@@ -195,13 +193,11 @@ class Harvester(
                     val open = currentFunction ?: continue
                     try {
                         when (val decl = parseSymbol(rec)) {
-                            is SymbolDecl.StackParam, is SymbolDecl.RegParam -> open.params += ParamRecord(
-                                globalizeSymbol(decl),
-                                rec.value,
-                            )
+                            is SymbolDecl.StackParam, is SymbolDecl.RegParam ->
+                                open.params += ParamRecord(decl, rec.value)
 
                             is SymbolDecl.RegLocal -> {
-                                open.locals.add(LocalRecord(globalizeSymbol(decl), rec.value, i))
+                                open.locals.add(LocalRecord(decl, rec.value, i))
                             }
 
                             else -> log("unexpected-psym-rsym", "@$i: $decl")
@@ -215,35 +211,21 @@ class Harvester(
                 StabType.N_LSYM -> try {
                     when (val decl = parseSymbol(rec)) {
                         is SymbolDecl.TaggedType -> appendAsts(
-                            listOf(
-                                TypeAst(
-                                    currentCu!!,
-                                    globalIdFor(decl.id),
-                                    decl.name,
-                                    globalize(decl.type),
-                                ),
-                            ),
+                            listOf(TypeAst(currentCu!!, decl.id, decl.name, decl.type)),
                         )
 
                         is SymbolDecl.Typedef -> appendAsts(
-                            listOf(
-                                TypeAst(
-                                    currentCu!!,
-                                    globalIdFor(decl.id),
-                                    decl.name,
-                                    globalize(decl.type),
-                                ),
-                            ),
+                            listOf(TypeAst(currentCu!!, decl.id, decl.name, decl.type)),
                         )
 
                         is SymbolDecl.StackLocal, is SymbolDecl.RegLocal -> {
-                            currentFunction?.locals?.add(LocalRecord(globalizeSymbol(decl), rec.value, i))
+                            currentFunction?.locals?.add(LocalRecord(decl, rec.value, i))
                         }
 
                         is SymbolDecl.StaticVar -> {
                             // Function-scope static variables get their actual address from rec.value
                             symbolsByCu.getOrPut(currentCu!!.filename) { mutableListOf() } +=
-                                HarvestedSymbol(globalizeSymbol(decl), rec.type, rec.value)
+                                HarvestedSymbol(decl, rec.type, rec.value)
                         }
 
                         is SymbolDecl.Function, is SymbolDecl.Global, is SymbolDecl.RegParam, is SymbolDecl.StackParam,
@@ -294,9 +276,9 @@ class Harvester(
         return Harvest(
             parseErrors,
             typeAsts,
+            collidingAsts,
             symbolsByCu,
             openFunctions,
-            FileResolver(includesByFile),
             sharedHeaderRegistry,
         )
     }
@@ -310,7 +292,7 @@ class Harvester(
             // under its canonical (48, 3) key. The global ends up untyped.
             val decl = parseSymbol(rec)
             symbolsByCu.getOrPut(currentCu!!.filename) { mutableListOf() } += HarvestedSymbol(
-                globalizeSymbol(decl),
+                decl,
                 rec.type,
                 rec.value,
             )
@@ -332,6 +314,7 @@ class Harvester(
         is SymbolDecl.Typedef -> SymbolDecl.Typedef(sym.name, globalIdFor(sym.id), globalize(sym.type))
     }
 
+    @Suppress("UNCHECKED_CAST")
     fun globalize(decl: TypeDecl<LocalTypeId>): TypeDecl<GlobalTypeId> = when (decl) {
         is TypeDecl.Complex, is TypeDecl.Enum, is TypeDecl.XRef -> decl as TypeDecl<GlobalTypeId>
         is TypeDecl.Range -> TypeDecl.Range(globalIdFor(decl.of), decl.min, decl.max)
@@ -374,7 +357,7 @@ class Harvester(
         is TypeDecl.InlineDef -> TypeDecl.InlineDef(globalIdFor(decl.id), globalize(decl.body))
     }
 
-    fun walkDefinitions(decl: TypeDecl<LocalTypeId>): List<TypeAst> = when (decl) {
+    fun walkDefinitions(decl: TypeDecl<GlobalTypeId>): List<TypeAst> = when (decl) {
         is TypeDecl.Complex, is TypeDecl.Enum, is TypeDecl.Range, is TypeDecl.Ref, is TypeDecl.XRef -> listOf()
         is TypeDecl.Const -> walkDefinitions(decl.inner)
         is TypeDecl.Volatile -> walkDefinitions(decl.inner)
@@ -392,38 +375,36 @@ class Harvester(
             decl.fields.flatMap { walkDefinitions(it.type) } +
             decl.methods.flatMap { walkDefinitions(it.signature) }
 
-        is TypeDecl.InlineDef if decl.body is TypeDecl.XRef -> {
-            log("dropping-fwd-xref", "${decl.id}")
-            listOf()
-        }
-
-        is TypeDecl.InlineDef -> listOf(
-            TypeAst(
-                currentCu!!,
-                globalIdFor(decl.id),
-                "unnamed_${decl.id}",
-                globalize(decl.body),
-            ),
-        )
+        is TypeDecl.InlineDef -> listOf(TypeAst(currentCu!!, decl.id, "${decl.id}", decl.body))
     }
 
     fun appendAsts(asts: List<TypeAst>) {
-        val existing = typeAsts.groupBy { it.id }
         val new = asts.groupBy { it.id }
-        val collisions = existing.keys.intersect(new.keys)
+        // replace XRef by its definition
+        val collisions = typeAsts.filter { it.value.body !is TypeDecl.XRef }.map { it.key }.intersect(new.keys)
         if (collisions.isNotEmpty()) {
             for (id in collisions) {
-                val exHash = existing[id]!!.associate { it.name to it.body.hashCode() }
+                val ex = typeAsts[id]!!
+                val exHash = mapOf(ex.name to ex.body.hashCode())
                 val newHash = new[id]!!.associate { it.name to it.body.hashCode() }
                 if (exHash == newHash) {
                     log("ast-id-collision-same-hash", "$exHash == $newHash")
                 } else {
                     log("ast-id-collision", "$exHash != $newHash")
                 }
+                collidingAsts.getOrPut(id, { mutableMapOf() }).getOrPut(ex.name, { mutableSetOf() }).add(ex.body)
+
+                for (ex in new[id]!!) {
+                    collidingAsts.getOrPut(id, { mutableMapOf() }).getOrPut(ex.name, { mutableSetOf() }).add(ex.body)
+                }
             }
         }
-        typeAsts += asts.filter { !collisions.contains(it.id) }
+        for (ast in asts.filter { !collisions.contains(it.id) }) {
+            typeAsts[ast.id] = ast
+        }
     }
 
-    fun parseSymbol(rec: StabRecord) = Parser(rec.name).parseSymbol().also { appendAsts(walkDefinitions(it.type)) }
+    fun parseSymbol(rec: StabRecord) = globalizeSymbol(Parser(rec.name).parseSymbol()).also {
+        appendAsts(walkDefinitions(it.type))
+    }
 }

@@ -39,12 +39,11 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
             ctx.dtm,
             ctx.sink,
             ctx.diagnostics,
-            harvest.fileResolver,
             harvest.typeResolver,
         )
         val txB = ctx.program.startTransaction("Stabs: materialise types")
         try {
-            typeRegistry.materialiseAll(harvest.typeAsts) { name, cus ->
+            typeRegistry.materialiseAll(harvest.typeAsts.values) { name, cus ->
                 Attribution.categoryFor(name, cus, ctx.diagnostics)
             }
         } finally {
@@ -91,7 +90,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
         ctx.diagnostics.inc("harvest-statics", allSyms.count { it.decl is SymbolDecl.StaticVar }.toLong())
         ctx.diagnostics.inc("harvest-typeAsts", harvest.typeAsts.size.toLong())
         // typeAst breakdown by AST kind — surfaces struct/enum/typedef weights.
-        val byKind = harvest.typeAsts.groupingBy { it.body::class.simpleName ?: "Unknown" }.eachCount()
+        val byKind = harvest.typeAsts.values.groupingBy { it.body::class.simpleName ?: "Unknown" }.eachCount()
         for ((kind, n) in byKind.toSortedMap()) {
             ctx.diagnostics.inc("harvest-typeAsts-$kind", n.toLong())
         }
@@ -100,7 +99,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
         ctx.diagnostics.inc("harvest-cus", harvest.symbolsByCu.size.toLong())
         // Names dropped during harvest (parse error or canonicalisation
         // collision) versus what reached PassA's output.
-        val uniqueTypeIds = harvest.typeAsts.map { it.id }.toSet().size
+        val uniqueTypeIds = harvest.typeAsts.keys.size
         ctx.diagnostics.inc("harvest-typeAsts-unique-by-id", uniqueTypeIds.toLong())
         ctx.diagnostics.inc("harvest-typeAsts-dup-by-id", (harvest.typeAsts.size - uniqueTypeIds).toLong())
     }
@@ -131,7 +130,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
                 }
 
                 // Apply return type from the parsed signature.
-                val retDt = typeRegistry.dataTypeFor(open.decl.type, open.cu)
+                val retDt = typeRegistry.dataTypeFor(open.decl.type)
                 if (retDt != null) func.setReturnType(retDt, source)
 
                 // Build parameters from the recorded N_PSYM / N_RSYM records.
@@ -153,16 +152,8 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
                     .mapIndexed { i, p ->
                         val pdecl = p.decl
                         val (pname, pdt) = when (pdecl) {
-                            is SymbolDecl.StackParam -> pdecl.name to typeRegistry.dataTypeFor(
-                                pdecl.type,
-                                open.cu,
-                            )
-
-                            is SymbolDecl.RegParam -> pdecl.name to typeRegistry.dataTypeFor(
-                                pdecl.type,
-                                open.cu,
-                            )
-
+                            is SymbolDecl.StackParam -> pdecl.name to typeRegistry.dataTypeFor(pdecl.type)
+                            is SymbolDecl.RegParam -> pdecl.name to typeRegistry.dataTypeFor(pdecl.type)
                             else -> "arg$i" to null
                         }
                         ParameterImpl(
@@ -182,7 +173,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
 
                 // Apply locals.
                 for (loc in open.locals) {
-                    applyLocal(open.cu, func, loc, typeRegistry, source)
+                    applyLocal(func, loc, typeRegistry, source)
                 }
 
                 // Apply scope plate comments.
@@ -202,17 +193,13 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
             for (h in syms) {
                 try {
                     when (val d = h.decl) {
-                        is SymbolDecl.Global -> applyGlobal(cu, d, typeRegistry).let { if (it) globals++ }
-                        is SymbolDecl.StaticVar -> applyStatic(
-                            cu,
-                            d,
-                            h.rawValue,
-                            typeRegistry,
-                        ).let { if (it) globals++ }
+                        is SymbolDecl.Global -> applyGlobal(d, typeRegistry).let { if (it) globals++ }
 
-                        else -> {
-                            log("unexpected-symbol", "$d")
+                        is SymbolDecl.StaticVar -> applyStatic(d, h.rawValue, typeRegistry).let {
+                            if (it) globals++
                         }
+
+                        else -> log("unexpected-symbol", "$d")
                     }
                 } catch (t: Throwable) {
                     log("apply-error", "symbol ${h.decl.name} in $cu: ${t.message}")
@@ -240,7 +227,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
             // class, only ONE landing on the canonical category (huge `[class-not-struct]`
             // log spam). Pick the most-detailed body (max methods, then fields) so vtable
             // construction sees the full method list.
-            for ((name, asts) in harvest.typeAsts.groupBy { it.name }) {
+            for ((name, asts) in harvest.typeAsts.values.groupBy { it.ghidraName }) {
                 val structAsts = asts.mapNotNull {
                     when (it.body) {
                         is TypeDecl.Struct -> it.cu to it.body
@@ -259,7 +246,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
                 try {
                     val defSources = asts.map { it.id.source }.toSet()
                     val category = Attribution.categoryFor(name, defSources, ctx.diagnostics)
-                    classBuilder.build(cu, name, body, category)
+                    classBuilder.build(name, body, category)
                     classes++
                 } catch (t: Throwable) {
                     log("class-apply-error", "$name: ${t.message}")
@@ -380,17 +367,11 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
         flushGap()
     }
 
-    private fun applyLocal(
-        cu: SourceFile.CUSource,
-        func: Function,
-        loc: LocalRecord,
-        typeRegistry: TypeRegistry,
-        source: SourceType,
-    ) {
+    private fun applyLocal(func: Function, loc: LocalRecord, typeRegistry: TypeRegistry, source: SourceType) {
         val decl = loc.decl
         val dt = when (decl) {
-            is SymbolDecl.StackLocal -> typeRegistry.dataTypeFor(decl.type, cu)
-            is SymbolDecl.RegLocal -> typeRegistry.dataTypeFor(decl.type, cu)
+            is SymbolDecl.StackLocal -> typeRegistry.dataTypeFor(decl.type)
+            is SymbolDecl.RegLocal -> typeRegistry.dataTypeFor(decl.type)
             else -> return
         } ?: Undefined4DataType.dataType
         try {
@@ -417,10 +398,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
                     ctx.diagnostics.inc("local-var-add-success")
                 }
 
-                is SymbolDecl.RegLocal -> log(
-                    "regparam-deferred",
-                    "Register local '${decl.name}' in function deferred (register mapping not implemented)",
-                )
+                is SymbolDecl.RegLocal -> ctx.diagnostics.inc("regparam-deferred")
             }
         } catch (e: Exception) {
             // local-var-error counter auto-bumps via BookmarkSink tag→counter contract
@@ -450,15 +428,14 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
         }
     }
 
-    private fun applyGlobal(cu: String, decl: SymbolDecl.Global<GlobalTypeId>, typeRegistry: TypeRegistry): Boolean {
+    private fun applyGlobal(decl: SymbolDecl.Global<GlobalTypeId>, typeRegistry: TypeRegistry): Boolean {
         val addr = ctx.resolver.resolve(decl.name) ?: run {
             log("unresolved-symbol", "global ${decl.name}")
             ctx.diagnostics.recordGlobal(decl.name, "skipped", dtKind = "unknown", reason = "unresolved-symbol")
             return false
         }
-        if (decl.name == "ExpressionStrings") {
 
-        val dt = typeRegistry.dataTypeFor(decl.type, SourceFile.CUSource(cu)) ?: run {
+        val dt = typeRegistry.dataTypeFor(decl.type) ?: run {
             ctx.diagnostics.recordGlobal(
                 addr.toString(),
                 "skipped",
@@ -513,13 +490,12 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
     }
 
     private fun applyStatic(
-        cu: String,
         decl: SymbolDecl.StaticVar<GlobalTypeId>,
         rawAddr: Long,
         typeRegistry: TypeRegistry,
     ): Boolean {
         val addr = ctx.resolver.buildAddress(rawAddr)
-        val dt = typeRegistry.dataTypeFor(decl.type, SourceFile.CUSource(cu)) ?: return false
+        val dt = typeRegistry.dataTypeFor(decl.type) ?: return false
 
         try {
             // Clear any existing code units before creating data to avoid conflicts
