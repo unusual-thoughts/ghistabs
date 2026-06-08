@@ -14,13 +14,15 @@ import ghistabs.StabsAnalyzer
 import ghistabs.diag.CapturingSink
 import ghistabs.diag.defaultContext
 import ghistabs.importer.ImportContext
-import ghistabs.parser.*
+import ghistabs.parser.Harvester
+import ghistabs.parser.IdInterface
+import ghistabs.parser.StabReader
+import ghistabs.parser.ToStringSerializer
 import kotlinx.serialization.ExperimentalSerializationApi
-import kotlinx.serialization.PolymorphicSerializer
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.encodeToStream
 import kotlinx.serialization.modules.SerializersModule
-import kotlinx.serialization.modules.polymorphic
 import org.junit.jupiter.api.*
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import java.io.File
@@ -78,11 +80,8 @@ abstract class StabsAnalyzerRegressionTest(private val mode: Mode) : AbstractGhi
     private val json by lazy {
         Json {
             serializersModule = SerializersModule {
-                contextual(IdInterface::class, PolymorphicSerializer(IdInterface::class))
-                polymorphic(IdInterface::class) {
-                    subclass(LocalTypeId::class, LocalTypeId.serializer())
-                    subclass(GlobalTypeId::class, GlobalTypeId.serializer())
-                }
+                @Suppress("UNCHECKED_CAST")
+                contextual(IdInterface::class, ToStringSerializer as KSerializer<IdInterface>)
                 prettyPrint = true
             }
         }

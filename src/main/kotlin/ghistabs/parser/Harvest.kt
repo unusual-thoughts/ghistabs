@@ -72,7 +72,7 @@ data class Harvest(
     val headerRegistry: HeaderRegistry,
 ) {
     val allHarvestedSymbols get() = symbolsByCu.values.flatten()
-    val typeResolver get() = TypeResolver(typeAsts, fileResolver)
+    val typeResolver get() = TypeResolver(typeAsts)
 }
 
 class Harvester(
