@@ -38,6 +38,6 @@ class CapturingSink : DiagnosticSink {
 fun Program.defaultContext() = ImportContext(this, CapturingSink(), ConsoleTaskMonitor(), StabsOptions())
 fun ImportContext<*>.defaultTypeRegistry(): TypeRegistry {
     val fileResolver = FileResolver(mapOf())
-    val typeResolver = TypeResolver(listOf(), fileResolver)
+    val typeResolver = TypeResolver(listOf())
     return TypeRegistry(dtm, sink, diagnostics, fileResolver, typeResolver)
 }

@@ -11,7 +11,7 @@ import ghistabs.diag.DiagnosticSink
 import ghistabs.importer.ImportContext
 import ghistabs.parser.*
 
-class TypeResolver(typeAsts: List<TypeAst>, private val fileResolver: FileResolver) {
+class TypeResolver(typeAsts: List<TypeAst>) {
     /** All type ASTs indexed by TypeId for inheritance resolution. */
     val typeAstsById = typeAsts.associateBy { it.id }
 
