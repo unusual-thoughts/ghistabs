@@ -1,3 +1,5 @@
+@file:Suppress("SERIALIZER_TYPE_INCOMPATIBLE")
+
 package ghistabs.parser
 
 import ghistabs.diag.DiagnosticSink
