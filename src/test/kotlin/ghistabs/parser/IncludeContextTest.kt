@@ -17,7 +17,7 @@ class IncludeContextTest {
 
     @Test
     fun `beginInclude allocates fileNum and pushes stack`() {
-        val ctx = IncludeContext("test.cpp", sink, registry)
+        val ctx = IncludeContext(SourceFile.CUSource("test.cpp"), sink, registry)
         val fileNum2 = ctx.beginInclude("header.h", 0x123L)
         assertEquals(2, fileNum2)
         val header = ctx.headerForFileNum(fileNum2)
@@ -28,7 +28,7 @@ class IncludeContextTest {
 
     @Test
     fun `endInclude pops stack without changing fileNum`() {
-        val ctx = IncludeContext("test.cpp", sink, registry)
+        val ctx = IncludeContext(SourceFile.CUSource("test.cpp"), sink, registry)
         val fileNum2 = ctx.beginInclude("header.h", 0x123L)
         ctx.endInclude()
         // After popping, headerForFileNum should still return the header (it was registered by fileNum)
@@ -37,11 +37,11 @@ class IncludeContextTest {
 
     @Test
     fun `two CUs with same BINCL get same HeaderFile instance`() {
-        val ctx1 = IncludeContext("cu1.cpp", sink, registry)
+        val ctx1 = IncludeContext(SourceFile.CUSource("cu1.cpp"), sink, registry)
         val fileNum1 = ctx1.beginInclude("header.h", 0x123L)
         val header1 = ctx1.headerForFileNum(fileNum1)
 
-        val ctx2 = IncludeContext("cu2.cpp", sink, registry)
+        val ctx2 = IncludeContext(SourceFile.CUSource("cu2.cpp"), sink, registry)
         val fileNum2 = ctx2.beginInclude("header.h", 0x123L)
         val header2 = ctx2.headerForFileNum(fileNum2)
 
@@ -52,24 +52,25 @@ class IncludeContextTest {
     }
 
     @Test
-    fun `reMountExcluded with prior BINCL reuses same HeaderFile`() {
-        val ctx1 = IncludeContext("cu1.cpp", sink, registry)
+    fun `remount with prior BINCL reuses same HeaderFile`() {
+        val ctx1 = IncludeContext(SourceFile.CUSource("cu1.cpp"), sink, registry)
         val fileNum1 = ctx1.beginInclude("header.h", 0x123L)
         val header1 = ctx1.headerForFileNum(fileNum1)
 
-        val ctx2 = IncludeContext("cu2.cpp", sink, registry)
+        val ctx2 = IncludeContext(SourceFile.CUSource("cu2.cpp"), sink, registry)
         val fileNum2 = ctx2.remount("header.h", 0x123L)
         val header2 = ctx2.headerForFileNum(fileNum2)
 
         // Same instance
         assertTrue(header1 === header2)
-        // Different fileNum (new allocation in ctx2)
-        assertTrue(fileNum1 != fileNum2 || fileNum1 == 2 && fileNum2 == 2)
+        // same local id
+        assertTrue(fileNum1 == 1)
+        assertTrue(fileNum2 == 1)
     }
 
     @Test
     fun `forward EXCL without prior BINCL allocates placeholder and logs`() {
-        val ctx = IncludeContext("test.cpp", sink, registry)
+        val ctx = IncludeContext(SourceFile.CUSource("test.cpp"), sink, registry)
         val fileNum2 = ctx.remount("unknown.h", 0x456L)
         val header = ctx.headerForFileNum(fileNum2)
 
@@ -87,7 +88,7 @@ class IncludeContextTest {
 
     @Test
     fun `forward EXCL then BINCL creates two distinct HeaderFile instances`() {
-        val ctx1 = IncludeContext("cu1.cpp", sink, registry)
+        val ctx1 = IncludeContext(SourceFile.CUSource("cu1.cpp"), sink, registry)
         val fileNum1Excl = ctx1.remount("header.h", 0x123L)
         val header1Excl = ctx1.headerForFileNum(fileNum1Excl)
 
@@ -96,19 +97,19 @@ class IncludeContextTest {
         assertEquals("<unknown>", header1Excl!!.originatingCu)
 
         // Now a later CU with real BINCL should get a different HeaderFile
-        val ctx2 = IncludeContext("cu2.cpp", sink, registry)
+        val ctx2 = IncludeContext(SourceFile.CUSource("cu2.cpp"), sink, registry)
         val fileNum2Bincl = ctx2.beginInclude("header.h", 0x123L)
         val header2Bincl = ctx2.headerForFileNum(fileNum2Bincl)
 
         // Different instances (per-CU slots)
         assertTrue(header1Excl !== header2Bincl)
         // But the BINCL one should have the real originating CU
-        assertEquals("cu2.cpp", header2Bincl!!.originatingCu)
+        assertEquals(SourceFile.CUSource("cu2.cpp"), header2Bincl!!.originatingCu)
     }
 
     @Test
     fun `endInclude with empty stack logs unbalanced warning`() {
-        val ctx = IncludeContext("test.cpp", sink, registry)
+        val ctx = IncludeContext(SourceFile.CUSource("test.cpp"), sink, registry)
 
         // Call endInclude on empty stack
         ctx.endInclude()
@@ -132,11 +133,11 @@ class IncludeContextTest {
 
         // === Part 1: WITH shared registry (correct behavior) ===
         val sharedRegistry = HeaderRegistry()
-        val cu1WithShared = IncludeContext("cu1.cpp", sink, sharedRegistry)
+        val cu1WithShared = IncludeContext(SourceFile.CUSource("cu1.cpp"), sink, sharedRegistry)
         val cu1HeaderFileNum = cu1WithShared.beginInclude("shared.h", 0xABCDL)
         val cu1Header = cu1WithShared.headerForFileNum(cu1HeaderFileNum)
 
-        val cu2WithShared = IncludeContext("cu2.cpp", sink, sharedRegistry)
+        val cu2WithShared = IncludeContext(SourceFile.CUSource("cu2.cpp"), sink, sharedRegistry)
         val cu2HeaderFileNum = cu2WithShared.beginInclude("shared.h", 0xABCDL)
         val cu2Header = cu2WithShared.headerForFileNum(cu2HeaderFileNum)
 
@@ -148,12 +149,12 @@ class IncludeContextTest {
 
         // === Part 2: WITHOUT shared registry (pre-fix bug) ===
         val cu1PrivateRegistry = HeaderRegistry()
-        val cu1WithPrivate = IncludeContext("cu1.cpp", sink, cu1PrivateRegistry)
+        val cu1WithPrivate = IncludeContext(SourceFile.CUSource("cu1.cpp"), sink, cu1PrivateRegistry)
         val cu1PrivHeaderFileNum = cu1WithPrivate.beginInclude("shared.h", 0xABCDL)
         val cu1PrivHeader = cu1WithPrivate.headerForFileNum(cu1PrivHeaderFileNum)
 
         val cu2PrivateRegistry = HeaderRegistry()
-        val cu2WithPrivate = IncludeContext("cu2.cpp", sink, cu2PrivateRegistry)
+        val cu2WithPrivate = IncludeContext(SourceFile.CUSource("cu2.cpp"), sink, cu2PrivateRegistry)
         val cu2PrivHeaderFileNum = cu2WithPrivate.beginInclude("shared.h", 0xABCDL)
         val cu2PrivHeader = cu2WithPrivate.headerForFileNum(cu2PrivHeaderFileNum)
 

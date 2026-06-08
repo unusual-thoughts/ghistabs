@@ -1,56 +1,11 @@
+@file:Suppress("SERIALIZER_TYPE_INCOMPATIBLE")
+
 package ghistabs.parser
 
+import kotlinx.serialization.Contextual
 import kotlinx.serialization.ExperimentalSerializationApi
-import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.descriptors.PrimitiveKind
-import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
-import kotlinx.serialization.encoding.Decoder
-import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.JsonClassDiscriminator
-
-/** Identifies a type within a CU: (file-number, type-number). */
-@Serializable(with = LocalTypeIdAsStringSerializer::class)
-data class LocalTypeId(val file: Int, val n: Int) {
-    override fun toString() = "($file,$n)"
-}
-
-@Serializable
-data class GlobalTypeId(val source: SourceFile, val n: Int)
-
-@Serializable
-sealed class SourceFile : Comparable<SourceFile> {
-    abstract val filename: String
-    abstract val cu: String
-
-    override fun compareTo(other: SourceFile): Int = filename.compareTo(other.filename)
-
-    @Serializable
-    data class HeaderSource(val header: HeaderFile) : SourceFile() {
-        override val filename get() = header.filename
-        override val cu get() = header.originatingCu
-    }
-
-    @Serializable
-    data class CUSource(override val cu: String) : SourceFile() {
-        override val filename get() = cu
-    }
-}
-
-class LocalTypeIdAsStringSerializer : KSerializer<LocalTypeId> {
-    override val descriptor = PrimitiveSerialDescriptor(
-        this::class.java.canonicalName,
-        PrimitiveKind.STRING,
-    )
-
-    override fun serialize(encoder: Encoder, value: LocalTypeId) {
-        encoder.encodeString(value.toString())
-    }
-
-    override fun deserialize(decoder: Decoder): LocalTypeId {
-        TODO("Not yet implemented")
-    }
-}
 
 enum class Access { PRIVATE, PROTECTED, PUBLIC }
 
@@ -60,85 +15,93 @@ enum class AggrKind { STRUCT, UNION, CLASS }
 
 /** Type AST. Sealed; every grammar form has a constructor here. */
 @Serializable
-sealed interface TypeDecl {
+sealed interface TypeDecl<out Id : IdInterface> {
     /** Forward reference to a type defined elsewhere by id. */
     @Serializable
-    data class Ref(val id: LocalTypeId) : TypeDecl
+    data class Ref<Id : IdInterface>(@Contextual val id: Id) : TypeDecl<Id>
 
     /** Sun range descriptor: `r<id>;<min>;<max>;` — encodes integer/char widths. */
     @Serializable
-    data class Range(val of: LocalTypeId, val min: Long, val max: Long) : TypeDecl
+    data class Range<Id : IdInterface>(@Contextual val of: Id, val min: Long, val max: Long) : TypeDecl<Id>
 
     @Serializable
-    data class Pointer(val pointee: TypeDecl) : TypeDecl
+    data class Pointer<Id : IdInterface>(val pointee: TypeDecl<Id>) : TypeDecl<Id>
+
+    /** C++ reference */
+    @Serializable
+    data class Reference<Id : IdInterface>(val referent: TypeDecl<Id>) : TypeDecl<Id>
 
     @Serializable
-    data class Reference(val referent: TypeDecl) : TypeDecl
+    data class Const<Id : IdInterface>(val inner: TypeDecl<Id>) : TypeDecl<Id>
 
     @Serializable
-    data class Const(val inner: TypeDecl) : TypeDecl
+    data class Volatile<Id : IdInterface>(val inner: TypeDecl<Id>) : TypeDecl<Id>
 
     @Serializable
-    data class Volatile(val inner: TypeDecl) : TypeDecl
+    data class Array<Id : IdInterface>(val element: TypeDecl<Id>, val length: Long?, val indexType: TypeDecl<Id>?) :
+        TypeDecl<Id>
 
     @Serializable
-    data class Array(val element: TypeDecl, val length: Long?, val indexType: TypeDecl?) : TypeDecl
+    data class Enum<Id : IdInterface>(val members: List<Pair<String, Long>>) : TypeDecl<Id>
 
     @Serializable
-    data class Enum(val members: List<Pair<String, Long>>) : TypeDecl
-
-    @Serializable
-    data class Struct(
+    data class Struct<Id : IdInterface>(
         val kind: AggrKind,
         val sizeBytes: Long,
-        val bases: List<BaseDecl>,
-        val fields: List<FieldDecl>,
-        val methods: List<MethodDecl>,
+        val bases: List<BaseDecl<Id>>,
+        val fields: List<FieldDecl<Id>>,
+        val methods: List<MethodDecl<Id>>,
         val hasVTablePointerMarker: Boolean,
-        val vtableTargetTypeId: LocalTypeId?,
-    ) : TypeDecl
+        @Contextual val vtableTargetTypeId: Id?,
+    ) : TypeDecl<Id>
 
     @Serializable
-    data class FunctionT(val ret: TypeDecl, val params: List<TypeDecl>) : TypeDecl
+    data class FunctionT<Id : IdInterface>(val ret: TypeDecl<Id>, val params: List<TypeDecl<Id>>) : TypeDecl<Id>
 
     /** Pointer-to-member-function (the `#` descriptor body). */
     @Serializable
-    data class Method(val cls: TypeDecl, val ret: TypeDecl, val params: List<TypeDecl>) : TypeDecl
+    data class Method<Id : IdInterface>(val cls: TypeDecl<Id>, val ret: TypeDecl<Id>, val params: List<TypeDecl<Id>>) :
+        TypeDecl<Id>
 
     /** GCC complex/floating: `R<n>;<size>;0;`. n encodes 3=cfloat, 4=cdouble, 5=cldouble per gcc/dbxout. */
     @Serializable
-    data class Complex(val rCode: Int, val sizeBytes: Int) : TypeDecl
+    data class Complex<Id : IdInterface>(val rCode: Int, val sizeBytes: Int) : TypeDecl<Id>
 
     /** Cross-reference: `xs<name>:` / `xu<name>:` / `xc<name>:` — incomplete tag. */
     @Serializable
-    data class XRef(val kind: AggrKind, val tagName: String) : TypeDecl
+    data class XRef<Id : IdInterface>(val kind: AggrKind, val tagName: String) : TypeDecl<Id>
 
     /** Wrapper carrying an `@s<n>;` size attribute around an inner type. */
     @Serializable
-    data class WithSizeAttr(val sizeBits: Int, val inner: TypeDecl) : TypeDecl
+    data class WithSizeAttr<Id : IdInterface>(val sizeBits: Int, val inner: TypeDecl<Id>) : TypeDecl<Id>
 
     /** Inline type definition: `(cu,n)=<body>` where the binding `(cu,n)` is preserved for Phase 3. */
     @Serializable
-    data class InlineDef(val id: LocalTypeId, val body: TypeDecl) : TypeDecl
+    data class InlineDef<Id : IdInterface>(@Contextual val id: Id, val body: TypeDecl<Id>) : TypeDecl<Id>
 }
 
 @Serializable
-data class FieldDecl(
+data class FieldDecl<Id : IdInterface>(
     val name: String,
-    val type: TypeDecl,
+    val type: TypeDecl<Id>,
     val offsetBits: Long,
     val sizeBits: Long,
     val isStatic: Boolean,
 )
 
 @Serializable
-data class BaseDecl(val type: TypeDecl, val isVirtual: Boolean, val access: Access, val offsetBits: Long)
+data class BaseDecl<Id : IdInterface>(
+    val type: TypeDecl<Id>,
+    val isVirtual: Boolean,
+    val access: Access,
+    val offsetBits: Long,
+)
 
 @Serializable
-data class MethodDecl(
+data class MethodDecl<Id : IdInterface>(
     val name: String,
     val mangled: String?,
-    val signature: TypeDecl,
+    val signature: TypeDecl<Id>,
     val access: Access,
     val virt: VirtKind,
     val isConst: Boolean,
@@ -151,44 +114,63 @@ data class MethodDecl(
 @Serializable
 @OptIn(ExperimentalSerializationApi::class)
 @JsonClassDiscriminator("kind")
-sealed interface SymbolDecl {
+sealed interface SymbolDecl<Id : IdInterface> {
     val name: String
+    val type: TypeDecl<Id>
 
     /** `:F` / `:f`. Top-level function (file-static if `f`). */
     @Serializable
-    data class Function(override val name: String, val isFileStatic: Boolean, val signature: TypeDecl) : SymbolDecl
+    data class Function<Id : IdInterface>(
+        override val name: String,
+        val isFileStatic: Boolean,
+        override val type: TypeDecl<Id>,
+    ) : SymbolDecl<Id>
 
     /** `:p` */
     @Serializable
-    data class StackParam(override val name: String, val type: TypeDecl) : SymbolDecl
+    data class StackParam<Id : IdInterface>(override val name: String, override val type: TypeDecl<Id>) : SymbolDecl<Id>
 
     /** `:P` (register param) or `:R` (alt). */
     @Serializable
-    data class RegParam(override val name: String, val type: TypeDecl, val regNum: Int) : SymbolDecl
+    data class RegParam<Id : IdInterface>(override val name: String, override val type: TypeDecl<Id>, val regNum: Int) :
+        SymbolDecl<Id>
 
     /** `:r` register variable. */
     @Serializable
-    data class RegLocal(override val name: String, val type: TypeDecl, val regNum: Int) : SymbolDecl
+    data class RegLocal<Id : IdInterface>(override val name: String, override val type: TypeDecl<Id>, val regNum: Int) :
+        SymbolDecl<Id>
 
     /** Plain stack local (a `:` descriptor with no class letter, or `:V` static-local). */
     @Serializable
-    data class StackLocal(override val name: String, val type: TypeDecl) : SymbolDecl
+    data class StackLocal<Id : IdInterface>(override val name: String, override val type: TypeDecl<Id>) : SymbolDecl<Id>
 
     /** `:T` tagged type (struct/union/class/enum tag). */
     @Serializable
-    data class TaggedType(override val name: String, val id: LocalTypeId, val body: TypeDecl) : SymbolDecl
+    data class TaggedType<Id : IdInterface>(
+        override val name: String,
+        @Contextual val id: Id,
+        override val type: TypeDecl<Id>,
+    ) : SymbolDecl<Id>
 
     /** `:t` typedef. */
     @Serializable
-    data class Typedef(override val name: String, val id: LocalTypeId, val body: TypeDecl) : SymbolDecl
+    data class Typedef<Id : IdInterface>(
+        override val name: String,
+        @Contextual val id: Id,
+        override val type: TypeDecl<Id>,
+    ) : SymbolDecl<Id>
 
     /** `:G` */
     @Serializable
-    data class Global(override val name: String, val type: TypeDecl) : SymbolDecl
+    data class Global<Id : IdInterface>(override val name: String, override val type: TypeDecl<Id>) : SymbolDecl<Id>
 
     /** `:S` file-static / `:V` static-local. */
     @Serializable
-    data class StaticVar(override val name: String, val type: TypeDecl, val isFunctionLocal: Boolean) : SymbolDecl
+    data class StaticVar<Id : IdInterface>(
+        override val name: String,
+        override val type: TypeDecl<Id>,
+        val isFunctionLocal: Boolean,
+    ) : SymbolDecl<Id>
 }
 
 class StabsParseException(val pos: Int, val src: String, msg: String) :
