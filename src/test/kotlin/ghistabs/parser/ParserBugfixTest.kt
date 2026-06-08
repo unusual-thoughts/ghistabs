@@ -76,7 +76,7 @@ class ParserBugfixTest {
 
             assertNotNull(symbol, "Parse result should not be null")
             if (symbol is SymbolDecl.Typedef) {
-                val ptr = symbol.body
+                val ptr = symbol.type
                 if (ptr is TypeDecl.Pointer) {
                     // The pointer should reference (0,30), which is the type being defined
                     if (ptr.pointee is TypeDecl.Ref) {
@@ -108,7 +108,7 @@ class ParserBugfixTest {
 
             assertNotNull(symbol, "Parse result should not be null")
             if (symbol is SymbolDecl.TaggedType) {
-                val struct = symbol.body
+                val struct = symbol.type
                 if (struct is TypeDecl.Struct) {
                     // Should have 2 fields
                     assertEquals(2, struct.fields.size, "Struct should have 2 fields")

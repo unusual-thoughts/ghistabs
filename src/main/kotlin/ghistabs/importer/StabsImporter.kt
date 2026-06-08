@@ -131,7 +131,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
                 }
 
                 // Apply return type from the parsed signature.
-                val retDt = typeRegistry.dataTypeFor(open.decl.signature, open.cu)
+                val retDt = typeRegistry.dataTypeFor(open.decl.type, open.cu)
                 if (retDt != null) func.setReturnType(retDt, source)
 
                 // Build parameters from the recorded N_PSYM / N_RSYM records.
@@ -243,12 +243,12 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
             for ((name, asts) in harvest.typeAsts.groupBy { it.name }) {
                 val structAsts = asts.mapNotNull {
                     when (it.body) {
-                        is TypeDecl.Struct -> it.id.source to it.body
+                        is TypeDecl.Struct -> it.cu to it.body
                         else -> null
                     }
                 }.toMap()
                 if (structAsts.isEmpty()) continue
-                val (src, body) = structAsts.maxWithOrNull(
+                val (cu, body) = structAsts.maxWithOrNull(
                     compareBy(
                         { it.value.methods.size },
                         { it.value.fields.size },
@@ -259,7 +259,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
                 try {
                     val defSources = asts.map { it.id.source }.toSet()
                     val category = Attribution.categoryFor(name, defSources, ctx.diagnostics)
-                    classBuilder.build(src, name, body, category)
+                    classBuilder.build(cu, name, body, category)
                     classes++
                 } catch (t: Throwable) {
                     log("class-apply-error", "$name: ${t.message}")
@@ -450,15 +450,13 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
         }
     }
 
-    private fun applyGlobal(cu: String, decl: SymbolDecl.Global, typeRegistry: TypeRegistry): Boolean {
+    private fun applyGlobal(cu: String, decl: SymbolDecl.Global<GlobalTypeId>, typeRegistry: TypeRegistry): Boolean {
         val addr = ctx.resolver.resolve(decl.name) ?: run {
             log("unresolved-symbol", "global ${decl.name}")
             ctx.diagnostics.recordGlobal(decl.name, "skipped", dtKind = "unknown", reason = "unresolved-symbol")
             return false
         }
-        if (decl.name == "BranchInstructions") {
-            log("prout")
-        }
+        if (decl.name == "ExpressionStrings") {
 
         val dt = typeRegistry.dataTypeFor(decl.type, SourceFile.CUSource(cu)) ?: run {
             ctx.diagnostics.recordGlobal(
@@ -516,7 +514,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
 
     private fun applyStatic(
         cu: String,
-        decl: SymbolDecl.StaticVar,
+        decl: SymbolDecl.StaticVar<GlobalTypeId>,
         rawAddr: Long,
         typeRegistry: TypeRegistry,
     ): Boolean {

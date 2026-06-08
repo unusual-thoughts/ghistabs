@@ -15,7 +15,7 @@ class ParserClassTest {
         val expected = SymbolDecl.TaggedType(
             name = "Foo",
             id = LocalTypeId(0, 5),
-            body = TypeDecl.Struct(
+            type = TypeDecl.Struct(
                 kind = AggrKind.STRUCT,
                 sizeBytes = 8,
                 bases = emptyList(),
@@ -43,7 +43,7 @@ class ParserClassTest {
         val expected = SymbolDecl.TaggedType(
             name = "Bar",
             id = LocalTypeId(0, 6),
-            body = TypeDecl.Struct(
+            type = TypeDecl.Struct(
                 kind = AggrKind.STRUCT,
                 sizeBytes = 4,
                 bases =
@@ -70,7 +70,7 @@ class ParserClassTest {
         val expected = SymbolDecl.TaggedType(
             name = "Baz",
             id = LocalTypeId(0, 7),
-            body = TypeDecl.Struct(
+            type = TypeDecl.Struct(
                 kind = AggrKind.STRUCT,
                 sizeBytes = 8,
                 bases = emptyList(),
@@ -89,7 +89,7 @@ class ParserClassTest {
         val expected = SymbolDecl.TaggedType(
             name = "Qux",
             id = LocalTypeId(0, 9),
-            body = TypeDecl.Struct(
+            type = TypeDecl.Struct(
                 kind = AggrKind.STRUCT,
                 sizeBytes = 4,
                 bases = emptyList(),
@@ -126,7 +126,7 @@ class ParserClassTest {
         val expected = SymbolDecl.TaggedType(
             name = "Qux",
             id = LocalTypeId(0, 9),
-            body = TypeDecl.Struct(
+            type = TypeDecl.Struct(
                 kind = AggrKind.STRUCT,
                 sizeBytes = 4,
                 bases = emptyList(),
@@ -163,7 +163,7 @@ class ParserClassTest {
         val expected = SymbolDecl.TaggedType(
             name = "Quux",
             id = LocalTypeId(0, 11),
-            body = TypeDecl.Struct(
+            type = TypeDecl.Struct(
                 kind = AggrKind.STRUCT,
                 sizeBytes = 4,
                 bases = emptyList(),

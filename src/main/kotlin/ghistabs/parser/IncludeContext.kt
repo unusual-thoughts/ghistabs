@@ -16,14 +16,14 @@ class HeaderRegistry(@Transient val sink: DiagnosticSink = DummySink) : Diagnost
     @Transient
     private val globalByFilenameChecksum = mutableMapOf<Pair<String, Long>, HeaderFile>()
 
-    fun getOrInsert(filename: String, checksum: Long, cu: String) =
+    fun getOrInsert(filename: String, checksum: Long, cu: SourceFile.CUSource) =
         globalByFilenameChecksum.getOrPut(filename to checksum) {
             HeaderFile(filename, checksum, originatingCu = cu)
         }
 
     fun recall(filename: String, checksum: Long): HeaderFile = globalByFilenameChecksum[filename to checksum] ?: run {
         log("forward-excl", "$filename checksum=0x${checksum.toString(16)}")
-        HeaderFile(filename, checksum, originatingCu = "<unknown>")
+        HeaderFile(filename, checksum, originatingCu = null)
     }
 
     /** Clear all registries (for test isolation). */
@@ -31,13 +31,6 @@ class HeaderRegistry(@Transient val sink: DiagnosticSink = DummySink) : Diagnost
         globalByFilenameChecksum.clear()
     }
 }
-
-/**
- * Represents one BINCL-or-source-file entity. Two CUs that include or EXCL the same
- * (filename, checksum) share a single HeaderFile instance.
- */
-@Serializable
-data class HeaderFile(val filename: String, val checksum: Long, val originatingCu: String)
 
 /**
  * Maintains per-CU file context: file number → header mapping, include stack tracking,
@@ -49,7 +42,7 @@ data class HeaderFile(val filename: String, val checksum: Long, val originatingC
  */
 @Serializable
 class IncludeContext(
-    val cuFile: String,
+    val cu: SourceFile.CUSource,
     @Transient private val sink: DiagnosticSink = DummySink,
     @Transient val registry: HeaderRegistry = HeaderRegistry(sink),
 ) : DiagnosticSink by sink {
@@ -66,7 +59,7 @@ class IncludeContext(
      */
     fun beginInclude(filename: String, checksum: Long): Int {
         val fileNum = nextFileNum++
-        fileNumToHeader[fileNum] = registry.getOrInsert(filename, checksum, cuFile)
+        fileNumToHeader[fileNum] = registry.getOrInsert(filename, checksum, cu)
         includeStack.push(fileNum)
         return fileNum
     }
@@ -82,6 +75,8 @@ class IncludeContext(
             log("einc-unbalanced", "endInclude with empty stack")
         }
     }
+
+    val currentInclude get() = includeStack.lastOrNull()?.let { fileNumToHeader[it] }
 
     /**
      * N_EXCL: allocates fileNum for a header that was previously INCLUDed (or will be later, in the case
@@ -100,10 +95,17 @@ class IncludeContext(
     /**
      * Lookup header for a given fileNum.
      */
-    private fun headerForFileNum(fileNum: Int): HeaderFile? = fileNumToHeader[fileNum]
+    internal fun headerForFileNum(fileNum: Int): HeaderFile? = fileNumToHeader[fileNum]
 
-    fun sourceForFileNum(fileNum: Int) = when (val header = headerForFileNum(fileNum)) {
-        null -> SourceFile.CUSource(cuFile)
+    fun sourceFor(id: LocalTypeId) = when (val header = headerForFileNum(id.file)) {
+        null -> {
+            // referencing 0 is allowed, it means "current CU"
+            if (id.file != 0) {
+                log("unknown-header-num", "$id header not yet defined for $cu")
+            }
+            cu
+        }
+
         else -> SourceFile.HeaderSource(header)
     }
 

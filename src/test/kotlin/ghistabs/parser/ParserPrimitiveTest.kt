@@ -15,7 +15,7 @@ class ParserPrimitiveTest {
         val expected = SymbolDecl.Typedef(
             name = "_Bool",
             id = LocalTypeId(0, 21),
-            body = TypeDecl.WithSizeAttr(
+            type = TypeDecl.WithSizeAttr(
                 sizeBits = 8,
                 inner = TypeDecl.Ref(LocalTypeId(0, -16)),
             ),
@@ -29,7 +29,7 @@ class ParserPrimitiveTest {
         val expected = SymbolDecl.Typedef(
             name = "int",
             id = LocalTypeId(0, 1),
-            body = TypeDecl.Range(
+            type = TypeDecl.Range(
                 of = LocalTypeId(0, 1),
                 min = -2147483648L,
                 max = 2147483647L,
@@ -44,7 +44,7 @@ class ParserPrimitiveTest {
         val expected = SymbolDecl.Typedef(
             name = "long long int",
             id = LocalTypeId(0, 6),
-            body = TypeDecl.WithSizeAttr(
+            type = TypeDecl.WithSizeAttr(
                 sizeBits = 64,
                 inner = TypeDecl.Range(
                     of = LocalTypeId(0, 6),
@@ -62,7 +62,7 @@ class ParserPrimitiveTest {
         val expected = SymbolDecl.Typedef(
             name = "complex float",
             id = LocalTypeId(0, 16),
-            body = TypeDecl.Complex(rCode = 3, sizeBytes = 8),
+            type = TypeDecl.Complex(rCode = 3, sizeBytes = 8),
         )
         assertEquals(expected, Parser(input).parseSymbol())
     }
@@ -73,7 +73,7 @@ class ParserPrimitiveTest {
         val expected = SymbolDecl.Typedef(
             name = "complex double",
             id = LocalTypeId(0, 17),
-            body = TypeDecl.Complex(rCode = 4, sizeBytes = 16),
+            type = TypeDecl.Complex(rCode = 4, sizeBytes = 16),
         )
         assertEquals(expected, Parser(input).parseSymbol())
     }
@@ -84,7 +84,7 @@ class ParserPrimitiveTest {
         val expected = SymbolDecl.Typedef(
             name = "pi",
             id = LocalTypeId(0, 30),
-            body = TypeDecl.Pointer(TypeDecl.Ref(LocalTypeId(0, 1))),
+            type = TypeDecl.Pointer(TypeDecl.Ref(LocalTypeId(0, 1))),
         )
         assertEquals(expected, Parser(input).parseSymbol())
     }
@@ -95,7 +95,7 @@ class ParserPrimitiveTest {
         val expected = SymbolDecl.Typedef(
             name = "cpi",
             id = LocalTypeId(0, 31),
-            body = TypeDecl.Const(TypeDecl.Pointer(TypeDecl.Ref(LocalTypeId(0, 1)))),
+            type = TypeDecl.Const(TypeDecl.Pointer(TypeDecl.Ref(LocalTypeId(0, 1)))),
         )
         assertEquals(expected, Parser(input).parseSymbol())
     }
