@@ -4,7 +4,10 @@ import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Program
 import ghidra.util.task.ConsoleTaskMonitor
 import ghistabs.StabsOptions
+import ghistabs.builder.TypeRegistry
+import ghistabs.builder.TypeResolver
 import ghistabs.importer.ImportContext
+import ghistabs.parser.FileResolver
 
 /**
  * Pure Kotlin test double that captures log() calls into a list.
@@ -33,3 +36,8 @@ class CapturingSink : DiagnosticSink {
 }
 
 fun Program.defaultContext() = ImportContext(this, CapturingSink(), ConsoleTaskMonitor(), StabsOptions())
+fun ImportContext<*>.defaultTypeRegistry(): TypeRegistry {
+    val fileResolver = FileResolver(mapOf())
+    val typeResolver = TypeResolver(listOf(), fileResolver)
+    return TypeRegistry(dtm, sink, diagnostics, fileResolver, typeResolver)
+}

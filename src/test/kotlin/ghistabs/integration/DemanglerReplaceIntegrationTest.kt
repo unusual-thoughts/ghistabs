@@ -6,6 +6,7 @@ import ghidra.program.model.data.DataTypeConflictHandler
 import ghidra.program.model.data.StructureDataType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghistabs.diag.defaultContext
+import ghistabs.diag.defaultTypeRegistry
 import ghistabs.importer.DemanglerReplacer
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -91,7 +92,7 @@ class DemanglerReplaceIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
 
         // Run DemanglerReplacer inside a transaction — `dtm.replaceDataType`
         // (used when a real replacement is found) requires one.
-        val registry = ghistabs.builder.TypeRegistry(ctx.dtm, ctx.sink, ctx.diagnostics)
+        val registry = ctx.defaultTypeRegistry()
         val txRun = program.startTransaction("demangler-replace")
         try {
             DemanglerReplacer(ctx, registry).run()
@@ -146,8 +147,8 @@ class DemanglerReplaceIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
         // Create ImportContext
         val ctx = program.defaultContext()
 
-        // Run DemanglerReplacer (should skip gracefully since stub is absent)
-        val registry = ghistabs.builder.TypeRegistry(ctx.dtm, ctx.sink, ctx.diagnostics)
+        // Run DemanglerReplPacer (should skip gracefully since stub is absent)
+        val registry = ctx.defaultTypeRegistry()
         // Should not throw
         DemanglerReplacer(ctx, registry).run()
 
