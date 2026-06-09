@@ -200,4 +200,99 @@ class ParserBugfixTest {
             }, "Line ${lineNum + 1} should parse: ${line.take(100)}")
         }
     }
+
+    /**
+     * Cross-reference forward declaration of a struct (xs descriptor).
+     * A struct forward ref by tag name without body definition.
+     * stabs PDF §5.10 "Cross-References"
+     */
+    @Test
+    fun testStructXRef() {
+        val input = "my_struct:T(0,50)=xsMyStruct:"
+        val expected = SymbolDecl.TaggedType(
+            name = "my_struct",
+            id = LocalTypeId(0, 50),
+            type = TypeDecl.XRef<LocalTypeId>(kind = AggrKind.STRUCT, tagName = "MyStruct"),
+        )
+        assertEquals(expected, Parser(input).parseSymbol())
+    }
+
+    /**
+     * Cross-reference forward declaration of a union (xu descriptor).
+     * A union forward ref by tag name without body definition.
+     * stabs PDF §5.10 "Cross-References"
+     */
+    @Test
+    fun testUnionXRef() {
+        val input = "my_union:T(0,51)=xuMyUnion:"
+        val expected = SymbolDecl.TaggedType(
+            name = "my_union",
+            id = LocalTypeId(0, 51),
+            type = TypeDecl.XRef<LocalTypeId>(kind = AggrKind.UNION, tagName = "MyUnion"),
+        )
+        assertEquals(expected, Parser(input).parseSymbol())
+    }
+
+    /**
+     * Deeply nested InlineDef: InlineDef containing InlineDef containing Struct.
+     * Tests that the parser correctly handles arbitrary nesting depth of inline
+     * type definitions without recursion issues.
+     *
+     * The structure is:
+     * - (0,60) = inline definition of (0,61)
+     * - (0,61) = inline definition of a struct with field 'inner'
+     * - field 'inner' has type (0,62) = inline definition of (0,63)
+     * - (0,63) = a struct with field 'value'
+     * - field 'value' has type (0,64) = range
+     *
+     * stabs PDF §5.2 "Defining a Type"
+     */
+    @Test
+    fun testDeeplyNestedInlineDef() {
+        // Structure: nested InlineDefs wrapping struct definitions
+        // Outer: (0,60) = (0,61) = struct { inner : (0,62) = ... }
+        // Inner: (0,62) = (0,63) = struct { value : (0,64) = range }
+        val input = "nested:T(0,60)=(0,61)=s8inner:(0,62)=(0,63)=s4value:(0,64)=r(0,1);0;32;,0,32;;,0,64;;"
+        val symbol = assertDoesNotThrow({
+            Parser(input).parseSymbol()
+        }, "Deeply nested InlineDef should parse without infinite recursion")
+
+        // Verify the structure parsed correctly
+        assertNotNull(symbol, "Parse result must not be null")
+        @Suppress("USELESS_IS_CHECK", "UNCHECKED_CAST")
+        if (symbol is SymbolDecl.TaggedType<*>) {
+            val typeDecl = symbol.type
+            // The top-level type should be an InlineDef
+            if (typeDecl is TypeDecl.InlineDef<*>) {
+                assertEquals(LocalTypeId(0, 60), typeDecl.id)
+                // The body should be another InlineDef
+                val body = typeDecl.body
+                if (body is TypeDecl.InlineDef<*>) {
+                    assertEquals(LocalTypeId(0, 61), body.id)
+                    // The nested body should be a Struct
+                    if (body.body is TypeDecl.Struct<*>) {
+                        val struct = body.body as TypeDecl.Struct<LocalTypeId>
+                        assertTrue(struct.fields.isNotEmpty(), "Outer struct should have fields")
+                        // Check that the first field's type is an InlineDef
+                        val firstField = struct.fields[0]
+                        assertEquals("inner", firstField.name)
+                        if (firstField.type is TypeDecl.InlineDef<*>) {
+                            val innerInlineDef = firstField.type as TypeDecl.InlineDef<LocalTypeId>
+                            assertEquals(LocalTypeId(0, 62), innerInlineDef.id)
+                            // The inner InlineDef should also wrap a struct
+                            if (innerInlineDef.body is TypeDecl.InlineDef<*>) {
+                                val deeperInlineDef = innerInlineDef.body as TypeDecl.InlineDef<LocalTypeId>
+                                assertEquals(LocalTypeId(0, 63), deeperInlineDef.id)
+                                if (deeperInlineDef.body is TypeDecl.Struct<*>) {
+                                    val innerStruct = deeperInlineDef.body as TypeDecl.Struct<LocalTypeId>
+                                    assertEquals(1, innerStruct.fields.size)
+                                    assertEquals("value", innerStruct.fields[0].name)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
