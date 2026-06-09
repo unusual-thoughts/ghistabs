@@ -23,6 +23,20 @@ class HeaderRegistry(@Transient val sink: DiagnosticSink = DummySink) : Diagnost
             HeaderFile(filename, checksum, originatingCu = cu)
         }
 
+    /**
+     * Retrieves or creates a [HeaderFile] for an N_EXCL (header remount) record.
+     *
+     * Forward EXCL case: if `N_EXCL` is encountered before any CU has processed the corresponding
+     * `N_BINCL`, this method creates a placeholder [HeaderFile] with `originatingCu = null`.
+     * This placeholder is stored ONLY in the calling CU's local [fileNumToHeader] map via the
+     * [IncludeContext.remount] method, NOT in the global [globalByFilenameChecksum] registry.
+     *
+     * When a later CU processes the real `N_BINCL` and calls [getOrInsert], it creates a different
+     * [HeaderFile] instance, causing [GlobalTypeId] divergence. The forward-CU's types are attributed
+     * to the placeholder instance; the real-BINCL CU's types are attributed to the real instance.
+     * This leads to hash collisions in [Harvester.appendAsts] (see stabs-canonicalization.md §6
+     * deviation D1).
+     */
     fun recall(filename: String, checksum: Long): HeaderFile = globalByFilenameChecksum[filename to checksum] ?: run {
         log("forward-excl", "$filename checksum=0x${checksum.toString(16)}")
         HeaderFile(filename, checksum, originatingCu = null)
@@ -35,12 +49,13 @@ class HeaderRegistry(@Transient val sink: DiagnosticSink = DummySink) : Diagnost
 }
 
 /**
- * Maintains per-CU file context: file number → header mapping, include stack tracking,
+ * Maintains per-CU file context: file number → header mapping, include stack tracking.
  *
  * BINCL/EINCL/EXCL handling:
- * - beginInclude: N_BINCL, allocates fileNum, registers/retrieves header globally, pushes stack.
- * - endInclude: N_EINCL, pops stack (no fileNum change).
- * - remount: N_EXCL, allocates fileNum for shared header (or placeholder if forward EXCL).
+ * - [beginInclude]: N_BINCL, allocates fileNum, registers/retrieves header globally, pushes stack.
+ * - [endInclude]: N_EINCL, pops stack (no fileNum change).
+ * - [remount]: N_EXCL, allocates fileNum for shared header (or placeholder if forward EXCL).
+ * - [sourceFor]: converts [LocalTypeId] to [SourceFile] by looking up fileNum in header map.
  */
 @Serializable
 class IncludeContext(
@@ -99,6 +114,20 @@ class IncludeContext(
      */
     internal fun headerForFileNum(fileNum: Int): HeaderFile? = fileNumToHeader[fileNum]
 
+    /**
+     * Returns the [SourceFile] for a [LocalTypeId], handling both CU-level and header-level types.
+     *
+     * Lookup contract:
+     * - If `id.file == 0`, return [CUSource] (CU-level type).
+     * - If `id.file > 0` and a header is registered for this fileNum, return [HeaderSource] wrapping
+     *   the [HeaderFile].
+     * - If `id.file > 0` but the fileNum has no header entry (missing BINCL or forward EXCL case),
+     *   fall back to [CUSource] and log `unknown-header-num`.
+     *
+     * This ensures consistent [GlobalTypeId] formation: two types with the same [LocalTypeId] but
+     * processed in different CUs receive the same [SourceFile] instance if and only if the header
+     * mapping is identical.
+     */
     fun sourceFor(id: LocalTypeId) = when (val header = headerForFileNum(id.file)) {
         null -> {
             // referencing 0 is allowed, it means "current CU"
