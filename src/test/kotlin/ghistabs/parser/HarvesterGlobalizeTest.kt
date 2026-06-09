@@ -1,6 +1,6 @@
 package ghistabs.parser
 
-import ghidra.util.task.ConsoleTaskMonitor
+import ghidra.util.task.TaskMonitor
 import ghistabs.diag.DummySink
 import ghistabs.importer.StabOnlyAddressResolver
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -14,12 +14,12 @@ import org.junit.jupiter.api.Test
  * terminal pass-through, and InlineDef side effects.
  *
  * Tests are pure unit tests (Kind 1): no Program/DataTypeManager/Listing,
- * only ConsoleTaskMonitor, DummySink, and constructed test data.
+ * only TaskMonitor.DUMMY, DummySink, and constructed test data.
  */
 class HarvesterGlobalizeTest {
     private fun createTestHarvester(records: List<StabRecord> = emptyList()): Harvester {
         val harvester = Harvester(
-            monitor = ConsoleTaskMonitor(),
+            monitor = TaskMonitor.DUMMY,
             sink = DummySink,
             resolver = StabOnlyAddressResolver(),
         )
