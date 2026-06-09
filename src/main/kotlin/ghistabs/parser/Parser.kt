@@ -457,6 +457,7 @@ class Parser(src: String) {
         val kind = when (val kindChar = c.advance()) {
             's' -> AggrKind.STRUCT
             'u' -> AggrKind.UNION
+            'e' -> AggrKind.ENUM
             'c', 'Y' -> AggrKind.CLASS
             else -> throw StabsParseException(c.pos - 1, c.src, "unknown cross-ref kind '$kindChar'")
         }
