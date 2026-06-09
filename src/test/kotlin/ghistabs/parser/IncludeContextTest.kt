@@ -176,4 +176,30 @@ class IncludeContextTest {
             "C1 fix: sourceFor for same (filename, checksum) must yield equal SourceFile across CUs",
         )
     }
+
+    @Test
+    fun `BINCL re-entry for same header produces same HeaderFile instance`() {
+        val registry = HeaderRegistry()
+        val ctx = IncludeContext(SourceFile.CUSource("test.c"), sink, registry)
+
+        val fn1 = ctx.beginInclude("hdr.h", 0xABCD)
+        ctx.endInclude()
+        val fn2 = ctx.beginInclude("hdr.h", 0xABCD)
+        ctx.endInclude()
+
+        // Two fileNums were allocated
+        assertTrue(fn1 != fn2, "Re-entry should allocate two distinct fileNums")
+
+        // Both map to the same HeaderFile instance
+        val h1 = ctx.headerForFileNum(fn1)
+        val h2 = ctx.headerForFileNum(fn2)
+        assertNotNull(h1)
+        assertNotNull(h2)
+        assertTrue(h1 === h2, "Same (filename, checksum) should resolve to same HeaderFile instance")
+
+        // Types via either fileNum produce the same GlobalTypeId
+        val id1 = ctx.sourceFor(LocalTypeId(fn1, 7))
+        val id2 = ctx.sourceFor(LocalTypeId(fn2, 7))
+        assertEquals(id1, id2, "Same fileNum type should produce equal GlobalTypeId")
+    }
 }
