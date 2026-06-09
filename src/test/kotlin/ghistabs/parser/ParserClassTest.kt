@@ -183,4 +183,86 @@ class ParserClassTest {
         )
         assertEquals(expected, Parser(input).parseSymbol())
     }
+
+    @Test
+    fun testMethodNoParametersVoidSentinel() {
+        // Method with implicit this but no explicit parameters.
+        // Format: #<cls>,<ret>; (no comma after ret type signals no params)
+        // stabs PDF §8.5 "Member Functions"
+        val input = "Base:T(0,20)=s4method::(0,21)=#(0,20),(0,1);:_ZN4Base6methodEv;2A.;;"
+        val expected = SymbolDecl.TaggedType(
+            name = "Base",
+            id = LocalTypeId(0, 20),
+            type = TypeDecl.Struct(
+                kind = AggrKind.STRUCT,
+                sizeBytes = 4,
+                bases = emptyList(),
+                fields = emptyList(),
+                methods = listOf(
+                    MethodDecl(
+                        name = "method",
+                        mangled = "_ZN4Base6methodEv",
+                        signature = TypeDecl.InlineDef(
+                            id = LocalTypeId(0, 21),
+                            body = TypeDecl.Method(
+                                cls = TypeDecl.Ref(LocalTypeId(0, 20)),
+                                ret = TypeDecl.Ref(LocalTypeId(0, 1)),
+                                params = emptyList(), // No explicit parameters; implicit this is in cls
+                            ),
+                        ),
+                        access = Access.PUBLIC,
+                        virt = VirtKind.NORMAL,
+                        isConst = false,
+                        isVolatile = false,
+                        vtableOffsetBits = null,
+                    ),
+                ),
+                hasVTablePointerMarker = false,
+                vtableTargetTypeId = null,
+            ),
+        )
+        assertEquals(expected, Parser(input).parseSymbol())
+    }
+
+    @Test
+    fun testMethodImplicitThisPointer() {
+        // Method with implicit this pointer represented as the cls field.
+        // The cls field (TypeDecl.Ref(LocalTypeId(0,20))) is a pointer to the containing class,
+        // representing the implicit this argument.
+        // stabs PDF §8.5 "Member Functions" notes implicit this as first argument.
+        // This test verifies that cls is set correctly to the containing class type.
+        val input = "Derived:T(0,30)=s8vmethod::(0,31)=#(0,30),(0,1),(0,2);:_ZN7Derived7vmethodEi;2A*0;(0,30);;;"
+        val expected = SymbolDecl.TaggedType(
+            name = "Derived",
+            id = LocalTypeId(0, 30),
+            type = TypeDecl.Struct(
+                kind = AggrKind.STRUCT,
+                sizeBytes = 8,
+                bases = emptyList(),
+                fields = emptyList(),
+                methods = listOf(
+                    MethodDecl(
+                        name = "vmethod",
+                        mangled = "_ZN7Derived7vmethodEi",
+                        signature = TypeDecl.InlineDef(
+                            id = LocalTypeId(0, 31),
+                            body = TypeDecl.Method(
+                                cls = TypeDecl.Ref(LocalTypeId(0, 30)), // Implicit this: pointer to Derived
+                                ret = TypeDecl.Ref(LocalTypeId(0, 1)),
+                                params = listOf(TypeDecl.Ref(LocalTypeId(0, 2))), // Explicit parameter
+                            ),
+                        ),
+                        access = Access.PUBLIC,
+                        virt = VirtKind.VIRTUAL,
+                        isConst = false,
+                        isVolatile = false,
+                        vtableOffsetBits = 0L,
+                    ),
+                ),
+                hasVTablePointerMarker = false,
+                vtableTargetTypeId = null,
+            ),
+        )
+        assertEquals(expected, Parser(input).parseSymbol())
+    }
 }
