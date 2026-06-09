@@ -285,11 +285,6 @@ class Harvester(
 
     private fun harvestSymbol(rec: StabRecord, onError: () -> Unit) {
         try {
-            // Canonicalise the symbol's TypeDecl exactly like N_LSYM TaggedType/Typedef
-            // bodies. Without this, e.g. an N_GSYM `BranchInstructions:G(1,1103)=ar(1,4);0;15;(148,3)`
-            // walks the typeAsts map looking for `(148,3)` — but `(148, 3)` is a raw
-            // local file ID that has no entry: the matching typeAst was registered
-            // under its canonical (48, 3) key. The global ends up untyped.
             val decl = parseSymbol(rec)
             symbolsByCu.getOrPut(currentCu!!.filename) { mutableListOf() } += HarvestedSymbol(
                 decl,
@@ -388,14 +383,14 @@ class Harvester(
                 val exHash = mapOf(ex.name to ex.body.hashCode())
                 val newHash = new[id]!!.associate { it.name to it.body.hashCode() }
                 if (exHash == newHash) {
-                    log("ast-id-collision-same-hash", "$exHash == $newHash")
+                    log("ast-id-collision-same-hash")
                 } else {
                     log("ast-id-collision", "$exHash != $newHash")
-                }
-                collidingAsts.getOrPut(id, { mutableMapOf() }).getOrPut(ex.name, { mutableSetOf() }).add(ex.body)
-
-                for (ex in new[id]!!) {
                     collidingAsts.getOrPut(id, { mutableMapOf() }).getOrPut(ex.name, { mutableSetOf() }).add(ex.body)
+                    for (ex in new[id]!!) {
+                        collidingAsts.getOrPut(id, { mutableMapOf() }).getOrPut(ex.name, { mutableSetOf() })
+                            .add(ex.body)
+                    }
                 }
             }
         }
