@@ -1,6 +1,6 @@
 package ghistabs.parser
 
-import ghidra.util.task.ConsoleTaskMonitor
+import ghidra.util.task.TaskMonitor
 import ghistabs.diag.DummySink
 import ghistabs.importer.StabOnlyAddressResolver
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -14,12 +14,12 @@ import org.junit.jupiter.api.Test
  * hash-differing first-writer-wins, and same-type-twice behavior.
  *
  * Tests are pure unit tests (Kind 1): no Program/DataTypeManager/Listing,
- * only ConsoleTaskMonitor, DummySink, and constructed test data.
+ * only TaskMonitor.DUMMY, DummySink, and constructed test data.
  */
 class HarvesterAppendAstsTest {
     private fun createTestHarvester(records: List<StabRecord> = emptyList()): Harvester {
         val harvester = Harvester(
-            monitor = ConsoleTaskMonitor(),
+            monitor = TaskMonitor.DUMMY,
             sink = DummySink,
             resolver = StabOnlyAddressResolver(),
         )
@@ -40,6 +40,7 @@ class HarvesterAppendAstsTest {
     @Test
     fun testXRefReplacedByConcreteDefinition() {
         val cuName = "cu.c"
+        // N_SO record establishes CU context; not needed by appendAsts() but kept for structural consistency
         val records = listOf(
             StabRecord(
                 recordIndex = 0,
@@ -60,7 +61,7 @@ class HarvesterAppendAstsTest {
             name = "Foo",
             body = TypeDecl.XRef(kind = AggrKind.STRUCT, tagName = "Foo"),
         )
-        val concreteStuct = TypeDecl.Struct(
+        val concreteStruct = TypeDecl.Struct(
             kind = AggrKind.STRUCT,
             sizeBytes = 16L,
             bases = emptyList(),
@@ -81,7 +82,7 @@ class HarvesterAppendAstsTest {
             cu = SourceFile.CUSource(cuName),
             id = globalId,
             name = "Foo",
-            body = concreteStuct,
+            body = concreteStruct,
         )
 
         // Append XRef first, then concrete definition
@@ -113,6 +114,7 @@ class HarvesterAppendAstsTest {
     @Test
     fun testSameHashSuppression() {
         val cuName = "cu.c"
+        // N_SO record establishes CU context; not needed by appendAsts() but kept for structural consistency
         val records = listOf(
             StabRecord(
                 recordIndex = 0,
@@ -176,6 +178,7 @@ class HarvesterAppendAstsTest {
     @Test
     fun testHashDifferingFirstWriterWins() {
         val cuName = "cu.c"
+        // N_SO record establishes CU context; not needed by appendAsts() but kept for structural consistency
         val records = listOf(
             StabRecord(
                 recordIndex = 0,
@@ -278,6 +281,7 @@ class HarvesterAppendAstsTest {
     @Test
     fun testSameTypeTwiceFromSameCU() {
         val cuName = "cu.c"
+        // N_SO record establishes CU context; not needed by appendAsts() but kept for structural consistency
         val records = listOf(
             StabRecord(
                 recordIndex = 0,
