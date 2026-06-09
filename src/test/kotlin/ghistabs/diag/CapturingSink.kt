@@ -2,14 +2,11 @@ package ghistabs.diag
 
 import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Program
-import ghidra.util.task.ConsoleTaskMonitor
 import ghidra.util.task.TaskMonitor
 import ghistabs.StabsOptions
 import ghistabs.builder.TypeRegistry
 import ghistabs.builder.TypeResolver
 import ghistabs.importer.ImportContext
-import ghistabs.parser.Harvester
-import ghistabs.parser.StabRecord
 
 /**
  * Pure Kotlin test double that captures log() calls into a list.
@@ -37,24 +34,8 @@ class CapturingSink : DiagnosticSink {
         .mapValues { it.value.toLong() }
 }
 
-fun Program.defaultContext() = ImportContext(this, CapturingSink(), ConsoleTaskMonitor(), StabsOptions())
+fun Program.defaultContext() = ImportContext(this, CapturingSink(), TaskMonitor.DUMMY, StabsOptions())
 fun ImportContext<*>.defaultTypeRegistry(): TypeRegistry {
     val typeResolver = TypeResolver(mapOf())
     return TypeRegistry(dtm, sink, diagnostics, typeResolver)
-}
-
-/**
- * Create a test Harvester with minimal dependencies.
- * Kind 1 pure unit test: uses TaskMonitor.DUMMY_MONITOR and DummySink.
- * Optional records are pre-seeded via preSeedHeaders() to establish CU context
- * before calling globalize().
- */
-fun ImportContext<*>.defaultHarvester(records: List<StabRecord> = emptyList()): Harvester {
-    val h = Harvester(
-        monitor = TaskMonitor.DUMMY_MONITOR,
-        sink = DummySink,
-        resolver = resolver,
-    )
-    h.preSeedHeaders(records)
-    return h
 }
