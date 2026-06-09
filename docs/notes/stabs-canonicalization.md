@@ -296,7 +296,7 @@ Consider a struct field whose type is `Ref(3, 12)` (reference to type 12 in file
 
 **CU2 (forward EXCL before BINCL):**
 - Processes `N_EXCL header.h` with checksum C before any BINCL has been seen.
-- `headerRegistry.recall("header.h", C)` creates placeholder `HeaderFile(name="header.h", checksum=C, originatingCu=null)` (NOT in global registry).
+- `headerRegistry.recall("header.h", C)` creates placeholder `HeaderFile(name="header.h", checksum=C, originatingCu=null)` (see also `IncludeContext.recall` KDoc — currently disagrees with the implementation; resolved in Phase 4) (NOT in global registry).
 - `fileNumToHeader[2] = HeaderFile_placeholder` (note: different fileNum, different instance).
 - Struct field `Ref(2, 12)` globalizes via `sourceFor((2, 12))` → `HeaderSource(HeaderFile_placeholder)` → `GlobalTypeId(HeaderSource(HeaderFile_placeholder), 12)`.
 
@@ -379,7 +379,7 @@ A forward EXCL occurs when a CU encounters `N_EXCL` for a header `(filename, che
 
 Option 1 is closest to GDB and easiest to implement.
 
-**Source:** **gdb/stabsread.c** `add_old_header_file()` (lines 413–438), `add_new_header_file()` (lines 390–410); **ghistabs/parser/IncludeContext.kt** `HeaderRegistry.recall()`; **stabs PDF** §7.1 ("Include Files").
+**Source:** **gdb/stabsread.c** `add_old_header_file()`, `add_new_header_file()`; **ghistabs/parser/IncludeContext.kt** `HeaderRegistry.recall()`; **stabs PDF** §7.1 ("Include Files").
 
 ---
 
@@ -398,8 +398,8 @@ Option 1 is closest to GDB and easiest to implement.
 - **GDB stabsread.c** (GDB source tree, versions 5.x–8.x):
   - `define_symbol()` - Symbol-level dispatch
   - `read_type()` - Type descriptor recursion
-  - `add_new_header_file()` (lines 390–410) - Create new header entry
-  - `add_old_header_file()` (lines 413–438) - Reuse or create placeholder header entry
+  - `add_new_header_file()` - Create new header entry
+  - `add_old_header_file()` - Reuse or create placeholder header entry
   - `this_object_header_files[]` - Per-CU header file array (declared near top of file)
   - `start_symtab()` / `end_symtab()` - CU open/close
 
