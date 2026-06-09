@@ -16,21 +16,21 @@ This section maps each N_* record type to its semantic role in the stabs namespa
 
 ### Record Types: Namespace and Type Carriers
 
-| N_* Type | Segment | Carries Type String | Format | Semantics |
-|----------|---------|---------------------|--------|-----------|
-| `N_SO` | STAB_DESC_COMP_UNIT | No | `name` (pathname) | Opens compilation unit. Allocates `fileNum=0` context. Addressed to the first `text` address in the CU. |
-| `N_BINCL` | STAB_DESC_INCLUDE_BEGIN | No | `name` (header filename) | Opens header inclusion block. Allocates new `fileNum ≥ 1`. Linker computes checksum; deduplication key is `(filename, checksum)`. |
-| `N_EINCL` | STAB_DESC_INCLUDE_END | No | (empty) | Closes header block. No fileNum change. Marks end of stabs attributed to current header. |
-| `N_EXCL` | STAB_DESC_INCLUDE_EXCL | No | `name` (header filename) | **Linker-transformed BINCL**: remounts previously-seen header (identified by name+checksum). No stabs follow; fileNum re-established locally. Signals to GDB: "types from this header were in a prior CU." |
-| `N_SOL` | STAB_DESC_SOURCE | No | `name` (source file) | Source-line directive (for debugger's line-to-address map). Does NOT allocate fileNum; does NOT affect type attribution. |
-| `N_GSYM` | STAB_DESC_GSYM | Yes | `name:SC=type_expr` | Global symbol (external variable). Type string provides type. |
-| `N_LSYM` | STAB_DESC_LSYM | Yes | `name:SC(cu,n)=type_expr` | Local symbol (automatic variable, local static, type definition). Inline body defines type. |
-| `N_STSYM` | STAB_DESC_STSYM | Yes | `name:SC(cu,n)=type_expr` | Static symbol (function-static or file-static variable). Type string provides type. |
-| `N_PSYM` | STAB_DESC_PSYM | Yes | `name:SC(cu,n)=type_expr` | Parameter symbol (function parameter). Type string provides type. |
-| `N_RSYM` | STAB_DESC_RSYM | Yes | `name:SC(cu,n)=type_expr` | Register symbol (parameter/local in register). Type string provides type. |
-| `N_FUN` | STAB_DESC_FUN | Yes | `name:SC(cu,n)=type_expr` | Function symbol. Type string (if non-empty) provides return type and parameter types. |
+| N_* Type | Carries Type String | Format | Semantics |
+|----------|---------------------|--------|-----------|
+| `N_SO` | No | `name` (pathname) | Opens compilation unit. Allocates `fileNum=0` context. Addressed to the first `text` address in the CU. |
+| `N_BINCL` | No | `name` (header filename) | Opens header inclusion block. Allocates new `fileNum ≥ 1`. Linker computes checksum; deduplication key is `(filename, checksum)`. |
+| `N_EINCL` | No | (empty) | Closes header block. No fileNum change. Marks end of stabs attributed to current header. |
+| `N_EXCL` | No | `name` (header filename) | **Linker-transformed BINCL**: remounts previously-seen header (identified by name+checksum). No stabs follow; fileNum re-established locally. Signals to GDB: "types from this header were in a prior CU." |
+| `N_SOL` | No | `name` (source file) | Source-line directive (for debugger's line-to-address map). Does NOT allocate fileNum; does NOT affect type attribution. |
+| `N_GSYM` | Yes | `name:SC=type_expr` | Global symbol (external variable). Type string provides type. |
+| `N_LSYM` | Yes | `name:SC(cu,n)=type_expr` | Local symbol (automatic variable, local static, type definition). Inline body defines type. |
+| `N_STSYM` | Yes | `name:SC(cu,n)=type_expr` | Static symbol (function-static or file-static variable). Type string provides type. |
+| `N_PSYM` | Yes | `name:SC(cu,n)=type_expr` | Parameter symbol (function parameter). Type string provides type. |
+| `N_RSYM` | Yes | `name:SC(cu,n)=type_expr` | Register symbol (parameter/local in register). Type string provides type. |
+| `N_FUN` | Yes | `name:SC(cu,n)=type_expr` | Function symbol. Type string (if non-empty) provides return type and parameter types. |
 
-**Source:** stabs PDF §2 ("Symbol Types"); **gdb/stabsread.c** `define_symbol()` dispatch on descriptor letter (~line 700 in GCC-3.4.4 era).
+**Source:** stabs PDF §2 ("Symbol Types"); **gdb/stabsread.c** `define_symbol()`.
 
 ### Type Expression Nesting
 
@@ -42,19 +42,21 @@ Type expressions are composed from atomic descriptors (e.g., `*` for pointer, `a
 - **Inline definitions:** `(cu,n)=body` nests a full type definition within a field or array bounds expression.
 - **Cross-references (forward refs):** `x<kind><name>:` where kind ∈ {s, u, c, Y} names an incomplete type by tag.
 
-**Source:** stabs PDF §4 ("Type Definitions"); **gdb/stabsread.c** `read_type()` dispatch (~line 2000).
+**Source:** stabs PDF §4 ("Type Definitions"); **gdb/stabsread.c** `read_type()`.
 
 ### Continuation Lines
 
-Stab strings are truncated at `STAB_LINE_MAX` characters (typically 4096). When a type definition exceeds this limit, the stab string is split across multiple records with a continuation marker.
+When a stab string in a type-carrying record exceeds the compiler's line-length limit, it is split across multiple physical records. Continuation records reuse the same N_* type code as the original record; they do not use a separate `N_CONT` descriptor.
 
-- **Format:** First record's name-string ends with `\` (backslash).
-- **Subsequent records:** N_CONT descriptor (code `0x90`) carries the continuation, with name-string being the next chunk.
-- **Concatenation:** The parser reassembles by joining the chunks at the backslash boundary.
+- **Format:** A type-carrying record whose name-string ends with `\` (backslash) signals that the next physical record(s) continue the same name string.
+- **Continuation records:** Subsequent physical records with the same N_* type are treated as continuations. The `\` is stripped, and the continuation record's name-string is concatenated to the original.
+- **Concatenation:** The parser reassembles by dropping the trailing `\` and appending the next record's name-string, repeating until a record does not end with `\`.
 
-**Implication:** `Parser.kt` must handle stab records with descriptor `N_CONT` and accumulate continuations before dispatching to type parsing.
+**Eligible types:** Only certain N_* types support continuation: `N_GSYM`, `N_FUN`, `N_STSYM`, `N_LCSYM`, `N_RSYM`, `N_LSYM`, `N_PSYM` (as defined in `Stabs.kt:TYPES_WITH_CONTINUATION`).
 
-**Source:** stabs PDF §2.1 ("String Table Handling"); **gdb/stabsread.c** continuation handling in `read_type_string()`.
+**Implication:** `Parser.kt` must accumulate continuations during stab reading, merging them before parsing the complete type string.
+
+**Source:** **Stabs.kt** lines 294–428 (continuation merging logic and `TYPES_WITH_CONTINUATION` set definition).
 
 ---
 
@@ -93,11 +95,11 @@ An `N_EXCL` record (appearing after linking) remounts a previously-seen header b
 - **Our model:** `remount(filename, checksum)` allocates a new `fileNum` and stores the SAME `HeaderFile` instance (retrieved by looking up `(filename, checksum)` in `HeaderRegistry.globalByFilenameChecksum`) in the per-CU map. Types in this CU attributed to this `fileNum` thus share identical `GlobalTypeId`s with types in earlier CUs that BINCL'd the same header.
 - **No stabs follow:** The EXCL record carries only the filename. No type definitions appear after EXCL.
 
-**Deviation:** If an `N_EXCL` appears before any CU has processed the corresponding `N_BINCL`, `HeaderRegistry.recall()` creates a **placeholder** `HeaderFile` with `originatingCu = null`. This placeholder is stored locally in `fileNumToHeader` but NOT in the global registry. When a later CU processes the real BINCL, it allocates a NEW `HeaderFile` instance. This divergence causes `GlobalTypeId` collisions (see Section 4).
+**Deviation:** If an `N_EXCL` appears before any CU has processed the corresponding `N_BINCL`, `HeaderRegistry.recall()` creates a **placeholder** `HeaderFile` with `originatingCu = null` (see also `IncludeContext.recall` KDoc — currently disagrees with the implementation; resolved in Phase 4). This placeholder is stored locally in `fileNumToHeader` but NOT in the global registry. When a later CU processes the real BINCL, it allocates a NEW `HeaderFile` instance. This divergence causes `GlobalTypeId` collisions (see Section 4).
 
 **Implication:** The log message "forward-excl" marks this case for audit purposes.
 
-**Source:** **gdb/stabsread.c** `add_old_header_file()` (lines 413–438); **ghistabs/parser/IncludeContext.kt** `HeaderRegistry`.
+**Source:** **gdb/stabsread.c** `add_old_header_file()`; **ghistabs/parser/IncludeContext.kt** `HeaderRegistry`.
 
 ### Source-Line Directive (SOL)
 
@@ -169,7 +171,7 @@ GDB uses `this_object_header_files[]`, a per-CU array indexed by `fileNum`:
 
 Our model is structurally equivalent, with `HeaderRegistry.globalByFilenameChecksum` playing the role of GDB's global table, and `fileNumToHeader` playing the role of `this_object_header_files[]`.
 
-**Source:** **gdb/stabsread.c** `this_object_header_files[]` declaration, `add_new_header_file()` (lines 390–410), `add_old_header_file()` (lines 413–438); **ghistabs/parser/IdInterface.kt**, **ghistabs/parser/IncludeContext.kt**.
+**Source:** **gdb/stabsread.c** `this_object_header_files[]`, `add_new_header_file()`, `add_old_header_file()`; **ghistabs/parser/IdInterface.kt**, **ghistabs/parser/IncludeContext.kt**.
 
 ---
 
@@ -187,7 +189,7 @@ Before linking, each object file's stab section contains multiple BINCL/EINCL pa
 
 2. **Deduplication (BFD):** After checksumming, iterate through all CUs. For each BINCL with checksum C and filename F:
    - If this is the FIRST occurrence of `(F, C)`, keep the BINCL and its stabs.
-   - If a previous BINCL had the SAME `(F, C)`, convert this BINCL to EXCL (marker `0x84`), suppress its stabs, and write the checksum into the EXCL record.
+   - If a previous BINCL had the SAME `(F, C)`, convert this BINCL to EXCL, suppress its stabs, and write the checksum into the EXCL record.
    - **Spec:** bfd/stabs.c lines 391–438.
    - **Outcome:** In the final linked binary, each unique `(filename, checksum)` pair appears as exactly one BINCL block; subsequent inclusions are marked EXCL.
 
@@ -208,7 +210,7 @@ Our `HeaderRegistry` mimics GDB's dedup table:
 
 **`appendAsts()` collision policy:**
 
-- **Same GlobalTypeId, same content hash:** Suppress (silent dedup). The type is already in the collection.
+- **Same GlobalTypeId, same content hash:** Logged as `ast-id-collision-same-hash` and deduplicated. The type is already in the collection.
 - **Same GlobalTypeId, different content hash:** Log the collision with details (file, type index, both hashes) in `collidingAsts` map. Apply first-writer-wins: retain the existing body, discard the new one.
 - **Different GlobalTypeId:** Always add both to the collection.
 
@@ -218,7 +220,7 @@ Our `HeaderRegistry` mimics GDB's dedup table:
 
 The xapasmcsr binary (CSR XAP assembler, circa 2005) exhibits 207 collision log lines involving `GlobalTypeId` pairs with the same ID but different content hashes.
 
-**Root cause (per design audit):** Nested `Ref` types inside struct fields whose resolved hash diverges across CUs. Example:
+**Root cause (per design audit):** Nested `Ref` types inside struct fields whose resolved hash diverges across CUs. The following example uses illustrative fileNums; actual fileNums depend on the number of prior BINCL records in each CU.
 
 - CU1 includes header H via BINCL.
   - Struct S (in H) has field `f: Ref(file=1, n=42)`.
@@ -241,7 +243,7 @@ The xapasmcsr binary (CSR XAP assembler, circa 2005) exhibits 207 collision log 
 
 **`collidingAsts` map:** Keyed by `GlobalTypeId`, stores the list of hashes that collided. Populated by `appendAsts()` when a conflict is detected. Its downstream consumer status is not yet clear; see Section 7 for the audit.
 
-**Source:** **bfd/stabs.c** `_bfd_link_section_stabs()` (entire function); **gdb/stabsread.c** `add_old_header_file()` (lines 413–438); **ghistabs/parser/Harvest.kt** `appendAsts()`; integration log `src/test/resources/logs/xapasmcsr.after.log` (collision lines); harvest JSON `src/test/resources/harvests/xapasmcsr-harvest.json` (`collidingAsts` field).
+**Source:** **bfd/stabs.c** `_bfd_link_section_stabs()`; **gdb/stabsread.c** `add_old_header_file()`; **ghistabs/parser/Harvest.kt** `appendAsts()`; integration log `src/test/resources/logs/xapasmcsr.after.log` (collision lines); harvest JSON `src/test/resources/harvests/xapasmcsr-harvest.json` (`collidingAsts` field).
 
 ---
 
@@ -284,7 +286,7 @@ After globalization, `walkDefinitions()` performs a second pass through the tree
 
 ### Deep Nesting Example
 
-Consider a struct field whose type is `Ref(3, 12)` (reference to type 12 in fileNum 3, a header):
+Consider a struct field whose type is `Ref(3, 12)` (reference to type 12 in fileNum 3, a header). Note: fileNums in this example are illustrative and differ from the Section 4 example; actual fileNums depend on the number of prior BINCL records in each CU.
 
 **CU1 (correct BINCL):**
 - Processes `N_BINCL header.h` with checksum C, allocating fileNum 3.
@@ -314,7 +316,7 @@ GDB resolves type references lazily using `read_type()`:
 
 **Our model:** We resolve eagerly (at globalize time), replacing `LocalTypeId` with `GlobalTypeId` upfront. This means forward-EXCL divergence manifests as hash collisions rather than unresolved refs. The trade-off is that all types must be parsed before globalization, but deduplication is deterministic.
 
-**Source:** **gdb/stabsread.c** `read_type()` (lines 1900–2200), `read_struct_fields()` (lines 3200–3350); **ghistabs/parser/Harvest.kt** `globalize()` (recursive descent), `walkDefinitions()` (side-effect collection).
+**Source:** **gdb/stabsread.c** `read_type()`, `read_struct_fields()`; **ghistabs/parser/Harvest.kt** `globalize()` (recursive descent), `walkDefinitions()` (side-effect collection).
 
 ---
 
@@ -341,7 +343,7 @@ A `TypeDecl.XRef(kind, tag)` is emitted when a type expression is:
 
 **Implication:** The order of processing matters: if a full definition arrives before an XRef, the XRef will not be created (since there's nothing to place-hold). If an XRef arrives first, it is retained until superseded by a definition.
 
-**Source:** stabs PDF §4.6 ("Cross-References"); **gdb/stabsread.c** `read_cross_ref()` (lines 2950–3000).
+**Source:** stabs PDF §4.6 ("Cross-References"); **gdb/stabsread.c** `read_type()`.
 
 ### Forward EXCL Before BINCL
 
@@ -362,7 +364,7 @@ A forward EXCL occurs when a CU encounters `N_EXCL` for a header `(filename, che
 
 **Our approach (no patching):**
 
-- `HeaderRegistry.recall()` creates a placeholder `HeaderFile(filename, checksum, originatingCu=null)` and stores it ONLY in the local `fileNumToHeader` map.
+- `HeaderRegistry.recall()` creates a placeholder `HeaderFile(filename, checksum, originatingCu=null)` (see also `IncludeContext.recall` KDoc — currently disagrees with the implementation; resolved in Phase 4) and stores it ONLY in the local `fileNumToHeader` map.
 - The placeholder is NOT added to `globalByFilenameChecksum`.
 - When `HeaderRegistry.getOrInsert()` processes the real BINCL in a later CU, it looks up `(filename, checksum)` in the global table. Since the placeholder was never added, a NEW `HeaderFile` instance is created and stored.
 - The earlier CU's types are attributed to the placeholder instance; later CU's types are attributed to the real instance → **divergent GlobalTypeIds** → **hash collisions in `appendAsts()`**.
@@ -401,14 +403,14 @@ Option 1 is closest to GDB and easiest to implement.
   - `this_object_header_files[]` - Per-CU header file array (declared near top of file)
   - `start_symtab()` / `end_symtab()` - CU open/close
 
-- **GCC dbxout.c** (GCC source tree, 3.x–4.x era):
-  - `dbxout_type()` - Type emission
-  - Continuation line handling in type string emission
-
 - **ghistabs codebase:**
-  - **ghistabs/parser/IdInterface.kt** - `LocalTypeId`, `GlobalTypeId`, `SourceFile` definitions
-  - **ghistabs/parser/IncludeContext.kt** - `HeaderRegistry`, `HeaderFile`, `sourceFor()` contract
-  - **ghistabs/parser/Harvest.kt** - `globalize()`, `walkDefinitions()`, `appendAsts()`
+  - **Stabs.kt** lines 294–428: `TYPES_WITH_CONTINUATION` set and continuation record merging logic
+  - **ghistabs/parser/IdInterface.kt**: `LocalTypeId`, `GlobalTypeId`, `SourceFile` definitions
+  - **ghistabs/parser/IncludeContext.kt** line 26: `recall()` method for forward-EXCL placeholder creation
+  - **ghistabs/parser/IncludeContext.kt** line 64: `beginInclude()` method for header block allocation
+  - **ghistabs/parser/Harvest.kt** line 333: `globalize()` recursive descent through type trees
+  - **ghistabs/parser/Harvest.kt** line 375: `walkDefinitions()` traversal collecting emitted TypeAsts
+  - **ghistabs/parser/Harvest.kt** line 402: `appendAsts()` collision policy and deduplication
   - **src/test/resources/logs/xapasmcsr.after.log** - 207 collision log lines (xapasmcsr binary)
   - **src/test/resources/harvests/xapasmcsr-harvest.json** - `collidingAsts` map from same binary
 
