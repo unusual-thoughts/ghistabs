@@ -383,6 +383,107 @@ Option 1 is closest to GDB and easiest to implement.
 
 ---
 
+## Section 7: Untouched Algorithm Parts
+
+This section documents code paths and logic not modified by commits `3f2e566..3a40357`. The goal is to flag staleness relative to the new `SourceFile` model and note vestigial code.
+
+### 7.1 Attribution.categoryFor() and AttributionTraceDump
+
+The `Attribution.categoryFor()` method (**src/main/kotlin/ghistabs/builder/Attribution.kt**) routes types to Ghidra categories (namespaces) given a type name and the set of source files defining it. The routing decision tree:
+
+1. **PROJECT_OVERRIDE_NAMES**: Hard-coded set of type names → `/proj/` category regardless of source.
+2. **STD_MARKERS regex**: Any source matching `STD_MARKERS` pattern → stdlib category.
+3. **Single CUSource**: If exactly one source and it's a `CUSource`, derive category from the CU filename.
+4. **Clean multi-CU name**: Multiple CU sources but a "clean" name (no special chars) → `/headers-untracked/<name>.h`.
+5. **Multi-CU fallback**: Otherwise → `/<canonicalCu>/instantiations`.
+
+**Known staleness:** The four refactor commits introduced `HeaderSource` as a new `SourceFile` variant, but `categoryFor()` was not updated to treat `HeaderSource` distinctly from `CUSource`. A `HeaderSource` falls through to the multi-CU heuristic branch (step 5) rather than a dedicated header-aware route. This produces `/headers-untracked/` or `/instantiations/` categories for header-attributed types instead of a clearer `/headers/<filename_without_ext>/` path.
+
+**Diagnostic companion:** `AttributionTraceDump` (**src/main/kotlin/ghistabs/diag/AttributionTraceDump.kt**) logs the routing decision for each type. Its downstream consumer in `TypeRegistry` or elsewhere was not audited by the four commits.
+
+**Deviation rating:** D2 (incomplete) — `categoryFor()` ignores `HeaderSource` as a distinct case.
+
+### 7.2 preSeedHeaders() Two-Pass Rationale
+
+The `preSeedHeaders()` method (**src/main/kotlin/ghistabs/parser/Harvest.kt** lines 104–124) scans the stab stream for `N_SO`, `N_BINCL`, `N_EINCL`, and `N_EXCL` records, building `IncludeContext` for each CU and populating `includesByFile` before `passA()` processes any types.
+
+**Rationale:** `passA()` processes records in order and needs the `IncludeContext` (with its `fileNumToHeader` mapping) to be established for each CU before encountering the first type symbol in that CU. If types were processed before all BINCL/EINCL/EXCL records had been seen, a forward EXCL (N_EXCL appearing before the real N_BINCL) would leave a temporary placeholder that might not match the real header when it arrives later.
+
+Pre-seeding ensures a stable `IncludeContext` per CU upfront, avoiding the need to re-process types when mappings change.
+
+**Known issue:** The pre-seeding approach avoids repeated re-processing but does not fully solve the forward-EXCL divergence (see Section 6). Forward EXCLs still create placeholder `HeaderFile`s that don't get patched when the real BINCL arrives, producing different `GlobalTypeId`s.
+
+**Deviation rating:** D3 (incomplete) — pre-seeding defers the forward-EXCL issue rather than fixing it.
+
+### 7.3 walkDefinitions() InlineDef Naming
+
+The `walkDefinitions()` method (**src/main/kotlin/ghistabs/parser/Harvest.kt** lines 375–400) traverses a `TypeDecl` tree and emits `TypeAst` nodes for any `InlineDef` bodies found. When `walkDefinitions()` encounters an `InlineDef(localId, body)`, it emits a `TypeAst` with name `"${decl.id}"` (the string representation of the `GlobalTypeId`, e.g., `[<HeaderSource>,42]` for an anonymous type).
+
+**Rationale:** Anonymous types in stabs have no textual name in the grammar; the name is synthesized from the type ID itself.
+
+**Note:** This naming convention is not derived from the stabs spec — the spec has no concept of a global name for anonymous types. The choice to use the ID as a name is an implementation convention, not spec-grounded.
+
+**Deviation rating:** D4 (correct / convention) — anonymous `TypeAst` naming from `walkDefinitions()` is a local convention not spec-grounded, but it is correct.
+
+### 7.4 rawByIdSnapshot Field
+
+The `typeAsts` field in `Harvest` (**src/main/kotlin/ghistabs/parser/Ast.kt** lines 65–74) is the live collection of `TypeAst` objects indexed by `GlobalTypeId`. There is no `rawByIdSnapshot` field in the current codebase; it may have existed in a prior version or been removed.
+
+**Open question (from TODO.md line 32):** "Is rawByIdSnapshot used anywhere downstream?" If this field existed and is no longer present, that is a closed question. If the equivalent functionality now lives elsewhere (e.g., as a computed property), the name and purpose should be documented.
+
+**Deviation rating:** D5 (vestigial or removed) — no current consumer identified.
+
+---
+
+## Section 8: Commit Review and Deviation Table
+
+### 8.1 Model Introduced
+
+The refactor commits `3f2e566..3a40357` introduced a new type-ID and deduplication model replacing the prior approach:
+
+**Old approach:** Types were deduplicated by some heuristic (described in commit messages as "stupid canonicalization"); the exact mechanism is not documented in the current codebase.
+
+**New model:**
+- **LocalTypeId(file, n)** — Stream-local type identifier within a CU's stab stream; file is the fileNum (0 for CU-level, ≥1 for BINCL blocks).
+- **GlobalTypeId(source, n)** — Cross-CU global identifier formed by replacing the file component with a `SourceFile` object (either `CUSource` or `HeaderSource`).
+- **SourceFile sealed class** — Two variants:
+  - `CUSource(filename)` — Represents a single CU; each CU gets one instance.
+  - `HeaderSource(HeaderFile)` — Represents a header file; multiple CUs may share the same `HeaderFile` instance if they include the same header.
+- **HeaderFile(filename, checksum, originatingCu)** — The dedup key for headers; `(filename, checksum)` uniquely identifies header contents (post-linking), and `originatingCu` tracks which CU first defined the header.
+- **HeaderRegistry** — Global cross-CU registry mapping `(filename, checksum)` → `HeaderFile` instance (singleton per key).
+- **IncludeContext** — Per-CU state machine managing the include-block stack and fileNum-to-header mappings.
+- **globalize()** — Recursive descent replacing `LocalTypeId` refs with `GlobalTypeId` refs during `passA()`.
+- **walkDefinitions()** — Traversal collecting all `TypeAst` nodes emitted by inline-type side effects.
+- **appendAsts()** — Collision policy and cross-CU deduplication: same `GlobalTypeId` with identical hash = deduplicated; same ID with different hash = collision logged.
+
+### 8.2 What Was Removed
+
+The commit messages reference a "stupid canonicalization" approach that was removed. The exact details are not preserved in the current codebase, but the intent is clear: the new model replaces name-based merging or other heuristics with deterministic identity-based deduplication keyed by `GlobalTypeId`.
+
+### 8.3 Alignment with Spec and GDB
+
+For each design choice in the new model:
+
+- **BINCL/EXCL dedup by (filename, checksum):** Aligns with gdb's `add_old_header_file()` and BFD's linker checksum protocol (bfd/stabs.c lines 364–384, 391–438).
+- **sourceFor() mapping (LocalTypeId → SourceFile):** Aligns with gdb's `this_object_header_files[]` per-CU indexing (**gdb/stabsread.c** `this_object_header_files`, `start_symtab()`, `end_symtab()`).
+- **Forward EXCL placeholder:** Partial alignment — gdb patches the placeholder when the real BINCL arrives; our approach creates a non-patched placeholder, causing `GlobalTypeId` divergence. See Section 6 for details.
+- **Two-pass pre-seeding:** Not present in gdb; gdb processes single-pass with lazy resolution. Our approach is different but valid (deterministic and early-binding).
+- **InlineDef side-effect during globalize():** Not directly analogous to gdb; gdb handles inline types differently via `read_type()`. Our model "hoists" inline definitions into the top-level collection during globalization.
+
+### 8.4 Deviation Table
+
+| ID | Location | Description | Rating |
+|----|----------|-------------|--------|
+| D1 | HeaderRegistry.recall() | Forward EXCL creates placeholder HeaderFile not stored globally; later BINCL CU gets different HeaderFile → GlobalTypeId mismatch → hash collisions | needs-fix |
+| D2 | Attribution.categoryFor() | Ignores HeaderSource as a distinct case; header-attributed types fall through to multi-CU heuristic | incomplete |
+| D3 | preSeedHeaders() | Two-pass pre-seeding does not patch forward-EXCL placeholders when the BINCL arrives; placeholder divergence persists | incomplete |
+| D4 | walkDefinitions() anonymous naming | Anonymous inline TypeAst named "${decl.id}" — convention only, not spec-grounded | correct (convention) |
+| D5 | rawByIdSnapshot | Field not found in current codebase; presumably removed or replaced | vestigial |
+| D6 | collidingAsts map | Map of colliding TypeDecls indexed by GlobalTypeId; populated by appendAsts() but downstream consumer not audited | pending audit (Section 9) |
+| D7 | AttributionTraceDump | Diagnostic companion to categoryFor(); not updated for HeaderSource model | incomplete |
+
+---
+
 ## References
 
 - **stabs.html** (GNU Binutils documentation): <https://sourceware.org/binutils/docs/stabs/>
