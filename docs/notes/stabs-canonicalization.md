@@ -425,22 +425,26 @@ The `walkDefinitions()` method (**src/main/kotlin/ghistabs/parser/Harvest.kt** l
 
 **Deviation rating:** D4 (correct / convention) — anonymous `TypeAst` naming from `walkDefinitions()` is a local convention not spec-grounded, but it is correct.
 
-### 7.4 rawByIdSnapshot: Historical Artifact in Comments
+### 7.4 rawByIdSnapshot: Removed Field with Vestigial Documentation
 
-The `rawByIdSnapshot` field existed in the prior TypeRegistry implementation (before commit 7d2bc56, "rip out stupid canonicalization") as a snapshot of `typeAsts` keyed by `TypeId`. It was removed during the refactoring that introduced the `GlobalTypeId` and `SourceFile` model.
+The `rawByIdSnapshot` field existed in the prior TypeRegistry implementation (before commit 7d2bc56, "rip out stupid canonicalization") as a snapshot map of `TypeId` → `TypeAst` used during type resolution. It was removed during the refactoring that introduced the `GlobalTypeId` and `SourceFile` model.
 
-**Current status (post-refactor):** The field no longer exists in the codebase. However, three comments in the current TypeRegistry still reference it as a conceptual part of the type-lookup cascade:
+**Current status (post-refactor):** The field no longer exists in the codebase. However, four comments still reference it as a conceptual part of the type-lookup cascade:
 
-- **src/main/kotlin/ghistabs/builder/TypeRegistry.kt:88** — `dataTypeFor()` KDoc describes the lookup order: "byId → placeholders → rawByIdSnapshot"
+- **src/main/kotlin/ghistabs/builder/TypeRegistry.kt:88** — `dataTypeFor()` KDoc describes an idealized lookup order: "byId → placeholders → rawByIdSnapshot"
 - **src/main/kotlin/ghistabs/builder/TypeRegistry.kt:457** — Comment in `resolve()`: "Same cascade as dataTypeFor: byId → placeholders → rawByIdSnapshot"
 - **src/main/kotlin/ghistabs/builder/TypeRegistry.kt:462** — Comment: "Truly-missing classifier: rawByIdSnapshot already exhausted above"
 - **src/main/kotlin/ghistabs/builder/ResolverDecision.kt:40** — KDoc on `classifyRef()`: "@param knownTypeIds All TypeIds that were observed in the harvest (from rawByIdSnapshot)"
 
-These comments describe the **conceptual resolution strategy**, not an actual field. The actual cascade in the post-refactor code is: `tryGetExisting(gId)` → `byId[gId]` → `placeholders[gId]` → `typeResolver.getTypeFor(gId)` (which returns from the `Harvest.typeAsts` map). The `rawByIdSnapshot` references are **vestigial documentation artifacts** that conflate the old-implementation cascade with the new one.
+**What it was:** The field was a snapshot of the Harvest's `typeAsts` map, created at the start of materialization to provide a fallback lookup when a type reference could not be resolved via `byId` or `placeholders`. It represented the complete set of types observed during the harvest phase.
 
-**Recommendation for cleanup:** The comments should be updated to replace "rawByIdSnapshot" with "harvest.typeAsts" to match the current implementation. The field itself is correctly removed; only documentation needs updating.
+**Why it was removed:** The new `GlobalTypeId`-based model and `TypeResolver` make the snapshot unnecessary. Types are now resolved via `typeResolver.getTypeFor(GlobalTypeId)`, which queries the `Harvest.typeAsts` map directly, eliminating the need for an intermediate snapshot.
 
-**Deviation rating:** D5 (vestigial in documentation) — the field is removed, but references persist in comments as conceptual (not functional) artifacts. The lookup logic is correctly implemented; comments are stale.
+**Current resolution cascade:** `tryGetExisting(gId)` → `byId[gId]` (Ghidra already-materialized) → `placeholders[gId]` (forward-ref placeholder) → `typeResolver.getTypeFor(gId)` (query Harvest.typeAsts). The `rawByIdSnapshot` references are **vestigial documentation artifacts** that describe an old strategy no longer needed.
+
+**Recommendation for cleanup:** Replace all four comments' references to "rawByIdSnapshot" with "harvest.typeAsts" or "typeResolver" to match the current post-refactor implementation.
+
+**Deviation rating:** D5 (vestigial in documentation) — the field is correctly removed, but comments persist as stale documentation. The lookup logic is correctly implemented; only the descriptive text needs updating.
 
 ---
 
@@ -494,7 +498,7 @@ For each design choice in the new model:
 | D2 | Attribution.categoryFor() | Ignores HeaderSource as a distinct case; header-attributed types fall through to multi-CU heuristic | incomplete |
 | D3 | preSeedHeaders() | Two-pass pre-seeding does not patch forward-EXCL placeholders when the BINCL arrives; placeholder divergence persists | incomplete |
 | D4 | walkDefinitions() anonymous naming | Anonymous inline TypeAst named "${decl.id}" — convention only, not spec-grounded | correct (convention) |
-| D5 | rawByIdSnapshot | Field not found in current codebase; presumably removed or replaced | vestigial |
+| D5 | rawByIdSnapshot | Field removed in commit 7d2bc56; vestigial comments remain in TypeRegistry.kt lines 88, 457, 462 and ResolverDecision.kt line 40 describing old lookup cascade — see §7.4 | vestigial (in documentation) |
 | D6 | collidingAsts map | Map of colliding TypeDecls indexed by GlobalTypeId; populated by appendAsts() but no production consumer (diagnostic-only) | vestigial (diagnostic-only, no production consumer — see §9.6) |
 | D7 | AttributionTraceDump | Diagnostic companion to categoryFor(); not updated for HeaderSource model | incomplete |
 
@@ -510,7 +514,7 @@ This section evaluates the pipeline layering, data-flow boundaries, and context 
 
 **Parser (src/main/kotlin/ghistabs/parser/Parser.kt)** — Recursive-descent parser consuming type expression strings and symbol descriptors, producing `TypeDecl<LocalTypeId>` and `SymbolDecl<LocalTypeId>` ASTs. Entry points: `parseSymbol()` (parses `name:descriptor`), `parseTypeBody()` (parses type body for testing). Continuation-line joining is delegated to the caller. No Ghidra types; pure grammar implementation.
 
-**Harvester (src/main/kotlin/ghistabs/parser/Harvest.kt)** — Stateful stream processor consuming stab records; produces `Harvest` (data class containing `typeAsts: Map<GlobalTypeId, TypeAst>`, `symbolsByCu`, `openFunctions`, `collidingAsts`, `headerRegistry`). Two passes: `preSeedHeaders()` pre-allocates include contexts, then `passA()` processes all records, calling `Parser` on each type-carrying record. Responsibility: state management (`currentCu`, `currentFunction`, `includesByFile`), record dispatch (N_* type routing), symbol/type accumulation, `LocalTypeId` → `GlobalTypeId` globalization, inline-type hoisting via side effects, collision logging.
+**Harvester (src/main/kotlin/ghistabs/parser/Harvest.kt)** — Stateful stream processor consuming stab records; produces `Harvest` (data class containing `typeAsts: Map<GlobalTypeId, TypeAst>`, `symbolsByCu`, `openFunctions`, `collidingAsts`, `headerRegistry`). Two passes: `preSeedHeaders()` pre-allocates include contexts, then `passA()` processes all records, calling `Parser` on each type-carrying record. Responsibility: state management (`currentCu`, `currentFunction`, `includesByFile`), record dispatch (N_* type routing), symbol/type accumulation, `LocalTypeId` → `GlobalTypeId` globalization (lines 333–373), inline-type hoisting via side effects, collision logging.
 
 **TypeResolver (src/main/kotlin/ghistabs/builder/TypeRegistry.kt computed property `typeResolver`)** — Computed property on `Harvest` returning `TypeResolver(typeAsts)`. Lightweight helper providing three queries: `getTypeFor(GlobalTypeId)`, `getBodyFor<T>(GlobalTypeId)`, `getStructByName(name)`. Used by `TypeRegistry` and `ClassBuilder` to look up type definitions during materialization and class construction.
 
@@ -550,7 +554,7 @@ However:
 
 **Ghidra-specific types:** None in `Harvest`. It is pure data (serializable via `kotlinx.serialization`).
 
-**Subtle design choice — TypeAst.cu field:** Each `TypeAst` (**src/main/kotlin/ghistabs/parser/Ast.kt** lines 15–23) carries a `cu: SourceFile.CUSource` field AND an `id: GlobalTypeId` field. The `id` contains `id.source` (a `SourceFile` — either `CUSource` or `HeaderSource`). The `cu` field is always a `CUSource` and represents the CU that originally emitted this type record (even if the type is in a header). This duplication allows callers to ask "which CU did this come from originally?" without having to parse the source type.
+**Subtle design choice — TypeAst.cu field:** Each `TypeAst` (**src/main/kotlin/ghistabs/parser/Harvest.kt** lines 15–23) carries a `cu: SourceFile.CUSource` field AND an `id: GlobalTypeId` field. The `id` contains `id.source` (a `SourceFile` — either `CUSource` or `HeaderSource`). The `cu` field is always a `CUSource` and represents the CU that originally emitted this type record (even if the type is in a header). This duplication allows callers to ask "which CU did this come from originally?" without having to parse the source type.
 
 **Assessment:** The `cu` field is redundant for Harvest-layer consumers but useful for diagnostics and attribution (matching defining CUs to compute categories). It is harmless and intentional. No change suggested.
 
