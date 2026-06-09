@@ -227,10 +227,12 @@ class ParserClassTest {
     @Test
     fun testMethodImplicitThisPointer() {
         // Method with implicit this pointer represented as the cls field.
-        // The cls field (TypeDecl.Ref(LocalTypeId(0,20))) is a pointer to the containing class,
-        // representing the implicit this argument.
+        // The cls field is the type as it appears in the stabs method descriptor (#<cls>,...).
+        // In this test, (0,30) is a back-reference to the containing class itself.
+        // Per the stabs PDF §8.5 "Member Functions", the first parameter (implicit this) is the
+        // containing class; the AST stores the parsed type as-is (not wrapped in Pointer).
         // stabs PDF §8.5 "Member Functions" notes implicit this as first argument.
-        // This test verifies that cls is set correctly to the containing class type.
+        // This test verifies that cls is set correctly to the containing class type reference.
         val input = "Derived:T(0,30)=s8vmethod::(0,31)=#(0,30),(0,1),(0,2);:_ZN7Derived7vmethodEi;2A*0;(0,30);;;"
         val expected = SymbolDecl.TaggedType(
             name = "Derived",
@@ -247,7 +249,7 @@ class ParserClassTest {
                         signature = TypeDecl.InlineDef(
                             id = LocalTypeId(0, 31),
                             body = TypeDecl.Method(
-                                cls = TypeDecl.Ref(LocalTypeId(0, 30)), // Implicit this: pointer to Derived
+                                cls = TypeDecl.Ref(LocalTypeId(0, 30)), // Implicit this: the containing class
                                 ret = TypeDecl.Ref(LocalTypeId(0, 1)),
                                 params = listOf(TypeDecl.Ref(LocalTypeId(0, 2))), // Explicit parameter
                             ),
