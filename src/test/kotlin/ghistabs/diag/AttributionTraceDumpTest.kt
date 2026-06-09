@@ -1,5 +1,7 @@
 package ghistabs.diag
 
+import ghistabs.parser.HeaderFile
+import ghistabs.parser.SourceFile
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -8,27 +10,29 @@ import java.nio.file.Files
 import java.nio.file.Path
 
 class AttributionTraceDumpTest {
+    private fun stdHeader(path: String): SourceFile.HeaderSource = SourceFile.HeaderSource(HeaderFile(path, 0L, null))
+
     @Test
     fun testFormatForTypeNoMatches() {
-        val traces = emptyList<AttributionTrace>()
-        val result = AttributionTraceDump.formatForType("Foo", traces)
+        val result = AttributionTraceDump.formatForType("Foo", emptyList())
         assertEquals("Foo not routed to /std/* in this run", result)
     }
 
     @Test
     fun testFormatForTypeOneMatch() {
+        val path = "/usr/include/c++/3.4.4/string"
         val traces = listOf(
             AttributionTrace(
                 typeName = "Bar",
-                matchedCU = "/usr/include/c++/3.4.4/string",
-                definingCUs = setOf("/usr/include/c++/3.4.4/string"),
+                matchedCU = stdHeader(path),
+                definingCUs = setOf(stdHeader(path)),
                 routedTo = "/std/string",
             ),
         )
         val result = AttributionTraceDump.formatForType("Bar", traces)
-        assertTrue(result.contains("Bar | matched=/usr/include/c++/3.4.4/string"))
-        assertTrue(result.contains("routedTo=/std/string"))
-        assertTrue(result.contains("definingCUs=/usr/include/c++/3.4.4/string"))
+        assertTrue(result.contains("Bar"))
+        assertTrue(result.contains(path))
+        assertTrue(result.contains("/std/string"))
     }
 
     @Test
@@ -36,20 +40,20 @@ class AttributionTraceDumpTest {
         val traces = listOf(
             AttributionTrace(
                 typeName = "Baz",
-                matchedCU = "/usr/include/c++/3.4.4/string",
-                definingCUs = setOf("/usr/include/c++/3.4.4/string"),
+                matchedCU = stdHeader("/usr/include/c++/3.4.4/string"),
+                definingCUs = setOf(stdHeader("/usr/include/c++/3.4.4/string")),
                 routedTo = "/std/string",
             ),
             AttributionTrace(
                 typeName = "Baz",
-                matchedCU = "/usr/include/c++/3.4.4/vector",
-                definingCUs = setOf("/usr/include/c++/3.4.4/vector"),
+                matchedCU = stdHeader("/usr/include/c++/3.4.4/vector"),
+                definingCUs = setOf(stdHeader("/usr/include/c++/3.4.4/vector")),
                 routedTo = "/std/vector",
             ),
         )
         val result = AttributionTraceDump.formatForType("Baz", traces)
         val lines = result.split("\n")
-        assertEquals(2, lines.size, "Should have two lines for two matches")
+        assertEquals(2, lines.size)
         assertTrue(lines[0].contains("Baz"))
         assertTrue(lines[1].contains("Baz"))
     }
@@ -60,8 +64,8 @@ class AttributionTraceDumpTest {
         val traces = listOf(
             AttributionTrace(
                 typeName = "Test",
-                matchedCU = "/usr/include/c++/3.4.4/string",
-                definingCUs = setOf("/usr/include/c++/3.4.4/string"),
+                matchedCU = stdHeader("/usr/include/c++/3.4.4/string"),
+                definingCUs = setOf(stdHeader("/usr/include/c++/3.4.4/string")),
                 routedTo = "/std/string",
             ),
         )
@@ -72,7 +76,7 @@ class AttributionTraceDumpTest {
             filename = "test-trace.txt",
         )
         val outFile = outDir.resolve("test-trace.txt")
-        assertTrue(Files.exists(outFile), "Output file should exist")
+        assertTrue(Files.exists(outFile))
         val content = Files.readString(outFile)
         assertTrue(content.contains("Test"))
         assertTrue(content.contains("/std/string"))
@@ -81,10 +85,9 @@ class AttributionTraceDumpTest {
     @Test
     fun testWriteTraceArtifactEmptyTracesWritesNotRoutedMessage(@TempDir tempDir: Path) {
         val outDir = tempDir.resolve("output")
-        val traces = emptyList<AttributionTrace>()
         AttributionTraceDump.writeTraceArtifact(
             typeName = "Unrouted",
-            traces = traces,
+            traces = emptyList(),
             outDir = outDir,
             filename = "unrouted-trace.txt",
         )

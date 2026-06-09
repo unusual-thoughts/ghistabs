@@ -6,179 +6,126 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class PolymorphicBaseTest {
-    @Test
-    fun `polyBase - direct polymorphic base detected`() {
-        // Base with vtable marker
-        val base = TypeDecl.Struct(
+    private val cu = SourceFile.CUSource("test.cpp")
+    private fun gid(n: Int) = GlobalTypeId(cu, n)
+    private fun helpers(typeAsts: Map<GlobalTypeId, TypeAst> = emptyMap()) = ClassBuilderHelpers(TypeResolver(typeAsts))
+
+    private fun polyStruct(hasVtableMarker: Boolean = false, methods: List<MethodDecl<GlobalTypeId>> = emptyList()) =
+        TypeDecl.Struct<GlobalTypeId>(
             kind = AggrKind.CLASS,
             sizeBytes = 8L,
             bases = emptyList(),
             fields = emptyList(),
-            methods = emptyList(),
-            hasVTablePointerMarker = true,
+            methods = methods,
+            hasVTablePointerMarker = hasVtableMarker,
             vtableTargetTypeId = null,
         )
 
-        // Derived inherits from Base
-        val derived = TypeDecl.Struct(
+    private fun virtualMethod(name: String) = MethodDecl<GlobalTypeId>(
+        name = name,
+        mangled = null,
+        signature = TypeDecl.FunctionT(TypeDecl.Complex(0, 4), emptyList()),
+        access = Access.PUBLIC,
+        virt = VirtKind.VIRTUAL,
+        isConst = false,
+        isVolatile = false,
+        vtableOffsetBits = 0L,
+    )
+
+    private fun inlineBase(n: Int, body: TypeDecl.Struct<GlobalTypeId>) = BaseDecl<GlobalTypeId>(
+        type = TypeDecl.InlineDef(gid(n), body),
+        isVirtual = false,
+        access = Access.PUBLIC,
+        offsetBits = 0L,
+    )
+
+    @Test
+    fun `polyBase - direct polymorphic base detected`() {
+        val base = polyStruct(hasVtableMarker = true)
+        val derived = TypeDecl.Struct<GlobalTypeId>(
             kind = AggrKind.CLASS,
             sizeBytes = 12L,
-            bases =
-            listOf(
-                BaseDecl(
-                    type = TypeDecl.InlineDef(LocalTypeId(0, 1), base),
-                    isVirtual = false,
-                    access = Access.PUBLIC,
-                    offsetBits = 0L,
-                ),
-            ),
+            bases = listOf(inlineBase(1, base)),
             fields = emptyList(),
             methods = emptyList(),
             hasVTablePointerMarker = false,
             vtableTargetTypeId = null,
         )
-
-        val structAstsByName = mapOf<String, TypeDecl.Struct>()
-        val result = ClassBuilderHelpers.hasPolymorphicBaseSubobject(derived, structAstsByName)
-        assertTrue(result)
+        assertTrue(helpers().hasPolymorphicBaseSubobject(derived))
     }
 
     @Test
     fun `nonPolyBase - no virtual methods or markers detected`() {
-        // Base with no vtable marker or virtuals
-        val base = TypeDecl.Struct(
-            kind = AggrKind.CLASS,
-            sizeBytes = 8L,
-            bases = emptyList(),
-            fields = emptyList(),
-            methods = emptyList(),
-            hasVTablePointerMarker = false,
-            vtableTargetTypeId = null,
-        )
-
-        // Derived inherits from non-poly Base
-        val derived = TypeDecl.Struct(
+        val base = polyStruct(hasVtableMarker = false)
+        val derived = TypeDecl.Struct<GlobalTypeId>(
             kind = AggrKind.CLASS,
             sizeBytes = 12L,
-            bases = listOf(
-                BaseDecl(
-                    type = TypeDecl.InlineDef(LocalTypeId(0, 1), base),
-                    isVirtual = false,
-                    access = Access.PUBLIC,
-                    offsetBits = 0L,
-                ),
-            ),
+            bases = listOf(inlineBase(1, base)),
             fields = emptyList(),
             methods = emptyList(),
             hasVTablePointerMarker = false,
             vtableTargetTypeId = null,
         )
-
-        val structAstsByName = mapOf<String, TypeDecl.Struct>()
-        val result = ClassBuilderHelpers.hasPolymorphicBaseSubobject(derived, structAstsByName)
-        assertFalse(result)
+        assertFalse(helpers().hasPolymorphicBaseSubobject(derived))
     }
 
     @Test
     fun `transitive - polymorphism inherited through intermediate class`() {
-        // Base is polymorphic
-        val base = TypeDecl.Struct(
-            kind = AggrKind.CLASS,
-            sizeBytes = 8L,
-            bases = emptyList(),
-            fields = emptyList(),
-            methods = emptyList(),
-            hasVTablePointerMarker = true,
-            vtableTargetTypeId = null,
-        )
-
-        // Middle inherits from Base
-        val middle = TypeDecl.Struct(
+        val base = polyStruct(hasVtableMarker = true)
+        val middle = TypeDecl.Struct<GlobalTypeId>(
             kind = AggrKind.CLASS,
             sizeBytes = 12L,
-            bases = listOf(
-                BaseDecl(
-                    type = TypeDecl.InlineDef(LocalTypeId(0, 1), base),
-                    isVirtual = false,
-                    access = Access.PUBLIC,
-                    offsetBits = 0L,
-                ),
-            ),
+            bases = listOf(inlineBase(1, base)),
             fields = emptyList(),
             methods = emptyList(),
             hasVTablePointerMarker = false,
             vtableTargetTypeId = null,
         )
-
-        // Derived inherits from Middle, which transitively has poly base
-        val derived = TypeDecl.Struct(
+        val derived = TypeDecl.Struct<GlobalTypeId>(
             kind = AggrKind.CLASS,
             sizeBytes = 16L,
-            bases = listOf(
-                BaseDecl(
-                    type = TypeDecl.InlineDef(LocalTypeId(0, 2), middle),
-                    isVirtual = false,
-                    access = Access.PUBLIC,
-                    offsetBits = 0L,
-                ),
-            ),
+            bases = listOf(inlineBase(2, middle)),
             fields = emptyList(),
             methods = emptyList(),
             hasVTablePointerMarker = false,
             vtableTargetTypeId = null,
         )
-
-        val structAstsByName = mapOf<String, TypeDecl.Struct>()
-        val result = ClassBuilderHelpers.hasPolymorphicBaseSubobject(derived, structAstsByName)
-        assertTrue(result)
+        assertTrue(helpers().hasPolymorphicBaseSubobject(derived))
     }
 
     @Test
     fun `noBases - empty bases list returns false`() {
-        val derived = TypeDecl.Struct(
+        val derived = polyStruct(hasVtableMarker = false)
+        assertFalse(helpers().hasPolymorphicBaseSubobject(derived))
+    }
+
+    @Test
+    fun `virtual method in base - detected as polymorphic`() {
+        val base = polyStruct(methods = listOf(virtualMethod("foo")))
+        val derived = TypeDecl.Struct<GlobalTypeId>(
             kind = AggrKind.CLASS,
-            sizeBytes = 8L,
-            bases = emptyList(),
+            sizeBytes = 12L,
+            bases = listOf(inlineBase(1, base)),
             fields = emptyList(),
             methods = emptyList(),
             hasVTablePointerMarker = false,
             vtableTargetTypeId = null,
         )
-
-        val result = ClassBuilderHelpers.hasPolymorphicBaseSubobject(derived, mapOf())
-        assertFalse(result)
+        assertTrue(helpers().hasPolymorphicBaseSubobject(derived))
     }
 
     @Test
-    fun `virtual method marker - base with virtual method detected as polymorphic`() {
-        // Base has a virtual method
-        val base = TypeDecl.Struct(
-            kind = AggrKind.CLASS,
-            sizeBytes = 8L,
-            bases = emptyList(),
-            fields = emptyList(),
-            methods = listOf(
-                MethodDecl(
-                    name = "foo",
-                    mangled = "_ZN4BaseC1Ev",
-                    signature = TypeDecl.FunctionT(ret = TypeDecl.Builtin, params = emptyList()),
-                    access = Access.PUBLIC,
-                    virt = VirtKind.VIRTUAL,
-                    isConst = false,
-                    isVolatile = false,
-                    vtableOffsetBits = null,
-                ),
-            ),
-            hasVTablePointerMarker = false,
-            vtableTargetTypeId = null,
-        )
+    fun `TypeDecl_Ref base - resolved via TypeResolver map`() {
+        val baseId = gid(99)
+        val base = polyStruct(methods = listOf(virtualMethod("virtualMethod")))
+        val baseAst = TypeAst(cu, baseId, "Base", base)
 
-        val derived = TypeDecl.Struct(
+        val derived = TypeDecl.Struct<GlobalTypeId>(
             kind = AggrKind.CLASS,
             sizeBytes = 12L,
             bases = listOf(
                 BaseDecl(
-                    type = TypeDecl.InlineDef(LocalTypeId(0, 1), base),
+                    type = TypeDecl.Ref(baseId),
                     isVirtual = false,
                     access = Access.PUBLIC,
                     offsetBits = 0L,
@@ -190,62 +137,6 @@ class PolymorphicBaseTest {
             vtableTargetTypeId = null,
         )
 
-        val structAstsByName = mapOf<String, TypeDecl.Struct>()
-        val result = ClassBuilderHelpers.hasPolymorphicBaseSubobject(derived, structAstsByName)
-        assertTrue(result)
-    }
-
-    @Test
-    fun `TypeDecl_Ref base - resolved via typeAstsById map`() {
-        // Base is polymorphic (has virtual method)
-        val baseTypeId = LocalTypeId(0, 99)
-        val base = TypeDecl.Struct(
-            kind = AggrKind.CLASS,
-            sizeBytes = 8L,
-            bases = emptyList(),
-            fields = emptyList(),
-            methods = listOf(
-                MethodDecl(
-                    name = "virtualMethod",
-                    mangled = "_ZN4BaseC1Ev",
-                    signature = TypeDecl.FunctionT(ret = TypeDecl.Builtin, params = emptyList()),
-                    access = Access.PUBLIC,
-                    virt = VirtKind.VIRTUAL,
-                    isConst = false,
-                    isVolatile = false,
-                    vtableOffsetBits = null,
-                ),
-            ),
-            hasVTablePointerMarker = false,
-            vtableTargetTypeId = null,
-        )
-
-        // Derived references Base via TypeDecl.Ref (by TypeId)
-        val derived = TypeDecl.Struct(
-            kind = AggrKind.CLASS,
-            sizeBytes = 12L,
-            bases = listOf(
-                BaseDecl(
-                    type = TypeDecl.Ref(baseTypeId),
-                    isVirtual = false,
-                    access = Access.PUBLIC,
-                    offsetBits = 0L,
-                ),
-            ),
-            fields = emptyList(),
-            methods = emptyList(),
-            hasVTablePointerMarker = false,
-            vtableTargetTypeId = null,
-        )
-
-        // TypeAst wrapping the base struct
-        val baseTypeAst = TypeAst(baseTypeId, "Base", base, "test.c")
-
-        val structAstsByName = mapOf<String, TypeDecl.Struct>()
-        val typeAstsById = mapOf(baseTypeId to baseTypeAst)
-
-        // Should resolve base via typeAstsById and detect polymorphism
-        val result = ClassBuilderHelpers.hasPolymorphicBaseSubobject(derived, structAstsByName, typeAstsById)
-        assertTrue(result)
+        assertTrue(helpers(mapOf(baseId to baseAst)).hasPolymorphicBaseSubobject(derived))
     }
 }
