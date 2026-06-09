@@ -2,9 +2,26 @@ package ghistabs.builder
 
 import ghidra.program.model.data.CategoryPath
 import ghistabs.diag.StabsDiagnostics
+import ghistabs.parser.HeaderFile
+import ghistabs.parser.SourceFile
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+
+/**
+ * Path-only helper for tests. Attribution only inspects `.filename` on each
+ * SourceFile, so route every path through the CU branch with the path used
+ * as both CU name and filename. For header-only paths a HeaderSource is
+ * equivalent — neither branch carries a checksum/instance.
+ */
+private fun src(path: String): SourceFile =
+    if (path.endsWith(".h") || path.endsWith(".hpp") || path.endsWith(".hh") || path.contains("/include/")) {
+        SourceFile.HeaderSource(HeaderFile(filename = path, checksum = 0, originatingCu = SourceFile.CUSource(path)))
+    } else {
+        SourceFile.CUSource(path)
+    }
+
+private fun srcs(vararg paths: String): Set<SourceFile> = paths.map(::src).toSet()
 
 // NOTE: This file imports ghidra.program.model.data.CategoryPath because Attribution.categoryFor
 // returns CategoryPath directly. Per testing-convention.md this is a Kind 1 violation; tracked
@@ -13,50 +30,50 @@ import org.junit.jupiter.api.Test
 class AttributionTest {
     @Test
     fun testCppStdBasename() {
-        val cat = Attribution.categoryFor("basic_string", setOf("/usr/include/c++/3.4.4/string"))
+        val cat = Attribution.categoryFor("basic_string", srcs("/usr/include/c++/3.4.4/string"))
         assertEquals(CategoryPath("/std/string"), cat)
     }
 
     @Test
     fun testMingwStdBasename() {
-        val cat = Attribution.categoryFor("int32_t", setOf("/usr/include/mingw/stdint.h"))
+        val cat = Attribution.categoryFor("int32_t", srcs("/usr/include/mingw/stdint.h"))
         assertEquals(CategoryPath("/std/stdint"), cat)
     }
 
     @Test
     fun testSingleHeaderCU() {
-        val cat = Attribution.categoryFor("Foo", setOf("/proj/include/foo.h"))
+        val cat = Attribution.categoryFor("Foo", srcs("/proj/include/foo.h"))
         assertEquals(CategoryPath("/foo"), cat)
     }
 
     @Test
     fun testSingleSourceCU() {
-        val cat = Attribution.categoryFor("LocalThing", setOf("/proj/src/main.cpp"))
+        val cat = Attribution.categoryFor("LocalThing", srcs("/proj/src/main.cpp"))
         assertEquals(CategoryPath("/main"), cat)
     }
 
     @Test
     fun testMultiCUCleanName() {
-        val cat = Attribution.categoryFor("Shared", setOf("/proj/a.cpp", "/proj/b.cpp"))
+        val cat = Attribution.categoryFor("Shared", srcs("/proj/a.cpp", "/proj/b.cpp"))
         assertEquals(CategoryPath("/headers-untracked/Shared.h"), cat)
     }
 
     @Test
     fun testMultiCULexicalFirstCanonical() {
         // Two CUs; canonical (lex-first) is "a"
-        val cat = Attribution.categoryFor("vector<int,allocator<int>>", setOf("/proj/b.cpp", "/proj/a.cpp"))
+        val cat = Attribution.categoryFor("vector<int,allocator<int>>", srcs("/proj/b.cpp", "/proj/a.cpp"))
         assertEquals(CategoryPath("/a/instantiations"), cat)
     }
 
     @Test
     fun testMultiCUUncleanStartsWithUnderscore() {
-        val cat = Attribution.categoryFor("__internal", setOf("/proj/a.cpp", "/proj/b.cpp"))
+        val cat = Attribution.categoryFor("__internal", srcs("/proj/a.cpp", "/proj/b.cpp"))
         assertEquals(CategoryPath("/a/instantiations"), cat)
     }
 
     @Test
     fun testMultiCUBuiltinNameUnclean() {
-        val cat = Attribution.categoryFor("int", setOf("/proj/a.cpp", "/proj/b.cpp"))
+        val cat = Attribution.categoryFor("int", srcs("/proj/a.cpp", "/proj/b.cpp"))
         assertEquals(CategoryPath("/a/instantiations"), cat)
     }
 
@@ -67,14 +84,14 @@ class AttributionTest {
         val cat =
             Attribution.categoryFor(
                 "basic_string",
-                setOf("/usr/include/c++/3.4.4/string"),
+                srcs("/usr/include/c++/3.4.4/string"),
                 diag,
             )
         assertEquals(CategoryPath("/std/string"), cat)
         val traces = diag.snapshotAttributionTraces()
         assertEquals(1, traces.size)
         assertEquals("basic_string", traces[0].typeName)
-        assertEquals("/usr/include/c++/3.4.4/string", traces[0].matchedCU)
+        assertEquals("/usr/include/c++/3.4.4/string", traces[0].matchedCU.filename)
         assertEquals("/std/string", traces[0].routedTo)
     }
 
@@ -84,7 +101,7 @@ class AttributionTest {
         repeat(250) { i ->
             Attribution.categoryFor(
                 "Type$i",
-                setOf("/usr/include/c++/3.4.4/string$i"),
+                srcs("/usr/include/c++/3.4.4/string$i"),
                 diag,
             )
         }
@@ -96,14 +113,14 @@ class AttributionTest {
     @Test
     fun testNoFalsePositiveOnProjectCxxDir() {
         // Path with c++ as a directory name should NOT route to /std/
-        val cat = Attribution.categoryFor("Foo", setOf("/proj/src/c++_helpers/foo.cpp"))
+        val cat = Attribution.categoryFor("Foo", srcs("/proj/src/c++_helpers/foo.cpp"))
         assertEquals(CategoryPath("/foo"), cat)
     }
 
     @Test
     fun testRealStdlibStillMatches() {
         // Real stdlib paths must still match the tightened regex
-        val cat = Attribution.categoryFor("basic_string", setOf("/usr/include/c++/3.4.4/string"))
+        val cat = Attribution.categoryFor("basic_string", srcs("/usr/include/c++/3.4.4/string"))
         assertEquals(CategoryPath("/std/string"), cat)
     }
 
@@ -114,7 +131,7 @@ class AttributionTest {
         val cat =
             Attribution.categoryFor(
                 "XapArgInst",
-                setOf("/anywhere/at/all/string"),
+                srcs("/anywhere/at/all/string"),
                 diag,
             )
         assertTrue(cat.toString().startsWith("/proj"), "XapArgInst should route to /proj/")
@@ -124,7 +141,7 @@ class AttributionTest {
     @Test
     fun testGenuineStdTypesStillRouteToStd() {
         // Genuine stdlib types NOT in override list should still route to /std/
-        val cat = Attribution.categoryFor("vector", setOf("/usr/include/c++/3.4.4/vector"))
+        val cat = Attribution.categoryFor("vector", srcs("/usr/include/c++/3.4.4/vector"))
         assertEquals(CategoryPath("/std/vector"), cat)
     }
 
@@ -133,7 +150,7 @@ class AttributionTest {
         // A CU path like /usr/local/myproj/c++_helpers/foo.cpp should NOT route to /std/
         // because there are two intermediate dirs after /usr/: "local" and "myproj"
         // The regex /(usr|lib|include)(/[^/]+)?/(mingw|cygwin|c\+\+|bits)/ only allows one
-        val cat = Attribution.categoryFor("Foo", setOf("/usr/local/myproj/c++_helpers/foo.cpp"))
+        val cat = Attribution.categoryFor("Foo", srcs("/usr/local/myproj/c++_helpers/foo.cpp"))
         assertEquals(CategoryPath("/foo"), cat)
     }
 
@@ -141,7 +158,7 @@ class AttributionTest {
     fun testStdlibWithOneIntermediateDir() {
         // /usr/local/mingw/ should still match (one intermediate dir "local")
         // The basename is extracted from the path after the marker, so /usr/local/mingw/stdint.h → /std/stdint
-        val cat = Attribution.categoryFor("Foo", setOf("/usr/local/mingw/stdint.h"))
+        val cat = Attribution.categoryFor("Foo", srcs("/usr/local/mingw/stdint.h"))
         assertEquals(CategoryPath("/std/stdint"), cat)
     }
 }

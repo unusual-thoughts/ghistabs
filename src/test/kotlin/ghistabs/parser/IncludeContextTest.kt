@@ -18,9 +18,9 @@ class IncludeContextTest {
     @Test
     fun `beginInclude allocates fileNum and pushes stack`() {
         val ctx = IncludeContext(SourceFile.CUSource("test.cpp"), sink, registry)
-        val fileNum2 = ctx.beginInclude("header.h", 0x123L)
-        assertEquals(2, fileNum2)
-        val header = ctx.headerForFileNum(fileNum2)
+        val fileNum = ctx.beginInclude("header.h", 0x123L)
+        assertEquals(1, fileNum)
+        val header = ctx.headerForFileNum(fileNum)
         assertNotNull(header)
         assertEquals("header.h", header!!.filename)
         assertEquals(0x123L, header.checksum)
@@ -29,10 +29,10 @@ class IncludeContextTest {
     @Test
     fun `endInclude pops stack without changing fileNum`() {
         val ctx = IncludeContext(SourceFile.CUSource("test.cpp"), sink, registry)
-        val fileNum2 = ctx.beginInclude("header.h", 0x123L)
+        val fileNum = ctx.beginInclude("header.h", 0x123L)
         ctx.endInclude()
         // After popping, headerForFileNum should still return the header (it was registered by fileNum)
-        assertNotNull(ctx.headerForFileNum(fileNum2))
+        assertNotNull(ctx.headerForFileNum(fileNum))
     }
 
     @Test
@@ -77,7 +77,7 @@ class IncludeContextTest {
         assertNotNull(header)
         assertEquals("unknown.h", header!!.filename)
         assertEquals(0x456L, header.checksum)
-        assertEquals("<unknown>", header.originatingCu)
+        assertNull(header.originatingCu)
 
         // Check log was emitted
         val forwardExclLog = sink.lines.find { it.tag == "forward-excl" }
@@ -94,7 +94,7 @@ class IncludeContextTest {
 
         // Verify forward-excl log was emitted exactly once
         assertEquals(1, sink.lines.filter { it.tag == "forward-excl" }.size)
-        assertEquals("<unknown>", header1Excl!!.originatingCu)
+        assertNull(header1Excl!!.originatingCu)
 
         // Now a later CU with real BINCL should get a different HeaderFile
         val ctx2 = IncludeContext(SourceFile.CUSource("cu2.cpp"), sink, registry)
@@ -167,8 +167,13 @@ class IncludeContextTest {
         assertEquals(cu1PrivHeader!!.filename, cu2PrivHeader!!.filename)
         assertEquals(cu1PrivHeader.checksum, cu2PrivHeader.checksum)
 
-        // === Verify canonical TypeIds are stable across shared registry ===
+        // === Verify cross-CU sourceFor resolves to the same SourceFile for same (filename, checksum) ===
         val typeIdInCu1 = LocalTypeId(cu1HeaderFileNum, 99)
         val typeIdInCu2 = LocalTypeId(cu2HeaderFileNum, 99)
+        assertEquals(
+            cu1WithShared.sourceFor(typeIdInCu1),
+            cu2WithShared.sourceFor(typeIdInCu2),
+            "C1 fix: sourceFor for same (filename, checksum) must yield equal SourceFile across CUs",
+        )
     }
 }
