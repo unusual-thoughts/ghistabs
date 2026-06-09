@@ -425,13 +425,22 @@ The `walkDefinitions()` method (**src/main/kotlin/ghistabs/parser/Harvest.kt** l
 
 **Deviation rating:** D4 (correct / convention) — anonymous `TypeAst` naming from `walkDefinitions()` is a local convention not spec-grounded, but it is correct.
 
-### 7.4 rawByIdSnapshot Field
+### 7.4 rawByIdSnapshot: Historical Artifact in Comments
 
-The `typeAsts` field in `Harvest` (**src/main/kotlin/ghistabs/parser/Ast.kt** lines 65–74) is the live collection of `TypeAst` objects indexed by `GlobalTypeId`. There is no `rawByIdSnapshot` field in the current codebase; it may have existed in a prior version or been removed.
+The `rawByIdSnapshot` field existed in the prior TypeRegistry implementation (before commit 7d2bc56, "rip out stupid canonicalization") as a snapshot of `typeAsts` keyed by `TypeId`. It was removed during the refactoring that introduced the `GlobalTypeId` and `SourceFile` model.
 
-**Open question (from TODO.md line 32):** "Is rawByIdSnapshot used anywhere downstream?" If this field existed and is no longer present, that is a closed question. If the equivalent functionality now lives elsewhere (e.g., as a computed property), the name and purpose should be documented.
+**Current status (post-refactor):** The field no longer exists in the codebase. However, three comments in the current TypeRegistry still reference it as a conceptual part of the type-lookup cascade:
 
-**Deviation rating:** D5 (vestigial or removed) — no current consumer identified.
+- **src/main/kotlin/ghistabs/builder/TypeRegistry.kt:88** — `dataTypeFor()` KDoc describes the lookup order: "byId → placeholders → rawByIdSnapshot"
+- **src/main/kotlin/ghistabs/builder/TypeRegistry.kt:457** — Comment in `resolve()`: "Same cascade as dataTypeFor: byId → placeholders → rawByIdSnapshot"
+- **src/main/kotlin/ghistabs/builder/TypeRegistry.kt:462** — Comment: "Truly-missing classifier: rawByIdSnapshot already exhausted above"
+- **src/main/kotlin/ghistabs/builder/ResolverDecision.kt:40** — KDoc on `classifyRef()`: "@param knownTypeIds All TypeIds that were observed in the harvest (from rawByIdSnapshot)"
+
+These comments describe the **conceptual resolution strategy**, not an actual field. The actual cascade in the post-refactor code is: `tryGetExisting(gId)` → `byId[gId]` → `placeholders[gId]` → `typeResolver.getTypeFor(gId)` (which returns from the `Harvest.typeAsts` map). The `rawByIdSnapshot` references are **vestigial documentation artifacts** that conflate the old-implementation cascade with the new one.
+
+**Recommendation for cleanup:** The comments should be updated to replace "rawByIdSnapshot" with "harvest.typeAsts" to match the current implementation. The field itself is correctly removed; only documentation needs updating.
+
+**Deviation rating:** D5 (vestigial in documentation) — the field is removed, but references persist in comments as conceptual (not functional) artifacts. The lookup logic is correctly implemented; comments are stale.
 
 ---
 
@@ -458,7 +467,14 @@ The refactor commits `3f2e566..3a40357` introduced a new type-ID and deduplicati
 
 ### 8.2 What Was Removed
 
-The commit messages reference a "stupid canonicalization" approach that was removed. The exact details are not preserved in the current codebase, but the intent is clear: the new model replaces name-based merging or other heuristics with deterministic identity-based deduplication keyed by `GlobalTypeId`.
+Commit 7d2bc56 ("rip out stupid canonicalization") removed a name-based deduplication strategy and related infrastructure:
+
+1. **ContentHash class:** A custom hash function that computed content-based hashes of `TypeDecl` trees for deduplication.
+2. **rawByIdSnapshot field:** A snapshot map of `TypeId` → `TypeAst` used for fallback type lookup when refs were unresolved.
+3. **Type-lookup maps by (TypeId, name):** Fields `byIdName`, `placeholdersByIdName`, and `byHash: Map<(String, ContentHash), DataType>` that keyed types by both identity AND name separately, allowing multiple types per ID.
+4. **FileResolver and IncludeContext initialization:** Simplified context setup; the old code maintained per-CU `includeContextsByFile` and `structAstsByName` snapshots.
+
+The new model replaces this with deterministic `GlobalTypeId`-based deduplication, where identity is primary and content-hash is used only for collision detection (not deduplication). The removal of the `ContentHash` class and name-keyed maps reflects a shift from "try all possible dedup keys" to "use a single deterministic ID".
 
 ### 8.3 Alignment with Spec and GDB
 
@@ -479,7 +495,7 @@ For each design choice in the new model:
 | D3 | preSeedHeaders() | Two-pass pre-seeding does not patch forward-EXCL placeholders when the BINCL arrives; placeholder divergence persists | incomplete |
 | D4 | walkDefinitions() anonymous naming | Anonymous inline TypeAst named "${decl.id}" — convention only, not spec-grounded | correct (convention) |
 | D5 | rawByIdSnapshot | Field not found in current codebase; presumably removed or replaced | vestigial |
-| D6 | collidingAsts map | Map of colliding TypeDecls indexed by GlobalTypeId; populated by appendAsts() but downstream consumer not audited | pending audit (Section 9) |
+| D6 | collidingAsts map | Map of colliding TypeDecls indexed by GlobalTypeId; populated by appendAsts() but no production consumer (diagnostic-only) | vestigial (diagnostic-only, no production consumer — see §9.6) |
 | D7 | AttributionTraceDump | Diagnostic companion to categoryFor(); not updated for HeaderSource model | incomplete |
 
 ---
@@ -487,6 +503,8 @@ For each design choice in the new model:
 ## Section 9: Pipeline Architecture and Segmentation Audit
 
 This section evaluates the pipeline layering, data-flow boundaries, and context dataclass shapes across six pipeline stages: Parser, Harvester, TypeRegistry, TypeResolver, ClassBuilder, and StabsImporter.
+
+**Note on code citations:** Kotlin file and line-number references in this section are pinned to commit `07b9791290145ce1a57bcc08d32e1510571e42ee` (current HEAD). Consult that commit if line numbers drift.
 
 ### 9.1 Pipeline Layer Map
 
@@ -509,7 +527,7 @@ This section evaluates the pipeline layering, data-flow boundaries, and context 
 However:
 - **Continuation-line joining** (backslash-terminated records) is performed by `Stabs.kt` before Parser sees the string (**Stabs.kt** lines 294–428, `TYPES_WITH_CONTINUATION` set). This is correctly located at the record level, not Parser level, since continuation is a physical-record property, not a grammar property.
 - **No logic in Parser consumes or produces Harvest-level data structures.** All typing metadata (`LocalTypeId`, type-ID resolution) is Parser's concern; all stream state is Harvester's.
-- **LocalTypeId → GlobalTypeId globalization** happens in Harvester (`globalize()` method, lines 332–373), after Parser produces `TypeDecl<LocalTypeId>`. This is correct: the globalization step requires knowledge of the current `IncludeContext`, which Parser has no access to.
+- **LocalTypeId → GlobalTypeId globalization** happens in Harvester (`globalize()` method, lines 333–373), after Parser produces `TypeDecl<LocalTypeId>`. This is correct: the globalization step requires knowledge of the current `IncludeContext`, which Parser has no access to.
 
 **Verdict:** Correct separation. No changes suggested.
 
@@ -517,7 +535,7 @@ However:
 
 **Finding:** The boundary is well-defined but has one subtle design choice worth noting.
 
-**Harvest data shape:** The `Harvest` data class (**src/main/kotlin/ghistabs/parser/Ast.kt** lines 64–74) contains:
+**Harvest data shape:** The `Harvest` data class (**src/main/kotlin/ghistabs/parser/Harvest.kt** lines 64–74) contains:
 - `typeAsts: Map<GlobalTypeId, TypeAst>` — all types indexed by global ID
 - `symbolsByCu: Map<String, List<HarvestedSymbol>>` — all non-type symbols (globals, statics, function-params) grouped by CU filename
 - `openFunctions: List<OpenFunction>` — all function records with locals, params, scope brackets
@@ -587,9 +605,9 @@ However:
 | TypeRegistry | `dataType.name == resolvedDataType.name` | `applyGlobal()` | Verify stab-applied type actually stuck |
 
 **Operation levels:**
-- **Harvest-layer hash (TypeDecl.hashCode):** Detects collision during type accumulation; content-based comparison. ✓ Correct level.
-- **TypeRegistry byHash:** Efficient lookup by (name, hash); prevents re-materializing identical types. ✓ Correct level.
-- **StructuralDiff:** Ghidra-level structural comparison (offset, length, type path); used when name-matched types have different hashes. ✓ Correct level.
+- **Harvest-layer hash (TypeDecl.hashCode):** Detects collision during type accumulation; content-based comparison. Correct level.
+- **TypeRegistry byHash:** Efficient lookup by (name, hash); prevents re-materializing identical types. Correct level.
+- **StructuralDiff:** Ghidra-level structural comparison (offset, length, type path); used when name-matched types have different hashes. Correct level.
 
 **collidingAsts consumer status:** `collidingAsts` is populated in `appendAsts()` (**src/main/kotlin/ghistabs/parser/Harvest.kt** lines 415–419) but not consumed by TypeRegistry, ClassBuilder, or StabsImporter. It is serialized to the harvest JSON for diagnostic analysis. No code reads it downstream.
 
@@ -601,35 +619,35 @@ However:
 
 Evaluation of five key data classes:
 
-**TypeAst(cu, id, name, body)** (**src/main/kotlin/ghistabs/parser/Ast.kt** lines 15–23):
+**TypeAst(cu, id, name, body)** (**src/main/kotlin/ghistabs/parser/Harvest.kt** lines 15–23):
 - `cu: SourceFile.CUSource` — originating CU (always CUSource, never HeaderSource).
 - `id: GlobalTypeId` — global identity (may be HeaderSource).
 - `name: String` — type name.
 - `body: TypeDecl<GlobalTypeId>` — type definition.
 
-**Evaluation:** The `cu` field duplicates information from `id.source` when `id.source` is a `CUSource`. However, when `id.source` is a `HeaderSource`, the `cu` field tells which CU first emitted this stab record, which is useful for attribution. Not redundant; intended. ✓ Correct.
+**Evaluation:** The `cu` field duplicates information from `id.source` when `id.source` is a `CUSource`. However, when `id.source` is a `HeaderSource`, the `cu` field tells which CU first emitted this stab record, which is useful for attribution. Not redundant; intended. Correct.
 
-**HarvestedSymbol(decl, recordType, rawValue)** (**src/main/kotlin/ghistabs/parser/Ast.kt** lines 39):
+**HarvestedSymbol(decl, recordType, rawValue)** (**src/main/kotlin/ghistabs/parser/Harvest.kt** lines 39):
 - `decl: SymbolDecl<GlobalTypeId>` — the parsed symbol.
 - `recordType: StabType` — the N_* code (for filtering in downstream code).
 - `rawValue: Long` — the stab record's value field (address or offset).
 
-**Evaluation:** Used in `StabsImporter.applyAllSymbols()` (**src/main/kotlin/ghistabs/importer/StabsImporter.kt** lines 192–208). All three fields are used: decl is applied, recordType helps dispatch (global vs static), rawValue is passed to `applyStatic()`. ✓ Correct shape.
+**Evaluation:** Used in `StabsImporter.applyAllSymbols()` (**src/main/kotlin/ghistabs/importer/StabsImporter.kt** lines 192–208). All three fields are used: decl is applied, recordType helps dispatch (global vs static), rawValue is passed to `applyStatic()`. Correct shape.
 
-**OpenFunction(name, addr, decl, cu, locals, params, scopeBrackets, sizeBytes)** (**src/main/kotlin/ghistabs/parser/Ast.kt** lines 52–61):
+**OpenFunction(name, addr, decl, cu, locals, params, scopeBrackets, sizeBytes)** (**src/main/kotlin/ghistabs/parser/Harvest.kt** lines 52–61):
 - `locals: MutableList<LocalRecord>` — accumulates locals during harvest.
 - `params: MutableList<ParamRecord>` — accumulates params during harvest.
 - `scopeBrackets: MutableList<Triple<StabType, Long, Int>>` — LBRAC/RBRAC pairs for scope comments.
 - `sizeBytes: Long` — function size from end-of-function N_FUN record.
 
-**Evaluation:** `scopeBrackets` stores `(StabType, Long, Int)` = (LBRAC or RBRAC, address, record index). `ScopePairs.compute()` (**src/main/kotlin/ghistabs/importer/StabsImporter.kt** lines 416) pairs opens/closes by record-index range and filters locals whose `recordIndex` falls within the range. This mechanism is correct. `locals` and `params` are properly typed. ✓ Correct shape.
+**Evaluation:** `scopeBrackets` stores `(StabType, Long, Int)` = (LBRAC or RBRAC, address, record index). `ScopePairs.compute()` (**src/main/kotlin/ghistabs/importer/StabsImporter.kt** lines 416) pairs opens/closes by record-index range and filters locals whose `recordIndex` falls within the range. This mechanism is correct. `locals` and `params` are properly typed. Correct shape.
 
-**LocalRecord(decl, rawValue, recordIndex)** (**src/main/kotlin/ghistabs/parser/Ast.kt** lines 35–36):
+**LocalRecord(decl, rawValue, recordIndex)** (**src/main/kotlin/ghistabs/parser/Harvest.kt** lines 35–36):
 - `recordIndex` — stab stream record number (for scope filtering).
 
-**Evaluation:** `recordIndex` enables scope-bracket pairing. Used in `ScopePairs.compute()` to filter locals by scope. ✓ Correct usage.
+**Evaluation:** `recordIndex` enables scope-bracket pairing. Used in `ScopePairs.compute()` to filter locals by scope. Correct usage.
 
-**Attribution context:** The `Attribution.categoryFor()` method (**src/main/kotlin/ghistabs/builder/Attribution.kt**) takes `(typeName: String, defCUs: Set<SourceFile>)` and returns a `CategoryPath`. This signature is sufficient for the dedup strategy (route based on name and defining CUs). ✓ Correct.
+**Attribution context:** The `Attribution.categoryFor()` method (**src/main/kotlin/ghistabs/builder/Attribution.kt**) takes `(typeName: String, defCUs: Set<SourceFile>)` and returns a `CategoryPath`. This signature is sufficient for the dedup strategy (route based on name and defining CUs). Correct.
 
 **Verdict:** All dataclass shapes are correct. No missing or redundant fields identified.
 
