@@ -11,7 +11,7 @@ enum class Access { PRIVATE, PROTECTED, PUBLIC }
 
 enum class VirtKind { NORMAL, STATIC, VIRTUAL, PURE_VIRTUAL }
 
-enum class AggrKind { STRUCT, UNION, CLASS }
+enum class AggrKind { STRUCT, UNION, CLASS, ENUM }
 
 /** Type AST. Sealed; every grammar form has a constructor here. */
 @Serializable
