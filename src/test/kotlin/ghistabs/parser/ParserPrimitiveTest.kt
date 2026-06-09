@@ -99,4 +99,65 @@ class ParserPrimitiveTest {
         )
         assertEquals(expected, Parser(input).parseSymbol())
     }
+
+    @Test
+    fun testArrayOfInts() {
+        // Array descriptor: ar<index-type>;<lower>;<upper>;<element-type>
+        // stabs PDF §5.3: array of 10 ints (0..9)
+        // Note: Parser stores the index type (range) and element type; length is null.
+        val input = "int_array:t(0,32)=ar(0,1);0;9;(0,1)"
+        val expected = SymbolDecl.Typedef(
+            name = "int_array",
+            id = LocalTypeId(0, 32),
+            type = TypeDecl.Array(
+                element = TypeDecl.Ref(LocalTypeId(0, 1)),
+                length = null,
+                indexType = TypeDecl.Range(
+                    of = LocalTypeId(0, 1),
+                    min = 0L,
+                    max = 9L,
+                ),
+            ),
+        )
+        assertEquals(expected, Parser(input).parseSymbol())
+    }
+
+    @Test
+    fun testReferenceToInt() {
+        // C++ reference descriptor: &<referent-type>
+        // stabs PDF §5.6
+        val input = "ref_int:t(0,33)=&(0,1)"
+        val expected = SymbolDecl.Typedef(
+            name = "ref_int",
+            id = LocalTypeId(0, 33),
+            type = TypeDecl.Reference(TypeDecl.Ref(LocalTypeId(0, 1))),
+        )
+        assertEquals(expected, Parser(input).parseSymbol())
+    }
+
+    @Test
+    fun testVolatileInt() {
+        // Volatile qualifier: B<inner-type>
+        // stabs PDF §5.7
+        val input = "vol_int:t(0,34)=B(0,1)"
+        val expected = SymbolDecl.Typedef(
+            name = "vol_int",
+            id = LocalTypeId(0, 34),
+            type = TypeDecl.Volatile(TypeDecl.Ref(LocalTypeId(0, 1))),
+        )
+        assertEquals(expected, Parser(input).parseSymbol())
+    }
+
+    @Test
+    fun testFunctionType() {
+        // Function type descriptor: f<return-type>
+        // stabs PDF §5.5
+        val input = "fn_type:t(0,35)=f(0,1)"
+        val expected = SymbolDecl.Typedef(
+            name = "fn_type",
+            id = LocalTypeId(0, 35),
+            type = TypeDecl.FunctionT(ret = TypeDecl.Ref(LocalTypeId(0, 1)), params = emptyList()),
+        )
+        assertEquals(expected, Parser(input).parseSymbol())
+    }
 }
