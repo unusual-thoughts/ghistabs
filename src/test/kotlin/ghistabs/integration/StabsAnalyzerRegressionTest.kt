@@ -51,6 +51,7 @@ import java.io.File
 enum class Mode { CONCURRENT, AFTER }
 
 const val BINARY_NAME = "xapasmcsr"
+const val BINARY_NAME2 = "appquery"
 
 fun resourceFile(kind: String, name: String) = File("src/test/resources/${kind}s/$name-$kind.json")
 
@@ -65,12 +66,13 @@ fun resourceFile(kind: String, name: String) = File("src/test/resources/${kind}s
  * only make sense (or only fail) in one mode go in the subclass.
  */
 @Tag("integration")
-abstract class StabsAnalyzerRegressionTest(private val mode: Mode) : AbstractGhidraHeadlessIntegrationTest() {
-    private val fixture = File("src/test/resources/binaries/$BINARY_NAME.exe")
-    private val baselineFile = resourceFile("baseline", BINARY_NAME)
-    private val recordsFile = resourceFile("record", BINARY_NAME)
-    private val harvestFile = resourceFile("harvest", BINARY_NAME)
-    private val logFile = File("src/test/resources/logs/${BINARY_NAME}.${mode.name.lowercase()}.log")
+abstract class StabsAnalyzerRegressionTest(private val mode: Mode, private val binary_name: String) :
+    AbstractGhidraHeadlessIntegrationTest() {
+    private val fixture = File("src/test/resources/binaries/$binary_name.exe")
+    private val baselineFile = resourceFile("baseline", binary_name)
+    private val recordsFile = resourceFile("record", binary_name)
+    private val harvestFile = resourceFile("harvest", binary_name)
+    private val logFile = File("src/test/resources/logs/${binary_name}.${mode.name.lowercase()}.log")
 
     protected lateinit var program: Program
     private var loadResults: LoadResults<Program>? = null
@@ -828,7 +830,7 @@ abstract class StabsAnalyzerRegressionTest(private val mode: Mode) : AbstractGhi
     }
 }
 
-class StabsAnalyzerAfterTest : StabsAnalyzerRegressionTest(Mode.AFTER) {
+abstract class StabsAnalyzerAbstract(binary_name: String) : StabsAnalyzerRegressionTest(Mode.AFTER, binary_name) {
     /**
      * AFTER mode: auto-analysis (including the demangler) runs first, then we
      * run. The demangler creates `/Demangler/<Name>` placeholder stubs for
@@ -870,4 +872,7 @@ class StabsAnalyzerAfterTest : StabsAnalyzerRegressionTest(Mode.AFTER) {
     }
 }
 
-class StabsAnalyzerConcurrentTest : StabsAnalyzerRegressionTest(Mode.CONCURRENT)
+class StabsAnalyzerConcurrentTest : StabsAnalyzerRegressionTest(Mode.CONCURRENT, BINARY_NAME)
+class StabsAnalyzerConcurrentTest2 : StabsAnalyzerRegressionTest(Mode.CONCURRENT, BINARY_NAME2)
+class StabsAnalyzerAfterTest : StabsAnalyzerAbstract(BINARY_NAME)
+class StabsAnalyzerAfterTest2 : StabsAnalyzerAbstract(BINARY_NAME2)
