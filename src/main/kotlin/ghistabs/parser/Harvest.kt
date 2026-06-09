@@ -73,6 +73,21 @@ data class Harvest(
     val typeResolver get() = TypeResolver(typeAsts)
 }
 
+/**
+ * Harvests typed symbols and type ASTs from a flat stab record stream.
+ *
+ * Two-pass pipeline:
+ *  1. [preSeedHeaders] — scans for N_SO / N_BINCL / N_EINCL / N_EXCL to populate
+ *     per-CU [IncludeContext] instances before any type symbols are processed.
+ *  2. [passA] — main pass; dispatches on record type to populate [typeAsts],
+ *     [symbolsByCu], and [openFunctions], calling [globalize] and [appendAsts]
+ *     for each parsed symbol.
+ *
+ * Shared-registry invariant: the [HeaderRegistry] passed to each [IncludeContext]
+ * is shared across all CUs. Two CUs that BINCL/EXCL the same (filename, checksum)
+ * therefore receive the same [HeaderFile] instance, making their [GlobalTypeId]s
+ * identical for header-attributed types (see stabs-canonicalization.md §3).
+ */
 class Harvester(
     private val monitor: TaskMonitor,
     private val sink: DiagnosticSink,
@@ -85,9 +100,7 @@ class Harvester(
     private val includesByFile = mutableMapOf<String, IncludeContext>()
     private var parseErrors = 0
 
-    // FIXME: replace with String?; and replace every "<unknown>" with null
     private var currentCu: SourceFile.CUSource? = null
-
     private var currentFunction: OpenFunction? = null
 
     // Allocate ONE shared HeaderRegistry for all per-CU IncludeContext instances.
@@ -96,6 +109,7 @@ class Harvester(
     val sharedHeaderRegistry = HeaderRegistry(this)
 
     val currentInclude get() = includesByFile[currentCu?.filename]
+    val currentSource get() = currentInclude?.currentInclude ?: currentCu!!
     fun globalIdFor(id: LocalTypeId) = GlobalTypeId(currentInclude?.sourceFor(id) ?: currentCu!!, id.n)
 
     internal fun preSeedHeaders(records: List<StabRecord>) {
@@ -143,6 +157,11 @@ class Harvester(
                     currentCu = null
                 }
 
+                // line context
+                StabType.N_SOL if (rec.name.isNotEmpty()) -> {
+                    // N_SOL does not affect type namespace; ignored for harvesting
+                }
+
                 StabType.N_BINCL, StabType.N_EINCL, StabType.N_EXCL -> {}
 
                 StabType.N_FUN -> if (rec.name.isEmpty()) {
@@ -152,6 +171,7 @@ class Harvester(
                 } else {
                     val addr = resolver.buildAddress(rec.value)
                     // Pull mangled name from before the colon.
+                    // FIXME: demangle
                     val mangled = rec.name.substringBefore(':')
                     resolver.recordFromStab(mangled, addr)
                     try {
@@ -197,6 +217,7 @@ class Harvester(
                                 open.params += ParamRecord(decl, rec.value)
 
                             is SymbolDecl.RegLocal -> {
+                                // TODO: how does that differ from N_LSYM ?
                                 open.locals.add(LocalRecord(decl, rec.value, i))
                             }
 
@@ -309,6 +330,21 @@ class Harvester(
         is SymbolDecl.Typedef -> SymbolDecl.Typedef(sym.name, globalIdFor(sym.id), globalize(sym.type))
     }
 
+    /**
+     * Recursively converts a [TypeDecl<LocalTypeId>] to [TypeDecl<GlobalTypeId>] by replacing
+     * local type references with global ones.
+     *
+     * Identity on terminal nodes: leaf types like [TypeDecl.Builtin] and [TypeDecl.Void] pass
+     * through unchanged via `@Suppress("UNCHECKED_CAST")`.
+     *
+     * Recursion contract: every [TypeDecl] variant is handled; none falls through unprocessed.
+     * For recursive types, child nodes are recursively globalized.
+     *
+     * InlineDef side effect: when an [TypeDecl.InlineDef] is encountered, its body is
+     * globalized AND a [TypeAst] is emitted as a side effect (the side effect itself
+     * happens in the caller's [walkDefinitions] and [appendAsts], not within [globalize]).
+     * This ensures inline-type definitions are hoisted into the top-level [typeAsts] collection.
+     */
     @Suppress("UNCHECKED_CAST")
     fun globalize(decl: TypeDecl<LocalTypeId>): TypeDecl<GlobalTypeId> = when (decl) {
         is TypeDecl.Complex, is TypeDecl.Enum, is TypeDecl.XRef -> decl as TypeDecl<GlobalTypeId>
@@ -373,6 +409,22 @@ class Harvester(
         is TypeDecl.InlineDef -> listOf(TypeAst(currentCu!!, decl.id, "${decl.id}", decl.body))
     }
 
+    /**
+     * Accumulates [TypeAst]s into [typeAsts], handling three collision cases:
+     *
+     * 1. **XRef replacement:** If a [TypeDecl.XRef] body already exists in [typeAsts] for a
+     *    [GlobalTypeId], a concrete definition (Struct, Enum, etc.) replaces it. The first
+     *    non-XRef definition wins.
+     *
+     * 2. **Same-hash suppression:** If an identical body (same content hash) already exists,
+     *    the duplicate is logged as `ast-id-collision-same-hash` and silently discarded.
+     *
+     * 3. **Hash-differing first-writer-wins:** If a body with a different hash exists for the
+     *    same [GlobalTypeId], the new body is discarded (first-writer-wins), and the collision
+     *    is logged and recorded in [collidingAsts] for audit purposes. This happens when forward
+     *    EXCL creates a placeholder HeaderFile that diverges from the real BINCL HeaderFile
+     *    (see stabs-canonicalization.md §6 deviation D1).
+     */
     fun appendAsts(asts: List<TypeAst>) {
         val new = asts.groupBy { it.id }
         // replace XRef by its definition
