@@ -6,6 +6,7 @@ All entries verified against the current `xapasmcsr.exe` regression run
 `src/test/resources/harvests/xapasmcsr-harvest.json`).
 
 ## Open
+- [ ] take N_SO "directory" entries into account (two N_SO in a row -> the first is the directory location of the header, store it in a field inside CUSource)
 - [ ] SymbolDecl vs TypeDecl? 
 - [ ] purge forbidden words from git history: csr/qualcomm/adk/xapasmcsr/appquery/bose/qc35/bluecore
 - [ ] stop copying test resources to build/
@@ -67,6 +68,10 @@ All entries verified against the current `xapasmcsr.exe` regression run
 - [ ] fix log capture in tests
     - should we use Msg.debug/info/warn/error etc instead of MessageLog ?
 
+
+- [ ] **demangle function names from stab records** (Harvest.kt) — currently mangled names from N_FUN records are stored as-is; should demangle them at point of recording for cleaner symbols.
+
+- [ ] **investigate N_RSYM vs N_LSYM register local semantics** (Harvest.kt) — when parsing N_RSYM records, determine how register-based locals differ from N_LSYM-declared stack locals; currently unclear if the distinction matters for type resolution.
 
 - [ ] **invoke `GnuDemangler` directly on stab-derived labels**. Pinned by
   the disabled test `freeFunctionSymbolGetsDemangled`. Root cause: Ghidra's
