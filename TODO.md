@@ -6,7 +6,13 @@ All entries verified against the current `xapasmcsr.exe` regression run
 `src/test/resources/harvests/xapasmcsr-harvest.json`).
 
 ## Open
-
+- [ ] SymbolDecl vs TypeDecl? 
+- [ ] purge forbidden words from git history: csr/qualcomm/adk/xapasmcsr/appquery/bose/qc35/bluecore
+- [ ] stop copying test resources to build/
+- [ ] figure out Junit 4 vs 5 nonsense (intellij complains)
+- [x] handle bool better (fixed ?)
+- [ ] ghidra messes up namespaces when demangling names that have :: within <>
+- [ ] global/statics are not renamed, they get their name from PE symbols which have a preceding undersocre
 - [ ] **gcc per-BINCL include-stack vs our flat `fileNumToHeader`**.
   After the N_GSYM/N_PSYM canonicalisation fix (see Done), every global
   carrying inline-defined types DOES apply, but cross-CU element refs
@@ -24,6 +30,32 @@ All entries verified against the current `xapasmcsr.exe` regression run
 
 - [ ] need to tally placeholders that were never replaced in the diagnostics (fwd-decl)
 - [ ] is there any point left to rawByIdSnapshot ?
+
+- [ ] **[algo-audit] D1: Fix forward-EXCL placeholder divergence** —
+  Ref: stabs-canonicalization.md §6, §4 deviation D1.
+  `HeaderRegistry.recall()` creates a non-globally-registered placeholder when N_EXCL
+  precedes N_BINCL. The placeholder is never patched when the real BINCL arrives, so
+  types attributed to the placeholder get different GlobalTypeIds than the real header
+  → hash collisions in appendAsts() (207 in xapasmcsr). Fix: when a real BINCL arrives
+  for (filename, checksum) and a placeholder already exists, replace the placeholder
+  with the real HeaderFile in all affected IncludeContext instances.
+  [out of scope for stabs-algo-audit plan]
+
+- [ ] **[algo-audit] D2: Update Attribution.categoryFor() for HeaderSource** —
+  Ref: stabs-canonicalization.md §7.1, deviation D2.
+  `Attribution.categoryFor()` does not handle HeaderSource distinctly from CUSource.
+  Header-attributed types fall into the multi-CU heuristic branch, producing
+  `/headers-untracked/` or `/instantiations/` categories rather than a header-aware path.
+  Fix: add a HeaderSource → `/headers/<filename_without_ext>/` routing branch.
+  [out of scope for stabs-algo-audit plan]
+
+- [ ] **[algo-audit] D3: Patch forward-EXCL placeholders when real BINCL arrives** —
+  Ref: stabs-canonicalization.md §7.2, deviation D3.
+  `preSeedHeaders()` two-pass pre-seeding does not patch forward-EXCL placeholders
+  when the BINCL arrives. When HeaderRegistry.recall() creates a placeholder for a
+  forward EXCL, and a later BINCL arrives, the new real HeaderFile should replace
+  the placeholder in all IncludeContext instances that reference it.
+  [out of scope for stabs-algo-audit plan]
 
 - [ ] (partial) **dedup code with RTTIGccClassRecoverer / GccTypeinfo /
   RecoverClassesFromRTTIScript** — `RecoveredClassHelper` lives in
@@ -187,7 +219,7 @@ All entries verified against the current `xapasmcsr.exe` regression run
   `harvest-typeAsts` with per-kind breakdown, `harvest-cus`,
   `harvest-typeAsts-{unique,dup}-by-id`. Surfaces "how much did we even
   see?" before any apply-side filtering. Counter `vftable-slot-fallback-untyped`
-  + `method-param-unresolved` track signature-resolution health.
+    + `method-param-unresolved` track signature-resolution health.
 
 - [x] **vftable convention compatibility with shift-S workflow** —
   `ClassBuilder.buildAndApplyVtable` now:
