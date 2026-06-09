@@ -2,14 +2,13 @@ package ghistabs.builder
 
 import ghidra.program.model.data.*
 import ghistabs.parser.GlobalTypeId
-import ghistabs.parser.LocalTypeId
 import ghistabs.parser.TypeDecl
 
 object BuiltinTable {
     fun resolve(decl: TypeDecl<GlobalTypeId>): DataType? = when (decl) {
-        // _Bool special case: 8-bit unsigned that maps to BooleanDataType
+        // _Bool special case: gdb stabs encodes _Bool as (0,-16); n=-16 is preserved after globalisation.
         is TypeDecl.WithSizeAttr if decl.inner is TypeDecl.Ref &&
-            decl.inner.id == LocalTypeId(0, -16) -> BooleanDataType()
+            decl.inner.id.n == -16 -> BooleanDataType()
 
         // For WithSizeAttr with a non-boolean inner, resolve the inner and check for sign
         is TypeDecl.WithSizeAttr -> {

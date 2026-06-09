@@ -1,48 +1,48 @@
 package ghistabs.builder
 
 import ghidra.program.model.data.*
-import ghistabs.parser.LocalTypeId
+import ghistabs.parser.GlobalTypeId
+import ghistabs.parser.SourceFile
 import ghistabs.parser.TypeDecl
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertInstanceOf
 
-/**
- * Pure unit tests for BuiltinTable core logic.
- * Tests the data type classification algorithm without mocking DataTypeManager.
- */
 class BuiltinTableTest {
+    private val cu = SourceFile.CUSource("test")
+
     @Test
     fun testClassifySignedInt32() {
-        val kind = BuiltinTable.resolve(TypeDecl.Range(LocalTypeId(0, 1), -2147483648L, 2147483647L))
+        val kind = BuiltinTable.resolve(TypeDecl.Range(GlobalTypeId(cu, 1), -2147483648L, 2147483647L))
         assertInstanceOf<IntegerDataType>(kind)
         assertEquals(4, kind.length)
     }
 
     @Test
     fun testClassifyUnsignedInt32() {
-        val kind = BuiltinTable.resolve(TypeDecl.Range(LocalTypeId(0, 1), 0L, 4294967295L))
+        val kind = BuiltinTable.resolve(TypeDecl.Range(GlobalTypeId(cu, 1), 0L, 4294967295L))
         assertInstanceOf<UnsignedIntegerDataType>(kind)
         assertEquals(4, kind.length)
     }
 
     @Test
     fun testClassifyUnsignedByte() {
-        val kind = BuiltinTable.resolve(TypeDecl.Range(LocalTypeId(0, 1), 0L, 255L))
+        val kind = BuiltinTable.resolve(TypeDecl.Range(GlobalTypeId(cu, 1), 0L, 255L))
         assertInstanceOf<ByteDataType>(kind)
         assertEquals(1, kind.length)
     }
 
     @Test
     fun testClassifyWithSizeAttr64ULL() {
-        val kind = BuiltinTable.resolve(TypeDecl.WithSizeAttr(64, TypeDecl.Range(LocalTypeId(0, 6), 0L, -1L)))
+        val kind = BuiltinTable.resolve(TypeDecl.WithSizeAttr(64, TypeDecl.Range(GlobalTypeId(cu, 6), 0L, -1L)))
         assertInstanceOf<UnsignedLongLongDataType>(kind)
         assertEquals(8, kind.length)
     }
 
     @Test
     fun testClassifyBool() {
-        val kind = BuiltinTable.resolve(TypeDecl.WithSizeAttr(8, TypeDecl.Ref(LocalTypeId(0, -16))))
+        // gdb stabs encodes _Bool as (0,-16); n=-16 is the canonical identifier after globalisation.
+        val kind = BuiltinTable.resolve(TypeDecl.WithSizeAttr(8, TypeDecl.Ref(GlobalTypeId(cu, -16))))
         assertInstanceOf<BooleanDataType>(kind)
         assertEquals(1, kind.length)
     }
@@ -63,7 +63,7 @@ class BuiltinTableTest {
 
     @Test
     fun testClassifyNonPrimitive() {
-        val kind = BuiltinTable.resolve(TypeDecl.Pointer(TypeDecl.Ref(LocalTypeId(0, 1))))
-        assertEquals(kind, null)
+        val kind = BuiltinTable.resolve(TypeDecl.Pointer(TypeDecl.Ref(GlobalTypeId(cu, 1))))
+        assertEquals(null, kind)
     }
 }
