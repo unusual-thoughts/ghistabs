@@ -234,6 +234,22 @@ class ParserBugfixTest {
     }
 
     /**
+     * Cross-reference forward declaration of an enum (xe descriptor).
+     * An enum forward ref by tag name without body definition.
+     * stabs PDF §5.10 "Cross-References"
+     */
+    @Test
+    fun testEnumXRef() {
+        val input = "my_enum:T(0,52)=xeMyEnum:"
+        val expected = SymbolDecl.TaggedType(
+            name = "my_enum",
+            id = LocalTypeId(0, 52),
+            type = TypeDecl.XRef<LocalTypeId>(kind = AggrKind.ENUM, tagName = "MyEnum"),
+        )
+        assertEquals(expected, Parser(input).parseSymbol())
+    }
+
+    /**
      * Deeply nested InlineDef: InlineDef containing InlineDef containing Struct.
      * Tests that the parser correctly handles arbitrary nesting depth of inline
      * type definitions without recursion issues.
@@ -253,46 +269,55 @@ class ParserBugfixTest {
         // Outer: (0,60) = (0,61) = struct { inner : (0,62) = ... }
         // Inner: (0,62) = (0,63) = struct { value : (0,64) = range }
         val input = "nested:T(0,60)=(0,61)=s8inner:(0,62)=(0,63)=s4value:(0,64)=r(0,1);0;32;,0,32;;,0,64;;"
-        val symbol = assertDoesNotThrow({
-            Parser(input).parseSymbol()
-        }, "Deeply nested InlineDef should parse without infinite recursion")
-
-        // Verify the structure parsed correctly
-        assertNotNull(symbol, "Parse result must not be null")
-        @Suppress("USELESS_IS_CHECK", "UNCHECKED_CAST")
-        if (symbol is SymbolDecl.TaggedType<*>) {
-            val typeDecl = symbol.type
-            // The top-level type should be an InlineDef
-            if (typeDecl is TypeDecl.InlineDef<*>) {
-                assertEquals(LocalTypeId(0, 60), typeDecl.id)
-                // The body should be another InlineDef
-                val body = typeDecl.body
-                if (body is TypeDecl.InlineDef<*>) {
-                    assertEquals(LocalTypeId(0, 61), body.id)
-                    // The nested body should be a Struct
-                    if (body.body is TypeDecl.Struct<*>) {
-                        val struct = body.body as TypeDecl.Struct<LocalTypeId>
-                        assertTrue(struct.fields.isNotEmpty(), "Outer struct should have fields")
-                        // Check that the first field's type is an InlineDef
-                        val firstField = struct.fields[0]
-                        assertEquals("inner", firstField.name)
-                        if (firstField.type is TypeDecl.InlineDef<*>) {
-                            val innerInlineDef = firstField.type as TypeDecl.InlineDef<LocalTypeId>
-                            assertEquals(LocalTypeId(0, 62), innerInlineDef.id)
-                            // The inner InlineDef should also wrap a struct
-                            if (innerInlineDef.body is TypeDecl.InlineDef<*>) {
-                                val deeperInlineDef = innerInlineDef.body as TypeDecl.InlineDef<LocalTypeId>
-                                assertEquals(LocalTypeId(0, 63), deeperInlineDef.id)
-                                if (deeperInlineDef.body is TypeDecl.Struct<*>) {
-                                    val innerStruct = deeperInlineDef.body as TypeDecl.Struct<LocalTypeId>
-                                    assertEquals(1, innerStruct.fields.size)
-                                    assertEquals("value", innerStruct.fields[0].name)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        val expected = SymbolDecl.TaggedType(
+            name = "nested",
+            id = LocalTypeId(0, 60),
+            type = TypeDecl.InlineDef(
+                id = LocalTypeId(0, 61),
+                body = TypeDecl.Struct(
+                    kind = AggrKind.STRUCT,
+                    sizeBytes = 8,
+                    bases = emptyList(),
+                    fields = listOf(
+                        FieldDecl(
+                            name = "inner",
+                            type = TypeDecl.InlineDef(
+                                id = LocalTypeId(0, 62),
+                                body = TypeDecl.InlineDef(
+                                    id = LocalTypeId(0, 63),
+                                    body = TypeDecl.Struct(
+                                        kind = AggrKind.STRUCT,
+                                        sizeBytes = 4,
+                                        bases = emptyList(),
+                                        fields = listOf(
+                                            FieldDecl(
+                                                name = "value",
+                                                type = TypeDecl.InlineDef(
+                                                    id = LocalTypeId(0, 64),
+                                                    body = TypeDecl.Range(LocalTypeId(0, 1), 0, 32),
+                                                ),
+                                                offsetBits = 0,
+                                                sizeBits = 32,
+                                                isStatic = false,
+                                            ),
+                                        ),
+                                        methods = emptyList(),
+                                        hasVTablePointerMarker = false,
+                                        vtableTargetTypeId = null,
+                                    ),
+                                ),
+                            ),
+                            offsetBits = 0,
+                            sizeBits = 64,
+                            isStatic = false,
+                        ),
+                    ),
+                    methods = emptyList(),
+                    hasVTablePointerMarker = false,
+                    vtableTargetTypeId = null,
+                ),
+            ),
+        )
+        assertEquals(expected, Parser(input).parseSymbol())
     }
 }
