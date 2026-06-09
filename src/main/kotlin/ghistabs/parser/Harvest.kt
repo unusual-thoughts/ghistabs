@@ -109,7 +109,6 @@ class Harvester(
     val sharedHeaderRegistry = HeaderRegistry(this)
 
     val currentInclude get() = includesByFile[currentCu?.filename]
-    val currentSource get() = currentInclude?.currentInclude ?: currentCu!!
     fun globalIdFor(id: LocalTypeId) = GlobalTypeId(currentInclude?.sourceFor(id) ?: currentCu!!, id.n)
 
     internal fun preSeedHeaders(records: List<StabRecord>) {
@@ -158,10 +157,6 @@ class Harvester(
                 }
 
                 // line context
-                StabType.N_SOL if (rec.name.isNotEmpty()) -> {
-                    // N_SOL does not affect type namespace; ignored for harvesting
-                }
-
                 StabType.N_BINCL, StabType.N_EINCL, StabType.N_EXCL -> {}
 
                 StabType.N_FUN -> if (rec.name.isEmpty()) {
@@ -171,7 +166,6 @@ class Harvester(
                 } else {
                     val addr = resolver.buildAddress(rec.value)
                     // Pull mangled name from before the colon.
-                    // FIXME: demangle
                     val mangled = rec.name.substringBefore(':')
                     resolver.recordFromStab(mangled, addr)
                     try {
@@ -216,10 +210,8 @@ class Harvester(
                             is SymbolDecl.StackParam, is SymbolDecl.RegParam ->
                                 open.params += ParamRecord(decl, rec.value)
 
-                            is SymbolDecl.RegLocal -> {
-                                // TODO: how does that differ from N_LSYM ?
+                            is SymbolDecl.RegLocal ->
                                 open.locals.add(LocalRecord(decl, rec.value, i))
-                            }
 
                             else -> log("unexpected-psym-rsym", "@$i: $decl")
                         }
@@ -331,8 +323,8 @@ class Harvester(
     }
 
     /**
-     * Recursively converts a [TypeDecl<LocalTypeId>] to [TypeDecl<GlobalTypeId>] by replacing
-     * local type references with global ones.
+     * Recursively converts a [TypeDecl] (with [LocalTypeId] nodes) to [TypeDecl] (with [GlobalTypeId] nodes)
+     * by replacing local type references with global ones.
      *
      * Identity on terminal nodes: leaf types like [TypeDecl.Builtin] and [TypeDecl.Void] pass
      * through unchanged via `@Suppress("UNCHECKED_CAST")`.
@@ -342,7 +334,7 @@ class Harvester(
      *
      * InlineDef side effect: when an [TypeDecl.InlineDef] is encountered, its body is
      * globalized AND a [TypeAst] is emitted as a side effect (the side effect itself
-     * happens in the caller's [walkDefinitions] and [appendAsts], not within [globalize]).
+     * happens in sibling methods [walkDefinitions] and [appendAsts], not within [globalize]).
      * This ensures inline-type definitions are hoisted into the top-level [typeAsts] collection.
      */
     @Suppress("UNCHECKED_CAST")
