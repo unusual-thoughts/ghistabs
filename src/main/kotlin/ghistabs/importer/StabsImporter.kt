@@ -39,13 +39,12 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
             ctx.dtm,
             ctx.sink,
             ctx.diagnostics,
-            harvest.typeResolver,
+            harvest,
         )
+
         val txB = ctx.program.startTransaction("Stabs: materialise types")
         try {
-            typeRegistry.materialiseAll(harvest.typeAsts.values) { name, cus ->
-                Attribution.categoryFor(name, cus, ctx.diagnostics)
-            }
+            typeRegistry.materialiseAll()
         } finally {
             ctx.program.endTransaction(txB, true)
         }
@@ -212,22 +211,26 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
 
         // Classes + vtables.
         if (ctx.options.applyVtables) {
-            val classBuilder = ghistabs.builder.ClassBuilder(
-                typeRegistry,
-                harvest.typeResolver,
-                ctx,
+            val classBuilder = ghistabs.builder.ClassBuilder(typeRegistry, harvest, ctx)
+            // Each class header transitively included by N CUs produces N TypeAst
+            // entries with distinct GlobalTypeIds but identical `ghidraName`
+            // (xapasmcsr: 86 names duplicated, up to 11x each). `materialiseAll`
+            // already collapsed them into one DTM Structure per name; group here
+            // so we build each class once, with two extra requirements:
+            //
+            //  * Attribution gets the *union* of defining CUs, matching the key
+            //    `materialiseAll` used when picking a category. Without this,
+            //    most ASTs would resolve to a non-canonical category and the
+            //    DTM lookup would miss (cf. old `[class-not-struct]` spam).
+            //  * Among same-name ASTs, pick the most-detailed body (max methods,
+            //    then max fields). Different transitive-include paths can see
+            //    different completeness — e.g. one CU sees only the forward
+            //    decl, another the full body with methods.
+            ctx.diagnostics.inc(
+                "class-build-name-collisions",
+                harvest.astsByGhidraName.values.count { it.size > 1 }.toLong(),
             )
-            // Dedupe ASTs by name: many classes appear under multiple cuFiles (each transitive
-            // include of a header that defines the class produces a TypeAst). materialiseAll
-            // collapses them into one DataType keyed by the union of defining CUs; ClassBuilder
-            // must use the same union for Attribution so its DTM lookup matches.
-            // Dedupe ASTs by name and use the union of cuFiles for Attribution — the same
-            // signal materialiseAll used when seeding placeholders. Per-AST iteration with
-            // single-cuFile attribution produced N attempted `dtm.getDataType` lookups per
-            // class, only ONE landing on the canonical category (huge `[class-not-struct]`
-            // log spam). Pick the most-detailed body (max methods, then fields) so vtable
-            // construction sees the full method list.
-            for ((name, asts) in harvest.typeAsts.values.groupBy { it.ghidraName }) {
+            for ((name, asts) in harvest.astsByGhidraName) {
                 val structAsts = asts.mapNotNull {
                     when (it.body) {
                         is TypeDecl.Struct -> it.cu to it.body
@@ -399,6 +402,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
                 }
 
                 is SymbolDecl.RegLocal -> ctx.diagnostics.inc("regparam-deferred")
+//                    "Register local '${decl.name}' in function deferred (register mapping not implemented)",
             }
         } catch (e: Exception) {
             // local-var-error counter auto-bumps via BookmarkSink tag→counter contract
@@ -434,6 +438,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
             ctx.diagnostics.recordGlobal(decl.name, "skipped", dtKind = "unknown", reason = "unresolved-symbol")
             return false
         }
+        ensureStabLabel(addr, decl.name)
 
         val dt = typeRegistry.dataTypeFor(decl.type) ?: run {
             ctx.diagnostics.recordGlobal(
@@ -496,6 +501,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
     ): Boolean {
         val addr = ctx.resolver.buildAddress(rawAddr)
         val dt = typeRegistry.dataTypeFor(decl.type) ?: return false
+        ensureStabLabel(addr, decl.name)
 
         try {
             // Clear any existing code units before creating data to avoid conflicts
@@ -506,6 +512,34 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
             return false
         }
         return true
+    }
+
+    /**
+     * Make `name` (the demangled C/C++ source-form name from the stab) the
+     * primary label at `addr`. Without this, globals/statics keep the PE
+     * loader's `_<name>` label and the demangled form never appears in the
+     * symbol table.
+     *
+     * Idempotent: skips creation when a same-named symbol already exists, and
+     * skips re-promotion when it's already primary.
+     */
+    private fun ensureStabLabel(addr: Address, name: String) {
+        val symtab = ctx.program.symbolTable
+        val existing = symtab.getSymbols(addr).firstOrNull { it.name == name }
+        val sym = existing ?: try {
+            symtab.createLabel(addr, name, SourceType.IMPORTED)
+        } catch (e: Exception) {
+            log("symbol-create-error", "$name at $addr: ${e.message}")
+            return
+        }
+        if (!sym.isPrimary) {
+            try {
+                ghidra.app.cmd.label.SetLabelPrimaryCmd(addr, sym.name, sym.parentNamespace)
+                    .applyTo(ctx.program)
+            } catch (e: Exception) {
+                log("symbol-primary-error", "$name at $addr: ${e.message}")
+            }
+        }
     }
 
     internal data class ApplyResult(val functions: Int, val globals: Int, val classes: Int = 0)

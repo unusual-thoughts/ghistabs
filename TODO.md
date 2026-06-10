@@ -1,162 +1,96 @@
 # TODO
 
-Last triaged: 2026-06-09.
+Last triaged: 2026-06-10.
 All entries verified against the current `xapasmcsr.exe` regression run
-(`src/test/resources/logs/xapasmcsr.log`,
+(`src/test/resources/logs/xapasmcsr.after.log`,
 `src/test/resources/harvests/xapasmcsr-harvest.json`).
 
 ## Open
+
+### Admin / scope
+
 - [ ] add any missing documentation for Stabs tokens in the parser (similar to what was done for N_*)
-- [ ] take N_SO "directory" entries into account (two N_SO in a row -> the first is the directory location of the header, store it in a field inside CUSource)
-- [ ] SymbolDecl vs TypeDecl?
+- [ ] take N_SO "directory" entries into account (two N_SO in a row → the first is the directory
+  location of the header, store it in a field inside CUSource)
+- [ ] does the TypeDecl / SymbolDecl split make sense, or should they merge?
 - [ ] purge forbidden words from git history: csr/qualcomm/adk/xapasmcsr/appquery/bose/qc35/bluecore
 - [ ] stop copying test resources to build/
 - [ ] figure out Junit 4 vs 5 nonsense (intellij complains)
-- [x] handle bool better (fixed ?)
-- [ ] ghidra messes up namespaces when demangling names that have :: within <>
-- [ ] global/statics are not renamed, they get their name from PE symbols which have a preceding underscore
+- [ ] fix log capture in tests — should we use Msg.debug/info/warn/error etc instead of MessageLog?
+- [ ] **investigate N_RSYM vs N_LSYM register local semantics** (Harvest.kt) — when parsing N_RSYM
+  records, determine how register-based locals differ from N_LSYM-declared stack locals; currently
+  unclear if the distinction matters for type resolution.
+- [ ] **check the logic actual GDB uses to deduplicate / canonicalize types and classes** — see if
+  our algorithm makes sense or if we need to change or simplify it.
+
+### Forward-EXCL placeholder divergence (D1 / D3 / include-stack)
+
+- [ ] **D1 / D3: patch forward-EXCL placeholders on BINCL arrival** —
+  Ref: stabs-canonicalization.md §2.3, §6, §7.2; deviations D1 and D3.
+  When N_EXCL precedes N_BINCL for the same (filename, checksum),
+  `HeaderRegistry.recall()` creates a non-globally-registered placeholder
+  `HeaderFile(originatingCu=null)`. When the real BINCL arrives later,
+  `getOrInsert()` creates a distinct `HeaderFile` instance — the two never
+  merge, so types attributed to the placeholder get different GlobalTypeIds
+  than types attributed to the real header (207 hash collisions in
+  xapasmcsr). Concrete symptom: `BranchInstructions` 16-element array
+  resolves element type to wrong slot.
+  Fix options:
+    1. On real BINCL arrival, replace the placeholder in all affected
+       `IncludeContext` instances. Closest to the spec, requires tracking
+       which IncludeContexts referenced the placeholder.
+    2. Switch to a content-keyed cross-CU type index independent of file
+       slot. Heavier refactor but sidesteps the placeholder model entirely.
+  Should also add a diagnostic counter for unreplaced placeholders so we
+  can spot regressions.
+
 - [ ] **gcc per-BINCL include-stack vs our flat `fileNumToHeader`** —
-  Ref: stabs-canonicalization.md §2.5, §4.1 cross-CU deduplication model.
-  gdb uses `this_object_header_files[]` per-CU array (gdb/stabsread.c add_new_header_file(),
-  add_old_header_file()) to maintain per-CU stacks of header contexts; our `IncludeContext.fileNumToHeader`
-  is the flat analogue, but does not model re-entry stacks for the same header within one CU (forward-EXCL
-  case in §2.3). Concrete case: `BranchInstructions` 16-element array resolves element type to wrong slot
-  because N_EXCL placeholder (148) never merges with real N_BINCL — they allocate different GlobalTypeIds.
-  Fix needs either (a) placeholder patching on BINCL arrival (deviation D1), or (b) content-keyed cross-CU
-  type index independent of file slot.
-
-- [ ] need to tally placeholders that were never replaced in the diagnostics (forward-EXCL without matching BINCL):
-  `HeaderRegistry.recall()` creates placeholder `HeaderFile(originatingCu=null)` for N_EXCL arriving before the corresponding
-  N_BINCL. A later `getOrInsert()` for the same key creates a distinct non-placeholder — they never merge, causing
-  GlobalTypeId collision (forward-EXCL case). See stabs-canonicalization.md §2.3, §6, deviation D1.
-
-- [ ] **[algo-audit] D1: Fix forward-EXCL placeholder divergence** —
-  Ref: stabs-canonicalization.md §2.3, §6, deviation D1.
-  `HeaderRegistry.recall()` creates a non-globally-registered placeholder when N_EXCL
-  precedes N_BINCL. The placeholder is never patched when the real BINCL arrives, so
-  types attributed to the placeholder get different GlobalTypeIds than the real header
-  → hash collisions in appendAsts() (207 in xapasmcsr). Fix: when a real BINCL arrives
-  for (filename, checksum) and a placeholder already exists, replace the placeholder
-  with the real HeaderFile in all affected IncludeContext instances.
-  [out of scope for stabs-algo-audit plan]
-
-- [ ] **[algo-audit] D2: Update Attribution.categoryFor() for HeaderSource** —
-  Ref: stabs-canonicalization.md §7.1, deviation D2.
-  `Attribution.categoryFor()` does not handle HeaderSource distinctly from CUSource.
-  Header-attributed types fall into the multi-CU heuristic branch, producing
-  `/headers-untracked/` or `/instantiations/` categories rather than a header-aware path.
-  Fix: add a HeaderSource → `/headers/<filename_without_ext>/` routing branch.
-  [out of scope for stabs-algo-audit plan]
-
-- [ ] **[algo-audit] D3: Patch forward-EXCL placeholders when real BINCL arrives** —
-  Ref: stabs-canonicalization.md §7.2, deviation D3.
-  `preSeedHeaders()` two-pass pre-seeding does not patch forward-EXCL placeholders
-  when the BINCL arrives. When HeaderRegistry.recall() creates a placeholder for a
-  forward EXCL, and a later BINCL arrives, the new real HeaderFile should replace
-  the placeholder in all IncludeContext instances that reference it.
-  [documented: stabs-canonicalization.md §7.2 — preSeedHeaders establishes IncludeContext per CU
-  before passA processes any type symbols; forward-EXCL handling still incomplete (deviation D3)]
-
-- [ ] **[vestigial] D5: rawByIdSnapshot** —
-  [documented: stabs-canonicalization.md §7.4, deviation D5 — Field removed in commit 7d2bc56; vestigial comments remain
-  in TypeRegistry.kt lines 88, 457, 462 and ResolverDecision.kt line 40 describing old lookup cascade; no live consumer]
-
-- [ ] **[vestigial] D6: collidingAsts downstream consumer** —
-  [documented: stabs-canonicalization.md §8.4, §9.6, deviation D6; Map populated by appendAsts() (lines 415–419)
-  but no downstream consumer in TypeRegistry, ClassBuilder, or StabsImporter; diagnostic-only serialized to harvest JSON]
-
-- [ ] **[stale] D2: Attribution.categoryFor() ignores HeaderSource** —
-  [documented: stabs-canonicalization.md §7.1, deviation D2; new TODO added in Phase 3 with spec citation; see D2
-  TODO item above for fix description]
-
-- [ ] **[incomplete] D7: AttributionTraceDump usage** —
-  [incomplete: not updated for HeaderSource model; see stabs-canonicalization.md §7.1, deviation D7]
-
-- [ ] (partial) **dedup code with RTTIGccClassRecoverer / GccTypeinfo /
-  RecoverClassesFromRTTIScript** — `RecoveredClassHelper` lives in
-  `ghidra_scripts/classrecovery/` (Ghidra script source, not on Ghidra's
-  compiled classpath) so a compiled extension can't import it. Full
-  delegation would require vendoring ~9 kLOC of script source (Apache-2.0,
-  legal but heavy). Convention-level compatibility is done (see Done
-  below); we keep our own vtable construction.
-- [ ] fix log capture in tests
-    - should we use Msg.debug/info/warn/error etc instead of MessageLog ?
-
-- [ ] **demangle function names from stab records** (Harvest.kt) — currently mangled names from N_FUN records are stored as-is; should demangle them at point of recording for cleaner symbols.
-
-- [ ] **investigate N_RSYM vs N_LSYM register local semantics** (Harvest.kt) — when parsing N_RSYM records, determine how register-based locals differ from N_LSYM-declared stack locals; currently unclear if the distinction matters for type resolution.
-
-- [ ] **invoke `GnuDemangler` directly on stab-derived labels**. Pinned by
-  the disabled test `freeFunctionSymbolGetsDemangled`. Root cause: Ghidra's
-  demangler is a `BYTE_ANALYZER` that runs once at priority ~897 over the
-  loader-added symbol set. We now run at `LOW_PRIORITY` (10000, see
-  `StabsAnalyzer.kt`) so labels created via `recordFromStab` only appear
-  after the demangler has finished, and Ghidra does not re-trigger the
-  demangler for later-added symbols. Fix options:
-    1. Call `DemanglerUtil.demangle(name)` in `ProgramAddressResolver.recordFromStab`
-       and create the label under the demangled form when it parses.
-    2. Add a follow-up pass at the end of `StabsImporter.run` that walks
-       all IMPORTED labels starting with `_Z`/`__Z` and demangles each.
-       Symptom on xapasmcsr.exe: `_Z11RegToBinary12EnumRegToken` stays mangled.
-       Behaviour is identical in both AFTER and CONCURRENT modes — initial
-       hypothesis that it was a concurrency race was wrong.
-
-- [ ] **check the logic actual GDB uses to deduplicate / canonicalize
-  types and classes**, see if our algorithm makes sense or if we need to
-  change or simplify it.
+  Ref: stabs-canonicalization.md §2.5, §4.1.
+  gdb uses `this_object_header_files[]` (gdb/stabsread.c
+  `add_new_header_file()`, `add_old_header_file()`) — a per-CU stack of
+  header contexts. Our flat `IncludeContext.fileNumToHeader` doesn't model
+  re-entry stacks for the same header within one CU. Whether this matters
+  in practice depends on whether D1/D3 (above) is enough; if it is, the
+  per-CU stack is superseded.
 
 ### Likely still broken
 
-- [ ] **`vfptr-collision` on `CLexStream`** —
+- [ ] **`vfptr-collision` on `CLexStream`** (2 entries in current log) —
   `[vfptr-collision] CLexStream: cannot place {vfptr} at +0 (occupied by _base_unknown_0)`.
   CLexStream's base type is in a header gcc didn't fully resolve, so the
-  base-insertion path emitted an `_base_unknown_0` synthetic placeholder.
-  `firstPolymorphicBase` then can't recognise the placeholder as polymorphic,
-  so VfptrDecision falls through to `CollisionAt`. Either teach
-  `resolveBaseAstStatic` to follow the synthetic placeholder, or detect the
-  case and emit `vfptr-inherited-from-base`. Two remaining
-  `[vfptr-collision]` entries on the binary, both CLexStream.
-
-- [ ] **demangled method names sometimes replaced by mangled** —
-    - issue related to demangler analysis running simultaneously
-    - take with a grain of salt: observed on some renamed methods; the displayed name for non-ctor/dtor
-      methods comes from `displayNameFor` and falls back to `m.name` when
-      the input mangled name isn't a ctor/dtor pattern, but the user wants
-      the fully demangled form (e.g. `Dump`, not `_ZN6DSInst4DumpEPt`).
-      Plug Ghidra's `GnuDemangler` and use the demangled form as fallback.
-
-- [ ] **`[class-apply-error]` on long templated `_Rb_tree<…>` names** (216 entries)
-  — Ghidra rejects symbol names with `<`/`>`/space. Each rejected
-  templated _Rb_tree<…> blocks the project iterator typedefs that wrap it
-  (`symtab_iterator_const`, `token_vector_iterator`,
-  `symbol_data_map_iterator`, etc. — currently failing as
-  `[dangling-ref] … [forward-same-cu]`, 9 entries). Sanitise long
-  template names (replace illegal chars with `_`) before creating the
-  symbol, or use Ghidra's `SymbolUtilities.replaceInvalidChars`.
-
-### Diagnostic noise / cosmetic
-
-- [ ] **`_Value_type` / `_ValueType` cross-CU dangling-refs** (37 of the 53
-  remaining `dangling-ref` entries) — libstdc++ `<bits/type_traits.h>`
-  template-internal typedefs. Each template instantiation gets its own
-  per-CU canonical id and the typedef body references a TypeId in a
-  different canonical CU. Genuine STL noise; cleanup would require
-  cross-CU resolution by name+hash for template-parameter typedefs.
-
-- [ ] **3 remaining `[class-not-struct]` entries** —
-  `_Rb_tree<…>` template instantiations whose mangled name was rejected
-  earlier (downstream of `class-apply-error` above).
+  base-insertion path emitted a `_base_unknown_0` synthetic placeholder.
+  `firstPolymorphicBase` then can't recognise the placeholder as
+  polymorphic, so `VfptrDecision` falls through to `CollisionAt`. Either
+  teach `resolveBaseAstStatic` to follow the synthetic placeholder, or
+  detect the case and emit `vfptr-inherited-from-base`.
 
 ### Quality / scope
 
-- [ ] **use Ghidra's GnuDemangler** instead of the hand-rolled
-  `VtableSymbolCandidates.itaniumMangleClassName` — currently rebuilds
-  the mangled name in Kotlin to look up `_ZTV<class>`. Ghidra's demangler
-  could match a class to existing symbols by demangling, side-stepping
-  templated-name edge cases.
+- [ ] **use Ghidra's `GnuDemangler` for `VtableSymbolCandidates`** instead of
+  the hand-rolled `itaniumMangleClassName` — currently rebuilds the mangled
+  name in Kotlin to look up `_ZTV<class>`. With the ClassBuilder demangler
+  refactor in place, the natural next step is iterate existing `_ZTV…`
+  symbols, demangle each, and match by class — sidestepping templated-name
+  edge cases.
+
+- [ ] **let `DemangledObject.applyTo` create the namespace hierarchy end to
+  end on the method path** — `ClassBuilder.namespaceChainFromMangled` now
+  walks the demangled namespace chain manually, but `applyTo` could do that
+  plus the rename in one call. If we adopt it, `reparentMethod` reduces to
+  "call applyTo, then set thiscall + explicit-this param list". Verify
+  whether applyTo's symbol-creation semantics conflict with our
+  `IMPORTED`-source / primary-label invariants before switching.
+
+- [ ] (partial) **dedup code with `RTTIGccClassRecoverer` / `GccTypeinfo` /
+  `RecoverClassesFromRTTIScript`** — `RecoveredClassHelper` lives in
+  `ghidra_scripts/classrecovery/` (script source, not on Ghidra's compiled
+  classpath), so a compiled extension can't import it. Full delegation
+  would require vendoring ~9 kLOC of script source (Apache-2.0, legal but
+  heavy). Convention-level compatibility is done; we keep our own vtable
+  construction.
 
 - [ ] **define structures in the `.stab` section itself** — turn
-  StabRecord into a Ghidra Structure overlay so the disassembler view of
+  `StabRecord` into a Ghidra Structure overlay so the disassembler view of
   `.stab` shows decoded fields (with refs into `.stabstr` and back into
   code/data for symbols).
 
@@ -172,7 +106,7 @@ All entries verified against the current `xapasmcsr.exe` regression run
 - [ ] Add kdoc to `Harvester`, `TypeRegistry`, and `ClassBuilder` covering
   the multi-pass pipeline (Pass A = harvest, materialiseAll = build types,
   applyAllSymbols = apply to program), placeholders, byHash dedup, and the
-  cross-CU canonicalisation/`(id, name)` split.
+  cross-CU canonicalisation / `(id, name)` split.
 - [ ] README/`docs/` short explainer for the hairy bits: CU canonicalisation,
   placeholders + pre-add to DTM, byHash dedup, the `(TypeId, name)` map,
   and the BINCL collision case.
@@ -182,15 +116,102 @@ All entries verified against the current `xapasmcsr.exe` regression run
 
 ## Done
 
+### TODO triage (2026-06-10)
+
+- [x] **naive `name.split("::")` breaks on `::` inside template `<…>`** —
+  fixed by `ghistabs/util/QualifiedName.split`, a depth-aware splitter
+  that tracks `<>`/`()` nesting. Wired into `ClassBuilder` (as the
+  fallback for type-only stabs) and `VtableSymbolCandidates`.
+
+- [x] **drop non-standard `_C1`/`_C2`/`_C3`/`_D0`/`_D1`/`_D2` ctor/dtor
+  display suffixes** — `ClassBuilder.displayNameFor` now emits the
+  demangled source-form name (`Foo` / `~Foo`); multiple Itanium variants
+  share that name and Ghidra disambiguates by address.
+
+- [x] **thread mangled names through to ClassBuilder so Ghidra's
+  `DemanglerUtil` handles namespace splitting** — `ensureClassNamespace`
+  prefers `namespaceChainFromMangled(m.mangled)`, walking
+  `DemangledObject.getNamespace()` parent-chain to build the GhidraClass
+  hierarchy without string-splitting. Falls back to the depth-aware
+  splitter when no mangled method is available. Follow-up "use
+  `DemangledObject.applyTo` end-to-end" tracked separately under Quality.
+
+- [x] **global/statics not renamed (PE-loader underscore wins)** — new
+  `StabsImporter.ensureStabLabel(addr, name)` creates an `IMPORTED`
+  label with the stab's demangled name and promotes it to primary via
+  `SetLabelPrimaryCmd`, so the demangled form displays over `_<name>`.
+  Called from `applyGlobal` and `applyStatic`.
+
+- [x] **`_Value_type` / `_ValueType` cross-CU dangling-refs** — gone.
+  Current `xapasmcsr.after.log` shows `dangling-ref = 0` and zero
+  occurrences of either name. Cleanup fell out of the canonicalisation
+  work (commits 3f2e566..3a40357).
+
+- [x] **demangle function names from stab records** — stale. The
+  end-of-import `demangleMangledLabels()` pass already converts `_Z…`
+  labels via Ghidra's demangler; the harvest legitimately stores raw
+  stab content. No remaining symptom in current runs.
+
+- [x] **D5: rawByIdSnapshot vestigial documentation** — removed the
+  three stale references in `TypeRegistry.kt` (`dataTypeFor` kdoc + two
+  inline comments) and the one in `ResolverDecision.kt`. Field already
+  gone since commit 7d2bc56; only the descriptive text was stale.
+
+- [x] **D7: `AttributionTraceDump` updated for header model** —
+  empty-result message now reads "no attribution trace recorded in this
+  run" instead of the misleading "/std/* in this run"; kdoc explains
+  that traces cover both `/std/*` and `/headers/*` (D2). Tests updated.
+
+- [x] **[algo-audit] D2: Attribution.categoryFor() routes HeaderSource to /headers/<basename>/** —
+  Ref: stabs-canonicalization.md §7.1, deviation D2.
+  Added a routing branch (Attribution.kt step 3) that fires when every
+  defining source is a `HeaderSource` and they all share the same filename
+  basename — single-defining case (the common case for header-attributed
+  types) AND multi-defining shared-header case (D1 forward-EXCL placeholders
+  produce distinct `HeaderFile` instances for the same physical header;
+  attribution still converges). Bumps `attribution-routed-headers` counter
+  and records an `AttributionTrace` via the generalised
+  `StabsDiagnostics.recordAttributionTrace(..., counter)` helper. Stays
+  before the single-CU shortcut so single HeaderSource defs land in
+  `/headers/<basename>/` instead of `/<basename>/`. Single-CUSource case
+  unchanged. Cross-header multi-defining cases still fall through to the
+  multi-CU heuristic (step 5).
+
+- [x] **`_Z11RegToBinary12EnumRegToken` stays mangled** — `demangleMangledLabels()`
+  end-of-import pass at `StabsImporter.kt:272–295` walks IMPORTED labels and
+  runs `DemanglerCmd` on residual `_Z…`/`__Z…` symbols. Confirmed zero
+  `_Z11…` occurrences in `xapasmcsr.after.log`.
+- [x] **demangled method names sometimes replaced by mangled** — covered
+  by the same end-of-import demangle pass + `StabsAnalyzer` at LOW_PRIORITY.
+- [x] **`[class-apply-error]` on templated `_Rb_tree<…>` names (216 entries)**
+  — diagnosis was wrong (`<` and `>` are valid in Ghidra symbol names; only
+  space is forbidden, and `ghidraName` already strips it via
+  `SymbolUtilities.replaceInvalidChars(name, false)`). Current
+  `xapasmcsr.after.log` shows 0 `class-apply-error` and 0 `_Rb_tree`
+  entries. (Older `xapasmcsr.log` baseline still shows them — it's stale
+  by 6 days.)
+- [x] **3 remaining `[class-not-struct]` entries downstream of
+  class-apply-error** — gone with the above.
+
 ### Phase 8 (stabs-algo-audit plan, 2026-06-09)
 
-- [x] **Parsing audit complete** — AC1: Every type expression form (range, array, struct/union, method #-form, XRef, InlineDef, pointer, reference, const, volatile, function, complex) has test coverage. Parser edge cases (trailing void sentinel, implicit this pointer) tested. Deeply nested InlineDef chains parse correctly (ParserPrimitiveTest, ParserClassTest, ParserBugfixTest).
+- [x] **Parsing audit complete** — AC1: Every type expression form (range, array, struct/union, method #-form, XRef,
+  InlineDef, pointer, reference, const, volatile, function, complex) has test coverage. Parser edge cases (trailing void
+  sentinel, implicit this pointer) tested. Deeply nested InlineDef chains parse correctly (ParserPrimitiveTest,
+  ParserClassTest, ParserBugfixTest).
 
-- [x] **Reference document written** — AC2: `docs/notes/stabs-canonicalization.md` complete with all 9 sections (1–8 spec/algo + 9 architecture audit), 7-item deviation table (D1–D7), and comprehensive spec citations to stabs PDF, BFD stabs.c, gdb stabsread.c.
+- [x] **Reference document written** — AC2: `docs/notes/stabs-canonicalization.md` complete with all 9 sections (1–8
+  spec/algo + 9 architecture audit), 7-item deviation table (D1–D7), and comprehensive spec citations to stabs PDF, BFD
+  stabs.c, gdb stabsread.c.
 
-- [x] **KDoc added to key functions** — AC2.4: Harvester, IncludeContext, HeaderRegistry, globalize(), appendAsts() annotated with comprehensive KDoc covering the multi-pass pipeline, placeholder handling, byHash dedup, cross-CU canonicalisation, and (TypeId, name) mapping.
+- [x] **KDoc added to key functions** — AC2.4: Harvester, IncludeContext, HeaderRegistry, globalize(), appendAsts()
+  annotated with comprehensive KDoc covering the multi-pass pipeline, placeholder handling, byHash dedup, cross-CU
+  canonicalisation, and (TypeId, name) mapping.
 
-- [x] **Harvester unit tests added** — AC3: HarvesterGlobalizeTest (identity, recursion, InlineDef, Ref resolution), HarvesterAppendAstsTest (XRef replacement, hash collision, first-writer-wins), HarvesterPassATest (N_SO/N_FUN/N_GSYM/N_LSYM state machine, N_SOL non-allocation, BINCL/EXCL/EINCL), HarvesterGapTest (untested deviations), IncludeContextTest extended (BINCL re-entry).
+- [x] **Harvester unit tests added** — AC3: HarvesterGlobalizeTest (identity, recursion, InlineDef, Ref resolution),
+  HarvesterAppendAstsTest (XRef replacement, hash collision, first-writer-wins), HarvesterPassATest (
+  N_SO/N_FUN/N_GSYM/N_LSYM state machine, N_SOL non-allocation, BINCL/EXCL/EINCL), HarvesterGapTest (untested
+  deviations), IncludeContextTest extended (BINCL re-entry).
 
 ### This session (2026-06-02 → 2026-06-04)
 

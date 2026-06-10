@@ -4,7 +4,6 @@ import ghidra.util.task.TaskMonitor
 import ghistabs.diag.DummySink
 import ghistabs.importer.StabOnlyAddressResolver
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
@@ -726,7 +725,5 @@ class HarvesterPassATest {
         assertEquals(0, harvest.parseErrors)
         assertTrue(harvest.symbolsByCu.containsKey("a.c"), "CU a.c should be registered in symbolsByCu")
         assertTrue(harvest.symbolsByCu.containsKey("b.c"), "CU b.c should be registered in symbolsByCu")
-        // The shared header registry should have both headers
-        assertNotNull(harvest.headerRegistry, "Header registry should be present")
     }
 }

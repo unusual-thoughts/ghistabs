@@ -1,5 +1,6 @@
 package ghistabs.builder
 
+import ghidra.app.util.demangler.DemanglerUtil
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.*
 import ghidra.program.model.gclass.ClassUtils
@@ -10,26 +11,12 @@ import ghidra.program.model.symbol.SourceType
 import ghistabs.diag.DiagnosticSink
 import ghistabs.importer.ImportContext
 import ghistabs.parser.*
-
-class TypeResolver(val typeAsts: Map<GlobalTypeId, TypeAst>) {
-    /** All struct ASTs harvested in Pass A, indexed by name. */
-    val structAstsByName = typeAsts.values.mapNotNull { ast ->
-        (ast.body as? TypeDecl.Struct)?.let { ast.name to (ast.id to it) }
-    }.toMap()
-
-    fun getTypeFor(id: GlobalTypeId) = typeAsts[id]
-
-    inline fun <reified T : TypeDecl<GlobalTypeId>> getBodyFor(id: GlobalTypeId) = getTypeFor(id)?.let {
-        it.body as? T
-    }
-
-    fun getStructByName(name: String) = structAstsByName[name]
-}
+import ghistabs.util.QualifiedName
 
 /**
  * Static helpers for polymorphic base detection (extracted for pure unit testing).
  */
-internal class ClassBuilderHelpers(val resolver: TypeResolver) {
+internal class ClassBuilderHelpers(val resolver: Harvest) {
     fun hasPolymorphicBaseSubobject(body: TypeDecl.Struct<GlobalTypeId>) = firstPolymorphicBase(body) != null
 
     fun firstPolymorphicBase(body: TypeDecl.Struct<GlobalTypeId>): BaseDecl<GlobalTypeId>? = body.bases
@@ -44,16 +31,16 @@ internal class ClassBuilderHelpers(val resolver: TypeResolver) {
 
     fun resolveBaseAstStatic(typeDecl: TypeDecl<GlobalTypeId>): TypeDecl.Struct<GlobalTypeId>? = when (typeDecl) {
         // Look up by TypeId using the byId map
-        is TypeDecl.Ref -> resolver.getBodyFor<TypeDecl.Struct<GlobalTypeId>>(typeDecl.id)
+        is TypeDecl.Ref -> resolver.getStruct(typeDecl.id)
 
         // Cross-reference by tagName: look in structAstsByName
-        is TypeDecl.XRef -> resolver.getStructByName(typeDecl.tagName)?.second
+        is TypeDecl.XRef -> resolver.getStructByXRef(typeDecl.tagName)?.second
 
         // Inline definition: prefer the materialised AST at this id (real struct body), fall
         // back to the inline body. The inline body is often a forward XRef stub whose Struct
         // form lives at typeAstsById[typeDecl.id] — without this fallback, base polymorphism
         // detection misses inherited vfptrs (e.g. DCInst → InlineDef(ExprInst id, XRef body)).
-        is TypeDecl.InlineDef -> resolver.getBodyFor<TypeDecl.Struct<GlobalTypeId>>(typeDecl.id)
+        is TypeDecl.InlineDef -> resolver.getStruct(typeDecl.id)
             ?: (typeDecl.body as? TypeDecl.Struct)
             ?: resolveBaseAstStatic(typeDecl.body)
 
@@ -63,7 +50,7 @@ internal class ClassBuilderHelpers(val resolver: TypeResolver) {
 
 class ClassBuilder(
     private val typeRegistry: TypeRegistry,
-    private val typeResolver: TypeResolver,
+    private val harvest: Harvest,
     private val ctx: ImportContext<*>,
 ) : DiagnosticSink by ctx.sink {
     private val source = SourceType.IMPORTED
@@ -91,7 +78,7 @@ class ClassBuilder(
         if (isPoly) ensureVfptrFirstField(structDt, body, name, category)
 
         // 3. Create or upgrade the GhidraClass namespace.
-        val ns = ensureClassNamespace(name)
+        val ns = ensureClassNamespace(name, body)
 
         // 4. Re-parent member functions.
         for (m in body.methods) reparentMethod(m, name, ns, structDt)
@@ -100,16 +87,53 @@ class ClassBuilder(
         if (isPoly) buildAndApplyVtable(name, body, ns, category, structDt)
     }
 
-    private fun ensureClassNamespace(name: String): GhidraClass {
-        // Split `Foo::Bar::Baz` and walk/create each segment.
-        val parts = name.split("::").filter { it.isNotEmpty() }
+    /**
+     * Build (or upgrade) the GhidraClass for this struct.
+     *
+     * Two paths:
+     *  1. If any method carries an Itanium mangled symbol, demangle it and
+     *     walk `Demangled.getNamespace()` parent-chain to derive the class's
+     *     fully-qualified namespace structure. Avoids any string splitting
+     *     and inherits Ghidra's handling of templated names.
+     *  2. Otherwise (struct with no methods, or unmangleable symbol), fall
+     *     back to a depth-aware split of the demangled C++ source-form name
+     *     so that `::` inside template args doesn't shred parameters.
+     */
+    private fun ensureClassNamespace(name: String, body: TypeDecl.Struct<GlobalTypeId>): GhidraClass {
+        val parts = body.methods.firstNotNullOfOrNull { it.mangled }
+            ?.let { namespaceChainFromMangled(it) }
+            ?: QualifiedName.split(name)
+        return buildNamespaceChain(parts.filter { it.isNotEmpty() })
+    }
+
+    /**
+     * Demangle [mangled] and return the parent-namespace chain root-first
+     * (so the leaf is the immediate-enclosing class). Returns null if the
+     * symbol can't be demangled or has no namespace parent.
+     */
+    private fun namespaceChainFromMangled(mangled: String): List<String>? {
+        val obj = try {
+            DemanglerUtil.demangle(program, mangled, null).firstOrNull()
+        } catch (_: Throwable) {
+            null
+        } ?: return null
+        val parent = obj.namespace ?: return null
+        return generateSequence(parent) { it.namespace }
+            .map { it.name }
+            .toList()
+            .asReversed()
+    }
+
+    private fun buildNamespaceChain(parts: List<String>): GhidraClass {
         var parent: Namespace? = null
         for ((i, part) in parts.withIndex()) {
             val isLast = i == parts.lastIndex
             val existing = symtab.getNamespace(part, parent)
             parent = when (existing) {
                 null if isLast -> symtab.createClass(parent, part, source)
+
                 null -> symtab.createNameSpace(parent, part, source)
+
                 else if (isLast && existing !is GhidraClass) ->
                     ghidra.app.util.NamespaceUtils.convertNamespaceToClass(existing)
 
@@ -154,7 +178,9 @@ class ClassBuilder(
 
         when (action) {
             is VfptrAction.SkipInheritedFromBase -> ctx.diagnostics.inc("vfptr-inherited-from-base")
+
             is VfptrAction.AlreadyCanonical -> return
+
             is VfptrAction.Insert -> {
                 val ptrToVtable = ensureVtableTypeAndPointer(className, category)
                 structDt.insertAtOffset(
@@ -354,25 +380,22 @@ class ClassBuilder(
      * Map a ctor/dtor mangled name to its in-class display form. Returns null
      * for non-ctor/dtor methods (caller falls back to MethodDecl.name).
      *
-     *   _ZN3FooC1Ev → "Foo_C1"   (in-charge ctor)
-     *   _ZN3FooC2Ev → "Foo_C2"   (not-in-charge ctor)
-     *   _ZN3FooC3Ev → "Foo_C3"   (allocating ctor)
-     *   _ZN3FooD0Ev → "~Foo_D0"  (deleting dtor)
-     *   _ZN3FooD1Ev → "~Foo_D1"  (in-charge dtor)
-     *   _ZN3FooD2Ev → "~Foo_D2"  (not-in-charge dtor)
+     *   _ZN3FooC[123]E… → "Foo"
+     *   _ZN3FooD[012]E… → "~Foo"
      *
-     * If only one variant exists in the binary we still suffix; the design says
-     * "_C1/_C2/_C3 suffixes to disambiguate when multiple linker symbols exist".
-     * We always suffix because we don't yet know how many variants exist; pruning
-     * happens later (or never — the suffixes are harmless).
+     * Itanium emits up to three linker symbols per ctor (in-charge /
+     * not-in-charge / allocating) and three per dtor (deleting / in-charge /
+     * not-in-charge); all share the same source-level name. Ghidra's symbol
+     * model allows multiple symbols with the same name in a namespace —
+     * they're disambiguated by address — so we match the demangler's
+     * convention and emit just `Foo` / `~Foo` rather than inventing
+     * `_C1`/`_D1` suffixes.
      */
     private fun displayNameFor(mangled: String, className: String): String? {
-        // Match Itanium-ABI ctor/dtor encoding: _ZN…C[123]Ev?… or _ZN…D[012]Ev?…
-        // The variant digit is followed by parameter encoding (E, Ev, etc).
-        val ctorRe = Regex("""C([123])E[a-zA-Z_0-9$]*$""")
-        val dtorRe = Regex("""D([012])E[a-zA-Z_0-9$]*$""")
-        ctorRe.find(mangled)?.let { return "${className}_C${it.groupValues[1]}" }
-        dtorRe.find(mangled)?.let { return "~${className}_D${it.groupValues[1]}" }
+        val ctorRe = Regex("""C[123]E[a-zA-Z_0-9$]*$""")
+        val dtorRe = Regex("""D[012]E[a-zA-Z_0-9$]*$""")
+        ctorRe.containsMatchIn(mangled).let { if (it) return className }
+        dtorRe.containsMatchIn(mangled).let { if (it) return "~$className" }
         return null
     }
 
@@ -594,6 +617,7 @@ class ClassBuilder(
         // All resolution attempts failed: bucket the failure
         val failureBucket = when {
             '<' in className -> "templated-unsupported"
+
             body.hasVTablePointerMarker && body.methods.none { it.virt == VirtKind.VIRTUAL } ->
                 "no-virtual-methods-flagged-but-marker-set"
 
@@ -633,7 +657,7 @@ class ClassBuilder(
         visited: MutableSet<TypeDecl.Struct<GlobalTypeId>>,
     ) {
         for (base in body.bases) {
-            val baseStruct = ClassBuilderHelpers(typeResolver).resolveBaseAstStatic(base.type)
+            val baseStruct = ClassBuilderHelpers(harvest).resolveBaseAstStatic(base.type)
                 ?: continue
             if (!visited.add(baseStruct)) continue
             // Depth-first: grand-base virtuals come before direct-base's own additions,
@@ -673,10 +697,10 @@ class ClassBuilder(
      * Delegates to the static ClassBuilderHelpers version which is the single source of truth.
      */
     internal fun firstPolymorphicBase(body: TypeDecl.Struct<GlobalTypeId>): BaseDecl<GlobalTypeId>? =
-        ClassBuilderHelpers(typeResolver).firstPolymorphicBase(body)
+        ClassBuilderHelpers(harvest).firstPolymorphicBase(body)
 
     internal fun hasPolymorphicBaseSubobject(body: TypeDecl.Struct<GlobalTypeId>): Boolean =
-        ClassBuilderHelpers(typeResolver).hasPolymorphicBaseSubobject(body)
+        ClassBuilderHelpers(harvest).hasPolymorphicBaseSubobject(body)
 
     /**
      * Itanium-mangled compiler-implicit special members the compiler typically omits

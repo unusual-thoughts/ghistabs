@@ -15,7 +15,7 @@ class AttributionTraceDumpTest {
     @Test
     fun testFormatForTypeNoMatches() {
         val result = AttributionTraceDump.formatForType("Foo", emptyList())
-        assertEquals("Foo not routed to /std/* in this run", result)
+        assertEquals("Foo: no attribution trace recorded in this run", result)
     }
 
     @Test
@@ -94,6 +94,6 @@ class AttributionTraceDumpTest {
         val outFile = outDir.resolve("unrouted-trace.txt")
         assertTrue(Files.exists(outFile))
         val content = Files.readString(outFile)
-        assertEquals("Unrouted not routed to /std/* in this run", content)
+        assertEquals("Unrouted: no attribution trace recorded in this run", content)
     }
 }

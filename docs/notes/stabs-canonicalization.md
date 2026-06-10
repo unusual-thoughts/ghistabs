@@ -16,19 +16,19 @@ This section maps each N_* record type to its semantic role in the stabs namespa
 
 ### Record Types: Namespace and Type Carriers
 
-| N_* Type | Carries Type String | Format | Semantics |
-|----------|---------------------|--------|-----------|
-| `N_SO` | No | `name` (pathname) | Opens compilation unit. Allocates `fileNum=0` context. Addressed to the first `text` address in the CU. |
-| `N_BINCL` | No | `name` (header filename) | Opens header inclusion block. Allocates new `fileNum ≥ 1`. Linker computes checksum; deduplication key is `(filename, checksum)`. |
-| `N_EINCL` | No | (empty) | Closes header block. No fileNum change. Marks end of stabs attributed to current header. |
-| `N_EXCL` | No | `name` (header filename) | **Linker-transformed BINCL**: remounts previously-seen header (identified by name+checksum). No stabs follow; fileNum re-established locally. Signals to GDB: "types from this header were in a prior CU." |
-| `N_SOL` | No | `name` (source file) | Source-line directive (for debugger's line-to-address map). Does NOT allocate fileNum; does NOT affect type attribution. |
-| `N_GSYM` | Yes | `name:SC=type_expr` | Global symbol (external variable). Type string provides type. |
-| `N_LSYM` | Yes | `name:SC(cu,n)=type_expr` | Local symbol (automatic variable, local static, type definition). Inline body defines type. |
-| `N_STSYM` | Yes | `name:SC(cu,n)=type_expr` | Static symbol (function-static or file-static variable). Type string provides type. |
-| `N_PSYM` | Yes | `name:SC(cu,n)=type_expr` | Parameter symbol (function parameter). Type string provides type. |
-| `N_RSYM` | Yes | `name:SC(cu,n)=type_expr` | Register symbol (parameter/local in register). Type string provides type. |
-| `N_FUN` | Yes | `name:SC(cu,n)=type_expr` | Function symbol. Type string (if non-empty) provides return type and parameter types. |
+| N_* Type  | Carries Type String | Format                    | Semantics                                                                                                                                                                                                  |
+| --------- | ------------------- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `N_SO`    | No                  | `name` (pathname)         | Opens compilation unit. Allocates `fileNum=0` context. Addressed to the first `text` address in the CU.                                                                                                    |
+| `N_BINCL` | No                  | `name` (header filename)  | Opens header inclusion block. Allocates new `fileNum ≥ 1`. Linker computes checksum; deduplication key is `(filename, checksum)`.                                                                          |
+| `N_EINCL` | No                  | (empty)                   | Closes header block. No fileNum change. Marks end of stabs attributed to current header.                                                                                                                   |
+| `N_EXCL`  | No                  | `name` (header filename)  | **Linker-transformed BINCL**: remounts previously-seen header (identified by name+checksum). No stabs follow; fileNum re-established locally. Signals to GDB: "types from this header were in a prior CU." |
+| `N_SOL`   | No                  | `name` (source file)      | Source-line directive (for debugger's line-to-address map). Does NOT allocate fileNum; does NOT affect type attribution.                                                                                   |
+| `N_GSYM`  | Yes                 | `name:SC=type_expr`       | Global symbol (external variable). Type string provides type.                                                                                                                                              |
+| `N_LSYM`  | Yes                 | `name:SC(cu,n)=type_expr` | Local symbol (automatic variable, local static, type definition). Inline body defines type.                                                                                                                |
+| `N_STSYM` | Yes                 | `name:SC(cu,n)=type_expr` | Static symbol (function-static or file-static variable). Type string provides type.                                                                                                                        |
+| `N_PSYM`  | Yes                 | `name:SC(cu,n)=type_expr` | Parameter symbol (function parameter). Type string provides type.                                                                                                                                          |
+| `N_RSYM`  | Yes                 | `name:SC(cu,n)=type_expr` | Register symbol (parameter/local in register). Type string provides type.                                                                                                                                  |
+| `N_FUN`   | Yes                 | `name:SC(cu,n)=type_expr` | Function symbol. Type string (if non-empty) provides return type and parameter types.                                                                                                                      |
 
 **Source:** stabs PDF §2 ("Symbol Types"); **gdb/stabsread.c** `define_symbol()`.
 
@@ -397,11 +397,11 @@ The `Attribution.categoryFor()` method (**src/main/kotlin/ghistabs/builder/Attri
 4. **Clean multi-CU name**: Multiple CU sources but a "clean" name (no special chars) → `/headers-untracked/<name>.h`.
 5. **Multi-CU fallback**: Otherwise → `/<canonicalCu>/instantiations`.
 
-**Known staleness:** The four refactor commits introduced `HeaderSource` as a new `SourceFile` variant, but `categoryFor()` was not updated to treat `HeaderSource` distinctly from `CUSource`. A `HeaderSource` falls through to the multi-CU heuristic branch (step 5) rather than a dedicated header-aware route. This produces `/headers-untracked/` or `/instantiations/` categories for header-attributed types instead of a clearer `/headers/<filename_without_ext>/` path.
+**D2 fix (2026-06-10):** A new step 3 routes types whose entire defining-source set is `HeaderSource` (and shares a single filename basename) to `/headers/<basename>/`. The branch sits before the single-CU shortcut (so single `HeaderSource` defs land in `/headers/<basename>/` rather than `/<basename>/`) and converges multi-defining cases caused by D1 forward-EXCL placeholder divergence — distinct `HeaderFile` instances for the same physical header still resolve to the same category. Cross-header multi-defining cases (different basenames) intentionally fall through to step 5. The new route increments `attribution-routed-headers`; the existing stdlib route still increments `attribution-routed-std`; both go through the same `recordAttributionTrace(...counter)` helper.
 
 **Diagnostic companion:** `AttributionTraceDump` (**src/main/kotlin/ghistabs/diag/AttributionTraceDump.kt**) logs the routing decision for each type. Its downstream consumer in `TypeRegistry` or elsewhere was not audited by the four commits.
 
-**Deviation rating:** D2 (incomplete) — `categoryFor()` ignores `HeaderSource` as a distinct case.
+**Deviation rating:** D2 (fixed 2026-06-10) — `categoryFor()` now treats `HeaderSource` as a distinct case.
 
 ### 7.2 preSeedHeaders() Two-Pass Rationale
 
@@ -492,15 +492,15 @@ For each design choice in the new model:
 
 ### 8.4 Deviation Table
 
-| ID | Location | Description | Rating |
-|----|----------|-------------|--------|
-| D1 | HeaderRegistry.recall() | Forward EXCL creates placeholder HeaderFile not stored globally; later BINCL CU gets different HeaderFile → GlobalTypeId mismatch → hash collisions | needs-fix |
-| D2 | Attribution.categoryFor() | Ignores HeaderSource as a distinct case; header-attributed types fall through to multi-CU heuristic | incomplete |
-| D3 | preSeedHeaders() | Two-pass pre-seeding does not patch forward-EXCL placeholders when the BINCL arrives; placeholder divergence persists | incomplete |
-| D4 | walkDefinitions() anonymous naming | Anonymous inline TypeAst named "${decl.id}" — convention only, not spec-grounded | correct (convention) |
-| D5 | rawByIdSnapshot | Field removed in commit 7d2bc56; vestigial comments remain in TypeRegistry.kt lines 88, 457, 462 and ResolverDecision.kt line 40 describing old lookup cascade — see §7.4 | vestigial (in documentation) |
-| D6 | collidingAsts map | Map of colliding TypeDecls indexed by GlobalTypeId; populated by appendAsts() but no production consumer (diagnostic-only) | vestigial (diagnostic-only, no production consumer — see §9.6) |
-| D7 | AttributionTraceDump | Diagnostic companion to categoryFor(); not updated for HeaderSource model | incomplete |
+| ID  | Location                           | Description                                                                                                                                                               | Rating                                                         |
+| --- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| D1  | HeaderRegistry.recall()            | Forward EXCL creates placeholder HeaderFile not stored globally; later BINCL CU gets different HeaderFile → GlobalTypeId mismatch → hash collisions                       | needs-fix                                                      |
+| D2  | Attribution.categoryFor()          | All-HeaderSource same-basename defs route to `/headers/<basename>/` via new step 3 branch; cross-header multi-defining still falls through to multi-CU heuristic          | fixed (2026-06-10) — see §7.1                                  |
+| D3  | preSeedHeaders()                   | Two-pass pre-seeding does not patch forward-EXCL placeholders when the BINCL arrives; placeholder divergence persists                                                     | incomplete                                                     |
+| D4  | walkDefinitions() anonymous naming | Anonymous inline TypeAst named "${decl.id}" — convention only, not spec-grounded                                                                                          | correct (convention)                                           |
+| D5  | rawByIdSnapshot                    | Field removed in commit 7d2bc56; vestigial comments remain in TypeRegistry.kt lines 88, 457, 462 and ResolverDecision.kt line 40 describing old lookup cascade — see §7.4 | vestigial (in documentation)                                   |
+| D6  | collidingAsts map                  | Map of colliding TypeDecls indexed by GlobalTypeId; populated by appendAsts() but no production consumer (diagnostic-only)                                                | vestigial (diagnostic-only, no production consumer — see §9.6) |
+| D7  | AttributionTraceDump               | Diagnostic companion to categoryFor(); not updated for HeaderSource model                                                                                                 | incomplete                                                     |
 
 ---
 
@@ -580,12 +580,12 @@ However:
 
 **Scan for name-based dedup:** Grep results show name-based keying in the following places:
 
-| Location | Pattern | Purpose | Justified? |
-|----------|---------|---------|-----------|
-| TypeRegistry.materialiseAll lines 44–61 | `val byName = asts.groupBy { it.name }` | Pre-seed placeholders per unique name; later dedup by name within the batch | Yes — ensures forward refs resolve via placeholders |
-| TypeRegistry.resolve lines 178, 194 | `byName[ast.name]?.map { it.id.source }?.toSet()` | Compute union of defining CUs for attribution | Yes — needed for correct category computation |
-| TypeRegistry.byHash lines 17 | `byHash: Map<Pair<String, Int>, DataType>` | Cross-CU dedup: same name + same hash | Yes — efficient by-hash lookup keyed on (name, hash) for idempotent reruns |
-| StabsImporter.applyAllSymbols lines 232 | `harvest.typeAsts.values.groupBy { it.ghidraName }` | Dedupe class ASTs by display name | Yes — multiple ASTs from different CUs may have the same name; take the most detailed |
+| Location                                | Pattern                                             | Purpose                                                                     | Justified?                                                                            |
+| --------------------------------------- | --------------------------------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| TypeRegistry.materialiseAll lines 44–61 | `val byName = asts.groupBy { it.name }`             | Pre-seed placeholders per unique name; later dedup by name within the batch | Yes — ensures forward refs resolve via placeholders                                   |
+| TypeRegistry.resolve lines 178, 194     | `byName[ast.name]?.map { it.id.source }?.toSet()`   | Compute union of defining CUs for attribution                               | Yes — needed for correct category computation                                         |
+| TypeRegistry.byHash lines 17            | `byHash: Map<Pair<String, Int>, DataType>`          | Cross-CU dedup: same name + same hash                                       | Yes — efficient by-hash lookup keyed on (name, hash) for idempotent reruns            |
+| StabsImporter.applyAllSymbols lines 232 | `harvest.typeAsts.values.groupBy { it.ghidraName }` | Dedupe class ASTs by display name                                           | Yes — multiple ASTs from different CUs may have the same name; take the most detailed |
 
 **Specific case — same name, different IDs:** When two `TypeAst`s have the same `ghidraName` but different `GlobalTypeId`s (e.g., a struct defined in two different CUs with the same name but different bodies):
 - In `materialiseAll`: Both materialise into the DTM as separate `DataType` objects (keyed by `(name, hash)`); the byId map keeps first-writer-wins for ref resolution.
@@ -600,13 +600,13 @@ However:
 
 **Hash/equality mechanisms in the pipeline:**
 
-| Level | Mechanism | Used By | Purpose |
-|-------|-----------|---------|---------|
-| Harvest | `TypeDecl<GlobalTypeId>.hashCode()` | `appendAsts()` | Detect collisions (same ID, different hash) |
-| Harvest | `collidingAsts` map | Logged but not consumed | Collision audit trail |
+| Level        | Mechanism                                  | Used By                 | Purpose                                     |
+| ------------ | ------------------------------------------ | ----------------------- | ------------------------------------------- |
+| Harvest      | `TypeDecl<GlobalTypeId>.hashCode()`        | `appendAsts()`          | Detect collisions (same ID, different hash) |
+| Harvest      | `collidingAsts` map                        | Logged but not consumed | Collision audit trail                       |
 | TypeRegistry | `byHash: Map<Pair<String, Int>, DataType>` | `resolve()` idempotency | Reuse type if same (name, hash) seen before |
-| TypeRegistry | `StructuralDiff.diff()` comparison | `tryExecuteMerge()` | Byte-by-byte layout conflict detection |
-| TypeRegistry | `dataType.name == resolvedDataType.name` | `applyGlobal()` | Verify stab-applied type actually stuck |
+| TypeRegistry | `StructuralDiff.diff()` comparison         | `tryExecuteMerge()`     | Byte-by-byte layout conflict detection      |
+| TypeRegistry | `dataType.name == resolvedDataType.name`   | `applyGlobal()`         | Verify stab-applied type actually stuck     |
 
 **Operation levels:**
 - **Harvest-layer hash (TypeDecl.hashCode):** Detects collision during type accumulation; content-based comparison. Correct level.

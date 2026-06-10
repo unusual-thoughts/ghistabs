@@ -37,7 +37,7 @@ object ResolverDecision {
      *
      * @param refId The TypeId being referenced (cu, n).
      * @param refererCu The file number (cu) of the referrer's CU.
-     * @param knownTypeIds All TypeIds that were observed in the harvest (from rawByIdSnapshot).
+     * @param knownTypeIds All TypeIds that were observed in the harvest.
      * @param knownFileNums All file numbers known to the referrer's CU (from IncludeContext.fileNumToHeader.keys).
      * @return RefClassification: ForwardSameCu, CrossCuIncludeMiss, or TrulyMissing.
      *

@@ -64,16 +64,39 @@ object Attribution {
                 definingCUs = defSources,
                 matchedCU = sortedDefiningCUs.first { stdBasename(it.filename) != null },
                 routedTo = "/std/$stdMatch",
+                counter = "attribution-routed-std",
             )
             return CategoryPath("/std/$stdMatch")
         }
 
-        // 3. Single CU ending with .h/.hpp/.hh/.H (header)
+        // 3. All-HeaderSource, same filename basename → /headers/<basename>/.
+        //    Covers the common case (single defining HeaderSource) AND the
+        //    cross-CU header-shared case where multiple HeaderSource entries
+        //    point at the same physical header (forward-EXCL D1 may produce
+        //    distinct HeaderFile instances for the same filename, but the
+        //    routing should still converge). Stays before the single-CU
+        //    shortcut so single HeaderSource defs land in `/headers/...`
+        //    instead of `/<basename>/` (stabs-canonicalization.md §7.1, D2).
+        val headerBasenames = defSources
+            .filterIsInstance<SourceFile.HeaderSource>()
+            .map { basename(it.filename) }
+            .toSet()
+        if (headerBasenames.size == 1 && defSources.all { it is SourceFile.HeaderSource }) {
+            val headerBase = headerBasenames.single()
+            diagnostics?.recordAttributionTrace(
+                typeName = typeName,
+                definingCUs = defSources,
+                matchedCU = sortedDefiningCUs.first(),
+                routedTo = "/headers/$headerBase",
+                counter = "attribution-routed-headers",
+            )
+            return CategoryPath("/headers/$headerBase")
+        }
+
+        // 4. Single CUSource → /<basename>/.
         if (defSources.size == 1) {
-            return when (val cu = defSources.single()) {
-                is SourceFile.CUSource -> CategoryPath("/" + basename(cu.filename))
-                is SourceFile.HeaderSource -> CategoryPath("/" + basename(cu.filename))
-            }
+            val cu = defSources.single() as SourceFile.CUSource
+            return CategoryPath("/" + basename(cu.filename))
         }
 
         // 5. Multi-CU decision tree
