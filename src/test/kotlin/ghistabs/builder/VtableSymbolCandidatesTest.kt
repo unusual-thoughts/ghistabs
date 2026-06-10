@@ -1,5 +1,8 @@
 package ghistabs.builder
 
+import ghidra.app.util.demangler.DemangledAddressTable
+import ghidra.app.util.demangler.DemangledFunction
+import ghidra.app.util.demangler.DemangledNamespaceNode
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 
@@ -27,65 +30,70 @@ class VtableSymbolCandidatesTest {
 
     @Test
     fun testItaniumMangledClassNameSimple() {
-        val result = VtableSymbolCandidates.itaniumMangleClassName("CLexStream")
-        assertEquals("10CLexStream", result)
+        assertEquals("10CLexStream", VtableSymbolCandidates.itaniumMangleClassName("CLexStream"))
     }
 
     @Test
     fun testItaniumMangledClassNameNested() {
-        val result = VtableSymbolCandidates.itaniumMangleClassName("Foo::Bar")
-        assertEquals("N3Foo3BarE", result)
+        assertEquals("N3Foo3BarE", VtableSymbolCandidates.itaniumMangleClassName("Foo::Bar"))
     }
 
     @Test
     fun testItaniumMangledClassNameTripleNested() {
-        val result = VtableSymbolCandidates.itaniumMangleClassName("Foo::Bar::Baz")
-        assertEquals("N3Foo3Bar3BazE", result)
+        assertEquals("N3Foo3Bar3BazE", VtableSymbolCandidates.itaniumMangleClassName("Foo::Bar::Baz"))
     }
 
     @Test
     fun testItaniumMangledClassNameTemplated() {
-        val result = VtableSymbolCandidates.itaniumMangleClassName("vector<int>")
-        assertEquals("vector<int>", result)
+        assertEquals("vector<int>", VtableSymbolCandidates.itaniumMangleClassName("vector<int>"))
     }
 
     @Test
-    fun testItaniumDecodesToClassMatches() {
-        assertTrue(
-            VtableSymbolCandidates.itaniumDecodesToClass("_ZTV10CLexStream", "CLexStream"),
-            "Should decode _ZTV10CLexStream to CLexStream",
-        )
+    fun testLooksLikeZtv() {
+        assertTrue(VtableSymbolCandidates.looksLikeZtv("_ZTV10CLexStream"))
+        assertTrue(VtableSymbolCandidates.looksLikeZtv("__ZTV10CLexStream"))
+        assertTrue(VtableSymbolCandidates.looksLikeZtv("ZTVbare"))
+        assertFalse(VtableSymbolCandidates.looksLikeZtv("XYZ_ZTV9CLexStream"))
+        assertFalse(VtableSymbolCandidates.looksLikeZtv("_ZN3FooC1Ev"))
     }
 
     @Test
-    fun testItaniumDecodesToClassMatchesCygwinVariant() {
-        assertTrue(
-            VtableSymbolCandidates.itaniumDecodesToClass("__ZTV10CLexStream", "CLexStream"),
-            "Should decode __ZTV10CLexStream (Cygwin variant) to CLexStream",
-        )
+    fun testDemangledMatchesSimpleClass() {
+        val obj = vtableObj("CLexStream")
+        assertTrue(VtableSymbolCandidates.demangledMatchesClass(obj, "CLexStream"))
+        assertFalse(VtableSymbolCandidates.demangledMatchesClass(obj, "OtherClass"))
     }
 
     @Test
-    fun testItaniumDecodesToClassMatchesNested() {
-        assertTrue(
-            VtableSymbolCandidates.itaniumDecodesToClass("_ZTVN3Foo3BarE", "Foo::Bar"),
-            "Should decode _ZTVN3Foo3BarE to Foo::Bar",
-        )
+    fun testDemangledMatchesNestedClass() {
+        val obj = vtableObj("Foo", "Bar")
+        assertTrue(VtableSymbolCandidates.demangledMatchesClass(obj, "Foo::Bar"))
+        assertFalse(VtableSymbolCandidates.demangledMatchesClass(obj, "Foo"))
+        assertFalse(VtableSymbolCandidates.demangledMatchesClass(obj, "Bar"))
     }
 
     @Test
-    fun testItaniumDecodesToClassNoMatch() {
-        assertFalse(
-            VtableSymbolCandidates.itaniumDecodesToClass("XYZ_ZTV9CLexStream", "CLexStream"),
-            "Should not match if prefix is not _ZTV or __ZTV",
-        )
+    fun testDemangledMatchesRejectsNonVtable() {
+        val func = DemangledFunction("_ZN3FooC1Ev", "Foo::Foo()", "Foo")
+        func.namespace = DemangledNamespaceNode("_ZN3FooC1Ev", "Foo", "Foo")
+        assertFalse(VtableSymbolCandidates.demangledMatchesClass(func, "Foo"))
     }
 
-    @Test
-    fun testItaniumDecodesToClassWrongClass() {
-        assertFalse(
-            VtableSymbolCandidates.itaniumDecodesToClass("_ZTV3Foo", "Bar"),
-            "Should not match if mangled form doesn't match class",
-        )
+    /**
+     * Build a synthetic `DemangledAddressTable("vtable", parts...)` shaped
+     * like Ghidra's GnuDemangler output for `_ZTV…`. The namespace chain
+     * is linked leaf-pointing-at-parent so iteration via `obj.namespace`
+     * walks deepest-first.
+     */
+    private fun vtableObj(vararg parts: String): DemangledAddressTable {
+        val obj = DemangledAddressTable("synthetic", "synthetic-vtable", "vtable", false)
+        var node: DemangledNamespaceNode? = null
+        for (p in parts) {
+            val next = DemangledNamespaceNode("synthetic", p, p)
+            next.namespace = node
+            node = next
+        }
+        obj.namespace = node
+        return obj
     }
 }
