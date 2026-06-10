@@ -180,14 +180,15 @@ class StabsDiagnostics {
     }
 
     /**
-     * Record an attribution trace (type routed to /std/).
-     * Stores up to 200 traces; further traces increment counter only.
+     * Record an attribution trace and bump [counter]. Stores up to 200 traces
+     * total across all buckets; further traces increment the counter only.
      */
     fun recordAttributionTrace(
         typeName: String,
         definingCUs: Set<SourceFile>,
         matchedCU: SourceFile,
         routedTo: String,
+        counter: String,
     ) {
         if (attributionTraces.size < 200) {
             attributionTraces.add(
@@ -199,7 +200,7 @@ class StabsDiagnostics {
                 ),
             )
         }
-        inc("attribution-routed-std")
+        inc(counter)
     }
 
     /**

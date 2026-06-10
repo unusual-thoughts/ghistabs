@@ -10,18 +10,29 @@ class TypeRegistry(
     private val dtm: DataTypeManager,
     private val sink: DiagnosticSink,
     private val diagnostics: StabsDiagnostics,
-    private val typeResolver: TypeResolver,
+    private val harvest: Harvest,
 ) : DiagnosticSink by sink {
     private val byId = mutableMapOf<GlobalTypeId, DataType>()
     private val placeholders = mutableMapOf<GlobalTypeId, DataType>()
     private val byHash = mutableMapOf<Pair<String, Int>, DataType>()
     private val byPath = mutableMapOf<Pair<CategoryPath, String>, Int>()
     private val conflictCount = mutableMapOf<String, Int>()
-    fun tryGetExisting(gId: GlobalTypeId) = byId[gId] ?: placeholders[gId] ?: typeResolver.getTypeFor(gId)?.let { raw ->
+//    private var unnamedCount = 0
+
+//    fun newUnnamed(type: String) = "${type}_${unnamedCount++}"
+//
+//    fun tryGetExisting(id: LocalTypeId, cu: SourceFile.CUSource) = fileResolver.globalIdForCu(id, cu)?.let { gId ->
+//        byId[gId] ?: placeholders[gId] ?: typeResolver.getTypeFor(id, cu)?.let { raw ->
+//            makePlaceholder(raw.body, CategoryPath("/stabs"), raw.name)
+//                .also { placeholders[gId] = it }
+//        }
+//    }
+
+    fun tryGetExisting(gId: GlobalTypeId) = byId[gId] ?: placeholders[gId] ?: harvest.getType(gId)?.let { raw ->
         makePlaceholder(raw, CategoryPath("/stabs")).also { placeholders[gId] = it }
     }
 
-    fun materialiseAll(typeAsts: Collection<TypeAst>, attribution: (String, Set<SourceFile>) -> CategoryPath) {
+    fun materialiseAll() {
         // gcc reuses local type IDs inside BINCL blocks per-CU: every CU's stab stream
         // emits its own private types inside e.g. `BINCL project_header.h` using local
         // file slots that all canonicalise to the same canonical CU. So multiple ASTs
@@ -29,8 +40,7 @@ class TypeRegistry(
         // Process every TypeAst; do NOT pre-dedupe by id. Ref resolution still uses
         // byId (last writer wins) — fine because refs are always emitted IN THE SAME CU
         // as the type they reference, so all CUs see consistent local→canonical lookups.
-        val asts = typeAsts
-        val byName = asts.groupBy { it.name }
+        //
 
         val tx = dtm.startTransaction("ghidra-stabs build types")
         try {
@@ -46,9 +56,8 @@ class TypeRegistry(
             // returns a Structure stub for them, and pre-adding it would later conflict
             // with the real EnumDataType during resolve() and cause it to be renamed to
             // `<name>_2`.
-            for (ast in asts) {
-                val defCUs = byName[ast.name]?.map { it.id.source }?.toSet() ?: setOf(ast.cu)
-                val category = attribution(ast.name, defCUs)
+            for ((id, ast) in harvest.typeAsts) {
+                val category = Attribution.categoryFor(ast.ghidraName, harvest.definingCUs(ast), diagnostics)
                 val raw = makePlaceholder(ast, category)
                 val placeholder = if (ast.body is TypeDecl.Struct) {
                     dtm.addDataType(raw, DataTypeConflictHandler.KEEP_HANDLER)
@@ -59,10 +68,10 @@ class TypeRegistry(
                 // during materialisation get something. Later distinct-name ASTs at the
                 // same id keep their own placeholderByIdName but DON'T overwrite the id-keyed
                 // entry — refs by id should remain stable across the batch.
-                placeholders.getOrPut(ast.id) { placeholder }
+                placeholders.getOrPut(id) { placeholder }
             }
-            for (ast in asts) {
-                resolve(ast, byName, attribution)
+            for (ast in harvest.typeAsts.values) {
+                resolve(ast)
             }
         } finally {
             dtm.endTransaction(tx, true)
@@ -74,7 +83,7 @@ class TypeRegistry(
      * pointee, a base class's type expression) to a Ghidra DataType.
      *
      * Per kind:
-     * - **Ref / InlineDef**: look the TypeId up via byId → placeholders → rawByIdSnapshot.
+     * - **Ref / InlineDef**: look the TypeId up via byId → placeholders → harvest.
      *   Cycle-safe (placeholders break self-recursion).
      * - **Builtin / Range / Complex / WithSizeAttr**: delegated to [BuiltinTable].
      * - **Pointer / Reference / Const / Volatile / Array**: recurse on the inner type.
@@ -100,8 +109,11 @@ class TypeRegistry(
         }
 
         is TypeDecl.Pointer -> PointerDataType(dataTypeFor(decl.pointee) ?: Undefined4DataType.dataType, 4, dtm)
+
         is TypeDecl.Reference -> PointerDataType(dataTypeFor(decl.referent) ?: Undefined4DataType.dataType, 4, dtm)
+
         is TypeDecl.Const -> dataTypeFor(decl.inner)
+
         is TypeDecl.Volatile -> dataTypeFor(decl.inner)
 
         is TypeDecl.Array -> {
@@ -138,15 +150,16 @@ class TypeRegistry(
             fd
         }
 
-        is TypeDecl.XRef if decl.kind == AggrKind.STRUCT -> typeResolver.getStructByName(decl.tagName)
+        is TypeDecl.XRef if decl.kind == AggrKind.STRUCT -> harvest.getStructByXRef(decl.tagName)
             ?.let { tryGetExisting(it.first) }
 
-        is TypeDecl.XRef -> typeResolver.getStructByName(decl.tagName)?.let { dataTypeFor(it.second) }
+        is TypeDecl.XRef -> harvest.getStructByXRef(decl.tagName)?.let { dataTypeFor(it.second) }
 
         // Aggregate bodies — never referenced directly; only meaningful via TypeId.
         // See kdoc above.
         is TypeDecl.Struct, is TypeDecl.Enum, is TypeDecl.Method -> {
             log("referenced-aggregate", "asked for ref to $decl")
+//            materialiseBody(TypeAst(cu))
             null
         }
     }
@@ -161,11 +174,7 @@ class TypeRegistry(
         return dt
     }
 
-    private fun resolve(
-        ast: TypeAst,
-        byName: Map<String, List<TypeAst>>,
-        attribution: (String, Set<SourceFile>) -> CategoryPath,
-    ): DataType {
+    private fun resolve(ast: TypeAst): DataType {
         // 2. Compute content hash for cross-CU dedup
         val hash = ast.body.hashCode()
 
@@ -173,14 +182,13 @@ class TypeRegistry(
         //    DataType and STOP — re-materialising the body onto a different placeholder
         //    would let the resulting empty-vs-real conflict in registerWithConflict
         //    overwrite the canonical (gap census on the duplicate is best-effort).
-        byHash[ast.name to hash]?.let {
+        byHash[ast.ghidraName to hash]?.let {
             byId.putIfAbsent(ast.id, it)
             return it
         }
 
         // 4. Compute category
-        val definingCUs = byName[ast.name]?.map { it.id.source }?.toSet() ?: setOf(ast.cu)
-        val category = attribution(ast.name, definingCUs)
+        val category = Attribution.categoryFor(ast.ghidraName, harvest.definingCUs(ast), diagnostics)
 
         // 5. Reuse pre-seeded placeholder (or create one if resolve() is called directly)
         val placeholder = placeholders.getOrPut(ast.id) {
@@ -191,12 +199,13 @@ class TypeRegistry(
         val materialised = materialiseBody(ast, category, placeholder)
 
         // 7. Register with conflict handling and record as fully resolved
-        val canonical = registerWithConflict(materialised, ast.name, hash, category)
+        val canonical = registerWithConflict(materialised, ast.ghidraName, hash, category)
+//        byIdName[key] = canonical
         // Keep byId stable for Ref lookups: first writer wins. (Later same-id ASTs
         // with different names still materialise into the DTM via byIdName but don't
         // hijack Ref(id) resolution.)
         byId.putIfAbsent(ast.id, canonical)
-        byHash[ast.name to hash] = canonical
+        byHash[ast.ghidraName to hash] = canonical
 
         return canonical
     }
@@ -219,7 +228,9 @@ class TypeRegistry(
             )
 
             is TypeDecl.Const -> dataTypeFor(body.inner) ?: placeholder
+
             is TypeDecl.Volatile -> dataTypeFor(body.inner) ?: placeholder
+
             is TypeDecl.InlineDef -> dataTypeFor(body.body)?.apply {
                 byId[body.id] = this
             } ?: placeholder
@@ -340,7 +351,7 @@ class TypeRegistry(
                 }
 
                 // Compute polymorphic base for inherited vfptr gating
-                val polyBase = ClassBuilderHelpers(typeResolver).firstPolymorphicBase(body)
+                val polyBase = ClassBuilderHelpers(harvest).firstPolymorphicBase(body)
 
                 // Existing field loop (unchanged).
                 for (field in body.fields) {
@@ -441,6 +452,23 @@ class TypeRegistry(
                 placeholder
             }
 
+            // Same cascade as dataTypeFor: byId -> placeholders -> harvest -> classify.
+            // FIXME: handle body.id.cu == 0 => current code unit
+//                    val refKey = "(${body.id.file},${body.id.n})"
+//                val knownFileNums = includeContextsByCu[ast.id.source.cu]?.getAllFileNums() ?: emptySet()
+//                val knownFileNums = fileResolver.knownFileNums(ast.cu)
+            // Truly-missing classifier: harvest already exhausted above.
+//                val knownTypeIds = emptySet<LocalTypeId>()
+
+//                val classification = ResolverDecision.classifyRef(
+//                    body.id,
+//                    ast.id.source.cu,
+//                    knownTypeIds,
+//                    knownFileNums,
+//                )
+//                val gId = fileResolver.globalIdForCu(body.id)
+//                val gId = body.id
+            // FIXME: refactor to avoid code duplication
             is TypeDecl.Ref -> tryGetExisting(body.id) ?: run {
                 log("dangling-ref", "Dangling ref to ${body.id} in '${ast.name}' from ${ast.source} CU ${ast.cu} ")
                 diagnostics.recordUnresolvedRef(body.id, ast.name)
@@ -579,7 +607,9 @@ class TypeRegistry(
         }
         return when {
             candidates.isEmpty() -> null
+
             candidates.size == 1 -> dtm.getDataType(candidates[0].first, candidates[0].second)
+
             else -> {
                 // Multiple matches: ambiguous. Log and count.
                 log("demangler-ambiguous", "Multiple matches for '$simpleName': $candidates")

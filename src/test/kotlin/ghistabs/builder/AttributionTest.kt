@@ -42,8 +42,23 @@ class AttributionTest {
 
     @Test
     fun testSingleHeaderCU() {
+        // D2: HeaderSource defs route to /headers/<basename>/ regardless of CU count.
         val cat = Attribution.categoryFor("Foo", srcs("/proj/include/foo.h"))
-        assertEquals(CategoryPath("/foo"), cat)
+        assertEquals(CategoryPath("/headers/foo"), cat)
+    }
+
+    @Test
+    fun testMultiHeaderSameBasenameRoutesToHeaders() {
+        // Two HeaderSource entries with the same filename basename but distinct
+        // checksums — D1 forward-EXCL placeholders can produce distinct
+        // HeaderFile instances for the same header; attribution must still
+        // converge on a single /headers/<basename>/ category.
+        val originator = SourceFile.CUSource("/proj/src/a.cpp")
+        val defSources = setOf<SourceFile>(
+            SourceFile.HeaderSource(HeaderFile("/proj/include/foo.h", checksum = 1L, originatingCu = originator)),
+            SourceFile.HeaderSource(HeaderFile("/proj/include/foo.h", checksum = 2L, originatingCu = null)),
+        )
+        assertEquals(CategoryPath("/headers/foo"), Attribution.categoryFor("Foo", defSources))
     }
 
     @Test
