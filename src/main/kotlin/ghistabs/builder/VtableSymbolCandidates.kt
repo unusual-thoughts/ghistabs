@@ -1,5 +1,7 @@
 package ghistabs.builder
 
+import ghistabs.util.QualifiedName
+
 object VtableSymbolCandidates {
     /**
      * Ordered candidate symbol names that may resolve to a vtable for [className].
@@ -40,7 +42,7 @@ object VtableSymbolCandidates {
      */
     fun itaniumMangleClassName(name: String): String {
         if ('<' in name) return name // templated → caller falls back
-        val parts = name.split("::").filter { it.isNotEmpty() }
+        val parts = QualifiedName.split(name)
         return if (parts.size == 1) {
             "${parts[0].length}${parts[0]}"
         } else {

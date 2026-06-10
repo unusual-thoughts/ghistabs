@@ -12,10 +12,8 @@ import java.util.*
  * Global registry for header files shared across multiple CUs via BINCL/EXCL.
  * Maintains canonical CU integer mapping to avoid hashCode() collisions.
  */
-@Serializable
-class HeaderRegistry(@Transient val sink: DiagnosticSink = DummySink) : DiagnosticSink by sink {
+class HeaderRegistry(val sink: DiagnosticSink = DummySink) : DiagnosticSink by sink {
     /** (filename, checksum) → HeaderFile for cross-CU BINCL/EXCL sharing. */
-    @Transient
     private val globalByFilenameChecksum = mutableMapOf<Pair<String, Long>, HeaderFile>()
 
     fun getOrInsert(filename: String, checksum: Long, cu: SourceFile.CUSource) =

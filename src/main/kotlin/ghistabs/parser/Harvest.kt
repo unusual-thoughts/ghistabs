@@ -2,10 +2,10 @@
 
 package ghistabs.parser
 
+import com.google.common.annotations.VisibleForTesting
 import ghidra.program.model.address.Address
 import ghidra.program.model.symbol.SymbolUtilities
 import ghidra.util.task.TaskMonitor
-import ghistabs.builder.TypeResolver
 import ghistabs.diag.DiagnosticSink
 import ghistabs.importer.AddressResolver
 import kotlinx.serialization.Serializable
@@ -64,13 +64,31 @@ data class OpenFunction(
 data class Harvest(
     val parseErrors: Int,
     val typeAsts: Map<GlobalTypeId, TypeAst>,
-    val collidingAsts: Map<GlobalTypeId, MutableMap<String, MutableSet<TypeDecl<GlobalTypeId>>>>,
+    val collidingAsts: Map<GlobalTypeId, Map<String, Set<TypeDecl<GlobalTypeId>>>>,
     val symbolsByCu: Map<String, List<HarvestedSymbol>>,
     val openFunctions: List<OpenFunction>,
-    val headerRegistry: HeaderRegistry,
 ) {
-    val allHarvestedSymbols get() = symbolsByCu.values.flatten()
-    val typeResolver get() = TypeResolver(typeAsts)
+    @VisibleForTesting
+    constructor(typeAsts: Map<GlobalTypeId, TypeAst>) : this(0, typeAsts, mapOf(), mapOf(), listOf())
+
+    val allHarvestedSymbols by lazy { symbolsByCu.values.flatten() }
+
+    /** Group ASTs once by Ghidra-sanitised name (only space is invalid; cf. SymbolUtilities.INVALIDCHARS). */
+    val astsByGhidraName by lazy { typeAsts.values.groupBy { it.ghidraName } }
+
+    /** All struct ASTs harvested in Pass A, indexed by name, for XRef purposes. */
+    private val structAstsByName by lazy {
+        typeAsts.values.mapNotNull { ast -> (ast.body as? TypeDecl.Struct)?.let { ast.name to (ast.id to it) } }.toMap()
+    }
+
+    fun getType(id: GlobalTypeId) = typeAsts[id]
+    fun getStruct(id: GlobalTypeId) = typeAsts[id]?.body as? TypeDecl.Struct
+    fun getStructByXRef(name: String) = structAstsByName[name]
+    fun definingCUs(ast: TypeAst) = astsByGhidraName[ast.ghidraName]?.map { it.id.source }?.toSet() ?: setOf(ast.cu)
+
+    //    inline fun <reified T : TypeDecl<GlobalTypeId>> getBodyFor(id: GlobalTypeId) = getTypeFor(id)?.let {
+//        it.body as? T
+//    }
 }
 
 /**
@@ -124,8 +142,11 @@ class Harvester(
                 }
 
                 StabType.N_BINCL -> currentInclude?.beginInclude(rec.name, rec.value)
+
                 StabType.N_EINCL -> currentInclude?.endInclude()
+
                 StabType.N_EXCL -> currentInclude?.remount(rec.name, rec.value)
+
                 else -> {}
             }
         }
@@ -292,7 +313,6 @@ class Harvester(
             collidingAsts,
             symbolsByCu,
             openFunctions,
-            sharedHeaderRegistry,
         )
     }
 
@@ -340,14 +360,23 @@ class Harvester(
     @Suppress("UNCHECKED_CAST")
     fun globalize(decl: TypeDecl<LocalTypeId>): TypeDecl<GlobalTypeId> = when (decl) {
         is TypeDecl.Complex, is TypeDecl.Enum, is TypeDecl.XRef -> decl as TypeDecl<GlobalTypeId>
+
         is TypeDecl.Range -> TypeDecl.Range(globalIdFor(decl.of), decl.min, decl.max)
+
         is TypeDecl.Ref -> TypeDecl.Ref(globalIdFor(decl.id))
+
         is TypeDecl.Const -> TypeDecl.Const(globalize(decl.inner))
+
         is TypeDecl.Volatile -> TypeDecl.Volatile(globalize(decl.inner))
+
         is TypeDecl.WithSizeAttr -> TypeDecl.WithSizeAttr(decl.sizeBits, globalize(decl.inner))
+
         is TypeDecl.Pointer -> TypeDecl.Pointer(globalize(decl.pointee))
+
         is TypeDecl.Reference -> TypeDecl.Reference(globalize(decl.referent))
+
         is TypeDecl.Array -> TypeDecl.Array(globalize(decl.element), decl.length, decl.indexType?.let { globalize(it) })
+
         is TypeDecl.FunctionT -> TypeDecl.FunctionT(globalize(decl.ret), decl.params.map { globalize(it) })
 
         is TypeDecl.Method -> TypeDecl.Method(
@@ -382,12 +411,19 @@ class Harvester(
 
     fun walkDefinitions(decl: TypeDecl<GlobalTypeId>): List<TypeAst> = when (decl) {
         is TypeDecl.Complex, is TypeDecl.Enum, is TypeDecl.Range, is TypeDecl.Ref, is TypeDecl.XRef -> listOf()
+
         is TypeDecl.Const -> walkDefinitions(decl.inner)
+
         is TypeDecl.Volatile -> walkDefinitions(decl.inner)
+
         is TypeDecl.WithSizeAttr -> walkDefinitions(decl.inner)
+
         is TypeDecl.Pointer -> walkDefinitions(decl.pointee)
+
         is TypeDecl.Reference -> walkDefinitions(decl.referent)
+
         is TypeDecl.Array -> walkDefinitions(decl.element) + (decl.indexType?.let { walkDefinitions(it) } ?: listOf())
+
         is TypeDecl.FunctionT -> decl.params.flatMap { walkDefinitions(it) } + walkDefinitions(decl.ret)
 
         is TypeDecl.Method -> decl.params.flatMap { walkDefinitions(it) } + walkDefinitions(decl.ret) + walkDefinitions(
