@@ -1,11 +1,17 @@
 package ghistabs.builder
 
+import ghidra.app.util.demangler.DemangledAddressTable
+import ghidra.app.util.demangler.DemanglerUtil
+import ghidra.program.model.listing.Program
 import ghistabs.util.QualifiedName
 
 object VtableSymbolCandidates {
     /**
-     * Ordered candidate symbol names that may resolve to a vtable for [className].
-     * Tries Itanium mangling first, then Cygwin/PE variants, then gcc2 fallback.
+     * Ordered candidate symbol names that may resolve to a vtable for
+     * [className] via direct lookup (`resolver.resolve(name)`). For
+     * templated class names there is no closed-form mangling, so the
+     * caller must fall back to a symbol-table scan with
+     * [decodesToClass] (which round-trips through the real demangler).
      */
     fun mangledZtvCandidates(className: String): List<String> {
         val itaniumMangled = itaniumMangleClassName(className)
@@ -19,22 +25,41 @@ object VtableSymbolCandidates {
     }
 
     /**
-     * True if [symbolName] (with any leading underscore stripped) decodes
-     * to the Itanium-mangled form of [className]. Used by the symbol-iterator fallback.
+     * True if [symbolName] is a vtable symbol whose demangled class chain
+     * matches [className]. Built on Ghidra's `GnuDemangler` so templated
+     * vtables (e.g. `_ZTVN3std6vectorIiSaIiEEE`) are recognised — the
+     * old reverse-mangling path punted on `<` and missed those.
      */
-    fun itaniumDecodesToClass(symbolName: String, className: String): Boolean {
-        // Strip all leading underscores (handle both _ZTV and __ZTV variants)
-        var stripped = symbolName
-        while (stripped.startsWith("_")) {
-            stripped = stripped.drop(1)
-        }
-        if (!stripped.startsWith("ZTV")) return false
-        val rest = stripped.removePrefix("ZTV")
-        return rest == itaniumMangleClassName(className)
+    fun decodesToClass(program: Program, symbolName: String, className: String): Boolean {
+        if (!looksLikeZtv(symbolName)) return false
+        val obj = runCatching {
+            DemanglerUtil.demangle(program, symbolName, null).firstOrNull()
+        }.getOrNull() ?: return false
+        return demangledMatchesClass(obj, className)
+    }
+
+    /** String-level pre-filter so we don't pay the demangler cost on every label. */
+    internal fun looksLikeZtv(symbolName: String): Boolean = symbolName.trimStart('_').startsWith("ZTV")
+
+    /**
+     * Inspect a [DemangledObject] (typically from `_ZTV…`) and report whether
+     * it's a vtable for [className]. Pure — extracted so unit tests can
+     * exercise it with a synthetic `DemangledAddressTable` and avoid the
+     * Ghidra demangler's `Program`-dependent setup path.
+     */
+    internal fun demangledMatchesClass(obj: ghidra.app.util.demangler.DemangledObject, className: String): Boolean {
+        if (obj !is DemangledAddressTable || obj.name != "vtable") return false
+        val chain = generateSequence(obj.namespace) { it.namespace }
+            .map { it.name }
+            .toList()
+            .asReversed()
+            .joinToString("::")
+        return chain == className
     }
 
     /**
-     * Itanium-mangle a (possibly nested) class name. Templated names not supported.
+     * Itanium-mangle a (possibly nested) class name. Templated names not supported —
+     * caller falls back to [decodesToClass]-based symbol-table scan.
      * Examples:
      *   "Foo" → "3Foo"
      *   "Foo::Bar" → "N3Foo3BarE"

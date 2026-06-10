@@ -260,12 +260,29 @@ class ClassBuilder(
             return
         }
 
-        // 1. Re-parent.
-        func.parentNamespace = ns
-
-        // 2. Choose the in-class display name:
-        val displayName = displayNameFor(mangled, className) ?: m.name
-        if (func.name != displayName) func.setName(displayName, source)
+        // 1. Re-parent + rename via Ghidra's demangler. `ensureClassNamespace`
+        //    already created the GhidraClass leaf, so
+        //    `applyDemangledName.getOrCreateNameSpace` reuses it (and the
+        //    method ends up in the right class with `thiscall`-friendly
+        //    `parentNamespace is GhidraClass`). Disable signature/calling-
+        //    convention/disassembly application — the stab gives us richer
+        //    types than the demangler can derive from the mangled name, and
+        //    our `__thiscall` choice below must win.
+        val demangleOpts = ghidra.app.util.demangler.DemanglerOptions().apply {
+            setApplySignature(false)
+            setApplyCallingConvention(false)
+            setDoDisassembly(false)
+        }
+        val demangleCmd = ghidra.app.cmd.label.DemanglerCmd(addr, mangled, demangleOpts)
+        if (!demangleCmd.applyTo(program)) {
+            // Demangler couldn't parse the symbol — fall back to manual
+            // namespace + display-name handling so we still produce a
+            // usable class layout.
+            func.parentNamespace = ns
+            val fallbackName = displayNameFor(mangled, className) ?: m.name
+            if (func.name != fallbackName) func.setName(fallbackName, source)
+            log("method-demangle-fallback", "$className::${m.name}: ${demangleCmd.statusMsg}")
+        }
 
         // 3. Mark thiscall. Calling convention drives `this`:
         //    On x86 PE/Cygwin (`x86win32`) the cspec routes `this` through ECX.
@@ -592,7 +609,7 @@ class ClassBuilder(
         try {
             symtab.symbolIterator.firstOrNull {
                 (it.name.startsWith("_ZTV") || it.name.startsWith("__ZTV")) &&
-                    VtableSymbolCandidates.itaniumDecodesToClass(it.name, className)
+                    VtableSymbolCandidates.decodesToClass(program, it.name, className)
             }?.let { return it.address }
         } catch (e: IllegalArgumentException) {
             log("vtable-symbol-scan-error", "exception scanning symbol table for $className: ${e.message}")
@@ -607,7 +624,7 @@ class ClassBuilder(
                     .takeWhile { it.address < rdataBlock.end }
                     .firstOrNull {
                         (it.name.startsWith("_ZTV") || it.name.startsWith("__ZTV")) &&
-                            VtableSymbolCandidates.itaniumDecodesToClass(it.name, className)
+                            VtableSymbolCandidates.decodesToClass(program, it.name, className)
                     }?.let { return it.address }
             } catch (e: IllegalArgumentException) {
                 log("vtable-rdata-scan-error", "exception scanning .rdata for $className: ${e.message}")
