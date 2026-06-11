@@ -25,6 +25,8 @@ import kotlinx.serialization.json.encodeToStream
 import kotlinx.serialization.modules.SerializersModule
 import org.junit.jupiter.api.*
 import org.junit.jupiter.api.Assumptions.assumeTrue
+import org.junit.jupiter.api.parallel.Execution
+import org.junit.jupiter.api.parallel.ExecutionMode
 import java.io.File
 
 /**
@@ -65,14 +67,16 @@ fun resourceFile(kind: String, name: String) = File("src/test/resources/${kind}s
  * [StabsAnalyzerConcurrentTest]. Tests common to both live here; tests that
  * only make sense (or only fail) in one mode go in the subclass.
  */
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
+@Execution(ExecutionMode.CONCURRENT)
 @Tag("integration")
-abstract class StabsAnalyzerRegressionTest(private val mode: Mode, private val binary_name: String) :
+abstract class StabsAnalyzerRegressionTest(private val mode: Mode, binaryName: String) :
     AbstractGhidraHeadlessIntegrationTest() {
-    private val fixture = File("src/test/resources/binaries/$binary_name.exe")
-    private val baselineFile = resourceFile("baseline", binary_name)
-    private val recordsFile = resourceFile("record", binary_name)
-    private val harvestFile = resourceFile("harvest", binary_name)
-    private val logFile = File("src/test/resources/logs/${binary_name}.${mode.name.lowercase()}.log")
+    private val fixture = File("src/test/resources/binaries/$binaryName.exe")
+    private val baselineFile = resourceFile("baseline", binaryName)
+    private val recordsFile = resourceFile("record", binaryName)
+    private val harvestFile = resourceFile("harvest", binaryName)
+    private val logFile = File("src/test/resources/logs/$binaryName.${mode.name.lowercase()}.log")
 
     protected lateinit var program: Program
     private var loadResults: LoadResults<Program>? = null
@@ -89,7 +93,7 @@ abstract class StabsAnalyzerRegressionTest(private val mode: Mode, private val b
         }
     }
 
-    @BeforeEach
+    @BeforeAll
     fun setUp() {
         assumeTrue(
             fixture.exists(),
@@ -132,7 +136,7 @@ abstract class StabsAnalyzerRegressionTest(private val mode: Mode, private val b
                     // next analysis pass — it then runs at its declared priority
                     // alongside the demangler.
                     options.setBoolean(ourName, true)
-                    mgr.scheduleOneTimeAnalysis(discovered!! as StabsAnalyzer, program.memory)
+                    mgr.scheduleOneTimeAnalysis(discovered, program.memory)
                     runAutoAnalysis(mgr, monitor)
                     // The auto-run captured into MessageLog (not our CapturingSink),
                     // so `context` is mostly an empty shell here; tests that depend
@@ -185,7 +189,7 @@ abstract class StabsAnalyzerRegressionTest(private val mode: Mode, private val b
         }
     }
 
-    @AfterEach
+    @AfterAll
     fun tearDown() {
         if (::program.isInitialized) program.release(this)
         loadResults?.close()
@@ -341,8 +345,7 @@ abstract class StabsAnalyzerRegressionTest(private val mode: Mode, private val b
     fun noClassMethodHasDuplicateThis() {
         val offenders = program.functionManager
             .getFunctions(true)
-            .iterator()
-            .asSequence()
+            .asIterable()
             .filter { it.parentNamespace is ghidra.program.model.listing.GhidraClass }
             .mapNotNull { f ->
                 val thisCount = (0 until f.parameterCount)
@@ -375,8 +378,7 @@ abstract class StabsAnalyzerRegressionTest(private val mode: Mode, private val b
         // Spot-check via _ZN6DSInst4DumpEPt — DSInst::Dump(unsigned short*).
         val func = program.functionManager
             .getFunctions(true)
-            .iterator()
-            .asSequence()
+            .asIterable()
             .firstOrNull { it.name == "Dump" && it.parentNamespace.name == "DSInst" }
         assumeTrue(func != null, "Skipping: DSInst::Dump not found")
         Assertions.assertEquals("__thiscall", func!!.callingConventionName)
@@ -449,10 +451,8 @@ abstract class StabsAnalyzerRegressionTest(private val mode: Mode, private val b
 
     @Test
     fun xapInstFirstComponentIsBase() {
-        val xapInst =
-            program.dataTypeManager.allDataTypes
-                .asSequence()
-                .firstOrNull { it.name == "XapInst" && it is Structure } as? Structure
+        val xapInst = program.dataTypeManager.allDataTypes.asSequence()
+            .firstOrNull { it.name == "XapInst" && it is Structure } as? Structure
         assumeTrue(xapInst != null, "Skipping: XapInst not found in DTM (stabs not processed)")
         assumeTrue(xapInst!!.numComponents > 0, "Skipping: XapInst has no components")
         val first = xapInst.getComponent(0)
@@ -492,10 +492,8 @@ abstract class StabsAnalyzerRegressionTest(private val mode: Mode, private val b
 
     @Test
     fun cLexStreamHasBaseField() {
-        val cls =
-            program.dataTypeManager.allDataTypes
-                .asSequence()
-                .firstOrNull { it.name == "CLexStream" && it is Structure } as? Structure
+        val cls = program.dataTypeManager.allDataTypes.asSequence()
+            .firstOrNull { it.name == "CLexStream" && it is Structure } as? Structure
         assumeTrue(cls != null, "Skipping: CLexStream not found (stabs not processed)")
         val hasBase =
             (0 until cls!!.numComponents).any { i ->
@@ -791,7 +789,7 @@ abstract class StabsAnalyzerRegressionTest(private val mode: Mode, private val b
     @Test
     fun freeFunctionSymbolGetsDemangled() {
         val fm = program.functionManager
-        val byMangled = fm.getFunctions(true).iterator().asSequence()
+        val byMangled = fm.getFunctions(true).asIterable()
             .firstOrNull { it.name == "_Z11RegToBinary12EnumRegToken" }
         val byDemangled = fm.getFunctions(true).iterator().asSequence()
             .firstOrNull { it.name == "RegToBinary" }
@@ -830,6 +828,9 @@ abstract class StabsAnalyzerRegressionTest(private val mode: Mode, private val b
     }
 }
 
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
+@Execution(ExecutionMode.CONCURRENT)
+@Tag("integration")
 abstract class StabsAnalyzerAbstract(binary_name: String) : StabsAnalyzerRegressionTest(Mode.AFTER, binary_name) {
     /**
      * AFTER mode: auto-analysis (including the demangler) runs first, then we
@@ -872,7 +873,22 @@ abstract class StabsAnalyzerAbstract(binary_name: String) : StabsAnalyzerRegress
     }
 }
 
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
+@Execution(ExecutionMode.CONCURRENT)
+@Tag("integration")
 class StabsAnalyzerConcurrentTest : StabsAnalyzerRegressionTest(Mode.CONCURRENT, BINARY_NAME)
+
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
+@Execution(ExecutionMode.CONCURRENT)
+@Tag("integration")
 class StabsAnalyzerConcurrentTest2 : StabsAnalyzerRegressionTest(Mode.CONCURRENT, BINARY_NAME2)
+
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
+@Execution(ExecutionMode.CONCURRENT)
+@Tag("integration")
 class StabsAnalyzerAfterTest : StabsAnalyzerAbstract(BINARY_NAME)
+
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
+@Execution(ExecutionMode.CONCURRENT)
+@Tag("integration")
 class StabsAnalyzerAfterTest2 : StabsAnalyzerAbstract(BINARY_NAME2)

@@ -73,7 +73,19 @@ val integrationTest =
         shouldRunAfter("test")
         // JVM args mirror ~/git/ghidra/gradle/javaTestProject.gradle:initTestJVM so Ghidra's
         // HeadlessGhidraApplicationConfiguration boots cleanly under JDK 21.
-        forkEvery = 1
+        //
+        // Ghidra's Application bootstrap is idempotent (AbstractGenericTest.initialize
+        // skips on second call) so test classes in the same JVM share one Ghidra
+        // install. Forking per-class — forkEvery=1 — paid the ~30s Ghidra boot
+        // 9 times. Drop forking entirely and parallelise across maxParallelForks
+        // JVMs instead: gradle splits the 9 test classes across N concurrent JVMs,
+        // each booting Ghidra once and reusing it. Each fork needs a real heap;
+        // loading xapasmcsr.exe + autoanalysis overflows the gradle default
+        // -Xmx512m and crashes the worker with NoSuchFileException on the result
+        // binary.
+        forkEvery = 0
+        maxParallelForks = (Runtime.getRuntime().availableProcessors() / 2).coerceIn(1, 4)
+        maxHeapSize = "2g"
         jvmArgs(
             // Ghidra installs its own ObjectInputFilter factory; under JDK 21 it must be
             // declared at JVM startup, otherwise the BuiltinFilterFactory wins the race.
