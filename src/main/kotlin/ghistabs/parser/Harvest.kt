@@ -86,9 +86,184 @@ data class Harvest(
     fun getStructByXRef(name: String) = structAstsByName[name]
     fun definingCUs(ast: TypeAst) = astsByGhidraName[ast.ghidraName]?.map { it.id.source }?.toSet() ?: setOf(ast.cu)
 
+    /**
+     * Content-equivalence hash for a [TypeDecl] tree, using `typeAsts`
+     * as the oracle. See the top-level [contentHash] for semantics.
+     */
+    fun contentHash(body: TypeDecl<GlobalTypeId>): Int = contentHash(body, typeAsts::get)
+
     //    inline fun <reified T : TypeDecl<GlobalTypeId>> getBodyFor(id: GlobalTypeId) = getTypeFor(id)?.let {
 //        it.body as? T
 //    }
+}
+
+/**
+ * Content-equivalence hash for a [TypeDecl] tree. Differs from the
+ * default `data class` `hashCode()` in two places:
+ *
+ *   1. Anywhere a [TypeDecl] holds an id (`Ref`, `Range.of`,
+ *      `Struct.vtableTargetTypeId`, `InlineDef.id`), the id is resolved
+ *      via [oracle] and the hash recurses into the referenced body —
+ *      so a forward `Ref(id)` and an inline `InlineDef(id, body)` for
+ *      the same content collapse to the same hash. gcc emits either
+ *      form depending on per-CU history.
+ *
+ *   2. The `"Ref"` and `"InlineDef"` wrapper tags are intentionally
+ *      omitted — both reduce to their wrapped content's hash. Per-CU
+ *      template-instantiation clones end up content-equivalent because
+ *      their fields' refs converge on the same primitive types
+ *      regardless of which CU canonically owns the clone.
+ *
+ * Cycles (self-referential `Range.of`, recursive struct fields, vtable
+ * pointing back at the enclosing class) are broken by [visited]: once
+ * a [GlobalTypeId] is in flight, hitting it again yields a fixed
+ * `"back-edge"` marker hash instead of recursing.
+ *
+ * [oracle] is parameterised so `Harvester.appendAsts` can compose its
+ * in-flight batch with the merged store, while a finished [Harvest]
+ * can pass `typeAsts::get` directly.
+ *
+ * Each `when` branch destructures the variant — adding a field to any
+ * [TypeDecl] subclass is a compile error here.
+ */
+fun contentHash(
+    body: TypeDecl<GlobalTypeId>,
+    oracle: (GlobalTypeId) -> TypeAst?,
+    visited: Set<GlobalTypeId> = emptySet(),
+): Int = when (body) {
+    is TypeDecl.Ref -> {
+        // Drop the "Ref" wrapper so `Ref(id)` and the equivalent inline
+        // `InlineDef(id, content)` (gcc emits either form depending on
+        // each CU's history) reduce to the same content hash.
+        val (id) = body
+        refKey(id, oracle, visited)
+    }
+    is TypeDecl.Range -> {
+        val (of, min, max) = body
+        java.util.Objects.hash("Range", refKey(of, oracle, visited), min, max)
+    }
+    is TypeDecl.Pointer -> {
+        val (pointee) = body
+        java.util.Objects.hash("Pointer", contentHash(pointee, oracle, visited))
+    }
+    is TypeDecl.Reference -> {
+        val (referent) = body
+        java.util.Objects.hash("Reference", contentHash(referent, oracle, visited))
+    }
+    is TypeDecl.Const -> {
+        val (inner) = body
+        java.util.Objects.hash("Const", contentHash(inner, oracle, visited))
+    }
+    is TypeDecl.Volatile -> {
+        val (inner) = body
+        java.util.Objects.hash("Volatile", contentHash(inner, oracle, visited))
+    }
+    is TypeDecl.Array -> {
+        val (element, length, indexType) = body
+        java.util.Objects.hash(
+            "Array",
+            contentHash(element, oracle, visited),
+            length,
+            indexType?.let { contentHash(it, oracle, visited) },
+        )
+    }
+    is TypeDecl.Enum -> body.hashCode() // members: List<Pair<String, Long>> — no ids
+    is TypeDecl.Struct -> {
+        val (kind, sizeBytes, bases, fields, methods, hasVtbl, vtableTargetTypeId) = body
+        java.util.Objects.hash(
+            "Struct",
+            kind,
+            sizeBytes,
+            bases.map { contentHashBase(it, oracle, visited) },
+            fields.map { contentHashField(it, oracle, visited) },
+            methods.map { contentHashMethod(it, oracle, visited) },
+            hasVtbl,
+            vtableTargetTypeId?.let { refKey(it, oracle, visited) },
+        )
+    }
+    is TypeDecl.FunctionT -> {
+        val (ret, params) = body
+        java.util.Objects.hash(
+            "FunctionT",
+            contentHash(ret, oracle, visited),
+            params.map { contentHash(it, oracle, visited) },
+        )
+    }
+    is TypeDecl.Method -> {
+        val (cls, ret, params) = body
+        java.util.Objects.hash(
+            "Method",
+            contentHash(cls, oracle, visited),
+            contentHash(ret, oracle, visited),
+            params.map { contentHash(it, oracle, visited) },
+        )
+    }
+    is TypeDecl.Complex -> body.hashCode() // (rCode, sizeBytes) — primitives only
+    is TypeDecl.XRef -> body.hashCode() // (kind, tagName) — primitives only
+    is TypeDecl.WithSizeAttr -> {
+        val (sizeBits, inner) = body
+        java.util.Objects.hash("WithSizeAttr", sizeBits, contentHash(inner, oracle, visited))
+    }
+    is TypeDecl.InlineDef -> {
+        // The id is local-binding metadata; identity is the body. Drop
+        // the "InlineDef" wrapper so this form is content-equivalent to
+        // `Ref(id_at_same_content)` (see the Ref branch). Add the id to
+        // `visited` so a back-edge inside the body (a forward Ref
+        // pointing at this InlineDef's slot) stops recursing.
+        val (id, inner) = body
+        contentHash(inner, oracle, visited + id)
+    }
+}
+
+/**
+ * Resolve [id] through [oracle] and recurse into the referenced body so
+ * `Ref(id)` and the inline `InlineDef(id, body)` form converge on the
+ * same hash (gcc emits both for the same logical content depending on
+ * how a type was first introduced in each CU). [visited] guards against
+ * self-referential cycles — `Range.of` always points at itself, and
+ * struct fields can transitively reach back into the enclosing class.
+ */
+private fun refKey(id: GlobalTypeId, oracle: (GlobalTypeId) -> TypeAst?, visited: Set<GlobalTypeId>): Int {
+    if (id in visited) return java.util.Objects.hash("back-edge")
+    val referenced = oracle(id) ?: return java.util.Objects.hash("unresolved", id)
+    return contentHash(referenced.body, oracle, visited + id)
+}
+
+private fun contentHashField(
+    f: FieldDecl<GlobalTypeId>,
+    oracle: (GlobalTypeId) -> TypeAst?,
+    visited: Set<GlobalTypeId>,
+): Int {
+    val (name, type, offsetBits, sizeBits, isStatic) = f
+    return java.util.Objects.hash("Field", name, contentHash(type, oracle, visited), offsetBits, sizeBits, isStatic)
+}
+
+private fun contentHashBase(
+    b: BaseDecl<GlobalTypeId>,
+    oracle: (GlobalTypeId) -> TypeAst?,
+    visited: Set<GlobalTypeId>,
+): Int {
+    val (type, isVirtual, access, offsetBits) = b
+    return java.util.Objects.hash("Base", contentHash(type, oracle, visited), isVirtual, access, offsetBits)
+}
+
+private fun contentHashMethod(
+    m: MethodDecl<GlobalTypeId>,
+    oracle: (GlobalTypeId) -> TypeAst?,
+    visited: Set<GlobalTypeId>,
+): Int {
+    val (name, mangled, signature, access, virt, isConst, isVolatile, vtableOffsetBits) = m
+    return java.util.Objects.hash(
+        "Method",
+        name,
+        mangled,
+        contentHash(signature, oracle, visited),
+        access,
+        virt,
+        isConst,
+        isVolatile,
+        vtableOffsetBits,
+    )
 }
 
 /**
@@ -455,13 +630,18 @@ class Harvester(
      */
     fun appendAsts(asts: List<TypeAst>) {
         val new = asts.groupBy { it.id }
+        // Oracle covers both the already-merged store AND the in-flight batch,
+        // since within one parseSymbol() the inner InlineDef types arrive in
+        // the same batch as the outer struct.
+        val batchById = asts.associateBy { it.id }
+        val oracle: (GlobalTypeId) -> TypeAst? = { id -> typeAsts[id] ?: batchById[id] }
         // replace XRef by its definition
         val collisions = typeAsts.filter { it.value.body !is TypeDecl.XRef }.map { it.key }.intersect(new.keys)
         if (collisions.isNotEmpty()) {
             for (id in collisions) {
                 val ex = typeAsts[id]!!
-                val exHash = mapOf(ex.name to ex.body.hashCode())
-                val newHash = new[id]!!.associate { it.name to it.body.hashCode() }
+                val exHash = mapOf(ex.name to contentHash(ex.body, oracle))
+                val newHash = new[id]!!.associate { it.name to contentHash(it.body, oracle) }
                 if (exHash == newHash) {
                     log("ast-id-collision-same-hash")
                 } else {
