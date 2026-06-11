@@ -87,10 +87,19 @@ data class Harvest(
     fun definingCUs(ast: TypeAst) = astsByGhidraName[ast.ghidraName]?.map { it.id.source }?.toSet() ?: setOf(ast.cu)
 
     /**
+     * Per-id memoization cache for [contentHash]. Cleared with the
+     * Harvest, so each test/run gets a fresh map. Not synchronized —
+     * the harvest is single-threaded during construction; consumers
+     * after construction (TypeRegistry, ClassBuilder) call from one
+     * thread per Harvest.
+     */
+    private val hashCache = mutableMapOf<GlobalTypeId, Int>()
+
+    /**
      * Content-equivalence hash for a [TypeDecl] tree, using `typeAsts`
      * as the oracle. See the top-level [contentHash] for semantics.
      */
-    fun contentHash(body: TypeDecl<GlobalTypeId>): Int = contentHash(body, typeAsts::get)
+    fun contentHash(body: TypeDecl<GlobalTypeId>): Int = contentHash(body, typeAsts::get, cache = hashCache)
 
     //    inline fun <reified T : TypeDecl<GlobalTypeId>> getBodyFor(id: GlobalTypeId) = getTypeFor(id)?.let {
 //        it.body as? T
@@ -130,41 +139,42 @@ fun contentHash(
     body: TypeDecl<GlobalTypeId>,
     oracle: (GlobalTypeId) -> TypeAst?,
     visited: Set<GlobalTypeId> = emptySet(),
+    cache: MutableMap<GlobalTypeId, Int>? = null,
 ): Int = when (body) {
     is TypeDecl.Ref -> {
         // Drop the "Ref" wrapper so `Ref(id)` and the equivalent inline
         // `InlineDef(id, content)` (gcc emits either form depending on
         // each CU's history) reduce to the same content hash.
         val (id) = body
-        refKey(id, oracle, visited)
+        refKey(id, oracle, visited, cache)
     }
     is TypeDecl.Range -> {
         val (of, min, max) = body
-        java.util.Objects.hash("Range", refKey(of, oracle, visited), min, max)
+        java.util.Objects.hash("Range", refKey(of, oracle, visited, cache), min, max)
     }
     is TypeDecl.Pointer -> {
         val (pointee) = body
-        java.util.Objects.hash("Pointer", contentHash(pointee, oracle, visited))
+        java.util.Objects.hash("Pointer", contentHash(pointee, oracle, visited, cache))
     }
     is TypeDecl.Reference -> {
         val (referent) = body
-        java.util.Objects.hash("Reference", contentHash(referent, oracle, visited))
+        java.util.Objects.hash("Reference", contentHash(referent, oracle, visited, cache))
     }
     is TypeDecl.Const -> {
         val (inner) = body
-        java.util.Objects.hash("Const", contentHash(inner, oracle, visited))
+        java.util.Objects.hash("Const", contentHash(inner, oracle, visited, cache))
     }
     is TypeDecl.Volatile -> {
         val (inner) = body
-        java.util.Objects.hash("Volatile", contentHash(inner, oracle, visited))
+        java.util.Objects.hash("Volatile", contentHash(inner, oracle, visited, cache))
     }
     is TypeDecl.Array -> {
         val (element, length, indexType) = body
         java.util.Objects.hash(
             "Array",
-            contentHash(element, oracle, visited),
+            contentHash(element, oracle, visited, cache),
             length,
-            indexType?.let { contentHash(it, oracle, visited) },
+            indexType?.let { contentHash(it, oracle, visited, cache) },
         )
     }
     is TypeDecl.Enum -> body.hashCode() // members: List<Pair<String, Long>> — no ids
@@ -174,35 +184,35 @@ fun contentHash(
             "Struct",
             kind,
             sizeBytes,
-            bases.map { contentHashBase(it, oracle, visited) },
-            fields.map { contentHashField(it, oracle, visited) },
-            methods.map { contentHashMethod(it, oracle, visited) },
+            bases.map { contentHashBase(it, oracle, visited, cache) },
+            fields.map { contentHashField(it, oracle, visited, cache) },
+            methods.map { contentHashMethod(it, oracle, visited, cache) },
             hasVtbl,
-            vtableTargetTypeId?.let { refKey(it, oracle, visited) },
+            vtableTargetTypeId?.let { refKey(it, oracle, visited, cache) },
         )
     }
     is TypeDecl.FunctionT -> {
         val (ret, params) = body
         java.util.Objects.hash(
             "FunctionT",
-            contentHash(ret, oracle, visited),
-            params.map { contentHash(it, oracle, visited) },
+            contentHash(ret, oracle, visited, cache),
+            params.map { contentHash(it, oracle, visited, cache) },
         )
     }
     is TypeDecl.Method -> {
         val (cls, ret, params) = body
         java.util.Objects.hash(
             "Method",
-            contentHash(cls, oracle, visited),
-            contentHash(ret, oracle, visited),
-            params.map { contentHash(it, oracle, visited) },
+            contentHash(cls, oracle, visited, cache),
+            contentHash(ret, oracle, visited, cache),
+            params.map { contentHash(it, oracle, visited, cache) },
         )
     }
     is TypeDecl.Complex -> body.hashCode() // (rCode, sizeBytes) — primitives only
     is TypeDecl.XRef -> body.hashCode() // (kind, tagName) — primitives only
     is TypeDecl.WithSizeAttr -> {
         val (sizeBits, inner) = body
-        java.util.Objects.hash("WithSizeAttr", sizeBits, contentHash(inner, oracle, visited))
+        java.util.Objects.hash("WithSizeAttr", sizeBits, contentHash(inner, oracle, visited, cache))
     }
     is TypeDecl.InlineDef -> {
         // The id is local-binding metadata; identity is the body. Drop
@@ -211,7 +221,7 @@ fun contentHash(
         // `visited` so a back-edge inside the body (a forward Ref
         // pointing at this InlineDef's slot) stops recursing.
         val (id, inner) = body
-        contentHash(inner, oracle, visited + id)
+        contentHash(inner, oracle, visited + id, cache)
     }
 }
 
@@ -223,41 +233,76 @@ fun contentHash(
  * self-referential cycles — `Range.of` always points at itself, and
  * struct fields can transitively reach back into the enclosing class.
  */
-private fun refKey(id: GlobalTypeId, oracle: (GlobalTypeId) -> TypeAst?, visited: Set<GlobalTypeId>): Int {
-    if (id in visited) return java.util.Objects.hash("back-edge")
+/**
+ * Resolve a Ref-shaped id through [oracle] and recurse into the body,
+ * memoizing the result. `Ref(id)` and `InlineDef(id, content)` for the
+ * same content converge on the same hash (gcc emits either form
+ * depending on per-CU history). [visited] guards against self-referential
+ * cycles — `Range.of` always points at itself; struct fields can
+ * transitively reach back into the enclosing class.
+ *
+ * Caching strategy: store every successful (non-back-edge) result keyed
+ * by [id]. For tree-shaped types the cached value is exact. For
+ * mutually-recursive types the first computation wins and is reused —
+ * mild inconsistency with what a from-scratch recomputation would
+ * produce, but still deterministic across calls and good enough for
+ * collision detection and DTM dedup.
+ */
+private fun refKey(
+    id: GlobalTypeId,
+    oracle: (GlobalTypeId) -> TypeAst?,
+    visited: Set<GlobalTypeId>,
+    cache: MutableMap<GlobalTypeId, Int>?,
+): Int {
+    if (id in visited) return BACK_EDGE_HASH
+    cache?.get(id)?.let { return it }
     val referenced = oracle(id) ?: return java.util.Objects.hash("unresolved", id)
-    return contentHash(referenced.body, oracle, visited + id)
+    val h = contentHash(referenced.body, oracle, visited + id, cache)
+    cache?.put(id, h)
+    return h
 }
+
+private val BACK_EDGE_HASH = java.util.Objects.hash("back-edge")
 
 private fun contentHashField(
     f: FieldDecl<GlobalTypeId>,
     oracle: (GlobalTypeId) -> TypeAst?,
     visited: Set<GlobalTypeId>,
+    cache: MutableMap<GlobalTypeId, Int>?,
 ): Int {
     val (name, type, offsetBits, sizeBits, isStatic) = f
-    return java.util.Objects.hash("Field", name, contentHash(type, oracle, visited), offsetBits, sizeBits, isStatic)
+    return java.util.Objects.hash(
+        "Field",
+        name,
+        contentHash(type, oracle, visited, cache),
+        offsetBits,
+        sizeBits,
+        isStatic,
+    )
 }
 
 private fun contentHashBase(
     b: BaseDecl<GlobalTypeId>,
     oracle: (GlobalTypeId) -> TypeAst?,
     visited: Set<GlobalTypeId>,
+    cache: MutableMap<GlobalTypeId, Int>?,
 ): Int {
     val (type, isVirtual, access, offsetBits) = b
-    return java.util.Objects.hash("Base", contentHash(type, oracle, visited), isVirtual, access, offsetBits)
+    return java.util.Objects.hash("Base", contentHash(type, oracle, visited, cache), isVirtual, access, offsetBits)
 }
 
 private fun contentHashMethod(
     m: MethodDecl<GlobalTypeId>,
     oracle: (GlobalTypeId) -> TypeAst?,
     visited: Set<GlobalTypeId>,
+    cache: MutableMap<GlobalTypeId, Int>?,
 ): Int {
     val (name, mangled, signature, access, virt, isConst, isVolatile, vtableOffsetBits) = m
     return java.util.Objects.hash(
         "Method",
         name,
         mangled,
-        contentHash(signature, oracle, visited),
+        contentHash(signature, oracle, visited, cache),
         access,
         virt,
         isConst,
