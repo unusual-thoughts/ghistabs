@@ -101,10 +101,62 @@ data class Harvest(
      */
     fun contentHash(body: TypeDecl<GlobalTypeId>): Int = contentHash(body, typeAsts::get, cache = hashCache)
 
+    /**
+     * Sort entries in [collidingAsts] by whether their alternate bodies
+     * are content-equivalent (just different per-CU representations of
+     * the same logical type) or genuinely divergent.
+     *
+     * Runs post-harvest against a fully-populated [typeAsts] with the
+     * memoized [hashCache] doing the heavy lifting. Putting this on the
+     * incremental `appendAsts` path was the source of the 10-minute
+     * regression — see commit history.
+     */
+    fun classifyCollisions(maxRealExamples: Int = 10): CollisionClassification {
+        var spurious = 0
+        var real = 0
+        var totalVariants = 0
+        val realExamples = mutableListOf<GlobalTypeId>()
+        for ((id, byName) in collidingAsts) {
+            val variants = byName.values.flatten()
+            totalVariants += variants.size
+            val distinctHashes = variants.map { contentHash(it) }.toSet().size
+            if (distinctHashes <= 1) {
+                spurious++
+            } else {
+                real++
+                if (realExamples.size < maxRealExamples) realExamples += id
+            }
+        }
+        return CollisionClassification(spurious, real, totalVariants, realExamples)
+    }
+
     //    inline fun <reified T : TypeDecl<GlobalTypeId>> getBodyFor(id: GlobalTypeId) = getTypeFor(id)?.let {
 //        it.body as? T
 //    }
 }
+
+/**
+ * Post-harvest classification of `ast-id-collision` entries.
+ *
+ * @property spuriousIds        ids whose alternate bodies all hash the
+ *                              same — the "collision" was purely a
+ *                              per-CU representation artifact (e.g.
+ *                              `Ref(id)` in one CU vs the equivalent
+ *                              `InlineDef(id', body)` in another).
+ * @property realIds            ids with genuinely different content
+ *                              across CUs.
+ * @property totalVariants      total alternate bodies seen across all
+ *                              colliding ids.
+ * @property realExamples       up to `maxRealExamples` ids whose
+ *                              collision was real; useful for log
+ *                              spelunking.
+ */
+data class CollisionClassification(
+    val spuriousIds: Int,
+    val realIds: Int,
+    val totalVariants: Int,
+    val realExamples: List<GlobalTypeId>,
+)
 
 /**
  * Content-equivalence hash for a [TypeDecl] tree. Differs from the
@@ -686,56 +738,39 @@ class Harvester(
     }
 
     /**
-     * Accumulates [TypeAst]s into [typeAsts], handling three collision cases:
+     * Accumulate [TypeAst]s into [typeAsts] with first-writer-wins on
+     * GlobalTypeId collisions.
      *
-     * 1. **XRef replacement:** If a [TypeDecl.XRef] body already exists in [typeAsts] for a
-     *    [GlobalTypeId], a concrete definition (Struct, Enum, etc.) replaces it. The first
-     *    non-XRef definition wins.
-     *
-     * 2. **Same-hash suppression:** If an identical body (same content hash) already exists,
-     *    the duplicate is logged as `ast-id-collision-same-hash` and silently discarded.
-     *
-     * 3. **Hash-differing first-writer-wins:** If a body with a different hash exists for the
-     *    same [GlobalTypeId], the new body is discarded (first-writer-wins), and the collision
-     *    is logged and recorded in [collidingAsts] for audit purposes. This happens when forward
-     *    EXCL creates a placeholder HeaderFile that diverges from the real BINCL HeaderFile
-     *    (see stabs-canonicalization.md §6 deviation D1).
+     * 1. **Non-colliding:** insert as-is.
+     * 2. **Existing XRef placeholder:** replaced by any concrete body that
+     *    arrives later for the same id (see filter on the collision set).
+     * 3. **GlobalTypeId already taken:** record every alternate body into
+     *    [collidingAsts] for post-harvest classification, then drop the
+     *    new entries. No per-collision logging or `contentHash` walk
+     *    here — that turned the harvest into a 10-minute affair on
+     *    template-heavy binaries. `Harvest.classifyCollisions` runs once
+     *    after harvest against a fully populated `typeAsts` and the
+     *    memoized `hashCache` to surface real-vs-spurious counts; see
+     *    `StabsImporter`.
      */
     fun appendAsts(asts: List<TypeAst>) {
         val new = asts.groupBy { it.id }
-        // Oracle covers both the already-merged store AND the in-flight batch,
-        // since within one parseSymbol() the inner InlineDef types arrive in
-        // the same batch as the outer struct.
-        // Hash for collision-classification only — uses Kotlin's data-class
-        // hashCode (cheap, structural). The full content-aware `contentHash`
-        // exists in the file but isn't called from the hot path: walking
-        // through Refs blew up O(n²) on the bouniafbouniaf fixture and the
-        // distinction between "same hash" and "different hash" buckets is
-        // diagnostic-only — first-writer-wins applies either way.
-        val batchById = asts.associateBy { it.id }
-//        val oracle: (GlobalTypeId) -> TypeAst? = { id -> typeAsts[id] ?: batchById[id] }
-        // replace XRef by its definition
         val collisions = new.keys.intersect(typeAsts.keys).filter { typeAsts[it]?.body !is TypeDecl.XRef }
-//        val collisions = typeAsts.filter { it.value.body !is TypeDecl.XRef }.map { it.key }.intersect(new.keys)
-        if (collisions.isNotEmpty()) {
-            for (id in collisions) {
-                val ex = typeAsts[id]!!
-                val exHash = mapOf(ex.name to ex.body.hashCode())
-                val newHash = new[id]!!.associate { it.name to it.body.hashCode() }
-//                val exHash = mapOf(ex.name to contentHash(ex.body, oracle))
-//                val newHash = new[id]!!.associate { it.name to contentHash(it.body, oracle) }
-                if (exHash == newHash) {
-                    log("ast-id-collision-same-hash")
-                } else {
-                    log("ast-id-collision", "$exHash != $newHash")
-                    collidingAsts.getOrPut(id, { mutableMapOf() }).getOrPut(ex.name, { mutableSetOf() }).add(ex.body)
-                    for (ex in new[id]!!) {
-                        collidingAsts.getOrPut(id, { mutableMapOf() }).getOrPut(ex.name, { mutableSetOf() })
-                            .add(ex.body)
-                    }
-                }
-            }
+        for (id in collisions) {
+            val ex = typeAsts[id]!!
+            // Cheap-equality skip: if every alternate body is `==` to
+            // the merged entry (data-class structural equality, no
+            // Ref-walk), the collision is a literal re-emission and
+            // not worth recording. classifyCollisions does the deeper
+            // Ref-aware check later for the entries that survive.
+            val alternates = new[id]!!.filter { it.body != ex.body }
+            if (alternates.isEmpty()) continue
+            val bucket = collidingAsts.getOrPut(id) { mutableMapOf() }
+                .getOrPut(ex.name) { mutableSetOf() }
+            bucket.add(ex.body)
+            for (alt in alternates) bucket.add(alt.body)
         }
+
         for (ast in asts.filter { !collisions.contains(it.id) }) {
             typeAsts[ast.id] = ast
         }
