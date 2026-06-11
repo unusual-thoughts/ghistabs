@@ -175,8 +175,11 @@ class TypeRegistry(
     }
 
     private fun resolve(ast: TypeAst): DataType {
-        // 2. Compute content hash for cross-CU dedup
-        val hash = ast.body.hashCode()
+        // 2. Compute content hash for cross-CU dedup. Uses Harvest.contentHash,
+        // which treats Refs as content-equivalent when they point at types
+        // with the same (name, body-kind) — so per-CU template-instantiation
+        // clones collapse onto a single canonical DataType.
+        val hash = harvest.contentHash(ast.body)
 
         // 3. Cross-CU dedup: same name + same body seen before? Reuse the canonical
         //    DataType and STOP — re-materialising the body onto a different placeholder
