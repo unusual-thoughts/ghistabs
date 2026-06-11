@@ -148,26 +148,32 @@ fun contentHash(
         val (id) = body
         refKey(id, oracle, visited, cache)
     }
+
     is TypeDecl.Range -> {
         val (of, min, max) = body
         java.util.Objects.hash("Range", refKey(of, oracle, visited, cache), min, max)
     }
+
     is TypeDecl.Pointer -> {
         val (pointee) = body
         java.util.Objects.hash("Pointer", contentHash(pointee, oracle, visited, cache))
     }
+
     is TypeDecl.Reference -> {
         val (referent) = body
         java.util.Objects.hash("Reference", contentHash(referent, oracle, visited, cache))
     }
+
     is TypeDecl.Const -> {
         val (inner) = body
         java.util.Objects.hash("Const", contentHash(inner, oracle, visited, cache))
     }
+
     is TypeDecl.Volatile -> {
         val (inner) = body
         java.util.Objects.hash("Volatile", contentHash(inner, oracle, visited, cache))
     }
+
     is TypeDecl.Array -> {
         val (element, length, indexType) = body
         java.util.Objects.hash(
@@ -177,7 +183,10 @@ fun contentHash(
             indexType?.let { contentHash(it, oracle, visited, cache) },
         )
     }
-    is TypeDecl.Enum -> body.hashCode() // members: List<Pair<String, Long>> — no ids
+
+    is TypeDecl.Enum -> body.hashCode()
+
+    // members: List<Pair<String, Long>> — no ids
     is TypeDecl.Struct -> {
         val (kind, sizeBytes, bases, fields, methods, hasVtbl, vtableTargetTypeId) = body
         java.util.Objects.hash(
@@ -191,6 +200,7 @@ fun contentHash(
             vtableTargetTypeId?.let { refKey(it, oracle, visited, cache) },
         )
     }
+
     is TypeDecl.FunctionT -> {
         val (ret, params) = body
         java.util.Objects.hash(
@@ -199,6 +209,7 @@ fun contentHash(
             params.map { contentHash(it, oracle, visited, cache) },
         )
     }
+
     is TypeDecl.Method -> {
         val (cls, ret, params) = body
         java.util.Objects.hash(
@@ -208,12 +219,18 @@ fun contentHash(
             params.map { contentHash(it, oracle, visited, cache) },
         )
     }
-    is TypeDecl.Complex -> body.hashCode() // (rCode, sizeBytes) — primitives only
-    is TypeDecl.XRef -> body.hashCode() // (kind, tagName) — primitives only
+
+    is TypeDecl.Complex -> body.hashCode()
+
+    // (rCode, sizeBytes) — primitives only
+    is TypeDecl.XRef -> body.hashCode()
+
+    // (kind, tagName) — primitives only
     is TypeDecl.WithSizeAttr -> {
         val (sizeBits, inner) = body
         java.util.Objects.hash("WithSizeAttr", sizeBits, contentHash(inner, oracle, visited, cache))
     }
+
     is TypeDecl.InlineDef -> {
         // The id is local-binding metadata; identity is the body. Drop
         // the "InlineDef" wrapper so this form is content-equivalent to
@@ -233,6 +250,7 @@ fun contentHash(
  * self-referential cycles — `Range.of` always points at itself, and
  * struct fields can transitively reach back into the enclosing class.
  */
+
 /**
  * Resolve a Ref-shaped id through [oracle] and recurse into the body,
  * memoizing the result. `Ref(id)` and `InlineDef(id, content)` for the
@@ -654,7 +672,17 @@ class Harvester(
             decl.fields.flatMap { walkDefinitions(it.type) } +
             decl.methods.flatMap { walkDefinitions(it.signature) }
 
-        is TypeDecl.InlineDef -> listOf(TypeAst(currentCu!!, decl.id, "${decl.id}", decl.body))
+        // Emit the outer InlineDef's TypeAst AND recurse into its body —
+        // gcc nests InlineDefs (e.g. an outer Method whose return type is
+        // itself an inline-defined Pointer-to-X), and without the
+        // recursion the inner ids are referenced by other types but
+        // never registered. Result: the contentHash oracle can't resolve
+        // the Refs, per-CU clones diverge, and the appendAsts collision
+        // log surfaces hundreds of false "different hash" entries.
+        is TypeDecl.InlineDef -> listOf(TypeAst(currentCu!!, decl.id, "${decl.id}", decl.body)) +
+            walkDefinitions(decl.body)
+
+//        is TypeDecl.InlineDef -> listOf(TypeAst(currentCu!!, decl.id, "${decl.id}", decl.body))
     }
 
     /**
@@ -678,15 +706,24 @@ class Harvester(
         // Oracle covers both the already-merged store AND the in-flight batch,
         // since within one parseSymbol() the inner InlineDef types arrive in
         // the same batch as the outer struct.
+        // Hash for collision-classification only — uses Kotlin's data-class
+        // hashCode (cheap, structural). The full content-aware `contentHash`
+        // exists in the file but isn't called from the hot path: walking
+        // through Refs blew up O(n²) on the xapasmcsr fixture and the
+        // distinction between "same hash" and "different hash" buckets is
+        // diagnostic-only — first-writer-wins applies either way.
         val batchById = asts.associateBy { it.id }
-        val oracle: (GlobalTypeId) -> TypeAst? = { id -> typeAsts[id] ?: batchById[id] }
+//        val oracle: (GlobalTypeId) -> TypeAst? = { id -> typeAsts[id] ?: batchById[id] }
         // replace XRef by its definition
-        val collisions = typeAsts.filter { it.value.body !is TypeDecl.XRef }.map { it.key }.intersect(new.keys)
+        val collisions = new.keys.intersect(typeAsts.keys).filter { typeAsts[it]?.body !is TypeDecl.XRef }
+//        val collisions = typeAsts.filter { it.value.body !is TypeDecl.XRef }.map { it.key }.intersect(new.keys)
         if (collisions.isNotEmpty()) {
             for (id in collisions) {
                 val ex = typeAsts[id]!!
-                val exHash = mapOf(ex.name to contentHash(ex.body, oracle))
-                val newHash = new[id]!!.associate { it.name to contentHash(it.body, oracle) }
+                val exHash = mapOf(ex.name to ex.body.hashCode())
+                val newHash = new[id]!!.associate { it.name to it.body.hashCode() }
+//                val exHash = mapOf(ex.name to contentHash(ex.body, oracle))
+//                val newHash = new[id]!!.associate { it.name to contentHash(it.body, oracle) }
                 if (exHash == newHash) {
                     log("ast-id-collision-same-hash")
                 } else {

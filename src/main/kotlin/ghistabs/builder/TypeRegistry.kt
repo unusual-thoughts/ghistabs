@@ -175,6 +175,14 @@ class TypeRegistry(
     }
 
     private fun resolve(ast: TypeAst): DataType {
+//        // 2. Compute content hash for cross-CU dedup. Uses the
+//        // structural data-class hashCode — same as the appendAsts
+//        // collision check. The Ref-resolving `Harvest.contentHash`
+//        // exists for diagnostic use but isn't on the hot path: walking
+//        // through Refs was O(n²) per resolve() call on real binaries
+//        // and lit up the harvester to 10+ minutes.
+//        val hash = ast.body.hashCode()
+
         // 2. Compute content hash for cross-CU dedup. Uses Harvest.contentHash,
         // which treats Refs as content-equivalent when they point at types
         // with the same (name, body-kind) — so per-CU template-instantiation
@@ -498,27 +506,40 @@ class TypeRegistry(
                 return mergeResult
             }
         }
-        // Fall back to renaming: find a free _N slot
-        // EXCEPT for Structures in conflict: drop them entirely (no _N renaming)
-        if (dt is Structure && existing is Structure) {
-            // Already tried merge and it failed; was logged via recordDedup in tryExecuteMerge
-            return existing
-        }
-        var n = (conflictCount[name] ?: 1) + 1
-        while (true) {
-            val candidate = "${name}_$n"
-            if (dtm.getDataType(category, candidate) == null) break
-            n++
-            if (n > 1000) error("cannot allocate conflict suffix for '$name'")
-        }
-        conflictCount[name] = n
-        // Clone and rename
-        val copy = dt.copy(dtm)
-        copy.name = "${name}_$n"
-        log("type-conflict", "Two definitions of '$name' with different bodies; second renamed to '${name}_$n'")
-        diagnostics.recordDedup(kind = "rename", name = name, detail = "renamed-to-${name}_$n")
-        byPath[category to "${name}_$n"] = hash
-        return dtm.addDataType(copy, DataTypeConflictHandler.KEEP_HANDLER)
+
+        // Drop the duplicate. The `_N`-rename path used to allocate a fresh
+        // DataType slot but no consumer ever references the rename — Refs
+        // resolve through `byId` to the canonical entry, and `byHash`
+        // dedups same-content by name. The rename was particularly costly
+        // on C++ template-internal typedefs (`_ValueType`, `_Is_POD`, etc.)
+        // where every CU's instantiation has its own per-CU body and the
+        // count exploded into the thousands; each rename did a DataType
+        // clone + DTM addType + log line. First-writer-wins via the
+        // existing canonical entry is correct and ~100x faster on
+        // template-heavy binaries.
+        diagnostics.recordDedup(kind = "drop", name = name, detail = "first-writer-wins")
+        return existing
+//        // Fall back to renaming: find a free _N slot
+//        // EXCEPT for Structures in conflict: drop them entirely (no _N renaming)
+//        if (dt is Structure && existing is Structure) {
+//            // Already tried merge and it failed; was logged via recordDedup in tryExecuteMerge
+//            return existing
+//        }
+//        var n = (conflictCount[name] ?: 1) + 1
+//        while (true) {
+//            val candidate = "${name}_$n"
+//            if (dtm.getDataType(category, candidate) == null) break
+//            n++
+//            if (n > 1000) error("cannot allocate conflict suffix for '$name'")
+//        }
+//        conflictCount[name] = n
+//        // Clone and rename
+//        val copy = dt.copy(dtm)
+//        copy.name = "${name}_$n"
+//        log("type-conflict", "Two definitions of '$name' with different bodies; second renamed to '${name}_$n'")
+//        diagnostics.recordDedup(kind = "rename", name = name, detail = "renamed-to-${name}_$n")
+//        byPath[category to "${name}_$n"] = hash
+//        return dtm.addDataType(copy, DataTypeConflictHandler.KEEP_HANDLER)
     }
 
     /**
