@@ -176,6 +176,20 @@ class TypeRegistry(
     }
 
     private fun resolve(ast: TypeAst): DataType {
+        // XRef-bodied typeAsts (gcc emits these for ABI-internal helpers
+        // like `InlineDef(id, XRef(STRUCT, "__si_class_type_info_pseudo"))`)
+        // are aliases — defer to the canonical struct's resolution and
+        // alias `byId[ast.id]` at it. Avoids registering a spurious
+        // auto-generated `XRef_[...]` placeholder in the DTM and applying
+        // it at typeinfo globals (the canonical struct's data goes there
+        // instead).
+        if (ast.body is TypeDecl.XRef) {
+            harvest.getByXRef(ast.body)?.let { canonical ->
+                val dt = byId[canonical.id] ?: resolve(canonical)
+                byId[ast.id] = dt
+                return dt
+            }
+        }
         // 2. Compute content hash for cross-CU dedup. Uses Harvest.contentHash,
         // which treats Refs as content-equivalent when they point at types
         // with the same (name, body-kind) — so per-CU template-instantiation
