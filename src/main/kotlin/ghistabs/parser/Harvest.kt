@@ -2,7 +2,6 @@
 
 package ghistabs.parser
 
-import com.google.common.annotations.VisibleForTesting
 import ghidra.program.model.address.Address
 import ghidra.program.model.symbol.SymbolUtilities
 import ghidra.util.task.TaskMonitor
@@ -62,14 +61,13 @@ data class OpenFunction(
 
 @Serializable
 data class Harvest(
-    val parseErrors: Int,
     val typeAsts: Map<GlobalTypeId, TypeAst>,
-    val collidingAsts: Map<GlobalTypeId, Map<String, Set<TypeDecl<GlobalTypeId>>>>,
-    val symbolsByCu: Map<String, List<HarvestedSymbol>>,
-    val openFunctions: List<OpenFunction>,
+    val parseErrors: Int = 0,
+    val collidingAsts: Map<GlobalTypeId, Map<String, Set<TypeDecl<GlobalTypeId>>>> = mapOf(),
+    val symbolsByCu: Map<String, List<HarvestedSymbol>> = mapOf(),
+    val openFunctions: List<OpenFunction> = listOf(),
+    val hashCache: MutableMap<GlobalTypeId, Int> = mutableMapOf(),
 ) {
-    @VisibleForTesting
-    constructor(typeAsts: Map<GlobalTypeId, TypeAst>) : this(0, typeAsts, mapOf(), mapOf(), listOf())
 
     val allHarvestedSymbols by lazy { symbolsByCu.values.flatten() }
 
@@ -87,94 +85,11 @@ data class Harvest(
     fun definingCUs(ast: TypeAst) = astsByGhidraName[ast.ghidraName]?.map { it.id.source }?.toSet() ?: setOf(ast.cu)
 
     /**
-     * Per-id memoization cache for [contentHash]. Cleared with the
-     * Harvest, so each test/run gets a fresh map. Not synchronized —
-     * the harvest is single-threaded during construction; consumers
-     * after construction (TypeRegistry, ClassBuilder) call from one
-     * thread per Harvest.
-     */
-    private val hashCache = mutableMapOf<GlobalTypeId, Int>()
-
-    /**
      * Content-equivalence hash for a [TypeDecl] tree, using `typeAsts`
      * as the oracle. See the top-level [contentHash] for semantics.
      */
     fun contentHash(body: TypeDecl<GlobalTypeId>): Int = contentHash(body, typeAsts::get, cache = hashCache)
-
-    /**
-     * Sort entries in [collidingAsts] by whether their alternate bodies
-     * are content-equivalent (just different per-CU representations of
-     * the same logical type) or genuinely divergent.
-     *
-     * Runs post-harvest against a fully-populated [typeAsts] with the
-     * memoized [hashCache] doing the heavy lifting. Putting this on the
-     * incremental `appendAsts` path was the source of the 10-minute
-     * regression — see commit history.
-     */
-    fun classifyCollisions(maxRealExamples: Int = 10): CollisionClassification {
-        // Pre-warm [hashCache] by hashing every typeAst body top-level
-        // before classifying. The cache otherwise gets populated mid-walk
-        // with stale values: the first variant computed seeds cache
-        // entries for transitively-referenced ids using a visited set
-        // that already contains the colliding id, so inner self-Refs
-        // back-edge instead of recursing. Subsequent variants then
-        // cache-hit those stale values, and structurally-identical
-        // Ref-vs-InlineDef forms diverge purely on cache state.
-        //
-        // Concrete repro: the bouniafbouniaf `pair<const int,CSourceSymbolData*>`
-        // collision has 8 content-equivalent variants. Without pre-warm:
-        // variant[0] produces one hash, variants[1..7] cache-hit the
-        // polluted entries and produce a different hash → classified
-        // "real". With pre-warm: every variant produces the same hash
-        // → classified "spurious" (as it actually is).
-        for (ast in typeAsts.values) {
-            hashCache[ast.id] = contentHash(ast.body)
-        }
-        var spurious = 0
-        var real = 0
-        var totalVariants = 0
-        val realExamples = mutableListOf<GlobalTypeId>()
-        for ((id, byName) in collidingAsts) {
-            val variants = byName.values.flatten()
-            totalVariants += variants.size
-            val distinctHashes = variants.map { contentHash(it) }.toSet().size
-            if (distinctHashes <= 1) {
-                spurious++
-            } else {
-                real++
-                if (realExamples.size < maxRealExamples) realExamples += id
-            }
-        }
-        return CollisionClassification(spurious, real, totalVariants, realExamples)
-    }
-
-    //    inline fun <reified T : TypeDecl<GlobalTypeId>> getBodyFor(id: GlobalTypeId) = getTypeFor(id)?.let {
-//        it.body as? T
-//    }
 }
-
-/**
- * Post-harvest classification of `ast-id-collision` entries.
- *
- * @property spuriousIds        ids whose alternate bodies all hash the
- *                              same — the "collision" was purely a
- *                              per-CU representation artifact (e.g.
- *                              `Ref(id)` in one CU vs the equivalent
- *                              `InlineDef(id', body)` in another).
- * @property realIds            ids with genuinely different content
- *                              across CUs.
- * @property totalVariants      total alternate bodies seen across all
- *                              colliding ids.
- * @property realExamples       up to `maxRealExamples` ids whose
- *                              collision was real; useful for log
- *                              spelunking.
- */
-data class CollisionClassification(
-    val spuriousIds: Int,
-    val realIds: Int,
-    val totalVariants: Int,
-    val realExamples: List<GlobalTypeId>,
-)
 
 /**
  * Content-equivalence hash for a [TypeDecl] tree. Differs from the
@@ -615,12 +530,15 @@ class Harvester(
                 )
             }
         }
+
+        val cache = classifyCollisions()
         return Harvest(
-            parseErrors,
             typeAsts,
+            parseErrors,
             collidingAsts,
             symbolsByCu,
             openFunctions,
+            cache,
         )
     }
 
@@ -751,8 +669,6 @@ class Harvester(
         // log surfaces hundreds of false "different hash" entries.
         is TypeDecl.InlineDef -> listOf(TypeAst(currentCu!!, decl.id, "${decl.id}", decl.body)) +
             walkDefinitions(decl.body)
-
-//        is TypeDecl.InlineDef -> listOf(TypeAst(currentCu!!, decl.id, "${decl.id}", decl.body))
     }
 
     /**
@@ -797,5 +713,48 @@ class Harvester(
 
     fun parseSymbol(rec: StabRecord) = globalizeSymbol(Parser(rec.name).parseSymbol()).also {
         appendAsts(walkDefinitions(it.type))
+    }
+
+    /**
+     * Classify [collidingAsts] entries by whether their alternate bodies
+     * are content-equivalent. Pre-warms [cache] by hashing every typeAst
+     * body top-level first so cache state doesn't bias the result.
+     *
+     * Cache-pollution failure mode this avoids: with a cold cache the
+     * first variant computed seeds cache entries for transitively-
+     * referenced ids using a visited set that already contains the
+     * colliding id, so inner self-Refs back-edge instead of recursing.
+     * Subsequent variants then cache-hit those stale values, and
+     * structurally-identical Ref-vs-InlineDef forms diverge purely on
+     * cache state. Pre-warming with empty visited sets fixes this.
+     */
+    private fun classifyCollisions(): MutableMap<GlobalTypeId, Int> {
+        // Classify collisions and drop the spurious (content-equivalent)
+        // buckets before the Harvest is published. Downstream consumers
+        // only ever see genuinely-divergent collisions; the warmed cache
+        // is handed off to the Harvest so TypeRegistry doesn't redo the
+        // hash work, and the stats ride along on `harvest.classification`.
+        val cache = mutableMapOf<GlobalTypeId, Int>()
+        val oracle: (GlobalTypeId) -> TypeAst? = typeAsts::get
+        for (ast in typeAsts.values) {
+            cache[ast.id] = contentHash(ast.body, oracle, cache = cache)
+        }
+        var totalVariants = 0
+        val spurious = mutableSetOf<GlobalTypeId>()
+        var real = 0
+        for ((id, byName) in collidingAsts) {
+            val variants = byName.values.flatten()
+            totalVariants += variants.size
+            val distinctHashes = variants.map { contentHash(it, oracle, cache = cache) }.toSet().size
+            if (distinctHashes <= 1) {
+                spurious += id
+            } else {
+                real++
+            }
+        }
+        for (id in spurious) {
+            collidingAsts.remove(id)
+        }
+        return cache
     }
 }

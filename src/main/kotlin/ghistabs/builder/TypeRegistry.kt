@@ -175,14 +175,6 @@ class TypeRegistry(
     }
 
     private fun resolve(ast: TypeAst): DataType {
-//        // 2. Compute content hash for cross-CU dedup. Uses the
-//        // structural data-class hashCode — same as the appendAsts
-//        // collision check. The Ref-resolving `Harvest.contentHash`
-//        // exists for diagnostic use but isn't on the hot path: walking
-//        // through Refs was O(n²) per resolve() call on real binaries
-//        // and lit up the harvester to 10+ minutes.
-//        val hash = ast.body.hashCode()
-
         // 2. Compute content hash for cross-CU dedup. Uses Harvest.contentHash,
         // which treats Refs as content-equivalent when they point at types
         // with the same (name, body-kind) — so per-CU template-instantiation
@@ -211,7 +203,6 @@ class TypeRegistry(
 
         // 7. Register with conflict handling and record as fully resolved
         val canonical = registerWithConflict(materialised, ast.ghidraName, hash, category)
-//        byIdName[key] = canonical
         // Keep byId stable for Ref lookups: first writer wins. (Later same-id ASTs
         // with different names still materialise into the DTM via byIdName but don't
         // hijack Ref(id) resolution.)
