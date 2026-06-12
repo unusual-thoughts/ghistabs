@@ -4,7 +4,12 @@ package ghistabs.parser
 
 import kotlinx.serialization.Contextual
 import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.JsonClassDiscriminator
 
 enum class Access { PRIVATE, PROTECTED, PUBLIC }
@@ -75,9 +80,33 @@ sealed interface TypeDecl<out Id : IdInterface> {
     @Serializable
     data class WithSizeAttr<Id : IdInterface>(val sizeBits: Int, val inner: TypeDecl<Id>) : TypeDecl<Id>
 
+    /**
+     * gcc/XCOFF builtin-type slot — `Ref` to a negative type number (`(0,-N)`).
+     * Per the stabs spec these refer to compiler-table builtins (`-1`=int,
+     * `-2`=char, `-16`=`bool`, …) and have no defining stab. The same slot
+     * means the same primitive across every CU, so [contentHash] keys on
+     * [slot] alone — keeping it as a per-CU [Ref] would let `bool` in CU
+     * A differ from `bool` in CU B, breaking content-equivalence dedup.
+     */
+    @Serializable
+    data class Builtin<Id : IdInterface>(val slot: Int) : TypeDecl<Id>
+
     /** Inline type definition: `(cu,n)=<body>` where the binding `(cu,n)` is preserved for Phase 3. */
     @Serializable
     data class InlineDef<Id : IdInterface>(@Contextual val id: Id, val body: TypeDecl<Id>) : TypeDecl<Id>
+}
+
+@Serializable
+data class IdWithHash(val id: GlobalTypeId, val hash: Int?)
+
+class WithHashSerializer(val hashes: Map<GlobalTypeId, Int>) : KSerializer<GlobalTypeId> {
+    override val descriptor = PrimitiveSerialDescriptor("WithHash", PrimitiveKind.STRING)
+    override fun serialize(encoder: Encoder, value: GlobalTypeId) = encoder.encodeSerializableValue(
+        IdWithHash.serializer(),
+        IdWithHash(value, hashes[value]),
+    )
+
+    override fun deserialize(decoder: Decoder) = throw UnsupportedOperationException("serialize-only")
 }
 
 @Serializable

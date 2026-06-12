@@ -6,6 +6,7 @@ import ghidra.program.model.address.Address
 import ghidra.program.model.symbol.SymbolUtilities
 import ghidra.util.task.TaskMonitor
 import ghistabs.diag.DiagnosticSink
+import ghistabs.diag.DummySink
 import ghistabs.importer.AddressResolver
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
@@ -18,7 +19,10 @@ data class TypeAst(
     val body: TypeDecl<GlobalTypeId>,
 ) {
     val source get() = id.source
-    val ghidraName get() = SymbolUtilities.replaceInvalidChars(name, false)
+    val ghidraName: String
+        get() = SymbolUtilities.replaceInvalidChars(name, false).ifEmpty {
+            "${body::class.java.simpleName}_$id"
+        }
 }
 
 @Serializable
@@ -63,11 +67,12 @@ data class OpenFunction(
 data class Harvest(
     val typeAsts: Map<GlobalTypeId, TypeAst>,
     val parseErrors: Int = 0,
-    val collidingAsts: Map<GlobalTypeId, Map<String, Set<TypeDecl<GlobalTypeId>>>> = mapOf(),
+    var collidingAsts: Map<GlobalTypeId, Map<String, Set<TypeDecl<GlobalTypeId>>>> = mapOf(),
     val symbolsByCu: Map<String, List<HarvestedSymbol>> = mapOf(),
     val openFunctions: List<OpenFunction> = listOf(),
-    val hashCache: MutableMap<GlobalTypeId, Int> = mutableMapOf(),
-) {
+    @Transient val sink: DiagnosticSink = DummySink,
+) : DiagnosticSink by sink {
+    val hashCache: MutableMap<GlobalTypeId, Int> = mutableMapOf()
 
     val allHarvestedSymbols by lazy { symbolsByCu.values.flatten() }
 
@@ -81,238 +86,72 @@ data class Harvest(
 
     fun getType(id: GlobalTypeId) = typeAsts[id]
     fun getStruct(id: GlobalTypeId) = typeAsts[id]?.body as? TypeDecl.Struct
-    fun getStructByXRef(name: String) = structAstsByName[name]
+
+    // XRef → canonical struct: look up by name + matching kind so
+    // `XRef(STRUCT, "Foo")` in one CU hashes equally to `Ref(id)`
+    // pointing at the same `struct Foo` defined in another CU.
+    fun getByXRef(xref: TypeDecl.XRef<GlobalTypeId>) = structAstsByName[xref.tagName]
+        ?.takeIf { (_, struct) -> struct.kind == xref.kind }
+        ?.let { (id, _) -> typeAsts[id] }
+        .also {
+            if (it == null) {
+                log("unresolved-xref", "${xref.tagName} [${xref.kind}]")
+            }
+        }
+
     fun definingCUs(ast: TypeAst) = astsByGhidraName[ast.ghidraName]?.map { it.id.source }?.toSet() ?: setOf(ast.cu)
 
     /**
      * Content-equivalence hash for a [TypeDecl] tree, using `typeAsts`
-     * as the oracle. See the top-level [contentHash] for semantics.
+     * (plus the name-keyed XRef index) as the oracle. See the top-level
+     * [contentHash] for semantics.
      */
-    fun contentHash(body: TypeDecl<GlobalTypeId>): Int = contentHash(body, typeAsts::get, cache = hashCache)
-}
+    fun contentHash(body: TypeDecl<GlobalTypeId>): Int = body.contentHash(oracle, hashCache)
 
-/**
- * Content-equivalence hash for a [TypeDecl] tree. Differs from the
- * default `data class` `hashCode()` in two places:
- *
- *   1. Anywhere a [TypeDecl] holds an id (`Ref`, `Range.of`,
- *      `Struct.vtableTargetTypeId`, `InlineDef.id`), the id is resolved
- *      via [oracle] and the hash recurses into the referenced body —
- *      so a forward `Ref(id)` and an inline `InlineDef(id, body)` for
- *      the same content collapse to the same hash. gcc emits either
- *      form depending on per-CU history.
- *
- *   2. The `"Ref"` and `"InlineDef"` wrapper tags are intentionally
- *      omitted — both reduce to their wrapped content's hash. Per-CU
- *      template-instantiation clones end up content-equivalent because
- *      their fields' refs converge on the same primitive types
- *      regardless of which CU canonically owns the clone.
- *
- * Cycles (self-referential `Range.of`, recursive struct fields, vtable
- * pointing back at the enclosing class) are broken by [visited]: once
- * a [GlobalTypeId] is in flight, hitting it again yields a fixed
- * `"back-edge"` marker hash instead of recursing.
- *
- * [oracle] is parameterised so `Harvester.appendAsts` can compose its
- * in-flight batch with the merged store, while a finished [Harvest]
- * can pass `typeAsts::get` directly.
- *
- * Each `when` branch destructures the variant — adding a field to any
- * [TypeDecl] subclass is a compile error here.
- */
-fun contentHash(
-    body: TypeDecl<GlobalTypeId>,
-    oracle: (GlobalTypeId) -> TypeAst?,
-    visited: Set<GlobalTypeId> = emptySet(),
-    cache: MutableMap<GlobalTypeId, Int>? = null,
-): Int = when (body) {
-    is TypeDecl.Ref -> {
-        // Drop the "Ref" wrapper so `Ref(id)` and the equivalent inline
-        // `InlineDef(id, content)` (gcc emits either form depending on
-        // each CU's history) reduce to the same content hash.
-        val (id) = body
-        refKey(id, oracle, visited, cache)
-    }
+    /** Oracle exposing both id-based and name-based (XRef) lookups. */
+    val oracle: TypeAstOracle by lazy { TypeAstOracle(byId = typeAsts::get, byXRef = ::getByXRef) }
 
-    is TypeDecl.Range -> {
-        val (of, min, max) = body
-        java.util.Objects.hash("Range", refKey(of, oracle, visited, cache), min, max)
-    }
+    /**
+     * Classify [collidingAsts] entries by whether their alternate bodies
+     * are content-equivalent. Pre-warms [cache] by hashing every typeAst
+     * body top-level first so cache state doesn't bias the result.
+     *
+     * Cache-pollution failure mode this avoids: with a cold cache the
+     * first variant computed seeds cache entries for transitively-
+     * referenced ids using a visited set that already contains the
+     * colliding id, so inner self-Refs back-edge instead of recursing.
+     * Subsequent variants then cache-hit those stale values, and
+     * structurally-identical Ref-vs-InlineDef forms diverge purely on
+     * cache state. Pre-warming with empty visited sets fixes this.
+     */
+    fun classifyCollisions() {
+        // Classify collisions and drop the spurious (content-equivalent)
+        // buckets before the Harvest is published. Downstream consumers
+        // only ever see genuinely-divergent collisions; the warmed cache
+        // is handed off to the Harvest so TypeRegistry doesn't redo the
+        // hash work, and the stats ride along on `harvest.classification`.
 
-    is TypeDecl.Pointer -> {
-        val (pointee) = body
-        java.util.Objects.hash("Pointer", contentHash(pointee, oracle, visited, cache))
-    }
-
-    is TypeDecl.Reference -> {
-        val (referent) = body
-        java.util.Objects.hash("Reference", contentHash(referent, oracle, visited, cache))
-    }
-
-    is TypeDecl.Const -> {
-        val (inner) = body
-        java.util.Objects.hash("Const", contentHash(inner, oracle, visited, cache))
-    }
-
-    is TypeDecl.Volatile -> {
-        val (inner) = body
-        java.util.Objects.hash("Volatile", contentHash(inner, oracle, visited, cache))
-    }
-
-    is TypeDecl.Array -> {
-        val (element, length, indexType) = body
-        java.util.Objects.hash(
-            "Array",
-            contentHash(element, oracle, visited, cache),
-            length,
-            indexType?.let { contentHash(it, oracle, visited, cache) },
-        )
-    }
-
-    is TypeDecl.Enum -> body.hashCode()
-
-    // members: List<Pair<String, Long>> — no ids
-    is TypeDecl.Struct -> {
-        val (kind, sizeBytes, bases, fields, methods, hasVtbl, vtableTargetTypeId) = body
-        java.util.Objects.hash(
-            "Struct",
-            kind,
-            sizeBytes,
-            bases.map { contentHashBase(it, oracle, visited, cache) },
-            fields.map { contentHashField(it, oracle, visited, cache) },
-            methods.map { contentHashMethod(it, oracle, visited, cache) },
-            hasVtbl,
-            vtableTargetTypeId?.let { refKey(it, oracle, visited, cache) },
-        )
-    }
-
-    is TypeDecl.FunctionT -> {
-        val (ret, params) = body
-        java.util.Objects.hash(
-            "FunctionT",
-            contentHash(ret, oracle, visited, cache),
-            params.map { contentHash(it, oracle, visited, cache) },
-        )
-    }
-
-    is TypeDecl.Method -> {
-        val (cls, ret, params) = body
-        java.util.Objects.hash(
-            "Method",
-            contentHash(cls, oracle, visited, cache),
-            contentHash(ret, oracle, visited, cache),
-            params.map { contentHash(it, oracle, visited, cache) },
-        )
-    }
-
-    is TypeDecl.Complex -> body.hashCode()
-
-    // (rCode, sizeBytes) — primitives only
-    is TypeDecl.XRef -> body.hashCode()
-
-    // (kind, tagName) — primitives only
-    is TypeDecl.WithSizeAttr -> {
-        val (sizeBits, inner) = body
-        java.util.Objects.hash("WithSizeAttr", sizeBits, contentHash(inner, oracle, visited, cache))
-    }
-
-    is TypeDecl.InlineDef -> {
-        // The id is local-binding metadata; identity is the body. Drop
-        // the "InlineDef" wrapper so this form is content-equivalent to
-        // `Ref(id_at_same_content)` (see the Ref branch). Add the id to
-        // `visited` so a back-edge inside the body (a forward Ref
-        // pointing at this InlineDef's slot) stops recursing.
-        val (id, inner) = body
-        contentHash(inner, oracle, visited + id, cache)
+        for (ast in typeAsts.values) {
+            hashCache[ast.id] = contentHash(ast.body)
+        }
+        collidingAsts = collidingAsts.filterValues { byName ->
+            byName.values.flatten().map { contentHash(it) }.toSet().size > 1
+        }.mapValues { (_, byName) ->
+            byName.mapValues { (_, types) ->
+                types.groupBy { contentHash(it) }.map { it.value.first() }.toSet()
+            }
+        }.toMap()
     }
 }
 
-/**
- * Resolve [id] through [oracle] and recurse into the referenced body so
- * `Ref(id)` and the inline `InlineDef(id, body)` form converge on the
- * same hash (gcc emits both for the same logical content depending on
- * how a type was first introduced in each CU). [visited] guards against
- * self-referential cycles — `Range.of` always points at itself, and
- * struct fields can transitively reach back into the enclosing class.
- */
-
-/**
- * Resolve a Ref-shaped id through [oracle] and recurse into the body,
- * memoizing the result. `Ref(id)` and `InlineDef(id, content)` for the
- * same content converge on the same hash (gcc emits either form
- * depending on per-CU history). [visited] guards against self-referential
- * cycles — `Range.of` always points at itself; struct fields can
- * transitively reach back into the enclosing class.
- *
- * Caching strategy: store every successful (non-back-edge) result keyed
- * by [id]. For tree-shaped types the cached value is exact. For
- * mutually-recursive types the first computation wins and is reused —
- * mild inconsistency with what a from-scratch recomputation would
- * produce, but still deterministic across calls and good enough for
- * collision detection and DTM dedup.
- */
-private fun refKey(
-    id: GlobalTypeId,
-    oracle: (GlobalTypeId) -> TypeAst?,
-    visited: Set<GlobalTypeId>,
-    cache: MutableMap<GlobalTypeId, Int>?,
-): Int {
-    if (id in visited) return BACK_EDGE_HASH
-    cache?.get(id)?.let { return it }
-    val referenced = oracle(id) ?: return java.util.Objects.hash("unresolved", id)
-    val h = contentHash(referenced.body, oracle, visited + id, cache)
-    cache?.put(id, h)
-    return h
-}
-
-private val BACK_EDGE_HASH = java.util.Objects.hash("back-edge")
-
-private fun contentHashField(
-    f: FieldDecl<GlobalTypeId>,
-    oracle: (GlobalTypeId) -> TypeAst?,
-    visited: Set<GlobalTypeId>,
-    cache: MutableMap<GlobalTypeId, Int>?,
-): Int {
-    val (name, type, offsetBits, sizeBits, isStatic) = f
-    return java.util.Objects.hash(
-        "Field",
-        name,
-        contentHash(type, oracle, visited, cache),
-        offsetBits,
-        sizeBits,
-        isStatic,
-    )
-}
-
-private fun contentHashBase(
-    b: BaseDecl<GlobalTypeId>,
-    oracle: (GlobalTypeId) -> TypeAst?,
-    visited: Set<GlobalTypeId>,
-    cache: MutableMap<GlobalTypeId, Int>?,
-): Int {
-    val (type, isVirtual, access, offsetBits) = b
-    return java.util.Objects.hash("Base", contentHash(type, oracle, visited, cache), isVirtual, access, offsetBits)
-}
-
-private fun contentHashMethod(
-    m: MethodDecl<GlobalTypeId>,
-    oracle: (GlobalTypeId) -> TypeAst?,
-    visited: Set<GlobalTypeId>,
-    cache: MutableMap<GlobalTypeId, Int>?,
-): Int {
-    val (name, mangled, signature, access, virt, isConst, isVolatile, vtableOffsetBits) = m
-    return java.util.Objects.hash(
-        "Method",
-        name,
-        mangled,
-        contentHash(signature, oracle, visited, cache),
-        access,
-        virt,
-        isConst,
-        isVolatile,
-        vtableOffsetBits,
-    )
-}
+//        val actualCollisions = mutableMapOf<GlobalTypeId, Map<String, Set<TypeDecl<GlobalTypeId>>>>()
+//        for ((id, byName) in collidingAsts) {
+//            if (byName.values.flatten().map { it.contentHash(oracle, hashCache) }.toSet().size > 1) {
+//                actualCollisions[id] = byName.mapValues { (_, types) ->
+//                    types.groupBy { it.contentHash(oracle) }.map { it.value.first() }.toSet()
+//                }
+//            }
+//        }
 
 /**
  * Harvests typed symbols and type ASTs from a flat stab record stream.
@@ -531,15 +370,14 @@ class Harvester(
             }
         }
 
-        val cache = classifyCollisions()
         return Harvest(
             typeAsts,
             parseErrors,
             collidingAsts,
             symbolsByCu,
             openFunctions,
-            cache,
-        )
+            sink,
+        ).apply { classifyCollisions() }
     }
 
     private fun harvestSymbol(rec: StabRecord, onError: () -> Unit) {
@@ -585,10 +423,13 @@ class Harvester(
      */
     @Suppress("UNCHECKED_CAST")
     fun globalize(decl: TypeDecl<LocalTypeId>): TypeDecl<GlobalTypeId> = when (decl) {
-        is TypeDecl.Complex, is TypeDecl.Enum, is TypeDecl.XRef -> decl as TypeDecl<GlobalTypeId>
+        is TypeDecl.Complex, is TypeDecl.Enum, is TypeDecl.XRef, is TypeDecl.Builtin ->
+            decl as TypeDecl<GlobalTypeId>
 
         is TypeDecl.Range -> TypeDecl.Range(globalIdFor(decl.of), decl.min, decl.max)
 
+        // Refs with negative ids never reach this point — the parser
+        // (see [Parser.parseType]) emits [TypeDecl.Builtin] for those.
         is TypeDecl.Ref -> TypeDecl.Ref(globalIdFor(decl.id))
 
         is TypeDecl.Const -> TypeDecl.Const(globalize(decl.inner))
@@ -636,7 +477,9 @@ class Harvester(
     }
 
     fun walkDefinitions(decl: TypeDecl<GlobalTypeId>): List<TypeAst> = when (decl) {
-        is TypeDecl.Complex, is TypeDecl.Enum, is TypeDecl.Range, is TypeDecl.Ref, is TypeDecl.XRef -> listOf()
+        is TypeDecl.Builtin, is TypeDecl.Complex, is TypeDecl.Enum, is TypeDecl.Range,
+        is TypeDecl.Ref, is TypeDecl.XRef,
+        -> listOf()
 
         is TypeDecl.Const -> walkDefinitions(decl.inner)
 
@@ -715,46 +558,55 @@ class Harvester(
         appendAsts(walkDefinitions(it.type))
     }
 
-    /**
-     * Classify [collidingAsts] entries by whether their alternate bodies
-     * are content-equivalent. Pre-warms [cache] by hashing every typeAst
-     * body top-level first so cache state doesn't bias the result.
-     *
-     * Cache-pollution failure mode this avoids: with a cold cache the
-     * first variant computed seeds cache entries for transitively-
-     * referenced ids using a visited set that already contains the
-     * colliding id, so inner self-Refs back-edge instead of recursing.
-     * Subsequent variants then cache-hit those stale values, and
-     * structurally-identical Ref-vs-InlineDef forms diverge purely on
-     * cache state. Pre-warming with empty visited sets fixes this.
-     */
-    private fun classifyCollisions(): MutableMap<GlobalTypeId, Int> {
-        // Classify collisions and drop the spurious (content-equivalent)
-        // buckets before the Harvest is published. Downstream consumers
-        // only ever see genuinely-divergent collisions; the warmed cache
-        // is handed off to the Harvest so TypeRegistry doesn't redo the
-        // hash work, and the stats ride along on `harvest.classification`.
-        val cache = mutableMapOf<GlobalTypeId, Int>()
-        val oracle: (GlobalTypeId) -> TypeAst? = typeAsts::get
-        for (ast in typeAsts.values) {
-            cache[ast.id] = contentHash(ast.body, oracle, cache = cache)
-        }
-        var totalVariants = 0
-        val spurious = mutableSetOf<GlobalTypeId>()
-        var real = 0
-        for ((id, byName) in collidingAsts) {
-            val variants = byName.values.flatten()
-            totalVariants += variants.size
-            val distinctHashes = variants.map { contentHash(it, oracle, cache = cache) }.toSet().size
-            if (distinctHashes <= 1) {
-                spurious += id
-            } else {
-                real++
-            }
-        }
-        for (id in spurious) {
-            collidingAsts.remove(id)
-        }
-        return cache
-    }
+//    /**
+//     * Classify [collidingAsts] entries by whether their alternate bodies
+//     * are content-equivalent. Pre-warms [cache] by hashing every typeAst
+//     * body top-level first so cache state doesn't bias the result.
+//     *
+//     * Cache-pollution failure mode this avoids: with a cold cache the
+//     * first variant computed seeds cache entries for transitively-
+//     * referenced ids using a visited set that already contains the
+//     * colliding id, so inner self-Refs back-edge instead of recursing.
+//     * Subsequent variants then cache-hit those stale values, and
+//     * structurally-identical Ref-vs-InlineDef forms diverge purely on
+//     * cache state. Pre-warming with empty visited sets fixes this.
+//     */
+//    private fun classifyCollisions(): MutableMap<GlobalTypeId, Int> {
+//        // Classify collisions and drop the spurious (content-equivalent)
+//        // buckets before the Harvest is published. Downstream consumers
+//        // only ever see genuinely-divergent collisions; the warmed cache
+//        // is handed off to the Harvest so TypeRegistry doesn't redo the
+//        // hash work, and the stats ride along on `harvest.classification`.
+//        val cache = mutableMapOf<GlobalTypeId, Int>()
+//        // Build a name-keyed struct index for XRef resolution: a CU that
+//        // only saw `struct Foo;` (an XRef) must hash any wrapping type the
+//        // same way as a CU with the full definition.
+//        val structByName: Map<String, TypeAst> = typeAsts.values.mapNotNull { ast ->
+//            (ast.body as? TypeDecl.Struct)?.let { ast.name to ast }
+//        }.toMap()
+//        val oracle = TypeAstOracle(
+//            byId = typeAsts::get,
+//            byXRef = { xref -> structByName[xref.tagName]?.takeIf { (it.body as TypeDecl.Struct).kind == xref.kind } },
+//        )
+//        for (ast in typeAsts.values) {
+//            cache[ast.id] = ast.body.contentHash(oracle, cache = cache)
+//        }
+//        var totalVariants = 0
+//        val spurious = mutableSetOf<GlobalTypeId>()
+//        var real = 0
+//        for ((id, byName) in collidingAsts) {
+//            val variants = byName.values.flatten()
+//            totalVariants += variants.size
+//            val distinctHashes = variants.map { it.contentHash(oracle, cache = cache) }.toSet().size
+//            if (distinctHashes <= 1) {
+//                spurious += id
+//            } else {
+//                real++
+//            }
+//        }
+//        for (id in spurious) {
+//            collidingAsts.remove(id)
+//        }
+//        return cache
+//    }
 }

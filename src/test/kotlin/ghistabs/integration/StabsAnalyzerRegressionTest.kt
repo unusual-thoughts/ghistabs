@@ -52,8 +52,12 @@ import java.io.File
  */
 enum class Mode { CONCURRENT, AFTER }
 
-const val BINARY_NAME = "bouniafbouniaf"
-const val BINARY_NAME2 = "bouniaf"
+const val BINARY_NAME = "bouniafbouniaf.exe"
+
+// const val BINARY_NAME2 = "bouniaf.exe"
+// const val BINARY_NAME2 = "tinyxml2.cpp.o"
+// const val BINARY_NAME2 = "xmltest"
+const val BINARY_NAME2 = "box2d"
 
 fun resourceFile(kind: String, name: String) = File("src/test/resources/${kind}s/$name-$kind.json")
 
@@ -72,11 +76,11 @@ fun resourceFile(kind: String, name: String) = File("src/test/resources/${kind}s
 @Tag("integration")
 abstract class StabsAnalyzerRegressionTest(private val mode: Mode, binaryName: String) :
     AbstractGhidraHeadlessIntegrationTest() {
-    private val fixture = File("src/test/resources/binaries/$binaryName.exe")
-    private val baselineFile = resourceFile("baseline", binaryName)
-    private val recordsFile = resourceFile("record", binaryName)
-    private val harvestFile = resourceFile("harvest", binaryName)
-    private val logFile = File("src/test/resources/logs/$binaryName.${mode.name.lowercase()}.log")
+    private val fixture = File("src/test/resources/binaries/$binaryName")
+    private val baselineFile = resourceFile("baseline", fixture.nameWithoutExtension)
+    private val recordsFile = resourceFile("record", fixture.nameWithoutExtension)
+    private val harvestFile = resourceFile("harvest", fixture.nameWithoutExtension)
+    private val logFile = File("src/test/resources/logs/${fixture.nameWithoutExtension}.${mode.name.lowercase()}.log")
 
     protected lateinit var program: Program
     private var loadResults: LoadResults<Program>? = null
@@ -86,6 +90,11 @@ abstract class StabsAnalyzerRegressionTest(private val mode: Mode, binaryName: S
     private val json by lazy {
         Json {
             serializersModule = SerializersModule {
+//                contextual(IdInterface::class, PolymorphicSerializer(IdInterface::class))
+//                polymorphic(IdInterface::class) {
+//                    subclass(LocalTypeId::class, LocalTypeId.serializer())
+//                    subclass(GlobalTypeId::class, GlobalTypeId.serializer())
+//                }
                 @Suppress("UNCHECKED_CAST")
                 contextual(IdInterface::class, ToStringSerializer as KSerializer<IdInterface>)
                 prettyPrint = true
@@ -110,7 +119,7 @@ abstract class StabsAnalyzerRegressionTest(private val mode: Mode, binaryName: S
             loadResults = ProgramLoader
                 .builder()
                 .source(fixture)
-                .compiler("mingw")
+                .compiler(if (fixture.extension.lowercase() == "exe") "mingw" else null)
                 .log(log)
                 .monitor(monitor)
                 .load()
@@ -121,15 +130,15 @@ abstract class StabsAnalyzerRegressionTest(private val mode: Mode, binaryName: S
             val ourName = StabsAnalyzer().name
             val options = program.getOptions(Program.ANALYSIS_PROPERTIES)
 
-            // Confirm Ghidra's ClassSearcher actually discovered our analyzer
-            // (build/classes/kotlin/main is on the test classpath). If this
-            // assertion ever fails the test would be silently meaningless.
-            val discovered = mgr.getAnalyzer(ourName)
-            Assertions.assertNotNull(discovered, "StabsAnalyzer not discovered by ClassSearcher")
-            assertInstanceOf<StabsAnalyzer>(discovered)
-
             when (mode) {
                 Mode.CONCURRENT -> {
+                    // Confirm Ghidra's ClassSearcher actually discovered our analyzer
+                    // (build/classes/kotlin/main is on the test classpath). If this
+                    // assertion ever fails the test would be silently meaningless.
+                    val discovered = mgr.getAnalyzer(ourName)
+                    Assertions.assertNotNull(discovered, "StabsAnalyzer not discovered by ClassSearcher")
+                    assertInstanceOf<StabsAnalyzer>(discovered)
+
                     // BYTE_ANALYZER auto-fires on byte changes; on a freshly-
                     // loaded program nothing has "changed" since the loader put
                     // bytes down, so we explicitly schedule our analyzer for the
@@ -732,6 +741,12 @@ abstract class StabsAnalyzerRegressionTest(private val mode: Mode, binaryName: S
     @OptIn(ExperimentalSerializationApi::class)
     @Test
     fun harvestTest() {
+//        val responseModule = SerializersModule {
+//            polymorphic(TypeDecl::class) {
+//                subclass(TypeDecl.serializer(PolymorphicSerializer(Any::class)))
+//            }
+//        }
+
         val ctx = program.defaultContext()
         val stabs = StabReader.fromProgram(program)!!
         json.encodeToStream(stabs.records, recordsFile.outputStream())
@@ -746,6 +761,30 @@ abstract class StabsAnalyzerRegressionTest(private val mode: Mode, binaryName: S
         } finally {
             program.endTransaction(tx, true)
         }
+
+        for ((i, ast) in harvest.typeAsts.values.withIndex()) {
+            if (i % 100 == 0) {
+                println("$i/${harvest.typeAsts.size}")
+            }
+            harvest.hashCache[ast.id] = harvest.contentHash(ast.body)
+//            Assertions.assertTrue(harvest.hashCache.containsKey(ast.id))
+        }
+
+        for ((id, collision) in harvest.collidingAsts) {
+            val hashes = collision.flatMap { it.value }.map { harvest.contentHash(it) }.toSet()
+            if (hashes.size > 1) {
+                println(hashes.size)
+            }
+        }
+
+//        Json {
+//            serializersModule = SerializersModule {
+//                @Suppress("UNCHECKED_CAST")
+//                contextual(IdInterface::class, ToStringSerializer as KSerializer<IdInterface>)
+//                contextual(GlobalTypeId::class, WithHashSerializer(harvest.hashCache))
+//                prettyPrint = true
+//            }
+//        }
         json.encodeToStream(harvest, harvestFile.outputStream())
     }
 

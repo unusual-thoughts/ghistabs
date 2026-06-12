@@ -87,27 +87,29 @@ class Parser(src: String) {
     // ===== Symbol-level productions =====
 
     /**
-     * Parse `:T(cu,n)=<body>` (tagged type).
-     * Mirror of gdb/stabsread.c:define_symbol (T case).
+     * Parse `:T(cu,n)=<body>` (tagged type), or the body-less forward-
+     * declaration form `:T(cu,n)` that gcc emits when the tag is named
+     * here but its body is defined by a later stab. Mirror of
+     * `gdb/stabsread.c:define_symbol` (T case).
      */
     private fun parseTagged(name: String): SymbolDecl.TaggedType<LocalTypeId> {
         c.consume('T')
         c.consumeIf('t') // GCC emits Tt for combined tagged-type+typedef (e.g. typedef struct foo {} foo)
         val id = c.parseTypeId()
-        c.consume('=')
-        val body = parseType()
+        val body = if (c.consumeIf('=')) parseType() else TypeDecl.Ref(id)
         return SymbolDecl.TaggedType(name, id, body)
     }
 
     /**
-     * Parse `:t(cu,n)=<body>` (typedef).
-     * Mirror of gdb/stabsread.c:define_symbol (t case).
+     * Parse `:t(cu,n)=<body>` (typedef), or the body-less forward-
+     * declaration form `:t(cu,n)` (the binding for the body lives in a
+     * separate stab — common with cygwin gcc 13+ on box2d-style C++23
+     * code). Mirror of `gdb/stabsread.c:define_symbol` (t case).
      */
     private fun parseTypedef(name: String): SymbolDecl.Typedef<LocalTypeId> {
         c.consume('t')
         val id = c.parseTypeId()
-        c.consume('=')
-        val body = parseType()
+        val body = if (c.consumeIf('=')) parseType() else TypeDecl.Ref(id)
         return SymbolDecl.Typedef(name, id, body)
     }
 
@@ -123,13 +125,21 @@ class Parser(src: String) {
      */
     private fun parseType(): TypeDecl<LocalTypeId> = when (val ch = c.peekOrNull()) {
         'a' -> parseArray()
+
         'e' -> parseEnum()
+
         'f' -> parseFunctionT()
+
         '#' -> parseMethod()
+
         'r' -> parseRange()
+
         'R' -> parseComplex()
+
         'x' -> parseXRef()
+
         '@' -> parseSizeAttr()
+
         '*' -> {
             c.advance()
             TypeDecl.Pointer(parseType())
@@ -166,14 +176,23 @@ class Parser(src: String) {
         }
 
         else if (ch == '(' || ch == '-' || ch?.isDigit() == null) -> {
-            // Forward reference or inline definition: (cu,n) or bare n, possibly followed by =
+            // Forward reference, inline definition, or builtin slot: (cu,n) /
+            // bare n, possibly followed by =.
             val id = c.parseTypeId()
-            if (c.consumeIf('=')) {
+            when {
                 // Inline definition: parse the body recursively and wrap in InlineDef
-                TypeDecl.InlineDef(id, parseType())
-            } else {
+                c.consumeIf('=') -> TypeDecl.InlineDef(id, parseType())
+
+                // Negative type number = gcc XCOFF builtin slot. Per the
+                // stabs spec: "the idea of negative type numbers is simply
+                // to give a special type number which indicates the builtin
+                // type. There is no stab defining these types." So bind
+                // straight to [TypeDecl.Builtin] instead of leaving a
+                // dangling Ref that no later stab will ever resolve.
+                id.file == 0 && id.n < 0 -> TypeDecl.Builtin(id.n)
+
                 // Forward reference
-                TypeDecl.Ref(id)
+                else -> TypeDecl.Ref(id)
             }
         }
 

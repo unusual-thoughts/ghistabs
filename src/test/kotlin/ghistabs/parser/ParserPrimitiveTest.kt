@@ -17,7 +17,10 @@ class ParserPrimitiveTest {
             id = LocalTypeId(0, 21),
             type = TypeDecl.WithSizeAttr(
                 sizeBits = 8,
-                inner = TypeDecl.Ref(LocalTypeId(0, -16)),
+                // Parser hoists `(0,-N)` Refs to [TypeDecl.Builtin] directly
+                // — the stabs spec says no stab defines these slots, so
+                // they're builtin from the moment they're read.
+                inner = TypeDecl.Builtin(-16),
             ),
         )
         assertEquals(expected, Parser(input).parseSymbol())
