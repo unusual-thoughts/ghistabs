@@ -150,10 +150,12 @@ class TypeRegistry(
             fd
         }
 
-        // FIXME: why the two cases ???
-        is TypeDecl.XRef if decl.kind == AggrKind.STRUCT -> harvest.getByXRef(decl)?.let { tryGetExisting(it.id) }
-
-        is TypeDecl.XRef -> harvest.getByXRef(decl)?.let { dataTypeFor(it.body) }
+        // XRef → canonical TypeAst by (kind, tagName), then look up the
+        // materialised DataType by its id. Unified across struct / union
+        // / class / enum (the old code asymmetrically asked dataTypeFor()
+        // for the resolved body, which the aggregate branch always
+        // returns null for — silently dropping every non-struct XRef).
+        is TypeDecl.XRef -> harvest.getByXRef(decl)?.let { tryGetExisting(it.id) }
 
         // Aggregate bodies — never referenced directly; only meaningful via TypeId.
         // See kdoc above.

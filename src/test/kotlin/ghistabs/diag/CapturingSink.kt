@@ -28,6 +28,40 @@ class CapturingSink : DiagnosticSink {
 
     fun capturedOutput(): String = lines.filter { it.msg != null }.joinToString("\n")
 
+    /**
+     * [capturedOutput] with repeated `(tag, msg)` pairs suppressed beyond
+     * [maxPerKey] occurrences. Address-bearing lines are never dropped —
+     * each address is a unique location. tagFrequencies stays raw so
+     * counter-baseline assertions remain stable.
+     */
+    fun dedupedOutput(maxPerKey: Int = 3): String {
+        val seen = mutableMapOf<Pair<String, String?>, Int>()
+        return buildString {
+            for (line in lines) {
+                if (line.msg == null) continue
+                if (line.address != null) {
+                    if (isNotEmpty()) append('\n')
+                    append(line.toString())
+                    continue
+                }
+                val key = line.tag to line.msg
+                val count = (seen[key] ?: 0) + 1
+                seen[key] = count
+                when {
+                    count <= maxPerKey -> {
+                        if (isNotEmpty()) append('\n')
+                        append(line.toString())
+                    }
+                    count == maxPerKey + 1 -> {
+                        if (isNotEmpty()) append('\n')
+                        append("[${line.tag}] ...suppressing further duplicates of: ${line.msg}")
+                    }
+                    // else silently drop
+                }
+            }
+        }
+    }
+
     fun tagFrequencies(): Map<String, Long> = lines
         .groupingBy { it.tag }
         .eachCount()

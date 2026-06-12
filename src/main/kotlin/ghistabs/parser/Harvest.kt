@@ -144,15 +144,6 @@ data class Harvest(
     }
 }
 
-//        val actualCollisions = mutableMapOf<GlobalTypeId, Map<String, Set<TypeDecl<GlobalTypeId>>>>()
-//        for ((id, byName) in collidingAsts) {
-//            if (byName.values.flatten().map { it.contentHash(oracle, hashCache) }.toSet().size > 1) {
-//                actualCollisions[id] = byName.mapValues { (_, types) ->
-//                    types.groupBy { it.contentHash(oracle) }.map { it.value.first() }.toSet()
-//                }
-//            }
-//        }
-
 /**
  * Harvests typed symbols and type ASTs from a flat stab record stream.
  *
@@ -310,9 +301,18 @@ class Harvester(
                             listOf(TypeAst(currentCu!!, decl.id, decl.name, decl.type)),
                         )
 
-                        is SymbolDecl.Typedef -> appendAsts(
-                            listOf(TypeAst(currentCu!!, decl.id, decl.name, decl.type)),
-                        )
+                        is SymbolDecl.Typedef -> {
+                            // `name:t(cu,n)` with no `=body` parses as
+                            // `Typedef(name, id, Ref(id))` — a self-Ref. The
+                            // typedef adds a name but no new type definition,
+                            // so emitting it as a TypeAst would create a
+                            // body-less alias that collides with the real
+                            // definition at the same id in another CU
+                            // (every box2d typedef went this way).
+                            if (decl.type !is TypeDecl.Ref || decl.type.id != decl.id) {
+                                appendAsts(listOf(TypeAst(currentCu!!, decl.id, decl.name, decl.type)))
+                            }
+                        }
 
                         is SymbolDecl.StackLocal, is SymbolDecl.RegLocal -> {
                             currentFunction?.locals?.add(LocalRecord(decl, rec.value, i))
