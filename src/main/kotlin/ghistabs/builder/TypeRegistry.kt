@@ -104,7 +104,7 @@ class TypeRegistry(
             }
         }
 
-        is TypeDecl.Range, is TypeDecl.Complex, is TypeDecl.WithSizeAttr -> {
+        is TypeDecl.Range, is TypeDecl.Complex, is TypeDecl.WithSizeAttr, is TypeDecl.Builtin -> {
             BuiltinTable.resolve(decl)
         }
 
@@ -150,16 +150,15 @@ class TypeRegistry(
             fd
         }
 
-        is TypeDecl.XRef if decl.kind == AggrKind.STRUCT -> harvest.getStructByXRef(decl.tagName)
-            ?.let { tryGetExisting(it.first) }
+        // FIXME: why the two cases ???
+        is TypeDecl.XRef if decl.kind == AggrKind.STRUCT -> harvest.getByXRef(decl)?.let { tryGetExisting(it.id) }
 
-        is TypeDecl.XRef -> harvest.getStructByXRef(decl.tagName)?.let { dataTypeFor(it.second) }
+        is TypeDecl.XRef -> harvest.getByXRef(decl)?.let { dataTypeFor(it.body) }
 
         // Aggregate bodies — never referenced directly; only meaningful via TypeId.
         // See kdoc above.
         is TypeDecl.Struct, is TypeDecl.Enum, is TypeDecl.Method -> {
             log("referenced-aggregate", "asked for ref to $decl")
-//            materialiseBody(TypeAst(cu))
             null
         }
     }
@@ -214,7 +213,7 @@ class TypeRegistry(
 
     private fun materialiseBody(ast: TypeAst, category: CategoryPath, placeholder: DataType): DataType =
         when (val body = ast.body) {
-            is TypeDecl.Range, is TypeDecl.Complex, is TypeDecl.WithSizeAttr ->
+            is TypeDecl.Range, is TypeDecl.Complex, is TypeDecl.WithSizeAttr, is TypeDecl.Builtin ->
                 BuiltinTable.resolve(body) ?: placeholder
 
             is TypeDecl.Pointer -> PointerDataType(
@@ -450,15 +449,21 @@ class TypeRegistry(
             }
 
             is TypeDecl.XRef -> {
-                log("xref-stub", "Forward ref to '${body.tagName}'; materialising stub")
-                placeholder
+                // Resolve `XRef(kind, tagName)` to the canonical struct of
+                // that name + kind so an `InlineDef(id, XRef(STRUCT, "Foo"))`
+                // typeAst (often emitted by gcc for ABI-internal typeinfo
+                // helpers like `__si_class_type_info_pseudo`) doesn't get
+                // materialised as a separate empty `XRef_[...]` Structure
+                // applied at typeinfo locations. Aliases this id to the
+                // canonical DataType for `Foo` via byId.
+                harvest.getByXRef(body)?.let { canonical ->
+                    tryGetExisting(canonical.id)?.also { byId[ast.id] = it }
+                } ?: run {
+                    log("xref-stub", "Forward ref to '${body.tagName}'; materialising stub")
+                    placeholder
+                }
             }
 
-            // Same cascade as dataTypeFor: byId -> placeholders -> harvest -> classify.
-            // FIXME: handle body.id.cu == 0 => current code unit
-//                    val refKey = "(${body.id.file},${body.id.n})"
-//                val knownFileNums = includeContextsByCu[ast.id.source.cu]?.getAllFileNums() ?: emptySet()
-//                val knownFileNums = fileResolver.knownFileNums(ast.cu)
             // Truly-missing classifier: harvest already exhausted above.
 //                val knownTypeIds = emptySet<LocalTypeId>()
 
@@ -470,7 +475,6 @@ class TypeRegistry(
 //                )
 //                val gId = fileResolver.globalIdForCu(body.id)
 //                val gId = body.id
-            // FIXME: refactor to avoid code duplication
             is TypeDecl.Ref -> tryGetExisting(body.id) ?: run {
                 log("dangling-ref", "Dangling ref to ${body.id} in '${ast.name}' from ${ast.source} CU ${ast.cu} ")
                 diagnostics.recordUnresolvedRef(body.id, ast.name)

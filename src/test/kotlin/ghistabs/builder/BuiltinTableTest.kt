@@ -41,10 +41,21 @@ class BuiltinTableTest {
 
     @Test
     fun testClassifyBool() {
-        // gdb stabs encodes _Bool as (0,-16); n=-16 is the canonical identifier after globalisation.
-        val kind = BuiltinTable.resolve(TypeDecl.WithSizeAttr(8, TypeDecl.Ref(GlobalTypeId(cu, -16))))
+        // gdb stabs encodes _Bool as (0,-16); after globalize the inner Ref to
+        // a negative slot is hoisted into [TypeDecl.Builtin] so cross-CU
+        // bool slots share one canonical hash and one Ghidra DataType.
+        val kind = BuiltinTable.resolve(TypeDecl.WithSizeAttr(8, TypeDecl.Builtin(-16)))
         assertInstanceOf<BooleanDataType>(kind)
         assertEquals(1, kind.length)
+    }
+
+    @Test
+    fun testClassifyBuiltinSlotDirect() {
+        // Builtin slot resolved standalone (no WithSizeAttr wrapper) — gcc
+        // sometimes emits a bare `(0,-N)` Ref as a typedef body.
+        assertInstanceOf<IntegerDataType>(BuiltinTable.resolve(TypeDecl.Builtin(-1)))
+        assertInstanceOf<BooleanDataType>(BuiltinTable.resolve(TypeDecl.Builtin(-16)))
+        assertInstanceOf<VoidDataType>(BuiltinTable.resolve(TypeDecl.Builtin(-11)))
     }
 
     @Test

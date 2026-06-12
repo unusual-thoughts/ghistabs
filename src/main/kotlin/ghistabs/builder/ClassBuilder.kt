@@ -34,7 +34,7 @@ internal class ClassBuilderHelpers(val resolver: Harvest) {
         is TypeDecl.Ref -> resolver.getStruct(typeDecl.id)
 
         // Cross-reference by tagName: look in structAstsByName
-        is TypeDecl.XRef -> resolver.getStructByXRef(typeDecl.tagName)?.second
+        is TypeDecl.XRef -> resolver.getByXRef(typeDecl)?.body as? TypeDecl.Struct<GlobalTypeId>
 
         // Inline definition: prefer the materialised AST at this id (real struct body), fall
         // back to the inline body. The inline body is often a forward XRef stub whose Struct
