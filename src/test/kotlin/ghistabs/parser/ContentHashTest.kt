@@ -42,7 +42,7 @@ class ContentHashTest {
         charInCU1.id to charInCU1,
     )
 
-    private val oracle: (GlobalTypeId) -> TypeAst? = asts::get
+    private val oracle = TypeAstOracle(asts::get)
 
     /**
      * `Ref(cu=a.cpp, n=1)` and `Ref(cu=b.cpp, n=1)` both point at "int"
@@ -53,14 +53,49 @@ class ContentHashTest {
     fun refsToSameNamedTypeFromDifferentCUsHashIdentically() {
         val refToIntFromCU1 = TypeDecl.Ref(intInCU1.id)
         val refToIntFromCU2 = TypeDecl.Ref(intInCU2.id)
-        assertEquals(contentHash(refToIntFromCU1, oracle), contentHash(refToIntFromCU2, oracle))
+        assertEquals(refToIntFromCU1.contentHash(oracle), refToIntFromCU2.contentHash(oracle))
     }
 
     @Test
     fun refsToDifferentlyNamedTypesHashDifferently() {
         val refToInt = TypeDecl.Ref(intInCU1.id)
         val refToChar = TypeDecl.Ref(charInCU1.id)
-        assertNotEquals(contentHash(refToInt, oracle), contentHash(refToChar, oracle))
+        assertNotEquals(refToInt.contentHash(oracle), refToChar.contentHash(oracle))
+    }
+
+    /**
+     * Per-CU `bool` slots are encoded as `WithSizeAttr(8, Builtin(-16))`
+     * after [Harvester.globalize] hoists the negative-id Ref. Two CUs
+     * therefore both encode `bool` as `WithSizeAttr(8, Builtin(-16))`
+     * — same content, must hash equally. Before the Builtin hoist this
+     * was `WithSizeAttr(8, Ref([CU_X, -16]))`, which fell through to
+     * [contentHash]'s `unresolved` fallback and baked the source CU
+     * into the hash → per-CU divergence → 3 spurious "real" collisions
+     * in bouniafbouniaf.
+     */
+    @Test
+    fun perCuBoolSlotHashesEqual() {
+        val boolInCU1 = TypeAst(
+            cu = SourceFile.CUSource("a.cpp"),
+            id = GlobalTypeId(SourceFile.CUSource("a.cpp"), 21),
+            name = "bool",
+            body = TypeDecl.WithSizeAttr(8, TypeDecl.Builtin(-16)),
+        )
+        val boolInCU2 = TypeAst(
+            cu = SourceFile.CUSource("b.cpp"),
+            id = GlobalTypeId(SourceFile.CUSource("b.cpp"), 21),
+            name = "bool",
+            body = TypeDecl.WithSizeAttr(8, TypeDecl.Builtin(-16)),
+        )
+        val store = mapOf(boolInCU1.id to boolInCU1, boolInCU2.id to boolInCU2)
+        val o = TypeAstOracle(store::get)
+        assertEquals(boolInCU1.body.contentHash(o), boolInCU2.body.contentHash(o))
+        // And the Refs into them — what the surrounding struct's field
+        // type expression actually looks like — must agree too.
+        assertEquals(
+            TypeDecl.Ref(boolInCU1.id).contentHash(o),
+            TypeDecl.Ref(boolInCU2.id).contentHash(o),
+        )
     }
 
     @Test
@@ -70,7 +105,7 @@ class ContentHashTest {
         // Two evaluations of the same unresolved ref agree with each
         // other; the unresolved branch must be deterministic so
         // collision detection isn't randomised.
-        assertEquals(contentHash(ref, oracle), contentHash(ref, oracle))
+        assertEquals(ref.contentHash(oracle), ref.contentHash(oracle))
     }
 
     /**
@@ -102,7 +137,7 @@ class ContentHashTest {
                 clone1Body.fields[0].copy(type = TypeDecl.Ref(intInCU2.id)),
             ),
         )
-        assertEquals(contentHash(clone1Body, oracle), contentHash(clone2Body, oracle))
+        assertEquals(clone1Body.contentHash(oracle), clone2Body.contentHash(oracle))
     }
 
     @Test
@@ -127,7 +162,7 @@ class ContentHashTest {
         val s2 = s1.copy(
             fields = listOf(s1.fields[0].copy(type = TypeDecl.Ref(charInCU1.id))),
         )
-        assertNotEquals(contentHash(s1, oracle), contentHash(s2, oracle))
+        assertNotEquals(s1.contentHash(oracle), s2.contentHash(oracle))
     }
 
     /**
@@ -142,7 +177,7 @@ class ContentHashTest {
         val body = TypeDecl.Pointer<GlobalTypeId>(TypeDecl.Ref(charInCU1.id))
         val inline1 = TypeDecl.InlineDef(intInCU1.id, body)
         val inline2 = TypeDecl.InlineDef(intInCU2.id, body)
-        assertEquals(contentHash(inline1, oracle), contentHash(inline2, oracle))
+        assertEquals(inline1.contentHash(oracle), inline2.contentHash(oracle))
     }
 
     /**
@@ -161,7 +196,7 @@ class ContentHashTest {
             body = TypeDecl.Pointer(TypeDecl.Ref(intInCU1.id)),
         )
         val asts2 = asts + (pointerToInt.id to pointerToInt)
-        val oracle2: (GlobalTypeId) -> TypeAst? = asts2::get
+        val oracle2: TypeAstOracle = TypeAstOracle(asts2::get)
         // Form A: a Ref pointing at the Pointer-to-int type.
         val asRef = TypeDecl.Ref<GlobalTypeId>(pointerToInt.id)
         // Form B: the Pointer inlined at a different id.
@@ -169,7 +204,7 @@ class ContentHashTest {
             GlobalTypeId(SourceFile.CUSource("d.cpp"), 99),
             TypeDecl.Pointer(TypeDecl.Ref(intInCU1.id)),
         )
-        assertEquals(contentHash(asRef, oracle2), contentHash(asInline, oracle2))
+        assertEquals(asRef.contentHash(oracle2), asInline.contentHash(oracle2))
     }
 
     /**
@@ -178,7 +213,7 @@ class ContentHashTest {
      */
     @Test
     fun selfReferentialTypeTerminates() {
-        val h = contentHash(intInCU1.body, oracle)
+        val h = intInCU1.body.contentHash(oracle)
         // Plain assertion that it returned; if it had infinite-looped
         // we'd never get here.
         assertNotEquals(0, h)
@@ -193,8 +228,7 @@ class ContentHashTest {
      * both forms should hash identically — they're the same logical
      * type. If they don't, classifyCollisions buckets them as "real"
      * when they're actually spurious.
-     */
-    /**
+     *
      * Faithful replay of the bouniafbouniaf `[sym.h,87]` pair-collision:
      * the outer Struct itself has self-referential methods (cls=Ref to
      * the pair id), and the variants differ only in how param[0] of
@@ -276,17 +310,17 @@ class ContentHashTest {
         val intAst =
             TypeAst(cu = keywordsCu, id = intId, name = "int", body = TypeDecl.Range(intId, -2147483648L, 2147483647L))
         val store = mapOf(pairId to pairCanonical, ptrAId to ptrA, ptrBId to ptrB, intId to intAst)
-        val storeOracle: (GlobalTypeId) -> TypeAst? = store::get
+        val storeOracle: TypeAstOracle = TypeAstOracle(store::get)
 
         // Pre-populate the cache the same way the dump test does:
         // hash every TypeAst.body top-level, then store under its id.
         val cache = mutableMapOf<GlobalTypeId, Int>()
         for (ast in store.values) {
-            cache[ast.id] = contentHash(ast.body, storeOracle, cache = cache)
+            cache[ast.id] = ast.body.contentHash(storeOracle, cache)
         }
 
-        val h0 = contentHash(variant0, storeOracle, cache = cache)
-        val h1 = contentHash(variant1, storeOracle, cache = cache)
+        val h0 = variant0.contentHash(storeOracle, cache)
+        val h1 = variant1.contentHash(storeOracle, cache)
         assertEquals(h0, h1, "variant_0 (Ref param) and variant_1 (InlineDef param) must hash identically")
     }
 
@@ -312,7 +346,7 @@ class ContentHashTest {
             body = TypeDecl.Pointer(TypeDecl.Ref(pairId)),
         )
         val store = mapOf(ptrInA.id to ptrInA, ptrInB.id to ptrInB)
-        val storeOracle: (GlobalTypeId) -> TypeAst? = store::get
+        val storeOracle: TypeAstOracle = TypeAstOracle(store::get)
 
         // Form A: a Ref to ptrInA.
         val formA = TypeDecl.Ref<GlobalTypeId>(ptrInA.id)
@@ -323,6 +357,6 @@ class ContentHashTest {
             TypeDecl.Pointer(TypeDecl.Ref(pairId)),
         )
 
-        assertEquals(contentHash(formA, storeOracle), contentHash(formB, storeOracle))
+        assertEquals(formA.contentHash(storeOracle), formB.contentHash(storeOracle))
     }
 }
