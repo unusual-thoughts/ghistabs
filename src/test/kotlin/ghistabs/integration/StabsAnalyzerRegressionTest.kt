@@ -90,11 +90,7 @@ abstract class StabsAnalyzerRegressionTest(private val mode: Mode, binaryName: S
     private val json by lazy {
         Json {
             serializersModule = SerializersModule {
-//                contextual(IdInterface::class, PolymorphicSerializer(IdInterface::class))
-//                polymorphic(IdInterface::class) {
-//                    subclass(LocalTypeId::class, LocalTypeId.serializer())
-//                    subclass(GlobalTypeId::class, GlobalTypeId.serializer())
-//                }
+
                 @Suppress("UNCHECKED_CAST")
                 contextual(IdInterface::class, ToStringSerializer as KSerializer<IdInterface>)
                 prettyPrint = true
@@ -182,7 +178,7 @@ abstract class StabsAnalyzerRegressionTest(private val mode: Mode, binaryName: S
             // MessageSinkAdapter(log), so also append the MessageLog so the
             // log file isn't empty there.
             // FIXME: MessageLog truncates after 500 messages!!
-            logFile.writeText(context.log.capturedOutput() + "\n--- MessageLog ---\n" + log.toString())
+            logFile.writeText(context.log.dedupedOutput() + "\n--- MessageLog ---\n" + log.toString())
         } catch (e: Exception) {
             assumeTrue(false, "Failed to load real binary via ProgramLoader: ${e.message}")
         }
@@ -741,12 +737,6 @@ abstract class StabsAnalyzerRegressionTest(private val mode: Mode, binaryName: S
     @OptIn(ExperimentalSerializationApi::class)
     @Test
     fun harvestTest() {
-//        val responseModule = SerializersModule {
-//            polymorphic(TypeDecl::class) {
-//                subclass(TypeDecl.serializer(PolymorphicSerializer(Any::class)))
-//            }
-//        }
-
         val ctx = program.defaultContext()
         val stabs = StabReader.fromProgram(program)!!
         json.encodeToStream(stabs.records, recordsFile.outputStream())
@@ -762,29 +752,6 @@ abstract class StabsAnalyzerRegressionTest(private val mode: Mode, binaryName: S
             program.endTransaction(tx, true)
         }
 
-        for ((i, ast) in harvest.typeAsts.values.withIndex()) {
-            if (i % 100 == 0) {
-                println("$i/${harvest.typeAsts.size}")
-            }
-            harvest.hashCache[ast.id] = harvest.contentHash(ast.body)
-//            Assertions.assertTrue(harvest.hashCache.containsKey(ast.id))
-        }
-
-        for ((id, collision) in harvest.collidingAsts) {
-            val hashes = collision.flatMap { it.value }.map { harvest.contentHash(it) }.toSet()
-            if (hashes.size > 1) {
-                println(hashes.size)
-            }
-        }
-
-//        Json {
-//            serializersModule = SerializersModule {
-//                @Suppress("UNCHECKED_CAST")
-//                contextual(IdInterface::class, ToStringSerializer as KSerializer<IdInterface>)
-//                contextual(GlobalTypeId::class, WithHashSerializer(harvest.hashCache))
-//                prettyPrint = true
-//            }
-//        }
         json.encodeToStream(harvest, harvestFile.outputStream())
     }
 
