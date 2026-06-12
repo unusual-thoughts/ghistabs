@@ -33,7 +33,6 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
         val harvester = Harvester(ctx.monitor, ctx.sink, ctx.resolver)
         val harvest = harvester.passA(stabs.records)
         recordHarvestCounters(harvest, stabs)
-        classifyCollisionsPostHarvest(harvest)
 
         // Pass B — materialise types
         val typeRegistry = TypeRegistry(
@@ -73,39 +72,6 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
         )
     }
 
-    /**
-     * Surface harvest-side population sizes as counters so the end-of-run
-     * `[diagnostics]` block answers "how much did we even see?" before any
-     * apply-side filtering. Lets the user spot e.g. "we harvested 200 globals
-     * but only applied 43" at a glance without running tooling.
-     * Classify entries in `harvest.collidingAsts` as content-equivalent
-     * (different per-CU representation of the same type — common gcc
-     * inline-vs-Ref asymmetry) or genuinely divergent. Runs once after
-     * harvest completes so the full typeAsts is available and the
-     * memoized `Harvest.contentHash` cache is hot.
-     */
-    private fun classifyCollisionsPostHarvest(harvest: Harvest) {
-        if (harvest.collidingAsts.isEmpty()) return
-        val classification = harvest.classifyCollisions()
-        ctx.diagnostics.inc("ast-id-collision-spurious", classification.spuriousIds.toLong())
-        ctx.diagnostics.inc("ast-id-collision-real", classification.realIds.toLong())
-        ctx.diagnostics.inc("ast-id-collision-variants-total", classification.totalVariants.toLong())
-        if (classification.realIds > 0) {
-            log(
-                "ast-id-collision-classify",
-                "real=${classification.realIds} (examples: " +
-                    "${classification.realExamples.joinToString(", ")}), " +
-                    "spurious=${classification.spuriousIds}",
-            )
-        } else {
-            log(
-                "ast-id-collision-classify",
-                "all ${classification.spuriousIds} colliding ids are content-equivalent " +
-                    "(per-CU representation differences)",
-            )
-        }
-    }
-
     private fun recordHarvestCounters(harvest: Harvest, stabs: StabReader.Result) {
         ctx.diagnostics.inc("harvest-records-read", stabs.recordCount.toLong())
         ctx.diagnostics.inc("harvest-records-parsed", (stabs.records.size - harvest.parseErrors).toLong())
@@ -129,6 +95,11 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
         val uniqueTypeIds = harvest.typeAsts.keys.size
         ctx.diagnostics.inc("harvest-typeAsts-unique-by-id", uniqueTypeIds.toLong())
         ctx.diagnostics.inc("harvest-typeAsts-dup-by-id", (harvest.typeAsts.size - uniqueTypeIds).toLong())
+        ctx.diagnostics.inc("harvest-collisions", harvest.collidingAsts.size.toLong())
+        ctx.diagnostics.inc(
+            "harvest-collisions-total",
+            harvest.collidingAsts.values.flatMap { it.values }.flatten().count().toLong(),
+        )
     }
 
     internal fun applyAllSymbols(harvest: Harvest, typeRegistry: TypeRegistry): ApplyResult {
