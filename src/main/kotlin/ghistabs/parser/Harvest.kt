@@ -112,6 +112,24 @@ data class Harvest(
      * regression — see commit history.
      */
     fun classifyCollisions(maxRealExamples: Int = 10): CollisionClassification {
+        // Pre-warm [hashCache] by hashing every typeAst body top-level
+        // before classifying. The cache otherwise gets populated mid-walk
+        // with stale values: the first variant computed seeds cache
+        // entries for transitively-referenced ids using a visited set
+        // that already contains the colliding id, so inner self-Refs
+        // back-edge instead of recursing. Subsequent variants then
+        // cache-hit those stale values, and structurally-identical
+        // Ref-vs-InlineDef forms diverge purely on cache state.
+        //
+        // Concrete repro: the xapasmcsr `pair<const int,CSourceSymbolData*>`
+        // collision has 8 content-equivalent variants. Without pre-warm:
+        // variant[0] produces one hash, variants[1..7] cache-hit the
+        // polluted entries and produce a different hash → classified
+        // "real". With pre-warm: every variant produces the same hash
+        // → classified "spurious" (as it actually is).
+        for (ast in typeAsts.values) {
+            hashCache[ast.id] = contentHash(ast.body)
+        }
         var spurious = 0
         var real = 0
         var totalVariants = 0
@@ -763,12 +781,13 @@ class Harvester(
             // Ref-walk), the collision is a literal re-emission and
             // not worth recording. classifyCollisions does the deeper
             // Ref-aware check later for the entries that survive.
-            val alternates = new[id]!!.filter { it.body != ex.body }
+            val alternates = new[id]!!.filter { it.body != ex.body }.map { it.body }
             if (alternates.isEmpty()) continue
-            val bucket = collidingAsts.getOrPut(id) { mutableMapOf() }
+            val bucket = collidingAsts
+                .getOrPut(id) { mutableMapOf() }
                 .getOrPut(ex.name) { mutableSetOf() }
             bucket.add(ex.body)
-            for (alt in alternates) bucket.add(alt.body)
+            bucket.addAll(alternates)
         }
 
         for (ast in asts.filter { !collisions.contains(it.id) }) {

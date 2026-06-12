@@ -183,4 +183,146 @@ class ContentHashTest {
         // we'd never get here.
         assertNotEquals(0, h)
     }
+
+    /**
+     * Mirror of the xapasmcsr `pair<const int, CSourceSymbolData*>`
+     * collision case: two CUs each emit the same outer pair struct;
+     * CU1 expresses an inner Pointer-to-self via `Ref(id_A)` where
+     * `id_A` is a separately-emitted TypeAst, CU2 expresses it as
+     * `InlineDef(id_B, Pointer(Ref(pair_id)))` inline. After harvest
+     * both forms should hash identically — they're the same logical
+     * type. If they don't, classifyCollisions buckets them as "real"
+     * when they're actually spurious.
+     */
+    /**
+     * Faithful replay of the xapasmcsr `[sym.h,87]` pair-collision:
+     * the outer Struct itself has self-referential methods (cls=Ref to
+     * the pair id), and the variants differ only in how param[0] of
+     * one method is expressed (Ref vs InlineDef). typeAsts contains
+     * the canonical (variant_0) pair body plus the separately-emitted
+     * Pointer-to-pair entries at both [Keywords.cpp,180] and
+     * [assemble.cpp,229] (both with body=Pointer(Ref(pairId))).
+     *
+     * Both variants must hash identically — the actual harvest
+     * classifyCollisions sees them diverge, so this test reproduces
+     * the failing path in isolation.
+     */
+    @Test
+    fun pairStructWithSelfRefMethodsRefVsInlineDefParamHashesEqual() {
+        val pairId = GlobalTypeId(
+            SourceFile.HeaderSource(
+                HeaderFile("sym.h", checksum = 1L, originatingCu = SourceFile.CUSource("Keywords.cpp")),
+            ),
+            87,
+        )
+        val intId = GlobalTypeId(SourceFile.CUSource("Keywords.cpp"), 40)
+        val ptrAId = GlobalTypeId(SourceFile.CUSource("Keywords.cpp"), 180)
+        val ptrBId = GlobalTypeId(SourceFile.CUSource("assemble.cpp"), 229)
+        val methodBindAId = GlobalTypeId(SourceFile.CUSource("Keywords.cpp"), 440)
+        val methodBindBId = GlobalTypeId(SourceFile.CUSource("assemble.cpp"), 228)
+
+        fun makePairBody(param0: TypeDecl<GlobalTypeId>): TypeDecl.Struct<GlobalTypeId> = TypeDecl.Struct(
+            kind = AggrKind.STRUCT,
+            sizeBytes = 8L,
+            bases = emptyList(),
+            fields = listOf(
+                FieldDecl("first", TypeDecl.Ref(intId), 0L, 32L, false),
+            ),
+            methods = listOf(
+                MethodDecl(
+                    name = "operator=",
+                    mangled = null,
+                    signature = TypeDecl.InlineDef(
+                        if (param0 is TypeDecl.Ref<*>) methodBindAId else methodBindBId,
+                        TypeDecl.Method(
+                            cls = TypeDecl.Ref(pairId),
+                            ret = TypeDecl.Ref(intId),
+                            params = listOf(param0),
+                        ),
+                    ),
+                    access = Access.PUBLIC,
+                    virt = VirtKind.NORMAL,
+                    isConst = false,
+                    isVolatile = false,
+                    vtableOffsetBits = null,
+                ),
+            ),
+            hasVTablePointerMarker = false,
+            vtableTargetTypeId = null,
+        )
+
+        val variant0 = makePairBody(TypeDecl.Ref(ptrAId))
+        val variant1 = makePairBody(
+            TypeDecl.InlineDef(ptrBId, TypeDecl.Pointer(TypeDecl.Ref(pairId))),
+        )
+
+        val keywordsCu = SourceFile.CUSource("Keywords.cpp")
+        val assembleCu = SourceFile.CUSource("assemble.cpp")
+        val pairCanonical = TypeAst(cu = keywordsCu, id = pairId, name = "pair", body = variant0)
+        val ptrA =
+            TypeAst(
+                cu = keywordsCu,
+                id = ptrAId,
+                name = "[Keywords.cpp,180]",
+                body = TypeDecl.Pointer(TypeDecl.Ref(pairId)),
+            )
+        val ptrB =
+            TypeAst(
+                cu = assembleCu,
+                id = ptrBId,
+                name = "[assemble.cpp,229]",
+                body = TypeDecl.Pointer(TypeDecl.Ref(pairId)),
+            )
+        val intAst =
+            TypeAst(cu = keywordsCu, id = intId, name = "int", body = TypeDecl.Range(intId, -2147483648L, 2147483647L))
+        val store = mapOf(pairId to pairCanonical, ptrAId to ptrA, ptrBId to ptrB, intId to intAst)
+        val storeOracle: (GlobalTypeId) -> TypeAst? = store::get
+
+        // Pre-populate the cache the same way the dump test does:
+        // hash every TypeAst.body top-level, then store under its id.
+        val cache = mutableMapOf<GlobalTypeId, Int>()
+        for (ast in store.values) {
+            cache[ast.id] = contentHash(ast.body, storeOracle, cache = cache)
+        }
+
+        val h0 = contentHash(variant0, storeOracle, cache = cache)
+        val h1 = contentHash(variant1, storeOracle, cache = cache)
+        assertEquals(h0, h1, "variant_0 (Ref param) and variant_1 (InlineDef param) must hash identically")
+    }
+
+    @Test
+    fun refToSeparatelyEmittedTypeEqualsEquivalentInlineDef() {
+        // pair_id is the outer "pair" struct's GlobalTypeId.
+        val pairCu = SourceFile.HeaderSource(
+            HeaderFile("sym.h", checksum = 1L, originatingCu = SourceFile.CUSource("a.cpp")),
+        )
+        val pairId = GlobalTypeId(pairCu, 87)
+        // CU1's separately-emitted Pointer-to-pair at id 180 in CU1.
+        val ptrInA = TypeAst(
+            cu = SourceFile.CUSource("a.cpp"),
+            id = GlobalTypeId(SourceFile.CUSource("a.cpp"), 180),
+            name = "[a.cpp,180]",
+            body = TypeDecl.Pointer(TypeDecl.Ref(pairId)),
+        )
+        // CU2's inline form would emit a TypeAst from walkDefinitions too.
+        val ptrInB = TypeAst(
+            cu = SourceFile.CUSource("b.cpp"),
+            id = GlobalTypeId(SourceFile.CUSource("b.cpp"), 229),
+            name = "[b.cpp,229]",
+            body = TypeDecl.Pointer(TypeDecl.Ref(pairId)),
+        )
+        val store = mapOf(ptrInA.id to ptrInA, ptrInB.id to ptrInB)
+        val storeOracle: (GlobalTypeId) -> TypeAst? = store::get
+
+        // Form A: a Ref to ptrInA.
+        val formA = TypeDecl.Ref<GlobalTypeId>(ptrInA.id)
+        // Form B: an InlineDef wrapping the same Pointer content, with
+        // a different binding id (mimics the CU2 inline path).
+        val formB = TypeDecl.InlineDef<GlobalTypeId>(
+            GlobalTypeId(SourceFile.CUSource("b.cpp"), 999),
+            TypeDecl.Pointer(TypeDecl.Ref(pairId)),
+        )
+
+        assertEquals(contentHash(formA, storeOracle), contentHash(formB, storeOracle))
+    }
 }

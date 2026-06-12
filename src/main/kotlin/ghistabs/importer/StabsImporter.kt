@@ -78,8 +78,6 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
      * `[diagnostics]` block answers "how much did we even see?" before any
      * apply-side filtering. Lets the user spot e.g. "we harvested 200 globals
      * but only applied 43" at a glance without running tooling.
-     */
-    /**
      * Classify entries in `harvest.collidingAsts` as content-equivalent
      * (different per-CU representation of the same type — common gcc
      * inline-vs-Ref asymmetry) or genuinely divergent. Runs once after
