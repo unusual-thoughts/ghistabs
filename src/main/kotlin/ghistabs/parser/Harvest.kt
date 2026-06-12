@@ -21,7 +21,17 @@ data class TypeAst(
     val source get() = id.source
     val ghidraName: String
         get() = SymbolUtilities.replaceInvalidChars(name, false).ifEmpty {
-            "${body::class.java.simpleName}_$id"
+            // XRef-bodied TypeAsts emitted by gcc for ABI-internal helpers
+            // (e.g. `InlineDef(id, XRef(STRUCT, "__si_class_type_info_pseudo"))`)
+            // have no name field. Without this clause every per-CU XRef
+            // would get an auto-generated `XRef_[…]` name keyed on the
+            // anonymous id — three CUs that all forward-declare the same
+            // tag would then materialise as three separate empty
+            // Structures, each applied at the SAME typeinfo address,
+            // racing each other on every write. Fold to the tagName so
+            // the byHash/registerWithConflict dedup actually fires.
+            (body as? TypeDecl.XRef)?.tagName?.let { SymbolUtilities.replaceInvalidChars(it, false) }
+                ?: "${body::class.java.simpleName}_$id"
         }
 }
 
