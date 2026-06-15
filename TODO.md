@@ -7,42 +7,26 @@ All entries verified against the current `xapasmcsr.exe` regression run
 
 ## Open
 
+- [ ] CSymLexStream and CLexStream look weird, full of holes and empty bases
+- [ ] many headers end up in headers-untracked: XapArgInst ends up in proj but XapArgRegInst in untracked
+
 ### Admin / scope
 
-- [ ] add any missing documentation for Stabs tokens in the parser (similar to what was done for N_*)
 - [ ] take N_SO "directory" entries into account (two N_SO in a row → the first is the directory
   location of the header, store it in a field inside CUSource)
-- [ ] does the TypeDecl / SymbolDecl split make sense, or should they merge?
-- [ ] purge forbidden words from git history: csr/qualcomm/adk/xapasmcsr/appquery/bose/qc35/bluecore
 - [ ] stop copying test resources to build/
 - [ ] figure out Junit 4 vs 5 nonsense (intellij complains)
 - [ ] fix log capture in tests — should we use Msg.debug/info/warn/error etc instead of MessageLog?
+- [ ] purge forbidden words from git history: csr/qualcomm/adk/xapasmcsr/appquery/bose/qc35/bluecore
+- [ ] does the TypeDecl / SymbolDecl split make sense, or should they merge?
+- [ ] add any missing documentation for Stabs tokens in the parser (similar to what was done for N_*)
 - [ ] **investigate N_RSYM vs N_LSYM register local semantics** (Harvest.kt) — when parsing N_RSYM
   records, determine how register-based locals differ from N_LSYM-declared stack locals; currently
   unclear if the distinction matters for type resolution.
 - [ ] **check the logic actual GDB uses to deduplicate / canonicalize types and classes** — see if
   our algorithm makes sense or if we need to change or simplify it.
 
-### Forward-EXCL placeholder divergence (D1 / D3 / include-stack)
-
-- [ ] **D1 / D3: patch forward-EXCL placeholders on BINCL arrival** —
-  Ref: stabs-canonicalization.md §2.3, §6, §7.2; deviations D1 and D3.
-  When N_EXCL precedes N_BINCL for the same (filename, checksum),
-  `HeaderRegistry.recall()` creates a non-globally-registered placeholder
-  `HeaderFile(originatingCu=null)`. When the real BINCL arrives later,
-  `getOrInsert()` creates a distinct `HeaderFile` instance — the two never
-  merge, so types attributed to the placeholder get different GlobalTypeIds
-  than types attributed to the real header (207 hash collisions in
-  xapasmcsr). Concrete symptom: `BranchInstructions` 16-element array
-  resolves element type to wrong slot.
-  Fix options:
-    1. On real BINCL arrival, replace the placeholder in all affected
-       `IncludeContext` instances. Closest to the spec, requires tracking
-       which IncludeContexts referenced the placeholder.
-    2. Switch to a content-keyed cross-CU type index independent of file
-       slot. Heavier refactor but sidesteps the placeholder model entirely.
-  Should also add a diagnostic counter for unreplaced placeholders so we
-  can spot regressions.
+### Forward-EXCL placeholder divergence (include-stack)
 
 - [ ] **gcc per-BINCL include-stack vs our flat `fileNumToHeader`** —
   Ref: stabs-canonicalization.md §2.5, §4.1.
@@ -115,6 +99,21 @@ All entries verified against the current `xapasmcsr.exe` regression run
   with `ClassBuilder`).
 
 ## Done
+
+### Forward-EXCL placeholder divergence (D1 / D3)
+
+- [x] **D1 / D3: forward-EXCL placeholders share identity with real BINCL** —
+  `HeaderRegistry.recall()` now stores the placeholder in
+  `globalByFilenameChecksum` via `getOrPut`, so a subsequent `getOrInsert()`
+  for the same `(filename, checksum)` returns the same `HeaderFile` instance.
+  Types attributed via forward-EXCL converge with types attributed via the
+  real BINCL: same `GlobalTypeId`, Ref resolution succeeds across CUs.
+  Symptom fixed: `BranchInstructions[16]` now resolves its element type to
+  the real `EnumInstToken` enum (regression assertion strengthened in
+  `branchInstructionsGlobalIsTyped`). Tests `IncludeContextTest.forward EXCL
+  then BINCL share the same HeaderFile instance` and
+  `HarvesterGapTest.forward EXCL placeholder is shared with later BINCL`
+  pin the invariant.
 
 ### TODO triage (2026-06-10)
 

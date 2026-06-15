@@ -3,8 +3,8 @@ package ghistabs.parser
 import ghidra.util.task.TaskMonitor
 import ghistabs.diag.DummySink
 import ghistabs.importer.StabOnlyAddressResolver
-import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 
@@ -34,38 +34,27 @@ class HarvesterGapTest {
     )
 
     /**
-     * Test: Forward EXCL placeholder is not stored globally (D1).
+     * Test: Forward EXCL placeholder is stored globally so a later BINCL reuses it (D1 fixed).
      *
-     * Deviation D1: when recall() is called for an unknown (filename, checksum),
-     * it returns a placeholder HeaderFile that is NOT stored in globalByFilenameChecksum.
-     * A subsequent getOrInsert() for the same key returns a DIFFERENT HeaderFile instance.
-     *
-     * This test documents the current broken behavior. When D1 is fixed, this test
-     * should be updated or removed.
-     *
-     * Source: stabs-canonicalization.md §6 deviation D1.
+     * Source: stabs-canonicalization.md §6 deviation D1. `recall()` now registers the
+     * placeholder in the shared `globalByFilenameChecksum` map; a subsequent
+     * `getOrInsert()` for the same `(filename, checksum)` returns the same instance.
      */
     @Test
-    fun `forward EXCL placeholder is not stored globally`() {
+    fun `forward EXCL placeholder is shared with later BINCL`() {
         val registry = HeaderRegistry()
         val ctx1 = IncludeContext(SourceFile.CUSource("a.c"), DummySink, registry)
 
-        // CU "a.c" sees EXCL before BINCL — triggers forward-EXCL placeholder
         val fn1 = ctx1.remount("hdr.h", 0x1234L)
 
-        // Later, CU "b.c" sees the real BINCL
         val ctx2 = IncludeContext(SourceFile.CUSource("b.c"), DummySink, registry)
         val fn2 = ctx2.beginInclude("hdr.h", 0x1234L)
 
-        // The two HeaderFile instances are DIFFERENT (placeholder divergence)
         val h1 = ctx1.headerForFileNum(fn1)
         val h2 = ctx2.headerForFileNum(fn2)
         assertNotNull(h1, "Forward-EXCL should create placeholder HeaderFile")
-        assertNotNull(h2, "BINCL should create HeaderFile")
-        assertFalse(
-            h1 === h2,
-            "D1 broken behavior: forward EXCL and real BINCL create different HeaderFile instances",
-        )
+        assertNotNull(h2, "BINCL should reuse the placeholder")
+        assertSame(h1, h2, "Placeholder and real BINCL must share one HeaderFile instance")
     }
 
     /**

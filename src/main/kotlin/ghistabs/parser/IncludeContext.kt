@@ -25,20 +25,17 @@ class HeaderRegistry(val sink: DiagnosticSink = DummySink) : DiagnosticSink by s
      * Retrieves or creates a [HeaderFile] for an N_EXCL (header remount) record.
      *
      * Forward EXCL case: if `N_EXCL` is encountered before any CU has processed the corresponding
-     * `N_BINCL`, this method creates a placeholder [HeaderFile] with `originatingCu = null`.
-     * This placeholder is stored ONLY in the calling CU's local [fileNumToHeader] map via the
-     * [IncludeContext.remount] method, NOT in the global [globalByFilenameChecksum] registry.
-     *
-     * When a later CU processes the real `N_BINCL` and calls [getOrInsert], it creates a different
-     * [HeaderFile] instance, causing [GlobalTypeId] divergence. The forward-CU's types are attributed
-     * to the placeholder instance; the real-BINCL CU's types are attributed to the real instance.
-     * This leads to hash collisions in [Harvester.appendAsts] (see stabs-canonicalization.md §6
-     * deviation D1).
+     * `N_BINCL`, this method creates a placeholder [HeaderFile] with `originatingCu = null` and
+     * stores it in [globalByFilenameChecksum] so that a later [getOrInsert] for the same key
+     * returns the same instance. This resolves stabs-canonicalization.md §6 deviation D1: types
+     * referenced via the placeholder share a single [HeaderFile] identity with types defined by
+     * the real BINCL, so their [GlobalTypeId]s agree and cross-CU Ref lookup succeeds.
      */
-    fun recall(filename: String, checksum: Long): HeaderFile = globalByFilenameChecksum[filename to checksum] ?: run {
-        log("forward-excl", "$filename checksum=0x${checksum.toString(16)}")
-        HeaderFile(filename, checksum, originatingCu = null)
-    }
+    fun recall(filename: String, checksum: Long): HeaderFile =
+        globalByFilenameChecksum.getOrPut(filename to checksum) {
+            log("forward-excl", "$filename checksum=0x${checksum.toString(16)}")
+            HeaderFile(filename, checksum, originatingCu = null)
+        }
 
     /** Clear all registries (for test isolation). */
     fun clear() {
@@ -94,12 +91,11 @@ class IncludeContext(
     val currentInclude get() = includeStack.lastOrNull()?.let { fileNumToHeader[it] }
 
     /**
-     * N_EXCL: allocates fileNum for a header that was previously INCLUDed (or will be later, in the case
-     * of a forward EXCL). If the (filename, checksum) is already known globally, reuses it. Otherwise,
-     * allocates a placeholder header with originatingCu = "<unknown>". Does NOT push includeStack.
-     * The placeholder is registered ONLY in the local fileNumToHeader, NOT in the global registry,
-     * so a later real BINCL gets its own slot and the forward-EXCL CU's types diverge from it.
-     * Returns fileNum.
+     * N_EXCL: allocates fileNum for a header that was previously INCLUDed (or will be later, in the
+     * case of a forward EXCL). If the (filename, checksum) is already known globally, reuses it.
+     * Otherwise, allocates a placeholder header with `originatingCu = null` AND registers it
+     * globally so a later real BINCL returns the same instance (see [HeaderRegistry.recall]).
+     * Does NOT push includeStack. Returns fileNum.
      */
     fun remount(filename: String, checksum: Long): Int {
         val fileNum = nextFileNum++
