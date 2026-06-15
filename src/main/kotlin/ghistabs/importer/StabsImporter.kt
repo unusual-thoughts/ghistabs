@@ -304,8 +304,43 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
      */
     private fun tryCreateFunctionFromStab(open: OpenFunction): Function? {
         val addr = open.addr.address
+        val block = ctx.program.memory.getBlock(addr)
+        if (block == null || !block.isExecute) {
+            ctx.diagnostics.inc("function-create-skipped-non-text")
+            log(
+                "function-create-skipped-non-text",
+                "no executable block at $addr for ${open.name} (block=${block?.name})",
+                Level.WARN,
+            )
+            return null
+        }
+
+        // CreateFunctionCmd refuses to start a function on uninitialised code.
+        // For MinGW COMDAT chunks Ghidra's autoanalysis sometimes hasn't reached,
+        // disassemble first so the cmd has an Instruction to anchor on.
+        if (ctx.program.listing.getInstructionAt(addr) == null) {
+            val disasm = ghidra.app.cmd.disassemble.DisassembleCommand(addr, null, true)
+            if (disasm.applyTo(ctx.program, ctx.monitor) && disasm.disassembledAddressSet.numAddresses > 0) {
+                ctx.diagnostics.inc("function-create-disassembled-first")
+            } else {
+                ctx.diagnostics.inc("function-create-disasm-failed")
+                log(
+                    "function-create-disasm-failed",
+                    "DisassembleCommand failed at $addr for ${open.name}: ${disasm.statusMsg}",
+                    Level.WARN,
+                )
+                return null
+            }
+        }
+
         val cmd = ghidra.app.cmd.function.CreateFunctionCmd(open.name, addr, null, SourceType.IMPORTED)
         if (!cmd.applyTo(ctx.program, ctx.monitor)) {
+            ctx.diagnostics.inc("function-create-cmd-failed")
+            log(
+                "function-create-cmd-failed",
+                "CreateFunctionCmd failed at $addr for ${open.name}: ${cmd.statusMsg}",
+                Level.WARN,
+            )
             return null
         }
         ctx.diagnostics.inc("function-created-from-stab")

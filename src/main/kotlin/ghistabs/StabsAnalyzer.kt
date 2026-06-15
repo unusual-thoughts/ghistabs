@@ -83,7 +83,12 @@ class StabsAnalyzer :
                 program,
                 monitor,
                 options = StabsOptions(program.getOptions(Program.ANALYSIS_PROPERTIES).getOptions(name)),
-                log = ext?.let { TeeSink(msgSink, it.sink) } ?: msgSink,
+                // Tee onto ext.log (the raw CapturingSink), NOT ext.sink: the latter
+                // is a BookmarkSink that auto-bumps `ext.diagnostics` on every log()
+                // call. Since we already share `ext.diagnostics` via the explicit
+                // `diagnostics =` arg below, our own BookmarkSink would inc once and
+                // the tee'd ext.sink would inc again — every counter would double.
+                log = ext?.let { TeeSink(msgSink, it.log) } ?: msgSink,
                 diagnostics = ext?.diagnostics ?: StabsDiagnostics(),
             ),
         )
