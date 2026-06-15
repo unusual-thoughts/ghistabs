@@ -7,6 +7,7 @@ import ghidra.program.model.symbol.SymbolUtilities
 import ghidra.util.task.TaskMonitor
 import ghistabs.diag.DiagnosticSink
 import ghistabs.diag.DummySink
+import ghistabs.diag.Level
 import ghistabs.importer.AddressResolver
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
@@ -105,7 +106,7 @@ data class Harvest(
         ?.let { (id, _) -> typeAsts[id] }
         .also {
             if (it == null) {
-                log("unresolved-xref", "${xref.tagName} [${xref.kind}]")
+                log("unresolved-xref", "${xref.tagName} [${xref.kind}]", Level.WARN)
             }
         }
 
@@ -225,7 +226,12 @@ class Harvester(
                 StabType.N_SO if (rec.name.isNotEmpty()) -> {
                     currentCu = SourceFile.CUSource(rec.name)
                     if (rec.value != 0L) {
-                        log("file-start", "${rec.name} starts here", address = resolver.buildAddress(rec.value))
+                        log(
+                            "file-start",
+                            "${rec.name} starts here",
+                            Level.DEBUG,
+                            address = resolver.buildAddress(rec.value),
+                        )
                     }
                 }
 
@@ -234,6 +240,7 @@ class Harvester(
                         log(
                             "file-start",
                             "${currentCu?.filename} ends here",
+                            Level.DEBUG,
                             address = resolver.buildAddress(rec.value),
                         )
                     }

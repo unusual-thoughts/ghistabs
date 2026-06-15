@@ -3,6 +3,7 @@ package ghistabs.builder
 import ghidra.program.model.data.*
 import ghistabs.diag.DiagnosticSink
 import ghistabs.diag.GapRecord
+import ghistabs.diag.Level
 import ghistabs.diag.StabsDiagnostics
 import ghistabs.parser.*
 
@@ -475,7 +476,7 @@ class TypeRegistry(
                 harvest.getByXRef(body)?.let { canonical ->
                     tryGetExisting(canonical.id)?.also { byId[ast.id] = it }
                 } ?: run {
-                    log("xref-stub", "Forward ref to '${body.tagName}'; materialising stub")
+                    log("xref-stub", "Forward ref to '${body.tagName}'; materialising stub", Level.DEBUG)
                     placeholder
                 }
             }

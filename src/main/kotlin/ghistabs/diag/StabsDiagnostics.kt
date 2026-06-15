@@ -6,26 +6,43 @@ import ghistabs.parser.GlobalTypeId
 import ghistabs.parser.SourceFile
 
 /**
+ * Severity level for diagnostic output. Defaults to [INFO] at every callsite.
+ */
+enum class Level { DEBUG, INFO, WARN, ERROR }
+
+/**
  * Narrow interface for diagnostic output (emits strings with a category tag).
  * Implemented by BookmarkSink, but also by test doubles for pure unit tests.
+ *
+ * [level] is an optional trailing argument so existing callsites stay valid;
+ * only callers that care about severity need to pass it.
  */
 interface DiagnosticSink {
-    fun log(category: String, message: String? = null, address: Address? = null)
+    fun log(category: String, message: String? = null, level: Level = Level.INFO, address: Address? = null)
 }
 
 object DummySink : DiagnosticSink {
-    override fun log(category: String, message: String?, address: Address?) {}
+    override fun log(category: String, message: String?, level: Level, address: Address?) {}
+}
+
+/**
+ * Fan-out sink: each [log] call is delivered to every wrapped sink in order.
+ * Used to tee Ghidra's truncating [MessageLog] alongside a test-side
+ * [CapturingSink], so integration tests can read the full, non-truncated log
+ * even when the analyzer is driven by `AutoAnalysisManager` (CONCURRENT mode).
+ */
+class TeeSink(private vararg val sinks: DiagnosticSink) : DiagnosticSink {
+    override fun log(category: String, message: String?, level: Level, address: Address?) {
+        for (s in sinks) s.log(category, message, level, address)
+    }
 }
 
 fun MessageLog.toSink() = object : DiagnosticSink {
-    override fun log(category: String, message: String?, address: Address?) {
-        if (message != null) {
-            if (address != null) {
-                appendMsg("[Stabs] $category at $address: $message")
-            } else {
-                appendMsg("[Stabs] $category: $message")
-            }
-        }
+    override fun log(category: String, message: String?, level: Level, address: Address?) {
+        if (message == null) return
+        val prefix = "[Stabs][${level.name}]"
+        val line = if (address != null) "$prefix $category at $address: $message" else "$prefix $category: $message"
+        if (level == Level.ERROR) appendMsg("ERROR: $line") else appendMsg(line)
     }
 }
 

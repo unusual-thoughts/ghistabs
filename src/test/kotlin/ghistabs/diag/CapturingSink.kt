@@ -12,18 +12,18 @@ import ghistabs.parser.Harvest
  * Pure Kotlin test double that captures log() calls into a list.
  */
 class CapturingSink : DiagnosticSink {
-    data class LogLine(val tag: String, val address: Address?, val msg: String?) {
+    data class LogLine(val tag: String, val address: Address?, val msg: String?, val level: Level = Level.INFO) {
         override fun toString(): String = if (address != null) {
-            "[$tag] at @$address $msg"
+            "[${level.name}][$tag] at @$address $msg"
         } else {
-            "[$tag] $msg"
+            "[${level.name}][$tag] $msg"
         }
     }
 
     internal val lines = mutableListOf<LogLine>()
 
-    override fun log(category: String, message: String?, address: Address?) {
-        lines.add(LogLine(tag = category, msg = message, address = address))
+    override fun log(category: String, message: String?, level: Level, address: Address?) {
+        lines.add(LogLine(tag = category, msg = message, address = address, level = level))
     }
 
     fun capturedOutput(): String = lines.filter { it.msg != null }.joinToString("\n")
@@ -52,6 +52,7 @@ class CapturingSink : DiagnosticSink {
                         if (isNotEmpty()) append('\n')
                         append(line.toString())
                     }
+
                     count == maxPerKey + 1 -> {
                         if (isNotEmpty()) append('\n')
                         append("[${line.tag}] ...suppressing further duplicates of: ${line.msg}")
@@ -68,7 +69,14 @@ class CapturingSink : DiagnosticSink {
         .mapValues { it.value.toLong() }
 }
 
-fun Program.defaultContext() = ImportContext(this, CapturingSink(), TaskMonitor.DUMMY, StabsOptions())
+fun Program.defaultContext() = ImportContext(
+    this,
+    TaskMonitor.DUMMY,
+    StabsOptions(),
+    CapturingSink(),
+    StabsDiagnostics(),
+)
+
 fun ImportContext<*>.defaultTypeRegistry(): TypeRegistry {
     val harvest = Harvest(mapOf())
     return TypeRegistry(dtm, sink, diagnostics, harvest)

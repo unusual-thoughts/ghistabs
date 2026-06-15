@@ -31,11 +31,10 @@ class HeaderRegistry(val sink: DiagnosticSink = DummySink) : DiagnosticSink by s
      * referenced via the placeholder share a single [HeaderFile] identity with types defined by
      * the real BINCL, so their [GlobalTypeId]s agree and cross-CU Ref lookup succeeds.
      */
-    fun recall(filename: String, checksum: Long): HeaderFile =
-        globalByFilenameChecksum.getOrPut(filename to checksum) {
-            log("forward-excl", "$filename checksum=0x${checksum.toString(16)}")
-            HeaderFile(filename, checksum, originatingCu = null)
-        }
+    fun recall(filename: String, checksum: Long): HeaderFile = globalByFilenameChecksum.getOrPut(filename to checksum) {
+        log("forward-excl", "$filename checksum=0x${checksum.toString(16)}")
+        HeaderFile(filename, checksum, originatingCu = null)
+    }
 
     /** Clear all registries (for test isolation). */
     fun clear() {

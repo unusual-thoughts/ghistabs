@@ -9,6 +9,7 @@ import ghistabs.diag.BookmarkSink
 import ghistabs.diag.DiagnosticSink
 import ghistabs.diag.StabsDiagnostics
 import org.jetbrains.annotations.TestOnly
+import java.util.*
 
 data class PassResult(
     val recordsRead: Int = 0,
@@ -22,13 +23,38 @@ data class PassResult(
 
 class ImportContext<Log : DiagnosticSink>(
     val program: Program,
-    @get:TestOnly val log: Log,
     val monitor: TaskMonitor,
-    val options: StabsOptions = StabsOptions(),
+    val options: StabsOptions,
+    @get:TestOnly val log: Log,
+    val diagnostics: StabsDiagnostics,
 ) {
     val dtm: DataTypeManager = program.dataTypeManager
     val symtab: SymbolTable = program.symbolTable
-    val diagnostics: StabsDiagnostics = StabsDiagnostics()
     val sink: BookmarkSink = BookmarkSink(program, log, diagnostics)
     val resolver: AddressResolver = ProgramAddressResolver(program)
+}
+
+/**
+ * Test-only side-channel: a [Program] can have an extra [ImportContext] installed
+ * so that when Ghidra invokes [ghistabs.StabsAnalyzer.added] (CONCURRENT mode), the
+ * analyzer tees its output to that sink in addition to Ghidra's [MessageLog].
+ *
+ * Production code does not install anything here; the lookup just returns null
+ * and the analyzer logs to MessageLog only.
+ */
+object StaticContexts {
+    private val map = WeakHashMap<Program, ImportContext<*>>()
+
+    @Synchronized
+    fun install(ctx: ImportContext<*>) {
+        map[ctx.program] = ctx
+    }
+
+    @Synchronized
+    fun clear(program: Program) {
+        map.remove(program)
+    }
+
+    @Synchronized
+    fun get(program: Program): ImportContext<*>? = map[program]
 }
