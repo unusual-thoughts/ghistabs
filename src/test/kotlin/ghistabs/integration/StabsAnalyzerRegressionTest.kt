@@ -14,6 +14,7 @@ import ghistabs.StabsAnalyzer
 import ghistabs.diag.CapturingSink
 import ghistabs.diag.defaultContext
 import ghistabs.importer.ImportContext
+import ghistabs.importer.StaticContexts
 import ghistabs.parser.Harvester
 import ghistabs.parser.IdInterface
 import ghistabs.parser.StabReader
@@ -94,15 +95,14 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
     private val logFile
         get() = File("src/test/resources/logs/${fixture.nameWithoutExtension}.${mode.name.lowercase()}.log")
 
-    protected lateinit var program: Program
-    private var loadResults: LoadResults<Program>? = null
-    protected lateinit var context: ImportContext<CapturingSink>
+    private lateinit var loadResults: LoadResults<Program>
+    private lateinit var context: ImportContext<CapturingSink>
+    private val program get() = context.program
 
     @OptIn(ExperimentalSerializationApi::class)
     private val json by lazy {
         Json {
             serializersModule = SerializersModule {
-
                 @Suppress("UNCHECKED_CAST")
                 contextual(IdInterface::class, ToStringSerializer as KSerializer<IdInterface>)
                 prettyPrint = true
@@ -112,8 +112,6 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
 
     @BeforeParameterizedClassInvocation
     fun setUp() {
-        // Clear so tearDown's `loadResults != null` guard is safe if this setUp aborts.
-        loadResults = null
         assumeTrue(
             fixture.exists(),
             "Skipping: ${fixture.path} absent, must be added manually",
@@ -134,7 +132,7 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
                 .monitor(monitor)
                 .load()
 
-            program = loadResults!!.getPrimaryDomainObject(this)
+            context = loadResults.getPrimaryDomainObject(this).defaultContext()
 
             val mgr = AutoAnalysisManager.getAnalysisManager(program)
             val ourName = StabsAnalyzer().name
@@ -149,6 +147,13 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
                     Assertions.assertNotNull(discovered, "StabsAnalyzer not discovered by ClassSearcher")
                     assertInstanceOf<StabsAnalyzer>(discovered)
 
+                    // Pre-build the test's context and install its CapturingSink as a
+                    // side-channel on the Program. StabsAnalyzer.added() will tee its
+                    // output to that sink in addition to Ghidra's truncating MessageLog,
+                    // so we get the full, untruncated log here while autoanalysis still
+                    // sees its own logs in MessageLog.
+                    StaticContexts.install(context)
+
                     // BYTE_ANALYZER auto-fires on byte changes; on a freshly-
                     // loaded program nothing has "changed" since the loader put
                     // bytes down, so we explicitly schedule our analyzer for the
@@ -157,12 +162,6 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
                     options.setBoolean(ourName, true)
                     mgr.scheduleOneTimeAnalysis(discovered, program.memory)
                     runAutoAnalysis(mgr, monitor)
-                    // The auto-run captured into MessageLog (not our CapturingSink),
-                    // so `context` is mostly an empty shell here; tests that depend
-                    // on counters should belong to the AFTER subclass.
-                    // NOTE: We need to find a proper way to capture logs even in
-                    // that case, without truncation (MessageLog truncates).
-                    context = program.defaultContext()
                 }
 
                 Mode.AFTER -> {
@@ -178,20 +177,18 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
                     }
                     mgr.initializeOptions()
                     runAutoAnalysis(mgr, monitor)
-                    context = program.defaultContext()
                     val tx = program.startTransaction("stabs-analyze")
                     try {
-                        StabsAnalyzer().run(program, context)
+                        StabsAnalyzer().run(context)
                     } finally {
                         program.endTransaction(tx, true)
                     }
                 }
             }
-            // Dump our CapturingSink output (AFTER mode only). For CONCURRENT
-            // mode the analyzer ran via Ghidra's path through
-            // MessageSinkAdapter(log), so also append the MessageLog so the
-            // log file isn't empty there.
-            // FIXME: MessageLog truncates after 500 messages!!
+            // CapturingSink holds the full untruncated log in both modes
+            // (in CONCURRENT it's fed via ExternalSinks → TeeSink). MessageLog
+            // is appended for parity with Ghidra's own view, even though it
+            // truncates at ~500 lines.
             logFile.writeText(context.log.dedupedOutput() + "\n--- MessageLog ---\n" + log.toString())
         } catch (e: Exception) {
             assumeTrue(false, "Failed to load real binary via ProgramLoader: ${e.message}")
@@ -210,11 +207,9 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
 
     @AfterParameterizedClassInvocation
     fun tearDown() {
-        // Guard against double-release when setUp aborted: loadResults is null
-        // iff this invocation never loaded a binary (see setUp for the reset).
-        if (::program.isInitialized && loadResults != null) program.release(this)
-        loadResults?.close()
-        loadResults = null
+        StaticContexts.clear(program)
+        program.release(this)
+        loadResults.close()
     }
 
     @Test
@@ -627,9 +622,8 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
         )
         // Gate 2: `vftable` symbol at the DTV address. Walk the symbol table
         // for `_ZTV6bouniaf` (Itanium-mangled DTV symbol) and check siblings.
-        val ztv = program.symbolTable.symbolIterator.iterator().asSequence()
-            .firstOrNull { it.name == "_ZTV6bouniaf" }
-        assumeTrue(ztv != null, "Skipping: _ZTV6bouniaf not resolved")
+        val ztv = program.symbolTable.getSymbols("__ZTV6bouniaf").firstOrNull()
+        assumeTrue(ztv != null, "Skipping: bouniaf not resolved")
         val sibs = program.symbolTable.getSymbols(ztv!!.address).toList()
         val sibSummary = sibs.map { "${it.parentNamespace.name}::${it.name}" }
         Assertions.assertTrue(
@@ -853,7 +847,7 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
      */
     @Test
     fun noEmptyDemanglerStubsRemain() {
-        assumeTrue(mode == Mode.AFTER, "Skipping: only meaningful in AFTER mode")
+//        assumeTrue(mode == Mode.AFTER, "Skipping: only meaningful in AFTER mode")
         val emptyStubs = program.dataTypeManager.allDataTypes
             .asSequence()
             .filterIsInstance<Structure>()
@@ -874,7 +868,7 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
      */
     @Test
     fun inheritanceWasApplied() {
-        assumeTrue(mode == Mode.AFTER, "Skipping: counter only captured in AFTER mode")
+//        assumeTrue(mode == Mode.AFTER, "Skipping: counter only captured in AFTER mode")
         assumeTrue(binaryName == "bouniafbouniaf.exe", "Skipping: inheritance checks specific to bouniafbouniaf.exe")
         val applied = context.diagnostics.snapshotCounters()["inheritance-applied"] ?: 0L
         Assertions.assertTrue(
