@@ -278,21 +278,10 @@ abstract class StabsAnalyzerRegressionTest(private val mode: Mode, binaryName: S
             arr.numElements,
             "BranchInstructions array length should be 16 (Range 0..15 in stab).\n$ctx",
         )
-        // Ideally the element resolves to the real `EnumInstToken` Enum.
-        // Currently it resolves to a builtin (typically `int`) because gcc
-        // encodes the cross-CU element reference as a Ref into a local
-        // file slot (an N_EXCL placeholder for sourceloc.h in our case)
-        // that our canonicalisation can't unify with the slot where
-        // `EnumInstToken` was actually defined (an N_SOL-tracked
-        // stl_multiset.h slot in Keywords.cpp). Fixing this needs a model
-        // of gcc's per-BINCL include-stack file numbering that our flat
-        // fileNumToHeader doesn't capture. See TODO.md.
-        // For now, assert what we DO get: a 16-element typed array (not
-        // the previous `undefined4` fallback).
-        Assertions.assertNotEquals(
-            "undefined",
+        Assertions.assertEquals(
+            "EnumInstToken",
             arr.dataType.name,
-            "BranchInstructions element should be a real type, not undefined.\n$ctx",
+            "BranchInstructions element should resolve to the EnumInstToken Enum.\n$ctx",
         )
     }
 
