@@ -9,6 +9,7 @@ import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
 import ghistabs.diag.DiagnosticSink
+import ghistabs.diag.Level
 import ghistabs.importer.ImportContext
 import ghistabs.parser.*
 import ghistabs.util.QualifiedName
@@ -251,12 +252,12 @@ class ClassBuilder(
             if (isLikelyImplicitTrivialSpecialMember(mangled)) {
                 ctx.diagnostics.inc("method-implicit-not-emitted")
             } else {
-                log("unresolved-symbol", "method $mangled (in $className)")
+                log("unresolved-symbol", "method $mangled (in $className)", Level.DEBUG)
             }
             return
         }
         val func = program.functionManager.getFunctionAt(addr) ?: run {
-            log("unresolved-symbol", "no Function at $addr for $mangled")
+            log("unresolved-symbol", "no Function at $addr for $mangled", Level.WARN)
             return
         }
 
@@ -519,7 +520,7 @@ class ClassBuilder(
         // (no f), so this label is what makes us discoverable.
         runCatching { symtab.createLabel(addr, "vftable", ns, source) }
             .onFailure { log("vftable-label-failed", "$className at $addr: ${it.message}") }
-        log("vtable", "applied $vtableName", addr)
+        log("vtable", "applied $vtableName", address = addr)
         ctx.diagnostics.recordVtable(className, "applied")
 
         // 5. Plate-comment each virtual method.

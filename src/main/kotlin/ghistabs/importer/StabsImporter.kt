@@ -11,6 +11,7 @@ import ghistabs.builder.Attribution
 import ghistabs.builder.TypeRegistry
 import ghistabs.diag.ApplyErrorBucket
 import ghistabs.diag.DiagnosticSink
+import ghistabs.diag.Level
 import ghistabs.parser.*
 
 class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.sink {
@@ -182,7 +183,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
                 val bucket = ApplyErrorBucket.bucket(t)
                 ctx.diagnostics.recordApplyError(open.name, bucket, t.message.orEmpty())
                 log("apply-error-$bucket", "function ${open.name}: ${t.message}")
-                log("apply-error", "function ${open.name}: ${t.message}", open.addr.address)
+                log("apply-error", "function ${open.name}: ${t.message}", address = open.addr.address)
             }
         }
 
@@ -433,7 +434,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
 
     private fun applyGlobal(decl: SymbolDecl.Global<GlobalTypeId>, typeRegistry: TypeRegistry): Boolean {
         val addr = ctx.resolver.resolve(decl.name) ?: run {
-            log("unresolved-symbol", "global ${decl.name}")
+            log("unresolved-symbol", "global ${decl.name}", Level.WARN)
             ctx.diagnostics.recordGlobal(decl.name, "skipped", dtKind = "unknown", reason = "unresolved-symbol")
             return false
         }

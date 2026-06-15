@@ -22,16 +22,16 @@ class BookmarkSink(
     private val parent: DiagnosticSink,
     private var diagnostics: StabsDiagnostics? = null,
 ) : DiagnosticSink {
-    override fun log(category: String, message: String?, address: Address?) {
+    override fun log(category: String, message: String?, level: Level, address: Address?) {
         diagnostics?.inc(category)
         if (address != null) {
             program.bookmarkManager.setBookmark(
                 address,
                 BookmarkType.WARNING,
                 "Stabs:$category",
-                "[Stabs] $category: $message",
+                "[Stabs][${level.name}] $category: $message",
             )
         }
-        parent.log(category, message)
+        parent.log(category, message, level, address)
     }
 }

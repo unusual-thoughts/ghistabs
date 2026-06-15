@@ -9,9 +9,12 @@ import ghidra.program.model.address.AddressSetView
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
 import ghistabs.StabsAnalyzer.Companion.OPT_STABS_DONE
+import ghistabs.diag.StabsDiagnostics
+import ghistabs.diag.TeeSink
 import ghistabs.diag.toSink
 import ghistabs.importer.ImportContext
 import ghistabs.importer.StabsImporter
+import ghistabs.importer.StaticContexts
 
 /**
  * Imports STABS debug info (.stab/.stabstr) into Ghidra: types, function signatures,
@@ -61,20 +64,29 @@ class StabsAnalyzer :
         )
     }
 
-    fun run(program: Program, ctx: ImportContext<*>) {
-        if (isStabsDone(program)) return // idempotent re-trigger; treat as success.
+    fun run(ctx: ImportContext<*>) {
+        if (isStabsDone(ctx.program)) return // idempotent re-trigger; treat as success.
 
         val result = StabsImporter(ctx).run()
         ctx.sink.log("done", "import complete: $result")
-        markStabsDone(program, true)
+        markStabsDone(ctx.program, true)
     }
 
     override fun added(program: Program?, set: AddressSetView?, monitor: TaskMonitor?, log: MessageLog?): Boolean {
         program ?: return false
         log ?: return false
         monitor ?: return false
-        val options = StabsOptions(program.getOptions(Program.ANALYSIS_PROPERTIES).getOptions(name))
-        run(program, ImportContext(program, log.toSink(), monitor, options))
+        val msgSink = log.toSink()
+        val ext = StaticContexts.get(program)
+        run(
+            ImportContext(
+                program,
+                monitor,
+                options = StabsOptions(program.getOptions(Program.ANALYSIS_PROPERTIES).getOptions(name)),
+                log = ext?.let { TeeSink(msgSink, it.sink) } ?: msgSink,
+                diagnostics = ext?.diagnostics ?: StabsDiagnostics(),
+            ),
+        )
         return true
     }
 
