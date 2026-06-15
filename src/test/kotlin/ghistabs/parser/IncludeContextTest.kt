@@ -87,7 +87,7 @@ class IncludeContextTest {
     }
 
     @Test
-    fun `forward EXCL then BINCL creates two distinct HeaderFile instances`() {
+    fun `forward EXCL then BINCL share the same HeaderFile instance (D1 fixed)`() {
         val ctx1 = IncludeContext(SourceFile.CUSource("cu1.cpp"), sink, registry)
         val fileNum1Excl = ctx1.remount("header.h", 0x123L)
         val header1Excl = ctx1.headerForFileNum(fileNum1Excl)
@@ -96,15 +96,13 @@ class IncludeContextTest {
         assertEquals(1, sink.lines.filter { it.tag == "forward-excl" }.size)
         assertNull(header1Excl!!.originatingCu)
 
-        // Now a later CU with real BINCL should get a different HeaderFile
+        // A later CU with real BINCL must reuse the placeholder, so types attributed
+        // to (filename, checksum) from either CU land at the same GlobalTypeId.
         val ctx2 = IncludeContext(SourceFile.CUSource("cu2.cpp"), sink, registry)
         val fileNum2Bincl = ctx2.beginInclude("header.h", 0x123L)
         val header2Bincl = ctx2.headerForFileNum(fileNum2Bincl)
 
-        // Different instances (per-CU slots)
-        assertTrue(header1Excl !== header2Bincl)
-        // But the BINCL one should have the real originating CU
-        assertEquals(SourceFile.CUSource("cu2.cpp"), header2Bincl!!.originatingCu)
+        assertTrue(header1Excl === header2Bincl)
     }
 
     @Test
