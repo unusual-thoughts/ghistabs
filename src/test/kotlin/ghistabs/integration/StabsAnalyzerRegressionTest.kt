@@ -27,6 +27,12 @@ import org.junit.jupiter.api.*
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.parallel.Execution
 import org.junit.jupiter.api.parallel.ExecutionMode
+import org.junit.jupiter.params.AfterParameterizedClassInvocation
+import org.junit.jupiter.params.BeforeParameterizedClassInvocation
+import org.junit.jupiter.params.Parameter
+import org.junit.jupiter.params.ParameterizedClass
+import org.junit.jupiter.params.provider.Arguments
+import org.junit.jupiter.params.provider.MethodSource
 import java.io.File
 
 /**
@@ -52,35 +58,41 @@ import java.io.File
  */
 enum class Mode { CONCURRENT, AFTER }
 
-const val BINARY_NAME = "bouniafbouniaf.exe"
-
-// const val BINARY_NAME2 = "bouniaf.exe"
-// const val BINARY_NAME2 = "tinyxml2.cpp.o"
-// const val BINARY_NAME2 = "xmltest"
-const val BINARY_NAME2 = "box2d"
-
-fun resourceFile(kind: String, name: String) = File("src/test/resources/${kind}s/$name-$kind.json")
-
 /**
  * Regression test harness for StabsAnalyzer on bouniafbouniaf.exe.
  *
  * Runs full analysis pipeline and validates counters against committed baseline.
  * Skips gracefully if fixture is absent (bouniaf, not in repo).
- *
- * Two subclasses pin the [Mode]: [StabsAnalyzerAfterTest] and
- * [StabsAnalyzerConcurrentTest]. Tests common to both live here; tests that
- * only make sense (or only fail) in one mode go in the subclass.
  */
+@ParameterizedClass
+@MethodSource("testParameters")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @Execution(ExecutionMode.CONCURRENT)
 @Tag("integration")
-abstract class StabsAnalyzerRegressionTest(private val mode: Mode, binaryName: String) :
-    AbstractGhidraHeadlessIntegrationTest() {
-    private val fixture = File("src/test/resources/binaries/$binaryName")
-    private val baselineFile = resourceFile("baseline", fixture.nameWithoutExtension)
-    private val recordsFile = resourceFile("record", fixture.nameWithoutExtension)
-    private val harvestFile = resourceFile("harvest", fixture.nameWithoutExtension)
-    private val logFile = File("src/test/resources/logs/${fixture.nameWithoutExtension}.${mode.name.lowercase()}.log")
+class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
+    companion object {
+        val BINARIES = listOf("bouniafbouniaf.exe", "xmltest", "bouniaf.exe") //  "box2d"
+
+        @JvmStatic
+        fun testParameters() = BINARIES.flatMap { binary ->
+            Mode.entries.map { mode -> Arguments.of(binary, mode) }
+        }.stream()
+    }
+
+    // Both fields injected per parameterized invocation before @BeforeParameterizedClassInvocation.
+    @Parameter(0)
+    lateinit var binaryName: String
+
+    @Parameter(1)
+    lateinit var mode: Mode
+
+    fun resourceFile(kind: String) = File("src/test/resources/${kind}s/${fixture.nameWithoutExtension}-$kind.json")
+    private val fixture get() = File("src/test/resources/binaries/$binaryName")
+    private val baselineFile get() = resourceFile("baseline")
+    private val recordsFile get() = resourceFile("record")
+    private val harvestFile get() = resourceFile("harvest.${mode.name.lowercase()}")
+    private val logFile
+        get() = File("src/test/resources/logs/${fixture.nameWithoutExtension}.${mode.name.lowercase()}.log")
 
     protected lateinit var program: Program
     private var loadResults: LoadResults<Program>? = null
@@ -98,8 +110,10 @@ abstract class StabsAnalyzerRegressionTest(private val mode: Mode, binaryName: S
         }
     }
 
-    @BeforeAll
+    @BeforeParameterizedClassInvocation
     fun setUp() {
+        // Clear so tearDown's `loadResults != null` guard is safe if this setUp aborts.
+        loadResults = null
         assumeTrue(
             fixture.exists(),
             "Skipping: ${fixture.path} absent, must be added manually",
@@ -194,14 +208,18 @@ abstract class StabsAnalyzerRegressionTest(private val mode: Mode, binaryName: S
         }
     }
 
-    @AfterAll
+    @AfterParameterizedClassInvocation
     fun tearDown() {
-        if (::program.isInitialized) program.release(this)
+        // Guard against double-release when setUp aborted: loadResults is null
+        // iff this invocation never loaded a binary (see setUp for the reset).
+        if (::program.isInitialized && loadResults != null) program.release(this)
         loadResults?.close()
+        loadResults = null
     }
 
     @Test
     fun countersWithinBaseline() {
+        assumeTrue(binaryName == "bouniafbouniaf.exe", "Skipping: baseline only exists for bouniafbouniaf.exe")
         val tagCounts = context.log.tagFrequencies()
         val baseline = BaselineLoader.load(baselineFile)
 
@@ -389,6 +407,7 @@ abstract class StabsAnalyzerRegressionTest(private val mode: Mode, binaryName: S
 
     @Test
     fun cparserMaterialised() {
+        assumeTrue(binaryName == "bouniafbouniaf.exe", "Skipping: CParser/Token_Type/EAsm specific to bouniafbouniaf.exe")
         // CParser, Token_Type and EAsm all canonicalise to the same TypeId because
         // gcc reuses local ids inside BINCL blocks per CU. Each must still reach the DTM.
         for (name in listOf("CParser", "Token_Type", "EAsm")) {
@@ -399,6 +418,7 @@ abstract class StabsAnalyzerRegressionTest(private val mode: Mode, binaryName: S
 
     @Test
     fun csymLexStreamPresent() {
+        assumeTrue(binaryName == "bouniafbouniaf.exe", "Skipping: bouniaf specific to bouniafbouniaf.exe")
         val all = program.dataTypeManager.allDataTypes
             .asSequence()
             .filter { it.name == "bouniaf" }
@@ -498,6 +518,7 @@ abstract class StabsAnalyzerRegressionTest(private val mode: Mode, binaryName: S
 
     @Test
     fun atLeastOneVtableStructApplied() {
+        assumeTrue(binaryName == "bouniafbouniaf.exe", "Skipping: vtable layout checks specific to bouniafbouniaf.exe")
         val vtables = program.dataTypeManager.allDataTypes
             .asSequence()
             .filterIsInstance<Structure>()
@@ -670,6 +691,7 @@ abstract class StabsAnalyzerRegressionTest(private val mode: Mode, binaryName: S
 
     @Test
     fun atLeastOneRootClassHasVtableBackEdge() {
+        assumeTrue(binaryName == "bouniafbouniaf.exe", "Skipping: vtable back-edge checks specific to bouniafbouniaf.exe")
         // At least one polymorphic class should directly contain a {vfptr} Pointer
         // pointing at its <Name>_vftable struct (the function pointer array — what
         // a real C++ vptr actually points at, vs. the full <Name>_vtable record that
@@ -783,6 +805,7 @@ abstract class StabsAnalyzerRegressionTest(private val mode: Mode, binaryName: S
      */
     @Test
     fun freeFunctionSymbolGetsDemangled() {
+        assumeTrue(binaryName == "bouniafbouniaf.exe", "Skipping: RegToBinary specific to bouniafbouniaf.exe")
         val fm = program.functionManager
         val byMangled = fm.getFunctions(true).asIterable()
             .firstOrNull { it.name == "_Z11RegToBinary12EnumRegToken" }
@@ -821,23 +844,16 @@ abstract class StabsAnalyzerRegressionTest(private val mode: Mode, binaryName: S
             "Expected /Demangler/{$knownNames} stubs to be replaced, still present: $leftover",
         )
     }
-}
 
-@TestInstance(TestInstance.Lifecycle.PER_CLASS)
-@Execution(ExecutionMode.CONCURRENT)
-@Tag("integration")
-abstract class StabsAnalyzerAbstract(binary_name: String) : StabsAnalyzerRegressionTest(Mode.AFTER, binary_name) {
     /**
-     * AFTER mode: auto-analysis (including the demangler) runs first, then we
-     * run. The demangler creates `/Demangler/<Name>` placeholder stubs for
-     * Itanium-mangled symbols; our [DemanglerReplacer] should resolve those
-     * stubs to the real types we materialised from the stabs.
-     *
-     * Only meaningful in AFTER mode — in CONCURRENT mode the demangler may
-     * still be running while we apply types, so the stub population is racy.
+     * AFTER mode only: demangler has settled before we run, so all
+     * `/Demangler/<Name>` placeholder stubs should have been replaced.
+     * In CONCURRENT mode the demangler may still be running while we apply
+     * types, so the stub population is racy.
      */
     @Test
     fun noEmptyDemanglerStubsRemain() {
+        assumeTrue(mode == Mode.AFTER, "Skipping: only meaningful in AFTER mode")
         val emptyStubs = program.dataTypeManager.allDataTypes
             .asSequence()
             .filterIsInstance<Structure>()
@@ -853,12 +869,13 @@ abstract class StabsAnalyzerAbstract(binary_name: String) : StabsAnalyzerRegress
     }
 
     /**
-     * `inheritance-applied` counter lives on the CapturingSink-backed context
-     * — only AFTER mode carries that context (CONCURRENT mode's analyzer is
-     * fed `MessageSinkAdapter(MessageLog)` by Ghidra).
+     * `inheritance-applied` counter is only captured via CapturingSink in
+     * AFTER mode (CONCURRENT mode feeds through MessageSinkAdapter→MessageLog).
      */
     @Test
     fun inheritanceWasApplied() {
+        assumeTrue(mode == Mode.AFTER, "Skipping: counter only captured in AFTER mode")
+        assumeTrue(binaryName == "bouniafbouniaf.exe", "Skipping: inheritance checks specific to bouniafbouniaf.exe")
         val applied = context.diagnostics.snapshotCounters()["inheritance-applied"] ?: 0L
         Assertions.assertTrue(
             applied > 0,
@@ -867,23 +884,3 @@ abstract class StabsAnalyzerAbstract(binary_name: String) : StabsAnalyzerRegress
         )
     }
 }
-
-@TestInstance(TestInstance.Lifecycle.PER_CLASS)
-@Execution(ExecutionMode.CONCURRENT)
-@Tag("integration")
-class StabsAnalyzerConcurrentTest : StabsAnalyzerRegressionTest(Mode.CONCURRENT, BINARY_NAME)
-
-@TestInstance(TestInstance.Lifecycle.PER_CLASS)
-@Execution(ExecutionMode.CONCURRENT)
-@Tag("integration")
-class StabsAnalyzerConcurrentTest2 : StabsAnalyzerRegressionTest(Mode.CONCURRENT, BINARY_NAME2)
-
-@TestInstance(TestInstance.Lifecycle.PER_CLASS)
-@Execution(ExecutionMode.CONCURRENT)
-@Tag("integration")
-class StabsAnalyzerAfterTest : StabsAnalyzerAbstract(BINARY_NAME)
-
-@TestInstance(TestInstance.Lifecycle.PER_CLASS)
-@Execution(ExecutionMode.CONCURRENT)
-@Tag("integration")
-class StabsAnalyzerAfterTest2 : StabsAnalyzerAbstract(BINARY_NAME2)
