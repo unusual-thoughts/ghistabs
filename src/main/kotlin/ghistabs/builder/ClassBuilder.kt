@@ -1,11 +1,16 @@
 package ghistabs.builder
 
+import ghidra.app.cmd.label.DemanglerCmd
+import ghidra.app.util.NamespaceUtils
+import ghidra.app.util.demangler.DemanglerOptions
 import ghidra.app.util.demangler.DemanglerUtil
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.*
 import ghidra.program.model.gclass.ClassUtils
 import ghidra.program.model.listing.CommentType
+import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.GhidraClass
+import ghidra.program.model.listing.ParameterImpl
 import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
 import ghistabs.diag.DiagnosticSink
@@ -50,6 +55,8 @@ internal class ClassBuilderHelpers(val resolver: Harvest) {
     }
 }
 
+data class TypeInfo(val name: String, val body: TypeDecl.Struct<GlobalTypeId>, val category: CategoryPath)
+
 class ClassBuilder(
     private val typeRegistry: TypeRegistry,
     private val harvest: Harvest,
@@ -66,8 +73,9 @@ class ClassBuilder(
         // 1. Locate the materialised Structure in the DTM.
         // (typeRegistry.dataTypeFor does not handle TypeDecl.Struct — Structs are only
         // looked up by TypeId via materialiseAll; here we resolve by (category, name).)
-        val structDt = (dtm.getDataType(category, name) as? Structure) ?: run {
-            log("class-not-struct", "skipping non-struct class '$name' at $category")
+        val structDt = dtm.getDataType(category, name)
+        if (structDt !is Structure) {
+            log("class-not-struct", "skipping ${structDt::class.simpleName} class '$name' at $category ")
             return
         }
 
@@ -137,7 +145,7 @@ class ClassBuilder(
                 null -> symtab.createNameSpace(parent, part, source)
 
                 else if (isLast && existing !is GhidraClass) ->
-                    ghidra.app.util.NamespaceUtils.convertNamespaceToClass(existing)
+                    NamespaceUtils.convertNamespaceToClass(existing)
 
                 else -> existing
             }
@@ -279,12 +287,12 @@ class ClassBuilder(
         //    convention/disassembly application — the stab gives us richer
         //    types than the demangler can derive from the mangled name, and
         //    our `__thiscall` choice below must win.
-        val demangleOpts = ghidra.app.util.demangler.DemanglerOptions().apply {
+        val demangleOpts = DemanglerOptions().apply {
             setApplySignature(false)
             setApplyCallingConvention(false)
             setDoDisassembly(false)
         }
-        val demangleCmd = ghidra.app.cmd.label.DemanglerCmd(addr, mangled, demangleOpts)
+        val demangleCmd = DemanglerCmd(addr, mangled, demangleOpts)
         if (!demangleCmd.applyTo(program)) {
             // Demangler couldn't parse the symbol — fall back to manual
             // namespace + display-name handling so we still produce a
@@ -378,7 +386,7 @@ class ClassBuilder(
         val classPtr = PointerDataType(structDt, dtm)
         val explicitThis = if (ghidraInjectsThis) {
             listOf(
-                ghidra.program.model.listing.ParameterImpl(
+                ParameterImpl(
                     "this",
                     classPtr,
                     program,
@@ -389,7 +397,7 @@ class ClassBuilder(
             emptyList()
         }
         val formals = paramTypes.mapIndexed { i, pdt ->
-            ghidra.program.model.listing.ParameterImpl(
+            ParameterImpl(
                 "arg$i",
                 pdt ?: Undefined4DataType.dataType,
                 program,
@@ -398,7 +406,7 @@ class ClassBuilder(
         }
         func.replaceParameters(
             explicitThis + formals,
-            ghidra.program.model.listing.Function.FunctionUpdateType.DYNAMIC_STORAGE_ALL_PARAMS,
+            Function.FunctionUpdateType.DYNAMIC_STORAGE_ALL_PARAMS,
             true,
             source,
         )

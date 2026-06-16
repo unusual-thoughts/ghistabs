@@ -64,7 +64,7 @@ class TypeRegistry(
                     "placeholder-unresolved" -> "never had its body materialised"
                     else -> "materialised but every field fell back to Undefined"
                 },
-                ghistabs.diag.Level.WARN,
+                Level.WARN,
             )
         }
     }
@@ -157,9 +157,20 @@ class TypeRegistry(
             BuiltinTable.resolve(decl)
         }
 
-        is TypeDecl.Pointer -> PointerDataType(dataTypeFor(decl.pointee) ?: Undefined4DataType.dataType, 4, dtm)
+        is TypeDecl.Pointer -> PointerDataType(
+            dataTypeFor(decl.pointee) ?: undef("pointer-pointee", decl.pointee),
+            4,
+            dtm,
+        )
 
-        is TypeDecl.Reference -> PointerDataType(dataTypeFor(decl.referent) ?: Undefined4DataType.dataType, 4, dtm)
+        is TypeDecl.Reference -> PointerDataType(
+            dataTypeFor(decl.referent) ?: undef(
+                "reference-referent",
+                decl.referent,
+            ),
+            4,
+            dtm,
+        )
 
         is TypeDecl.Const -> dataTypeFor(decl.inner)
 
@@ -193,7 +204,7 @@ class TypeRegistry(
             val fd = FunctionDefinitionDataType(CategoryPath("/stabs/unnamed"), "FUNCTION_${decl.hashCode()}", dtm)
             fd.returnType = dataTypeFor(decl.ret) ?: VoidDataType()
             val params = decl.params.mapIndexed { i, p ->
-                ParameterDefinitionImpl("arg$i", dataTypeFor(p) ?: Undefined4DataType.dataType, null)
+                ParameterDefinitionImpl("arg$i", dataTypeFor(p) ?: undef("functionT-param", p), null)
             }.toTypedArray()
             fd.setArguments(*params)
             fd
@@ -212,6 +223,23 @@ class TypeRegistry(
             log("referenced-aggregate", "asked for ref to $decl")
             null
         }
+    }
+
+    /**
+     * Unified fallback for every `dataTypeFor(...) ?: Undefined4` site. Returns
+     * `Undefined4` and emits a per-site DEBUG log so the trail of "this Ref/XRef
+     * couldn't resolve so we fell back to Undefined4" is visible. Per-site tags
+     * (`undefined-fallback-<site>`) let us count silent coverage losses by location
+     * instead of only by end-state. The decl is included in the message so the
+     * specific offending TypeDecl can be matched against the harvest.
+     */
+    private fun undef(site: String, decl: TypeDecl<GlobalTypeId>): DataType {
+        sink.log(
+            "undefined-fallback-$site",
+            decl.toString(),
+            Level.DEBUG,
+        )
+        return Undefined4DataType.dataType
     }
 
     private fun makePlaceholder(ast: TypeAst, category: CategoryPath, reason: String = "fwd-decl"): DataType {
@@ -282,13 +310,13 @@ class TypeRegistry(
                 BuiltinTable.resolve(body) ?: placeholder
 
             is TypeDecl.Pointer -> PointerDataType(
-                dataTypeFor(body.pointee) ?: Undefined4DataType.dataType,
+                dataTypeFor(body.pointee) ?: undef("body-pointer-pointee", body.pointee),
                 4,
                 dtm,
             )
 
             is TypeDecl.Reference -> PointerDataType(
-                dataTypeFor(body.referent) ?: Undefined4DataType.dataType,
+                dataTypeFor(body.referent) ?: undef("body-reference-referent", body.referent),
                 4,
                 dtm,
             )
@@ -297,8 +325,15 @@ class TypeRegistry(
 
             is TypeDecl.Volatile -> dataTypeFor(body.inner) ?: placeholder
 
-            is TypeDecl.InlineDef -> dataTypeFor(body.body)?.apply {
-                byId[body.id] = this
+            // Look up the INNER (decl.id) typeAst — gcc emits anonymous nested aggregates
+            // (e.g. C `struct { ... }` member types in box2d) as InlineDef wrappers around
+            // an aggregate body. `dataTypeFor(body)` dispatches to the InlineDef case which
+            // calls `tryGetExisting(body.id)` first; that picks up the harvested typeAst
+            // for the inner aggregate instead of falling through to the
+            // `referenced-aggregate` branch that returns null. Avoids 535 silent
+            // null-resolutions on box2d's nested-struct fields.
+            is TypeDecl.InlineDef -> dataTypeFor(body)?.also {
+                byId[body.id] = it
             } ?: placeholder
 
             is TypeDecl.Array -> {
@@ -448,7 +483,8 @@ class TypeRegistry(
                         continue
                     }
 
-                    val ft = dataTypeFor(field.type) ?: Undefined4DataType.dataType
+                    val ft = dataTypeFor(field.type)
+                        ?: undef("field-type[${ast.ghidraName}.${field.name}]", field.type)
                     val len = if (ft.length <= 0) 4 else ft.length
                     try {
                         when (struct) {
@@ -499,7 +535,11 @@ class TypeRegistry(
                 val fd = FunctionDefinitionDataType(category, ast.ghidraName, dtm)
                 fd.returnType = dataTypeFor(body.ret) ?: VoidDataType()
                 val params = body.params.mapIndexed { i, p ->
-                    ParameterDefinitionImpl("arg$i", dataTypeFor(p) ?: Undefined4DataType.dataType, null)
+                    ParameterDefinitionImpl(
+                        "arg$i",
+                        dataTypeFor(p) ?: undef("body-functionT-param[${ast.ghidraName}.$i]", p),
+                        null,
+                    )
                 }.toTypedArray()
                 fd.setArguments(*params)
                 fd
@@ -510,14 +550,14 @@ class TypeRegistry(
                 fd.returnType = dataTypeFor(body.ret) ?: VoidDataType()
                 val thisParam = ParameterDefinitionImpl(
                     "this",
-                    dataTypeFor(body.cls) ?: Undefined4DataType.dataType,
+                    dataTypeFor(body.cls) ?: undef("body-method-cls[${ast.ghidraName}]", body.cls),
                     null,
                 )
                 val otherParams =
                     body.params.mapIndexed { i, p ->
                         ParameterDefinitionImpl(
                             "arg$i",
-                            dataTypeFor(p) ?: Undefined4DataType.dataType,
+                            dataTypeFor(p) ?: undef("body-method-param[${ast.ghidraName}.$i]", p),
                             null,
                         )
                     }
@@ -553,7 +593,7 @@ class TypeRegistry(
 //                val gId = fileResolver.globalIdForCu(body.id)
 //                val gId = body.id
             is TypeDecl.Ref -> tryGetExisting(body.id) ?: run {
-                log("dangling-ref", "Dangling ref to ${body.id} in '${ast.name}' from ${ast.source} CU ${ast.cu} ")
+                log("dangling-ref", "Dangling ref to ${body.id} in '${ast.name}' from ${ast.source}")
                 diagnostics.recordUnresolvedRef(body.id, ast.name)
                 diagnostics.inc("dangling-ref")
                 Undefined4DataType.dataType
@@ -573,6 +613,21 @@ class TypeRegistry(
         }
         // Different body → try merge if both are Structures
         if (dt is Structure && existing is Structure) {
+            // Promote the incoming canonical when the existing slot is empty: a
+            // size-0 Structure can't be merge target (tryExecuteMerge would trip
+            // "Offset 0 beyond end of structure (0)" on every component). Mutate
+            // existing in place — clear, resize, copy components — so all byId
+            // references that already point at it stay valid and the
+            // first-writer-wins identity is preserved without losing the second
+            // writer's content. Same trick when the incoming is materially bigger:
+            // first writer was a forward-decl-shaped stub and the second writer
+            // is the real definition (tinyxml2's multi-size DynArray pattern).
+            if (existing.length == 0 && dt.length > 0) {
+                promoteExistingFromIncoming(existing, dt)
+                byPath[category to name] = hash
+                diagnostics.recordDedup(kind = "promoted-from-empty", name = name, detail = "size 0 → ${dt.length}")
+                return existing
+            }
             val mergeResult = tryExecuteMerge(existing, dt, name, category, hash)
             if (mergeResult != null) {
                 return mergeResult
@@ -591,6 +646,34 @@ class TypeRegistry(
         // template-heavy binaries.
         diagnostics.recordDedup(kind = "drop", name = name, detail = "first-writer-wins")
         return existing
+    }
+
+    /**
+     * Mutate [existing] in place so its components match [incoming]. Used when a
+     * later writer brings a fully-typed definition for a name whose existing
+     * canonical entry is a zero-length stub. Identity is preserved so byId
+     * lookups already pointing at `existing` continue to resolve correctly.
+     */
+    private fun promoteExistingFromIncoming(existing: Structure, incoming: Structure) {
+        existing.deleteAll()
+        existing.growStructure(incoming.length - existing.length)
+        for (comp in incoming.components) {
+            try {
+                existing.replaceAtOffset(
+                    comp.offset,
+                    comp.dataType,
+                    comp.length,
+                    comp.fieldName,
+                    comp.comment,
+                )
+            } catch (e: IllegalArgumentException) {
+                sink.log(
+                    "promote-component-failed",
+                    "'${existing.name}' at +${comp.offset}: ${e.message}",
+                    Level.WARN,
+                )
+            }
+        }
 //        // Fall back to renaming: find a free _N slot
 //        // EXCEPT for Structures in conflict: drop them entirely (no _N renaming)
 //        if (dt is Structure && existing is Structure) {

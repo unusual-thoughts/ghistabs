@@ -169,6 +169,7 @@ data class Harvest(
             val distinctSizes = candidates.map { (_, struct) -> struct.sizeBytes }.toSet()
             when {
                 candidates.isEmpty() -> Unit
+
                 distinctSizes.size == 1 -> {
                     val (id, _) = candidates.first()
                     val resolved = typeAsts[id]
@@ -177,6 +178,7 @@ data class Harvest(
                         return resolved
                     }
                 }
+
                 else -> {
                     log(
                         "xref-base-tag-ambiguous",
@@ -395,7 +397,7 @@ class Harvester(
                 StabType.N_LSYM -> try {
                     when (val decl = parseSymbol(rec)) {
                         is SymbolDecl.TaggedType -> appendAsts(
-                            listOf(TypeAst(currentCu!!, decl.id, decl.name, decl.type)),
+                            TypeAst(currentCu!!, decl.id, decl.name, decl.type),
                         )
 
                         is SymbolDecl.Typedef -> {
@@ -407,7 +409,7 @@ class Harvester(
                             // definition at the same id in another CU
                             // (every box2d typedef went this way).
                             if (decl.type !is TypeDecl.Ref || decl.type.id != decl.id) {
-                                appendAsts(listOf(TypeAst(currentCu!!, decl.id, decl.name, decl.type)))
+                                appendAsts(TypeAst(currentCu!!, decl.id, decl.name, decl.type))
                             }
                         }
 
@@ -627,7 +629,7 @@ class Harvester(
      *    memoized `hashCache` to surface real-vs-spurious counts; see
      *    `StabsImporter`.
      */
-    fun appendAsts(asts: List<TypeAst>) {
+    fun appendAsts(vararg asts: TypeAst) {
         val new = asts.groupBy { it.id }
         val collisions = new.keys.intersect(typeAsts.keys).filter { typeAsts[it]?.body !is TypeDecl.XRef }
         for (id in collisions) {
@@ -652,58 +654,6 @@ class Harvester(
     }
 
     fun parseSymbol(rec: StabRecord) = globalizeSymbol(Parser(rec.name).parseSymbol()).also {
-        appendAsts(walkDefinitions(it.type))
+        appendAsts(*walkDefinitions(it.type).toTypedArray())
     }
-
-//    /**
-//     * Classify [collidingAsts] entries by whether their alternate bodies
-//     * are content-equivalent. Pre-warms [cache] by hashing every typeAst
-//     * body top-level first so cache state doesn't bias the result.
-//     *
-//     * Cache-pollution failure mode this avoids: with a cold cache the
-//     * first variant computed seeds cache entries for transitively-
-//     * referenced ids using a visited set that already contains the
-//     * colliding id, so inner self-Refs back-edge instead of recursing.
-//     * Subsequent variants then cache-hit those stale values, and
-//     * structurally-identical Ref-vs-InlineDef forms diverge purely on
-//     * cache state. Pre-warming with empty visited sets fixes this.
-//     */
-//    private fun classifyCollisions(): MutableMap<GlobalTypeId, Int> {
-//        // Classify collisions and drop the spurious (content-equivalent)
-//        // buckets before the Harvest is published. Downstream consumers
-//        // only ever see genuinely-divergent collisions; the warmed cache
-//        // is handed off to the Harvest so TypeRegistry doesn't redo the
-//        // hash work, and the stats ride along on `harvest.classification`.
-//        val cache = mutableMapOf<GlobalTypeId, Int>()
-//        // Build a name-keyed struct index for XRef resolution: a CU that
-//        // only saw `struct Foo;` (an XRef) must hash any wrapping type the
-//        // same way as a CU with the full definition.
-//        val structByName: Map<String, TypeAst> = typeAsts.values.mapNotNull { ast ->
-//            (ast.body as? TypeDecl.Struct)?.let { ast.name to ast }
-//        }.toMap()
-//        val oracle = TypeAstOracle(
-//            byId = typeAsts::get,
-//            byXRef = { xref -> structByName[xref.tagName]?.takeIf { (it.body as TypeDecl.Struct).kind == xref.kind } },
-//        )
-//        for (ast in typeAsts.values) {
-//            cache[ast.id] = ast.body.contentHash(oracle, cache = cache)
-//        }
-//        var totalVariants = 0
-//        val spurious = mutableSetOf<GlobalTypeId>()
-//        var real = 0
-//        for ((id, byName) in collidingAsts) {
-//            val variants = byName.values.flatten()
-//            totalVariants += variants.size
-//            val distinctHashes = variants.map { it.contentHash(oracle, cache = cache) }.toSet().size
-//            if (distinctHashes <= 1) {
-//                spurious += id
-//            } else {
-//                real++
-//            }
-//        }
-//        for (id in spurious) {
-//            collidingAsts.remove(id)
-//        }
-//        return cache
-//    }
 }
