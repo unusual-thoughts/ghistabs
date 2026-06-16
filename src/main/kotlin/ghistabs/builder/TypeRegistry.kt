@@ -34,17 +34,22 @@ class TypeRegistry(
     }
 
     /**
-     * Walk the placeholders map at end-of-import and log every entry whose body
-     * was never materialised — i.e. a Structure / Union sitting in the DTM with
-     * zero components. These are the source of downstream cascades like
-     * `merge-failed` "Offset 0 beyond end of structure" and bogus 1-byte fields
-     * in the listing. Naming them at the source makes the cause findable.
+     * Walk the placeholders map at end-of-import and log every Struct/Union
+     * typeAst whose body never made it into the DTM as a non-empty aggregate.
+     * These are the source of downstream cascades like `merge-failed`
+     * "Offset 0 beyond end of structure" and bogus 1-byte fields in the
+     * listing. Naming them at the source makes the cause findable.
      *
-     * Zero-component is the check (length can be non-zero when sizeBytes was
-     * known up-front for a struct whose body never resolved).
+     * Only Struct/Union typeAsts are considered: [makePlaceholder] hands out a
+     * throwaway empty Structure stub for non-aggregate bodies (Range, Enum,
+     * FunctionT, …), but those stubs are never registered in the DTM —
+     * `materialiseBody` returns the real DataType directly. Reporting those
+     * would be noise, not a bug.
      */
     fun reportSurvivingPlaceholders() {
         for ((id, placeholder) in placeholders) {
+            val ast = harvest.getType(id) ?: continue
+            if (ast.body !is TypeDecl.Struct) continue
             val isEmpty = when (placeholder) {
                 is Structure -> placeholder.numComponents == 0
                 is Union -> placeholder.numComponents == 0
