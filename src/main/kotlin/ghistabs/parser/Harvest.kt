@@ -107,34 +107,48 @@ data class Harvest(
     /** Group ASTs once by Ghidra-sanitised name (only space is invalid; cf. SymbolUtilities.INVALIDCHARS). */
     val astsByGhidraName by lazy { typeAsts.values.groupBy { it.ghidraName } }
 
-    /** All struct ASTs harvested in Pass A, indexed by name, for XRef purposes. */
-    private val structAstsByName by lazy {
-        typeAsts.values.mapNotNull { ast -> (ast.body as? TypeDecl.Struct)?.let { ast.name to (ast.id to it) } }.toMap()
+    /**
+     * All named aggregate / enum ASTs harvested in Pass A, indexed by raw stabs name.
+     * Covers `TypeDecl.Struct` (struct/union/class via `kind`) and `TypeDecl.Enum` —
+     * an XRef with `kind = ENUM` resolves through the same index.
+     *
+     * Multi-CU collisions on the same name are common: list, kind-filter at lookup.
+     */
+    private val astsByName: Map<String, List<TypeAst>> by lazy {
+        typeAsts.values.filter { it.name.isNotEmpty() && it.body.isXRefTarget() }.groupBy { it.name }
     }
 
     /**
-     * Secondary index for XRef resolution: struct typeAsts keyed by their "base tag" —
-     * the class name stripped of namespace qualifiers and template arguments.
-     *
-     * Why we need it: gcc stabs emit forward declarations in headers like `<iosfwd>`
-     * with the *bare* template-class tag (e.g. `XRef(STRUCT, "basic_istream")`), while
-     * the matching full definition is named with its concrete instantiation
-     * (`basic_istream<char,std::char_traits<char>>`). Exact-name lookup misses every
-     * one of those. Stripping to the base tag (`basic_istream`) bridges the gap and
-     * lets a partial-template forward reference resolve to a real complete struct,
-     * which is what GDB does for stub types via TYPE_TAG_NAME walking.
-     *
-     * Only non-empty struct definitions are indexed: there's no point falling back to
-     * another empty forward decl.
+     * Secondary index for XRef resolution: base-tag (template args + namespace stripped).
+     * Bridges `XRef(STRUCT, "basic_istream")` ↔ `basic_istream<char,…>` (gdb
+     * `check_typedef()` / TYPE_TAG_NAME territory). Same kind coverage as [astsByName],
+     * skip incomplete definitions (forward-decl-shaped) — no point falling back to
+     * another forward decl.
      */
-    private val structAstsByBaseTag by lazy {
+    private val astsByBaseTag: Map<String, List<TypeAst>> by lazy {
         typeAsts.values
-            .mapNotNull { ast ->
-                (ast.body as? TypeDecl.Struct)
-                    ?.takeIf { it.sizeBytes > 0 }
-                    ?.let { ast to it }
-            }
-            .groupBy({ (ast, _) -> baseTag(ast.name) }) { (ast, struct) -> ast.id to struct }
+            .filter { it.name.isNotEmpty() && it.body.isXRefTarget() && it.body.isComplete() }
+            .groupBy { baseTag(it.name) }
+    }
+
+    private fun TypeDecl<*>.isXRefTarget(): Boolean = this is TypeDecl.Struct || this is TypeDecl.Enum
+
+    private fun TypeDecl<*>.isComplete(): Boolean = when (this) {
+        is TypeDecl.Struct -> sizeBytes > 0
+        is TypeDecl.Enum -> members.isNotEmpty()
+        else -> false
+    }
+
+    private fun TypeAst.matchesXRefKind(kind: AggrKind): Boolean = when (val b = body) {
+        is TypeDecl.Struct -> b.kind == kind
+        is TypeDecl.Enum -> kind == AggrKind.ENUM
+        else -> false
+    }
+
+    private fun TypeAst.bodySize(): Long = when (val b = body) {
+        is TypeDecl.Struct -> b.sizeBytes
+        is TypeDecl.Enum -> 4L // gcc default
+        else -> 0L
     }
 
     fun getType(id: GlobalTypeId) = typeAsts[id]
@@ -157,34 +171,27 @@ data class Harvest(
      *     uniquely identify one.
      */
     fun getByXRef(xref: TypeDecl.XRef<GlobalTypeId>): TypeAst? {
-        structAstsByName[xref.tagName]
-            ?.takeIf { (_, struct) -> struct.kind == xref.kind }
-            ?.let { (id, _) -> return typeAsts[id] }
+        astsByName[xref.tagName]
+            ?.firstOrNull { it.matchesXRefKind(xref.kind) }
+            ?.let { return it }
 
         val tag = baseTag(xref.tagName)
         if (tag.isNotEmpty()) {
-            val candidates = structAstsByBaseTag[tag]
-                ?.filter { (_, struct) -> struct.kind == xref.kind }
-                .orEmpty()
-            val distinctSizes = candidates.map { (_, struct) -> struct.sizeBytes }.toSet()
+            val candidates = astsByBaseTag[tag]?.filter { it.matchesXRefKind(xref.kind) }.orEmpty()
+            val distinctSizes = candidates.map { it.bodySize() }.toSet()
             when {
                 candidates.isEmpty() -> Unit
 
                 distinctSizes.size == 1 -> {
-                    val (id, _) = candidates.first()
-                    val resolved = typeAsts[id]
-                    if (resolved != null) {
-                        log("xref-base-tag-resolved", "'${xref.tagName}' → '${resolved.name}'", Level.DEBUG)
-                        return resolved
-                    }
+                    val resolved = candidates.first()
+                    log("xref-base-tag-resolved", "'${xref.tagName}' → '${resolved.name}'", Level.DEBUG)
+                    return resolved
                 }
 
-                else -> {
-                    log(
-                        "xref-base-tag-ambiguous",
-                        "'${xref.tagName}': ${candidates.size} candidates with sizes $distinctSizes; refusing fallback",
-                    )
-                }
+                else -> log(
+                    "xref-base-tag-ambiguous",
+                    "'${xref.tagName}': ${candidates.size} candidates with sizes $distinctSizes; refusing fallback",
+                )
             }
         }
 
