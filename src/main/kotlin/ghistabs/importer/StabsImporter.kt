@@ -12,6 +12,7 @@ import ghistabs.builder.TypeRegistry
 import ghistabs.diag.ApplyErrorBucket
 import ghistabs.diag.DiagnosticSink
 import ghistabs.diag.Level
+import ghistabs.diag.isInlineStdMember
 import ghistabs.parser.*
 
 class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.sink {
@@ -58,6 +59,13 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
             } finally {
                 ctx.program.endTransaction(txC, true)
             }
+
+        // Report placeholders that never had their bodies resolved. These are
+        // empty StructureDataTypes left in the DTM at end-of-import; downstream
+        // they'd cause "Offset 0 beyond end of structure" merge errors and bogus
+        // type info in the listing. Logging them named makes the cause findable
+        // instead of just showing up as cascading errors elsewhere.
+        typeRegistry.reportSurvivingPlaceholders()
 
         // Emit end-of-run diagnostics summary
         ctx.diagnostics.writeSummary(ctx.sink)
@@ -120,11 +128,17 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
                         ctx.diagnostics.inc("entrypoint-snapped")
                     }
                     ?: tryCreateFunctionFromStab(open) ?: run {
-                    ctx.diagnostics.inc("apply-error-no-function")
-                    log(
-                        "apply-error-no-function",
-                        "no Function at or containing ${open.addr} for ${open.name}",
-                    )
+                    val tag: String
+                    val level: Level
+                    if (isInlineStdMember(open.name)) {
+                        tag = "apply-error-inlined-std"
+                        level = Level.DEBUG
+                    } else {
+                        tag = "apply-error-no-function"
+                        level = Level.INFO
+                    }
+                    // BookmarkSink auto-bumps the counter on log() — no explicit inc.
+                    log(tag, "no Function at or containing ${open.addr} for ${open.name}", level)
                     continue
                 }
 
@@ -306,12 +320,15 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
         val addr = open.addr.address
         val block = ctx.program.memory.getBlock(addr)
         if (block == null || !block.isExecute) {
-            ctx.diagnostics.inc("function-create-skipped-non-text")
-            log(
-                "function-create-skipped-non-text",
-                "no executable block at $addr for ${open.name} (block=${block?.name})",
-                Level.WARN,
-            )
+            // Inline std::/`__gnu_cxx`:: members emitted by gcc are routinely declared
+            // in stabs but never make it into .text (the compiler inlined every call
+            // site, the linker dropped the COMDAT). Log at DEBUG with a dedicated
+            // counter so the noise doesn't drown out real "non-executable address"
+            // problems on user code.
+            val inlined = isInlineStdMember(open.name)
+            val tag = if (inlined) "function-create-inlined-std" else "function-create-skipped-non-text"
+            val level = if (inlined) Level.DEBUG else Level.WARN
+            log(tag, "no executable block at $addr for ${open.name} (block=${block?.name})", level)
             return null
         }
 
@@ -323,7 +340,6 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
             if (disasm.applyTo(ctx.program, ctx.monitor) && disasm.disassembledAddressSet.numAddresses > 0) {
                 ctx.diagnostics.inc("function-create-disassembled-first")
             } else {
-                ctx.diagnostics.inc("function-create-disasm-failed")
                 log(
                     "function-create-disasm-failed",
                     "DisassembleCommand failed at $addr for ${open.name}: ${disasm.statusMsg}",
@@ -335,7 +351,6 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
 
         val cmd = ghidra.app.cmd.function.CreateFunctionCmd(open.name, addr, null, SourceType.IMPORTED)
         if (!cmd.applyTo(ctx.program, ctx.monitor)) {
-            ctx.diagnostics.inc("function-create-cmd-failed")
             log(
                 "function-create-cmd-failed",
                 "CreateFunctionCmd failed at $addr for ${open.name}: ${cmd.statusMsg}",

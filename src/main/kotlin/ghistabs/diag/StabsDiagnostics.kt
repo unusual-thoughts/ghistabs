@@ -11,6 +11,19 @@ import ghistabs.parser.SourceFile
 enum class Level { DEBUG, INFO, WARN, ERROR }
 
 /**
+ * Itanium-mangled `_ZN…` (or `_ZNK…`/`_ZNV…`) names whose first scope is `std::`,
+ * `__gnu_cxx::`, or one of the encoded STL shortcuts (`Ss` basic_string, `Sa`
+ * allocator, `Si`/`So`/`Sd` istream/ostream/iostream, `St` namespace std). gcc
+ * routinely declares these in stabs even when every call site is inlined and the
+ * linker drops the COMDAT, so a missing Function at the asserted address is
+ * expected — not a bug. Routing those failures into separate `*-inlined-std`
+ * counters at DEBUG keeps the WARN log focused on user-code problems.
+ */
+private val INLINE_STD_MEMBER = Regex("""^_ZN[KV]*(?:S[adios]|St|9__gnu_cxx)""")
+
+fun isInlineStdMember(name: String): Boolean = INLINE_STD_MEMBER.containsMatchIn(name)
+
+/**
  * Narrow interface for diagnostic output (emits strings with a category tag).
  * Implemented by BookmarkSink, but also by test doubles for pure unit tests.
  *
