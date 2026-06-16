@@ -40,7 +40,7 @@ internal class ClassBuilderHelpers(val resolver: Harvest) {
         // Look up by TypeId using the byId map
         is TypeDecl.Ref -> resolver.getStruct(typeDecl.id)
 
-        // Cross-reference by tagName: look in structAstsByName
+        // Cross-reference by tagName: look in astsByName
         is TypeDecl.XRef -> resolver.getByXRef(typeDecl)?.body as? TypeDecl.Struct<GlobalTypeId>
 
         // Inline definition: prefer the materialised AST at this id (real struct body), fall

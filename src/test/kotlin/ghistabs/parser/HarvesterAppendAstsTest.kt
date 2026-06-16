@@ -86,8 +86,8 @@ class HarvesterAppendAstsTest {
         )
 
         // Append XRef first, then concrete definition
-        harvester.appendAsts(listOf(xrefAst))
-        harvester.appendAsts(listOf(concreteAst))
+        harvester.appendAsts(xrefAst)
+        harvester.appendAsts(concreteAst)
 
         // Verify: typeAsts[id] contains Struct (replaced the XRef)
         val passBResult = harvester.passA(emptyList())
@@ -153,7 +153,7 @@ class HarvesterAppendAstsTest {
         )
 
         // Append both (same hash)
-        harvester.appendAsts(listOf(ast1, ast2))
+        harvester.appendAsts(ast1, ast2)
 
         // Verify: exactly one entry exists
         val passBResult = harvester.passA(emptyList())
@@ -251,8 +251,8 @@ class HarvesterAppendAstsTest {
         )
 
         // Append first, then second (different hashes)
-        harvester.appendAsts(listOf(firstAst))
-        harvester.appendAsts(listOf(secondAst))
+        harvester.appendAsts(firstAst)
+        harvester.appendAsts(secondAst)
 
         // Verify: typeAsts[id].body equals first body
         val passBResult = harvester.passA(emptyList())
@@ -305,8 +305,8 @@ class HarvesterAppendAstsTest {
         )
 
         // Append twice
-        harvester.appendAsts(listOf(ast))
-        harvester.appendAsts(listOf(ast))
+        harvester.appendAsts(ast)
+        harvester.appendAsts(ast)
 
         // Verify: exactly one entry
         val passBResult = harvester.passA(emptyList())
