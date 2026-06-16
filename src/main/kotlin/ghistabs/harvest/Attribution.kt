@@ -114,6 +114,16 @@ object Attribution {
         !name.startsWith("_") &&
         name !in BUILTIN_NAMES
 
+    private val CU_LOCAL_NAME = Regex("""\.?_anon_\d+""")
+
+    /**
+     * Names that carry no cross-CU identity. gcc emits anonymous types with
+     * CU-local sequential names (`._anon_82` etc.); the same name in two
+     * CUs refers to unrelated source-level types and must not be grouped.
+     * Callers should pass only the owning CU as `defSources` for these names.
+     */
+    fun isCuLocalName(name: String): Boolean = name.isEmpty() || CU_LOCAL_NAME.matches(name)
+
     private fun stdBasename(path: String): String? {
         val match = STD_MARKERS.find(path) ?: return null
         val startIdx = match.range.last + 1
