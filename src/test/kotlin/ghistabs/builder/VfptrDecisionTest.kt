@@ -82,6 +82,34 @@ class VfptrDecisionTest {
     }
 
     @Test
+    fun `baseSubobjectAtOffset - skip inherited (no collision)`() {
+        // CLexStream → ios_base cascade: the unresolved base occupies offset 0 as
+        // a synthesised `_base_unknown_0` field. firstPolymorphicBase couldn't
+        // prove polymorphism (base type doesn't resolve), but the layout still
+        // hands us a base subobject at the vfptr offset; we must not overwrite it.
+        val snapshot = FirstComponentSnapshot(fieldName = "_base_unknown_0", offsetBytes = 0, isUndefined = false)
+        val action = VfptrDecision.chooseVfptrAction(
+            hasPolymorphicBaseSubobject = false,
+            parserVptrOffsetBytes = 0,
+            componentAtTargetOffset = snapshot,
+            canonicalVfptrFieldName = "{vfptr}",
+        )
+        assertTrue(action is VfptrAction.SkipInheritedFromBase)
+    }
+
+    @Test
+    fun `resolvedBaseAtOffset - skip inherited (no collision)`() {
+        val snapshot = FirstComponentSnapshot(fieldName = "_base_CLexStream", offsetBytes = 0, isUndefined = false)
+        val action = VfptrDecision.chooseVfptrAction(
+            hasPolymorphicBaseSubobject = false,
+            parserVptrOffsetBytes = 0,
+            componentAtTargetOffset = snapshot,
+            canonicalVfptrFieldName = "{vfptr}",
+        )
+        assertTrue(action is VfptrAction.SkipInheritedFromBase)
+    }
+
+    @Test
     fun `undefinedSlot - insert action`() {
         val snapshot = FirstComponentSnapshot(fieldName = null, offsetBytes = 0, isUndefined = true)
         val action = VfptrDecision.chooseVfptrAction(
