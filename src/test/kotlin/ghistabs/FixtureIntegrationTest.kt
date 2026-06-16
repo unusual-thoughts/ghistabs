@@ -1,7 +1,7 @@
 package ghistabs
 
-import ghistabs.parser.StabRecord
-import ghistabs.parser.StabType
+import ghistabs.parse.StabRecord
+import ghistabs.parse.StabType
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
