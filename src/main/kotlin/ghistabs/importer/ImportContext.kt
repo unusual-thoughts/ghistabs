@@ -5,9 +5,9 @@ import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.SymbolTable
 import ghidra.util.task.TaskMonitor
 import ghistabs.StabsOptions
-import ghistabs.diag.BookmarkSink
-import ghistabs.diag.DiagnosticSink
-import ghistabs.diag.StabsDiagnostics
+import ghistabs.diagnose.BookmarkSink
+import ghistabs.diagnose.DiagnosticSink
+import ghistabs.diagnose.StabsDiagnostics
 import org.jetbrains.annotations.TestOnly
 import java.util.*
 

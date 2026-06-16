@@ -7,12 +7,16 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.LocalVariableImpl
 import ghidra.program.model.listing.ParameterImpl
 import ghidra.program.model.symbol.SourceType
-import ghistabs.builder.TypeRegistry
-import ghistabs.diag.ApplyErrorBucket
-import ghistabs.diag.DiagnosticSink
-import ghistabs.diag.Level
-import ghistabs.diag.isInlineStdMember
-import ghistabs.parser.*
+import ghistabs.diagnose.ApplyErrorBucket
+import ghistabs.diagnose.DiagnosticSink
+import ghistabs.diagnose.Level
+import ghistabs.diagnose.isInlineStdMember
+import ghistabs.harvest.*
+import ghistabs.materialize.TypeRegistry
+import ghistabs.parse.GlobalTypeId
+import ghistabs.parse.StabReader
+import ghistabs.parse.SymbolDecl
+import ghistabs.parse.TypeDecl
 
 class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.sink {
     fun run(): PassResult {
@@ -118,7 +122,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
         var classes = 0
 
         // Run demangler stub replacement before applying symbols
-        DemanglerReplacer(ctx, typeRegistry).run()
+        DemanglerReplacer(ctx).run()
 
         for (open in harvest.openFunctions) {
             try {
@@ -224,7 +228,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
 
         // Classes + vtables.
         if (ctx.options.applyVtables) {
-            val classBuilder = ghistabs.builder.ClassBuilder(typeRegistry, harvest, ctx)
+            val classBuilder = ghistabs.materialize.ClassBuilder(typeRegistry, harvest, ctx)
             // Each class header transitively included by N CUs produces N TypeAst
             // entries with distinct GlobalTypeIds but identical `ghidraName`
             // (bouniafbouniaf: 86 names duplicated, up to 11x each). `materialiseAll`

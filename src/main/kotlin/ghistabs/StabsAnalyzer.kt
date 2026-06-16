@@ -9,9 +9,9 @@ import ghidra.program.model.address.AddressSetView
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
 import ghistabs.StabsAnalyzer.Companion.OPT_STABS_DONE
-import ghistabs.diag.StabsDiagnostics
-import ghistabs.diag.TeeSink
-import ghistabs.diag.toSink
+import ghistabs.diagnose.StabsDiagnostics
+import ghistabs.diagnose.TeeSink
+import ghistabs.diagnose.toSink
 import ghistabs.importer.ImportContext
 import ghistabs.importer.StabsImporter
 import ghistabs.importer.StaticContexts

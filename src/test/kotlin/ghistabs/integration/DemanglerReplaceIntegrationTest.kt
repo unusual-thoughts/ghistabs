@@ -5,8 +5,8 @@ import ghidra.program.model.data.CategoryPath
 import ghidra.program.model.data.DataTypeConflictHandler
 import ghidra.program.model.data.StructureDataType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghistabs.diag.defaultContext
-import ghistabs.diag.defaultTypeRegistry
+import ghistabs.diagnose.defaultContext
+import ghistabs.diagnose.defaultTypeRegistry
 import ghistabs.importer.DemanglerReplacer
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -95,7 +95,7 @@ class DemanglerReplaceIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
         val registry = ctx.defaultTypeRegistry()
         val txRun = program.startTransaction("demangler-replace")
         try {
-            DemanglerReplacer(ctx, registry).run()
+            DemanglerReplacer(ctx).run()
         } finally {
             program.endTransaction(txRun, true)
         }
@@ -150,7 +150,7 @@ class DemanglerReplaceIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
         // Run DemanglerReplPacer (should skip gracefully since stub is absent)
         val registry = ctx.defaultTypeRegistry()
         // Should not throw
-        DemanglerReplacer(ctx, registry).run()
+        DemanglerReplacer(ctx).run()
 
         // Assert /proj/Foo still exists
         val projPath = CategoryPath("/proj")
