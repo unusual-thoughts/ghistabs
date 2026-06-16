@@ -7,7 +7,6 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.LocalVariableImpl
 import ghidra.program.model.listing.ParameterImpl
 import ghidra.program.model.symbol.SourceType
-import ghistabs.builder.Attribution
 import ghistabs.builder.TypeRegistry
 import ghistabs.diag.ApplyErrorBucket
 import ghistabs.diag.DiagnosticSink
