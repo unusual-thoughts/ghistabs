@@ -1,27 +1,53 @@
 # ghidra-stabs Phase 5: Classes & vtables
 
-**Goal:** Recover full C++ class layout — struct fields, nested namespaces, member functions re-parented under their class with ctor/dtor variant disambiguation, vtable structs synthesised and applied at `_ZTV<class>` addresses, polymorphic class `{vfptr}` first-field annotation.
+**Goal:** Recover full C++ class layout — struct fields, nested namespaces, member functions re-parented under their
+class with ctor/dtor variant disambiguation, vtable structs synthesised and applied at `_ZTV<class>` addresses,
+polymorphic class `{vfptr}` first-field annotation.
 
-**Architecture:** `builder/Classes.kt` provides `ClassBuilder` — a stateful object created per import that materialises classes after `TypeRegistry` has run and after Pass C has created the function entries. It derives namespaces from class names (handling templated names), re-parents member functions, builds vtable `Structure`s, and applies them at the resolved `_ZTV` address. FCIS-bending is unavoidable here since we mutate `Program`; this layer is part of the imperative shell.
+**Architecture:** `builder/Classes.kt` provides `ClassBuilder` — a stateful object created per import that materialises
+classes after `TypeRegistry` has run and after Pass C has created the function entries. It derives namespaces from class
+names (handling templated names), re-parents member functions, builds vtable `Structure`s, and applies them at the
+resolved `_ZTV` address. FCIS-bending is unavoidable here since we mutate `Program`; this layer is part of the
+imperative shell.
 
-**Tech Stack:** Kotlin 2.3.21, Ghidra `GhidraClass` / `Namespace` / `SymbolTable` / `ClassUtils.VFPTR` / `GnuDemangler` APIs.
+**Tech Stack:** Kotlin 2.3.21, Ghidra `GhidraClass` / `Namespace` / `SymbolTable` / `ClassUtils.VFPTR` / `GnuDemangler`
+APIs.
 
 **Scope:** Phase 5 of 6.
 
 **Codebase verified:** 2026-05-07.
 
 **Codebase verification findings:**
-- ✓ `Ghidra/Framework/SoftwareModeling/src/main/java/ghidra/program/model/symbol/SymbolTable.java`: `createClass(parent: Namespace?, name: String, source: SourceType): GhidraClass`. Parent `null` ⇒ global namespace.
-- ✓ `Ghidra/Framework/SoftwareModeling/src/main/java/ghidra/app/util/NamespaceUtils.java`: `convertNamespaceToClass(Namespace): GhidraClass` for upgrading existing namespaces. `getNamespaceByPath(program, parent, "Foo::Bar"): Namespace` resolves a `::`-separated path.
-- ✓ `ClassUtils.VFPTR` (`/home/riton/git/ghidra/Ghidra/Framework/SoftwareModeling/src/main/java/ghidra/program/model/gclass/ClassUtils.java`) is the canonical name string `"{vfptr}"` we use for the vtable-pointer field.
-- ✓ `ghidra.app.util.demangler.gnu.GnuDemangler` — its `demangle(MangledContext)` returns `DemangledFunction` with `getNamespace()` (a `DemangledType` chain) and `getName()` (the bare member name). Reference: `Ghidra/Features/GnuDemangler/src/main/java/ghidra/app/util/demangler/gnu/GnuDemangler.java`.
-- ✓ `Function.setParentNamespace(Namespace)` exists at `Ghidra/Framework/SoftwareModeling/src/main/java/ghidra/program/model/listing/Function.java`.
-- ✓ Ctor/dtor mangled forms per Itanium ABI: `_ZN<…>C1E…` / `C2E…` / `C3E…` (in-charge / not-in-charge / allocating ctor); `_ZN<…>D0E…` / `D1E…` / `D2E…` (deleting / in-charge / not-in-charge dtor). The variant letter is right before the parameter encoding `E`.
-- ✓ Vtable mangled form: `_ZTV<encoded-class-name>`. Itanium gcc-3 always emits this; gcc-2 uses `_vt$<class>` (legacy form).
+
+- ✓ `Ghidra/Framework/SoftwareModeling/src/main/java/ghidra/program/model/symbol/SymbolTable.java`:
+  `createClass(parent: Namespace?, name: String, source: SourceType): GhidraClass`. Parent `null` ⇒ global namespace.
+- ✓ `Ghidra/Framework/SoftwareModeling/src/main/java/ghidra/app/util/NamespaceUtils.java`:
+  `convertNamespaceToClass(Namespace): GhidraClass` for upgrading existing namespaces.
+  `getNamespaceByPath(program, parent, "Foo::Bar"): Namespace` resolves a `::`-separated path.
+- ✓ `ClassUtils.VFPTR` (
+  `/home/riton/git/ghidra/Ghidra/Framework/SoftwareModeling/src/main/java/ghidra/program/model/gclass/ClassUtils.java`)
+  is the canonical name string `"{vfptr}"` we use for the vtable-pointer field.
+- ✓ `ghidra.app.util.demangler.gnu.GnuDemangler` — its `demangle(MangledContext)` returns `DemangledFunction` with
+  `getNamespace()` (a `DemangledType` chain) and `getName()` (the bare member name). Reference:
+  `Ghidra/Features/GnuDemangler/src/main/java/ghidra/app/util/demangler/gnu/GnuDemangler.java`.
+- ✓ `Function.setParentNamespace(Namespace)` exists at
+  `Ghidra/Framework/SoftwareModeling/src/main/java/ghidra/program/model/listing/Function.java`.
+- ✓ Ctor/dtor mangled forms per Itanium ABI: `_ZN<…>C1E…` / `C2E…` / `C3E…` (in-charge / not-in-charge / allocating
+  ctor); `_ZN<…>D0E…` / `D1E…` / `D2E…` (deleting / in-charge / not-in-charge dtor). The variant letter is right before
+  the parameter encoding `E`.
+- ✓ Vtable mangled form: `_ZTV<encoded-class-name>`. Itanium gcc-3 always emits this; gcc-2 uses `_vt$<class>` (legacy
+  form).
 
 **External dependency findings:**
-- 📖 **Itanium C++ ABI 32-bit vtable layout:** vtable contents are: (1) RTTI pointer (often null on Cygwin 3.4.4 because `-fno-rtti` is common), (2) offset-to-top (0 for primary class), (3) function pointers in declaration order, with inherited base entries copied first. We model the function-pointer slots only; RTTI/offset-to-top are at negative offsets and we skip them in v1 (acceptable per design's 32-bit-only scope).
-- 📖 **{vfptr} convention:** Ghidra's class-recovery code (`Ghidra/Features/Decompiler/ghidra_scripts/classrecovery/RecoveredClass.java`) uses `ClassUtils.VFPTR` ("{vfptr}") and a pointer-to-vtable type as the first struct field. Decompiler resolves virtual calls via pointer dataflow on this field.
+
+- 📖 **Itanium C++ ABI 32-bit vtable layout:** vtable contents are: (1) RTTI pointer (often null on Cygwin 3.4.4 because
+  `-fno-rtti` is common), (2) offset-to-top (0 for primary class), (3) function pointers in declaration order, with
+  inherited base entries copied first. We model the function-pointer slots only; RTTI/offset-to-top are at negative
+  offsets and we skip them in v1 (acceptable per design's 32-bit-only scope).
+- 📖 **{vfptr} convention:** Ghidra's class-recovery code (
+  `Ghidra/Features/Decompiler/ghidra_scripts/classrecovery/RecoveredClass.java`) uses `ClassUtils.VFPTR` ("{vfptr}") and
+  a pointer-to-vtable type as the first struct field. Decompiler resolves virtual calls via pointer dataflow on this
+  field.
 
 ---
 
@@ -31,13 +57,24 @@ This phase implements and tests:
 
 ### ghidra-stabs.AC5: C++ classes and vtables
 
-- **ghidra-stabs.AC5.1 Success:** Each parsed class produces a `Structure` with the correct field layout (fields at correct byte offsets, sizes match), a `GhidraClass` namespace (created via `SymbolTable.createClass`), and member functions re-parented under that namespace.
-- **ghidra-stabs.AC5.2 Success:** Ctor variants (`__base_ctor` / `__comp_ctor`) are renamed to `<ClassName>` with `_C1`/`_C2`/`_C3` suffixes when multiple linker symbols exist for the same demangled name; dtor variants (`__base_dtor` / `__comp_dtor` / `__deleting_dtor`) renamed to `~<ClassName>` with `_D0`/`_D1`/`_D2` suffixes.
-- **ghidra-stabs.AC5.3 Success:** A class with at least one virtual method has a sibling `<Class>_vtable` `Structure` containing one named `PointerDataType` field per virtual method, ordered by `*<voff>;` (inherited base-class entries first, per Itanium ABI 32-bit).
-- **ghidra-stabs.AC5.4 Success:** Polymorphic class structs have `{vfptr}` as their first field, of type `<Class>_vtable*`.
-- **ghidra-stabs.AC5.5 Success:** The vtable global (Itanium-mangled `_ZTV<class>` or gcc-2 `_vt$<class>`) is resolved via `AddressResolver`, has `<Class>_vtable` applied as data, and each virtual method's function symbol carries a plate comment naming the class and vtable offset.
-- **ghidra-stabs.AC5.6 Success:** Nested namespaces mirror C++: `Foo::Bar::method` results in namespace tree `Foo` ⊃ `Bar` ⊃ `method`; template-arg names like `std::basic_string<char,…>` are valid namespace names.
-- **ghidra-stabs.AC5.7 Failure:** When a class method's mangled symbol isn't found in `program.symbolTable`, the method is skipped with a `[Stabs] unresolved-symbol` log entry; other methods of the same class still apply.
+- **ghidra-stabs.AC5.1 Success:** Each parsed class produces a `Structure` with the correct field layout (fields at
+  correct byte offsets, sizes match), a `GhidraClass` namespace (created via `SymbolTable.createClass`), and member
+  functions re-parented under that namespace.
+- **ghidra-stabs.AC5.2 Success:** Ctor variants (`__base_ctor` / `__comp_ctor`) are renamed to `<ClassName>` with `_C1`/
+  `_C2`/`_C3` suffixes when multiple linker symbols exist for the same demangled name; dtor variants (`__base_dtor` /
+  `__comp_dtor` / `__deleting_dtor`) renamed to `~<ClassName>` with `_D0`/`_D1`/`_D2` suffixes.
+- **ghidra-stabs.AC5.3 Success:** A class with at least one virtual method has a sibling `<Class>_vtable` `Structure`
+  containing one named `PointerDataType` field per virtual method, ordered by `*<voff>;` (inherited base-class entries
+  first, per Itanium ABI 32-bit).
+- **ghidra-stabs.AC5.4 Success:** Polymorphic class structs have `{vfptr}` as their first field, of type
+  `<Class>_vtable*`.
+- **ghidra-stabs.AC5.5 Success:** The vtable global (Itanium-mangled `_ZTV<class>` or gcc-2 `_vt$<class>`) is resolved
+  via `AddressResolver`, has `<Class>_vtable` applied as data, and each virtual method's function symbol carries a plate
+  comment naming the class and vtable offset.
+- **ghidra-stabs.AC5.6 Success:** Nested namespaces mirror C++: `Foo::Bar::method` results in namespace tree `Foo` ⊃
+  `Bar` ⊃ `method`; template-arg names like `std::basic_string<char,…>` are valid namespace names.
+- **ghidra-stabs.AC5.7 Failure:** When a class method's mangled symbol isn't found in `program.symbolTable`, the method
+  is skipped with a `[Stabs] unresolved-symbol` log entry; other methods of the same class still apply.
 
 ---
 
@@ -46,15 +83,17 @@ This phase implements and tests:
 <!-- START_SUBCOMPONENT_A (tasks 1-2) -->
 
 <!-- START_TASK_1 -->
+
 ### Task 1: `ClassBuilder` skeleton — class struct + namespace
 
 **Files:**
+
 - Create: `/home/riton/git/bouse/ghidra-stabs/src/main/kotlin/ghistabs/builder/Classes.kt`
 
 **Implementation:**
 
 ```kotlin
-package ghistabs.builder
+package ghistabs.materialize
 
 import ghidra.program.model.data.*
 import ghidra.program.model.gclass.ClassUtils
@@ -65,8 +104,8 @@ import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
 import ghistabs.container.AddressResolver
 import ghistabs.importer.BookmarkSink
-import ghistabs.parser.MethodDecl
-import ghistabs.parser.TypeDecl
+import ghistabs.parse.MethodDecl
+import ghistabs.parse.TypeDecl
 
 class ClassBuilder(
     private val program: Program,
@@ -85,7 +124,7 @@ class ClassBuilder(
             ?: run { sink.log("class-not-struct", "skipping non-struct class '$name'"); return }
 
         // 2. Insert {vfptr} first if class is polymorphic.
-        val isPoly = body.hasVTablePointerMarker || body.methods.any { it.virt == ghistabs.parser.VirtKind.VIRTUAL }
+        val isPoly = body.hasVTablePointerMarker || body.methods.any { it.virt == ghistabs.parse.VirtKind.VIRTUAL }
         if (isPoly) ensureVfptrFirstField(structDt, name)
 
         // 3. Create or upgrade the GhidraClass namespace.
@@ -121,19 +160,26 @@ class ClassBuilder(
         val vfptrName = ClassUtils.VFPTR  // "{vfptr}"
         if (structDt.numComponents > 0 && structDt.getComponent(0).fieldName == vfptrName) return
         val vtableType = dtm.getDataType(CategoryPath.ROOT, "${className}_vtable")
-            ?: StructureDataType(CategoryPath.ROOT, "${className}_vtable", 0, dtm).let { dtm.addDataType(it, DataTypeConflictHandler.KEEP_HANDLER) }
+            ?: StructureDataType(CategoryPath.ROOT, "${className}_vtable", 0, dtm).let {
+                dtm.addDataType(
+                    it,
+                    DataTypeConflictHandler.KEEP_HANDLER
+                )
+            }
         val ptrToVtable = PointerDataType.getPointer(vtableType, dtm)
         structDt.insertAtOffset(0, ptrToVtable, ptrToVtable.length, vfptrName, "vtable pointer")
     }
 
-    private fun reparentMethod(m: MethodDecl, className: String, ns: GhidraClass) { /* Task 2 */ }
+    private fun reparentMethod(m: MethodDecl, className: String, ns: GhidraClass) { /* Task 2 */
+    }
     private fun buildAndApplyVtable(
         className: String,
         body: TypeDecl.Struct,
         ns: GhidraClass,
         category: CategoryPath,
         structDt: Structure,
-    ) { /* Task 3 */ }
+    ) { /* Task 3 */
+    }
 }
 ```
 
@@ -151,9 +197,11 @@ Expected: compiles. Bodies are stubbed.
 <!-- END_TASK_1 -->
 
 <!-- START_TASK_2 -->
+
 ### Task 2: `reparentMethod` — ctor/dtor variant disambiguation + namespace move
 
 **Files:**
+
 - Modify: `/home/riton/git/bouse/ghidra-stabs/src/main/kotlin/ghistabs/builder/Classes.kt:reparentMethod`
 
 **Implementation:**
@@ -226,7 +274,11 @@ private fun displayNameFor(mangled: String, className: String): String? {
 }
 ```
 
-**Note on AC5.2 wording:** the design says "with `_C1`/`_C2`/`_C3` suffixes to disambiguate when the same demangled form has multiple linker symbols". The simplest implementation is to suffix unconditionally — the suffixes are harmless when only one variant exists, and we don't have the population count at the per-method level (we'd need a second pass over all class methods). If the user prefers strict disambiguation-only, that's an optimisation for v1.1; surface to the user before Task 5 tests.
+**Note on AC5.2 wording:** the design says "with `_C1`/`_C2`/`_C3` suffixes to disambiguate when the same demangled form
+has multiple linker symbols". The simplest implementation is to suffix unconditionally — the suffixes are harmless when
+only one variant exists, and we don't have the population count at the per-method level (we'd need a second pass over
+all class methods). If the user prefers strict disambiguation-only, that's an optimisation for v1.1; surface to the user
+before Task 5 tests.
 
 **Step: Commit Tasks 1+2**
 
@@ -235,15 +287,18 @@ git add src/main/kotlin/ghistabs/builder/Classes.kt
 git commit -m "feat(builder): ClassBuilder skeleton + reparentMethod with ctor/dtor variants"
 ```
 
-**Verifies:** Implementation-side of `ghidra-stabs.AC5.1`, `ghidra-stabs.AC5.2`, `ghidra-stabs.AC5.6`, `ghidra-stabs.AC5.7`.
+**Verifies:** Implementation-side of `ghidra-stabs.AC5.1`, `ghidra-stabs.AC5.2`, `ghidra-stabs.AC5.6`,
+`ghidra-stabs.AC5.7`.
 <!-- END_TASK_2 -->
 
 <!-- END_SUBCOMPONENT_A -->
 
 <!-- START_TASK_3 -->
+
 ### Task 3: `buildAndApplyVtable` — synthesise `<Class>_vtable` Structure, apply at `_ZTV<class>`
 
 **Files:**
+
 - Modify: `/home/riton/git/bouse/ghidra-stabs/src/main/kotlin/ghistabs/builder/Classes.kt:buildAndApplyVtable`
 
 **Implementation:**
@@ -261,7 +316,7 @@ private fun buildAndApplyVtable(
     //    of the base list, with overridden slots replaced by the derived method).
     val inherited = collectInheritedVirtuals(body)
     val ownVirtuals = body.methods
-        .filter { it.virt == ghistabs.parser.VirtKind.VIRTUAL }
+        .filter { it.virt == ghistabs.parse.VirtKind.VIRTUAL }
         .sortedBy { it.vtableOffsetBits ?: Long.MAX_VALUE }
     // Merge: inherited slots first (in inheritance order), then any new ones
     // declared in this class. Overrides replace the inherited slot (matched by
@@ -348,7 +403,7 @@ private fun collectInheritedVirtuals(body: TypeDecl.Struct): List<MethodDecl> {
     val out = mutableListOf<MethodDecl>()
     for (base in body.bases) {
         val baseStruct = resolveBaseAst(base.type) ?: continue
-        out += baseStruct.methods.filter { it.virt == ghistabs.parser.VirtKind.VIRTUAL }
+        out += baseStruct.methods.filter { it.virt == ghistabs.parse.VirtKind.VIRTUAL }
     }
     return out.sortedBy { it.vtableOffsetBits ?: Long.MAX_VALUE }
 }
@@ -390,7 +445,10 @@ class ClassBuilder(
 
 Phase 4 Task 4 (wiring) builds this map from `typeAsts` when constructing `ClassBuilder`.
 
-**For templated class names** (`std::basic_string<char,…>`), `itaniumMangleClassName` returns the name as-is and `resolver.resolve("_ZTVstd::basic_string<char,…>")` will fail. The fallback: scan `program.symbolTable` for any symbol whose demangled-name matches `vtable for ${className}`. This is slow but correct. Surface to user if performance is an issue.
+**For templated class names** (`std::basic_string<char,…>`), `itaniumMangleClassName` returns the name as-is and
+`resolver.resolve("_ZTVstd::basic_string<char,…>")` will fail. The fallback: scan `program.symbolTable` for any symbol
+whose demangled-name matches `vtable for ${className}`. This is slow but correct. Surface to user if performance is an
+issue.
 
 **Step: Commit**
 
@@ -403,9 +461,11 @@ git commit -m "feat(builder): synthesise <Class>_vtable + apply at _ZTV"
 <!-- END_TASK_3 -->
 
 <!-- START_TASK_4 -->
+
 ### Task 4: Wire `ClassBuilder` into Pass C
 
 **Files:**
+
 - Modify: `/home/riton/git/bouse/ghidra-stabs/src/main/kotlin/ghistabs/importer/Importer.kt:applyAllSymbols`
 
 **Implementation:**
@@ -413,21 +473,26 @@ git commit -m "feat(builder): synthesise <Class>_vtable + apply at _ZTV"
 **Pass C ordering (explicit, important).** Within the single `txC` transaction:
 
 1. **Functions, params, locals, scope plate comments** (Phase 4 logic).
-2. **Globals + file-statics** (Phase 4 logic). This step records `_ZTV<class>` addresses into `AddressResolver` (because they appear as `N_GSYM` / `N_STSYM` records and are processed here).
-3. **Class application** (this phase). `ClassBuilder.build(...)` queries `AddressResolver.resolve("_ZTV<class>")` which now succeeds because step 2 populated it.
+2. **Globals + file-statics** (Phase 4 logic). This step records `_ZTV<class>` addresses into `AddressResolver` (because
+   they appear as `N_GSYM` / `N_STSYM` records and are processed here).
+3. **Class application** (this phase). `ClassBuilder.build(...)` queries `AddressResolver.resolve("_ZTV<class>")` which
+   now succeeds because step 2 populated it.
 
-Reordering — e.g. running ClassBuilder before globals — would cause `vtable-unresolved` log entries even when the symbol exists.
+Reordering — e.g. running ClassBuilder before globals — would cause `vtable-unresolved` log entries even when the symbol
+exists.
 
-After applying non-class globals/file-statics in Phase 4's `applyAllSymbols`, add a final loop over the `TypeAst`s whose body is a `Struct` with at least one method or the vtable-pointer marker, calling `ClassBuilder.build(name, body, category)` for each.
+After applying non-class globals/file-statics in Phase 4's `applyAllSymbols`, add a final loop over the `TypeAst`s whose
+body is a `Struct` with at least one method or the vtable-pointer marker, calling
+`ClassBuilder.build(name, body, category)` for each.
 
 ```kotlin
 // Inside applyAllSymbols, after the globals/statics loop:
-val classBuilder = ghistabs.builder.ClassBuilder(ctx.program, typeRegistry, ctx.resolver, ctx.sink)
+val classBuilder = ghistabs.materialize.ClassBuilder(ctx.program, typeRegistry, ctx.resolver, ctx.sink)
 for (ast in /* the typeAsts list passed in here — refactor signature */) {
     val body = ast.body as? TypeDecl.Struct ?: continue
     if (body.methods.isEmpty() && !body.hasVTablePointerMarker) continue
     try {
-        val category = ghistabs.builder.Attribution.categoryFor(ast.name, setOf(ast.cuFile))
+        val category = ghistabs.materialize.Attribution.categoryFor(ast.name, setOf(ast.cuFile))
         classBuilder.build(ast.name, body, category)
     } catch (t: Throwable) {
         ctx.sink.log("class-apply-error", "${ast.name}: ${t.message}")
@@ -435,7 +500,8 @@ for (ast in /* the typeAsts list passed in here — refactor signature */) {
 }
 ```
 
-**Refactor:** `applyAllSymbols` needs access to `typeAsts`. Update its signature to accept `typeAsts: List<TypeAst>` and pass from `run()`.
+**Refactor:** `applyAllSymbols` needs access to `typeAsts`. Update its signature to accept `typeAsts: List<TypeAst>` and
+pass from `run()`.
 
 **Step: Commit**
 
@@ -450,12 +516,15 @@ git commit -m "feat(importer): wire ClassBuilder into Pass C"
 <!-- START_SUBCOMPONENT_B (tasks 5-7) -->
 
 <!-- START_TASK_5 -->
+
 ### Task 5: `ClassBuilderTest` — single-inheritance, struct + namespace + method reparent (Ring-2)
 
 **Files:**
+
 - Create: `/home/riton/git/bouse/ghidra-stabs/src/test/kotlin/ghistabs/builder/ClassBuilderTest.kt`
 
 **Setup:** Use `ProgramBuilder` to construct an in-memory program containing:
+
 - A code section with a function entry at `0x10000` (mangled `_ZN3Foo3barEv`).
 - A data section reservation at `0x20000` for the future vtable.
 
@@ -464,18 +533,20 @@ Synthetic AST input: `Foo:T(0,5)=s4...bar::(...)=#(0,5),(0,1);;;:_ZN3Foo3barEv;0
 **Tests must verify:**
 
 - **`ghidra-stabs.AC5.1`**: After `ClassBuilder.build("Foo", body, …)`:
-  - `program.dataTypeManager.getDataType("/Foo", "Foo")` is a `Structure` with the right fields.
-  - `program.symbolTable.getNamespace("Foo", null)` returns a `GhidraClass`.
-  - `program.functionManager.getFunctionAt(0x10000)` has `parentNamespace.name == "Foo"` and `name == "bar"`.
+    - `program.dataTypeManager.getDataType("/Foo", "Foo")` is a `Structure` with the right fields.
+    - `program.symbolTable.getNamespace("Foo", null)` returns a `GhidraClass`.
+    - `program.functionManager.getFunctionAt(0x10000)` has `parentNamespace.name == "Foo"` and `name == "bar"`.
 
 - **`ghidra-stabs.AC5.6`** (nested namespaces): Provide `Foo::Bar` AST, assert namespace tree `Foo` ⊃ `Bar` ⊃ method.
 
-- **`ghidra-stabs.AC5.6`** (template name): Provide `std::vector<int>` AST. Assert `program.symbolTable.getNamespace("vector<int>", stdNs)` is non-null and is a `GhidraClass`. Test passes even though Itanium mangling of templated names is approximate.
+- **`ghidra-stabs.AC5.6`** (template name): Provide `std::vector<int>` AST. Assert
+  `program.symbolTable.getNamespace("vector<int>", stdNs)` is non-null and is a `GhidraClass`. Test passes even though
+  Itanium mangling of templated names is approximate.
 
 **Step: Run, commit**
 
 ```bash
-./gradlew test --tests 'ghistabs.builder.ClassBuilderTest'
+./gradlew test --tests 'ghistabs.materialize.ClassBuilderTest'
 git add src/test/kotlin/ghistabs/builder/ClassBuilderTest.kt
 git commit -m "test(builder): single-inheritance class struct + namespace + method reparent"
 ```
@@ -484,12 +555,15 @@ git commit -m "test(builder): single-inheritance class struct + namespace + meth
 <!-- END_TASK_5 -->
 
 <!-- START_TASK_6 -->
+
 ### Task 6: `ClassBuilderTest` — vtable struct, {vfptr}, `_ZTV` application, plate comments
 
 **Files:**
+
 - Modify: `/home/riton/git/bouse/ghidra-stabs/src/test/kotlin/ghistabs/builder/ClassBuilderTest.kt` (add tests)
 
 **Setup additions:**
+
 - Add a function entry for `_ZN3Foo4drawEv` (virtual method) at `0x10100`.
 - Add a `_ZTV3Foo` symbol at `0x20000` in the data section.
 
@@ -497,15 +571,18 @@ Synthetic AST input: `Foo:T(0,5)=s8~%(0,8);draw::(...)=#(0,5),...;:_ZN3Foo4drawE
 
 **Tests must verify:**
 
-- **`ghidra-stabs.AC5.3`**: `dtm.getDataType("/Foo", "Foo_vtable")` is a `Structure` with one component named `draw` of type `Pointer`.
-- **`ghidra-stabs.AC5.4`**: `dtm.getDataType("/Foo", "Foo")` has `getComponent(0).fieldName == "{vfptr}"` and `getComponent(0).dataType` is a `Pointer` whose pointee is `Foo_vtable`.
-- **`ghidra-stabs.AC5.5`**: `program.listing.getDataAt(0x20000).dataType.name == "Foo_vtable"`. The function at `0x10100` has a plate comment containing `"virtual draw"` and `"Foo_vtable offset 0"`.
+- **`ghidra-stabs.AC5.3`**: `dtm.getDataType("/Foo", "Foo_vtable")` is a `Structure` with one component named `draw` of
+  type `Pointer`.
+- **`ghidra-stabs.AC5.4`**: `dtm.getDataType("/Foo", "Foo")` has `getComponent(0).fieldName == "{vfptr}"` and
+  `getComponent(0).dataType` is a `Pointer` whose pointee is `Foo_vtable`.
+- **`ghidra-stabs.AC5.5`**: `program.listing.getDataAt(0x20000).dataType.name == "Foo_vtable"`. The function at
+  `0x10100` has a plate comment containing `"virtual draw"` and `"Foo_vtable offset 0"`.
 - **`ghidra-stabs.AC5.5`** (bookmark): Exactly one `Stabs:vtable` bookmark exists at `0x20000`.
 
 **Step: Run, commit**
 
 ```bash
-./gradlew test --tests 'ghistabs.builder.ClassBuilderTest'
+./gradlew test --tests 'ghistabs.materialize.ClassBuilderTest'
 git add src/test/kotlin/ghistabs/builder/ClassBuilderTest.kt
 git commit -m "test(builder): vtable struct, vfptr, _ZTV application, plate comments"
 ```
@@ -514,27 +591,33 @@ git commit -m "test(builder): vtable struct, vfptr, _ZTV application, plate comm
 <!-- END_TASK_6 -->
 
 <!-- START_TASK_8 -->
+
 ### Task 8: `ClassBuilderTest` — single inheritance vtable layout (inherited entries first)
 
 **Files:**
+
 - Modify: `/home/riton/git/bouse/ghidra-stabs/src/test/kotlin/ghistabs/builder/ClassBuilderTest.kt` (add tests)
 
 **Setup:** Construct two ASTs:
+
 - `Base:T(0,5)=s4~%(0,8);foo::(...)=#…;:_ZN4Base3fooEv;1A.*0;(0,5);;;` (one virtual method `foo`).
-- `Derived:T(0,6)=s4!1,0011,(0,5);bar::(...)=#…;:_ZN7Derived3barEv;1A.*4;(0,5);;;` (inherits Base, adds virtual `bar` at vtable offset 4).
+- `Derived:T(0,6)=s4!1,0011,(0,5);bar::(...)=#…;:_ZN7Derived3barEv;1A.*4;(0,5);;;` (inherits Base, adds virtual `bar` at
+  vtable offset 4).
 
 Add function entries `_ZN4Base3fooEv` at `0x10000`, `_ZN7Derived3barEv` at `0x10100`. Add `_ZTV7Derived` at `0x20000`.
 
 **Tests must verify (`ghidra-stabs.AC5.3` inheritance):**
 
-- `dtm.getDataType("/Derived", "Derived_vtable")` is a `Structure` with TWO components: index 0 is `foo` (inherited from Base), index 1 is `bar`.
+- `dtm.getDataType("/Derived", "Derived_vtable")` is a `Structure` with TWO components: index 0 is `foo` (inherited from
+  Base), index 1 is `bar`.
 - The `Derived_vtable` global at `0x20000` has data of type `Derived_vtable` applied.
-- The plate comment on `_ZN4Base3fooEv` mentions `Base_vtable` (it's inherited but the originating-class attribution sticks). The plate comment on `_ZN7Derived3barEv` mentions `Derived_vtable offset 4`.
+- The plate comment on `_ZN4Base3fooEv` mentions `Base_vtable` (it's inherited but the originating-class attribution
+  sticks). The plate comment on `_ZN7Derived3barEv` mentions `Derived_vtable offset 4`.
 
 **Step: Run, commit**
 
 ```bash
-./gradlew test --tests 'ghistabs.builder.ClassBuilderTest'
+./gradlew test --tests 'ghistabs.materialize.ClassBuilderTest'
 git add src/test/kotlin/ghistabs/builder/ClassBuilderTest.kt
 git commit -m "test(builder): inherited vtable entries (Base::foo before Derived::bar)"
 ```
@@ -543,13 +626,21 @@ git commit -m "test(builder): inherited vtable entries (Base::foo before Derived
 <!-- END_TASK_8 -->
 
 <!-- START_TASK_9 -->
+
 ### Task 9 (DESCOPED): Multiple-inheritance and virtual-base layouts
 
-The design's Phase 5 "Done when" lists "single-inheritance, multiple-inheritance, virtual-base, and ctor-variant cases." This implementation plan covers single-inheritance (Tasks 5, 8), ctor/dtor variants (Task 7), and inherited vtable ordering (Task 8). **Multiple-inheritance and virtual-base are explicitly descoped to v1.1** — the `xapasmcsr.exe` corpus uses neither pattern (verified via `parse_image/stabs_stats.py` class detector — no `~%` markers with multiple `!` base entries), so the rejection is empirically safe for the integration target.
+The design's Phase 5 "Done when" lists "single-inheritance, multiple-inheritance, virtual-base, and ctor-variant cases."
+This implementation plan covers single-inheritance (Tasks 5, 8), ctor/dtor variants (Task 7), and inherited vtable
+ordering (Task 8). **Multiple-inheritance and virtual-base are explicitly descoped to v1.1** — the `xapasmcsr.exe`
+corpus uses neither pattern (verified via `parse_image/stabs_stats.py` class detector — no `~%` markers with multiple
+`!` base entries), so the rejection is empirically safe for the integration target.
 
-If a future binary forces re-opening this: the work is (a) extend `mergeVtableSlots` to track per-base offset-to-top values (Itanium MI ABI), (b) add `BaseDecl.isVirtual` handling in `ensureVfptrFirstField` (virtual bases use a separate vbtable), (c) add tests with hand-built MI/VB ASTs.
+If a future binary forces re-opening this: the work is (a) extend `mergeVtableSlots` to track per-base offset-to-top
+values (Itanium MI ABI), (b) add `BaseDecl.isVirtual` handling in `ensureVfptrFirstField` (virtual bases use a separate
+vbtable), (c) add tests with hand-built MI/VB ASTs.
 
-**Surface to user before Task 5:** confirm the descope. If user wants MI/VB in v1, this becomes Tasks 9–11 with full ASTs and assertions.
+**Surface to user before Task 5:** confirm the descope. If user wants MI/VB in v1, this becomes Tasks 9–11 with full
+ASTs and assertions.
 
 **Step: No code change. Document and commit.**
 
@@ -561,26 +652,33 @@ git commit --allow-empty -m "docs(plan): MI/virtual-base descoped to v1.1 (xapas
 <!-- END_TASK_9 -->
 
 <!-- START_TASK_7 -->
+
 ### Task 7: `ClassBuilderTest` — ctor/dtor variants, unresolved-method tolerance
 
 **Files:**
+
 - Modify: `/home/riton/git/bouse/ghidra-stabs/src/test/kotlin/ghistabs/builder/ClassBuilderTest.kt` (add tests)
 
 **Setup:** Add three function entries:
+
 - `0x10200` named `_ZN3FooC1Ev` (in-charge ctor)
 - `0x10300` named `_ZN3FooD0Ev` (deleting dtor)
-- `0x10400` named `_ZN3Foo7missingEv` (a method that the AST claims exists but with a typo — let's say the AST mangled value is `_ZN3Foo7missingEi` so the lookup fails)
+- `0x10400` named `_ZN3Foo7missingEv` (a method that the AST claims exists but with a typo — let's say the AST mangled
+  value is `_ZN3Foo7missingEi` so the lookup fails)
 
 **Tests must verify:**
 
-- **`ghidra-stabs.AC5.2`** (ctor variant): After build, `functionManager.getFunctionAt(0x10200).name == "Foo_C1"`. Parent namespace is `Foo`.
+- **`ghidra-stabs.AC5.2`** (ctor variant): After build, `functionManager.getFunctionAt(0x10200).name == "Foo_C1"`.
+  Parent namespace is `Foo`.
 - **`ghidra-stabs.AC5.2`** (dtor variant): `functionManager.getFunctionAt(0x10300).name == "~Foo_D0"`.
-- **`ghidra-stabs.AC5.7`** (unresolved): The `missing` method is skipped. Log contains `[Stabs] unresolved-symbol: method _ZN3Foo7missingEi`. The other methods (`Foo_C1`, `~Foo_D0`) are still applied — assert their names.
+- **`ghidra-stabs.AC5.7`** (unresolved): The `missing` method is skipped. Log contains
+  `[Stabs] unresolved-symbol: method _ZN3Foo7missingEi`. The other methods (`Foo_C1`, `~Foo_D0`) are still applied —
+  assert their names.
 
 **Step: Run, commit**
 
 ```bash
-./gradlew test --tests 'ghistabs.builder.ClassBuilderTest'
+./gradlew test --tests 'ghistabs.materialize.ClassBuilderTest'
 git add src/test/kotlin/ghistabs/builder/ClassBuilderTest.kt
 git commit -m "test(builder): ctor/dtor variants + unresolved-method tolerance"
 ```
@@ -595,12 +693,18 @@ git commit -m "test(builder): ctor/dtor variants + unresolved-method tolerance"
 ## Phase Done When
 
 - [ ] `builder/Classes.kt` exports `ClassBuilder.build(name, body, category)`.
-- [ ] `Importer.applyAllSymbols` invokes `ClassBuilder.build` for every struct AST that has methods or a vtable-pointer marker.
-- [ ] `ClassBuilderTest` covers single-inheritance, vtable+vfptr, ctor/dtor variants, unresolved-method tolerance, nested namespaces, template names. All green.
+- [ ] `Importer.applyAllSymbols` invokes `ClassBuilder.build` for every struct AST that has methods or a vtable-pointer
+  marker.
+- [ ] `ClassBuilderTest` covers single-inheritance, vtable+vfptr, ctor/dtor variants, unresolved-method tolerance,
+  nested namespaces, template names. All green.
 - [ ] AC5 phase-6 integration assertions (≥ 50 GhidraClass namespaces in `xapasmcsr.exe`) deferred to Phase 6.
 
 ## Open Questions for User
 
-- **Always suffix ctor/dtor variants `_C1`/`_C2`/`_C3`/`_D0`/`_D1`/`_D2`, or only when multiple variants exist?** Current plan: always (cheaper, harmless). Confirm before Task 5 tests freeze the assertion.
-- **Itanium mangling of templated class names is approximate.** The fallback (scanning `program.symbolTable` for "vtable for X" demangled match) is correct but slow. Acceptable for v1, or do we need a real mangler?
-- **Multiple-inheritance and virtual-base layouts** — the design's "Done when" mentions tests for these, but they're complex. v1 plan focuses on single-inheritance and one example with `~%` virtual marker. Multiple-inheritance is a stretch goal in Phase 5 unless the user declares it required. Confirm.
+- **Always suffix ctor/dtor variants `_C1`/`_C2`/`_C3`/`_D0`/`_D1`/`_D2`, or only when multiple variants exist?**
+  Current plan: always (cheaper, harmless). Confirm before Task 5 tests freeze the assertion.
+- **Itanium mangling of templated class names is approximate.** The fallback (scanning `program.symbolTable` for "vtable
+  for X" demangled match) is correct but slow. Acceptable for v1, or do we need a real mangler?
+- **Multiple-inheritance and virtual-base layouts** — the design's "Done when" mentions tests for these, but they're
+  complex. v1 plan focuses on single-inheritance and one example with `~%` virtual marker. Multiple-inheritance is a
+  stretch goal in Phase 5 unless the user declares it required. Confirm.

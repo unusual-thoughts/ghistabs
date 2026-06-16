@@ -2,8 +2,7 @@ package ghistabs.importer
 
 import ghidra.program.model.data.*
 import ghidra.program.model.data.Array
-import ghistabs.builder.TypeRegistry
-import ghistabs.diag.DiagnosticSink
+import ghistabs.diagnose.DiagnosticSink
 import java.util.*
 
 /**
@@ -36,8 +35,7 @@ sealed class Skip(open val reason: String) {
 /**
  * Adapter that uses Ghidra's DataTypeManager to execute demangler stub replacements.
  */
-class DemanglerReplacer(private val ctx: ImportContext<*>, private val registry: TypeRegistry) :
-    DiagnosticSink by ctx.sink {
+class DemanglerReplacer(private val ctx: ImportContext<*>) : DiagnosticSink by ctx.sink {
     companion object {
         /**
          * Pure algorithm: given stubs and replacements, decide which replacements are safe.

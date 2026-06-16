@@ -1,8 +1,12 @@
 # ghidra-stabs Phase 3: Type building
 
-**Goal:** Materialise Ghidra `DataType`s from the AST: primitives, structs, unions, enums, arrays, pointers, references, function definitions, recursive types — all deduped across CUs and filed under a sensible `CategoryPath`.
+**Goal:** Materialise Ghidra `DataType`s from the AST: primitives, structs, unions, enums, arrays, pointers, references,
+function definitions, recursive types — all deduped across CUs and filed under a sensible `CategoryPath`.
 
-**Architecture:** Pass-2 walker over the parser's `TypeDecl` tree. `TypeRegistry` is the single owner of `(TypeId, n) → DataType` resolution and `(name, body-hash) → canonical DataType` cross-CU dedup. `Attribution` is a pure function deciding category placement. Recursive types are handled by registering a placeholder DataType BEFORE recursing into the body, then patching its members in place.
+**Architecture:** Pass-2 walker over the parser's `TypeDecl` tree. `TypeRegistry` is the single owner of
+`(TypeId, n) → DataType` resolution and `(name, body-hash) → canonical DataType` cross-CU dedup. `Attribution` is a pure
+function deciding category placement. Recursive types are handled by registering a placeholder DataType BEFORE recursing
+into the body, then patching its members in place.
 
 **Tech Stack:** Kotlin 2.3.21, Ghidra `DataTypeManager` API, `ProgramBuilder` for Ring-2 tests, JUnit 5.
 
@@ -11,18 +15,40 @@
 **Codebase verified:** 2026-05-07.
 
 **Codebase verification findings:**
-- ✓ Phase 2 lands the AST. This phase imports `ghistabs.parser.*`.
-- ✓ Ghidra `DataTypeManager` API is at `ghidra.program.model.data.DataTypeManager`. Key methods: `addDataType(DataType, DataTypeConflictHandler)`, `getDataType(CategoryPath, String): DataType?`, `getCategory(CategoryPath): Category`, `createCategory(CategoryPath): Category`.
+
+- ✓ Phase 2 lands the AST. This phase imports `ghistabs.parse.*`.
+- ✓ Ghidra `DataTypeManager` API is at `ghidra.program.model.data.DataTypeManager`. Key methods:
+  `addDataType(DataType, DataTypeConflictHandler)`, `getDataType(CategoryPath, String): DataType?`,
+  `getCategory(CategoryPath): Category`, `createCategory(CategoryPath): Category`.
 - ✓ `CategoryPath` constructor takes a `/`-delimited path: `CategoryPath("/std/string")`. Root is `CategoryPath.ROOT`.
-- ✓ Built-ins available via `program.dataTypeManager.getDataType("/byte")` etc., or via `BuiltInDataTypeManager.getDataTypeManager()` for cross-program lookups. Concrete classes: `IntegerDataType`, `LongLongDataType`, `BooleanDataType`, `FloatDataType`, `DoubleDataType`, `Complex8DataType`, `Complex16DataType`, `CharDataType`, `WideCharDataType`, `VoidDataType`, `Undefined1DataType` … Undefined8.
-- ✓ `StructureDataType(CategoryPath, String, int length, DataTypeManager dtm)` — length 0 is "auto-grow", positive is "fixed". `replaceAtOffset(offset, type, len, name, comment)` is for static-position layout. We use `add(component)` for sequential append.
-- ✓ Cycle handling: `StructureDataType` allows `add(...)` of a `Pointer` to a not-yet-resolved type via `DataTypeManager.getDataType(path)` returning a `DataType` proxy that updates when the real type lands. Confirmed by reading `Ghidra/Framework/SoftwareModeling/src/main/java/ghidra/program/model/data/StructureDataType.java`.
-- ✓ `MSDataTypeUtils.getMatchingDataType(...)` exists and is intended for Microsoft-binary type unification — for our purposes we use `dtm.addDataType(dt, DataTypeConflictHandler.REPLACE_HANDLER)` and let the manager dedup by full path. The (name, body-hash) layer is OUR concern, not the DTM's.
-- ✓ `ProgramBuilder` lives at `ghidra.test.ProgramBuilder` (`Ghidra/Framework/SoftwareModeling/src/test.slow/java/ghidra/test/ProgramBuilder.java`). Constructor `ProgramBuilder(name, language)`; method `getProgram()` returns a fully-functional `Program`. Languages we'll use for tests: `_LE_` LP32 (closest match to XAP/x86 32-bit) — `ProgramBuilder._X86`. The implementor confirms by trial.
+- ✓ Built-ins available via `program.dataTypeManager.getDataType("/byte")` etc., or via
+  `BuiltInDataTypeManager.getDataTypeManager()` for cross-program lookups. Concrete classes: `IntegerDataType`,
+  `LongLongDataType`, `BooleanDataType`, `FloatDataType`, `DoubleDataType`, `Complex8DataType`, `Complex16DataType`,
+  `CharDataType`, `WideCharDataType`, `VoidDataType`, `Undefined1DataType` … Undefined8.
+- ✓ `StructureDataType(CategoryPath, String, int length, DataTypeManager dtm)` — length 0 is "auto-grow", positive is "
+  fixed". `replaceAtOffset(offset, type, len, name, comment)` is for static-position layout. We use `add(component)` for
+  sequential append.
+- ✓ Cycle handling: `StructureDataType` allows `add(...)` of a `Pointer` to a not-yet-resolved type via
+  `DataTypeManager.getDataType(path)` returning a `DataType` proxy that updates when the real type lands. Confirmed by
+  reading `Ghidra/Framework/SoftwareModeling/src/main/java/ghidra/program/model/data/StructureDataType.java`.
+- ✓ `MSDataTypeUtils.getMatchingDataType(...)` exists and is intended for Microsoft-binary type unification — for our
+  purposes we use `dtm.addDataType(dt, DataTypeConflictHandler.REPLACE_HANDLER)` and let the manager dedup by full path.
+  The (name, body-hash) layer is OUR concern, not the DTM's.
+- ✓ `ProgramBuilder` lives at `ghidra.test.ProgramBuilder` (
+  `Ghidra/Framework/SoftwareModeling/src/test.slow/java/ghidra/test/ProgramBuilder.java`). Constructor
+  `ProgramBuilder(name, language)`; method `getProgram()` returns a fully-functional `Program`. Languages we'll use for
+  tests: `_LE_` LP32 (closest match to XAP/x86 32-bit) — `ProgramBuilder._X86`. The implementor confirms by trial.
 
 **External dependency findings:**
-- 📖 **`DataTypeConflictHandler.REPLACE_HANDLER`** vs `KEEP_HANDLER` vs `DEFAULT_HANDLER`: REPLACE keeps the new one if conflict, KEEP keeps the old. We want KEEP (the canonical / first-seen wins) to avoid overwriting a multi-CU consolidated type with a later partial. Confirm by reading `Ghidra/Framework/SoftwareModeling/src/main/java/ghidra/program/model/data/DataTypeConflictHandler.java`.
-- 📖 **Itanium ABI 32-bit struct layout:** size is the sum of field sizes plus padding to align each field to its natural alignment (alignment = sizeof(field) for primitives, max-alignment-of-fields for nested aggregates). The stabs descriptor carries `<size>` explicitly; we trust it and lay out fields at the offsets the stab provides, padding with `Undefined` if needed.
+
+- 📖 **`DataTypeConflictHandler.REPLACE_HANDLER`** vs `KEEP_HANDLER` vs `DEFAULT_HANDLER`: REPLACE keeps the new one if
+  conflict, KEEP keeps the old. We want KEEP (the canonical / first-seen wins) to avoid overwriting a multi-CU
+  consolidated type with a later partial. Confirm by reading
+  `Ghidra/Framework/SoftwareModeling/src/main/java/ghidra/program/model/data/DataTypeConflictHandler.java`.
+- 📖 **Itanium ABI 32-bit struct layout:** size is the sum of field sizes plus padding to align each field to its natural
+  alignment (alignment = sizeof(field) for primitives, max-alignment-of-fields for nested aggregates). The stabs
+  descriptor carries `<size>` explicitly; we trust it and lay out fields at the offsets the stab provides, padding with
+  `Undefined` if needed.
 
 ---
 
@@ -32,11 +58,18 @@ This phase implements and tests:
 
 ### ghidra-stabs.AC3: Type resolution, dedup, and attribution
 
-- **ghidra-stabs.AC3.1 Success:** Two CUs that emit the same `(name, body)` produce a single canonical Ghidra `DataType`; the second emission is dropped, no duplicate appears in the DTM.
-- **ghidra-stabs.AC3.2 Success:** Two CUs that emit the same `name` with different bodies produce two distinct DataTypes (`Foo`, `Foo_2`), and a `[Stabs] type-conflict` log entry references both CUs.
-- **ghidra-stabs.AC3.3 Success:** A type defined in a single header is materialised at category `/<header-basename>/`. A multi-CU clean-named type that appears only in `.cpp` files lands at `/headers-untracked/<name>.h`. A type whose defining file path contains `/mingw/`, `/cygwin/`, `/c++/`, or `/bits/` lands at `/std/<basename>/`. A multi-CU template-instantiation name lands at `/<canonical-cu>/instantiations/`.
-- **ghidra-stabs.AC3.4 Success:** Recursive types (struct contains pointer to itself; mutually recursive struct A → B → A) resolve via the cycle-breaker placeholder mechanism without throwing or producing partially-populated structs.
-- **ghidra-stabs.AC3.5 Success:** On `xapasmcsr.exe`, ≥ 80 "interesting" project typenames (per the Phase 1 stats output's `INTERESTING project typenames` list) are present in the DTM after import.
+- **ghidra-stabs.AC3.1 Success:** Two CUs that emit the same `(name, body)` produce a single canonical Ghidra
+  `DataType`; the second emission is dropped, no duplicate appears in the DTM.
+- **ghidra-stabs.AC3.2 Success:** Two CUs that emit the same `name` with different bodies produce two distinct
+  DataTypes (`Foo`, `Foo_2`), and a `[Stabs] type-conflict` log entry references both CUs.
+- **ghidra-stabs.AC3.3 Success:** A type defined in a single header is materialised at category `/<header-basename>/`. A
+  multi-CU clean-named type that appears only in `.cpp` files lands at `/headers-untracked/<name>.h`. A type whose
+  defining file path contains `/mingw/`, `/cygwin/`, `/c++/`, or `/bits/` lands at `/std/<basename>/`. A multi-CU
+  template-instantiation name lands at `/<canonical-cu>/instantiations/`.
+- **ghidra-stabs.AC3.4 Success:** Recursive types (struct contains pointer to itself; mutually recursive struct A → B →
+  A) resolve via the cycle-breaker placeholder mechanism without throwing or producing partially-populated structs.
+- **ghidra-stabs.AC3.5 Success:** On `xapasmcsr.exe`, ≥ 80 "interesting" project typenames (per the Phase 1 stats
+  output's `INTERESTING project typenames` list) are present in the DTM after import.
 
 (AC3.5 is asserted by Phase 6's integration test against the real binary; this phase's tests use synthetic ASTs.)
 
@@ -47,27 +80,38 @@ This phase implements and tests:
 <!-- START_SUBCOMPONENT_A (tasks 1-2) -->
 
 <!-- START_TASK_1 -->
+
 ### Task 1: `Attribution` — pure CategoryPath chooser
 
 **Files:**
+
 - Create: `/home/riton/git/bouse/ghidra-stabs/src/main/kotlin/ghistabs/builder/Attribution.kt`
 
 **Implementation:**
 
-Pure function. No Ghidra mutation. Takes the type's name + the set of CUs that defined it + the set of source-file paths (from N_SOL records) seen alongside those definitions. Returns a `CategoryPath`.
+Pure function. No Ghidra mutation. Takes the type's name + the set of CUs that defined it + the set of source-file
+paths (from N_SOL records) seen alongside those definitions. Returns a `CategoryPath`.
 
 Decision tree (from design):
 
-1. If ANY defining file path matches `Regex("/(mingw|cygwin|c\\+\\+|bits)/")`, the type is std/system: pick the most-specific path-segment after the matched marker as the basename, return `CategoryPath("/std/<basename>")`. Example: `/usr/include/c++/3.4.4/string` → basename = `string` → `/std/string`.
-2. Else if defined in EXACTLY ONE CU and the CU's filename ends with `.h` / `.hpp` / `.hh` / `.H`: it's a project header. Return `CategoryPath("/" + basename-no-ext)`.
-3. Else if defined in EXACTLY ONE CU with a `.c` / `.cpp` / `.cc` extension: it's a CU-private type. Return `CategoryPath("/" + cu-basename-no-ext)`.
+1. If ANY defining file path matches `Regex("/(mingw|cygwin|c\\+\\+|bits)/")`, the type is std/system: pick the
+   most-specific path-segment after the matched marker as the basename, return `CategoryPath("/std/<basename>")`.
+   Example: `/usr/include/c++/3.4.4/string` → basename = `string` → `/std/string`.
+2. Else if defined in EXACTLY ONE CU and the CU's filename ends with `.h` / `.hpp` / `.hh` / `.H`: it's a project
+   header. Return `CategoryPath("/" + basename-no-ext)`.
+3. Else if defined in EXACTLY ONE CU with a `.c` / `.cpp` / `.cc` extension: it's a CU-private type. Return
+   `CategoryPath("/" + cu-basename-no-ext)`.
 4. Else (multi-CU). Check the name:
-   - `cleanName(name)`: returns true iff `name` contains none of `<>,:` AND does not start with `_` AND is not in the C/C++ builtin set (`int`, `unsigned`, `void`, etc.). The builtin set is a fixed `setOf("int", "char", "short", "long", "float", "double", "void", "bool", "_Bool", "signed", "unsigned")` — extend as needed.
-   - If clean: `CategoryPath("/headers-untracked/" + name.h)` — a synthetic header bucket.
-   - If unclean (template instantiation, mangled name, leading-underscore): pick the lexicographically-first defining CU as canonical, return `CategoryPath("/<canonical-cu>/instantiations")`.
+    - `cleanName(name)`: returns true iff `name` contains none of `<>,:` AND does not start with `_` AND is not in the
+      C/C++ builtin set (`int`, `unsigned`, `void`, etc.). The builtin set is a fixed
+      `setOf("int", "char", "short", "long", "float", "double", "void", "bool", "_Bool", "signed", "unsigned")` — extend
+      as needed.
+    - If clean: `CategoryPath("/headers-untracked/" + name.h)` — a synthetic header bucket.
+    - If unclean (template instantiation, mangled name, leading-underscore): pick the lexicographically-first defining
+      CU as canonical, return `CategoryPath("/<canonical-cu>/instantiations")`.
 
 ```kotlin
-package ghistabs.builder
+package ghistabs.materialize
 
 import ghidra.program.model.data.CategoryPath
 
@@ -89,15 +133,18 @@ object Attribution {
     fun categoryFor(
         typeName: String,
         definingCUs: Set<String>,
-    ): CategoryPath { /* ... */ }
+    ): CategoryPath { /* ... */
+    }
 
     private fun isClean(name: String): Boolean =
         !UNCLEAN_CHARS.containsMatchIn(name) &&
-            !name.startsWith("_") &&
-            name !in BUILTIN_NAMES
+                !name.startsWith("_") &&
+                name !in BUILTIN_NAMES
 
-    private fun stdBasename(path: String): String? { /* find STD_MARKERS, return last non-empty path segment */ }
-    private fun basename(path: String): String { /* drop dir, drop extension */ }
+    private fun stdBasename(path: String): String? { /* find STD_MARKERS, return last non-empty path segment */
+    }
+    private fun basename(path: String): String { /* drop dir, drop extension */
+    }
 }
 ```
 
@@ -107,9 +154,11 @@ object Attribution {
 <!-- END_TASK_1 -->
 
 <!-- START_TASK_2 -->
+
 ### Task 2: `AttributionTest` — every row in the decision tree (Ring-1)
 
 **Files:**
+
 - Create: `/home/riton/git/bouse/ghidra-stabs/src/test/kotlin/ghistabs/builder/AttributionTest.kt`
 
 **Tests must verify (`ghidra-stabs.AC3.3`):**
@@ -121,14 +170,17 @@ object Attribution {
 - Single header (project) — `definingCUs = {"/proj/include/foo.h"}`, name = `Foo` ⇒ `/foo`.
 - Single CU (project) — `definingCUs = {"/proj/src/main.cpp"}`, name = `LocalThing` ⇒ `/main`.
 - Multi-CU clean name — `definingCUs = {"/proj/a.cpp", "/proj/b.cpp"}`, name = `Shared` ⇒ `/headers-untracked/Shared.h`.
-- Multi-CU unclean name (template instantiation) — `definingCUs = {"/proj/b.cpp", "/proj/a.cpp"}`, name = `vector<int,allocator<int>>` ⇒ `/a/instantiations` (canonical CU lexicographically first).
-- Multi-CU leading-underscore — `definingCUs = {"/proj/a.cpp", "/proj/b.cpp"}`, name = `__internal` ⇒ `/a/instantiations`.
-- Multi-CU builtin-named (impossible-but-defensive) — `definingCUs = {"/proj/a.cpp", "/proj/b.cpp"}`, name = `int` ⇒ `/a/instantiations` (treated as unclean since it matches a builtin).
+- Multi-CU unclean name (template instantiation) — `definingCUs = {"/proj/b.cpp", "/proj/a.cpp"}`, name =
+  `vector<int,allocator<int>>` ⇒ `/a/instantiations` (canonical CU lexicographically first).
+- Multi-CU leading-underscore — `definingCUs = {"/proj/a.cpp", "/proj/b.cpp"}`, name = `__internal` ⇒
+  `/a/instantiations`.
+- Multi-CU builtin-named (impossible-but-defensive) — `definingCUs = {"/proj/a.cpp", "/proj/b.cpp"}`, name = `int` ⇒
+  `/a/instantiations` (treated as unclean since it matches a builtin).
 
 **Step: Run, commit (Task 1 + Task 2 together)**
 
 ```bash
-./gradlew test --tests 'ghistabs.builder.AttributionTest'
+./gradlew test --tests 'ghistabs.materialize.AttributionTest'
 git add src/main/kotlin/ghistabs/builder/Attribution.kt src/test/kotlin/ghistabs/builder/AttributionTest.kt
 git commit -m "feat(builder): Attribution category-path picker + tests"
 ```
@@ -141,38 +193,46 @@ git commit -m "feat(builder): Attribution category-path picker + tests"
 <!-- START_SUBCOMPONENT_B (tasks 3-4) -->
 
 <!-- START_TASK_3 -->
+
 ### Task 3: `BuiltinTable` — primitive-form → Ghidra builtin DataType
 
 **Files:**
+
 - Create: `/home/riton/git/bouse/ghidra-stabs/src/main/kotlin/ghistabs/builder/BuiltinTable.kt`
 
 **Implementation:**
 
-Pure mapping from a "primitive shape descriptor" (the parser's `TypeDecl.Range`, `TypeDecl.Complex`, `TypeDecl.WithSizeAttr`, and the parser's eventual canonical builtin names) to a Ghidra builtin `DataType`.
+Pure mapping from a "primitive shape descriptor" (the parser's `TypeDecl.Range`, `TypeDecl.Complex`,
+`TypeDecl.WithSizeAttr`, and the parser's eventual canonical builtin names) to a Ghidra builtin `DataType`.
 
 The rule of thumb from the design:
+
 - `r(0,N);min;max;` with min/max forming a signed [−2^(W−1), 2^(W−1)−1] range → `IntegerDataType` of size W bits.
 - `r(0,N);0;<umax>;` with umax = 2^W − 1 → `UnsignedIntegerDataType` of size W bits.
-- `@s<n>;<inner>` where inner is an integer range → builtin of `<n>` bits (width override). E.g. `@s64;r(0,6);…` → `LongLongDataType`.
+- `@s<n>;<inner>` where inner is an integer range → builtin of `<n>` bits (width override). E.g. `@s64;r(0,6);…` →
+  `LongLongDataType`.
 - `@s8;-16` (the `_Bool` form) → `BooleanDataType`.
 - `R3;8;0;` → `Complex8DataType` (single-precision complex).
 - `R4;16;0;` → `Complex16DataType` (double-precision complex).
-- `R5;<size>;0;` → mapped to whichever Ghidra type matches the requested size (likely a long-double complex; if no exact builtin exists, fall back to `Complex16DataType` and log).
+- `R5;<size>;0;` → mapped to whichever Ghidra type matches the requested size (likely a long-double complex; if no exact
+  builtin exists, fall back to `Complex16DataType` and log).
 
 API:
 
 ```kotlin
-package ghistabs.builder
+package ghistabs.materialize
 
 import ghidra.program.model.data.*
 
 object BuiltinTable {
     /** Resolve a primitive-shaped TypeDecl to a builtin Ghidra DataType, or null if not a primitive. */
-    fun resolve(decl: ghistabs.parser.TypeDecl, dtm: DataTypeManager): DataType?
+    fun resolve(decl: ghistabs.parse.TypeDecl, dtm: DataTypeManager): DataType?
 }
 ```
 
-The implementation matches on `decl` shape, derives the bit-width, and returns the builtin. For sizes Ghidra has no exact match for, return `null` and let `TypeRegistry` fall back to a generic `StructureDataType` of the correct size with `Undefined` filler.
+The implementation matches on `decl` shape, derives the bit-width, and returns the builtin. For sizes Ghidra has no
+exact match for, return `null` and let `TypeRegistry` fall back to a generic `StructureDataType` of the correct size
+with `Undefined` filler.
 
 **Step: Commit (after Task 4 tests)**
 
@@ -180,9 +240,11 @@ The implementation matches on `decl` shape, derives the bit-width, and returns t
 <!-- END_TASK_3 -->
 
 <!-- START_TASK_4 -->
+
 ### Task 4: `BuiltinTableTest` — every primitive form (Ring-1)
 
 **Files:**
+
 - Create: `/home/riton/git/bouse/ghidra-stabs/src/test/kotlin/ghistabs/builder/BuiltinTableTest.kt`
 
 **Tests must verify (`ghidra-stabs.AC2.2`/`AC2.3` re-verified at the type-mapping layer):**
@@ -201,7 +263,7 @@ The DTM in Ring-1 tests is `BuiltInDataTypeManager.getDataTypeManager()` (a stat
 **Step: Run, commit**
 
 ```bash
-./gradlew test --tests 'ghistabs.builder.BuiltinTableTest'
+./gradlew test --tests 'ghistabs.materialize.BuiltinTableTest'
 git add src/main/kotlin/ghistabs/builder/BuiltinTable.kt src/test/kotlin/ghistabs/builder/BuiltinTableTest.kt
 git commit -m "feat(builder): BuiltinTable primitive mapper + tests"
 ```
@@ -214,20 +276,22 @@ git commit -m "feat(builder): BuiltinTable primitive mapper + tests"
 <!-- START_SUBCOMPONENT_C (tasks 5-7) -->
 
 <!-- START_TASK_5 -->
+
 ### Task 5: `TypeRegistry` core — id resolution, content-hash dedup, conflict naming
 
 **Files:**
+
 - Create: `/home/riton/git/bouse/ghidra-stabs/src/main/kotlin/ghistabs/builder/TypeRegistry.kt`
 
 **Implementation:**
 
 ```kotlin
-package ghistabs.builder
+package ghistabs.materialize
 
 import ghidra.program.model.data.*
 import ghistabs.importer.BookmarkSink
-import ghistabs.parser.TypeDecl
-import ghistabs.parser.TypeId
+import ghistabs.parse.TypeDecl
+import ghistabs.parse.TypeId
 
 /** Per-type metadata accumulated during pass A. */
 data class TypeAst(
@@ -356,7 +420,9 @@ class TypeRegistry(
                 var renamed: DataType? = null
                 while (renamed == null && n < 1000) {
                     val candidate = "${name}_$n"
-                    if (dtm.getDataType(dt.categoryPath, candidate) != null) { n++; continue }
+                    if (dtm.getDataType(dt.categoryPath, candidate) != null) {
+                        n++; continue
+                    }
                     val copy = dt.copy(dtm)
                     try {
                         copy.name = candidate
@@ -370,8 +436,10 @@ class TypeRegistry(
                 }
                 checkNotNull(renamed) { "could not allocate conflict suffix for '$name'" }
                 conflictCount[name] = n
-                sink.log("type-conflict",
-                    "Two definitions of '$name' with different bodies; renamed second to '${name}_$n'.")
+                sink.log(
+                    "type-conflict",
+                    "Two definitions of '$name' with different bodies; renamed second to '${name}_$n'."
+                )
                 dtm.addDataType(renamed, DataTypeConflictHandler.KEEP_HANDLER)
             }
         }
@@ -382,15 +450,21 @@ class TypeRegistry(
 @JvmInline
 value class ContentHash(val v: Long) {
     companion object {
-        fun of(decl: TypeDecl): ContentHash { /* stable serialisation, then hash */ TODO() }
-        fun ofDataType(dt: DataType): ContentHash { /* serialise field layout, then hash */ TODO() }
+        fun of(decl: TypeDecl): ContentHash { /* stable serialisation, then hash */ TODO()
+        }
+        fun ofDataType(dt: DataType): ContentHash { /* serialise field layout, then hash */ TODO()
+        }
     }
 }
 ```
 
-**`dataTypeFor` is the single Pass C / ClassBuilder entry point.** Phase 4 and Phase 5 consume it; this phase owns its definition and behavior so Phase 4 doesn't retroactively edit Phase 3 code.
+**`dataTypeFor` is the single Pass C / ClassBuilder entry point.** Phase 4 and Phase 5 consume it; this phase owns its
+definition and behavior so Phase 4 doesn't retroactively edit Phase 3 code.
 
-**ContentHash design choice:** structural hashing of the AST. Visit every node, append a tag byte for the variant kind plus the relevant primitive fields (sizes, names, type-id refs). Use `Long.hashCode()` on the combined byte array (or `kotlin.collections.contentHashCode`). The hash is approximate (collisions theoretically possible) but for our purposes — tens of thousands of types per binary — collision probability is negligible.
+**ContentHash design choice:** structural hashing of the AST. Visit every node, append a tag byte for the variant kind
+plus the relevant primitive fields (sizes, names, type-id refs). Use `Long.hashCode()` on the combined byte array (or
+`kotlin.collections.contentHashCode`). The hash is approximate (collisions theoretically possible) but for our
+purposes — tens of thousands of types per binary — collision probability is negligible.
 
 **Step: Commit (after Task 7 tests)**
 
@@ -398,32 +472,57 @@ value class ContentHash(val v: Long) {
 <!-- END_TASK_5 -->
 
 <!-- START_TASK_6 -->
+
 ### Task 6: Implement `materialiseBody` for every `TypeDecl` variant + cycle handling
 
 **Files:**
+
 - Modify: `/home/riton/git/bouse/ghidra-stabs/src/main/kotlin/ghistabs/builder/TypeRegistry.kt:materialiseBody`
 
 **Implementation:**
 
 Fill in the `TODO` from Task 5. Per-variant handling:
 
-- `TypeDecl.Builtin` / `WithSizeAttr` / `Range` / `Complex` — delegate to `BuiltinTable.resolve(decl, dtm)`. If non-null, return that. If null (e.g. exotic size), fall back to `StructureDataType(category, name, sizeBytes, dtm)` of the right total size with `Undefined` filler.
-- `TypeDecl.Pointer(pointee)` — `PointerDataType.getPointer(resolvePointee(pointee), dtm)`. If `pointee` is a `Ref(id)` for which we have a placeholder, the pointer's pointee is the placeholder (Ghidra resolves the indirection automatically when the placeholder is replaced with the real type later).
-- `TypeDecl.Reference(referent)` — same as Pointer but flagged. Ghidra has no first-class reference type; we use `PointerDataType` and add a comment "C++ reference" via `Pointer.setDescription(...)` if the API allows.
-- `TypeDecl.Const(inner)` — Ghidra has no const qualifier; resolve `inner` and return it. Drop the const information (or stash it in a comment if required by future work; not for v1).
+- `TypeDecl.Builtin` / `WithSizeAttr` / `Range` / `Complex` — delegate to `BuiltinTable.resolve(decl, dtm)`. If
+  non-null, return that. If null (e.g. exotic size), fall back to `StructureDataType(category, name, sizeBytes, dtm)` of
+  the right total size with `Undefined` filler.
+- `TypeDecl.Pointer(pointee)` — `PointerDataType.getPointer(resolvePointee(pointee), dtm)`. If `pointee` is a `Ref(id)`
+  for which we have a placeholder, the pointer's pointee is the placeholder (Ghidra resolves the indirection
+  automatically when the placeholder is replaced with the real type later).
+- `TypeDecl.Reference(referent)` — same as Pointer but flagged. Ghidra has no first-class reference type; we use
+  `PointerDataType` and add a comment "C++ reference" via `Pointer.setDescription(...)` if the API allows.
+- `TypeDecl.Const(inner)` — Ghidra has no const qualifier; resolve `inner` and return it. Drop the const information (or
+  stash it in a comment if required by future work; not for v1).
 - `TypeDecl.Volatile(inner)` — same as Const.
-- `TypeDecl.Array(element, length, _)` — `ArrayDataType(resolveElement(element), length.toInt(), elementSize)`. If `length == null` (open-ended), default to `0` (Ghidra interprets as flexible array member).
-- `TypeDecl.Enum(members)` — `EnumDataType(category, name, sizeBytes ?: 4, dtm)`, then for each member `enum.add(memberName, memberValue)`.
-- `TypeDecl.Struct` — already initialised as a `StructureDataType` placeholder. Cast and call `add(fieldType, fieldName, comment)` in field-offset order; pad with `DataType.DEFAULT` (Undefined) where needed. Set the structure's overall length to `sizeBytes` via `setLength` if API permits, else use `replaceAtOffset` to write fields at exact offsets.
-  - For union: use `UnionDataType` instead (different class; same `add` API).
-- `TypeDecl.FunctionT(ret, params)` — `FunctionDefinitionDataType(category, name, dtm)`, then `setReturnType(resolve(ret))`, `setArguments(params.mapIndexed { i, p -> ParameterDefinitionImpl("arg$i", resolve(p), null) }.toTypedArray())`.
+- `TypeDecl.Array(element, length, _)` — `ArrayDataType(resolveElement(element), length.toInt(), elementSize)`. If
+  `length == null` (open-ended), default to `0` (Ghidra interprets as flexible array member).
+- `TypeDecl.Enum(members)` — `EnumDataType(category, name, sizeBytes ?: 4, dtm)`, then for each member
+  `enum.add(memberName, memberValue)`.
+- `TypeDecl.Struct` — already initialised as a `StructureDataType` placeholder. Cast and call
+  `add(fieldType, fieldName, comment)` in field-offset order; pad with `DataType.DEFAULT` (Undefined) where needed. Set
+  the structure's overall length to `sizeBytes` via `setLength` if API permits, else use `replaceAtOffset` to write
+  fields at exact offsets.
+    - For union: use `UnionDataType` instead (different class; same `add` API).
+- `TypeDecl.FunctionT(ret, params)` — `FunctionDefinitionDataType(category, name, dtm)`, then
+  `setReturnType(resolve(ret))`,
+  `setArguments(params.mapIndexed { i, p -> ParameterDefinitionImpl("arg$i", resolve(p), null) }.toTypedArray())`.
 - `TypeDecl.Method(...)` — same as `FunctionT` but the first parameter is a pointer-to-class (the implicit `this`).
-- `TypeDecl.XRef(kind, tagName)` — return a stub `StructureDataType(category, tagName, 1, dtm)`. The real definition will land later (or never, if the type is genuinely incomplete in the binary). Mark with a `[Stabs] xref-stub` log on creation.
-- `TypeDecl.Ref(id)` — recurse to `resolve()` of the referent's `TypeAst` (looked up via a separate `byId` index built once at the start of `materialiseAll`). If the referent isn't in the index, return `Undefined4DataType` (4-byte placeholder) and log `[Stabs] dangling-ref`.
+- `TypeDecl.XRef(kind, tagName)` — return a stub `StructureDataType(category, tagName, 1, dtm)`. The real definition
+  will land later (or never, if the type is genuinely incomplete in the binary). Mark with a `[Stabs] xref-stub` log on
+  creation.
+- `TypeDecl.Ref(id)` — recurse to `resolve()` of the referent's `TypeAst` (looked up via a separate `byId` index built
+  once at the start of `materialiseAll`). If the referent isn't in the index, return `Undefined4DataType` (4-byte
+  placeholder) and log `[Stabs] dangling-ref`.
 
 **Cycle test specifically asserted in Task 7:**
-- Self-pointer (`struct A { A* next; }`): `resolve` is called for A, registers the placeholder, recurses into the body. The body has one field of type `Pointer(Ref(A.id))`. Resolving that pointer's pointee finds the placeholder via `byId`, returns it. The pointer is added to the struct as a 4-byte field. No infinite recursion.
-- Mutually recursive (`A → B → A`): `resolve(A)` registers A's placeholder, recurses; A has a field of type `Pointer(Ref(B.id))`. We call `resolve(B)`. B registers its placeholder, recurses; B has a field of type `Pointer(Ref(A.id))`. `resolve(A)` finds A's placeholder in `byId`, returns it. B's struct is populated, returned. Back in A's resolution, the pointer-to-B is added. Done.
+
+- Self-pointer (`struct A { A* next; }`): `resolve` is called for A, registers the placeholder, recurses into the body.
+  The body has one field of type `Pointer(Ref(A.id))`. Resolving that pointer's pointee finds the placeholder via
+  `byId`, returns it. The pointer is added to the struct as a 4-byte field. No infinite recursion.
+- Mutually recursive (`A → B → A`): `resolve(A)` registers A's placeholder, recurses; A has a field of type
+  `Pointer(Ref(B.id))`. We call `resolve(B)`. B registers its placeholder, recurses; B has a field of type
+  `Pointer(Ref(A.id))`. `resolve(A)` finds A's placeholder in `byId`, returns it. B's struct is populated, returned.
+  Back in A's resolution, the pointer-to-B is added. Done.
 
 **Step: Run tests, commit (with Task 7)**
 
@@ -431,9 +530,11 @@ Fill in the `TODO` from Task 5. Per-variant handling:
 <!-- END_TASK_6 -->
 
 <!-- START_TASK_7 -->
+
 ### Task 7: `TypeRegistryTest` (Ring-2) — dedup, conflict, recursion, multi-CU attribution
 
 **Files:**
+
 - Create: `/home/riton/git/bouse/ghidra-stabs/src/test/kotlin/ghistabs/builder/TypeRegistryTest.kt`
 
 **Setup helper:**
@@ -457,26 +558,38 @@ ProgramBuilder isn't on the classpath.
 
 **Tests must verify:**
 
-- **`ghidra-stabs.AC3.1`** (cross-CU dedup): construct two `TypeAst` entries with the same name `Foo` and the same body (a 2-field struct of identical fields), but different CUs. Call `materialiseAll`. Assert `dtm.getAllDataTypes().count { it.name == "Foo" } == 1`. Assert no `[Stabs] type-conflict` log entries.
+- **`ghidra-stabs.AC3.1`** (cross-CU dedup): construct two `TypeAst` entries with the same name `Foo` and the same
+  body (a 2-field struct of identical fields), but different CUs. Call `materialiseAll`. Assert
+  `dtm.getAllDataTypes().count { it.name == "Foo" } == 1`. Assert no `[Stabs] type-conflict` log entries.
 
-- **`ghidra-stabs.AC3.2`** (cross-CU conflict): same name `Foo`, different bodies (one is `{int x; int y;}`, the other is `{int x; float y;}`). Assert `dtm.getAllDataTypes().count { it.name == "Foo" } == 1` AND `dtm.getAllDataTypes().count { it.name == "Foo_2" } == 1`. Assert exactly one `[Stabs] type-conflict` log entry that mentions both CU paths.
+- **`ghidra-stabs.AC3.2`** (cross-CU conflict): same name `Foo`, different bodies (one is `{int x; int y;}`, the other
+  is `{int x; float y;}`). Assert `dtm.getAllDataTypes().count { it.name == "Foo" } == 1` AND
+  `dtm.getAllDataTypes().count { it.name == "Foo_2" } == 1`. Assert exactly one `[Stabs] type-conflict` log entry that
+  mentions both CU paths.
 
-- **`ghidra-stabs.AC3.4`** (self-cycle): single AST `Node` with body `Struct(STRUCT, 8, [], [FieldDecl("next", Pointer(Ref(Node.id)), 0, 32, false), FieldDecl("val", Range((0,1), -2^31, 2^31-1), 32, 32, false)], [], false, null)`. `materialiseAll` completes without StackOverflow. The materialised `Node` has length 8, two fields, and the first field's data type is `Node *`.
+- **`ghidra-stabs.AC3.4`** (self-cycle): single AST `Node` with body
+  `Struct(STRUCT, 8, [], [FieldDecl("next", Pointer(Ref(Node.id)), 0, 32, false), FieldDecl("val", Range((0,1), -2^31, 2^31-1), 32, 32, false)], [], false, null)`.
+  `materialiseAll` completes without StackOverflow. The materialised `Node` has length 8, two fields, and the first
+  field's data type is `Node *`.
 
-- **`ghidra-stabs.AC3.4`** (mutual cycle): two ASTs `A` and `B` where A has a `B*` field and B has an `A*` field. `materialiseAll` completes; both structs have length matching the stab payload; both are present in DTM; both pointer fields point at the correct opposing struct.
+- **`ghidra-stabs.AC3.4`** (mutual cycle): two ASTs `A` and `B` where A has a `B*` field and B has an `A*` field.
+  `materialiseAll` completes; both structs have length matching the stab payload; both are present in DTM; both pointer
+  fields point at the correct opposing struct.
 
-- **`ghidra-stabs.AC3.3`** (attribution at materialisation time): `Foo` defined once in `/proj/foo.h`. After `materialiseAll`, `dtm.getDataType(CategoryPath("/foo"), "Foo") != null`.
+- **`ghidra-stabs.AC3.3`** (attribution at materialisation time): `Foo` defined once in `/proj/foo.h`. After
+  `materialiseAll`, `dtm.getDataType(CategoryPath("/foo"), "Foo") != null`.
 
 **Step: Run, commit**
 
 ```bash
-./gradlew test --tests 'ghistabs.builder.TypeRegistryTest'
+./gradlew test --tests 'ghistabs.materialize.TypeRegistryTest'
 git add src/main/kotlin/ghistabs/builder/TypeRegistry.kt \
         src/test/kotlin/ghistabs/builder/TypeRegistryTest.kt
 git commit -m "feat(builder): TypeRegistry (dedup, conflict naming, cycles) + tests"
 ```
 
-**Verifies:** `ghidra-stabs.AC3.1`, `ghidra-stabs.AC3.2`, `ghidra-stabs.AC3.3` (materialisation half), `ghidra-stabs.AC3.4`.
+**Verifies:** `ghidra-stabs.AC3.1`, `ghidra-stabs.AC3.2`, `ghidra-stabs.AC3.3` (materialisation half),
+`ghidra-stabs.AC3.4`.
 <!-- END_TASK_7 -->
 
 <!-- END_SUBCOMPONENT_C -->
@@ -494,5 +607,6 @@ git commit -m "feat(builder): TypeRegistry (dedup, conflict naming, cycles) + te
 
 ## Open Questions for User
 
-- **Should we preserve `const`/`volatile` qualifiers somewhere?** Ghidra has no first-class const datatype; v1 drops them. Acceptable?
+- **Should we preserve `const`/`volatile` qualifiers somewhere?** Ghidra has no first-class const datatype; v1 drops
+  them. Acceptable?
 - **Reference types as `Pointer` with comment "C++ reference"** — OK or should we use a different convention?

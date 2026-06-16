@@ -1,29 +1,60 @@
 # ghidra-stabs Phase 4: Symbol application (functions, globals, locals, params)
 
-**Goal:** Apply non-class symbols to the program — function signatures with return + parameter types and names, register/stack locals, globals at resolved addresses, file-statics at stab-carried addresses, plate comments at lexical scopes.
+**Goal:** Apply non-class symbols to the program — function signatures with return + parameter types and names,
+register/stack locals, globals at resolved addresses, file-statics at stab-carried addresses, plate comments at lexical
+scopes.
 
-**Architecture:** `StabsImporter.run()` is the orchestrator implementing the three-pass walk (read → parse + harvest → materialise types → apply symbols). This phase wires Pass A's harvesting and Pass C's non-class symbol application; class-method re-parenting is left to Phase 5.
+**Architecture:** `StabsImporter.run()` is the orchestrator implementing the three-pass walk (read → parse + harvest →
+materialise types → apply symbols). This phase wires Pass A's harvesting and Pass C's non-class symbol application;
+class-method re-parenting is left to Phase 5.
 
-**Tech Stack:** Kotlin 2.3.21, Ghidra `Function` / `Variable` / `Listing` / `SymbolTable` APIs, JUnit 5 + `ProgramBuilder`.
+**Tech Stack:** Kotlin 2.3.21, Ghidra `Function` / `Variable` / `Listing` / `SymbolTable` APIs, JUnit 5 +
+`ProgramBuilder`.
 
 **Scope:** Phase 4 of 6.
 
 **Codebase verified:** 2026-05-07.
 
 **Codebase verification findings:**
-- ✓ Phases 1–3 deliver: `StabReader`, `Parser`, `TypeRegistry`, `AddressResolver`, `BookmarkSink`. This phase imports all of them.
-- ✓ Ghidra Function API: `program.functionManager.getFunctionAt(addr): Function?`; `createFunction(name, addr, body, source): Function`; `function.setReturnType(dt, source)`; `function.replaceParameters(params, FunctionUpdateType.DYNAMIC_STORAGE_ALL_PARAMS, true, source)`. Confirmed in `Ghidra/Framework/SoftwareModeling/src/main/java/ghidra/program/model/listing/Function.java`.
-- ✓ `Parameter` / `LocalVariable` / `ReturnParameterImpl` / `ParameterImpl` available under `ghidra.program.model.listing.*`.
-- ✓ Plate comments: `program.listing.setComment(addr, CodeUnit.PLATE_COMMENT, text)`. `CodeUnit.PLATE_COMMENT` is the integer constant `3`.
-- ✓ For locals: `function.addLocalVariable(LocalVariableImpl, source)`. Stack offsets are signed (negative = below frame pointer).
-- ✓ Register locals: `LocalVariableImpl(name, dt, register, function, source)`. Need to map stab register numbers to Ghidra `Register` objects via `program.programContext.getRegister(int)` — though for x86, the gcc register-number convention is `0=eax, 1=ecx, …`. **The implementor must verify the mapping against the target architecture.** xapasmcsr.exe is a PE32 x86 binary (Cygwin gcc 3.4.4 produces standard SysV-style register numbers there).
-- ✓ Transactions: every `Program` mutation must be inside `program.startTransaction("name") … endTransaction(id, true)`. We wrap each pass in its own transaction.
+
+- ✓ Phases 1–3 deliver: `StabReader`, `Parser`, `TypeRegistry`, `AddressResolver`, `BookmarkSink`. This phase imports
+  all of them.
+- ✓ Ghidra Function API: `program.functionManager.getFunctionAt(addr): Function?`;
+  `createFunction(name, addr, body, source): Function`; `function.setReturnType(dt, source)`;
+  `function.replaceParameters(params, FunctionUpdateType.DYNAMIC_STORAGE_ALL_PARAMS, true, source)`. Confirmed in
+  `Ghidra/Framework/SoftwareModeling/src/main/java/ghidra/program/model/listing/Function.java`.
+- ✓ `Parameter` / `LocalVariable` / `ReturnParameterImpl` / `ParameterImpl` available under
+  `ghidra.program.model.listing.*`.
+- ✓ Plate comments: `program.listing.setComment(addr, CodeUnit.PLATE_COMMENT, text)`. `CodeUnit.PLATE_COMMENT` is the
+  integer constant `3`.
+- ✓ For locals: `function.addLocalVariable(LocalVariableImpl, source)`. Stack offsets are signed (negative = below frame
+  pointer).
+- ✓ Register locals: `LocalVariableImpl(name, dt, register, function, source)`. Need to map stab register numbers to
+  Ghidra `Register` objects via `program.programContext.getRegister(int)` — though for x86, the gcc register-number
+  convention is `0=eax, 1=ecx, …`. **The implementor must verify the mapping against the target architecture.**
+  xapasmcsr.exe is a PE32 x86 binary (Cygwin gcc 3.4.4 produces standard SysV-style register numbers there).
+- ✓ Transactions: every `Program` mutation must be inside `program.startTransaction("name") … endTransaction(id, true)`.
+  We wrap each pass in its own transaction.
 
 **External dependency findings:**
-- 📖 **`N_FUN.n_value` semantics on PE32 / Cygwin gcc 3.4.4:** the function-start `N_FUN` carries `n_value` as the *absolute virtual address* (image base + section offset), matching Ghidra's `Address` interpretation. The function-end `N_FUN` (empty name) carries `n_value` as the function size *relative to function start*. This is the Cygwin/MinGW gcc dialect; it differs from a.out where N_FUN can be section-relative. Reference: gcc 3.4.4 source `gcc/dbxout.c:dbxout_function_decl` emits `assemble_name (file, name); fprintf (file, ":%c", '%s'); …` which the assembler resolves to the absolute symbol value. **The implementor must verify against the first 5 functions of `xapasmcsr.exe`** (compare stab `n_value` to the function entry as Ghidra's PE loader places it). If absolute-address assumption is wrong, document and add image-base offset adjustment in passAHarvest.
-- 📖 **Stabs scope semantics:** `N_FUN` opens a function record, then a sequence of `N_PSYM` (stack params), `N_RSYM` (register params/locals), `N_LSYM` (locals — `n_value` is the stack offset), `N_LBRAC` / `N_RBRAC` (lexical scope brackets — `n_value` is an offset from function start), `N_SLINE` (line numbers, out of scope for v1). Order matters for scope.
-- 📖 **`N_FUN` end-of-function record:** GCC emits a `N_FUN` with empty name and `n_value = function size` (relative to function start) to mark the end of a function. We use this to compute function bodies.
-- 📖 **Ghidra `AddressSet` for function body:** if we don't have an end marker, fall back to `function.getBody()` after `createFunction(addr, null, source)` — Ghidra computes body via flow analysis. The stab-derived size is more reliable; use it when present.
+
+- 📖 **`N_FUN.n_value` semantics on PE32 / Cygwin gcc 3.4.4:** the function-start `N_FUN` carries `n_value` as the
+  *absolute virtual address* (image base + section offset), matching Ghidra's `Address` interpretation. The function-end
+  `N_FUN` (empty name) carries `n_value` as the function size *relative to function start*. This is the Cygwin/MinGW gcc
+  dialect; it differs from a.out where N_FUN can be section-relative. Reference: gcc 3.4.4 source
+  `gcc/dbxout.c:dbxout_function_decl` emits `assemble_name (file, name); fprintf (file, ":%c", '%s'); …` which the
+  assembler resolves to the absolute symbol value. **The implementor must verify against the first 5 functions
+  of `xapasmcsr.exe`** (compare stab `n_value` to the function entry as Ghidra's PE loader places it). If
+  absolute-address assumption is wrong, document and add image-base offset adjustment in passAHarvest.
+- 📖 **Stabs scope semantics:** `N_FUN` opens a function record, then a sequence of `N_PSYM` (stack params), `N_RSYM` (
+  register params/locals), `N_LSYM` (locals — `n_value` is the stack offset), `N_LBRAC` / `N_RBRAC` (lexical scope
+  brackets — `n_value` is an offset from function start), `N_SLINE` (line numbers, out of scope for v1). Order matters
+  for scope.
+- 📖 **`N_FUN` end-of-function record:** GCC emits a `N_FUN` with empty name and `n_value = function size` (relative to
+  function start) to mark the end of a function. We use this to compute function bodies.
+- 📖 **Ghidra `AddressSet` for function body:** if we don't have an end marker, fall back to `function.getBody()` after
+  `createFunction(addr, null, source)` — Ghidra computes body via flow analysis. The stab-derived size is more reliable;
+  use it when present.
 
 ---
 
@@ -33,17 +64,29 @@ This phase implements and tests:
 
 ### ghidra-stabs.AC4: Symbol application — functions, globals, locals, params
 
-- **ghidra-stabs.AC4.1 Success:** For each `N_FUN` record, a `Function` exists at the stab's address (created or already present), with prototype set from the stab's return-type AST plus parameter types/names from following `N_PSYM`/`N_RSYM` records.
-- **ghidra-stabs.AC4.2 Success:** For each `N_LSYM` non-type record (a local variable), a stack/register local is added to the enclosing function with the correct name and type.
-- **ghidra-stabs.AC4.3 Success:** For each `N_GSYM`, the corresponding global variable's address is resolved via `AddressResolver` and a data type is applied; unresolved cases produce `[Stabs] unresolved-symbol` log entries (no bookmark).
-- **ghidra-stabs.AC4.4 Success:** For each `N_STSYM` / `N_LCSYM`, a data type is applied at the stab-carried address (no symbol-table lookup needed).
-- **ghidra-stabs.AC4.5 Success:** Where stabs has `N_LBRAC`/`N_RBRAC` scope info, plate comments are added at the scope-start address listing locals visible in that scope.
-- **ghidra-stabs.AC4.6 Success:** On `xapasmcsr.exe`, ≥ 470 of the 990 `N_FUN` records have named parameters; ≥ 92 have locals; the remainder are bookmark-free (compiler stubs without param info). (Asserted in Phase 6 integration test.)
+- **ghidra-stabs.AC4.1 Success:** For each `N_FUN` record, a `Function` exists at the stab's address (created or already
+  present), with prototype set from the stab's return-type AST plus parameter types/names from following `N_PSYM`/
+  `N_RSYM` records.
+- **ghidra-stabs.AC4.2 Success:** For each `N_LSYM` non-type record (a local variable), a stack/register local is added
+  to the enclosing function with the correct name and type.
+- **ghidra-stabs.AC4.3 Success:** For each `N_GSYM`, the corresponding global variable's address is resolved via
+  `AddressResolver` and a data type is applied; unresolved cases produce `[Stabs] unresolved-symbol` log entries (no
+  bookmark).
+- **ghidra-stabs.AC4.4 Success:** For each `N_STSYM` / `N_LCSYM`, a data type is applied at the stab-carried address (no
+  symbol-table lookup needed).
+- **ghidra-stabs.AC4.5 Success:** Where stabs has `N_LBRAC`/`N_RBRAC` scope info, plate comments are added at the
+  scope-start address listing locals visible in that scope.
+- **ghidra-stabs.AC4.6 Success:** On `xapasmcsr.exe`, ≥ 470 of the 990 `N_FUN` records have named parameters; ≥ 92 have
+  locals; the remainder are bookmark-free (compiler stubs without param info). (Asserted in Phase 6 integration test.)
 
 ### ghidra-stabs.AC6: Error handling
 
-- **ghidra-stabs.AC6.2 Failure:** A single malformed stab record never aborts the run; it produces a `[Stabs] parse-error` log entry with the raw descriptor and the cursor position, and the importer continues. (Importer-catches-and-continues half — parser-throws-with-cursor half landed in Phase 2.)
-- **ghidra-stabs.AC6.3 Success:** Bookmarks attach only at intrinsically-meaningful addresses (function entry, data location, vtable); diagnostics with no useful address (header-record parse errors, unresolved externs, type conflicts) go to `MessageLog` only.
+- **ghidra-stabs.AC6.2 Failure:** A single malformed stab record never aborts the run; it produces a
+  `[Stabs] parse-error` log entry with the raw descriptor and the cursor position, and the importer continues. (
+  Importer-catches-and-continues half — parser-throws-with-cursor half landed in Phase 2.)
+- **ghidra-stabs.AC6.3 Success:** Bookmarks attach only at intrinsically-meaningful addresses (function entry, data
+  location, vtable); diagnostics with no useful address (header-record parse errors, unresolved externs, type conflicts)
+  go to `MessageLog` only.
 
 ---
 
@@ -52,9 +95,11 @@ This phase implements and tests:
 <!-- START_SUBCOMPONENT_A (tasks 1-2) -->
 
 <!-- START_TASK_1 -->
+
 ### Task 1: `ImportContext`, `StabsOptions`, `PassResult` value types
 
 **Files:**
+
 - Create: `/home/riton/git/bouse/ghidra-stabs/src/main/kotlin/ghistabs/importer/ImportContext.kt`
 
 **Implementation:**
@@ -104,9 +149,11 @@ class ImportContext(
 <!-- END_TASK_1 -->
 
 <!-- START_TASK_2 -->
+
 ### Task 2: `StabsImporter` skeleton — three-pass orchestrator + Pass A wiring
 
 **Files:**
+
 - Create: `/home/riton/git/bouse/ghidra-stabs/src/main/kotlin/ghistabs/importer/Importer.kt`
 
 **Implementation:**
@@ -116,9 +163,9 @@ package ghistabs.importer
 
 import ghistabs.container.StabReader
 import ghistabs.container.StabType
-import ghistabs.parser.Parser
-import ghistabs.parser.StabsParseException
-import ghistabs.parser.SymbolDecl
+import ghistabs.parse.Parser
+import ghistabs.parse.StabsParseException
+import ghistabs.parse.SymbolDecl
 
 class StabsImporter(private val ctx: ImportContext) {
     fun run(): PassResult {
@@ -132,17 +179,17 @@ class StabsImporter(private val ctx: ImportContext) {
         ctx.monitor.message = "Stabs: parsing"
 
         // Pass A — parse + harvest
-        val typeAsts = mutableListOf<ghistabs.builder.TypeAst>()
+        val typeAsts = mutableListOf<ghistabs.materialize.TypeAst>()
         val symbolsByCu = mutableMapOf<String, MutableList<HarvestedSymbol>>()
         val openFunctions = mutableListOf<OpenFunction>()
         val parseErrors = passAHarvest(records, typeAsts, symbolsByCu, openFunctions)
 
         // Pass B — materialise types (defer to Phase 3 components)
-        val typeRegistry = ghistabs.builder.TypeRegistry(ctx.dtm, ctx.sink)
+        val typeRegistry = ghistabs.materialize.TypeRegistry(ctx.dtm, ctx.sink)
         val txB = ctx.program.startTransaction("Stabs: materialise types")
         try {
             typeRegistry.materialiseAll(typeAsts) { name, cus ->
-                ghistabs.builder.Attribution.categoryFor(name, cus)
+                ghistabs.materialize.Attribution.categoryFor(name, cus)
             }
         } finally {
             ctx.program.endTransaction(txB, true)
@@ -168,7 +215,7 @@ class StabsImporter(private val ctx: ImportContext) {
 
     private fun passAHarvest(
         records: List<ghistabs.container.StabRecord>,
-        typeAsts: MutableList<ghistabs.builder.TypeAst>,
+        typeAsts: MutableList<ghistabs.materialize.TypeAst>,
         symbolsByCu: MutableMap<String, MutableList<HarvestedSymbol>>,
         openFunctions: MutableList<OpenFunction>,
     ): Int {
@@ -198,7 +245,15 @@ class StabsImporter(private val ctx: ImportContext) {
                         try {
                             val decl = Parser(rec.name).parseSymbol() as? SymbolDecl.Function
                             if (decl != null) {
-                                val open = OpenFunction(name = mangled, addr = addr, decl = decl, cu = currentCu, locals = mutableListOf(), params = mutableListOf(), scopeBrackets = mutableListOf())
+                                val open = OpenFunction(
+                                    name = mangled,
+                                    addr = addr,
+                                    decl = decl,
+                                    cu = currentCu,
+                                    locals = mutableListOf(),
+                                    params = mutableListOf(),
+                                    scopeBrackets = mutableListOf()
+                                )
                                 openFunctions += open
                                 currentFunction = open
                             }
@@ -221,7 +276,10 @@ class StabsImporter(private val ctx: ImportContext) {
                     try {
                         val decl = Parser(rec.name).parseSymbol()
                         when (decl) {
-                            is SymbolDecl.StackParam, is SymbolDecl.RegParam -> open.params += ParamRecord(decl, rec.value)
+                            is SymbolDecl.StackParam, is SymbolDecl.RegParam -> open.params += ParamRecord(
+                                decl,
+                                rec.value
+                            )
                             else -> Unit
                         }
                     } catch (e: StabsParseException) {
@@ -234,9 +292,21 @@ class StabsImporter(private val ctx: ImportContext) {
                     try {
                         val decl = Parser(rec.name).parseSymbol()
                         when (decl) {
-                            is SymbolDecl.TaggedType -> typeAsts += ghistabs.builder.TypeAst(decl.id, decl.name, decl.body, currentCu)
-                            is SymbolDecl.Typedef -> typeAsts += ghistabs.builder.TypeAst(decl.id, decl.name, decl.body, currentCu)
-                            is SymbolDecl.StackLocal, is SymbolDecl.RegLocal, is SymbolDecl.StaticVar -> open?.locals?.add(LocalRecord(decl, rec.value))
+                            is SymbolDecl.TaggedType -> typeAsts += ghistabs.builder.TypeAst(
+                                decl.id,
+                                decl.name,
+                                decl.body,
+                                currentCu
+                            )
+                            is SymbolDecl.Typedef -> typeAsts += ghistabs.builder.TypeAst(
+                                decl.id,
+                                decl.name,
+                                decl.body,
+                                currentCu
+                            )
+                            is SymbolDecl.StackLocal, is SymbolDecl.RegLocal, is SymbolDecl.StaticVar -> open?.locals?.add(
+                                LocalRecord(decl, rec.value)
+                            )
                             else -> Unit
                         }
                     } catch (e: StabsParseException) {
@@ -271,8 +341,9 @@ class StabsImporter(private val ctx: ImportContext) {
     private fun applyAllSymbols(
         symbolsByCu: Map<String, List<HarvestedSymbol>>,
         openFunctions: List<OpenFunction>,
-        typeRegistry: ghistabs.builder.TypeRegistry,
-    ): ApplyResult { /* implemented in Task 3 */ TODO() }
+        typeRegistry: ghistabs.materialize.TypeRegistry,
+    ): ApplyResult { /* implemented in Task 3 */ TODO()
+    }
 
     private data class HarvestedSymbol(val decl: SymbolDecl, val recordType: StabType, val rawValue: Long)
     private data class OpenFunction(
@@ -307,20 +378,23 @@ Expected: compiles cleanly (the body of `applyAllSymbols` is `TODO`; tests in Ta
 <!-- END_SUBCOMPONENT_A -->
 
 <!-- START_TASK_3 -->
+
 ### Task 3: `applyAllSymbols` — function prototype + params + locals + globals + statics
 
 **Files:**
+
 - Modify: `/home/riton/git/bouse/ghidra-stabs/src/main/kotlin/ghistabs/importer/Importer.kt:applyAllSymbols`
 
 **Implementation:**
 
-Replace the `TODO()` with the full apply logic. Per-function and per-symbol exceptions are caught at this level and routed to `sink.log("apply-error", …)`. The transaction wrapping is in `run()`.
+Replace the `TODO()` with the full apply logic. Per-function and per-symbol exceptions are caught at this level and
+routed to `sink.log("apply-error", …)`. The transaction wrapping is in `run()`.
 
 ```kotlin
 private fun applyAllSymbols(
     symbolsByCu: Map<String, List<HarvestedSymbol>>,
     openFunctions: List<OpenFunction>,
-    typeRegistry: ghistabs.builder.TypeRegistry,
+    typeRegistry: ghistabs.materialize.TypeRegistry,
 ): ApplyResult {
     val source = ghidra.program.model.symbol.SourceType.IMPORTED
     val funcMgr = ctx.program.functionManager
@@ -383,7 +457,12 @@ private fun applyAllSymbols(
             try {
                 when (val d = h.decl) {
                     is SymbolDecl.Global -> applyGlobal(d, typeRegistry, source).let { if (it) globals++ }
-                    is SymbolDecl.StaticVar -> applyStatic(d, h.rawValue, typeRegistry, source).let { if (it) globals++ }
+                    is SymbolDecl.StaticVar -> applyStatic(
+                        d,
+                        h.rawValue,
+                        typeRegistry,
+                        source
+                    ).let { if (it) globals++ }
                     else -> Unit
                 }
             } catch (t: Throwable) {
@@ -398,9 +477,10 @@ private fun applyAllSymbols(
 private fun applyLocal(
     func: ghidra.program.model.listing.Function,
     loc: LocalRecord,
-    typeRegistry: ghistabs.builder.TypeRegistry,
+    typeRegistry: ghistabs.materialize.TypeRegistry,
     source: ghidra.program.model.symbol.SourceType,
-) { /* StackLocal: stack offset; RegLocal: map regNum to Register */ }
+) { /* StackLocal: stack offset; RegLocal: map regNum to Register */
+}
 
 private fun applyScopeComments(
     func: ghidra.program.model.listing.Function,
@@ -420,7 +500,7 @@ private fun applyScopeComments(
 
 private fun applyGlobal(
     decl: SymbolDecl.Global,
-    typeRegistry: ghistabs.builder.TypeRegistry,
+    typeRegistry: ghistabs.materialize.TypeRegistry,
     source: ghidra.program.model.symbol.SourceType,
 ): Boolean {
     val addr = ctx.resolver.resolve(decl.name) ?: run {
@@ -435,7 +515,7 @@ private fun applyGlobal(
 private fun applyStatic(
     decl: SymbolDecl.StaticVar,
     rawAddr: Long,
-    typeRegistry: ghistabs.builder.TypeRegistry,
+    typeRegistry: ghistabs.materialize.TypeRegistry,
     source: ghidra.program.model.symbol.SourceType,
 ): Boolean {
     val addr = ctx.program.addressFactory.defaultAddressSpace.getAddress(rawAddr)
@@ -446,7 +526,9 @@ private fun applyStatic(
 ```
 
 **Required addition to `TypeRegistry`** (Phase 3 amendment carried here):
-- Add `fun dataTypeFor(decl: TypeDecl): DataType?` that performs lookup or builds-if-missing. Single entry point used by Pass C.
+
+- Add `fun dataTypeFor(decl: TypeDecl): DataType?` that performs lookup or builds-if-missing. Single entry point used by
+  Pass C.
 
 **Step: Commit Tasks 1–3 together**
 
@@ -462,14 +544,19 @@ git commit -m "feat(importer): three-pass orchestrator + non-class symbol applic
 <!-- START_SUBCOMPONENT_B (tasks 4-6) -->
 
 <!-- START_TASK_4 -->
+
 ### Task 4: `SymbolApplyTest` — function with params (Ring-2)
 
 **Files:**
+
 - Create: `/home/riton/git/bouse/ghidra-stabs/src/test/kotlin/ghistabs/importer/SymbolApplyTest.kt`
 
-**Setup:** use `ProgramBuilder("test", ProgramBuilder._X86)` to build an in-memory program with a single text section. Manually populate `.stab`/`.stabstr` blocks with synthetic byte fixtures that encode a small program: one function `add(int a, int b)` returning `int`, plus a global `g_count: int`, plus a file-static `s_buf: char[16]`.
+**Setup:** use `ProgramBuilder("test", ProgramBuilder._X86)` to build an in-memory program with a single text section.
+Manually populate `.stab`/`.stabstr` blocks with synthetic byte fixtures that encode a small program: one function
+`add(int a, int b)` returning `int`, plus a global `g_count: int`, plus a file-static `s_buf: char[16]`.
 
-The fixture builder is shared across Tasks 4–6 — extract into `private object Fixture { fun buildProgramWith(stabBytes: ByteArray, stabstrBytes: ByteArray): Program }`.
+The fixture builder is shared across Tasks 4–6 — extract into
+`private object Fixture { fun buildProgramWith(stabBytes: ByteArray, stabstrBytes: ByteArray): Program }`.
 
 **Tests must verify (`ghidra-stabs.AC4.1`):**
 
@@ -493,16 +580,23 @@ git commit -m "test(importer): function prototype + params"
 <!-- END_TASK_4 -->
 
 <!-- START_TASK_5 -->
+
 ### Task 5: `SymbolApplyTest` — locals + register vars + scope plate comments
 
 **Files:**
+
 - Modify: `/home/riton/git/bouse/ghidra-stabs/src/test/kotlin/ghistabs/importer/SymbolApplyTest.kt` (add tests)
 
 **Tests must verify:**
 
-- **`ghidra-stabs.AC4.2`** — Function `f()` has one stack local `int x` at frame offset −8. After import, `func.getLocalVariables()` has one entry with `name == "x"`, `dataType is IntegerDataType`, `stackOffset == -8`.
-- **`ghidra-stabs.AC4.2`** — Function `g()` has one register local `r0` of type `int` (stab `r:(0,1);0`). After import, the function has a register-storage local with the right name and type. (If register mapping is uncertain on x86, use a stack local instead and surface the register-mapping question to the user.)
-- **`ghidra-stabs.AC4.5`** — Function `h()` has two locals inside an `LBRAC`/`RBRAC` block at offset +12. After import, `program.listing.getComment(addr=funcStart+12, CodeUnit.PLATE_COMMENT)` contains the substring `"Stabs scope locals:"` and lists both local names.
+- **`ghidra-stabs.AC4.2`** — Function `f()` has one stack local `int x` at frame offset −8. After import,
+  `func.getLocalVariables()` has one entry with `name == "x"`, `dataType is IntegerDataType`, `stackOffset == -8`.
+- **`ghidra-stabs.AC4.2`** — Function `g()` has one register local `r0` of type `int` (stab `r:(0,1);0`). After import,
+  the function has a register-storage local with the right name and type. (If register mapping is uncertain on x86, use
+  a stack local instead and surface the register-mapping question to the user.)
+- **`ghidra-stabs.AC4.5`** — Function `h()` has two locals inside an `LBRAC`/`RBRAC` block at offset +12. After import,
+  `program.listing.getComment(addr=funcStart+12, CodeUnit.PLATE_COMMENT)` contains the substring `"Stabs scope locals:"`
+  and lists both local names.
 
 **Step: Run, commit**
 
@@ -516,23 +610,36 @@ git commit -m "test(importer): locals + scope plate comments"
 <!-- END_TASK_5 -->
 
 <!-- START_TASK_6 -->
+
 ### Task 6: `SymbolApplyTest` — globals (resolved + unresolved), file-statics, error policy
 
 **Files:**
+
 - Modify: `/home/riton/git/bouse/ghidra-stabs/src/test/kotlin/ghistabs/importer/SymbolApplyTest.kt` (add tests)
 
 **Tests must verify:**
 
-- **`ghidra-stabs.AC4.3`** (resolved global): A program where `g_count` exists in `program.symbolTable` (added via the Ghidra COFF/ELF loader path simulation) and is referenced by an `N_GSYM` record. After import, `program.listing.getDataAt(g_count_addr).dataType` is `IntegerDataType`.
-- **`ghidra-stabs.AC4.3`** (unresolved global): An `N_GSYM` for `g_unknown` with no matching symbol. After import, `[Stabs] unresolved-symbol` appears in the message log; NO bookmark is created at any address (assert `program.bookmarkManager.getBookmarks(...)` is empty for the `Stabs:unresolved-symbol` category).
-- **`ghidra-stabs.AC4.4`** (file-static): A program with an `N_STSYM` for `s_buf` carrying address `0x4000`. After import, `program.listing.getDataAt(0x4000).dataType` is the right `ArrayDataType` of char × 16. AddressResolver has a stab-derived label `s_buf` at `0x4000` with `SourceType.IMPORTED`.
-- **`ghidra-stabs.AC6.3`** (bookmark vs log split): A combined fixture with one parse-error in a header record (no useful address) and one apply-error at a function entry. Assert: 0 bookmarks for the parse-error, 1 bookmark for the apply-error (at the function entry address). Both produce log entries.
+- **`ghidra-stabs.AC4.3`** (resolved global): A program where `g_count` exists in `program.symbolTable` (added via the
+  Ghidra COFF/ELF loader path simulation) and is referenced by an `N_GSYM` record. After import,
+  `program.listing.getDataAt(g_count_addr).dataType` is `IntegerDataType`.
+- **`ghidra-stabs.AC4.3`** (unresolved global): An `N_GSYM` for `g_unknown` with no matching symbol. After import,
+  `[Stabs] unresolved-symbol` appears in the message log; NO bookmark is created at any address (assert
+  `program.bookmarkManager.getBookmarks(...)` is empty for the `Stabs:unresolved-symbol` category).
+- **`ghidra-stabs.AC4.4`** (file-static): A program with an `N_STSYM` for `s_buf` carrying address `0x4000`. After
+  import, `program.listing.getDataAt(0x4000).dataType` is the right `ArrayDataType` of char × 16. AddressResolver has a
+  stab-derived label `s_buf` at `0x4000` with `SourceType.IMPORTED`.
+- **`ghidra-stabs.AC6.3`** (bookmark vs log split): A combined fixture with one parse-error in a header record (no
+  useful address) and one apply-error at a function entry. Assert: 0 bookmarks for the parse-error, 1 bookmark for the
+  apply-error (at the function entry address). Both produce log entries.
 
-- **`ghidra-stabs.AC6.2`** (importer continues past malformed record): Build a fixture with three records — a valid `N_GSYM` for `g_one`, a malformed `N_GSYM` whose descriptor is `garbage:G@@@?`, and a valid `N_GSYM` for `g_three`. Run `StabsImporter.run()`. Assert:
-  - `result.parseErrors == 1`
-  - `g_one` and `g_three` both have datatypes applied at their addresses (i.e. surrounding records are NOT lost).
-  - The MessageLog contains a `[Stabs] parse-error` entry that mentions `garbage` (the leading name token) AND a cursor position.
-  - No `Stabs:parse-error` bookmark is created (header-record errors have no useful address per AC6.3).
+- **`ghidra-stabs.AC6.2`** (importer continues past malformed record): Build a fixture with three records — a valid
+  `N_GSYM` for `g_one`, a malformed `N_GSYM` whose descriptor is `garbage:G@@@?`, and a valid `N_GSYM` for `g_three`.
+  Run `StabsImporter.run()`. Assert:
+    - `result.parseErrors == 1`
+    - `g_one` and `g_three` both have datatypes applied at their addresses (i.e. surrounding records are NOT lost).
+    - The MessageLog contains a `[Stabs] parse-error` entry that mentions `garbage` (the leading name token) AND a
+      cursor position.
+    - No `Stabs:parse-error` bookmark is created (header-record errors have no useful address per AC6.3).
 
 **Step: Run, commit**
 
@@ -554,10 +661,14 @@ git commit -m "test(importer): globals, file-statics, bookmark/log split"
 - [ ] `importer/ImportContext.kt` exports `ImportContext`, `StabsOptions`, `PassResult`.
 - [ ] `importer/Importer.kt` exports `StabsImporter` with a fully wired `run()`.
 - [ ] `TypeRegistry.dataTypeFor(decl)` exists.
-- [ ] `SymbolApplyTest` covers: function-with-params, locals, scope comments, resolved + unresolved globals, file-static, bookmark/log split. All tests green.
+- [ ] `SymbolApplyTest` covers: function-with-params, locals, scope comments, resolved + unresolved globals,
+  file-static, bookmark/log split. All tests green.
 - [ ] AC4.6 (real-binary count) deferred to Phase 6 integration test.
 
 ## Open Questions for User
 
-- **Register-number → Ghidra `Register` mapping for `N_RSYM` on x86 PE32:** is the gcc convention `0=eax, 1=ecx, 2=edx, 3=ebx, …` correct here, or are we targeting XAP2 in this run (in which case different)? Implementor: surface before Task 5.
-- **Is `g_count` and `g_unknown` synthetic-fixture style OK** for the resolved/unresolved global tests, or should we use real names from `xapasmcsr.exe`?
+- **Register-number → Ghidra `Register` mapping for `N_RSYM` on x86 PE32:** is the gcc convention
+  `0=eax, 1=ecx, 2=edx, 3=ebx, …` correct here, or are we targeting XAP2 in this run (in which case different)?
+  Implementor: surface before Task 5.
+- **Is `g_count` and `g_unknown` synthetic-fixture style OK** for the resolved/unresolved global tests, or should we use
+  real names from `xapasmcsr.exe`?

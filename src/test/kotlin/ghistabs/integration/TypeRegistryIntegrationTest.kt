@@ -2,11 +2,11 @@ package ghistabs.integration
 
 import ghidra.program.database.ProgramBuilder
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghistabs.diag.defaultContext
+import ghistabs.diagnose.defaultContext
 import ghistabs.importer.StabsImporter
-import ghistabs.parser.StabReader
-import ghistabs.parser.StabRecord
-import ghistabs.parser.StabType
+import ghistabs.parse.StabReader
+import ghistabs.parse.StabRecord
+import ghistabs.parse.StabType
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
