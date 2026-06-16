@@ -50,20 +50,35 @@ class TypeRegistry(
         for ((id, placeholder) in placeholders) {
             val ast = harvest.getType(id) ?: continue
             if (ast.body !is TypeDecl.Struct) continue
-            val isEmpty = when (placeholder) {
-                is Structure -> placeholder.numComponents == 0
-                is Union -> placeholder.numComponents == 0
-                else -> false
+            val composite = placeholder as? Composite ?: continue
+            val tag = when {
+                composite.numComponents == 0 -> "placeholder-unresolved"
+                composite.allComponentsUndefined() -> "placeholder-undefined-fields"
+                else -> continue
             }
-            if (!isEmpty) continue
             // BookmarkSink.log bumps the diagnostics counter on every call, so just
             // log — no explicit inc, or we'd double-count.
             sink.log(
-                "placeholder-unresolved",
-                "${placeholder.categoryPath}/${placeholder.name} (id=$id) never had its body materialised",
+                tag,
+                "${composite.categoryPath}/${composite.name} (id=$id) " + when (tag) {
+                    "placeholder-unresolved" -> "never had its body materialised"
+                    else -> "materialised but every field fell back to Undefined"
+                },
                 ghistabs.diag.Level.WARN,
             )
         }
+    }
+
+    /**
+     * A struct "filled with undefined" is one whose every component's data type is in the
+     * `UndefinedNDataType` family — i.e. every field's Ref or XRef failed to resolve and
+     * the materialiser used the `Undefined4` fallback. From the user's point of view this
+     * is no better than an empty placeholder; flagging it separately distinguishes
+     * "body never ran" from "body ran but couldn't bind any field type".
+     */
+    private fun Composite.allComponentsUndefined(): Boolean {
+        if (numComponents == 0) return false
+        return components.all { it.dataType.name.startsWith("undefined") }
     }
 
     fun materialiseAll() {
@@ -404,6 +419,15 @@ class TypeRegistry(
                 // Compute polymorphic base for inherited vfptr gating
                 val polyBase = ClassBuilderHelpers(harvest).firstPolymorphicBase(body)
 
+                // Pre-compute base-occupied offset set so a parser-emitted vptr that lands
+                // inside a base subobject is filtered out — regardless of whether we could
+                // prove the base polymorphic. When the base is unresolved (synthesised
+                // _base_unknown_*) `firstPolymorphicBase` returns null, but the stab still
+                // emitted a _vptr$Class at the base's offset, and gcc only does that when
+                // the base owns the vfptr. Trying to apply our vptr there just collides
+                // with the synthesised base — see bouniaf → ios_base cascade.
+                val baseOffsets = body.bases.map { it.offsetBits }.toSet()
+
                 // Existing field loop (unchanged).
                 for (field in body.fields) {
                     if (field.isStatic) continue // Skip static fields
@@ -413,10 +437,13 @@ class TypeRegistry(
                         field.name.startsWith("_vptr$") || field.name.startsWith("_vptr.") || field.name == "_vptr"
                     if (
                         isParserEmittedVptr &&
-                        polyBase != null &&
-                        field.offsetBits == polyBase.offsetBits
+                        (
+                            (polyBase != null && field.offsetBits == polyBase.offsetBits) ||
+                                field.offsetBits in baseOffsets
+                            )
                     ) {
-                        // Inherited vfptr — the _base_<Base> component already carries it. Skip.
+                        // Inherited vfptr — the _base_<Base> (resolved or synthesised) at
+                        // that offset already carries it. Skip.
                         diagnostics.inc("vptr-skipped-inherited")
                         continue
                     }

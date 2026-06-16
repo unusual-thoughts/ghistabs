@@ -64,6 +64,16 @@ object VfptrDecision {
             return VfptrAction.Insert(targetOffset)
         }
 
+        // If slot is occupied by a base subobject (resolved `_base_<Name>` or synthesised
+        // `_base_unknown_*` / `_vbase_*`), the base owns the vfptr — never overwrite it.
+        // The `hasPolymorphicBaseSubobject` guard above catches the resolved-polymorphic
+        // case; this catches the unresolved/synthesised case where we couldn't prove
+        // polymorphism but the stab layout still puts a base at the vptr offset.
+        val isBaseSubobject = componentAtTargetOffset.fieldName?.let {
+            it.startsWith("_base_") || it.startsWith("_vbase_")
+        } ?: false
+        if (isBaseSubobject) return VfptrAction.SkipInheritedFromBase
+
         // If slot is occupied by a parser-emitted vptr variant, replace it.
         val isParserEmitted = componentAtTargetOffset.fieldName?.let {
             it.startsWith("_vptr$") || it.startsWith("_vptr.") || it == "_vptr"
