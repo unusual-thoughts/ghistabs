@@ -77,11 +77,21 @@ data class Harvest(
     val byCanonicalKey: Map<Pair<CategoryPath, String>, CanonicalGroup> by lazy {
         val registerable = typeAsts.values.filter { it.body.isXRefTarget }
         val byGhidraName = registerable.groupBy { it.ghidraName }
-        val categoryByGhidraName = byGhidraName.mapValues { (name, asts) ->
-            Attribution.categoryFor(name, asts.map { it.id.source }.toSet())
+        // For non-anonymous names, the route decision is per-ghidraName (a single
+        // category over the union of defining CUs). For anonymous gcc-emitted names
+        // like `._anon_82`, sources are inherently CU-local (sample.cpp's `_anon_82`
+        // is unrelated to events.cpp's `_anon_82`); Attribution sees only that AST's
+        // own CU, so each one routes into `/<cu>/...` and they never collide.
+        val categoryFor = { ast: TypeAst ->
+            val sources = if (Attribution.isCuLocalName(ast.name)) {
+                setOf(ast.id.source)
+            } else {
+                byGhidraName.getValue(ast.ghidraName).map { it.id.source }.toSet()
+            }
+            Attribution.categoryFor(ast.ghidraName, sources)
         }
         registerable
-            .groupBy { categoryByGhidraName.getValue(it.ghidraName) to it.ghidraName }
+            .groupBy { categoryFor(it) to it.ghidraName }
             .mapValues { (key, members) -> classifyGroup(key, members) }
     }
 
