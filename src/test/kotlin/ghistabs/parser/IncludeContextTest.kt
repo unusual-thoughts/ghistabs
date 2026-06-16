@@ -83,7 +83,7 @@ class IncludeContextTest {
         val forwardExclLog = sink.lines.find { it.tag == "forward-excl" }
         assertNotNull(forwardExclLog)
         assertTrue(forwardExclLog!!.msg!!.contains("unknown.h"))
-        assertTrue(forwardExclLog.msg!!.contains("0x456"))
+        assertTrue(forwardExclLog.msg.contains("0x456"))
     }
 
     @Test
