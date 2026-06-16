@@ -247,16 +247,16 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
             for ((name, asts) in harvest.astsByGhidraName) {
                 val structAsts = asts.mapNotNull {
                     when (it.body) {
-                        is TypeDecl.Struct -> it.cu to it.body
+                        is TypeDecl.Struct -> harvest.contentHash(it.body) to it.body
                         else -> null
                     }
                 }.toMap()
+                if (structAsts.size > 1) {
+                    log("multiple-hashes-for-name", "$name [${structAsts.size}]")
+                }
                 if (structAsts.isEmpty()) continue
-                val (cu, body) = structAsts.maxWithOrNull(
-                    compareBy(
-                        { it.value.methods.size },
-                        { it.value.fields.size },
-                    ),
+                val body = structAsts.values.maxWithOrNull(
+                    compareBy({ it.methods.size }, { it.fields.size }),
                 )!!
 
                 if (body.methods.isEmpty() && !body.hasVTablePointerMarker) continue

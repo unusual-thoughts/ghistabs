@@ -4,43 +4,43 @@ This document maps each parser method in `ghistabs.parser.Parser` to its upstrea
 
 ## Parser Method → Upstream Citation
 
-| Parser Method | Upstream Citation | Notes |
-|---------------|-------------------|-------|
-| `parseSymbol` | **stabs.html** §2 "Symbol Types"; **gdb/stabsread.c** `define_symbol` (line ~700 in gcc-3.4.4 era) | Dispatches on descriptor letter (F/f/p/P/r/G/S/V/T/t) or defaults to stack local. |
-| `parseTagged` | **stabs.html** §2; **gdb/stabsread.c** `define_symbol` (T case, line ~750) | Tagged type: `:T(cu,n)=<body>`. Struct/union/enum/class tag definition. |
-| `parseTypedef` | **stabs.html** §2; **gdb/stabsread.c** `define_symbol` (t case, line ~760) | Typedef: `:t(cu,n)=<body>`. Creates a type alias. |
-| `parseType` | **stabs.html** §4 "Type Definitions"; **gdb/stabsread.c** `read_type` (line ~2000) | Recursive dispatch on lookahead character. Core of the grammar. |
-| `parseStruct` | **stabs.html** §4.7 "Structures"; **gdb/stabsread.c** `read_struct_type` (line ~3300) | Reads aggregate (struct/union/class) body with fields, methods, inheritance, vtable markers. |
-| `parseInheritanceList` | **gdb/stabsread.c** `read_cpp_abbrev` (line ~3500); **stabs.html** §4.7 "Class Inheritance" | Parses C++ inheritance list after `!`. Format: `!<count>,<virt><access><offset>,<base-id>;…` |
-| `parseMethodBlock` | **gdb/stabsread.c** `read_member_functions` (line ~3600); **gdb/stabsread.c** `read_cpp_abbrev` (line ~3500) | Method definition in struct: `(<count>=#<cls>,<ret>;<params>;):_Z…;<access><modifier><virt>` |
-| `parseEnum` | **stabs.html** §4.4 "Enumerations"; **gdb/stabsread.c** `read_enum_type` (line ~2900) | Enumeration body: `e<name>:<value>,<name>:<value>,…;` |
-| `parseRange` | **stabs.html** §4.5 "Ranges"; **gdb/stabsread.c** `read_range_type` (line ~2950) | Integer/char range: `r<id>;<min>;<max>;`. Bounds parse via `Cursor.parseRangeBound()`. |
-| `parseComplex` | **gcc/dbxout.c** `dbxout_type` (COMPLEX_TYPE case); **gcc/dbxout.c** `dbxout.c:1200` (gcc-3.4.4) | GCC complex/floating: `R<n>;<size>;0;` where n=3 (cfloat), 4 (cdouble), 5 (cldouble). |
-| `parseSizeAttr` | **gcc/dbxout.c** `dbxout_type` (size-attribute emission, line ~1150); **gcc/dbxout.c** "Type attributes" section | GCC extension: `@s<bits>;<inner>`. Size attribute wrapper for sized integer types. |
-| `parseXRef` | **stabs.html** §4.6 "Cross-References"; **gdb/stabsread.c** `read_cross_ref` (line ~3000) | Incomplete forward reference: `x<kind><name>:` where kind ∈ {s, u, c, Y}. |
-| `parseArray` | **stabs.html** §4.3 "Arrays"; **gdb/stabsread.c** `read_array_type` (line ~2800) | Array type: `a<index-type>;<element-type>` with optional range bounds. |
-| `parseFunctionT` | **stabs.html** §4.8 "Functions"; **gdb/stabsread.c** `read_type` (f case, line ~2100) | Function type: `f<return-type>`. Params typically come via separate `:p`/`:P` records. |
-| `parseMethod` | **gdb/stabsread.c** `read_type` (# case, line ~2120); **gdb/stabsread.c** `read_member_functions` (line ~3600) | Pointer-to-member-function (PMF): `#<cls>,<ret>;<params>;`. Params inline (unlike standalone `f`). |
+| Parser Method          | Upstream Citation                                                                                                | Notes                                                                                              |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `parseSymbol`          | **stabs.html** §2 "Symbol Types"; **gdb/stabsread.c** `define_symbol` (line ~700 in gcc-3.4.4 era)               | Dispatches on descriptor letter (F/f/p/P/r/G/S/V/T/t) or defaults to stack local.                  |
+| `parseTagged`          | **stabs.html** §2; **gdb/stabsread.c** `define_symbol` (T case, line ~750)                                       | Tagged type: `:T(cu,n)=<body>`. Struct/union/enum/class tag definition.                            |
+| `parseTypedef`         | **stabs.html** §2; **gdb/stabsread.c** `define_symbol` (t case, line ~760)                                       | Typedef: `:t(cu,n)=<body>`. Creates a type alias.                                                  |
+| `parseType`            | **stabs.html** §4 "Type Definitions"; **gdb/stabsread.c** `read_type` (line ~2000)                               | Recursive dispatch on lookahead character. Core of the grammar.                                    |
+| `parseStruct`          | **stabs.html** §4.7 "Structures"; **gdb/stabsread.c** `read_struct_type` (line ~3300)                            | Reads aggregate (struct/union/class) body with fields, methods, inheritance, vtable markers.       |
+| `parseInheritanceList` | **gdb/stabsread.c** `read_cpp_abbrev` (line ~3500); **stabs.html** §4.7 "Class Inheritance"                      | Parses C++ inheritance list after `!`. Format: `!<count>,<virt><access><offset>,<base-id>;…`       |
+| `parseMethodBlock`     | **gdb/stabsread.c** `read_member_functions` (line ~3600); **gdb/stabsread.c** `read_cpp_abbrev` (line ~3500)     | Method definition in struct: `(<count>=#<cls>,<ret>;<params>;):_Z…;<access><modifier><virt>`       |
+| `parseEnum`            | **stabs.html** §4.4 "Enumerations"; **gdb/stabsread.c** `read_enum_type` (line ~2900)                            | Enumeration body: `e<name>:<value>,<name>:<value>,…;`                                              |
+| `parseRange`           | **stabs.html** §4.5 "Ranges"; **gdb/stabsread.c** `read_range_type` (line ~2950)                                 | Integer/char range: `r<id>;<min>;<max>;`. Bounds parse via `Cursor.parseRangeBound()`.             |
+| `parseComplex`         | **gcc/dbxout.c** `dbxout_type` (COMPLEX_TYPE case); **gcc/dbxout.c** `dbxout.c:1200` (gcc-3.4.4)                 | GCC complex/floating: `R<n>;<size>;0;` where n=3 (cfloat), 4 (cdouble), 5 (cldouble).              |
+| `parseSizeAttr`        | **gcc/dbxout.c** `dbxout_type` (size-attribute emission, line ~1150); **gcc/dbxout.c** "Type attributes" section | GCC extension: `@s<bits>;<inner>`. Size attribute wrapper for sized integer types.                 |
+| `parseXRef`            | **stabs.html** §4.6 "Cross-References"; **gdb/stabsread.c** `read_cross_ref` (line ~3000)                        | Incomplete forward reference: `x<kind><name>:` where kind ∈ {s, u, c, Y}.                          |
+| `parseArray`           | **stabs.html** §4.3 "Arrays"; **gdb/stabsread.c** `read_array_type` (line ~2800)                                 | Array type: `a<index-type>;<element-type>` with optional range bounds.                             |
+| `parseFunctionT`       | **stabs.html** §4.8 "Functions"; **gdb/stabsread.c** `read_type` (f case, line ~2100)                            | Function type: `f<return-type>`. Params typically come via separate `:p`/`:P` records.             |
+| `parseMethod`          | **gdb/stabsread.c** `read_type` (# case, line ~2120); **gdb/stabsread.c** `read_member_functions` (line ~3600)   | Pointer-to-member-function (PMF): `#<cls>,<ret>;<params>;`. Params inline (unlike standalone `f`). |
 
 ## Type Descriptor Characters (Dispatch in `parseType`)
 
-| Character | Production | Upstream |
-|-----------|-----------|----------|
-| `*` | `Pointer` | **stabs.html** §4.2 "Pointers" |
-| `&` | `Reference` | **stabs.html** §4.2; GCC extension |
-| `k` | `Const` | **stabs.html** §4.2 "Qualifiers" |
-| `B` | `Volatile` | **stabs.html** §4.2 "Qualifiers" |
-| `a` | `Array` | **stabs.html** §4.3 |
-| `e` | `Enum` | **stabs.html** §4.4 |
-| `s` | `Struct` | **stabs.html** §4.7 |
-| `u` | `Union` | **stabs.html** §4.7 |
-| `Y` | `Class` (gcc-2) | **stabs.html** §4.7; GCC-2 form of class descriptor |
-| `f` | `FunctionT` | **stabs.html** §4.8 |
-| `#` | `Method` (PMF) | GCC extension; **gdb/stabsread.c** line ~2120 |
-| `r` | `Range` | **stabs.html** §4.5 |
-| `R` | `Complex` | **gcc/dbxout.c** COMPLEX_TYPE handling |
-| `x` | `XRef` | **stabs.html** §4.6 |
-| `@` | `WithSizeAttr` | **gcc/dbxout.c** size-attribute emission |
+| Character       | Production           | Upstream                                                             |
+| --------------- | -------------------- | -------------------------------------------------------------------- |
+| `*`             | `Pointer`            | **stabs.html** §4.2 "Pointers"                                       |
+| `&`             | `Reference`          | **stabs.html** §4.2; GCC extension                                   |
+| `k`             | `Const`              | **stabs.html** §4.2 "Qualifiers"                                     |
+| `B`             | `Volatile`           | **stabs.html** §4.2 "Qualifiers"                                     |
+| `a`             | `Array`              | **stabs.html** §4.3                                                  |
+| `e`             | `Enum`               | **stabs.html** §4.4                                                  |
+| `s`             | `Struct`             | **stabs.html** §4.7                                                  |
+| `u`             | `Union`              | **stabs.html** §4.7                                                  |
+| `Y`             | `Class` (gcc-2)      | **stabs.html** §4.7; GCC-2 form of class descriptor                  |
+| `f`             | `FunctionT`          | **stabs.html** §4.8                                                  |
+| `#`             | `Method` (PMF)       | GCC extension; **gdb/stabsread.c** line ~2120                        |
+| `r`             | `Range`              | **stabs.html** §4.5                                                  |
+| `R`             | `Complex`            | **gcc/dbxout.c** COMPLEX_TYPE handling                               |
+| `x`             | `XRef`               | **stabs.html** §4.6                                                  |
+| `@`             | `WithSizeAttr`       | **gcc/dbxout.c** size-attribute emission                             |
 | `(`, digit, `-` | `Ref` or inline defn | **stabs.html** §4.1 "Type References"; allows `(cu,n)=<body>` inline |
 
 ## Cygwin GCC 3.4.4 Deviations from Sun

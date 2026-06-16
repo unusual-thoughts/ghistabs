@@ -72,7 +72,7 @@ enum class Mode { CONCURRENT, AFTER }
 @Tag("integration")
 class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
     companion object {
-        val BINARIES = listOf("xapasmcsr.exe", "xmltest", "appquery.exe") //  "box2d"
+        val BINARIES = listOf("xapasmcsr.exe", "xmltest", "appquery.exe", "box2d")
 
         @JvmStatic
         fun testParameters() = BINARIES.flatMap { binary ->
@@ -847,7 +847,6 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
      */
     @Test
     fun noEmptyDemanglerStubsRemain() {
-//        assumeTrue(mode == Mode.AFTER, "Skipping: only meaningful in AFTER mode")
         val emptyStubs = program.dataTypeManager.allDataTypes
             .asSequence()
             .filterIsInstance<Structure>()
@@ -868,8 +867,7 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
      */
     @Test
     fun inheritanceWasApplied() {
-//        assumeTrue(mode == Mode.AFTER, "Skipping: counter only captured in AFTER mode")
-        assumeTrue(binaryName == "xapasmcsr.exe", "Skipping: inheritance checks specific to xapasmcsr.exe")
+//        assumeTrue(binaryName == "xapasmcsr.exe", "Skipping: inheritance checks specific to xapasmcsr.exe")
         val applied = context.diagnostics.snapshotCounters()["inheritance-applied"] ?: 0L
         Assertions.assertTrue(
             applied > 0,

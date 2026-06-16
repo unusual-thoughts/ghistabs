@@ -4,12 +4,7 @@ package ghistabs.parser
 
 import kotlinx.serialization.Contextual
 import kotlinx.serialization.ExperimentalSerializationApi
-import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.descriptors.PrimitiveKind
-import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
-import kotlinx.serialization.encoding.Decoder
-import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.JsonClassDiscriminator
 
 enum class Access { PRIVATE, PROTECTED, PUBLIC }
@@ -94,19 +89,6 @@ sealed interface TypeDecl<out Id : IdInterface> {
     /** Inline type definition: `(cu,n)=<body>` where the binding `(cu,n)` is preserved for Phase 3. */
     @Serializable
     data class InlineDef<Id : IdInterface>(@Contextual val id: Id, val body: TypeDecl<Id>) : TypeDecl<Id>
-}
-
-@Serializable
-data class IdWithHash(val id: GlobalTypeId, val hash: Int?)
-
-class WithHashSerializer(val hashes: Map<GlobalTypeId, Int>) : KSerializer<GlobalTypeId> {
-    override val descriptor = PrimitiveSerialDescriptor("WithHash", PrimitiveKind.STRING)
-    override fun serialize(encoder: Encoder, value: GlobalTypeId) = encoder.encodeSerializableValue(
-        IdWithHash.serializer(),
-        IdWithHash(value, hashes[value]),
-    )
-
-    override fun deserialize(decoder: Decoder) = throw UnsupportedOperationException("serialize-only")
 }
 
 @Serializable
