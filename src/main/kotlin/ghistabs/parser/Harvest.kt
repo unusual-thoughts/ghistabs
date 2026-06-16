@@ -87,6 +87,23 @@ data class Harvest(
 
     val allHarvestedSymbols by lazy { symbolsByCu.values.flatten() }
 
+    /**
+     * Strip template arguments and namespace qualifiers from a class name.
+     *
+     *   `basic_istream<char,std::char_traits<char>>` → `basic_istream`
+     *   `std::basic_istream`                          → `basic_istream`
+     *   `__gnu_cxx::__normal_iterator<char*,…>`       → `__normal_iterator`
+     *
+     * Used by the XRef base-tag fallback to bridge "forward-declared bare tag in one
+     * CU vs full template instantiation in another" — the cross-CU mismatch is
+     * structural in gcc stabs, not a libstdc++-version detail, so this helper has no
+     * hardcoded names.
+     */
+    private fun baseTag(name: String): String {
+        val noArgs = name.indexOf('<').let { if (it >= 0) name.substring(0, it) else name }
+        return noArgs.trim().substringAfterLast("::")
+    }
+
     /** Group ASTs once by Ghidra-sanitised name (only space is invalid; cf. SymbolUtilities.INVALIDCHARS). */
     val astsByGhidraName by lazy { typeAsts.values.groupBy { it.ghidraName } }
 
@@ -95,20 +112,66 @@ data class Harvest(
         typeAsts.values.mapNotNull { ast -> (ast.body as? TypeDecl.Struct)?.let { ast.name to (ast.id to it) } }.toMap()
     }
 
+    /**
+     * Secondary index for XRef resolution: struct typeAsts keyed by their "base tag" —
+     * the class name stripped of namespace qualifiers and template arguments.
+     *
+     * Why we need it: gcc stabs emit forward declarations in headers like `<iosfwd>`
+     * with the *bare* template-class tag (e.g. `XRef(STRUCT, "basic_istream")`), while
+     * the matching full definition is named with its concrete instantiation
+     * (`basic_istream<char,std::char_traits<char>>`). Exact-name lookup misses every
+     * one of those. Stripping to the base tag (`basic_istream`) bridges the gap and
+     * lets a partial-template forward reference resolve to a real complete struct,
+     * which is what GDB does for stub types via TYPE_TAG_NAME walking.
+     *
+     * Only non-empty struct definitions are indexed: there's no point falling back to
+     * another empty forward decl.
+     */
+    private val structAstsByBaseTag by lazy {
+        typeAsts.values
+            .mapNotNull { ast ->
+                (ast.body as? TypeDecl.Struct)
+                    ?.takeIf { it.sizeBytes > 0 }
+                    ?.let { ast to it }
+            }
+            .groupBy({ (ast, _) -> baseTag(ast.name) }) { (ast, struct) -> ast.id to struct }
+    }
+
     fun getType(id: GlobalTypeId) = typeAsts[id]
     fun getStruct(id: GlobalTypeId) = typeAsts[id]?.body as? TypeDecl.Struct
 
-    // XRef → canonical struct: look up by name + matching kind so
-    // `XRef(STRUCT, "Foo")` in one CU hashes equally to `Ref(id)`
-    // pointing at the same `struct Foo` defined in another CU.
-    fun getByXRef(xref: TypeDecl.XRef<GlobalTypeId>) = structAstsByName[xref.tagName]
-        ?.takeIf { (_, struct) -> struct.kind == xref.kind }
-        ?.let { (id, _) -> typeAsts[id] }
-        .also {
-            if (it == null) {
-                log("unresolved-xref", "${xref.tagName} [${xref.kind}]", Level.WARN)
+    /**
+     * XRef → canonical struct.
+     *  1. Exact-name lookup (the common case: two CUs both name the same class identically).
+     *  2. Base-tag fallback: strip namespace prefix and template args, find any complete
+     *     definition with the same base name and matching kind. Picks the first match,
+     *     biased to non-empty structs by index construction. Logged at DEBUG so the
+     *     resolution path is auditable. Fixes the iosfwd-style "forward decl in one
+     *     header, full template instantiation in another" cascade without hardcoding
+     *     any libstdc++ symbol.
+     */
+    fun getByXRef(xref: TypeDecl.XRef<GlobalTypeId>): TypeAst? {
+        structAstsByName[xref.tagName]
+            ?.takeIf { (_, struct) -> struct.kind == xref.kind }
+            ?.let { (id, _) -> return typeAsts[id] }
+
+        val tag = baseTag(xref.tagName)
+        if (tag.isNotEmpty()) {
+            val candidate = structAstsByBaseTag[tag]
+                ?.firstOrNull { (_, struct) -> struct.kind == xref.kind }
+            if (candidate != null) {
+                val (id, _) = candidate
+                val resolved = typeAsts[id]
+                if (resolved != null) {
+                    log("xref-base-tag-resolved", "'${xref.tagName}' → '${resolved.name}'", Level.DEBUG)
+                    return resolved
+                }
             }
         }
+
+        log("unresolved-xref", "${xref.tagName} [${xref.kind}]", Level.WARN)
+        return null
+    }
 
     fun definingCUs(ast: TypeAst) = astsByGhidraName[ast.ghidraName]?.map { it.id.source }?.toSet() ?: setOf(ast.cu)
 
