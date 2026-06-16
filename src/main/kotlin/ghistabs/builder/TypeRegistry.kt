@@ -15,19 +15,6 @@ class TypeRegistry(
 ) : DiagnosticSink by sink {
     private val byId = mutableMapOf<GlobalTypeId, DataType>()
     private val placeholders = mutableMapOf<GlobalTypeId, DataType>()
-    private val byHash = mutableMapOf<Pair<String, Int>, DataType>()
-    private val byPath = mutableMapOf<Pair<CategoryPath, String>, Int>()
-    private val conflictCount = mutableMapOf<String, Int>()
-//    private var unnamedCount = 0
-
-//    fun newUnnamed(type: String) = "${type}_${unnamedCount++}"
-//
-//    fun tryGetExisting(id: LocalTypeId, cu: SourceFile.CUSource) = fileResolver.globalIdForCu(id, cu)?.let { gId ->
-//        byId[gId] ?: placeholders[gId] ?: typeResolver.getTypeFor(id, cu)?.let { raw ->
-//            makePlaceholder(raw.body, CategoryPath("/stabs"), raw.name)
-//                .also { placeholders[gId] = it }
-//        }
-//    }
 
     fun tryGetExisting(gId: GlobalTypeId) = byId[gId] ?: placeholders[gId] ?: harvest.getType(gId)?.let { raw ->
         makePlaceholder(raw, CategoryPath("/stabs")).also { placeholders[gId] = it }
@@ -82,44 +69,57 @@ class TypeRegistry(
     }
 
     fun materialiseAll() {
-        // gcc reuses local type IDs inside BINCL blocks per-CU: every CU's stab stream
-        // emits its own private types inside e.g. `BINCL project_header.h` using local
-        // file slots that all canonicalise to the same canonical CU. So multiple ASTs
-        // legitimately share an `id` post-canonicalisation but describe DIFFERENT types.
-        // Process every TypeAst; do NOT pre-dedupe by id. Ref resolution still uses
-        // byId (last writer wins) — fine because refs are always emitted IN THE SAME CU
-        // as the type they reference, so all CUs see consistent local→canonical lookups.
-        //
-
+        // Two-phase walk driven by harvest.byCanonicalKey:
+        //  1. For each CanonicalGroup, materialise the winner once into its (cat, name)
+        //     slot and alias every member's id to the resulting DataType.
+        //  2. Handle non-registerable top-level typeAsts (XRef-aliased helpers,
+        //     FunctionT, Method, …) via the legacy resolve() path — they need byId
+        //     entries for Ref resolution but never occupy a stable Ghidra slot.
         val tx = dtm.startTransaction("ghidra-stabs build types")
         try {
-            // Pre-seed placeholders so forward refs within the batch resolve during body
-            // materialisation. For Struct/Union bodies we ALSO addDataType the placeholder
-            // up-front: addDataType returns the DTM-resolved instance and later mutations
-            // on it land on the DTM-resident object. Without this, when two ASTs with the
-            // same (name, category) but different bodies both materialise, the second one's
-            // empty-vs-real conflict in registerWithConflict overwrites the first's
-            // components.
-            //
-            // Non-aggregate placeholders (Enum etc.) are NOT pre-added — makePlaceholder
-            // returns a Structure stub for them, and pre-adding it would later conflict
-            // with the real EnumDataType during resolve() and cause it to be renamed to
-            // `<name>_2`.
-            for ((id, ast) in harvest.typeAsts) {
-                val category = Attribution.categoryFor(ast.ghidraName, harvest.definingCUs(ast), diagnostics)
-                val raw = makePlaceholder(ast, category)
-                val placeholder = if (ast.body is TypeDecl.Struct) {
+            val memberToWinner: Map<GlobalTypeId, TypeAst> = buildMap {
+                for (group in harvest.byCanonicalKey.values) {
+                    for (m in group.members) put(m.id, group.winner)
+                }
+            }
+            val winnerCategory: Map<GlobalTypeId, CategoryPath> = buildMap {
+                for (group in harvest.byCanonicalKey.values) put(group.winner.id, group.key.first)
+            }
+
+            // Pre-seed placeholders for every member id so Ref(id) cycle-breaks during
+            // body materialisation. Struct/Union placeholders go into the DTM up-front
+            // so later in-place mutations land on the DTM-resident object.
+            for (group in harvest.byCanonicalKey.values) {
+                val winner = group.winner
+                val raw = makePlaceholder(winner, group.key.first)
+                val placeholder = if (winner.body is TypeDecl.Struct) {
                     dtm.addDataType(raw, DataTypeConflictHandler.KEEP_HANDLER)
                 } else {
                     raw
                 }
-                // First placeholder per id also goes in placeholders[id] so Ref(id) lookups
-                // during materialisation get something. Later distinct-name ASTs at the
-                // same id keep their own placeholderByIdName but DON'T overwrite the id-keyed
-                // entry — refs by id should remain stable across the batch.
-                placeholders.getOrPut(id) { placeholder }
+                for (m in group.members) placeholders.putIfAbsent(m.id, placeholder)
             }
+
+            // Materialise winners.
+            for ((winnerId, category) in winnerCategory) {
+                val winner = harvest.getType(winnerId) ?: continue
+                val placeholder = placeholders[winnerId]!!
+                val materialised = materialiseBody(winner, category, placeholder)
+                val canonical = if (materialised === placeholder) {
+                    placeholder
+                } else {
+                    dtm.addDataType(materialised, DataTypeConflictHandler.KEEP_HANDLER)
+                }
+                byId[winnerId] = canonical
+            }
+            // Alias members to their winner's DataType.
+            for ((memberId, winner) in memberToWinner) {
+                byId[winner.id]?.let { byId.putIfAbsent(memberId, it) }
+            }
+
+            // Non-registerable top-level typeAsts (XRef body, FunctionT, Method, …)
             for (ast in harvest.typeAsts.values) {
+                if (ast.id in byId) continue
                 resolve(ast)
             }
         } finally {
@@ -252,14 +252,12 @@ class TypeRegistry(
         return dt
     }
 
+    /**
+     * Materialise a non-registerable top-level typeAst (XRef alias, FunctionT, Method).
+     * Registerable bodies (Struct/Enum) are handled directly in [materialiseAll] via
+     * `harvest.byCanonicalKey`.
+     */
     private fun resolve(ast: TypeAst): DataType {
-        // XRef-bodied typeAsts (gcc emits these for ABI-internal helpers
-        // like `InlineDef(id, XRef(STRUCT, "__si_class_type_info_pseudo"))`)
-        // are aliases — defer to the canonical struct's resolution and
-        // alias `byId[ast.id]` at it. Avoids registering a spurious
-        // auto-generated `XRef_[...]` placeholder in the DTM and applying
-        // it at typeinfo globals (the canonical struct's data goes there
-        // instead).
         if (ast.body is TypeDecl.XRef) {
             harvest.getByXRef(ast.body)?.let { canonical ->
                 val dt = byId[canonical.id] ?: resolve(canonical)
@@ -267,41 +265,12 @@ class TypeRegistry(
                 return dt
             }
         }
-        // 2. Compute content hash for cross-CU dedup. Uses Harvest.contentHash,
-        // which treats Refs as content-equivalent when they point at types
-        // with the same (name, body-kind) — so per-CU template-instantiation
-        // clones collapse onto a single canonical DataType.
-        val hash = harvest.contentHash(ast.body)
-
-        // 3. Cross-CU dedup: same name + same body seen before? Reuse the canonical
-        //    DataType and STOP — re-materialising the body onto a different placeholder
-        //    would let the resulting empty-vs-real conflict in registerWithConflict
-        //    overwrite the canonical (gap census on the duplicate is best-effort).
-        byHash[ast.ghidraName to hash]?.let {
-            byId.putIfAbsent(ast.id, it)
-            return it
-        }
-
-        // 4. Compute category
-        val category = Attribution.categoryFor(ast.ghidraName, harvest.definingCUs(ast), diagnostics)
-
-        // 5. Reuse pre-seeded placeholder (or create one if resolve() is called directly)
         val placeholder = placeholders.getOrPut(ast.id) {
-            makePlaceholder(ast, category, "ref-stub")
+            makePlaceholder(ast, CategoryPath("/stabs"), "ref-stub")
         }
-
-        // 6. Materialise body — references back to ast.id will resolve via placeholders[ast.id]
-        val materialised = materialiseBody(ast, category, placeholder)
-
-        // 7. Register with conflict handling and record as fully resolved
-        val canonical = registerWithConflict(materialised, ast.ghidraName, hash, category)
-        // Keep byId stable for Ref lookups: first writer wins. (Later same-id ASTs
-        // with different names still materialise into the DTM via byIdName but don't
-        // hijack Ref(id) resolution.)
-        byId.putIfAbsent(ast.id, canonical)
-        byHash[ast.ghidraName to hash] = canonical
-
-        return canonical
+        val materialised = materialiseBody(ast, CategoryPath("/stabs"), placeholder)
+        byId.putIfAbsent(ast.id, materialised)
+        return materialised
     }
 
     private fun materialiseBody(ast: TypeAst, category: CategoryPath, placeholder: DataType): DataType =
@@ -600,197 +569,19 @@ class TypeRegistry(
             }
         }
 
-    private fun registerWithConflict(dt: DataType, name: String, hash: Int, category: CategoryPath): DataType {
-        val existing = dtm.getDataType(category, name)
-        if (existing == null) {
-            byPath[category to name] = hash
-            return dtm.addDataType(dt, DataTypeConflictHandler.KEEP_HANDLER)
-        }
-        // Same hash → idempotent
-        val existingHash = byPath[category to name]
-        if (existingHash == hash) {
-            return existing
-        }
-        // Different body → try merge if both are Structures
-        if (dt is Structure && existing is Structure) {
-            // Promote the incoming canonical when the existing slot is empty: a
-            // size-0 Structure can't be merge target (tryExecuteMerge would trip
-            // "Offset 0 beyond end of structure (0)" on every component). Mutate
-            // existing in place — clear, resize, copy components — so all byId
-            // references that already point at it stay valid and the
-            // first-writer-wins identity is preserved without losing the second
-            // writer's content. Same trick when the incoming is materially bigger:
-            // first writer was a forward-decl-shaped stub and the second writer
-            // is the real definition (tinyxml2's multi-size DynArray pattern).
-            if (existing.length == 0 && dt.length > 0) {
-                promoteExistingFromIncoming(existing, dt)
-                byPath[category to name] = hash
-                diagnostics.recordDedup(kind = "promoted-from-empty", name = name, detail = "size 0 → ${dt.length}")
-                return existing
-            }
-            val mergeResult = tryExecuteMerge(existing, dt, name, category, hash)
-            if (mergeResult != null) {
-                return mergeResult
-            }
-        }
-
-        // Drop the duplicate. The `_N`-rename path used to allocate a fresh
-        // DataType slot but no consumer ever references the rename — Refs
-        // resolve through `byId` to the canonical entry, and `byHash`
-        // dedups same-content by name. The rename was particularly costly
-        // on C++ template-internal typedefs (`_ValueType`, `_Is_POD`, etc.)
-        // where every CU's instantiation has its own per-CU body and the
-        // count exploded into the thousands; each rename did a DataType
-        // clone + DTM addType + log line. First-writer-wins via the
-        // existing canonical entry is correct and ~100x faster on
-        // template-heavy binaries.
-        diagnostics.recordDedup(kind = "drop", name = name, detail = "first-writer-wins")
-        return existing
-    }
-
     /**
-     * Mutate [existing] in place so its components match [incoming]. Used when a
-     * later writer brings a fully-typed definition for a name whose existing
-     * canonical entry is a zero-length stub. Identity is preserved so byId
-     * lookups already pointing at `existing` continue to resolve correctly.
-     */
-    private fun promoteExistingFromIncoming(existing: Structure, incoming: Structure) {
-        existing.deleteAll()
-        existing.growStructure(incoming.length - existing.length)
-        for (comp in incoming.components) {
-            try {
-                existing.replaceAtOffset(
-                    comp.offset,
-                    comp.dataType,
-                    comp.length,
-                    comp.fieldName,
-                    comp.comment,
-                )
-            } catch (e: IllegalArgumentException) {
-                sink.log(
-                    "promote-component-failed",
-                    "'${existing.name}' at +${comp.offset}: ${e.message}",
-                    Level.WARN,
-                )
-            }
-        }
-//        // Fall back to renaming: find a free _N slot
-//        // EXCEPT for Structures in conflict: drop them entirely (no _N renaming)
-//        if (dt is Structure && existing is Structure) {
-//            // Already tried merge and it failed; was logged via recordDedup in tryExecuteMerge
-//            return existing
-//        }
-//        var n = (conflictCount[name] ?: 1) + 1
-//        while (true) {
-//            val candidate = "${name}_$n"
-//            if (dtm.getDataType(category, candidate) == null) break
-//            n++
-//            if (n > 1000) error("cannot allocate conflict suffix for '$name'")
-//        }
-//        conflictCount[name] = n
-//        // Clone and rename
-//        val copy = dt.copy(dtm)
-//        copy.name = "${name}_$n"
-//        log("type-conflict", "Two definitions of '$name' with different bodies; second renamed to '${name}_$n'")
-//        diagnostics.recordDedup(kind = "rename", name = name, detail = "renamed-to-${name}_$n")
-//        byPath[category to "${name}_$n"] = hash
-//        return dtm.addDataType(copy, DataTypeConflictHandler.KEEP_HANDLER)
-    }
-
-    /**
-     * Try to merge two structures via byte-coverage algorithm.
-     * Returns the merged structure if successful, null if conflict or identical.
-     */
-    private fun tryExecuteMerge(
-        existing: Structure,
-        incoming: Structure,
-        name: String,
-        category: CategoryPath,
-        incomingHash: Int,
-    ): DataType? {
-        val existingComp = existing.toComponentRecords()
-        val incomingComp = incoming.toComponentRecords()
-        return when (val result = StructuralDiff.diff(existingComp, existing.length, incomingComp, incoming.length)) {
-            // Same structure layout, already idempotent
-            StructDiffResult.Identical -> existing
-
-            // Execute the merge plan
-            is StructDiffResult.GapMergeable -> {
-                val incomingByOffset = incomingComp.associateBy { it.offsetBytes }
-                val existingByOffset = existingComp.associateBy { it.offsetBytes }
-
-                for (op in result.mergePlan) {
-                    val sourceComponent = op.sourceComponent
-
-                    // Fetch the actual DataTypeComponent from the source side
-                    val sourceDataTypeComponent =
-                        if (op.sourceFromLeft) {
-                            // Source is from existing
-                            existing.components.find { it.offset == sourceComponent.offsetBytes }
-                        } else {
-                            // Source is from incoming
-                            incoming.components.find { it.offset == sourceComponent.offsetBytes }
-                        }
-
-                    if (sourceDataTypeComponent != null) {
-                        try {
-                            existing.replaceAtOffset(
-                                sourceComponent.offsetBytes,
-                                sourceDataTypeComponent.dataType,
-                                sourceDataTypeComponent.length,
-                                sourceDataTypeComponent.fieldName,
-                                sourceDataTypeComponent.comment,
-                            )
-                        } catch (e: IllegalArgumentException) {
-                            log(
-                                "merge-failed",
-                                "Could not apply merge to '$name' at offset ${sourceComponent.offsetBytes}: ${e.message}",
-                            )
-                            return null
-                        }
-                    }
-                }
-
-                // Update hash to reflect the new merged content
-                byPath[category to name] = incomingHash
-                diagnostics.recordDedup(kind = "merge", name = name, detail = "merged ${result.mergePlan.size} fields")
-                log("dedup-merged", "$name: ${result.mergePlan.size} fields merged")
-                existing
-            }
-
-            is StructDiffResult.Conflicting -> {
-                // Structural conflict: drop the new one (don't merge)
-                diagnostics.recordDedup(kind = "drop", name = name, result.reason)
-                null
-            }
-        }
-    }
-
-    /**
-     * Find a DataType by simple name (not full path).
-     * Conservative: returns null if not found OR if ambiguous (multiple matches).
-     * Logs ambiguity with a numeric counter for surfacing unresolved ambiguities.
-     *
-     * This is used by DemanglerReplacer to locate replacement types for demangler stubs.
-     * Ambiguity is logged and counted but NOT resolved heuristically (too risky for type safety).
-     *
-     * @param simpleName the unqualified type name to search for
-     * @return the unique DataType if exactly one match, null if not found or ambiguous
+     * Find a DataType by simple ghidraName (no path), used by DemanglerReplacer.
+     * Walks `harvest.byCanonicalKey` — the authoritative (category, name) view —
+     * and returns null on ambiguity (no heuristic guess).
      */
     fun findByName(simpleName: String): DataType? {
-        val candidates = mutableListOf<Pair<CategoryPath, String>>()
-        for ((key, _) in byPath) {
-            if (key.second == simpleName) {
-                candidates.add(key)
-            }
-        }
+        val candidates = harvest.byCanonicalKey.keys.filter { it.second == simpleName }
         return when {
             candidates.isEmpty() -> null
 
             candidates.size == 1 -> dtm.getDataType(candidates[0].first, candidates[0].second)
 
             else -> {
-                // Multiple matches: ambiguous. Log and count.
                 log("demangler-ambiguous", "Multiple matches for '$simpleName': $candidates")
                 diagnostics.inc("demangler-ambiguous")
                 null
