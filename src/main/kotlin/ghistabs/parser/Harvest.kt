@@ -143,12 +143,18 @@ data class Harvest(
     /**
      * XRef → canonical struct.
      *  1. Exact-name lookup (the common case: two CUs both name the same class identically).
-     *  2. Base-tag fallback: strip namespace prefix and template args, find any complete
-     *     definition with the same base name and matching kind. Picks the first match,
-     *     biased to non-empty structs by index construction. Logged at DEBUG so the
-     *     resolution path is auditable. Fixes the iosfwd-style "forward decl in one
-     *     header, full template instantiation in another" cascade without hardcoding
-     *     any libstdc++ symbol.
+     *  2. Base-tag fallback: strip namespace prefix and template args, find a complete
+     *     definition with the same base name and matching kind. Only used when the
+     *     candidates of the right kind are unambiguous *by size* — multiple distinct
+     *     sizes mean we'd be picking among template instantiations (tinyxml2's
+     *     `DynArray<char,20>` vs `DynArray<PKc,10>`); picking the wrong one would
+     *     fail downstream `replaceAtOffset` calls with the wrong byte count.
+     *     Logged at DEBUG when it fires, `xref-base-tag-ambiguous` at INFO when
+     *     candidates exist but differ in size.
+     *
+     *     Mirrors GDB's check_typedef() walk over stub types via TYPE_TAG_NAME but
+     *     without committing to a specific instantiation when the harvest doesn't
+     *     uniquely identify one.
      */
     fun getByXRef(xref: TypeDecl.XRef<GlobalTypeId>): TypeAst? {
         structAstsByName[xref.tagName]
@@ -157,14 +163,25 @@ data class Harvest(
 
         val tag = baseTag(xref.tagName)
         if (tag.isNotEmpty()) {
-            val candidate = structAstsByBaseTag[tag]
-                ?.firstOrNull { (_, struct) -> struct.kind == xref.kind }
-            if (candidate != null) {
-                val (id, _) = candidate
-                val resolved = typeAsts[id]
-                if (resolved != null) {
-                    log("xref-base-tag-resolved", "'${xref.tagName}' → '${resolved.name}'", Level.DEBUG)
-                    return resolved
+            val candidates = structAstsByBaseTag[tag]
+                ?.filter { (_, struct) -> struct.kind == xref.kind }
+                .orEmpty()
+            val distinctSizes = candidates.map { (_, struct) -> struct.sizeBytes }.toSet()
+            when {
+                candidates.isEmpty() -> Unit
+                distinctSizes.size == 1 -> {
+                    val (id, _) = candidates.first()
+                    val resolved = typeAsts[id]
+                    if (resolved != null) {
+                        log("xref-base-tag-resolved", "'${xref.tagName}' → '${resolved.name}'", Level.DEBUG)
+                        return resolved
+                    }
+                }
+                else -> {
+                    log(
+                        "xref-base-tag-ambiguous",
+                        "'${xref.tagName}': ${candidates.size} candidates with sizes $distinctSizes; refusing fallback",
+                    )
                 }
             }
         }
