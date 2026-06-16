@@ -1,8 +1,7 @@
-package ghistabs.builder
+package ghistabs.parser
 
 import ghidra.program.model.data.CategoryPath
 import ghistabs.diag.StabsDiagnostics
-import ghistabs.parser.SourceFile
 
 object Attribution {
     /**

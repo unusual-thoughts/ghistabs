@@ -3,6 +3,7 @@
 package ghistabs.parser
 
 import ghidra.program.model.address.Address
+import ghidra.program.model.data.CategoryPath
 import ghidra.program.model.symbol.SymbolUtilities
 import ghidra.util.task.TaskMonitor
 import ghistabs.diag.DiagnosticSink
@@ -73,6 +74,13 @@ data class OpenFunction(
     val scopeBrackets: MutableList<Triple<StabType, Long, Int>>,
     var sizeBytes: Long = 0L,
 )
+
+/**
+ * One bucket of TypeAsts mapping to a single (CategoryPath, ghidraName) slot —
+ * Ghidra's uniqueness constraint. `winner` is the AST whose body materialises
+ * into the DTM; the other members are tracked for diagnostics only.
+ */
+data class CanonicalGroup(val key: Pair<CategoryPath, String>, val members: List<TypeAst>, val winner: TypeAst)
 
 @Serializable
 data class Harvest(
@@ -153,6 +161,56 @@ data class Harvest(
 
     fun getType(id: GlobalTypeId) = typeAsts[id]
     fun getStruct(id: GlobalTypeId) = typeAsts[id]?.body as? TypeDecl.Struct
+
+    /**
+     * Canonical (CategoryPath, ghidraName) view — Ghidra's uniqueness key.
+     * Built only from registerable bodies (Struct/Enum); derived types
+     * never occupy a stable slot. See docs/notes/canonical-key.md.
+     */
+    val byCanonicalKey: Map<Pair<CategoryPath, String>, CanonicalGroup> by lazy { buildCanonicalKey() }
+
+    private fun buildCanonicalKey(): Map<Pair<CategoryPath, String>, CanonicalGroup> {
+        val registerable = typeAsts.values.filter { it.body.isXRefTarget() }
+        val byGhidraName = registerable.groupBy { it.ghidraName }
+        val categoryByGhidraName = byGhidraName.mapValues { (name, asts) ->
+            Attribution.categoryFor(name, asts.map { it.id.source }.toSet())
+        }
+        val groups = registerable
+            .groupBy { categoryByGhidraName.getValue(it.ghidraName) to it.ghidraName }
+            .mapValues { (key, members) -> classifyGroup(key, members) }
+        return groups
+    }
+
+    private fun classifyGroup(key: Pair<CategoryPath, String>, members: List<TypeAst>): CanonicalGroup {
+        val distinctKinds = members.map { it.body::class }.toSet()
+        if (distinctKinds.size > 1) {
+            log(
+                "canonical-key-multi-kind",
+                "${key.first}/${key.second}: ${distinctKinds.map { it.simpleName }}",
+                Level.WARN,
+            )
+        }
+        val byHash = members.groupBy { contentHash(it.body) }
+        when {
+            byHash.size > 1 -> log(
+                "canonical-key-multi-hash",
+                "${key.first}/${key.second}: ${byHash.size} distinct bodies across " +
+                    members.map { it.id.source.filename }.toSet(),
+                Level.INFO,
+            )
+
+            members.size > 1 -> log(
+                "canonical-key-merged",
+                "${key.first}/${key.second}: ${members.size} ASTs collapsed (single body)",
+                Level.DEBUG,
+            )
+        }
+        // Winner: largest body, then first by source filename for stability.
+        val winner = members.maxWithOrNull(
+            compareBy<TypeAst> { it.bodySize() }.thenBy { it.id.source.filename },
+        )!!
+        return CanonicalGroup(key, members, winner)
+    }
 
     /**
      * XRef → canonical struct.
@@ -483,7 +541,10 @@ class Harvester(
             symbolsByCu,
             openFunctions,
             sink,
-        ).apply { classifyCollisions() }
+        ).apply {
+            classifyCollisions()
+            byCanonicalKey // force lazy build so canonical-key diagnostics surface during harvest
+        }
     }
 
     private fun harvestSymbol(rec: StabRecord, onError: () -> Unit) {
