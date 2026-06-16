@@ -10,6 +10,7 @@ import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
 import ghistabs.diag.DiagnosticSink
 import ghistabs.diag.Level
+import ghistabs.diag.isInlineStdMember
 import ghistabs.importer.ImportContext
 import ghistabs.parser.*
 import ghistabs.util.QualifiedName
@@ -257,7 +258,16 @@ class ClassBuilder(
             return
         }
         val func = program.functionManager.getFunctionAt(addr) ?: run {
-            log("unresolved-symbol", "no Function at $addr for $mangled", Level.WARN)
+            val tag: String
+            val level: Level
+            if (isInlineStdMember(mangled)) {
+                tag = "unresolved-symbol-inlined-std"
+                level = Level.DEBUG
+            } else {
+                tag = "unresolved-symbol"
+                level = Level.WARN
+            }
+            log(tag, "no Function at $addr for $mangled", level)
             return
         }
 

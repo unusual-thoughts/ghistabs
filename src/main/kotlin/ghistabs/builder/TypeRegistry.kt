@@ -33,6 +33,34 @@ class TypeRegistry(
         makePlaceholder(raw, CategoryPath("/stabs")).also { placeholders[gId] = it }
     }
 
+    /**
+     * Walk the placeholders map at end-of-import and log every entry whose body
+     * was never materialised — i.e. a Structure / Union sitting in the DTM with
+     * zero components. These are the source of downstream cascades like
+     * `merge-failed` "Offset 0 beyond end of structure" and bogus 1-byte fields
+     * in the listing. Naming them at the source makes the cause findable.
+     *
+     * Zero-component is the check (length can be non-zero when sizeBytes was
+     * known up-front for a struct whose body never resolved).
+     */
+    fun reportSurvivingPlaceholders() {
+        for ((id, placeholder) in placeholders) {
+            val isEmpty = when (placeholder) {
+                is Structure -> placeholder.numComponents == 0
+                is Union -> placeholder.numComponents == 0
+                else -> false
+            }
+            if (!isEmpty) continue
+            // BookmarkSink.log bumps the diagnostics counter on every call, so just
+            // log — no explicit inc, or we'd double-count.
+            sink.log(
+                "placeholder-unresolved",
+                "${placeholder.categoryPath}/${placeholder.name} (id=$id) never had its body materialised",
+                ghistabs.diag.Level.WARN,
+            )
+        }
+    }
+
     fun materialiseAll() {
         // gcc reuses local type IDs inside BINCL blocks per-CU: every CU's stab stream
         // emits its own private types inside e.g. `BINCL project_header.h` using local
