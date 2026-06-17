@@ -64,6 +64,10 @@ fun TypeDecl<GlobalTypeId>.contentHash(
 
     is TypeDecl.Range -> Objects.hash("Range", of.refKey(oracle, cache, visited), min, max)
 
+    // Source-independent: gcc emits `r<base>;<size>;0;` with `<base>` purely decorative
+    // (different CUs point at different int slots). Hash by size only — see [TypeDecl.Float].
+    is TypeDecl.Float -> Objects.hash("Float", sizeBytes)
+
     is TypeDecl.Pointer -> Objects.hash("Pointer", pointee.contentHash(oracle, cache, visited))
 
     is TypeDecl.Reference -> Objects.hash("Reference", referent.contentHash(oracle, cache, visited))

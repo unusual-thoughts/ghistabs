@@ -431,9 +431,13 @@ class Parser(src: String) {
      * Parse a range type: `r<id>;<min>;<max>;`
      * Bounds may be in decimal or octal (with leading 0).
      *
+     * Returns `TypeDecl.Float` for the gcc float encoding `r<base>;<NBYTES>;0;`
+     * (i.e. `min > 0 && max == 0`) where `<base>` is decorative per the stabs
+     * spec — see [TypeDecl.Float] kdoc. Otherwise returns [TypeDecl.Range].
+     *
      * Mirror of gdb/stabsread.c:read_range_type.
      */
-    private fun parseRange(): TypeDecl.Range<LocalTypeId> {
+    private fun parseRange(): TypeDecl<LocalTypeId> {
         c.consume('r')
         val typeId = c.parseTypeId()
         // GCC may define the base type inline: r(cu,n)=<inner-type>;lo;hi;
@@ -445,6 +449,9 @@ class Parser(src: String) {
         c.consume(';')
         val max = c.parseRangeBound()
         c.consume(';')
+        if (max == 0L && min > 0L) {
+            return TypeDecl.Float(min.toInt())
+        }
         return TypeDecl.Range(typeId, min, max)
     }
 

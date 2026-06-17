@@ -65,6 +65,13 @@ object BuiltinTable {
             }
         }
 
+        is TypeDecl.Float -> when (decl.sizeBytes) {
+            4 -> FloatDataType()
+            8 -> DoubleDataType()
+            10, 12, 16 -> LongDoubleDataType()
+            else -> null
+        }
+
         is TypeDecl.Complex -> when (decl.rCode) {
             3 -> Complex8DataType()
             4 -> Complex16DataType()
