@@ -26,6 +26,15 @@ class TypeRegistry(
     }
 
     /**
+     * The materialised DataType for a TypeAst id, as registered by [materialiseAll].
+     * Returns null if the id was never registered (e.g. non-registerable typeAst that
+     * went through the on-demand `resolve()` path). Prefer this over `dtm.getDataType`
+     * — it skips the DTM round-trip and is the authoritative source for the
+     * `(category, name)` slot's current DataType.
+     */
+    fun dataTypeFor(id: GlobalTypeId): DataType? = byId[id]
+
+    /**
      * Walk the placeholders map at end-of-import and log every Struct/Union
      * typeAst whose body never made it into the DTM as a non-empty aggregate.
      * These are the source of downstream cascades like `merge-failed`
@@ -84,25 +93,25 @@ class TypeRegistry(
         try {
             val memberToWinner: Map<GlobalTypeId, TypeAst> = buildMap {
                 for (group in harvest.byCanonicalKey.values) {
-                    for (m in group.members) put(m.id, group.winner)
+                    for (m in group.members) put(m, group.ast)
                 }
             }
             val winnerCategory: Map<GlobalTypeId, CategoryPath> = buildMap {
-                for (group in harvest.byCanonicalKey.values) put(group.winner.id, group.key.first)
+                for (group in harvest.byCanonicalKey.values) put(group.ast.id, group.key.category)
             }
 
             // Pre-seed placeholders for every member id so Ref(id) cycle-breaks during
             // body materialisation. Struct/Union placeholders go into the DTM up-front
             // so later in-place mutations land on the DTM-resident object.
             for (group in harvest.byCanonicalKey.values) {
-                val winner = group.winner
-                val raw = makePlaceholder(winner, group.key.first)
+                val winner = group.ast
+                val raw = makePlaceholder(winner, group.key.category)
                 val placeholder = if (winner.body is TypeDecl.Struct) {
                     dtm.addDataType(raw, DataTypeConflictHandler.KEEP_HANDLER)
                 } else {
                     raw
                 }
-                for (m in group.members) placeholders.putIfAbsent(m.id, placeholder)
+                for (m in group.members) placeholders.putIfAbsent(m, placeholder)
             }
 
             // Materialise winners.
@@ -158,7 +167,7 @@ class TypeRegistry(
             }
         }
 
-        is TypeDecl.Range, is TypeDecl.Complex, is TypeDecl.WithSizeAttr, is TypeDecl.Builtin -> {
+        is TypeDecl.Range, is TypeDecl.Complex, is TypeDecl.Float, is TypeDecl.WithSizeAttr, is TypeDecl.Builtin -> {
             BuiltinTable.resolve(decl)
         }
 
@@ -280,7 +289,7 @@ class TypeRegistry(
 
     private fun materialiseBody(ast: TypeAst, category: CategoryPath, placeholder: DataType): DataType =
         when (val body = ast.body) {
-            is TypeDecl.Range, is TypeDecl.Complex, is TypeDecl.WithSizeAttr, is TypeDecl.Builtin ->
+            is TypeDecl.Range, is TypeDecl.Complex, is TypeDecl.Float, is TypeDecl.WithSizeAttr, is TypeDecl.Builtin ->
                 BuiltinTable.resolve(body) ?: placeholder
 
             is TypeDecl.Pointer -> PointerDataType(
@@ -580,11 +589,11 @@ class TypeRegistry(
      * and returns null on ambiguity (no heuristic guess).
      */
     fun findByName(simpleName: String): DataType? {
-        val candidates = harvest.byCanonicalKey.keys.filter { it.second == simpleName }
+        val candidates = harvest.byCanonicalKey.keys.filter { it.name == simpleName }
         return when {
             candidates.isEmpty() -> null
 
-            candidates.size == 1 -> dtm.getDataType(candidates[0].first, candidates[0].second)
+            candidates.size == 1 -> dtm.getDataType(candidates[0].category, candidates[0].name)
 
             else -> {
                 log("demangler-ambiguous", "Multiple matches for '$simpleName': $candidates")

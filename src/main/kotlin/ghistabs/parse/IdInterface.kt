@@ -52,9 +52,9 @@ sealed class SourceFile : Comparable<SourceFile> {
     }
 }
 
-object ToStringSerializer : KSerializer<Any> {
+class ToStringSerializer<T> : KSerializer<T> {
     override val descriptor = PrimitiveSerialDescriptor("ToString", PrimitiveKind.STRING)
-    override fun serialize(encoder: Encoder, value: Any) = encoder.encodeString(value.toString())
+    override fun serialize(encoder: Encoder, value: T) = encoder.encodeString(value.toString())
     override fun deserialize(decoder: Decoder) =
         throw UnsupportedOperationException("ToStringSerializer is serialize-only")
 }
@@ -80,7 +80,7 @@ interface Globalizer {
  */
 @Suppress("UNCHECKED_CAST")
 fun TypeDecl<LocalTypeId>.globalize(g: Globalizer): TypeDecl<GlobalTypeId> = when (this) {
-    is TypeDecl.Complex, is TypeDecl.Enum, is TypeDecl.XRef, is TypeDecl.Builtin ->
+    is TypeDecl.Complex, is TypeDecl.Float, is TypeDecl.Enum, is TypeDecl.XRef, is TypeDecl.Builtin ->
         this as TypeDecl<GlobalTypeId>
 
     is TypeDecl.Range -> TypeDecl.Range(g.globalIdFor(of), min, max)

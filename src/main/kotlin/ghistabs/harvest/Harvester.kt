@@ -246,10 +246,7 @@ class Harvester(
             symbolsByCu,
             openFunctions,
             sink,
-        ).apply {
-            classifyCollisions()
-            byCanonicalKey // force lazy build so canonical-key diagnostics surface during harvest
-        }
+        )
     }
 
     private fun harvestSymbol(rec: StabRecord, onError: () -> Unit) {
@@ -267,7 +264,7 @@ class Harvester(
     }
 
     fun walkDefinitions(decl: TypeDecl<GlobalTypeId>): List<TypeAst> = when (decl) {
-        is TypeDecl.Builtin, is TypeDecl.Complex, is TypeDecl.Enum, is TypeDecl.Range,
+        is TypeDecl.Builtin, is TypeDecl.Complex, is TypeDecl.Float, is TypeDecl.Enum, is TypeDecl.Range,
         is TypeDecl.Ref, is TypeDecl.XRef,
         -> listOf()
 
