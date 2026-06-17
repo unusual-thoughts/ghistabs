@@ -1,6 +1,7 @@
+@file:Suppress("SERIALIZER_TYPE_INCOMPATIBLE")
+
 package ghistabs.harvest
 
-import ghidra.program.model.data.CategoryPath
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.DummySink
 import ghistabs.diagnose.Level
@@ -17,27 +18,17 @@ data class Harvest(
     val openFunctions: List<OpenFunction> = listOf(),
     @Transient val sink: DiagnosticSink = DummySink,
 ) : DiagnosticSink by sink {
+    /**
+     * Canonical (CategoryPath, ghidraName) view — Ghidra's uniqueness key.
+     * Built only from registerable bodies (Struct/Enum); derived types
+     * never occupy a stable slot. See docs/notes/canonical-key.md.
+     */
+    val byCanonicalKey: Map<GhidraKey, CanonicalGroup>
+
     @Transient
     val hashCache: MutableMap<GlobalTypeId, Int> = mutableMapOf()
 
     val allHarvestedSymbols by lazy { symbolsByCu.values.flatten() }
-
-    /**
-     * Strip template arguments and namespace qualifiers from a class name.
-     *
-     *   `basic_istream<char,std::char_traits<char>>` → `basic_istream`
-     *   `std::basic_istream`                          → `basic_istream`
-     *   `__gnu_cxx::__normal_iterator<char*,…>`       → `__normal_iterator`
-     *
-     * Used by the XRef base-tag fallback to bridge "forward-declared bare tag in one
-     * CU vs full template instantiation in another" — the cross-CU mismatch is
-     * structural in gcc stabs, not a libstdc++-version detail, so this helper has no
-     * hardcoded names.
-     */
-    private fun baseTag(name: String): String {
-        val noArgs = name.indexOf('<').let { if (it >= 0) name.substring(0, it) else name }
-        return noArgs.trim().substringAfterLast("::")
-    }
 
     /** Group ASTs once by Ghidra-sanitised name (only space is invalid; cf. SymbolUtilities.INVALIDCHARS). */
     val astsByGhidraName by lazy { typeAsts.values.groupBy { it.ghidraName } }
@@ -63,44 +54,18 @@ data class Harvest(
     private val astsByBaseTag: Map<String, List<TypeAst>> by lazy {
         typeAsts.values
             .filter { it.name.isNotEmpty() && it.body.isXRefTarget && it.body.isComplete }
-            .groupBy { baseTag(it.name) }
+            .groupBy { QualifiedName.baseTag(it.name) }
     }
 
     fun getType(id: GlobalTypeId) = typeAsts[id]
     fun getStruct(id: GlobalTypeId) = typeAsts[id]?.body as? TypeDecl.Struct
 
-    /**
-     * Canonical (CategoryPath, ghidraName) view — Ghidra's uniqueness key.
-     * Built only from registerable bodies (Struct/Enum); derived types
-     * never occupy a stable slot. See docs/notes/canonical-key.md.
-     */
-    val byCanonicalKey: Map<Pair<CategoryPath, String>, CanonicalGroup> by lazy {
-        val registerable = typeAsts.values.filter { it.body.isXRefTarget }
-        val byGhidraName = registerable.groupBy { it.ghidraName }
-        // For non-anonymous names, the route decision is per-ghidraName (a single
-        // category over the union of defining CUs). For anonymous gcc-emitted names
-        // like `._anon_82`, sources are inherently CU-local (sample.cpp's `_anon_82`
-        // is unrelated to events.cpp's `_anon_82`); Attribution sees only that AST's
-        // own CU, so each one routes into `/<cu>/...` and they never collide.
-        val categoryFor = { ast: TypeAst ->
-            val sources = if (Attribution.isCuLocalName(ast.name)) {
-                setOf(ast.id.source)
-            } else {
-                byGhidraName.getValue(ast.ghidraName).map { it.id.source }.toSet()
-            }
-            Attribution.categoryFor(ast.ghidraName, sources)
-        }
-        registerable
-            .groupBy { categoryFor(it) to it.ghidraName }
-            .mapValues { (key, members) -> classifyGroup(key, members) }
-    }
-
-    private fun classifyGroup(key: Pair<CategoryPath, String>, members: List<TypeAst>): CanonicalGroup {
+    private fun classifyGroup(key: GhidraKey, members: List<TypeAst>): CanonicalGroup {
         val distinctKinds = members.map { it.body::class }.toSet()
         if (distinctKinds.size > 1) {
             log(
                 "canonical-key-multi-kind",
-                "${key.first}/${key.second}: ${distinctKinds.map { it.simpleName }}",
+                "$key: ${distinctKinds.map { it.simpleName }}",
                 Level.WARN,
             )
         }
@@ -108,22 +73,47 @@ data class Harvest(
         when {
             byHash.size > 1 -> log(
                 "canonical-key-multi-hash",
-                "${key.first}/${key.second}: ${byHash.size} distinct bodies across " +
+                "$key: ${byHash.size} distinct bodies across " +
                     members.map { it.id.source.filename }.toSet(),
                 Level.INFO,
             )
 
             members.size > 1 -> log(
                 "canonical-key-merged",
-                "${key.first}/${key.second}: ${members.size} ASTs collapsed (single body)",
+                "$key: ${members.size} ASTs collapsed (single body)",
                 Level.DEBUG,
             )
         }
-        // Winner: largest body, then first by source filename for stability.
+        // Winner: largest body, then fewest unresolved Refs (so the DTM gets the
+        // most-resolved variant of CUs that disagree on which gcc-implicit slots
+        // they emit), then first by source filename for stability.
         val winner = members.maxWithOrNull(
-            compareBy<TypeAst> { it.body.sizeBytes }.thenBy { it.id.source.filename },
+            compareBy<TypeAst> { it.body.sizeBytes }
+                .thenByDescending { countUnresolvedRefs(it.body) }
+                .thenBy { it.id.source.filename },
         )!!
-        return CanonicalGroup(key, members, winner)
+        return CanonicalGroup(key, winner, members.map { it.id }, byHash.size)
+    }
+
+    /**
+     * Count direct unresolved Refs in a struct body — Refs whose target id isn't
+     * in [typeAsts]. Walks one level through InlineDef/Pointer/Const/Volatile
+     * wrappers; doesn't descend recursively. Used by [classifyGroup] to pick the
+     * winner that gives Ghidra the fewest `<undefined>` fields.
+     */
+    private fun countUnresolvedRefs(body: TypeDecl<GlobalTypeId>): Int {
+        if (body !is TypeDecl.Struct) return 0
+        return body.fields.count { f -> walksToUnresolvedRef(f.type) }
+    }
+
+    private tailrec fun walksToUnresolvedRef(t: TypeDecl<GlobalTypeId>): Boolean = when (t) {
+        is TypeDecl.Ref -> t.id !in typeAsts
+        is TypeDecl.InlineDef -> walksToUnresolvedRef(t.body)
+        is TypeDecl.Pointer -> walksToUnresolvedRef(t.pointee)
+        is TypeDecl.Reference -> walksToUnresolvedRef(t.referent)
+        is TypeDecl.Const -> walksToUnresolvedRef(t.inner)
+        is TypeDecl.Volatile -> walksToUnresolvedRef(t.inner)
+        else -> false
     }
 
     /**
@@ -147,7 +137,7 @@ data class Harvest(
             ?.firstOrNull { it.body.matchesXRefKind(xref.kind) }
             ?.let { return it }
 
-        val tag = baseTag(xref.tagName)
+        val tag = QualifiedName.baseTag(xref.tagName)
         if (tag.isNotEmpty()) {
             val candidates = astsByBaseTag[tag]?.filter { it.body.matchesXRefKind(xref.kind) }.orEmpty()
             val distinctSizes = candidates.map { it.body.sizeBytes }.toSet()
@@ -179,7 +169,8 @@ data class Harvest(
     fun contentHash(body: TypeDecl<GlobalTypeId>): Int = body.contentHash(oracle, hashCache)
 
     /** Oracle exposing both id-based and name-based (XRef) lookups. */
-    val oracle: TypeAstOracle by lazy { TypeAstOracle(byId = typeAsts::get, byXRef = ::getByXRef) }
+    @Transient
+    val oracle = TypeAstOracle(byId = typeAsts::get, byXRef = ::getByXRef)
 
     /**
      * Classify [collidingAsts] entries by whether their alternate bodies
@@ -194,7 +185,7 @@ data class Harvest(
      * structurally-identical Ref-vs-InlineDef forms diverge purely on
      * cache state. Pre-warming with empty visited sets fixes this.
      */
-    fun classifyCollisions() {
+    init {
         // Classify collisions and drop the spurious (content-equivalent)
         // buckets before the Harvest is published. Downstream consumers
         // only ever see genuinely-divergent collisions; the warmed cache
@@ -211,5 +202,14 @@ data class Harvest(
                 types.groupBy { contentHash(it) }.map { it.value.first() }.toSet()
             }
         }.toMap()
+
+        val byGhidraName = typeAsts.values.groupBy { it.ghidraName }
+
+        byCanonicalKey = typeAsts.values.filter { it.body.isXRefTarget }.groupBy { ast ->
+            Attribution.keyForAst(
+                ast,
+                byGhidraName.getValue(ast.ghidraName).map { it.id.source }.toSet(),
+            )
+        }.mapValues { (key, members) -> classifyGroup(key, members) }
     }
 }
