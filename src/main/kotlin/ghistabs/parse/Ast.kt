@@ -24,6 +24,18 @@ sealed interface TypeDecl<out Id : IdInterface> {
     @Serializable
     data class Range<Id : IdInterface>(@Contextual val of: Id, val min: Long, val max: Long) : TypeDecl<Id>
 
+    /**
+     * GCC floating-point encoding: `r<base>;<NBYTES>;0;` (i.e. `min > 0 && max == 0`).
+     * Per the stabs spec (GDB "STABS Debug Format" §"Floating Point Types";
+     * `gcc/dbxout.c::dbxout_range_type`; `gdb/stabsread.c::read_range_type`), `<base>`
+     * is decorative — included for ABI/syntactic compatibility, ignored at parse
+     * time. Semantically a float is identified by its byte size alone. Lifting this
+     * out of [Range] makes content-equivalent floats hash the same across CUs
+     * regardless of which int slot gcc happened to point `<base>` at.
+     */
+    @Serializable
+    data class Float<Id : IdInterface>(val sizeBytes: Int) : TypeDecl<Id>
+
     @Serializable
     data class Pointer<Id : IdInterface>(val pointee: TypeDecl<Id>) : TypeDecl<Id>
 

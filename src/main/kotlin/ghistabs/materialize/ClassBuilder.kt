@@ -16,6 +16,7 @@ import ghidra.program.model.symbol.SourceType
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.Level
 import ghistabs.diagnose.isInlineStdMember
+import ghistabs.harvest.CanonicalGroup
 import ghistabs.harvest.Harvest
 import ghistabs.importer.ImportContext
 import ghistabs.parse.*
@@ -67,13 +68,15 @@ class ClassBuilder(
     private val dtm = program.dataTypeManager
 
     /** Materialise a class struct + namespace + (optional) vtable struct + apply at _ZTV. */
-    fun build(name: String, body: TypeDecl.Struct<GlobalTypeId>, category: CategoryPath) {
-        // 1. Locate the materialised Structure in the DTM.
-        // (typeRegistry.dataTypeFor does not handle TypeDecl.Struct — Structs are only
-        // looked up by TypeId via materialiseAll; here we resolve by (category, name).)
-        val structDt = dtm.getDataType(category, name)
+    fun build(group: CanonicalGroup) {
+        val name = group.key.name
+        val category = group.key.category
+        val body = group.ast.body as TypeDecl.Struct<GlobalTypeId>
+        // 1. Look up the materialised Structure registered by materialiseAll for this group's
+        //    winner — TypeRegistry is the authoritative source; no DTM round-trip needed.
+        val structDt = typeRegistry.dataTypeFor(group.ast.id)
         if (structDt !is Structure) {
-            log("class-not-struct", "skipping ${structDt::class.simpleName} class '$name' at $category ")
+            log("class-not-struct", "skipping ${structDt?.let { it::class.simpleName }} class '$name' at $category ")
             return
         }
 
