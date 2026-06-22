@@ -596,8 +596,30 @@ class ClassBuilder(
         className: String,
         classCategory: CategoryPath,
     ): PointerDataType? {
-        val mAddr = m.mangled?.let(resolver::resolve) ?: return null
-        val func = program.functionManager.getFunctionAt(mAddr) ?: return null
+        if (m.mangled == null) {
+            ctx.diagnostics.recordDegradation(
+                "vftable-slot-no-mangled",
+                "$className::${m.name}",
+                "virt=${m.virt}",
+            )
+            return null
+        }
+        val mAddr = resolver.resolve(m.mangled!!) ?: run {
+            ctx.diagnostics.recordDegradation(
+                "vftable-slot-mangled-unresolved",
+                "$className::${m.name}",
+                "mangled=${m.mangled}",
+            )
+            return null
+        }
+        val func = program.functionManager.getFunctionAt(mAddr) ?: run {
+            ctx.diagnostics.recordDegradation(
+                "vftable-slot-no-function",
+                "$className::${m.name}",
+                "addr=$mAddr mangled=${m.mangled}",
+            )
+            return null
+        }
         val funcDef = FunctionDefinitionDataType(func, false)
         // Name the FunctionDefinition after the in-class display name, not
         // the function's possibly-mangled-or-class-namespaced full name.
