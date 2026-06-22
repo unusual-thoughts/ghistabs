@@ -124,18 +124,20 @@ class TypeResolver(
             )
         }
         val diagnosis = xrefDiagnosis(xref)
-        if (recordDegradation) {
-            val category = when (reason) {
-                XRefLookup.Reason.NoCandidate -> "xref-undefined"
-                XRefLookup.Reason.KindMismatch -> "xref-kind-mismatch"
-                XRefLookup.Reason.AmbiguousSize -> "xref-ambiguous"
-            }
-            diagnostics.recordDegradation(
-                category,
-                xref.tagName,
-                "[${xref.kind}] $diagnosis",
-            )
-        } else {
+        // Bump per-reason counters (so the cardinality is visible in the
+        // summary) but don't record as a degradation: an unresolved XRef on
+        // its own isn't a loss. The materialiser-side [xrefStubs] tracking
+        // emits xref-stub-in-field/-base/-array degradations only when the
+        // resulting empty placeholder actually lands somewhere that needs a
+        // layout. Pointer/Reference use sites are fine — gcc deliberately
+        // emits forward decls for those.
+        val counter = when (reason) {
+            XRefLookup.Reason.NoCandidate -> "xref-undefined"
+            XRefLookup.Reason.KindMismatch -> "xref-kind-mismatch"
+            XRefLookup.Reason.AmbiguousSize -> "xref-ambiguous"
+        }
+        diagnostics.inc(counter)
+        if (!recordDegradation) {
             sink.log("unresolved-xref", "${xref.tagName} [${xref.kind}] $diagnosis", Level.WARN)
         }
         return XRefLookup.Unresolved(reason, diagnosis)
