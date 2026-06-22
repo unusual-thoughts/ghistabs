@@ -34,6 +34,7 @@ sealed class Skip(open val reason: String) {
 
 /**
  * Adapter that uses Ghidra's DataTypeManager to execute demangler stub replacements.
+ * FIXME: use  authoritative map of canonicalkey -> candidate instead of guessing (maybe use TypeRegistry.findByName)
  */
 class DemanglerReplacer(private val ctx: ImportContext<*>) : DiagnosticSink by ctx.sink {
     companion object {

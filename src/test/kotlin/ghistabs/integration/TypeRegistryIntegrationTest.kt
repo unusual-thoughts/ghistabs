@@ -1,6 +1,8 @@
 package ghistabs.integration
 
 import ghidra.program.database.ProgramBuilder
+import ghidra.program.model.data.TypeDef
+import ghidra.program.model.data.UnsignedIntegerDataType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghistabs.diagnose.defaultContext
 import ghistabs.importer.StabsImporter
@@ -8,6 +10,7 @@ import ghistabs.parse.StabReader
 import ghistabs.parse.StabRecord
 import ghistabs.parse.StabType
 import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Tag
@@ -262,6 +265,33 @@ class TypeRegistryIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         assertTrue(
             result.typesMaterialised >= 2,
             "Mutually referential types should be handled correctly",
+        )
+    }
+
+    /** Named primitive typedef: `unsigned int:t(0,4)=r(0,4);0;4294967295;` → /unsignedint TypeDef. */
+    @Test
+    fun testNamedPrimitiveTypedef() {
+        val program = builder.program
+        val records = listOf(
+            StabRecord(0, StabType.N_SO, 0, 0, 0, 0, "main.cpp"),
+            StabRecord(1, StabType.N_LSYM, 0, 0, 0, 0, "unsigned int:t(0,4)=r(0,4);0000000000000;0037777777777;"),
+        )
+        val ctx = program.defaultContext()
+        StabsImporter(ctx).runOnRecords(StabReader.Result(records))
+
+        val dtm = program.dataTypeManager
+        val found = dtm.allDataTypes.asSequence().filter { it.name == "unsignedint" }.toList()
+        val u = found.singleOrNull()
+        assertNotNull(
+            u,
+            "expected 1 type named 'unsignedint', got ${found.size}: " +
+                found.map { "${it::class.simpleName}@${it.categoryPath}" },
+        )
+        val nnu = u ?: return
+        val base = (nnu as? TypeDef)?.baseDataType ?: nnu
+        assertTrue(
+            base.isEquivalent(UnsignedIntegerDataType()),
+            "expected unsignedint -> uint, got ${nnu::class.simpleName}(${nnu.name})",
         )
     }
 }
