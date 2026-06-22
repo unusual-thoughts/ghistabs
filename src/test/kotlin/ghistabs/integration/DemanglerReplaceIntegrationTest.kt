@@ -8,6 +8,7 @@ import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghistabs.diagnose.defaultContext
 import ghistabs.diagnose.defaultTypeRegistry
 import ghistabs.importer.DemanglerReplacer
+import ghistabs.runTransaction
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
@@ -62,8 +63,7 @@ class DemanglerReplaceIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
         val dtm = program.dataTypeManager
 
         // Seed /Demangler/Foo as empty structure (stub) within a transaction
-        val txId = program.startTransaction("setup-test")
-        try {
+        program.runTransaction("setup-test") {
             val stubPath = CategoryPath("/Demangler")
             val stubDt = StructureDataType(stubPath, "Foo", 0)
             dtm.addDataType(stubDt, DataTypeConflictHandler.KEEP_HANDLER)
@@ -77,8 +77,6 @@ class DemanglerReplaceIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
                 projDt.add(intType, 4, "fieldA", "first int")
             }
             dtm.addDataType(projDt, DataTypeConflictHandler.KEEP_HANDLER)
-        } finally {
-            program.endTransaction(txId, true)
         }
 
         // Create ImportContext (minimal setup for DemanglerReplacer)
@@ -93,11 +91,8 @@ class DemanglerReplaceIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
         // Run DemanglerReplacer inside a transaction — `dtm.replaceDataType`
         // (used when a real replacement is found) requires one.
         val registry = ctx.defaultTypeRegistry()
-        val txRun = program.startTransaction("demangler-replace")
-        try {
+        program.runTransaction("demangler-replace") {
             DemanglerReplacer(ctx).run()
-        } finally {
-            program.endTransaction(txRun, true)
         }
 
         // Verify that the stub is gone and the replacement remains.
@@ -130,8 +125,7 @@ class DemanglerReplaceIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
         val dtm = program.dataTypeManager
 
         // Seed only /proj/Foo (no stub) within a transaction
-        val txId = program.startTransaction("setup-test")
-        try {
+        program.runTransaction("setup-test") {
             val projPath = CategoryPath("/proj")
             val projDt = StructureDataType(projPath, "Foo", 4)
             // Resolve the int type first to avoid null when adding
@@ -140,8 +134,6 @@ class DemanglerReplaceIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
                 projDt.add(intType, 4, "fieldA", null)
             }
             dtm.addDataType(projDt, DataTypeConflictHandler.KEEP_HANDLER)
-        } finally {
-            program.endTransaction(txId, true)
         }
 
         // Create ImportContext
