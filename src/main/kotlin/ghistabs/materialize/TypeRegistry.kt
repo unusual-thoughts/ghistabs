@@ -679,7 +679,27 @@ class TypeRegistry(
                     if (resolvedFt != null) {
                         recordXRefStubAt("field", "${ast.ghidraName}.${field.name}", resolvedFt)
                     }
-                    val len = if (ft.length <= 0) 4 else ft.length
+                    // Empty placeholders (XRef stubs, ref-stubs for non-
+                    // primitive bodies that materialised lazily) get Ghidra's
+                    // enforced length=1. Inserting that 1 byte where a 4-byte
+                    // pointer or whatever the stab said belongs would leave
+                    // field.sizeBits/8 - 1 bytes as auto-Undefined holes. If
+                    // the resolved type is logically empty, prefer the stab's
+                    // declared field size (in bytes) so the field at least
+                    // occupies the right slot.
+                    val stabBytes = (field.sizeBits / 8).toInt()
+                    val len = when {
+                        ft.length <= 0 -> stabBytes.takeIf { it > 0 } ?: 4
+                        ft.isZeroLength && stabBytes > 0 -> {
+                            diagnostics.recordDegradation(
+                                "field-stub-padded",
+                                "${ast.ghidraName}.${field.name}",
+                                "type=${ft.name} (zero-length); padding to stab-declared $stabBytes bytes",
+                            )
+                            stabBytes
+                        }
+                        else -> ft.length
+                    }
                     try {
                         when (struct) {
                             is Structure -> struct.replaceAtOffset(
