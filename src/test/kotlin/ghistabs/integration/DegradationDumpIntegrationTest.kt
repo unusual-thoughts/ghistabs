@@ -26,7 +26,7 @@ import java.io.File
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class DegradationDumpIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     @ParameterizedTest
-    @ValueSource(strings = ["xapasmcsr.exe", "xmltest", "appquery.exe"])
+    @ValueSource(strings = ["xapasmcsr.exe", "xmltest", "appquery.exe", "box2d", "box2d_tests"])
     fun dumpDegradations(binaryName: String) {
         val fixture = File("src/test/resources/binaries/$binaryName")
         assumeTrue(fixture.exists(), "fixture absent")
