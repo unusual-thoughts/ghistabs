@@ -15,6 +15,7 @@ import ghistabs.harvest.Harvest
 import ghistabs.harvest.Harvester
 import ghistabs.harvest.LocalRecord
 import ghistabs.harvest.OpenFunction
+import ghistabs.harvest.TypeResolver
 import ghistabs.materialize.TypeRegistry
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.StabReader
@@ -41,7 +42,11 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
         // Pass A — parse + harvest
         val harvester = Harvester(ctx.monitor, ctx.sink, ctx.resolver)
         val harvest = harvester.passA(stabs.records)
-        recordHarvestCounters(harvest, stabs)
+        // Resolver wraps the harvest with by-name/by-base-tag indices, oracle
+        // duties, canonicalization, and divergent-collision filtering. Everything
+        // downstream that needs cross-CU lookups talks to this.
+        val typeResolver = TypeResolver(harvest.typeAsts, harvest.rawCollisions, ctx.sink, ctx.diagnostics)
+        recordHarvestCounters(harvest, typeResolver, stabs)
 
         // Pass B — materialise types
         val typeRegistry = TypeRegistry(
@@ -49,6 +54,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
             ctx.sink,
             ctx.diagnostics,
             harvest,
+            typeResolver,
         )
 
         ctx.program.runTransaction("Stabs: materialise types") {
@@ -57,7 +63,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
 
         // Pass C — apply symbols
         val applyResult = ctx.program.runTransaction("Stabs: apply symbols") {
-            applyAllSymbols(harvest, typeRegistry)
+            applyAllSymbols(harvest, typeRegistry, typeResolver)
         }
 
         // Report placeholders that never had their bodies resolved. These are
@@ -84,7 +90,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
         )
     }
 
-    private fun recordHarvestCounters(harvest: Harvest, stabs: StabReader.Result) {
+    private fun recordHarvestCounters(harvest: Harvest, resolver: TypeResolver, stabs: StabReader.Result) {
         ctx.diagnostics.inc("harvest-records-read", stabs.recordCount.toLong())
         ctx.diagnostics.inc("harvest-records-parsed", (stabs.records.size - harvest.parseErrors).toLong())
         ctx.diagnostics.inc("harvest-parse-errors", harvest.parseErrors.toLong())
@@ -107,14 +113,25 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
         val uniqueTypeIds = harvest.typeAsts.keys.size
         ctx.diagnostics.inc("harvest-typeAsts-unique-by-id", uniqueTypeIds.toLong())
         ctx.diagnostics.inc("harvest-typeAsts-dup-by-id", (harvest.typeAsts.size - uniqueTypeIds).toLong())
-        ctx.diagnostics.inc("harvest-collisions", harvest.collidingAsts.size.toLong())
+        ctx.diagnostics.inc("harvest-collisions-raw", harvest.rawCollisions.size.toLong())
         ctx.diagnostics.inc(
-            "harvest-collisions-total",
-            harvest.collidingAsts.values.flatMap { it.values }.flatten().count().toLong(),
+            "harvest-collisions-raw-total",
+            harvest.rawCollisions.values.flatMap { it.values }.flatten().count().toLong(),
+        )
+        // Post-filter: content-equivalent duplicates dropped, only genuinely
+        // divergent multi-body collisions remain.
+        ctx.diagnostics.inc("harvest-collisions-divergent", resolver.divergentCollisions.size.toLong())
+        ctx.diagnostics.inc(
+            "harvest-collisions-divergent-total",
+            resolver.divergentCollisions.values.flatMap { it.values }.flatten().count().toLong(),
         )
     }
 
-    internal fun applyAllSymbols(harvest: Harvest, typeRegistry: TypeRegistry): ApplyResult {
+    internal fun applyAllSymbols(
+        harvest: Harvest,
+        typeRegistry: TypeRegistry,
+        typeResolver: TypeResolver,
+    ): ApplyResult {
         val source = SourceType.IMPORTED
         val funcMgr = ctx.program.functionManager
         var functions = 0
@@ -234,7 +251,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
 
         // Classes + vtables.
         if (ctx.options.applyVtables) {
-            val classBuilder = ghistabs.materialize.ClassBuilder(typeRegistry, harvest, ctx)
+            val classBuilder = ghistabs.materialize.ClassBuilder(typeRegistry, harvest, typeResolver, ctx)
             // Each class header transitively included by N CUs produces N TypeAst
             // entries with distinct GlobalTypeIds but identical `ghidraName`
             // (xapasmcsr: 86 names duplicated, up to 11x each). `materialiseAll`
@@ -251,9 +268,10 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
             //    decl, another the full body with methods.
             ctx.diagnostics.inc(
                 "class-build-name-collisions",
-                harvest.astsByGhidraName.values.count { it.size > 1 }.toLong(),
+                harvest.typeAsts.values.groupingBy { it.ghidraName }.eachCount()
+                    .values.count { it > 1 }.toLong(),
             )
-            for (group in harvest.byCanonicalKey.values) {
+            for (group in typeResolver.byCanonicalKey.values) {
                 if (group.ast.body !is TypeDecl.Struct) {
                     continue
                 }

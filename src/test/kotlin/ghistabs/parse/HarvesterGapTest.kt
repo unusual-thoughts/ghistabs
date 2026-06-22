@@ -78,7 +78,7 @@ class HarvesterGapTest {
 
         // Verify: collidingAsts field exists and is accessible
         assertNotNull(
-            harvest.collidingAsts,
+            harvest.rawCollisions,
             "D6: collidingAsts field must exist in Harvest data class for collision recording",
         )
     }

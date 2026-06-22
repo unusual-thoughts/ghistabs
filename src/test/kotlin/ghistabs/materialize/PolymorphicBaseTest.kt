@@ -1,7 +1,7 @@
 package ghistabs.materialize
 
-import ghistabs.harvest.Harvest
 import ghistabs.harvest.TypeAst
+import ghistabs.harvest.TypeResolver
 import ghistabs.parse.*
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test
 class PolymorphicBaseTest {
     private val cu = SourceFile.CUSource("test.cpp")
     private fun gid(n: Int) = GlobalTypeId(cu, n)
-    private fun helpers(typeAsts: Map<GlobalTypeId, TypeAst> = emptyMap()) = ClassBuilderHelpers(Harvest(typeAsts))
+    private fun helpers(typeAsts: Map<GlobalTypeId, TypeAst> = emptyMap()) = ClassBuilderHelpers(TypeResolver(typeAsts))
 
     private fun polyStruct(hasVtableMarker: Boolean = false, methods: List<MethodDecl<GlobalTypeId>> = emptyList()) =
         TypeDecl.Struct<GlobalTypeId>(
