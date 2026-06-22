@@ -34,6 +34,29 @@ class TypeRegistry(
      */
     private val xrefStubs = mutableSetOf<DataType>()
 
+    /**
+     * Every DataType this importer materialised or directly added to the DTM.
+     *
+     *  - [byId] holds the result of every TypeAst we resolved (winners,
+     *    aliases, builtin typedefs, ref-stubs, dangling-ref fallbacks).
+     *  - [ClassBuilder] writes its vftable / vtable / per-slot
+     *    FunctionDefinitions under `/ClassDataTypes/<Class>` and doesn't go
+     *    through [byId]; pick those up by path.
+     *
+     * Together these are exhaustive: any DTM type whose category doesn't
+     * start with `/ClassDataTypes` and whose id isn't in [byId] was not
+     * created by this importer (it came from the loader, the demangler,
+     * or pre-existing user content).
+     */
+    fun allCreatedDataTypes(): Set<DataType> {
+        val result = LinkedHashSet<DataType>(byId.values.size + 64)
+        result.addAll(byId.values)
+        for (dt in dtm.allDataTypes) {
+            if (dt.categoryPath.path.startsWith("/ClassDataTypes")) result.add(dt)
+        }
+        return result
+    }
+
     private fun recordXRefStubAt(useSite: String, at: String, dt: DataType) {
         if (dt in xrefStubs) {
             diagnostics.recordDegradation("xref-stub-in-$useSite", at, "type=${dt.name}")

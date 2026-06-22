@@ -166,9 +166,18 @@ class Harvester(
 
                 StabType.N_LSYM -> try {
                     when (val decl = parseSymbol(rec)) {
-                        is SymbolDecl.TaggedType -> appendAsts(
-                            TypeAst(currentCu!!, decl.id, decl.name, decl.type),
-                        )
+                        is SymbolDecl.TaggedType -> {
+                            // Outer typeAst + every InlineDef (`(0,N)=…`)
+                            // bound inside the struct body. gcc heavily uses
+                            // inline-bound ids for field types (anon pointers,
+                            // arrays, function pointers) — without recursing
+                            // through walkDefinitions those ids are referenced
+                            // by `Ref(id)` from other types but never harvested
+                            // as their own TypeAst, producing dangling refs
+                            // and undefined field types downstream.
+                            val outer = TypeAst(currentCu!!, decl.id, decl.name, decl.type)
+                            appendAsts(outer, *walkDefinitions(decl.type).toTypedArray())
+                        }
 
                         is SymbolDecl.Typedef -> {
                             // `name:t(cu,n)` with no `=body` parses as
@@ -179,7 +188,8 @@ class Harvester(
                             // definition at the same id in another CU
                             // (every box2d typedef went this way).
                             if (decl.type !is TypeDecl.Ref || decl.type.id != decl.id) {
-                                appendAsts(TypeAst(currentCu!!, decl.id, decl.name, decl.type))
+                                val outer = TypeAst(currentCu!!, decl.id, decl.name, decl.type)
+                                appendAsts(outer, *walkDefinitions(decl.type).toTypedArray())
                             }
                         }
 
