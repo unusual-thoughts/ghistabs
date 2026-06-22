@@ -1,6 +1,6 @@
 package ghistabs.util
 
-import ghistabs.materialize.QualifiedName
+import ghistabs.parse.QualifiedName
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 

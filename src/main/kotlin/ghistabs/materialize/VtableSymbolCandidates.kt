@@ -4,6 +4,7 @@ import ghidra.app.util.demangler.DemangledAddressTable
 import ghidra.app.util.demangler.DemanglerUtil
 import ghidra.program.model.listing.Program
 import ghistabs.materialize.VtableSymbolCandidates.decodesToClass
+import ghistabs.parse.QualifiedName
 
 object VtableSymbolCandidates {
     /**
