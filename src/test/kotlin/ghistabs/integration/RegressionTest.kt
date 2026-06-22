@@ -986,6 +986,29 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
      * no-op — the assertion intentionally only checks the mingw side, since
      * the Linux side already has reliable cdecl/sysv handling.
      */
+    /**
+     * Any DataType we registered in the DTM with a name that's a serialized
+     * GlobalTypeId (`[<source>,<n>]` shape) is an anonymous type we couldn't
+     * give a meaningful name to. That's a missing name-promotion / fallback
+     * path. Reading the listing, the user would see `[/xml/tinyxml2.cpp,42] *`
+     * as a field type — not useful. Flag every one and fail.
+     */
+    @Test
+    fun noAnonymousMaterializedTypes() {
+        // [source,n] where source may contain '/', '#', '.', etc. — match liberally.
+        val idLike = Regex("""^\[[^\[\]]+,\d+]$""")
+        val anon = program.dataTypeManager.allDataTypes.asSequence()
+            .filter { idLike.matches(it.name) }
+            .take(20)
+            .map { "${it.categoryPath}/${it.name} (${it::class.simpleName})" }
+            .toList()
+        Assertions.assertTrue(
+            anon.isEmpty(),
+            "Found ${anon.size} anonymous DTM types named after a GlobalTypeId:\n  - " +
+                anon.joinToString("\n  - "),
+        )
+    }
+
     @Test
     fun mingwClassMethodsCarryThiscall() {
         assumeTrue(

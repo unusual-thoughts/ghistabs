@@ -68,6 +68,22 @@ class TypeRegistry(
     }
 
     /**
+     * Get-or-create a DTM-resident DataType at `(category, name)`. If an
+     * existing entry there is an instance of [T] it's returned as-is;
+     * otherwise [build] is invoked and the result is [register]ed. Used by
+     * [ClassBuilder] to manage class-scoped composites without reaching for
+     * the DTM directly.
+     */
+    inline fun <reified T : DataType> getOrRegister(category: CategoryPath, name: String, build: () -> T): T {
+        (dtmLookup(category, name) as? T)?.let { return it }
+        return register(build()) as T
+    }
+
+    /** Bridge so the inline [getOrRegister] doesn't need the DTM as an inline-visible field. */
+    @PublishedApi
+    internal fun dtmLookup(category: CategoryPath, name: String): DataType? = dtm.getDataType(category, name)
+
+    /**
      * Every DataType this importer materialised or registered. Exhaustive by
      * construction — every DTM write goes through [register] or sets [byId].
      */
