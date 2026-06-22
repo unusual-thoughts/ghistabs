@@ -1025,4 +1025,73 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
                 "(reparentMethod's setCallingConvention silently failed)",
         )
     }
+
+    /**
+     * CLexStream and CSymLexStream form a single-inheritance chain in
+     * xapasmcsr (CSymLexStream extends CLexStream extends basic_ifstream).
+     * gcc's stab is internally inconsistent on both — `s328` / `s416`
+     * declare more bytes than the layout actually describes (CLexStream's
+     * last own field Tok ends at 192; CSymLexStream's last own field
+     * RecoverySet ends at 276). The placeholder-truncate fix uses
+     * "last described byte" as the size, which (a) removes the trailing
+     * unexplained padding and (b) makes CLexStream's size match what
+     * CSymLexStream's CU expects from its base — so the base placement
+     * fits cleanly without overwrite or synthesis.
+     *
+     * This also requires the truncate to happen at placeholder-creation
+     * time (not later), so the size is consistent across pre-seed and
+     * the materialise-winner loop regardless of order: CSymLexStream's
+     * base loop sees CLexStream's already-truncated placeholder.
+     */
+    @Test
+    fun cLexStreamAndCSymLexStreamTruncated() {
+        assumeTrue(binaryName == "xapasmcsr.exe", "Skipping: CLexStream chain is xapasmcsr-specific")
+
+        fun findStruct(name: String): ghidra.program.model.data.Structure = program.dataTypeManager.allDataTypes
+            .asSequence()
+            .filterIsInstance<ghidra.program.model.data.Structure>()
+            .firstOrNull { it.name == name }
+            ?: throw AssertionError("Structure '$name' not in DTM")
+
+        // CLexStream: truncate to its last own field end. Tok at +168 size 24 → 192.
+        val clex = findStruct("CLexStream")
+        Assertions.assertEquals(
+            192,
+            clex.length,
+            "CLexStream should be truncated to 192 (Tok ends at 168+24); got ${clex.length}",
+        )
+        val clexFields = clex.components.associateBy { it.fieldName ?: "" }
+        Assertions.assertEquals(112, clexFields["LineNo"]?.offset, "LineNo expected at +112")
+        Assertions.assertEquals(168, clexFields["Tok"]?.offset, "Tok expected at +168")
+        Assertions.assertEquals(24, clexFields["Tok"]?.length, "Tok expected to span 24 bytes")
+
+        // CSymLexStream: own fields end at RecoverySet+40 = 276. Truncate target = 276.
+        val csym = findStruct("CSymLexStream")
+        Assertions.assertEquals(
+            276,
+            csym.length,
+            "CSymLexStream should be truncated to 276 (RecoverySet ends at 236+40); got ${csym.length}",
+        )
+
+        // CSymLexStream's base at +0 must be CLexStream itself (resolved, not
+        // a synthesised placeholder). That's the cascade: CLexStream's
+        // truncate-to-192 made it fit exactly in CSymLexStream's 192-byte gap.
+        val csymFields = csym.components.associateBy { it.fieldName ?: "" }
+        val baseField = csymFields["_base_CLexStream"]
+        Assertions.assertNotNull(
+            baseField,
+            "_base_CLexStream missing from CSymLexStream; components: ${csymFields.keys}",
+        )
+        Assertions.assertEquals(0, baseField!!.offset, "_base_CLexStream expected at +0")
+        Assertions.assertEquals(192, baseField.length, "_base_CLexStream expected to span 192 bytes")
+        Assertions.assertSame(
+            clex,
+            baseField.dataType,
+            "_base_CLexStream's dataType should be the same CLexStream Structure",
+        )
+
+        Assertions.assertEquals(192, csymFields["CurrentTok"]?.offset, "CurrentTok expected at +192")
+        Assertions.assertEquals(236, csymFields["RecoverySet"]?.offset, "RecoverySet expected at +236")
+        Assertions.assertEquals(40, csymFields["RecoverySet"]?.length, "RecoverySet expected to span 40 bytes")
+    }
 }
