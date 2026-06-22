@@ -488,16 +488,36 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
         )
     }
 
+    /**
+     * CLexStream extends basic_ifstream — verify the inheritance is
+     * reflected in the layout. Two acceptable shapes:
+     *  - A named `_base_basic_ifstream` (or `_vbase_…`) component at +0,
+     *    if the base type resolved. Only happens when libstdc++'s stabs
+     *    body is present in this binary (it isn't in xapasmcsr — only
+     *    iosfwd's forward decl is emitted).
+     *  - The struct's first own non-static field at offset > 0, with
+     *    the base subobject reserved as bare Undefined1 (the explicit
+     *    "don't pretend we know what's here" choice). This is the path
+     *    xapasmcsr takes for CLexStream's basic_ifstream base.
+     */
     @Test
     fun cLexStreamHasBaseField() {
         val cls = program.dataTypeManager.allDataTypes.asSequence()
             .firstOrNull { it.name == "CLexStream" && it is Structure } as? Structure
         assumeTrue(cls != null, "Skipping: CLexStream not found (stabs not processed)")
-        val hasBase =
-            (0 until cls!!.numComponents).any { i ->
-                cls.getComponent(i).fieldName?.let { it.startsWith("_base_") || it.startsWith("_vbase_") } == true
-            }
-        Assertions.assertTrue(hasBase, "CLexStream has no _base_/_vbase_ component")
+        val hasNamedBase = (0 until cls!!.numComponents).any { i ->
+            cls.getComponent(i).fieldName?.let { it.startsWith("_base_") || it.startsWith("_vbase_") } == true
+        }
+        val firstOwnFieldOffset = (0 until cls.numComponents)
+            .map { cls.getComponent(it) }
+            .firstOrNull { c -> c.fieldName?.let { !it.startsWith("_base_") && !it.startsWith("_vbase_") } == true }
+            ?.offset
+            ?: 0
+        Assertions.assertTrue(
+            hasNamedBase || firstOwnFieldOffset > 0,
+            "CLexStream: no _base_/_vbase_ component AND first own field at offset 0 — " +
+                "no inheritance reflected at all",
+        )
     }
 
     @Test
