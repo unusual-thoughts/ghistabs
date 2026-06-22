@@ -35,25 +35,46 @@ class TypeRegistry(
     private val xrefStubs = mutableSetOf<DataType>()
 
     /**
-     * Every DataType this importer materialised or directly added to the DTM.
-     *
-     *  - [byId] holds the result of every TypeAst we resolved (winners,
-     *    aliases, builtin typedefs, ref-stubs, dangling-ref fallbacks).
-     *  - [ClassBuilder] writes its vftable / vtable / per-slot
-     *    FunctionDefinitions under `/ClassDataTypes/<Class>` and doesn't go
-     *    through [byId]; pick those up by path.
-     *
-     * Together these are exhaustive: any DTM type whose category doesn't
-     * start with `/ClassDataTypes` and whose id isn't in [byId] was not
-     * created by this importer (it came from the loader, the demangler,
-     * or pre-existing user content).
+     * DataTypes this importer registered in the DTM that don't correspond to
+     * a single stab TypeId — `<Class>_vftable` / `<Class>_vtable` structs and
+     * per-slot FunctionDefinitions built by [ClassBuilder]. Tracked alongside
+     * [byId] so [allCreatedDataTypes] is exhaustive without any DTM-path
+     * filtering tricks.
+     */
+    private val extras = LinkedHashSet<DataType>()
+
+    /**
+     * Register [dt] with the DTM (via [DataTypeManager.resolve]) and remember
+     * it as something this importer authored. Returns the DTM-resolved
+     * instance, which may be a different object if the DTM dedup'd against
+     * an existing equivalent. All non-id'd DTM writes (vftable/vtable
+     * composites, per-slot FunctionDefinitions, …) should go through this.
+     */
+    fun register(dt: DataType): DataType {
+        val resolved = dtm.resolve(dt, DataTypeConflictHandler.KEEP_HANDLER)
+        extras.add(resolved)
+        return resolved
+    }
+
+    /**
+     * Same as [register] but the type is the canonical DataType for [id] —
+     * cached in [byId] so subsequent `dataTypeFor(id)` returns it without
+     * re-resolving.
+     */
+    fun register(dt: DataType, id: GlobalTypeId): DataType {
+        val resolved = dtm.resolve(dt, DataTypeConflictHandler.KEEP_HANDLER)
+        byId[id] = resolved
+        return resolved
+    }
+
+    /**
+     * Every DataType this importer materialised or registered. Exhaustive by
+     * construction — every DTM write goes through [register] or sets [byId].
      */
     fun allCreatedDataTypes(): Set<DataType> {
-        val result = LinkedHashSet<DataType>(byId.values.size + 64)
+        val result = LinkedHashSet<DataType>(byId.values.size + extras.size)
         result.addAll(byId.values)
-        for (dt in dtm.allDataTypes) {
-            if (dt.categoryPath.path.startsWith("/ClassDataTypes")) result.add(dt)
-        }
+        result.addAll(extras)
         return result
     }
 
@@ -158,7 +179,10 @@ class TypeRegistry(
                 val winner = group.ast
                 val raw = makePlaceholder(winner, group.key.category)
                 val placeholder = if (winner.body is TypeDecl.Struct) {
-                    dtm.addDataType(raw, DataTypeConflictHandler.KEEP_HANDLER)
+                    // Add to DTM up-front so later in-place mutations land on
+                    // the DTM-resident object. byId is set below by the winner
+                    // materialiser; here we just need the DTM-resolved handle.
+                    register(raw)
                 } else {
                     raw
                 }
@@ -170,12 +194,13 @@ class TypeRegistry(
                 val winner = harvest.getType(winnerId) ?: continue
                 val placeholder = placeholders[winnerId]!!
                 val materialised = materialiseBody(winner, category, placeholder)
-                val canonical = if (materialised === placeholder) {
-                    placeholder
+                if (materialised === placeholder) {
+                    // Pre-seeded into DTM above (for Struct) or kept in-memory
+                    // (for non-Struct, which materialiseBody handled directly).
+                    byId[winnerId] = placeholder
                 } else {
-                    dtm.addDataType(materialised, DataTypeConflictHandler.KEEP_HANDLER)
+                    register(materialised, winnerId)
                 }
-                byId[winnerId] = canonical
             }
             // Alias members to their winner's DataType.
             for ((memberId, winner) in memberToWinner) {
@@ -193,10 +218,7 @@ class TypeRegistry(
                 .forEach { (ghidraName, asts) ->
                     val body = asts.first().body
                     val resolved = BuiltinTable.resolve(body) ?: return@forEach
-                    val typedef = dtm.addDataType(
-                        TypedefDataType(CategoryPath.ROOT, ghidraName, resolved, dtm),
-                        DataTypeConflictHandler.KEEP_HANDLER,
-                    )
+                    val typedef = register(TypedefDataType(CategoryPath.ROOT, ghidraName, resolved, dtm))
                     for (ast in asts) byId.putIfAbsent(ast.id, typedef)
                 }
 
