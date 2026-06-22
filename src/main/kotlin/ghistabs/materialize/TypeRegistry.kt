@@ -411,11 +411,38 @@ class TypeRegistry(
     private fun makePlaceholder(ast: TypeAst, category: CategoryPath, reason: String = "fwd-decl"): DataType {
         val dt = when (ast.body) {
             is TypeDecl.Struct if (ast.body.kind == AggrKind.UNION) -> UnionDataType(category, ast.ghidraName, dtm)
-            is TypeDecl.Struct -> StructureDataType(category, ast.ghidraName, ast.body.sizeBytes.toInt(), dtm)
+            is TypeDecl.Struct -> StructureDataType(category, ast.ghidraName, usefulStructSize(ast.body), dtm)
             else -> StructureDataType(category, ast.ghidraName, 0, dtm)
         }
         diagnostics.recordPlaceholder(ast.nameOrId, category.toString(), reason)
         return dt
+    }
+
+    /**
+     * "Useful" size for a Struct body — the last byte we have a description
+     * for. stab `sizeBytes` often overshoots:
+     *  - bouniaf: `s328` but own fields end at 192 (the 136 trailing
+     *    bytes are gcc's allocation for basic_ifstream's subobject that
+     *    was never emitted in this CU's stab, only forward-declared).
+     *  - bouniaf: `s416` but own fields end at 276.
+     *
+     * Trusting `sizeBytes` produces structs that are mostly Undefined1
+     * padding and confuse cross-CU consumers (bouniaf's compile-
+     * time view of bouniaf is 192 bytes, but canonical bouniaf at
+     * `sizeBytes` is 328 — the size mismatch silently overwrites the
+     * derived class's own fields). Truncating to the last meaningful
+     * byte we can describe eliminates both problems.
+     *
+     * Falls back to `sizeBytes` when there are no own non-static fields
+     * (empty class, possibly with bases that take some unknown space).
+     */
+    private fun usefulStructSize(body: TypeDecl.Struct<GlobalTypeId>): Int {
+        val fieldEnd = body.fields
+            .filter { !it.isStatic }
+            .maxOfOrNull { ((it.offsetBits + it.sizeBits + 7) / 8).toInt() }
+            ?: 0
+        if (fieldEnd == 0) return body.sizeBytes.toInt()
+        return fieldEnd.coerceAtMost(body.sizeBytes.toInt())
     }
 
     /**
