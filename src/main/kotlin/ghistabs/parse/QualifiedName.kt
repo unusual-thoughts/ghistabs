@@ -1,4 +1,4 @@
-package ghistabs.materialize
+package ghistabs.parse
 
 /**
  * Helpers for the C++ source-form qualified names that arrive in stab records.
@@ -68,5 +68,22 @@ object QualifiedName {
         }
         if (cur.isNotEmpty()) parts.add(cur.toString())
         return parts
+    }
+
+    /**
+     * Strip template arguments and namespace qualifiers from a class name.
+     *
+     *   `basic_istream<char,std::char_traits<char>>` → `basic_istream`
+     *   `std::basic_istream`                          → `basic_istream`
+     *   `__gnu_cxx::__normal_iterator<char*,…>`       → `__normal_iterator`
+     *
+     * Used by the XRef base-tag fallback to bridge "forward-declared bare tag in one
+     * CU vs full template instantiation in another" — the cross-CU mismatch is
+     * structural in gcc stabs, not a libstdc++-version detail, so this helper has no
+     * hardcoded names.
+     */
+    fun baseTag(name: String): String {
+        val noArgs = name.indexOf('<').let { if (it >= 0) name.substring(0, it) else name }
+        return noArgs.trim().substringAfterLast("::")
     }
 }
