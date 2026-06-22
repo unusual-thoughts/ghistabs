@@ -297,7 +297,7 @@ class Harvester(
         // never registered. Result: the contentHash oracle can't resolve
         // the Refs, per-CU clones diverge, and the appendAsts collision
         // log surfaces hundreds of false "different hash" entries.
-        is TypeDecl.InlineDef -> listOf(TypeAst(currentCu!!, decl.id, "${decl.id}", decl.body)) +
+        is TypeDecl.InlineDef -> listOf(TypeAst(currentCu!!, decl.id, null, decl.body)) +
             walkDefinitions(decl.body)
     }
 
@@ -322,16 +322,29 @@ class Harvester(
         val collisions = new.keys.intersect(typeAsts.keys).filter { typeAsts[it]?.body !is TypeDecl.XRef }
         for (id in collisions) {
             val ex = typeAsts[id]!!
+            val incoming = new[id]!!
+
+            // Name-promotion: an anonymous InlineDef-extracted TypeAst can be
+            // superseded by an explicit named Typedef for the same id (same CU-local
+            // type). The `of` self-ref in Range bodies differs between the two
+            // forms, so we don't require body equality — just that both are
+            // non-XRefTarget (primitive-like) and the existing is unnamed.
+            val namedIncoming = incoming.firstOrNull { it.name != null && !it.body.isXRefTarget }
+            if (namedIncoming != null && ex.name == null && !ex.body.isXRefTarget) {
+                typeAsts[id] = namedIncoming
+                continue
+            }
+
             // Cheap-equality skip: if every alternate body is `==` to
             // the merged entry (data-class structural equality, no
             // Ref-walk), the collision is a literal re-emission and
             // not worth recording. classifyCollisions does the deeper
             // Ref-aware check later for the entries that survive.
-            val alternates = new[id]!!.filter { it.body != ex.body }.map { it.body }
+            val alternates = incoming.filter { it.body != ex.body }.map { it.body }
             if (alternates.isEmpty()) continue
             val bucket = collidingAsts
                 .getOrPut(id) { mutableMapOf() }
-                .getOrPut(ex.name) { mutableSetOf() }
+                .getOrPut(ex.nameOrId) { mutableSetOf() }
             bucket.add(ex.body)
             bucket.addAll(alternates)
         }
