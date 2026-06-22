@@ -516,8 +516,16 @@ class TypeRegistry(
                     for (base in body.bases) {
                         val offsetBytes = (base.offsetBits / 8).toInt()
                         val dt = dataTypeFor(base.type)
-                        if (dt != null && dt.length > 0) {
-                            recordXRefStubAt("base", "${ast.nameOrId}@+$offsetBytes", dt)
+                        // Empty placeholders (XRef stubs for unresolvable
+                        // forward decls, ref-stubs from non-registerable
+                        // typeAsts) show up with `length = 1` because Ghidra
+                        // forces a minimum on size-0 Composites — but
+                        // `isZeroLength` returns the logical truth. Treat
+                        // those as unresolved so the inference branch below
+                        // produces an `Array<Undefined1, gap-size>` named
+                        // `_base_unknown_<offset>` — a strictly better
+                        // representation of the base subobject.
+                        if (dt != null && !dt.isZeroLength && dt.length > 0) {
                             dataTypeByOffset[offsetBytes] = dt
                             resolvedBaseInfo[offsetBytes] = ResolvedBase(dt.name, dt.length)
                             continue
@@ -548,7 +556,8 @@ class TypeRegistry(
                     // Plan ops from resolved bases; supplement with synthesised ones.
                     val resolvedOps = BaseInsertionPlanner.planBaseInsertions(body.bases) {
                         val dt = dataTypeFor(it)
-                        if (dt != null && dt.length > 0) {
+                        // Same empty-placeholder gate as the loop above.
+                        if (dt != null && !dt.isZeroLength && dt.length > 0) {
                             ResolvedBase(dt.name, dt.length)
                         } else {
                             null
