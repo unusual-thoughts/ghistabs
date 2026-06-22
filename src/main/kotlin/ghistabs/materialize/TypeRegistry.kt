@@ -11,6 +11,8 @@ import ghistabs.parse.AggrKind
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.LocalTypeId
 import ghistabs.parse.TypeDecl
+import ghistabs.parse.isXRefTarget
+import ghistabs.runTransaction
 
 class TypeRegistry(
     private val dtm: DataTypeManager,
@@ -22,7 +24,13 @@ class TypeRegistry(
     private val placeholders = mutableMapOf<GlobalTypeId, DataType>()
 
     fun tryGetExisting(gId: GlobalTypeId) = byId[gId] ?: placeholders[gId] ?: harvest.getType(gId)?.let { raw ->
-        makePlaceholder(raw, CategoryPath("/stabs")).also { placeholders[gId] = it }
+        // Primitives (Range, Builtin, Float, …) resolve directly via BuiltinTable.
+        // Without this, the `else` branch in makePlaceholder creates a zero-size
+        // StructureDataType as a stand-in. When that stub later appears as a field
+        // type inside a real struct, Ghidra auto-registers it as a StructureDB,
+        // shadowing the properly-named TypedefDB added later by the typedef loop.
+        BuiltinTable.resolve(raw.body)?.also { byId[gId] = it }
+            ?: makePlaceholder(raw, CategoryPath("/stabs")).also { placeholders[gId] = it }
     }
 
     /**
@@ -89,8 +97,7 @@ class TypeRegistry(
         //  2. Handle non-registerable top-level typeAsts (XRef-aliased helpers,
         //     FunctionT, Method, …) via the legacy resolve() path — they need byId
         //     entries for Ref resolution but never occupy a stable Ghidra slot.
-        val tx = dtm.startTransaction("ghidra-stabs build types")
-        try {
+        dtm.runTransaction("ghidra-stabs build types") {
             val memberToWinner: Map<GlobalTypeId, TypeAst> = buildMap {
                 for (group in harvest.byCanonicalKey.values) {
                     for (m in group.members) put(m, group.ast)
@@ -131,13 +138,29 @@ class TypeRegistry(
                 byId[winner.id]?.let { byId.putIfAbsent(memberId, it) }
             }
 
+            // Materialise named primitive typedefs (Range, Builtin, Float, etc.).
+            // These don't qualify as XRefTarget so they're absent from byCanonicalKey,
+            // but stabs assigns them names ("unsigned int", "char", …) that should
+            // appear in the DTM as typedef aliases for the corresponding Ghidra builtins.
+            // Group by ghidraName to emit exactly one typedef per logical primitive name.
+            harvest.typeAsts.values
+                .filter { it.name != null && !it.body.isXRefTarget }
+                .groupBy { it.ghidraName }
+                .forEach { (ghidraName, asts) ->
+                    val body = asts.first().body
+                    val resolved = BuiltinTable.resolve(body) ?: return@forEach
+                    val typedef = dtm.addDataType(
+                        TypedefDataType(CategoryPath.ROOT, ghidraName, resolved, dtm),
+                        DataTypeConflictHandler.KEEP_HANDLER,
+                    )
+                    for (ast in asts) byId.putIfAbsent(ast.id, typedef)
+                }
+
             // Non-registerable top-level typeAsts (XRef body, FunctionT, Method, …)
             for (ast in harvest.typeAsts.values) {
                 if (ast.id in byId) continue
                 resolve(ast)
             }
-        } finally {
-            dtm.endTransaction(tx, true)
         }
     }
 
@@ -262,7 +285,7 @@ class TypeRegistry(
             is TypeDecl.Struct -> StructureDataType(category, ast.ghidraName, ast.body.sizeBytes.toInt(), dtm)
             else -> StructureDataType(category, ast.ghidraName, 0, dtm)
         }
-        diagnostics.recordPlaceholder(ast.name, category.toString(), reason)
+        diagnostics.recordPlaceholder(ast.nameOrId, category.toString(), reason)
         return dt
     }
 
@@ -372,7 +395,7 @@ class TypeRegistry(
                         if (inferredSize <= 0) {
                             log(
                                 "base-skipped-zero-size",
-                                "Base of '${ast.name}' at offset $offsetBytes: cannot infer size",
+                                "Base of '${ast.nameOrId}' at offset $offsetBytes: cannot infer size",
                             )
                             diagnostics.inc("base-skipped-zero-size")
                             continue
@@ -383,7 +406,7 @@ class TypeRegistry(
                         resolvedBaseInfo[offsetBytes] = ResolvedBase(synthName, inferredSize)
                         log(
                             "base-synthesized",
-                            "Base of '${ast.name}' at offset $offsetBytes: " +
+                            "Base of '${ast.nameOrId}' at offset $offsetBytes: " +
                                 "Ref unresolved, synthesised $inferredSize-byte placeholder",
                         )
                         diagnostics.inc("base-synthesized")
@@ -427,7 +450,7 @@ class TypeRegistry(
                         } catch (e: java.lang.IllegalArgumentException) {
                             log(
                                 "base-layout",
-                                "Failed to insert base '${op.baseSimpleName}' in '${ast.name}': ${e.message}",
+                                "Failed to insert base '${op.baseSimpleName}' in '${ast.nameOrId}': ${e.message}",
                             )
                             diagnostics.inc("inheritance-failed")
                         }
@@ -484,7 +507,7 @@ class TypeRegistry(
                             else -> {}
                         }
                     } catch (e: Exception) {
-                        log("field-layout", "Failed to add '${field.name}' to '${ast.name}': ${e.message}")
+                        log("field-layout", "Failed to add '${field.name}' to '${ast.nameOrId}': ${e.message}")
                     }
                 }
 
@@ -576,8 +599,8 @@ class TypeRegistry(
 //                val gId = fileResolver.globalIdForCu(body.id)
 //                val gId = body.id
             is TypeDecl.Ref -> tryGetExisting(body.id) ?: run {
-                log("dangling-ref", "Dangling ref to ${body.id} in '${ast.name}' from ${ast.source}")
-                diagnostics.recordUnresolvedRef(body.id, ast.name)
+                log("dangling-ref", "Dangling ref to ${body.id} in '${ast.nameOrId}' from ${ast.source}")
+                diagnostics.recordUnresolvedRef(body.id, ast.nameOrId)
                 diagnostics.inc("dangling-ref")
                 Undefined4DataType.dataType
             }
