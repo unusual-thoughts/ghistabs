@@ -3,8 +3,8 @@ package ghistabs.parse
 import ghidra.program.model.data.CategoryPath
 import ghistabs.diagnose.StabsDiagnostics
 import ghistabs.harvest.Attribution
+import ghistabs.harvest.commonProjectPrefix
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 /**
@@ -22,157 +22,259 @@ private fun src(path: String): SourceFile =
 
 private fun srcs(vararg paths: String): Set<SourceFile> = paths.map(::src).toSet()
 
-// NOTE: This file imports ghidra.program.model.data.CategoryPath because Attribution.categoryFor
-// returns CategoryPath directly. Per testing-convention.md this is a Kind 1 violation; tracked
-// for future refactor (extract pure-string core from Attribution, adapt to CategoryPath at the boundary).
-// Until then, this file is treated as a tolerated exception.
 class AttributionTest {
+    // No project prefix by default; tests use absolute paths.
+    private val attr = Attribution()
+
+    // --- Stdlib routing -----------------------------------------------------
+
     @Test
-    fun testCppStdBasename() {
-        val cat = Attribution.categoryFor("basic_string", srcs("/usr/include/c++/3.4.4/string"))
-        assertEquals(CategoryPath("/std/string"), cat)
+    fun stdlibCppStringHeader() {
+        val cat = attr.keyFor("basic_string", srcs("/usr/include/c++/3.4.4/string"))
+        assertEquals(CategoryPath("/std/string"), cat.category)
     }
 
     @Test
-    fun testMingwStdBasename() {
-        val cat = Attribution.categoryFor("int32_t", srcs("/usr/include/mingw/stdint.h"))
-        assertEquals(CategoryPath("/std/stdint"), cat)
+    fun stdlibMingwStdint() {
+        val cat = attr.keyFor("int32_t", srcs("/usr/include/mingw/stdint.h"))
+        assertEquals(CategoryPath("/std/stdint"), cat.category)
     }
 
     @Test
-    fun testSingleHeaderCU() {
-        // D2: HeaderSource defs route to /headers/<basename>/ regardless of CU count.
-        val cat = Attribution.categoryFor("Foo", srcs("/proj/include/foo.h"))
-        assertEquals(CategoryPath("/headers/foo"), cat)
+    fun stdlibSkipsBitsIntermediate() {
+        // bits/ is a known intermediate dir — skipped, basename comes from the next segment
+        val cat = attr.keyFor("vector_base", srcs("/usr/include/c++/3.4.4/bits/stl_vector.h"))
+        assertEquals(CategoryPath("/std/stl_vector"), cat.category)
     }
 
     @Test
-    fun testMultiHeaderSameBasenameRoutesToHeaders() {
-        // Two HeaderSource entries with the same filename basename but distinct
-        // checksums — D1 forward-EXCL placeholders can produce distinct
-        // HeaderFile instances for the same header; attribution must still
-        // converge on a single /headers/<basename>/ category.
+    fun stdlibWithOneIntermediateDir() {
+        val cat = attr.keyFor("Foo", srcs("/usr/local/mingw/stdint.h"))
+        assertEquals(CategoryPath("/std/stdint"), cat.category)
+    }
+
+    // --- Single source ------------------------------------------------------
+
+    @Test
+    fun singleHeaderSourcePreservesFullPath() {
+        val cat = attr.keyFor("Foo", srcs("/proj/include/foo.h"))
+        assertEquals(CategoryPath("/proj/include/foo.h"), cat.category)
+    }
+
+    @Test
+    fun singleCuSourcePreservesFullPath() {
+        val cat = attr.keyFor("LocalThing", srcs("/proj/src/main.cpp"))
+        assertEquals(CategoryPath("/proj/src/main.cpp"), cat.category)
+    }
+
+    @Test
+    fun normalizesDotDotInPath() {
+        val cat = attr.keyFor("Foo", srcs("/proj/src/../include/foo.h"))
+        assertEquals(CategoryPath("/proj/include/foo.h"), cat.category)
+    }
+
+    @Test
+    fun multipleHeaderSourcesForSamePathCollapse() {
+        // Forward-EXCL can produce distinct HeaderFile instances for the same
+        // physical header. They share `.filename` so attribution collapses them.
         val originator = SourceFile.CUSource("/proj/src/a.cpp")
         val defSources = setOf<SourceFile>(
             SourceFile.HeaderSource(HeaderFile("/proj/include/foo.h", checksum = 1L, originatingCu = originator)),
             SourceFile.HeaderSource(HeaderFile("/proj/include/foo.h", checksum = 2L, originatingCu = null)),
         )
-        assertEquals(CategoryPath("/headers/foo"), Attribution.categoryFor("Foo", defSources))
+        assertEquals(CategoryPath("/proj/include/foo.h"), attr.keyFor("Foo", defSources).category)
+    }
+
+    // --- Real-header preference --------------------------------------------
+
+    @Test
+    fun realHeaderWinsOverFakeHeaderSibling() {
+        // .cpp HeaderSources happen when gcc BINCL's a sibling CU (bouniafbouniaf's
+        // `inst.cpp` included by other CUs). A real .h beats the fake header.
+        val sources = setOf<SourceFile>(
+            SourceFile.HeaderSource(HeaderFile("/proj/inst.cpp", checksum = 1, originatingCu = null)),
+            SourceFile.HeaderSource(HeaderFile("/proj/parse.cpp", checksum = 2, originatingCu = null)),
+            SourceFile.HeaderSource(HeaderFile("/proj/include/inst.h", checksum = 3, originatingCu = null)),
+        )
+        assertEquals(CategoryPath("/proj/include/inst.h"), attr.keyFor("SomeInst", sources).category)
     }
 
     @Test
-    fun testSingleSourceCU() {
-        val cat = Attribution.categoryFor("LocalThing", srcs("/proj/src/main.cpp"))
-        assertEquals(CategoryPath("/main"), cat)
+    fun realHeaderWinsOverCu() {
+        // b2Hull-style: mostly CUSources, one real .h header.
+        val sources = setOf<SourceFile>(
+            SourceFile.CUSource("/proj/a.cpp"),
+            SourceFile.CUSource("/proj/b.cpp"),
+            SourceFile.HeaderSource(HeaderFile("/proj/include/collision.h", checksum = 0, originatingCu = null)),
+        )
+        assertEquals(CategoryPath("/proj/include/collision.h"), attr.keyFor("b2Hull", sources).category)
     }
 
     @Test
-    fun testMultiCUCleanName() {
-        val cat = Attribution.categoryFor("Shared", srcs("/proj/a.cpp", "/proj/b.cpp"))
-        assertEquals(CategoryPath("/headers-untracked/Shared.h"), cat)
+    fun lexFirstAmongMultipleRealHeaders() {
+        val sources = setOf<SourceFile>(
+            SourceFile.HeaderSource(HeaderFile("/proj/include/zeta.h", checksum = 0, originatingCu = null)),
+            SourceFile.HeaderSource(HeaderFile("/proj/include/alpha.h", checksum = 0, originatingCu = null)),
+        )
+        assertEquals(CategoryPath("/proj/include/alpha.h"), attr.keyFor("Foo", sources).category)
     }
 
     @Test
-    fun testMultiCULexicalFirstCanonical() {
-        // Two CUs; canonical (lex-first) is "a"
-        val cat = Attribution.categoryFor("vector<int,allocator<int>>", srcs("/proj/b.cpp", "/proj/a.cpp"))
-        assertEquals(CategoryPath("/a/instantiations"), cat)
+    fun tccHeaderCountsAsRealHeader() {
+        // libstdc++ template impls (`.tcc`) — should be treated as headers.
+        val sources = setOf<SourceFile>(
+            SourceFile.HeaderSource(HeaderFile("/usr/include/c++/3.4.4/bits/basic_string.tcc", 0, null)),
+            SourceFile.CUSource("/proj/a.cpp"),
+        )
+        // basic_string.tcc → /std/basic_string (stdlib remap wins first; this test
+        // just confirms .tcc participates in the real-header pool by routing
+        // through stdlib, not into the multi-source fallback).
+        assertEquals(CategoryPath("/std/basic_string"), attr.keyFor("basic_string", sources).category)
     }
 
     @Test
-    fun testMultiCUUncleanStartsWithUnderscore() {
-        val cat = Attribution.categoryFor("__internal", srcs("/proj/a.cpp", "/proj/b.cpp"))
-        assertEquals(CategoryPath("/a/instantiations"), cat)
+    fun allFakeHeadersFallBackToMultiBucket() {
+        // bouniaf case: two .cpp HeaderSources, no real header → /multi.
+        val sources = setOf<SourceFile>(
+            SourceFile.HeaderSource(HeaderFile("/proj/inst.cpp", checksum = 1, originatingCu = null)),
+            SourceFile.HeaderSource(HeaderFile("/proj/parse.cpp", checksum = 2, originatingCu = null)),
+        )
+        assertEquals(CategoryPath("/proj/inst.cpp/multi"), attr.keyFor("SomeInst", sources).category)
+    }
+
+    // --- Multi-source -------------------------------------------------------
+
+    @Test
+    fun multiSourceUsesLexFirstPlusMulti() {
+        val cat = attr.keyFor("Shared", srcs("/proj/a.cpp", "/proj/b.cpp"))
+        assertEquals(CategoryPath("/proj/a.cpp/multi"), cat.category)
     }
 
     @Test
-    fun testMultiCUBuiltinNameUnclean() {
-        val cat = Attribution.categoryFor("int", srcs("/proj/a.cpp", "/proj/b.cpp"))
-        assertEquals(CategoryPath("/a/instantiations"), cat)
+    fun multiSourceTemplateInstantiation() {
+        val cat = attr.keyFor("vector<int,allocator<int>>", srcs("/proj/b.cpp", "/proj/a.cpp"))
+        assertEquals(CategoryPath("/proj/a.cpp/multi"), cat.category)
     }
 
     @Test
-    fun testTraceRecordedOnStdRoute() {
-        // Use a genuine stdlib type that's not in the override list
+    fun multiSourceFakeHeadersOnlyPicksLexFirstPlusMulti() {
+        // Two .cpp HeaderSources (gcc BINCL'd siblings). No real headers, no CUs.
+        val sources = setOf<SourceFile>(
+            SourceFile.HeaderSource(HeaderFile("/proj/zeta.cpp", checksum = 1, originatingCu = null)),
+            SourceFile.HeaderSource(HeaderFile("/proj/alpha.cpp", checksum = 2, originatingCu = null)),
+        )
+        assertEquals(CategoryPath("/proj/alpha.cpp/multi"), attr.keyFor("Foo", sources).category)
+    }
+
+    // --- Project-prefix stripping ------------------------------------------
+
+    @Test
+    fun projectPrefixStrippedFromSourcePath() {
+        val a = Attribution(commonProjectPrefix = "/xml/box2d")
+        val cat = a.keyFor("b2Hull", srcs("/xml/box2d/src/../include/box2d/collision.h"))
+        assertEquals(CategoryPath("/include/box2d/collision.h"), cat.category)
+    }
+
+    @Test
+    fun projectPrefixDoesNotStripStdlibPaths() {
+        // stdlib remapping still wins; project prefix doesn't apply to /usr/include/...
+        val a = Attribution(commonProjectPrefix = "/xml/box2d")
+        val cat = a.keyFor("basic_string", srcs("/usr/include/c++/3.4.4/string"))
+        assertEquals(CategoryPath("/std/string"), cat.category)
+    }
+
+    @Test
+    fun commonProjectPrefixHelperFindsLcp() {
+        val sources = listOf<SourceFile>(
+            SourceFile.CUSource("/xml/box2d/samples/car.cpp"),
+            SourceFile.CUSource("/xml/box2d/samples/donut.cpp"),
+            SourceFile.CUSource("/xml/box2d/src/body.c"),
+        )
+        assertEquals("/xml/box2d", commonProjectPrefix(sources))
+    }
+
+    @Test
+    fun commonProjectPrefixIgnoresHeaders() {
+        // Headers can live outside the project root; LCP is computed from CUSources only.
+        val sources = listOf<SourceFile>(
+            SourceFile.CUSource("/xml/box2d/samples/car.cpp"),
+            SourceFile.CUSource("/xml/box2d/samples/donut.cpp"),
+            SourceFile.HeaderSource(HeaderFile("/usr/include/c++/3.4.4/string", checksum = 0, originatingCu = null)),
+        )
+        assertEquals("/xml/box2d/samples", commonProjectPrefix(sources))
+    }
+
+    // --- Diagnostic traces --------------------------------------------------
+
+    @Test
+    fun traceRecordedOnStdRoute() {
         val diag = StabsDiagnostics()
-        val cat =
-            Attribution.categoryFor(
-                "basic_string",
-                srcs("/usr/include/c++/3.4.4/string"),
-                diag,
-            )
-        assertEquals(CategoryPath("/std/string"), cat)
+        val cat = attr.keyFor("basic_string", srcs("/usr/include/c++/3.4.4/string"), diag)
+        assertEquals(CategoryPath("/std/string"), cat.category)
         val traces = diag.snapshotAttributionTraces()
         assertEquals(1, traces.size)
         assertEquals("basic_string", traces[0].typeName)
-        assertEquals("/usr/include/c++/3.4.4/string", traces[0].matchedCU.filename)
         assertEquals("/std/string", traces[0].routedTo)
     }
 
     @Test
-    fun testTraceCappedAt200() {
+    fun traceCappedAt200() {
         val diag = StabsDiagnostics()
         repeat(250) { i ->
-            Attribution.categoryFor(
-                "Type$i",
-                srcs("/usr/include/c++/3.4.4/string$i"),
-                diag,
-            )
+            attr.keyFor("Type$i", srcs("/usr/include/c++/3.4.4/string$i"), diag)
         }
         val traces = diag.snapshotAttributionTraces()
         assertEquals(200, traces.size, "Traces should be capped at 200")
         assertEquals(250L, diag["attribution-routed-std"], "Counter should track all 250 calls")
     }
 
+    // --- Windows drive-letter paths ----------------------------------------
+
     @Test
-    fun testNoFalsePositiveOnProjectCxxDir() {
-        // Path with c++ as a directory name should NOT route to /std/
-        val cat = Attribution.categoryFor("Foo", srcs("/proj/src/c++_helpers/foo.cpp"))
-        assertEquals(CategoryPath("/foo"), cat)
+    fun windowsDriveLetterStrippedFromCuPath() {
+        val cat = attr.keyFor("Foo", srcs("E:/dev/code/apps/sink/main.cpp"))
+        assertEquals(CategoryPath("/dev/code/apps/sink/main.cpp"), cat.category)
     }
 
     @Test
-    fun testRealStdlibStillMatches() {
-        // Real stdlib paths must still match the tightened regex
-        val cat = Attribution.categoryFor("basic_string", srcs("/usr/include/c++/3.4.4/string"))
-        assertEquals(CategoryPath("/std/string"), cat)
+    fun windowsDriveLetterStrippedFromHeaderPath() {
+        val cat = attr.keyFor("Foo", srcs("c:/mingw/include/stdint.h"))
+        assertEquals(CategoryPath("/mingw/include/stdint.h"), cat.category)
     }
 
     @Test
-    fun testbouniafOverrideRoutesToProj() {
-        // bouniaf should route to /proj/ regardless of CU path
-        val diag = StabsDiagnostics()
-        val cat =
-            Attribution.categoryFor(
-                "bouniaf",
-                srcs("/anywhere/at/all/string"),
-                diag,
-            )
-        assertTrue(cat.toString().startsWith("/proj"), "bouniaf should route to /proj/")
-        assertEquals(1L, diag["attribution-override"], "Override counter should increment")
+    fun commonProjectPrefixStripsWindowsDriveLetter() {
+        val sources = listOf<SourceFile>(
+            SourceFile.CUSource("E:/dev/code/apps/sink/main.cpp"),
+            SourceFile.CUSource("E:/dev/code/apps/sink/audio.cpp"),
+        )
+        assertEquals("/dev/code/apps/sink", commonProjectPrefix(sources))
     }
 
     @Test
-    fun testGenuineStdTypesStillRouteToStd() {
-        // Genuine stdlib types NOT in override list should still route to /std/
-        val cat = Attribution.categoryFor("vector", srcs("/usr/include/c++/3.4.4/vector"))
-        assertEquals(CategoryPath("/std/vector"), cat)
+    fun windowsPathWithProjectPrefixStripped() {
+        val sources = listOf<SourceFile>(
+            SourceFile.CUSource("E:/dev/code/apps/sink/main.cpp"),
+            SourceFile.CUSource("E:/dev/code/apps/sink/audio.cpp"),
+        )
+        val prefix = commonProjectPrefix(sources)
+        val a = Attribution(commonProjectPrefix = prefix)
+        val cat = a.keyFor("Foo", srcs("E:/dev/code/apps/sink/main.cpp"))
+        assertEquals(CategoryPath("/main.cpp"), cat.category)
+    }
+
+    // --- Stdlib false positives --------------------------------------------
+
+    @Test
+    fun noFalsePositiveOnProjectCxxDir() {
+        val cat = attr.keyFor("Foo", srcs("/proj/src/c++_helpers/foo.cpp"))
+        assertEquals(CategoryPath("/proj/src/c++_helpers/foo.cpp"), cat.category)
     }
 
     @Test
-    fun testNoFalsePositiveOnUsrLocalProj() {
-        // A CU path like /usr/local/myproj/c++_helpers/foo.cpp should NOT route to /std/
-        // because there are two intermediate dirs after /usr/: "local" and "myproj"
-        // The regex /(usr|lib|include)(/[^/]+)?/(mingw|cygwin|c\+\+|bits)/ only allows one
-        val cat = Attribution.categoryFor("Foo", srcs("/usr/local/myproj/c++_helpers/foo.cpp"))
-        assertEquals(CategoryPath("/foo"), cat)
-    }
-
-    @Test
-    fun testStdlibWithOneIntermediateDir() {
-        // /usr/local/mingw/ should still match (one intermediate dir "local")
-        // The basename is extracted from the path after the marker, so /usr/local/mingw/stdint.h → /std/stdint
-        val cat = Attribution.categoryFor("Foo", srcs("/usr/local/mingw/stdint.h"))
-        assertEquals(CategoryPath("/std/stdint"), cat)
+    fun noFalsePositiveOnUsrLocalProj() {
+        // Two intermediate dirs after /usr/ (local + myproj) — outside the regex's allowance.
+        val cat = attr.keyFor("Foo", srcs("/usr/local/myproj/c++_helpers/foo.cpp"))
+        assertEquals(CategoryPath("/usr/local/myproj/c++_helpers/foo.cpp"), cat.category)
     }
 }

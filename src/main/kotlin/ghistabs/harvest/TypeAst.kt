@@ -13,12 +13,13 @@ import kotlinx.serialization.Transient
 data class TypeAst(
     val cu: SourceFile.CUSource,
     val id: GlobalTypeId,
-    val name: String,
+    val name: String?,
     val body: TypeDecl<GlobalTypeId>,
 ) {
     val source get() = id.source
+    val nameOrId get() = name ?: "$id"
     val ghidraName: String
-        get() = SymbolUtilities.replaceInvalidChars(name, false).ifEmpty {
+        get() = SymbolUtilities.replaceInvalidChars(nameOrId, false).ifEmpty {
             // XRef-bodied TypeAsts emitted by gcc for ABI-internal helpers
             // (e.g. `InlineDef(id, XRef(STRUCT, "__si_class_type_info_pseudo"))`)
             // have no name field. Without this clause every per-CU XRef
@@ -31,6 +32,14 @@ data class TypeAst(
             (body as? TypeDecl.XRef)?.tagName?.let { SymbolUtilities.replaceInvalidChars(it, false) }
                 ?: "${body::class.java.simpleName}_$id"
         }
+
+    inline fun <reified T : TypeDecl<GlobalTypeId>> asType() = if (body is T) {
+        this to body
+    } else {
+        null
+    }
+
+    fun asStruct() = asType<TypeDecl.Struct<GlobalTypeId>>()
 }
 
 @Serializable
@@ -71,9 +80,17 @@ data class OpenFunction(
     var sizeBytes: Long = 0L,
 )
 
+@Serializable(with = ToStringSerializer::class)
+data class GhidraKey(val category: CategoryPath, val name: String) {
+    constructor(path: String, name: String) : this(CategoryPath(path), name)
+
+    override fun toString() = "$category/$name"
+}
+
 /**
  * One bucket of TypeAsts mapping to a single (CategoryPath, ghidraName) slot —
  * Ghidra's uniqueness constraint. `winner` is the AST whose body materialises
  * into the DTM; the other members are tracked for diagnostics only.
  */
-data class CanonicalGroup(val key: Pair<CategoryPath, String>, val members: List<TypeAst>, val winner: TypeAst)
+@Serializable
+data class CanonicalGroup(val key: GhidraKey, val ast: TypeAst, val members: List<GlobalTypeId>, val distinct: Int)
