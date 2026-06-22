@@ -105,11 +105,8 @@ class StabsAnalyzer :
 
         @JvmStatic
         fun markStabsDone(program: Program, value: Boolean) {
-            val tx = program.startTransaction("Stabs: set done flag")
-            try {
+            program.runTransaction("Stabs: set done flag") {
                 program.getOptions(Program.PROGRAM_INFO).setBoolean(OPT_STABS_DONE, value)
-            } finally {
-                program.endTransaction(tx, true)
             }
         }
     }
