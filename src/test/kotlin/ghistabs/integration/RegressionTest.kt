@@ -807,10 +807,11 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
             .filter { (ast, body) -> body.fields.isEmpty() && body.methods.isEmpty() }
             .toList()
 
+        val resolver = ghistabs.harvest.TypeResolver(harvest.typeAsts)
         val baseTypes =
             harvest.typeAsts.values.filter { it.id.source is SourceFile.CUSource && !it.body.isXRefTarget }.toList()
         val different = baseTypes
-            .groupBy { harvest.contentHash(it.body) }
+            .groupBy { resolver.contentHash(it.body) }
             .mapKeys { (k, v) -> k to v.map { it.name }.toSet() }
 
         println("base types: ${different.mapValues { (_, v) -> v.size }}")
@@ -819,8 +820,8 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
             if (asts.size > 1 && names.contains(null)) {
                 println("- $hash")
                 for (ast in asts) {
-                    val hash = harvest.contentHash(ast.body)
-                    println("       =>  ${ast.id} $ast")
+                    val h = resolver.contentHash(ast.body)
+                    println("       =>  $h ${ast.id} $ast")
                 }
             }
         }

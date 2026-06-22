@@ -18,13 +18,14 @@ import ghistabs.diagnose.Level
 import ghistabs.diagnose.isInlineStdMember
 import ghistabs.harvest.CanonicalGroup
 import ghistabs.harvest.Harvest
+import ghistabs.harvest.TypeResolver
 import ghistabs.importer.ImportContext
 import ghistabs.parse.*
 
 /**
  * Static helpers for polymorphic base detection (extracted for pure unit testing).
  */
-internal class ClassBuilderHelpers(val resolver: Harvest) {
+internal class ClassBuilderHelpers(val resolver: TypeResolver) {
     fun hasPolymorphicBaseSubobject(body: TypeDecl.Struct<GlobalTypeId>) = firstPolymorphicBase(body) != null
 
     fun firstPolymorphicBase(body: TypeDecl.Struct<GlobalTypeId>): BaseDecl<GlobalTypeId>? = body.bases
@@ -38,11 +39,9 @@ internal class ClassBuilderHelpers(val resolver: Harvest) {
         }
 
     fun resolveBaseAstStatic(typeDecl: TypeDecl<GlobalTypeId>): TypeDecl.Struct<GlobalTypeId>? = when (typeDecl) {
-        // Look up by TypeId using the byId map
         is TypeDecl.Ref -> resolver.getStruct(typeDecl.id)
 
-        // Cross-reference by tagName: look in astsByName
-        is TypeDecl.XRef -> resolver.getByXRef(typeDecl)?.body as? TypeDecl.Struct<GlobalTypeId>
+        is TypeDecl.XRef -> resolver.byXRef(typeDecl)?.body as? TypeDecl.Struct<GlobalTypeId>
 
         // Inline definition: prefer the materialised AST at this id (real struct body), fall
         // back to the inline body. The inline body is often a forward XRef stub whose Struct
@@ -59,6 +58,7 @@ internal class ClassBuilderHelpers(val resolver: Harvest) {
 class ClassBuilder(
     private val typeRegistry: TypeRegistry,
     private val harvest: Harvest,
+    private val typeResolver: TypeResolver,
     private val ctx: ImportContext<*>,
 ) : DiagnosticSink by ctx.sink {
     private val source = SourceType.IMPORTED
@@ -701,7 +701,7 @@ class ClassBuilder(
         visited: MutableSet<TypeDecl.Struct<GlobalTypeId>>,
     ) {
         for (base in body.bases) {
-            val baseStruct = ClassBuilderHelpers(harvest).resolveBaseAstStatic(base.type)
+            val baseStruct = ClassBuilderHelpers(typeResolver).resolveBaseAstStatic(base.type)
                 ?: continue
             if (!visited.add(baseStruct)) continue
             // Depth-first: grand-base virtuals come before direct-base's own additions,
@@ -741,10 +741,10 @@ class ClassBuilder(
      * Delegates to the static ClassBuilderHelpers version which is the single source of truth.
      */
     internal fun firstPolymorphicBase(body: TypeDecl.Struct<GlobalTypeId>): BaseDecl<GlobalTypeId>? =
-        ClassBuilderHelpers(harvest).firstPolymorphicBase(body)
+        ClassBuilderHelpers(typeResolver).firstPolymorphicBase(body)
 
     internal fun hasPolymorphicBaseSubobject(body: TypeDecl.Struct<GlobalTypeId>): Boolean =
-        ClassBuilderHelpers(harvest).hasPolymorphicBaseSubobject(body)
+        ClassBuilderHelpers(typeResolver).hasPolymorphicBaseSubobject(body)
 
     /**
      * Itanium-mangled compiler-implicit special members the compiler typically omits

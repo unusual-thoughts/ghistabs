@@ -240,12 +240,11 @@ class Harvester(
         }
 
         return Harvest(
-            typeAsts,
-            parseErrors,
-            collidingAsts,
-            symbolsByCu,
-            openFunctions,
-            sink,
+            typeAsts = typeAsts,
+            parseErrors = parseErrors,
+            rawCollisions = collidingAsts,
+            symbolsByCu = symbolsByCu,
+            openFunctions = openFunctions,
         )
     }
 

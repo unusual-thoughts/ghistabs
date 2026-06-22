@@ -6,6 +6,7 @@ import ghistabs.diagnose.GapRecord
 import ghistabs.diagnose.StabsDiagnostics
 import ghistabs.harvest.Harvest
 import ghistabs.harvest.TypeAst
+import ghistabs.harvest.TypeResolver
 import ghistabs.parse.AggrKind
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.LocalTypeId
@@ -18,6 +19,7 @@ class TypeRegistry(
     private val sink: DiagnosticSink,
     private val diagnostics: StabsDiagnostics,
     private val harvest: Harvest,
+    private val resolver: TypeResolver,
 ) : DiagnosticSink by sink {
     private val byId = mutableMapOf<GlobalTypeId, DataType>()
     private val placeholders = mutableMapOf<GlobalTypeId, DataType>()
@@ -94,7 +96,7 @@ class TypeRegistry(
     }
 
     fun materialiseAll() {
-        // Two-phase walk driven by harvest.byCanonicalKey:
+        // Two-phase walk driven by resolver.byCanonicalKey:
         //  1. For each CanonicalGroup, materialise the winner once into its (cat, name)
         //     slot and alias every member's id to the resulting DataType.
         //  2. Handle non-registerable top-level typeAsts (XRef-aliased helpers,
@@ -102,18 +104,18 @@ class TypeRegistry(
         //     entries for Ref resolution but never occupy a stable Ghidra slot.
         dtm.runTransaction("ghidra-stabs build types") {
             val memberToWinner: Map<GlobalTypeId, TypeAst> = buildMap {
-                for (group in harvest.byCanonicalKey.values) {
+                for (group in resolver.byCanonicalKey.values) {
                     for (m in group.members) put(m, group.ast)
                 }
             }
             val winnerCategory: Map<GlobalTypeId, CategoryPath> = buildMap {
-                for (group in harvest.byCanonicalKey.values) put(group.ast.id, group.key.category)
+                for (group in resolver.byCanonicalKey.values) put(group.ast.id, group.key.category)
             }
 
             // Pre-seed placeholders for every member id so Ref(id) cycle-breaks during
             // body materialisation. Struct/Union placeholders go into the DTM up-front
             // so later in-place mutations land on the DTM-resident object.
-            for (group in harvest.byCanonicalKey.values) {
+            for (group in resolver.byCanonicalKey.values) {
                 val winner = group.ast
                 val raw = makePlaceholder(winner, group.key.category)
                 val placeholder = if (winner.body is TypeDecl.Struct) {
@@ -252,7 +254,7 @@ class TypeRegistry(
         // / class / enum (the old code asymmetrically asked dataTypeFor()
         // for the resolved body, which the aggregate branch always
         // returns null for — silently dropping every non-struct XRef).
-        is TypeDecl.XRef -> harvest.getByXRef(decl)?.let { tryGetExisting(it.id) }
+        is TypeDecl.XRef -> resolver.byXRef(decl)?.let { tryGetExisting(it.id) }
 
         // Aggregate bodies — never referenced directly; only meaningful via TypeId.
         // See kdoc above.
@@ -287,11 +289,11 @@ class TypeRegistry(
     /**
      * Materialise a non-registerable top-level typeAst (XRef alias, FunctionT, Method).
      * Registerable bodies (Struct/Enum) are handled directly in [materialiseAll] via
-     * `harvest.byCanonicalKey`.
+     * `resolver.byCanonicalKey`.
      */
     private fun resolve(ast: TypeAst): DataType {
         if (ast.body is TypeDecl.XRef) {
-            harvest.getByXRef(ast.body)?.let { canonical ->
+            resolver.byXRef(ast.body)?.let { canonical ->
                 val dt = byId[canonical.id] ?: resolve(canonical)
                 byId[ast.id] = dt
                 return dt
@@ -456,7 +458,7 @@ class TypeRegistry(
                 }
 
                 // Compute polymorphic base for inherited vfptr gating
-                val polyBase = ClassBuilderHelpers(harvest).firstPolymorphicBase(body)
+                val polyBase = ClassBuilderHelpers(resolver).firstPolymorphicBase(body)
 
                 // Pre-compute base-occupied offset set so a parser-emitted vptr that lands
                 // inside a base subobject is filtered out — regardless of whether we could
@@ -595,16 +597,12 @@ class TypeRegistry(
                 // materialised as a separate empty `XRef_[...]` Structure
                 // applied at typeinfo locations. Aliases this id to the
                 // canonical DataType for `Foo` via byId.
-                harvest.getByXRef(body)?.let { canonical ->
-                    tryGetExisting(canonical.id)?.also { byId[ast.id] = it }
-                } ?: run {
-                    diagnostics.recordDegradation(
-                        "xref-stub",
-                        ast.nameOrId,
-                        "forward ref to '${body.tagName}'",
-                    )
-                    placeholder
-                }
+                // Resolver records the degradation itself (with the right
+                // bucket by reason) when the lookup fails — we just alias or
+                // fall back to the placeholder.
+                (resolver.lookupByXRef(body) as? TypeResolver.XRefLookup.Resolved)
+                    ?.ast?.let { canonical -> tryGetExisting(canonical.id)?.also { byId[ast.id] = it } }
+                    ?: placeholder
             }
 
             // Truly-missing classifier: harvest already exhausted above.
@@ -630,11 +628,11 @@ class TypeRegistry(
 
     /**
      * Find a DataType by simple ghidraName (no path), used by DemanglerReplacer.
-     * Walks `harvest.byCanonicalKey` — the authoritative (category, name) view —
+     * Walks `resolver.byCanonicalKey` — the authoritative (category, name) view —
      * and returns null on ambiguity (no heuristic guess).
      */
     fun findByName(simpleName: String): DataType? {
-        val candidates = harvest.byCanonicalKey.keys.filter { it.name == simpleName }
+        val candidates = resolver.byCanonicalKey.keys.filter { it.name == simpleName }
         return when {
             candidates.isEmpty() -> null
 

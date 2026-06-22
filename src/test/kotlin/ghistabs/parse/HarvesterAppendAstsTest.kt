@@ -98,7 +98,7 @@ class HarvesterAppendAstsTest {
         assertTrue(body is TypeDecl.Struct, "Body should be Struct, not XRef")
         // Verify: collidingAsts should NOT contain entry
         assertTrue(
-            !passBResult.collidingAsts.containsKey(globalId),
+            !passBResult.rawCollisions.containsKey(globalId),
             "XRef replacement should not create collision entry",
         )
     }
@@ -162,7 +162,7 @@ class HarvesterAppendAstsTest {
         assertEquals(1, passBResult.typeAsts.size, "Should have exactly one entry after same-hash append")
         // Verify: collidingAsts should NOT contain entry
         assertTrue(
-            !passBResult.collidingAsts.containsKey(globalId),
+            !passBResult.rawCollisions.containsKey(globalId),
             "Same-hash should not create collision entry",
         )
     }
@@ -261,11 +261,11 @@ class HarvesterAppendAstsTest {
         assertEquals(firstBody, passBResult.typeAsts[globalId]!!.body, "First writer should win")
         // Verify: collidingAsts[id] is non-empty
         assertTrue(
-            passBResult.collidingAsts.containsKey(globalId),
+            passBResult.rawCollisions.containsKey(globalId),
             "Hash-differing bodies should create collision entry",
         )
         assertTrue(
-            passBResult.collidingAsts[globalId]!!.isNotEmpty(),
+            passBResult.rawCollisions[globalId]!!.isNotEmpty(),
             "Collision entry should be non-empty",
         )
     }
@@ -315,7 +315,7 @@ class HarvesterAppendAstsTest {
         assertEquals(1, passBResult.typeAsts.size, "Should have exactly one entry after duplicate append")
         // Verify: collidingAsts should NOT contain entry
         assertTrue(
-            !passBResult.collidingAsts.containsKey(globalId),
+            !passBResult.rawCollisions.containsKey(globalId),
             "Duplicate should not create collision entry",
         )
     }
