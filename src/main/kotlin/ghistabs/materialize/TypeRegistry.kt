@@ -102,12 +102,22 @@ class TypeRegistry(
 
     fun tryGetExisting(gId: GlobalTypeId) = byId[gId] ?: placeholders[gId] ?: harvest.getType(gId)?.let { raw ->
         // Primitives (Range, Builtin, Float, …) resolve directly via BuiltinTable.
-        // Without this, the `else` branch in makePlaceholder creates a zero-size
-        // StructureDataType as a stand-in. When that stub later appears as a field
-        // type inside a real struct, Ghidra auto-registers it as a StructureDB,
-        // shadowing the properly-named TypedefDB added later by the typedef loop.
         BuiltinTable.resolve(raw.body)?.also { byId[gId] = it }
-            ?: makePlaceholder(raw, CategoryPath("/stabs")).also { placeholders[gId] = it }
+            // Aggregate bodies (Struct/Union) get an empty-shell placeholder so
+            // self-recursive Refs in fields can cycle-break. The placeholder is
+            // mutated in-place by materialiseBody later when this id is hit by
+            // the materialiseAll winner loop.
+            ?: if (raw.body is TypeDecl.Struct) {
+                makePlaceholder(raw, CategoryPath("/stabs")).also { placeholders[gId] = it }
+            } else {
+                // Everything else (Pointer, Array, Reference, Const/Volatile,
+                // FunctionT, Method, Enum, InlineDef, Ref, XRef, …) has a
+                // perfectly materialisable body — resolve it now. Without this
+                // the field-fill path that called us would store the empty
+                // placeholder as the field's type (e.g. `_Alloc_hider._M_p`
+                // ends up `/stabs/[stdio.h,2]` instead of `char *`).
+                resolve(raw)
+            }
     }
 
     /**
