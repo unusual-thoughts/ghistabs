@@ -950,4 +950,56 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
                 "(no C++ inheritance edges were materialised)",
         )
     }
+
+    /**
+     * No class method should end up with two `this` parameters. The
+     * historical regression (see ClassBuilder comment around the
+     * `ghidraInjectsThis` decision) was the importer keeping the stab's
+     * explicit leading `this` while Ghidra's `__thiscall` convention also
+     * auto-injected one, producing
+     *   `void bouniaf::Dump(bouniaf *this, ushort this, …)`
+     * Static class methods legitimately have zero `this` params, so the
+     * tight bound is `count <= 1`, not `== 1`.
+     */
+    @Test
+    fun classMethodsHaveAtMostOneThis() {
+        val offenders = program.functionManager.getFunctions(true).iterator().asSequence()
+            .filter { it.parentNamespace is ghidra.program.model.listing.GhidraClass }
+            .filter { f -> f.parameters.count { it.name == "this" } > 1 }
+            .map { f ->
+                val params = f.parameters.joinToString(", ") { "${it.name}: ${it.dataType.name}" }
+                "${f.parentNamespace.name}::${f.name} cc=${f.callingConventionName} params=[$params]"
+            }
+            .take(20)
+            .toList()
+        Assertions.assertTrue(
+            offenders.isEmpty(),
+            "Class methods must have at most one `this` (no duplicate-this regression): " +
+                "${offenders.size} offenders:\n  - " + offenders.joinToString("\n  - "),
+        )
+    }
+
+    /**
+     * On the mingw fixtures the importer should have promoted class methods
+     * to `__thiscall` (`reparentMethod` calls `func.setCallingConvention`).
+     * On x86-64 ELF the convention exists in the spec but is effectively a
+     * no-op — the assertion intentionally only checks the mingw side, since
+     * the Linux side already has reliable cdecl/sysv handling.
+     */
+    @Test
+    fun mingwClassMethodsCarryThiscall() {
+        assumeTrue(
+            binaryName.endsWith(".exe"),
+            "Skipping: __thiscall check only meaningful on mingw fixtures",
+        )
+        val classFuncs = program.functionManager.getFunctions(true).iterator().asSequence()
+            .filter { it.parentNamespace is ghidra.program.model.listing.GhidraClass }
+            .toList()
+        val thiscalled = classFuncs.count { it.callingConventionName == "__thiscall" }
+        Assertions.assertTrue(
+            thiscalled > 0,
+            "binary=$binaryName: ${classFuncs.size} class methods, none tagged __thiscall " +
+                "(reparentMethod's setCallingConvention silently failed)",
+        )
+    }
 }

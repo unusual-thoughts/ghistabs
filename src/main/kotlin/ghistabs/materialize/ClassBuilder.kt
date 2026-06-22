@@ -335,7 +335,11 @@ class ClassBuilder(
         // adjustments are Method-only.
         val retDecl: TypeDecl<GlobalTypeId>
         val paramDecls: List<TypeDecl<GlobalTypeId>>
-        when (val sig = m.signature) {
+        // gcc emits MethodDecl.signature as Ref or InlineDef into a Method ast
+        // (it's a separately-bound type id). Walk the wrappers before
+        // pattern-matching so the common cases reach the Method/FunctionT
+        // branches instead of falling through `else -> return`.
+        when (val sig = unwrapSignature(m.signature)) {
             is TypeDecl.Method -> {
                 retDecl = sig.ret
                 paramDecls = if (ghidraInjectsThis) sig.params.drop(1) else sig.params
@@ -591,49 +595,66 @@ class ClassBuilder(
      * Returns null if the method's address can't be resolved or the function
      * isn't present — caller falls back to a generic `Pointer→Undefined4`.
      */
+    /**
+     * Wrap the *already-materialised* FunctionDefinition for [m] in a
+     * Pointer. `m.signature` is a Ref/InlineDef into a Method ast that
+     * [TypeRegistry] resolved in passB; the FunctionDefinition there already
+     * carries `__thiscall` and `this: <Class>*`, so the slot is just a
+     * pointer to it — no re-build, no recalibration of this.
+     */
+    /**
+     * Walk Ref/InlineDef wrappers to the underlying Method or FunctionT decl.
+     * gcc binds method signatures to their own type ids, so the value carried
+     * on [MethodDecl.signature] is typically `Ref(id)` or `InlineDef(id, …)`,
+     * not the bare Method/FunctionT.
+     */
+    private fun unwrapSignature(sig: TypeDecl<GlobalTypeId>): TypeDecl<GlobalTypeId>? {
+        var cur: TypeDecl<GlobalTypeId>? = sig
+        while (cur != null) {
+            when (cur) {
+                is TypeDecl.Method, is TypeDecl.FunctionT -> return cur
+                is TypeDecl.Ref -> cur = harvest.getType(cur.id)?.body
+                is TypeDecl.InlineDef -> cur = cur.body
+                else -> return null
+            }
+        }
+        return null
+    }
+
+    /**
+     * Build a class-scoped FunctionDefinition for [m] and wrap it in a Pointer.
+     * The vftable struct's slot field is named after the method (e.g.
+     * `GetInstType`) and the pointee FD is named the same so the two line up
+     * — see the `atLeastOneVtableStructApplied` regression invariant.
+     *
+     * `this` is the declaring class's pointer when resolvable, void* otherwise.
+     * Calling convention is `__thiscall` if the program supports it (mingw /
+     * x86win32); the lookup silently downgrades on platforms without it.
+     */
     private fun buildVirtualSlotType(
         m: MethodDecl<GlobalTypeId>,
         className: String,
         classCategory: CategoryPath,
     ): PointerDataType? {
-        if (m.mangled == null) {
+        val unwrapped = unwrapSignature(m.signature)
+        val method = unwrapped as? TypeDecl.Method<GlobalTypeId> ?: run {
             ctx.diagnostics.recordDegradation(
-                "vftable-slot-no-mangled",
+                "vftable-slot-signature-not-method",
                 "$className::${m.name}",
-                "virt=${m.virt}",
+                "unwrapped=${unwrapped?.let { it::class.simpleName } ?: "null"} sig=${m.signature}",
             )
             return null
         }
-        val mAddr = resolver.resolve(m.mangled!!) ?: run {
-            ctx.diagnostics.recordDegradation(
-                "vftable-slot-mangled-unresolved",
-                "$className::${m.name}",
-                "mangled=${m.mangled}",
-            )
-            return null
-        }
-        val func = program.functionManager.getFunctionAt(mAddr) ?: run {
-            ctx.diagnostics.recordDegradation(
-                "vftable-slot-no-function",
-                "$className::${m.name}",
-                "addr=$mAddr mangled=${m.mangled}",
-            )
-            return null
-        }
-        val funcDef = FunctionDefinitionDataType(func, false)
-        // Name the FunctionDefinition after the in-class display name, not
-        // the function's possibly-mangled-or-class-namespaced full name.
-        runCatching { funcDef.name = m.name }
-        // Rewrite the auto-injected `this: <Class>*` (from __thiscall) to
-        // void* so this slot's type doesn't pin the pointer to one concrete
-        // class — overrides in derived classes can still share the slot.
-        val args = funcDef.arguments
-        if (args.isNotEmpty() && args[0].name == "this") {
-            val voidPtr = PointerDataType(VoidDataType(), dtm)
-            args[0].dataType = voidPtr
-        }
-        funcDef.categoryPath = classCategory
-        val resolved = dtm.addDataType(funcDef, DataTypeConflictHandler.KEEP_HANDLER) as FunctionDefinition
+        val funcDef = typeRegistry.buildFunctionDefinition(
+            category = classCategory,
+            name = m.name,
+            ret = method.ret,
+            params = method.params,
+            thisType = typeRegistry.dataTypeFor(method.cls) ?: PointerDataType(VoidDataType(), dtm),
+            callingConvention = "__thiscall",
+            at = "$className::${m.name}",
+        )
+        val resolved = dtm.resolve(funcDef, DataTypeConflictHandler.KEEP_HANDLER) as FunctionDefinition
         return PointerDataType(resolved, dtm)
     }
 
