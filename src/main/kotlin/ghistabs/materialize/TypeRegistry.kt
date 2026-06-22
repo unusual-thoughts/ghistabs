@@ -411,7 +411,11 @@ class TypeRegistry(
     private fun makePlaceholder(ast: TypeAst, category: CategoryPath, reason: String = "fwd-decl"): DataType {
         val dt = when (ast.body) {
             is TypeDecl.Struct if (ast.body.kind == AggrKind.UNION) -> UnionDataType(category, ast.ghidraName, dtm)
-            is TypeDecl.Struct -> StructureDataType(category, ast.ghidraName, usefulStructSize(ast.body), dtm)
+            is TypeDecl.Struct -> {
+                val sz = usefulStructSize(ast.body)
+                recordTruncation(ast, ast.body.sizeBytes.toInt(), sz)
+                StructureDataType(category, ast.ghidraName, sz, dtm)
+            }
             else -> StructureDataType(category, ast.ghidraName, 0, dtm)
         }
         diagnostics.recordPlaceholder(ast.nameOrId, category.toString(), reason)
@@ -443,6 +447,20 @@ class TypeRegistry(
             ?: 0
         if (fieldEnd == 0) return body.sizeBytes.toInt()
         return fieldEnd.coerceAtMost(body.sizeBytes.toInt())
+    }
+
+    /**
+     * Record truncation events (called from makePlaceholder for Struct
+     * bodies) so the diagnostic dump shows exactly which structs lost
+     * trailing bytes and how many.
+     */
+    private fun recordTruncation(ast: TypeAst, originalBytes: Int, truncatedBytes: Int) {
+        if (originalBytes <= truncatedBytes) return
+        diagnostics.recordDegradation(
+            "struct-truncated",
+            ast.ghidraName,
+            "stab claims $originalBytes bytes, last described byte $truncatedBytes; trimmed ${originalBytes - truncatedBytes}",
+        )
     }
 
     /**
@@ -750,15 +768,36 @@ class TypeRegistry(
                     }
                 }
 
-                // Record gaps for this struct
+                // Detect Undefined1 holes in the materialised struct. The old
+                // implementation looked for "gaps between consecutive
+                // components", which never fired because Ghidra auto-fills
+                // every empty byte with a 1-byte Undefined1 component (so
+                // consecutive components are always contiguous). What we
+                // actually care about: runs of Undefined1 where the stab told
+                // us there should be a field. The new pass walks components
+                // and reports runs ≥ 4 bytes of unnamed Undefined1.
                 if (struct is Structure) {
-                    val componentRecords: MutableList<Pair<String, Pair<Int, Int>>> = mutableListOf()
-                    for (component in struct.components) {
-                        componentRecords.add(Pair(component.fieldName, Pair(component.offset, component.length)))
+                    val componentRecords = struct.components.map { c ->
+                        Triple(c.fieldName, Pair(c.offset, c.length), c.dataType.name)
                     }
-                    val gaps = computeGaps(componentRecords, body.sizeBytes.toInt())
+                    val holes = detectUndefinedRuns(componentRecords, minRunBytes = 4)
                     val qualifiedName = "$category/${ast.ghidraName}"
-                    diagnostics.recordStructGaps(qualifiedName, gaps)
+                    diagnostics.recordStructGaps(qualifiedName, holes)
+                    if (holes.isNotEmpty()) {
+                        val bytesInHoles = holes.sumOf { (it.lengthBits / 8).toInt() }
+                        val totalBytes = struct.length
+                        if (totalBytes > 0 && bytesInHoles * 4 >= totalBytes) {
+                            // ≥25% of the struct is unexplained Undefined1 —
+                            // surface as a degradation; this catches the
+                            // bouniaf-style "base class invisible"
+                            // pattern automatically.
+                            diagnostics.recordDegradation(
+                                "struct-mostly-undefined",
+                                "$category/${ast.ghidraName}",
+                                "$bytesInHoles of $totalBytes bytes are unnamed Undefined1 across ${holes.size} run(s)",
+                            )
+                        }
+                    }
                 }
 
                 // Task 2: Plate-comment summary on the derived struct (base class metadata).
@@ -862,6 +901,66 @@ class TypeRegistry(
  * @param totalLengthBytes Total size of struct in bytes
  * @return List of gaps; empty if fully packed or no components
  */
+/**
+ * Walk a struct's components and report runs of unnamed Undefined1 padding
+ * of length ≥ [minRunBytes]. Unlike `computeGaps` (which assumes Ghidra
+ * leaves byte-offset gaps between components — it doesn't, since auto-fill
+ * inserts an `Undefined1` for every empty byte), this works on the actual
+ * materialised composite to surface the "this struct has a base subobject
+ * we couldn't render" / "this struct has trailing padding nobody described"
+ * patterns.
+ *
+ * Each triple is `(fieldName, (offsetBytes, lengthBytes), typeName)`.
+ * Returns a `GapRecord` per run, with `prevField` / `nextField` set to
+ * the names of the nearest named field on either side (null at the ends).
+ */
+fun detectUndefinedRuns(
+    componentRecords: List<Triple<String?, Pair<Int, Int>, String>>,
+    minRunBytes: Int = 4,
+): List<GapRecord> {
+    val out = mutableListOf<GapRecord>()
+    val sorted = componentRecords.sortedBy { it.second.first }
+
+    var runStartIdx = -1
+    var runStart = -1
+    var runEnd = -1
+
+    fun flushRun(prevName: String?, nextName: String?) {
+        if (runStartIdx < 0) return
+        val runBytes = runEnd - runStart
+        if (runBytes >= minRunBytes) {
+            out.add(
+                GapRecord(
+                    offsetBits = (runStart * 8).toLong(),
+                    lengthBits = (runBytes * 8).toLong(),
+                    prevField = prevName,
+                    nextField = nextName,
+                ),
+            )
+        }
+        runStartIdx = -1
+    }
+
+    for ((i, comp) in sorted.withIndex()) {
+        val (name, offsetLen, typeName) = comp
+        val isUnnamed = name.isNullOrEmpty()
+        val isUndef = typeName.startsWith("undefined")
+        if (isUnnamed && isUndef) {
+            if (runStartIdx < 0) {
+                runStartIdx = i
+                runStart = offsetLen.first
+            }
+            runEnd = offsetLen.first + offsetLen.second
+        } else {
+            val prevName = if (runStartIdx > 0) sorted[runStartIdx - 1].first else null
+            flushRun(prevName, name)
+        }
+    }
+    val prevName = if (runStartIdx > 0) sorted[runStartIdx - 1].first else null
+    flushRun(prevName, null)
+    return out
+}
+
 fun computeGaps(componentRecords: List<Pair<String, Pair<Int, Int>>>, totalLengthBytes: Int): List<GapRecord> {
     if (componentRecords.isEmpty()) return emptyList()
 
