@@ -74,8 +74,7 @@ class XRefDiagnosisIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                 for (xref in xrefs.sortedBy { it.tagName }) {
                     @Suppress("UNCHECKED_CAST")
                     val typed = xref as TypeDecl.XRef<ghistabs.parse.GlobalTypeId>
-                    val lookup = resolver.lookupByXRef(typed, recordDegradation = false)
-                    if (lookup is TypeResolver.XRefLookup.Resolved) continue
+                    if (resolver.lookupByXRef(typed, silent = true) != null) continue
                     val norm = normalize(xref.tagName)
                     val normMatches = normalizedIndex[norm].orEmpty()
                     val exactMatch = nameSet.contains(xref.tagName)
