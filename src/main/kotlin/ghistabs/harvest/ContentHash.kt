@@ -13,13 +13,22 @@ import java.util.*
  * around `Foo` — without it, `XRef(STRUCT, "Foo")` and `Ref(id_of_Foo)`
  * hash to completely different values.
  */
-class TypeAstOracle(
-    val byId: (GlobalTypeId) -> TypeAst?,
-    val byXRef: (TypeDecl.XRef<GlobalTypeId>) -> TypeAst? = { _ -> null },
-) {
+interface TypeAstOracle {
+    fun byId(id: GlobalTypeId): TypeAst?
+    fun byXRef(xref: TypeDecl.XRef<GlobalTypeId>): TypeAst? = null
+
     companion object {
-        /** Adapter for legacy callers (tests) that only need id-based lookups. */
-        operator fun invoke(byId: (GlobalTypeId) -> TypeAst?): TypeAstOracle = TypeAstOracle(byId, { _ -> null })
+        /**
+         * Lambda-based constructor for tests and ad-hoc callers that don't
+         * want to declare an `object : TypeAstOracle { ... }` block.
+         */
+        operator fun invoke(
+            byId: (GlobalTypeId) -> TypeAst?,
+            byXRef: (TypeDecl.XRef<GlobalTypeId>) -> TypeAst? = { _ -> null },
+        ): TypeAstOracle = object : TypeAstOracle {
+            override fun byId(id: GlobalTypeId) = byId(id)
+            override fun byXRef(xref: TypeDecl.XRef<GlobalTypeId>) = byXRef(xref)
+        }
     }
 }
 

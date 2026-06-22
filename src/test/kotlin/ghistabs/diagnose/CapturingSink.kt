@@ -79,5 +79,5 @@ fun Program.defaultContext() = ImportContext(
 
 fun ImportContext<*>.defaultTypeRegistry(): TypeRegistry {
     val harvest = Harvest(mapOf())
-    return TypeRegistry(dtm, sink, diagnostics, harvest)
+    return TypeRegistry(dtm, sink, diagnostics, harvest, ghistabs.harvest.TypeResolver.Empty)
 }
