@@ -16,11 +16,9 @@ import ghistabs.diagnose.defaultContext
 import ghistabs.harvest.Harvester
 import ghistabs.importer.ImportContext
 import ghistabs.importer.StaticContexts
-import ghistabs.parse.IdInterface
-import ghistabs.parse.StabReader
-import ghistabs.parse.ToStringSerializer
+import ghistabs.parse.*
+import ghistabs.runTransaction
 import kotlinx.serialization.ExperimentalSerializationApi
-import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.encodeToStream
 import kotlinx.serialization.modules.SerializersModule
@@ -103,8 +101,8 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
     private val json by lazy {
         Json {
             serializersModule = SerializersModule {
-                @Suppress("UNCHECKED_CAST")
-                contextual(IdInterface::class, ToStringSerializer as KSerializer<IdInterface>)
+                contextual(IdInterface::class, ToStringSerializer())
+                contextual(CategoryPath::class, ToStringSerializer())
                 prettyPrint = true
             }
         }
@@ -169,19 +167,13 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
                     // without us, then re-run it manually with our CapturingSink.
                     // `Options.setBoolean` mutates the program options DB and needs
                     // a transaction.
-                    val txOpt = program.startTransaction("disable-stabs-analyzer")
-                    try {
+                    program.runTransaction("disable-stabs-analyzer") {
                         options.setBoolean(ourName, false)
-                    } finally {
-                        program.endTransaction(txOpt, true)
                     }
                     mgr.initializeOptions()
                     runAutoAnalysis(mgr, monitor)
-                    val tx = program.startTransaction("stabs-analyze")
-                    try {
+                    program.runTransaction("stabs-analyze") {
                         StabsAnalyzer().run(context)
-                    } finally {
-                        program.endTransaction(tx, true)
                     }
                 }
             }
@@ -196,12 +188,9 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
     }
 
     private fun runAutoAnalysis(mgr: AutoAnalysisManager, monitor: TaskMonitor) {
-        val tx = program.startTransaction("auto-analyze")
-        try {
+        program.runTransaction("auto-analyze") {
             mgr.startAnalysis(monitor)
             mgr.waitForAnalysis(null, monitor)
-        } finally {
-            program.endTransaction(tx, true)
         }
     }
 
@@ -512,8 +501,47 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
     }
 
     @Test
+    fun unsignedInt() {
+        assumeTrue(binaryName == "bouniafbouniaf.exe")
+        val found = program.dataTypeManager.allDataTypes.asSequence()
+            .filter { it.name == "unsignedint" }.toList()
+        val unsigned = found.singleOrNull()
+        Assertions.assertNotNull(
+            unsigned,
+            "expected 1 type named 'unsignedint', got ${found.size}: " +
+                found.map { "${it::class.simpleName}@${it.categoryPath}" },
+        )
+        val u = unsigned ?: return
+        val base = (u as? TypeDef)?.baseDataType ?: u
+        Assertions.assertTrue(
+            base.isEquivalent(UnsignedIntegerDataType()),
+            "type 'unsignedint' should alias uint, got ${u::class.simpleName}(${u.name})",
+        )
+    }
+
+    @Test
+    fun noEmptyStructs() {
+        val emptyCats = program.dataTypeManager.allDataTypes.asSequence()
+            .filterIsInstance<Structure>().filter { it.numComponents == 0 && it.isZeroLength }
+            .groupBy { it.categoryPath }.mapValues { it.value.size }
+
+        Assertions.assertTrue(emptyCats.isEmpty(), "found ${emptyCats.values.sum()} empty structs in $emptyCats")
+    }
+
+    @Test
+    fun demanglerStringReplaced() {
+        assumeTrue(binaryName == "bouniafbouniaf.exe" || binaryName == "bouniaf.exe")
+        val strings = program.dataTypeManager.allDataTypes.asSequence().filterIsInstance<Structure>()
+            .filter { it.name == "string" }.toList()
+        val goodString = strings.find { !it.categoryPath.path.startsWith("/Demangler") }
+        Assertions.assertNotNull(goodString)
+        Assertions.assertFalse { goodString!!.isZeroLength }
+        Assertions.assertFalse(strings.any { it.categoryPath.path.startsWith("/Demangler") })
+    }
+
+    @Test
     fun atLeastOneVtableStructApplied() {
-        assumeTrue(binaryName == "bouniafbouniaf.exe", "Skipping: vtable layout checks specific to bouniafbouniaf.exe")
+//        assumeTrue(binaryName == "bouniafbouniaf.exe", "Skipping: vtable layout checks specific to bouniafbouniaf.exe")
         val vtables = program.dataTypeManager.allDataTypes
             .asSequence()
             .filterIsInstance<Structure>()
@@ -531,11 +559,24 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
         val classesWithVtables = program.dataTypeManager.allDataTypes
             .asSequence()
             .filterIsInstance<Structure>()
-            .filter { it.components.any { vmethods.contains((it.dataType as? Pointer)?.dataType) } }
+            .filter { struc -> struc.components.any { vmethods.contains((it.dataType as? Pointer)?.dataType) } }
             .toList()
         Assertions.assertTrue(
             classesWithVtables.isNotEmpty(),
             "Expected at least one class with a vtable pointer",
+        )
+        val badMethodFields = vmethods.flatMap { it.components.asIterable() }
+            .filter {
+                when (val dt = it.dataType) {
+                    is Pointer -> dt.dataType.name != it.fieldName
+                    else -> true
+                }
+            }
+        val badMethodTypes = badMethodFields.map { it.dataType.name }.toSet()
+        val badVftables = badMethodFields.map { it.parent.name }.toSet()
+        Assertions.assertTrue(
+            badMethodFields.isEmpty(),
+            "$badVftables have fields that aren't proper function pointers: $badMethodTypes",
         )
     }
 
@@ -750,14 +791,47 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
         // passA writes via AddressResolver.recordFromStab → symbolTable.createLabel, so it
         // needs a transaction. (We re-run it here to serialize a self-contained harvest
         // independent of setUp's own pass.)
-        val tx = program.startTransaction("stabs-harvest-dump")
-        val harvest = try {
+        val harvest = program.runTransaction("stabs-harvest-dump") {
             harvester.passA(stabs.records)
-        } finally {
-            program.endTransaction(tx, true)
         }
 
-        json.encodeToStream(harvest, harvestFile.outputStream())
+//        json.encodeToStream(harvest, harvestFile.outputStream())
+
+        val classStructs = harvest.typeAsts.values
+            .mapNotNull { it.asStruct() }
+            .filter { (ast, body) -> body.kind == AggrKind.CLASS }
+            .toList()
+
+        val emptyStructs = harvest.typeAsts.values
+            .mapNotNull { it.asStruct() }
+            .filter { (ast, body) -> body.fields.isEmpty() && body.methods.isEmpty() }
+            .toList()
+
+        val baseTypes =
+            harvest.typeAsts.values.filter { it.id.source is SourceFile.CUSource && !it.body.isXRefTarget }.toList()
+        val different = baseTypes
+            .groupBy { harvest.contentHash(it.body) }
+            .mapKeys { (k, v) -> k to v.map { it.name }.toSet() }
+
+        println("base types: ${different.mapValues { (_, v) -> v.size }}")
+        for ((k, asts) in different) {
+            val (hash, names) = k
+            if (asts.size > 1 && names.contains(null)) {
+                println("- $hash")
+                for (ast in asts) {
+                    val hash = harvest.contentHash(ast.body)
+                    println("       =>  ${ast.id} $ast")
+                }
+            }
+        }
+//        Assertions.assertFalse(doubleUnderscores.isEmpty(), "there should be double underscores")
+
+//        val doubleUnderscores = harvest.typeAsts.values.filter { it.name.startsWith("__") }.toList()
+
+//        Assertions.assertFalse(doubleUnderscores.isEmpty(), "there should be double underscores")
+
+        Assertions.assertTrue(emptyStructs.isEmpty(), "there should not be structs with no field and no method")
+//        Assertions.assertFalse(classStructs.isEmpty(), "there should be class structs")
     }
 
     // ---- Mangling / execution-order assertions, shared between modes. ----
