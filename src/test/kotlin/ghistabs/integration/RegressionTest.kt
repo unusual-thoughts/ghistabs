@@ -1025,4 +1025,73 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
                 "(reparentMethod's setCallingConvention silently failed)",
         )
     }
+
+    /**
+     * bouniaf and bouniaf form a single-inheritance chain in
+     * bouniafbouniaf (bouniaf extends bouniaf extends basic_ifstream).
+     * gcc's stab is internally inconsistent on both — `s328` / `s416`
+     * declare more bytes than the layout actually describes (bouniaf's
+     * last own field Tok ends at 192; bouniaf's last own field
+     * RecoverySet ends at 276). The placeholder-truncate fix uses
+     * "last described byte" as the size, which (a) removes the trailing
+     * unexplained padding and (b) makes bouniaf's size match what
+     * bouniaf's CU expects from its base — so the base placement
+     * fits cleanly without overwrite or synthesis.
+     *
+     * This also requires the truncate to happen at placeholder-creation
+     * time (not later), so the size is consistent across pre-seed and
+     * the materialise-winner loop regardless of order: bouniaf's
+     * base loop sees bouniaf's already-truncated placeholder.
+     */
+    @Test
+    fun bouniafAndbouniafTruncated() {
+        assumeTrue(binaryName == "bouniafbouniaf.exe", "Skipping: bouniaf chain is bouniafbouniaf-specific")
+
+        fun findStruct(name: String): ghidra.program.model.data.Structure = program.dataTypeManager.allDataTypes
+            .asSequence()
+            .filterIsInstance<ghidra.program.model.data.Structure>()
+            .firstOrNull { it.name == name }
+            ?: throw AssertionError("Structure '$name' not in DTM")
+
+        // bouniaf: truncate to its last own field end. Tok at +168 size 24 → 192.
+        val clex = findStruct("bouniaf")
+        Assertions.assertEquals(
+            192,
+            clex.length,
+            "bouniaf should be truncated to 192 (Tok ends at 168+24); got ${clex.length}",
+        )
+        val clexFields = clex.components.associateBy { it.fieldName ?: "" }
+        Assertions.assertEquals(112, clexFields["LineNo"]?.offset, "LineNo expected at +112")
+        Assertions.assertEquals(168, clexFields["Tok"]?.offset, "Tok expected at +168")
+        Assertions.assertEquals(24, clexFields["Tok"]?.length, "Tok expected to span 24 bytes")
+
+        // bouniaf: own fields end at RecoverySet+40 = 276. Truncate target = 276.
+        val csym = findStruct("bouniaf")
+        Assertions.assertEquals(
+            276,
+            csym.length,
+            "bouniaf should be truncated to 276 (RecoverySet ends at 236+40); got ${csym.length}",
+        )
+
+        // bouniaf's base at +0 must be bouniaf itself (resolved, not
+        // a synthesised placeholder). That's the cascade: bouniaf's
+        // truncate-to-192 made it fit exactly in bouniaf's 192-byte gap.
+        val csymFields = csym.components.associateBy { it.fieldName ?: "" }
+        val baseField = csymFields["_base_bouniaf"]
+        Assertions.assertNotNull(
+            baseField,
+            "_base_bouniaf missing from bouniaf; components: ${csymFields.keys}",
+        )
+        Assertions.assertEquals(0, baseField!!.offset, "_base_bouniaf expected at +0")
+        Assertions.assertEquals(192, baseField.length, "_base_bouniaf expected to span 192 bytes")
+        Assertions.assertSame(
+            clex,
+            baseField.dataType,
+            "_base_bouniaf's dataType should be the same bouniaf Structure",
+        )
+
+        Assertions.assertEquals(192, csymFields["CurrentTok"]?.offset, "CurrentTok expected at +192")
+        Assertions.assertEquals(236, csymFields["RecoverySet"]?.offset, "RecoverySet expected at +236")
+        Assertions.assertEquals(40, csymFields["RecoverySet"]?.length, "RecoverySet expected to span 40 bytes")
+    }
 }
