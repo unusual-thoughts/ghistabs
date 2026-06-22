@@ -241,8 +241,9 @@ class ClassBuilder(
     ): Pointer {
         val vftableCategory = CategoryPath(CategoryPath(CategoryPath.ROOT, "ClassDataTypes"), className)
         val name = "${className}_vftable"
-        val struct = dtm.getDataType(vftableCategory, name)
-            ?: typeRegistry.register(StructureDataType(vftableCategory, name, 0, dtm))
+        val struct = typeRegistry.getOrRegister<DataType>(vftableCategory, name) {
+            StructureDataType(vftableCategory, name, 0, dtm)
+        }
         return PointerDataType.getPointer(struct, dtm)
     }
 
@@ -490,8 +491,9 @@ class ClassBuilder(
         val ptrSize = program.defaultPointerSize // typically 4 on 32-bit
 
         // a. Populate <Class>_vftable (the function pointer array).
-        val vftable = (dtm.getDataType(vftableCategory, vftableName) as? Structure)
-            ?: typeRegistry.register(StructureDataType(vftableCategory, vftableName, 0, dtm)) as Structure
+        val vftable = typeRegistry.getOrRegister<Structure>(vftableCategory, vftableName) {
+            StructureDataType(vftableCategory, vftableName, 0, dtm)
+        }
         while (vftable.numComponents > 0) vftable.delete(0)
         for (m in virtuals) {
             val slotType = buildVirtualSlotType(m, className, vftableCategory) ?: run {
@@ -505,8 +507,9 @@ class ClassBuilder(
         }
 
         // b. Build <Class>_vtable wrapping that.
-        val vtable = (dtm.getDataType(vftableCategory, vtableName) as? Structure)
-            ?: typeRegistry.register(StructureDataType(vftableCategory, vtableName, 0, dtm)) as Structure
+        val vtable = typeRegistry.getOrRegister<Structure>(vftableCategory, vtableName) {
+            StructureDataType(vftableCategory, vtableName, 0, dtm)
+        }
         while (vtable.numComponents > 0) vtable.delete(0)
         val intPtrDt = if (ptrSize == 8) {
             LongLongDataType.dataType
