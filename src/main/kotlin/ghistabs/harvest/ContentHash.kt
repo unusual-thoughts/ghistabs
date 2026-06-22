@@ -132,10 +132,19 @@ fun TypeDecl<GlobalTypeId>.contentHash(
 
     // The id is local-binding metadata; identity is the body. Drop
     // the "InlineDef" wrapper so this form is content-equivalent to
-    // `Ref(id_at_same_content)` (see the Ref branch). Add the id to
-    // `visited` so a back-edge inside the body (a forward Ref
-    // pointing at this InlineDef's slot) stops recursing.
-    is TypeDecl.InlineDef -> body.contentHash(oracle, cache, visited + id)
+    // `Ref(id_at_same_content)` (see the Ref branch).
+    //
+    // Guard against back-edges only when the body is NOT itself an XRef.
+    // When body IS XRef, we intentionally omit the visited guard so that
+    // `byXRef` resolution followed by `refKey` on the resolved id can add
+    // the id to visited naturally. Without this exception, the gcc pattern
+    //   TypeAst(id=A, body=InlineDef(id=B, body=XRef(STRUCT, Foo)))
+    //   TypeAst(id=B, body=Struct{...})   ← byXRef("Foo") returns this
+    // would pre-mark B as visited before the XRef is resolved, causing
+    // refKey(B) to return BACK_EDGE_HASH instead of the struct content.
+    // For non-XRef bodies the guard is still required: a Ref(id) inside
+    // a Struct body must not recurse back into the same InlineDef.
+    is TypeDecl.InlineDef -> body.contentHash(oracle, cache, if (body is TypeDecl.XRef) visited else visited + id)
 }
 
 /**
