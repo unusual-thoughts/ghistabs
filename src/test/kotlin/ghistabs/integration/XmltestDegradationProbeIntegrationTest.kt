@@ -151,6 +151,174 @@ class XmltestDegradationProbeIntegrationTest : AbstractGhidraHeadlessIntegration
                     for (m in ms) w.write("  n=$n: ${m.key} → name=${m.value.name}\n")
                 }
 
+                w.write("\n=== Source-attribution census ===\n")
+                val bySource = harvest.typeAsts.keys.groupBy { id ->
+                    val s = id.toString()
+                    s.substring(1, s.lastIndexOf(','))
+                }
+                for ((src, ids) in bySource.toSortedMap(compareBy { it })) {
+                    w.write("  $src: ${ids.size} ids\n")
+                }
+
+                w.write("\n=== Raw stab records under each N_SO scope ===\n")
+                var curSo = "(unknown)"
+                val perSoIds = mutableMapOf<String, MutableSet<Int>>()
+                val perSoBincls = mutableMapOf<String, MutableList<String>>()
+                for (rec in reader.records) {
+                    when (rec.type.name) {
+                        "N_SO" -> {
+                            if (rec.name.isNotEmpty()) {
+                                curSo = rec.name
+                                w.write("[N_SO] -> $curSo\n")
+                            } else {
+                                w.write("[N_SO] (end of $curSo)\n")
+                            }
+                        }
+                        "N_BINCL" -> {
+                            w.write("  [N_BINCL] $curSo includes ${rec.name}\n")
+                            perSoBincls.getOrPut(curSo) { mutableListOf() }.add(rec.name)
+                        }
+                        "N_EXCL" -> w.write("  [N_EXCL] $curSo reuses ${rec.name}\n")
+                        "N_LSYM" -> {
+                            val s = rec.name
+                            val m = Regex("""^([^:]*):.*?\(0,(\d+)\)=""").find(s)
+                            if (m != null) {
+                                val n = m.groupValues[2].toInt()
+                                perSoIds.getOrPut(curSo) { mutableSetOf() }.add(n)
+                            }
+                        }
+                    }
+                }
+                w.write("\n=== N_LSYM (0,N) bindings per CU ===\n")
+                for ((cu, ns) in perSoIds) {
+                    w.write("  $cu: ${ns.size} N_LSYM bindings (0,N) — sample: ${ns.sorted().take(40).joinToString(",")}\n")
+                }
+
+                w.write("\n=== Raw N_LSYM records under tinyxml2.cpp scope mentioning (0,25)= ===\n")
+                curSo = "(none)"
+                for (rec in reader.records) {
+                    if (rec.type.name == "N_SO") {
+                        curSo = if (rec.name.isNotEmpty()) rec.name else "(none)"
+                        continue
+                    }
+                    if (curSo != "/xml/tinyxml2.cpp") continue
+                    if (rec.type.name != "N_LSYM") continue
+                    if ("(0,25)=" in rec.name || "(0,89)=" in rec.name || "(0,27)=" in rec.name) {
+                        w.write("  ${rec.name.take(240)}\n")
+                    }
+                }
+
+                w.write("\n=== Raw stabs in tinyxml2.cpp CU defining ANY of these inline (sample) ===\n")
+                curSo = "(none)"
+                val targetInlines = listOf(25, 27, 89, 97).map { "(0,$it)=" }
+                for (rec in reader.records) {
+                    if (rec.type.name == "N_SO") {
+                        curSo = if (rec.name.isNotEmpty()) rec.name else "(none)"
+                        continue
+                    }
+                    if (curSo != "/xml/tinyxml2.cpp") continue
+                    if (rec.type.name != "N_LSYM" && rec.type.name != "N_GSYM" && rec.type.name != "N_PSYM") continue
+                    if (targetInlines.any { it in rec.name }) {
+                        w.write("  type=${rec.type.name} ${rec.name.take(240)}\n")
+                    }
+                }
+
+                w.write("\n=== First 20 stabs in tinyxml2.cpp CU + first 30 N_LSYM/N_PSYM bindings ===\n")
+                curSo = "(none)"
+                var emitted = 0
+                var nlsym = 0
+                for (rec in reader.records) {
+                    if (rec.type.name == "N_SO") {
+                        if (rec.name.isNotEmpty()) {
+                            curSo = rec.name
+                            if (curSo == "/xml/tinyxml2.cpp") emitted = 0
+                        } else {
+                            if (curSo == "/xml/tinyxml2.cpp") {
+                                w.write("[end tinyxml2.cpp]\n")
+                                break
+                            }
+                            curSo = "(none)"
+                        }
+                        continue
+                    }
+                    if (curSo != "/xml/tinyxml2.cpp") continue
+                    if (rec.type.name == "N_BINCL" || rec.type.name == "N_EINCL" || rec.type.name == "N_EXCL") {
+                        w.write("  type=${rec.type.name} ${rec.name.take(100)}\n")
+                    } else if (rec.type.name == "N_LSYM") {
+                        nlsym++
+                        if (nlsym <= 30) w.write("  type=N_LSYM #$nlsym ${rec.name.take(160)}\n")
+                    }
+                    emitted++
+                    if (emitted > 200) break
+                }
+
+                w.write("\n=== Looking for (0,25)= binding ANYWHERE in tinyxml2.cpp records ===\n")
+                curSo = "(none)"
+                for (rec in reader.records) {
+                    if (rec.type.name == "N_SO") {
+                        curSo = if (rec.name.isNotEmpty()) rec.name else "(none)"
+                        continue
+                    }
+                    if (curSo != "/xml/tinyxml2.cpp") continue
+                    if ("(0,25)=" in rec.name) {
+                        w.write("  type=${rec.type.name} ${rec.name.take(260)}\n")
+                    }
+                }
+
+                w.write("\n=== Any include records in tinyxml2.cpp CU ===\n")
+                curSo = "(none)"
+                for (rec in reader.records) {
+                    if (rec.type.name == "N_SO") {
+                        curSo = if (rec.name.isNotEmpty()) rec.name else "(none)"
+                        continue
+                    }
+                    if (curSo != "/xml/tinyxml2.cpp") continue
+                    if (rec.type.name in setOf("N_BINCL", "N_EINCL", "N_EXCL", "N_SOL")) {
+                        w.write("  type=${rec.type.name} ${rec.name.take(120)}\n")
+                    }
+                }
+
+                w.write("\n=== Any reference to (0,25) (def OR use) in tinyxml2.cpp ===\n")
+                curSo = "(none)"
+                var n = 0
+                for (rec in reader.records) {
+                    if (rec.type.name == "N_SO") {
+                        curSo = if (rec.name.isNotEmpty()) rec.name else "(none)"
+                        continue
+                    }
+                    if (curSo != "/xml/tinyxml2.cpp") continue
+                    if ("(0,25)" in rec.name) {
+                        n++
+                        if (n <= 15) w.write("  type=${rec.type.name} ${rec.name.take(200)}\n")
+                    }
+                }
+                w.write("  total: $n records mention (0,25)\n")
+
+                w.write("\n=== XMLNode name references in tinyxml2.cpp ===\n")
+                curSo = "(none)"
+                for (rec in reader.records) {
+                    if (rec.type.name == "N_SO") {
+                        curSo = if (rec.name.isNotEmpty()) rec.name else "(none)"
+                        continue
+                    }
+                    if (curSo != "/xml/tinyxml2.cpp") continue
+                    if (rec.name.startsWith("XMLNode:")) {
+                        w.write("  type=${rec.type.name} ${rec.name.take(220)}\n")
+                    }
+                }
+
+                w.write("\n=== All tinyxml2.cpp ids (n values) ===\n")
+                val tinyxml2Ns = harvest.typeAsts.keys
+                    .filter { it.toString().startsWith("[/xml/tinyxml2.cpp,") }
+                    .mapNotNull { id ->
+                        val s = id.toString()
+                        val end = s.indexOf(']', s.lastIndexOf(','))
+                        s.substring(s.lastIndexOf(',') + 1, end).toIntOrNull()
+                    }
+                    .sorted()
+                w.write("  ${tinyxml2Ns.size} ids; range ${tinyxml2Ns.firstOrNull()}..${tinyxml2Ns.lastOrNull()}\n")
+                w.write("  ids: ${tinyxml2Ns.joinToString(",")}\n")
+
                 w.write("\n=== All DynArray* ASTs ===\n")
                 val dynArray = harvest.typeAsts.values.filter { (it.name ?: "").contains("DynArray") }
                 for (a in dynArray) {
