@@ -214,6 +214,59 @@ class ContentHashTest {
      * Cycle protection: a `Range.of` always points back at the Range
      * itself. `contentHash` must terminate.
      */
+    /**
+     * Regression: gcc emits `InlineDef(id=98, body=XRef(STRUCT, _IO_FILE))`
+     * as a forward-reference alias for id 97, while id 98 holds the actual
+     * Struct body. The InlineDef branch adds 98 to `visited` before recursing
+     * into the XRef body; `byXRef` resolves to id 98; refKey sees 98 in
+     * visited and returns BACK_EDGE_HASH — a false cycle.
+     *
+     * After the fix, XRef checks the visited set itself and, when the
+     * resolved id is already marked, calls body.contentHash directly instead
+     * of going through refKey, yielding the correct Struct hash.
+     */
+    @Test
+    fun xRefResolvingToInlineDefIdIsNotACycle() {
+        val cu = SourceFile.CUSource("/xml/xmltest.cpp")
+        // id 98: the actual _IO_FILE struct definition
+        val id98 = GlobalTypeId(cu, 98)
+        val intId = GlobalTypeId(cu, 2)
+        val intAst = TypeAst(cu, intId, "int", TypeDecl.Range(intId, -2147483648L, 2147483647L))
+        val ioFileBody = TypeDecl.Struct<GlobalTypeId>(
+            kind = AggrKind.STRUCT,
+            sizeBytes = 216,
+            bases = emptyList(),
+            fields = listOf(FieldDecl("_flags", TypeDecl.Ref(intId), 0L, 32L, false)),
+            methods = emptyList(),
+            hasVTablePointerMarker = false,
+            vtableTargetTypeId = null,
+        )
+        val ioFileAst = TypeAst(cu, id98, "_IO_FILE", ioFileBody)
+        // id 97: InlineDef(id=98, body=XRef(STRUCT, _IO_FILE)) — the forward-ref alias
+        val id97 = GlobalTypeId(cu, 97)
+        val forwardAlias = TypeAst(
+            cu,
+            id97,
+            null,
+            TypeDecl.InlineDef(id98, TypeDecl.XRef(AggrKind.STRUCT, "_IO_FILE")),
+        )
+
+        val store = mapOf(id97 to forwardAlias, id98 to ioFileAst, intId to intAst)
+        val o = TypeAstOracle(
+            byId = store::get,
+            byXRef = { xref -> store.values.firstOrNull { it.name == xref.tagName } },
+        )
+
+        // Ref(97) must hash to the same value as the actual struct body
+        val hashViaForwardRef = TypeDecl.Ref<GlobalTypeId>(id97).contentHash(o)
+        val hashViaDirectRef = ioFileBody.contentHash(o)
+        assertEquals(
+            hashViaDirectRef,
+            hashViaForwardRef,
+            "forward-ref alias must hash as the struct body, not BACK_EDGE_HASH",
+        )
+    }
+
     @Test
     fun selfReferentialTypeTerminates() {
         val h = intInCU1.body.contentHash(oracle)
