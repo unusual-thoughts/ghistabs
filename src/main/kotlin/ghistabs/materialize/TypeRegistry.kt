@@ -24,6 +24,22 @@ class TypeRegistry(
     private val byId = mutableMapOf<GlobalTypeId, DataType>()
     private val placeholders = mutableMapOf<GlobalTypeId, DataType>()
 
+    /**
+     * DataTypes that originated as an unresolved XRef placeholder. An XRef stub
+     * is benign when wrapped in a `Pointer→<stub>` or `Reference→<stub>` — gcc
+     * deliberately emits the forward decl in that case and `void*` semantics
+     * survive in the listing. It's a real layout loss when one appears as a
+     * struct field, base class, or array element — those use sites are caught
+     * by [recordXRefStubAt] and emitted as their own degradation bucket.
+     */
+    private val xrefStubs = mutableSetOf<DataType>()
+
+    private fun recordXRefStubAt(useSite: String, where: String, dt: DataType) {
+        if (dt in xrefStubs) {
+            diagnostics.recordDegradation("xref-stub-in-$useSite", where, "type=${dt.name}")
+        }
+    }
+
     fun tryGetExisting(gId: GlobalTypeId) = byId[gId] ?: placeholders[gId] ?: harvest.getType(gId)?.let { raw ->
         // Primitives (Range, Builtin, Float, …) resolve directly via BuiltinTable.
         // Without this, the `else` branch in makePlaceholder creates a zero-size
@@ -344,6 +360,7 @@ class TypeRegistry(
                     diagnostics.recordDegradation("array-element", ast.nameOrId, body.element.toString())
                     ByteDataType.dataType
                 }
+                recordXRefStubAt("array-element", ast.nameOrId, elem)
                 val rangeLen = (body.indexType as? TypeDecl.Range)
                     ?.let { it.max - it.min + 1 }
                     ?.takeIf { it > 0 }
@@ -384,6 +401,7 @@ class TypeRegistry(
                         val offsetBytes = (base.offsetBits / 8).toInt()
                         val dt = dataTypeFor(base.type)
                         if (dt != null && dt.length > 0) {
+                            recordXRefStubAt("base", "${ast.nameOrId}@+$offsetBytes", dt)
                             dataTypeByOffset[offsetBytes] = dt
                             resolvedBaseInfo[offsetBytes] = ResolvedBase(dt.name, dt.length)
                             continue
@@ -499,6 +517,9 @@ class TypeRegistry(
                             "type=${resolvedFt.name} from ${field.type}",
                         )
                     }
+                    if (resolvedFt != null) {
+                        recordXRefStubAt("field", "${ast.ghidraName}.${field.name}", resolvedFt)
+                    }
                     val len = if (ft.length <= 0) 4 else ft.length
                     try {
                         when (struct) {
@@ -602,7 +623,7 @@ class TypeRegistry(
                 // fall back to the placeholder.
                 (resolver.lookupByXRef(body) as? TypeResolver.XRefLookup.Resolved)
                     ?.ast?.let { canonical -> tryGetExisting(canonical.id)?.also { byId[ast.id] = it } }
-                    ?: placeholder
+                    ?: placeholder.also { xrefStubs.add(it) }
             }
 
             // Truly-missing classifier: harvest already exhausted above.
