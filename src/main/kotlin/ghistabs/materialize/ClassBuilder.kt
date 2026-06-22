@@ -301,7 +301,11 @@ class ClassBuilder(
             func.parentNamespace = ns
             val fallbackName = displayNameFor(mangled, className) ?: m.name
             if (func.name != fallbackName) func.setName(fallbackName, source)
-            log("method-demangle-fallback", "$className::${m.name}: ${demangleCmd.statusMsg}")
+            ctx.diagnostics.recordDegradation(
+                "method-demangle-fallback",
+                "$className::${m.name}",
+                demangleCmd.statusMsg,
+            )
         }
 
         // 3. Mark thiscall. Calling convention drives `this`:
@@ -366,14 +370,14 @@ class ClassBuilder(
         }
         val unresolvedCount = paramTypes.count { it == null }
         if (unresolvedCount > 0) {
-            ctx.diagnostics.inc("method-param-unresolved", unresolvedCount.toLong())
-            if (paramTypes.isNotEmpty()) {
-                log(
-                    "method-param-unresolved",
-                    "$className::${m.name}: $unresolvedCount/${paramTypes.size} stab param types " +
-                        "unresolved; substituting Undefined4 so __thiscall `this` injection isn't " +
-                        "shadowed by leftover autoanalysis params",
-                )
+            paramTypes.forEachIndexed { i, pdt ->
+                if (pdt == null) {
+                    ctx.diagnostics.recordDegradation(
+                        "method-param-unresolved",
+                        "$className::${m.name}[$i]",
+                        paramDecls.getOrNull(i)?.toString(),
+                    )
+                }
             }
         }
         // Build the full param list ourselves — explicit `this: Class*`
@@ -493,7 +497,10 @@ class ClassBuilder(
         while (vftable.numComponents > 0) vftable.delete(0)
         for (m in virtuals) {
             val slotType = buildVirtualSlotType(m, className, vftableCategory) ?: run {
-                ctx.diagnostics.inc("vftable-slot-fallback-untyped")
+                ctx.diagnostics.recordDegradation(
+                    "vftable-slot-untyped",
+                    "$className::${m.name}",
+                )
                 PointerDataType.getPointer(Undefined4DataType.dataType, dtm)
             }
             vftable.add(slotType, ptrSize, m.name, "virtual ${m.name}")

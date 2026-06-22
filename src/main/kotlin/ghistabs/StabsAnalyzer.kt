@@ -62,6 +62,13 @@ class StabsAnalyzer :
             null,
             "Synthesise <Class>_vtable structs and apply at _ZTV addresses.",
         )
+        options.registerOption(
+            OPT_LOG_DEGRADATIONS,
+            false,
+            null,
+            "Dump every materialization degradation (Undefined4 fallback, synthesised base, " +
+                "skipped field, dropped vtable slot, …) at end-of-run.",
+        )
     }
 
     fun run(ctx: ImportContext<*>) {
@@ -99,6 +106,7 @@ class StabsAnalyzer :
         const val OPT_STABS_DONE: String = "Stabs Imported"
         const val OPT_PLATE_COMMENTS: String = "Apply scope plate comments"
         const val OPT_VTABLES: String = "Synthesise vtable structs"
+        const val OPT_LOG_DEGRADATIONS: String = "Log degradations at end-of-run"
 
         @JvmStatic
         fun isStabsDone(program: Program) = program.getOptions(Program.PROGRAM_INFO).getBoolean(OPT_STABS_DONE, false)
@@ -116,9 +124,11 @@ data class StabsOptions(
     val createImportedLabels: Boolean = true,
     val applyPlateComments: Boolean = true,
     val applyVtables: Boolean = true,
+    val logDegradations: Boolean = false,
 ) {
     constructor(opts: Options) : this(
         applyPlateComments = opts.getBoolean(StabsAnalyzer.OPT_PLATE_COMMENTS, true),
         applyVtables = opts.getBoolean(StabsAnalyzer.OPT_VTABLES, true),
+        logDegradations = opts.getBoolean(StabsAnalyzer.OPT_LOG_DEGRADATIONS, false),
     )
 }
