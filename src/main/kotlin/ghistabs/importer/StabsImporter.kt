@@ -69,6 +69,9 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
 
         // Emit end-of-run diagnostics summary
         ctx.diagnostics.writeSummary(ctx.sink)
+        if (ctx.options.logDegradations) {
+            ctx.diagnostics.writeDegradations(ctx.sink)
+        }
 
         return PassResult(
             recordsRead = stabs.recordCount,
@@ -168,6 +171,12 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
                             is SymbolDecl.StackParam -> pdecl.name to typeRegistry.dataTypeFor(pdecl.type)
                             is SymbolDecl.RegParam -> pdecl.name to typeRegistry.dataTypeFor(pdecl.type)
                             else -> "arg$i" to null
+                        }
+                        if (pdt == null) {
+                            ctx.diagnostics.recordDegradation(
+                                "param-untyped",
+                                "${open.name}.$pname",
+                            )
                         }
                         ParameterImpl(
                             pname,
@@ -410,11 +419,19 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
 
     private fun applyLocal(func: Function, loc: LocalRecord, typeRegistry: TypeRegistry, source: SourceType) {
         val decl = loc.decl
-        val dt = when (decl) {
+        val resolvedDt = when (decl) {
             is SymbolDecl.StackLocal -> typeRegistry.dataTypeFor(decl.type)
             is SymbolDecl.RegLocal -> typeRegistry.dataTypeFor(decl.type)
             else -> return
-        } ?: Undefined4DataType.dataType
+        }
+        if (resolvedDt == null) {
+            val localName = when (decl) {
+                is SymbolDecl.StackLocal -> decl.name
+                is SymbolDecl.RegLocal -> decl.name
+            }
+            ctx.diagnostics.recordDegradation("local-untyped", "${func.name}.$localName")
+        }
+        val dt = resolvedDt ?: Undefined4DataType.dataType
         try {
             when (decl) {
                 is SymbolDecl.StackLocal -> {
@@ -517,7 +534,6 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
             val after = ctx.program.listing.getDataAt(addr)
             val stuck = after != null && after.dataType.name == dt.name
             if (!stuck) {
-                ctx.diagnostics.inc("global-applied-then-overwritten")
                 log(
                     "global-applied-then-overwritten",
                     "$decl.name at $addr: wrote ${dt.name} but readback is ${after?.dataType?.name}",

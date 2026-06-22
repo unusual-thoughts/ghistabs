@@ -3,7 +3,6 @@ package ghistabs.materialize
 import ghidra.program.model.data.*
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.GapRecord
-import ghistabs.diagnose.Level
 import ghistabs.diagnose.StabsDiagnostics
 import ghistabs.harvest.Harvest
 import ghistabs.harvest.TypeAst
@@ -60,20 +59,24 @@ class TypeRegistry(
             val ast = harvest.getType(id) ?: continue
             if (ast.body !is TypeDecl.Struct) continue
             val composite = placeholder as? Composite ?: continue
+            // Empty C++ structs (e.g. tag/trait types) have sizeBytes=1 and no
+            // source fields. Ghidra fills the byte with Undefined1 padding, which
+            // would otherwise show up as `placeholder-undefined-fields`. That's
+            // the correct representation of an empty struct, not a degradation.
+            val sourceHasNoMembers =
+                ast.body.fields.none { !it.isStatic } && ast.body.bases.isEmpty()
             val tag = when {
-                composite.numComponents == 0 -> "placeholder-unresolved"
-                composite.allComponentsUndefined() -> "placeholder-undefined-fields"
+                composite.numComponents == 0 && !sourceHasNoMembers -> "placeholder-unresolved"
+                composite.allComponentsUndefined() && !sourceHasNoMembers -> "placeholder-undefined-fields"
                 else -> continue
             }
-            // BookmarkSink.log bumps the diagnostics counter on every call, so just
-            // log — no explicit inc, or we'd double-count.
-            sink.log(
+            diagnostics.recordDegradation(
                 tag,
-                "${composite.categoryPath}/${composite.name} (id=$id) " + when (tag) {
-                    "placeholder-unresolved" -> "never had its body materialised"
-                    else -> "materialised but every field fell back to Undefined"
+                "${composite.categoryPath}/${composite.name}",
+                when (tag) {
+                    "placeholder-unresolved" -> "never had its body materialised (id=$id)"
+                    else -> "materialised but every field fell back to Undefined (id=$id)"
                 },
-                Level.WARN,
             )
         }
     }
@@ -195,16 +198,13 @@ class TypeRegistry(
         }
 
         is TypeDecl.Pointer -> PointerDataType(
-            dataTypeFor(decl.pointee) ?: undef("pointer-pointee", decl.pointee),
+            dataTypeFor(decl.pointee) ?: undef("pointer-pointee", "(anon)", decl.pointee),
             4,
             dtm,
         )
 
         is TypeDecl.Reference -> PointerDataType(
-            dataTypeFor(decl.referent) ?: undef(
-                "reference-referent",
-                decl.referent,
-            ),
+            dataTypeFor(decl.referent) ?: undef("reference-referent", "(anon)", decl.referent),
             4,
             dtm,
         )
@@ -241,7 +241,7 @@ class TypeRegistry(
             val fd = FunctionDefinitionDataType(CategoryPath("/stabs/unnamed"), "FUNCTION_${decl.hashCode()}", dtm)
             fd.returnType = dataTypeFor(decl.ret) ?: VoidDataType()
             val params = decl.params.mapIndexed { i, p ->
-                ParameterDefinitionImpl("arg$i", dataTypeFor(p) ?: undef("functionT-param", p), null)
+                ParameterDefinitionImpl("arg$i", dataTypeFor(p) ?: undef("functionT-param", "(anon)[$i]", p), null)
             }.toTypedArray()
             fd.setArguments(*params)
             fd
@@ -264,18 +264,13 @@ class TypeRegistry(
 
     /**
      * Unified fallback for every `dataTypeFor(...) ?: Undefined4` site. Returns
-     * `Undefined4` and emits a per-site DEBUG log so the trail of "this Ref/XRef
-     * couldn't resolve so we fell back to Undefined4" is visible. Per-site tags
-     * (`undefined-fallback-<site>`) let us count silent coverage losses by location
-     * instead of only by end-state. The decl is included in the message so the
-     * specific offending TypeDecl can be matched against the harvest.
+     * `Undefined4` and records a degradation so the end-of-run dump enumerates
+     * every silent coverage loss. [category] is the bucket (e.g. `field-type`,
+     * `body-pointer-pointee`); [where] is the qualified offending location
+     * (e.g. `Foo.bar`, `Cls::method[2]`); the decl is captured as detail.
      */
-    private fun undef(site: String, decl: TypeDecl<GlobalTypeId>): DataType {
-        sink.log(
-            "undefined-fallback-$site",
-            decl.toString(),
-            Level.DEBUG,
-        )
+    private fun undef(category: String, where: String, decl: TypeDecl<GlobalTypeId>): DataType {
+        diagnostics.recordDegradation(category, where, decl.toString())
         return Undefined4DataType.dataType
     }
 
@@ -316,13 +311,13 @@ class TypeRegistry(
                 BuiltinTable.resolve(body) ?: placeholder
 
             is TypeDecl.Pointer -> PointerDataType(
-                dataTypeFor(body.pointee) ?: undef("body-pointer-pointee", body.pointee),
+                dataTypeFor(body.pointee) ?: undef("body-pointer-pointee", ast.nameOrId, body.pointee),
                 4,
                 dtm,
             )
 
             is TypeDecl.Reference -> PointerDataType(
-                dataTypeFor(body.referent) ?: undef("body-reference-referent", body.referent),
+                dataTypeFor(body.referent) ?: undef("body-reference-referent", ast.nameOrId, body.referent),
                 4,
                 dtm,
             )
@@ -343,7 +338,10 @@ class TypeRegistry(
             } ?: placeholder
 
             is TypeDecl.Array -> {
-                val elem = dataTypeFor(body.element) ?: ByteDataType.dataType
+                val elem = dataTypeFor(body.element) ?: run {
+                    diagnostics.recordDegradation("array-element", ast.nameOrId, body.element.toString())
+                    ByteDataType.dataType
+                }
                 val rangeLen = (body.indexType as? TypeDecl.Range)
                     ?.let { it.max - it.min + 1 }
                     ?.takeIf { it > 0 }
@@ -393,23 +391,22 @@ class TypeRegistry(
                             sortedBaseOffsetsBytes.firstOrNull { it > offsetBytes } ?: firstFieldOffsetBytes
                         val inferredSize = nextOffset - offsetBytes
                         if (inferredSize <= 0) {
-                            log(
+                            diagnostics.recordDegradation(
                                 "base-skipped-zero-size",
-                                "Base of '${ast.nameOrId}' at offset $offsetBytes: cannot infer size",
+                                "${ast.nameOrId}@+$offsetBytes",
+                                "cannot infer size",
                             )
-                            diagnostics.inc("base-skipped-zero-size")
                             continue
                         }
                         val synthName = "unknown_$offsetBytes"
                         val synthDt = ArrayDataType(Undefined1DataType.dataType, inferredSize, 1)
                         dataTypeByOffset[offsetBytes] = synthDt
                         resolvedBaseInfo[offsetBytes] = ResolvedBase(synthName, inferredSize)
-                        log(
+                        diagnostics.recordDegradation(
                             "base-synthesized",
-                            "Base of '${ast.nameOrId}' at offset $offsetBytes: " +
-                                "Ref unresolved, synthesised $inferredSize-byte placeholder",
+                            "${ast.nameOrId}@+$offsetBytes",
+                            "Ref unresolved, synthesised $inferredSize-byte placeholder",
                         )
-                        diagnostics.inc("base-synthesized")
                     }
 
                     // Plan ops from resolved bases; supplement with synthesised ones.
@@ -448,9 +445,10 @@ class TypeRegistry(
                             )
                             diagnostics.inc("inheritance-applied")
                         } catch (e: java.lang.IllegalArgumentException) {
-                            log(
-                                "base-layout",
-                                "Failed to insert base '${op.baseSimpleName}' in '${ast.nameOrId}': ${e.message}",
+                            diagnostics.recordDegradation(
+                                "base-layout-failed",
+                                "${ast.nameOrId}::${op.baseSimpleName}",
+                                e.message,
                             )
                             diagnostics.inc("inheritance-failed")
                         }
@@ -489,8 +487,16 @@ class TypeRegistry(
                         continue
                     }
 
-                    val ft = dataTypeFor(field.type)
-                        ?: undef("field-type[${ast.ghidraName}.${field.name}]", field.type)
+                    val resolvedFt = dataTypeFor(field.type)
+                    val ft = resolvedFt
+                        ?: undef("field-type", "${ast.ghidraName}.${field.name}", field.type)
+                    if (resolvedFt != null && resolvedFt.name.startsWith("undefined")) {
+                        diagnostics.recordDegradation(
+                            "field-resolved-to-undefined",
+                            "${ast.ghidraName}.${field.name}",
+                            "type=${resolvedFt.name} from ${field.type}",
+                        )
+                    }
                     val len = if (ft.length <= 0) 4 else ft.length
                     try {
                         when (struct) {
@@ -507,7 +513,11 @@ class TypeRegistry(
                             else -> {}
                         }
                     } catch (e: Exception) {
-                        log("field-layout", "Failed to add '${field.name}' to '${ast.nameOrId}': ${e.message}")
+                        diagnostics.recordDegradation(
+                            "field-dropped",
+                            "${ast.nameOrId}.${field.name}",
+                            e.message,
+                        )
                     }
                 }
 
@@ -539,11 +549,14 @@ class TypeRegistry(
 
             is TypeDecl.FunctionT -> {
                 val fd = FunctionDefinitionDataType(category, ast.ghidraName, dtm)
-                fd.returnType = dataTypeFor(body.ret) ?: VoidDataType()
+                fd.returnType = dataTypeFor(body.ret) ?: run {
+                    diagnostics.recordDegradation("functionT-ret", ast.ghidraName, body.ret.toString())
+                    VoidDataType()
+                }
                 val params = body.params.mapIndexed { i, p ->
                     ParameterDefinitionImpl(
                         "arg$i",
-                        dataTypeFor(p) ?: undef("body-functionT-param[${ast.ghidraName}.$i]", p),
+                        dataTypeFor(p) ?: undef("functionT-param", "${ast.ghidraName}[$i]", p),
                         null,
                     )
                 }.toTypedArray()
@@ -553,17 +566,20 @@ class TypeRegistry(
 
             is TypeDecl.Method -> {
                 val fd = FunctionDefinitionDataType(category, ast.ghidraName, dtm)
-                fd.returnType = dataTypeFor(body.ret) ?: VoidDataType()
+                fd.returnType = dataTypeFor(body.ret) ?: run {
+                    diagnostics.recordDegradation("method-ret", ast.ghidraName, body.ret.toString())
+                    VoidDataType()
+                }
                 val thisParam = ParameterDefinitionImpl(
                     "this",
-                    dataTypeFor(body.cls) ?: undef("body-method-cls[${ast.ghidraName}]", body.cls),
+                    dataTypeFor(body.cls) ?: undef("method-this-cls", ast.ghidraName, body.cls),
                     null,
                 )
                 val otherParams =
                     body.params.mapIndexed { i, p ->
                         ParameterDefinitionImpl(
                             "arg$i",
-                            dataTypeFor(p) ?: undef("body-method-param[${ast.ghidraName}.$i]", p),
+                            dataTypeFor(p) ?: undef("method-param", "${ast.ghidraName}[$i]", p),
                             null,
                         )
                     }
@@ -582,7 +598,11 @@ class TypeRegistry(
                 harvest.getByXRef(body)?.let { canonical ->
                     tryGetExisting(canonical.id)?.also { byId[ast.id] = it }
                 } ?: run {
-                    log("xref-stub", "Forward ref to '${body.tagName}'; materialising stub", Level.DEBUG)
+                    diagnostics.recordDegradation(
+                        "xref-stub",
+                        ast.nameOrId,
+                        "forward ref to '${body.tagName}'",
+                    )
                     placeholder
                 }
             }
@@ -599,9 +619,11 @@ class TypeRegistry(
 //                val gId = fileResolver.globalIdForCu(body.id)
 //                val gId = body.id
             is TypeDecl.Ref -> tryGetExisting(body.id) ?: run {
-                log("dangling-ref", "Dangling ref to ${body.id} in '${ast.nameOrId}' from ${ast.source}")
-                diagnostics.recordUnresolvedRef(body.id, ast.nameOrId)
-                diagnostics.inc("dangling-ref")
+                diagnostics.recordDegradation(
+                    "dangling-ref",
+                    ast.nameOrId,
+                    "ref to ${body.id} from ${ast.source}",
+                )
                 Undefined4DataType.dataType
             }
         }

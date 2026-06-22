@@ -83,6 +83,18 @@ data class AttributionTrace(
 )
 
 /**
+ * A single materialization degradation: a place where the importer fell back
+ * to `Undefined4`, dropped a field, synthesised a placeholder base, skipped a
+ * vtable slot, etc. Collected unbounded; the full list is dumped at end-of-run
+ * when the `logDegradations` analyzer option is enabled.
+ *
+ * [category] is a stable tag (used as the message category in the dump);
+ * [context] identifies the offending site ("FooStruct.bar", "Cls::method[2]",
+ * "0x80004000 someGlobal"); [detail] is optional free-form text.
+ */
+data class DegradationRecord(val category: String, val context: String, val detail: String? = null)
+
+/**
  * Run-scoped diagnostic aggregator for the Stabs importer.
  * Records counters, examples, and structural gaps detected during analysis.
  *
@@ -97,6 +109,7 @@ class StabsDiagnostics {
     private val examples: MutableMap<String, MutableList<String>> = linkedMapOf()
     private val gapCensus: MutableMap<String, List<GapRecord>> = linkedMapOf()
     private val attributionTraces: MutableList<AttributionTrace> = mutableListOf()
+    private val degradations: MutableList<DegradationRecord> = mutableListOf()
 
     private var isSealed = false
 
@@ -156,6 +169,9 @@ class StabsDiagnostics {
         inc(counterName)
         val detail = if (reason != null) "class=$className reason=$reason" else "class=$className"
         recordExample(counterName, detail)
+        if (outcome == "failed") {
+            recordDegradation("vtable-failed", className, reason)
+        }
     }
 
     /**
@@ -227,6 +243,36 @@ class StabsDiagnostics {
      * Snapshot attribution traces for inspection.
      */
     fun snapshotAttributionTraces() = attributionTraces.toList()
+
+    /**
+     * Record a materialization degradation. Unbounded — the full list is
+     * dumped at end-of-run via [writeDegradations] when the caller's option
+     * is enabled. Also bumps a counter named `degraded-$category` so the
+     * regular summary shows totals per bucket without the per-event noise.
+     */
+    fun recordDegradation(category: String, context: String, detail: String? = null) {
+        degradations.add(DegradationRecord(category, context, detail))
+        inc("degraded-$category")
+    }
+
+    /**
+     * Snapshot of all recorded degradations in insertion order.
+     */
+    fun snapshotDegradations(): List<DegradationRecord> = degradations.toList()
+
+    /**
+     * Emit every recorded degradation to [sink], one line per event, under
+     * the per-event category. Caller is responsible for gating this on the
+     * `logDegradations` analyzer option.
+     */
+    fun writeDegradations(sink: DiagnosticSink) {
+        if (degradations.isEmpty()) return
+        sink.log("degradations", "=== degradations (${degradations.size}) ===")
+        for (d in degradations) {
+            val msg = if (d.detail != null) "${d.context} :: ${d.detail}" else d.context
+            sink.log(d.category, msg)
+        }
+    }
 
     /**
      * Emit a complete diagnostic summary to the sink.

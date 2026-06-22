@@ -125,7 +125,12 @@ class DemanglerReplacer(private val ctx: ImportContext<*>) : DiagnosticSink by c
                 is Skip.StubAlreadyMissing -> "demangler-skip-already-missing"
             }
             ctx.diagnostics.inc(counterKey)
-            log("demangler-skip", skip.reason)
+            // Only WouldBeCycle is a real degradation: we had a replacement and
+            // couldn't apply it. NoReplacement means there was no stab type that
+            // matched the stub at all (often a third-party stub); not lossy.
+            if (skip is Skip.WouldBeCycle) {
+                ctx.diagnostics.recordDegradation("demangler-skip-cycle", skip.name, skip.reason)
+            }
         }
 
         // Execute replacements
@@ -146,7 +151,11 @@ class DemanglerReplacer(private val ctx: ImportContext<*>) : DiagnosticSink by c
                 log("replaced-demangler", "${stubDt.pathName} -> ${replDt.pathName}")
             } catch (e: Exception) {
                 ctx.diagnostics.inc("replaced-demangler-failed")
-                log("replaced-demangler-failed", "${stubDt.pathName}: ${e.message}")
+                ctx.diagnostics.recordDegradation(
+                    "demangler-replace-failed",
+                    stubDt.pathName,
+                    e.message,
+                )
             }
         }
     }
