@@ -11,12 +11,16 @@ import ghistabs.diagnose.ApplyErrorBucket
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.Level
 import ghistabs.diagnose.isInlineStdMember
-import ghistabs.harvest.*
+import ghistabs.harvest.Harvest
+import ghistabs.harvest.Harvester
+import ghistabs.harvest.LocalRecord
+import ghistabs.harvest.OpenFunction
 import ghistabs.materialize.TypeRegistry
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.StabReader
 import ghistabs.parse.SymbolDecl
 import ghistabs.parse.TypeDecl
+import ghistabs.runTransaction
 
 class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.sink {
     fun run(): PassResult {
@@ -47,21 +51,14 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
             harvest,
         )
 
-        val txB = ctx.program.startTransaction("Stabs: materialise types")
-        try {
+        ctx.program.runTransaction("Stabs: materialise types") {
             typeRegistry.materialiseAll()
-        } finally {
-            ctx.program.endTransaction(txB, true)
         }
 
         // Pass C — apply symbols
-        val txC = ctx.program.startTransaction("Stabs: apply symbols")
-        val applyResult =
-            try {
-                applyAllSymbols(harvest, typeRegistry)
-            } finally {
-                ctx.program.endTransaction(txC, true)
-            }
+        val applyResult = ctx.program.runTransaction("Stabs: apply symbols") {
+            applyAllSymbols(harvest, typeRegistry)
+        }
 
         // Report placeholders that never had their bodies resolved. These are
         // empty StructureDataTypes left in the DTM at end-of-import; downstream
@@ -247,29 +244,17 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
                 "class-build-name-collisions",
                 harvest.astsByGhidraName.values.count { it.size > 1 }.toLong(),
             )
-            for ((name, asts) in harvest.astsByGhidraName) {
-                val structAsts = asts.mapNotNull {
-                    when (it.body) {
-                        is TypeDecl.Struct -> harvest.contentHash(it.body) to it.body
-                        else -> null
-                    }
-                }.toMap()
-                if (structAsts.size > 1) {
-                    log("multiple-hashes-for-name", "$name [${structAsts.size}]")
+            for (group in harvest.byCanonicalKey.values) {
+                if (group.ast.body !is TypeDecl.Struct) {
+                    continue
                 }
-                if (structAsts.isEmpty()) continue
-                val body = structAsts.values.maxWithOrNull(
-                    compareBy({ it.methods.size }, { it.fields.size }),
-                )!!
 
-                if (body.methods.isEmpty() && !body.hasVTablePointerMarker) continue
+                if (group.ast.body.methods.isEmpty() && !group.ast.body.hasVTablePointerMarker) continue
                 try {
-                    val defSources = asts.map { it.id.source }.toSet()
-                    val category = Attribution.categoryFor(name, defSources, ctx.diagnostics)
-                    classBuilder.build(name, body, category)
+                    classBuilder.build(group)
                     classes++
                 } catch (t: Throwable) {
-                    log("class-apply-error", "$name: ${t.message}")
+                    log("class-apply-error", "${group.key}: ${t.message}")
                 }
             }
         }

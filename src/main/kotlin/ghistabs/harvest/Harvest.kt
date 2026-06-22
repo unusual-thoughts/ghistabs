@@ -41,7 +41,7 @@ data class Harvest(
      * Multi-CU collisions on the same name are common: list, kind-filter at lookup.
      */
     private val astsByName: Map<String, List<TypeAst>> by lazy {
-        typeAsts.values.filter { it.name.isNotEmpty() && it.body.isXRefTarget }.groupBy { it.name }
+        typeAsts.values.filter { !it.name.isNullOrEmpty() && it.body.isXRefTarget }.groupBy { it.name!! }
     }
 
     /**
@@ -53,8 +53,8 @@ data class Harvest(
      */
     private val astsByBaseTag: Map<String, List<TypeAst>> by lazy {
         typeAsts.values
-            .filter { it.name.isNotEmpty() && it.body.isXRefTarget && it.body.isComplete }
-            .groupBy { QualifiedName.baseTag(it.name) }
+            .filter { !it.name.isNullOrEmpty() && it.body.isXRefTarget && it.body.isComplete }
+            .groupBy { QualifiedName.baseTag(it.name!!) }
     }
 
     fun getType(id: GlobalTypeId) = typeAsts[id]
@@ -146,7 +146,7 @@ data class Harvest(
 
                 distinctSizes.size == 1 -> {
                     val resolved = candidates.first()
-                    log("xref-base-tag-resolved", "'${xref.tagName}' → '${resolved.name}'", Level.DEBUG)
+                    log("xref-base-tag-resolved", "'${xref.tagName}' → '${resolved.nameOrId}'", Level.DEBUG)
                     return resolved
                 }
 
@@ -204,9 +204,12 @@ data class Harvest(
         }.toMap()
 
         val byGhidraName = typeAsts.values.groupBy { it.ghidraName }
+        val attribution = Attribution(
+            commonProjectPrefix = commonProjectPrefix(typeAsts.values.map { it.id.source }),
+        )
 
         byCanonicalKey = typeAsts.values.filter { it.body.isXRefTarget }.groupBy { ast ->
-            Attribution.keyForAst(
+            attribution.keyForAst(
                 ast,
                 byGhidraName.getValue(ast.ghidraName).map { it.id.source }.toSet(),
             )
