@@ -249,6 +249,8 @@ class Harvester(
             }
         }
 
+        synthesizeXRefStubsForDanglingInheritanceRefs()
+
         return Harvest(
             typeAsts = typeAsts,
             parseErrors = parseErrors,
@@ -256,6 +258,68 @@ class Harvester(
             symbolsByCu = symbolsByCu,
             openFunctions = openFunctions,
         )
+    }
+
+    /**
+     * gcc 12 has a units bug emitting C++ inheritance as a leading
+     * pseudo-field instead of the documented `!N,<bases>;` form. Verified
+     * via objdump and via gdb itself:
+     *
+     *   $ rg 'XMLText:T' xmltest-record.json
+     *   XMLText:T(0,81)=s112XMLNode:(0,25),0,6656;_isCData:(0,9),832,8;;
+     *
+     *   $ objdump -g xmltest
+     *   struct XMLText {                 // size 112 id 3
+     *     struct XMLNode XMLNode;        // bitsize 6656, bitpos 0
+     *     enum { False, True } _isCData; // bitsize 8,    bitpos 832
+     *   };
+     *
+     *   $ gdb> ptype XMLText
+     *   internal-error: create_range_type: Assertion
+     *     `index_type->length () > 0' failed.
+     *
+     * XMLNode is 104 bytes (832 bits). The emitted bitsize is 6656 = 832 × 8
+     * = bytes × 64 — gcc applied the byte→bit conversion twice. binutils,
+     * objdump, and gdb all read the bogus value as-is; the actual byte
+     * layout survives because subsequent code uses `field_type->length()`,
+     * not bitsize. gdb crashes elsewhere on the same data, so consider this
+     * stab genuinely malformed.
+     *
+     * Detection: `field.sizeBits > struct.sizeBytes * 8`. A real field
+     * cannot exceed its enclosing struct — that's the unambiguous signal.
+     * The dangling id `(0,N)` referenced here is the base class; the field
+     * name carries the base's source-level name (the convention is to use
+     * the base class identifier verbatim). Synthesise an XRef-stub at the
+     * dangling id named after the field, so [TypeResolver.lookupByXRef]
+     * can cross-CU-resolve it to the real struct.
+     */
+    private fun synthesizeXRefStubsForDanglingInheritanceRefs() {
+        val synthetic = mutableListOf<TypeAst>()
+        for (ast in typeAsts.values) {
+            val struct = ast.body as? TypeDecl.Struct ?: continue
+            val structBits = struct.sizeBytes * 8
+            for (field in struct.fields) {
+                val ref = field.type as? TypeDecl.Ref ?: continue
+                if (ref.id in typeAsts) continue
+                if (field.name.isEmpty()) continue
+                if (field.sizeBits <= structBits) continue
+                synthetic.add(
+                    TypeAst(
+                        cu = ast.cu,
+                        id = ref.id,
+                        name = field.name,
+                        body = TypeDecl.XRef(AggrKind.STRUCT, field.name),
+                    ),
+                )
+            }
+        }
+        if (synthetic.isNotEmpty()) {
+            log(
+                "xref-stubs-synthesized",
+                "${synthetic.size} inheritance-pseudo-field Refs → synthetic XRef stubs",
+            )
+            appendAsts(*synthetic.toTypedArray())
+        }
     }
 
     private fun harvestSymbol(rec: StabRecord, onError: () -> Unit) {
