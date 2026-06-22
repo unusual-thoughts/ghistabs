@@ -16,8 +16,8 @@ import ghistabs.parse.sizeBytes
  * Indexes the [Harvest]'s typeAsts for downstream consumers:
  *
  *  - [TypeAstOracle] implementation for [contentHash] (id + xref).
- *  - [lookupByXRef] for materialiser-time XRef resolution. Records degradations
- *    at the lookup site so callers never need to bucket failure reasons.
+ *  - [lookupByXRef] for materialiser-time XRef resolution. Bumps per-reason
+ *    counters on miss; callers just get a `TypeAst?`.
  *  - [byCanonicalKey] — the (CategoryPath, name) → CanonicalGroup mapping that
  *    drives Ghidra slot assignment in TypeRegistry. Computed lazily.
  *  - [divergentCollisions] — the [Harvest.rawCollisions] filtered down to
@@ -69,36 +69,28 @@ class TypeResolver(
     /** Convenience: id → struct body (null if not a struct). */
     fun getStruct(id: GlobalTypeId): TypeDecl.Struct<GlobalTypeId>? = typeAsts[id]?.body as? TypeDecl.Struct
 
-    override fun byXRef(xref: TypeDecl.XRef<GlobalTypeId>): TypeAst? =
-        (lookupByXRef(xref, recordDegradation = false) as? XRefLookup.Resolved)?.ast
+    override fun byXRef(xref: TypeDecl.XRef<GlobalTypeId>): TypeAst? = lookupByXRef(xref, silent = true)
 
     /**
-     * Outcome of an XRef lookup. [Resolved] carries the canonical [TypeAst];
-     * [Unresolved] carries a [reason] distinguishing benign "no candidate"
-     * forward decls from real resolver gaps (kind mismatch, ambiguous size).
-     */
-    sealed interface XRefLookup {
-        data class Resolved(val ast: TypeAst) : XRefLookup
-        data class Unresolved(val reason: Reason, val diagnosis: String) : XRefLookup
-
-        enum class Reason { NoCandidate, KindMismatch, AmbiguousSize }
-    }
-
-    /**
-     * Resolve [xref] to its canonical [TypeAst].
+     * Resolve [xref] to its canonical [TypeAst], or null if no candidate
+     * matches.
      *
-     * Tries exact-name lookup first, then base-tag fallback (used for the
-     * "bare forward decl in one CU vs full template instantiation in another"
-     * case). When [recordDegradation] is true (the materialiser path), an
-     * `xref-undefined` / `xref-kind-mismatch` / `xref-ambiguous` event is
-     * recorded at the failure site. When false (the contentHash oracle path),
-     * the lookup runs silently — content hashing legitimately queries
-     * unresolvable XRefs while computing the cache.
+     * Tries exact-name lookup first, then base-tag fallback (used for "bare
+     * forward decl in one CU vs full template instantiation in another"),
+     * which only commits when every same-kind candidate has the same size.
+     *
+     * On failure, bumps a per-reason counter (`xref-undefined` /
+     * `xref-kind-mismatch` / `xref-ambiguous`) so the run summary surfaces
+     * cardinality. An unresolved XRef on its own isn't a degradation — the
+     * materialiser tracks where the resulting placeholder *lands* via the
+     * `xref-stub-in-*` buckets. [silent] suppresses the counter bump and
+     * unresolved-xref log; used by the contentHash oracle path which
+     * legitimately probes for XRefs it expects to miss.
      */
-    fun lookupByXRef(xref: TypeDecl.XRef<GlobalTypeId>, recordDegradation: Boolean = true): XRefLookup {
+    fun lookupByXRef(xref: TypeDecl.XRef<GlobalTypeId>, silent: Boolean = false): TypeAst? {
         astsByName[xref.tagName]
             ?.firstOrNull { it.body.matchesXRefKind(xref.kind) }
-            ?.let { return XRefLookup.Resolved(it) }
+            ?.let { return it }
 
         val tag = QualifiedName.baseTag(xref.tagName)
         val sameTagAnyKind = if (tag.isNotEmpty()) astsByBaseTag[tag].orEmpty() else emptyList()
@@ -108,39 +100,26 @@ class TypeResolver(
         if (sameKind.isNotEmpty() && distinctSizes.size == 1) {
             val resolved = sameKind.first()
             sink.log("xref-base-tag-resolved", "'${xref.tagName}' → '${resolved.nameOrId}'", Level.DEBUG)
-            return XRefLookup.Resolved(resolved)
+            return resolved
         }
 
+        if (silent) return null
+
         val exactAnyKind = astsByName[xref.tagName].orEmpty()
-        val reason = when {
-            sameKind.isNotEmpty() -> XRefLookup.Reason.AmbiguousSize
-            sameTagAnyKind.isNotEmpty() || exactAnyKind.isNotEmpty() -> XRefLookup.Reason.KindMismatch
-            else -> XRefLookup.Reason.NoCandidate
-        }
-        if (reason == XRefLookup.Reason.AmbiguousSize) {
-            sink.log(
-                "xref-base-tag-ambiguous",
-                "'${xref.tagName}': ${sameKind.size} candidates with sizes $distinctSizes; refusing fallback",
-            )
-        }
-        val diagnosis = xrefDiagnosis(xref)
-        // Bump per-reason counters (so the cardinality is visible in the
-        // summary) but don't record as a degradation: an unresolved XRef on
-        // its own isn't a loss. The materialiser-side [xrefStubs] tracking
-        // emits xref-stub-in-field/-base/-array degradations only when the
-        // resulting empty placeholder actually lands somewhere that needs a
-        // layout. Pointer/Reference use sites are fine — gcc deliberately
-        // emits forward decls for those.
-        val counter = when (reason) {
-            XRefLookup.Reason.NoCandidate -> "xref-undefined"
-            XRefLookup.Reason.KindMismatch -> "xref-kind-mismatch"
-            XRefLookup.Reason.AmbiguousSize -> "xref-ambiguous"
+        val counter = when {
+            sameKind.isNotEmpty() -> {
+                sink.log(
+                    "xref-base-tag-ambiguous",
+                    "'${xref.tagName}': ${sameKind.size} candidates with sizes $distinctSizes; refusing fallback",
+                )
+                "xref-ambiguous"
+            }
+            sameTagAnyKind.isNotEmpty() || exactAnyKind.isNotEmpty() -> "xref-kind-mismatch"
+            else -> "xref-undefined"
         }
         diagnostics.inc(counter)
-        if (!recordDegradation) {
-            sink.log("unresolved-xref", "${xref.tagName} [${xref.kind}] $diagnosis", Level.WARN)
-        }
-        return XRefLookup.Unresolved(reason, diagnosis)
+        sink.log("unresolved-xref", "${xref.tagName} [${xref.kind}] ${xrefDiagnosis(xref)}", Level.WARN)
+        return null
     }
 
     /**

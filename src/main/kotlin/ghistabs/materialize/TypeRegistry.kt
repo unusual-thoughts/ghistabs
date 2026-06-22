@@ -621,8 +621,8 @@ class TypeRegistry(
                 // Resolver records the degradation itself (with the right
                 // bucket by reason) when the lookup fails — we just alias or
                 // fall back to the placeholder.
-                (resolver.lookupByXRef(body) as? TypeResolver.XRefLookup.Resolved)
-                    ?.ast?.let { canonical -> tryGetExisting(canonical.id)?.also { byId[ast.id] = it } }
+                resolver.lookupByXRef(body)
+                    ?.let { canonical -> tryGetExisting(canonical.id)?.also { byId[ast.id] = it } }
                     ?: placeholder.also { xrefStubs.add(it) }
             }
 
