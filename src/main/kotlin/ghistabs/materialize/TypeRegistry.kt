@@ -34,9 +34,9 @@ class TypeRegistry(
      */
     private val xrefStubs = mutableSetOf<DataType>()
 
-    private fun recordXRefStubAt(useSite: String, where: String, dt: DataType) {
+    private fun recordXRefStubAt(useSite: String, at: String, dt: DataType) {
         if (dt in xrefStubs) {
-            diagnostics.recordDegradation("xref-stub-in-$useSite", where, "type=${dt.name}")
+            diagnostics.recordDegradation("xref-stub-in-$useSite", at, "type=${dt.name}")
         }
     }
 
@@ -284,11 +284,56 @@ class TypeRegistry(
      * Unified fallback for every `dataTypeFor(...) ?: Undefined4` site. Returns
      * `Undefined4` and records a degradation so the end-of-run dump enumerates
      * every silent coverage loss. [category] is the bucket (e.g. `field-type`,
-     * `body-pointer-pointee`); [where] is the qualified offending location
+     * `body-pointer-pointee`); [at] is the qualified offending location
      * (e.g. `Foo.bar`, `Cls::method[2]`); the decl is captured as detail.
      */
-    private fun undef(category: String, where: String, decl: TypeDecl<GlobalTypeId>): DataType {
-        diagnostics.recordDegradation(category, where, decl.toString())
+    /**
+     * Build a [FunctionDefinitionDataType] from stab-level types: resolves
+     * [ret] and [params] through [dataTypeFor] (falling back via [undef] when
+     * a param doesn't resolve), optionally prepends a `this` arg, and sets the
+     * calling convention. Shared by the FunctionT / Method materialiser cases
+     * and by the vftable-slot builder in ClassBuilder. The returned DataType
+     * is NOT yet added to the DTM — caller decides.
+     *
+     * [at] is the qualified location used in degradation context (e.g.
+     * `"Foo::bar"` or `"Cls::method"`); param fallbacks use `"$at[i]"`.
+     */
+    fun buildFunctionDefinition(
+        category: CategoryPath,
+        name: String,
+        ret: TypeDecl<GlobalTypeId>,
+        params: List<TypeDecl<GlobalTypeId>>,
+        thisType: DataType? = null,
+        callingConvention: String? = null,
+        at: String = name,
+    ): FunctionDefinitionDataType {
+        val fd = FunctionDefinitionDataType(category, name, dtm)
+        fd.returnType = dataTypeFor(ret) ?: run {
+            diagnostics.recordDegradation("function-ret-untyped", at, ret.toString())
+            VoidDataType()
+        }
+        val thisParam = thisType?.let { ParameterDefinitionImpl("this", it, null) }
+        val otherParams = params.mapIndexed { i, p ->
+            ParameterDefinitionImpl(
+                "arg$i",
+                dataTypeFor(p) ?: undef("function-param", "$at[$i]", p),
+                null,
+            )
+        }
+        fd.setArguments(*(listOfNotNull(thisParam) + otherParams).toTypedArray())
+        // Calling conventions that aren't known to this program's CompilerSpec
+        // (e.g. __thiscall on x86-64 ELF) cause setCallingConvention to throw
+        // when the FD is later attached to the DTM. Validate up-front against
+        // the DTM's known list and skip silently when unsupported — the FD
+        // stays at the default convention.
+        if (callingConvention != null && callingConvention in dtm.knownCallingConventionNames) {
+            runCatching { fd.setCallingConvention(callingConvention) }
+        }
+        return fd
+    }
+
+    private fun undef(category: String, at: String, decl: TypeDecl<GlobalTypeId>): DataType {
+        diagnostics.recordDegradation(category, at, decl.toString())
         return Undefined4DataType.dataType
     }
 
@@ -388,7 +433,7 @@ class TypeRegistry(
                 // Phase 5: insert base classes as inlined components.
                 if (struct is Structure) {
                     // Compute layout boundary to infer size of unresolved bases (offset of next base
-                    // or first non-static field — that's where this base subobject must end).
+                    // or first non-static field — that's at this base subobject must end).
                     val sortedBaseOffsetsBytes = body.bases.map { (it.offsetBits / 8).toInt() }.toSortedSet()
                     val firstFieldOffsetBytes = body.fields
                         .filter { !it.isStatic }
@@ -570,45 +615,25 @@ class TypeRegistry(
                 struct
             }
 
-            is TypeDecl.FunctionT -> {
-                val fd = FunctionDefinitionDataType(category, ast.ghidraName, dtm)
-                fd.returnType = dataTypeFor(body.ret) ?: run {
-                    diagnostics.recordDegradation("functionT-ret", ast.ghidraName, body.ret.toString())
-                    VoidDataType()
-                }
-                val params = body.params.mapIndexed { i, p ->
-                    ParameterDefinitionImpl(
-                        "arg$i",
-                        dataTypeFor(p) ?: undef("functionT-param", "${ast.ghidraName}[$i]", p),
-                        null,
-                    )
-                }.toTypedArray()
-                fd.setArguments(*params)
-                fd
-            }
+            is TypeDecl.FunctionT -> buildFunctionDefinition(
+                category = category,
+                name = ast.ghidraName,
+                ret = body.ret,
+                params = body.params,
+                thisType = null,
+                callingConvention = null,
+                at = ast.ghidraName,
+            )
 
-            is TypeDecl.Method -> {
-                val fd = FunctionDefinitionDataType(category, ast.ghidraName, dtm)
-                fd.returnType = dataTypeFor(body.ret) ?: run {
-                    diagnostics.recordDegradation("method-ret", ast.ghidraName, body.ret.toString())
-                    VoidDataType()
-                }
-                val thisParam = ParameterDefinitionImpl(
-                    "this",
-                    dataTypeFor(body.cls) ?: undef("method-this-cls", ast.ghidraName, body.cls),
-                    null,
-                )
-                val otherParams =
-                    body.params.mapIndexed { i, p ->
-                        ParameterDefinitionImpl(
-                            "arg$i",
-                            dataTypeFor(p) ?: undef("method-param", "${ast.ghidraName}[$i]", p),
-                            null,
-                        )
-                    }
-                fd.setArguments(*(listOf(thisParam) + otherParams).toTypedArray())
-                fd
-            }
+            is TypeDecl.Method -> buildFunctionDefinition(
+                category = category,
+                name = ast.ghidraName,
+                ret = body.ret,
+                params = body.params,
+                thisType = dataTypeFor(body.cls) ?: undef("method-this-cls", ast.ghidraName, body.cls),
+                callingConvention = "__thiscall",
+                at = ast.ghidraName,
+            )
 
             is TypeDecl.XRef -> {
                 // Resolve `XRef(kind, tagName)` to the canonical struct of
