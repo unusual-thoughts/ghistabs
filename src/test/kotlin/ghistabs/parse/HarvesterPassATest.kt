@@ -208,7 +208,7 @@ class HarvesterPassATest {
         assertEquals(0, harvest.parseErrors)
         assertEquals(1, harvest.typeAsts.size, "Tagged type should populate typeAsts")
         val typeAst = harvest.typeAsts.values.first()
-        assertEquals("MyStruct", typeAst.name, "Tagged type name should be 'MyStruct'")
+        assertEquals("MyStruct", typeAst.nameOrId, "Tagged type name should be 'MyStruct'")
         // Tagged types should NOT be in symbolsByCu
         assertEquals(0, harvest.allHarvestedSymbols.size, "Tagged type should NOT be in harvested symbols")
     }
@@ -349,7 +349,7 @@ class HarvesterPassATest {
         // N_SOL does NOT allocate a new fileNum — it only changes line-tracking context.
         assertEquals(1, harvest.typeAsts.size, "One type should be harvested")
         val typeAst = harvest.typeAsts.values.first()
-        assertEquals("AfterSOL", typeAst.name, "Type name should be AfterSOL")
+        assertEquals("AfterSOL", typeAst.nameOrId, "Type name should be AfterSOL")
         val source = typeAst.source
         assertTrue(
             source is SourceFile.HeaderSource,
@@ -426,7 +426,7 @@ class HarvesterPassATest {
         // The type inside the BINCL should be attributed to the header, not the CU
         assertEquals(1, harvest.typeAsts.size, "Type inside BINCL should be recorded in typeAsts")
         val typeAst = harvest.typeAsts.values.first()
-        assertEquals("HeaderType", typeAst.name, "Type name should be HeaderType")
+        assertEquals("HeaderType", typeAst.nameOrId, "Type name should be HeaderType")
         val source = typeAst.source
         assertTrue(
             source is SourceFile.HeaderSource,
@@ -544,7 +544,7 @@ class HarvesterPassATest {
         // GlobalTypeId(HeaderSource(same HeaderFile), 5).
         assertEquals(1, harvest.typeAsts.size, "Both types should deduplicate to one GlobalTypeId entry")
         val typeAst = harvest.typeAsts.values.first()
-        assertEquals("SharedType", typeAst.name, "Type name should be SharedType")
+        assertEquals("SharedType", typeAst.nameOrId, "Type name should be SharedType")
         val source = typeAst.source
         assertTrue(
             source is SourceFile.HeaderSource,
