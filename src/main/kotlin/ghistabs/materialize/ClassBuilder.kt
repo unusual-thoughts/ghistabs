@@ -553,7 +553,13 @@ class ClassBuilder(
         log("vtable", "applied $vtableName", address = addr)
         ctx.diagnostics.recordVtable(className, "applied")
 
-        // 5. Plate-comment each virtual method.
+        // 5. Plate-comment each virtual method. An unresolved mangled name
+        // here is *not* a vtable failure — it's the expected shape for a
+        // pure virtual (gcc's vtable slot points at `__cxa_pure_virtual`
+        // and emits no symbol for the declaration) or for a method whose
+        // implementation lives in an external DLL the binary imports. The
+        // slot type was already typed from the stabs signature in step a;
+        // we just can't anchor a comment without a target Function.
         // First function pointer sits after the offset-to-top + rtti prefix.
         var off = (2L * ptrSize)
         for (m in virtuals) {
@@ -567,18 +573,22 @@ class ClassBuilder(
                         "virtual ${m.name}; ${className}_vtable offset $off",
                     )
                 } else {
+                    ctx.diagnostics.inc("vtable-virtual-no-function")
                     log(
-                        "vtable-virtual-unresolved",
+                        "vtable-virtual-no-function",
                         "no Function at $mAddr for virtual method ${m.name} in $className",
+                        Level.DEBUG,
                     )
-                    ctx.diagnostics.recordVtable(className, "failed", reason = "virtual-method-unresolved")
                 }
             } else {
+                // Pure virtual or import-resident — both expected.
+                ctx.diagnostics.inc("vtable-virtual-no-impl")
                 log(
-                    "vtable-virtual-unresolved",
-                    "virtual method '${m.name}' in $className: no mangled symbol or unresolved address",
+                    "vtable-virtual-no-impl",
+                    "virtual method '${m.name}' in $className has no resolvable implementation " +
+                        "(pure virtual or DLL import); slot type still applied",
+                    Level.DEBUG,
                 )
-                ctx.diagnostics.recordVtable(className, "failed", reason = "virtual-method-unresolved")
             }
             off += ptrSize
         }
