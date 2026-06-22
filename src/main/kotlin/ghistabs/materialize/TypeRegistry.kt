@@ -516,68 +516,102 @@ class TypeRegistry(
                     for (base in body.bases) {
                         val offsetBytes = (base.offsetBits / 8).toInt()
                         val dt = dataTypeFor(base.type)
+                        // Compute the layout gap before deciding what to use.
+                        // gcc's inheritance line doesn't transmit the
+                        // subobject size — the consuming struct's own fields
+                        // start at whatever offset the compiler decided
+                        // (e.g. bouniaf's CurrentTok at +192 means
+                        // bouniaf's subobject is 192 bytes here, even
+                        // though the canonical bouniaf is 328 bytes
+                        // because another CU saw a richer definition).
+                        val nextOffset =
+                            sortedBaseOffsetsBytes.firstOrNull { it > offsetBytes } ?: firstFieldOffsetBytes
+                        val gap = nextOffset - offsetBytes
+
                         // Empty placeholders (XRef stubs for unresolvable
                         // forward decls, ref-stubs from non-registerable
                         // typeAsts) show up with `length = 1` because Ghidra
-                        // forces a minimum on size-0 Composites — but
-                        // `isZeroLength` returns the logical truth. Treat
-                        // those as unresolved so the inference branch below
-                        // produces an `Array<Undefined1, gap-size>` named
-                        // `_base_unknown_<offset>` — a strictly better
-                        // representation of the base subobject.
-                        if (dt != null && !dt.isZeroLength && dt.length > 0) {
+                        // forces a minimum on size-0 Composites — `isZeroLength`
+                        // returns the logical truth. Treat those as unresolved.
+                        if (dt != null && !dt.isZeroLength && dt.length > 0 && dt.length <= gap) {
                             dataTypeByOffset[offsetBytes] = dt
                             resolvedBaseInfo[offsetBytes] = ResolvedBase(dt.name, dt.length)
                             continue
                         }
-                        // Synthesise a placeholder of the size implied by layout.
-                        val nextOffset =
-                            sortedBaseOffsetsBytes.firstOrNull { it > offsetBytes } ?: firstFieldOffsetBytes
-                        val inferredSize = nextOffset - offsetBytes
-                        if (inferredSize <= 0) {
-                            diagnostics.recordDegradation(
-                                "base-skipped-zero-size",
-                                "${ast.nameOrId}@+$offsetBytes",
-                                "cannot infer size",
-                            )
+
+                        // Either unresolved, or resolved-but-larger-than-the-gap
+                        // (cross-CU size disagreement). Synthesise a gap-sized
+                        // placeholder so the base subobject is visible and own
+                        // fields don't have to clear half of an oversized base.
+                        if (gap <= 0) {
+                            // Empty base optimization: the base subobject takes
+                            // 0 bytes and is invisible in layout. Resolved-to-
+                            // empty + gap-zero is the normal EBO case (e.g.
+                            // `std::allocator<char>` inside `_Alloc_hider`).
+                            // No degradation — just skip the base insertion
+                            // and let the own fields at offset 0 take that
+                            // slot.
+                            if (dt == null || !dt.isZeroLength) {
+                                diagnostics.recordDegradation(
+                                    "base-skipped-zero-size",
+                                    "${ast.nameOrId}@+$offsetBytes",
+                                    "cannot infer size",
+                                )
+                            } else {
+                                diagnostics.inc("base-empty-ebo")
+                            }
                             continue
                         }
                         val synthName = "unknown_$offsetBytes"
-                        val synthDt = ArrayDataType(Undefined1DataType.dataType, inferredSize, 1)
+                        val synthDt = ArrayDataType(Undefined1DataType.dataType, gap, 1)
                         dataTypeByOffset[offsetBytes] = synthDt
-                        resolvedBaseInfo[offsetBytes] = ResolvedBase(synthName, inferredSize)
+                        resolvedBaseInfo[offsetBytes] = ResolvedBase(synthName, gap)
+                        val reason = if (dt == null || dt.isZeroLength || dt.length <= 0) {
+                            "Ref unresolved, synthesised $gap-byte placeholder"
+                        } else {
+                            "${dt.name} (${dt.length}b) larger than gap ($gap b); synthesised $gap-byte placeholder"
+                        }
                         diagnostics.recordDegradation(
                             "base-synthesized",
                             "${ast.nameOrId}@+$offsetBytes",
-                            "Ref unresolved, synthesised $inferredSize-byte placeholder",
+                            reason,
                         )
                     }
 
-                    // Plan ops from resolved bases; supplement with synthesised ones.
-                    val resolvedOps = BaseInsertionPlanner.planBaseInsertions(body.bases) {
-                        val dt = dataTypeFor(it)
-                        // Same empty-placeholder gate as the loop above.
-                        if (dt != null && !dt.isZeroLength && dt.length > 0) {
-                            ResolvedBase(dt.name, dt.length)
-                        } else {
-                            null
+                    // Build insertion ops directly from the loop above's
+                    // results — dataTypeByOffset / resolvedBaseInfo already
+                    // encode the right size (resolved-and-fits-in-gap or
+                    // gap-sized placeholder). Skip the synthesised placeholders
+                    // entirely: a `_base_unknown_N : Undefined1[N]` field
+                    // pretends to be a real base subobject, but it's just our
+                    // gap-fill — better to leave those bytes as Ghidra's
+                    // default Undefined1 components so they read as honest
+                    // "we don't know what's here". The `base-synthesized`
+                    // degradation already records the diagnostic.
+                    val ops = body.bases
+                        .sortedBy { it.offsetBits }
+                        .mapNotNull { base ->
+                            val off = (base.offsetBits / 8).toInt()
+                            val info = resolvedBaseInfo[off] ?: return@mapNotNull null
+                            // Synthesised placeholders don't get inserted —
+                            // we identify them by name (the synth path uses
+                            // `unknown_<off>` for resolvedBaseInfo.simpleName).
+                            // The bytes stay as Ghidra's default Undefined1
+                            // fill so they read as honest "we don't know
+                            // what's here" rather than a fake named field.
+                            if (info.simpleName.startsWith("unknown_")) return@mapNotNull null
+                            val prefix = if (base.isVirtual) "_vbase_" else "_base_"
+                            InsertOp(
+                                offsetBytes = off,
+                                fieldName = prefix + info.simpleName,
+                                comment = buildString {
+                                    append(base.access.name.lowercase())
+                                    if (base.isVirtual) append(" virtual")
+                                    append(" base")
+                                },
+                                baseSimpleName = info.simpleName,
+                            )
                         }
-                    }
-                    val resolvedOffsets = resolvedOps.map { it.offsetBytes }.toSet()
-                    val synthOps = body.bases.mapNotNull { base ->
-                        val off = (base.offsetBits / 8).toInt()
-                        if (off in resolvedOffsets) return@mapNotNull null
-                        val info = resolvedBaseInfo[off] ?: return@mapNotNull null
-                        val fieldName =
-                            if (base.isVirtual) "_vbase_${info.simpleName}" else "_base_${info.simpleName}"
-                        val comment = buildString {
-                            append(base.access.name.lowercase())
-                            if (base.isVirtual) append(" virtual")
-                            append(" base (unresolved type)")
-                        }
-                        InsertOp(off, fieldName, comment, info.simpleName)
-                    }
-                    val ops = (resolvedOps + synthOps).sortedBy { it.offsetBytes }
                     for (op in ops) {
                         val baseDt = dataTypeByOffset[op.offsetBytes] ?: continue
                         try {
