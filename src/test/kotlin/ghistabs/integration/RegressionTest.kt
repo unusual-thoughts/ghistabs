@@ -656,9 +656,31 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
         )
         Assertions.assertNotNull(stubExists, "precondition: injected stub should exist")
 
-        // Re-run DemanglerReplacer.
+        // Re-run DemanglerReplacer. The TypeRegistry is freshly constructed
+        // (empty byId/extras) so `findByName` falls back to walking the
+        // DTM directly — the typedef `/stabs/string` is already there from
+        // the import. Avoid re-materialising; that would create
+        // `.conflict`-suffixed duplicates and (since tests in this class
+        // run with @Execution(CONCURRENT)) race other tests' DTM reads.
+        val reader = ghistabs.parse.StabReader.fromProgram(program)!!
+        val harvest = program.runTransaction("rerun-harvest") {
+            ghistabs.harvest.Harvester(TaskMonitor.DUMMY, context.sink, context.resolver).passA(reader.records)
+        }
+        val resolver = ghistabs.harvest.TypeResolver(
+            harvest.typeAsts,
+            harvest.rawCollisions,
+            context.sink,
+            context.diagnostics,
+        )
+        val typeRegistry = ghistabs.materialize.TypeRegistry(
+            program.dataTypeManager,
+            context.sink,
+            context.diagnostics,
+            harvest,
+            resolver,
+        )
         program.runTransaction("rerun-demangler-replacer") {
-            ghistabs.importer.DemanglerReplacer(context).run()
+            ghistabs.importer.DemanglerReplacer(context, typeRegistry).run()
         }
 
         val stubAfter = program.dataTypeManager.getDataType(

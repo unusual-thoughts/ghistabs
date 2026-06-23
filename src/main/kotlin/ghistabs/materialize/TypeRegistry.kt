@@ -41,7 +41,15 @@ class TypeRegistry(
      * [byId] so [allCreatedDataTypes] is exhaustive without any DTM-path
      * filtering tricks.
      */
-    private val extras = LinkedHashSet<DataType>()
+    /**
+     * Id-less DataType registrations: typedef aliases, vftable/vtable
+     * composites, per-slot FunctionDefinitions. Keyed by simple name for
+     * O(1) [findByName] lookup; values are deduped via LinkedHashSet so
+     * the same DataType doesn't accumulate when re-registered. Iteration
+     * order is insertion order (mirrors the original LinkedHashSet
+     * semantics for [allCreatedDataTypes]).
+     */
+    private val extrasByName = LinkedHashMap<String, LinkedHashSet<DataType>>()
 
     /**
      * Register [dt] with the DTM (via [DataTypeManager.resolve]) and remember
@@ -52,7 +60,7 @@ class TypeRegistry(
      */
     fun register(dt: DataType): DataType {
         val resolved = dtm.resolve(dt, DataTypeConflictHandler.KEEP_HANDLER)
-        extras.add(resolved)
+        extrasByName.getOrPut(resolved.name) { LinkedHashSet() }.add(resolved)
         return resolved
     }
 
@@ -88,9 +96,9 @@ class TypeRegistry(
      * construction — every DTM write goes through [register] or sets [byId].
      */
     fun allCreatedDataTypes(): Set<DataType> {
-        val result = LinkedHashSet<DataType>(byId.values.size + extras.size)
+        val result = LinkedHashSet<DataType>()
         result.addAll(byId.values)
-        result.addAll(extras)
+        for (bucket in extrasByName.values) result.addAll(bucket)
         return result
     }
 
@@ -1007,22 +1015,33 @@ class TypeRegistry(
 
     /**
      * Find a DataType by simple ghidraName (no path), used by DemanglerReplacer.
-     * Walks `resolver.byCanonicalKey` — the authoritative (category, name) view —
-     * and returns null on ambiguity (no heuristic guess).
+     * Searches [allCreatedDataTypes] — every DataType this importer
+     * authored is either in `byId.values` (id-keyed registers) or
+     * `extras` (id-less registers — typedefs, vftable/vtable composites,
+     * per-slot FunctionDefinitions). When multiple matches share the
+     * simple name, prefer the one whose category equals
+     * [preferredCategory] (typically the `/Demangler/...`-stripped stub
+     * category — e.g. `/std` for `/Demangler/std/string`).
      */
-    fun findByName(simpleName: String): DataType? {
-        val candidates = resolver.byCanonicalKey.keys.filter { it.name == simpleName }
-        return when {
-            candidates.isEmpty() -> null
-
-            candidates.size == 1 -> dtm.getDataType(candidates[0].category, candidates[0].name)
-
-            else -> {
-                log("demangler-ambiguous", "Multiple matches for '$simpleName': $candidates")
-                diagnostics.inc("demangler-ambiguous")
-                null
-            }
+    fun findByName(simpleName: String, preferredCategory: CategoryPath? = null): DataType? {
+        val fromExtras = extrasByName[simpleName].orEmpty()
+        // byId.values aren't indexed by name (the key is GlobalTypeId), so
+        // pay the linear scan for the residual case where a typedef hasn't
+        // gone through register(dt) — e.g. ast aliases set via byId.putIfAbsent.
+        val fromById = byId.values.filter { it.name == simpleName }
+        val matches = (fromExtras + fromById).distinct()
+        if (matches.isEmpty()) return null
+        if (matches.size == 1) return matches.single()
+        if (preferredCategory != null) {
+            matches.firstOrNull { it.categoryPath == preferredCategory }?.let { return it }
         }
+        log(
+            "demangler-ambiguous",
+            "Multiple matches for '$simpleName' (preferred=$preferredCategory): " +
+                matches.joinToString { "${it.pathName}(${it::class.simpleName})" },
+        )
+        diagnostics.inc("demangler-ambiguous")
+        return null
     }
 }
 
