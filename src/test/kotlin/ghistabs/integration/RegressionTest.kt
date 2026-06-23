@@ -562,6 +562,108 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
         )
     }
 
+    /**
+     * gcc/gdb encode void as a TypeAst with body `Ref(self.id)`. These show
+     * up in method signatures as both the return type (every void-returning
+     * ctor) and the trailing end-of-args sentinel. Without recognition
+     * they'd surface as empty-Structure placeholders named `[<file>,N]`
+     * polluting every demangled signature.
+     *
+     * The check: no DTM Structure should have a synthetic `[file,N]`-shaped
+     * name, AND for bouniafbouniaf the specific path that prompted the discovery
+     * (stdlib.h-derived `div_t` ctors) must not survive.
+     */
+    @Test
+    fun voidSelfRefNotMaterialised() {
+        // Enumerate every void self-Ref ast in the harvest (body = Ref(self.id)).
+        // For each one assert no Structure was created at its category+name.
+        val reader = ghistabs.parse.StabReader.fromProgram(program)!!
+        val harvest = program.runTransaction("void-self-ref-harvest") {
+            ghistabs.harvest.Harvester(TaskMonitor.DUMMY, context.sink, context.resolver).passA(reader.records)
+        }
+        val voidAsts = harvest.typeAsts.values.filter { ast ->
+            val body = ast.body
+            body is ghistabs.parse.TypeDecl.Ref && body.id == ast.id
+        }
+        assumeTrue(voidAsts.isNotEmpty(), "no void self-Refs in this fixture's harvest")
+
+        val leaked = voidAsts.mapNotNull { ast ->
+            // A void self-Ref must NOT materialise as a Structure under any
+            // category bearing its synthetic ghidraName.
+            program.dataTypeManager.allDataTypes.asSequence()
+                .filterIsInstance<Structure>()
+                .firstOrNull { it.name == ast.ghidraName }
+                ?.pathName
+        }
+        Assertions.assertTrue(
+            leaked.isEmpty(),
+            "void self-Refs leaked as Structures: $leaked (out of ${voidAsts.size} void asts)",
+        )
+
+        // The original report (bouniafbouniaf): `(3,7)` in stdlib.h consumed by
+        // Keywords.cpp. Explicit check so the assertion fires by exact name
+        // if regressed.
+        if (binaryName == "bouniafbouniaf.exe") {
+            val specific = program.dataTypeManager.allDataTypes.asSequence()
+                .filterIsInstance<Structure>()
+                .filter { it.name.contains("stdlib.h") && it.name.endsWith("Keywords.cpp,7]") }
+                .map { it.pathName }
+                .toList()
+            Assertions.assertTrue(
+                specific.isEmpty(),
+                "the stdlib.h Keywords.cpp,7 void self-Ref leaked: $specific",
+            )
+        }
+    }
+
+    /**
+     * Reproduces the GUI scenario: Ghidra's demangler eventually creates a
+     * /Demangler/std/string Structure stub (e.g. when applying a mangled-symbol
+     * function signature that references std::string), and we expect
+     * DemanglerReplacer to substitute it with our /stabs/string typedef.
+     *
+     * The other `demanglerStringReplaced` test misses this because our headless
+     * demangleMangledLabels invocation sets applySignature=false, suppressing
+     * the placeholder creation that's the whole point of the test. Here we
+     * create the stub by hand to exercise the post-import scenario.
+     */
+    @Test
+    fun demanglerStringReplacedAfterStubInjection() {
+        assumeTrue(binaryName == "bouniafbouniaf.exe" || binaryName == "bouniaf.exe")
+        // Stub creation must happen inside a transaction.
+        program.runTransaction("inject-demangler-stub") {
+            val cat = program.dataTypeManager.createCategory(ghidra.program.model.data.CategoryPath("/Demangler/std"))
+            cat.addDataType(
+                ghidra.program.model.data.StructureDataType(
+                    ghidra.program.model.data.CategoryPath("/Demangler/std"),
+                    "string",
+                    0,
+                    program.dataTypeManager,
+                ),
+                ghidra.program.model.data.DataTypeConflictHandler.KEEP_HANDLER,
+            )
+        }
+        val stubExists = program.dataTypeManager.getDataType(
+            ghidra.program.model.data.CategoryPath("/Demangler/std"),
+            "string",
+        )
+        Assertions.assertNotNull(stubExists, "precondition: injected stub should exist")
+
+        // Re-run DemanglerReplacer.
+        program.runTransaction("rerun-demangler-replacer") {
+            ghistabs.importer.DemanglerReplacer(context).run()
+        }
+
+        val stubAfter = program.dataTypeManager.getDataType(
+            ghidra.program.model.data.CategoryPath("/Demangler/std"),
+            "string",
+        )
+        Assertions.assertNull(
+            stubAfter,
+            "/Demangler/std/string should have been replaced; still in DTM as $stubAfter",
+        )
+    }
+
     @Test
     fun atLeastOneVtableStructApplied() {
 //        assumeTrue(binaryName == "bouniafbouniaf.exe", "Skipping: vtable layout checks specific to bouniafbouniaf.exe")
