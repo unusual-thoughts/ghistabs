@@ -416,6 +416,12 @@ class TypeRegistry(
                 recordTruncation(ast, ast.body.sizeBytes.toInt(), sz)
                 StructureDataType(category, ast.ghidraName, sz, dtm)
             }
+            // Enum-bodied placeholder must be an EnumDataType — otherwise the
+            // empty StructureDataType leaks into the DTM via replaceAtOffset's
+            // auto-register-on-use, then collides with the real Enum when its
+            // winner registers under the same (category, name) slot. Field
+            // consumers end up holding the zero-length Structure reference.
+            is TypeDecl.Enum -> EnumDataType(category, ast.ghidraName, 4, dtm)
             else -> StructureDataType(category, ast.ghidraName, 0, dtm)
         }
         diagnostics.recordPlaceholder(ast.nameOrId, category.toString(), reason)
