@@ -19,6 +19,7 @@ data class ReplacementRecord(
     val pathName: String, // e.g. "/proj/Foo"
     val simpleName: String,
     val dependsOnPathNames: Set<String>, // simulated dependsOn lookup
+    val isTypedef: Boolean = false, // typedef replacements can't cycle on themselves
 )
 
 data class ReplaceOp(val stubPath: String, val replacementPath: String)
@@ -57,7 +58,16 @@ class DemanglerReplacer(private val ctx: ImportContext<*>) : DiagnosticSink by c
                     continue
                 }
 
-                if (stub.pathName in replacement.dependsOnPathNames) {
+                // Cycle guard: avoid Foo→Bar where Bar transitively contains
+                // Foo (would create a real self-containment after
+                // replaceDataType). Doesn't apply to TypeDef replacements:
+                // a typedef aliasing a struct that references the stub
+                // (e.g. `std::string → basic_string<…>::operator=` taking
+                // `std::string&`) is the normal C++ recursive type pattern
+                // — replaceDataType rewrites those references to point at
+                // the typedef, leaving a benign typedef→struct→typedef
+                // graph that Ghidra handles correctly.
+                if (!replacement.isTypedef && stub.pathName in replacement.dependsOnPathNames) {
                     skips.add(Skip.WouldBeCycle(stub.simpleName))
                     continue
                 }
@@ -100,15 +110,30 @@ class DemanglerReplacer(private val ctx: ImportContext<*>) : DiagnosticSink by c
                 stubDtByPath[dt.pathName] = dt
                 continue
             }
+        }
 
-            // Collect potential replacements (non-stub structures with content).
-            val candidates = nameIndex[dt.name] ?: continue
-            val candidate = if (candidates.size == 1) candidates[0] else null
-            if (candidate == null || candidate !== dt) continue
-
-            // Collect dependencies for cycle detection
-            val deps = collectDependsOnPaths(dt)
-            replacements[dt.name] = ReplacementRecord(dt.pathName, dt.name, deps) to dt
+        // For each stub, find the best candidate among same-simple-name
+        // DataTypes. With multiple candidates (e.g. `/string` built-in +
+        // `/stabs/string` typedef + `/std/string` Structure), the old
+        // size-must-be-1 rule rejected everything; instead prefer the
+        // candidate whose path matches the stub's namespace path with
+        // `/Demangler` stripped (so `/Demangler/std/string → /std/string`).
+        // Fallback ranking: TypeDef > Structure > other.
+        for (stub in stubs) {
+            val candidates = nameIndex[stub.simpleName] ?: continue
+            val preferredPath = stub.pathName.removePrefix("/Demangler")
+            val candidate = candidates.firstOrNull { it.pathName == preferredPath }
+                ?: candidates.firstOrNull { it is TypeDef }
+                ?: candidates.firstOrNull { it is Structure }
+                ?: candidates.singleOrNull()
+                ?: continue
+            val deps = collectDependsOnPaths(candidate)
+            replacements[stub.simpleName] = ReplacementRecord(
+                candidate.pathName,
+                candidate.name,
+                deps,
+                candidate is TypeDef,
+            ) to candidate
         }
 
         // Use pure core to decide which ops are safe
