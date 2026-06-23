@@ -14,9 +14,13 @@ import ghistabs.diagnose.defaultContext
 import ghistabs.harvest.Harvest
 import ghistabs.harvest.Harvester
 import ghistabs.harvest.OpenFunction
+import ghistabs.materialize.BuiltinTable
+import ghistabs.parse.AggrKind
+import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.StabReader
 import ghistabs.parse.StabType
 import ghistabs.parse.SymbolDecl
+import ghistabs.parse.TypeDecl
 import ghistabs.runTransaction
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
@@ -220,75 +224,82 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             buckets[entry.line] += "$indent// $lineTag @ $addrHex${codeUnit?.let { ": $it" } ?: ""}"
         }
 
-        // Type declaration markers — N_LSYM's `desc` carries the line
-        // where a typedef/tag/local-type was declared. Emit a one-line
-        // comment so the skeleton shows which types this file (or the
-        // header it captures) declares.
-        val typeDecls = harvest.typeAsts.values
+        fun lineTag(line: Int) = "// L" + line.toString().padStart(4)
+        fun indentFor(line: Int) = if (inFunction(line)) "    " else ""
+
+        // Type declarations — N_LSYM `:T`/`:t` `desc` carries the line
+        // where a typedef / struct tag was declared. Render as C-ish
+        // declarations: `struct X { … };` for tags, `typedef T Y;` for
+        // aliases. Same alias name repeated at the same line (e.g.
+        // `iterator` materialised from multiple template instantiations)
+        // is deduped on (line, body-shape, name).
+        data class TypeDeclKey(val line: Int, val name: String, val bodyKind: String)
+
+        val seenTypeDecls = mutableSetOf<TypeDeclKey>()
+        for (ast in harvest.typeAsts.values
             .filter { it.declSourceFile == source && it.declLine in 1..maxLine && it.name != null }
-            .groupBy { it.declLine }
-        for ((line, asts) in typeDecls) {
-            val names = asts.mapNotNull { it.name }.distinct().take(3).joinToString(", ")
-            val lineTag = "L" + line.toString().padStart(4)
-            buckets[line] += "// $lineTag : typedef $names"
+            .sortedBy { it.declLine }) {
+            val line = ast.declLine
+            val name = ast.name ?: continue
+            val key = TypeDeclKey(line, name, ast.body::class.simpleName ?: "")
+            if (!seenTypeDecls.add(key)) continue
+            val decl = when (val b = ast.body) {
+                is TypeDecl.Struct -> "${kindKeyword(b.kind)} $name; /* ${b.sizeBytes} bytes */"
+                is TypeDecl.Enum -> "enum $name; /* ${b.members.size} members */"
+                else -> "typedef ${renderType(b, harvest)} $name;"
+            }
+            buckets[line] += "${indentFor(line)}$decl  ${lineTag(line)}"
         }
 
         // Param + local + global declarations — N_PSYM / N_RSYM /
-        // N_GSYM / N_LCSYM / N_STSYM desc. Cluster per (line, kind) and
-        // dedupe by name so multiple inline methods sharing one
-        // declaration line don't pile up identical comments. `this` is
-        // filtered out — every method's first reg local is `this`, no
-        // signal in seeing it 12× per line.
-        data class DeclKey(val line: Int, val kind: String)
+        // N_GSYM / N_LCSYM / N_STSYM `desc`. Dedupe per (line, name)
+        // because the same template instantiated many times produces
+        // duplicate `__val` / `__first` entries at the same header line.
+        // `this` is filtered — no signal in seeing it 12× per line.
+        data class DeclKey(val line: Int, val name: String)
 
-        val declNames = mutableMapOf<DeclKey, MutableSet<String>>()
-        fun add(line: Int, kind: String, name: String) {
+        val seenDecls = mutableSetOf<DeclKey>()
+        fun emitDecl(line: Int, name: String, type: TypeDecl<GlobalTypeId>, suffix: String) {
             if (line !in 1..maxLine) return
             if (name == "this") return
-            declNames.getOrPut(DeclKey(line, kind)) { mutableSetOf() } += name
+            if (!seenDecls.add(DeclKey(line, name))) return
+            val rendered = "${renderType(type, harvest)} $name;"
+            buckets[line] += "${indentFor(line)}$rendered  ${lineTag(line)} $suffix"
         }
         for (f in rawFuncs) {
             for (p in f.params) {
                 if (p.sourceFile != source) continue
-                val name = (p.body as? SymbolDecl.StackParam)?.name
-                    ?: (p.body as? SymbolDecl.RegParam)?.name
-                    ?: continue
-                add(p.declLine, "param", name)
+                when (val d = p.body) {
+                    is SymbolDecl.StackParam -> emitDecl(p.declLine, d.name, d.type, "(param)")
+                    is SymbolDecl.RegParam -> emitDecl(p.declLine, d.name, d.type, "(reg param)")
+                    else -> {}
+                }
             }
             for (l in f.locals) {
                 if (l.sourceFile != source) continue
-                val (kind, name) = when (val d = l.body) {
-                    is SymbolDecl.RegLocal -> "reg local" to d.name
-                    is SymbolDecl.StackLocal -> "stack local" to d.name
-                    else -> continue
+                when (val d = l.body) {
+                    is SymbolDecl.RegLocal -> emitDecl(l.declLine, d.name, d.type, "(reg local)")
+                    is SymbolDecl.StackLocal -> emitDecl(l.declLine, d.name, d.type, "(stack local)")
+                    else -> {}
                 }
-                add(l.declLine, kind, name)
             }
         }
         for ((_, syms) in harvest.symbolsByCu) {
             for (s in syms) {
                 if (s.sourceFile != source) continue
-                val name = when (val d = s.body) {
-                    is SymbolDecl.Global -> d.name
-                    is SymbolDecl.StaticVar -> d.name
-                    else -> continue
+                val suffix = when (s.recordType) {
+                    StabType.N_GSYM -> "(global)"
+                    StabType.N_LCSYM -> "(.bss static)"
+                    StabType.N_STSYM -> "(.data static)"
+                    StabType.N_ROSYM -> "(.rodata static)"
+                    else -> "(symbol)"
                 }
-                val kind = when (s.recordType) {
-                    StabType.N_GSYM -> "global"
-                    StabType.N_LCSYM -> ".bss static"
-                    StabType.N_STSYM -> ".data static"
-                    StabType.N_ROSYM -> ".rodata static"
-                    else -> "symbol"
+                when (val d = s.body) {
+                    is SymbolDecl.Global -> emitDecl(s.declLine, d.name, d.type, suffix)
+                    is SymbolDecl.StaticVar -> emitDecl(s.declLine, d.name, d.type, suffix)
+                    else -> {}
                 }
-                add(s.declLine, kind, name)
             }
-        }
-        for ((key, names) in declNames) {
-            val lineTag = "L" + key.line.toString().padStart(4)
-            val joined = names.take(6).joinToString(", ") +
-                if (names.size > 6) ", … (${names.size - 6} more)" else ""
-            val indent = if (inFunction(key.line)) "    " else ""
-            buckets[key.line] += "$indent// $lineTag : ${key.kind} $joined"
         }
 
         // Function openers at startLine. Tag with the source line so
@@ -310,27 +321,25 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             append("// Auto-generated from stabs N_SOL / N_SLINE / N_FUN records.\n")
             append("// Source: $source\n")
             append("// Functions: ${funcs.size}, line entries: ${lines.size}\n")
-            // Header is N lines of preamble; pad the rest with blanks
-            // so source-line N lands on output-line N + preamble.
-            val preambleLines = 3
-            repeat(preambleLines) { /* preamble lines already appended */ }
+            // Each item in a bucket goes on its own output line so
+            // typedefs / declarations read as real C, not a single
+            // 700-char run-on. To keep `// Lnnn` ≈ output-line N as
+            // closely as possible, overflow lines are absorbed into the
+            // next runs of blank source lines: a bucket with 5 items at
+            // source-line 42 followed by 8 blank source lines emits
+            // those 5 items then only 4 blanks (5−1=4 absorbed),
+            // landing source-line 50 back on output-line 50.
+            var debt = 0
             for (line in 1..maxLine) {
                 val bucket = buckets[line]
                 if (bucket.isEmpty()) {
-                    append('\n')
-                } else if (bucket.size == 1) {
-                    append(bucket.single())
-                    append('\n')
+                    if (debt > 0) debt-- else append('\n')
                 } else {
-                    // Multiple items on one line: declaration + first
-                    // comment, then continuation indented below so the
-                    // PRIMARY line slot stays single-line.
-                    append(bucket.first())
-                    for (extra in bucket.drop(1)) {
-                        append("  ")
-                        append(extra)
+                    for (item in bucket) {
+                        append(item)
+                        append('\n')
                     }
-                    append('\n')
+                    debt += bucket.size - 1
                 }
             }
         }
@@ -375,6 +384,64 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
      * leading `__*call ` token and rebuild from the demangler's name +
      * params instead.
      */
+    private fun kindKeyword(k: AggrKind) = when (k) {
+        AggrKind.STRUCT -> "struct"
+        AggrKind.UNION -> "union"
+        AggrKind.CLASS -> "class"
+        AggrKind.ENUM -> "enum"
+    }
+
+    /**
+     * Best-effort C-style rendering of a [TypeDecl]. Primitives go
+     * through [BuiltinTable] so they come out as `int` / `uchar` /
+     * `double` etc; named composite types are looked up by id in
+     * [Harvest.typeAsts]. Depth-capped because cyclic types (gcc's
+     * recursive `std::basic_string<…>::operator=` taking
+     * `std::string&`) would otherwise loop.
+     */
+    private fun renderType(t: TypeDecl<GlobalTypeId>, harvest: Harvest, depth: Int = 0): String {
+        if (depth > 6) return "…"
+        return when (t) {
+            is TypeDecl.Ref -> {
+                // Named TypeAst → use the name. Anonymous → recurse into
+                // its body so the user sees `int *` rather than a raw
+                // GlobalTypeId. Unresolved (cross-CU dangling Ref) →
+                // fall back to the id stringification.
+                val ast = harvest.typeAsts[t.id]
+                ast?.name ?: ast?.let { renderType(it.body, harvest, depth + 1) } ?: "T_${t.id}"
+            }
+            is TypeDecl.Pointer -> "${renderType(t.pointee, harvest, depth + 1)} *"
+            is TypeDecl.Reference -> "${renderType(t.referent, harvest, depth + 1)} &"
+            is TypeDecl.Const -> "${renderType(t.inner, harvest, depth + 1)} const"
+            is TypeDecl.Volatile -> "${renderType(t.inner, harvest, depth + 1)} volatile"
+            is TypeDecl.Array -> "${renderType(t.element, harvest, depth + 1)}[${t.length ?: ""}]"
+            is TypeDecl.Builtin,
+            is TypeDecl.Range,
+            is TypeDecl.Float,
+            is TypeDecl.Complex,
+            is TypeDecl.WithSizeAttr,
+            -> BuiltinTable.resolve(t)?.name ?: t::class.simpleName?.lowercase() ?: "?"
+
+            is TypeDecl.XRef -> "${kindKeyword(t.kind)} ${t.tagName}"
+            is TypeDecl.Struct -> kindKeyword(t.kind)
+            is TypeDecl.Enum -> "enum"
+            is TypeDecl.FunctionT -> {
+                val ret = renderType(t.ret, harvest, depth + 1)
+                val params = t.params.joinToString(", ") { renderType(it, harvest, depth + 1) }
+                "$ret($params)"
+            }
+
+            is TypeDecl.Method -> {
+                val cls = renderType(t.cls, harvest, depth + 1)
+                val ret = renderType(t.ret, harvest, depth + 1)
+                val params = t.params.joinToString(", ") { renderType(it, harvest, depth + 1) }
+                "$ret($cls::*)($params)"
+            }
+
+            is TypeDecl.InlineDef -> renderType(t.body, harvest, depth + 1)
+        }
+    }
+
     private fun signatureFor(f: OpenFunction): String {
         val mangled = f.name
         val demangled = runCatching {
