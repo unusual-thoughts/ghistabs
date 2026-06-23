@@ -659,18 +659,22 @@ class TypeRegistry(
                         // fields don't have to clear half of an oversized base.
                         if (gap <= 0) {
                             // Empty base optimization: the base subobject takes
-                            // 0 bytes and is invisible in layout. Resolved-to-
-                            // empty + gap-zero is the normal EBO case (e.g.
-                            // `std::allocator<char>` inside `_Alloc_hider`).
-                            // No degradation — just skip the base insertion
-                            // and let the own fields at offset 0 take that
-                            // slot.
-                            if (dt == null || !dt.isZeroLength) {
-                                diagnostics.recordDegradation(
-                                    "base-skipped-zero-size",
-                                    "${ast.nameOrId}@+$offsetBytes",
-                                    "cannot infer size",
-                                )
+                            // 0 bytes and is invisible in layout. Two flavours:
+                            //  - Resolved-to-empty + gap-zero: the normal EBO
+                            //    case (e.g. `std::allocator<char>` inside
+                            //    `_Alloc_hider`).
+                            //  - Unresolved + gap-zero: the base type is
+                            //    missing from this binary's stabs but the
+                            //    layout shows it contributes 0 bytes — also
+                            //    EBO (overwhelmingly libstdc++ iterator-tag
+                            //    template instantiations like
+                            //    `__normal_iterator<char*, …>` whose base
+                            //    `_Bit_iterator_base` etc. live in headers).
+                            // Either way, no layout-impacting degradation —
+                            // skip the base insertion and let own fields at
+                            // offset 0 take that slot.
+                            if (dt == null) {
+                                diagnostics.inc("base-empty-ebo-inferred")
                             } else {
                                 diagnostics.inc("base-empty-ebo")
                             }
