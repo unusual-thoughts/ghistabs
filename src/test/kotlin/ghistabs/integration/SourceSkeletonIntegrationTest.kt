@@ -147,6 +147,14 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         // Comments at every N_SLINE line (dedupe by address — gcc
         // occasionally emits duplicates after optimisation).
         val seenPerLine = mutableMapOf<Int, MutableSet<Long>>()
+        // For each line, determine whether it falls inside a function's
+        // [startLine, closeLine] range so we can indent it like C++ source.
+        val funcSpan = ranges.map { (f, start, _) ->
+            val close = closeLineByFunc[f] ?: start
+            start..close
+        }
+        fun inFunction(line: Int) = funcSpan.any { line in it }
+
         for (entry in lines) {
             val addrs = seenPerLine.getOrPut(entry.line) { mutableSetOf() }
             if (!addrs.add(entry.addr.address.offset)) continue
@@ -157,7 +165,21 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             // after manual edits is just `grep -nE '// L([0-9]+):' | awk
             // -F: '$1 != $2'`.
             val lineTag = "L" + entry.line.toString().padStart(4)
-            buckets[entry.line] += "// $lineTag @ $addrHex${codeUnit?.let { ": $it" } ?: ""}"
+            val indent = if (inFunction(entry.line)) "    " else ""
+            buckets[entry.line] += "$indent// $lineTag @ $addrHex${codeUnit?.let { ": $it" } ?: ""}"
+        }
+
+        // Type declaration markers — N_LSYM's `desc` carries the line
+        // where a typedef/tag/local-type was declared. Emit a one-line
+        // comment so the skeleton shows which types this file (or the
+        // header it captures) declares.
+        val typeDecls = harvest.typeAsts.values
+            .filter { it.declSourceFile == source && it.declLine in 1..maxLine && it.name != null }
+            .groupBy { it.declLine }
+        for ((line, asts) in typeDecls) {
+            val names = asts.mapNotNull { it.name }.distinct().take(3).joinToString(", ")
+            val lineTag = "L" + line.toString().padStart(4)
+            buckets[line] += "// $lineTag : typedef $names"
         }
 
         // Function openers at startLine. Tag with the source line so
@@ -234,13 +256,23 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         }
     }
 
-    /** Best-effort C++-style declaration from the stab function name. */
+    /**
+     * Best-effort C++-style declaration from the stab function name.
+     * Ghidra's `DemangledFunction.signature` prepends Ghidra's guess at
+     * the calling convention (often the wrong `__rustcall` for Itanium
+     * `_ZN…` symbols because the unified demangler can't distinguish
+     * gcc-Itanium from legacy-Rust at the entry point). Strip any
+     * leading `__*call ` token and rebuild from the demangler's name +
+     * params instead.
+     */
     private fun signatureFor(f: OpenFunction): String {
         val mangled = f.name
         val demangled = runCatching {
             @Suppress("DEPRECATION")
-            ghidra.app.util.demangler.DemanglerUtil.demangle(mangled)?.signature
-        }.getOrNull()
-        return demangled ?: "// $mangled"
+            ghidra.app.util.demangler.DemanglerUtil.demangle(mangled)
+        }.getOrNull() ?: return "// $mangled"
+        val raw = demangled.signature ?: return "// $mangled"
+        // Drop a leading `__<conv>call ` prefix Ghidra inserted.
+        return Regex("""^__[a-zA-Z]+call\s+""").replace(raw, "")
     }
 }
