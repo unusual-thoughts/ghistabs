@@ -296,8 +296,26 @@ class TypeRegistry(
      *   the registry should look up the materialised type by category+name in the DTM
      *   (see ClassBuilder.build for the canonical pattern).
      */
+    /**
+     * gcc/gdb convention (stabsread.c): a TypeAst whose body is `Ref(self.id)`
+     * encodes the void type. Used as the return type for void-returning
+     * methods and as the end-of-args sentinel inside method signatures.
+     */
+    private fun isVoidSelfRef(id: GlobalTypeId): Boolean {
+        val ast = harvest.getType(id) ?: return false
+        val body = ast.body
+        return body is TypeDecl.Ref && body.id == id
+    }
+
     fun dataTypeFor(decl: TypeDecl<GlobalTypeId>): DataType? = when (decl) {
         is TypeDecl.Ref -> tryGetExisting(decl.id)
+            // gcc/gdb convention (stabsread.c): `(N,M)=(N,M)` self-ref
+            // encodes the void type. Used as the return type for
+            // void-returning methods AND as the trailing terminator in
+            // method argument lists. Without this, void self-refs end
+            // up as empty-Structure placeholders that surface as
+            // `[<file>,N]` arg/return types in every C-style ctor.
+            ?: if (isVoidSelfRef(decl.id)) VoidDataType() else null
 
         is TypeDecl.InlineDef -> {
             tryGetExisting(decl.id) ?: dataTypeFor(decl.body)?.apply {
@@ -950,14 +968,20 @@ class TypeRegistry(
 //                )
 //                val gId = fileResolver.globalIdForCu(body.id)
 //                val gId = body.id
-            is TypeDecl.Ref -> tryGetExisting(body.id) ?: run {
-                diagnostics.recordDegradation(
-                    "dangling-ref",
-                    ast.nameOrId,
-                    "ref to ${body.id} from ${ast.source}",
-                )
-                Undefined4DataType.dataType
-            }
+            is TypeDecl.Ref -> tryGetExisting(body.id)
+                ?: if (isVoidSelfRef(body.id) || body.id == ast.id) {
+                    VoidDataType()
+                } else {
+                    null
+                        ?: run {
+                            diagnostics.recordDegradation(
+                                "dangling-ref",
+                                ast.nameOrId,
+                                "ref to ${body.id} from ${ast.source}",
+                            )
+                            Undefined4DataType.dataType
+                        }
+                }
         }
 
     /**
