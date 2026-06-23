@@ -571,13 +571,30 @@ class TypeRegistry(
     }
 
     /**
-     * Build an EnumDataType for an Enum body. `explicitSizeBits` comes from
-     * an enclosing `@s<bits>` attribute (stabs.texinfo §"String Field" — the
-     * standard way to override the architecture's default enum size). When
-     * absent, derive the smallest power-of-two byte width that fits every
-     * member's value: C++ `bool` is emitted as `eFalse:0,True:1,;` and the
-     * C++ ABI guarantees sizeof(bool)==1, so a hard-coded 4 would overflow
-     * any field declared with an 8-bit slot.
+     * Build an EnumDataType for an Enum body.
+     *
+     * Sizing follows GDB (`gdb/stabsread.c::read_enum_type`, line ~6077):
+     *
+     *     type->set_length (gdbarch_int_bit (gdbarch) / HOST_CHAR_BIT);
+     *
+     * — i.e. `sizeof(int)` on the target architecture. No
+     * member-value-fitting fallback; no bool special case. The previous
+     * "smallest power-of-two width that fits every member" heuristic
+     * was wrong in both directions: `enum EnumInstToken { … }` with
+     * single-byte values came out as a 1-byte enum even though its
+     * fields are 4-byte slots, and any plain enum gcc emits without an
+     * `@s` attribute would be wrongly narrowed.
+     *
+     * `bool` does NOT reach this path — gcc emits it as Builtin slot
+     * -16 (`bool:t(N)=@s8;-16;`), which goes through [BuiltinTable] /
+     * the WithSizeAttr+Builtin handler. The stale comment that claimed
+     * "C++ bool is emitted as eFalse:0,True:1,;" predates the slot-16
+     * convention and doesn't match anything gcc-3.x or gcc-12 produces
+     * today.
+     *
+     * The only override is gcc's explicit `@s<bits>` attribute
+     * (`-fshort-enums` and similar), captured by [explicitSizeBits] —
+     * stabs.texinfo §"String Field" is the spec for that channel.
      */
     private fun materialiseEnum(
         ast: TypeAst,
@@ -585,20 +602,7 @@ class TypeRegistry(
         body: TypeDecl.Enum<GlobalTypeId>,
         explicitSizeBits: Int?,
     ): DataType {
-        val sizeBytes = if (explicitSizeBits != null) {
-            (explicitSizeBits + 7) / 8
-        } else {
-            val values = body.members.map { it.second }
-            val maxV = values.maxOrNull() ?: 0
-            val minV = values.minOrNull() ?: 0
-            when {
-                minV >= Byte.MIN_VALUE && maxV <= Byte.MAX_VALUE -> 1
-                minV >= 0 && maxV <= 0xFF -> 1
-                minV >= Short.MIN_VALUE && maxV <= Short.MAX_VALUE -> 2
-                minV >= 0 && maxV <= 0xFFFF -> 2
-                else -> 4
-            }
-        }
+        val sizeBytes = if (explicitSizeBits != null) (explicitSizeBits + 7) / 8 else 4
         val e = EnumDataType(category, ast.ghidraName, sizeBytes, dtm)
         for ((mname, mval) in body.members) e.add(mname, mval)
         return e
