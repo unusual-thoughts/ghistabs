@@ -103,39 +103,38 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     }
 
     private fun renderSkeleton(source: String, harvest: Harvest, program: Program): String {
-        val funcs = harvest.openFunctions
-            .filter { it.sourceFile == source && it.startLine > 0 }
-            .sortedBy { it.startLine }
+        val rawFuncs = harvest.openFunctions.filter { it.sourceFile == source }
         val lines = harvest.lineEntries[source].orEmpty()
-        if (funcs.isEmpty() && lines.isEmpty()) return ""
+        if (rawFuncs.isEmpty() && lines.isEmpty()) return ""
 
-        // Per-function end line: max N_SLINE line whose address falls
-        // inside the function's address range. Addresses are absolute
-        // (the harvester adds the function's start address to each
-        // N_SLINE's function-relative value).
-        data class FuncRange(val func: OpenFunction, val endLine: Int)
-        val ranges = funcs.map { f ->
+        // gcc 12 emits N_FUN with desc=0 for every function (no source
+        // line annotation), so OpenFunction.startLine is 0. Approximate
+        // by the smallest N_SLINE line inside the function's address
+        // range; skip the function entirely if it has no N_SLINE
+        // coverage either.
+        data class FuncRange(val func: OpenFunction, val startLine: Int, val endLine: Int)
+        val ranges = rawFuncs.mapNotNull { f ->
             val lo = f.addr.address.offset
             val hi = lo + f.sizeBytes
-            val end = lines
-                .filter { it.addr.address.offset in lo until hi }
-                .maxOfOrNull { it.line }
-                ?: f.startLine
-            FuncRange(f, end)
-        }
+            val inside = lines.filter { it.addr.address.offset in lo until hi }
+            val start = f.startLine.takeIf { it > 0 } ?: inside.minOfOrNull { it.line } ?: return@mapNotNull null
+            val end = inside.maxOfOrNull { it.line } ?: start
+            FuncRange(f, start, end)
+        }.sortedBy { it.startLine }
+        val funcs = ranges.map { it.func }
         // Compute close-brace target line per function. Default: endLine+1
         // (closing braces usually live on the line after the last
         // statement). If that collides with a sibling function's start
         // line, put the close on endLine.
-        val startLines = funcs.map { it.startLine }.toSet()
-        val closeLineByFunc = ranges.associate { (f, end) ->
+        val startLines = ranges.map { it.startLine }.toSet()
+        val closeLineByFunc = ranges.associate { (f, _, end) ->
             f to if ((end + 1) in startLines) end else end + 1
         }
 
         val maxLine = sequenceOf(
             closeLineByFunc.values.maxOrNull() ?: 0,
             lines.maxOfOrNull { it.line } ?: 0,
-            funcs.maxOfOrNull { it.startLine } ?: 0,
+            ranges.maxOfOrNull { it.startLine } ?: 0,
             ranges.maxOfOrNull { it.endLine } ?: 0,
         ).max()
         if (maxLine == 0) return ""
@@ -163,13 +162,13 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
 
         // Function openers at startLine. Tag with the source line so
         // alignment drift after edits is immediately obvious.
-        for ((f, _) in ranges) {
+        for ((f, startLine, _) in ranges) {
             val sig = signatureFor(f)
-            val lineTag = "L" + f.startLine.toString().padStart(4)
-            buckets[f.startLine].add(0, "$sig {  /* $lineTag — opens ${f.decl.name} */")
+            val lineTag = "L" + startLine.toString().padStart(4)
+            buckets[startLine].add(0, "$sig {  /* $lineTag — opens ${f.decl.name} */")
         }
         // Function closers at chosen close line.
-        for ((f, _) in ranges) {
+        for ((f, _, _) in ranges) {
             val closeLine = closeLineByFunc[f] ?: continue
             if (closeLine !in 1..maxLine) continue
             val lineTag = "L" + closeLine.toString().padStart(4)
