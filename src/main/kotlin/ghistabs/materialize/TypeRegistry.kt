@@ -307,13 +307,13 @@ class TypeRegistry(
 
         is TypeDecl.Pointer -> PointerDataType(
             dataTypeFor(decl.pointee) ?: undef("pointer-pointee", "(anon)", decl.pointee),
-            4,
+            dtm.dataOrganization.pointerSize,
             dtm,
         )
 
         is TypeDecl.Reference -> PointerDataType(
             dataTypeFor(decl.referent) ?: undef("reference-referent", "(anon)", decl.referent),
-            4,
+            dtm.dataOrganization.pointerSize,
             dtm,
         )
 
@@ -557,13 +557,13 @@ class TypeRegistry(
         when (val body = ast.body) {
             is TypeDecl.Pointer -> PointerDataType(
                 dataTypeFor(body.pointee) ?: undef("body-pointer-pointee", ast.nameOrId, body.pointee),
-                4,
+                dtm.dataOrganization.pointerSize,
                 dtm,
             )
 
             is TypeDecl.Reference -> PointerDataType(
                 dataTypeFor(body.referent) ?: undef("body-reference-referent", ast.nameOrId, body.referent),
-                4,
+                dtm.dataOrganization.pointerSize,
                 dtm,
             )
 
