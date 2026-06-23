@@ -242,18 +242,29 @@ class TypeRegistry(
                 .filter { it.name != null && !it.body.isXRefTarget }
                 .groupBy { it.ghidraName }
                 .forEach { (ghidraName, asts) ->
-                    val body = asts.first().body
-                    // BuiltinTable handles primitives (Range/Builtin/Float/…);
-                    // dataTypeFor handles aliases to aggregates (InlineDef→XRef
-                    // to basic_string, Pointer→…, etc.) so e.g.
-                    // `string:t(N,M)=(P,Q)=xsbasic_string<…>` materialises as
-                    // a TypedefDataType("string" → basic_string<…>) the
-                    // DemanglerReplacer can use as a candidate for
-                    // `/Demangler/string`.
-                    val resolved = BuiltinTable.resolve(body) ?: dataTypeFor(body) ?: return@forEach
-                    val category = if (BuiltinTable.resolve(body) != null) CategoryPath.ROOT else CategoryPath("/stabs")
-                    val typedef = register(TypedefDataType(category, ghidraName, resolved, dtm))
-                    for (ast in asts) byId.putIfAbsent(ast.id, typedef)
+                    // Per-ast resolution: each CU's typedef has its own id and
+                    // body — e.g. one CU emits `bool:t = _Bool` (1 byte) and
+                    // another emits `bool:t = int` (4 bytes). Routing every
+                    // ast.id to one shared typedef would silently substitute
+                    // the wrong size at field-fill time and produce
+                    // `bool.conflict` collisions in the DTM. Resolve each
+                    // ast's body individually for byId.
+                    for (ast in asts) {
+                        val resolved = BuiltinTable.resolve(ast.body) ?: dataTypeFor(ast.body) ?: continue
+                        byId.putIfAbsent(ast.id, resolved)
+                    }
+                    // Register one shared typedef under /stabs (or root for
+                    // primitives) so DemanglerReplacer can find it as a
+                    // candidate for `/Demangler/<ghidraName>`. Use the first
+                    // ast's body for the alias target.
+                    val firstBody = asts.first().body
+                    val typedefTarget = BuiltinTable.resolve(firstBody) ?: dataTypeFor(firstBody) ?: return@forEach
+                    val category = if (BuiltinTable.resolve(firstBody) != null) {
+                        CategoryPath.ROOT
+                    } else {
+                        CategoryPath("/stabs")
+                    }
+                    register(TypedefDataType(category, ghidraName, typedefTarget, dtm))
                 }
 
             // Non-registerable top-level typeAsts (XRef body, FunctionT, Method, …)
@@ -549,7 +560,22 @@ class TypeRegistry(
             }
 
             is TypeDecl.Enum -> {
-                val sizeBytes = 4 // GCC default
+                // Pick the smallest power-of-two byte width that fits every
+                // member's value. gcc's stab default is 4 bytes for plain
+                // enums, but C++ `bool` is emitted as `eFalse:0,True:1,;` —
+                // sizeof(bool)==1 by the C++ ABI, so a 4-byte enum overflows
+                // any field declared with an 8-bit slot (every
+                // bool-as-struct-field in box2d). Size from the values.
+                val values = body.members.map { it.second }
+                val maxV = values.maxOrNull() ?: 0
+                val minV = values.minOrNull() ?: 0
+                val sizeBytes = when {
+                    minV >= Byte.MIN_VALUE && maxV <= Byte.MAX_VALUE -> 1
+                    minV >= 0 && maxV <= 0xFF -> 1
+                    minV >= Short.MIN_VALUE && maxV <= Short.MAX_VALUE -> 2
+                    minV >= 0 && maxV <= 0xFFFF -> 2
+                    else -> 4
+                }
                 val e = EnumDataType(category, ast.ghidraName, sizeBytes, dtm)
                 for ((mname, mval) in body.members) {
                     e.add(mname, mval)
