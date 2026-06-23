@@ -1,19 +1,12 @@
 # TODO
 
-Last triaged: 2026-06-23. All entries verified against the current
-xapasmcsr/xmltest/box2d/box2d_tests/appquery degradation dumps in
-`build/degradations/` and the regression test suite (all passing as of
-commit `39a01dd`).
+Last triaged: 2026-06-23 (post-`af463a5`). All entries verified
+against the current degradation dumps in `build/degradations/` and
+the regression test suite (24 baseline passing).
 
 ## Open
 
 ### Real, fixable
-
-- [ ] **DemanglerReplacer FIXME** (DemanglerReplacer.kt:38) — replace
-  the simple-name + heuristic candidate lookup with an authoritative
-  `byCanonicalKey` query (or `TypeRegistry.findByName`). The current
-  prefer-by-path/TypeDef-then-Structure rule handles `/Demangler/std/string`
-  but is still a guess.
 
 - [ ] **Pattern B: anonymous Pointer/Array to never-bound id** (~1000
   entries on box2d, 24 on xmltest, 5 on box2d_tests) — gcc-12 emits
@@ -64,10 +57,11 @@ commit `39a01dd`).
 
 ### Admin / housekeeping
 
-- [ ] Take N_SO "directory" entries into account (two N_SO in a row →
-  the first is the directory of the header; store it on `CUSource`).
-- [ ] Stop copying test resources to `build/`.
 - [ ] JUnit 4 vs 5 cleanup (IntelliJ complains).
+- [ ] **investigate N_RSYM vs N_LSYM register local semantics** — when
+  parsing N_RSYM records, determine how register-based locals differ
+  from N_LSYM-declared stack locals beyond the storage class; currently
+  both go through the same applyLocal path.
 - [ ] Log capture in tests — consider `Msg.debug/info/warn/error` over
   `MessageLog`.
 - [ ] **Purge forbidden words from git history**:
@@ -105,6 +99,26 @@ commit `39a01dd`).
 
 ### Session 2026-06-23
 
+- [x] **DemanglerReplacer FIXME → authoritative TypeRegistry lookup** —
+  `c3eabde` + `1a1b51e`. The "candidates.size == 1 or skip" heuristic
+  replaced with `TypeRegistry.findByName(simpleName, preferredCategory)`
+  consulting `byCanonicalKey` (Struct/Enum) and the new
+  `extrasByName` map (typedefs, vftable/vtable composites). Preferred
+  category derived from the stub's path with `/Demangler` stripped
+  (`/Demangler/std/string` prefers `/std`). DTM-walk fallback dropped
+  after instrumentation confirmed 0 hits across all fixtures.
+- [x] **Demangler-string regression test against real registry** —
+  `814342c`. `ImportContext.typeRegistry` now exposes the populated
+  registry so the post-import injection test can drive a real
+  DemanglerReplacer without re-running materialiseAll (would create
+  `.conflict` artifacts that race other tests under
+  `@Execution(CONCURRENT)`).
+- [x] **Build-resource hygiene** — `af463a5`. `src/test/resources/`
+  now holds only manual inputs (binaries, baselines, corpus,
+  junit-platform.properties); test-generated dumps (records, logs,
+  harvest.afters/.concurrents/harvests) moved to
+  `build/test-output/`. `processTestResources` excludes `binaries/**`
+  so the build-dir resource copy is 3.2M instead of 563M.
 - [x] **Register-stored locals (N_RSYM)** — `39a01dd`. Previously
   `regparam-deferred` no-op. Now maps gcc dbx register number to Ghidra
   `Register` via per-arch table (i386 0..7 = eax..edi; x86_64 0..15 =

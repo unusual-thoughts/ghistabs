@@ -37,6 +37,19 @@ class Harvester(
     private var currentCu: SourceFile.CUSource? = null
     private var currentFunction: OpenFunction? = null
 
+    /**
+     * Pending compilation-directory from a trailing-slash N_SO record.
+     * Per stabs.texinfo §"Source Files": gcc / SunOS /bin/cc emit two
+     * N_SO records back-to-back — the first is the compilation directory
+     * (ends in `/`), the second is the source filename. We pair them
+     * here so the filename's CUSource carries the directory. cfront may
+     * emit additional N_SO entries for nonexistent source files after
+     * the real one; they "contain no useful information" per the spec,
+     * so we ignore further N_SOs until the empty-name end-of-CU marker.
+     */
+    private var pendingDirectory: String? = null
+    private var currentCuFinalised = false
+
     // Allocate ONE shared HeaderRegistry for all per-CU IncludeContext instances.
     // This ensures cross-CU dedup: two CUs with the same (filename, checksum) BINCL
     // get the SAME HeaderFile instance via the shared registry.
@@ -48,13 +61,24 @@ class Harvester(
     internal fun preSeedHeaders(records: List<StabRecord>) {
         for (rec in records) {
             when (rec.type) {
+                StabType.N_SO if (rec.name.endsWith('/')) -> {
+                    pendingDirectory = rec.name
+                    currentCuFinalised = false
+                }
+
                 StabType.N_SO if (rec.name.isNotEmpty()) -> {
-                    currentCu = SourceFile.CUSource(rec.name)
-                    includesByFile[rec.name] = IncludeContext(SourceFile.CUSource(rec.name), this, sharedHeaderRegistry)
+                    if (currentCuFinalised) continue // cfront extra N_SO — ignore
+                    val cu = SourceFile.CUSource(rec.name, pendingDirectory)
+                    currentCu = cu
+                    includesByFile[rec.name] = IncludeContext(cu, this, sharedHeaderRegistry)
+                    pendingDirectory = null
+                    currentCuFinalised = true
                 }
 
                 StabType.N_SO -> {
                     currentCu = null
+                    pendingDirectory = null
+                    currentCuFinalised = false
                 }
 
                 StabType.N_BINCL -> currentInclude?.beginInclude(rec.name, rec.value)
@@ -75,12 +99,20 @@ class Harvester(
             monitor.incrementProgress(1)
 
             when (rec.type) {
+                StabType.N_SO if (rec.name.endsWith('/')) -> {
+                    pendingDirectory = rec.name
+                    currentCuFinalised = false
+                }
+
                 StabType.N_SO if (rec.name.isNotEmpty()) -> {
-                    currentCu = SourceFile.CUSource(rec.name)
+                    if (currentCuFinalised) continue // cfront extra N_SO — ignore
+                    currentCu = SourceFile.CUSource(rec.name, pendingDirectory)
+                    pendingDirectory = null
+                    currentCuFinalised = true
                     if (rec.value != 0L) {
                         log(
                             "file-start",
-                            "${rec.name} starts here",
+                            "${currentCu?.directory.orEmpty()}${rec.name} starts here",
                             Level.DEBUG,
                             address = resolver.buildAddress(rec.value),
                         )
@@ -97,6 +129,8 @@ class Harvester(
                         )
                     }
                     currentCu = null
+                    pendingDirectory = null
+                    currentCuFinalised = false
                 }
 
                 // line context
