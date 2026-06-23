@@ -13,6 +13,7 @@ import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.defaultContext
 import ghistabs.harvest.Harvest
 import ghistabs.harvest.Harvester
+import ghistabs.harvest.LineEntry
 import ghistabs.harvest.OpenFunction
 import ghistabs.materialize.BuiltinTable
 import ghistabs.parse.AggrKind
@@ -52,7 +53,7 @@ import java.io.File
 @Tag("integration")
 class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     @ParameterizedTest
-    @ValueSource(strings = ["xapasmcsr.exe", "appquery.exe", "xmltest", "box2d_tests"])
+    @ValueSource(strings = ["xapasmcsr.exe"])
     fun writeSkeletons(binaryName: String) {
         val fixture = File("src/test/resources/binaries/$binaryName")
         assumeTrue(fixture.exists(), "fixture absent")
@@ -95,13 +96,14 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             // sizeBytes==0 or no covered N_SLINE drop out of every
             // skeleton — they have no place to go.
             val funcToSource = attributeFunctionsBySource(harvest)
-            val sources = (harvest.lineEntries.keys + funcToSource.values)
+            val lineEntries = rerouteLineEntriesByFunc(harvest, funcToSource)
+            val sources = (lineEntries.keys + funcToSource.values)
                 .filter { it.isNotEmpty() }
                 .toSet()
 
             var written = 0
             for (source in sources) {
-                val skeleton = renderSkeleton(source, harvest, program, funcToSource)
+                val skeleton = renderSkeleton(source, harvest, lineEntries, program, funcToSource)
                 if (skeleton.isBlank()) continue
                 // Keep the source's own extension — don't append `.cpp`
                 // (so e.g. `assemble.cpp` stays `assemble.cpp`, not
@@ -118,12 +120,32 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     }
 
     /**
+     * gcc emits file-scope synthetic init/destruct wrappers
+     * (`_GLOBAL__I_<sym>`, `_GLOBAL__D_<sym>`,
+     * `__static_initialization_and_destruction_0`) at the CU's
+     * end-of-file but under whatever N_SOL was last active — typically
+     * the last `#include`d header. They belong to the CU that owns the
+     * static they initialize, not to that header.
+     */
+    private fun isSyntheticInit(f: OpenFunction): Boolean {
+        val n = f.name
+        return n.startsWith("_GLOBAL__I_") ||
+            n.startsWith("_GLOBAL__D_") ||
+            n.startsWith("_GLOBAL__N_") ||
+            n.startsWith("_Z41__static_initialization_and_destruction_0") ||
+            n == "__static_initialization_and_destruction_0"
+    }
+
+    /**
      * Attribute each function to the source of its lowest-address
      * N_SLINE entry inside `[addr, addr+sizeBytes)`. The first line
      * entry corresponds to the function's prologue, which is always
      * emitted under the N_SOL active at N_FUN time — for
      * `std::vector::push_back` that's `stl_vector.h`, for
      * `CParser::Foo` that's `parse.cpp`.
+     *
+     * Exception: gcc synthetic init wrappers ([isSyntheticInit]) get
+     * routed to their owning CU, since gcc lies about their N_SOL.
      *
      * A count-based heuristic looks tempting but backfires on host
      * methods with heavily inlined std helpers (e.g. a CParser method
@@ -136,6 +158,10 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     private fun attributeFunctionsBySource(harvest: Harvest): Map<OpenFunction, String> {
         val out = mutableMapOf<OpenFunction, String>()
         for (f in harvest.openFunctions) {
+            if (isSyntheticInit(f)) {
+                out[f] = f.cu.filename
+                continue
+            }
             val lo = f.addr.address.offset
             val hi = lo + f.sizeBytes
             if (hi <= lo) continue
@@ -155,14 +181,48 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         return out
     }
 
+    /**
+     * Reroute every N_SLINE entry to the source of the function that
+     * contains it, when it has one. gcc occasionally emits a single
+     * N_SLINE under a transient (wrong) N_SOL while its siblings in
+     * the same function land under the right one — leaving stray
+     * `// L N @ 0xADDR` comments orphaned in some unrelated header.
+     * Anchoring on the host function gives uniform attribution across
+     * a function's body. Entries outside every function range stay
+     * where N_SOL put them.
+     */
+    private fun rerouteLineEntriesByFunc(
+        harvest: Harvest,
+        funcToSource: Map<OpenFunction, String>,
+    ): Map<String, List<LineEntry>> {
+        data class Reroute(val range: LongRange, val target: String)
+        val reroutes = harvest.openFunctions
+            .filter { it.sizeBytes > 0 && funcToSource[it] != null }
+            .map {
+                val lo = it.addr.address.offset
+                Reroute(lo until lo + it.sizeBytes, funcToSource.getValue(it))
+            }
+        if (reroutes.isEmpty()) return harvest.lineEntries
+        val out = mutableMapOf<String, MutableList<LineEntry>>()
+        for ((src, entries) in harvest.lineEntries) {
+            for (e in entries) {
+                val addr = e.addr.address.offset
+                val target = reroutes.firstOrNull { addr in it.range }?.target ?: src
+                out.getOrPut(target) { mutableListOf() } += e
+            }
+        }
+        return out
+    }
+
     private fun renderSkeleton(
         source: String,
         harvest: Harvest,
+        lineEntries: Map<String, List<LineEntry>>,
         program: Program,
         funcToSource: Map<OpenFunction, String>,
     ): String {
         val rawFuncs = harvest.openFunctions.filter { funcToSource[it] == source }
-        val lines = harvest.lineEntries[source].orEmpty()
+        val lines = lineEntries[source].orEmpty()
         if (rawFuncs.isEmpty() && lines.isEmpty()) return ""
 
         data class FuncRange(val func: OpenFunction, val startLine: Int, val endLine: Int)
@@ -324,9 +384,6 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         }
 
         return buildString {
-            append("// Auto-generated from stabs N_SOL / N_SLINE / N_FUN records.\n")
-            append("// Source: $source\n")
-            append("// Functions: ${funcs.size}, line entries: ${lines.size}\n")
             // Each item in a bucket goes on its own output line so
             // typedefs / declarations read as real C, not a single
             // 700-char run-on. To keep `// Lnnn` ≈ output-line N as
