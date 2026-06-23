@@ -124,11 +124,30 @@ class Harvester(
         }
     }
 
+    /**
+     * Stab types whose `desc` field is consumed: N_FUN's startLine,
+     * N_SLINE's line, N_LSYM (TaggedType/Typedef) declLine. Any other
+     * record with a non-zero desc is silently dropping a line number;
+     * tally it so we can see the surface we're missing.
+     */
+    private val descConsumers = setOf(StabType.N_FUN, StabType.N_SLINE, StabType.N_LSYM)
+
     internal fun passA(records: List<StabRecord>): Harvest {
         preSeedHeaders(records)
         for ((i, rec) in records.withIndex()) {
             monitor.checkCancelled()
             monitor.incrementProgress(1)
+            if (rec.desc != 0) {
+                when (rec.type) {
+                    StabType.N_FUN, StabType.N_SLINE, StabType.N_LSYM -> {}
+
+                    else -> log(
+                        "desc-dropped-${rec.type.name.removePrefix("N_").lowercase()}",
+                        "desc=${rec.desc} name=${rec.name.take(40)}",
+                        Level.DEBUG,
+                    )
+                }
+            }
 
             when (rec.type) {
                 StabType.N_SO if (rec.name.endsWith('/')) -> {
@@ -281,7 +300,14 @@ class Harvester(
                             // by `Ref(id)` from other types but never harvested
                             // as their own TypeAst, producing dangling refs
                             // and undefined field types downstream.
-                            val outer = TypeAst(currentCu!!, decl.id, decl.name, decl.type)
+                            val outer = TypeAst(
+                                currentCu!!,
+                                decl.id,
+                                decl.name,
+                                decl.type,
+                                declLine = rec.desc,
+                                declSourceFile = currentSourceForLines ?: currentCu?.filename,
+                            )
                             appendAsts(outer, *walkDefinitions(decl.type).toTypedArray())
                         }
 

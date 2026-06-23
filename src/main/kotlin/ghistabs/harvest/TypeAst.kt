@@ -15,6 +15,15 @@ data class TypeAst(
     val id: GlobalTypeId,
     val name: String?,
     val body: TypeDecl<GlobalTypeId>,
+    /**
+     * Source-file line where the type was declared. Captured from N_LSYM's
+     * `desc` field. gcc 3.x sets it; gcc 12 leaves it 0. The companion
+     * `sourceFile` is the N_SOL-effective filename at definition time
+     * (typically a header for stdlib types, the CU itself for app-local
+     * declarations).
+     */
+    val declLine: Int = 0,
+    val declSourceFile: String? = null,
 ) {
     val source get() = id.source
     val nameOrId get() = name ?: "$id"
