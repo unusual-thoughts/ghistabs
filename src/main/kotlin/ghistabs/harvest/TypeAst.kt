@@ -78,7 +78,18 @@ data class OpenFunction(
     val params: MutableList<ParamRecord>,
     val scopeBrackets: MutableList<Triple<StabType, Long, Int>>,
     var sizeBytes: Long = 0L,
+    /** Source filename in effect when N_FUN fired (N_SOL or CU's primary). */
+    val sourceFile: String? = null,
+    /** Line in [sourceFile] where the function starts; from N_FUN's desc field. */
+    val startLine: Int = 0,
 )
+
+/**
+ * A line-number record (N_SLINE) — `(source, line)` mapped to a text
+ * address. Captured in [Harvest.lineEntries] grouped by source filename.
+ */
+@Serializable
+data class LineEntry(val line: Int, val addr: SerializableAddress)
 
 @Serializable(with = ToStringSerializer::class)
 data class GhidraKey(val category: CategoryPath, val name: String) {

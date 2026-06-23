@@ -23,6 +23,13 @@ data class Harvest(
     val rawCollisions: Map<GlobalTypeId, Map<String, Set<TypeDecl<GlobalTypeId>>>> = mapOf(),
     val symbolsByCu: Map<String, List<HarvestedSymbol>> = mapOf(),
     val openFunctions: List<OpenFunction> = listOf(),
+    /**
+     * N_SLINE entries grouped by source filename. N_SOL switches the
+     * "current source file" for subsequent N_SLINE records (so a line
+     * number inside an `#include`d header lands under that header's
+     * filename, not the enclosing CU's). Sorted by line on insertion.
+     */
+    val lineEntries: Map<String, List<LineEntry>> = mapOf(),
 ) {
     val allHarvestedSymbols by lazy { symbolsByCu.values.flatten() }
 

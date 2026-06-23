@@ -50,6 +50,17 @@ class Harvester(
     private var pendingDirectory: String? = null
     private var currentCuFinalised = false
 
+    /**
+     * Current source filename for N_SLINE attribution. N_SOL (non-empty)
+     * switches it; an N_SO end-of-CU marker resets it to null. When null
+     * but inside a CU, [currentCu] supplies the default. Stabs.texinfo:
+     * "An N_SOL record specifies that subsequent N_SLINE records refer to
+     * the source file named." Without it, lines inside `#include`'d
+     * headers would all be filed under the enclosing CU.
+     */
+    private var currentSourceForLines: String? = null
+    private val lineEntriesByFile = mutableMapOf<String, MutableList<LineEntry>>()
+
     // Allocate ONE shared HeaderRegistry for all per-CU IncludeContext instances.
     // This ensures cross-CU dedup: two CUs with the same (filename, checksum) BINCL
     // get the SAME HeaderFile instance via the shared registry.
@@ -131,10 +142,27 @@ class Harvester(
                     currentCu = null
                     pendingDirectory = null
                     currentCuFinalised = false
+                    currentSourceForLines = null
                 }
 
                 // line context
                 StabType.N_BINCL, StabType.N_EINCL, StabType.N_EXCL -> {}
+
+                // N_SOL switches the source filename for subsequent N_SLINE
+                // records. Empty name = no-op (handled in the drop branch).
+                StabType.N_SOL if rec.name.isNotEmpty() -> {
+                    currentSourceForLines = rec.name
+                }
+
+                // N_SLINE: line-number entry. desc = line, value = code
+                // offset. The current source filename is whichever the
+                // most recent N_SOL set (or the CU's own filename if no
+                // N_SOL has fired yet).
+                StabType.N_SLINE -> {
+                    val source = currentSourceForLines ?: currentCu?.filename ?: continue
+                    lineEntriesByFile.getOrPut(source) { mutableListOf() } +=
+                        LineEntry(rec.desc, SerializableAddress(resolver.buildAddress(rec.value)))
+                }
 
                 StabType.N_FUN -> if (rec.name.isEmpty()) {
                     // End-of-function marker: rec.value = function size relative to start.
@@ -156,6 +184,8 @@ class Harvester(
                                     locals = mutableListOf(),
                                     params = mutableListOf(),
                                     scopeBrackets = mutableListOf(),
+                                    sourceFile = currentSourceForLines ?: currentCu?.filename,
+                                    startLine = rec.desc,
                                 )
                                 openFunctions += open
                                 currentFunction = open
@@ -251,8 +281,8 @@ class Harvester(
 
                 // Known-irrelevant for type/symbol harvesting — bumped silently into
                 // diagnostics counters by the caller (no per-record log lines, which
-                // otherwise drown the log under N_SLINE @ 23k records/binary).
-                StabType.N_SLINE, StabType.N_DSLINE, StabType.N_BSLINE, StabType.N_FLINE,
+                // otherwise drown the log under similar high-volume records).
+                StabType.N_DSLINE, StabType.N_BSLINE, StabType.N_FLINE,
                 StabType.N_OPT, StabType.N_OLEVEL, StabType.N_PARAMS, StabType.N_VERSION,
                 StabType.N_MAIN, StabType.N_PC, StabType.N_M2C, StabType.N_DEFD,
                 StabType.N_SSYM, StabType.N_ENDM, StabType.N_OSO, StabType.N_FNAME,
@@ -291,6 +321,7 @@ class Harvester(
             rawCollisions = collidingAsts,
             symbolsByCu = symbolsByCu,
             openFunctions = openFunctions,
+            lineEntries = lineEntriesByFile.mapValues { (_, v) -> v.sortedBy { it.line } },
         )
     }
 
