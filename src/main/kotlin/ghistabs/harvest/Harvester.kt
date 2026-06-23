@@ -218,31 +218,18 @@ class Harvester(
                     val mangled = rec.name.substringBefore(':')
                     resolver.recordFromStab(mangled, addr)
                     try {
-                        when (val decl = parseSymbol(rec).body) {
-                            is SymbolDecl.Function -> {
-                                val open = OpenFunction(
-                                    name = mangled,
-                                    addr = SerializableAddress(addr),
-                                    decl = SymbolDecl.Function(decl.name, decl.isFileStatic, decl.type),
-                                    cu = currentCu!!,
-                                    locals = mutableListOf(),
-                                    params = mutableListOf(),
-                                    scopeBrackets = mutableListOf(),
-                                    // A function lives in the CU it was
-                                    // declared in, not in whichever header
-                                    // it happens to inline from. N_SOL may
-                                    // have switched to a header for prior
-                                    // statements; prefer the CU filename.
-                                    sourceFile = currentCu?.filename,
-                                    startLine = rec.desc,
-                                )
-                                openFunctions += open
-                                currentFunction = open
-                            }
+                        val sym = parseSymbol(rec)
+                        when (sym.body) {
+                            is SymbolDecl.Function -> currentFunction = OpenFunction(
+                                name = mangled,
+                                addr = SerializableAddress(addr),
+                                decl = sym.body,
+                                cu = currentCu!!,
+                            ).also { openFunctions += it }
 
-                            is SymbolDecl.StaticVar -> harvestSymbol(rec) { parseErrors++ }
+                            is SymbolDecl.StaticVar -> harvestSymbol(rec)
 
-                            else -> log("unexpected-nfun", "@$i: $decl")
+                            else -> log("unexpected-nfun", "$sym")
                         }
                     } catch (e: StabsParseException) {
                         parseErrors++
@@ -250,13 +237,13 @@ class Harvester(
                     }
                 }
 
-                StabType.N_GSYM -> harvestSymbol(rec) { parseErrors++ }
+                StabType.N_GSYM -> harvestSymbol(rec)
 
                 StabType.N_STSYM, StabType.N_LCSYM -> {
                     val addr = resolver.buildAddress(rec.value)
                     val mangled = rec.name.substringBefore(':')
                     resolver.recordFromStab(mangled, addr)
-                    harvestSymbol(rec) { parseErrors++ }
+                    harvestSymbol(rec)
                 }
 
                 StabType.N_PSYM, StabType.N_RSYM -> {
@@ -291,8 +278,8 @@ class Harvester(
                                 decl.id,
                                 decl.name,
                                 decl.type,
-                                declLine = rec.desc,
-                                declSourceFile = lineSource,
+                                declLine = sym.declLine,
+                                declSourceFile = sym.sourceFile,
                             )
                             appendAsts(outer, *walkDefinitions(decl.type).toTypedArray())
                         }
@@ -321,7 +308,7 @@ class Harvester(
                         }
 
                         is SymbolDecl.Function, is SymbolDecl.Global, is SymbolDecl.RegParam, is SymbolDecl.StackParam,
-                        -> log("unexpected-lsym", "@$i: $decl")
+                        -> log("unexpected-lsym", "$sym")
                     }
                 } catch (e: StabsParseException) {
                     parseErrors++
@@ -476,11 +463,11 @@ class Harvester(
         }
     }
 
-    private fun harvestSymbol(rec: StabRecord, onError: () -> Unit) {
+    private fun harvestSymbol(rec: StabRecord) {
         try {
             symbolsByCu.getOrPut(currentCu!!.filename) { mutableListOf() } += parseSymbol(rec)
         } catch (e: StabsParseException) {
-            onError()
+            parseErrors++
             log("parse-error", "@${rec.recordIndex} '${rec.name.take(80)}': ${e.message}")
         }
     }

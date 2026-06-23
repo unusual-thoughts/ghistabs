@@ -82,13 +82,22 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
 
             val outDir = File("build/test-output/skeletons/${fixture.nameWithoutExtension}").apply { mkdirs() }
 
-            val sources = (harvest.lineEntries.keys + harvest.openFunctions.mapNotNull { it.sourceFile })
+            // Attribute each function to the source whose N_SLINE entries
+            // cover the most of its address range. This is the
+            // authoritative signal (gcc emits N_SOL("header") before
+            // template instantiations' N_FUN and resets it before CU
+            // functions), so std::pair::pair lands in stl_pair.h and
+            // CParser::ParseSymbol lands in parse.cpp. Functions with
+            // sizeBytes==0 or no covered N_SLINE drop out of every
+            // skeleton — they have no place to go.
+            val funcToSource = attributeFunctionsBySource(harvest)
+            val sources = (harvest.lineEntries.keys + funcToSource.values)
                 .filter { it.isNotEmpty() }
                 .toSet()
 
             var written = 0
             for (source in sources) {
-                val skeleton = renderSkeleton(source, harvest, program)
+                val skeleton = renderSkeleton(source, harvest, program, funcToSource)
                 if (skeleton.isBlank()) continue
                 // Keep the source's own extension — don't append `.cpp`
                 // (so e.g. `assemble.cpp` stays `assemble.cpp`, not
@@ -104,23 +113,61 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         }
     }
 
-    private fun renderSkeleton(source: String, harvest: Harvest, program: Program): String {
-        val rawFuncs = harvest.openFunctions.filter { it.sourceFile == source }
+    /**
+     * Attribute each function to the source of its lowest-address
+     * N_SLINE entry inside `[addr, addr+sizeBytes)`. The first line
+     * entry corresponds to the function's prologue, which is always
+     * emitted under the N_SOL active at N_FUN time — for
+     * `std::vector::push_back` that's `stl_vector.h`, for
+     * `CParser::Foo` that's `parse.cpp`.
+     *
+     * A count-based heuristic looks tempting but backfires on host
+     * methods with heavily inlined std helpers (e.g. a CParser method
+     * with five own lines and fifty inlined `vector::operator[]`
+     * N_SLINEs gets misattributed to `stl_vector.h`).
+     *
+     * Functions with no covered N_SLINE (or `sizeBytes==0`) get no
+     * attribution and silently drop from every skeleton.
+     */
+    private fun attributeFunctionsBySource(harvest: Harvest): Map<OpenFunction, String> {
+        val out = mutableMapOf<OpenFunction, String>()
+        for (f in harvest.openFunctions) {
+            val lo = f.addr.address.offset
+            val hi = lo + f.sizeBytes
+            if (hi <= lo) continue
+            var bestSrc: String? = null
+            var bestAddr = Long.MAX_VALUE
+            for ((src, entries) in harvest.lineEntries) {
+                for (e in entries) {
+                    val a = e.addr.address.offset
+                    if (a in lo until hi && a < bestAddr) {
+                        bestAddr = a
+                        bestSrc = src
+                    }
+                }
+            }
+            bestSrc?.let { out[f] = it }
+        }
+        return out
+    }
+
+    private fun renderSkeleton(
+        source: String,
+        harvest: Harvest,
+        program: Program,
+        funcToSource: Map<OpenFunction, String>,
+    ): String {
+        val rawFuncs = harvest.openFunctions.filter { funcToSource[it] == source }
         val lines = harvest.lineEntries[source].orEmpty()
         if (rawFuncs.isEmpty() && lines.isEmpty()) return ""
 
-        // gcc 12 emits N_FUN with desc=0 for every function (no source
-        // line annotation), so OpenFunction.startLine is 0. Approximate
-        // by the smallest N_SLINE line inside the function's address
-        // range; skip the function entirely if it has no N_SLINE
-        // coverage either.
         data class FuncRange(val func: OpenFunction, val startLine: Int, val endLine: Int)
 
         val ranges = rawFuncs.mapNotNull { f ->
             val lo = f.addr.address.offset
             val hi = lo + f.sizeBytes
             val inside = lines.filter { it.addr.address.offset in lo until hi }
-            val start = f.startLine.takeIf { it > 0 } ?: inside.minOfOrNull { it.line } ?: return@mapNotNull null
+            val start = inside.minOfOrNull { it.line } ?: return@mapNotNull null
             val end = inside.maxOfOrNull { it.line } ?: start
             FuncRange(f, start, end)
         }.sortedBy { it.startLine }

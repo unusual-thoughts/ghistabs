@@ -89,14 +89,10 @@ data class OpenFunction(
     val addr: SerializableAddress,
     val decl: SymbolDecl.Function<GlobalTypeId>,
     val cu: SourceFile.CUSource,
-    val locals: MutableList<SymbolRecord>,
-    val params: MutableList<SymbolRecord>,
-    val scopeBrackets: MutableList<Triple<StabType, Long, Int>>,
+    val locals: MutableList<SymbolRecord> = mutableListOf(),
+    val params: MutableList<SymbolRecord> = mutableListOf(),
+    val scopeBrackets: MutableList<Triple<StabType, Long, Int>> = mutableListOf(),
     var sizeBytes: Long = 0L,
-    /** Source filename in effect when N_FUN fired (N_SOL or CU's primary). */
-    val sourceFile: String? = null,
-    /** Line in [sourceFile] where the function starts; from N_FUN's desc field. */
-    val startLine: Int = 0,
 )
 
 /**
