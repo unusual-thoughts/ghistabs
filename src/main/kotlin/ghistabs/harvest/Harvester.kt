@@ -295,14 +295,27 @@ class Harvester(
      */
     private fun synthesizeXRefStubsForDanglingInheritanceRefs() {
         val synthetic = mutableListOf<TypeAst>()
+        // Per outer struct id: pseudo-fields detected as inheritance edges.
+        // We rewrite the outer ast to move those fields into `bases` so the
+        // materialiser's BaseInsertionPlanner / firstPolymorphicBase /
+        // vtable wiring sees the inheritance.
+        val outerRewrites =
+            mutableMapOf<GlobalTypeId, MutableList<FieldDecl<GlobalTypeId>>>()
         for (ast in typeAsts.values) {
             val struct = ast.body as? TypeDecl.Struct ?: continue
             val structBits = struct.sizeBytes * 8
             for (field in struct.fields) {
                 val ref = field.type as? TypeDecl.Ref ?: continue
-                if (ref.id in typeAsts) continue
                 if (field.name.isEmpty()) continue
                 if (field.sizeBits <= structBits) continue
+                // Bases-rewrite fires for every detected pseudo-field, even
+                // when the dangling Ref happens to be bound — gcc-12's bogus
+                // bitsize signal is independent of cross-CU resolution.
+                outerRewrites.getOrPut(ast.id) { mutableListOf() }.add(field)
+                // XRef-stub synthesis is only needed when the dangling Ref
+                // has no binding anywhere; otherwise the materialiser can
+                // resolve `Ref(id)` directly.
+                if (ref.id in typeAsts) continue
                 synthetic.add(
                     TypeAst(
                         cu = ast.cu,
@@ -319,6 +332,29 @@ class Harvester(
                 "${synthetic.size} inheritance-pseudo-field Refs → synthetic XRef stubs",
             )
             appendAsts(*synthetic.toTypedArray())
+        }
+        for ((outerId, pseudoFields) in outerRewrites) {
+            val outer = typeAsts[outerId] ?: continue
+            val struct = outer.body as? TypeDecl.Struct ?: continue
+            val pseudoSet = pseudoFields.toSet()
+            val newBases = struct.bases + pseudoFields.map { f ->
+                BaseDecl(
+                    type = f.type,
+                    isVirtual = false,
+                    access = Access.PUBLIC,
+                    offsetBits = f.offsetBits,
+                )
+            }
+            val newFields = struct.fields.filter { it !in pseudoSet }
+            typeAsts[outerId] = outer.copy(
+                body = struct.copy(bases = newBases, fields = newFields),
+            )
+        }
+        if (outerRewrites.isNotEmpty()) {
+            log(
+                "inheritance-pseudo-fields-promoted",
+                "${outerRewrites.size} outer struct(s) rewritten to populate bases[]",
+            )
         }
     }
 
