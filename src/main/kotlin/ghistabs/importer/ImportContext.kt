@@ -32,6 +32,23 @@ class ImportContext<Log : DiagnosticSink>(
     val symtab: SymbolTable = program.symbolTable
     val sink: BookmarkSink = BookmarkSink(program, log, diagnostics)
     val resolver: AddressResolver = ProgramAddressResolver(program)
+
+    /**
+     * The fully-populated [ghistabs.materialize.TypeRegistry] from the
+     * import run, captured at end-of-import so tests can drive a real
+     * [DemanglerReplacer] against the analyzer's authoritative
+     * `byCanonicalKey` + `extrasByName` indices instead of constructing a
+     * fresh empty one (which would force a second `materialiseAll`,
+     * producing `.conflict` artifacts that race other tests under
+     * `@Execution(CONCURRENT)`).
+     *
+     * Null until the import finishes; in production reading this field is
+     * pointless — the importer's own DemanglerReplacer run uses the local
+     * variable directly.
+     */
+    @get:TestOnly
+    var typeRegistry: ghistabs.materialize.TypeRegistry? = null
+        internal set
 }
 
 /**
