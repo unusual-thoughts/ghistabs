@@ -61,6 +61,27 @@ class Harvester(
     private var currentSourceForLines: String? = null
     private val lineEntriesByFile = mutableMapOf<String, MutableList<LineEntry>>()
 
+    /**
+     * gcc 12 (and other modern ELF emitters) omit the empty-name N_FUN
+     * end marker — they delimit the function's address range with the
+     * outermost N_RBRAC instead. When we're about to swap functions
+     * (new named N_FUN or end-of-CU N_SO), compute the previous
+     * function's size from its scope brackets if no explicit
+     * end-of-function record set it.
+     */
+    private fun finaliseGcc12FunctionSize() {
+        val f = currentFunction ?: return
+        if (f.sizeBytes != 0L) return
+        val rbracs = f.scopeBrackets.filter { it.first == StabType.N_RBRAC }
+        if (rbracs.isEmpty()) return
+        // N_RBRAC values follow the same absolute-vs-function-relative
+        // convention as N_SLINE: large = absolute text address, small =
+        // function-relative offset.
+        val funcStart = f.addr.address.offset
+        val maxRbrac = rbracs.maxOf { it.second }
+        f.sizeBytes = if (maxRbrac > funcStart) maxRbrac - funcStart else maxRbrac
+    }
+
     // Allocate ONE shared HeaderRegistry for all per-CU IncludeContext instances.
     // This ensures cross-CU dedup: two CUs with the same (filename, checksum) BINCL
     // get the SAME HeaderFile instance via the shared registry.
@@ -139,6 +160,7 @@ class Harvester(
                             address = resolver.buildAddress(rec.value),
                         )
                     }
+                    finaliseGcc12FunctionSize()
                     currentCu = null
                     pendingDirectory = null
                     currentCuFinalised = false
@@ -155,16 +177,20 @@ class Harvester(
                 }
 
                 // N_SLINE: line-number entry. desc = line, value =
-                // function-relative offset (gcc/COFF convention — the
-                // dbx-historical form is also relative). Convert to
-                // absolute by adding the current function's start
-                // address. If no function is open (top-level statement,
-                // global initialiser), `buildAddress` treats `value` as
-                // the raw address.
+                // either function-relative offset (gcc/COFF for PE
+                // binaries; dbx-historical) or already-absolute (gcc on
+                // ELF, where the assembler resolves these to text-section
+                // addresses). Disambiguate by comparing to the current
+                // function's start: a value smaller than the function's
+                // start address is by construction relative, otherwise
+                // it's already absolute.
                 StabType.N_SLINE -> {
                     val source = currentSourceForLines ?: currentCu?.filename ?: continue
-                    val abs = currentFunction?.addr?.address?.add(rec.value)
-                        ?: resolver.buildAddress(rec.value)
+                    val funcStart = currentFunction?.addr?.address
+                    val abs = when {
+                        funcStart != null && rec.value < funcStart.offset -> funcStart.add(rec.value)
+                        else -> resolver.buildAddress(rec.value)
+                    }
                     lineEntriesByFile.getOrPut(source) { mutableListOf() } +=
                         LineEntry(rec.desc, SerializableAddress(abs))
                 }
@@ -174,6 +200,12 @@ class Harvester(
                     currentFunction?.let { it.sizeBytes = rec.value }
                     currentFunction = null
                 } else {
+                    // gcc 12 ELF doesn't emit the empty-name N_FUN
+                    // end marker — it relies on the outermost N_RBRAC
+                    // instead. Before opening a new function, finalise
+                    // the previous one from its scope brackets if its
+                    // sizeBytes is still 0.
+                    finaliseGcc12FunctionSize()
                     val addr = resolver.buildAddress(rec.value)
                     // Pull mangled name from before the colon.
                     val mangled = rec.name.substringBefore(':')
@@ -189,7 +221,12 @@ class Harvester(
                                     locals = mutableListOf(),
                                     params = mutableListOf(),
                                     scopeBrackets = mutableListOf(),
-                                    sourceFile = currentSourceForLines ?: currentCu?.filename,
+                                    // A function lives in the CU it was
+                                    // declared in, not in whichever header
+                                    // it happens to inline from. N_SOL may
+                                    // have switched to a header for prior
+                                    // statements; prefer the CU filename.
+                                    sourceFile = currentCu?.filename,
                                     startLine = rec.desc,
                                 )
                                 openFunctions += open
