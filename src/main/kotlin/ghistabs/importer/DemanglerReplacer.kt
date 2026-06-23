@@ -125,7 +125,10 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val typeRegis
         // 2. nameIndex scan — covers non-empty DTM-resident types we
         //    didn't author (Ghidra-bundled primitives, demangler-created
         //    elsewhere, etc.) with the same preferred-path / TypeDef-then-
-        //    Structure ranking.
+        //    Structure ranking. Verified to fire on real fixtures: without
+        //    it, 16 demangler regression tests fail across bouniafbouniaf +
+        //    bouniaf × 2 modes — the stubs whose only counterpart is a
+        //    Ghidra-bundled primitive can't otherwise be substituted.
         for (stub in stubs) {
             val preferredCategory = stub.pathName.removePrefix("/Demangler")
                 .substringBeforeLast('/', missingDelimiterValue = "/")
