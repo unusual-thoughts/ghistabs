@@ -643,7 +643,22 @@ class TypeRegistry(
                     ?.let { it.max - it.min + 1 }
                     ?.takeIf { it > 0 }
                 val numElements = (body.length ?: rangeLen ?: 1L).toInt().coerceAtLeast(1)
-                ArrayDataType(elem, numElements, elem.length)
+                // ArrayDataType.validate rejects element types with length < 1.
+                // FunctionDefinitionDataType reports length=0 (it's an
+                // interface, not a stored value); arrays-of-function would be
+                // a stab-side encoding we can't honour faithfully. Substitute
+                // a pointer-sized element so the array shape is preserved.
+                val safeElem = if (elem.length < 1) {
+                    diagnostics.recordDegradation(
+                        "array-element-unsized",
+                        ast.nameOrId,
+                        "${elem::class.simpleName} has length ${elem.length}; substituted Undefined4",
+                    )
+                    Undefined4DataType.dataType
+                } else {
+                    elem
+                }
+                ArrayDataType(safeElem, numElements, safeElem.length)
             }
 
             is TypeDecl.Enum -> materialiseEnum(ast, category, body, explicitSizeBits = null)

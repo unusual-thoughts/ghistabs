@@ -46,9 +46,15 @@ sealed class SourceFile : Comparable<SourceFile> {
         override fun toString() = header.toString()
     }
 
+    /**
+     * A compilation-unit source. [directory] is captured when gcc / SunOS
+     * /bin/cc emit a "directory" N_SO (one ending in `/`) immediately
+     * before the filename N_SO — see stabs.texinfo §"Source Files" and
+     * the leading paragraph of `parse/StabType.kt`'s N_SO section.
+     */
     @Serializable(with = ToStringSerializer::class)
-    data class CUSource(override val filename: String) : SourceFile() {
-        override fun toString() = filename
+    data class CUSource(override val filename: String, val directory: String? = null) : SourceFile() {
+        override fun toString() = if (directory != null) "$directory$filename" else filename
     }
 }
 
