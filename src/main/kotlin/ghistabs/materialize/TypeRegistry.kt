@@ -243,8 +243,16 @@ class TypeRegistry(
                 .groupBy { it.ghidraName }
                 .forEach { (ghidraName, asts) ->
                     val body = asts.first().body
-                    val resolved = BuiltinTable.resolve(body) ?: return@forEach
-                    val typedef = register(TypedefDataType(CategoryPath.ROOT, ghidraName, resolved, dtm))
+                    // BuiltinTable handles primitives (Range/Builtin/Float/…);
+                    // dataTypeFor handles aliases to aggregates (InlineDef→XRef
+                    // to basic_string, Pointer→…, etc.) so e.g.
+                    // `string:t(N,M)=(P,Q)=xsbasic_string<…>` materialises as
+                    // a TypedefDataType("string" → basic_string<…>) the
+                    // DemanglerReplacer can use as a candidate for
+                    // `/Demangler/string`.
+                    val resolved = BuiltinTable.resolve(body) ?: dataTypeFor(body) ?: return@forEach
+                    val category = if (BuiltinTable.resolve(body) != null) CategoryPath.ROOT else CategoryPath("/stabs")
+                    val typedef = register(TypedefDataType(category, ghidraName, resolved, dtm))
                     for (ast in asts) byId.putIfAbsent(ast.id, typedef)
                 }
 
