@@ -514,11 +514,42 @@ class TypeRegistry(
         return materialised
     }
 
+    /**
+     * Build an EnumDataType for an Enum body. `explicitSizeBits` comes from
+     * an enclosing `@s<bits>` attribute (stabs.texinfo §"String Field" — the
+     * standard way to override the architecture's default enum size). When
+     * absent, derive the smallest power-of-two byte width that fits every
+     * member's value: C++ `bool` is emitted as `eFalse:0,True:1,;` and the
+     * C++ ABI guarantees sizeof(bool)==1, so a hard-coded 4 would overflow
+     * any field declared with an 8-bit slot.
+     */
+    private fun materialiseEnum(
+        ast: TypeAst,
+        category: CategoryPath,
+        body: TypeDecl.Enum<GlobalTypeId>,
+        explicitSizeBits: Int?,
+    ): DataType {
+        val sizeBytes = if (explicitSizeBits != null) {
+            (explicitSizeBits + 7) / 8
+        } else {
+            val values = body.members.map { it.second }
+            val maxV = values.maxOrNull() ?: 0
+            val minV = values.minOrNull() ?: 0
+            when {
+                minV >= Byte.MIN_VALUE && maxV <= Byte.MAX_VALUE -> 1
+                minV >= 0 && maxV <= 0xFF -> 1
+                minV >= Short.MIN_VALUE && maxV <= Short.MAX_VALUE -> 2
+                minV >= 0 && maxV <= 0xFFFF -> 2
+                else -> 4
+            }
+        }
+        val e = EnumDataType(category, ast.ghidraName, sizeBytes, dtm)
+        for ((mname, mval) in body.members) e.add(mname, mval)
+        return e
+    }
+
     private fun materialiseBody(ast: TypeAst, category: CategoryPath, placeholder: DataType): DataType =
         when (val body = ast.body) {
-            is TypeDecl.Range, is TypeDecl.Complex, is TypeDecl.Float, is TypeDecl.WithSizeAttr, is TypeDecl.Builtin ->
-                BuiltinTable.resolve(body) ?: placeholder
-
             is TypeDecl.Pointer -> PointerDataType(
                 dataTypeFor(body.pointee) ?: undef("body-pointer-pointee", ast.nameOrId, body.pointee),
                 4,
@@ -559,29 +590,17 @@ class TypeRegistry(
                 ArrayDataType(elem, numElements, elem.length)
             }
 
-            is TypeDecl.Enum -> {
-                // Pick the smallest power-of-two byte width that fits every
-                // member's value. gcc's stab default is 4 bytes for plain
-                // enums, but C++ `bool` is emitted as `eFalse:0,True:1,;` —
-                // sizeof(bool)==1 by the C++ ABI, so a 4-byte enum overflows
-                // any field declared with an 8-bit slot (every
-                // bool-as-struct-field in box2d). Size from the values.
-                val values = body.members.map { it.second }
-                val maxV = values.maxOrNull() ?: 0
-                val minV = values.minOrNull() ?: 0
-                val sizeBytes = when {
-                    minV >= Byte.MIN_VALUE && maxV <= Byte.MAX_VALUE -> 1
-                    minV >= 0 && maxV <= 0xFF -> 1
-                    minV >= Short.MIN_VALUE && maxV <= Short.MAX_VALUE -> 2
-                    minV >= 0 && maxV <= 0xFFFF -> 2
-                    else -> 4
-                }
-                val e = EnumDataType(category, ast.ghidraName, sizeBytes, dtm)
-                for ((mname, mval) in body.members) {
-                    e.add(mname, mval)
-                }
-                e
-            }
+            is TypeDecl.Enum -> materialiseEnum(ast, category, body, explicitSizeBits = null)
+
+            // `@s<bits>;e...;` — explicit size attribute on an enum
+            // (the stabs-standard mechanism per stabs.texinfo §"String
+            // Field"). Honour the bits-from-attribute over the gcc-default
+            // 4-byte assumption.
+            is TypeDecl.WithSizeAttr if body.inner is TypeDecl.Enum ->
+                materialiseEnum(ast, category, body.inner, explicitSizeBits = body.sizeBits)
+
+            is TypeDecl.Range, is TypeDecl.Complex, is TypeDecl.Float, is TypeDecl.WithSizeAttr, is TypeDecl.Builtin ->
+                BuiltinTable.resolve(body) ?: placeholder
 
             is TypeDecl.Struct -> {
                 // Reuse the placeholder cast to the right type
