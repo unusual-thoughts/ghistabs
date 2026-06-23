@@ -138,9 +138,6 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
         var globals = 0
         var classes = 0
 
-        // Run demangler stub replacement before applying symbols
-        DemanglerReplacer(ctx).run()
-
         for (open in harvest.openFunctions) {
             try {
                 val func = funcMgr.getFunctionAt(open.addr.address)
@@ -309,6 +306,12 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
         // richer signatures than the demangler could derive from the mangled
         // name, and our `__thiscall` choice (set in ClassBuilder) must win.
         demangleMangledLabels()
+
+        // DemanglerReplacer scans `/Demangler/*` stubs and substitutes any
+        // matching stab-sourced type with the same simple name. Must run
+        // AFTER demangleMangledLabels so every `/Demangler/...` placeholder
+        // created during signature demangling is visible to the scan.
+        DemanglerReplacer(ctx).run()
 
         return ApplyResult(functions, globals, classes)
     }
