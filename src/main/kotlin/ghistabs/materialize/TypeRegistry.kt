@@ -755,11 +755,22 @@ class TypeRegistry(
                     val len = when {
                         ft.length <= 0 -> stabBytes.takeIf { it > 0 } ?: 4
                         ft.isZeroLength && stabBytes > 0 -> {
-                            diagnostics.recordDegradation(
-                                "field-stub-padded",
-                                "${ast.ghidraName}.${field.name}",
-                                "type=${ft.name} (zero-length); padding to stab-declared $stabBytes bytes",
-                            )
+                            // Skip the degradation when `ft` is a pre-seeded
+                            // placeholder that materialiseAll will fill in-
+                            // place (anonymous nested aggregate, sibling
+                            // canonical winner not yet materialised). The
+                            // Structure/Union is the same DTM-resident object;
+                            // mutating it later widens it to its real size,
+                            // and our reserved `stabBytes` slot fits exactly.
+                            // Only log when the placeholder is *not* tracked
+                            // — that's the real unresolvable XRef stub case.
+                            if (ft !in placeholders.values) {
+                                diagnostics.recordDegradation(
+                                    "field-stub-padded",
+                                    "${ast.ghidraName}.${field.name}",
+                                    "type=${ft.name} (zero-length); padding to stab-declared $stabBytes bytes",
+                                )
+                            }
                             stabBytes
                         }
                         else -> ft.length
