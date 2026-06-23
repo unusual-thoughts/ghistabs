@@ -253,24 +253,20 @@ class TypeRegistry(
                         val resolved = BuiltinTable.resolve(ast.body) ?: dataTypeFor(ast.body) ?: continue
                         byId.putIfAbsent(ast.id, resolved)
                     }
-                    // Register one shared typedef so Ghidra's demangler finds
-                    // it directly (avoiding the creation of a `/Demangler/*`
-                    // placeholder) and DemanglerReplacer can use it as a
-                    // candidate for any `/Demangler/*` that does slip through.
-                    //
-                    // Placement: root for primitives (matches builtin lookup
-                    // conventions); for aggregate aliases, the parent of the
-                    // target's category — so `string → basic_string<…>` at
-                    // `/std/stringfwd/basic_string<…>` lands at `/std/string`,
-                    // exactly where the GnuDemanglerParser resolves
-                    // `std::string`.
+                    // Register one shared typedef under /stabs (or root for
+                    // primitives) so DemanglerReplacer can use it as a
+                    // candidate for any `/Demangler/*` stub the demangler
+                    // creates on-demand during signature application. Stabs
+                    // don't carry the typedef's namespace, so we can't place
+                    // it at the C++-canonical `/std/<name>` path directly —
+                    // DemanglerReplacer's after-demangling scan handles the
+                    // namespace-qualified stubs.
                     val firstBody = asts.first().body
                     val typedefTarget = BuiltinTable.resolve(firstBody) ?: dataTypeFor(firstBody) ?: return@forEach
-                    val category = when {
-                        BuiltinTable.resolve(firstBody) != null -> CategoryPath.ROOT
-                        typedefTarget.categoryPath != CategoryPath.ROOT ->
-                            typedefTarget.categoryPath.parent ?: CategoryPath.ROOT
-                        else -> CategoryPath("/stabs")
+                    val category = if (BuiltinTable.resolve(firstBody) != null) {
+                        CategoryPath.ROOT
+                    } else {
+                        CategoryPath("/stabs")
                     }
                     register(TypedefDataType(category, ghidraName, typedefTarget, dtm))
                 }
