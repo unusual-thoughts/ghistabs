@@ -51,21 +51,27 @@ data class TypeAst(
     fun asStruct() = asType<TypeDecl.Struct<GlobalTypeId>>()
 }
 
-@Serializable
-data class ParamRecord(val decl: SymbolDecl<GlobalTypeId>, val rawValue: Long)
-
 /**
- * Represents a local variable record from the stabs stream.
- *
- * @property decl The parsed symbol declaration.
- * @property rawValue The raw value from the stab record (stack offset for stack locals).
- * @property recordIndex The index of this record in the stabs stream (for scope filtering).
+ * @property recordIndex Index in the stabs stream (for scope filtering).
+ * @property declLine N_GSYM / N_LCSYM / N_STSYM / N_PSYM / N_LSYM / N_RSYM's `desc` field — source line where
+ * the local/parameter/global/static was declared. 0 when the emitter doesn't write it.
+ * @property sourceFile N_SOL-effective filename at decl time.
  */
 @Serializable
-data class LocalRecord(val decl: SymbolDecl<GlobalTypeId>, val rawValue: Long, val recordIndex: Int)
-
-@Serializable
-data class HarvestedSymbol(val decl: SymbolDecl<GlobalTypeId>, val recordType: StabType, val rawValue: Long)
+data class SymbolRecord(
+    val recordIndex: Int,
+    val recordType: StabType,
+    val body: SymbolDecl<GlobalTypeId>,
+    val rawValue: Long,
+    val declLine: Int = 0,
+    val sourceFile: String? = null,
+) {
+    constructor(
+        record: StabRecord,
+        decl: SymbolDecl<GlobalTypeId>,
+        sourceFile: String? = null,
+    ) : this(record.recordIndex, record.type, decl, record.value, record.desc, sourceFile)
+}
 
 @Serializable
 data class SerializableAddress(val space: String, val offset: Long) {
@@ -83,8 +89,8 @@ data class OpenFunction(
     val addr: SerializableAddress,
     val decl: SymbolDecl.Function<GlobalTypeId>,
     val cu: SourceFile.CUSource,
-    val locals: MutableList<LocalRecord>,
-    val params: MutableList<ParamRecord>,
+    val locals: MutableList<SymbolRecord>,
+    val params: MutableList<SymbolRecord>,
     val scopeBrackets: MutableList<Triple<StabType, Long, Int>>,
     var sizeBytes: Long = 0L,
     /** Source filename in effect when N_FUN fired (N_SOL or CU's primary). */

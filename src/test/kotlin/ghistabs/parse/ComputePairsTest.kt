@@ -1,6 +1,6 @@
 package ghistabs.parse
 
-import ghistabs.harvest.LocalRecord
+import ghistabs.harvest.SymbolRecord
 import ghistabs.importer.ScopePairs
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Test
@@ -16,9 +16,24 @@ class ComputePairsTest {
         )
 
         val locals = listOf(
-            LocalRecord(createDummyLocal("loc1"), 1000L, 5),
-            LocalRecord(createDummyLocal("loc2"), 2000L, 10),
-            LocalRecord(createDummyLocal("loc3"), 3000L, 15),
+            SymbolRecord(
+                recordIndex = 5,
+                recordType = StabType.N_LSYM,
+                body = createDummyLocal("loc1"),
+                rawValue = 1000L,
+            ),
+            SymbolRecord(
+                recordIndex = 10,
+                recordType = StabType.N_LSYM,
+                body = createDummyLocal("loc2"),
+                rawValue = 2000L,
+            ),
+            SymbolRecord(
+                recordIndex = 15,
+                recordType = StabType.N_LSYM,
+                body = createDummyLocal("loc3"),
+                rawValue = 3000L,
+            ),
         )
 
         val pairs = ScopePairs.compute(scopeBrackets, locals)
@@ -29,7 +44,7 @@ class ComputePairsTest {
         Assertions.assertEquals(200L, innerOpen)
         Assertions.assertEquals(300L, innerClose)
         Assertions.assertEquals(1, innerLocals.size)
-        Assertions.assertEquals("loc2", innerLocals[0].decl.name)
+        Assertions.assertEquals("loc2", innerLocals[0].body.name)
 
         val (outerOpen, outerClose, outerLocals) = pairs[1]
         Assertions.assertEquals(100L, outerOpen)
@@ -47,17 +62,17 @@ class ComputePairsTest {
         )
 
         val locals = listOf(
-            LocalRecord(createDummyLocal("a"), 1000L, 1),
-            LocalRecord(createDummyLocal("b"), 2000L, 5),
+            SymbolRecord(recordIndex = 1, recordType = StabType.N_LSYM, body = createDummyLocal("a"), rawValue = 1000L),
+            SymbolRecord(recordIndex = 5, recordType = StabType.N_LSYM, body = createDummyLocal("b"), rawValue = 2000L),
         )
 
         val pairs = ScopePairs.compute(scopeBrackets, locals)
 
         Assertions.assertEquals(2, pairs.size)
         Assertions.assertEquals(1, pairs[0].third.size)
-        Assertions.assertEquals("a", pairs[0].third[0].decl.name)
+        Assertions.assertEquals("a", pairs[0].third[0].body.name)
         Assertions.assertEquals(1, pairs[1].third.size)
-        Assertions.assertEquals("b", pairs[1].third[0].decl.name)
+        Assertions.assertEquals("b", pairs[1].third[0].body.name)
     }
 
     private fun createDummyLocal(name: String): SymbolDecl.StackLocal<GlobalTypeId> =

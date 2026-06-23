@@ -1,6 +1,6 @@
 package ghistabs.importer
 
-import ghistabs.harvest.LocalRecord
+import ghistabs.harvest.SymbolRecord
 import ghistabs.parse.StabType
 
 /**
@@ -18,9 +18,9 @@ internal object ScopePairs {
      */
     fun compute(
         scopeBrackets: List<Triple<StabType, Long, Int>>,
-        locals: List<LocalRecord>,
-    ): List<Triple<Long, Long, List<LocalRecord>>> {
-        val pairs = mutableListOf<Triple<Long, Long, List<LocalRecord>>>()
+        locals: List<SymbolRecord>,
+    ): List<Triple<Long, Long, List<SymbolRecord>>> {
+        val pairs = mutableListOf<Triple<Long, Long, List<SymbolRecord>>>()
         val stack = mutableListOf<Triple<Int, Long, Int>>() // (bracketArrayIdx, offset, recordIdx)
 
         for ((arrIdx, bracket) in scopeBrackets.withIndex()) {

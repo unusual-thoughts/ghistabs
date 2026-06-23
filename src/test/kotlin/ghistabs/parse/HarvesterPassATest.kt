@@ -96,7 +96,7 @@ class HarvesterPassATest {
         val harvestedSymbols = harvest.allHarvestedSymbols
         assertEquals(1, harvestedSymbols.size, "One global symbol should be harvested")
         val gsymRecord = harvestedSymbols[0]
-        assertEquals("g", gsymRecord.decl.name, "Symbol name should be 'g'")
+        assertEquals("g", gsymRecord.body.name, "Symbol name should be 'g'")
         assertEquals(StabType.N_GSYM, gsymRecord.recordType, "Record type should be N_GSYM")
     }
 
@@ -161,7 +161,7 @@ class HarvesterPassATest {
         assertEquals("f", func.name, "Function name should be 'f'")
         assertEquals(1, func.locals.size, "Function should have exactly one local")
         val xLocal = func.locals[0]
-        assertEquals("x", xLocal.decl.name, "Local variable name should be 'x'")
+        assertEquals("x", xLocal.body.name, "Local variable name should be 'x'")
         assertEquals(4L, xLocal.rawValue, "Local stack offset should be 4")
         assertEquals(100L, func.sizeBytes, "Function size should be 100")
     }
@@ -272,7 +272,7 @@ class HarvesterPassATest {
         val func = harvest.openFunctions[0]
         assertEquals(1, func.locals.size, "Function should have exactly one local record")
         val varLocal = func.locals[0]
-        assertEquals("var", varLocal.decl.name, "Local name should be 'var'")
+        assertEquals("var", varLocal.body.name, "Local name should be 'var'")
         assertEquals(8L, varLocal.rawValue, "Local stack offset should be 8")
     }
 

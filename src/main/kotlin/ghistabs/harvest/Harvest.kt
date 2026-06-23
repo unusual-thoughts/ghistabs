@@ -21,7 +21,7 @@ data class Harvest(
     val typeAsts: Map<GlobalTypeId, TypeAst>,
     val parseErrors: Int = 0,
     val rawCollisions: Map<GlobalTypeId, Map<String, Set<TypeDecl<GlobalTypeId>>>> = mapOf(),
-    val symbolsByCu: Map<String, List<HarvestedSymbol>> = mapOf(),
+    val symbolsByCu: Map<String, List<SymbolRecord>> = mapOf(),
     val openFunctions: List<OpenFunction> = listOf(),
     /**
      * N_SLINE entries grouped by source filename. N_SOL switches the
@@ -34,5 +34,4 @@ data class Harvest(
     val allHarvestedSymbols by lazy { symbolsByCu.values.flatten() }
 
     fun getType(id: GlobalTypeId) = typeAsts[id]
-    fun getStruct(id: GlobalTypeId) = typeAsts[id]?.body as? TypeDecl.Struct
 }

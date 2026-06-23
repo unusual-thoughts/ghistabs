@@ -29,7 +29,7 @@ class Harvester(
     Globalizer {
     private val typeAsts = mutableMapOf<GlobalTypeId, TypeAst>()
     private val collidingAsts = mutableMapOf<GlobalTypeId, MutableMap<String, MutableSet<TypeDecl<GlobalTypeId>>>>()
-    private val symbolsByCu = mutableMapOf<String, MutableList<HarvestedSymbol>>()
+    private val symbolsByCu = mutableMapOf<String, MutableList<SymbolRecord>>()
     private val openFunctions = mutableListOf<OpenFunction>()
     private val includesByFile = mutableMapOf<String, IncludeContext>()
     private var parseErrors = 0
@@ -42,13 +42,9 @@ class Harvester(
      * Per stabs.texinfo §"Source Files": gcc / SunOS /bin/cc emit two
      * N_SO records back-to-back — the first is the compilation directory
      * (ends in `/`), the second is the source filename. We pair them
-     * here so the filename's CUSource carries the directory. cfront may
-     * emit additional N_SO entries for nonexistent source files after
-     * the real one; they "contain no useful information" per the spec,
-     * so we ignore further N_SOs until the empty-name end-of-CU marker.
+     * here so the filename's CUSource carries the directory.
      */
     private var pendingDirectory: String? = null
-    private var currentCuFinalised = false
 
     /**
      * Current source filename for N_SLINE attribution. N_SOL (non-empty)
@@ -59,6 +55,7 @@ class Harvester(
      * headers would all be filed under the enclosing CU.
      */
     private var currentSourceForLines: String? = null
+    private val lineSource get() = currentSourceForLines ?: currentCu?.filename
     private val lineEntriesByFile = mutableMapOf<String, MutableList<LineEntry>>()
 
     /**
@@ -95,22 +92,18 @@ class Harvester(
             when (rec.type) {
                 StabType.N_SO if (rec.name.endsWith('/')) -> {
                     pendingDirectory = rec.name
-                    currentCuFinalised = false
                 }
 
                 StabType.N_SO if (rec.name.isNotEmpty()) -> {
-                    if (currentCuFinalised) continue // cfront extra N_SO — ignore
                     val cu = SourceFile.CUSource(rec.name, pendingDirectory)
                     currentCu = cu
                     includesByFile[rec.name] = IncludeContext(cu, this, sharedHeaderRegistry)
                     pendingDirectory = null
-                    currentCuFinalised = true
                 }
 
                 StabType.N_SO -> {
                     currentCu = null
                     pendingDirectory = null
-                    currentCuFinalised = false
                 }
 
                 StabType.N_BINCL -> currentInclude?.beginInclude(rec.name, rec.value)
@@ -124,14 +117,6 @@ class Harvester(
         }
     }
 
-    /**
-     * Stab types whose `desc` field is consumed: N_FUN's startLine,
-     * N_SLINE's line, N_LSYM (TaggedType/Typedef) declLine. Any other
-     * record with a non-zero desc is silently dropping a line number;
-     * tally it so we can see the surface we're missing.
-     */
-    private val descConsumers = setOf(StabType.N_FUN, StabType.N_SLINE, StabType.N_LSYM)
-
     internal fun passA(records: List<StabRecord>): Harvest {
         preSeedHeaders(records)
         for ((i, rec) in records.withIndex()) {
@@ -139,8 +124,14 @@ class Harvester(
             monitor.incrementProgress(1)
             if (rec.desc != 0) {
                 when (rec.type) {
-                    StabType.N_FUN, StabType.N_SLINE, StabType.N_LSYM -> {}
+                    StabType.N_FUN, StabType.N_SLINE, StabType.N_LSYM,
+                    StabType.N_PSYM, StabType.N_RSYM,
+                    StabType.N_GSYM, StabType.N_LCSYM, StabType.N_STSYM, StabType.N_ROSYM,
+                    -> {
+                    }
 
+                    // Any other record with a non-zero desc is silently dropping a line number;
+                    // tally it so we can see the surface we're missing.
                     else -> log(
                         "desc-dropped-${rec.type.name.removePrefix("N_").lowercase()}",
                         "desc=${rec.desc} name=${rec.name.take(40)}",
@@ -152,14 +143,12 @@ class Harvester(
             when (rec.type) {
                 StabType.N_SO if (rec.name.endsWith('/')) -> {
                     pendingDirectory = rec.name
-                    currentCuFinalised = false
                 }
 
                 StabType.N_SO if (rec.name.isNotEmpty()) -> {
-                    if (currentCuFinalised) continue // cfront extra N_SO — ignore
+                    finaliseGcc12FunctionSize()
                     currentCu = SourceFile.CUSource(rec.name, pendingDirectory)
                     pendingDirectory = null
-                    currentCuFinalised = true
                     if (rec.value != 0L) {
                         log(
                             "file-start",
@@ -182,7 +171,6 @@ class Harvester(
                     finaliseGcc12FunctionSize()
                     currentCu = null
                     pendingDirectory = null
-                    currentCuFinalised = false
                     currentSourceForLines = null
                 }
 
@@ -204,7 +192,7 @@ class Harvester(
                 // start address is by construction relative, otherwise
                 // it's already absolute.
                 StabType.N_SLINE -> {
-                    val source = currentSourceForLines ?: currentCu?.filename ?: continue
+                    val source = lineSource ?: continue
                     val funcStart = currentFunction?.addr?.address
                     val abs = when {
                         funcStart != null && rec.value < funcStart.offset -> funcStart.add(rec.value)
@@ -230,7 +218,7 @@ class Harvester(
                     val mangled = rec.name.substringBefore(':')
                     resolver.recordFromStab(mangled, addr)
                     try {
-                        when (val decl = parseSymbol(rec)) {
+                        when (val decl = parseSymbol(rec).body) {
                             is SymbolDecl.Function -> {
                                 val open = OpenFunction(
                                     name = mangled,
@@ -274,14 +262,11 @@ class Harvester(
                 StabType.N_PSYM, StabType.N_RSYM -> {
                     val open = currentFunction ?: continue
                     try {
-                        when (val decl = parseSymbol(rec)) {
-                            is SymbolDecl.StackParam, is SymbolDecl.RegParam ->
-                                open.params += ParamRecord(decl, rec.value)
-
-                            is SymbolDecl.RegLocal ->
-                                open.locals.add(LocalRecord(decl, rec.value, i))
-
-                            else -> log("unexpected-psym-rsym", "@$i: $decl")
+                        val sym = parseSymbol(rec)
+                        when (sym.body) {
+                            is SymbolDecl.StackParam, is SymbolDecl.RegParam -> open.params += sym
+                            is SymbolDecl.RegLocal -> open.locals += sym
+                            else -> log("unexpected-psym-rsym", "$sym")
                         }
                     } catch (e: StabsParseException) {
                         parseErrors++
@@ -290,7 +275,8 @@ class Harvester(
                 }
 
                 StabType.N_LSYM -> try {
-                    when (val decl = parseSymbol(rec)) {
+                    val sym = parseSymbol(rec)
+                    when (val decl = sym.body) {
                         is SymbolDecl.TaggedType -> {
                             // Outer typeAst + every InlineDef (`(0,N)=…`)
                             // bound inside the struct body. gcc heavily uses
@@ -306,7 +292,7 @@ class Harvester(
                                 decl.name,
                                 decl.type,
                                 declLine = rec.desc,
-                                declSourceFile = currentSourceForLines ?: currentCu?.filename,
+                                declSourceFile = lineSource,
                             )
                             appendAsts(outer, *walkDefinitions(decl.type).toTypedArray())
                         }
@@ -326,13 +312,12 @@ class Harvester(
                         }
 
                         is SymbolDecl.StackLocal, is SymbolDecl.RegLocal -> {
-                            currentFunction?.locals?.add(LocalRecord(decl, rec.value, i))
+                            currentFunction?.locals?.add(sym)
                         }
 
                         is SymbolDecl.StaticVar -> {
                             // Function-scope static variables get their actual address from rec.value
-                            symbolsByCu.getOrPut(currentCu!!.filename) { mutableListOf() } +=
-                                HarvestedSymbol(decl, rec.type, rec.value)
+                            symbolsByCu.getOrPut(currentCu!!.filename) { mutableListOf() } += sym
                         }
 
                         is SymbolDecl.Function, is SymbolDecl.Global, is SymbolDecl.RegParam, is SymbolDecl.StackParam,
@@ -493,12 +478,7 @@ class Harvester(
 
     private fun harvestSymbol(rec: StabRecord, onError: () -> Unit) {
         try {
-            val decl = parseSymbol(rec)
-            symbolsByCu.getOrPut(currentCu!!.filename) { mutableListOf() } += HarvestedSymbol(
-                decl,
-                rec.type,
-                rec.value,
-            )
+            symbolsByCu.getOrPut(currentCu!!.filename) { mutableListOf() } += parseSymbol(rec)
         } catch (e: StabsParseException) {
             onError()
             log("parse-error", "@${rec.recordIndex} '${rec.name.take(80)}': ${e.message}")
@@ -596,7 +576,11 @@ class Harvester(
         }
     }
 
-    fun parseSymbol(rec: StabRecord) = Parser(rec.name).parseSymbol().globalize(this).also {
-        appendAsts(*walkDefinitions(it.type).toTypedArray())
-    }
+    fun parseSymbol(rec: StabRecord) = SymbolRecord(
+        rec,
+        Parser(rec.name).parseSymbol().globalize(this).also {
+            appendAsts(*walkDefinitions(it.type).toTypedArray())
+        },
+        lineSource,
+    )
 }
