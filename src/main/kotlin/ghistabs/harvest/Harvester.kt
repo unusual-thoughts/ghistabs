@@ -281,7 +281,10 @@ class Harvester(
                                 declLine = sym.declLine,
                                 declSourceFile = sym.sourceFile,
                             )
-                            appendAsts(outer, *walkDefinitions(decl.type).toTypedArray())
+                            appendAsts(
+                                outer,
+                                *walkDefinitions(decl.type, sym.declLine, sym.sourceFile).toTypedArray(),
+                            )
                         }
 
                         is SymbolDecl.Typedef -> {
@@ -293,8 +296,18 @@ class Harvester(
                             // definition at the same id in another CU
                             // (every box2d typedef went this way).
                             if (decl.type !is TypeDecl.Ref || decl.type.id != decl.id) {
-                                val outer = TypeAst(currentCu!!, decl.id, decl.name, decl.type)
-                                appendAsts(outer, *walkDefinitions(decl.type).toTypedArray())
+                                val outer = TypeAst(
+                                    currentCu!!,
+                                    decl.id,
+                                    decl.name,
+                                    decl.type,
+                                    declLine = sym.declLine,
+                                    declSourceFile = sym.sourceFile,
+                                )
+                                appendAsts(
+                                    outer,
+                                    *walkDefinitions(decl.type, sym.declLine, sym.sourceFile).toTypedArray(),
+                                )
                             }
                         }
 
@@ -421,12 +434,16 @@ class Harvester(
                 // has no binding anywhere; otherwise the materialiser can
                 // resolve `Ref(id)` directly.
                 if (ref.id in typeAsts) continue
+                // Inheritance-pseudo-field XRef: synthesized on behalf of
+                // the outer struct, so inherit its declaration source.
                 synthetic.add(
                     TypeAst(
                         cu = ast.cu,
                         id = ref.id,
                         name = field.name,
                         body = TypeDecl.XRef(AggrKind.STRUCT, field.name),
+                        declLine = ast.declLine,
+                        declSourceFile = ast.declSourceFile,
                     ),
                 )
             }
@@ -472,42 +489,56 @@ class Harvester(
         }
     }
 
-    fun walkDefinitions(decl: TypeDecl<GlobalTypeId>): List<TypeAst> = when (decl) {
-        is TypeDecl.Builtin, is TypeDecl.Complex, is TypeDecl.Float, is TypeDecl.Enum, is TypeDecl.Range,
-        is TypeDecl.Ref, is TypeDecl.XRef,
-        -> listOf()
+    /**
+     * Walk a type AST gathering [TypeAst]s for every [TypeDecl.InlineDef]
+     * encountered. The anonymous nested TypeAsts inherit the enclosing
+     * declaration's `declLine` / `declSourceFile` — they were declared
+     * at the same source location as the outer named type (a nested
+     * pointer/array/method-return inside `:T Foo:...` lives at the same
+     * `Foo`-declaration line as Foo itself).
+     */
+    fun walkDefinitions(
+        decl: TypeDecl<GlobalTypeId>,
+        declLine: Int = 0,
+        declSourceFile: String? = null,
+    ): List<TypeAst> {
+        fun walk(d: TypeDecl<GlobalTypeId>): List<TypeAst> = when (d) {
+            is TypeDecl.Builtin, is TypeDecl.Complex, is TypeDecl.Float, is TypeDecl.Enum, is TypeDecl.Range,
+            is TypeDecl.Ref, is TypeDecl.XRef,
+            -> listOf()
 
-        is TypeDecl.Const -> walkDefinitions(decl.inner)
+            is TypeDecl.Const -> walk(d.inner)
+            is TypeDecl.Volatile -> walk(d.inner)
+            is TypeDecl.WithSizeAttr -> walk(d.inner)
+            is TypeDecl.Pointer -> walk(d.pointee)
+            is TypeDecl.Reference -> walk(d.referent)
+            is TypeDecl.Array -> walk(d.element) + (d.indexType?.let { walk(it) } ?: listOf())
+            is TypeDecl.FunctionT -> d.params.flatMap { walk(it) } + walk(d.ret)
+            is TypeDecl.Method -> d.params.flatMap { walk(it) } + walk(d.ret) + walk(d.cls)
+            is TypeDecl.Struct -> d.bases.flatMap { walk(it.type) } +
+                d.fields.flatMap { walk(it.type) } +
+                d.methods.flatMap { walk(it.signature) }
 
-        is TypeDecl.Volatile -> walkDefinitions(decl.inner)
-
-        is TypeDecl.WithSizeAttr -> walkDefinitions(decl.inner)
-
-        is TypeDecl.Pointer -> walkDefinitions(decl.pointee)
-
-        is TypeDecl.Reference -> walkDefinitions(decl.referent)
-
-        is TypeDecl.Array -> walkDefinitions(decl.element) + (decl.indexType?.let { walkDefinitions(it) } ?: listOf())
-
-        is TypeDecl.FunctionT -> decl.params.flatMap { walkDefinitions(it) } + walkDefinitions(decl.ret)
-
-        is TypeDecl.Method -> decl.params.flatMap { walkDefinitions(it) } + walkDefinitions(decl.ret) + walkDefinitions(
-            decl.cls,
-        )
-
-        is TypeDecl.Struct -> decl.bases.flatMap { walkDefinitions(it.type) } +
-            decl.fields.flatMap { walkDefinitions(it.type) } +
-            decl.methods.flatMap { walkDefinitions(it.signature) }
-
-        // Emit the outer InlineDef's TypeAst AND recurse into its body —
-        // gcc nests InlineDefs (e.g. an outer Method whose return type is
-        // itself an inline-defined Pointer-to-X), and without the
-        // recursion the inner ids are referenced by other types but
-        // never registered. Result: the contentHash oracle can't resolve
-        // the Refs, per-CU clones diverge, and the appendAsts collision
-        // log surfaces hundreds of false "different hash" entries.
-        is TypeDecl.InlineDef -> listOf(TypeAst(currentCu!!, decl.id, null, decl.body)) +
-            walkDefinitions(decl.body)
+            // Emit the outer InlineDef's TypeAst AND recurse into its
+            // body — gcc nests InlineDefs (e.g. an outer Method whose
+            // return type is itself an inline-defined Pointer-to-X),
+            // and without the recursion the inner ids are referenced by
+            // other types but never registered. Result: the contentHash
+            // oracle can't resolve the Refs, per-CU clones diverge, and
+            // the appendAsts collision log surfaces hundreds of false
+            // "different hash" entries.
+            is TypeDecl.InlineDef -> listOf(
+                TypeAst(
+                    currentCu!!,
+                    d.id,
+                    null,
+                    d.body,
+                    declLine = declLine,
+                    declSourceFile = declSourceFile,
+                ),
+            ) + walk(d.body)
+        }
+        return walk(decl)
     }
 
     /**
@@ -566,7 +597,7 @@ class Harvester(
     fun parseSymbol(rec: StabRecord) = SymbolRecord(
         rec,
         Parser(rec.name).parseSymbol().globalize(this).also {
-            appendAsts(*walkDefinitions(it.type).toTypedArray())
+            appendAsts(*walkDefinitions(it.type, rec.desc, lineSource).toTypedArray())
         },
         lineSource,
     )
