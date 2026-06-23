@@ -441,12 +441,17 @@ class TypeRegistry(
      * (empty class, possibly with bases that take some unknown space).
      */
     private fun usefulStructSize(body: TypeDecl.Struct<GlobalTypeId>): Int {
-        val fieldEnd = body.fields
-            .filter { !it.isStatic }
-            .maxOfOrNull { ((it.offsetBits + it.sizeBits + 7) / 8).toInt() }
-            ?: 0
-        if (fieldEnd == 0) return body.sizeBytes.toInt()
-        return fieldEnd.coerceAtMost(body.sizeBytes.toInt())
+        val nonStatic = body.fields.filter { !it.isStatic }
+        if (nonStatic.isEmpty()) return body.sizeBytes.toInt()
+        val fieldEnd = nonStatic.maxOf { ((it.offsetBits + it.sizeBits + 7) / 8).toInt() }
+        // Round up to the program's default alignment for trailing
+        // padding. DataOrganizationImpl.getAlignedOffset handles both
+        // power-of-two and arbitrary alignments uniformly.
+        val aligned = DataOrganizationImpl.getAlignedOffset(
+            dtm.dataOrganization.defaultAlignment,
+            fieldEnd,
+        )
+        return aligned.coerceAtMost(body.sizeBytes.toInt())
     }
 
     /**
