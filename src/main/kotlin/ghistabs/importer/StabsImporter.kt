@@ -486,11 +486,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
             else -> return
         }
         if (resolvedDt == null) {
-            val localName = when (decl) {
-                is SymbolDecl.StackLocal -> decl.name
-                is SymbolDecl.RegLocal -> decl.name
-            }
-            ctx.diagnostics.recordDegradation("local-untyped", "${func.name}.$localName")
+            ctx.diagnostics.recordDegradation("local-untyped", "${func.name}.${decl.name}]")
         }
         val dt = resolvedDt ?: Undefined4DataType.dataType
         try {
