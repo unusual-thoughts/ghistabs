@@ -62,35 +62,29 @@ class DemanglerReplaceIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
         val program = builder.program
         val dtm = program.dataTypeManager
 
+        val ctx = program.defaultContext()
+        val registry = ctx.defaultTypeRegistry()
+
         // Seed /Demangler/Foo as empty structure (stub) within a transaction
         program.runTransaction("setup-test") {
             val stubPath = CategoryPath("/Demangler")
             val stubDt = StructureDataType(stubPath, "Foo", 0)
             dtm.addDataType(stubDt, DataTypeConflictHandler.KEEP_HANDLER)
 
-            // Seed /proj/Foo as non-empty structure with one int32 field (replacement)
+            // Seed /proj/Foo as non-empty structure with one int32 field (replacement).
+            // Route through registry.register so it lands in extrasByName, which
+            // is what DemanglerReplacer's authoritative findByName consults.
             val projPath = CategoryPath("/proj")
             val projDt = StructureDataType(projPath, "Foo", 4)
-            // Resolve the int type before adding to avoid null
             val intType = dtm.getDataType(CategoryPath("/"), "int")
             if (intType != null) {
                 projDt.add(intType, 4, "fieldA", "first int")
             }
-            dtm.addDataType(projDt, DataTypeConflictHandler.KEEP_HANDLER)
+            registry.register(projDt)
         }
-
-        // Create ImportContext (minimal setup for DemanglerReplacer)
-        val ctx = program.defaultContext()
-
-        // Note: In a real scenario, TypeRegistry would be populated by StabsImporter.
-        // For this test, we construct a minimal TypeRegistry directly.
-        // This test demonstrates the real-shaped code but won't execute fully due to
-        // harness blocker #40 (integrationTest JVM crash).
-        // The test is structured to pass if/when that blocker is resolved.
 
         // Run DemanglerReplacer inside a transaction — `dtm.replaceDataType`
         // (used when a real replacement is found) requires one.
-        val registry = ctx.defaultTypeRegistry()
         program.runTransaction("demangler-replace") {
             DemanglerReplacer(ctx, registry).run()
         }
