@@ -154,14 +154,19 @@ class Harvester(
                     currentSourceForLines = rec.name
                 }
 
-                // N_SLINE: line-number entry. desc = line, value = code
-                // offset. The current source filename is whichever the
-                // most recent N_SOL set (or the CU's own filename if no
-                // N_SOL has fired yet).
+                // N_SLINE: line-number entry. desc = line, value =
+                // function-relative offset (gcc/COFF convention — the
+                // dbx-historical form is also relative). Convert to
+                // absolute by adding the current function's start
+                // address. If no function is open (top-level statement,
+                // global initialiser), `buildAddress` treats `value` as
+                // the raw address.
                 StabType.N_SLINE -> {
                     val source = currentSourceForLines ?: currentCu?.filename ?: continue
+                    val abs = currentFunction?.addr?.address?.add(rec.value)
+                        ?: resolver.buildAddress(rec.value)
                     lineEntriesByFile.getOrPut(source) { mutableListOf() } +=
-                        LineEntry(rec.desc, SerializableAddress(resolver.buildAddress(rec.value)))
+                        LineEntry(rec.desc, SerializableAddress(abs))
                 }
 
                 StabType.N_FUN -> if (rec.name.isEmpty()) {
