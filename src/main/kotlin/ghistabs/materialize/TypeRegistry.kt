@@ -469,14 +469,19 @@ class TypeRegistry(
         val nonStatic = body.fields.filter { !it.isStatic }
         if (nonStatic.isEmpty()) return body.sizeBytes.toInt()
         val fieldEnd = nonStatic.maxOf { ((it.offsetBits + it.sizeBits + 7) / 8).toInt() }
-        // Round up to the program's default alignment for trailing
-        // padding. DataOrganizationImpl.getAlignedOffset handles both
-        // power-of-two and arbitrary alignments uniformly.
-        val aligned = DataOrganizationImpl.getAlignedOffset(
-            dtm.dataOrganization.defaultAlignment,
-            fieldEnd,
-        )
-        return aligned.coerceAtMost(body.sizeBytes.toInt())
+        val claimed = body.sizeBytes.toInt()
+        // Only trim when the gap between stab-claimed size and last
+        // described byte is too large to be legitimate trailing alignment
+        // padding. A struct's tail padding is bounded by
+        // (struct alignment - 1) ≤ maxFieldSize - 1; anything beyond that
+        // can't be padding and must be unrecovered fields (the case we
+        // want to truncate — CLexStream 328→192 etc.). Sidesteps having
+        // to compute the struct's actual alignment, which would require
+        // either resolved field DataTypes (not available here) or
+        // ABI-specific assumptions (long-long alignment, packing pragmas,
+        // x86win's defaultAlignment=1, …).
+        val maxFieldSize = nonStatic.maxOf { ((it.sizeBits + 7) / 8).toInt() }
+        return if (claimed - fieldEnd > maxFieldSize) fieldEnd else claimed
     }
 
     /**
