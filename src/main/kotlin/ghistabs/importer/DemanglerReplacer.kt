@@ -3,6 +3,7 @@ package ghistabs.importer
 import ghidra.program.model.data.*
 import ghidra.program.model.data.Array
 import ghistabs.diagnose.DiagnosticSink
+import ghistabs.materialize.TypeRegistry
 import java.util.*
 
 /**
@@ -34,10 +35,17 @@ sealed class Skip(open val reason: String) {
 }
 
 /**
- * Adapter that uses Ghidra's DataTypeManager to execute demangler stub replacements.
- * FIXME: use  authoritative map of canonicalkey -> candidate instead of guessing (maybe use TypeRegistry.findByName)
+ * Adapter that uses Ghidra's DataTypeManager to execute demangler stub
+ * replacements. Candidate lookup goes through [TypeRegistry.findByName],
+ * which consults the authoritative `byCanonicalKey` (for Struct/Enum)
+ * and `registeredTypedefsByName` (for named typedef aliases) — no
+ * walking-all-DTM heuristics. When multiple candidates share a simple
+ * name, the stub's path with `/Demangler` stripped acts as the
+ * preferred-category hint (so `/Demangler/std/string` selects the
+ * candidate at `/std/string` over `/string` or `/stabs/string`).
  */
-class DemanglerReplacer(private val ctx: ImportContext<*>) : DiagnosticSink by ctx.sink {
+class DemanglerReplacer(private val ctx: ImportContext<*>, private val typeRegistry: TypeRegistry) :
+    DiagnosticSink by ctx.sink {
     companion object {
         /**
          * Pure algorithm: given stubs and replacements, decide which replacements are safe.
@@ -87,46 +95,51 @@ class DemanglerReplacer(private val ctx: ImportContext<*>) : DiagnosticSink by c
         val replacements = mutableMapOf<String, Pair<ReplacementRecord, DataType>>()
         val stubDtByPath = mutableMapOf<String, DataType>()
 
-        // Precompute name-to-DataTypes index to find replacement candidates.
-        // Exclude /Demangler/* entries — those are the stubs we want to *replace*,
-        // not candidates to replace anything with. Without this filter, a real
-        // `/proj/XapArgRegInst` paired with a stub `/Demangler/XapArgRegInst`
-        // gives `candidates.size == 2`, both get skipped, and the stub remains.
+        // Name index over the whole DTM minus /Demangler/* (those ARE the
+        // stubs) and minus empty Structures (substituting one empty stub
+        // for another is meaningless theatre). Ghidra-bundled primitives
+        // and real Structures stay — they convey actual information.
         val nameIndex = dtm.allDataTypes.asSequence()
             .filterNot { it.categoryPath.path.startsWith("/Demangler") }
+            .filterNot { it is Structure && (it.length == 0 || it.numComponents == 0) }
             .groupBy { it.name }
 
         for (dt in dtm.allDataTypes) {
-            // Collect all stubs under /Demangler
             if (dt.categoryPath.path.startsWith("/Demangler") && dt is Structure) {
-                val isEmptyStructure = dt.length == 0 || dt.numComponents == 0
                 stubs.add(
                     StubRecord(
                         pathName = dt.pathName,
                         simpleName = dt.name,
-                        isEmptyStructure = isEmptyStructure,
+                        isEmptyStructure = dt.length == 0 || dt.numComponents == 0,
                     ),
                 )
                 stubDtByPath[dt.pathName] = dt
-                continue
             }
         }
 
-        // For each stub, find the best candidate among same-simple-name
-        // DataTypes. With multiple candidates (e.g. `/string` built-in +
-        // `/stabs/string` typedef + `/std/string` Structure), the old
-        // size-must-be-1 rule rejected everything; instead prefer the
-        // candidate whose path matches the stub's namespace path with
-        // `/Demangler` stripped (so `/Demangler/std/string → /std/string`).
-        // Fallback ranking: TypeDef > Structure > other.
+        // Pick a candidate per stub. Priority:
+        // 1. Authoritative TypeRegistry lookup — disambiguates among types
+        //    WE registered using the byCanonicalKey + extras indices and
+        //    the preferred-category hint (`/Demangler/std/string` prefers
+        //    a candidate under `/std`).
+        // 2. nameIndex scan — covers non-empty DTM-resident types we
+        //    didn't author (Ghidra-bundled primitives, demangler-created
+        //    elsewhere, etc.) with the same preferred-path / TypeDef-then-
+        //    Structure ranking.
         for (stub in stubs) {
-            val candidates = nameIndex[stub.simpleName] ?: continue
-            val preferredPath = stub.pathName.removePrefix("/Demangler")
-            val candidate = candidates.firstOrNull { it.pathName == preferredPath }
-                ?: candidates.firstOrNull { it is TypeDef }
-                ?: candidates.firstOrNull { it is Structure }
-                ?: candidates.singleOrNull()
-                ?: continue
+            val preferredCategory = stub.pathName.removePrefix("/Demangler")
+                .substringBeforeLast('/', missingDelimiterValue = "/")
+                .ifEmpty { "/" }
+                .let { CategoryPath(it) }
+            val authoritative = typeRegistry.findByName(stub.simpleName, preferredCategory)
+            val candidate = authoritative ?: run {
+                val all = nameIndex[stub.simpleName] ?: return@run null
+                val preferredPath = stub.pathName.removePrefix("/Demangler")
+                all.firstOrNull { it.pathName == preferredPath }
+                    ?: all.firstOrNull { it is TypeDef }
+                    ?: all.firstOrNull { it is Structure }
+                    ?: all.singleOrNull()
+            } ?: continue
             val deps = collectDependsOnPaths(candidate)
             replacements[stub.simpleName] = ReplacementRecord(
                 candidate.pathName,

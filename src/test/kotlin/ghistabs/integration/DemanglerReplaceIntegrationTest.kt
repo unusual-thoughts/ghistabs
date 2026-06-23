@@ -92,7 +92,7 @@ class DemanglerReplaceIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
         // (used when a real replacement is found) requires one.
         val registry = ctx.defaultTypeRegistry()
         program.runTransaction("demangler-replace") {
-            DemanglerReplacer(ctx).run()
+            DemanglerReplacer(ctx, registry).run()
         }
 
         // Verify that the stub is gone and the replacement remains.
@@ -142,7 +142,7 @@ class DemanglerReplaceIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
         // Run DemanglerReplPacer (should skip gracefully since stub is absent)
         val registry = ctx.defaultTypeRegistry()
         // Should not throw
-        DemanglerReplacer(ctx).run()
+        DemanglerReplacer(ctx, registry).run()
 
         // Assert /proj/Foo still exists
         val projPath = CategoryPath("/proj")

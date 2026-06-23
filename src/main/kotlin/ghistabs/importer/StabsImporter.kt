@@ -317,7 +317,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
         // matching stab-sourced type with the same simple name. Must run
         // AFTER demangleMangledLabels so every `/Demangler/...` placeholder
         // created during signature demangling is visible to the scan.
-        DemanglerReplacer(ctx).run()
+        DemanglerReplacer(ctx, typeRegistry).run()
 
         return ApplyResult(functions, globals, classes)
     }
