@@ -367,15 +367,13 @@ class TypeRegistry(
             ArrayDataType(elem, numElements, elem.length)
         }
 
-        is TypeDecl.FunctionT -> {
-            val fd = FunctionDefinitionDataType(CategoryPath("/stabs/unnamed"), "FUNCTION_${decl.hashCode()}", dtm)
-            fd.returnType = dataTypeFor(decl.ret) ?: VoidDataType()
-            val params = decl.params.mapIndexed { i, p ->
-                ParameterDefinitionImpl("arg$i", dataTypeFor(p) ?: undef("functionT-param", "(anon)[$i]", p), null)
-            }.toTypedArray()
-            fd.setArguments(*params)
-            fd
-        }
+        is TypeDecl.FunctionT -> buildFunctionDefinition(
+            category = CategoryPath("/stabs/unnamed"),
+            name = "FUNCTION_${decl.hashCode()}",
+            ret = decl.ret,
+            params = decl.params,
+            at = "FunctionT(anon)",
+        )
 
         // XRef → canonical TypeAst by (kind, tagName), then look up the
         // materialised DataType by its id. Unified across struct / union
@@ -424,13 +422,26 @@ class TypeRegistry(
             diagnostics.recordDegradation("function-ret-untyped", at, ret.toString())
             VoidDataType()
         }
-        val thisParam = thisType?.let { ParameterDefinitionImpl("this", it, null) }
-        val otherParams = params.mapIndexed { i, p ->
-            ParameterDefinitionImpl(
-                "arg$i",
-                dataTypeFor(p) ?: undef("function-param", "$at[$i]", p),
-                null,
-            )
+        val thisParam = thisType?.let {
+            val safeThis = if (it is VoidDataType) PointerDataType(VoidDataType(), dtm) else it
+            ParameterDefinitionImpl("this", safeThis, null)
+        }
+        // gcc stabs method signatures end in a void-typed sentinel marking
+        // end-of-args; passing that as a real parameter trips Ghidra's
+        // `void type not permitted` assertion in ParameterDefinitionImpl.
+        // Drop only the trailing void (the documented gcc convention) to
+        // preserve param count for inherited-virtual signature matching in
+        // non-terminator positions; if void somehow shows up mid-list,
+        // substitute Undefined4 to keep arity stable.
+        val effectiveParams = if (params.isNotEmpty() && dataTypeFor(params.last()) is VoidDataType) {
+            params.dropLast(1)
+        } else {
+            params
+        }
+        val otherParams = effectiveParams.mapIndexed { i, p ->
+            val resolved = dataTypeFor(p) ?: undef("function-param", "$at[$i]", p)
+            val safe = if (resolved is VoidDataType) Undefined4DataType.dataType else resolved
+            ParameterDefinitionImpl("arg$i", safe, null)
         }
         fd.setArguments(*(listOfNotNull(thisParam) + otherParams).toTypedArray())
         // Calling conventions that aren't known to this program's CompilerSpec
@@ -532,6 +543,16 @@ class TypeRegistry(
                 byId[ast.id] = dt
                 return dt
             }
+        }
+        // gcc/gdb void-encoding: a TypeAst whose body is Ref(self.id)
+        // means void. Resolve before creating a placeholder, otherwise
+        // subsequent tryGetExisting calls return the empty-Structure
+        // placeholder and the VoidDataType fallback in dataTypeFor never
+        // fires. See [isVoidSelfRef].
+        if (ast.body is TypeDecl.Ref && ast.body.id == ast.id) {
+            val void = VoidDataType()
+            byId[ast.id] = void
+            return void
         }
         val placeholder = placeholders.getOrPut(ast.id) {
             makePlaceholder(ast, CategoryPath("/stabs"), "ref-stub")

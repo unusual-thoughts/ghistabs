@@ -366,11 +366,17 @@ class ClassBuilder(
         // replacing the formal-param list — even with Undefined4 for slots we
         // couldn't type — gives a clean `(this, Undefined4 arg0)` instead.
         val resolvedParams = paramDecls.map { typeRegistry.dataTypeFor(it) }
-        val paramTypes = if (m.signature is TypeDecl.Method) {
+        // gcc encodes the end-of-args sentinel as void on every Method-style
+        // signature; check the UNWRAPPED form, not `m.signature` directly
+        // (gcc emits signatures wrapped in InlineDef / Ref, where the
+        // wrapper isn't a Method itself). Also substitute mid-list voids
+        // (defensive — void isn't a legal real param type) to keep
+        // ParameterImpl happy below.
+        val paramTypes = if (unwrapSignature(m.signature) is TypeDecl.Method) {
             resolvedParams.dropLastWhile { it is VoidDataType }
         } else {
             resolvedParams
-        }
+        }.map { if (it is VoidDataType) Undefined4DataType.dataType else it }
         val unresolvedCount = paramTypes.count { it == null }
         if (unresolvedCount > 0) {
             paramTypes.forEachIndexed { i, pdt ->
