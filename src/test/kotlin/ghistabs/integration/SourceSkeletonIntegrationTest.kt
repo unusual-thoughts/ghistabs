@@ -97,7 +97,11 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             // skeleton — they have no place to go.
             val funcToSource = attributeFunctionsBySource(harvest)
             val lineEntries = rerouteLineEntriesByFunc(harvest, funcToSource)
-            val sources = (lineEntries.keys + funcToSource.values)
+            val sources = (
+                lineEntries.keys +
+                    funcToSource.values +
+                    harvest.typeAsts.values.map { it.id.source.filename }
+                )
                 .filter { it.isNotEmpty() }
                 .toSet()
 
@@ -117,6 +121,32 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         } finally {
             loadResults.close()
         }
+    }
+
+    /**
+     * Pull the outermost class / namespace name out of an Itanium-ABI
+     * mangled symbol — e.g. `_ZN13EquExpressionC1ERKS_` → `EquExpression`,
+     * `_ZN7CParser11ParseSymbolEv` → `CParser`. Used to look up the
+     * class's `declSourceFile` and pin the function there when N_SLINE
+     * would otherwise drag a defaulted/implicit method into whichever
+     * header materialised it (e.g. gcc's implicit `EquExpression` copy
+     * ctor materialised inside `std::pair<…, EquExpression>` lands at
+     * `stl_pair.h:84`; the class itself lives elsewhere).
+     *
+     * Returns null for non-nested-name mangles (`_Z…` without `N`) and
+     * for symbols whose first segment is a substitution-prefix like
+     * `St` (std) — we WANT those to keep their N_SLINE attribution.
+     */
+    private fun outermostClassFrom(mangled: String): String? {
+        if (!mangled.startsWith("_ZN")) return null
+        var i = 3
+        // First segment must be a length-prefixed name (digits).
+        if (i >= mangled.length || !mangled[i].isDigit()) return null
+        var j = i
+        while (j < mangled.length && mangled[j].isDigit()) j++
+        val len = mangled.substring(i, j).toIntOrNull() ?: return null
+        if (j + len > mangled.length) return null
+        return mangled.substring(j, j + len)
     }
 
     /**
@@ -156,10 +186,31 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
      * attribution and silently drop from every skeleton.
      */
     private fun attributeFunctionsBySource(harvest: Harvest): Map<OpenFunction, String> {
+        // Index TypeAsts by simple name → the BINCL-anchored source of
+        // the type (header filename when it came in through #include,
+        // CU filename otherwise). `declSourceFile` would be wrong here
+        // — it tracks N_SOL at N_LSYM time, which for a type defined
+        // in `rep.h` is whichever .cpp was being compiled, not `rep.h`.
+        val classSourceByName = mutableMapOf<String, String>()
+        for (ast in harvest.typeAsts.values) {
+            val n = ast.name ?: continue
+            classSourceByName.putIfAbsent(n, ast.id.source.filename)
+        }
+
         val out = mutableMapOf<OpenFunction, String>()
         for (f in harvest.openFunctions) {
             if (isSyntheticInit(f)) {
                 out[f] = f.cu.filename
+                continue
+            }
+            // Prefer the source where the function's class is declared,
+            // when we can find it. This rescues defaulted/implicit
+            // methods that gcc materialises inside an unrelated
+            // template header (`EquExpression`'s implicit copy ctor
+            // emitted inside `std::pair<…, EquExpression>` → `stl_pair.h`).
+            val classSrc = outermostClassFrom(f.name)?.let { classSourceByName[it] }
+            if (classSrc != null) {
+                out[f] = classSrc
                 continue
             }
             val lo = f.addr.address.offset
@@ -223,7 +274,10 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     ): String {
         val rawFuncs = harvest.openFunctions.filter { funcToSource[it] == source }
         val lines = lineEntries[source].orEmpty()
-        if (rawFuncs.isEmpty() && lines.isEmpty()) return ""
+        val hasTypeDecls = harvest.typeAsts.values.any {
+            it.id.source.filename == source && it.name != null && it.declLine > 0
+        }
+        if (rawFuncs.isEmpty() && lines.isEmpty() && !hasTypeDecls) return ""
 
         data class FuncRange(val func: OpenFunction, val startLine: Int, val endLine: Int)
 
@@ -250,6 +304,9 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             lines.maxOfOrNull { it.line } ?: 0,
             ranges.maxOfOrNull { it.startLine } ?: 0,
             ranges.maxOfOrNull { it.endLine } ?: 0,
+            harvest.typeAsts.values
+                .filter { it.id.source.filename == source && it.declLine > 0 }
+                .maxOfOrNull { it.declLine } ?: 0,
         ).max()
         if (maxLine == 0) return ""
 
@@ -296,8 +353,13 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         data class TypeDeclKey(val line: Int, val name: String, val bodyKind: String)
 
         val seenTypeDecls = mutableSetOf<TypeDeclKey>()
+        // BINCL-anchored source for type attribution: a typedef from
+        // `rep.h` lands in rep.h's skeleton even though gcc emits its
+        // N_LSYM under whatever N_SOL was last set (typically the
+        // including .cpp). `declLine` is still useful — gcc 3.x writes
+        // the source line into N_LSYM's `desc`.
         for (ast in harvest.typeAsts.values
-            .filter { it.declSourceFile == source && it.declLine in 1..maxLine && it.name != null }
+            .filter { it.id.source.filename == source && it.declLine in 1..maxLine && it.name != null }
             .sortedBy { it.declLine }) {
             val line = ast.declLine
             val name = ast.name ?: continue
