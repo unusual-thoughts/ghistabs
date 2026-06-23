@@ -11,11 +11,7 @@ import ghistabs.diagnose.ApplyErrorBucket
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.Level
 import ghistabs.diagnose.isInlineStdMember
-import ghistabs.harvest.Harvest
-import ghistabs.harvest.Harvester
-import ghistabs.harvest.LocalRecord
-import ghistabs.harvest.OpenFunction
-import ghistabs.harvest.TypeResolver
+import ghistabs.harvest.*
 import ghistabs.materialize.TypeRegistry
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.StabReader
@@ -103,8 +99,8 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
         ctx.diagnostics.inc("harvest-functions", harvest.openFunctions.size.toLong())
         val allSyms = harvest.symbolsByCu.values.flatten()
         ctx.diagnostics.inc("harvest-symbols", allSyms.size.toLong())
-        ctx.diagnostics.inc("harvest-globals", allSyms.count { it.decl is SymbolDecl.Global }.toLong())
-        ctx.diagnostics.inc("harvest-statics", allSyms.count { it.decl is SymbolDecl.StaticVar }.toLong())
+        ctx.diagnostics.inc("harvest-globals", allSyms.count { it.body is SymbolDecl.Global }.toLong())
+        ctx.diagnostics.inc("harvest-statics", allSyms.count { it.body is SymbolDecl.StaticVar }.toLong())
         ctx.diagnostics.inc("harvest-typeAsts", harvest.typeAsts.size.toLong())
         // typeAst breakdown by AST kind — surfaces struct/enum/typedef weights.
         val byKind = harvest.typeAsts.values.groupingBy { it.body::class.simpleName ?: "Unknown" }.eachCount()
@@ -181,12 +177,12 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
                 // can't always evict, producing duplicate-`this` signatures.
                 val params = open.params
                     .filterNot {
-                        val d = it.decl
+                        val d = it.body
                         (d is SymbolDecl.StackParam && d.name == "this") ||
                             (d is SymbolDecl.RegParam && d.name == "this")
                     }
                     .mapIndexed { i, p ->
-                        val pdecl = p.decl
+                        val pdecl = p.body
                         val (pname, pdt) = when (pdecl) {
                             is SymbolDecl.StackParam -> pdecl.name to typeRegistry.dataTypeFor(pdecl.type)
                             is SymbolDecl.RegParam -> pdecl.name to typeRegistry.dataTypeFor(pdecl.type)
@@ -234,7 +230,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
         for ((cu, syms) in harvest.symbolsByCu) {
             for (h in syms) {
                 try {
-                    when (val d = h.decl) {
+                    when (val d = h.body) {
                         is SymbolDecl.Global -> applyGlobal(d, typeRegistry).let { if (it) globals++ }
 
                         is SymbolDecl.StaticVar -> applyStatic(d, h.rawValue, typeRegistry).let {
@@ -244,7 +240,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
                         else -> log("unexpected-symbol", "$d")
                     }
                 } catch (t: Throwable) {
-                    log("apply-error", "symbol ${h.decl.name} in $cu: ${t.message}")
+                    log("apply-error", "symbol ${h.body.name} in $cu: ${t.message}")
                 }
             }
         }
@@ -408,7 +404,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
 
         // Build list of harvested symbols with resolved addresses
         val harvestedAddrs = harvest.allHarvestedSymbols.mapNotNull {
-            val name = (it.decl as? SymbolDecl.Global)?.name ?: return@mapNotNull null
+            val name = (it.body as? SymbolDecl.Global)?.name ?: return@mapNotNull null
             val addr = ctx.resolver.resolve(name)?.offset
             HarvestedAddr(name, addr)
         }
@@ -482,8 +478,8 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
         return table.getOrNull(dbxNum)
     }
 
-    private fun applyLocal(func: Function, loc: LocalRecord, typeRegistry: TypeRegistry, source: SourceType) {
-        val decl = loc.decl
+    private fun applyLocal(func: Function, loc: SymbolRecord, typeRegistry: TypeRegistry, source: SourceType) {
+        val decl = loc.body
         val resolvedDt = when (decl) {
             is SymbolDecl.StackLocal -> typeRegistry.dataTypeFor(decl.type)
             is SymbolDecl.RegLocal -> typeRegistry.dataTypeFor(decl.type)
@@ -558,7 +554,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
                     ctx.diagnostics.recordEmptyScope(addr.toString(), func.name)
                     continue
                 }
-                val text = "Stabs scope locals: " + localsInScope.joinToString(", ") { it.decl.name }
+                val text = "Stabs scope locals: " + localsInScope.joinToString(", ") { it.body.name }
                 ctx.program.listing.setComment(addr, CommentType.PLATE, text)
             } catch (e: Exception) {
                 log("scope-comment-error", "Failed to set scope comment: ${e.message}")
