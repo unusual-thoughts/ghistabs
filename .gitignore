@@ -34,3 +34,11 @@ src/test/resources/binaries/
 # Per-run debug artifacts produced by StabsAnalyzerRegressionTest
 src/test/resources/harvests/
 src/test/resources/logs/
+src/test/resources/harvest.afters/
+src/test/resources/harvest.concurrents/
+src/test/resources/records/
+
+# Local-only scratch & working copies kept out of git
+src/test/resources.bak/
+docs/implementation-plans/
+tinyxml2/
