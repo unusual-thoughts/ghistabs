@@ -95,15 +95,6 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val typeRegis
         val replacements = mutableMapOf<String, Pair<ReplacementRecord, DataType>>()
         val stubDtByPath = mutableMapOf<String, DataType>()
 
-        // Name index over the whole DTM minus /Demangler/* (those ARE the
-        // stubs) and minus empty Structures (substituting one empty stub
-        // for another is meaningless theatre). Ghidra-bundled primitives
-        // and real Structures stay — they convey actual information.
-        val nameIndex = dtm.allDataTypes.asSequence()
-            .filterNot { it.categoryPath.path.startsWith("/Demangler") }
-            .filterNot { it is Structure && (it.length == 0 || it.numComponents == 0) }
-            .groupBy { it.name }
-
         for (dt in dtm.allDataTypes) {
             if (dt.categoryPath.path.startsWith("/Demangler") && dt is Structure) {
                 stubs.add(
@@ -117,32 +108,19 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val typeRegis
             }
         }
 
-        // Pick a candidate per stub. Priority:
-        // 1. Authoritative TypeRegistry lookup — disambiguates among types
-        //    WE registered using the byCanonicalKey + extras indices and
-        //    the preferred-category hint (`/Demangler/std/string` prefers
-        //    a candidate under `/std`).
-        // 2. nameIndex scan — covers non-empty DTM-resident types we
-        //    didn't author (Ghidra-bundled primitives, demangler-created
-        //    elsewhere, etc.) with the same preferred-path / TypeDef-then-
-        //    Structure ranking. Verified to fire on real fixtures: without
-        //    it, 16 demangler regression tests fail across xapasmcsr +
-        //    appquery × 2 modes — the stubs whose only counterpart is a
-        //    Ghidra-bundled primitive can't otherwise be substituted.
+        // Authoritative TypeRegistry lookup — only types WE registered
+        // qualify as replacements. Substituting one Ghidra-bundled empty
+        // stub for another is meaningless theatre; primitives are
+        // interesting in theory but in practice the production analyzer
+        // run produces 0 demangler-fallback-hit events across all our
+        // fixtures (verified by instrumentation 2026-06-23), so leaving
+        // the stub in place is at worst no-op.
         for (stub in stubs) {
             val preferredCategory = stub.pathName.removePrefix("/Demangler")
                 .substringBeforeLast('/', missingDelimiterValue = "/")
                 .ifEmpty { "/" }
                 .let { CategoryPath(it) }
-            val authoritative = typeRegistry.findByName(stub.simpleName, preferredCategory)
-            val candidate = authoritative ?: run {
-                val all = nameIndex[stub.simpleName] ?: return@run null
-                val preferredPath = stub.pathName.removePrefix("/Demangler")
-                all.firstOrNull { it.pathName == preferredPath }
-                    ?: all.firstOrNull { it is TypeDef }
-                    ?: all.firstOrNull { it is Structure }
-                    ?: all.singleOrNull()
-            } ?: continue
+            val candidate = typeRegistry.findByName(stub.simpleName, preferredCategory) ?: continue
             val deps = collectDependsOnPaths(candidate)
             replacements[stub.simpleName] = ReplacementRecord(
                 candidate.pathName,
