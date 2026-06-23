@@ -276,7 +276,21 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
                     continue
                 }
 
-                if (group.ast.body.methods.isEmpty() && !group.ast.body.hasVTablePointerMarker) continue
+                // ClassBuilder.build is the only path that builds <Class>_vtable
+                // structs and assigns __thiscall. gcc 12 emits the vfptr as a
+                // regular field `_vptr.XX` instead of the `~%<id>;` marker
+                // hasVTablePointerMarker watches for, so the empty-methods +
+                // no-marker check below would silently skip every polymorphic
+                // class in xmltest. Treat a `_vptr*` field as the same signal.
+                val hasVptrField = group.ast.body.fields.any {
+                    it.name.startsWith("_vptr$") || it.name.startsWith("_vptr.") || it.name == "_vptr"
+                }
+                if (group.ast.body.methods.isEmpty() &&
+                    !group.ast.body.hasVTablePointerMarker &&
+                    !hasVptrField
+                ) {
+                    continue
+                }
                 try {
                     classBuilder.build(group)
                     classes++
