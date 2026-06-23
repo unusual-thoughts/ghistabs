@@ -555,6 +555,55 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
         }
     }
 
+    /**
+     * Inject a `/Demangler/std/string` Structure stub by hand and verify
+     * the analyzer's DemanglerReplacer substitutes our `/stabs/string`
+     * typedef when re-run. Reproduces the GUI scenario where Ghidra's
+     * demangler creates the stub on demand during signature application
+     * (suppressed in our headless `demangleMangledLabels` invocation by
+     * `setApplySignature(false)`, so the other `demanglerStringReplaced`
+     * test trivially passes — there's no stub to replace).
+     *
+     * Uses [ImportContext.typeRegistry] — the populated registry the
+     * importer set at end-of-import. Constructing a fresh one would mean
+     * either (a) re-running materialiseAll (creates `.conflict`
+     * duplicates that race other @Test methods under
+     * @Execution(CONCURRENT)) or (b) leaving it empty (findByName always
+     * returns null and we can't test the substitution path at all).
+     */
+    @Test
+    fun demanglerStringReplacedAfterStubInjection() {
+        assumeTrue(binaryName == "bouniafbouniaf.exe" || binaryName == "bouniaf.exe")
+        val typeRegistry = context.typeRegistry
+        Assumptions.assumeTrue(typeRegistry != null, "import didn't populate typeRegistry on ctx")
+        val demanglerCat = ghidra.program.model.data.CategoryPath("/Demangler/std")
+        program.runTransaction("inject-demangler-stub") {
+            program.dataTypeManager.createCategory(demanglerCat)
+                .addDataType(
+                    ghidra.program.model.data.StructureDataType(
+                        demanglerCat,
+                        "string",
+                        0,
+                        program.dataTypeManager,
+                    ),
+                    ghidra.program.model.data.DataTypeConflictHandler.KEEP_HANDLER,
+                )
+        }
+        Assertions.assertNotNull(
+            program.dataTypeManager.getDataType(demanglerCat, "string"),
+            "precondition: injected stub should exist",
+        )
+
+        program.runTransaction("rerun-demangler-replacer") {
+            ghistabs.importer.DemanglerReplacer(context, typeRegistry!!).run()
+        }
+
+        Assertions.assertNull(
+            program.dataTypeManager.getDataType(demanglerCat, "string"),
+            "/Demangler/std/string should have been replaced by /stabs/string",
+        )
+    }
+
     @Test
     fun demanglerStringReplaced() {
         assumeTrue(binaryName == "bouniafbouniaf.exe" || binaryName == "bouniaf.exe")
