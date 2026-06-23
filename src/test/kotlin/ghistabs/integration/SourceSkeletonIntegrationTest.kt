@@ -15,6 +15,8 @@ import ghistabs.harvest.Harvest
 import ghistabs.harvest.Harvester
 import ghistabs.harvest.OpenFunction
 import ghistabs.parse.StabReader
+import ghistabs.parse.StabType
+import ghistabs.parse.SymbolDecl
 import ghistabs.runTransaction
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
@@ -113,6 +115,7 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         // range; skip the function entirely if it has no N_SLINE
         // coverage either.
         data class FuncRange(val func: OpenFunction, val startLine: Int, val endLine: Int)
+
         val ranges = rawFuncs.mapNotNull { f ->
             val lo = f.addr.address.offset
             val hi = lo + f.sizeBytes
@@ -153,6 +156,7 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             val close = closeLineByFunc[f] ?: start
             start..close
         }
+
         fun inFunction(line: Int) = funcSpan.any { line in it }
 
         for (entry in lines) {
@@ -180,6 +184,64 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             val names = asts.mapNotNull { it.name }.distinct().take(3).joinToString(", ")
             val lineTag = "L" + line.toString().padStart(4)
             buckets[line] += "// $lineTag : typedef $names"
+        }
+
+        // Param + local + global declarations — N_PSYM / N_RSYM /
+        // N_GSYM / N_LCSYM / N_STSYM desc. Cluster per (line, kind) and
+        // dedupe by name so multiple inline methods sharing one
+        // declaration line don't pile up identical comments. `this` is
+        // filtered out — every method's first reg local is `this`, no
+        // signal in seeing it 12× per line.
+        data class DeclKey(val line: Int, val kind: String)
+
+        val declNames = mutableMapOf<DeclKey, MutableSet<String>>()
+        fun add(line: Int, kind: String, name: String) {
+            if (line !in 1..maxLine) return
+            if (name == "this") return
+            declNames.getOrPut(DeclKey(line, kind)) { mutableSetOf() } += name
+        }
+        for (f in rawFuncs) {
+            for (p in f.params) {
+                if (p.sourceFile != source) continue
+                val name = (p.body as? SymbolDecl.StackParam)?.name
+                    ?: (p.body as? SymbolDecl.RegParam)?.name
+                    ?: continue
+                add(p.declLine, "param", name)
+            }
+            for (l in f.locals) {
+                if (l.sourceFile != source) continue
+                val (kind, name) = when (val d = l.body) {
+                    is SymbolDecl.RegLocal -> "reg local" to d.name
+                    is SymbolDecl.StackLocal -> "stack local" to d.name
+                    else -> continue
+                }
+                add(l.declLine, kind, name)
+            }
+        }
+        for ((_, syms) in harvest.symbolsByCu) {
+            for (s in syms) {
+                if (s.sourceFile != source) continue
+                val name = when (val d = s.body) {
+                    is SymbolDecl.Global -> d.name
+                    is SymbolDecl.StaticVar -> d.name
+                    else -> continue
+                }
+                val kind = when (s.recordType) {
+                    StabType.N_GSYM -> "global"
+                    StabType.N_LCSYM -> ".bss static"
+                    StabType.N_STSYM -> ".data static"
+                    StabType.N_ROSYM -> ".rodata static"
+                    else -> "symbol"
+                }
+                add(s.declLine, kind, name)
+            }
+        }
+        for ((key, names) in declNames) {
+            val lineTag = "L" + key.line.toString().padStart(4)
+            val joined = names.take(6).joinToString(", ") +
+                if (names.size > 6) ", … (${names.size - 6} more)" else ""
+            val indent = if (inFunction(key.line)) "    " else ""
+            buckets[key.line] += "$indent// $lineTag : ${key.kind} $joined"
         }
 
         // Function openers at startLine. Tag with the source line so
@@ -238,14 +300,15 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         val sym = program.symbolTable.getPrimarySymbol(addr)
             ?.takeIf { it.source != SourceType.DEFAULT }
             ?.name
-        val cu = program.listing.getCodeUnitAt(addr)
-        val body = when (cu) {
+        val body = when (val cu = program.listing.getCodeUnitAt(addr)) {
             is Instruction -> "${cu.mnemonicString} ${cu.toString().substringAfter(' ', "").trim()}".trim()
+
             is Data -> {
                 val value = runCatching { cu.value?.toString() }.getOrNull()
                 val type = cu.dataType.name
                 listOfNotNull(type, value).joinToString(" = ")
             }
+
             else -> null
         }
         return when {
