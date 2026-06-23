@@ -191,7 +191,9 @@ class XmltestDegradationProbeIntegrationTest : AbstractGhidraHeadlessIntegration
                 }
                 w.write("\n=== N_LSYM (0,N) bindings per CU ===\n")
                 for ((cu, ns) in perSoIds) {
-                    w.write("  $cu: ${ns.size} N_LSYM bindings (0,N) — sample: ${ns.sorted().take(40).joinToString(",")}\n")
+                    w.write(
+                        "  $cu: ${ns.size} N_LSYM bindings (0,N) — sample: ${ns.sorted().take(40).joinToString(",")}\n",
+                    )
                 }
 
                 w.write("\n=== Raw N_LSYM records under tinyxml2.cpp scope mentioning (0,25)= ===\n")
