@@ -284,9 +284,15 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                 }
             }
         }
-        for ((_, syms) in harvest.symbolsByCu) {
+        // For globals/statics, attribute by CU rather than by
+        // `s.sourceFile`. gcc doesn't emit `N_SOL("bouniaffile.cpp")`
+        // before each N_GSYM in the CU's opening declaration burst, so
+        // `sourceFile` ends up pointing at whichever header N_SOL last
+        // visited (typically the LAST `#include`d header — e.g.
+        // stl_map.h). The CU key in `symbolsByCu` is authoritative.
+        for ((cu, syms) in harvest.symbolsByCu) {
+            if (cu != source) continue
             for (s in syms) {
-                if (s.sourceFile != source) continue
                 val suffix = when (s.recordType) {
                     StabType.N_GSYM -> "(global)"
                     StabType.N_LCSYM -> "(.bss static)"
