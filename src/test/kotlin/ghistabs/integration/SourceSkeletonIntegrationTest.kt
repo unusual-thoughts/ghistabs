@@ -85,7 +85,15 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                 Harvester(monitor, ctx.sink, ctx.resolver).passA(reader.records)
             }
 
-            val outDir = File("build/test-output/skeletons/${fixture.nameWithoutExtension}").apply { mkdirs() }
+            // Clear previous-run output before writing — otherwise a
+            // file we no longer attribute anything to (e.g. iostream
+            // after the synthetic-init / class-source overrides
+            // re-routed its content elsewhere) is left around from the
+            // old run and looks like a current misattribution.
+            val outDir = File("build/test-output/skeletons/${fixture.nameWithoutExtension}").apply {
+                deleteRecursively()
+                mkdirs()
+            }
 
             // Attribute each function to the source whose N_SLINE entries
             // cover the most of its address range. This is the
@@ -186,15 +194,29 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
      * attribution and silently drop from every skeleton.
      */
     private fun attributeFunctionsBySource(harvest: Harvest): Map<OpenFunction, String> {
-        // Index TypeAsts by simple name → the BINCL-anchored source of
-        // the type (header filename when it came in through #include,
-        // CU filename otherwise). `declSourceFile` would be wrong here
-        // — it tracks N_SOL at N_LSYM time, which for a type defined
-        // in `rep.h` is whichever .cpp was being compiled, not `rep.h`.
+        // Index TypeAsts by simple name → BINCL-anchored source of the
+        // type's defining declaration. Prefer concrete Struct / Enum
+        // bodies over forward-decl `XRef`s and over Refs / aliases:
+        // gcc emits XRef stubs for class names mentioned via pointer
+        // /reference inside unrelated headers (e.g. `class
+        // CSymLexStream;` reachable from `<iostream>` via the include
+        // graph), and those XRef stubs share the class's simple name
+        // — picking one of them would route the class's methods to
+        // `<iostream>` instead of `lexstream.h`.
         val classSourceByName = mutableMapOf<String, String>()
+        fun bodyRank(body: TypeDecl<GlobalTypeId>) = when (body) {
+            is TypeDecl.Struct, is TypeDecl.Enum -> 2
+            is TypeDecl.XRef -> 0
+            else -> 1
+        }
+        val bestRank = mutableMapOf<String, Int>()
         for (ast in harvest.typeAsts.values) {
             val n = ast.name ?: continue
-            classSourceByName.putIfAbsent(n, ast.id.source.filename)
+            val rank = bodyRank(ast.body)
+            if (rank > (bestRank[n] ?: -1)) {
+                bestRank[n] = rank
+                classSourceByName[n] = ast.id.source.filename
+            }
         }
 
         val out = mutableMapOf<OpenFunction, String>()
