@@ -319,6 +319,9 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
         // created during signature demangling is visible to the scan.
         DemanglerReplacer(ctx, typeRegistry).run()
 
+        // Surface the populated TypeRegistry for tests (see ImportContext kdoc).
+        ctx.typeRegistry = typeRegistry
+
         return ApplyResult(functions, globals, classes)
     }
 
