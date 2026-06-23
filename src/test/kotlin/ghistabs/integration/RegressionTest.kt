@@ -85,13 +85,17 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
     @Parameter(1)
     lateinit var mode: Mode
 
-    fun resourceFile(kind: String) = File("src/test/resources/${kind}s/${fixture.nameWithoutExtension}-$kind.json")
+    // Manual inputs live under src/test/resources/ (binaries — gitignored,
+    // user-placed — and baselines — tracked); test-generated dumps go to
+    // build/test-output/ so `./gradlew clean` regenerates them. See README
+    // / build.gradle.kts for the split rationale.
+    private fun outputFile(kind: String) = File("build/test-output/${kind}s/${fixture.nameWithoutExtension}-$kind.json")
     private val fixture get() = File("src/test/resources/binaries/$binaryName")
-    private val baselineFile get() = resourceFile("baseline")
-    private val recordsFile get() = resourceFile("record")
-    private val harvestFile get() = resourceFile("harvest.${mode.name.lowercase()}")
+    private val baselineFile get() = File("src/test/resources/baselines/${fixture.nameWithoutExtension}-baseline.json")
+    private val recordsFile get() = outputFile("record")
+    private val harvestFile get() = outputFile("harvest.${mode.name.lowercase()}")
     private val logFile
-        get() = File("src/test/resources/logs/${fixture.nameWithoutExtension}.${mode.name.lowercase()}.log")
+        get() = File("build/test-output/logs/${fixture.nameWithoutExtension}.${mode.name.lowercase()}.log")
 
     private lateinit var loadResults: LoadResults<Program>
     private lateinit var context: ImportContext<CapturingSink>

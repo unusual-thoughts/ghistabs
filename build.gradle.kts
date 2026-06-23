@@ -53,6 +53,17 @@ ktlint {
     )
 }
 
+// Don't copy `binaries/` into build/resources/test/. It's a ~21M
+// pile of manually-placed test fixtures that integration tests open
+// directly via File("src/test/resources/binaries/…"); copying it to the
+// classpath just bloats the build dir. (Generated test outputs —
+// records, logs, harvest dumps — already live under build/test-output/
+// so they aren't a concern here. The extension zip excludes src/**
+// regardless, so this filter is purely about build-dir hygiene.)
+tasks.processTestResources {
+    exclude("binaries/**")
+}
+
 tasks.test {
     useJUnitPlatform { excludeTags("integration") }
     testLogging {
