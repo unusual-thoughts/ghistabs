@@ -430,10 +430,6 @@ class TypeRegistry(
             diagnostics.recordDegradation("function-ret-untyped", at, ret.toString())
             VoidDataType()
         }
-        val thisParam = thisType?.let {
-            val safeThis = if (it is VoidDataType) PointerDataType(VoidDataType(), dtm) else it
-            ParameterDefinitionImpl("this", safeThis, null)
-        }
         // gcc stabs method signatures end in a void-typed sentinel marking
         // end-of-args; passing that as a real parameter trips Ghidra's
         // `void type not permitted` assertion in ParameterDefinitionImpl.
@@ -446,12 +442,27 @@ class TypeRegistry(
         } else {
             params
         }
-        val otherParams = effectiveParams.mapIndexed { i, p ->
+        // gcc's `#` method form encodes `this` AS THE FIRST PARAM —
+        // confirmed by gdb/stabsread.c::read_args: "We should read at
+        // least the THIS parameter here." So when [thisType] is set
+        // (Method case), we don't prepend our own; we name the first
+        // gcc-provided param `this` and let the rest flow through. The
+        // [thisType] arg is kept as a documentation / fallback hook for
+        // future callsites where gcc DOESN'T provide it.
+        val argDefs = effectiveParams.mapIndexed { i, p ->
             val resolved = dataTypeFor(p) ?: undef("function-param", "$at[$i]", p)
             val safe = if (resolved is VoidDataType) Undefined4DataType.dataType else resolved
-            ParameterDefinitionImpl("arg$i", safe, null)
+            val argName = if (i == 0 && thisType != null) "this" else "arg$i"
+            ParameterDefinitionImpl(argName, safe, null)
+        }.toMutableList()
+        if (thisType != null && argDefs.isEmpty()) {
+            // Defensive: stabs didn't provide a `this` param (broken
+            // emission). Synthesise one from [thisType] so the
+            // signature still has the right arity for __thiscall.
+            val safe = if (thisType is VoidDataType) PointerDataType(VoidDataType(), dtm) else thisType
+            argDefs += ParameterDefinitionImpl("this", safe, null)
         }
-        fd.setArguments(*(listOfNotNull(thisParam) + otherParams).toTypedArray())
+        fd.setArguments(*argDefs.toTypedArray())
         // Calling conventions that aren't known to this program's CompilerSpec
         // (e.g. __thiscall on x86-64 ELF) cause setCallingConvention to throw
         // when the FD is later attached to the DTM. Validate up-front against
