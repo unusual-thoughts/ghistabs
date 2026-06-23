@@ -551,12 +551,15 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
     @Test
     fun demanglerStringReplaced() {
         assumeTrue(binaryName == "xapasmcsr.exe" || binaryName == "appquery.exe")
-        val strings = program.dataTypeManager.allDataTypes.asSequence().filterIsInstance<Structure>()
+        val strings = program.dataTypeManager.allDataTypes.asSequence()
             .filter { it.name == "string" }.toList()
         val goodString = strings.find { !it.categoryPath.path.startsWith("/Demangler") }
-        Assertions.assertNotNull(goodString)
-        Assertions.assertFalse { goodString!!.isZeroLength }
-        Assertions.assertFalse(strings.any { it.categoryPath.path.startsWith("/Demangler") })
+        Assertions.assertNotNull(goodString, "no non-Demangler `string` DataType: $strings")
+        Assertions.assertFalse(goodString!!.isZeroLength, "`string` is zero-length: $goodString")
+        Assertions.assertFalse(
+            strings.any { it.categoryPath.path.startsWith("/Demangler") },
+            "/Demangler/string still present: $strings",
+        )
     }
 
     @Test
