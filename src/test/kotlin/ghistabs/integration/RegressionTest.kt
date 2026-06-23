@@ -70,7 +70,7 @@ enum class Mode { CONCURRENT, AFTER }
 @Tag("integration")
 class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
     companion object {
-        val BINARIES = listOf("bouniafbouniaf.exe", "xmltest", "bouniaf.exe", "box2d")
+        val BINARIES = listOf("bouniafbouniaf.exe", "xmltest", "bouniaf.exe", "box2d_tests")
 
         @JvmStatic
         fun testParameters() = BINARIES.flatMap { binary ->
@@ -1009,6 +1009,7 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
      * no-op — the assertion intentionally only checks the mingw side, since
      * the Linux side already has reliable cdecl/sysv handling.
      */
+
     /**
      * Any DataType we registered in the DTM with a name that's a serialized
      * GlobalTypeId (`[<source>,<n>]` shape) is an anonymous type we couldn't
@@ -1070,9 +1071,9 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
     fun bouniafAndbouniafTruncated() {
         assumeTrue(binaryName == "bouniafbouniaf.exe", "Skipping: bouniaf chain is bouniafbouniaf-specific")
 
-        fun findStruct(name: String): ghidra.program.model.data.Structure = program.dataTypeManager.allDataTypes
+        fun findStruct(name: String): Structure = program.dataTypeManager.allDataTypes
             .asSequence()
-            .filterIsInstance<ghidra.program.model.data.Structure>()
+            .filterIsInstance<Structure>()
             .firstOrNull { it.name == name }
             ?: throw AssertionError("Structure '$name' not in DTM")
 
