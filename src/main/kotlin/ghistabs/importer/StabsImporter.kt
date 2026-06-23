@@ -23,6 +23,12 @@ import ghistabs.parse.SymbolDecl
 import ghistabs.parse.TypeDecl
 import ghistabs.runTransaction
 
+private val X86_DBX_TO_REGISTER = listOf("EAX", "ECX", "EDX", "EBX", "ESP", "EBP", "ESI", "EDI")
+private val X86_64_DBX_TO_REGISTER = listOf(
+    "RAX", "RDX", "RCX", "RBX", "RSI", "RDI", "RBP", "RSP",
+    "R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15",
+)
+
 class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.sink {
     fun run(): PassResult {
         val readerResult = StabReader.fromProgram(ctx.program)
@@ -452,6 +458,27 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
         flushGap()
     }
 
+    /**
+     * Map gcc's dbx register number to a Ghidra register name. The mapping
+     * is architecture-specific; gcc/config/<arch>/<arch>.h defines
+     * `DBX_REGISTER_NUMBER` for each target. We cover the two relevant
+     * cases for the test fixtures:
+     *  - 32-bit x86 (i386 ABI, used by Cygwin/MinGW PE binaries):
+     *    0..7 = eax,ecx,edx,ebx,esp,ebp,esi,edi.
+     *  - x86_64 (SysV / Win64 — both agree on the dbx mapping):
+     *    0..7 = rax,rdx,rcx,rbx,rsi,rdi,rbp,rsp, then 8..15 = r8..r15.
+     * Returns null if the regNum or pointer size doesn't match a known
+     * mapping; the caller logs a degradation rather than crashing.
+     */
+    private fun dbxRegisterName(dbxNum: Int): String? {
+        val table = when (ctx.program.defaultPointerSize) {
+            4 -> X86_DBX_TO_REGISTER
+            8 -> X86_64_DBX_TO_REGISTER
+            else -> return null
+        }
+        return table.getOrNull(dbxNum)
+    }
+
     private fun applyLocal(func: Function, loc: LocalRecord, typeRegistry: TypeRegistry, source: SourceType) {
         val decl = loc.decl
         val resolvedDt = when (decl) {
@@ -470,20 +497,13 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
         try {
             when (decl) {
                 is SymbolDecl.StackLocal -> {
-                    val paramNames = func.parameters.map { it.name }.toSet()
-                    val localNames = func.localVariables.map { it.name }.toSet()
-                    when (LocalVarDedup.shouldSkipLocal(decl.name, paramNames, localNames)) {
-                        SkipReason.DuplicateParamName -> {
-                            ctx.diagnostics.inc("local-var-skipped-dup-param")
-                            return // benign N_PSYM+N_LSYM 'this' duplication
-                        }
-
-                        SkipReason.DuplicateLocalName -> {
-                            ctx.diagnostics.inc("local-var-skipped-dup-local")
-                            return // flat-locals model can't disambiguate sibling scopes
-                        }
-
-                        null -> {}
+                    if (decl.name in func.parameters.map { it.name }) {
+                        ctx.diagnostics.inc("local-var-skipped-dup-param")
+                        return
+                    }
+                    if (decl.name in func.localVariables.map { it.name }) {
+                        ctx.diagnostics.inc("local-var-skipped-dup-local")
+                        return
                     }
                     val stackOffset = loc.rawValue.toInt()
                     val lv = LocalVariableImpl(decl.name, dt, stackOffset, ctx.program, source)
@@ -491,8 +511,29 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
                     ctx.diagnostics.inc("local-var-add-success")
                 }
 
-                is SymbolDecl.RegLocal -> ctx.diagnostics.inc("regparam-deferred")
-//                    "Register local '${decl.name}' in function deferred (register mapping not implemented)",
+                is SymbolDecl.RegLocal -> {
+                    val regName = dbxRegisterName(decl.regNum)
+                    val reg = regName?.let { ctx.program.getRegister(it) }
+                    if (reg == null) {
+                        ctx.diagnostics.recordDegradation(
+                            "reglocal-unmapped-regnum",
+                            "${func.name}.${decl.name}",
+                            "dbx-reg=${decl.regNum} arch-ptr-size=${ctx.program.defaultPointerSize}",
+                        )
+                        return
+                    }
+                    if (decl.name in func.parameters.map { it.name }) {
+                        ctx.diagnostics.inc("reglocal-skipped-dup-param")
+                        return
+                    }
+                    if (decl.name in func.localVariables.map { it.name }) {
+                        ctx.diagnostics.inc("reglocal-skipped-dup-local")
+                        return
+                    }
+                    val lv = LocalVariableImpl(decl.name, 0, dt, reg, ctx.program, source)
+                    func.addLocalVariable(lv, source)
+                    ctx.diagnostics.inc("reglocal-add-success")
+                }
             }
         } catch (e: Exception) {
             // local-var-error counter auto-bumps via BookmarkSink tag→counter contract
