@@ -4,31 +4,12 @@ import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.DummySink
 import ghistabs.diagnose.Level
 import ghistabs.diagnose.StabsDiagnostics
-import ghistabs.parse.GlobalTypeId
-import ghistabs.parse.QualifiedName
-import ghistabs.parse.TypeDecl
-import ghistabs.parse.isComplete
-import ghistabs.parse.isXRefTarget
-import ghistabs.parse.matchesXRefKind
-import ghistabs.parse.sizeBytes
+import ghistabs.parse.*
 
 /**
- * Indexes the [Harvest]'s typeAsts for downstream consumers:
- *
- *  - [TypeAstOracle] implementation for [contentHash] (id + xref).
- *  - [lookupByXRef] for materialiser-time XRef resolution. Bumps per-reason
- *    counters on miss; callers just get a `TypeAst?`.
- *  - [byCanonicalKey] — the (CategoryPath, name) → CanonicalGroup mapping that
- *    drives Ghidra slot assignment in TypeRegistry. Computed lazily.
- *  - [divergentCollisions] — the [Harvest.rawCollisions] filtered down to
- *    content-distinct buckets (content-equivalent duplicates dropped via the
- *    same hashCache that warms canonicalization).
- *
- * The hashCache stays private; canonicalization is the only consumer.
- *
- * Sink + diagnostics are taken at construction time so degradations get
- * recorded in the same context as the rest of the importer. Tests that don't
- * care can leave them defaulted.
+ * Indexes the [Harvest]'s typeAsts: id/xref oracle for [contentHash], xref resolution with
+ * per-reason failure counters, canonical-key grouping for TypeRegistry slot assignment,
+ * and content-distinct collision filtering.
  */
 class TypeResolver(
     val typeAsts: Map<GlobalTypeId, TypeAst>,
@@ -43,11 +24,7 @@ class TypeResolver(
             .groupBy { it.name!! }
     }
 
-    /**
-     * Secondary index for XRef resolution: base-tag (template args + namespace
-     * stripped). Only complete definitions — no point falling back to another
-     * forward decl.
-     */
+    /** Base-tag (template args + namespace stripped) → complete definitions only. */
     private val astsByBaseTag: Map<String, List<TypeAst>> by lazy {
         typeAsts.values
             .filter { !it.name.isNullOrEmpty() && it.body.isXRefTarget && it.body.isComplete }
@@ -55,10 +32,7 @@ class TypeResolver(
     }
 
     private val hashCache: MutableMap<GlobalTypeId, Int> by lazy {
-        // Pre-warm by hashing every typeAst body with an empty visited set so
-        // cache state doesn't bias collision classification. Same cache is
-        // reused for divergentCollisions filtering and for downstream
-        // contentHash queries.
+        // Pre-warm with empty `visited` so collision classification isn't biased by traversal order.
         mutableMapOf<GlobalTypeId, Int>().also { c ->
             for (ast in typeAsts.values) c[ast.id] = ast.body.contentHash(this, c)
         }
@@ -72,20 +46,10 @@ class TypeResolver(
     override fun byXRef(xref: TypeDecl.XRef<GlobalTypeId>): TypeAst? = lookupByXRef(xref, silent = true)
 
     /**
-     * Resolve [xref] to its canonical [TypeAst], or null if no candidate
-     * matches.
-     *
-     * Tries exact-name lookup first, then base-tag fallback (used for "bare
-     * forward decl in one CU vs full template instantiation in another"),
-     * which only commits when every same-kind candidate has the same size.
-     *
-     * On failure, bumps a per-reason counter (`xref-undefined` /
-     * `xref-kind-mismatch` / `xref-ambiguous`) so the run summary surfaces
-     * cardinality. An unresolved XRef on its own isn't a degradation — the
-     * materialiser tracks where the resulting placeholder *lands* via the
-     * `xref-stub-in-*` buckets. [silent] suppresses the counter bump and
-     * unresolved-xref log; used by the contentHash oracle path which
-     * legitimately probes for XRefs it expects to miss.
+     * Resolve [xref] to its canonical [TypeAst]. Tries exact-name, then base-tag fallback
+     * (commits only when all same-kind candidates agree on size). On miss bumps
+     * `xref-undefined` / `xref-kind-mismatch` / `xref-ambiguous`. [silent] is for the
+     * contentHash oracle path which expects misses.
      */
     fun lookupByXRef(xref: TypeDecl.XRef<GlobalTypeId>, silent: Boolean = false): TypeAst? {
         astsByName[xref.tagName]
@@ -99,7 +63,7 @@ class TypeResolver(
 
         if (sameKind.isNotEmpty() && distinctSizes.size == 1) {
             val resolved = sameKind.first()
-            sink.log("xref-base-tag-resolved", "'${xref.tagName}' → '${resolved.nameOrId}'", Level.DEBUG)
+            sink.log("xref-base-tag-resolved", "'${xref.tagName}' → '${resolved.nameOrUnique}'", Level.DEBUG)
             return resolved
         }
 
@@ -114,7 +78,9 @@ class TypeResolver(
                 )
                 "xref-ambiguous"
             }
+
             sameTagAnyKind.isNotEmpty() || exactAnyKind.isNotEmpty() -> "xref-kind-mismatch"
+
             else -> "xref-undefined"
         }
         diagnostics.inc(counter)
@@ -122,10 +88,7 @@ class TypeResolver(
         return null
     }
 
-    /**
-     * One-line snapshot of what's in the harvest under [xref]'s exact tag
-     * and base tag — used in the unresolved-xref log line.
-     */
+    /** One-line snapshot of harvest contents under [xref]'s exact tag and base tag. */
     private fun xrefDiagnosis(xref: TypeDecl.XRef<GlobalTypeId>): String {
         val tag = QualifiedName.baseTag(xref.tagName)
         val exact = astsByName[xref.tagName].orEmpty()
@@ -143,17 +106,10 @@ class TypeResolver(
         return "exact=${summarise(exact)} baseTag='$tag' byBaseTag=${summarise(byBase)}"
     }
 
-    /**
-     * Content-equivalence hash for [body], using the typeAsts + XRef index as
-     * oracle and the cache pre-warmed during canonicalization.
-     */
+    /** Content hash of [body] under this resolver's oracle, sharing the canonicalization cache. */
     fun contentHash(body: TypeDecl<GlobalTypeId>): Int = body.contentHash(this, hashCache)
 
-    /**
-     * Multi-body collisions that survive content-equivalence filtering —
-     * the genuinely-divergent ones. Per-name buckets dedupe content-
-     * equivalent variants down to a single representative.
-     */
+    /** Multi-body collisions after content-equivalence filtering — only genuinely divergent ones. */
     val divergentCollisions: Map<GlobalTypeId, Map<String, Set<TypeDecl<GlobalTypeId>>>> by lazy {
         rawCollisions.filterValues { byName ->
             byName.values.flatten().map { contentHash(it) }.toSet().size > 1
@@ -164,11 +120,7 @@ class TypeResolver(
         }
     }
 
-    /**
-     * Canonical (CategoryPath, ghidraName) → group mapping. Drives Ghidra
-     * slot assignment in TypeRegistry. Built only from registerable bodies
-     * (Struct/Enum). Computed lazily; touches [hashCache] for winner selection.
-     */
+    /** Canonical (CategoryPath, ghidraName) → group. Drives TypeRegistry slot assignment. */
     val byCanonicalKey: Map<GhidraKey, CanonicalGroup> by lazy {
         val byGhidraName = typeAsts.values.groupBy { it.ghidraName }
         val attribution = Attribution(
@@ -202,15 +154,15 @@ class TypeResolver(
                     members.map { it.id.source.filename }.toSet(),
                 Level.INFO,
             )
+
             members.size > 1 -> sink.log(
                 "canonical-key-merged",
                 "$key: ${members.size} ASTs collapsed (single body)",
                 Level.DEBUG,
             )
         }
-        // Winner: largest body, then fewest unresolved Refs (so the DTM gets
-        // the most-resolved variant of CUs that disagree on which gcc-implicit
-        // slots they emit), then first by source filename for stability.
+        // Winner: largest body → fewest unresolved Refs → first by source filename (stable tiebreak).
+        // Fewest-unresolved picks the most-resolved variant when CUs disagree on gcc-implicit slots.
         val winner = members.maxWithOrNull(
             compareBy<TypeAst> { it.body.sizeBytes }
                 .thenByDescending { countUnresolvedRefs(it.body) }

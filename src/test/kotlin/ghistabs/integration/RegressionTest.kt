@@ -579,18 +579,18 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
     fun demanglerStringReplacedAfterStubInjection() {
         assumeTrue(binaryName == "xapasmcsr.exe" || binaryName == "appquery.exe")
         val typeRegistry = context.typeRegistry
-        Assumptions.assumeTrue(typeRegistry != null, "import didn't populate typeRegistry on ctx")
-        val demanglerCat = ghidra.program.model.data.CategoryPath("/Demangler/std")
+        assumeTrue(typeRegistry != null, "import didn't populate typeRegistry on ctx")
+        val demanglerCat = CategoryPath("/Demangler/std")
         program.runTransaction("inject-demangler-stub") {
             program.dataTypeManager.createCategory(demanglerCat)
                 .addDataType(
-                    ghidra.program.model.data.StructureDataType(
+                    StructureDataType(
                         demanglerCat,
                         "string",
                         0,
                         program.dataTypeManager,
                     ),
-                    ghidra.program.model.data.DataTypeConflictHandler.KEEP_HANDLER,
+                    DataTypeConflictHandler.KEEP_HANDLER,
                 )
         }
         Assertions.assertNotNull(
@@ -637,13 +637,13 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
     fun voidSelfRefNotMaterialised() {
         // Enumerate every void self-Ref ast in the harvest (body = Ref(self.id)).
         // For each one assert no Structure was created at its category+name.
-        val reader = ghistabs.parse.StabReader.fromProgram(program)!!
+        val reader = StabReader.fromProgram(program)!!
         val harvest = program.runTransaction("void-self-ref-harvest") {
-            ghistabs.harvest.Harvester(TaskMonitor.DUMMY, context.sink, context.resolver).passA(reader.records)
+            Harvester(TaskMonitor.DUMMY, context.sink, context.resolver).passA(reader.records)
         }
         val voidAsts = harvest.typeAsts.values.filter { ast ->
             val body = ast.body
-            body is ghistabs.parse.TypeDecl.Ref && body.id == ast.id
+            body is TypeDecl.Ref && body.id == ast.id
         }
         assumeTrue(voidAsts.isNotEmpty(), "no void self-Refs in this fixture's harvest")
 
@@ -984,7 +984,7 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
         if (emptyStructs.isNotEmpty()) {
             println(
                 "harvestTest[$binaryName/$mode]: ${emptyStructs.size} empty structs in harvest " +
-                    "(${emptyStructs.take(5).map { (a, _) -> a.nameOrId }})",
+                    "(${emptyStructs.take(5).map { (a, _) -> a.nameOrUnique }})",
             )
         }
 //        Assertions.assertFalse(classStructs.isEmpty(), "there should be class structs")

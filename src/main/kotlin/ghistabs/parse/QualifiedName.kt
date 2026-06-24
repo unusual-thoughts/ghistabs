@@ -1,26 +1,12 @@
 package ghistabs.parse
 
 /**
- * Helpers for the C++ source-form qualified names that arrive in stab records.
- *
- * gcc writes demangled names directly into stabs — e.g.
- * `std::basic_string<char, std::char_traits<char>, std::allocator<char>>` —
- * so we never get a structured tree, only a flat string with `::` separators
- * that can also appear inside template arguments. Naive splitting on `::`
- * shreds template parameters; this is the depth-aware alternative.
- *
- * For names that have a matching mangled token, prefer Ghidra's
- * `DemanglerUtil` and walk `Demangled.getNamespace()` — that path never
- * touches strings at all. This util is the fallback for type-only stabs that
- * have no mangled symbol.
+ * Depth-aware splitting/stripping for C++ source-form names in stabs (gcc writes them demangled).
+ * Prefer Ghidra's [ghidra.app.util.demangler.DemanglerUtil] when a mangled token is available;
+ * this is the fallback for type-only stabs.
  */
 object QualifiedName {
-    /**
-     * Split a C++ qualified name on `::`, ignoring separators that appear
-     * inside angle brackets or parentheses.
-     *
-     * `std::map<K, V>::iterator` → `["std", "map<K, V>", "iterator"]`.
-     */
+    /** Split on `::` ignoring separators inside `<>` or `()`. */
     fun split(name: String): List<String> {
         val parts = mutableListOf<String>()
         val cur = StringBuilder()
@@ -71,16 +57,8 @@ object QualifiedName {
     }
 
     /**
-     * Strip template arguments and namespace qualifiers from a class name.
-     *
-     *   `basic_istream<char,std::char_traits<char>>` → `basic_istream`
-     *   `std::basic_istream`                          → `basic_istream`
-     *   `__gnu_cxx::__normal_iterator<char*,…>`       → `__normal_iterator`
-     *
-     * Used by the XRef base-tag fallback to bridge "forward-declared bare tag in one
-     * CU vs full template instantiation in another" — the cross-CU mismatch is
-     * structural in gcc stabs, not a libstdc++-version detail, so this helper has no
-     * hardcoded names.
+     * Strip template args + namespace. `std::basic_istream<...>` → `basic_istream`.
+     * Used by the XRef base-tag fallback to bridge bare-forward-decl vs template-instantiation.
      */
     fun baseTag(name: String): String {
         val noArgs = name.indexOf('<').let { if (it >= 0) name.substring(0, it) else name }

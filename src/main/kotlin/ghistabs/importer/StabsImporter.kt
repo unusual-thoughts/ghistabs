@@ -44,7 +44,8 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
         // Pass A — parse + harvest
         val harvester = Harvester(ctx.monitor, ctx.sink, ctx.resolver)
         val harvest = harvester.passA(stabs.records)
-        // TypeResolver adds by-name/by-XRef indices + canonicalisation + divergent-collision filter.
+        // Resolver: by-name/by-base-tag indices, canonicalization, divergent-collision
+        // filtering. Every cross-CU lookup downstream goes through this.
         val typeResolver = TypeResolver(harvest.typeAsts, harvest.rawCollisions, ctx.sink, ctx.diagnostics)
         recordHarvestCounters(harvest, typeResolver, stabs)
 
@@ -66,11 +67,8 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
             applyAllSymbols(harvest, typeRegistry, typeResolver)
         }
 
-        // Flag never-materialised placeholders — they cause "Offset 0 beyond end of structure"
-        // cascades downstream; naming them at source makes the root cause findable.
         typeRegistry.reportSurvivingPlaceholders()
 
-        // Emit end-of-run diagnostics summary
         ctx.diagnostics.writeSummary(ctx.sink)
         if (ctx.options.logDegradations) {
             ctx.diagnostics.writeDegradations(ctx.sink)
@@ -110,7 +108,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
             "harvest-collisions-raw-total",
             harvest.rawCollisions.values.flatMap { it.values }.flatten().count().toLong(),
         )
-        // Post-filter: content-equivalent dups dropped, only genuinely divergent collisions remain.
+        // Post-filter: only genuinely divergent multi-body collisions.
         ctx.diagnostics.inc("harvest-collisions-divergent", resolver.divergentCollisions.size.toLong())
         ctx.diagnostics.inc(
             "harvest-collisions-divergent-total",
@@ -154,8 +152,11 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
                 val retDt = typeRegistry.dataTypeFor(open.decl.type)
                 if (retDt != null) func.setReturnType(retDt, source)
 
-                // Drop any N_PSYM `this` — gcc 3.x often mistypes it (e.g. int instead of Class*),
-                // and ClassBuilder.reparentMethod will synthesise a typed `this` from the class struct.
+                // Build params from N_PSYM/N_RSYM. Filter out any N_PSYM literally named
+                // `this`: gcc 3.x emits it for members but often mistypes (seen `int`
+                // instead of `<Class>*`); ClassBuilder.reparentMethod sets __thiscall and
+                // synthesises a typed `this` from the class struct, which is authoritative.
+                // Keeping the N_PSYM one produces duplicate-`this` signatures Ghidra can't evict.
                 val params = open.params
                     .filterNot {
                         val d = it.body
@@ -182,7 +183,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
                             source,
                         )
                     }
-                // Always replace (even empty) — leaves Ghidra's auto-guessed signature out.
+                // Always replace (even empty list) to set the signature explicitly.
                 func.replaceParameters(
                     params,
                     Function.FunctionUpdateType.DYNAMIC_STORAGE_FORMAL_PARAMS,
@@ -226,11 +227,12 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
             }
         }
 
-        // .bss coverage analysis: detect uncovered ranges in the .bss section.
         analyzeBssCoverage(harvest)
 
-        // Classes + vtables. typeResolver.byCanonicalKey collapsed same-name TypeAsts to one entry
-        // per (category, name); we just iterate them.
+        // Classes + vtables. Each class header included by N CUs produces N TypeAsts with
+        // distinct ids but identical ghidraName (xapasmcsr: 86 names duplicated up to 11x).
+        // materialiseAll already collapsed by name; iterating canonical groups here ensures
+        // we build each class once, off the most-detailed body.
         if (ctx.options.applyVtables) {
             val classBuilder = ghistabs.materialize.ClassBuilder(typeRegistry, harvest, typeResolver, ctx)
             ctx.diagnostics.inc(
@@ -243,8 +245,9 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
                     continue
                 }
 
-                // gcc 12 emits the vfptr as a regular `_vptr.X` field, not the `~%<id>;` marker —
-                // treat any `_vptr*` field as the polymorphic-class signal.
+                // gcc 12 emits the vfptr as a regular `_vptr.XX` field instead of the
+                // `~%<id>;` marker hasVTablePointerMarker watches for — without this check
+                // every polymorphic class in xmltest would be skipped.
                 val hasVptrField = group.ast.body.fields.any {
                     it.name.startsWith("_vptr$") || it.name.startsWith("_vptr.") || it.name == "_vptr"
                 }
@@ -263,23 +266,16 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
             }
         }
 
-        // Final pass: demangle any Itanium-mangled IMPORTED labels that remain.
-        // Ghidra's DemanglerAnalyzer is a BYTE_ANALYZER that runs once at
-        // priority ~897 over loader-added symbols; labels we created via
-        // `recordFromStab` were not in that set and so were never demangled.
-        // We replicate the analyzer's per-symbol invocation locally, with
-        // signature/calling-convention application disabled — the stab has
-        // richer signatures than the demangler could derive from the mangled
-        // name, and our `__thiscall` choice (set in ClassBuilder) must win.
+        // Ghidra's DemanglerAnalyzer is a BYTE_ANALYZER that only runs over loader-added
+        // symbols, missing labels we created via recordFromStab. Replicate it locally with
+        // signature/calling-convention application off — stab signatures are richer and
+        // our __thiscall must win.
         demangleMangledLabels()
 
-        // DemanglerReplacer scans `/Demangler/*` stubs and substitutes any
-        // matching stab-sourced type with the same simple name. Must run
-        // AFTER demangleMangledLabels so every `/Demangler/...` placeholder
-        // created during signature demangling is visible to the scan.
+        // Must run AFTER demangleMangledLabels so every /Demangler/... stub created during
+        // signature demangling is visible to the scan.
         DemanglerReplacer(ctx, typeRegistry).run()
 
-        // Surface the populated TypeRegistry for tests (see ImportContext kdoc).
         ctx.typeRegistry = typeRegistry
 
         return ApplyResult(functions, globals, classes)
@@ -296,7 +292,8 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
         for (sym in ctx.program.symbolTable.symbolIterator) {
             ctx.monitor.checkCancelled()
             val name = sym.name
-            // `__Z` is Cygwin PE/COFF's extra-underscore form; GnuDemangler strips it.
+            // Cygwin PE/COFF loader prepends `_`, so Itanium symbols appear as `__Z`.
+            // GnuDemangler handles both (strips one leading `_`).
             if (!name.startsWith("_Z") && !name.startsWith("__Z")) continue
             attempted++
             val cmd = ghidra.app.cmd.label.DemanglerCmd(sym.address, name, options)
@@ -309,14 +306,16 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
     }
 
     /**
-     * Force-create the function the N_FUN record asserts when autoanalysis missed it (typical for
-     * vtable-only or static-init-list referenced functions). Returns null on creation failure.
+     * Force-create a function the stab asserts but Ghidra's auto-analysis missed (typical
+     * for ctors only called from data-driven init lists, or vtable-only references).
+     * Returns null if the address is in data or disassembly fails.
      */
     private fun tryCreateFunctionFromStab(open: OpenFunction): Function? {
         val addr = open.addr.address
         val block = ctx.program.memory.getBlock(addr)
         if (block == null || !block.isExecute) {
-            // Inline std::/__gnu_cxx members get stabs but no .text (inlined+COMDAT-dropped); demote.
+            // Inline std::/__gnu_cxx members get stabbed but the linker drops the COMDAT.
+            // Bucket separately so real non-text-address problems aren't drowned out.
             val inlined = isInlineStdMember(open.name)
             val tag = if (inlined) "function-create-inlined-std" else "function-create-skipped-non-text"
             val level = if (inlined) Level.DEBUG else Level.WARN
@@ -324,7 +323,8 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
             return null
         }
 
-        // CreateFunctionCmd needs an Instruction to anchor on — disassemble first if missing.
+        // CreateFunctionCmd refuses uninitialised code. MinGW COMDAT chunks that
+        // autoanalysis hasn't reached need a manual disassemble first.
         if (ctx.program.listing.getInstructionAt(addr) == null) {
             val disasm = ghidra.app.cmd.disassemble.DisassembleCommand(addr, null, true)
             if (disasm.applyTo(ctx.program, ctx.monitor) && disasm.disassembledAddressSet.numAddresses > 0) {
@@ -355,14 +355,14 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
     private fun analyzeBssCoverage(harvest: Harvest) {
         val bssBlock = ctx.program.memory.getBlock(".bss") ?: return
 
-        // Build list of harvested symbols with resolved addresses
         val harvestedAddrs = harvest.allHarvestedSymbols.mapNotNull {
             val name = (it.body as? SymbolDecl.Global)?.name ?: return@mapNotNull null
             val addr = ctx.resolver.resolve(name)?.offset
             HarvestedAddr(name, addr)
         }
 
-        // Scan .bss at 4-byte intervals; coalesce contiguous no-coverage runs into one log line.
+        // 4-byte sweep, coalescing contiguous no-coverage into one log entry per range
+        // (a per-chunk log produces thousands of lines on typical .bss).
         var addr = bssBlock.start
         var gapStart: Address? = null
         var gapEnd: Address? = null
@@ -409,8 +409,10 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
     }
 
     /**
-     * Map gcc dbx register number → Ghidra register name (i386 and x86_64 only; per
-     * gcc/config/<arch>/<arch>.h `DBX_REGISTER_NUMBER`).
+     * Map gcc dbx register number → Ghidra register name. Architecture-specific
+     * (gcc/config/<arch>/<arch>.h `DBX_REGISTER_NUMBER`). i386: 0..7 = eax,ecx,edx,ebx,
+     * esp,ebp,esi,edi. x86_64 (SysV+Win64 agree): 0..7 = rax,rdx,rcx,rbx,rsi,rdi,rbp,
+     * rsp; 8..15 = r8..r15.
      */
     private fun dbxRegisterName(dbxNum: Int): String? {
         val table = when (ctx.program.defaultPointerSize) {
@@ -480,13 +482,12 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
     }
 
     private fun applyScopeComments(func: Function, open: OpenFunction) {
-        // For each LBRAC/RBRAC pair, plate-comment the locals declared inside at the LBRAC address.
+        // For each LBRAC/RBRAC pair, plate-comment the LBRAC with the in-scope locals.
         val pairs = ScopePairs.compute(open.scopeBrackets, open.locals)
         for ((openOff, _, localsInScope) in pairs) {
             try {
                 val addr = func.entryPoint.add(openOff)
 
-                // Suppress empty scope comments (when a scope contains no locals).
                 if (localsInScope.isEmpty()) {
                     ctx.diagnostics.recordEmptyScope(addr.toString(), func.name)
                     continue
@@ -525,7 +526,8 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
             is ghidra.program.model.data.Enum -> "Enum"
             else -> dt.displayName
         }
-        // CLEAR_ALL_CONFLICT_DATA evicts undefined4 placeholders autoanalysis raced us to apply.
+        // CLEAR_ALL_CONFLICT_DATA evicts `undefined4` placeholders auto-analysis may
+        // have raced us to apply.
         try {
             ghidra.program.model.data.DataUtilities.createData(
                 ctx.program,
@@ -534,7 +536,8 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
                 dt.length,
                 ghidra.program.model.data.DataUtilities.ClearDataMode.CLEAR_ALL_CONFLICT_DATA,
             )
-            // Verify our type stuck — auto-analyser races / undo path can overwrite silently.
+            // Verify the write stuck — auto-analyser races or data-equivalence collapse
+            // can replace it; we'd otherwise silently claim success.
             val after = ctx.program.listing.getDataAt(addr)
             val stuck = after != null && after.dataType.name == dt.name
             if (!stuck) {
@@ -562,7 +565,6 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
         ensureStabLabel(addr, decl.name)
 
         try {
-            // Clear any existing code units before creating data to avoid conflicts
             ctx.program.listing.clearCodeUnits(addr, addr.add((dt.length - 1).toLong()), false)
             ctx.program.listing.createData(addr, dt)
         } catch (e: Exception) {
@@ -573,8 +575,9 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
     }
 
     /**
-     * Make [name] primary at [addr] — otherwise globals keep the PE loader's `_<name>` label
-     * and the demangled form never appears in the symbol table. Idempotent.
+     * Make [name] (demangled source-form) the primary label at [addr]. Otherwise
+     * globals/statics keep the PE loader's `_<name>` and the demangled form is never
+     * in the symbol table. Idempotent.
      */
     private fun ensureStabLabel(addr: Address, name: String) {
         val symtab = ctx.program.symbolTable

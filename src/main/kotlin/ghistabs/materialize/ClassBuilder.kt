@@ -22,7 +22,7 @@ import ghistabs.harvest.TypeResolver
 import ghistabs.importer.ImportContext
 import ghistabs.parse.*
 
-/** Polymorphic-base detection, extracted for pure unit testing. */
+/** Polymorphic-base detection helpers (extracted for pure unit testing). */
 internal class ClassBuilderHelpers(val resolver: TypeResolver) {
     fun hasPolymorphicBaseSubobject(body: TypeDecl.Struct<GlobalTypeId>) = firstPolymorphicBase(body) != null
 
@@ -38,11 +38,16 @@ internal class ClassBuilderHelpers(val resolver: TypeResolver) {
 
     fun resolveBaseAstStatic(typeDecl: TypeDecl<GlobalTypeId>): TypeDecl.Struct<GlobalTypeId>? = when (typeDecl) {
         is TypeDecl.Ref -> resolver.getStruct(typeDecl.id)
+
         is TypeDecl.XRef -> resolver.byXRef(typeDecl)?.body as? TypeDecl.Struct<GlobalTypeId>
-        // Prefer the materialised AST at this id (real Struct body) — inline body is often a forward XRef.
+
+        // Prefer the ast at this id (real struct body) over the inline body, which is
+        // often a forward XRef. Without the fallback, polymorphism detection misses
+        // inherited vfptrs (e.g. DCInst → InlineDef(ExprInst id, XRef body)).
         is TypeDecl.InlineDef -> resolver.getStruct(typeDecl.id)
             ?: (typeDecl.body as? TypeDecl.Struct)
             ?: resolveBaseAstStatic(typeDecl.body)
+
         else -> null
     }
 }
@@ -59,7 +64,7 @@ class ClassBuilder(
     private val symtab = program.symbolTable
     private val dtm = program.dataTypeManager
 
-    /** Materialise a class struct + namespace + (optional) vtable struct + apply at _ZTV. */
+    /** Materialise class struct + namespace + (optional) vtable struct, apply at _ZTV. */
     fun build(group: CanonicalGroup) {
         val name = group.key.name
         val category = group.key.category
@@ -79,13 +84,13 @@ class ClassBuilder(
 
         val ns = ensureClassNamespace(name, body)
         for (m in body.methods) reparentMethod(m, name, ns, structDt)
-
         if (isPoly) buildAndApplyVtable(name, body, ns, category, structDt)
     }
 
     /**
-     * Build/upgrade the class namespace from the demangled namespace chain of any mangled method
-     * symbol; fall back to depth-aware splitting of the C++ source-form name.
+     * Derive the class's namespace chain. Prefers demangling a method's Itanium symbol
+     * (handles templates) over splitting the source-form name (handles classes with no
+     * methods or unmangleable symbols).
      */
     private fun ensureClassNamespace(name: String, body: TypeDecl.Struct<GlobalTypeId>): GhidraClass {
         val parts = body.methods.firstNotNullOfOrNull { it.mangled }
@@ -94,7 +99,7 @@ class ClassBuilder(
         return buildNamespaceChain(parts.filter { it.isNotEmpty() })
     }
 
-    /** Demangle and return the parent-namespace chain root-first (leaf is enclosing class). */
+    /** Demangle [mangled]; return parent-namespace chain root-first, or null if no parent. */
     private fun namespaceChainFromMangled(mangled: String): List<String>? {
         val obj = try {
             DemanglerUtil.demangle(program, mangled, null).firstOrNull()
@@ -133,8 +138,7 @@ class ClassBuilder(
         className: String,
         category: CategoryPath,
     ) {
-        val vfptrName = ClassUtils.VFPTR // "{vfptr}"
-
+        val vfptrName = ClassUtils.VFPTR
         val parserVptrOffset = body.fields
             .firstOrNull {
                 it.name.startsWith("_vptr$") || it.name.startsWith("_vptr.") || it.name == "_vptr"
@@ -194,8 +198,10 @@ class ClassBuilder(
     }
 
     /**
-     * Get-or-create `<Class>_vftable` (the function-pointer-array struct) and return a Pointer to it.
-     * Lives under `/ClassDataTypes/<Class>/` so `RecoveredClassHelper` and shift-S round-trip find it.
+     * {vfptr} points at the function-pointer array inside the vtable record
+     * (`_ZTV<class> + 2*ptrSize`), not at the record start. Modelled as `<Class>_vftable*`
+     * under `/ClassDataTypes/<Class>/` so `RecoveredClassHelper` / shift-S round-trip
+     * can find it.
      */
     private fun ensureVtableTypeAndPointer(
         className: String,
@@ -215,8 +221,9 @@ class ClassBuilder(
             return
         }
         val addr = resolver.resolve(mangled) ?: run {
-            // Trivial implicit special members appear in every class's stab but the compiler emits
-            // no symbol for them — bucket separately so unresolved-symbol surfaces real problems.
+            // Trivial implicit special members (default ctor, copy/move ctor/assignment, dtor)
+            // appear in every class's stab list but get no emitted symbol. Bucket separately
+            // so the unresolved-symbol log surfaces real problems.
             if (isLikelyImplicitTrivialSpecialMember(mangled)) {
                 ctx.diagnostics.inc("method-implicit-not-emitted")
             } else {
@@ -238,7 +245,10 @@ class ClassBuilder(
             return
         }
 
-        // Re-parent via demangler; disable sig/cspec/disasm application since the stab is richer.
+        // Re-parent + rename via Ghidra's demangler (reuses the GhidraClass leaf
+        // ensureClassNamespace already created). Signature/calling-convention application
+        // disabled: the stab has richer types than the mangled name, and our __thiscall
+        // choice below must win.
         val demangleOpts = DemanglerOptions().apply {
             setApplySignature(false)
             setApplyCallingConvention(false)
@@ -246,6 +256,7 @@ class ClassBuilder(
         }
         val demangleCmd = DemanglerCmd(addr, mangled, demangleOpts)
         if (!demangleCmd.applyTo(program)) {
+            // Fall back to manual namespace + display-name handling.
             func.parentNamespace = ns
             val fallbackName = displayNameFor(mangled, className) ?: m.name
             if (func.name != fallbackName) func.setName(fallbackName, source)
@@ -256,13 +267,18 @@ class ClassBuilder(
             )
         }
 
-        // Ghidra injects implicit `this` iff thiscall is accepted by the cspec AND parent ns is a class.
+        // Mark __thiscall. On x86win32 the cspec routes `this` via ECX; on x86mingw via stack.
+        // Either way, accepted __thiscall + GhidraClass namespace = Ghidra auto-injects
+        // hidden `this: Class*` at render time. Don't probe func.getParameter(0)?.name to
+        // detect — for force-created functions the param list isn't populated yet.
         val thiscallAccepted = runCatching { func.setCallingConvention("__thiscall") }
             .onFailure { log("method-calling-convention", "$className::${m.name}: ${it.message}") }
             .isSuccess
         val ghidraInjectsThis = thiscallAccepted && func.parentNamespace is GhidraClass
 
-        // gcc 3.x `#`-form methods carry `[this, p1, ..., pN, void_sentinel]`; FunctionT carries none.
+        // gcc 3.x Method signatures: `[this, p1..pN, void_sentinel]`. FunctionT (free
+        // functions) carries no inline params (they arrive via N_PSYM). Both adjustments
+        // are Method-only. Walk Ref/InlineDef wrappers before pattern-matching.
         val retDecl: TypeDecl<GlobalTypeId>
         val paramDecls: List<TypeDecl<GlobalTypeId>>
         when (val sig = unwrapSignature(m.signature)) {
@@ -281,7 +297,13 @@ class ClassBuilder(
         val ret = typeRegistry.dataTypeFor(retDecl)
         if (ret != null) func.setReturnType(ret, source)
 
+        // Always replace the formal-param list, falling back to Undefined4 for
+        // unresolved types. Early-returning left Ghidra's auto-guessed signature in
+        // place; combined with newly-applied __thiscall (which prepends its own `this`)
+        // that produced double-`this` like `void Foo::Dump(Foo *this, ushort this, ...)`.
         val resolvedParams = paramDecls.map { typeRegistry.dataTypeFor(it) }
+        // Drop the void sentinel — only on Method-shape signatures; check the
+        // UNWRAPPED form (m.signature is typically a Ref/InlineDef wrapper).
         val paramTypes = if (unwrapSignature(m.signature) is TypeDecl.Method) {
             resolvedParams.dropLastWhile { it is VoidDataType }
         } else {
@@ -299,8 +321,10 @@ class ClassBuilder(
                 }
             }
         }
-        // Build the param list explicitly via DYNAMIC_STORAGE_ALL_PARAMS — DYNAMIC_STORAGE_FORMAL_PARAMS
-        // + __thiscall renames arg0 to `this` and yields a duplicate.
+        // Build the full param list ourselves (explicit `this` prefix + formals) and use
+        // DYNAMIC_STORAGE_ALL_PARAMS. DYNAMIC_STORAGE_FORMAL_PARAMS + __thiscall varies by
+        // Ghidra version on whether it auto-prepends `this`, and would rename our `arg0`
+        // to `this` when the storage analyser placed it in the canonical this-slot.
         val classPtr = PointerDataType(structDt, dtm)
         val explicitThis = if (ghidraInjectsThis) {
             listOf(
@@ -314,7 +338,9 @@ class ClassBuilder(
         } else {
             emptyList()
         }
-        // Keep N_PSYM names that StabsImporter.passB set.
+        // Preserve N_PSYM-derived names set in StabsImporter.passB — those are
+        // the only source-level names we have. When Ghidra injects `this` at slot 0,
+        // user params start at index 1 in func.parameters.
         val priorOffset = if (ghidraInjectsThis) 1 else 0
         val formals = paramTypes.mapIndexed { i, pdt ->
             ParameterImpl(
@@ -332,7 +358,12 @@ class ClassBuilder(
         )
     }
 
-    /** `_ZN3FooC[123]E…` → `"Foo"`, `_ZN3FooD[012]E…` → `"~Foo"`; null otherwise. */
+    /**
+     * Map a ctor/dtor mangled name to its in-class display form
+     * (`_ZN3FooC[123]E…` → `Foo`, `_ZN3FooD[012]E…` → `~Foo`). Itanium emits up to three
+     * symbols per ctor/dtor — same source-level name; Ghidra disambiguates by address.
+     * Returns null for non-ctor/dtor methods.
+     */
     private fun displayNameFor(mangled: String, className: String): String? {
         val ctorRe = Regex("""C[123]E[a-zA-Z_0-9$]*$""")
         val dtorRe = Regex("""D[012]E[a-zA-Z_0-9$]*$""")
@@ -341,11 +372,6 @@ class ClassBuilder(
         return null
     }
 
-    /**
-     * Build `<Class>_vftable` (array of `Pointer→FunctionDefinition`s, one per virtual slot) and
-     * `<Class>_vtable` (Itanium prefix + embedded vftable), then apply the vtable at `_ZTV<class>`.
-     * Inherited virtuals come first in declaration-order; overrides match by name (single-inheritance only).
-     */
     private fun buildAndApplyVtable(
         className: String,
         body: TypeDecl.Struct<GlobalTypeId>,
@@ -353,6 +379,9 @@ class ClassBuilder(
         category: CategoryPath,
         structDt: Structure,
     ) {
+        // Itanium 32-bit: derived vtable = base entries first (in declaration order), with
+        // overridden slots replaced. Override matching uses method name only — sufficient
+        // for non-overloaded virtuals in the Cygwin gcc 3.4.4 corpus.
         val inherited = collectInheritedVirtuals(body)
         val ownVirtuals = body.methods
             .filter { it.virt == VirtKind.VIRTUAL }
@@ -363,6 +392,11 @@ class ClassBuilder(
             return
         }
 
+        // Two related structs under /ClassDataTypes/<Class>/:
+        //   <Class>_vftable — function-pointer array (what {vfptr} points at). Each slot is
+        //                     Pointer→FunctionDefinition(<sig>) so the decompiler resolves
+        //                     virtual calls; matches RecoveredClassHelper for shift-S round-trip.
+        //   <Class>_vtable  — full record at _ZTV: offset_to_top + rtti + embedded vftable.
         val classDataTypesRoot = CategoryPath(CategoryPath.ROOT, "ClassDataTypes")
         val vftableCategory = CategoryPath(classDataTypesRoot, className)
         val vftableName = "${className}_vftable"
@@ -406,13 +440,17 @@ class ClassBuilder(
 
         program.listing.clearCodeUnits(addr, addr.add(vtable.length.toLong() - 1), false)
         program.listing.createData(addr, vtable)
-        // RecoveredClassHelper / shift-S require a symbol named "vftable" at the address.
+        // RecoveredClassHelper / shift-S require a symbol containing "vftable" at the
+        // Data address. The demangler emits `<class>::vtable` (no f); this label is
+        // what makes us discoverable.
         runCatching { symtab.createLabel(addr, "vftable", ns, source) }
             .onFailure { log("vftable-label-failed", "$className at $addr: ${it.message}") }
         log("vtable", "applied $vtableName", address = addr)
         ctx.diagnostics.recordVtable(className, "applied")
 
-        // Plate-comment each virtual method at its function entry. First slot sits past the prefix.
+        // Plate-comment each virtual. An unresolved mangled name here is expected for
+        // pure virtuals (slot points at __cxa_pure_virtual, no symbol emitted) or
+        // DLL-imported impls. Slot type was already typed from the signature.
         var off = (2L * ptrSize)
         for (m in virtuals) {
             val mAddr = m.mangled?.let(resolver::resolve)
@@ -445,30 +483,7 @@ class ClassBuilder(
         }
     }
 
-    /**
-     * Build the typed function-pointer slot for [m] in `<Class>_vftable`:
-     * `Pointer → FunctionDefinition(<actual signature>)`. Following Ghidra's
-     * `RecoveredClassHelper` convention, the first param `this: Class*` (if
-     * present from `__thiscall` injection) is rewritten to `void*` so the
-     * resulting pointer type is reusable across the inheritance chain
-     * (parent slots can hold pointers to derived overrides).
-     *
-     * Returns null if the method's address can't be resolved or the function
-     * isn't present — caller falls back to a generic `Pointer→Undefined4`.
-     */
-    /**
-     * Wrap the *already-materialised* FunctionDefinition for [m] in a
-     * Pointer. `m.signature` is a Ref/InlineDef into a Method ast that
-     * [TypeRegistry] resolved in passB; the FunctionDefinition there already
-     * carries `__thiscall` and `this: <Class>*`, so the slot is just a
-     * pointer to it — no re-build, no recalibration of this.
-     */
-    /**
-     * Walk Ref/InlineDef wrappers to the underlying Method or FunctionT decl.
-     * gcc binds method signatures to their own type ids, so the value carried
-     * on [MethodDecl.signature] is typically `Ref(id)` or `InlineDef(id, …)`,
-     * not the bare Method/FunctionT.
-     */
+    /** Walk Ref/InlineDef wrappers to the underlying Method/FunctionT (gcc binds signatures to their own type id). */
     private fun unwrapSignature(sig: TypeDecl<GlobalTypeId>): TypeDecl<GlobalTypeId>? {
         var cur: TypeDecl<GlobalTypeId>? = sig
         while (cur != null) {
@@ -482,7 +497,12 @@ class ClassBuilder(
         return null
     }
 
-    /** Class-scoped FunctionDefinition for [m], wrapped in a Pointer. `this` is void* when unresolvable. */
+    /**
+     * Build the typed function-pointer slot for [m]: `Pointer→FunctionDefinition(<sig>)`.
+     * Slot field and pointee FD share the method's name to satisfy the
+     * `atLeastOneVtableStructApplied` regression invariant. `this` resolves to the
+     * declaring class's pointer or void*; __thiscall is dropped on platforms that lack it.
+     */
     private fun buildVirtualSlotType(
         m: MethodDecl<GlobalTypeId>,
         className: String,
@@ -510,10 +530,7 @@ class ClassBuilder(
         return PointerDataType(resolved, dtm)
     }
 
-    /**
-     * Try (1) [resolver] on each candidate, (2) symbol-table scan for `_ZTV*` decoding to [className],
-     * (3) `.rdata` symbol scan. Returns null after bucketing the failure.
-     */
+    /** Resolve _ZTV<class> address: try AddressResolver candidates, then symbol-table scan, then .rdata scan. */
     private fun resolveVtableAddress(
         className: String,
         body: TypeDecl.Struct<GlobalTypeId>,
@@ -563,16 +580,9 @@ class ClassBuilder(
     }
 
     /**
-     * Recursively gather virtual methods from each base subobject, walking the full
-     * inheritance chain (base of base of base…). Returns the merged list in vtable
-     * slot order: a derived class's vtable contains ALL virtuals visible through the
-     * type, with overrides replacing inherited slots by name (cheap heuristic;
-     * sufficient for non-overloaded virtuals in the Cygwin gcc 3.4.4 corpus —
-     * for full Itanium override matching we'd compare parameter types).
-     *
-     * Without recursion we'd miss virtuals from grand-bases (e.g. DCInst → ExprInst
-     * → XapInst → Inst: Inst::GetOffset is in DCInst's vtable but not in ExprInst's
-     * direct `methods` list).
+     * Gather virtuals from the full inheritance chain (DCInst → ExprInst → XapInst → Inst:
+     * Inst::GetOffset belongs in DCInst's vtable but isn't in ExprInst's direct methods).
+     * Override matching is by name only — fine for non-overloaded virtuals.
      */
     private fun collectInheritedVirtuals(body: TypeDecl.Struct<GlobalTypeId>): List<MethodDecl<GlobalTypeId>> {
         val out = mutableListOf<MethodDecl<GlobalTypeId>>()
@@ -590,8 +600,8 @@ class ClassBuilder(
             val baseStruct = ClassBuilderHelpers(typeResolver).resolveBaseAstStatic(base.type)
                 ?: continue
             if (!visited.add(baseStruct)) continue
-            // Depth-first: grand-base virtuals come before direct-base's own additions,
-            // matching the order they appear in the derived vtable.
+            // Depth-first: grand-base virtuals precede direct-base's own additions,
+            // matching their slot order in the derived vtable.
             gatherTransitive(baseStruct, out, visited)
             for (m in baseStruct.methods.filter { it.virt == VirtKind.VIRTUAL }) {
                 val idx = out.indexOfFirst { it.name == m.name }
@@ -600,12 +610,7 @@ class ClassBuilder(
         }
     }
 
-    /**
-     * Apply derived overrides on top of the inherited slot list (override = same
-     * simple name as an inherited entry). Sufficient for non-overloaded virtuals
-     * in the Cygwin gcc 3.4.4 corpus; full Itanium override matching would need
-     * parameter-type comparison.
-     */
+    /** Apply derived overrides on inherited slots (match by name). */
     private fun mergeVtableSlots(
         inherited: List<MethodDecl<GlobalTypeId>>,
         own: List<MethodDecl<GlobalTypeId>>,
@@ -618,14 +623,7 @@ class ClassBuilder(
         return result
     }
 
-    /**
-     * Returns the lowest-offset polymorphic base subobject of `body`, or null if none.
-     * "Polymorphic" = has its own vtable pointer marker, has a virtual method, or
-     * recursively has a polymorphic base. Used to determine whether a derived class
-     * inherits its vfptr slot from a base (no need to insert one) and at what offset.
-     *
-     * Delegates to the static ClassBuilderHelpers version which is the single source of truth.
-     */
+    /** Lowest-offset polymorphic base, or null. Determines whether to insert a vfptr or inherit. */
     internal fun firstPolymorphicBase(body: TypeDecl.Struct<GlobalTypeId>): BaseDecl<GlobalTypeId>? =
         ClassBuilderHelpers(typeResolver).firstPolymorphicBase(body)
 
@@ -633,11 +631,9 @@ class ClassBuilder(
         ClassBuilderHelpers(typeResolver).hasPolymorphicBaseSubobject(body)
 
     /**
-     * Itanium-mangled compiler-implicit special members the compiler typically omits
-     * when they are trivial. Pattern: `_ZN<class>` followed by `C[123]` (ctor variant),
-     * `D[012]` (dtor variant), or `aSE` (operator=), followed by `v` (void / no params,
-     * i.e. default-constructible) or `RKS_` (const-ref-to-Self, i.e. copy) or
-     * `OS_` (rvalue-ref-to-Self, i.e. move).
+     * Itanium pattern for trivial implicit special members the compiler typically omits:
+     * `_ZN<class>(C[123]|D[012]|aS)E(v|RKS_|OS_)` — ctor/dtor variant or `operator=` with
+     * no params, const-Self&, or Self&&.
      */
     private fun isLikelyImplicitTrivialSpecialMember(mangled: String): Boolean {
         if (!mangled.startsWith("_ZN")) return false
@@ -645,12 +641,8 @@ class ClassBuilder(
     }
 
     companion object {
-        // Itanium tail:  <special-mnemonic> 'E' <params>
-        //   C[123] = constructor variants (in-charge / not-in-charge / allocating)
-        //   D[012] = destructor variants (deleting / in-charge / not-in-charge)
-        //   aS     = operator=
-        //   'E' closes the nested-name; params: 'v' = (), 'RKS_' = (const Self&),
-        //   'OS_' = (Self&&).
+        // C[123]=ctor (in-charge/not-in-charge/allocating); D[012]=dtor (deleting/in-charge/
+        // not-in-charge); aS=operator=. E closes nested-name. v=(), RKS_=(const Self&), OS_=(Self&&).
         private val IMPLICIT_SPECIAL_MEMBER_TAIL =
             Regex("""(?:C[123]|D[012]|aS)E(?:v|RKS_|OS_)$""")
     }

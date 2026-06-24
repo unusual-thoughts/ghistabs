@@ -4,39 +4,14 @@ import ghistabs.parse.BaseDecl
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
 
-/**
- * Resolved base class information: simple name and byte length.
- * Pure data record for InsertOp decision-making.
- */
 data class ResolvedBase(val simpleName: String, val lengthBytes: Int)
 
-/**
- * Base field insertion operation for a single C++ base class.
- * Pure data record describing where and how to insert a base subobject.
- */
-data class InsertOp(
-    val offsetBytes: Int,
-    val fieldName: String, // "_base_<Name>" or "_vbase_<Name>"
-    val comment: String, // "public base", "protected virtual base", etc.
-    val baseSimpleName: String,
-)
+/** One `_base_<Name>` or `_vbase_<Name>` subobject to splice into a derived struct. */
+data class InsertOp(val offsetBytes: Int, val fieldName: String, val comment: String, val baseSimpleName: String)
 
-/**
- * Pure planning core for C++ base class materialization.
- * Decides insertion operations for a derived struct's bases.
- */
+/** Pure planner for C++ base-class subobject insertion, sorted by offset for stable apply order. */
 object BaseInsertionPlanner {
-    /**
-     * Plan base class field insertions for a derived struct.
-     *
-     * @param bases List of base declarations from the struct body.
-     * @param resolveBase Callback to resolve a base TypeDecl to name and length.
-     *   Returning null skips that base (dangling ref); returning lengthBytes <= 0 skips.
-     * @return List of insertion operations, sorted by offset, ready to apply
-     *   via Structure.replaceAtOffset(...).
-     *
-     * Sorting ensures correct application order and predictable output.
-     */
+    /** Plan base insertions. [resolveBase] returns null (dangling) or zero-length to skip a base. */
     fun planBaseInsertions(
         bases: List<BaseDecl<GlobalTypeId>>,
         resolveBase: (TypeDecl<GlobalTypeId>) -> ResolvedBase?,

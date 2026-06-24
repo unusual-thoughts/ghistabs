@@ -3,19 +3,8 @@ package ghistabs.importer
 import ghistabs.harvest.SymbolRecord
 import ghistabs.parse.StabType
 
-/**
- * Pure scope-pairing logic for matching LBRAC/RBRAC records and filtering locals by recordIndex.
- */
+/** Pure pairing of LBRAC/RBRAC brackets; each scope keeps locals whose recordIndex falls inside it. */
 internal object ScopePairs {
-    /**
-     * Pair LBRAC/RBRAC and filter locals by recordIndex.
-     * Locals are included in a scope only if their recordIndex falls within
-     * the bracket pair's recordIndex range (inclusive).
-     *
-     * @param scopeBrackets List of (StabType, offset, recordIndex) triples from stabs stream
-     * @param locals List of local variable records
-     * @return List of (openOffset, closeOffset, localsInScope) triples for each matched bracket pair
-     */
     fun compute(
         scopeBrackets: List<Triple<StabType, Long, Int>>,
         locals: List<SymbolRecord>,
