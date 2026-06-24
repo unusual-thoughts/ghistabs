@@ -410,9 +410,15 @@ class ClassBuilder(
         } else {
             emptyList()
         }
+        // Preserve param names already set by `StabsImporter.passB`
+        // from N_PSYM records — those are the only source-level names
+        // we have. When Ghidra injects `this` at slot 0, user params
+        // start at index 1 in `func.parameters`; without injection
+        // they start at 0.
+        val priorOffset = if (ghidraInjectsThis) 1 else 0
         val formals = paramTypes.mapIndexed { i, pdt ->
             ParameterImpl(
-                "arg$i",
+                func.parameters.getOrNull(i + priorOffset)?.name ?: "arg$i",
                 pdt ?: Undefined4DataType.dataType,
                 program,
                 source,
