@@ -7,19 +7,15 @@ import ghistabs.importer.AddressResolver
 import ghistabs.parse.*
 
 /**
- * Harvests typed symbols and type ASTs from a flat stab record stream.
+ * Harvest typed symbols and type ASTs from a flat stab record stream.
  *
- * Two-pass pipeline:
- *  1. [preSeedHeaders] — scans for N_SO / N_BINCL / N_EINCL / N_EXCL to populate
- *     per-CU [IncludeContext] instances before any type symbols are processed.
- *  2. [passA] — main pass; dispatches on record type to populate [typeAsts],
- *     [symbolsByCu], and [openFunctions], calling [globalize] and [appendAsts]
- *     for each parsed symbol.
+ * Two-pass: [preSeedHeaders] scans N_SO/N_BINCL/N_EINCL/N_EXCL to populate per-CU
+ * [IncludeContext]s, then [passA] dispatches on record type to fill [typeAsts] / [symbolsByCu] /
+ * [openFunctions].
  *
- * Shared-registry invariant: the [HeaderRegistry] passed to each [IncludeContext]
- * is shared across all CUs. Two CUs that BINCL/EXCL the same (filename, checksum)
- * therefore receive the same [ghistabs.parse.HeaderFile] instance, making their [ghistabs.parse.GlobalTypeId]s
- * identical for header-attributed types (see stabs-canonicalization.md §3).
+ * All [IncludeContext]s share one [HeaderRegistry] so identical `(filename, checksum)` BINCLs
+ * across CUs yield the same [HeaderFile] — the cross-CU dedup invariant for [GlobalTypeId]s
+ * (see stabs-canonicalization.md §3).
  */
 class Harvester(
     private val monitor: TaskMonitor,
@@ -38,50 +34,32 @@ class Harvester(
     private var currentFunction: OpenFunction? = null
 
     /**
-     * Pending compilation-directory from a trailing-slash N_SO record.
-     * Per stabs.texinfo §"Source Files": gcc / SunOS /bin/cc emit two
-     * N_SO records back-to-back — the first is the compilation directory
-     * (ends in `/`), the second is the source filename. We pair them
-     * here so the filename's CUSource carries the directory.
+     * Trailing-slash N_SO that we'll pair with the next named N_SO as that CU's directory
+     * (stabs.texinfo §"Source Files": gcc emits dir + filename N_SOs back-to-back).
      */
     private var pendingDirectory: String? = null
 
-    /**
-     * Current source filename for N_SLINE attribution. N_SOL (non-empty)
-     * switches it; an N_SO end-of-CU marker resets it to null. When null
-     * but inside a CU, [currentCu] supplies the default. Stabs.texinfo:
-     * "An N_SOL record specifies that subsequent N_SLINE records refer to
-     * the source file named." Without it, lines inside `#include`'d
-     * headers would all be filed under the enclosing CU.
-     */
+    /** Source filename for N_SLINE attribution; set by N_SOL, cleared at end-of-CU. */
     private var currentSourceForLines: String? = null
     private val lineSource get() = currentSourceForLines ?: currentCu?.filename
     private val lineEntriesByFile = mutableMapOf<String, MutableList<LineEntry>>()
 
     /**
-     * gcc 12 (and other modern ELF emitters) omit the empty-name N_FUN
-     * end marker — they delimit the function's address range with the
-     * outermost N_RBRAC instead. When we're about to swap functions
-     * (new named N_FUN or end-of-CU N_SO), compute the previous
-     * function's size from its scope brackets if no explicit
-     * end-of-function record set it.
+     * Recover function size for gcc-12 emitters that omit the empty-name end-of-fn N_FUN —
+     * use the outermost N_RBRAC. N_RBRAC values follow the same absolute-vs-function-relative
+     * heuristic as N_SLINE (large = absolute text addr, small = fn-relative offset).
      */
     private fun finaliseGcc12FunctionSize() {
         val f = currentFunction ?: return
         if (f.sizeBytes != 0L) return
         val rbracs = f.scopeBrackets.filter { it.first == StabType.N_RBRAC }
         if (rbracs.isEmpty()) return
-        // N_RBRAC values follow the same absolute-vs-function-relative
-        // convention as N_SLINE: large = absolute text address, small =
-        // function-relative offset.
         val funcStart = f.addr.address.offset
         val maxRbrac = rbracs.maxOf { it.second }
         f.sizeBytes = if (maxRbrac > funcStart) maxRbrac - funcStart else maxRbrac
     }
 
-    // Allocate ONE shared HeaderRegistry for all per-CU IncludeContext instances.
-    // This ensures cross-CU dedup: two CUs with the same (filename, checksum) BINCL
-    // get the SAME HeaderFile instance via the shared registry.
+    /** Shared across every IncludeContext — cross-CU `(filename, checksum)` dedup invariant. */
     val sharedHeaderRegistry = HeaderRegistry(this)
 
     val currentInclude get() = includesByFile[currentCu?.filename]
@@ -174,23 +152,15 @@ class Harvester(
                     currentSourceForLines = null
                 }
 
-                // line context
                 StabType.N_BINCL, StabType.N_EINCL, StabType.N_EXCL -> {}
 
-                // N_SOL switches the source filename for subsequent N_SLINE
-                // records. Empty name = no-op (handled in the drop branch).
+                // N_SOL switches source filename for subsequent N_SLINE.
                 StabType.N_SOL if rec.name.isNotEmpty() -> {
                     currentSourceForLines = rec.name
                 }
 
-                // N_SLINE: line-number entry. desc = line, value =
-                // either function-relative offset (gcc/COFF for PE
-                // binaries; dbx-historical) or already-absolute (gcc on
-                // ELF, where the assembler resolves these to text-section
-                // addresses). Disambiguate by comparing to the current
-                // function's start: a value smaller than the function's
-                // start address is by construction relative, otherwise
-                // it's already absolute.
+                // N_SLINE value is either fn-relative (gcc/COFF, dbx-historical) or absolute
+                // (gcc/ELF); disambiguate by comparing to the current function's start address.
                 StabType.N_SLINE -> {
                     val source = lineSource ?: continue
                     val funcStart = currentFunction?.addr?.address
@@ -203,18 +173,13 @@ class Harvester(
                 }
 
                 StabType.N_FUN -> if (rec.name.isEmpty()) {
-                    // End-of-function marker: rec.value = function size relative to start.
+                    // End-of-function: value = size relative to start.
                     currentFunction?.let { it.sizeBytes = rec.value }
                     currentFunction = null
                 } else {
-                    // gcc 12 ELF doesn't emit the empty-name N_FUN
-                    // end marker — it relies on the outermost N_RBRAC
-                    // instead. Before opening a new function, finalise
-                    // the previous one from its scope brackets if its
-                    // sizeBytes is still 0.
+                    // gcc 12 ELF omits the end-of-fn marker — finalise the previous via N_RBRAC.
                     finaliseGcc12FunctionSize()
                     val addr = resolver.buildAddress(rec.value)
-                    // Pull mangled name from before the colon.
                     val mangled = rec.name.substringBefore(':')
                     resolver.recordFromStab(mangled, addr)
                     try {
@@ -265,14 +230,9 @@ class Harvester(
                     val sym = parseSymbol(rec)
                     when (val decl = sym.body) {
                         is SymbolDecl.TaggedType -> {
-                            // Outer typeAst + every InlineDef (`(0,N)=…`)
-                            // bound inside the struct body. gcc heavily uses
-                            // inline-bound ids for field types (anon pointers,
-                            // arrays, function pointers) — without recursing
-                            // through walkDefinitions those ids are referenced
-                            // by `Ref(id)` from other types but never harvested
-                            // as their own TypeAst, producing dangling refs
-                            // and undefined field types downstream.
+                            // Recurse via walkDefinitions so InlineDef-bound nested ids (anon ptrs,
+                            // arrays, fn-ptrs) get their own TypeAsts — otherwise downstream
+                            // `Ref(id)`s dangle.
                             val outer = TypeAst(
                                 currentCu!!,
                                 decl.id,
@@ -288,13 +248,8 @@ class Harvester(
                         }
 
                         is SymbolDecl.Typedef -> {
-                            // `name:t(cu,n)` with no `=body` parses as
-                            // `Typedef(name, id, Ref(id))` — a self-Ref. The
-                            // typedef adds a name but no new type definition,
-                            // so emitting it as a TypeAst would create a
-                            // body-less alias that collides with the real
-                            // definition at the same id in another CU
-                            // (every box2d typedef went this way).
+                            // Skip self-Ref typedefs (`name:t(cu,n)` with no `=body`) — emitting
+                            // a body-less alias would collide with the real definition in another CU.
                             if (decl.type !is TypeDecl.Ref || decl.type.id != decl.id) {
                                 val outer = TypeAst(
                                     currentCu!!,
@@ -332,9 +287,7 @@ class Harvester(
                     Triple(rec.type, rec.value, i),
                 )
 
-                // Known-irrelevant for type/symbol harvesting — bumped silently into
-                // diagnostics counters by the caller (no per-record log lines, which
-                // otherwise drown the log under similar high-volume records).
+                // Known-irrelevant for harvesting — silently bucketed (would otherwise drown the log).
                 StabType.N_DSLINE, StabType.N_BSLINE, StabType.N_FLINE,
                 StabType.N_OPT, StabType.N_OLEVEL, StabType.N_PARAMS, StabType.N_VERSION,
                 StabType.N_MAIN, StabType.N_PC, StabType.N_M2C, StabType.N_DEFD,
@@ -350,15 +303,11 @@ class Harvester(
                 StabType.N_NBSTS, StabType.N_NBLCS,
                 -> log("drop-record-${rec.type.name.removePrefix("N_").lowercase()}")
 
-                // Empty-name forms that already played their role inside StabReader:
-                //   - N_UNDF: cuOff/cuSize were advanced as the record streamed by.
-                //   - empty N_SOL: ignored (no source filename to switch to).
+                // N_UNDF: StabReader already advanced cuOff/cuSize. Empty N_SOL: no filename to switch.
                 StabType.N_UNDF, StabType.N_SOL ->
                     log("drop-record-${rec.type.name.removePrefix("N_").lowercase()}-empty")
 
-                // Hard signal — a stab type the byte-decoder recognises but we have
-                // no harvesting rule for. Log loudly, once per type, with rawType so
-                // the binary's source (compiler/linker) can be identified.
+                // Decoder recognised the type but we have no harvesting rule — log loudly with rawType.
                 StabType.UNKNOWN -> log(
                     "stab-unknown",
                     "rawType=0x${"%02X".format(rec.rawType)} @${rec.recordIndex} '${rec.name.take(60)}'",
@@ -379,44 +328,17 @@ class Harvester(
     }
 
     /**
-     * gcc 12 has a units bug emitting C++ inheritance as a leading
-     * pseudo-field instead of the documented `!N,<bases>;` form. Verified
-     * via objdump and via gdb itself:
+     * Detect gcc-12's C++ inheritance-as-pseudo-field bug and recover it as a proper base.
      *
-     *   $ rg 'XMLText:T' xmltest-record.json
-     *   XMLText:T(0,81)=s112XMLNode:(0,25),0,6656;_isCData:(0,9),832,8;;
-     *
-     *   $ objdump -g xmltest
-     *   struct XMLText {                 // size 112 id 3
-     *     struct XMLNode XMLNode;        // bitsize 6656, bitpos 0
-     *     enum { False, True } _isCData; // bitsize 8,    bitpos 832
-     *   };
-     *
-     *   $ gdb> ptype XMLText
-     *   internal-error: create_range_type: Assertion
-     *     `index_type->length () > 0' failed.
-     *
-     * XMLNode is 104 bytes (832 bits). The emitted bitsize is 6656 = 832 × 8
-     * = bytes × 64 — gcc applied the byte→bit conversion twice. binutils,
-     * objdump, and gdb all read the bogus value as-is; the actual byte
-     * layout survives because subsequent code uses `field_type->length()`,
-     * not bitsize. gdb crashes elsewhere on the same data, so consider this
-     * stab genuinely malformed.
-     *
-     * Detection: `field.sizeBits > struct.sizeBytes * 8`. A real field
-     * cannot exceed its enclosing struct — that's the unambiguous signal.
-     * The dangling id `(0,N)` referenced here is the base class; the field
-     * name carries the base's source-level name (the convention is to use
-     * the base class identifier verbatim). Synthesise an XRef-stub at the
-     * dangling id named after the field, so [TypeResolver.lookupByXRef]
-     * can cross-CU-resolve it to the real struct.
+     * gcc 12 emits inheritance as a leading field whose `sizeBits` is 64× the base's bytes
+     * (double byte→bit conversion) instead of the documented `!N,<bases>;` form. Verified vs
+     * objdump and gdb (which crashes on the same data, so the stab is genuinely malformed).
+     * Detection: `field.sizeBits > struct.sizeBytes * 8` — a real field can't exceed its
+     * struct. We rewrite the field into `bases` and synthesise an XRef stub at the dangling id
+     * (named after the field) so [TypeResolver.lookupByXRef] can resolve it cross-CU.
      */
     private fun synthesizeXRefStubsForDanglingInheritanceRefs() {
         val synthetic = mutableListOf<TypeAst>()
-        // Per outer struct id: pseudo-fields detected as inheritance edges.
-        // We rewrite the outer ast to move those fields into `bases` so the
-        // materialiser's BaseInsertionPlanner / firstPolymorphicBase /
-        // vtable wiring sees the inheritance.
         val outerRewrites =
             mutableMapOf<GlobalTypeId, MutableList<FieldDecl<GlobalTypeId>>>()
         for (ast in typeAsts.values) {
@@ -426,16 +348,10 @@ class Harvester(
                 val ref = field.type as? TypeDecl.Ref ?: continue
                 if (field.name.isEmpty()) continue
                 if (field.sizeBits <= structBits) continue
-                // Bases-rewrite fires for every detected pseudo-field, even
-                // when the dangling Ref happens to be bound — gcc-12's bogus
-                // bitsize signal is independent of cross-CU resolution.
+                // Always rewrite into bases — gcc-12's bogus bitsize is independent of resolution.
                 outerRewrites.getOrPut(ast.id) { mutableListOf() }.add(field)
-                // XRef-stub synthesis is only needed when the dangling Ref
-                // has no binding anywhere; otherwise the materialiser can
-                // resolve `Ref(id)` directly.
+                // Only synthesise an XRef stub if no resolution exists anywhere.
                 if (ref.id in typeAsts) continue
-                // Inheritance-pseudo-field XRef: synthesized on behalf of
-                // the outer struct, so inherit its declaration source.
                 synthetic.add(
                     TypeAst(
                         cu = ast.cu,
@@ -490,12 +406,10 @@ class Harvester(
     }
 
     /**
-     * Walk a type AST gathering [TypeAst]s for every [TypeDecl.InlineDef]
-     * encountered. The anonymous nested TypeAsts inherit the enclosing
-     * declaration's `declLine` / `declSourceFile` — they were declared
-     * at the same source location as the outer named type (a nested
-     * pointer/array/method-return inside `:T Foo:...` lives at the same
-     * `Foo`-declaration line as Foo itself).
+     * Walk a TypeDecl emitting a [TypeAst] for every nested [TypeDecl.InlineDef]. Anonymous nested
+     * TypeAsts inherit the outer's `declLine` / `declSourceFile` (they're declared at the same site).
+     * Without the recursion gcc's nested InlineDefs (e.g. Method → InlineDef Pointer-to-X) leave
+     * inner ids referenced but never registered.
      */
     fun walkDefinitions(
         decl: TypeDecl<GlobalTypeId>,
@@ -519,14 +433,6 @@ class Harvester(
                 d.fields.flatMap { walk(it.type) } +
                 d.methods.flatMap { walk(it.signature) }
 
-            // Emit the outer InlineDef's TypeAst AND recurse into its
-            // body — gcc nests InlineDefs (e.g. an outer Method whose
-            // return type is itself an inline-defined Pointer-to-X),
-            // and without the recursion the inner ids are referenced by
-            // other types but never registered. Result: the contentHash
-            // oracle can't resolve the Refs, per-CU clones diverge, and
-            // the appendAsts collision log surfaces hundreds of false
-            // "different hash" entries.
             is TypeDecl.InlineDef -> listOf(
                 TypeAst(
                     currentCu!!,
@@ -542,20 +448,13 @@ class Harvester(
     }
 
     /**
-     * Accumulate [TypeAst]s into [typeAsts] with first-writer-wins on
-     * GlobalTypeId collisions.
+     * Accumulate TypeAsts into [typeAsts] with first-writer-wins on GlobalTypeId collisions:
+     *  - non-colliding → insert
+     *  - existing XRef placeholder → replaced by any later concrete body for the same id
+     *  - real collision → record all alternates into [collidingAsts] for post-harvest classification.
      *
-     * 1. **Non-colliding:** insert as-is.
-     * 2. **Existing XRef placeholder:** replaced by any concrete body that
-     *    arrives later for the same id (see filter on the collision set).
-     * 3. **GlobalTypeId already taken:** record every alternate body into
-     *    [collidingAsts] for post-harvest classification, then drop the
-     *    new entries. No per-collision logging or `contentHash` walk
-     *    here — that turned the harvest into a 10-minute affair on
-     *    template-heavy binaries. `Harvest.classifyCollisions` runs once
-     *    after harvest against a fully populated `typeAsts` and the
-     *    memoized `hashCache` to surface real-vs-spurious counts; see
-     *    `StabsImporter`.
+     * No per-collision contentHash walk here — that turned harvest into 10-min on template-heavy
+     * binaries. `StabsImporter` runs `Harvest.classifyCollisions` once after harvest instead.
      */
     fun appendAsts(vararg asts: TypeAst) {
         val new = asts.groupBy { it.id }
@@ -564,22 +463,17 @@ class Harvester(
             val ex = typeAsts[id]!!
             val incoming = new[id]!!
 
-            // Name-promotion: an anonymous InlineDef-extracted TypeAst can be
-            // superseded by an explicit named Typedef for the same id (same CU-local
-            // type). The `of` self-ref in Range bodies differs between the two
-            // forms, so we don't require body equality — just that both are
-            // non-XRefTarget (primitive-like) and the existing is unnamed.
+            // Name-promotion: anonymous InlineDef-extracted ast superseded by a named Typedef
+            // for the same id. Range bodies' `of` self-ref differs between forms, so don't require
+            // body equality — both non-XRefTarget + existing unnamed is enough.
             val namedIncoming = incoming.firstOrNull { it.name != null && !it.body.isXRefTarget }
             if (namedIncoming != null && ex.name == null && !ex.body.isXRefTarget) {
                 typeAsts[id] = namedIncoming
                 continue
             }
 
-            // Cheap-equality skip: if every alternate body is `==` to
-            // the merged entry (data-class structural equality, no
-            // Ref-walk), the collision is a literal re-emission and
-            // not worth recording. classifyCollisions does the deeper
-            // Ref-aware check later for the entries that survive.
+            // Skip literal re-emissions via structural equality; classifyCollisions does the
+            // deeper Ref-aware check on what survives.
             val alternates = incoming.filter { it.body != ex.body }.map { it.body }
             if (alternates.isEmpty()) continue
             val bucket = collidingAsts
