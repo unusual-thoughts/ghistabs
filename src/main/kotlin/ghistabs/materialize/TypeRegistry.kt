@@ -300,6 +300,13 @@ class TypeRegistry(
             val safe = if (resolved is VoidDataType) Undefined4DataType.dataType else resolved
             val argName = if (i == 0 && thisType != null) "this" else "arg$i"
             ParameterDefinitionImpl(argName, safe, null)
+        }.toMutableList()
+        // Broken-emitter guard: gdb's read_args has the same complaint for stabs that
+        // omit the THIS param. Without this, a __thiscall FD with arity 0 silently
+        // produces a wrong-shaped signature.
+        if (thisType != null && argDefs.isEmpty()) {
+            val safe = if (thisType is VoidDataType) PointerDataType(VoidDataType(), dtm) else thisType
+            argDefs += ParameterDefinitionImpl("this", safe, null)
         }
         fd.setArguments(*argDefs.toTypedArray())
         // Skip unsupported conventions (e.g. __thiscall on x86-64 ELF would throw
