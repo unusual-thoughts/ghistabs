@@ -176,6 +176,13 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
                                 "${open.name}.$pname",
                             )
                         }
+                        typeRegistry.reasonFor(pdt)?.let { reason ->
+                            ctx.diagnostics.recordDegradation(
+                                "param-typed-$reason",
+                                "${open.name}.$pname",
+                                "type=${pdt?.pathName}",
+                            )
+                        }
                         ParameterImpl(
                             pname,
                             pdt ?: Undefined4DataType.dataType,
@@ -277,6 +284,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
         DemanglerReplacer(ctx, typeRegistry).run()
 
         ctx.typeRegistry = typeRegistry
+        ctx.typeResolver = typeResolver
 
         return ApplyResult(functions, globals, classes)
     }
@@ -433,6 +441,13 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
         if (resolvedDt == null) {
             ctx.diagnostics.recordDegradation("local-untyped", "${func.name}.${decl.name}]")
         }
+        typeRegistry.reasonFor(resolvedDt)?.let { reason ->
+            ctx.diagnostics.recordDegradation(
+                "local-typed-$reason",
+                "${func.name}.${decl.name}",
+                "type=${resolvedDt?.pathName}",
+            )
+        }
         val dt = resolvedDt ?: Undefined4DataType.dataType
         try {
             when (decl) {
@@ -517,6 +532,13 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
             )
             return false
         }
+        typeRegistry.reasonFor(dt)?.let { reason ->
+            ctx.diagnostics.recordDegradation(
+                "global-typed-$reason",
+                decl.name,
+                "type=${dt.pathName}",
+            )
+        }
         val dtKind = when (dt) {
             is ghidra.program.model.data.Structure -> "Structure"
             is ghidra.program.model.data.Union -> "Union"
@@ -562,6 +584,13 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
     ): Boolean {
         val addr = ctx.resolver.buildAddress(rawAddr)
         val dt = typeRegistry.dataTypeFor(decl.type) ?: return false
+        typeRegistry.reasonFor(dt)?.let { reason ->
+            ctx.diagnostics.recordDegradation(
+                "static-typed-$reason",
+                decl.name,
+                "type=${dt.pathName}",
+            )
+        }
         ensureStabLabel(addr, decl.name)
 
         try {

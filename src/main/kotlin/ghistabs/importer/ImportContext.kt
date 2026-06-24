@@ -41,6 +41,11 @@ class ImportContext<Log : DiagnosticSink>(
     @get:TestOnly
     var typeRegistry: ghistabs.materialize.TypeRegistry? = null
         internal set
+
+    /** Companion to [typeRegistry] for test introspection (canonical-key index, divergent collisions). */
+    @get:TestOnly
+    var typeResolver: ghistabs.harvest.TypeResolver? = null
+        internal set
 }
 
 /** Test-only side-channel for [ghistabs.StabsAnalyzer.added] to tee output into [ImportContext.log]. */

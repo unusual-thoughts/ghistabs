@@ -94,6 +94,7 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
     private val baselineFile get() = File("src/test/resources/baselines/${fixture.nameWithoutExtension}-baseline.json")
     private val recordsFile get() = outputFile("record")
     private val harvestFile get() = outputFile("harvest.${mode.name.lowercase()}")
+    private val registryDumpFile get() = outputFile("registry.${mode.name.lowercase()}")
     private val logFile
         get() = File("build/test-output/logs/${fixture.nameWithoutExtension}.${mode.name.lowercase()}.log")
 
@@ -186,9 +187,45 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
             // is appended for parity with Ghidra's own view, even though it
             // truncates at ~500 lines.
             logFile.writeText(context.log.dedupedOutput() + "\n--- MessageLog ---\n" + log.toString())
+            writeRegistryDump()
         } catch (e: Exception) {
             assumeTrue(false, "Failed to load real binary via ProgramLoader: ${e.message}")
         }
+    }
+
+    /**
+     * Snapshot what the importer actually produced: compromised DataTypes (anonymous /
+     * empty-placeholder / all-Undefined / xref-stub), canonical groups, divergent collisions.
+     * Lets us spot misattributions visually without relying on individual degradation events.
+     */
+    @OptIn(ExperimentalSerializationApi::class)
+    private fun writeRegistryDump() {
+        val registry = context.typeRegistry ?: return
+        val resolver = context.typeResolver ?: return
+        registryDumpFile.parentFile.mkdirs()
+        val compromised = registry.compromisedTypes().mapValues { (_, dts) ->
+            dts.sortedBy { it.pathName }.map { CompromisedEntry(it.pathName, it::class.simpleName ?: "?", it.length) }
+        }
+        val canonicalGroups = resolver.byCanonicalKey.entries
+            .sortedBy { it.key.toString() }
+            .map { (key, g) -> CanonicalGroupEntry(key.toString(), g.ast.id.toString(), g.members.size, g.distinct) }
+        val divergent = resolver.divergentCollisions.entries
+            .sortedBy { it.key.toString() }
+            .map { (id, byName) ->
+                DivergentEntry(id.toString(), byName.mapValues { (_, bodies) -> bodies.size })
+            }
+        val dump = RegistryDump(
+            summary = DumpSummary(
+                registeredDataTypes = registry.allCreatedDataTypes().size,
+                compromisedCounts = compromised.mapValues { it.value.size },
+                canonicalGroups = canonicalGroups.size,
+                divergentCollisions = divergent.size,
+            ),
+            compromised = compromised,
+            canonicalGroups = canonicalGroups,
+            divergentCollisions = divergent,
+        )
+        registryDumpFile.outputStream().use { json.encodeToStream(dump, it) }
     }
 
     private fun runAutoAnalysis(mgr: AutoAnalysisManager, monitor: TaskMonitor) {
@@ -1265,3 +1302,28 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
         Assertions.assertEquals(40, csymFields["RecoverySet"]?.length, "RecoverySet expected to span 40 bytes")
     }
 }
+
+@kotlinx.serialization.Serializable
+private data class RegistryDump(
+    val summary: DumpSummary,
+    val compromised: Map<String, List<CompromisedEntry>>,
+    val canonicalGroups: List<CanonicalGroupEntry>,
+    val divergentCollisions: List<DivergentEntry>,
+)
+
+@kotlinx.serialization.Serializable
+private data class DumpSummary(
+    val registeredDataTypes: Int,
+    val compromisedCounts: Map<String, Int>,
+    val canonicalGroups: Int,
+    val divergentCollisions: Int,
+)
+
+@kotlinx.serialization.Serializable
+private data class CompromisedEntry(val pathName: String, val kind: String, val length: Int)
+
+@kotlinx.serialization.Serializable
+private data class CanonicalGroupEntry(val key: String, val winnerId: String, val members: Int, val distinct: Int)
+
+@kotlinx.serialization.Serializable
+private data class DivergentEntry(val id: String, val byName: Map<String, Int>)
