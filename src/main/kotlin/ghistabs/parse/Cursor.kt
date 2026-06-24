@@ -52,16 +52,10 @@ internal class Cursor(val src: String) {
         return src.substring(start, pos).toLong()
     }
 
-    /**
-     * Read a stabs range bound. GCC emits range bounds in either decimal
-     * (`-2147483648`, `2147483647`) or octal (`0`, `0177777`,
-     * `01777777777777777777777` for `unsigned long long`'s max). A leading
-     * `0` followed by another digit indicates octal. Plain `0` is decimal zero.
-     *
-     * Octal `01777777777777777777777` (= 2^64-1 = -1L) overflows signed
-     * decimal Long.toLong() but parses correctly via radix-8 with
-     * `java.lang.Long.parseUnsignedLong`. We then re-interpret the unsigned
-     * value as a signed `Long`.
+/**
+     * Range bound: decimal or octal (leading `0` followed by another digit = octal).
+     * Uses `parseUnsignedLong` so `unsigned long long`'s max (`01777777777777777777777` = -1L
+     * reinterpreted) doesn't overflow.
      */
     fun parseRangeBound(): Long {
         val start = pos
@@ -81,9 +75,7 @@ internal class Cursor(val src: String) {
             } else {
                 java.lang.Long.parseUnsignedLong(raw, 10)
             }
-        // Reinterpret unsigned magnitude with sign applied. For the gcc
-        // unsigned-overflow form (0..0xFFFFFFFFFFFFFFFF) sign is always +1
-        // and the result equals -1L when magnitude == 0xFFFFFFFFFFFFFFFF.
+        // For the gcc unsigned-overflow form sign=+1 and 0xFFFF... reinterprets as -1L.
         return sign * magnitude
     }
 
@@ -107,11 +99,7 @@ internal class Cursor(val src: String) {
         return src.substring(start, pos)
     }
 
-    /**
-     * Read the symbol name up to (but not including) the descriptor-separator `:`.
-     * C++ names in template arguments may contain `::` scope operators; these are
-     * included in the name. Only a single `:` (not followed by another `:`) terminates.
-     */
+    /** Read up to the descriptor `:`. `::` (C++ scope) is preserved; only a single `:` terminates. */
     fun readSymbolName(): String {
         val sb = StringBuilder()
         while (!eof) {
@@ -132,12 +120,7 @@ internal class Cursor(val src: String) {
         return sb.toString()
     }
 
-    /**
-     * Read an XRef tag name, which may contain `::` inside C++ template arguments.
-     * Rules:
-     *  - `::` INSIDE angle-bracket depth > 0 → include both colons in name
-     *  - `::` at depth 0 OR single `:` at any depth → stop (terminator is the first `:`)
-     */
+    /** Read an XRef tag name. `::` is preserved only inside `<>` template-arg depth > 0. */
     fun readXRefTagName(): String {
         val sb = StringBuilder()
         var depth = 0
@@ -162,9 +145,8 @@ internal class Cursor(val src: String) {
                     pos++
                 }
 
-                ':' -> break
+                ':' -> break // single `:` or `::` at depth 0
 
-                // single ':' or '::' at depth 0 — stop before it
                 else -> {
                     sb.append(ch)
                     pos++

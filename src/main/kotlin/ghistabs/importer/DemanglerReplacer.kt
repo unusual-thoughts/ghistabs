@@ -6,28 +6,19 @@ import ghistabs.diagnose.DiagnosticSink
 import ghistabs.materialize.TypeRegistry
 import java.util.*
 
-/**
- * Pure data records for demangler replacement decision logic.
- * No Ghidra imports — this is pure data.
- */
-data class StubRecord(
-    val pathName: String, // e.g. "/Demangler/Foo"
-    val simpleName: String, // e.g. "Foo"
-    val isEmptyStructure: Boolean,
-)
+/** Pure-data input to the demangler-stub replacement planner. */
+data class StubRecord(val pathName: String, val simpleName: String, val isEmptyStructure: Boolean)
 
 data class ReplacementRecord(
-    val pathName: String, // e.g. "/proj/Foo"
+    val pathName: String,
     val simpleName: String,
-    val dependsOnPathNames: Set<String>, // simulated dependsOn lookup
-    val isTypedef: Boolean = false, // typedef replacements can't cycle on themselves
+    val dependsOnPathNames: Set<String>,
+    /** Typedef replacements can't form a self-cycle (see [DemanglerReplacer.decide]). */
+    val isTypedef: Boolean = false,
 )
 
 data class ReplaceOp(val stubPath: String, val replacementPath: String)
 
-/**
- * Reason why a stub was skipped (not replaced).
- */
 sealed class Skip(open val reason: String) {
     data class NoReplacement(val name: String) : Skip("no-replacement-for-$name")
     data class WouldBeCycle(val name: String) : Skip("would-be-cycle-$name")
@@ -35,21 +26,14 @@ sealed class Skip(open val reason: String) {
 }
 
 /**
- * Adapter that uses Ghidra's DataTypeManager to execute demangler stub
- * replacements. Candidate lookup goes through [TypeRegistry.findByName],
- * which consults the authoritative `byCanonicalKey` (for Struct/Enum)
- * and `registeredTypedefsByName` (for named typedef aliases) — no
- * walking-all-DTM heuristics. When multiple candidates share a simple
- * name, the stub's path with `/Demangler` stripped acts as the
- * preferred-category hint (so `/Demangler/std/string` selects the
- * candidate at `/std/string` over `/string` or `/stabs/string`).
+ * Replaces empty `/Demangler/...` stubs with our registered types. Candidates come from
+ * [TypeRegistry.findByName] only — no DTM-wide heuristics. The stub's path (sans `/Demangler`)
+ * acts as the preferred-category hint when multiple candidates share a simple name.
  */
 class DemanglerReplacer(private val ctx: ImportContext<*>, private val typeRegistry: TypeRegistry) :
     DiagnosticSink by ctx.sink {
     companion object {
-        /**
-         * Pure algorithm: given stubs and replacements, decide which replacements are safe.
-         */
+        /** Pure planner: decide which stubs can be safely replaced. */
         fun decide(
             stubs: List<StubRecord>,
             replacements: Map<String, ReplacementRecord>,
@@ -66,15 +50,10 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val typeRegis
                     continue
                 }
 
-                // Cycle guard: avoid Foo→Bar where Bar transitively contains
-                // Foo (would create a real self-containment after
-                // replaceDataType). Doesn't apply to TypeDef replacements:
-                // a typedef aliasing a struct that references the stub
-                // (e.g. `std::string → basic_string<…>::operator=` taking
-                // `std::string&`) is the normal C++ recursive type pattern
-                // — replaceDataType rewrites those references to point at
-                // the typedef, leaving a benign typedef→struct→typedef
-                // graph that Ghidra handles correctly.
+                // Cycle guard: skip Foo→Bar when Bar transitively contains Foo (post-replace
+                // self-containment). Doesn't apply to typedef replacements: the normal C++
+                // `std::string → basic_string<…>` pattern produces a benign typedef→struct→typedef
+                // graph after replaceDataType, which Ghidra handles correctly.
                 if (!replacement.isTypedef && stub.pathName in replacement.dependsOnPathNames) {
                     skips.add(Skip.WouldBeCycle(stub.simpleName))
                     continue
@@ -90,7 +69,6 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val typeRegis
     fun run() {
         val dtm = ctx.dtm
 
-        // Build pure-record snapshot for the planner
         val stubs = mutableListOf<StubRecord>()
         val replacements = mutableMapOf<String, Pair<ReplacementRecord, DataType>>()
         val stubDtByPath = mutableMapOf<String, DataType>()
@@ -108,13 +86,8 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val typeRegis
             }
         }
 
-        // Authoritative TypeRegistry lookup — only types WE registered
-        // qualify as replacements. Substituting one Ghidra-bundled empty
-        // stub for another is meaningless theatre; primitives are
-        // interesting in theory but in practice the production analyzer
-        // run produces 0 demangler-fallback-hit events across all our
-        // fixtures (verified by instrumentation 2026-06-23), so leaving
-        // the stub in place is at worst no-op.
+        // Only types WE registered qualify — swapping one Ghidra-bundled stub for another
+        // is meaningless. Verified 2026-06-23: leaving non-registered stubs in place is a no-op.
         for (stub in stubs) {
             val preferredCategory = stub.pathName.removePrefix("/Demangler")
                 .substringBeforeLast('/', missingDelimiterValue = "/")
@@ -130,13 +103,11 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val typeRegis
             ) to candidate
         }
 
-        // Use pure core to decide which ops are safe
         val (ops, skips) = decide(
             stubs,
             replacements.mapValues { it.value.first },
         )
 
-        // Log all skips with per-kind counters
         for (skip in skips) {
             val counterKey = when (skip) {
                 is Skip.NoReplacement -> "demangler-skip-no-replacement"
@@ -144,15 +115,12 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val typeRegis
                 is Skip.StubAlreadyMissing -> "demangler-skip-already-missing"
             }
             ctx.diagnostics.inc(counterKey)
-            // Only WouldBeCycle is a real degradation: we had a replacement and
-            // couldn't apply it. NoReplacement means there was no stab type that
-            // matched the stub at all (often a third-party stub); not lossy.
+            // Only WouldBeCycle is a real degradation — we had a replacement and couldn't apply it.
             if (skip is Skip.WouldBeCycle) {
                 ctx.diagnostics.recordDegradation("demangler-skip-cycle", skip.name, skip.reason)
             }
         }
 
-        // Execute replacements
         for (op in ops) {
             val stubDt = stubDtByPath[op.stubPath] ?: continue
             val replDt = replacements.values
@@ -160,11 +128,10 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val typeRegis
                 ?.second
                 ?: continue
 
-            // Guard: stub must still exist in DTM
             if (!dtm.contains(stubDt)) continue
 
             try {
-                // updateCategoryPath = false: keep replacement at its real category
+                // updateCategoryPath = false: keep replacement at its real category.
                 dtm.replaceDataType(stubDt, replDt, false)
                 ctx.diagnostics.inc("replaced-demangler")
                 log("replaced-demangler", "${stubDt.pathName} -> ${replDt.pathName}")
@@ -179,14 +146,7 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val typeRegis
         }
     }
 
-    /**
-     * Collect all data type paths that a given DataType depends on, transitively.
-     * Walks Structure components, Pointer targets, Array element types, and TypeDef bases.
-     * Uses BFS to detect cycles via visited set. Excludes self.
-     *
-     * @param dt the DataType to analyze
-     * @return the set of all transitive dependency paths (excludes dt's own pathName)
-     */
+    /** Transitive dependency pathNames of [dt] (Structure components, Pointer/Array/TypeDef targets). Excludes self. */
     private fun collectDependsOnPaths(dt: DataType): Set<String> {
         val visited = mutableSetOf<String>()
         val queue = ArrayDeque<DataType>()
@@ -194,16 +154,12 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val typeRegis
 
         while (queue.isNotEmpty()) {
             val cur = queue.removeFirst()
-            // Mark visited by pathName to detect cycles
             if (!visited.add(cur.pathName)) {
-                // Already visited, skip
                 continue
             }
 
-            // Walk dependencies of current type
             when (cur) {
                 is Structure -> {
-                    // Add all component data types
                     for (component in cur.components) {
                         val childDt = component.dataType
                         if (!visited.contains(childDt.pathName)) {
@@ -213,7 +169,6 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val typeRegis
                 }
 
                 is Pointer -> {
-                    // Add pointed-to type if it exists
                     val target = cur.dataType
                     if (target != null && !visited.contains(target.pathName)) {
                         queue.add(target)
@@ -221,7 +176,6 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val typeRegis
                 }
 
                 is Array -> {
-                    // Add element type
                     val elemDt = cur.dataType
                     if (!visited.contains(elemDt.pathName)) {
                         queue.add(elemDt)
@@ -229,17 +183,14 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val typeRegis
                 }
 
                 is TypeDef -> {
-                    // Add base type
                     val baseDt = cur.baseDataType
                     if (!visited.contains(baseDt.pathName)) {
                         queue.add(baseDt)
                     }
                 }
-                // Primitive types and others have no dependencies
             }
         }
 
-        // Exclude self from results
         visited.remove(dt.pathName)
         return visited
     }

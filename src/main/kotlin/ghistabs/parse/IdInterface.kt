@@ -25,10 +25,7 @@ data class GlobalTypeId(val source: SourceFile, override val n: Int) : IdInterfa
     override fun toString() = "[$source,$n]"
 }
 
-/**
- * Represents one BINCL-or-source-file entity. Two CUs this include or EXCL the same
- * (filename, checksum) share a single HeaderFile instance.
- */
+/** BINCL-or-source-file entity. CUs that BINCL/EXCL the same (filename, checksum) share one instance. */
 @Serializable(with = ToStringSerializer::class)
 data class HeaderFile(val filename: String, val checksum: Long, val originatingCu: SourceFile.CUSource?) {
     override fun toString(): String = "$filename#$checksum#$originatingCu"
@@ -46,12 +43,7 @@ sealed class SourceFile : Comparable<SourceFile> {
         override fun toString() = header.toString()
     }
 
-    /**
-     * A compilation-unit source. [directory] is captured when gcc / SunOS
-     * /bin/cc emit a "directory" N_SO (one ending in `/`) immediately
-     * before the filename N_SO — see stabs.texinfo §"Source Files" and
-     * the leading paragraph of `parse/StabType.kt`'s N_SO section.
-     */
+    /** CU source. [directory] is set from the leading directory-`N_SO` (one ending in `/`). */
     @Serializable(with = ToStringSerializer::class)
     data class CUSource(override val filename: String, val directory: String? = null) : SourceFile() {
         override fun toString() = if (directory != null) "$directory$filename" else filename
@@ -70,19 +62,9 @@ interface Globalizer {
 }
 
 /**
- * Recursively converts a [TypeDecl] (with [LocalTypeId] nodes) to [TypeDecl] (with [GlobalTypeId] nodes)
- * by replacing local type references with global ones.
- *
- * Identity on terminal nodes: leaf types like [TypeDecl.Builtin] and [TypeDecl.Void] pass
- * through unchanged via `@Suppress("UNCHECKED_CAST")`.
- *
- * Recursion contract: every [TypeDecl] variant is handled; none falls through unprocessed.
- * For recursive types, child nodes are recursively globalized.
- *
- * InlineDef side effect: when an [TypeDecl.InlineDef] is encountered, its body is
- * globalized AND a [TypeAst] is emitted as a side effect (the side effect itself
- * happens in sibling methods [walkDefinitions] and [appendAsts], not within [globalize]).
- * This ensures inline-type definitions are hoisted into the top-level [typeAsts] collection.
+ * Replace every [LocalTypeId] in this tree with a [GlobalTypeId] via [g].
+ * Hoisting of inline definitions into the top-level `typeAsts` collection is done by the
+ * sibling walker (`walkDefinitions` / `appendAsts`), not here.
  */
 @Suppress("UNCHECKED_CAST")
 fun TypeDecl<LocalTypeId>.globalize(g: Globalizer): TypeDecl<GlobalTypeId> = when (this) {
@@ -91,8 +73,7 @@ fun TypeDecl<LocalTypeId>.globalize(g: Globalizer): TypeDecl<GlobalTypeId> = whe
 
     is TypeDecl.Range -> TypeDecl.Range(g.globalIdFor(of), min, max)
 
-    // Refs with negative ids never reach this point — the parser
-    // (see [Parser.parseType]) emits [TypeDecl.Builtin] for those.
+    // Negative-id Refs never reach here — parser emits [TypeDecl.Builtin] for those.
     is TypeDecl.Ref -> TypeDecl.Ref(g.globalIdFor(id))
 
     is TypeDecl.Const -> TypeDecl.Const(inner.globalize(g))

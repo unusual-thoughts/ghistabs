@@ -29,7 +29,7 @@ open class StabOnlyAddressResolver : AddressResolver {
             stabMap[name] = addr
         }
         if (existing != addr) {
-            // Conflict: same name at two different addresses across CUs. Keep first; caller logs.
+            // Same name at two different addresses across CUs — keep first; caller logs.
             return false
         }
         return true
@@ -37,27 +37,10 @@ open class StabOnlyAddressResolver : AddressResolver {
 }
 
 /**
- * Address-resolution facade. Stab-derived addresses (recorded via
- * `recordFromStab`) win; otherwise we delegate to the label store.
- *
- * Creates `IMPORTED` labels at stab-derived addresses when no symbol exists.
- * Never re-parses the PE/ELF/COFF symbol table directly — Ghidra has already
- * populated the symbol table.
- *
- * **Transactional requirement:** Callers must hold a Program transaction before invoking
- * [recordFromStab], since it may call `labelStore.createLabel()`, which mutates Program state.
+ * Address resolver that creates IMPORTED labels at stab-derived addresses.
+ * **Caller must hold a Program transaction** — [recordFromStab] calls `createLabel`.
  */
 class ProgramAddressResolver(private val program: Program) : StabOnlyAddressResolver() {
-    /**
-     * Record an address learned from a stab record. If `name` is non-blank
-     * AND no Ghidra symbol already exists at `addr` carrying that name,
-     * create an `IMPORTED` label.
-     *
-     * Idempotent: subsequent calls with the same (name, addr) are no-ops.
-     *
-     * **Transactional requirement:** Caller must hold a Program transaction, since
-     * [labelStore.createLabel] mutates Program state.
-     */
     override fun recordFromStab(name: String, addr: Address): Boolean {
         if (super.recordFromStab(name, addr)) {
             val present = program.symbolTable.getSymbols(addr).any { it.name == name }
@@ -71,23 +54,12 @@ class ProgramAddressResolver(private val program: Program) : StabOnlyAddressReso
     override fun buildAddress(offset: Long): Address = program.addressFactory.defaultAddressSpace.getAddress(offset)
 
     /**
-     * Resolve a (possibly mangled) symbol name to an address.
-     * Order:
-     *  1. Stab-derived map (recordFromStab).
-     *  2. Ghidra symbol table — exact name.
-     *  3. Ghidra symbol table — `_<name>` (MinGW/cdecl PE convention: externals
-     *     get a leading underscore in the COFF symbol table; stabs records
-     *     carry the un-prefixed C source name).
-     *
-     * Returns null if none of the above resolve.
+     * Resolve [name]: stab map → symbol table → `_<name>` (MinGW/PE cdecl underscore prefix —
+     * `Foo`→`_Foo`, `_ZTI4Foo`→`__ZTI4Foo`).
      */
     override fun resolve(name: String): Address? {
         super.resolve(name)?.let { return it }
         program.symbolTable.getSymbols(name).firstOrNull()?.let { return it.address }
-        // PE/Cygwin externals get one extra leading underscore vs. the stabs string:
-        //   - C symbols:  stab says `Foo`        → COFF has `_Foo`
-        //   - C++ symbols stab says `_ZTI4Foo`   → COFF has `__ZTI4Foo`
-        // Try the prefixed form unconditionally.
         program.symbolTable.getSymbols("_$name").firstOrNull()?.let { return it.address }
         return null
     }

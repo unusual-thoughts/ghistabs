@@ -4,42 +4,30 @@ import ghistabs.diagnose.StabsDiagnostics
 import ghistabs.parse.SourceFile
 
 /**
- * STD_MARKERS regex: requires `/usr/`, `/lib/`, `/include/` (or one
- * intermediate segment after them) before a stdlib marker directory
- * (`mingw`, `cygwin`, `c++`, `bits`). Prevents false positives like
- * `/proj/src/c++_helpers/` matching as stdlib.
+ * Stdlib path marker. Requires `/usr|lib|include/` (plus one optional segment) before a stdlib
+ * directory — guards against false positives like `/proj/src/c++_helpers/`.
  */
 private val STD_MARKERS = Regex("""/(usr|lib|include)(/[^/]+)?/(mingw|cygwin|c\+\+|bits)/""")
 
-/** Strip a Windows drive-letter prefix (`c:`, `E:`, etc.) from a stabs path. */
+/** Strip a Windows drive-letter prefix (`c:`, `E:`, …) from a stabs path. */
 private fun stripDriveLetter(path: String): String =
     if (path.length >= 2 && path[1] == ':' && path[0].isLetter()) path.substring(2) else path
 
 private val CU_LOCAL_NAME = Regex("""\.?_anon_\d+""")
 
 /**
- * "Real header" filename extensions — what gcc would normally `#include`
- * for declarations. `.tcc` is libstdc++'s template-implementation
- * convention (libstdc++ `bits/<file>.tcc`).
- *
- * Anything else (`.cpp`, `.c`, `.cc`, ...) hiding inside a [SourceFile.HeaderSource]
- * is a sibling translation unit that gcc registered via BINCL because some
- * other CU `#include`d it. It should not win attribution over actual headers.
+ * Real-header extensions (`.tcc` is libstdc++'s template-impl convention). A `.cpp`/`.cc`/`.c`
+ * inside a [SourceFile.HeaderSource] means another CU `#include`d that TU — it must NOT win
+ * attribution over actual headers.
  */
 private val REAL_HEADER_EXTENSIONS = setOf("h", "hpp", "hh", "hxx", "h++", "tcc")
 
-/**
- * Names that carry no cross-CU identity. gcc emits anonymous types with
- * CU-local sequential names (`._anon_82` etc.); same name in different CUs
- * refers to unrelated source-level types.
- */
+/** gcc emits anonymous types with CU-local sequential names; same name in different CUs is unrelated. */
 fun TypeAst.isCuLocalName() = name != null && (name.isEmpty() || CU_LOCAL_NAME.matches(name))
 
 /**
- * Compute the longest common path prefix across all CUSource filenames in
- * [sources]. Used by [Harvest] to strip project boilerplate from DTM
- * categories. Header sources are intentionally excluded — they can live
- * outside the project root (e.g. headers shared with stdlib).
+ * Longest common path prefix across CUSource filenames in [sources]. Used to strip project
+ * boilerplate from DTM categories. HeaderSource excluded — headers may live outside project root.
  */
 fun commonProjectPrefix(sources: Collection<SourceFile>): String {
     val cuPaths = sources.mapNotNull { (it as? SourceFile.CUSource)?.filename }
@@ -50,43 +38,28 @@ fun commonProjectPrefix(sources: Collection<SourceFile>): String {
     for ((i, seg) in shortest.withIndex()) {
         if (cuPaths.all { i < it.size && it[i] == seg }) prefix += seg else break
     }
-    // Drop the last segment if it looks like a filename (has an extension) — we
-    // want a directory prefix, not a file prefix.
+    // Want a directory prefix, not a file prefix.
     if (prefix.isNotEmpty() && '.' in prefix.last()) prefix.removeLast()
     return if (prefix.isEmpty()) "" else prefix.joinToString("/", prefix = "/")
 }
 
 /**
- * Determine the canonical `(category, name)` slot in Ghidra's DataTypeManager
- * for a harvested type.
+ * Routes a harvested type to its canonical `(category, name)` slot in the DTM.
  *
- * Routing intent — preserve as much path information as possible so a user
- * browsing the DTM can see *where* a type came from:
+ * Resolution order:
+ *  1. CU-local anonymous name (`._anon_NN`, empty) → `<ast.cu>/anon`.
+ *  2. Stdlib path → `/std/<post-marker-path>`.
+ *  3. Real-header preference (`.h/.hpp/.hh/.hxx/.tcc`) — gcc's BINCL/EINCL surfaces
+ *     sibling `.cpp` files as HeaderSource; those must lose to actual headers.
+ *  4. Single canonical source → that source's path.
+ *  5. Multi-source, no header owner → lex-first path + `/multi`.
  *
- *  - **Anonymous (CU-local) names** (`._anon_NN`, empty) → `<ast.cu>/anon`.
- *    gcc emits these with CU-local sequential numbering; the same name in
- *    two CUs refers to unrelated types.
- *  - **Stdlib paths** (`/usr/include/c++/...`, `/usr/include/mingw/...`,
- *    `/usr/lib/.../{c++,bits,mingw,cygwin}/...`) → `/std/<post-marker-path>`.
- *  - **Real-header preference** — if any defining source is a real header
- *    (`.h/.hpp/.hh/.hxx/.tcc`), route to that header. gcc's BINCL/EINCL
- *    mechanism produces HeaderSource even for sibling `.cpp` files; we
- *    skip those when a true header is available.
- *  - **Single canonical source** → that source's path.
- *  - **Multi-source** (no real-header owner) → lex-first path + `/multi`.
- *
- * Stripping the project prefix keeps DTM categories compact: e.g. on box2d
- * the project prefix is `/xml/box2d`, so `b2Hull` defined in
- * `/xml/box2d/include/box2d/collision.h` lands at
- * `/include/box2d/collision.h/b2Hull` instead of the full path.
- *
- * `..` segments are normalized away (`include/../src` → `src`).
+ * Strips [commonProjectPrefix] for compact categories; normalises `..` segments.
  */
 class Attribution(private val commonProjectPrefix: String = "") {
     fun keyForAst(ast: TypeAst, sources: Set<SourceFile>, diagnostics: StabsDiagnostics? = null): GhidraKey {
         val name = ast.ghidraName
 
-        // 1. CU-local names: ignore the cross-CU `sources` set; route per-CU.
         if (ast.isCuLocalName()) {
             return GhidraKey(strip(norm(ast.cu.filename)) + "/anon", name)
         }
@@ -95,7 +68,6 @@ class Attribution(private val commonProjectPrefix: String = "") {
     }
 
     fun keyFor(typeName: String, defSources: Set<SourceFile>, diagnostics: StabsDiagnostics? = null): GhidraKey {
-        // 2. Stdlib path on any defining source.
         defSources.sorted().firstNotNullOfOrNull { stdRelativePath(it.filename) }?.let { rel ->
             diagnostics?.recordAttributionTrace(
                 typeName = typeName,
@@ -107,22 +79,19 @@ class Attribution(private val commonProjectPrefix: String = "") {
             return GhidraKey("/std/$rel", typeName)
         }
 
-        // 3. Real-header preference (see kdoc).
         val realHeaders = defSources.filter { it.isRealHeader() }
         if (realHeaders.isNotEmpty()) {
             val owner = realHeaders.minBy { it.filename }
             return GhidraKey(strip(norm(owner.filename)), typeName)
         }
 
-        // 4. No real header. Single canonical source — all defSources share one
-        //    filename path (cross-CU HeaderSource instances for the same physical
-        //    file from forward-EXCL collapse here).
+        // Single canonical source — forward-EXCL collapses cross-CU HeaderSource instances
+        // for the same physical file into one path here.
         val uniquePaths = defSources.map { it.filename }.toSet()
         if (uniquePaths.size == 1) {
             return GhidraKey(strip(norm(uniquePaths.single())), typeName)
         }
 
-        // 5. Multi-source with no real-header owner: lex-first source + `/multi`.
         return GhidraKey(strip(norm(uniquePaths.min())) + "/multi", typeName)
     }
 
@@ -157,16 +126,10 @@ private fun SourceFile.isRealHeader(): Boolean = this is SourceFile.HeaderSource
     filename.substringAfterLast('.', "").lowercase() in REAL_HEADER_EXTENSIONS
 
 /**
- * Extract the path AFTER a stdlib marker, preserving inner directory structure.
- * Strips version-number segments (`3.4.4`) and known intermediate dirs (`bits`,
- * `ext`, `tr1`, `debug`, ...) before returning the rest as the relative stdlib
- * basename.
+ * Path AFTER a stdlib marker, skipping version segments (`3.4.4`) and known intermediates
+ * (`bits`, `ext`, `tr1`, `debug`, …). Returns the basename (no extension), or null if no marker.
  *
- * Example: `/usr/include/c++/3.4.4/bits/stl_vector.h`
- *   → marker matches `/include/c++/` (the `bits/` is in skip list)
- *   → after skipping: `stl_vector.h` → `stl_vector`.
- *
- * Returns null when no stdlib marker is present.
+ * Example: `/usr/include/c++/3.4.4/bits/stl_vector.h` → `stl_vector`.
  */
 private fun stdRelativePath(path: String): String? {
     val match = STD_MARKERS.find(path) ?: return null

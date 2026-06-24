@@ -7,14 +7,9 @@ import ghistabs.parse.TypeDecl
 import kotlinx.serialization.Serializable
 
 /**
- * Passive bag of what the parser produced. All canonicalization, XRef
- * resolution, and content-hash queries happen via [TypeResolver], constructed
- * by [ghistabs.importer.StabsImporter] from the harvest plus a sink/diagnostics
- * context.
- *
- * [rawCollisions] are multi-body name collisions as observed during parsing —
- * including content-equivalent duplicates. The filtered, content-distinct
- * survivors live on [TypeResolver.divergentCollisions].
+ * Passive parser output. Canonicalization, XRef resolution, and content-hash queries are done
+ * via [TypeResolver]. [rawCollisions] includes content-equivalent dupes; content-distinct survivors
+ * live on [TypeResolver.divergentCollisions].
  */
 @Serializable
 data class Harvest(
@@ -23,12 +18,7 @@ data class Harvest(
     val rawCollisions: Map<GlobalTypeId, Map<String, Set<TypeDecl<GlobalTypeId>>>> = mapOf(),
     val symbolsByCu: Map<String, List<SymbolRecord>> = mapOf(),
     val openFunctions: List<OpenFunction> = listOf(),
-    /**
-     * N_SLINE entries grouped by source filename. N_SOL switches the
-     * "current source file" for subsequent N_SLINE records (so a line
-     * number inside an `#include`d header lands under that header's
-     * filename, not the enclosing CU's). Sorted by line on insertion.
-     */
+    /** N_SLINE entries grouped by N_SOL-effective source filename; sorted by line on insertion. */
     val lineEntries: Map<String, List<LineEntry>> = mapOf(),
 ) {
     val allHarvestedSymbols by lazy { symbolsByCu.values.flatten() }
