@@ -16,12 +16,7 @@ import ghistabs.harvest.Harvester
 import ghistabs.harvest.LineEntry
 import ghistabs.harvest.OpenFunction
 import ghistabs.materialize.BuiltinTable
-import ghistabs.parse.AggrKind
-import ghistabs.parse.GlobalTypeId
-import ghistabs.parse.StabReader
-import ghistabs.parse.StabType
-import ghistabs.parse.SymbolDecl
-import ghistabs.parse.TypeDecl
+import ghistabs.parse.*
 import ghistabs.runTransaction
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
@@ -53,7 +48,7 @@ import java.io.File
 @Tag("integration")
 class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     @ParameterizedTest
-    @ValueSource(strings = ["xapasmcsr.exe"])
+    @ValueSource(strings = ["xapasmcsr.exe", "xmltest", "appquery.exe", "box2d_tests"])
     fun writeSkeletons(binaryName: String) {
         val fixture = File("src/test/resources/binaries/$binaryName")
         assumeTrue(fixture.exists(), "fixture absent")
@@ -209,6 +204,7 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             is TypeDecl.XRef -> 0
             else -> 1
         }
+
         val bestRank = mutableMapOf<String, Int>()
         for (ast in harvest.typeAsts.values) {
             val n = ast.name ?: continue
@@ -269,6 +265,7 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         funcToSource: Map<OpenFunction, String>,
     ): Map<String, List<LineEntry>> {
         data class Reroute(val range: LongRange, val target: String)
+
         val reroutes = harvest.openFunctions
             .filter { it.sizeBytes > 0 && funcToSource[it] != null }
             .map {
@@ -337,11 +334,6 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         // line N.
         val buckets = Array(maxLine + 1) { mutableListOf<String>() }
 
-        // Comments at every N_SLINE line (dedupe by address — gcc
-        // occasionally emits duplicates after optimisation).
-        val seenPerLine = mutableMapOf<Int, MutableSet<Long>>()
-        // For each line, determine whether it falls inside a function's
-        // [startLine, closeLine] range so we can indent it like C++ source.
         val funcSpan = ranges.map { (f, start, _) ->
             val close = closeLineByFunc[f] ?: start
             start..close
@@ -349,18 +341,23 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
 
         fun inFunction(line: Int) = funcSpan.any { line in it }
 
+        // Group N_SLINE entries by (line, codeUnit) and aggregate addresses, so e.g. six
+        // ~MarkerInst PUSH-EBP instances at L 63 collapse to one comment listing all addresses.
+        data class SliceKey(val line: Int, val codeUnit: String)
+
+        val sliceAddrs = mutableMapOf<SliceKey, MutableSet<Long>>()
         for (entry in lines) {
-            val addrs = seenPerLine.getOrPut(entry.line) { mutableSetOf() }
-            if (!addrs.add(entry.addr.address.offset)) continue
             if (entry.line !in 1..maxLine) continue
-            val codeUnit = describeAddress(program, entry.addr.address)
-            val addrHex = "0x" + entry.addr.address.offset.toString(16).padStart(8, '0')
-            // Keep `L<line>` inside the comment so an alignment check
-            // after manual edits is just `grep -nE '// L([0-9]+):' | awk
-            // -F: '$1 != $2'`.
-            val lineTag = "L" + entry.line.toString().padStart(4)
-            val indent = if (inFunction(entry.line)) "    " else ""
-            buckets[entry.line] += "$indent// $lineTag @ $addrHex${codeUnit?.let { ": $it" } ?: ""}"
+            val codeUnit = describeAddress(program, entry.addr.address) ?: ""
+            sliceAddrs.getOrPut(SliceKey(entry.line, codeUnit)) { sortedSetOf() } +=
+                entry.addr.address.offset
+        }
+        for ((key, addrs) in sliceAddrs) {
+            val lineTag = "L" + key.line.toString().padStart(4)
+            val indent = if (inFunction(key.line)) "    " else ""
+            val addrList = addrs.joinToString(", ") { "0x" + it.toString(16).padStart(8, '0') }
+            val suffix = if (key.codeUnit.isEmpty()) "" else ": ${key.codeUnit}"
+            buckets[key.line] += "$indent// $lineTag @ $addrList$suffix"
         }
 
         fun lineTag(line: Int) = "// L" + line.toString().padStart(4)
@@ -467,27 +464,13 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             buckets[closeLine] += "}  /* $lineTag — closes ${f.decl.name} */"
         }
 
+        // Strict alignment: source line N → output line N. Multiple bucket items
+        // share one output line, joined together.
         return buildString {
-            // Each item in a bucket goes on its own output line so
-            // typedefs / declarations read as real C, not a single
-            // 700-char run-on. To keep `// Lnnn` ≈ output-line N as
-            // closely as possible, overflow lines are absorbed into the
-            // next runs of blank source lines: a bucket with 5 items at
-            // source-line 42 followed by 8 blank source lines emits
-            // those 5 items then only 4 blanks (5−1=4 absorbed),
-            // landing source-line 50 back on output-line 50.
-            var debt = 0
             for (line in 1..maxLine) {
                 val bucket = buckets[line]
-                if (bucket.isEmpty()) {
-                    if (debt > 0) debt-- else append('\n')
-                } else {
-                    for (item in bucket) {
-                        append(item)
-                        append('\n')
-                    }
-                    debt += bucket.size - 1
-                }
+                if (bucket.isNotEmpty()) append(bucket.joinToString("   "))
+                append('\n')
             }
         }
     }
@@ -557,11 +540,17 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                 val ast = harvest.typeAsts[t.id]
                 ast?.name ?: ast?.let { renderType(it.body, harvest, depth + 1) } ?: "T_${t.id}"
             }
+
             is TypeDecl.Pointer -> "${renderType(t.pointee, harvest, depth + 1)} *"
+
             is TypeDecl.Reference -> "${renderType(t.referent, harvest, depth + 1)} &"
+
             is TypeDecl.Const -> "${renderType(t.inner, harvest, depth + 1)} const"
+
             is TypeDecl.Volatile -> "${renderType(t.inner, harvest, depth + 1)} volatile"
+
             is TypeDecl.Array -> "${renderType(t.element, harvest, depth + 1)}[${t.length ?: ""}]"
+
             is TypeDecl.Builtin,
             is TypeDecl.Range,
             is TypeDecl.Float,
@@ -570,8 +559,11 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             -> BuiltinTable.resolve(t)?.name ?: t::class.simpleName?.lowercase() ?: "?"
 
             is TypeDecl.XRef -> "${kindKeyword(t.kind)} ${t.tagName}"
+
             is TypeDecl.Struct -> kindKeyword(t.kind)
+
             is TypeDecl.Enum -> "enum"
+
             is TypeDecl.FunctionT -> {
                 val ret = renderType(t.ret, harvest, depth + 1)
                 val params = t.params.joinToString(", ") { renderType(it, harvest, depth + 1) }
