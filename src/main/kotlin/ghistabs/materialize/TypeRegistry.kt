@@ -9,7 +9,6 @@ import ghistabs.harvest.TypeAst
 import ghistabs.harvest.TypeResolver
 import ghistabs.parse.AggrKind
 import ghistabs.parse.GlobalTypeId
-import ghistabs.parse.LocalTypeId
 import ghistabs.parse.TypeDecl
 import ghistabs.parse.isXRefTarget
 import ghistabs.runTransaction
@@ -24,77 +23,36 @@ class TypeRegistry(
     private val byId = mutableMapOf<GlobalTypeId, DataType>()
     private val placeholders = mutableMapOf<GlobalTypeId, DataType>()
 
-    /**
-     * DataTypes that originated as an unresolved XRef placeholder. An XRef stub
-     * is benign when wrapped in a `Pointer→<stub>` or `Reference→<stub>` — gcc
-     * deliberately emits the forward decl in that case and `void*` semantics
-     * survive in the listing. It's a real layout loss when one appears as a
-     * struct field, base class, or array element — those use sites are caught
-     * by [recordXRefStubAt] and emitted as their own degradation bucket.
-     */
+    /** XRef placeholders flagged at use-sites where a forward decl is a real layout loss. */
     private val xrefStubs = mutableSetOf<DataType>()
 
-    /**
-     * DataTypes this importer registered in the DTM that don't correspond to
-     * a single stab TypeId — `<Class>_vftable` / `<Class>_vtable` structs and
-     * per-slot FunctionDefinitions built by [ClassBuilder]. Tracked alongside
-     * [byId] so [allCreatedDataTypes] is exhaustive without any DTM-path
-     * filtering tricks.
-     */
-    /**
-     * Id-less DataType registrations: typedef aliases, vftable/vtable
-     * composites, per-slot FunctionDefinitions. Keyed by simple name for
-     * O(1) [findByName] lookup; values are deduped via LinkedHashSet so
-     * the same DataType doesn't accumulate when re-registered. Iteration
-     * order is insertion order (mirrors the original LinkedHashSet
-     * semantics for [allCreatedDataTypes]).
-     */
+    /** Id-less DTM writes (typedef aliases, vftable composites, slot FDs), keyed for [findByName]. */
     private val extrasByName = LinkedHashMap<String, LinkedHashSet<DataType>>()
 
-    /**
-     * Register [dt] with the DTM (via [DataTypeManager.resolve]) and remember
-     * it as something this importer authored. Returns the DTM-resolved
-     * instance, which may be a different object if the DTM dedup'd against
-     * an existing equivalent. All non-id'd DTM writes (vftable/vtable
-     * composites, per-slot FunctionDefinitions, …) should go through this.
-     */
+    /** Resolve [dt] into the DTM and remember it (no TypeId binding). For id-less writes. */
     fun register(dt: DataType): DataType {
         val resolved = dtm.resolve(dt, DataTypeConflictHandler.KEEP_HANDLER)
         extrasByName.getOrPut(resolved.name) { LinkedHashSet() }.add(resolved)
         return resolved
     }
 
-    /**
-     * Same as [register] but the type is the canonical DataType for [id] —
-     * cached in [byId] so subsequent `dataTypeFor(id)` returns it without
-     * re-resolving.
-     */
+    /** Resolve [dt] into the DTM and cache it as the canonical type for [id]. */
     fun register(dt: DataType, id: GlobalTypeId): DataType {
         val resolved = dtm.resolve(dt, DataTypeConflictHandler.KEEP_HANDLER)
         byId[id] = resolved
         return resolved
     }
 
-    /**
-     * Get-or-create a DTM-resident DataType at `(category, name)`. If an
-     * existing entry there is an instance of [T] it's returned as-is;
-     * otherwise [build] is invoked and the result is [register]ed. Used by
-     * [ClassBuilder] to manage class-scoped composites without reaching for
-     * the DTM directly.
-     */
+    /** Get-or-create a DTM-resident DataType at `(category, name)` of type [T]. */
     inline fun <reified T : DataType> getOrRegister(category: CategoryPath, name: String, build: () -> T): T {
         (dtmLookup(category, name) as? T)?.let { return it }
         return register(build()) as T
     }
 
-    /** Bridge so the inline [getOrRegister] doesn't need the DTM as an inline-visible field. */
     @PublishedApi
     internal fun dtmLookup(category: CategoryPath, name: String): DataType? = dtm.getDataType(category, name)
 
-    /**
-     * Every DataType this importer materialised or registered. Exhaustive by
-     * construction — every DTM write goes through [register] or sets [byId].
-     */
+    /** Every DataType this importer materialised or registered. */
     fun allCreatedDataTypes(): Set<DataType> {
         val result = LinkedHashSet<DataType>()
         result.addAll(byId.values)
@@ -108,57 +66,27 @@ class TypeRegistry(
         }
     }
 
+    /** Look up an already-materialised type by id; for Struct/Union, seed an empty placeholder if absent. */
     fun tryGetExisting(gId: GlobalTypeId) = byId[gId] ?: placeholders[gId] ?: harvest.getType(gId)?.let { raw ->
-        // Primitives (Range, Builtin, Float, …) resolve directly via BuiltinTable.
         BuiltinTable.resolve(raw.body)?.also { byId[gId] = it }
-            // Aggregate bodies (Struct/Union) get an empty-shell placeholder so
-            // self-recursive Refs in fields can cycle-break. The placeholder is
-            // mutated in-place by materialiseBody later when this id is hit by
-            // the materialiseAll winner loop.
             ?: if (raw.body is TypeDecl.Struct) {
+                // Cycle-break: self-referential field Refs need a placeholder before materialiseBody runs.
                 makePlaceholder(raw, CategoryPath("/stabs")).also { placeholders[gId] = it }
             } else {
-                // Everything else (Pointer, Array, Reference, Const/Volatile,
-                // FunctionT, Method, Enum, InlineDef, Ref, XRef, …) has a
-                // perfectly materialisable body — resolve it now. Without this
-                // the field-fill path that called us would store the empty
-                // placeholder as the field's type (e.g. `_Alloc_hider._M_p`
-                // ends up `/stabs/[stdio.h,2]` instead of `char *`).
                 resolve(raw)
             }
     }
 
-    /**
-     * The materialised DataType for a TypeAst id, as registered by [materialiseAll].
-     * Returns null if the id was never registered (e.g. non-registerable typeAst that
-     * went through the on-demand `resolve()` path). Prefer this over `dtm.getDataType`
-     * — it skips the DTM round-trip and is the authoritative source for the
-     * `(category, name)` slot's current DataType.
-     */
+    /** Materialised DataType for [id], or null if [materialiseAll] never ran for it. */
     fun dataTypeFor(id: GlobalTypeId): DataType? = byId[id]
 
-    /**
-     * Walk the placeholders map at end-of-import and log every Struct/Union
-     * typeAst whose body never made it into the DTM as a non-empty aggregate.
-     * These are the source of downstream cascades like `merge-failed`
-     * "Offset 0 beyond end of structure" and bogus 1-byte fields in the
-     * listing. Naming them at the source makes the cause findable.
-     *
-     * Only Struct/Union typeAsts are considered: [makePlaceholder] hands out a
-     * throwaway empty Structure stub for non-aggregate bodies (Range, Enum,
-     * FunctionT, …), but those stubs are never registered in the DTM —
-     * `materialiseBody` returns the real DataType directly. Reporting those
-     * would be noise, not a bug.
-     */
+    /** Log Struct/Union placeholders that never got materialised — flag the source of downstream merge cascades. */
     fun reportSurvivingPlaceholders() {
         for ((id, placeholder) in placeholders) {
             val ast = harvest.getType(id) ?: continue
             if (ast.body !is TypeDecl.Struct) continue
             val composite = placeholder as? Composite ?: continue
-            // Empty C++ structs (e.g. tag/trait types) have sizeBytes=1 and no
-            // source fields. Ghidra fills the byte with Undefined1 padding, which
-            // would otherwise show up as `placeholder-undefined-fields`. That's
-            // the correct representation of an empty struct, not a degradation.
+            // Skip empty C++ tag/trait structs — their Undefined1 padding is the correct representation.
             val sourceHasNoMembers =
                 ast.body.fields.none { !it.isStatic } && ast.body.bases.isEmpty()
             val tag = when {
@@ -177,25 +105,18 @@ class TypeRegistry(
         }
     }
 
-    /**
-     * A struct "filled with undefined" is one whose every component's data type is in the
-     * `UndefinedNDataType` family — i.e. every field's Ref or XRef failed to resolve and
-     * the materialiser used the `Undefined4` fallback. From the user's point of view this
-     * is no better than an empty placeholder; flagging it separately distinguishes
-     * "body never ran" from "body ran but couldn't bind any field type".
-     */
+    /** True when every field's type resolved to the `UndefinedN` fallback. */
     private fun Composite.allComponentsUndefined(): Boolean {
         if (numComponents == 0) return false
         return components.all { it.dataType.name.startsWith("undefined") }
     }
 
+    /**
+     * Two-phase build:
+     *  1. For each [resolver.byCanonicalKey] group, materialise the winner once and alias members to it.
+     *  2. Resolve named primitive typedefs, then handle non-registerable top-level TypeAsts via [resolve].
+     */
     fun materialiseAll() {
-        // Two-phase walk driven by resolver.byCanonicalKey:
-        //  1. For each CanonicalGroup, materialise the winner once into its (cat, name)
-        //     slot and alias every member's id to the resulting DataType.
-        //  2. Handle non-registerable top-level typeAsts (XRef-aliased helpers,
-        //     FunctionT, Method, …) via the legacy resolve() path — they need byId
-        //     entries for Ref resolution but never occupy a stable Ghidra slot.
         dtm.runTransaction("ghidra-stabs build types") {
             val memberToWinner: Map<GlobalTypeId, TypeAst> = buildMap {
                 for (group in resolver.byCanonicalKey.values) {
@@ -241,34 +162,16 @@ class TypeRegistry(
                 byId[winner.id]?.let { byId.putIfAbsent(memberId, it) }
             }
 
-            // Materialise named primitive typedefs (Range, Builtin, Float, etc.).
-            // These don't qualify as XRefTarget so they're absent from byCanonicalKey,
-            // but stabs assigns them names ("unsigned int", "char", …) that should
-            // appear in the DTM as typedef aliases for the corresponding Ghidra builtins.
-            // Group by ghidraName to emit exactly one typedef per logical primitive name.
+            // Named primitive typedefs (Range/Builtin/Float/…): emit one typedef per ghidraName.
             harvest.typeAsts.values
                 .filter { it.name != null && !it.body.isXRefTarget }
                 .groupBy { it.ghidraName }
                 .forEach { (ghidraName, asts) ->
-                    // Per-ast resolution: each CU's typedef has its own id and
-                    // body — e.g. one CU emits `bool:t = _Bool` (1 byte) and
-                    // another emits `bool:t = int` (4 bytes). Routing every
-                    // ast.id to one shared typedef would silently substitute
-                    // the wrong size at field-fill time and produce
-                    // `bool.conflict` collisions in the DTM. Resolve each
-                    // ast's body individually for byId.
+                    // Resolve per-ast for byId so cross-CU size disagreements (e.g. bool:1B vs 4B) stay distinct.
                     for (ast in asts) {
                         val resolved = BuiltinTable.resolve(ast.body) ?: dataTypeFor(ast.body) ?: continue
                         byId.putIfAbsent(ast.id, resolved)
                     }
-                    // Register one shared typedef under /stabs (or root for
-                    // primitives) so DemanglerReplacer can use it as a
-                    // candidate for any `/Demangler/*` stub the demangler
-                    // creates on-demand during signature application. Stabs
-                    // don't carry the typedef's namespace, so we can't place
-                    // it at the C++-canonical `/std/<name>` path directly —
-                    // DemanglerReplacer's after-demangling scan handles the
-                    // namespace-qualified stubs.
                     val firstBody = asts.first().body
                     val typedefTarget = BuiltinTable.resolve(firstBody) ?: dataTypeFor(firstBody) ?: return@forEach
                     val category = if (BuiltinTable.resolve(firstBody) != null) {
@@ -279,7 +182,6 @@ class TypeRegistry(
                     register(TypedefDataType(category, ghidraName, typedefTarget, dtm))
                 }
 
-            // Non-registerable top-level typeAsts (XRef body, FunctionT, Method, …)
             for (ast in harvest.typeAsts.values) {
                 if (ast.id in byId) continue
                 resolve(ast)
@@ -287,42 +189,20 @@ class TypeRegistry(
         }
     }
 
-    /**
-     * Resolve a TypeDecl encountered inside another type's body (a field's type, a pointer's
-     * pointee, a base class's type expression) to a Ghidra DataType.
-     *
-     * Per kind:
-     * - **Ref / InlineDef**: look the TypeId up via byId → placeholders → harvest.
-     *   Cycle-safe (placeholders break self-recursion).
-     * - **Builtin / Range / Complex / WithSizeAttr**: delegated to [BuiltinTable].
-     * - **Pointer / Reference / Const / Volatile / Array**: recurse on the inner type.
-     * - **Struct / Enum / FunctionT / Method / XRef**: returns `null`. These aggregate bodies
-     *   only have meaning when keyed by a [LocalTypeId]. The DataType for them is the one
-     *   registered under that id during [materialiseAll]; passing the body itself loses
-     *   that identity, so there is no defined lookup. Callers in possession of the parent
-     *   [TypeAst.id] should use `byId[id]` (e.g. inside materialiseBody); callers outside
-     *   the registry should look up the materialised type by category+name in the DTM
-     *   (see ClassBuilder.build for the canonical pattern).
-     */
-    /**
-     * gcc/gdb convention (stabsread.c): a TypeAst whose body is `Ref(self.id)`
-     * encodes the void type. Used as the return type for void-returning
-     * methods and as the end-of-args sentinel inside method signatures.
-     */
+    /** gcc/gdb: `Ref(self.id)` encodes void (return type / end-of-args terminator). */
     private fun isVoidSelfRef(id: GlobalTypeId): Boolean {
         val ast = harvest.getType(id) ?: return false
         val body = ast.body
         return body is TypeDecl.Ref && body.id == id
     }
 
+    /**
+     * Resolve a [TypeDecl] encountered inside another type (field, pointee, base, …) to a Ghidra DataType.
+     * Refs/InlineDefs go via [byId]/placeholders/harvest (cycle-safe); aggregate bodies have no defined
+     * lookup — only the materialiser holds their (category, name) slot.
+     */
     fun dataTypeFor(decl: TypeDecl<GlobalTypeId>): DataType? = when (decl) {
         is TypeDecl.Ref -> tryGetExisting(decl.id)
-            // gcc/gdb convention (stabsread.c): `(N,M)=(N,M)` self-ref
-            // encodes the void type. Used as the return type for
-            // void-returning methods AND as the trailing terminator in
-            // method argument lists. Without this, void self-refs end
-            // up as empty-Structure placeholders that surface as
-            // `[<file>,N]` arg/return types in every C-style ctor.
             ?: if (isVoidSelfRef(decl.id)) VoidDataType() else null
 
         is TypeDecl.InlineDef -> {
@@ -353,21 +233,9 @@ class TypeRegistry(
 
         is TypeDecl.Array -> {
             // For arrays of unresolved element types (e.g. globals whose
-            // element refers to a TypeId not in the registry), fall back to
-            // ByteDataType, NOT `Undefined1`. The latter is type-equivalent
-            // to Ghidra's auto-analysis-placed "this is undefined" bytes, so
-            // a downstream data-reference analyzer that sees scalar refs to
-            // our array happily re-coalesces it into the `undefined4` form
-            // it would have built without us. `byte` is a concrete primitive
-            // and survives the round-trip.
+            // `byte` (not Undefined1) — Undefined1 is type-equivalent to autoanalysis padding and gets re-coalesced.
             val elem = dataTypeFor(decl.element) ?: ByteDataType.dataType
-            // Length resolution priority:
-            //   1. `decl.length` (explicit element count from the stab)
-            //   2. derive from `indexType` Range as `max - min + 1`
-            //      (gcc stabs frequently omit `length` and only encode the
-            //      array bound via the index Range — e.g. `BranchInstructions`
-            //      = array of EnumInstToken indexed 0..15 → 16 elements)
-            //   3. fall back to 1 so ArrayDataType doesn't throw
+            // Length: explicit decl.length, else indexType.Range size, else 1.
             val rangeLen = (decl.indexType as? TypeDecl.Range)
                 ?.let { it.max - it.min + 1 }
                 ?.takeIf { it > 0 }
@@ -383,15 +251,8 @@ class TypeRegistry(
             at = "FunctionT(anon)",
         )
 
-        // XRef → canonical TypeAst by (kind, tagName), then look up the
-        // materialised DataType by its id. Unified across struct / union
-        // / class / enum (the old code asymmetrically asked dataTypeFor()
-        // for the resolved body, which the aggregate branch always
-        // returns null for — silently dropping every non-struct XRef).
         is TypeDecl.XRef -> resolver.byXRef(decl)?.let { tryGetExisting(it.id) }
 
-        // Aggregate bodies — never referenced directly; only meaningful via TypeId.
-        // See kdoc above.
         is TypeDecl.Struct, is TypeDecl.Enum, is TypeDecl.Method -> {
             log("referenced-aggregate", "asked for ref to $decl")
             null
@@ -399,22 +260,8 @@ class TypeRegistry(
     }
 
     /**
-     * Unified fallback for every `dataTypeFor(...) ?: Undefined4` site. Returns
-     * `Undefined4` and records a degradation so the end-of-run dump enumerates
-     * every silent coverage loss. [category] is the bucket (e.g. `field-type`,
-     * `body-pointer-pointee`); [at] is the qualified offending location
-     * (e.g. `Foo.bar`, `Cls::method[2]`); the decl is captured as detail.
-     */
-    /**
-     * Build a [FunctionDefinitionDataType] from stab-level types: resolves
-     * [ret] and [params] through [dataTypeFor] (falling back via [undef] when
-     * a param doesn't resolve), optionally prepends a `this` arg, and sets the
-     * calling convention. Shared by the FunctionT / Method materialiser cases
-     * and by the vftable-slot builder in ClassBuilder. The returned DataType
-     * is NOT yet added to the DTM — caller decides.
-     *
-     * [at] is the qualified location used in degradation context (e.g.
-     * `"Foo::bar"` or `"Cls::method"`); param fallbacks use `"$at[i]"`.
+     * Build a [FunctionDefinitionDataType] from stab-level types. Shared by FunctionT/Method materialisation
+     * and the vftable-slot builder. Not added to the DTM — caller decides.
      */
     fun buildFunctionDefinition(
         category: CategoryPath,
@@ -448,17 +295,20 @@ class TypeRegistry(
         // when the FD is later attached to the DTM. Validate up-front against
         // the DTM's known list and skip silently when unsupported — the FD
         // stays at the default convention.
+        // Skip silently when the cspec doesn't know the convention (e.g. __thiscall on x86-64 ELF).
         if (callingConvention != null && callingConvention in dtm.knownCallingConventionNames) {
             runCatching { fd.setCallingConvention(callingConvention) }
         }
         return fd
     }
 
+    /** Fall back to Undefined4 and record a degradation under [category] / [at]. */
     private fun undef(category: String, at: String, decl: TypeDecl<GlobalTypeId>): DataType {
         diagnostics.recordDegradation(category, at, decl.toString())
         return Undefined4DataType.dataType
     }
 
+    /** Empty-shell placeholder for an aggregate body, so self-referential Refs can cycle-break. */
     private fun makePlaceholder(ast: TypeAst, category: CategoryPath, reason: String = "fwd-decl"): DataType {
         val dt = when (ast.body) {
             is TypeDecl.Struct if (ast.body.kind == AggrKind.UNION) -> UnionDataType(category, ast.ghidraName, dtm)
@@ -467,11 +317,8 @@ class TypeRegistry(
                 recordTruncation(ast, ast.body.sizeBytes.toInt(), sz)
                 StructureDataType(category, ast.ghidraName, sz, dtm)
             }
-            // Enum-bodied placeholder must be an EnumDataType — otherwise the
-            // empty StructureDataType leaks into the DTM via replaceAtOffset's
-            // auto-register-on-use, then collides with the real Enum when its
-            // winner registers under the same (category, name) slot. Field
-            // consumers end up holding the zero-length Structure reference.
+            // Must be EnumDataType — an empty Structure here gets adopted by replaceAtOffset
+            // and then collides with the real Enum when the winner registers.
             is TypeDecl.Enum -> EnumDataType(category, ast.ghidraName, 4, dtm)
             else -> StructureDataType(category, ast.ghidraName, 0, dtm)
         }
@@ -480,47 +327,20 @@ class TypeRegistry(
     }
 
     /**
-     * "Useful" size for a Struct body — the last byte we have a description
-     * for. stab `sizeBytes` often overshoots:
-     *  - CLexStream: `s328` but own fields end at 192 (the 136 trailing
-     *    bytes are gcc's allocation for basic_ifstream's subobject that
-     *    was never emitted in this CU's stab, only forward-declared).
-     *  - CSymLexStream: `s416` but own fields end at 276.
-     *
-     * Trusting `sizeBytes` produces structs that are mostly Undefined1
-     * padding and confuse cross-CU consumers (CSymLexStream's compile-
-     * time view of CLexStream is 192 bytes, but canonical CLexStream at
-     * `sizeBytes` is 328 — the size mismatch silently overwrites the
-     * derived class's own fields). Truncating to the last meaningful
-     * byte we can describe eliminates both problems.
-     *
-     * Falls back to `sizeBytes` when there are no own non-static fields
-     * (empty class, possibly with bases that take some unknown space).
+     * Effective struct size — the last byte we have a field description for. Trims gcc's
+     * over-allocated `sizeBytes` (e.g. CLexStream s328 with fields ending at 192) when the
+     * gap exceeds the largest field size, since legitimate trailing padding is bounded by
+     * (alignment - 1) ≤ maxFieldSize - 1.
      */
     private fun usefulStructSize(body: TypeDecl.Struct<GlobalTypeId>): Int {
         val nonStatic = body.fields.filter { !it.isStatic }
         if (nonStatic.isEmpty()) return body.sizeBytes.toInt()
         val fieldEnd = nonStatic.maxOf { ((it.offsetBits + it.sizeBits + 7) / 8).toInt() }
         val claimed = body.sizeBytes.toInt()
-        // Only trim when the gap between stab-claimed size and last
-        // described byte is too large to be legitimate trailing alignment
-        // padding. A struct's tail padding is bounded by
-        // (struct alignment - 1) ≤ maxFieldSize - 1; anything beyond that
-        // can't be padding and must be unrecovered fields (the case we
-        // want to truncate — CLexStream 328→192 etc.). Sidesteps having
-        // to compute the struct's actual alignment, which would require
-        // either resolved field DataTypes (not available here) or
-        // ABI-specific assumptions (long-long alignment, packing pragmas,
-        // x86win's defaultAlignment=1, …).
         val maxFieldSize = nonStatic.maxOf { ((it.sizeBits + 7) / 8).toInt() }
         return if (claimed - fieldEnd > maxFieldSize) fieldEnd else claimed
     }
 
-    /**
-     * Record truncation events (called from makePlaceholder for Struct
-     * bodies) so the diagnostic dump shows exactly which structs lost
-     * trailing bytes and how many.
-     */
     private fun recordTruncation(ast: TypeAst, originalBytes: Int, truncatedBytes: Int) {
         if (originalBytes <= truncatedBytes) return
         diagnostics.recordDegradation(
@@ -530,11 +350,7 @@ class TypeRegistry(
         )
     }
 
-    /**
-     * Materialise a non-registerable top-level typeAst (XRef alias, FunctionT, Method).
-     * Registerable bodies (Struct/Enum) are handled directly in [materialiseAll] via
-     * `resolver.byCanonicalKey`.
-     */
+    /** Materialise a non-registerable top-level TypeAst (XRef alias, FunctionT, Method, self-Ref-void). */
     private fun resolve(ast: TypeAst): DataType {
         if (ast.body is TypeDecl.XRef) {
             resolver.byXRef(ast.body)?.let { canonical ->
@@ -543,11 +359,6 @@ class TypeRegistry(
                 return dt
             }
         }
-        // gcc/gdb void-encoding: a TypeAst whose body is Ref(self.id)
-        // means void. Resolve before creating a placeholder, otherwise
-        // subsequent tryGetExisting calls return the empty-Structure
-        // placeholder and the VoidDataType fallback in dataTypeFor never
-        // fires. See [isVoidSelfRef].
         if (ast.body is TypeDecl.Ref && ast.body.id == ast.id) {
             val void = VoidDataType()
             byId[ast.id] = void
@@ -562,30 +373,9 @@ class TypeRegistry(
     }
 
     /**
-     * Build an EnumDataType for an Enum body.
-     *
-     * Sizing follows GDB (`gdb/stabsread.c::read_enum_type`, line ~6077):
-     *
-     *     type->set_length (gdbarch_int_bit (gdbarch) / HOST_CHAR_BIT);
-     *
-     * — i.e. `sizeof(int)` on the target architecture. No
-     * member-value-fitting fallback; no bool special case. The previous
-     * "smallest power-of-two width that fits every member" heuristic
-     * was wrong in both directions: `enum EnumInstToken { … }` with
-     * single-byte values came out as a 1-byte enum even though its
-     * fields are 4-byte slots, and any plain enum gcc emits without an
-     * `@s` attribute would be wrongly narrowed.
-     *
-     * `bool` does NOT reach this path — gcc emits it as Builtin slot
-     * -16 (`bool:t(N)=@s8;-16;`), which goes through [BuiltinTable] /
-     * the WithSizeAttr+Builtin handler. The stale comment that claimed
-     * "C++ bool is emitted as eFalse:0,True:1,;" predates the slot-16
-     * convention and doesn't match anything gcc-3.x or gcc-12 produces
-     * today.
-     *
-     * The only override is gcc's explicit `@s<bits>` attribute
-     * (`-fshort-enums` and similar), captured by [explicitSizeBits] —
-     * stabs.texinfo §"String Field" is the spec for that channel.
+     * Size enums per gdb's `stabsread.c::read_enum_type`: `sizeof(int)` unless gcc emits an
+     * explicit `@s<bits>` (`-fshort-enums`). bool doesn't reach this path — it comes through
+     * BuiltinTable slot -16.
      */
     private fun materialiseEnum(
         ast: TypeAst,
@@ -617,13 +407,8 @@ class TypeRegistry(
 
             is TypeDecl.Volatile -> dataTypeFor(body.inner) ?: placeholder
 
-            // Look up the INNER (decl.id) typeAst — gcc emits anonymous nested aggregates
-            // (e.g. C `struct { ... }` member types in box2d) as InlineDef wrappers around
-            // an aggregate body. `dataTypeFor(body)` dispatches to the InlineDef case which
-            // calls `tryGetExisting(body.id)` first; that picks up the harvested typeAst
-            // for the inner aggregate instead of falling through to the
-            // `referenced-aggregate` branch that returns null. Avoids 535 silent
-            // null-resolutions on box2d's nested-struct fields.
+            // Resolve InlineDef via its inner id — anonymous nested aggregates would otherwise
+            // hit the `referenced-aggregate` null branch.
             is TypeDecl.InlineDef -> dataTypeFor(body)?.also {
                 byId[body.id] = it
             } ?: placeholder
@@ -638,11 +423,7 @@ class TypeRegistry(
                     ?.let { it.max - it.min + 1 }
                     ?.takeIf { it > 0 }
                 val numElements = (body.length ?: rangeLen ?: 1L).toInt().coerceAtLeast(1)
-                // ArrayDataType.validate rejects element types with length < 1.
-                // FunctionDefinitionDataType reports length=0 (it's an
-                // interface, not a stored value); arrays-of-function would be
-                // a stab-side encoding we can't honour faithfully. Substitute
-                // a pointer-sized element so the array shape is preserved.
+                // ArrayDataType.validate needs element.length > 0; FunctionDefinition reports 0.
                 val safeElem = if (elem.length < 1) {
                     diagnostics.recordDegradation(
                         "array-element-unsized",
@@ -658,10 +439,7 @@ class TypeRegistry(
 
             is TypeDecl.Enum -> materialiseEnum(ast, category, body, explicitSizeBits = null)
 
-            // `@s<bits>;e...;` — explicit size attribute on an enum
-            // (the stabs-standard mechanism per stabs.texinfo §"String
-            // Field"). Honour the bits-from-attribute over the gcc-default
-            // 4-byte assumption.
+            // `@s<bits>;e...;` — explicit size attribute (-fshort-enums etc.).
             is TypeDecl.WithSizeAttr if body.inner is TypeDecl.Enum ->
                 materialiseEnum(ast, category, body.inner, explicitSizeBits = body.sizeBits)
 
@@ -669,17 +447,16 @@ class TypeRegistry(
                 BuiltinTable.resolve(body) ?: placeholder
 
             is TypeDecl.Struct -> {
-                // Reuse the placeholder cast to the right type
                 val struct: Composite = if (body.kind == AggrKind.UNION) {
                     placeholder as Union
                 } else {
                     placeholder as Structure
                 }
 
-                // Phase 5: insert base classes as inlined components.
                 if (struct is Structure) {
-                    // Compute layout boundary to infer size of unresolved bases (offset of next base
-                    // or first non-static field — that's at this base subobject must end).
+                    // Infer each base's subobject size from the gap to the next base or first field —
+                    // gcc's inheritance line doesn't transmit it (CSymLexStream sees CLexStream as
+                    // 192 bytes even though canonical CLexStream is 328 from a richer CU).
                     val sortedBaseOffsetsBytes = body.bases.map { (it.offsetBits / 8).toInt() }.toSortedSet()
                     val firstFieldOffsetBytes = body.fields
                         .filter { !it.isStatic }
@@ -691,49 +468,19 @@ class TypeRegistry(
                     for (base in body.bases) {
                         val offsetBytes = (base.offsetBits / 8).toInt()
                         val dt = dataTypeFor(base.type)
-                        // Compute the layout gap before deciding what to use.
-                        // gcc's inheritance line doesn't transmit the
-                        // subobject size — the consuming struct's own fields
-                        // start at whatever offset the compiler decided
-                        // (e.g. CSymLexStream's CurrentTok at +192 means
-                        // CLexStream's subobject is 192 bytes here, even
-                        // though the canonical CLexStream is 328 bytes
-                        // because another CU saw a richer definition).
                         val nextOffset =
                             sortedBaseOffsetsBytes.firstOrNull { it > offsetBytes } ?: firstFieldOffsetBytes
                         val gap = nextOffset - offsetBytes
 
-                        // Empty placeholders (XRef stubs for unresolvable
-                        // forward decls, ref-stubs from non-registerable
-                        // typeAsts) show up with `length = 1` because Ghidra
-                        // forces a minimum on size-0 Composites — `isZeroLength`
-                        // returns the logical truth. Treat those as unresolved.
+                        // Ghidra forces length>=1 on empty Composites; check isZeroLength for the truth.
                         if (dt != null && !dt.isZeroLength && dt.length > 0 && dt.length <= gap) {
                             dataTypeByOffset[offsetBytes] = dt
                             resolvedBaseInfo[offsetBytes] = ResolvedBase(dt.name, dt.length)
                             continue
                         }
 
-                        // Either unresolved, or resolved-but-larger-than-the-gap
-                        // (cross-CU size disagreement). Synthesise a gap-sized
-                        // placeholder so the base subobject is visible and own
-                        // fields don't have to clear half of an oversized base.
+                        // gap==0 → empty base optimization (resolved or unresolved); skip insertion.
                         if (gap <= 0) {
-                            // Empty base optimization: the base subobject takes
-                            // 0 bytes and is invisible in layout. Two flavours:
-                            //  - Resolved-to-empty + gap-zero: the normal EBO
-                            //    case (e.g. `std::allocator<char>` inside
-                            //    `_Alloc_hider`).
-                            //  - Unresolved + gap-zero: the base type is
-                            //    missing from this binary's stabs but the
-                            //    layout shows it contributes 0 bytes — also
-                            //    EBO (overwhelmingly libstdc++ iterator-tag
-                            //    template instantiations like
-                            //    `__normal_iterator<char*, …>` whose base
-                            //    `_Bit_iterator_base` etc. live in headers).
-                            // Either way, no layout-impacting degradation —
-                            // skip the base insertion and let own fields at
-                            // offset 0 take that slot.
                             if (dt == null) {
                                 diagnostics.inc("base-empty-ebo-inferred")
                             } else {
@@ -741,6 +488,7 @@ class TypeRegistry(
                             }
                             continue
                         }
+                        // Unresolved or oversized → synthesise a gap-sized placeholder.
                         val synthName = "unknown_$offsetBytes"
                         val synthDt = ArrayDataType(Undefined1DataType.dataType, gap, 1)
                         dataTypeByOffset[offsetBytes] = synthDt
@@ -757,27 +505,12 @@ class TypeRegistry(
                         )
                     }
 
-                    // Build insertion ops directly from the loop above's
-                    // results — dataTypeByOffset / resolvedBaseInfo already
-                    // encode the right size (resolved-and-fits-in-gap or
-                    // gap-sized placeholder). Skip the synthesised placeholders
-                    // entirely: a `_base_unknown_N : Undefined1[N]` field
-                    // pretends to be a real base subobject, but it's just our
-                    // gap-fill — better to leave those bytes as Ghidra's
-                    // default Undefined1 components so they read as honest
-                    // "we don't know what's here". The `base-synthesized`
-                    // degradation already records the diagnostic.
+                    // Synthesised placeholders stay as Ghidra's default Undefined1 — skip insertion.
                     val ops = body.bases
                         .sortedBy { it.offsetBits }
                         .mapNotNull { base ->
                             val off = (base.offsetBits / 8).toInt()
                             val info = resolvedBaseInfo[off] ?: return@mapNotNull null
-                            // Synthesised placeholders don't get inserted —
-                            // we identify them by name (the synth path uses
-                            // `unknown_<off>` for resolvedBaseInfo.simpleName).
-                            // The bytes stay as Ghidra's default Undefined1
-                            // fill so they read as honest "we don't know
-                            // what's here" rather than a fake named field.
                             if (info.simpleName.startsWith("unknown_")) return@mapNotNull null
                             val prefix = if (base.isVirtual) "_vbase_" else "_base_"
                             InsertOp(
@@ -813,23 +546,13 @@ class TypeRegistry(
                     }
                 }
 
-                // Compute polymorphic base for inherited vfptr gating
                 val polyBase = ClassBuilderHelpers(resolver).firstPolymorphicBase(body)
-
-                // Pre-compute base-occupied offset set so a parser-emitted vptr that lands
-                // inside a base subobject is filtered out — regardless of whether we could
-                // prove the base polymorphic. When the base is unresolved (synthesised
-                // _base_unknown_*) `firstPolymorphicBase` returns null, but the stab still
-                // emitted a _vptr$Class at the base's offset, and gcc only does that when
-                // the base owns the vfptr. Trying to apply our vptr there just collides
-                // with the synthesised base — see CLexStream → ios_base cascade.
+                // Any vptr at a base-occupied offset is inherited — base owns it. Skip it.
                 val baseOffsets = body.bases.map { it.offsetBits }.toSet()
 
-                // Existing field loop (unchanged).
                 for (field in body.fields) {
-                    if (field.isStatic) continue // Skip static fields
+                    if (field.isStatic) continue
 
-                    // Skip parser-emitted _vptr$<class> field if inherited from polymorphic base
                     val isParserEmittedVptr =
                         field.name.startsWith("_vptr$") || field.name.startsWith("_vptr.") || field.name == "_vptr"
                     if (
@@ -839,8 +562,6 @@ class TypeRegistry(
                                 field.offsetBits in baseOffsets
                             )
                     ) {
-                        // Inherited vfptr — the _base_<Base> (resolved or synthesised) at
-                        // that offset already carries it. Skip.
                         diagnostics.inc("vptr-skipped-inherited")
                         continue
                     }
@@ -858,27 +579,12 @@ class TypeRegistry(
                     if (resolvedFt != null) {
                         recordXRefStubAt("field", "${ast.ghidraName}.${field.name}", resolvedFt)
                     }
-                    // Empty placeholders (XRef stubs, ref-stubs for non-
-                    // primitive bodies that materialised lazily) get Ghidra's
-                    // enforced length=1. Inserting that 1 byte where a 4-byte
-                    // pointer or whatever the stab said belongs would leave
-                    // field.sizeBits/8 - 1 bytes as auto-Undefined holes. If
-                    // the resolved type is logically empty, prefer the stab's
-                    // declared field size (in bytes) so the field at least
-                    // occupies the right slot.
+                    // Prefer stab-declared size for zero-length placeholders so the slot stays the right width.
                     val stabBytes = (field.sizeBits / 8).toInt()
                     val len = when {
                         ft.length <= 0 -> stabBytes.takeIf { it > 0 } ?: 4
                         ft.isZeroLength && stabBytes > 0 -> {
-                            // Skip the degradation when `ft` is a pre-seeded
-                            // placeholder that materialiseAll will fill in-
-                            // place (anonymous nested aggregate, sibling
-                            // canonical winner not yet materialised). The
-                            // Structure/Union is the same DTM-resident object;
-                            // mutating it later widens it to its real size,
-                            // and our reserved `stabBytes` slot fits exactly.
-                            // Only log when the placeholder is *not* tracked
-                            // — that's the real unresolvable XRef stub case.
+                            // Tracked placeholders get widened in place by materialiseAll — don't degrade.
                             if (ft !in placeholders.values) {
                                 diagnostics.recordDegradation(
                                     "field-stub-padded",
@@ -913,14 +619,8 @@ class TypeRegistry(
                     }
                 }
 
-                // Detect Undefined1 holes in the materialised struct. The old
-                // implementation looked for "gaps between consecutive
-                // components", which never fired because Ghidra auto-fills
-                // every empty byte with a 1-byte Undefined1 component (so
-                // consecutive components are always contiguous). What we
-                // actually care about: runs of Undefined1 where the stab told
-                // us there should be a field. The new pass walks components
-                // and reports runs ≥ 4 bytes of unnamed Undefined1.
+                // Surface ≥4-byte runs of unnamed Undefined1 — auto-fill makes "gap between components"
+                // useless, but a long run says the stab didn't tell us about that range.
                 if (struct is Structure) {
                     val componentRecords = struct.components.map { c ->
                         Triple(c.fieldName, Pair(c.offset, c.length), c.dataType.name)
@@ -932,10 +632,6 @@ class TypeRegistry(
                         val bytesInHoles = holes.sumOf { (it.lengthBits / 8).toInt() }
                         val totalBytes = struct.length
                         if (totalBytes > 0 && bytesInHoles * 4 >= totalBytes) {
-                            // ≥25% of the struct is unexplained Undefined1 —
-                            // surface as a degradation; this catches the
-                            // CSymLexStream-style "base class invisible"
-                            // pattern automatically.
                             diagnostics.recordDegradation(
                                 "struct-mostly-undefined",
                                 "$category/${ast.ghidraName}",
@@ -945,7 +641,6 @@ class TypeRegistry(
                     }
                 }
 
-                // Task 2: Plate-comment summary on the derived struct (base class metadata).
                 if (body.bases.isNotEmpty() && struct is Structure) {
                     val lines = body.bases.sortedBy { it.offsetBits }.joinToString("\n") { base ->
                         val baseName = (dataTypeFor(base.type)?.name) ?: "<unresolved>"
@@ -981,63 +676,33 @@ class TypeRegistry(
             )
 
             is TypeDecl.XRef -> {
-                // Resolve `XRef(kind, tagName)` to the canonical struct of
-                // that name + kind so an `InlineDef(id, XRef(STRUCT, "Foo"))`
-                // typeAst (often emitted by gcc for ABI-internal typeinfo
-                // helpers like `__si_class_type_info_pseudo`) doesn't get
-                // materialised as a separate empty `XRef_[...]` Structure
-                // applied at typeinfo locations. Aliases this id to the
-                // canonical DataType for `Foo` via byId.
-                // Resolver records the degradation itself (with the right
-                // bucket by reason) when the lookup fails — we just alias or
-                // fall back to the placeholder.
+                // Alias this id to the canonical (kind, tagName) so InlineDef'd XRefs (gcc's typeinfo
+                // helpers like `__si_class_type_info_pseudo`) don't materialise as separate empties.
                 resolver.lookupByXRef(body)
                     ?.let { canonical -> tryGetExisting(canonical.id)?.also { byId[ast.id] = it } }
                     ?: placeholder.also { xrefStubs.add(it) }
             }
 
-            // Truly-missing classifier: harvest already exhausted above.
-//                val knownTypeIds = emptySet<LocalTypeId>()
-
-//                val classification = ResolverDecision.classifyRef(
-//                    body.id,
-//                    ast.id.source.cu,
-//                    knownTypeIds,
-//                    knownFileNums,
-//                )
-//                val gId = fileResolver.globalIdForCu(body.id)
-//                val gId = body.id
             is TypeDecl.Ref -> tryGetExisting(body.id)
                 ?: if (isVoidSelfRef(body.id) || body.id == ast.id) {
                     VoidDataType()
                 } else {
-                    null
-                        ?: run {
-                            diagnostics.recordDegradation(
-                                "dangling-ref",
-                                ast.nameOrId,
-                                "ref to ${body.id} from ${ast.source}",
-                            )
-                            Undefined4DataType.dataType
-                        }
+                    diagnostics.recordDegradation(
+                        "dangling-ref",
+                        ast.nameOrId,
+                        "ref to ${body.id} from ${ast.source}",
+                    )
+                    Undefined4DataType.dataType
                 }
         }
 
     /**
-     * Find a DataType by simple ghidraName (no path), used by DemanglerReplacer.
-     * Searches [allCreatedDataTypes] — every DataType this importer
-     * authored is either in `byId.values` (id-keyed registers) or
-     * `extras` (id-less registers — typedefs, vftable/vtable composites,
-     * per-slot FunctionDefinitions). When multiple matches share the
-     * simple name, prefer the one whose category equals
-     * [preferredCategory] (typically the `/Demangler/...`-stripped stub
-     * category — e.g. `/std` for `/Demangler/std/string`).
+     * Find a DataType by simple name across [allCreatedDataTypes]. On multiple matches, prefer
+     * the one at [preferredCategory] (e.g. `/std` for `/Demangler/std/string`).
      */
     fun findByName(simpleName: String, preferredCategory: CategoryPath? = null): DataType? {
         val fromExtras = extrasByName[simpleName].orEmpty()
-        // byId.values aren't indexed by name (the key is GlobalTypeId), so
-        // pay the linear scan for the residual case where a typedef hasn't
-        // gone through register(dt) — e.g. ast aliases set via byId.putIfAbsent.
+        // Residual: typedefs registered via byId.putIfAbsent skip extrasByName, so scan.
         val fromById = byId.values.filter { it.name == simpleName }
         val matches = (fromExtras + fromById).distinct()
         if (matches.isEmpty()) return null
@@ -1056,25 +721,9 @@ class TypeRegistry(
 }
 
 /**
- * Pure function to compute gaps in a struct's field layout.
- * Takes component records and total struct size, returns list of gaps.
- *
- * @param componentRecords List of fields with offset and length in bytes
- * @param totalLengthBytes Total size of struct in bytes
- * @return List of gaps; empty if fully packed or no components
- */
-/**
- * Walk a struct's components and report runs of unnamed Undefined1 padding
- * of length ≥ [minRunBytes]. Unlike `computeGaps` (which assumes Ghidra
- * leaves byte-offset gaps between components — it doesn't, since auto-fill
- * inserts an `Undefined1` for every empty byte), this works on the actual
- * materialised composite to surface the "this struct has a base subobject
- * we couldn't render" / "this struct has trailing padding nobody described"
- * patterns.
- *
- * Each triple is `(fieldName, (offsetBytes, lengthBytes), typeName)`.
- * Returns a `GapRecord` per run, with `prevField` / `nextField` set to
- * the names of the nearest named field on either side (null at the ends).
+ * Walk a struct's components and report runs of unnamed Undefined1 of length ≥ [minRunBytes].
+ * Each input triple is `(fieldName, (offsetBytes, lengthBytes), typeName)`. The returned [GapRecord]s
+ * carry the nearest named field on each side as `prevField` / `nextField`.
  */
 fun detectUndefinedRuns(
     componentRecords: List<Triple<String?, Pair<Int, Int>, String>>,
