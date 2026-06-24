@@ -37,16 +37,50 @@ class TypeRegistry(
      */
     private val degradedBy: Map<DataType, String> by lazy {
         val out = mutableMapOf<DataType, String>()
-        for ((id, dt) in byId) {
-            val ast = harvest.getType(id) ?: continue
+        fun classify(ast: TypeAst, dt: DataType) {
+            if (out.containsKey(dt)) return
+            // Unresolved XRef placeholders are flagged unconditionally — their dt is an
+            // empty Composite we created for the stub, not aliased from elsewhere.
+            if (xrefStubs.contains(dt)) {
+                out[dt] = "xref-stub"
+                return
+            }
+            // Skip wrapper / alias bodies — their byId points to the wrapped target's dt.
+            // An anonymous `InlineDef(id, Pointer(X))` aliases to `X *32` (Ghidra auto-named
+            // from its target); an XRef body that resolved via `resolver.byXRef` aliases to
+            // the canonical struct's dt. Letting those classify would misattribute named
+            // targets as anonymous. Only Struct/Enum/FunctionT/Method bodies actually own
+            // their own dt with their own ghidraName.
+            when (ast.body) {
+                is TypeDecl.Ref, is TypeDecl.InlineDef,
+                is TypeDecl.Pointer, is TypeDecl.Reference,
+                is TypeDecl.Const, is TypeDecl.Volatile,
+                is TypeDecl.Array, is TypeDecl.WithSizeAttr,
+                is TypeDecl.Builtin, is TypeDecl.Range, is TypeDecl.Float, is TypeDecl.Complex,
+                is TypeDecl.XRef,
+                -> return
+                else -> {}
+            }
             val reason = when {
-                xrefStubs.contains(dt) -> "xref-stub"
                 ast.name == null -> "anonymous"
                 dt is Composite && dt.numComponents == 0 -> "empty-placeholder"
                 dt is Composite && dt.allComponentsUndefined() -> "all-undefined"
                 else -> null
             }
-            if (reason != null) out.putIfAbsent(dt, reason)
+            if (reason != null) out[dt] = reason
+        }
+        // Canonical-group winners: the ast that actually built the dt. Non-winner
+        // member ids alias to the same dt — don't let an anonymous member misclassify
+        // a named winner's dt.
+        for (group in resolver.byCanonicalKey.values) {
+            byId[group.ast.id]?.let { classify(group.ast, it) }
+        }
+        // Non-canonical top-level asts (XRef aliases, FunctionT, Method, …) that
+        // materialised through resolve(); their own ast.id owns the dt directly.
+        val canonicalIds = resolver.byCanonicalKey.values.flatMap { it.members }.toSet()
+        for (ast in harvest.typeAsts.values) {
+            if (ast.id in canonicalIds) continue
+            byId[ast.id]?.let { classify(ast, it) }
         }
         out
     }
