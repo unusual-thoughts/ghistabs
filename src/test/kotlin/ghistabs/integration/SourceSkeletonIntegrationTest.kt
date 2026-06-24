@@ -305,7 +305,9 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             val hi = lo + f.sizeBytes
             val inside = lines.filter { it.addr.address.offset in lo until hi }
             val start = inside.minOfOrNull { it.line } ?: return@mapNotNull null
-            val end = inside.maxOfOrNull { it.line } ?: start
+            // End = source line of the highest-address N_SLINE (the epilogue), not the max
+            // line number — inlined content otherwise stretches end past the real fn end.
+            val end = inside.maxByOrNull { it.addr.address.offset }?.line ?: start
             FuncRange(f, start, end)
         }.sortedBy { it.startLine }
         val funcs = ranges.map { it.func }
