@@ -8,6 +8,8 @@ import ghidra.program.model.symbol.SymbolUtilities
 import ghistabs.parse.*
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
+import kotlin.io.path.Path
+import kotlin.io.path.name
 
 @Serializable
 data class TypeAst(
@@ -15,29 +17,19 @@ data class TypeAst(
     val id: GlobalTypeId,
     val name: String?,
     val body: TypeDecl<GlobalTypeId>,
-    /**
-     * Source-file line where the type was declared. Captured from N_LSYM's
-     * `desc` field. gcc 3.x sets it; gcc 12 leaves it 0. The companion
-     * `sourceFile` is the N_SOL-effective filename at definition time
-     * (typically a header for stdlib types, the CU itself for app-local
-     * declarations).
-     */
+    /** Source line from N_LSYM `desc`. gcc 3.x sets it; gcc 12 leaves 0. */
     val declLine: Int = 0,
+    /** N_SOL-effective filename at definition time (header for stdlib, CU for app-local). */
     val declSourceFile: String? = null,
 ) {
     val source get() = id.source
-    val nameOrId get() = name ?: "$id"
+    val nameOrUnique get() = name ?: "${Path(id.source.filename).name}_${id.hashCode()}_${id.n}"
     val ghidraName: String
-        get() = SymbolUtilities.replaceInvalidChars(nameOrId, false).ifEmpty {
-            // XRef-bodied TypeAsts emitted by gcc for ABI-internal helpers
-            // (e.g. `InlineDef(id, XRef(STRUCT, "__si_class_type_info_pseudo"))`)
-            // have no name field. Without this clause every per-CU XRef
-            // would get an auto-generated `XRef_[…]` name keyed on the
-            // anonymous id — three CUs that all forward-declare the same
-            // tag would then materialise as three separate empty
-            // Structures, each applied at the SAME typeinfo address,
-            // racing each other on every write. Fold to the tagName so
-            // the byHash/registerWithConflict dedup actually fires.
+        get() = SymbolUtilities.replaceInvalidChars(nameOrUnique, false).ifEmpty {
+            // ABI-internal XRefs (e.g. `__si_class_type_info_pseudo`) lack a name field.
+            // Folding to the tagName lets byHash/registerWithConflict dedup across CUs that
+            // all forward-declare the same tag — otherwise three CUs would write three
+            // separate empty Structures at the same typeinfo address, racing each other.
             (body as? TypeDecl.XRef)?.tagName?.let { SymbolUtilities.replaceInvalidChars(it, false) }
                 ?: "${body::class.java.simpleName}_$id"
         }
@@ -52,10 +44,8 @@ data class TypeAst(
 }
 
 /**
- * @property recordIndex Index in the stabs stream (for scope filtering).
- * @property declLine N_GSYM / N_LCSYM / N_STSYM / N_PSYM / N_LSYM / N_RSYM's `desc` field — source line where
- * the local/parameter/global/static was declared. 0 when the emitter doesn't write it.
- * @property sourceFile N_SOL-effective filename at decl time.
+ * One symbol stab. `recordIndex` is the stream position (for scope filtering); `declLine` comes
+ * from the stab's `desc` field (0 when emitter omits it); `sourceFile` is the N_SOL-effective name.
  */
 @Serializable
 data class SymbolRecord(
@@ -95,10 +85,7 @@ data class OpenFunction(
     var sizeBytes: Long = 0L,
 )
 
-/**
- * A line-number record (N_SLINE) — `(source, line)` mapped to a text
- * address. Captured in [Harvest.lineEntries] grouped by source filename.
- */
+/** N_SLINE record: line → text address. Stored in [Harvest.lineEntries] grouped by source. */
 @Serializable
 data class LineEntry(val line: Int, val addr: SerializableAddress)
 
@@ -109,10 +96,6 @@ data class GhidraKey(val category: CategoryPath, val name: String) {
     override fun toString() = "$category/$name"
 }
 
-/**
- * One bucket of TypeAsts mapping to a single (CategoryPath, ghidraName) slot —
- * Ghidra's uniqueness constraint. `winner` is the AST whose body materialises
- * into the DTM; the other members are tracked for diagnostics only.
- */
+/** TypeAsts collapsed onto one DTM slot. `ast` materialises; `members` is for diagnostics. */
 @Serializable
 data class CanonicalGroup(val key: GhidraKey, val ast: TypeAst, val members: List<GlobalTypeId>, val distinct: Int)

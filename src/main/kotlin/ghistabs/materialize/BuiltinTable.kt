@@ -4,29 +4,21 @@ import ghidra.program.model.data.*
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
 
+/** Resolves gcc XCOFF builtin slots / primitive ranges / floats / complex to Ghidra [DataType]s. */
 object BuiltinTable {
     fun resolve(decl: TypeDecl<GlobalTypeId>): DataType? = when (decl) {
-        // gcc XCOFF builtin slot — see [TypeDecl.Builtin]. Slot numbers
-        // follow gcc/dbxout.c::dbx_register_decl and the stabs spec
-        // (`(0,-N)` table). Only slots we've actually seen on bouniaf2/bouniaf
-        // binaries are mapped here; unknown slots fall through to null
-        // so the caller can substitute a placeholder.
         is TypeDecl.Builtin -> resolveSlot(decl.slot)
 
-        // Legacy form: gdb-style `t<n>=@s<bits>;-<slot>` lands as
-        // WithSizeAttr(bits, Builtin(slot)) after globalize hoists the
-        // negative-id Ref. Bool is the recurring case (size attribute
-        // gives the storage width; the slot identifies the primitive).
+        // Legacy form: `t<n>=@s<bits>;-<slot>` lands here after globalize hoists the
+        // negative-id Ref. Bool is the recurring case.
         is TypeDecl.WithSizeAttr if decl.inner is TypeDecl.Builtin ->
             resolveSlot(decl.inner.slot) ?: resolveSizedRange(decl, signed = false)
 
-        // For WithSizeAttr with a non-boolean inner, resolve the inner and check for sign
         is TypeDecl.WithSizeAttr -> {
             val innerResolved = resolve(decl.inner)
             if (innerResolved != null) {
                 return innerResolved
             }
-            // Otherwise use size attribute to determine the type
             val sizeBits = decl.sizeBits
             if (decl.inner is TypeDecl.Range) {
                 val range = decl.inner
@@ -76,123 +68,53 @@ object BuiltinTable {
             3 -> Complex8DataType()
             4 -> Complex16DataType()
             5 -> Complex32DataType()
-            else -> null // long double complex = 32 bytes
+            else -> null
         }
 
         else -> null
     }
 
     /**
-     * Map a gcc XCOFF builtin slot number to its Ghidra DataType.
-     * Slot numbers per the stabs spec / gcc `dbxout.c`. Only entries
-     * actually emitted by the cygwin gcc 3.4.4 toolchain on bouniaf2/bouniaf
-     * targets are included; expand as new slots show up.
+     * gcc XCOFF builtin slot → Ghidra type. Slot numbers per stabs spec / gcc `dbxout.c`.
+     * Only slots seen on cygwin gcc 3.4.4 bouniaf2/bouniaf binaries are mapped; unknowns return null.
      */
     private fun resolveSlot(slot: Int): DataType? = when (slot) {
-        -1 -> IntegerDataType()
-
-        // int (32-bit on target)
-        -2 -> CharDataType()
-
-        // char
-        -3 -> ShortDataType()
-
-        // short
-        -4 -> LongDataType()
-
-        // long
-        -5 -> UnsignedCharDataType()
-
-        // unsigned char
-        -6 -> SignedCharDataType()
-
-        // signed char
-        -7 -> UnsignedShortDataType()
-
-        // unsigned short
-        -8 -> UnsignedIntegerDataType()
-
-        // unsigned int
-        -9 -> UnsignedIntegerDataType()
-
-        // unsigned
-        -10 -> UnsignedLongDataType()
-
-        // unsigned long
-        -11 -> VoidDataType()
-
-        // void
-        -12 -> FloatDataType()
-
-        // float
-        -13 -> DoubleDataType()
-
-        // double
-        -14 -> LongDoubleDataType()
-
-        // long double
-        -15 -> IntegerDataType()
-
-        // integer (alias int)
-        -16 -> BooleanDataType()
-
-        // bool / _Bool
-        -17 -> FloatDataType()
-
-        // short real (alias float)
-        -18 -> DoubleDataType()
-
-        // real (alias double)
-        -19 -> CharDataType()
-
-        // stringptr
-        -20 -> CharDataType()
-
-        // character
-        -21 -> ByteDataType()
-
-        // logical*1
-        -22 -> ShortDataType()
-
-        // logical*2
-        -23 -> IntegerDataType()
-
-        // logical*4
-        -24 -> IntegerDataType()
-
-        // logical
-        -27 -> SignedByteDataType()
-
-        // integer*1
-        -28 -> ShortDataType()
-
-        // integer*2
-        -29 -> IntegerDataType()
-
-        // integer*4
-        -30 -> WideCharDataType()
-
-        // wchar_t
-        -31 -> LongLongDataType()
-
-        // long long
-        -32 -> UnsignedLongLongDataType()
-
-        // unsigned long long
-        -33 -> UnsignedLongLongDataType()
-
-        // logical*8
-        -34 -> LongLongDataType()
-
-        // integer*8
+        -1 -> IntegerDataType() // int
+        -2 -> CharDataType() // char
+        -3 -> ShortDataType() // short
+        -4 -> LongDataType() // long
+        -5 -> UnsignedCharDataType() // unsigned char
+        -6 -> SignedCharDataType() // signed char
+        -7 -> UnsignedShortDataType() // unsigned short
+        -8 -> UnsignedIntegerDataType() // unsigned int
+        -9 -> UnsignedIntegerDataType() // unsigned
+        -10 -> UnsignedLongDataType() // unsigned long
+        -11 -> VoidDataType() // void
+        -12 -> FloatDataType() // float
+        -13 -> DoubleDataType() // double
+        -14 -> LongDoubleDataType() // long double
+        -15 -> IntegerDataType() // integer (alias int)
+        -16 -> BooleanDataType() // bool / _Bool
+        -17 -> FloatDataType() // short real
+        -18 -> DoubleDataType() // real
+        -19 -> CharDataType() // stringptr
+        -20 -> CharDataType() // character
+        -21 -> ByteDataType() // logical*1
+        -22 -> ShortDataType() // logical*2
+        -23 -> IntegerDataType() // logical*4
+        -24 -> IntegerDataType() // logical
+        -27 -> SignedByteDataType() // integer*1
+        -28 -> ShortDataType() // integer*2
+        -29 -> IntegerDataType() // integer*4
+        -30 -> WideCharDataType() // wchar_t
+        -31 -> LongLongDataType() // long long
+        -32 -> UnsignedLongLongDataType() // unsigned long long
+        -33 -> UnsignedLongLongDataType() // logical*8
+        -34 -> LongLongDataType() // integer*8
         else -> null
     }
 
-    /**
-     * Pick a signed/unsigned integer DataType for [decl.sizeBits] when the
-     * inner type can't be directly resolved. Used by the WithSizeAttr
-     * fallback path for size-tagged builtins.
-     */
+    /** Pick signed/unsigned int by [decl.sizeBits] when the inner can't be resolved directly. */
     private fun resolveSizedRange(decl: TypeDecl.WithSizeAttr<GlobalTypeId>, signed: Boolean): DataType? =
         when (decl.sizeBits) {
             8 if signed -> SignedByteDataType()
@@ -207,10 +129,9 @@ object BuiltinTable {
         }
 
     private fun widthBits(min: Long, max: Long): Int = when {
-        min == 0L && max == 0L -> 0
+        min == 0L && max == 0L -> 0 // void
 
-        // void/zero-size
-        // unsigned: max is 2^n - 1 (use unsigned comparison)
+        // Unsigned: max = 2^n - 1; use unsigned comparison so 0xFFFFFFFF isn't read as negative.
         min == 0L -> when {
             java.lang.Long.compareUnsigned(max, 0xFFL) <= 0 -> 8
             java.lang.Long.compareUnsigned(max, 0xFFFFL) <= 0 -> 16
@@ -218,7 +139,7 @@ object BuiltinTable {
             else -> 64
         }
 
-        // signed: min = -(2^(n-1))
+        // Signed: min = -(2^(n-1)).
         min < 0 -> when {
             min >= -128L -> 8
             min >= -32768L -> 16
@@ -226,7 +147,6 @@ object BuiltinTable {
             else -> 64
         }
 
-        // fallback
         else -> 32
     }
 }

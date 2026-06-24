@@ -34,31 +34,16 @@ class ImportContext<Log : DiagnosticSink>(
     val resolver: AddressResolver = ProgramAddressResolver(program)
 
     /**
-     * The fully-populated [ghistabs.materialize.TypeRegistry] from the
-     * import run, captured at end-of-import so tests can drive a real
-     * [DemanglerReplacer] against the analyzer's authoritative
-     * `byCanonicalKey` + `extrasByName` indices instead of constructing a
-     * fresh empty one (which would force a second `materialiseAll`,
-     * producing `.conflict` artifacts that race other tests under
-     * `@Execution(CONCURRENT)`).
-     *
-     * Null until the import finishes; in production reading this field is
-     * pointless — the importer's own DemanglerReplacer run uses the local
-     * variable directly.
+     * Populated at end-of-import so tests can run [DemanglerReplacer] against the same
+     * `byCanonicalKey` indices the analyzer used — avoids a second `materialiseAll` that
+     * would race `.conflict` artifacts under `@Execution(CONCURRENT)`. Null in production.
      */
     @get:TestOnly
     var typeRegistry: ghistabs.materialize.TypeRegistry? = null
         internal set
 }
 
-/**
- * Test-only side-channel: a [Program] can have an extra [ImportContext] installed
- * so that when Ghidra invokes [ghistabs.StabsAnalyzer.added] (CONCURRENT mode), the
- * analyzer tees its output to that sink in addition to Ghidra's [MessageLog].
- *
- * Production code does not install anything here; the lookup just returns null
- * and the analyzer logs to MessageLog only.
- */
+/** Test-only side-channel for [ghistabs.StabsAnalyzer.added] to tee output into [ImportContext.log]. */
 object StaticContexts {
     private val map = WeakHashMap<Program, ImportContext<*>>()
 

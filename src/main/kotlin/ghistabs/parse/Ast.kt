@@ -25,13 +25,8 @@ sealed interface TypeDecl<out Id : IdInterface> {
     data class Range<Id : IdInterface>(@Contextual val of: Id, val min: Long, val max: Long) : TypeDecl<Id>
 
     /**
-     * GCC floating-point encoding: `r<base>;<NBYTES>;0;` (i.e. `min > 0 && max == 0`).
-     * Per the stabs spec (GDB "STABS Debug Format" §"Floating Point Types";
-     * `gcc/dbxout.c::dbxout_range_type`; `gdb/stabsread.c::read_range_type`), `<base>`
-     * is decorative — included for ABI/syntactic compatibility, ignored at parse
-     * time. Semantically a float is identified by its byte size alone. Lifting this
-     * out of [Range] makes content-equivalent floats hash the same across CUs
-     * regardless of which int slot gcc happened to point `<base>` at.
+     * GCC float encoding `r<base>;<NBYTES>;0;`. `<base>` is decorative (per stabs spec / gdb
+     * `read_range_type`) — hashing by size only keeps cross-CU floats content-equivalent.
      */
     @Serializable
     data class Float<Id : IdInterface>(val sizeBytes: Int) : TypeDecl<Id>
@@ -88,12 +83,8 @@ sealed interface TypeDecl<out Id : IdInterface> {
     data class WithSizeAttr<Id : IdInterface>(val sizeBits: Int, val inner: TypeDecl<Id>) : TypeDecl<Id>
 
     /**
-     * gcc/XCOFF builtin-type slot — `Ref` to a negative type number (`(0,-N)`).
-     * Per the stabs spec these refer to compiler-table builtins (`-1`=int,
-     * `-2`=char, `-16`=`bool`, …) and have no defining stab. The same slot
-     * means the same primitive across every CU, so [ghistabs.harvest.contentHash] keys on
-     * [slot] alone — keeping it as a per-CU [Ref] would let `bool` in CU
-     * A differ from `bool` in CU B, breaking content-equivalence dedup.
+     * gcc/XCOFF builtin slot (`(0,-N)`). No defining stab — same slot means same primitive
+     * in every CU (`-1`=int, `-2`=char, `-16`=bool, …). Hashed by [slot] alone.
      */
     @Serializable
     data class Builtin<Id : IdInterface>(val slot: Int) : TypeDecl<Id>
@@ -121,10 +112,7 @@ fun TypeDecl<*>.matchesXRefKind(xref: AggrKind) = when (this) {
 val TypeDecl<*>.sizeBytes
     get() = when (this) {
         is TypeDecl.Struct -> sizeBytes
-
-        // gcc default
-        is TypeDecl.Enum -> 4L
-
+        is TypeDecl.Enum -> 4L // gcc default
         else -> 0L
     }
 

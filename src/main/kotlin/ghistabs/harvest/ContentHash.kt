@@ -4,24 +4,15 @@ import ghistabs.parse.*
 import java.util.*
 
 /**
- * Two-way oracle used by [contentHash]: an id-keyed lookup for [ghistabs.parse.TypeDecl.Ref]
- * resolution and a name+kind lookup so [ghistabs.parse.TypeDecl.XRef] can resolve to the
- * struct it forward-declares.
- *
- * The XRef path is what lets a CU that only saw `struct Foo;` and one that
- * saw the full definition produce the same content hash for any type built
- * around `Foo` — without it, `XRef(STRUCT, "Foo")` and `Ref(id_of_Foo)`
- * hash to completely different values.
+ * Two-way oracle used by [contentHash]: id-keyed lookup for [TypeDecl.Ref], plus name+kind lookup
+ * so a `XRef(STRUCT, "Foo")` resolves to the same struct content as a `Ref(id_of_Foo)`.
  */
 interface TypeAstOracle {
     fun byId(id: GlobalTypeId): TypeAst?
     fun byXRef(xref: TypeDecl.XRef<GlobalTypeId>): TypeAst? = null
 
     companion object {
-        /**
-         * Lambda-based constructor for tests and ad-hoc callers that don't
-         * want to declare an `object : TypeAstOracle { ... }` block.
-         */
+        /** Lambda-form constructor for tests. */
         operator fun invoke(
             byId: (GlobalTypeId) -> TypeAst?,
             byXRef: (TypeDecl.XRef<GlobalTypeId>) -> TypeAst? = { _ -> null },
@@ -33,48 +24,27 @@ interface TypeAstOracle {
 }
 
 /**
- * Content-equivalence hash for a [TypeDecl] tree. Differs from the
- * default `data class` `hashCode()` in two places:
+ * Content-equivalence hash for a [TypeDecl] tree.
  *
- *   1. Anywhere a [TypeDecl] holds an id (`Ref`, `Range.of`,
- *      `Struct.vtableTargetTypeId`, `InlineDef.id`), the id is resolved
- *      via [oracle] and the hash recurses into the referenced body —
- *      so a forward `Ref(id)` and an inline `InlineDef(id, body)` for
- *      the same content collapse to the same hash. gcc emits either
- *      form depending on per-CU history.
+ * Differences from `data class hashCode()`:
+ *  - Id-bearing nodes (`Ref`, `Range.of`, `Struct.vtableTargetTypeId`, `InlineDef.id`) resolve
+ *    through [oracle] and hash by the referenced body, so `Ref(id)` and inline `InlineDef(id, body)`
+ *    forms (gcc emits either depending on per-CU history) collapse to the same hash.
+ *  - `"Ref"` and `"InlineDef"` wrapper tags are omitted — they reduce to their wrapped content.
  *
- *   2. The `"Ref"` and `"InlineDef"` wrapper tags are intentionally
- *      omitted — both reduce to their wrapped content's hash. Per-CU
- *      template-instantiation clones end up content-equivalent because
- *      their fields' refs converge on the same primitive types
- *      regardless of which CU canonically owns the clone.
- *
- * Cycles (self-referential `Range.of`, recursive struct fields, vtable
- * pointing back at the enclosing class) are broken by [cache]: once
- * a [GlobalTypeId] is in flight, hitting it again yields a fixed
- * `"back-edge"` marker hash instead of recursing.
- *
- * [oracle] is parameterised so `Harvester.appendAsts` can compose its
- * in-flight batch with the merged store, while a finished [Harvest]
- * can pass `typeAsts::get` directly.
- *
- * Each `when` branch destructures the variant — adding a field to any
- * [TypeDecl] subclass is a compile error here.
+ * Cycles break via [visited]: a re-entry returns the fixed [BACK_EDGE_HASH].
+ * [cache] memoizes successful (non-back-edge) results.
  */
 fun TypeDecl<GlobalTypeId>.contentHash(
     oracle: TypeAstOracle,
     cache: MutableMap<GlobalTypeId, Int>? = null,
     visited: Set<GlobalTypeId> = emptySet(),
 ): Int = when (this) {
-    // Drop the "Ref" wrapper so `Ref(id)` and the equivalent inline
-    // `InlineDef(id, content)` (gcc emits either form depending on
-    // each CU's history) reduce to the same content hash.
     is TypeDecl.Ref -> id.refKey(oracle, cache, visited)
 
     is TypeDecl.Range -> Objects.hash("Range", of.refKey(oracle, cache, visited), min, max)
 
-    // Source-independent: gcc emits `r<base>;<size>;0;` with `<base>` purely decorative
-    // (different CUs point at different int slots). Hash by size only — see [TypeDecl.Float].
+    // gcc's `r<base>;<size>;0;` has `<base>` purely decorative (varies per CU). Hash by size only.
     is TypeDecl.Float -> Objects.hash("Float", sizeBytes)
 
     is TypeDecl.Pointer -> Objects.hash("Pointer", pointee.contentHash(oracle, cache, visited))
@@ -92,9 +62,8 @@ fun TypeDecl<GlobalTypeId>.contentHash(
         indexType?.contentHash(oracle, cache, visited),
     )
 
-    is TypeDecl.Enum -> hashCode()
+    is TypeDecl.Enum -> hashCode() // members: List<Pair<String, Long>> — no ids
 
-    // members: List<Pair<String, Long>> — no ids
     is TypeDecl.Struct -> Objects.hash(
         "Struct",
         kind,
@@ -121,62 +90,32 @@ fun TypeDecl<GlobalTypeId>.contentHash(
 
     is TypeDecl.Complex -> hashCode()
 
-    // Resolve `XRef(kind, name)` to the canonical struct definition so a
-    // CU that only saw the forward-declaration `struct Foo;` hashes any
-    // surrounding type the same way as a CU that saw the full body. Falls
-    // back to the plain (kind, tagName) hash when no struct with that
-    // name exists yet (truly unresolved forward decl).
+    // Resolve XRef to its struct definition so a forward-declaration-only CU hashes any
+    // surrounding type identically to a full-definition CU. Falls back to (kind, tagName)
+    // when truly unresolved.
     is TypeDecl.XRef -> oracle.byXRef(this)?.id?.refKey(oracle, cache, visited) ?: hashCode()
 
-    // gcc XCOFF builtin slot: hash by slot number alone (source-independent).
-    // Same negative slot in every CU = same primitive = same hash.
+    // Source-independent: same slot in every CU = same primitive.
     is TypeDecl.Builtin -> Objects.hash("Builtin", slot)
 
-    // (kind, tagName) — primitives only
     is TypeDecl.WithSizeAttr -> Objects.hash(
         "WithSizeAttr",
         sizeBits,
         inner.contentHash(oracle, cache, visited),
     )
 
-    // The id is local-binding metadata; identity is the body. Drop
-    // the "InlineDef" wrapper so this form is content-equivalent to
-    // `Ref(id_at_same_content)` (see the Ref branch).
-    //
-    // Guard against back-edges only when the body is NOT itself an XRef.
-    // When body IS XRef, we intentionally omit the visited guard so that
-    // `byXRef` resolution followed by `refKey` on the resolved id can add
-    // the id to visited naturally. Without this exception, the gcc pattern
-    //   TypeAst(id=A, body=InlineDef(id=B, body=XRef(STRUCT, Foo)))
-    //   TypeAst(id=B, body=Struct{...})   ← byXRef("Foo") returns this
-    // would pre-mark B as visited before the XRef is resolved, causing
-    // refKey(B) to return BACK_EDGE_HASH instead of the struct content.
-    // For non-XRef bodies the guard is still required: a Ref(id) inside
-    // a Struct body must not recurse back into the same InlineDef.
+    // Skip the visited guard when body is an XRef: byXRef resolution must still be able to
+    // add the resolved id to `visited` naturally. Without this, the pattern
+    //   InlineDef(id=B, body=XRef(STRUCT, Foo))   resolving to id=B's own Struct
+    // would pre-mark B and make refKey(B) return BACK_EDGE_HASH instead of struct content.
+    // For non-XRef bodies the guard IS required (a Ref(id) in a Struct body must not recurse).
     is TypeDecl.InlineDef -> body.contentHash(oracle, cache, if (body is TypeDecl.XRef) visited else visited + id)
 }
 
 /**
- * Resolve [this] through [oracle] and recurse into the referenced body so
- * `Ref(id)` and the inline `InlineDef(id, body)` form converge on the
- * same hash (gcc emits both for the same logical content depending on
- * how a type was first introduced in each CU). [visited] guards against
- * self-referential cycles — `Range.of` always points at itself, and
- * struct fields can transitively reach back into the enclosing class.
- *
- * Resolve a Ref-shaped id through [oracle] and recurse into the body,
- * memoizing the result. `Ref(id)` and `InlineDef(id, content)` for the
- * same content converge on the same hash (gcc emits either form
- * depending on per-CU history). [visited] guards against self-referential
- * cycles — `Range.of` always points at itself; struct fields can
- * transitively reach back into the enclosing class.
- *
- * Caching strategy: store every successful (non-back-edge) result keyed
- * by [this]. For tree-shaped types the cached value is exact. For
- * mutually-recursive types the first computation wins and is reused —
- * mild inconsistency with what a from-scratch recomputation would
- * produce, but still deterministic across calls and good enough for
- * collision detection and DTM dedup.
+ * Resolve [this] through [oracle] and recurse into the referenced body. Memoizes successful
+ * (non-back-edge) results in [cache]. For mutually-recursive types the first computation wins —
+ * deterministic across calls; good enough for collision detection and DTM dedup.
  */
 private fun GlobalTypeId.refKey(
     oracle: TypeAstOracle,
@@ -185,9 +124,8 @@ private fun GlobalTypeId.refKey(
 ): Int {
     if (this in visited) return BACK_EDGE_HASH
     cache?.get(this)?.let { return it }
-    // Defense in depth: source-independent fallback for any unresolved id
-    // that slips past the globalize-time `Builtin` hoist. Hashing the full
-    // [GlobalTypeId] would bake `source` into the result and let per-CU
+    // Source-independent fallback for any unresolved id that slipped past the globalize-time
+    // Builtin hoist. Hashing the full GlobalTypeId would bake `source` in and let per-CU
     // slots for the same logical builtin diverge.
     val referenced = oracle.byId(this) ?: return Objects.hash("unresolved", n)
     val h = referenced.body.contentHash(oracle, cache, visited + this)

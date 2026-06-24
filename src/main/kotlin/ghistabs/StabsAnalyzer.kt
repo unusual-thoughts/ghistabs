@@ -30,11 +30,8 @@ class StabsAnalyzer :
         AnalyzerType.BYTE_ANALYZER,
     ) {
     init {
-        // Run AFTER Ghidra's demangler (priority ~897, i.e.
-        // DATA_TYPE_PROPOGATION.before().before().before()). If we ran earlier
-        // we'd promote function symbols to IMPORTED ahead of the demangler,
-        // which then skips them and leaves names mangled in the listing.
-        // LOW_PRIORITY (10000) keeps us strictly after every standard analyzer.
+        // Must run AFTER Ghidra's demangler (~897). Earlier and we promote function symbols to
+        // IMPORTED before the demangler runs — it then skips them, leaving names mangled.
         priority = AnalysisPriority.LOW_PRIORITY
         setDefaultEnablement(true)
         setSupportsOneTimeAnalysis()
@@ -72,7 +69,7 @@ class StabsAnalyzer :
     }
 
     fun run(ctx: ImportContext<*>) {
-        if (isStabsDone(ctx.program)) return // idempotent re-trigger; treat as success.
+        if (isStabsDone(ctx.program)) return
 
         val result = StabsImporter(ctx).run()
         ctx.sink.log("done", "import complete: $result")
@@ -90,11 +87,8 @@ class StabsAnalyzer :
                 program,
                 monitor,
                 options = StabsOptions(program.getOptions(Program.ANALYSIS_PROPERTIES).getOptions(name)),
-                // Tee onto ext.log (the raw CapturingSink), NOT ext.sink: the latter
-                // is a BookmarkSink that auto-bumps `ext.diagnostics` on every log()
-                // call. Since we already share `ext.diagnostics` via the explicit
-                // `diagnostics =` arg below, our own BookmarkSink would inc once and
-                // the tee'd ext.sink would inc again — every counter would double.
+                // Tee onto ext.log (raw CapturingSink), NOT ext.sink (BookmarkSink that
+                // bumps ext.diagnostics) — we share diagnostics, so ext.sink would double-count.
                 log = ext?.let { TeeSink(msgSink, it.log) } ?: msgSink,
                 diagnostics = ext?.diagnostics ?: StabsDiagnostics(),
             ),
