@@ -29,6 +29,28 @@ class TypeRegistry(
     /** Id-less DataType registrations (typedefs, vftable/vtable composites, FunctionDefinitions). */
     private val extrasByName = LinkedHashMap<String, LinkedHashSet<DataType>>()
 
+    /**
+     * Compromised DataTypes — anonymous (no name in stab), empty-placeholder (body never
+     * materialised), or all-Undefined (body ran but bound nothing). Lazily computed from
+     * [byId] / [xrefStubs] / [harvest] the first time [reasonFor] (or [compromisedTypes]) is hit;
+     * by then [materialiseAll] has already populated [byId] and [xrefStubs].
+     */
+    private val degradedBy: Map<DataType, String> by lazy {
+        val out = mutableMapOf<DataType, String>()
+        for ((id, dt) in byId) {
+            val ast = harvest.getType(id) ?: continue
+            val reason = when {
+                xrefStubs.contains(dt) -> "xref-stub"
+                ast.name == null -> "anonymous"
+                dt is Composite && dt.numComponents == 0 -> "empty-placeholder"
+                dt is Composite && dt.allComponentsUndefined() -> "all-undefined"
+                else -> null
+            }
+            if (reason != null) out.putIfAbsent(dt, reason)
+        }
+        out
+    }
+
     /** Resolve [dt] into the DTM and remember it. Returns the DTM-resolved instance (may differ). */
     fun register(dt: DataType): DataType {
         val resolved = dtm.resolve(dt, DataTypeConflictHandler.KEEP_HANDLER)
@@ -189,6 +211,12 @@ class TypeRegistry(
             }
         }
     }
+
+    /** Reason the DataType is compromised (anonymous / empty / all-Undefined / xref-stub), or null. */
+    fun reasonFor(dt: DataType?): String? = dt?.let { degradedBy[it] }
+
+    /** Snapshot of compromised DataTypes by reason — for the registry dump. */
+    fun compromisedTypes(): Map<String, List<DataType>> = degradedBy.entries.groupBy({ it.value }, { it.key })
 
     /** gcc/gdb (stabsread.c): `Ref(self.id)` encodes void — used for void returns and method-args sentinel. */
     private fun isVoidSelfRef(id: GlobalTypeId): Boolean {
