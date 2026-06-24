@@ -430,37 +430,17 @@ class TypeRegistry(
             diagnostics.recordDegradation("function-ret-untyped", at, ret.toString())
             VoidDataType()
         }
-        // gcc stabs method signatures end in a void-typed sentinel marking
-        // end-of-args; passing that as a real parameter trips Ghidra's
-        // `void type not permitted` assertion in ParameterDefinitionImpl.
-        // Drop only the trailing void (the documented gcc convention) to
-        // preserve param count for inherited-virtual signature matching in
-        // non-terminator positions; if void somehow shows up mid-list,
-        // substitute Undefined4 to keep arity stable.
+        // Drop gcc's trailing void sentinel (mid-list voids → Undefined4).
         val effectiveParams = if (params.isNotEmpty() && dataTypeFor(params.last()) is VoidDataType) {
             params.dropLast(1)
         } else {
             params
         }
-        // gcc's `#` method form encodes `this` AS THE FIRST PARAM —
-        // confirmed by gdb/stabsread.c::read_args: "We should read at
-        // least the THIS parameter here." So when [thisType] is set
-        // (Method case), we don't prepend our own; we name the first
-        // gcc-provided param `this` and let the rest flow through. The
-        // [thisType] arg is kept as a documentation / fallback hook for
-        // future callsites where gcc DOESN'T provide it.
+        // gcc's `#` method form puts `this` as params[0]; just name it.
         val argDefs = effectiveParams.mapIndexed { i, p ->
             val resolved = dataTypeFor(p) ?: undef("function-param", "$at[$i]", p)
             val safe = if (resolved is VoidDataType) Undefined4DataType.dataType else resolved
-            val argName = if (i == 0 && thisType != null) "this" else "arg$i"
-            ParameterDefinitionImpl(argName, safe, null)
-        }.toMutableList()
-        if (thisType != null && argDefs.isEmpty()) {
-            // Defensive: stabs didn't provide a `this` param (broken
-            // emission). Synthesise one from [thisType] so the
-            // signature still has the right arity for __thiscall.
-            val safe = if (thisType is VoidDataType) PointerDataType(VoidDataType(), dtm) else thisType
-            argDefs += ParameterDefinitionImpl("this", safe, null)
+            ParameterDefinitionImpl(if (i == 0 && thisType != null) "this" else "arg$i", safe, null)
         }
         fd.setArguments(*argDefs.toTypedArray())
         // Calling conventions that aren't known to this program's CompilerSpec
