@@ -23,10 +23,10 @@ class TypeRegistry(
     private val byId = mutableMapOf<GlobalTypeId, DataType>()
     private val placeholders = mutableMapOf<GlobalTypeId, DataType>()
 
-    /** XRef placeholders flagged at use-sites where a forward decl is a real layout loss. */
+    /** XRef stubs; loss only when appearing as field/base/array elem (caught by `xref-stub-in-*`). */
     private val xrefStubs = mutableSetOf<DataType>()
 
-    /** Id-less DTM writes (typedef aliases, vftable composites, slot FDs), keyed for [findByName]. */
+    /** Id-less DTM writes (typedefs, vftable composites, slot FDs), keyed for [findByName]. */
     private val extrasByName = LinkedHashMap<String, LinkedHashSet<DataType>>()
 
     /** Resolve [dt] into the DTM and remember it (no TypeId binding). For id-less writes. */
@@ -77,7 +77,7 @@ class TypeRegistry(
             }
     }
 
-    /** Materialised DataType for [id], or null if [materialiseAll] never ran for it. */
+    /** Materialised DataType for [id], authoritative for `(category, name)`. Prefer over `dtm.getDataType`. */
     fun dataTypeFor(id: GlobalTypeId): DataType? = byId[id]
 
     /** Log Struct/Union placeholders that never got materialised — flag the source of downstream merge cascades. */
@@ -197,9 +197,8 @@ class TypeRegistry(
     }
 
     /**
-     * Resolve a [TypeDecl] encountered inside another type (field, pointee, base, …) to a Ghidra DataType.
-     * Refs/InlineDefs go via [byId]/placeholders/harvest (cycle-safe); aggregate bodies have no defined
-     * lookup — only the materialiser holds their (category, name) slot.
+     * Resolve a nested [TypeDecl] (field, pointee, base, …). Aggregate bodies (Struct/Enum/
+     * FunctionT/Method/XRef) return null — they're only meaningful keyed by TypeId via `byId`.
      */
     fun dataTypeFor(decl: TypeDecl<GlobalTypeId>): DataType? = when (decl) {
         is TypeDecl.Ref -> tryGetExisting(decl.id)
@@ -327,10 +326,10 @@ class TypeRegistry(
     }
 
     /**
-     * Effective struct size — the last byte we have a field description for. Trims gcc's
-     * over-allocated `sizeBytes` (e.g. bouniaf s328 with fields ending at 192) when the
-     * gap exceeds the largest field size, since legitimate trailing padding is bounded by
-     * (alignment - 1) ≤ maxFieldSize - 1.
+     * Effective struct size — the last byte we have a field description for. gcc's `sizeBytes`
+     * often overshoots when a base subobject is forward-declared but never materialised in
+     * this CU (bouniaf: claimed 328, own fields end at 192). Only trim when the gap
+     * exceeds (alignment - 1) ≤ maxFieldSize - 1 — anything larger can't be tail padding.
      */
     private fun usefulStructSize(body: TypeDecl.Struct<GlobalTypeId>): Int {
         val nonStatic = body.fields.filter { !it.isStatic }
