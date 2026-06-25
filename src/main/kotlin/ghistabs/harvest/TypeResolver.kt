@@ -16,6 +16,7 @@ class TypeResolver(
     private val rawCollisions: Map<GlobalTypeId, Map<String, Set<TypeDecl<GlobalTypeId>>>> = emptyMap(),
     private val sink: DiagnosticSink = DummySink,
     private val diagnostics: StabsDiagnostics = StabsDiagnostics(),
+    private val harvest: Harvest? = null,
 ) : TypeAstOracle {
     /** All named aggregate / enum ASTs, indexed by raw stabs name. */
     private val astsByName: Map<String, List<TypeAst>> by lazy {
@@ -120,11 +121,55 @@ class TypeResolver(
         }
     }
 
+    /**
+     * For multi-CU classes whose direct sources are all .cpp, infer the owning header by
+     * majority vote over the source attribution of N_SLINE entries inside the type's member
+     * function bodies — gcc emits `N_SOL("foo.h")` bursts inside each method that inlines
+     * header code, so the line entries point back at the declaring header.
+     */
+    val multiSourceHeaderHints: Map<String, String> by lazy {
+        val h = harvest ?: return@lazy emptyMap()
+        if (h.openFunctions.isEmpty() || h.lineEntries.isEmpty()) return@lazy emptyMap()
+        val funcsByMangled = h.openFunctions.filter { it.sizeBytes > 0 }.associateBy { it.name }
+        // Skip lookups for sources that are the type's own definition CU: those win by
+        // sheer body-size and would short-circuit the heuristic.
+        val cuSourcesByName = typeAsts.values
+            .filter { it.name != null }
+            .groupBy({ it.name!! }, { it.id.source.filename })
+            .mapValues { it.value.toSet() }
+        val out = mutableMapOf<String, String>()
+        for ((name, asts) in astsByName) {
+            // Only types with >1 distinct CU source need a hint — single-source types
+            // already attribute correctly via Attribution's uniquePaths path.
+            val cuSources = cuSourcesByName[name] ?: continue
+            if (cuSources.size < 2) continue
+            val methods = asts.flatMap { (it.body as? TypeDecl.Struct<*>)?.methods.orEmpty() }
+            if (methods.isEmpty()) continue
+            val tally = mutableMapOf<String, Int>()
+            for (m in methods) {
+                val func = funcsByMangled[m.mangled ?: continue] ?: continue
+                val lo = func.addr.address.offset
+                val hi = lo + func.sizeBytes
+                for ((src, entries) in h.lineEntries) {
+                    if (src in cuSources) continue
+                    if (!src.hasHeaderExtension()) continue
+                    for (e in entries) {
+                        val a = e.addr.address.offset
+                        if (a in lo until hi) tally.merge(src, 1, Int::plus)
+                    }
+                }
+            }
+            tally.maxByOrNull { it.value }?.let { out[name] = it.key }
+        }
+        out
+    }
+
     /** Canonical (CategoryPath, ghidraName) → group. Drives TypeRegistry slot assignment. */
     val byCanonicalKey: Map<GhidraKey, CanonicalGroup> by lazy {
         val byGhidraName = typeAsts.values.groupBy { it.ghidraName }
         val attribution = Attribution(
             commonProjectPrefix = commonProjectPrefix(typeAsts.values.map { it.id.source }),
+            multiSourceHeaderHints = multiSourceHeaderHints,
         )
         typeAsts.values
             .filter { it.body.isXRefTarget }

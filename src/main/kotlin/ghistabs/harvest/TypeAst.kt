@@ -9,7 +9,7 @@ import ghistabs.parse.*
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
 import kotlin.io.path.Path
-import kotlin.io.path.name
+import kotlin.io.path.nameWithoutExtension
 
 @Serializable
 data class TypeAst(
@@ -23,16 +23,16 @@ data class TypeAst(
     val declSourceFile: String? = null,
 ) {
     val source get() = id.source
-    val nameOrUnique get() = name ?: "${Path(id.source.filename).name}_${id.hashCode()}_${id.n}"
-    val ghidraName: String
-        get() = SymbolUtilities.replaceInvalidChars(nameOrUnique, false).ifEmpty {
-            // ABI-internal XRefs (e.g. `__si_class_type_info_pseudo`) lack a name field.
-            // Folding to the tagName lets byHash/registerWithConflict dedup across CUs that
-            // all forward-declare the same tag — otherwise three CUs would write three
-            // separate empty Structures at the same typeinfo address, racing each other.
-            (body as? TypeDecl.XRef)?.tagName?.let { SymbolUtilities.replaceInvalidChars(it, false) }
-                ?: "${body::class.java.simpleName}_$id"
-        }
+    private val uniqueName
+        get() = "Anon_${Path(id.source.filename).nameWithoutExtension}_${id.n}_${id.hashCode().toHexString()}"
+
+    /** Anonymous TypeAst: prefer the XRef tagName (so all CUs forward-declaring the
+     * same tag — e.g. `__si_class_type_info_pseudo` — collapse to the same name and
+     *  byHash dedup actually fires). Otherwise, fall back to the synthetic.
+     */
+    val nameOrUnique get() = name?.ifEmpty { null } ?: (body as? TypeDecl.XRef)?.tagName?.ifEmpty { null } ?: uniqueName
+
+    val ghidraName: String = SymbolUtilities.replaceInvalidChars(nameOrUnique, false).ifEmpty { uniqueName }
 
     inline fun <reified T : TypeDecl<GlobalTypeId>> asType() = if (body is T) {
         this to body
