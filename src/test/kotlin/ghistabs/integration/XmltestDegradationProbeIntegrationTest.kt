@@ -60,7 +60,7 @@ class XmltestDegradationProbeIntegrationTest : AbstractGhidraHeadlessIntegration
                 "[/xml/tinyxml2.cpp,101]", // dangling-ref target
             )
 
-            val out = File("build/degradations/xmltest.probe.txt")
+            val out = File("build/test-output/degradations/xmltest.probe.txt")
             out.parentFile.mkdirs()
             out.bufferedWriter().use { w ->
                 w.write("=== Unresolved type ids referenced from degradations ===\n\n")
@@ -92,12 +92,14 @@ class XmltestDegradationProbeIntegrationTest : AbstractGhidraHeadlessIntegration
                 val tinyxml2Ids = harvest.typeAsts.entries.filter {
                     it.key.toString().startsWith("[/xml/tinyxml2.cpp,")
                 }
+
                 fun nFromKey(k: GlobalTypeId): Int? {
                     val s = k.toString()
                     val comma = s.lastIndexOf(',')
                     val end = s.indexOf(']', comma)
                     return s.substring(comma + 1, end).toIntOrNull()
                 }
+
                 val tracked = (20..40).toList() + (90..110).toList()
                 val byN = tinyxml2Ids.mapNotNull { e -> nFromKey(e.key)?.let { it to e } }.toMap()
                 for (n in tracked.sorted().distinct()) {
@@ -174,11 +176,14 @@ class XmltestDegradationProbeIntegrationTest : AbstractGhidraHeadlessIntegration
                                 w.write("[N_SO] (end of $curSo)\n")
                             }
                         }
+
                         "N_BINCL" -> {
                             w.write("  [N_BINCL] $curSo includes ${rec.name}\n")
                             perSoBincls.getOrPut(curSo) { mutableListOf() }.add(rec.name)
                         }
+
                         "N_EXCL" -> w.write("  [N_EXCL] $curSo reuses ${rec.name}\n")
+
                         "N_LSYM" -> {
                             val s = rec.name
                             val m = Regex("""^([^:]*):.*?\(0,(\d+)\)=""").find(s)

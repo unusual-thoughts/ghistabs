@@ -22,6 +22,9 @@ private val CU_LOCAL_NAME = Regex("""\.?_anon_\d+""")
  */
 private val REAL_HEADER_EXTENSIONS = setOf("h", "hpp", "hh", "hxx", "h++", "tcc")
 
+/** Filename has a header extension we trust as a "real" header for attribution. */
+fun String.hasHeaderExtension(): Boolean = substringAfterLast('.', "").lowercase() in REAL_HEADER_EXTENSIONS
+
 /** gcc emits anonymous types with CU-local sequential names; same name in different CUs is unrelated. */
 fun TypeAst.isCuLocalName() = name != null && (name.isEmpty() || CU_LOCAL_NAME.matches(name))
 
@@ -56,7 +59,10 @@ fun commonProjectPrefix(sources: Collection<SourceFile>): String {
  *
  * Strips [commonProjectPrefix] for compact categories; normalises `..` segments.
  */
-class Attribution(private val commonProjectPrefix: String = "") {
+class Attribution(
+    private val commonProjectPrefix: String = "",
+    private val multiSourceHeaderHints: Map<String, String> = emptyMap(),
+) {
     fun keyForAst(ast: TypeAst, sources: Set<SourceFile>, diagnostics: StabsDiagnostics? = null): GhidraKey {
         val name = ast.ghidraName
 
@@ -90,6 +96,12 @@ class Attribution(private val commonProjectPrefix: String = "") {
         val uniquePaths = defSources.map { it.filename }.toSet()
         if (uniquePaths.size == 1) {
             return GhidraKey(strip(norm(uniquePaths.single())), typeName)
+        }
+
+        // gcc didn't BINCL the owning header, so defSources is .cpp-only. The hint map
+        // (built from member-function SLINE majority) names the real header.
+        multiSourceHeaderHints[typeName]?.let { hint ->
+            return GhidraKey(strip(norm(hint)), typeName)
         }
 
         return GhidraKey(strip(norm(uniquePaths.min())) + "/multi", typeName)

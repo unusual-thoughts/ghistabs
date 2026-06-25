@@ -20,7 +20,7 @@ import java.io.File
 /**
  * One-shot dump of every materialization degradation produced by the importer
  * with `logDegradations = true`. Writes per-fixture output to
- * `build/degradations/<fixture>.txt` grouped by category.
+ * `build/test-output/degradations/<fixture>.txt` grouped by category.
  */
 @Tag("integration")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
@@ -57,7 +57,7 @@ class DegradationDumpIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                 .toList()
                 .sortedByDescending { it.second.size }
 
-            val out = File("build/degradations/${fixture.nameWithoutExtension}.txt")
+            val out = File("build/test-output/degradations/${fixture.nameWithoutExtension}.txt")
             out.parentFile.mkdirs()
             out.bufferedWriter().use { w ->
                 w.write("fixture: $binaryName\n")

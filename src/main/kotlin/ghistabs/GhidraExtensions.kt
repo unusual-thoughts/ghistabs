@@ -72,3 +72,5 @@ fun <T> DataTypeManager.runTransaction(description: String = "Kotlin Lambda Tran
             throw e
         }
     }
+
+fun String.nullIfEmpty() = ifEmpty { null }
