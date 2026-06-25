@@ -67,7 +67,7 @@ class XRefDiagnosisIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                 .filter { !it.name.isNullOrEmpty() }
                 .groupBy { normalize(it.name!!) }
 
-            val out = File("build/degradations/xapasmcsr.xref-diagnosis.txt")
+            val out = File("build/test-output/degradations/xapasmcsr.xref-diagnosis.txt")
             out.parentFile.mkdirs()
             out.bufferedWriter().use { w ->
                 w.write("Total distinct XRefs in harvest: ${xrefs.size}\n\n")
@@ -104,30 +104,41 @@ class XRefDiagnosisIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     private fun collectXRefs(decl: TypeDecl<*>, out: MutableSet<TypeDecl.XRef<*>>) {
         when (decl) {
             is TypeDecl.XRef -> out.add(decl)
+
             is TypeDecl.Pointer -> collectXRefs(decl.pointee, out)
+
             is TypeDecl.Reference -> collectXRefs(decl.referent, out)
+
             is TypeDecl.Array -> {
                 collectXRefs(decl.element, out)
                 decl.indexType?.let { collectXRefs(it, out) }
             }
+
             is TypeDecl.Const -> collectXRefs(decl.inner, out)
+
             is TypeDecl.Volatile -> collectXRefs(decl.inner, out)
+
             is TypeDecl.InlineDef -> collectXRefs(decl.body, out)
+
             is TypeDecl.WithSizeAttr -> collectXRefs(decl.inner, out)
+
             is TypeDecl.Struct -> {
                 for (f in decl.fields) collectXRefs(f.type, out)
                 for (b in decl.bases) collectXRefs(b.type, out)
                 for (m in decl.methods) collectXRefs(m.signature, out)
             }
+
             is TypeDecl.FunctionT -> {
                 collectXRefs(decl.ret, out)
                 for (p in decl.params) collectXRefs(p, out)
             }
+
             is TypeDecl.Method -> {
                 collectXRefs(decl.cls, out)
                 collectXRefs(decl.ret, out)
                 for (p in decl.params) collectXRefs(p, out)
             }
+
             else -> {}
         }
     }

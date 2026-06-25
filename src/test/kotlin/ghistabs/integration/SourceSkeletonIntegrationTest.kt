@@ -15,6 +15,7 @@ import ghistabs.harvest.Harvest
 import ghistabs.harvest.Harvester
 import ghistabs.harvest.LineEntry
 import ghistabs.harvest.OpenFunction
+import ghistabs.harvest.TypeAst
 import ghistabs.materialize.BuiltinTable
 import ghistabs.parse.*
 import ghistabs.runTransaction
@@ -54,76 +55,81 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         assumeTrue(fixture.exists(), "fixture absent")
         val log = MessageLog()
         val monitor = TaskMonitor.DUMMY
-        val loadResults = ProgramLoader.builder()
+        ProgramLoader.builder()
             .source(fixture)
             .compiler(if (fixture.extension.lowercase() == "exe") "mingw" else null)
-            .log(log).monitor(monitor).load()
-        try {
-            val program = loadResults.getPrimaryDomainObject(this)
-            val ctx = program.defaultContext()
-            // Run Ghidra's autoanalysis so getCodeUnitAt returns
-            // disassembled instructions / typed data instead of raw
-            // bytes when the skeleton renderer asks for the listing.
-            // initializeOptions + scheduleOneTimeAnalysis is the
-            // pattern from RegressionTest — startAnalysis alone is a
-            // no-op on a freshly loaded program because nothing has
-            // "changed" since the loader put bytes down.
-            val mgr = AutoAnalysisManager.getAnalysisManager(program)
-            mgr.initializeOptions()
-            mgr.reAnalyzeAll(null)
-            program.runTransaction("skeleton-autoanalyze") {
-                mgr.startAnalysis(monitor)
-                mgr.waitForAnalysis(null, monitor)
-            }
-            val reader = StabReader.fromProgram(program)!!
-            val harvest = program.runTransaction("skeleton-harvest") {
-                Harvester(monitor, ctx.sink, ctx.resolver).passA(reader.records)
-            }
+            .log(log).monitor(monitor).load().use { loadResults ->
+                val program = loadResults.getPrimaryDomainObject(this)
+                val ctx = program.defaultContext()
+                // Run Ghidra's autoanalysis so getCodeUnitAt returns
+                // disassembled instructions / typed data instead of raw
+                // bytes when the skeleton renderer asks for the listing.
+                // initializeOptions + scheduleOneTimeAnalysis is the
+                // pattern from RegressionTest — startAnalysis alone is a
+                // no-op on a freshly loaded program because nothing has
+                // "changed" since the loader put bytes down.
+                val mgr = AutoAnalysisManager.getAnalysisManager(program)
+                mgr.initializeOptions()
+                mgr.reAnalyzeAll(null)
+                program.runTransaction("skeleton-autoanalyze") {
+                    mgr.startAnalysis(monitor)
+                    mgr.waitForAnalysis(null, monitor)
+                }
+                val reader = StabReader.fromProgram(program)!!
+                val harvest = program.runTransaction("skeleton-harvest") {
+                    Harvester(monitor, ctx.sink, ctx.resolver).passA(reader.records)
+                }
 
-            // Clear previous-run output before writing — otherwise a
-            // file we no longer attribute anything to (e.g. iostream
-            // after the synthetic-init / class-source overrides
-            // re-routed its content elsewhere) is left around from the
-            // old run and looks like a current misattribution.
-            val outDir = File("build/test-output/skeletons/${fixture.nameWithoutExtension}").apply {
-                deleteRecursively()
-                mkdirs()
-            }
+                // Move previous run to `<outDir>.old` (overwriting any earlier .old)
+                // so a `diff -r outDir outDir.old` shows what this run changed. Need
+                // a clean outDir for the same reason as before — files we no longer
+                // attribute anything to would otherwise stick around from the old run.
+                val outDir = File("build/test-output/skeletons/${fixture.nameWithoutExtension}")
+                if (outDir.exists()) {
+                    val oldDir = File("${outDir.path}.old")
+                    oldDir.deleteRecursively()
+                    outDir.renameTo(oldDir)
+                }
+                outDir.mkdirs()
 
-            // Attribute each function to the source whose N_SLINE entries
-            // cover the most of its address range. This is the
-            // authoritative signal (gcc emits N_SOL("header") before
-            // template instantiations' N_FUN and resets it before CU
-            // functions), so std::pair::pair lands in stl_pair.h and
-            // CParser::ParseSymbol lands in parse.cpp. Functions with
-            // sizeBytes==0 or no covered N_SLINE drop out of every
-            // skeleton — they have no place to go.
-            val funcToSource = attributeFunctionsBySource(harvest)
-            val lineEntries = rerouteLineEntriesByFunc(harvest, funcToSource)
-            val sources = (
-                lineEntries.keys +
-                    funcToSource.values +
-                    harvest.typeAsts.values.map { it.id.source.filename }
+                // Attribute each function to the source whose N_SLINE entries
+                // cover the most of its address range. This is the
+                // authoritative signal (gcc emits N_SOL("header") before
+                // template instantiations' N_FUN and resets it before CU
+                // functions), so std::pair::pair lands in stl_pair.h and
+                // CParser::ParseSymbol lands in parse.cpp. Functions with
+                // sizeBytes==0 or no covered N_SLINE drop out of every
+                // skeleton — they have no place to go.
+                val funcToSource = attributeFunctionsBySource(harvest)
+                val lineEntries = harvest.lineEntries
+                val typeResolver = ghistabs.harvest.TypeResolver(
+                    harvest.typeAsts,
+                    harvest.rawCollisions,
+                    harvest = harvest,
                 )
-                .filter { it.isNotEmpty() }
-                .toSet()
+                val headerHints = typeResolver.multiSourceHeaderHints
+                val sources = (
+                    lineEntries.keys +
+                        funcToSource.values +
+                        harvest.typeAsts.values.map { headerHints[it.name] ?: it.id.source.filename }
+                    )
+                    .filter { it.isNotEmpty() }
+                    .toSet()
 
-            var written = 0
-            for (source in sources) {
-                val skeleton = renderSkeleton(source, harvest, lineEntries, program, funcToSource)
-                if (skeleton.isBlank()) continue
-                // Keep the source's own extension — don't append `.cpp`
-                // (so e.g. `assemble.cpp` stays `assemble.cpp`, not
-                // `assemble.cpp.cpp`; and `tinyxml2.h` keeps its `.h`).
-                val safeName = source.replace(Regex("[^A-Za-z0-9_.-]"), "_").trim('_')
-                File(outDir, safeName).writeText(skeleton)
-                written++
+                var written = 0
+                for (source in sources) {
+                    val skeleton = renderSkeleton(source, harvest, lineEntries, program, funcToSource, headerHints)
+                    if (skeleton.isBlank()) continue
+                    // Keep the source's own extension — don't append `.cpp`
+                    // (so e.g. `assemble.cpp` stays `assemble.cpp`, not
+                    // `assemble.cpp.cpp`; and `tinyxml2.h` keeps its `.h`).
+                    val safeName = source.replace(Regex("[^A-Za-z0-9_.-]"), "_").trim('_')
+                    File(outDir, safeName).writeText(skeleton)
+                    written++
+                }
+                println("SourceSkeleton[$binaryName]: ${sources.size} sources, $written skeletons → $outDir")
+                assumeTrue(written > 0, "no skeletons produced (no N_SOL/N_SLINE in this binary?)")
             }
-            println("SourceSkeleton[$binaryName]: ${sources.size} sources, $written skeletons → $outDir")
-            assumeTrue(written > 0, "no skeletons produced (no N_SOL/N_SLINE in this binary?)")
-        } finally {
-            loadResults.close()
-        }
     }
 
     /**
@@ -221,16 +227,12 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                 out[f] = f.cu.filename
                 continue
             }
-            // Prefer the source where the function's class is declared,
-            // when we can find it. This rescues defaulted/implicit
-            // methods that gcc materialises inside an unrelated
-            // template header (`EquExpression`'s implicit copy ctor
-            // emitted inside `std::pair<…, EquExpression>` → `stl_pair.h`).
-            val classSrc = outermostClassFrom(f.name)?.let { classSourceByName[it] }
-            if (classSrc != null) {
-                out[f] = classSrc
-                continue
-            }
+            // Trust SLINE attribution first: the source whose N_SLINE covers the
+            // earliest address in the function's range is where gcc says the body
+            // lives. Only fall back to the class-declaration source when SLINE
+            // names nothing (defaulted/implicit methods gcc materialises inside an
+            // unrelated template header, e.g. EquExpression's implicit copy ctor
+            // emitted inside std::pair<…, EquExpression>).
             val lo = f.addr.address.offset
             val hi = lo + f.sizeBytes
             if (hi <= lo) continue
@@ -245,41 +247,11 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                     }
                 }
             }
-            bestSrc?.let { out[f] = it }
-        }
-        return out
-    }
-
-    /**
-     * Reroute every N_SLINE entry to the source of the function that
-     * contains it, when it has one. gcc occasionally emits a single
-     * N_SLINE under a transient (wrong) N_SOL while its siblings in
-     * the same function land under the right one — leaving stray
-     * `// L N @ 0xADDR` comments orphaned in some unrelated header.
-     * Anchoring on the host function gives uniform attribution across
-     * a function's body. Entries outside every function range stay
-     * where N_SOL put them.
-     */
-    private fun rerouteLineEntriesByFunc(
-        harvest: Harvest,
-        funcToSource: Map<OpenFunction, String>,
-    ): Map<String, List<LineEntry>> {
-        data class Reroute(val range: LongRange, val target: String)
-
-        val reroutes = harvest.openFunctions
-            .filter { it.sizeBytes > 0 && funcToSource[it] != null }
-            .map {
-                val lo = it.addr.address.offset
-                Reroute(lo until lo + it.sizeBytes, funcToSource.getValue(it))
+            if (bestSrc != null) {
+                out[f] = bestSrc
+                continue
             }
-        if (reroutes.isEmpty()) return harvest.lineEntries
-        val out = mutableMapOf<String, MutableList<LineEntry>>()
-        for ((src, entries) in harvest.lineEntries) {
-            for (e in entries) {
-                val addr = e.addr.address.offset
-                val target = reroutes.firstOrNull { addr in it.range }?.target ?: src
-                out.getOrPut(target) { mutableListOf() } += e
-            }
+            outermostClassFrom(f.name)?.let { classSourceByName[it] }?.let { out[f] = it }
         }
         return out
     }
@@ -290,35 +262,81 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         lineEntries: Map<String, List<LineEntry>>,
         program: Program,
         funcToSource: Map<OpenFunction, String>,
+        headerHints: Map<String, String>,
     ): String {
+        // Resolve each ast's effective source via the hint: a multi-CU class with a
+        // header majority among its member-function SLINEs lands at the header, not
+        // at whichever .cpp gcc happened to emit the body burst in.
+        fun TypeAst.effectiveSource(): String = name?.let { headerHints[it] } ?: id.source.filename
+
         val rawFuncs = harvest.openFunctions.filter { funcToSource[it] == source }
         val lines = lineEntries[source].orEmpty()
         val hasTypeDecls = harvest.typeAsts.values.any {
-            it.id.source.filename == source && it.name != null && it.declLine > 0
+            it.effectiveSource() == source && it.name != null && it.declLine > 0
         }
         if (rawFuncs.isEmpty() && lines.isEmpty() && !hasTypeDecls) return ""
 
         data class FuncRange(val func: OpenFunction, val startLine: Int, val endLine: Int)
 
-        val ranges = rawFuncs.mapNotNull { f ->
+        val rawRanges = rawFuncs.mapNotNull { f ->
             val lo = f.addr.address.offset
             val hi = lo + f.sizeBytes
+            // Prefer SLINE entries already attributed to `source`. When there are none
+            // and this isn't a gcc synthetic init wrapper (whose body genuinely lives
+            // at the static's decl line in some unrelated header, so any "line in CU"
+            // we'd compute is meaningless), fall back to any SLINE in the function's
+            // address range — that's the case for out-of-line copies of header-declared
+            // methods, whose SLINEs went to the .cpp where the body was instantiated.
             val inside = lines.filter { it.addr.address.offset in lo until hi }
-            val start = inside.minOfOrNull { it.line } ?: return@mapNotNull null
-            // End = source line of the highest-address N_SLINE (the epilogue), not the max
-            // line number — inlined content otherwise stretches end past the real fn end.
-            val end = inside.maxByOrNull { it.addr.address.offset }?.line ?: start
+                .ifEmpty {
+                    if (isSyntheticInit(f)) {
+                        emptyList()
+                    } else {
+                        lineEntries.values.asSequence().flatten()
+                            .filter { it.addr.address.offset in lo until hi }
+                            .toList()
+                    }
+                }
+            if (inside.isEmpty()) return@mapNotNull null
+            // Anchor start/end on address-order, not line-number-order: the lowest-address
+            // N_SLINE is the prologue (function's actual source line); the highest-address
+            // N_SLINE is the epilogue. Picking min/max line number gets pulled around by
+            // inlined-template references.
+            val sortedByAddr = inside.sortedBy { it.addr.address.offset }
+            val start = sortedByAddr.first().line
+            val end = sortedByAddr.last().line
             FuncRange(f, start, end)
         }.sortedBy { it.startLine }
-        val funcs = ranges.map { it.func }
-        // Compute close-brace target line per function. Default: endLine+1
-        // (closing braces usually live on the line after the last
-        // statement). If that collides with a sibling function's start
-        // line, put the close on endLine.
-        val startLines = ranges.map { it.startLine }.toSet()
-        val closeLineByFunc = ranges.associate { (f, _, end) ->
-            f to if ((end + 1) in startLines) end else end + 1
+        // Drop ranges strictly contained inside another's range in this source — those
+        // are method-declaration fragments in a header where another method's range
+        // happens to span the same lines (gcc emits SLINE for headers with sparse,
+        // out-of-order line attribution).
+        val ranges = rawRanges.filter { r ->
+            rawRanges.none { other ->
+                other !== r &&
+                    other.startLine <= r.startLine &&
+                    r.endLine <= other.endLine &&
+                    (other.startLine < r.startLine || r.endLine < other.endLine)
+            }
         }
+        val funcs = ranges.map { it.func }
+
+        // A single-line range is rendered as a self-closing declaration on its one line
+        // — there's no body to bracket. gcc emits this shape both for header-declared
+        // inline methods' out-of-line copies (whose body collapses to the inline decl)
+        // and for synthetic wrappers (`_GLOBAL__I_*`, `__static_initialization_…`)
+        // whose body has no source-step structure. Multi-line ranges close on
+        // endLine+1, or endLine when that collides with a sibling's open.
+        fun isSingleLine(r: FuncRange) = r.startLine == r.endLine
+
+        val startLines = ranges.map { it.startLine }.toSet()
+        val closeLineByFunc = ranges.mapNotNull { r ->
+            when {
+                isSingleLine(r) -> null
+                (r.endLine + 1) in startLines -> r.func to r.endLine
+                else -> r.func to r.endLine + 1
+            }
+        }.toMap()
 
         val maxLine = sequenceOf(
             closeLineByFunc.values.maxOrNull() ?: 0,
@@ -326,8 +344,9 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             ranges.maxOfOrNull { it.startLine } ?: 0,
             ranges.maxOfOrNull { it.endLine } ?: 0,
             harvest.typeAsts.values
-                .filter { it.id.source.filename == source && it.declLine > 0 }
+                .filter { it.effectiveSource() == source && it.declLine > 0 && it.name != null }
                 .maxOfOrNull { it.declLine } ?: 0,
+            harvest.symbolsByCu[source]?.maxOfOrNull { it.declLine } ?: 0,
         ).max()
         if (maxLine == 0) return ""
 
@@ -347,17 +366,17 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         // ~MarkerInst PUSH-EBP instances at L 63 collapse to one comment listing all addresses.
         data class SliceKey(val line: Int, val codeUnit: String)
 
-        val sliceAddrs = mutableMapOf<SliceKey, MutableSet<Long>>()
+        val sliceAddrs = mutableMapOf<SliceKey, MutableSet<Address>>()
         for (entry in lines) {
             if (entry.line !in 1..maxLine) continue
             val codeUnit = describeAddress(program, entry.addr.address) ?: ""
             sliceAddrs.getOrPut(SliceKey(entry.line, codeUnit)) { sortedSetOf() } +=
-                entry.addr.address.offset
+                entry.addr.address
         }
         for ((key, addrs) in sliceAddrs) {
             val lineTag = "L" + key.line.toString().padStart(4)
             val indent = if (inFunction(key.line)) "    " else ""
-            val addrList = addrs.joinToString(", ") { "0x" + it.toString(16).padStart(8, '0') }
+            val addrList = formatAddrRuns(addrs.toList(), program)
             val suffix = if (key.codeUnit.isEmpty()) "" else ": ${key.codeUnit}"
             buckets[key.line] += "$indent// $lineTag @ $addrList$suffix"
         }
@@ -373,25 +392,39 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         // is deduped on (line, body-shape, name).
         data class TypeDeclKey(val line: Int, val name: String, val bodyKind: String)
 
+        // declLine past the file's own activity is a stale-N_SOL flag: gcc emitted the
+        // typedef inside this CU's stab burst but the line number refers to the last
+        // header N_SOL pointed at. We still render, but mark the warning. For files
+        // with body activity (CUs) we trust the body's extent — anything past it is
+        // suspect. For files with no body activity (pure headers like Keywords.h),
+        // we take typeAsts as the activity signal — the file legitimately has only
+        // type declarations.
+        val bodyExtent = sequenceOf(
+            lines.maxOfOrNull { it.line } ?: 0,
+            harvest.symbolsByCu[source]?.maxOfOrNull { it.declLine } ?: 0,
+            ranges.maxOfOrNull { it.endLine } ?: 0,
+        ).max()
+        val activityExtent = if (bodyExtent > 0) {
+            bodyExtent
+        } else {
+            harvest.typeAsts.values
+                .filter { it.effectiveSource() == source && it.declLine > 0 && it.name != null }
+                .maxOfOrNull { it.declLine } ?: 0
+        }
         val seenTypeDecls = mutableSetOf<TypeDeclKey>()
-        // BINCL-anchored source for type attribution: a typedef from
-        // `rep.h` lands in rep.h's skeleton even though gcc emits its
-        // N_LSYM under whatever N_SOL was last set (typically the
-        // including .cpp). `declLine` is still useful — gcc 3.x writes
-        // the source line into N_LSYM's `desc`.
+        // BINCL-anchored source for type attribution. Typedefs render as one-liners here;
+        // Struct/Enum/Union/Class run in a post-pass below so they can expand into blank lines.
         for (ast in harvest.typeAsts.values
-            .filter { it.id.source.filename == source && it.declLine in 1..maxLine && it.name != null }
+            .filter { it.effectiveSource() == source && it.declLine in 1..maxLine && it.name != null }
             .sortedBy { it.declLine }) {
             val line = ast.declLine
             val name = ast.name ?: continue
-            val key = TypeDeclKey(line, name, ast.body::class.simpleName ?: "")
+            val body = ast.body
+            if (body is TypeDecl.Struct || body is TypeDecl.Enum) continue
+            val key = TypeDeclKey(line, name, body::class.simpleName ?: "")
             if (!seenTypeDecls.add(key)) continue
-            val decl = when (val b = ast.body) {
-                is TypeDecl.Struct -> "${kindKeyword(b.kind)} $name; /* ${b.sizeBytes} bytes */"
-                is TypeDecl.Enum -> "enum $name; /* ${b.members.size} members */"
-                else -> "typedef ${renderType(b, harvest)} $name;"
-            }
-            buckets[line] += "${indentFor(line)}$decl  ${lineTag(line)}"
+            val tag = if (line > activityExtent) "${lineTag(line)} stale N_SOL?" else lineTag(line)
+            buckets[line] += "${indentFor(line)}typedef ${renderType(body, harvest)} $name;  $tag"
         }
 
         // Param + local + global declarations — N_PSYM / N_RSYM /
@@ -402,27 +435,53 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         data class DeclKey(val line: Int, val name: String)
 
         val seenDecls = mutableSetOf<DeclKey>()
-        fun emitDecl(line: Int, name: String, type: TypeDecl<GlobalTypeId>, suffix: String) {
+        fun emitDecl(
+            line: Int,
+            name: String,
+            type: TypeDecl<GlobalTypeId>,
+            suffix: String,
+            initFromAddr: Address? = null,
+        ) {
             if (line !in 1..maxLine) return
             if (name == "this") return
             if (!seenDecls.add(DeclKey(line, name))) return
-            val rendered = "${renderType(type, harvest)} $name;"
+            val init = initFromAddr?.let { initializerAt(program, it) }
+            val rendered = if (init != null) {
+                "${renderType(type, harvest)} $name = $init;"
+            } else {
+                "${renderType(type, harvest)} $name;"
+            }
             buckets[line] += "${indentFor(line)}$rendered  ${lineTag(line)} $suffix"
         }
+        // Render params/locals of every function pinned to this source. When the
+        // declLine falls outside the host function's bracket, it's gcc's stale-N_SOL
+        // signature: the local was emitted inside the host function's stab burst but
+        // the line number refers to whichever file N_SOL was last set to (typically
+        // an STL header where the inlined method was declared). Mark the suffix so
+        // the reader knows the line number isn't meaningful for this source.
+        val rangeByFunc = ranges.associateBy { it.func }
         for (f in rawFuncs) {
+            val span = rangeByFunc[f]?.let { it.startLine..(closeLineByFunc[f] ?: it.endLine) }
+            fun suffixFor(declLine: Int, base: String): String =
+                if (span != null && declLine in span) base else "$base; stale N_SOL?"
             for (p in f.params) {
                 if (p.sourceFile != source) continue
                 when (val d = p.body) {
-                    is SymbolDecl.StackParam -> emitDecl(p.declLine, d.name, d.type, "(param)")
-                    is SymbolDecl.RegParam -> emitDecl(p.declLine, d.name, d.type, "(reg param)")
+                    is SymbolDecl.StackParam -> emitDecl(p.declLine, d.name, d.type, suffixFor(p.declLine, "(param)"))
+                    is SymbolDecl.RegParam -> emitDecl(p.declLine, d.name, d.type, suffixFor(p.declLine, "(reg param)"))
                     else -> {}
                 }
             }
             for (l in f.locals) {
                 if (l.sourceFile != source) continue
                 when (val d = l.body) {
-                    is SymbolDecl.RegLocal -> emitDecl(l.declLine, d.name, d.type, "(reg local)")
-                    is SymbolDecl.StackLocal -> emitDecl(l.declLine, d.name, d.type, "(stack local)")
+                    is SymbolDecl.RegLocal -> emitDecl(l.declLine, d.name, d.type, suffixFor(l.declLine, "(reg local)"))
+                    is SymbolDecl.StackLocal -> emitDecl(
+                        l.declLine,
+                        d.name,
+                        d.type,
+                        suffixFor(l.declLine, "(stack local)"),
+                    )
                     else -> {}
                 }
             }
@@ -443,28 +502,163 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                     StabType.N_ROSYM -> "(.rodata static)"
                     else -> "(symbol)"
                 }
+                // N_LCSYM/N_STSYM carry the variable's address in rawValue. N_GSYM has
+                // rawValue=0 — the linker resolves the address from the mangled symbol
+                // name, so look it up in Ghidra's symbol table.
+                val name = (s.body as? SymbolDecl.Global)?.name
+                    ?: (s.body as? SymbolDecl.StaticVar)?.name
+                val addr = when {
+                    s.rawValue != 0L -> program.addressFactory.defaultAddressSpace.getAddress(s.rawValue)
+                    name != null -> program.symbolTable.getSymbols(name).firstOrNull()?.address
+                    else -> null
+                }
                 when (val d = s.body) {
-                    is SymbolDecl.Global -> emitDecl(s.declLine, d.name, d.type, suffix)
-                    is SymbolDecl.StaticVar -> emitDecl(s.declLine, d.name, d.type, suffix)
+                    is SymbolDecl.Global -> emitDecl(s.declLine, d.name, d.type, suffix, addr)
+                    is SymbolDecl.StaticVar -> emitDecl(s.declLine, d.name, d.type, suffix, addr)
                     else -> {}
                 }
             }
         }
 
         // Function openers at startLine. Tag with the source line so
-        // alignment drift after edits is immediately obvious.
-        for ((f, startLine, _) in ranges) {
-            val sig = signatureFor(f)
+        // alignment drift after edits is immediately obvious. Skip
+        // single-line ranges — see closeLineByFunc above.
+        for (r in ranges) {
+            val (f, startLine, _) = r
+            val sig = ghidraSignatureFor(f, program)
             val lineTag = "L" + startLine.toString().padStart(4)
-            buckets[startLine].add(0, "$sig {  /* $lineTag — opens ${f.decl.name} */")
+            val opener = if (isSingleLine(r)) {
+                "$sig;  /* $lineTag — ${f.decl.name} */"
+            } else {
+                "$sig {  /* $lineTag — opens ${f.decl.name} */"
+            }
+            buckets[startLine].add(0, opener)
         }
         // Function closers at chosen close line.
         for ((f, _, _) in ranges) {
             val closeLine = closeLineByFunc[f] ?: continue
             if (closeLine !in 1..maxLine) continue
             val lineTag = "L" + closeLine.toString().padStart(4)
-            buckets[closeLine] += "}  /* $lineTag — closes ${f.decl.name} */"
+            buckets[closeLine] += "}  /* $lineTag — closes ${demangledNameOf(f)} */"
         }
+
+        // Post-pass: Struct / Enum bodies. Expand into consecutive blank lines below the
+        // decl line when there's room; otherwise fall back to a one-line forward decl.
+        data class TypeBodyKey(val line: Int, val name: String)
+
+        val seenTypeBodies = mutableSetOf<TypeBodyKey>()
+        for (ast in harvest.typeAsts.values
+            .filter { it.effectiveSource() == source && it.declLine in 1..maxLine && it.name != null }
+            .sortedBy { it.declLine }) {
+            val line = ast.declLine
+            val name = ast.name ?: continue
+            val body = ast.body
+            if (body !is TypeDecl.Struct && body !is TypeDecl.Enum) continue
+            if (!seenTypeBodies.add(TypeBodyKey(line, name))) continue
+
+            val memberLines = when (body) {
+                is TypeDecl.Struct -> renderStructMembers(body, harvest, program)
+                is TypeDecl.Enum -> body.members.map { (mn, mv) -> "    $mn = $mv," }
+                else -> emptyList()
+            }
+            val indent = indentFor(line)
+            val openLine = when (body) {
+                is TypeDecl.Struct -> {
+                    val bases = if (body.bases.isEmpty()) {
+                        ""
+                    } else {
+                        " : " + body.bases.joinToString(", ") {
+                            "${it.access.name.lowercase()} ${renderType(it.type, harvest)}"
+                        }
+                    }
+                    "${aggKeyword(body)} $name$bases {"
+                }
+
+                is TypeDecl.Enum -> "enum $name {"
+
+                else -> error("unreachable")
+            }
+            val sizeNote = when (body) {
+                is TypeDecl.Struct -> "/* ${body.sizeBytes} bytes */"
+                is TypeDecl.Enum -> "/* ${body.members.size} members */"
+                else -> ""
+            }
+
+            // Count consecutive blank buckets below `line`. Need at least
+            // memberLines.size + 1 (for closing brace) to expand.
+            var available = 0
+            var probe = line + 1
+            while (probe <= maxLine && buckets[probe].isEmpty()) {
+                available++
+                probe++
+            }
+            val tag = if (line > activityExtent) "${lineTag(line)} stale N_SOL?" else lineTag(line)
+            if (memberLines.isNotEmpty() && available >= memberLines.size + 1) {
+                buckets[line] += "$indent$openLine  $tag"
+                for ((i, m) in memberLines.withIndex()) {
+                    buckets[line + 1 + i] += "$indent$m"
+                }
+                val closeIdx = line + 1 + memberLines.size
+                buckets[closeIdx] += "$indent}; $sizeNote".trimEnd()
+            } else if (memberLines.isNotEmpty()) {
+                // Not enough blank room for one-member-per-line — compact form on one line.
+                val compactMembers = memberLines.joinToString(" ") { it.trimStart() }
+                buckets[line] += "$indent$openLine $compactMembers }; $sizeNote  $tag"
+            } else {
+                // No members (opaque) — forward decl.
+                val keyword = when (body) {
+                    is TypeDecl.Struct -> aggKeyword(body)
+                    is TypeDecl.Enum -> "enum"
+                    else -> "struct"
+                }
+                buckets[line] += "$indent$keyword $name; $sizeNote  $tag"
+            }
+        }
+
+        // Diagnostic: anything that lands inside another function's interior is
+        // suspicious — gcc shouldn't be emitting a nested function, a top-level
+        // type definition, or a global at a line claimed by an enclosing N_FUN
+        // range. Dedup before printing: D1/D2 dtor variants and template
+        // instantiations otherwise repeat each observation N times. Skip
+        // self-comparisons on demangled name (overload set hitting same line).
+        val anomalies = sortedSetOf<String>()
+        for ((f, startLine, _) in ranges) {
+            val closeLine = closeLineByFunc[f] ?: continue
+            val interior = (startLine + 1) until closeLine
+            val fname = demangledNameOf(f)
+            for ((g, gStart, gEnd) in ranges) {
+                if (g === f) continue
+                val gname = demangledNameOf(g)
+                if (gname == fname) continue
+                if (gStart in interior) {
+                    anomalies +=
+                        "skeleton[$source]: function $gname opens at L$gStart inside $fname [L$startLine..L$closeLine]"
+                }
+                if (gEnd in interior && gStart !in interior) {
+                    anomalies +=
+                        "skeleton[$source]: function $gname closes at L$gEnd inside $fname [L$startLine..L$closeLine]"
+                }
+            }
+            for (ast in harvest.typeAsts.values) {
+                if (ast.id.source.filename != source) continue
+                if (ast.declLine !in interior) continue
+                val name = ast.name ?: continue
+                anomalies +=
+                    "skeleton[$source]: type $name declared at L${ast.declLine} inside $fname [L$startLine..L$closeLine]"
+            }
+            for ((cu, syms) in harvest.symbolsByCu) {
+                if (cu != source) continue
+                for (s in syms) {
+                    if (s.declLine !in interior) continue
+                    val nm = (s.body as? SymbolDecl.Global)?.name
+                        ?: (s.body as? SymbolDecl.StaticVar)?.name
+                        ?: continue
+                    anomalies +=
+                        "skeleton[$source]: global/static $nm at L${s.declLine} inside $fname [L$startLine..L$closeLine]"
+                }
+            }
+        }
+        anomalies.forEach(::println)
 
         // Strict alignment: source line N → output line N. Multiple bucket items
         // share one output line, joined together.
@@ -484,28 +678,25 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
      * mnemonic + operands, or the data type / value). Returns null if
      * nothing meaningful is at this address.
      */
-    private fun describeAddress(program: Program, addr: Address): String? {
-        val sym = program.symbolTable.getPrimarySymbol(addr)
-            ?.takeIf { it.source != SourceType.DEFAULT }
-            ?.name
-        val body = when (val cu = program.listing.getCodeUnitAt(addr)) {
-            is Instruction -> "${cu.mnemonicString} ${cu.toString().substringAfter(' ', "").trim()}".trim()
+    private fun describeAddress(program: Program, addr: Address): String? =
+        when (val cu = program.listing.getCodeUnitAt(addr)) {
+            is Instruction -> program.functionManager.getFunctionContaining(addr)?.getName(true)
+                ?: program.symbolTable.getPrimarySymbol(addr)
+                    ?.takeIf { it.source != SourceType.DEFAULT }
+                    ?.getName(true)
 
             is Data -> {
+                val sym = program.symbolTable.getPrimarySymbol(addr)
+                    ?.takeIf { it.source != SourceType.DEFAULT }
+                    ?.getName(true)
                 val value = runCatching { cu.value?.toString() }.getOrNull()
                 val type = cu.dataType.name
-                listOfNotNull(type, value).joinToString(" = ")
+                val body = listOfNotNull(type, value).joinToString(" = ")
+                if (sym != null) "$sym → $body" else body
             }
 
             else -> null
         }
-        return when {
-            sym != null && body != null -> "$sym → $body"
-            sym != null -> sym
-            body != null -> body
-            else -> null
-        }
-    }
 
     /**
      * Best-effort C++-style declaration from the stab function name.
@@ -521,6 +712,21 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         AggrKind.UNION -> "union"
         AggrKind.CLASS -> "class"
         AggrKind.ENUM -> "enum"
+    }
+
+    // gcc 3.x stabs emit `s` for both `struct` and `class`; promote to "class" when
+    // any method or base carries non-public access, OR when there are any methods
+    // at all (plain C structs have none — the presence of methods means C++).
+    private fun aggKeyword(s: TypeDecl.Struct<GlobalTypeId>): String {
+        if (s.kind == AggrKind.STRUCT &&
+            (
+                s.methods.isNotEmpty() ||
+                    s.bases.any { it.access != Access.PUBLIC }
+                )
+        ) {
+            return "class"
+        }
+        return kindKeyword(s.kind)
     }
 
     /**
@@ -583,14 +789,127 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         }
     }
 
-    private fun signatureFor(f: OpenFunction): String {
-        val mangled = f.name
+    /**
+     * Format a set of addresses as `0xS-0xE` interval(s) where consecutive entries cover
+     * back-to-back code units (instruction.length apart), so e.g. the prologue's 5 N_SLINEs
+     * at `0x401000..0x40100f` render as `0x401000-0x40100f` instead of a comma list.
+     */
+    private fun formatAddrRuns(addrs: List<Address>, program: Program): String {
+        if (addrs.isEmpty()) return ""
+        val sorted = addrs.sortedBy { it.offset }
+        val runs = mutableListOf<Pair<Address, Address>>()
+        var runStart = sorted[0]
+        var runEnd = sorted[0]
+        for (i in 1 until sorted.size) {
+            val cur = sorted[i]
+            val inst = program.listing.getInstructionAt(runEnd)
+            val expectedNext = inst?.next?.address
+                ?: program.listing.getCodeUnitAt(runEnd)?.takeIf {
+                    it.length > 0
+                }?.let { runEnd.add(it.length.toLong()) }
+            if (expectedNext != null && cur == expectedNext) {
+                runEnd = cur
+            } else {
+                runs += runStart to runEnd
+                runStart = cur
+                runEnd = cur
+            }
+        }
+        runs += runStart to runEnd
+        fun hex(a: Address) = "0x" + a.offset.toString(16).padStart(8, '0')
+        return runs.joinToString(", ") { (s, e) -> if (s == e) hex(s) else "${hex(s)}-${hex(e)}" }
+    }
+
+    /** Render a Struct's body members for in-skeleton expansion: one C-style decl per line. */
+    private fun renderStructMembers(
+        body: TypeDecl.Struct<GlobalTypeId>,
+        harvest: Harvest,
+        program: Program,
+    ): List<String> {
+        val fieldLines = body.fields
+            .filter { !it.isStatic }
+            .sortedBy { it.offsetBits }
+            .map { f ->
+                val type = renderType(f.type, harvest)
+                "    $type ${f.name};  /* +${f.offsetBits / 8}B */"
+            }
+        val funcByMangled = harvest.openFunctions.associateBy { it.name }
+        val methodLines = body.methods.mapNotNull { m ->
+            val mangled = m.mangled ?: return@mapNotNull null
+            val func = funcByMangled[mangled] ?: return@mapNotNull null
+            "    ${ghidraSignatureFor(func, program)};"
+        }
+        return fieldLines + methodLines
+    }
+
+    /**
+     * Function signature via Ghidra's API at the function's entry address — Ghidra has
+     * already resolved calling convention, parameter names and types from analysis +
+     * imported stabs types, so the rendered signature reflects what the binary actually
+     * does (not the demangler's textual guess).
+     */
+    private fun ghidraSignatureFor(f: OpenFunction, program: Program): String {
+        val func = program.functionManager.getFunctionAt(f.addr.address) ?: return f.name
+        return func.signature.prototypeString
+    }
+
+    /**
+     * Initializer string for a global/static at [addr] via Ghidra's data API. Primitives
+     * render their value (TRUE/FALSE, ints, strings); pointers dereference one level so
+     * a `char const *` pointing at a string shows the literal. Structs expand their
+     * components into a brace-list. Returns null when the value is uninformative
+     * (uninitialized `??`, empty struct, or zero-length).
+     */
+    private fun initializerAt(program: Program, addr: Address): String? {
+        val cu = program.listing.getDataAt(addr) ?: return null
+        val target = (cu.value as? Address)?.let { program.listing.getDataAt(it) }
+        val pick = target ?: cu
+        // byte/char arrays render as hex-list by default; recover the string literal
+        // by reading bytes directly.
+        if (pick.numComponents > 0 && pick.dataType is ghidra.program.model.data.Array) {
+            val arr = pick.dataType as ghidra.program.model.data.Array
+            if (arr.elementLength == 1) {
+                val bytes = ByteArray(pick.length)
+                runCatching { program.memory.getBytes(pick.address, bytes) }.getOrNull()
+                    ?: return null
+                val end = bytes.indexOf(0).let { if (it == -1) bytes.size else it }
+                if ((0 until end).all {
+                        val b = bytes[it].toInt() and 0xff
+                        b in 0x20..0x7e
+                    }
+                ) {
+                    return "\"${String(bytes, 0, end, Charsets.US_ASCII)}\""
+                }
+            }
+        }
+        // Try Ghidra's own representation first — for typed strings it returns a
+        // string literal; for primitives the value; for many structs the field list.
+        val repr = runCatching { pick.defaultValueRepresentation }.getOrNull()
+        if (!repr.isNullOrEmpty() && repr != "??" && !repr.contains("Empty-Structure")) {
+            return repr
+        }
+        // Fallback for structs Ghidra rendered as `<Empty-Structure>` (no inline value
+        // for the whole record) — recurse into components, picking up pointer
+        // dereferences (RTTI structs whose interesting content is one pointer away).
+        if (pick.numComponents > 0) {
+            val parts = (0 until pick.numComponents).mapNotNull { i ->
+                val c = pick.getComponent(i) ?: return@mapNotNull null
+                val v = (c.value as? Address)?.let { program.listing.getDataAt(it) }
+                    ?.runCatching { defaultValueRepresentation }?.getOrNull()
+                    ?: runCatching { c.defaultValueRepresentation }.getOrNull()
+                v?.takeIf { it.isNotEmpty() && it != "??" && !it.contains("Empty-Structure") }
+            }
+            if (parts.isNotEmpty()) return "{ ${parts.joinToString(", ")} }"
+        }
+        return null
+    }
+
+    private fun demangledNameOf(f: OpenFunction): String {
+        val mangled = f.decl.name
         val demangled = runCatching {
             @Suppress("DEPRECATION")
             ghidra.app.util.demangler.DemanglerUtil.demangle(mangled)
-        }.getOrNull() ?: return "// $mangled"
-        val raw = demangled.signature ?: return "// $mangled"
-        // Drop a leading `__<conv>call ` prefix Ghidra inserted.
-        return Regex("""^__[a-zA-Z]+call\s+""").replace(raw, "")
+        }.getOrNull() ?: return mangled
+        return demangled.demangledName ?: demangled.name ?: mangled
     }
 }

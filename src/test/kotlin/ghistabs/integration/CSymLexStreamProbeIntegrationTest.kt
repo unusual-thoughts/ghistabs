@@ -57,7 +57,7 @@ class CSymLexStreamProbeIntegrationTest : AbstractGhidraHeadlessIntegrationTest(
                 StabsAnalyzer().run(ctx)
             }
 
-            val out = File("build/degradations/xapasmcsr.csymlexstream-probe.txt")
+            val out = File("build/test-output/degradations/xapasmcsr.csymlexstream-probe.txt")
             out.parentFile.mkdirs()
             out.bufferedWriter().use { w ->
                 for (target in listOf("CSymLexStream", "CLexStream", "RecoverySet")) {
@@ -72,11 +72,9 @@ class CSymLexStreamProbeIntegrationTest : AbstractGhidraHeadlessIntegrationTest(
                             val fname = c.fieldName ?: "<unnamed>"
                             val mark = if (c.dataType.name.startsWith("undefined")) "  *HOLE*" else ""
                             w.write(
-                                "  +${c.offset.toString().padStart(
-                                    4,
-                                )} ${fname.padEnd(
-                                    28,
-                                )} ${c.dataType.pathName} (${c.dataType::class.simpleName}, ${c.length}b)$mark\n",
+                                "  +${c.offset.toString().padStart(4)} ${
+                                    fname.padEnd(28)
+                                } ${c.dataType.pathName} (${c.dataType::class.simpleName}, ${c.length}b)$mark\n",
                             )
                         }
                     }

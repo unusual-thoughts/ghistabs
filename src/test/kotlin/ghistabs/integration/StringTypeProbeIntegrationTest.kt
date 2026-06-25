@@ -69,7 +69,7 @@ class StringTypeProbeIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                 StabsAnalyzer().run(ctx)
             }
 
-            val out = File("build/degradations/$label.string-probe.txt")
+            val out = File("build/test-output/degradations/$label.string-probe.txt")
             out.parentFile.mkdirs()
             out.bufferedWriter().use { w ->
                 w.write("=== DataTypes whose name == \"string\" ===\n")
@@ -150,19 +150,23 @@ class StringTypeProbeIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                     val fname = c.fieldName ?: "<unnamed>"
                     val tname = c.dataType.pathName
                     w.write(
-                        "$prefix${c.offset.toString().padStart(
-                            3,
-                        )} $fname: $tname (${c.dataType::class.simpleName} ${c.length}b)\n",
+                        "$prefix${
+                            c.offset.toString().padStart(
+                                3,
+                            )
+                        } $fname: $tname (${c.dataType::class.simpleName} ${c.length}b)\n",
                     )
                     if (c.dataType is Structure || c.dataType is TypeDef || c.dataType is Pointer) {
                         dumpTree(c.dataType, "$prefix  ", depth + 1, visited, w)
                     }
                 }
             }
+
             is TypeDef -> {
                 w.write("${prefix}typedef → ${dt.baseDataType.pathName}\n")
                 dumpTree(dt.baseDataType, "$prefix  ", depth + 1, visited, w)
             }
+
             is Pointer -> {
                 val pointee = dt.dataType
                 if (pointee == null) {
@@ -174,6 +178,7 @@ class StringTypeProbeIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                     }
                 }
             }
+
             else -> {}
         }
     }
@@ -192,8 +197,11 @@ class StringTypeProbeIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             is Structure -> {
                 for (c in dt.components) collectUndef(c.dataType, visited, out)
             }
+
             is TypeDef -> collectUndef(dt.baseDataType, visited, out)
+
             is Pointer -> dt.dataType?.let { collectUndef(it, visited, out) }
+
             else -> {}
         }
     }
