@@ -842,31 +842,43 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
      * Best-effort C-style rendering of a [TypeDecl]. Primitives go
      * through [BuiltinTable] so they come out as `int` / `uchar` /
      * `double` etc; named composite types are looked up by id in
-     * [Harvest.typeAsts]. Depth-capped because cyclic types (gcc's
-     * recursive `std::basic_string<…>::operator=` taking
-     * `std::string&`) would otherwise loop.
+     * [Harvest.typeAsts]. Cycles (gcc's recursive
+     * `std::basic_string<…>::operator=` taking `std::string&`) are broken
+     * with a visited-set of the type ids on the current path — NOT a depth
+     * cap, which the transparent Ref/InlineDef indirections would exhaust
+     * on legitimately deep types (e.g. an array of const char pointers:
+     * Array→InlineDef→Const→Ref→Pointer→Ref→Const→Ref→char).
      */
-    private fun renderType(t: TypeDecl<GlobalTypeId>, harvest: Harvest, depth: Int = 0): String {
-        if (depth > 6) return "…"
-        return when (t) {
+    private fun renderType(t: TypeDecl<GlobalTypeId>, harvest: Harvest, seen: Set<GlobalTypeId> = emptySet()): String =
+        when (t) {
             is TypeDecl.Ref -> {
-                // Named TypeAst → use the name. Anonymous → recurse into
-                // its body so the user sees `int *` rather than a raw
-                // GlobalTypeId. Unresolved (cross-CU dangling Ref) →
-                // fall back to the id stringification.
+                // Named TypeAst → use the name. Anonymous → recurse into its body so the
+                // user sees `int *` rather than a raw GlobalTypeId, unless this id is
+                // already on the path (cycle). Unresolved (cross-CU dangling) → id string.
                 val ast = harvest.typeAsts[t.id]
-                ast?.name ?: ast?.let { renderType(it.body, harvest, depth + 1) } ?: "T_${t.id}"
+                val name = ast?.name
+                when {
+                    name != null -> name
+                    ast == null -> "T_${t.id}"
+                    t.id in seen -> "…"
+                    else -> renderType(ast.body, harvest, seen + t.id)
+                }
             }
 
-            is TypeDecl.Pointer -> "${renderType(t.pointee, harvest, depth + 1)} *"
+            is TypeDecl.Pointer -> "${renderType(t.pointee, harvest, seen)} *"
 
-            is TypeDecl.Reference -> "${renderType(t.referent, harvest, depth + 1)} &"
+            is TypeDecl.Reference -> "${renderType(t.referent, harvest, seen)} &"
 
-            is TypeDecl.Const -> "${renderType(t.inner, harvest, depth + 1)} const"
+            is TypeDecl.Const -> "${renderType(t.inner, harvest, seen)} const"
 
-            is TypeDecl.Volatile -> "${renderType(t.inner, harvest, depth + 1)} volatile"
+            is TypeDecl.Volatile -> "${renderType(t.inner, harvest, seen)} volatile"
 
-            is TypeDecl.Array -> "${renderType(t.element, harvest, depth + 1)}[${t.length ?: ""}]"
+            is TypeDecl.Array -> {
+                // gcc stores the bound in indexType (`ar<idx>;lo;hi`), leaving length null;
+                // derive count as hi-lo+1, same as TypeRegistry's array materialization.
+                val len = t.length ?: (t.indexType as? TypeDecl.Range)?.let { it.max - it.min + 1 }
+                "${renderType(t.element, harvest, seen)}[${len ?: ""}]"
+            }
 
             is TypeDecl.Builtin,
             is TypeDecl.Range,
@@ -882,21 +894,20 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             is TypeDecl.Enum -> "enum"
 
             is TypeDecl.FunctionT -> {
-                val ret = renderType(t.ret, harvest, depth + 1)
-                val params = t.params.joinToString(", ") { renderType(it, harvest, depth + 1) }
+                val ret = renderType(t.ret, harvest, seen)
+                val params = t.params.joinToString(", ") { renderType(it, harvest, seen) }
                 "$ret($params)"
             }
 
             is TypeDecl.Method -> {
-                val cls = renderType(t.cls, harvest, depth + 1)
-                val ret = renderType(t.ret, harvest, depth + 1)
-                val params = t.params.joinToString(", ") { renderType(it, harvest, depth + 1) }
+                val cls = renderType(t.cls, harvest, seen)
+                val ret = renderType(t.ret, harvest, seen)
+                val params = t.params.joinToString(", ") { renderType(it, harvest, seen) }
                 "$ret($cls::*)($params)"
             }
 
-            is TypeDecl.InlineDef -> renderType(t.body, harvest, depth + 1)
+            is TypeDecl.InlineDef -> renderType(t.body, harvest, seen + t.id)
         }
-    }
 
     /**
      * Format a set of addresses as `0xS-0xE` interval(s) where consecutive entries cover
