@@ -267,10 +267,11 @@ class ClassBuilder(
             )
         }
 
-        // Mark __thiscall. On x86win32 the cspec routes `this` via ECX; on x86mingw via stack.
-        // Either way, accepted __thiscall + GhidraClass namespace = Ghidra auto-injects
-        // hidden `this: Class*` at render time. Don't probe func.getParameter(0)?.name to
-        // detect — for force-created functions the param list isn't populated yet.
+        // Mark __thiscall. The x86gcc cspec routes `this` as the first stack argument
+        // (MSVC's x86win routes it via ECX); either way, accepted __thiscall + GhidraClass
+        // namespace = Ghidra auto-injects hidden `this: Class*` at render time. Don't probe
+        // func.getParameter(0)?.name to detect — for force-created functions the param list
+        // isn't populated yet.
         val thiscallAccepted = runCatching { func.setCallingConvention("__thiscall") }
             .onFailure { log("method-calling-convention", "$className::${m.name}: ${it.message}") }
             .isSuccess
