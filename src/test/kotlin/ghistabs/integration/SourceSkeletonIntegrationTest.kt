@@ -50,9 +50,16 @@ import java.io.File
 class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     @ParameterizedTest
     @ValueSource(strings = ["bouniafbouniaf.exe", "xmltest", "bouniaf.exe", "box2d_tests"])
-    fun writeSkeletons(binaryName: String) {
+    fun writeSkeletons(binaryName: String) = runPipeline(binaryName, decompile = false)
+
+    @ParameterizedTest
+    @ValueSource(strings = ["bouniafbouniaf.exe", "xmltest", "bouniaf.exe", "box2d_tests"])
+    fun writeDecompilations(binaryName: String) = runPipeline(binaryName, decompile = true)
+
+    private fun runPipeline(binaryName: String, decompile: Boolean) {
         val fixture = File("src/test/resources/binaries/$binaryName")
         assumeTrue(fixture.exists(), "fixture absent")
+        val outDirName = if (decompile) "decomps" else "skeletons"
         val log = MessageLog()
         val monitor = TaskMonitor.DUMMY
         ProgramLoader.builder()
@@ -61,13 +68,6 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             .log(log).monitor(monitor).load().use { loadResults ->
                 val program = loadResults.getPrimaryDomainObject(this)
                 val ctx = program.defaultContext()
-                // Run Ghidra's autoanalysis so getCodeUnitAt returns
-                // disassembled instructions / typed data instead of raw
-                // bytes when the skeleton renderer asks for the listing.
-                // initializeOptions + scheduleOneTimeAnalysis is the
-                // pattern from RegressionTest — startAnalysis alone is a
-                // no-op on a freshly loaded program because nothing has
-                // "changed" since the loader put bytes down.
                 val mgr = AutoAnalysisManager.getAnalysisManager(program)
                 mgr.initializeOptions()
                 mgr.reAnalyzeAll(null)
@@ -80,11 +80,7 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                     Harvester(monitor, ctx.sink, ctx.resolver).passA(reader.records)
                 }
 
-                // Move previous run to `<outDir>.old` (overwriting any earlier .old)
-                // so a `diff -r outDir outDir.old` shows what this run changed. Need
-                // a clean outDir for the same reason as before — files we no longer
-                // attribute anything to would otherwise stick around from the old run.
-                val outDir = File("build/test-output/skeletons/${fixture.nameWithoutExtension}")
+                val outDir = File("build/test-output/$outDirName/${fixture.nameWithoutExtension}")
                 if (outDir.exists()) {
                     val oldDir = File("${outDir.path}.old")
                     oldDir.deleteRecursively()
@@ -92,14 +88,6 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                 }
                 outDir.mkdirs()
 
-                // Attribute each function to the source whose N_SLINE entries
-                // cover the most of its address range. This is the
-                // authoritative signal (gcc emits N_SOL("header") before
-                // template instantiations' N_FUN and resets it before CU
-                // functions), so std::pair::pair lands in stl_pair.h and
-                // CParser::ParseSymbol lands in parse.cpp. Functions with
-                // sizeBytes==0 or no covered N_SLINE drop out of every
-                // skeleton — they have no place to go.
                 val funcToSource = attributeFunctionsBySource(harvest)
                 val lineEntries = harvest.lineEntries
                 val typeResolver = ghistabs.harvest.TypeResolver(
@@ -116,19 +104,28 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                     .filter { it.isNotEmpty() }
                     .toSet()
 
-                var written = 0
-                for (source in sources) {
-                    val skeleton = renderSkeleton(source, harvest, lineEntries, program, funcToSource, headerHints)
-                    if (skeleton.isBlank()) continue
-                    // Keep the source's own extension — don't append `.cpp`
-                    // (so e.g. `assemble.cpp` stays `assemble.cpp`, not
-                    // `assemble.cpp.cpp`; and `tinyxml2.h` keeps its `.h`).
-                    val safeName = source.replace(Regex("[^A-Za-z0-9_.-]"), "_").trim('_')
-                    File(outDir, safeName).writeText(skeleton)
-                    written++
+                val decomp = if (decompile) {
+                    ghidra.app.decompiler.DecompInterface().also {
+                        it.openProgram(program)
+                    }
+                } else {
+                    null
                 }
-                println("SourceSkeleton[$binaryName]: ${sources.size} sources, $written skeletons → $outDir")
-                assumeTrue(written > 0, "no skeletons produced (no N_SOL/N_SLINE in this binary?)")
+                try {
+                    var written = 0
+                    for (source in sources) {
+                        val out =
+                            renderSkeleton(source, harvest, lineEntries, program, funcToSource, headerHints, decomp)
+                        if (out.isBlank()) continue
+                        val safeName = source.replace(Regex("[^A-Za-z0-9_.-]"), "_").trim('_')
+                        File(outDir, safeName).writeText(out)
+                        written++
+                    }
+                    println("Pipeline[$binaryName, $outDirName]: ${sources.size} sources, $written files → $outDir")
+                    assumeTrue(written > 0, "no output (no N_SOL/N_SLINE in this binary?)")
+                } finally {
+                    decomp?.dispose()
+                }
             }
     }
 
@@ -227,28 +224,15 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                 out[f] = f.cu.filename
                 continue
             }
-            // Trust SLINE attribution first: the source whose N_SLINE covers the
-            // earliest address in the function's range is where gcc says the body
-            // lives. Only fall back to the class-declaration source when SLINE
-            // names nothing (defaulted/implicit methods gcc materialises inside an
-            // unrelated template header, e.g. EquExpression's implicit copy ctor
-            // emitted inside std::pair<…, EquExpression>).
-            val lo = f.addr.address.offset
-            val hi = lo + f.sizeBytes
-            if (hi <= lo) continue
-            var bestSrc: String? = null
-            var bestAddr = Long.MAX_VALUE
-            for ((src, entries) in harvest.lineEntries) {
-                for (e in entries) {
-                    val a = e.addr.address.offset
-                    if (a in lo until hi && a < bestAddr) {
-                        bestAddr = a
-                        bestSrc = src
-                    }
-                }
-            }
-            if (bestSrc != null) {
-                out[f] = bestSrc
+            // Trust SLINE attribution: the source of the function's lowest-address N_SLINE
+            // is where gcc says the body lives. The function carries its own line entries
+            // (stab-stream membership), so no address-range scan is needed. Fall back to the
+            // class-declaration source only when the function has no line entries
+            // (defaulted/implicit methods gcc materialises inside an unrelated template
+            // header, e.g. EquExpression's implicit copy ctor emitted inside std::pair).
+            val prologue = f.lineEntries.minByOrNull { it.addr.address.offset }
+            if (prologue != null) {
+                out[f] = prologue.source
                 continue
             }
             outermostClassFrom(f.name)?.let { classSourceByName[it] }?.let { out[f] = it }
@@ -263,6 +247,7 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         program: Program,
         funcToSource: Map<OpenFunction, String>,
         headerHints: Map<String, String>,
+        decomp: ghidra.app.decompiler.DecompInterface? = null,
     ): String {
         // Resolve each ast's effective source via the hint: a multi-CU class with a
         // header majority among its member-function SLINEs lands at the header, not
@@ -276,36 +261,62 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         }
         if (rawFuncs.isEmpty() && lines.isEmpty() && !hasTypeDecls) return ""
 
-        data class FuncRange(val func: OpenFunction, val startLine: Int, val endLine: Int)
-
-        val rawRanges = rawFuncs.mapNotNull { f ->
-            val lo = f.addr.address.offset
-            val hi = lo + f.sizeBytes
-            // Prefer SLINE entries already attributed to `source`. When there are none
-            // and this isn't a gcc synthetic init wrapper (whose body genuinely lives
-            // at the static's decl line in some unrelated header, so any "line in CU"
-            // we'd compute is meaningless), fall back to any SLINE in the function's
-            // address range — that's the case for out-of-line copies of header-declared
-            // methods, whose SLINEs went to the .cpp where the body was instantiated.
-            val inside = lines.filter { it.addr.address.offset in lo until hi }
-                .ifEmpty {
-                    if (isSyntheticInit(f)) {
-                        emptyList()
-                    } else {
-                        lineEntries.values.asSequence().flatten()
-                            .filter { it.addr.address.offset in lo until hi }
-                            .toList()
-                    }
-                }
+        // Per-function source-line extent, before neighbor-clamping the opener. gcc emits
+        // a function's N_SLINEs out of line order relative to address, so neither the
+        // first nor the last by address bounds the body: under SjLj exception handling
+        // (functions with __Unwind_SjLj_Register) the lowest-address entry can land
+        // mid-body and the highest-address one is an unwind landing pad mapped back near
+        // the decl. Min/max source line over the same-source entries captures the real
+        // extent. `prologueLine` (lowest-address entry) is the safe fallback opener.
+        data class RawSpan(
+            val func: OpenFunction,
+            val prologueAddr: Long,
+            val prologueLine: Int,
+            val minLine: Int,
+            val end: Int,
+            val sameSource: Boolean,
+        )
+        val rawSpans = rawFuncs.mapNotNull { f ->
+            // Membership is structural: the function carries the N_SLINEs gcc emitted for
+            // it (including landing-pad lines Ghidra's CFG body omits). Prefer entries
+            // tagged with `source`; when there are none and this isn't a gcc synthetic init
+            // wrapper (whose body genuinely lives at the static's decl line in some
+            // unrelated header), fall back to all the function's entries — the case for
+            // out-of-line copies of header-declared methods, instantiated in this .cpp.
+            val sameSourceInside = f.lineEntries.filter { it.source == source }
+            val inside = sameSourceInside
+                .ifEmpty { if (isSyntheticInit(f)) emptyList() else f.lineEntries }
             if (inside.isEmpty()) return@mapNotNull null
-            // Anchor start/end on address-order, not line-number-order: the lowest-address
-            // N_SLINE is the prologue (function's actual source line); the highest-address
-            // N_SLINE is the epilogue. Picking min/max line number gets pulled around by
-            // inlined-template references.
             val sortedByAddr = inside.sortedBy { it.addr.address.offset }
-            val start = sortedByAddr.first().line
-            val end = sortedByAddr.last().line
-            FuncRange(f, start, end)
+            // Order functions by their entry point (N_FUN address). In practice this equals
+            // the lowest-address line entry; `prologueLine` is that entry's source line.
+            val prologueAddr = f.addr.address.offset
+            val prologueLine = sortedByAddr.first().line
+            // Same-source min/max approximate the body's source-line extent; in the
+            // cross-source fallback the entries can be inlined-template refs from a header,
+            // so keep address order there. NB the min can still be a stray: gcc sometimes
+            // files inlined-template code (e.g. set<string> _Rb_tree ops) under the
+            // current .cpp's instantiation line rather than the header, so a same-source
+            // min-line can point at an unrelated earlier function's line — the opener pull
+            // below clamps against that.
+            val hasSame = sameSourceInside.isNotEmpty()
+            val minLine = if (hasSame) sameSourceInside.minOf { it.line } else prologueLine
+            val end = if (hasSame) sameSourceInside.maxOf { it.line } else sortedByAddr.last().line
+            RawSpan(f, prologueAddr, prologueLine, minLine, end, hasSame)
+        }.sortedBy { it.prologueAddr }
+
+        // Pull each opener up to the function's lowest same-source line — but only while
+        // that stays clear of every earlier function. A min-line below an earlier
+        // function's end is gcc cross-attribution (e.g. EmitSymtab carries an inlined
+        // set<string> SLINE tagged at FindFunctionPointers' decl line 372); trusting it
+        // would drag the opener up into the prior function and clobber its body. In that
+        // case fall back to the address-anchored prologue line — identical to not pulling
+        // at all, so this can never introduce an overlap the prologue anchor didn't have.
+        var prevEnd = Int.MIN_VALUE
+        val rawRanges = rawSpans.map { s ->
+            val start = if (s.sameSource && s.minLine > prevEnd) s.minLine else s.prologueLine
+            prevEnd = maxOf(prevEnd, s.end)
+            FuncRange(s.func, start, s.end)
         }.sortedBy { it.startLine }
         // Drop ranges strictly contained inside another's range in this source — those
         // are method-declaration fragments in a header where another method's range
@@ -660,6 +671,8 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         }
         anomalies.forEach(::println)
 
+        if (decomp != null) applyDecompilation(buckets, ranges, closeLineByFunc, program, decomp)
+
         // Strict alignment: source line N → output line N. Multiple bucket items
         // share one output line, joined together.
         return buildString {
@@ -669,6 +682,102 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                 append('\n')
             }
         }
+    }
+
+    /**
+     * Override each function's span in [buckets] with its Ghidra decompilation.
+     * `// L N @ 0xADDR: <funcname>` SLINE comments inside the span are trivial
+     * (the decomp already shows what's there) and dropped; anything else inside
+     * the span — type decls, params/locals, stale-N_SOL'd entries that still had
+     * meaningful content — is harvested as "tail" and appended to the close-brace
+     * line. When the decomp is longer than the span allows, the overflow lines
+     * get joined with `;` onto the last line so nothing is lost. Stale-marked
+     * items inside the span are dropped (they pollute the output where the decomp
+     * has the truth); outside the span they're kept.
+     */
+    private fun applyDecompilation(
+        buckets: Array<MutableList<String>>,
+        ranges: List<FuncRange>,
+        closeLineByFunc: Map<OpenFunction, Int>,
+        program: Program,
+        decomp: ghidra.app.decompiler.DecompInterface,
+    ) {
+        // Strip stale-N_SOL markers that landed in *any* bucket where there's
+        // other content — in decompile mode the truth comes from the decomp,
+        // not the suspect-attributed declaration.
+        for (b in buckets) {
+            if (b.size > 1) b.removeAll { it.contains("stale N_SOL?") }
+        }
+        for (r in ranges) {
+            val closeLine = closeLineByFunc[r.func] ?: continue
+            if (closeLine <= r.startLine) continue
+            val span = r.startLine..closeLine
+            val ghFunc = program.functionManager.getFunctionAt(r.func.addr.address) ?: continue
+            val results = runCatching { decomp.decompileFunction(ghFunc, 30, TaskMonitor.DUMMY) }
+                .getOrNull() ?: continue
+            val cCode = results.decompiledFunction?.c ?: continue
+            val cLines = cleanDecompLines(cCode)
+            val trivialSline = Regex("""^\s*// L\s*\d+ @ 0x[0-9a-f]+(, 0x[0-9a-f]+)*:?\s*\S+\s*$""")
+            val paramOrLocal = Regex(""".*\((reg )?param\)|.*\((reg|stack) local\).*""")
+            val tail = mutableListOf<String>()
+            for (line in span) {
+                buckets[line].removeAll { item ->
+                    val isFuncDelim = item.contains("— opens ") ||
+                        item.contains("— closes ") ||
+                        item.contains("out-of-line inline decl")
+                    if (isFuncDelim) return@removeAll true
+                    if (trivialSline.matches(item)) return@removeAll true
+                    if (paramOrLocal.matches(item)) return@removeAll true
+                    tail += item
+                    true
+                }
+            }
+            val available = closeLine - r.startLine + 1
+            if (cLines.size <= available) {
+                cLines.forEachIndexed { i, l -> buckets[r.startLine + i] += l }
+            } else {
+                for (i in 0 until available - 1) buckets[r.startLine + i] += cLines[i]
+                val rest = cLines.subList(available - 1, cLines.size)
+                    .map { it.trim().trimEnd(';') }
+                    .filter { it.isNotEmpty() }
+                buckets[closeLine] += rest.joinToString("; ") + ";"
+            }
+            for (t in tail) buckets[closeLine] += t
+        }
+    }
+
+    private data class FuncRange(val func: OpenFunction, val startLine: Int, val endLine: Int)
+
+    /**
+     * Tidy Ghidra decomp output: drop leading `/* WARNING: ... */` and the
+     * `/* funcname(args) */` header comment, then fold the line that's just `{`
+     * onto the end of the preceding non-blank line so the signature reads as
+     * `sig() {` instead of being split across three lines.
+     */
+    private fun cleanDecompLines(cCode: String): List<String> {
+        val raw = cCode.trim('\n').split('\n').toMutableList()
+        // Strip leading header / warning comments + their trailing blank lines.
+        while (raw.isNotEmpty()) {
+            val l = raw.first().trimStart()
+            val drop = l.startsWith("/*") && l.trimEnd().endsWith("*/") || l.isEmpty()
+            if (!drop) break
+            raw.removeAt(0)
+        }
+        // Fold a lone `{` onto the previous non-blank line.
+        val out = mutableListOf<String>()
+        for (l in raw) {
+            if (l.trim() == "{" && out.isNotEmpty()) {
+                // Walk back past blanks.
+                var idx = out.size - 1
+                while (idx > 0 && out[idx].isBlank()) idx--
+                out[idx] = out[idx].trimEnd() + " {"
+                // Drop any trailing blank line we walked past so the brace sits flush.
+                while (out.size - 1 > idx) out.removeAt(out.size - 1)
+            } else {
+                out += l
+            }
+        }
+        return out
     }
 
     /**

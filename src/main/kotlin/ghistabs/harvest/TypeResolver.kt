@@ -130,7 +130,7 @@ class TypeResolver(
     val multiSourceHeaderHints: Map<String, String> by lazy {
         val h = harvest ?: return@lazy emptyMap()
         if (h.openFunctions.isEmpty() || h.lineEntries.isEmpty()) return@lazy emptyMap()
-        val funcsByMangled = h.openFunctions.filter { it.sizeBytes > 0 }.associateBy { it.name }
+        val funcsByMangled = h.openFunctions.filter { (it.sizeBytes ?: 0uL) > 0uL }.associateBy { it.name }
         // Skip lookups for sources that are the type's own definition CU: those win by
         // sheer body-size and would short-circuit the heuristic.
         val cuSourcesByName = typeAsts.values
@@ -149,7 +149,7 @@ class TypeResolver(
             for (m in methods) {
                 val func = funcsByMangled[m.mangled ?: continue] ?: continue
                 val lo = func.addr.address.offset
-                val hi = lo + func.sizeBytes
+                val hi = lo + (func.sizeBytes ?: 0uL).toLong()
                 for ((src, entries) in h.lineEntries) {
                     if (src in cuSources) continue
                     if (!src.hasHeaderExtension()) continue
