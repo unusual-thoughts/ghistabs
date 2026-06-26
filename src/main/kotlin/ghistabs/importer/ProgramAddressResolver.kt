@@ -1,10 +1,12 @@
 package ghistabs.importer
 
+import ghidra.app.util.opinion.ElfLoader
 import ghidra.program.model.address.Address
 import ghidra.program.model.address.AddressSpace
 import ghidra.program.model.address.GenericAddressSpace
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.SourceType
+import ghistabs.plus
 
 interface AddressResolver {
     fun buildAddress(offset: Long): Address
@@ -51,7 +53,15 @@ class ProgramAddressResolver(private val program: Program) : StabOnlyAddressReso
         return true
     }
 
-    override fun buildAddress(offset: Long): Address = program.addressFactory.defaultAddressSpace.getAddress(offset)
+    // Stab values are link-time vaddrs. Ghidra relocates a PIE/ET_DYN ELF to its load
+    // base (default 0x100000) without rewriting the stabs, so every address is off by
+    // (loadBase - originalBase). PE has no such property → null → no fixup. Mirrors
+    // Ghidra's own DWARF address fixup (DIEContainer.setProgramBaseAddressFixup).
+    private val baseFixup: Long =
+        ElfLoader.getElfOriginalImageBase(program)?.let { program.imageBase.offset - it } ?: 0L
+
+    override fun buildAddress(offset: Long): Address =
+        program.addressFactory.defaultAddressSpace.getAddress(offset) + baseFixup
 
     /**
      * Resolve [name]: stab map → symbol table → `_<name>` (MinGW/PE cdecl underscore prefix —
