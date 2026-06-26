@@ -47,7 +47,7 @@ class StringTypeProbeIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         val monitor = TaskMonitor.DUMMY
         val loadResults = ProgramLoader.builder()
             .source(fixture)
-            .compiler("mingw")
+            .compiler("gcc")
             .log(log)
             .monitor(monitor)
             .load()

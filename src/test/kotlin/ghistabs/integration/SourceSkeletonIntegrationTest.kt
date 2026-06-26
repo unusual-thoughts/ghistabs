@@ -64,7 +64,7 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         val monitor = TaskMonitor.DUMMY
         ProgramLoader.builder()
             .source(fixture)
-            .compiler(if (fixture.extension.lowercase() == "exe") "mingw" else null)
+            .compiler(if (fixture.extension.lowercase() == "exe") "gcc" else null)
             .log(log).monitor(monitor).load().use { loadResults ->
                 val program = loadResults.getPrimaryDomainObject(this)
                 val ctx = program.defaultContext()

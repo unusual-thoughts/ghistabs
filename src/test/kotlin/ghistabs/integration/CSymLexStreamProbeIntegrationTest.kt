@@ -32,7 +32,7 @@ class CSymLexStreamProbeIntegrationTest : AbstractGhidraHeadlessIntegrationTest(
         val log = MessageLog()
         val monitor = TaskMonitor.DUMMY
         val loadResults = ProgramLoader.builder()
-            .source(fixture).compiler("mingw").log(log).monitor(monitor).load()
+            .source(fixture).compiler("gcc").log(log).monitor(monitor).load()
         try {
             val program = loadResults.getPrimaryDomainObject(this)
             val mgr = AutoAnalysisManager.getAnalysisManager(program)
