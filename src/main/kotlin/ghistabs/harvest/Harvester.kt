@@ -52,12 +52,12 @@ class Harvester(
      */
     private fun finaliseGcc12FunctionSize() {
         val f = currentFunction ?: return
-        if (f.sizeBytes != 0L) return
+        if (f.sizeBytes != null) return
         val rbracs = f.scopeBrackets.filter { it.first == StabType.N_RBRAC }
         if (rbracs.isEmpty()) return
         val funcStart = f.addr.address.offset
         val maxRbrac = rbracs.maxOf { it.second }
-        f.sizeBytes = if (maxRbrac > funcStart) maxRbrac - funcStart else maxRbrac
+        f.sizeBytes = (if (maxRbrac > funcStart) maxRbrac - funcStart else maxRbrac).toULong()
     }
 
     // ONE shared registry across all per-CU IncludeContexts — same (filename, checksum)
@@ -168,13 +168,14 @@ class Harvester(
                         funcStart != null && rec.value < funcStart.offset -> funcStart.add(rec.value)
                         else -> resolver.buildAddress(rec.value)
                     }
-                    lineEntriesByFile.getOrPut(source) { mutableListOf() } +=
-                        LineEntry(rec.desc, SerializableAddress(abs))
+                    val entry = LineEntry(rec.desc, SerializableAddress(abs), source)
+                    lineEntriesByFile.getOrPut(source) { mutableListOf() } += entry
+                    currentFunction?.lineEntries?.add(entry)
                 }
 
                 StabType.N_FUN -> if (rec.name.isEmpty()) {
                     // End-of-function marker: rec.value = size relative to start.
-                    currentFunction?.let { it.sizeBytes = rec.value }
+                    currentFunction?.let { it.sizeBytes = rec.value.toULong() }
                     currentFunction = null
                 } else {
                     finaliseGcc12FunctionSize()

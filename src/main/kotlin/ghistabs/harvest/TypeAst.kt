@@ -82,12 +82,21 @@ data class OpenFunction(
     val locals: MutableList<SymbolRecord> = mutableListOf(),
     val params: MutableList<SymbolRecord> = mutableListOf(),
     val scopeBrackets: MutableList<Triple<StabType, Long, Int>> = mutableListOf(),
-    var sizeBytes: Long = 0L,
+    // N_SLINEs emitted between this function's N_FUN and the next, in stab-stream order.
+    // This is the authoritative membership: it includes exception-handler / landing-pad
+    // lines that gcc attributes to the function but Ghidra's CFG-based body omits (nothing
+    // flows to them), and it needs no address/size arithmetic — the entry point isn't even
+    // guaranteed to be the function's lowest address.
+    val lineEntries: MutableList<LineEntry> = mutableListOf(),
+    // null = size not derivable from stabs (no N_LBRAC/N_RBRAC scope, no end-marker N_FUN).
+    // Distinct from a genuine 0. Used by TypeResolver for header-hint address ranges.
+    var sizeBytes: ULong? = null,
 )
 
-/** N_SLINE record: line → text address. Stored in [Harvest.lineEntries] grouped by source. */
+/** N_SLINE record: line → text address, tagged with its active N_SOL source. Held both in
+ *  [Harvest.lineEntries] (grouped by source) and on the owning [OpenFunction.lineEntries]. */
 @Serializable
-data class LineEntry(val line: Int, val addr: SerializableAddress)
+data class LineEntry(val line: Int, val addr: SerializableAddress, val source: String)
 
 @Serializable(with = ToStringSerializer::class)
 data class GhidraKey(val category: CategoryPath, val name: String) {
