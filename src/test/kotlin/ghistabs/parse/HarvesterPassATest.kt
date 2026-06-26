@@ -163,7 +163,7 @@ class HarvesterPassATest {
         val xLocal = func.locals[0]
         assertEquals("x", xLocal.body.name, "Local variable name should be 'x'")
         assertEquals(4L, xLocal.rawValue, "Local stack offset should be 4")
-        assertEquals(100L, func.sizeBytes, "Function size should be 100")
+        assertEquals(100uL, func.sizeBytes, "Function size should be 100")
     }
 
     /**
