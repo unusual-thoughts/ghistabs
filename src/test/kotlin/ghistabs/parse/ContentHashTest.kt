@@ -119,7 +119,7 @@ class ContentHashTest {
     @Test
     fun perCuTemplateClonesHashIdentically() {
         val clone1Body = TypeDecl.Struct<GlobalTypeId>(
-            kind = AggrKind.STRUCT,
+            rawKind = AggrKind.STRUCT,
             sizeBytes = 8L,
             bases = emptyList(),
             fields = listOf(
@@ -146,7 +146,7 @@ class ContentHashTest {
     @Test
     fun structurallyDifferentStructsHashDifferently() {
         val s1 = TypeDecl.Struct<GlobalTypeId>(
-            kind = AggrKind.STRUCT,
+            rawKind = AggrKind.STRUCT,
             sizeBytes = 4L,
             bases = emptyList(),
             fields = listOf(
@@ -214,6 +214,7 @@ class ContentHashTest {
      * Cycle protection: a `Range.of` always points back at the Range
      * itself. `contentHash` must terminate.
      */
+
     /**
      * Regression: gcc emits `InlineDef(id=98, body=XRef(STRUCT, _IO_FILE))`
      * as a forward-reference alias for id 97, while id 98 holds the actual
@@ -233,7 +234,7 @@ class ContentHashTest {
         val intId = GlobalTypeId(cu, 2)
         val intAst = TypeAst(cu, intId, "int", TypeDecl.Range(intId, -2147483648L, 2147483647L))
         val ioFileBody = TypeDecl.Struct<GlobalTypeId>(
-            kind = AggrKind.STRUCT,
+            rawKind = AggrKind.STRUCT,
             sizeBytes = 216,
             bases = emptyList(),
             fields = listOf(FieldDecl("_flags", TypeDecl.Ref(intId), 0L, 32L, false)),
@@ -312,7 +313,7 @@ class ContentHashTest {
         val methodBindBId = GlobalTypeId(SourceFile.CUSource("assemble.cpp"), 228)
 
         fun makePairBody(param0: TypeDecl<GlobalTypeId>): TypeDecl.Struct<GlobalTypeId> = TypeDecl.Struct(
-            kind = AggrKind.STRUCT,
+            rawKind = AggrKind.STRUCT,
             sizeBytes = 8L,
             bases = emptyList(),
             fields = listOf(

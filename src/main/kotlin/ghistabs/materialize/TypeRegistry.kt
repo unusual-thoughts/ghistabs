@@ -59,6 +59,7 @@ class TypeRegistry(
                 is TypeDecl.Builtin, is TypeDecl.Range, is TypeDecl.Float, is TypeDecl.Complex,
                 is TypeDecl.XRef,
                 -> return
+
                 else -> {}
             }
             val reason = when {
@@ -386,15 +387,18 @@ class TypeRegistry(
 
     private fun makePlaceholder(ast: TypeAst, category: CategoryPath, reason: String = "fwd-decl"): DataType {
         val dt = when (ast.body) {
-            is TypeDecl.Struct if (ast.body.kind == AggrKind.UNION) -> UnionDataType(category, ast.ghidraName, dtm)
+            is TypeDecl.Struct if (ast.body.rawKind == AggrKind.UNION) -> UnionDataType(category, ast.ghidraName, dtm)
+
             is TypeDecl.Struct -> {
                 val sz = usefulStructSize(ast.body)
                 recordTruncation(ast, ast.body.sizeBytes.toInt(), sz)
                 StructureDataType(category, ast.ghidraName, sz, dtm)
             }
+
             // Enum placeholder MUST be EnumDataType — a Structure stub would leak via
             // replaceAtOffset's auto-register and collide with the real Enum at the same slot.
             is TypeDecl.Enum -> EnumDataType(category, ast.ghidraName, 4, dtm)
+
             else -> StructureDataType(category, ast.ghidraName, 0, dtm)
         }
         diagnostics.recordPlaceholder(ast.nameOrUnique, category.toString(), reason)
@@ -529,7 +533,7 @@ class TypeRegistry(
 
             is TypeDecl.Struct -> {
                 // Reuse the placeholder cast to the right type
-                val struct: Composite = if (body.kind == AggrKind.UNION) {
+                val struct: Composite = if (body.rawKind == AggrKind.UNION) {
                     placeholder as Union
                 } else {
                     placeholder as Structure
@@ -683,6 +687,7 @@ class TypeRegistry(
                     val stabBytes = (field.sizeBits / 8).toInt()
                     val len = when {
                         ft.length <= 0 -> stabBytes.takeIf { it > 0 } ?: 4
+
                         ft.isZeroLength && stabBytes > 0 -> {
                             // Don't log when ft is a pre-seeded placeholder materialiseAll
                             // will fill in-place — same DTM object, mutating widens it to
@@ -696,6 +701,7 @@ class TypeRegistry(
                             }
                             stabBytes
                         }
+
                         else -> ft.length
                     }
                     try {

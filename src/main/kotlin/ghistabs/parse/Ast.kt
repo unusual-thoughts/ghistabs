@@ -11,7 +11,29 @@ enum class Access { PRIVATE, PROTECTED, PUBLIC }
 
 enum class VirtKind { NORMAL, STATIC, VIRTUAL, PURE_VIRTUAL }
 
-enum class AggrKind { STRUCT, UNION, CLASS, ENUM }
+enum class AggrKind {
+    STRUCT,
+    UNION,
+    CLASS,
+    ENUM,
+    ;
+
+    /**
+     * Best-effort C++-style declaration from the stab function name.
+     * Ghidra's `DemangledFunction.signature` prepends Ghidra's guess at
+     * the calling convention (often the wrong `__rustcall` for Itanium
+     * `_ZN…` symbols because the unified demangler can't distinguish
+     * gcc-Itanium from legacy-Rust at the entry point). Strip any
+     * leading `__*call ` token and rebuild from the demangler's name +
+     * params instead.
+     */
+    fun cxxKeyword() = when (this) {
+        STRUCT -> "struct"
+        UNION -> "union"
+        CLASS -> "class"
+        ENUM -> "enum"
+    }
+}
 
 /** Type AST. Sealed; every grammar form has a constructor here. */
 @Serializable
@@ -53,14 +75,23 @@ sealed interface TypeDecl<out Id : IdInterface> {
 
     @Serializable
     data class Struct<Id : IdInterface>(
-        val kind: AggrKind,
+        val rawKind: AggrKind,
         val sizeBytes: Long,
         val bases: List<BaseDecl<Id>>,
         val fields: List<FieldDecl<Id>>,
         val methods: List<MethodDecl<Id>>,
         val hasVTablePointerMarker: Boolean,
         @Contextual val vtableTargetTypeId: Id?,
-    ) : TypeDecl<Id>
+    ) : TypeDecl<Id> {
+        // gcc 3.x stabs emit `s` for both `struct` and `class`; promote to "class" when
+        // any method or base carries non-public access, OR when there are any methods
+        // at all (plain C structs have none — the presence of methods means C++).
+        val kind
+            get() = when (rawKind) {
+                AggrKind.STRUCT if (methods.isNotEmpty() || bases.any { it.access != Access.PUBLIC }) -> AggrKind.CLASS
+                else -> rawKind
+            }
+    }
 
     @Serializable
     data class FunctionT<Id : IdInterface>(val ret: TypeDecl<Id>, val params: List<TypeDecl<Id>>) : TypeDecl<Id>
@@ -104,7 +135,7 @@ val TypeDecl<*>.isComplete
     }
 
 fun TypeDecl<*>.matchesXRefKind(xref: AggrKind) = when (this) {
-    is TypeDecl.Struct -> kind == xref
+    is TypeDecl.Struct -> rawKind == xref
     is TypeDecl.Enum -> xref == AggrKind.ENUM
     else -> false
 }
@@ -112,7 +143,10 @@ fun TypeDecl<*>.matchesXRefKind(xref: AggrKind) = when (this) {
 val TypeDecl<*>.sizeBytes
     get() = when (this) {
         is TypeDecl.Struct -> sizeBytes
-        is TypeDecl.Enum -> 4L // gcc default
+
+        is TypeDecl.Enum -> 4L
+
+        // gcc default
         else -> 0L
     }
 

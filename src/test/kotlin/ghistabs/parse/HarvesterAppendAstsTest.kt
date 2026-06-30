@@ -64,7 +64,7 @@ class HarvesterAppendAstsTest {
             body = TypeDecl.XRef(kind = AggrKind.STRUCT, tagName = "Foo"),
         )
         val concreteStruct = TypeDecl.Struct(
-            kind = AggrKind.STRUCT,
+            rawKind = AggrKind.STRUCT,
             sizeBytes = 16L,
             bases = emptyList(),
             fields = listOf(
@@ -132,7 +132,7 @@ class HarvesterAppendAstsTest {
 
         val globalId = GlobalTypeId(SourceFile.CUSource(cuName), 20)
         val body = TypeDecl.Struct(
-            kind = AggrKind.STRUCT,
+            rawKind = AggrKind.STRUCT,
             sizeBytes = 8L,
             bases = emptyList(),
             fields = emptyList(),
@@ -197,7 +197,7 @@ class HarvesterAppendAstsTest {
         val globalId = GlobalTypeId(SourceFile.CUSource(cuName), 30)
 
         val firstBody = TypeDecl.Struct(
-            kind = AggrKind.STRUCT,
+            rawKind = AggrKind.STRUCT,
             sizeBytes = 8L,
             bases = emptyList(),
             fields = listOf(
@@ -215,7 +215,7 @@ class HarvesterAppendAstsTest {
         )
 
         val secondBody = TypeDecl.Struct(
-            kind = AggrKind.STRUCT,
+            rawKind = AggrKind.STRUCT,
             sizeBytes = 16L,
             bases = emptyList(),
             fields = listOf(

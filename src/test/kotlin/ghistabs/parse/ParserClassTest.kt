@@ -16,7 +16,7 @@ class ParserClassTest {
             name = "Foo",
             id = LocalTypeId(0, 5),
             type = TypeDecl.Struct(
-                kind = AggrKind.STRUCT,
+                rawKind = AggrKind.STRUCT,
                 sizeBytes = 8,
                 bases = emptyList(),
                 fields = listOf(
@@ -44,7 +44,7 @@ class ParserClassTest {
             name = "Bar",
             id = LocalTypeId(0, 6),
             type = TypeDecl.Struct(
-                kind = AggrKind.STRUCT,
+                rawKind = AggrKind.STRUCT,
                 sizeBytes = 4,
                 bases =
                 listOf(
@@ -71,7 +71,7 @@ class ParserClassTest {
             name = "Baz",
             id = LocalTypeId(0, 7),
             type = TypeDecl.Struct(
-                kind = AggrKind.STRUCT,
+                rawKind = AggrKind.STRUCT,
                 sizeBytes = 8,
                 bases = emptyList(),
                 fields = emptyList(),
@@ -90,7 +90,7 @@ class ParserClassTest {
             name = "Qux",
             id = LocalTypeId(0, 9),
             type = TypeDecl.Struct(
-                kind = AggrKind.STRUCT,
+                rawKind = AggrKind.STRUCT,
                 sizeBytes = 4,
                 bases = emptyList(),
                 fields = emptyList(),
@@ -127,7 +127,7 @@ class ParserClassTest {
             name = "Qux",
             id = LocalTypeId(0, 9),
             type = TypeDecl.Struct(
-                kind = AggrKind.STRUCT,
+                rawKind = AggrKind.STRUCT,
                 sizeBytes = 4,
                 bases = emptyList(),
                 fields = emptyList(),
@@ -164,7 +164,7 @@ class ParserClassTest {
             name = "Quux",
             id = LocalTypeId(0, 11),
             type = TypeDecl.Struct(
-                kind = AggrKind.STRUCT,
+                rawKind = AggrKind.STRUCT,
                 sizeBytes = 4,
                 bases = emptyList(),
                 fields = listOf(
@@ -194,7 +194,7 @@ class ParserClassTest {
             name = "Base",
             id = LocalTypeId(0, 20),
             type = TypeDecl.Struct(
-                kind = AggrKind.STRUCT,
+                rawKind = AggrKind.STRUCT,
                 sizeBytes = 4,
                 bases = emptyList(),
                 fields = emptyList(),
@@ -238,7 +238,7 @@ class ParserClassTest {
             name = "Derived",
             id = LocalTypeId(0, 30),
             type = TypeDecl.Struct(
-                kind = AggrKind.STRUCT,
+                rawKind = AggrKind.STRUCT,
                 sizeBytes = 8,
                 bases = emptyList(),
                 fields = emptyList(),

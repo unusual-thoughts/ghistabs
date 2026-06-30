@@ -14,7 +14,7 @@ class PolymorphicBaseTest {
 
     private fun polyStruct(hasVtableMarker: Boolean = false, methods: List<MethodDecl<GlobalTypeId>> = emptyList()) =
         TypeDecl.Struct<GlobalTypeId>(
-            kind = AggrKind.CLASS,
+            rawKind = AggrKind.CLASS,
             sizeBytes = 8L,
             bases = emptyList(),
             fields = emptyList(),
@@ -45,7 +45,7 @@ class PolymorphicBaseTest {
     fun `polyBase - direct polymorphic base detected`() {
         val base = polyStruct(hasVtableMarker = true)
         val derived = TypeDecl.Struct<GlobalTypeId>(
-            kind = AggrKind.CLASS,
+            rawKind = AggrKind.CLASS,
             sizeBytes = 12L,
             bases = listOf(inlineBase(1, base)),
             fields = emptyList(),
@@ -60,7 +60,7 @@ class PolymorphicBaseTest {
     fun `nonPolyBase - no virtual methods or markers detected`() {
         val base = polyStruct(hasVtableMarker = false)
         val derived = TypeDecl.Struct<GlobalTypeId>(
-            kind = AggrKind.CLASS,
+            rawKind = AggrKind.CLASS,
             sizeBytes = 12L,
             bases = listOf(inlineBase(1, base)),
             fields = emptyList(),
@@ -75,7 +75,7 @@ class PolymorphicBaseTest {
     fun `transitive - polymorphism inherited through intermediate class`() {
         val base = polyStruct(hasVtableMarker = true)
         val middle = TypeDecl.Struct<GlobalTypeId>(
-            kind = AggrKind.CLASS,
+            rawKind = AggrKind.CLASS,
             sizeBytes = 12L,
             bases = listOf(inlineBase(1, base)),
             fields = emptyList(),
@@ -84,7 +84,7 @@ class PolymorphicBaseTest {
             vtableTargetTypeId = null,
         )
         val derived = TypeDecl.Struct<GlobalTypeId>(
-            kind = AggrKind.CLASS,
+            rawKind = AggrKind.CLASS,
             sizeBytes = 16L,
             bases = listOf(inlineBase(2, middle)),
             fields = emptyList(),
@@ -105,7 +105,7 @@ class PolymorphicBaseTest {
     fun `virtual method in base - detected as polymorphic`() {
         val base = polyStruct(methods = listOf(virtualMethod("foo")))
         val derived = TypeDecl.Struct<GlobalTypeId>(
-            kind = AggrKind.CLASS,
+            rawKind = AggrKind.CLASS,
             sizeBytes = 12L,
             bases = listOf(inlineBase(1, base)),
             fields = emptyList(),
@@ -123,7 +123,7 @@ class PolymorphicBaseTest {
         val baseAst = TypeAst(cu, baseId, "Base", base)
 
         val derived = TypeDecl.Struct<GlobalTypeId>(
-            kind = AggrKind.CLASS,
+            rawKind = AggrKind.CLASS,
             sizeBytes = 12L,
             bases = listOf(
                 BaseDecl(
