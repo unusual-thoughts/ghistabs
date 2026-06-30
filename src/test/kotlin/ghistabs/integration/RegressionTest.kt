@@ -982,7 +982,7 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
 
         val classStructs = harvest.typeAsts.values
             .mapNotNull { it.asStruct() }
-            .filter { (ast, body) -> body.kind == AggrKind.CLASS }
+            .filter { (ast, body) -> body.rawKind == AggrKind.CLASS }
             .toList()
 
         val emptyStructs = harvest.typeAsts.values
