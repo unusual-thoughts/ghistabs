@@ -454,13 +454,17 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             if (line !in 1..maxLine) return
             if (name == "this") return
             if (!seenDecls.add(DeclKey(line, name))) return
-            val init = initFromAddr?.let { initializerAt(program, it) }
-            val rendered = if (init != null) {
-                "${renderType(type, harvest)} $name = $init;"
-            } else {
-                "${renderType(type, harvest)} $name;"
+            val indent = indentFor(line)
+            val typeStr = renderType(type, harvest)
+            val tag = "${lineTag(line)} $suffix"
+            val parts = initFromAddr?.let { initializerAt(program, it) }
+            when {
+                parts == null -> buckets[line] += "$indent$typeStr $name;  $tag"
+                parts.size == 1 -> buckets[line] += "$indent$typeStr $name = ${parts[0]};  $tag"
+                // Multi-element array/struct initializer: spread one element per blank
+                // line below the decl, cramming overflow + close onto the last one.
+                else -> layoutBraceBlock(buckets, line, indent, "$typeStr $name = {  $tag", parts, "};", ",", ", ")
             }
-            buckets[line] += "${indentFor(line)}$rendered  ${lineTag(line)} $suffix"
         }
         // Render params/locals of every function pinned to this source. When the
         // declLine falls outside the host function's bracket, it's gcc's stale-N_SOL
@@ -969,18 +973,19 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     }
 
     /**
-     * Initializer string for a global/static at [addr] via Ghidra's data API. Primitives
-     * render their value (TRUE/FALSE, ints, strings); pointers dereference one level so
-     * a `char const *` pointing at a string shows the literal. Structs expand their
-     * components into a brace-list. Returns null when the value is uninformative
-     * (uninitialized `??`, empty struct, or zero-length).
+     * Initializer element(s) for a global/static at [addr] via Ghidra's data API. A
+     * scalar (TRUE/FALSE, int, or the string a pointer targets) comes back as a single
+     * element; an array or multi-field struct comes back as one repr per component,
+     * pointers dereferenced one level so a `char const *` shows the literal. Returns null
+     * when the value is uninformative (uninitialized `??`, empty struct, or zero-length).
+     * Callers render a single element inline (`= v;`) and spread a multi-element list.
      */
-    private fun initializerAt(program: Program, addr: Address): String? {
+    private fun initializerAt(program: Program, addr: Address): List<String>? {
         val cu = program.listing.getDataAt(addr) ?: return null
         val target = (cu.value as? Address)?.let { program.listing.getDataAt(it) }
         val pick = target ?: cu
         // byte/char arrays render as hex-list by default; recover the string literal
-        // by reading bytes directly.
+        // by reading bytes directly — a single element.
         if (pick.numComponents > 0 && pick.dataType is ghidra.program.model.data.Array) {
             val arr = pick.dataType as ghidra.program.model.data.Array
             if (arr.elementLength == 1) {
@@ -993,19 +998,12 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                         b in 0x20..0x7e
                     }
                 ) {
-                    return "\"${String(bytes, 0, end, Charsets.US_ASCII)}\""
+                    return listOf("\"${String(bytes, 0, end, Charsets.US_ASCII)}\"")
                 }
             }
         }
-        // Try Ghidra's own representation first — for typed strings it returns a
-        // string literal; for primitives the value; for many structs the field list.
-        val repr = runCatching { pick.defaultValueRepresentation }.getOrNull()
-        if (!repr.isNullOrEmpty() && repr != "??" && !repr.contains("Empty-Structure")) {
-            return repr
-        }
-        // Fallback for structs Ghidra rendered as `<Empty-Structure>` (no inline value
-        // for the whole record) — recurse into components, picking up pointer
-        // dereferences (RTTI structs whose interesting content is one pointer away).
+        // Array / multi-field struct → one repr per component, dereferencing pointer
+        // components one level (RTTI structs whose interesting content is one pointer away).
         if (pick.numComponents > 0) {
             val parts = (0 until pick.numComponents).mapNotNull { i ->
                 val c = pick.getComponent(i) ?: return@mapNotNull null
@@ -1014,7 +1012,12 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                     ?: runCatching { c.defaultValueRepresentation }.getOrNull()
                 v?.takeIf { it.isNotEmpty() && it != "??" && !it.contains("Empty-Structure") }
             }
-            if (parts.isNotEmpty()) return "{ ${parts.joinToString(", ")} }"
+            if (parts.isNotEmpty()) return parts
+        }
+        // Scalar — Ghidra's own representation (typed string, primitive value).
+        val repr = runCatching { pick.defaultValueRepresentation }.getOrNull()
+        if (!repr.isNullOrEmpty() && repr != "??" && !repr.contains("Empty-Structure")) {
+            return listOf(repr)
         }
         return null
     }
