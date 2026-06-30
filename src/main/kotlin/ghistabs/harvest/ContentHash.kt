@@ -62,11 +62,13 @@ fun TypeDecl<GlobalTypeId>.contentHash(
         indexType?.contentHash(oracle, cache, visited),
     )
 
-    is TypeDecl.Enum -> hashCode() // members: List<Pair<String, Long>> — no ids
+    is TypeDecl.Enum -> hashCode()
+
+    // members: List<Pair<String, Long>> — no ids
 
     is TypeDecl.Struct -> Objects.hash(
         "Struct",
-        kind,
+        rawKind,
         sizeBytes,
         bases.map { it.contentHash(oracle, cache, visited) },
         fields.map { it.contentHash(oracle, cache, visited) },

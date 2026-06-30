@@ -275,7 +275,7 @@ class ParserBugfixTest {
             type = TypeDecl.InlineDef(
                 id = LocalTypeId(0, 61),
                 body = TypeDecl.Struct(
-                    kind = AggrKind.STRUCT,
+                    rawKind = AggrKind.STRUCT,
                     sizeBytes = 8,
                     bases = emptyList(),
                     fields = listOf(
@@ -286,7 +286,7 @@ class ParserBugfixTest {
                                 body = TypeDecl.InlineDef(
                                     id = LocalTypeId(0, 63),
                                     body = TypeDecl.Struct(
-                                        kind = AggrKind.STRUCT,
+                                        rawKind = AggrKind.STRUCT,
                                         sizeBytes = 4,
                                         bases = emptyList(),
                                         fields = listOf(

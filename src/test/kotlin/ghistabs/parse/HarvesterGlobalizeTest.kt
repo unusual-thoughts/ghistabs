@@ -148,7 +148,7 @@ class HarvesterGlobalizeTest {
         val harvester = createTestHarvester(records = records)
 
         val input = TypeDecl.Struct(
-            kind = AggrKind.STRUCT,
+            rawKind = AggrKind.STRUCT,
             sizeBytes = 8L,
             bases = emptyList(),
             fields = listOf(
@@ -175,7 +175,7 @@ class HarvesterGlobalizeTest {
 
         val globalCuSource = SourceFile.CUSource(cuName)
         val expected = TypeDecl.Struct(
-            kind = AggrKind.STRUCT,
+            rawKind = AggrKind.STRUCT,
             sizeBytes = 8L,
             bases = emptyList(),
             fields = listOf(
@@ -228,7 +228,7 @@ class HarvesterGlobalizeTest {
         val input = TypeDecl.InlineDef(
             id = inlineDefId,
             body = TypeDecl.Struct(
-                kind = AggrKind.STRUCT,
+                rawKind = AggrKind.STRUCT,
                 sizeBytes = 4L,
                 bases = emptyList(),
                 fields = listOf(

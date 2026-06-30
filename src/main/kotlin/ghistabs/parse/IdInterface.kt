@@ -97,7 +97,7 @@ fun TypeDecl<LocalTypeId>.globalize(g: Globalizer): TypeDecl<GlobalTypeId> = whe
     )
 
     is TypeDecl.Struct -> TypeDecl.Struct(
-        kind,
+        rawKind,
         sizeBytes,
         bases.map { BaseDecl(it.type.globalize(g), it.isVirtual, it.access, it.offsetBits) },
         fields.map { FieldDecl(it.name, it.type.globalize(g), it.offsetBits, it.sizeBits, it.isStatic) },

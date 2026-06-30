@@ -85,7 +85,7 @@ class ClassBuilderTest {
         )
 
         val classStruct = TypeDecl.Struct<GlobalTypeId>(
-            kind = AggrKind.CLASS,
+            rawKind = AggrKind.CLASS,
             sizeBytes = 4,
             bases = emptyList(),
             fields = emptyList(),
