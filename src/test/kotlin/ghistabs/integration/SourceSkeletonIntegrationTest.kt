@@ -109,14 +109,19 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                     null
                 }
                 try {
-                    var written = 0
-                    for (source in sources) {
-                        val out =
-                            renderSkeleton(source, harvest, lineEntries, program, funcToSource, headerHints, decomp)
-                        if (out.isBlank()) continue
-                        val safeName = source.replace(Regex("[^A-Za-z0-9_.-]"), "_").trim('_')
-                        File(outDir, safeName).writeText(out)
-                        written++
+                    // Transaction: renderSkeleton defines terminated strings at undefined
+                    // pointer targets it meets while rendering constant values.
+                    val written = program.runTransaction("skeleton-render") {
+                        var w = 0
+                        for (source in sources) {
+                            val out =
+                                renderSkeleton(source, harvest, lineEntries, program, funcToSource, headerHints, decomp)
+                            if (out.isBlank()) continue
+                            val safeName = source.replace(Regex("[^A-Za-z0-9_.-]"), "_").trim('_')
+                            File(outDir, safeName).writeText(out)
+                            w++
+                        }
+                        w
                     }
                     println("Pipeline[$binaryName, $outDirName]: ${sources.size} sources, $written files → $outDir")
                     assumeTrue(written > 0, "no output (no N_SOL/N_SLINE in this binary?)")
@@ -973,6 +978,43 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     }
 
     /**
+     * Data a pointer targets, defining a terminated string at [addr] first when it holds
+     * an undefined printable run gcc never typed — array-of-`char const *` literals sit in
+     * .rodata undefined until something references them, so without this the elements
+     * render as raw bytes (`43h`) instead of `"…"`. Returns the existing defined data when
+     * present, the freshly-created string when the bytes look like one, else the undefined
+     * data as-is. Requires an open transaction (the render loop opens one).
+     */
+    private fun resolvePointee(program: Program, addr: Address): Data? {
+        program.listing.getDataAt(addr)?.takeIf { it.isDefined }?.let { return it }
+        if (looksLikeAsciiString(program, addr)) {
+            runCatching {
+                ghidra.program.model.data.DataUtilities.createData(
+                    program,
+                    addr,
+                    ghidra.program.model.data.TerminatedStringDataType.dataType,
+                    -1,
+                    ghidra.program.model.data.DataUtilities.ClearDataMode.CLEAR_ALL_UNDEFINED_CONFLICT_DATA,
+                )
+            }.getOrNull()?.let { return it }
+        }
+        return program.listing.getDataAt(addr)
+    }
+
+    /** True when [addr] starts a NUL-terminated run of printable ASCII (at least one char). */
+    private fun looksLikeAsciiString(program: Program, addr: Address, max: Int = 1024): Boolean {
+        var i = 0
+        while (i < max) {
+            val b = runCatching { program.memory.getByte(addr.add(i.toLong())) }.getOrNull()
+                ?.toInt()?.and(0xff) ?: return false
+            if (b == 0) return i > 0
+            if (b !in 0x20..0x7e) return false
+            i++
+        }
+        return false
+    }
+
+    /**
      * Initializer element(s) for a global/static at [addr] via Ghidra's data API. A
      * scalar (TRUE/FALSE, int, or the string a pointer targets) comes back as a single
      * element; an array or multi-field struct comes back as one repr per component,
@@ -982,7 +1024,7 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
      */
     private fun initializerAt(program: Program, addr: Address): List<String>? {
         val cu = program.listing.getDataAt(addr) ?: return null
-        val target = (cu.value as? Address)?.let { program.listing.getDataAt(it) }
+        val target = (cu.value as? Address)?.let { resolvePointee(program, it) }
         val pick = target ?: cu
         // byte/char arrays render as hex-list by default; recover the string literal
         // by reading bytes directly — a single element.
@@ -1007,7 +1049,7 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         if (pick.numComponents > 0) {
             val parts = (0 until pick.numComponents).mapNotNull { i ->
                 val c = pick.getComponent(i) ?: return@mapNotNull null
-                val v = (c.value as? Address)?.let { program.listing.getDataAt(it) }
+                val v = (c.value as? Address)?.let { resolvePointee(program, it) }
                     ?.runCatching { defaultValueRepresentation }?.getOrNull()
                     ?: runCatching { c.defaultValueRepresentation }.getOrNull()
                 v?.takeIf { it.isNotEmpty() && it != "??" && !it.contains("Empty-Structure") }
