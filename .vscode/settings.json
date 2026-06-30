@@ -308,5 +308,6 @@
       "/home/riton/.config/ghidra/ghidra_12.0.4_DEV/Extensions/ghidra-extension/lib/ghidra-extension.jar": "/home/riton/.config/ghidra/ghidra_12.0.4_DEV/Extensions/ghidra-extension/lib/ghidra-extension-src.zip"
     }
   },
-  "python.analysis.stubPath": "/opt/ghidra/docs/ghidra_stubs/typestubs"
+  "python.analysis.stubPath": "/opt/ghidra/docs/ghidra_stubs/typestubs",
+  "search.useIgnoreFiles": false
 }
