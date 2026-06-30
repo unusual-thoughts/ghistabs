@@ -1,5 +1,6 @@
 package ghistabs.integration
 
+import ghidra.app.decompiler.DecompInterface
 import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.app.util.importer.MessageLog
 import ghidra.app.util.importer.ProgramLoader
@@ -11,11 +12,7 @@ import ghidra.program.model.symbol.SourceType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.defaultContext
-import ghistabs.harvest.Harvest
-import ghistabs.harvest.Harvester
-import ghistabs.harvest.LineEntry
-import ghistabs.harvest.OpenFunction
-import ghistabs.harvest.TypeAst
+import ghistabs.harvest.*
 import ghistabs.materialize.BuiltinTable
 import ghistabs.parse.*
 import ghistabs.runTransaction
@@ -90,7 +87,7 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
 
                 val funcToSource = attributeFunctionsBySource(harvest)
                 val lineEntries = harvest.lineEntries
-                val typeResolver = ghistabs.harvest.TypeResolver(
+                val typeResolver = TypeResolver(
                     harvest.typeAsts,
                     harvest.rawCollisions,
                     harvest = harvest,
@@ -105,8 +102,8 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                     .toSet()
 
                 val decomp = if (decompile) {
-                    ghidra.app.decompiler.DecompInterface().also {
-                        it.openProgram(program)
+                    DecompInterface().apply {
+                        openProgram(program)
                     }
                 } else {
                     null
@@ -145,7 +142,7 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
      */
     private fun outermostClassFrom(mangled: String): String? {
         if (!mangled.startsWith("_ZN")) return null
-        var i = 3
+        val i = 3
         // First segment must be a length-prefixed name (digits).
         if (i >= mangled.length || !mangled[i].isDigit()) return null
         var j = i
@@ -247,7 +244,7 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         program: Program,
         funcToSource: Map<OpenFunction, String>,
         headerHints: Map<String, String>,
-        decomp: ghidra.app.decompiler.DecompInterface? = null,
+        decomp: DecompInterface? = null,
     ): String {
         // Resolve each ast's effective source via the hint: a multi-CU class with a
         // header majority among its member-function SLINEs lands at the header, not
@@ -276,6 +273,7 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             val end: Int,
             val sameSource: Boolean,
         )
+
         val rawSpans = rawFuncs.mapNotNull { f ->
             // Membership is structural: the function carries the N_SLINEs gcc emitted for
             // it (including landing-pad lines Ghidra's CFG body omits). Prefer entries
@@ -487,12 +485,14 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                 if (l.sourceFile != source) continue
                 when (val d = l.body) {
                     is SymbolDecl.RegLocal -> emitDecl(l.declLine, d.name, d.type, suffixFor(l.declLine, "(reg local)"))
+
                     is SymbolDecl.StackLocal -> emitDecl(
                         l.declLine,
                         d.name,
                         d.type,
                         suffixFor(l.declLine, "(stack local)"),
                     )
+
                     else -> {}
                 }
             }
@@ -553,8 +553,9 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             buckets[closeLine] += "}  /* $lineTag — closes ${demangledNameOf(f)} */"
         }
 
-        // Post-pass: Struct / Enum bodies. Expand into consecutive blank lines below the
-        // decl line when there's room; otherwise fall back to a one-line forward decl.
+        // Post-pass: Struct / Enum bodies. Spread members across the blank lines below the
+        // decl line, cramming overflow onto the last one ([layoutBraceBlock]); fall back to
+        // a one-line forward decl when the type is opaque.
         data class TypeBodyKey(val line: Int, val name: String)
 
         val seenTypeBodies = mutableSetOf<TypeBodyKey>()
@@ -569,8 +570,7 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
 
             val memberLines = when (body) {
                 is TypeDecl.Struct -> renderStructMembers(body, harvest, program)
-                is TypeDecl.Enum -> body.members.map { (mn, mv) -> "    $mn = $mv," }
-                else -> emptyList()
+                is TypeDecl.Enum -> body.members.map { (mn, mv) -> "$mn = $mv" }
             }
             val indent = indentFor(line)
             val openLine = when (body) {
@@ -582,45 +582,29 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                             "${it.access.name.lowercase()} ${renderType(it.type, harvest)}"
                         }
                     }
-                    "${aggKeyword(body)} $name$bases {"
+                    "${body.kind.cxxKeyword()} $name$bases {"
                 }
 
                 is TypeDecl.Enum -> "enum $name {"
-
-                else -> error("unreachable")
             }
             val sizeNote = when (body) {
                 is TypeDecl.Struct -> "/* ${body.sizeBytes} bytes */"
                 is TypeDecl.Enum -> "/* ${body.members.size} members */"
-                else -> ""
             }
-
-            // Count consecutive blank buckets below `line`. Need at least
-            // memberLines.size + 1 (for closing brace) to expand.
-            var available = 0
-            var probe = line + 1
-            while (probe <= maxLine && buckets[probe].isEmpty()) {
-                available++
-                probe++
+            // Enum members carry a trailing comma and are comma-separated when crammed;
+            // struct fields/methods are full statements that self-separate with a space.
+            val (itemSuffix, sep) = when (body) {
+                is TypeDecl.Struct -> "" to " "
+                is TypeDecl.Enum -> "," to ", "
             }
             val tag = if (line > activityExtent) "${lineTag(line)} stale N_SOL?" else lineTag(line)
-            if (memberLines.isNotEmpty() && available >= memberLines.size + 1) {
-                buckets[line] += "$indent$openLine  $tag"
-                for ((i, m) in memberLines.withIndex()) {
-                    buckets[line + 1 + i] += "$indent$m"
-                }
-                val closeIdx = line + 1 + memberLines.size
-                buckets[closeIdx] += "$indent}; $sizeNote".trimEnd()
-            } else if (memberLines.isNotEmpty()) {
-                // Not enough blank room for one-member-per-line — compact form on one line.
-                val compactMembers = memberLines.joinToString(" ") { it.trimStart() }
-                buckets[line] += "$indent$openLine $compactMembers }; $sizeNote  $tag"
+            if (memberLines.isNotEmpty()) {
+                layoutBraceBlock(buckets, line, indent, "$openLine  $tag", memberLines, "}; $sizeNote", itemSuffix, sep)
             } else {
                 // No members (opaque) — forward decl.
                 val keyword = when (body) {
-                    is TypeDecl.Struct -> aggKeyword(body)
+                    is TypeDecl.Struct -> body.kind.cxxKeyword()
                     is TypeDecl.Enum -> "enum"
-                    else -> "struct"
                 }
                 buckets[line] += "$indent$keyword $name; $sizeNote  $tag"
             }
@@ -700,7 +684,7 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         ranges: List<FuncRange>,
         closeLineByFunc: Map<OpenFunction, Int>,
         program: Program,
-        decomp: ghidra.app.decompiler.DecompInterface,
+        decomp: DecompInterface,
     ) {
         // Strip stale-N_SOL markers that landed in *any* bucket where there's
         // other content — in decompile mode the truth comes from the decomp,
@@ -759,7 +743,7 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         // Strip leading header / warning comments + their trailing blank lines.
         while (raw.isNotEmpty()) {
             val l = raw.first().trimStart()
-            val drop = l.startsWith("/*") && l.trimEnd().endsWith("*/") || l.isEmpty()
+            val drop = (l.startsWith("/*") && l.trimEnd().endsWith("*/")) || l.isEmpty()
             if (!drop) break
             raw.removeAt(0)
         }
@@ -806,37 +790,6 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
 
             else -> null
         }
-
-    /**
-     * Best-effort C++-style declaration from the stab function name.
-     * Ghidra's `DemangledFunction.signature` prepends Ghidra's guess at
-     * the calling convention (often the wrong `__rustcall` for Itanium
-     * `_ZN…` symbols because the unified demangler can't distinguish
-     * gcc-Itanium from legacy-Rust at the entry point). Strip any
-     * leading `__*call ` token and rebuild from the demangler's name +
-     * params instead.
-     */
-    private fun kindKeyword(k: AggrKind) = when (k) {
-        AggrKind.STRUCT -> "struct"
-        AggrKind.UNION -> "union"
-        AggrKind.CLASS -> "class"
-        AggrKind.ENUM -> "enum"
-    }
-
-    // gcc 3.x stabs emit `s` for both `struct` and `class`; promote to "class" when
-    // any method or base carries non-public access, OR when there are any methods
-    // at all (plain C structs have none — the presence of methods means C++).
-    private fun aggKeyword(s: TypeDecl.Struct<GlobalTypeId>): String {
-        if (s.kind == AggrKind.STRUCT &&
-            (
-                s.methods.isNotEmpty() ||
-                    s.bases.any { it.access != Access.PUBLIC }
-                )
-        ) {
-            return "class"
-        }
-        return kindKeyword(s.kind)
-    }
 
     /**
      * Best-effort C-style rendering of a [TypeDecl]. Primitives go
@@ -887,9 +840,9 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             is TypeDecl.WithSizeAttr,
             -> BuiltinTable.resolve(t)?.name ?: t::class.simpleName?.lowercase() ?: "?"
 
-            is TypeDecl.XRef -> "${kindKeyword(t.kind)} ${t.tagName}"
+            is TypeDecl.XRef -> "${t.kind.cxxKeyword()} ${t.tagName}"
 
-            is TypeDecl.Struct -> kindKeyword(t.kind)
+            is TypeDecl.Struct -> t.kind.cxxKeyword()
 
             is TypeDecl.Enum -> "enum"
 
@@ -940,7 +893,49 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         return runs.joinToString(", ") { (s, e) -> if (s == e) hex(s) else "${hex(s)}-${hex(e)}" }
     }
 
-    /** Render a Struct's body members for in-skeleton expansion: one C-style decl per line. */
+    /**
+     * Lay out a brace block — [open] (the `… {` line, already carrying its tag), the bare
+     * [items], and [close] (the `}…` line) — across the blank output buckets at and below
+     * [line]. Each item lands on its own blank line (4-space inner indent, [itemSuffix]
+     * appended) when the run below is long enough; when it isn't, the available lines are
+     * filled one item each and the remaining items + [close] are crammed (joined with
+     * [sep]) onto the last one; with no blank line below at all the whole block folds onto
+     * [line]. [indent] prefixes every line. `available` counts blank buckets from [line]
+     * inclusive, so [open] consumes one and `available - 1` remain below it.
+     */
+    private fun layoutBraceBlock(
+        buckets: Array<MutableList<String>>,
+        line: Int,
+        indent: String,
+        open: String,
+        items: List<String>,
+        close: String,
+        itemSuffix: String,
+        sep: String,
+    ) {
+        val available = buckets.drop(line).takeWhile { it.isEmpty() }.count()
+        fun item(i: Int) = "$indent    ${items[i]}$itemSuffix"
+        when {
+            available >= items.size + 2 -> {
+                buckets[line] += "$indent$open"
+                items.indices.forEach { buckets[line + 1 + it] += item(it) }
+                buckets[line + 1 + items.size] += "$indent$close"
+            }
+
+            available > 1 -> {
+                buckets[line] += "$indent$open"
+                val belowSlots = available - 1
+                val onePerLine = belowSlots - 1
+                for (i in 0 until onePerLine) buckets[line + 1 + i] += item(i)
+                val overflow = items.drop(onePerLine).joinToString(sep)
+                buckets[line + belowSlots] += "$indent    $overflow $close"
+            }
+
+            else -> buckets[line] += "$indent$open ${items.joinToString(sep)} $close"
+        }
+    }
+
+    /** Render a Struct's body members for in-skeleton expansion: one bare C-style decl per entry. */
     private fun renderStructMembers(
         body: TypeDecl.Struct<GlobalTypeId>,
         harvest: Harvest,
@@ -951,13 +946,13 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             .sortedBy { it.offsetBits }
             .map { f ->
                 val type = renderType(f.type, harvest)
-                "    $type ${f.name};  /* +${f.offsetBits / 8}B */"
+                "$type ${f.name};  /* +${f.offsetBits / 8}B */"
             }
         val funcByMangled = harvest.openFunctions.associateBy { it.name }
         val methodLines = body.methods.mapNotNull { m ->
             val mangled = m.mangled ?: return@mapNotNull null
             val func = funcByMangled[mangled] ?: return@mapNotNull null
-            "    ${ghidraSignatureFor(func, program)};"
+            "${ghidraSignatureFor(func, program)};"
         }
         return fieldLines + methodLines
     }
