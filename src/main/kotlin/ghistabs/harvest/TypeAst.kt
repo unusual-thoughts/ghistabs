@@ -2,8 +2,10 @@
 
 package ghistabs.harvest
 
+import ghidra.app.util.demangler.DemanglerUtil
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.CategoryPath
+import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.SymbolUtilities
 import ghistabs.parse.*
 import kotlinx.serialization.Serializable
@@ -91,7 +93,17 @@ data class OpenFunction(
     // null = size not derivable from stabs (no N_LBRAC/N_RBRAC scope, no end-marker N_FUN).
     // Distinct from a genuine 0. Used by TypeResolver for header-hint address ranges.
     var sizeBytes: ULong? = null,
-)
+) {
+    fun demangledName(program: Program? = null) =
+        runCatching { DemanglerUtil.demangle(program, decl.name, addr.address) }.getOrNull()
+            ?.firstNotNullOfOrNull { it.demangledName } ?: decl.name
+//        val mangled = decl.name
+//        val demangled = runCatching {
+//            @Suppress("DEPRECATION")
+//            DemanglerUtil.demangle(mangled)
+//        }.getOrNull() ?: return mangled
+//        return demangled.demangledName ?: demangled.name ?: mangled
+}
 
 /** N_SLINE record: line → text address, tagged with its active N_SOL source. Held both in
  *  [Harvest.lineEntries] (grouped by source) and on the owning [OpenFunction.lineEntries]. */
