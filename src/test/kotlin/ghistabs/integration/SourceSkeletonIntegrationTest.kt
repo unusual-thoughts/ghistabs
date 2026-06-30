@@ -978,90 +978,96 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     }
 
     /**
-     * Data a pointer targets, defining a terminated string at [addr] first when it holds
-     * an undefined printable run gcc never typed — array-of-`char const *` literals sit in
-     * .rodata undefined until something references them, so without this the elements
-     * render as raw bytes (`43h`) instead of `"…"`. Returns the existing defined data when
-     * present, the freshly-created string when the bytes look like one, else the undefined
-     * data as-is. Requires an open transaction (the render loop opens one).
+     * Data a pointer targets, defining a string at [addr] when its bytes are an ASCII run
+     * Ghidra's string detector recognises. Short names (< the 5-char auto-analysis floor)
+     * are left undefined, or worse mis-typed as a pointer — e.g. `"HID\0"` at 0x402cf4
+     * becomes an `addr` to the unmapped 0x00444948, so the element renders as raw bytes
+     * instead of `"HID"`. (Re)define such a run as a string, clearing whatever bogus data
+     * auto-analysis left. An already-defined string is kept as-is. Returns the resolved
+     * data, else the existing data. Requires an open transaction (the render loop opens one).
      */
     private fun resolvePointee(program: Program, addr: Address): Data? {
-        program.listing.getDataAt(addr)?.takeIf { it.isDefined }?.let { return it }
-        if (looksLikeAsciiString(program, addr)) {
+        val existing = program.listing.getDataAt(addr)
+        if (existing != null && existing.isDefined && existing.value is String) return existing
+        if (isAsciiStringAt(program, addr)) {
             runCatching {
                 ghidra.program.model.data.DataUtilities.createData(
                     program,
                     addr,
                     ghidra.program.model.data.TerminatedStringDataType.dataType,
-                    -1,
-                    ghidra.program.model.data.DataUtilities.ClearDataMode.CLEAR_ALL_UNDEFINED_CONFLICT_DATA,
+                    -1, // dynamic — Ghidra sizes the terminated string itself
+                    ghidra.program.model.data.DataUtilities.ClearDataMode.CLEAR_ALL_CONFLICT_DATA,
                 )
             }.getOrNull()?.let { return it }
         }
-        return program.listing.getDataAt(addr)
+        return existing
     }
 
-    /** True when [addr] starts a NUL-terminated run of printable ASCII (at least one char). */
-    private fun looksLikeAsciiString(program: Program, addr: Address, max: Int = 1024): Boolean {
-        var i = 0
-        while (i < max) {
-            val b = runCatching { program.memory.getByte(addr.add(i.toLong())) }.getOrNull()
-                ?.toInt()?.and(0xff) ?: return false
+    /**
+     * True when [addr] begins a NUL-terminated run of characters Ghidra's string charset
+     * ([AsciiCharSetRecognizer], the recogniser its StringSearcher wraps) accepts. A point
+     * query — we already hold the exact address, so there's nothing to search for.
+     */
+    private fun isAsciiStringAt(program: Program, addr: Address, max: Int = 4096): Boolean {
+        val charSet = ghidra.util.ascii.AsciiCharSetRecognizer()
+        val bytes = ByteArray(max)
+        val n = runCatching { program.memory.getBytes(addr, bytes) }.getOrNull() ?: return false
+        for (i in 0 until n) {
+            val b = bytes[i].toInt() and 0xff
             if (b == 0) return i > 0
-            if (b !in 0x20..0x7e) return false
-            i++
+            if (!charSet.contains(b)) return false
         }
         return false
     }
 
     /**
-     * Initializer element(s) for a global/static at [addr] via Ghidra's data API. A
-     * scalar (TRUE/FALSE, int, or the string a pointer targets) comes back as a single
-     * element; an array or multi-field struct comes back as one repr per component,
-     * pointers dereferenced one level so a `char const *` shows the literal. Returns null
-     * when the value is uninformative (uninitialized `??`, empty struct, or zero-length).
-     * Callers render a single element inline (`= v;`) and spread a multi-element list.
+     * Render a [Data] node to one inline representation, recursing through arrays and
+     * structs to any depth and chasing pointers at every leaf (defining a string at the
+     * target when [resolvePointee] detects one). String-like data (char arrays, string
+     * types) renders as its quoted literal rather than spreading per character; [depth]
+     * guards against pointer cycles.
+     */
+    private fun renderData(program: Program, data: Data, depth: Int = 0): String? {
+        fun repr() = runCatching { data.defaultValueRepresentation }.getOrNull()
+            ?.takeIf { it.isNotEmpty() && it != "??" && !it.contains("Empty-Structure") }
+        if (depth > 12) return repr()
+        // char array / string type — Ghidra renders the quoted literal directly.
+        if (data.value is String) return repr()
+        // pointer — chase the target, defining a string there if it's an undefined run.
+        (data.value as? Address)?.let { ptr ->
+            resolvePointee(program, ptr)?.takeIf { it.isDefined }?.let {
+                return renderData(program, it, depth + 1) ?: repr()
+            }
+            return repr()
+        }
+        // array / struct — recurse each component into a brace-list.
+        if (data.numComponents > 0) {
+            val parts = (0 until data.numComponents).mapNotNull { i ->
+                data.getComponent(i)?.let { renderData(program, it, depth + 1) }
+            }
+            if (parts.isNotEmpty()) return "{ ${parts.joinToString(", ")} }"
+        }
+        return repr()
+    }
+
+    /**
+     * Initializer element(s) for a global/static at [addr] via Ghidra's data API. A scalar
+     * or pointer comes back as a single element; an array or multi-field struct comes back
+     * as one (recursively rendered) element per component. Returns null when nothing
+     * informative is found. Callers render a single element inline (`= v;`) and spread a
+     * multi-element list.
      */
     private fun initializerAt(program: Program, addr: Address): List<String>? {
-        val cu = program.listing.getDataAt(addr) ?: return null
-        val target = (cu.value as? Address)?.let { resolvePointee(program, it) }
-        val pick = target ?: cu
-        // byte/char arrays render as hex-list by default; recover the string literal
-        // by reading bytes directly — a single element.
-        if (pick.numComponents > 0 && pick.dataType is ghidra.program.model.data.Array) {
-            val arr = pick.dataType as ghidra.program.model.data.Array
-            if (arr.elementLength == 1) {
-                val bytes = ByteArray(pick.length)
-                runCatching { program.memory.getBytes(pick.address, bytes) }.getOrNull()
-                    ?: return null
-                val end = bytes.indexOf(0).let { if (it == -1) bytes.size else it }
-                if ((0 until end).all {
-                        val b = bytes[it].toInt() and 0xff
-                        b in 0x20..0x7e
-                    }
-                ) {
-                    return listOf("\"${String(bytes, 0, end, Charsets.US_ASCII)}\"")
-                }
+        val data = program.listing.getDataAt(addr) ?: return null
+        // A real aggregate (struct / non-char array) spreads one element per component; a
+        // pointer, scalar, or string-like value is a single element.
+        if (data.value !is String && data.value !is Address && data.numComponents > 0) {
+            val parts = (0 until data.numComponents).mapNotNull { i ->
+                data.getComponent(i)?.let { renderData(program, it) }
             }
+            return parts.takeIf { it.isNotEmpty() }
         }
-        // Array / multi-field struct → one repr per component, dereferencing pointer
-        // components one level (RTTI structs whose interesting content is one pointer away).
-        if (pick.numComponents > 0) {
-            val parts = (0 until pick.numComponents).mapNotNull { i ->
-                val c = pick.getComponent(i) ?: return@mapNotNull null
-                val v = (c.value as? Address)?.let { resolvePointee(program, it) }
-                    ?.runCatching { defaultValueRepresentation }?.getOrNull()
-                    ?: runCatching { c.defaultValueRepresentation }.getOrNull()
-                v?.takeIf { it.isNotEmpty() && it != "??" && !it.contains("Empty-Structure") }
-            }
-            if (parts.isNotEmpty()) return parts
-        }
-        // Scalar — Ghidra's own representation (typed string, primitive value).
-        val repr = runCatching { pick.defaultValueRepresentation }.getOrNull()
-        if (!repr.isNullOrEmpty() && repr != "??" && !repr.contains("Empty-Structure")) {
-            return listOf(repr)
-        }
-        return null
+        return renderData(program, data)?.let { listOf(it) }
     }
 
     private fun demangledNameOf(f: OpenFunction): String {
