@@ -76,6 +76,16 @@ fun TypeDecl<GlobalTypeId>.render(harvest: Harvest, seen: Set<GlobalTypeId> = em
     is TypeDecl.InlineDef -> body.render(harvest, seen + id)
 }
 
+/** True if this resolves to a pointer, seeing through refs, cv-qualifiers and typedefs. */
+fun TypeDecl<GlobalTypeId>.isPointer(harvest: Harvest): Boolean = when (this) {
+    is TypeDecl.Pointer -> true
+    is TypeDecl.Const -> inner.isPointer(harvest)
+    is TypeDecl.Volatile -> inner.isPointer(harvest)
+    is TypeDecl.InlineDef -> body.isPointer(harvest)
+    is TypeDecl.Ref -> harvest.typeAsts[id]?.body?.isPointer(harvest) ?: false
+    else -> false
+}
+
 /** Render a Struct's body members for in-skeleton expansion: one bare C-style decl per entry. */
 fun TypeDecl.Struct<GlobalTypeId>.renderFull(harvest: Harvest, program: Program): List<String> {
     val fieldLines = fields

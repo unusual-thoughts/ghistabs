@@ -1,28 +1,29 @@
 package ghistabs.render
 
 // Pure text formatting: how skeleton output is spelled, with no Ghidra, no harvest
-// types, and no decisions. Callers decide what to emit and on which line; these turn
-// the pieces into the exact strings that appear. Isolated here so the output format
-// can change without touching render logic.
+// types, and no decisions. Every provenance comment restates the fragment's line — a
+// render-time decoration derived from position — so it's formatted here from the line
+// index, not baked into the fragment by the emit passes.
 
 // "L  17" — the source-line reference stamped on every tag.
 private fun lineRef(line: Int) = "L" + line.toString().padStart(4)
 
-// Trailing line-comment tag: "// L  17", optionally flagged stale.
-fun lineTag(line: Int, stale: Boolean = false) = "// ${lineRef(line)}" + if (stale) " stale N_SOL?" else ""
-
-// A param/local/global decl tag: "// L  17 (param)", stale marker after the role.
-fun declTag(line: Int, role: String, stale: Boolean) = "${lineTag(line)} $role" + if (stale) "; stale N_SOL?" else ""
-
-// An N_SLINE address annotation: "// L  17 @ 0x…-0x… : mnemonic".
-fun slineComment(line: Int, addrRuns: String, codeUnit: String) =
-    "${lineTag(line)} @ $addrRuns" + if (codeUnit.isEmpty()) "" else ": $codeUnit"
-
-// A function brace delimiter: "/* L  17 — opens Foo */" / "… — closes Foo" / "… — Foo".
-fun funcDelimComment(line: Int, note: String) = "/* ${lineRef(line)} — $note */"
-
-// A declaration the decompilation displaced off its line: "// stray: <text>".
-fun strayComment(text: String) = "// stray: $text"
+/**
+ * The trailing comment for a fragment carrying [note] at [line]. The shape is chosen by
+ * [kind]: an SLINE address annotation, a function brace delimiter, a displaced-decl
+ * stray, or (default) a declaration provenance tag whose [note] is the role — empty for
+ * a typedef/type-body, "(param)" etc for a decl — with the stale marker appended.
+ */
+fun commentFor(line: Int, kind: FragmentKind, note: String, stale: Boolean) = when (kind) {
+    FragmentKind.SLINE -> "// ${lineRef(line)} @ $note"
+    FragmentKind.FUNC_DELIM -> "/* ${lineRef(line)} — $note */"
+    FragmentKind.STRAY -> "// stray: $note"
+    else -> {
+        val role = if (note.isEmpty()) "" else " $note"
+        val staleMark = if (stale) "${if (note.isEmpty()) "" else ";"} stale N_SOL?" else ""
+        "// ${lineRef(line)}$role$staleMark"
+    }
+}
 
 /** Drop the decomp's leading header/warning comments and fold a lone `{` onto the signature. */
 fun cleanDecompLines(cCode: String): List<String> {

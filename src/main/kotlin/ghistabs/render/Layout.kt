@@ -2,10 +2,9 @@ package ghistabs.render
 
 // Pure layout model: Canvas ⊃ TargetLine ⊃ Fragment.
 
-// What a fragment represents, so downstream passes (decompilation overlay) can decide
-// its fate from the tag instead of re-parsing the rendered string. SUBSUMED_BY_DECOMP
-// covers everything the decomp already shows — brace delimiters, SLINE address
-// annotations, param/local decls — and is dropped inside a decompiled span.
+// What a fragment represents, so the decompilation overlay can decide its fate from the
+// tag and the render step can pick its comment shape. subsumedByDecomp covers everything
+// the decomp already shows — brace delimiters, SLINE annotations, param/local decls.
 enum class FragmentKind {
     SLINE,
     FUNC_DELIM,
@@ -14,28 +13,31 @@ enum class FragmentKind {
     TYPEDEF,
     TYPE_BODY,
     DECOMP,
+    STRAY,
     OTHER,
     ;
 
     val subsumedByDecomp get() = this == SLINE || this == FUNC_DELIM || this == DECL_LOCAL
 }
 
-// One piece of a line: source [code] and its provenance [comment] kept apart so
-// decompilation can drop the comment or replace the code without string-surgery.
-// [kind] and [misattributed] carry the meaning the emitter already knew, so no later
-// pass has to recover it from the text.
+// One piece of a line, fully semantic: [code] is the C text (null for a bare comment),
+// [note] the comment payload (a role, an address run, a delimiter phrase — null for a
+// pure-code line). The line number the tag restates is the fragment's grid position, so
+// the comment is derived at render time via [commentAt], not stored.
 data class Fragment(
-    val indent: String = "",
+    val indent: Int = 0,
     val code: String? = null,
-    val comment: String? = null,
+    val note: String? = null,
     val kind: FragmentKind = FragmentKind.OTHER,
-    val misattributed: Boolean = false,
-)
+    val stale: Boolean = false,
+) {
+    fun commentAt(line: Int) = note?.let { commentFor(line, kind, it, stale) }
+}
 
-// The fragments sharing one source line. Renders all code first, all comments last,
-// so a `//` never swallows a following fragment's code — the line stays valid C
-// however many fragments collide.
-class TargetLine {
+// The fragments sharing source [line]. Renders all code first, all comments last, so a
+// `//` never swallows a following fragment's code — the line stays valid C however many
+// fragments collide. Each fragment's tag is derived from [line], its grid position.
+class TargetLine(val line: Int) {
     val fragments = mutableListOf<Fragment>()
 
     fun isEmpty() = fragments.isEmpty()
@@ -44,23 +46,23 @@ class TargetLine {
         fragments += fragment
     }
 
-    override fun toString(): String {
+    fun render(): String {
         if (fragments.isEmpty()) return ""
         val code = fragments.mapNotNull { it.code }.joinToString("   ")
-        val comments = fragments.mapNotNull { it.comment }.joinToString(" ")
+        val comments = fragments.mapNotNull { it.commentAt(line) }.joinToString(" ")
         val body = when {
             code.isEmpty() -> comments
             comments.isEmpty() -> code
             else -> "$code  $comments"
         }
-        return fragments.first().indent + body
+        return " ".repeat(fragments.first().indent) + body
     }
 }
 
 // One [TargetLine] per 1-based source line (index 0 unused), so `canvas[n]` is where
 // source line n renders.
 class Canvas(val maxLine: Int) {
-    private val lines = List(maxLine + 1) { TargetLine() }
+    private val lines = List(maxLine + 1) { TargetLine(it) }
 
     operator fun get(line: Int) = lines[line]
 
@@ -69,52 +71,49 @@ class Canvas(val maxLine: Int) {
     private fun blankRunFrom(line: Int) = lines.drop(line).takeWhile { it.isEmpty() }.count()
 
     /**
-     * Spread a brace block into the blank lines at and below [line]: open line, one
-     * [item][items] per line, then [close]. A short run crams the leftover items +
-     * [close] onto the last line; no room folds the lot onto [line] with the tag in the
-     * comment field so no code is lost.
+     * Spread a brace block into the blank lines at and below [line]: [open] on [line], one
+     * [items] entry per line, then [close] — the item/close fragments inheriting [open]'s
+     * indent (+4), kind and staleness. A short run crams leftover items + [close] onto the
+     * last line; no room folds the lot onto [line] (tag kept on [open] so no code is lost).
+     * Items arrive already punctuated; cramming just space-joins them.
      */
-    fun layoutBraceBlock(
-        line: Int,
-        indent: String,
-        openCode: String,
-        openComment: String?,
-        items: List<String>,
-        close: String,
-        itemSuffix: String,
-        sep: String,
-        kind: FragmentKind = FragmentKind.OTHER,
-        misattributed: Boolean = false,
-    ) {
+    fun layoutBraceBlock(line: Int, open: Fragment, items: List<String>, close: String) {
         val available = blankRunFrom(line)
-        val inner = "$indent    "
-        fun frag(indent: String, code: String? = null, comment: String? = null) =
-            Fragment(indent, code, comment, kind, misattributed)
-        fun item(i: Int) = frag(inner, code = "${items[i]}$itemSuffix")
-        val open = frag(indent, openCode, openComment)
+        fun code(indent: Int, text: String) = Fragment(indent, text, kind = open.kind, stale = open.stale)
+        val inner = open.indent + 4
         when {
             available >= items.size + 2 -> {
                 this[line] += open
-                items.indices.forEach { this[line + 1 + it] += item(it) }
-                this[line + 1 + items.size] += frag(indent, code = close)
+                items.forEachIndexed { i, s -> this[line + 1 + i] += code(inner, s) }
+                this[line + 1 + items.size] += code(open.indent, close)
             }
 
             available > 1 -> {
                 this[line] += open
                 val belowSlots = available - 1
                 val onePerLine = belowSlots - 1
-                for (i in 0 until onePerLine) this[line + 1 + i] += item(i)
-                val overflow = items.drop(onePerLine).joinToString(sep)
-                this[line + belowSlots] += frag(inner, code = "$overflow $close")
+                for (i in 0 until onePerLine) this[line + 1 + i] += code(inner, items[i])
+                this[line + belowSlots] += code(inner, "${items.drop(onePerLine).joinToString(" ")} $close")
             }
 
-            else -> this[line] +=
-                frag(indent, code = "$openCode ${items.joinToString(sep)} $close", comment = openComment)
+            else -> this[line] += open.copy(code = "${open.code} ${items.joinToString(" ")} $close")
         }
     }
 
-    /** Strict alignment: source line n → output line n, blank where empty. */
-    override fun toString() = buildString {
-        for (line in 1..maxLine) append(this@Canvas[line]).append('\n')
+    // The last line worth rendering: trailing blank lines and lines carrying only
+    // misattributed (stale N_SOL) fragments are noise past the file's real content.
+    private fun lastMeaningfulLine() = (maxLine downTo 1).firstOrNull { line ->
+        lines[line].fragments.any { !it.stale }
+    } ?: 0
+
+    /**
+     * Strict alignment: source line n → output line n. [trim] cuts trailing blank and
+     * stale-only lines (decomp mode); skeleton mode keeps the full source-aligned height.
+     */
+    fun render(trim: Boolean) = buildString {
+        val last = if (trim) lastMeaningfulLine() else maxLine
+        for (line in 1..last) append(this@Canvas[line].render()).append('\n')
     }
+
+    override fun toString() = render(trim = false)
 }
