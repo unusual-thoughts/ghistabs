@@ -267,14 +267,20 @@ private class RenderContext(val renderer: Renderer, val source: String) {
      * dropped when the decomp already shows it ([FragmentKind.subsumedByDecomp]) or when
      * it's misattributed; every other stray (a type decl / global gcc mis-filed here) is
      * demoted to a `// stray:` comment on the close line — never code, so it can't force
-     * a cram. Decomp longer than the span crams its own overflow onto the last line.
+     * a cram. Decomp longer than the span crams its own overflow onto the last line. A
+     * single-line function (self-closing decl in the skeleton) has no close line of its
+     * own, so its whole body crams onto its one decl line.
      */
     private fun applyDecompilation(decomp: DecompInterface) {
         // Where a decl shares a line with real content, the misattributed one is noise.
         for (b in canvas.multiFragmentLines()) b.fragments.removeAll { it.stale }
         for (r in spans.ranges) {
-            val closeLine = spans.closeLine(r.func) ?: continue
-            if (closeLine <= r.startLine) continue
+            val closeLine = spans.closeLine(r.func) ?: r.startLine
+            if (closeLine < r.startLine) continue
+            // Aliased out-of-line copies (ctor C1/C2, dtor D0/D1/D2) all collapse onto one
+            // source line; decompiling each would stack duplicate bodies, so leave those as
+            // the skeleton's side-by-side decls and only body a single-line function alone.
+            if (closeLine == r.startLine && spans.ranges.count { it.startLine == r.startLine } > 1) continue
             val ghFunc = program.functionManager.getFunctionAt(r.func.addr.address) ?: continue
             val cCode = runCatching { decomp.decompileFunction(ghFunc, 30, TaskMonitor.DUMMY) }
                 .getOrNull()?.decompiledFunction?.c ?: continue
