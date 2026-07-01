@@ -47,13 +47,15 @@ register. Params go through `ParameterImpl` with `DYNAMIC_STORAGE_FORMAL_PARAMS`
 so Ghidra assigns their storage from the calling convention (stab offset ignored
 for params).
 
-**Suspected bug (verify):** the stack-local offset is passed through raw. gcc's
-`n_value` is frame-relative to the CFA/EBP; Ghidra's `LocalVariableImpl` stack
-offset uses a different origin (return-addr / saved-EBP baseline). If they differ
-by a constant (−8 on x86 cdecl), every stack local lands off its true slot, the
-decompiler can't match it, and `in_stack_*` persists. Check one function's stab
-`n_value` against Ghidra's actual frame slot and apply a CFA correction to
-`stackOffset` if needed.
+**FIXED.** The stack-local offset was passed through raw. gcc's `n_value` is
+frame-pointer-relative (saved FP=0, return addr=+ptr, first param=+2·ptr); Ghidra's
+`LocalVariableImpl` offset is relative to SP at entry (return addr=0), so they
+differ by one pointer (the saved-FP slot) — confirmed by NSA/ghidra#223, #5485 and
+by the PSYM values (`this:p=+8`, `argc:p=+8` → Ghidra +4). The bias is not a
+hardcoded constant: it's `VariableUtilities.getBaseStackParamOffset` (where the
+calling convention starts stack params — the same saved-FP slot), read once
+program-wide in `deriveStackFrameBias`. Result: appquery `local_` 1816→1562 as the
+decompiler now adopts our named locals.
 
 ## 4. `_ZTS*` typeinfo-name globals + function overlap (xdvimage.cpp L131–133)
 
