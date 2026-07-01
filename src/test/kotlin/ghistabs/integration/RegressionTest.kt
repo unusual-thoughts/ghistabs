@@ -990,7 +990,7 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
             .filter { (ast, body) -> body.fields.isEmpty() && body.methods.isEmpty() }
             .toList()
 
-        val resolver = ghistabs.harvest.TypeResolver(harvest.typeAsts)
+        val resolver = ghistabs.harvest.TypeResolver(harvest)
         val baseTypes =
             harvest.typeAsts.values.filter { it.id.source is SourceFile.CUSource && !it.body.isXRefTarget }.toList()
         val different = baseTypes

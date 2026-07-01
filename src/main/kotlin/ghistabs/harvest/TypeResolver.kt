@@ -12,12 +12,12 @@ import ghistabs.parse.*
  * and content-distinct collision filtering.
  */
 class TypeResolver(
-    val typeAsts: Map<GlobalTypeId, TypeAst>,
-    private val rawCollisions: Map<GlobalTypeId, Map<String, Set<TypeDecl<GlobalTypeId>>>> = emptyMap(),
+    val harvest: Harvest,
     private val sink: DiagnosticSink = DummySink,
     private val diagnostics: StabsDiagnostics = StabsDiagnostics(),
-    private val harvest: Harvest? = null,
 ) : TypeAstOracle {
+    val typeAsts get() = harvest.typeAsts
+
     /** All named aggregate / enum ASTs, indexed by raw stabs name. */
     private val astsByName: Map<String, List<TypeAst>> by lazy {
         typeAsts.values
@@ -112,11 +112,60 @@ class TypeResolver(
 
     /** Multi-body collisions after content-equivalence filtering — only genuinely divergent ones. */
     val divergentCollisions: Map<GlobalTypeId, Map<String, Set<TypeDecl<GlobalTypeId>>>> by lazy {
-        rawCollisions.filterValues { byName ->
+        harvest.rawCollisions.filterValues { byName ->
             byName.values.flatten().map { contentHash(it) }.toSet().size > 1
         }.mapValues { (_, byName) ->
             byName.mapValues { (_, types) ->
                 types.groupBy { contentHash(it) }.map { it.value.first() }.toSet()
+            }
+        }
+    }
+
+    // Index TypeAsts by simple name → BINCL-anchored source of the
+    // type's defining declaration. Prefer concrete Struct / Enum
+    // bodies over forward-decl `XRef`s and over Refs / aliases:
+    // gcc emits XRef stubs for class names mentioned via pointer
+    // /reference inside unrelated headers (e.g. `class
+    // CSymLexStream;` reachable from `<iostream>` via the include
+    // graph), and those XRef stubs share the class's simple name
+    // — picking one of them would route the class's methods to
+    // `<iostream>` instead of `lexstream.h`.
+    val classSourceByName by lazy {
+        mutableMapOf<String, String>().apply {
+            val bestRank = mutableMapOf<String, Int>()
+            for (ast in typeAsts.values) {
+                val n = ast.name ?: continue
+                val rank = when (ast.body) {
+                    is TypeDecl.Struct, is TypeDecl.Enum -> 2
+                    is TypeDecl.XRef -> 0
+                    else -> 1
+                }
+                if (rank > (bestRank[n] ?: -1)) {
+                    bestRank[n] = rank
+                    this[n] = ast.id.source.filename
+                }
+            }
+        }
+    }
+
+    val functionSource by lazy {
+        mutableMapOf<OpenFunction, String>().apply {
+            for (f in harvest.openFunctions) {
+                if (f.isSyntheticInit) {
+                    this[f] = f.cu.filename
+                    continue
+                }
+                // Trust SLINE attribution: the source of the function's lowest-address N_SLINE
+                // is where gcc says the body lives. The function carries its own line entries
+                // (stab-stream membership), so no address-range scan is needed. Fall back to the
+                // class-declaration source only when the function has no line entries
+                // (defaulted/implicit methods gcc materialises inside an unrelated template
+                // header, e.g. EquExpression's implicit copy ctor emitted inside std::pair).
+                f.lineEntries.minByOrNull { it.addr.address.offset }?.let { prologue ->
+                    this[f] = prologue.source
+                    continue
+                }
+                f.outermostClass()?.let { classSourceByName[it] }?.let { this[f] = it }
             }
         }
     }
@@ -233,6 +282,6 @@ class TypeResolver(
 
     companion object {
         /** Empty resolver — useful for tests that only need oracle defaults. */
-        val Empty = TypeResolver(emptyMap())
+        val Empty = TypeResolver(Harvest(emptyMap()))
     }
 }

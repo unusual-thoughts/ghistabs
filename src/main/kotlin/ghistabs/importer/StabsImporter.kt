@@ -47,11 +47,9 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
         // Resolver: by-name/by-base-tag indices, canonicalization, divergent-collision
         // filtering. Every cross-CU lookup downstream goes through this.
         val typeResolver = TypeResolver(
-            harvest.typeAsts,
-            harvest.rawCollisions,
+            harvest,
             ctx.sink,
             ctx.diagnostics,
-            harvest,
         )
         recordHarvestCounters(harvest, typeResolver, stabs)
 
@@ -369,7 +367,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
     private fun analyzeBssCoverage(harvest: Harvest) {
         val bssBlock = ctx.program.memory.getBlock(".bss") ?: return
 
-        val harvestedAddrs = harvest.allHarvestedSymbols.mapNotNull {
+        val harvestedAddrs = harvest.symbolsByCu.values.flatten().mapNotNull {
             val name = (it.body as? SymbolDecl.Global)?.name ?: return@mapNotNull null
             val addr = ctx.resolver.resolve(name)?.offset
             HarvestedAddr(name, addr)

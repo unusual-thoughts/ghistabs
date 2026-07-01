@@ -21,7 +21,6 @@ data class Harvest(
     /** N_SLINE entries grouped by N_SOL-effective source filename; sorted by line on insertion. */
     val lineEntries: Map<String, List<LineEntry>> = mapOf(),
 ) {
-    val allHarvestedSymbols by lazy { symbolsByCu.values.flatten() }
 
     fun getType(id: GlobalTypeId) = typeAsts[id]
 }

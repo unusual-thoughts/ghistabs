@@ -26,60 +26,62 @@ import java.io.File
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class DegradationDumpIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     @ParameterizedTest
-    @ValueSource(strings = ["xapasmcsr.exe", "xmltest", "appquery.exe", "box2d", "box2d_tests"])
+    @ValueSource(
+        strings = [
+            "xapasmcsr.exe", "xmltest", "appquery.exe", "box2d", "box2d_tests", "unpackfile.exe", "packfile.exe",
+        ],
+    )
     fun dumpDegradations(binaryName: String) {
         val fixture = File("src/test/resources/binaries/$binaryName")
         assumeTrue(fixture.exists(), "fixture absent")
 
         val log = MessageLog()
         val monitor = TaskMonitor.DUMMY
-        val loadResults = ProgramLoader.builder()
+        ProgramLoader.builder()
             .source(fixture)
             .compiler(if (fixture.extension.lowercase() == "exe") "gcc" else null)
             .log(log)
             .monitor(monitor)
             .load()
-        try {
-            val program = loadResults.getPrimaryDomainObject(this)
-            val ctx = ImportContext(
-                program,
-                monitor,
-                StabsOptions(logDegradations = true),
-                CapturingSink(),
-                StabsDiagnostics(),
-            )
-            program.runTransaction("stabs-degradation-dump") {
-                StabsAnalyzer().run(ctx)
-            }
-
-            val events = ctx.diagnostics.snapshotDegradations()
-            val byCategory = events.groupBy { it.category }
-                .toList()
-                .sortedByDescending { it.second.size }
-
-            val out = File("build/test-output/degradations/${fixture.nameWithoutExtension}.txt")
-            out.parentFile.mkdirs()
-            out.bufferedWriter().use { w ->
-                w.write("fixture: $binaryName\n")
-                w.write("total degradations: ${events.size}\n\n")
-                w.write("counts by category:\n")
-                for ((cat, list) in byCategory) w.write("  $cat = ${list.size}\n")
-                w.write("\n")
-                for ((cat, list) in byCategory) {
-                    w.write("=== $cat (${list.size}) ===\n")
-                    for (e in list) {
-                        val detail = e.detail?.let { " :: $it" } ?: ""
-                        w.write("  ${e.context}$detail\n")
-                    }
-                    w.write("\n")
+            .use { loadResults ->
+                val program = loadResults.getPrimaryDomainObject(this)
+                val ctx = ImportContext(
+                    program,
+                    monitor,
+                    StabsOptions(logDegradations = true),
+                    CapturingSink(),
+                    StabsDiagnostics(),
+                )
+                program.runTransaction("stabs-degradation-dump") {
+                    StabsAnalyzer().run(ctx)
                 }
-            }
-            println("[$binaryName] wrote ${events.size} events to ${out.absolutePath}")
-            for ((cat, list) in byCategory) println("  $cat = ${list.size}")
 
-            program.release(this)
-        } finally {
-            loadResults.close()
-        }
+                val events = ctx.diagnostics.snapshotDegradations()
+                val byCategory = events.groupBy { it.category }
+                    .toList()
+                    .sortedByDescending { it.second.size }
+
+                val out = File("build/test-output/degradations/${fixture.nameWithoutExtension}.txt")
+                out.parentFile.mkdirs()
+                out.bufferedWriter().use { w ->
+                    w.write("fixture: $binaryName\n")
+                    w.write("total degradations: ${events.size}\n\n")
+                    w.write("counts by category:\n")
+                    for ((cat, list) in byCategory) w.write("  $cat = ${list.size}\n")
+                    w.write("\n")
+                    for ((cat, list) in byCategory) {
+                        w.write("=== $cat (${list.size}) ===\n")
+                        for (e in list) {
+                            val detail = e.detail?.let { " :: $it" } ?: ""
+                            w.write("  ${e.context}$detail\n")
+                        }
+                        w.write("\n")
+                    }
+                }
+                println("[$binaryName] wrote ${events.size} events to ${out.absolutePath}")
+                for ((cat, list) in byCategory) println("  $cat = ${list.size}")
+
+                program.release(this)
+            }
     }
 }
