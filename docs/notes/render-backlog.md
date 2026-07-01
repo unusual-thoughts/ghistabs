@@ -26,6 +26,24 @@ onto one line (or the signature line), so real statements line up with their
 N_SLINE source lines. Ties into better token-driven line flow generally
 (`cleanDecompLines` currently works on raw text).
 
+Interim: the harness sets `DecompileOptions.setMaxWidth(10_000)` so the
+decompiler doesn't wrap long template-typed declarations into orphan
+continuation lines (a bare `;`). This whole area — width, leading-decl folding,
+line flow — is superseded once rendering works from clang tokens instead of the
+flat C text.
+
+## 5. Sweep findings (appquery)
+
+- **Fixed:** single-line function delimiter tags showed the raw mangled name
+  (`/* L 15 — _ZN5ImageC1Ev */`) while multi-line closes used the demangled name;
+  `emitFunctionBraces` now uses `demangledName` for both.
+- **Fixed:** orphan `;` from decompiler line-wrapping (see interim note in #2).
+- **Not our bug:** `DAT_*`/`PTR_*` in decomp bodies are Ghidra's names for data it
+  didn't tie to a symbol (vtable pointers, literals); `<true,0>`/`<false,0>` are
+  valid non-type template args (`__default_alloc_template<true,0>`), not garbage.
+- **Open:** a few `stale N_SOL` diagnostic comments remain in decomp output
+  (`stl_vector.h`, `main.cpp`); harmless but could be trimmed in decomp mode.
+
 ## 3. Map stab frame offsets onto Ghidra's `in_stack_*` decomp vars
 
 Investigated: our line placement is **correct**. In a gcc N_LSYM/N_PSYM stab the
