@@ -93,7 +93,7 @@ class HarvesterPassATest {
 
         val harvest = harvester.passA(records)
 
-        val harvestedSymbols = harvest.allHarvestedSymbols
+        val harvestedSymbols = harvest.symbolsByCu.values.flatten()
         assertEquals(1, harvestedSymbols.size, "One global symbol should be harvested")
         val gsymRecord = harvestedSymbols[0]
         assertEquals("g", gsymRecord.body.name, "Symbol name should be 'g'")
@@ -210,7 +210,7 @@ class HarvesterPassATest {
         val typeAst = harvest.typeAsts.values.first()
         assertEquals("MyStruct", typeAst.nameOrUnique, "Tagged type name should be 'MyStruct'")
         // Tagged types should NOT be in symbolsByCu
-        assertEquals(0, harvest.allHarvestedSymbols.size, "Tagged type should NOT be in harvested symbols")
+        assertEquals(0, harvest.symbolsByCu.values.flatten().size, "Tagged type should NOT be in harvested symbols")
     }
 
     /**

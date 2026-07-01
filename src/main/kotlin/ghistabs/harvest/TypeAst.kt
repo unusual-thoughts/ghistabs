@@ -97,12 +97,56 @@ data class OpenFunction(
     fun demangledName(program: Program? = null) =
         runCatching { DemanglerUtil.demangle(program, decl.name, addr.address) }.getOrNull()
             ?.firstNotNullOfOrNull { it.demangledName } ?: decl.name
-//        val mangled = decl.name
-//        val demangled = runCatching {
-//            @Suppress("DEPRECATION")
-//            DemanglerUtil.demangle(mangled)
-//        }.getOrNull() ?: return mangled
-//        return demangled.demangledName ?: demangled.name ?: mangled
+
+    /**
+     * Function signature via Ghidra's API at the function's entry address — Ghidra has
+     * already resolved calling convention, parameter names and types from analysis +
+     * imported stabs types, so the rendered signature reflects what the binary actually
+     * does (not the demangler's textual guess).
+     */
+    fun signature(program: Program) =
+        program.functionManager.getFunctionAt(addr.address)?.signature?.prototypeString ?: name
+
+    /**
+     * Pull the outermost class / namespace name out of an Itanium-ABI
+     * mangled symbol — e.g. `_ZN13EquExpressionC1ERKS_` → `EquExpression`,
+     * `_ZN7CParser11ParseSymbolEv` → `CParser`. Used to look up the
+     * class's `declSourceFile` and pin the function there when N_SLINE
+     * would otherwise drag a defaulted/implicit method into whichever
+     * header materialised it (e.g. gcc's implicit `EquExpression` copy
+     * ctor materialised inside `std::pair<…, EquExpression>` lands at
+     * `stl_pair.h:84`; the class itself lives elsewhere).
+     *
+     * Returns null for non-nested-name mangles (`_Z…` without `N`) and
+     * for symbols whose first segment is a substitution-prefix like
+     * `St` (std) — we WANT those to keep their N_SLINE attribution.
+     */
+    fun outermostClass(): String? {
+        if (!name.startsWith("_ZN")) return null
+        val i = 3
+        // First segment must be a length-prefixed name (digits).
+        if (i >= name.length || !name[i].isDigit()) return null
+        var j = i
+        while (j < name.length && name[j].isDigit()) j++
+        val len = name.substring(i, j).toIntOrNull() ?: return null
+        if (j + len > name.length) return null
+        return name.substring(j, j + len)
+    }
+
+    /**
+     * gcc emits file-scope synthetic init/destruct wrappers
+     * (`_GLOBAL__I_<sym>`, `_GLOBAL__D_<sym>`,
+     * `__static_initialization_and_destruction_0`) at the CU's
+     * end-of-file but under whatever N_SOL was last active — typically
+     * the last `#include`d header. They belong to the CU that owns the
+     * static they initialize, not to that header.
+     */
+    val isSyntheticInit
+        get() = name.startsWith("_GLOBAL__I_") ||
+            name.startsWith("_GLOBAL__D_") ||
+            name.startsWith("_GLOBAL__N_") ||
+            name.startsWith("_Z41__static_initialization_and_destruction_0") ||
+            name == "__static_initialization_and_destruction_0"
 }
 
 /** N_SLINE record: line → text address, tagged with its active N_SOL source. Held both in
