@@ -2,14 +2,35 @@ package ghistabs.render
 
 // Pure layout model: Canvas ⊃ TargetLine ⊃ Fragment.
 
+// What a fragment represents, so downstream passes (decompilation overlay) can decide
+// its fate from the tag instead of re-parsing the rendered string. SUBSUMED_BY_DECOMP
+// covers everything the decomp already shows — brace delimiters, SLINE address
+// annotations, param/local decls — and is dropped inside a decompiled span.
+enum class FragmentKind {
+    SLINE,
+    FUNC_DELIM,
+    DECL_LOCAL,
+    DECL_GLOBAL,
+    TYPEDEF,
+    TYPE_BODY,
+    DECOMP,
+    OTHER,
+    ;
+
+    val subsumedByDecomp get() = this == SLINE || this == FUNC_DELIM || this == DECL_LOCAL
+}
+
 // One piece of a line: source [code] and its provenance [comment] kept apart so
 // decompilation can drop the comment or replace the code without string-surgery.
-// Comment-only = a bare SLINE annotation; code-only = e.g. a decomp line.
-data class Fragment(val indent: String = "", val code: String? = null, val comment: String? = null) {
-    val isSlineAnnotation get() = code == null && comment != null
-    val isFuncDelim get() = comment?.let { "— opens " in it || "— closes " in it || "out-of-line inline decl" in it } ==
-        true
-}
+// [kind] and [misattributed] carry the meaning the emitter already knew, so no later
+// pass has to recover it from the text.
+data class Fragment(
+    val indent: String = "",
+    val code: String? = null,
+    val comment: String? = null,
+    val kind: FragmentKind = FragmentKind.OTHER,
+    val misattributed: Boolean = false,
+)
 
 // The fragments sharing one source line. Renders all code first, all comments last,
 // so a `//` never swallows a following fragment's code — the line stays valid C
@@ -62,16 +83,20 @@ class Canvas(val maxLine: Int) {
         close: String,
         itemSuffix: String,
         sep: String,
+        kind: FragmentKind = FragmentKind.OTHER,
+        misattributed: Boolean = false,
     ) {
         val available = blankRunFrom(line)
         val inner = "$indent    "
-        fun item(i: Int) = Fragment(inner, code = "${items[i]}$itemSuffix")
-        val open = Fragment(indent, openCode, openComment)
+        fun frag(indent: String, code: String? = null, comment: String? = null) =
+            Fragment(indent, code, comment, kind, misattributed)
+        fun item(i: Int) = frag(inner, code = "${items[i]}$itemSuffix")
+        val open = frag(indent, openCode, openComment)
         when {
             available >= items.size + 2 -> {
                 this[line] += open
                 items.indices.forEach { this[line + 1 + it] += item(it) }
-                this[line + 1 + items.size] += Fragment(indent, code = close)
+                this[line + 1 + items.size] += frag(indent, code = close)
             }
 
             available > 1 -> {
@@ -80,11 +105,11 @@ class Canvas(val maxLine: Int) {
                 val onePerLine = belowSlots - 1
                 for (i in 0 until onePerLine) this[line + 1 + i] += item(i)
                 val overflow = items.drop(onePerLine).joinToString(sep)
-                this[line + belowSlots] += Fragment(inner, code = "$overflow $close")
+                this[line + belowSlots] += frag(inner, code = "$overflow $close")
             }
 
             else -> this[line] +=
-                Fragment(indent, code = "$openCode ${items.joinToString(sep)} $close", comment = openComment)
+                frag(indent, code = "$openCode ${items.joinToString(sep)} $close", comment = openComment)
         }
     }
 
