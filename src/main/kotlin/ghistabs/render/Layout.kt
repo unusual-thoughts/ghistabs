@@ -42,6 +42,10 @@ class TargetLine(val line: Int) {
 
     fun isEmpty() = fragments.isEmpty()
 
+    // Free for a brace block to expand into: empty, or holding only misattributed (stale
+    // N_SOL) fragments, which legitimate content may evict rather than fold around.
+    fun isExpandable() = fragments.all { it.stale }
+
     operator fun plusAssign(fragment: Fragment) {
         fragments += fragment
     }
@@ -68,35 +72,40 @@ class Canvas(val maxLine: Int) {
 
     fun multiFragmentLines() = lines.filter { it.fragments.size > 1 }
 
-    private fun blankRunFrom(line: Int) = lines.drop(line).takeWhile { it.isEmpty() }.count()
+    private fun blankRunFrom(line: Int) = lines.drop(line).takeWhile { it.isExpandable() }.count()
 
     /**
-     * Spread a brace block into the blank lines at and below [line]: [open] on [line], one
+     * Spread a brace block into the expandable lines at and below [line]: [open] on [line], one
      * [items] entry per line, then [close] — the item/close fragments inheriting [open]'s
      * indent (+4), kind and staleness. A short run crams leftover items + [close] onto the
      * last line; no room folds the lot onto [line] (tag kept on [open] so no code is lost).
-     * Items arrive already punctuated; cramming just space-joins them.
+     * Items arrive already punctuated; cramming just space-joins them. Writing a line evicts
+     * any misattributed (stale) fragment so a lone stale decl can't force the fold.
      */
     fun layoutBraceBlock(line: Int, open: Fragment, items: List<String>, close: String) {
         val available = blankRunFrom(line)
         fun code(indent: Int, text: String) = Fragment(indent, text, kind = open.kind, stale = open.stale)
+        fun place(target: Int, fragment: Fragment) {
+            this[target].fragments.removeAll { it.stale }
+            this[target] += fragment
+        }
         val inner = open.indent + 4
         when {
             available >= items.size + 2 -> {
-                this[line] += open
-                items.forEachIndexed { i, s -> this[line + 1 + i] += code(inner, s) }
-                this[line + 1 + items.size] += code(open.indent, close)
+                place(line, open)
+                items.forEachIndexed { i, s -> place(line + 1 + i, code(inner, s)) }
+                place(line + 1 + items.size, code(open.indent, close))
             }
 
             available > 1 -> {
-                this[line] += open
+                place(line, open)
                 val belowSlots = available - 1
                 val onePerLine = belowSlots - 1
-                for (i in 0 until onePerLine) this[line + 1 + i] += code(inner, items[i])
-                this[line + belowSlots] += code(inner, "${items.drop(onePerLine).joinToString(" ")} $close")
+                for (i in 0 until onePerLine) place(line + 1 + i, code(inner, items[i]))
+                place(line + belowSlots, code(inner, "${items.drop(onePerLine).joinToString(" ")} $close"))
             }
 
-            else -> this[line] += open.copy(code = "${open.code} ${items.joinToString(" ")} $close")
+            else -> place(line, open.copy(code = "${open.code} ${items.joinToString(" ")} $close"))
         }
     }
 
