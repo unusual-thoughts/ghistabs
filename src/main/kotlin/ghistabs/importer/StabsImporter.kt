@@ -6,6 +6,7 @@ import ghidra.program.model.listing.CommentType
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.LocalVariableImpl
 import ghidra.program.model.listing.ParameterImpl
+import ghidra.program.model.listing.VariableUtilities
 import ghidra.program.model.symbol.SourceType
 import ghistabs.diagnose.ApplyErrorBucket
 import ghistabs.diagnose.DiagnosticSink
@@ -127,6 +128,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
     ): ApplyResult {
         val source = SourceType.IMPORTED
         val funcMgr = ctx.program.functionManager
+        val frameBias = deriveStackFrameBias(harvest)
         var functions = 0
         var globals = 0
         var classes = 0
@@ -204,7 +206,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
 
                 // Apply locals.
                 for (loc in open.locals) {
-                    applyLocal(func, loc, typeRegistry, source)
+                    applyLocal(func, loc, typeRegistry, source, frameBias)
                 }
 
                 // Apply scope plate comments.
@@ -435,7 +437,29 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
         return table.getOrNull(dbxNum)
     }
 
-    private fun applyLocal(func: Function, loc: SymbolRecord, typeRegistry: TypeRegistry, source: SourceType) {
+    /**
+     * Bias from gcc's frame-pointer-relative stab offsets to Ghidra's stackpointer-at-entry
+     * offsets. gcc's frame origin is the saved frame pointer, one pointer below the return
+     * address; Ghidra's origin is the return address, and the calling convention places the
+     * first stack parameter exactly one pointer above it. Those two "one pointer" gaps are the
+     * same slot, so the bias is precisely where the convention starts stack params —
+     * [VariableUtilities.getBaseStackParamOffset] — not a hardcoded constant. It is a property
+     * of the convention, so any function fixes it program-wide; absent one, fall back to a
+     * pointer (the saved frame-pointer slot).
+     */
+    private fun deriveStackFrameBias(harvest: Harvest): Int = harvest.openFunctions
+        .asSequence()
+        .mapNotNull { ctx.program.functionManager.getFunctionAt(it.addr.address) }
+        .firstNotNullOfOrNull { VariableUtilities.getBaseStackParamOffset(it) }
+        ?: ctx.program.defaultPointerSize
+
+    private fun applyLocal(
+        func: Function,
+        loc: SymbolRecord,
+        typeRegistry: TypeRegistry,
+        source: SourceType,
+        frameBias: Int,
+    ) {
         val decl = loc.body
         val resolvedDt = when (decl) {
             is SymbolDecl.StackLocal -> typeRegistry.dataTypeFor(decl.type)
@@ -464,7 +488,9 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
                         ctx.diagnostics.inc("local-var-skipped-dup-local")
                         return
                     }
-                    val stackOffset = loc.rawValue.toInt()
+                    // gcc's frame-pointer-relative offset → Ghidra's SP-at-entry offset via the
+                    // convention-derived [frameBias] (NSA/ghidra#223, #5485).
+                    val stackOffset = loc.rawValue.toInt() - frameBias
                     val lv = LocalVariableImpl(decl.name, dt, stackOffset, ctx.program, source)
                     func.addLocalVariable(lv, source)
                     ctx.diagnostics.inc("local-var-add-success")
