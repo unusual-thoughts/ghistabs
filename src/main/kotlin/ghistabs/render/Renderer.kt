@@ -208,8 +208,9 @@ private class RenderContext(val renderer: Renderer, val source: String) {
     private fun emitFunctionBraces() {
         for (r in spans.ranges) {
             val sig = r.func.signature(program)
+            val name = r.func.demangledName(program)
             val openText = if (r.isSingleLine) "$sig;" else "$sig {"
-            val openNote = if (r.isSingleLine) r.func.decl.name else "opens ${r.func.decl.name}"
+            val openNote = if (r.isSingleLine) name else "opens $name"
             canvas[r.startLine].fragments.add(
                 0,
                 Fragment(code = openText, note = openNote, kind = FragmentKind.FUNC_DELIM),
