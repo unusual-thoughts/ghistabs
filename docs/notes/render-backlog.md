@@ -26,13 +26,34 @@ onto one line (or the signature line), so real statements line up with their
 N_SLINE source lines. Ties into better token-driven line flow generally
 (`cleanDecompLines` currently works on raw text).
 
-## 3. Stack-local decl attribution — offset hypothesis
+## 3. Map stab frame offsets onto Ghidra's `in_stack_*` decomp vars
 
-Stack locals may be rendered at a line derived from the definition offset that is
-actually frame/ESP-relative, not a source line — so `SymbolDecl.StackLocal`
-declLines land on the wrong row (see the `undefined2 in_stack_0000000e;` style
-entries). Verify how `declLine` is computed for `StackLocal`/`StackParam` vs the
-frame offset, and whether the offset is being conflated with a line number.
+Investigated: our line placement is **correct**. In a gcc N_LSYM/N_PSYM stab the
+`desc` field is the declaration line (used for `declLine`/placement) and `n_value`
+is the EBP-relative frame offset — e.g. `this:(1,151)` → `desc=375` (line),
+`value=0xffffff70` (−144). We already ignore `value` for lines. So there is no
+line-conflation bug.
+
+The real opportunity: the `undefined2 in_stack_0000000e;` entries are Ghidra's
+decompiler naming an *incoming stack parameter at +0xe* it never folded into a
+named param. The stab `StackParam`/`StackLocal` carries the matching frame offset
+(`n_value`); matching stab offset → Ghidra decomp storage would let us rename
+`in_stack_*` to the real source name. Ties into #2 (token-level decomp cleanup).
+
+**We DO define locals** — `StabsImporter.applyLocal` adds each stack local via
+`LocalVariableImpl(name, dt, stackOffset, …)` with `stackOffset =
+loc.rawValue.toInt()` (`StabsImporter.kt:467`) and each reg local via the dbx
+register. Params go through `ParameterImpl` with `DYNAMIC_STORAGE_FORMAL_PARAMS`,
+so Ghidra assigns their storage from the calling convention (stab offset ignored
+for params).
+
+**Suspected bug (verify):** the stack-local offset is passed through raw. gcc's
+`n_value` is frame-relative to the CFA/EBP; Ghidra's `LocalVariableImpl` stack
+offset uses a different origin (return-addr / saved-EBP baseline). If they differ
+by a constant (−8 on x86 cdecl), every stack local lands off its true slot, the
+decompiler can't match it, and `in_stack_*` persists. Check one function's stab
+`n_value` against Ghidra's actual frame slot and apply a CFA correction to
+`stackOffset` if needed.
 
 ## 4. `_ZTS*` typeinfo-name globals + function overlap (xdvimage.cpp L131–133)
 

@@ -1,5 +1,10 @@
 package ghistabs.render
 
+import ghidra.program.model.data.ByteDataType
+import ghidra.program.model.data.CharDataType
+import ghidra.program.model.data.SignedByteDataType
+import ghidra.program.model.data.SignedCharDataType
+import ghidra.program.model.data.UnsignedCharDataType
 import ghidra.program.model.listing.Program
 import ghistabs.harvest.Harvest
 import ghistabs.materialize.BuiltinTable
@@ -84,6 +89,31 @@ fun TypeDecl<GlobalTypeId>.isPointer(harvest: Harvest): Boolean = when (this) {
     is TypeDecl.InlineDef -> body.isPointer(harvest)
     is TypeDecl.Ref -> harvest.typeAsts[id]?.body?.isPointer(harvest) ?: false
     else -> false
+}
+
+/** True if this resolves to an array of char — a string literal — through cv-quals and typedefs. */
+fun TypeDecl<GlobalTypeId>.isCharArray(harvest: Harvest): Boolean = when (this) {
+    is TypeDecl.Array -> element.isCharType(harvest)
+    is TypeDecl.Const -> inner.isCharArray(harvest)
+    is TypeDecl.Volatile -> inner.isCharArray(harvest)
+    is TypeDecl.InlineDef -> body.isCharArray(harvest)
+    is TypeDecl.Ref -> harvest.typeAsts[id]?.body?.isCharArray(harvest) ?: false
+    else -> false
+}
+
+private fun TypeDecl<GlobalTypeId>.isCharType(harvest: Harvest): Boolean = when (this) {
+    is TypeDecl.Const -> inner.isCharType(harvest)
+    is TypeDecl.Volatile -> inner.isCharType(harvest)
+    is TypeDecl.InlineDef -> body.isCharType(harvest)
+    is TypeDecl.Ref -> harvest.typeAsts[id]?.body?.isCharType(harvest) ?: false
+    // Any 1-byte integer element: cygwin's named `char` resolves through its Range body to
+    // Byte, not Char. The printable-run guard in stringLiteralAt keeps binary byte[] as hex.
+    else -> when (BuiltinTable.resolve(this)) {
+        is CharDataType, is UnsignedCharDataType, is SignedCharDataType,
+        is ByteDataType, is SignedByteDataType,
+        -> true
+        else -> false
+    }
 }
 
 /** Render a Struct's body members for in-skeleton expansion: one bare C-style decl per entry. */

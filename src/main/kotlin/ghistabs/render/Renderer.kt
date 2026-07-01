@@ -155,10 +155,17 @@ private class RenderContext(val renderer: Renderer, val source: String) {
         if (!dedup(line, name)) return
         val indent = indentFor(line)
         val base = "${type.render(harvest)} $name"
-        // A pointer whose slot Ghidra left an untyped scalar renders its string target,
-        // which initializerAt would otherwise miss; other globals go the normal path.
-        val pointee = if (type.isPointer(harvest)) addr?.let { program.pointerString(it) } else null
-        val parts = pointee?.let { listOf(it) } ?: addr?.let { program.initializerAt(it) }
+        // A string-valued global (pointer-to-string whose slot Ghidra left an untyped
+        // scalar, or a char[N] holding an RTTI/string literal) renders as one quoted
+        // literal; initializerAt would otherwise miss it or spread a per-byte list.
+        val literal = addr?.let {
+            when {
+                type.isPointer(harvest) -> program.pointerString(it)
+                type.isCharArray(harvest) -> program.stringLiteralAt(it)
+                else -> null
+            }
+        }
+        val parts = literal?.let { listOf(it) } ?: addr?.let { program.initializerAt(it) }
         when {
             parts == null -> canvas[line] += Fragment(indent, "$base;", role, FragmentKind.DECL_GLOBAL)
             parts.size == 1 -> canvas[line] += Fragment(indent, "$base = ${parts[0]};", role, FragmentKind.DECL_GLOBAL)
