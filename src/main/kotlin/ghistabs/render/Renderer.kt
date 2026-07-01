@@ -51,7 +51,6 @@ private class RenderContext(val renderer: Renderer, val source: String) {
     private val canvas = Canvas(maxLine)
 
     private fun indentFor(line: Int) = if (spans.inFunction(line)) "    " else ""
-    private fun lineTag(line: Int) = "// L" + line.toString().padStart(4)
 
     // A declLine past the file's activity extent flags a stale N_SOL. Body extent for CUs;
     // type-decl extent for pure-header files.
@@ -63,8 +62,6 @@ private class RenderContext(val renderer: Renderer, val source: String) {
 
     // A decl at this line is misattributed (stale N_SOL) if it sits past the file's activity.
     private fun isStale(line: Int) = line > activityExtent
-
-    private fun staleTag(line: Int) = if (isStale(line)) "${lineTag(line)} stale N_SOL?" else lineTag(line)
 
     fun render(): String {
         if (rawFuncs.isEmpty() && lines.isEmpty() && typeDecls.isEmpty()) return ""
@@ -90,11 +87,9 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             byKey.getOrPut(SliceKey(entry.line, codeUnit)) { sortedSetOf() } += entry.addr.address
         }
         for ((key, addrs) in byKey) {
-            val tag = "L" + key.line.toString().padStart(4)
-            val suffix = if (key.codeUnit.isEmpty()) "" else ": ${key.codeUnit}"
             canvas[key.line] += Fragment(
                 indentFor(key.line),
-                comment = "// $tag @ ${formatAddrRuns(addrs.toList(), program)}$suffix",
+                comment = slineComment(key.line, formatAddrRuns(addrs.toList(), program), key.codeUnit),
                 kind = FragmentKind.SLINE,
             )
         }
@@ -107,12 +102,13 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             val body = ast.body
             if (body is TypeDecl.Struct || body is TypeDecl.Enum) continue
             if (!seen.add(TypeDeclKey(ast.declLine, name, body::class.simpleName ?: ""))) continue
+            val stale = isStale(ast.declLine)
             canvas[ast.declLine] += Fragment(
                 indentFor(ast.declLine),
                 "typedef ${body.render(harvest)} $name;",
-                staleTag(ast.declLine),
+                lineTag(ast.declLine, stale),
                 FragmentKind.TYPEDEF,
-                isStale(ast.declLine),
+                stale,
             )
         }
     }
@@ -133,7 +129,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
         if (!seenDecls.add(DeclKey(line, name))) return
         val indent = indentFor(line)
         val decl = "${type.render(harvest)} $name"
-        val tag = "${lineTag(line)} $role" + if (misattributed) "; stale N_SOL?" else ""
+        val tag = declTag(line, role, misattributed)
         val parts = initFromAddr?.let { program.initializerAt(it) }
         when {
             parts == null -> canvas[line] += Fragment(indent, "$decl;", tag, kind, misattributed)
@@ -207,20 +203,22 @@ private class RenderContext(val renderer: Renderer, val source: String) {
     private fun emitFunctionBraces() {
         for (r in spans.ranges) {
             val sig = r.func.signature(program)
-            val tag = "L" + r.startLine.toString().padStart(4)
             val openText = if (r.isSingleLine) "$sig;" else "$sig {"
-            val openNote = if (r.isSingleLine) "${r.func.decl.name}" else "opens ${r.func.decl.name}"
+            val openNote = if (r.isSingleLine) r.func.decl.name else "opens ${r.func.decl.name}"
             canvas[r.startLine].fragments.add(
                 0,
-                Fragment(code = openText, comment = "/* $tag — $openNote */", kind = FragmentKind.FUNC_DELIM),
+                Fragment(
+                    code = openText,
+                    comment = funcDelimComment(r.startLine, openNote),
+                    kind = FragmentKind.FUNC_DELIM,
+                ),
             )
 
             val closeLine = spans.closeLine(r.func) ?: continue
             if (closeLine !in 1..maxLine) continue
-            val closeTag = "L" + closeLine.toString().padStart(4)
             canvas[closeLine] += Fragment(
                 code = "}",
-                comment = "/* $closeTag — closes ${r.func.demangledName(program)} */",
+                comment = funcDelimComment(closeLine, "closes ${r.func.demangledName(program)}"),
                 kind = FragmentKind.FUNC_DELIM,
             )
         }
@@ -261,15 +259,16 @@ private class RenderContext(val renderer: Renderer, val source: String) {
                 is TypeDecl.Enum -> "," to ", "
             }
             val indent = indentFor(line)
+            val stale = isStale(line)
             if (members.isNotEmpty()) {
                 canvas.layoutBraceBlock(
-                    line, indent, open, staleTag(line), members, "}; $sizeNote", itemSuffix, sep,
-                    FragmentKind.TYPE_BODY, isStale(line),
+                    line, indent, open, lineTag(line, stale), members, "}; $sizeNote", itemSuffix, sep,
+                    FragmentKind.TYPE_BODY, stale,
                 )
             } else {
                 val keyword = if (body is TypeDecl.Struct) body.kind.cxxKeyword() else "enum"
                 canvas[line] +=
-                    Fragment(indent, "$keyword $name; $sizeNote", staleTag(line), FragmentKind.TYPE_BODY, isStale(line))
+                    Fragment(indent, "$keyword $name; $sizeNote", lineTag(line, stale), FragmentKind.TYPE_BODY, stale)
             }
         }
     }
@@ -316,7 +315,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             }
             for (s in strays) {
                 val text = listOfNotNull(s.code, s.comment).joinToString("  ")
-                canvas[closeLine] += Fragment(comment = "// stray: $text")
+                canvas[closeLine] += Fragment(comment = strayComment(text))
             }
         }
     }
@@ -354,51 +353,4 @@ private class RenderContext(val renderer: Renderer, val source: String) {
         }
         anomalies.forEach(::println)
     }
-}
-
-/** Collapse addresses of back-to-back code units into `0xS-0xE` runs, comma-joined. */
-private fun formatAddrRuns(addrs: List<Address>, program: Program): String {
-    if (addrs.isEmpty()) return ""
-    val sorted = addrs.sortedBy { it.offset }
-    val runs = mutableListOf<Pair<Address, Address>>()
-    var runStart = sorted[0]
-    var runEnd = sorted[0]
-    for (cur in sorted.drop(1)) {
-        val inst = program.listing.getInstructionAt(runEnd)
-        val expectedNext = inst?.next?.address
-            ?: program.listing.getCodeUnitAt(runEnd)?.takeIf { it.length > 0 }?.let { runEnd.add(it.length.toLong()) }
-        if (cur == expectedNext) {
-            runEnd = cur
-        } else {
-            runs += runStart to runEnd
-            runStart = cur
-            runEnd = cur
-        }
-    }
-    runs += runStart to runEnd
-    fun hex(a: Address) = "0x" + a.offset.toString(16).padStart(8, '0')
-    return runs.joinToString(", ") { (s, e) -> if (s == e) hex(s) else "${hex(s)}-${hex(e)}" }
-}
-
-/** Drop the decomp's leading header/warning comments and fold a lone `{` onto the signature. */
-private fun cleanDecompLines(cCode: String): List<String> {
-    val raw = cCode.trim('\n').split('\n').toMutableList()
-    while (raw.isNotEmpty()) {
-        val l = raw.first().trimStart()
-        val drop = (l.startsWith("/*") && l.trimEnd().endsWith("*/")) || l.isEmpty()
-        if (!drop) break
-        raw.removeAt(0)
-    }
-    val out = mutableListOf<String>()
-    for (l in raw) {
-        if (l.trim() == "{" && out.isNotEmpty()) {
-            var idx = out.size - 1
-            while (idx > 0 && out[idx].isBlank()) idx--
-            out[idx] = out[idx].trimEnd() + " {"
-            while (out.size - 1 > idx) out.removeAt(out.size - 1)
-        } else {
-            out += l
-        }
-    }
-    return out
 }
