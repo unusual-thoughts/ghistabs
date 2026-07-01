@@ -47,6 +47,21 @@ class LayoutTest {
     }
 
     @Test
+    fun `a brace block expands through and evicts a lone stale line`() {
+        // A misattributed (stale) decl sits on line 2, directly below the opener on line 1,
+        // with blank room beyond. The block expands through it — evicting the stale fragment —
+        // instead of folding everything onto line 1.
+        val canvas = Canvas(5).apply {
+            this[2] += Fragment(0, code = "int misattributed;", note = "", kind = FragmentKind.DECL_LOCAL, stale = true)
+            layoutBraceBlock(1, typeBodyOpen("struct S {"), listOf("int a;", "int b;"), "};")
+        }
+        assertEquals(
+            listOf("struct S {  // L   1", "    int a;", "    int b;", "};"),
+            canvas.toString().trimEnd('\n').split('\n'),
+        )
+    }
+
+    @Test
     fun `renders all code before any comment regardless of fragment order`() {
         val line = TargetLine(17).apply {
             this += Fragment(note = "0x1000", kind = FragmentKind.SLINE) // comment-only
