@@ -102,6 +102,15 @@ fun Program.pointerString(addr: Address): String? {
     return resolvePointee(this, target)?.takeIf { it.isDefined && it.value is String }?.render(this)
 }
 
+/**
+ * The quoted string literal a `char[N]` global holds, defining it at [addr] when Ghidra
+ * left the run undefined or (RTTI typeinfo-name strings like `_ZTS8XDVImage` → "8XDVImage")
+ * mis-disassembled it as code. Null when [addr]'s bytes aren't a printable run. Rendering
+ * as one literal keeps the global on its own line instead of spreading a per-byte list.
+ */
+fun Program.stringLiteralAt(addr: Address): String? =
+    resolvePointee(this, addr)?.takeIf { it.isDefined && it.value is String }?.render(this)
+
 fun Program.initializerAt(addr: Address): List<String>? {
     val data = listing.getDataAt(addr) ?: return null
     // A real aggregate (struct / non-char array) spreads one element per component; a
