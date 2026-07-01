@@ -52,6 +52,8 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     fun writeDecompilations(binaryName: String) = runPipeline(binaryName, decompile = true)
 
     private fun runPipeline(binaryName: String, decompile: Boolean) {
+        val filter = System.getProperty("fixtureFilter").orEmpty()
+        assumeTrue(filter.isEmpty() || filter == binaryName, "fixture filtered out by -Pfixture")
         val fixture = File("src/test/resources/binaries/$binaryName")
         assumeTrue(fixture.exists(), "fixture absent")
         val outDirName = if (decompile) "decomps" else "skeletons"
