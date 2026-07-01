@@ -97,6 +97,8 @@ val integrationTest =
         forkEvery = 0
         maxParallelForks = (Runtime.getRuntime().availableProcessors() / 2).coerceIn(1, 4)
         maxHeapSize = "2g"
+        // -Pfixture=<name> restricts fixture-parameterised probes to one binary for fast cycles.
+        systemProperty("fixtureFilter", providers.gradleProperty("fixture").getOrElse(""))
         jvmArgs(
             // Ghidra installs its own ObjectInputFilter factory; under JDK 21 it must be
             // declared at JVM startup, otherwise the BuiltinFilterFactory wins the race.
