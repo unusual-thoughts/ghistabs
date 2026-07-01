@@ -6,48 +6,49 @@ import ghidra.program.model.data.DataUtilities.ClearDataMode
 import ghidra.program.model.data.TerminatedStringDataType
 import ghidra.program.model.listing.Data
 import ghidra.program.model.listing.Program
+import ghidra.program.model.scalar.Scalar
 import ghidra.util.ascii.AsciiCharSetRecognizer
 
 /**
- * True when [addr] begins a NUL-terminated run of characters Ghidra's string charset
- * ([AsciiCharSetRecognizer], the recogniser its StringSearcher wraps) accepts. A point
- * query — we already hold the exact address, so there's nothing to search for.
+ * Length (including the terminator) of the NUL-terminated run of characters Ghidra's
+ * string charset ([AsciiCharSetRecognizer], the recogniser its StringSearcher wraps)
+ * accepts at [addr], or null if [addr] doesn't begin one. A point query — we already
+ * hold the exact address, so there's nothing to search for.
  */
-private fun isAsciiStringAt(program: Program, addr: Address, max: Int = 4096): Boolean {
+private fun asciiStringLen(program: Program, addr: Address, max: Int = 4096): Int? {
     val charSet = AsciiCharSetRecognizer()
     val bytes = ByteArray(max)
-    val n = runCatching { program.memory.getBytes(addr, bytes) }.getOrNull() ?: return false
+    val n = runCatching { program.memory.getBytes(addr, bytes) }.getOrNull() ?: return null
     for (i in 0 until n) {
         val b = bytes[i].toInt() and 0xff
-        if (b == 0) return i > 0
-        if (!charSet.contains(b)) return false
+        if (b == 0) return if (i > 0) i + 1 else null
+        if (!charSet.contains(b)) return null
     }
-    return false
+    return null
 }
 
 /**
  * Data a pointer targets, defining a string at [addr] when its bytes are an ASCII run
- * Ghidra's string detector recognises. Short names (< the 5-char auto-analysis floor)
- * are left undefined, or worse mis-typed as a pointer — e.g. `"HID\0"` at 0x402cf4
- * becomes an `addr` to the unmapped 0x00444948, so the element renders as raw bytes
- * instead of `"HID"`. (Re)define such a run as a string, clearing whatever bogus data
- * auto-analysis left. An already-defined string is kept as-is. Returns the resolved
+ * Ghidra's string detector recognises. Such a run is often left undefined or, worse,
+ * mis-disassembled as code (`char const * align_prefix` → "#!ALIGN "); since
+ * createData's ClearDataMode only clears conflicting *data*, the mis-identified code
+ * units are cleared first. An already-defined string is kept as-is. Returns the resolved
  * data, else the existing data. Requires an open transaction (the render loop opens one).
  */
 private fun resolvePointee(program: Program, addr: Address): Data? {
     val existing = program.listing.getDataAt(addr)
     if (existing != null && existing.isDefined && existing.value is String) return existing
-    if (isAsciiStringAt(program, addr)) {
-        runCatching {
-            DataUtilities.createData(
-                program,
-                addr,
-                TerminatedStringDataType.dataType,
-                -1, // dynamic — Ghidra sizes the terminated string itself
-                ClearDataMode.CLEAR_ALL_CONFLICT_DATA,
-            )
-        }.getOrNull()?.let { return it }
-    }
+    val len = asciiStringLen(program, addr) ?: return existing
+    runCatching {
+        program.listing.clearCodeUnits(addr, addr.add((len - 1).toLong()), false)
+        DataUtilities.createData(
+            program,
+            addr,
+            TerminatedStringDataType.dataType,
+            -1, // dynamic — Ghidra sizes the terminated string itself
+            ClearDataMode.CLEAR_ALL_CONFLICT_DATA,
+        )
+    }.getOrNull()?.let { return it }
     return existing
 }
 
@@ -89,6 +90,18 @@ fun Data.render(program: Program, depth: Int = 0): String? {
  * informative is found. Callers render a single element inline (`= v;`) and spread a
  * multi-element list.
  */
+/**
+ * The string a pointer-typed global points at when Ghidra left its slot an untyped
+ * scalar (mis-disassembled data), so [initializerAt] would print the raw address. Reads
+ * the stored value as an address and, if the target is an ASCII run, defines and returns
+ * the quoted literal. Null when the slot isn't a scalar or the target isn't a string.
+ */
+fun Program.pointerString(addr: Address): String? {
+    val target = (listing.getDataAt(addr)?.value as? Scalar)
+        ?.let { addressFactory.defaultAddressSpace.getAddress(it.value) } ?: return null
+    return resolvePointee(this, target)?.takeIf { it.isDefined && it.value is String }?.render(this)
+}
+
 fun Program.initializerAt(addr: Address): List<String>? {
     val data = listing.getDataAt(addr) ?: return null
     // A real aggregate (struct / non-char array) spreads one element per component; a
