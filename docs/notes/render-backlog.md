@@ -32,17 +32,30 @@ continuation lines (a bare `;`). This whole area — width, leading-decl folding
 line flow — is superseded once rendering works from clang tokens instead of the
 flat C text.
 
-## 5. Sweep findings (appquery)
+## 5. Sweep findings (all fixtures, `--exclude-dir='*.old'`)
 
-- **Fixed:** single-line function delimiter tags showed the raw mangled name
-  (`/* L 15 — _ZN5ImageC1Ev */`) while multi-line closes used the demangled name;
-  `emitFunctionBraces` now uses `demangledName` for both.
-- **Fixed:** orphan `;` from decompiler line-wrapping (see interim note in #2).
+Structurally sound: `T_<digits>` dangling type refs = 0; no unparseable garbage.
+
+- **Fixed:** single-line delimiter tags used the raw mangled name while multi-line
+  closes used the demangled name; `emitFunctionBraces` now demangles both.
+- **Fixed (common case):** orphan `;` from decompiler line-wrapping — harness
+  `setMaxWidth(10_000)` (see #2).
+- **Open — [C] raw mangled tags (~212):** `TypeAst.demangledName` calls the
+  deprecated `DemanglerUtil.demangle` and falls back to the raw mangled name on
+  failure, which fires **inconsistently** — the same `_ZN5ImageC1Ev` demangles to
+  `Image` in decomp mode but stays mangled in skeleton mode. Almost all are
+  ctor/dtor variants (`C1/C2/D0/D1/D2`). Fix: robust textual demangle (or special-
+  case the Itanium ctor/dtor clones) so tags are stable across modes.
+- **Open — [E] orphan punctuation (~9 files, decomp):** the decompiler still wraps
+  *extreme* `std::` template member-access chains
+  (`IncludePaths._base__Vector_base<…>._M_start`) even at width 10 000, leaving a
+  lone `.`/`;`. Subsumed by the token-based rendering rework (#2).
+- **Open — stale N_SOL in decomp (~108):** diagnostic comments that belong to
+  skeleton mode leak into decomp output; trim them in decomp mode.
 - **Not our bug:** `DAT_*`/`PTR_*` in decomp bodies are Ghidra's names for data it
   didn't tie to a symbol (vtable pointers, literals); `<true,0>`/`<false,0>` are
-  valid non-type template args (`__default_alloc_template<true,0>`), not garbage.
-- **Open:** a few `stale N_SOL` diagnostic comments remain in decomp output
-  (`stl_vector.h`, `main.cpp`); harmless but could be trimmed in decomp mode.
+  valid non-type template args; `/* 0 bytes */` are the documented `noEmptyStructs`
+  degradation (forward decls / opaque types).
 
 ## 3. Map stab frame offsets onto Ghidra's `in_stack_*` decomp vars
 
@@ -95,3 +108,32 @@ single source line inside `XDVImage::symbol_start`:
   onto the same close line, with the next function opener on L133. These
   compiler-generated RTTI globals are strays inside a function span and should be
   demoted to `// stray:` comments (or filed to their real home), not laid as code.
+
+## 6. Class body attributed to a .cpp instead of its header (AppImage → main.cpp)
+
+`class AppImage : public XVImage` renders in `main.cpp`, though its methods
+(`header_length`, `image_type`) correctly land in `appimage.h`. gcc emitted
+AppImage's full `:T` definition only in main.cpp's CU (where it's used), so
+`TypeAst.effectiveSource()` falls back to `id.source.filename` = main.cpp.
+
+Real root cause (from `registry.afters/appquery-registry.after.json`): the
+**canonical registry already attributes it correctly** —
+`"key": "/appimage.cpp/multi/AppImage"`. `Attribution.keyFor` (`Attribution.kt:76`)
+sees AppImage's defSources as multi-source (appimage.cpp + main.cpp) with no real
+header among them (gcc didn't BINCL appimage.h as a *definition* source, only as
+line-entries), so case 5 routes it to lex-min `/appimage.cpp` + `/multi`. The
+`winnerId = main.cpp,245` is just the representative TypeAst chosen for the
+DataType — not where it should render.
+
+The bug is that the **renderer bypasses this attribution**:
+`RenderContext.effectiveSource()` uses `multiSourceHeaderHints[name] ?:
+id.source.filename`, and with no hint falls to the winner's CU (main.cpp). So the
+DataType lands in `/appimage.cpp/` but the skeleton renders in main.cpp —
+divergent attribution from two code paths.
+
+Fix: unify — have `effectiveSource()` consult the canonical attribution
+(`typeResolver.byCanonicalKey` / `Attribution.keyFor`'s category) instead of
+`id.source.filename`, so the skeleton file matches the DataType category
+(appimage.cpp here). Separately, appimage.h would be preferable to appimage.cpp,
+but that needs the header in defSources (it isn't) — a distinct BINCL-attribution
+gap, lower priority than making the two paths agree.
