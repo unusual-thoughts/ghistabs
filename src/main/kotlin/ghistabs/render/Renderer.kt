@@ -50,7 +50,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
 
     private val canvas = Canvas(maxLine)
 
-    private fun indentFor(line: Int) = if (spans.inFunction(line)) "    " else ""
+    private fun indentFor(line: Int) = if (spans.inFunction(line)) 4 else 0
 
     // A declLine past the file's activity extent flags a stale N_SOL. Body extent for CUs;
     // type-decl extent for pure-header files.
@@ -75,7 +75,9 @@ private class RenderContext(val renderer: Renderer, val source: String) {
         emitTypeBodies()
         reportAnomalies()
         renderer.decomp?.let(::applyDecompilation)
-        return canvas.toString()
+        // Trailing blank/stale lines are trimmed only in decomp mode; skeleton output
+        // stays fully source-aligned.
+        return canvas.render(trim = renderer.decomp != null)
     }
 
     /** One `// L n @ 0xADDR[: code-unit]` annotation per (line, code-unit) group. */
@@ -87,11 +89,9 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             byKey.getOrPut(SliceKey(entry.line, codeUnit)) { sortedSetOf() } += entry.addr.address
         }
         for ((key, addrs) in byKey) {
-            canvas[key.line] += Fragment(
-                indentFor(key.line),
-                comment = slineComment(key.line, formatAddrRuns(addrs.toList(), program), key.codeUnit),
-                kind = FragmentKind.SLINE,
-            )
+            val runs = formatAddrRuns(addrs.toList(), program)
+            val note = if (key.codeUnit.isEmpty()) runs else "$runs: ${key.codeUnit}"
+            canvas[key.line] += Fragment(indentFor(key.line), note = note, kind = FragmentKind.SLINE)
         }
     }
 
@@ -102,66 +102,72 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             val body = ast.body
             if (body is TypeDecl.Struct || body is TypeDecl.Enum) continue
             if (!seen.add(TypeDeclKey(ast.declLine, name, body::class.simpleName ?: ""))) continue
-            val stale = isStale(ast.declLine)
             canvas[ast.declLine] += Fragment(
                 indentFor(ast.declLine),
                 "typedef ${body.render(harvest)} $name;",
-                lineTag(ast.declLine, stale),
-                FragmentKind.TYPEDEF,
-                stale,
+                note = "",
+                kind = FragmentKind.TYPEDEF,
+                stale = isStale(ast.declLine),
             )
         }
     }
 
     private val seenDecls = mutableSetOf<DeclKey>()
 
-    /** Emit a param/local/global decl, spreading a multi-element initializer over blank lines. */
-    private fun emitDecl(
-        line: Int,
-        name: String,
-        type: TypeDecl<GlobalTypeId>,
-        role: String,
-        kind: FragmentKind,
-        misattributed: Boolean = false,
-        initFromAddr: Address? = null,
-    ) {
-        if (line !in 1..maxLine || name == "this") return
-        if (!seenDecls.add(DeclKey(line, name))) return
-        val indent = indentFor(line)
-        val decl = "${type.render(harvest)} $name"
-        val tag = declTag(line, role, misattributed)
-        val parts = initFromAddr?.let { program.initializerAt(it) }
-        when {
-            parts == null -> canvas[line] += Fragment(indent, "$decl;", tag, kind, misattributed)
-            parts.size == 1 -> canvas[line] += Fragment(indent, "$decl = ${parts[0]};", tag, kind, misattributed)
-            else -> canvas.layoutBraceBlock(line, indent, "$decl = {", tag, parts, "};", ",", ", ", kind, misattributed)
-        }
-    }
+    // One declaration per (line, name); `this` never renders. Guards every decl pass.
+    private fun dedup(line: Int, name: String) =
+        line in 1..maxLine && name != "this" && seenDecls.add(DeclKey(line, name))
 
     // A declLine outside the host function's bracket is a stale-N_SOL signature — flag it.
     private fun emitParamsAndLocals() {
         val rangeByFunc = spans.ranges.associateBy { it.func }
         for (f in rawFuncs) {
             val span = rangeByFunc[f]?.let { it.startLine..(spans.closeLine(f) ?: it.endLine) }
-            fun stale(declLine: Int) = span == null || declLine !in span
-            fun emit(declLine: Int, name: String, type: TypeDecl<GlobalTypeId>, role: String) =
-                emitDecl(declLine, name, type, role, FragmentKind.DECL_LOCAL, stale(declLine))
+            fun place(line: Int, name: String, type: TypeDecl<GlobalTypeId>, role: String) {
+                if (!dedup(line, name)) return
+                val stale = span == null || line !in span
+                canvas[line] +=
+                    Fragment(indentFor(line), "${type.render(harvest)} $name;", role, FragmentKind.DECL_LOCAL, stale)
+            }
             for (p in f.params) {
                 if (p.sourceFile != source) continue
                 when (val d = p.body) {
-                    is SymbolDecl.StackParam -> emit(p.declLine, d.name, d.type, "(param)")
-                    is SymbolDecl.RegParam -> emit(p.declLine, d.name, d.type, "(reg param)")
+                    is SymbolDecl.StackParam -> place(p.declLine, d.name, d.type, "(param)")
+                    is SymbolDecl.RegParam -> place(p.declLine, d.name, d.type, "(reg param)")
                     else -> {}
                 }
             }
             for (l in f.locals) {
                 if (l.sourceFile != source) continue
                 when (val d = l.body) {
-                    is SymbolDecl.RegLocal -> emit(l.declLine, d.name, d.type, "(reg local)")
-                    is SymbolDecl.StackLocal -> emit(l.declLine, d.name, d.type, "(stack local)")
+                    is SymbolDecl.RegLocal -> place(l.declLine, d.name, d.type, "(reg local)")
+                    is SymbolDecl.StackLocal -> place(l.declLine, d.name, d.type, "(stack local)")
                     else -> {}
                 }
             }
+        }
+    }
+
+    // A global/static: the linker's data at [addr] renders as its initializer — a scalar
+    // inline, a multi-element aggregate spread over the blank lines below (the same
+    // brace-block layout as a struct body).
+    private fun emitGlobal(line: Int, name: String, type: TypeDecl<GlobalTypeId>, role: String, addr: Address?) {
+        if (!dedup(line, name)) return
+        val indent = indentFor(line)
+        val base = "${type.render(harvest)} $name"
+        // A pointer whose slot Ghidra left an untyped scalar renders its string target,
+        // which initializerAt would otherwise miss; other globals go the normal path.
+        val pointee = if (type.isPointer(harvest)) addr?.let { program.pointerString(it) } else null
+        val parts = pointee?.let { listOf(it) } ?: addr?.let { program.initializerAt(it) }
+        when {
+            parts == null -> canvas[line] += Fragment(indent, "$base;", role, FragmentKind.DECL_GLOBAL)
+            parts.size == 1 -> canvas[line] += Fragment(indent, "$base = ${parts[0]};", role, FragmentKind.DECL_GLOBAL)
+            else -> canvas.layoutBraceBlock(
+                line,
+                Fragment(indent, "$base = {", role, FragmentKind.DECL_GLOBAL),
+                parts.map { "$it," },
+                "};",
+            )
         }
     }
 
@@ -169,7 +175,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
     // before N_GSYM, so `sourceFile` points at the last header visited.
     private fun emitGlobals() {
         for (s in symbols) {
-            val suffix = when (s.recordType) {
+            val role = when (s.recordType) {
                 StabType.N_GSYM -> "(global)"
                 StabType.N_LCSYM -> "(.bss static)"
                 StabType.N_STSYM -> "(.data static)"
@@ -184,16 +190,8 @@ private class RenderContext(val renderer: Renderer, val source: String) {
                 else -> null
             }
             when (val d = s.body) {
-                is SymbolDecl.Global -> emitDecl(
-                    s.declLine,
-                    d.name,
-                    d.type,
-                    suffix,
-                    FragmentKind.DECL_GLOBAL,
-                    initFromAddr = addr,
-                )
-                is SymbolDecl.StaticVar ->
-                    emitDecl(s.declLine, d.name, d.type, suffix, FragmentKind.DECL_GLOBAL, initFromAddr = addr)
+                is SymbolDecl.Global -> emitGlobal(s.declLine, d.name, d.type, role, addr)
+                is SymbolDecl.StaticVar -> emitGlobal(s.declLine, d.name, d.type, role, addr)
                 else -> {}
             }
         }
@@ -207,18 +205,14 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             val openNote = if (r.isSingleLine) r.func.decl.name else "opens ${r.func.decl.name}"
             canvas[r.startLine].fragments.add(
                 0,
-                Fragment(
-                    code = openText,
-                    comment = funcDelimComment(r.startLine, openNote),
-                    kind = FragmentKind.FUNC_DELIM,
-                ),
+                Fragment(code = openText, note = openNote, kind = FragmentKind.FUNC_DELIM),
             )
 
             val closeLine = spans.closeLine(r.func) ?: continue
             if (closeLine !in 1..maxLine) continue
             canvas[closeLine] += Fragment(
                 code = "}",
-                comment = funcDelimComment(closeLine, "closes ${r.func.demangledName(program)}"),
+                note = "closes ${r.func.demangledName(program)}",
                 kind = FragmentKind.FUNC_DELIM,
             )
         }
@@ -235,11 +229,13 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             if (body !is TypeDecl.Struct && body !is TypeDecl.Enum) continue
             if (!seen.add(line to name)) continue
 
+            // Struct fields/methods are self-terminated statements; enum members carry a
+            // trailing comma so the space-join in layoutBraceBlock reads as a member list.
             val members = when (body) {
                 is TypeDecl.Struct -> body.renderFull(harvest, program)
-                is TypeDecl.Enum -> body.members.map { (mn, mv) -> "$mn = $mv" }
+                is TypeDecl.Enum -> body.members.map { (mn, mv) -> "$mn = $mv," }
             }
-            val open = when (body) {
+            val openText = when (body) {
                 is TypeDecl.Struct -> {
                     val bases = body.bases.takeIf { it.isNotEmpty() }
                         ?.joinToString(", ", prefix = " : ") {
@@ -254,21 +250,14 @@ private class RenderContext(val renderer: Renderer, val source: String) {
                 is TypeDecl.Struct -> "/* ${body.sizeBytes} bytes */"
                 is TypeDecl.Enum -> "/* ${body.members.size} members */"
             }
-            val (itemSuffix, sep) = when (body) {
-                is TypeDecl.Struct -> "" to " "
-                is TypeDecl.Enum -> "," to ", "
-            }
-            val indent = indentFor(line)
             val stale = isStale(line)
             if (members.isNotEmpty()) {
-                canvas.layoutBraceBlock(
-                    line, indent, open, lineTag(line, stale), members, "}; $sizeNote", itemSuffix, sep,
-                    FragmentKind.TYPE_BODY, stale,
-                )
+                val open = Fragment(indentFor(line), openText, "", FragmentKind.TYPE_BODY, stale)
+                canvas.layoutBraceBlock(line, open, members, "}; $sizeNote")
             } else {
                 val keyword = if (body is TypeDecl.Struct) body.kind.cxxKeyword() else "enum"
                 canvas[line] +=
-                    Fragment(indent, "$keyword $name; $sizeNote", lineTag(line, stale), FragmentKind.TYPE_BODY, stale)
+                    Fragment(indentFor(line), "$keyword $name; $sizeNote", "", FragmentKind.TYPE_BODY, stale)
             }
         }
     }
@@ -282,7 +271,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
      */
     private fun applyDecompilation(decomp: DecompInterface) {
         // Where a decl shares a line with real content, the misattributed one is noise.
-        for (b in canvas.multiFragmentLines()) b.fragments.removeAll { it.misattributed }
+        for (b in canvas.multiFragmentLines()) b.fragments.removeAll { it.stale }
         for (r in spans.ranges) {
             val closeLine = spans.closeLine(r.func) ?: continue
             if (closeLine <= r.startLine) continue
@@ -291,10 +280,14 @@ private class RenderContext(val renderer: Renderer, val source: String) {
                 .getOrNull()?.decompiledFunction?.c ?: continue
             val cLines = cleanDecompLines(cCode)
 
-            val strays = mutableListOf<Fragment>()
+            // Capture each surviving stray with its original line so the demoted comment
+            // keeps that line's provenance tag rather than the close line's.
+            val strays = mutableListOf<String>()
             for (line in r.startLine..closeLine) {
                 canvas[line].fragments.removeAll { f ->
-                    if (!f.kind.subsumedByDecomp && !f.misattributed) strays += f
+                    if (!f.kind.subsumedByDecomp && !f.stale) {
+                        strays += listOfNotNull(f.code, f.commentAt(line)).joinToString("  ")
+                    }
                     true
                 }
             }
@@ -313,10 +306,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
                     .filter { it.isNotEmpty() }
                 canvas[closeLine] += Fragment(code = rest.joinToString("; ") + ";", kind = FragmentKind.DECOMP)
             }
-            for (s in strays) {
-                val text = listOfNotNull(s.code, s.comment).joinToString("  ")
-                canvas[closeLine] += Fragment(comment = strayComment(text))
-            }
+            for (text in strays) canvas[closeLine] += Fragment(note = text, kind = FragmentKind.STRAY)
         }
     }
 

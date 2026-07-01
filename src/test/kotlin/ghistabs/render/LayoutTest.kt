@@ -4,66 +4,73 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
 /**
- * Pure-unit coverage of the layout engine's two non-obvious behaviours: the three
- * ways [Canvas.layoutBraceBlock] fits a block into the blank run below it, and the
- * invariant that [TargetLine] always renders code before comments so a `//` can
- * never comment out a following fragment's code.
+ * Pure-unit coverage of the layout engine: the three ways [Canvas.layoutBraceBlock]
+ * fits a block into the blank run below it, and the invariant that a [TargetLine]
+ * renders all code before any comment so a `//` never comments out a later fragment's
+ * code. Comments are derived from the line index at render time.
  */
 class LayoutTest {
-    private fun canvasWith(maxLine: Int, block: Canvas.() -> Unit) = Canvas(maxLine).apply(block)
+    private fun typeBodyOpen(code: String) = Fragment(0, code, note = "", kind = FragmentKind.TYPE_BODY)
 
     @Test
     fun `spreads one item per line when there is room`() {
-        val canvas = canvasWith(5) {
-            layoutBraceBlock(1, "", "struct S {", "// L1", listOf("int a;", "int b;"), "};", "", " ")
+        val canvas = Canvas(5).apply {
+            layoutBraceBlock(1, typeBodyOpen("struct S {"), listOf("int a;", "int b;"), "};")
         }
         assertEquals(
-            listOf("struct S {  // L1", "    int a;", "    int b;", "};"),
+            listOf("struct S {  // L   1", "    int a;", "    int b;", "};"),
             canvas.toString().trimEnd('\n').split('\n'),
         )
     }
 
     @Test
     fun `crams overflow and close onto the last blank line when the run is short`() {
-        // maxLine 3 → open on line 1 leaves only lines 2,3 blank: one item fits on 2,
-        // the rest (b, c) + close cram onto 3.
-        val canvas = canvasWith(3) {
-            layoutBraceBlock(1, "", "enum E {", "// L1", listOf("a", "b", "c"), "};", ",", ", ")
+        // maxLine 3 → open on line 1 leaves lines 2,3 blank: one item on 2, the rest cram on 3.
+        val canvas = Canvas(3).apply {
+            layoutBraceBlock(1, typeBodyOpen("enum E {"), listOf("a,", "b,", "c,"), "};")
         }
         assertEquals(
-            listOf("enum E {  // L1", "    a,", "    b, c };"),
+            listOf("enum E {  // L   1", "    a,", "    b, c, };"),
             canvas.toString().trimEnd('\n').split('\n'),
         )
     }
 
     @Test
     fun `folds onto one line with the tag after the code when there is no room below`() {
-        // Single line available: the whole block folds. The tag must ride the comment
-        // slot so it lands after the members — folding it mid-line would comment them out.
-        val canvas = canvasWith(1) {
-            layoutBraceBlock(1, "", "struct S {", "// L1", listOf("int a;", "int b;"), "};", "", " ")
+        val canvas = Canvas(1).apply {
+            layoutBraceBlock(1, typeBodyOpen("struct S {"), listOf("int a;", "int b;"), "};")
         }
         val line = canvas.toString().trimEnd('\n')
-        assertEquals("struct S { int a; int b; };  // L1", line)
-        // The comment is last: nothing of substance sits to the right of `//`.
-        assertEquals("// L1", line.substring(line.indexOf("//")))
+        assertEquals("struct S { int a; int b; };  // L   1", line)
+        // Comment last: nothing but the tag sits to the right of `//`.
+        assertEquals("// L   1", line.substring(line.indexOf("//")))
     }
 
     @Test
     fun `renders all code before any comment regardless of fragment order`() {
-        val line = TargetLine().apply {
-            this += Fragment(comment = "// L17 @ 0x1000")
-            this += Fragment(code = "int x;", comment = "// L17 (param)")
-            this += Fragment(code = "int y;")
+        val line = TargetLine(17).apply {
+            this += Fragment(note = "0x1000", kind = FragmentKind.SLINE) // comment-only
+            this += Fragment(code = "int x;", note = "(param)", kind = FragmentKind.DECL_LOCAL)
+            this += Fragment(code = "int y;") // pure code
         }
         // Both code fragments precede both comments — no `//` swallows `int y;`.
-        assertEquals("int x;   int y;  // L17 @ 0x1000 // L17 (param)", line.toString())
+        assertEquals("int x;   int y;  // L  17 @ 0x1000 // L  17 (param)", line.render())
     }
 
     @Test
-    fun `indent comes from the first fragment and empty lines render blank`() {
-        assertEquals("", TargetLine().toString())
-        val line = TargetLine().apply { this += Fragment("    ", code = "return 0;") }
-        assertEquals("    return 0;", line.toString())
+    fun `indent is a space count from the first fragment and empty lines render blank`() {
+        assertEquals("", TargetLine(1).render())
+        val line = TargetLine(1).apply { this += Fragment(4, code = "return 0;") }
+        assertEquals("    return 0;", line.render())
+    }
+
+    @Test
+    fun `trims trailing blank and stale-only lines`() {
+        val canvas = Canvas(6).apply {
+            this[2] += Fragment(0, code = "int real;", note = "(global)", kind = FragmentKind.DECL_GLOBAL)
+            this[5] += Fragment(0, code = "int stale;", note = "", kind = FragmentKind.TYPEDEF, stale = true)
+        }
+        // Line 5 is stale-only and 3,4,6 blank → trimmed output ends at line 2.
+        assertEquals(listOf("", "int real;  // L   2 (global)"), canvas.render(trim = true).trimEnd('\n').split('\n'))
     }
 }
