@@ -1,10 +1,10 @@
 package ghistabs.materialize
 
 import ghidra.app.util.demangler.DemangledAddressTable
-import ghidra.app.util.demangler.DemanglerUtil
 import ghidra.program.model.listing.Program
+import ghistabs.demangle
 import ghistabs.materialize.VtableSymbolCandidates.decodesToClass
-import ghistabs.parse.QualifiedName
+import ghistabs.parse.splitQualified
 
 /** Candidate vtable symbol names for direct lookup, plus a demangler-based recognizer for templates. */
 object VtableSymbolCandidates {
@@ -23,9 +23,7 @@ object VtableSymbolCandidates {
     /** True if [symbolName] demangles to a vtable for [className]. Handles templated `_ZTV…` names. */
     fun decodesToClass(program: Program, symbolName: String, className: String): Boolean {
         if (!looksLikeZtv(symbolName)) return false
-        val obj = runCatching {
-            DemanglerUtil.demangle(program, symbolName, null).firstOrNull()
-        }.getOrNull() ?: return false
+        val obj = demangle(program, symbolName) ?: return false
         return demangledMatchesClass(obj, className)
     }
 
@@ -49,7 +47,7 @@ object VtableSymbolCandidates {
      */
     fun itaniumMangleClassName(name: String): String {
         if ('<' in name) return name
-        val parts = QualifiedName.split(name)
+        val parts = splitQualified(name)
         return if (parts.size == 1) {
             "${parts[0].length}${parts[0]}"
         } else {

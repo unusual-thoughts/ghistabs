@@ -29,7 +29,7 @@ class TypeResolver(
     private val astsByBaseTag: Map<String, List<TypeAst>> by lazy {
         typeAsts.values
             .filter { !it.name.isNullOrEmpty() && it.body.isXRefTarget && it.body.isComplete }
-            .groupBy { QualifiedName.baseTag(it.name!!) }
+            .groupBy { baseTag(it.name!!) }
     }
 
     private val hashCache: MutableMap<GlobalTypeId, Int> by lazy {
@@ -57,7 +57,7 @@ class TypeResolver(
             ?.firstOrNull { it.body.matchesXRefKind(xref.kind) }
             ?.let { return it }
 
-        val tag = QualifiedName.baseTag(xref.tagName)
+        val tag = baseTag(xref.tagName)
         val sameTagAnyKind = if (tag.isNotEmpty()) astsByBaseTag[tag].orEmpty() else emptyList()
         val sameKind = sameTagAnyKind.filter { it.body.matchesXRefKind(xref.kind) }
         val distinctSizes = sameKind.map { it.body.sizeBytes }.toSet()
@@ -91,7 +91,7 @@ class TypeResolver(
 
     /** One-line snapshot of harvest contents under [xref]'s exact tag and base tag. */
     private fun xrefDiagnosis(xref: TypeDecl.XRef<GlobalTypeId>): String {
-        val tag = QualifiedName.baseTag(xref.tagName)
+        val tag = baseTag(xref.tagName)
         val exact = astsByName[xref.tagName].orEmpty()
         val byBase = astsByBaseTag[tag].orEmpty()
         fun summarise(asts: List<TypeAst>): String {

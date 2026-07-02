@@ -1,20 +1,20 @@
 package ghistabs.util
 
-import ghistabs.parse.QualifiedName
+import ghistabs.parse.splitQualified
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
-class QualifiedNameTest {
+class NamesTest {
     @Test
     fun `splits plain namespace chain`() {
-        assertEquals(listOf("std", "vector"), QualifiedName.split("std::vector"))
+        assertEquals(listOf("std", "vector"), splitQualified("std::vector"))
     }
 
     @Test
     fun `keeps inner scope-sep inside angle brackets together`() {
         assertEquals(
             listOf("std", "map<std::string, int>"),
-            QualifiedName.split("std::map<std::string, int>"),
+            splitQualified("std::map<std::string, int>"),
         )
     }
 
@@ -28,7 +28,7 @@ class QualifiedNameTest {
                 "basic_string<char, std::char_traits<char>, std::allocator<char>>",
                 "basic_string",
             ),
-            QualifiedName.split(input),
+            splitQualified(input),
         )
     }
 
@@ -36,7 +36,7 @@ class QualifiedNameTest {
     fun `keeps scope-sep inside parens together`() {
         assertEquals(
             listOf("ns", "f(std::pair<int, int>)"),
-            QualifiedName.split("ns::f(std::pair<int, int>)"),
+            splitQualified("ns::f(std::pair<int, int>)"),
         )
     }
 
@@ -48,22 +48,22 @@ class QualifiedNameTest {
         // balanced templates.
         assertEquals(
             listOf("ns", "less<int>", "operator()"),
-            QualifiedName.split("ns::less<int>::operator()"),
+            splitQualified("ns::less<int>::operator()"),
         )
     }
 
     @Test
     fun `empty leading separator collapses to single segment`() {
-        assertEquals(listOf("foo"), QualifiedName.split("::foo"))
+        assertEquals(listOf("foo"), splitQualified("::foo"))
     }
 
     @Test
     fun `single name returns itself`() {
-        assertEquals(listOf("Foo"), QualifiedName.split("Foo"))
+        assertEquals(listOf("Foo"), splitQualified("Foo"))
     }
 
     @Test
     fun `empty string returns empty list`() {
-        assertEquals(emptyList<String>(), QualifiedName.split(""))
+        assertEquals(emptyList<String>(), splitQualified(""))
     }
 }

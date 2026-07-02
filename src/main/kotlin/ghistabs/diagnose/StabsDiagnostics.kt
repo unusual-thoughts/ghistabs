@@ -7,15 +7,6 @@ import ghistabs.parse.SourceFile
 
 enum class Level { DEBUG, INFO, WARN, ERROR }
 
-/**
- * Itanium-mangled `_ZN…` whose first scope is `std::`, `__gnu_cxx::`, or an STL shortcut
- * (`Ss`/`Sa`/`Si`/`So`/`Sd`/`St`). gcc declares these in stabs even when COMDAT-dropped,
- * so a missing Function at the asserted address is expected — routed to `*-inlined-std`.
- */
-private val INLINE_STD_MEMBER = Regex("""^_ZN[KV]*(?:S[adios]|St|9__gnu_cxx)""")
-
-fun isInlineStdMember(name: String): Boolean = INLINE_STD_MEMBER.containsMatchIn(name)
-
 interface DiagnosticSink {
     fun log(category: String, message: String? = null, level: Level = Level.INFO, address: Address? = null)
 }
