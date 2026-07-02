@@ -1,8 +1,10 @@
 package ghistabs.materialize
 
+import ghidra.program.model.data.BuiltInDataType
 import ghidra.program.model.data.DataType
 import ghidra.program.model.data.DataTypeManager
 import ghidra.program.model.data.TypeDef
+import ghidra.program.model.data.Undefined
 import ghistabs.diagnose.DiagnosticSink
 
 /** A rename the shortening pass performs: datatype simple name [from] → [to]. */
@@ -37,12 +39,19 @@ fun typedefShorteningRenames(aliases: Map<String, String>, typeNames: Set<String
         .sortedByDescending { it.first.length }
     if (subs.isEmpty()) return emptyList()
 
+    // Match a target only on identifier boundaries so a bare-identifier target can't rewrite a
+    // substring of a longer name (`longlong` inside `longlongint`, `Node` inside `NodeList`). The
+    // `>`-terminated template targets still match — they're bounded by `<`, `,`, `::` or edges.
+    val guarded = subs.map { (target, alias) ->
+        Regex("(?<![A-Za-z0-9_])${Regex.escape(target)}(?![A-Za-z0-9_])") to alias
+    }
+
     fun rewrite(name: String): String {
         var s = canonTemplateName(name)
         var prev: String
         do {
             prev = s
-            for ((target, alias) in subs) s = s.replace(target, alias)
+            for ((re, alias) in guarded) s = re.replace(s) { alias }
         } while (s != prev)
         return s
     }
@@ -70,11 +79,19 @@ class TypedefShortener(private val dtm: DataTypeManager, private val sink: Diagn
     private fun DataType.isStabsOrigin(): Boolean =
         sourceArchive == null || sourceArchive.sourceArchiveID == dtm.localSourceArchive.sourceArchiveID
 
+    /**
+     * Ghidra base type — a built-in (`int`, `longlong`, `char *`, …) or an undefined placeholder
+     * (`undefined`, `undefined4`). Never shorten these: a stabs `typedef long long fpos_t` must not
+     * rename Ghidra's `longlong` to `fpos_t`, and their short names also corrupt siblings by
+     * substring (`longlong` inside `longlongint`, `undefined` inside `undefined4`).
+     */
+    private fun DataType.isGhidraBaseType(): Boolean = this is BuiltInDataType || Undefined.isUndefined(this)
+
     fun renames(): List<TypedefRename> {
         val types = allTypes()
         val aliases = types.asSequence()
             .filterIsInstance<TypeDef>()
-            .filter { it.isStabsOrigin() }
+            .filter { it.isStabsOrigin() && !it.dataType.isGhidraBaseType() }
             .associate { it.name to it.dataType.name }
         return typedefShorteningRenames(aliases, types.mapTo(mutableSetOf()) { it.name })
     }
