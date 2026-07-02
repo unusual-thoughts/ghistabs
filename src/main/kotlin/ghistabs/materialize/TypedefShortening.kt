@@ -8,15 +8,10 @@ import ghidra.program.model.data.DataTypeManager
 import ghidra.program.model.data.TypeDef
 import ghidra.program.model.data.Undefined
 import ghistabs.diagnose.DiagnosticSink
+import ghistabs.parse.canonTemplateName
 
 /** A rename the shortening pass performs: datatype simple name [from] → [to]. */
 data class TypedefRename(val from: String, val to: String)
-
-/** Whitespace around template punctuation — gcc is inconsistent (`< `, `, `, ` >`, `> >`). */
-private val TEMPLATE_PUNCT = Regex("""\s*([<>,])\s*""")
-
-/** Canonical spelling of a templated name: no whitespace around `<`, `>`, `,` (multi-word types like `short unsigned int` keep their spaces). */
-fun canonTemplateName(name: String): String = TEMPLATE_PUNCT.replace(name.trim()) { it.groupValues[1] }
 
 /**
  * Collapses long templated names onto shorter typedef aliases.

@@ -2,23 +2,17 @@ package ghistabs.importer
 
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.Undefined4DataType
-import ghidra.program.model.listing.CommentType
+import ghidra.program.model.listing.*
 import ghidra.program.model.listing.Function
-import ghidra.program.model.listing.LocalVariableImpl
-import ghidra.program.model.listing.ParameterImpl
-import ghidra.program.model.listing.VariableUtilities
 import ghidra.program.model.symbol.SourceType
+import ghistabs.applyDemangling
 import ghistabs.diagnose.ApplyErrorBucket
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.Level
-import ghistabs.diagnose.isInlineStdMember
 import ghistabs.harvest.*
 import ghistabs.materialize.TypeRegistry
 import ghistabs.materialize.TypedefShortener
-import ghistabs.parse.GlobalTypeId
-import ghistabs.parse.StabReader
-import ghistabs.parse.SymbolDecl
-import ghistabs.parse.TypeDecl
+import ghistabs.parse.*
 import ghistabs.runTransaction
 
 private val X86_DBX_TO_REGISTER = listOf("EAX", "ECX", "EDX", "EBX", "ESP", "EBP", "ESI", "EDI")
@@ -298,11 +292,6 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
     }
 
     private fun demangleMangledLabels() {
-        val options = ghidra.app.util.demangler.DemanglerOptions().apply {
-            setApplySignature(false)
-            setApplyCallingConvention(false)
-            setDoDisassembly(false)
-        }
         var attempted = 0
         var demangled = 0
         for (sym in ctx.program.symbolTable.symbolIterator) {
@@ -312,10 +301,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
             // GnuDemangler handles both (strips one leading `_`).
             if (!name.startsWith("_Z") && !name.startsWith("__Z")) continue
             attempted++
-            val cmd = ghidra.app.cmd.label.DemanglerCmd(sym.address, name, options)
-            if (cmd.applyTo(ctx.program, ctx.monitor) && cmd.result != null) {
-                demangled++
-            }
+            if (applyDemangling(ctx.program, sym.address, name, monitor = ctx.monitor)) demangled++
         }
         ctx.diagnostics.inc("demangle-attempted", attempted.toLong())
         ctx.diagnostics.inc("demangle-applied", demangled.toLong())
