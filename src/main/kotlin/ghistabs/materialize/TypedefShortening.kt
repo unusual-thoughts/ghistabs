@@ -1,12 +1,6 @@
 package ghistabs.materialize
 
-import ghidra.program.model.data.BuiltInDataType
-import ghidra.program.model.data.Composite
-import ghidra.program.model.data.DataType
-import ghidra.program.model.data.DataTypeComponent
-import ghidra.program.model.data.DataTypeManager
-import ghidra.program.model.data.TypeDef
-import ghidra.program.model.data.Undefined
+import ghidra.program.model.data.*
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.parse.canonTemplateName
 
@@ -62,7 +56,7 @@ fun typedefShorteningRenames(aliases: Map<String, String>, typeNames: Set<String
  * `basic_string<char, std::char_traits<char>, …>` spelling. Pure rename computation lives in
  * [typedefShorteningRenames]; this reads the aliases and names out of the DTM and applies them.
  */
-class TypedefShortener(private val dtm: DataTypeManager, private val sink: DiagnosticSink) {
+class TypedefShortener(private val dtm: DataTypeManager, sink: DiagnosticSink) : DiagnosticSink by sink {
     private fun allTypes(): List<DataType> = dtm.allDataTypes.asSequence().toList()
 
     /**
@@ -105,7 +99,7 @@ class TypedefShortener(private val dtm: DataTypeManager, private val sink: Diagn
         // build time, so renaming the base datatype never reaches them — rewrite those field names too.
         val fieldRenamed = types.filterIsInstance<Composite>()
             .sumOf { c -> c.components.count { it.shortenBaseField(shortener) } }
-        sink.log("typedef-shorten", "renamed $typeRenamed datatypes, $fieldRenamed base fields")
+        log("typedef-shorten", "renamed $typeRenamed datatypes, $fieldRenamed base fields")
         return typeRenamed + fieldRenamed
     }
 
@@ -127,10 +121,10 @@ class TypedefShortener(private val dtm: DataTypeManager, private val sink: Diagn
         val conflict = dtm.getDataType(dt.categoryPath, to)
         if (conflict is TypeDef && conflict.dataType == dt) {
             runCatching { dtm.replaceDataType(conflict, dt, false) }
-                .onFailure { sink.log("typedef-shorten-skip", "fold ${conflict.pathName}: ${it.message}") }
+                .onFailure { log("typedef-shorten-skip", "fold ${conflict.pathName}: ${it.message}") }
             return runCatching { dt.name = to }.isSuccess
         }
-        sink.log("typedef-shorten-skip", "${dt.pathName} -> $to: name held by ${conflict?.pathName ?: "?"}")
+        log("typedef-shorten-skip", "${dt.pathName} -> $to: name held by ${conflict?.pathName ?: "?"}")
         return false
     }
 }

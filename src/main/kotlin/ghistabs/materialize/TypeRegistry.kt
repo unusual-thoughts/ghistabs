@@ -3,7 +3,6 @@ package ghistabs.materialize
 import ghidra.program.model.data.*
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.GapRecord
-import ghistabs.diagnose.Level
 import ghistabs.diagnose.StabsDiagnostics
 import ghistabs.diagnose.degradation
 import ghistabs.harvest.Harvest
@@ -17,7 +16,7 @@ import ghistabs.runTransaction
 
 class TypeRegistry(
     private val dtm: DataTypeManager,
-    private val sink: DiagnosticSink,
+    sink: DiagnosticSink,
     private val diagnostics: StabsDiagnostics,
     private val harvest: Harvest,
     private val resolver: TypeResolver,
@@ -403,7 +402,7 @@ class TypeRegistry(
 
             else -> StructureDataType(category, ast.ghidraName, 0, dtm)
         }
-        log("placeholder-created", "name=${ast.nameOrUnique} category=$category reason=$reason", Level.DEBUG)
+        debug("placeholder-created", "name=${ast.nameOrUnique} category=$category reason=$reason")
         return dt
     }
 

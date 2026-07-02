@@ -12,7 +12,7 @@ import kotlinx.serialization.Transient
 import java.util.*
 
 /** Cross-CU dedup of header files via (filename, checksum) so BINCL/EXCL share one [HeaderFile]. */
-class HeaderRegistry(val sink: DiagnosticSink = DummySink) : DiagnosticSink by sink {
+class HeaderRegistry(sink: DiagnosticSink = DummySink) : DiagnosticSink by sink {
     /** (filename, checksum) → HeaderFile for cross-CU BINCL/EXCL sharing. */
     private val globalByFilenameChecksum = mutableMapOf<Pair<String, Long>, HeaderFile>()
 

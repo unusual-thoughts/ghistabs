@@ -2,7 +2,6 @@ package ghistabs.harvest
 
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.DummySink
-import ghistabs.diagnose.Level
 import ghistabs.parse.*
 
 /**
@@ -10,7 +9,9 @@ import ghistabs.parse.*
  * per-reason failure counters, canonical-key grouping for TypeRegistry slot assignment,
  * and content-distinct collision filtering.
  */
-class TypeResolver(val harvest: Harvest, private val sink: DiagnosticSink = DummySink) : TypeAstOracle {
+class TypeResolver(val harvest: Harvest, sink: DiagnosticSink = DummySink) :
+    DiagnosticSink by sink,
+    TypeAstOracle {
     val typeAsts get() = harvest.typeAsts
 
     /** All named aggregate / enum ASTs, indexed by raw stabs name. */
@@ -59,7 +60,7 @@ class TypeResolver(val harvest: Harvest, private val sink: DiagnosticSink = Dumm
 
         if (sameKind.isNotEmpty() && distinctSizes.size == 1) {
             val resolved = sameKind.first()
-            sink.log("xref-base-tag-resolved", "'${xref.tagName}' → '${resolved.nameOrUnique}'", Level.DEBUG)
+            debug("xref-base-tag-resolved", "'${xref.tagName}' → '${resolved.nameOrUnique}'")
             return resolved
         }
 
@@ -68,7 +69,7 @@ class TypeResolver(val harvest: Harvest, private val sink: DiagnosticSink = Dumm
         val exactAnyKind = astsByName[xref.tagName].orEmpty()
         val counter = when {
             sameKind.isNotEmpty() -> {
-                sink.log(
+                debug(
                     "xref-base-tag-ambiguous",
                     "'${xref.tagName}': ${sameKind.size} candidates with sizes $distinctSizes; refusing fallback",
                 )
@@ -79,8 +80,8 @@ class TypeResolver(val harvest: Harvest, private val sink: DiagnosticSink = Dumm
 
             else -> "xref-undefined"
         }
-        sink.log(counter)
-        sink.log("unresolved-xref", "${xref.tagName} [${xref.kind}] ${xrefDiagnosis(xref)}", Level.WARN)
+        log(counter)
+        debug("unresolved-xref", "${xref.tagName} [${xref.kind}] ${xrefDiagnosis(xref)}")
         return null
     }
 
@@ -244,25 +245,22 @@ class TypeResolver(val harvest: Harvest, private val sink: DiagnosticSink = Dumm
     private fun classifyGroup(key: GhidraKey, members: List<TypeAst>): CanonicalGroup {
         val distinctKinds = members.map { it.body::class }.toSet()
         if (distinctKinds.size > 1) {
-            sink.log(
+            warn(
                 "canonical-key-multi-kind",
                 "$key: ${distinctKinds.map { it.simpleName }}",
-                Level.WARN,
             )
         }
         val byHash = members.groupBy { contentHash(it.body) }
         when {
-            byHash.size > 1 -> sink.log(
+            byHash.size > 1 -> debug(
                 "canonical-key-multi-hash",
                 "$key: ${byHash.size} distinct bodies across " +
                     members.map { it.id.source.filename }.toSet(),
-                Level.INFO,
             )
 
-            members.size > 1 -> sink.log(
+            members.size > 1 -> debug(
                 "canonical-key-merged",
                 "$key: ${members.size} ASTs collapsed (single body)",
-                Level.DEBUG,
             )
         }
         // Winner: largest body → fewest unresolved Refs → first by source filename (stable tiebreak).

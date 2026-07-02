@@ -70,7 +70,14 @@ class ClassBuilder(
         val body = group.ast.body as TypeDecl.Struct<GlobalTypeId>
         val structDt = typeRegistry.dataTypeFor(group.ast.id)
         if (structDt !is Structure) {
-            log("class-not-struct", "skipping ${structDt?.let { it::class.simpleName }} class '$name' at $category ")
+            warn(
+                "class-not-struct",
+                "skipping ${
+                    structDt?.let {
+                        it::class.simpleName
+                    }
+                } class '$name' at $category ",
+            )
             return
         }
 
@@ -175,7 +182,7 @@ class ClassBuilder(
                 log("vfptr-normalized")
             }
 
-            is VfptrAction.CollisionAt -> log(
+            is VfptrAction.CollisionAt -> warn(
                 "vfptr-collision",
                 "$className: cannot place {vfptr} at +${action.offsetBytes} (occupied by ${action.occupantFieldName})",
             )
@@ -212,19 +219,15 @@ class ClassBuilder(
             if (isImplicitTrivialSpecialMember(mangled)) {
                 log("method-implicit-not-emitted")
             } else {
-                log("unresolved-symbol", "method $mangled (in $className)", Level.DEBUG)
+                debug("unresolved-symbol", "method $mangled (in $className)")
             }
             return
         }
         val func = program.functionManager.getFunctionAt(addr) ?: run {
-            val tag: String
-            val level: Level
-            if (isInlineStdMember(mangled)) {
-                tag = "unresolved-symbol-inlined-std"
-                level = Level.DEBUG
+            val (tag, level) = if (isInlineStdMember(mangled)) {
+                "unresolved-symbol-inlined-std" to Level.DEBUG
             } else {
-                tag = "unresolved-symbol"
-                level = Level.WARN
+                "unresolved-symbol" to Level.WARN
             }
             log(tag, "no Function at $addr for $mangled", level)
             return
@@ -252,7 +255,7 @@ class ClassBuilder(
         // func.getParameter(0)?.name to detect — for force-created functions the param list
         // isn't populated yet.
         val thiscallAccepted = runCatching { func.setCallingConvention("__thiscall") }
-            .onFailure { log("method-calling-convention", "$className::${m.name}: ${it.message}") }
+            .onFailure { warn("method-calling-convention", "$className::${m.name}: ${it.message}") }
             .isSuccess
         val ghidraInjectsThis = thiscallAccepted && func.parentNamespace is GhidraClass
 
@@ -368,7 +371,7 @@ class ClassBuilder(
             .sortedBy { it.vtableOffsetBits ?: Long.MAX_VALUE }
         val virtuals = mergeVtableSlots(inherited, ownVirtuals)
         if (virtuals.isEmpty()) {
-            log("vtable-skipped", "class=$className reason=no-virtuals", Level.DEBUG)
+            debug("vtable-skipped", "class=$className reason=no-virtuals")
             return
         }
 
@@ -424,9 +427,9 @@ class ClassBuilder(
         // Data address. The demangler emits `<class>::vtable` (no f); this label is
         // what makes us discoverable.
         runCatching { symtab.createLabel(addr, "vftable", ns, source) }
-            .onFailure { log("vftable-label-failed", "$className at $addr: ${it.message}") }
-        log("vtable", "applied $vtableName", address = addr)
-        log("vtable-applied", "class=$className", Level.DEBUG)
+            .onFailure { warn("vftable-label-failed", "$className at $addr: ${it.message}", address = addr) }
+        debug("vtable", "applied $vtableName", address = addr)
+        debug("vtable-applied", "class=$className")
 
         // Plate-comment each virtual. An unresolved mangled name here is expected for
         // pure virtuals (slot points at __cxa_pure_virtual, no symbol emitted) or
@@ -443,18 +446,16 @@ class ClassBuilder(
                         "virtual ${m.name}; ${className}_vtable offset $off",
                     )
                 } else {
-                    log(
+                    debug(
                         "vtable-virtual-no-function",
                         "no Function at $mAddr for virtual method ${m.name} in $className",
-                        Level.DEBUG,
                     )
                 }
             } else {
-                log(
+                debug(
                     "vtable-virtual-no-impl",
                     "virtual method '${m.name}' in $className has no resolvable implementation " +
                         "(pure virtual or DLL import); slot type still applied",
-                    Level.DEBUG,
                 )
             }
             off += ptrSize
@@ -522,7 +523,7 @@ class ClassBuilder(
                     VtableSymbolCandidates.decodesToClass(program, it.name, className)
             }?.let { return it.address }
         } catch (e: IllegalArgumentException) {
-            log("vtable-symbol-scan-error", "exception scanning symbol table for $className: ${e.message}")
+            warn("vtable-symbol-scan-error", "exception scanning symbol table for $className: ${e.message}")
         }
 
         val rdataBlock = program.memory.getBlock(".rdata")
@@ -536,7 +537,7 @@ class ClassBuilder(
                             VtableSymbolCandidates.decodesToClass(program, it.name, className)
                     }?.let { return it.address }
             } catch (e: IllegalArgumentException) {
-                log("vtable-rdata-scan-error", "exception scanning .rdata for $className: ${e.message}")
+                warn("vtable-rdata-scan-error", "exception scanning .rdata for $className: ${e.message}")
             }
         }
 
@@ -548,7 +549,7 @@ class ClassBuilder(
 
             else -> "truly-missing"
         }
-        log("vtable-failed", "class=$className reason=$failureBucket", Level.DEBUG)
+        debug("vtable-failed", "class=$className reason=$failureBucket")
         degradation("vtable-failed", className, failureBucket)
         log(
             "vtable-failed-$failureBucket",
