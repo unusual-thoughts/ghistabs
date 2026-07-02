@@ -4,6 +4,7 @@ import ghidra.app.decompiler.DecompInterface
 import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
+import ghistabs.harvest.LineEntry
 import ghistabs.harvest.TypeAst
 import ghistabs.harvest.TypeResolver
 import ghistabs.parse.GlobalTypeId
@@ -315,27 +316,51 @@ private class RenderContext(val renderer: Renderer, val source: String) {
                     true
                 }
             }
-            // Keep the decompiler's statement order; tag each line with the source line its
-            // instructions came from (address → the function's N_SLINE table), since the
-            // decompiler may invert conditions / leave gotos so its structure isn't the source's.
+            // Keep the decompiler's statement order (it may invert conditions / leave gotos, so its
+            // structure isn't the source's), but coalesce onto one output line each run of statements
+            // that belongs to one source line: repeats of the same line, plus inlined-header code
+            // (a foreign N_SOL — the inlined call belongs to its call site's line). This cuts the
+            // body to roughly the number of this-file source lines it touches, so it fits the span
+            // instead of cramming onto the close line. The folded head (index 0) is never a target.
             val slines = r.func.lineEntries.sortedBy { it.addr.address.offset }
-            fun sourceRef(addr: Address?): String? {
-                val e = addr?.let { a -> slines.lastOrNull { it.addr.address.offset <= a.offset } } ?: return null
-                return if (e.source == source) "L ${e.line}" else "${e.source.substringAfterLast('/')} L ${e.line}"
+            fun entryFor(addr: Address?) = addr?.let { a -> slines.lastOrNull { it.addr.address.offset <= a.offset } }
+            fun refOf(e: LineEntry?): String? {
+                e ?: return null
+                val file = if (e.source == source) "" else "${e.source.substringAfterLast('/')} "
+                return "${file}L ${e.line}"
+            }
+            val placed = mutableListOf<Pair<StringBuilder, LineEntry?>>()
+            var currentLine: Int? = null
+            for ((idx, dl) in cLines.withIndex()) {
+                val entry = entryFor(dl.address)
+                val ownLine = entry?.takeIf { it.source == source }?.line
+                if (idx > 0 && placed.size > 1 && (ownLine == null || ownLine == currentLine)) {
+                    placed.last().first.append(' ').append(dl.text.trim())
+                } else {
+                    placed += StringBuilder(dl.text) to entry
+                }
+                if (ownLine != null) currentLine = ownLine
             }
             val available = closeLine - r.startLine + 1
-            if (cLines.size <= available) {
-                cLines.forEachIndexed { i, l ->
-                    canvas[r.startLine + i] +=
-                        Fragment(code = l.text, note = sourceRef(l.address), kind = FragmentKind.DECOMP)
+            if (placed.size <= available) {
+                placed.forEachIndexed { i, (text, entry) ->
+                    canvas[r.startLine + i] += Fragment(
+                        code = text.toString(),
+                        note = refOf(entry),
+                        kind = FragmentKind.DECOMP,
+                    )
                 }
             } else {
                 for (i in 0 until available - 1) {
                     canvas[r.startLine + i] +=
-                        Fragment(code = cLines[i].text, note = sourceRef(cLines[i].address), kind = FragmentKind.DECOMP)
+                        Fragment(
+                            code = placed[i].first.toString(),
+                            note = refOf(placed[i].second),
+                            kind = FragmentKind.DECOMP,
+                        )
                 }
-                val rest = cLines.subList(available - 1, cLines.size)
-                    .map { it.text.trim().trimEnd(';') }
+                val rest = placed.subList(available - 1, placed.size)
+                    .map { it.first.toString().trim().trimEnd(';') }
                     .filter { it.isNotEmpty() }
                 canvas[closeLine] += Fragment(code = rest.joinToString("; ") + ";", kind = FragmentKind.DECOMP)
             }
