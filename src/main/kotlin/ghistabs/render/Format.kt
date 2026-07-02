@@ -18,6 +18,9 @@ fun commentFor(line: Int, kind: FragmentKind, note: String, stale: Boolean) = wh
     FragmentKind.SLINE -> "// ${lineRef(line)} @ $note"
     FragmentKind.FUNC_DELIM -> "/* ${lineRef(line)} — $note */"
     FragmentKind.STRAY -> "// stray: $note"
+    // Decomp keeps the decompiler's own statement order; the tag says which source line the
+    // statement's instructions actually came from ([note]), since the grid position doesn't.
+    FragmentKind.DECOMP -> "// ⇐ $note"
     else -> {
         val role = if (note.isEmpty()) "" else " $note"
         val staleMark = if (stale) "${if (note.isEmpty()) "" else ";"} stale N_SOL?" else ""

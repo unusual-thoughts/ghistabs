@@ -32,13 +32,19 @@ so the type is the text before the first space and the declarator (with its `*`/
 rest. appquery `names`: ~15 decl lines → one grouped head line. Replaced the text-based
 `cleanDecompLines`.
 
-**Next (source-line flow):** place each statement line on its N_SLINE source line by
-mapping its token address through the function's SLINE table (address → line), instead of
-the current sequential `startLine + i` placement with overflow cram. This is what actually
-aligns the decompilation to the source; the address is already on each `DecompLine`.
+**Done (source-line annotation, option B):** each statement line is tagged `// ⇐ L NN`
+with the source line its instructions came from — token address → the function's SLINE
+table (`lastOrNull { addr ≤ a }`), foreign source rendered `file.h L NN`. We keep the
+decompiler's own statement order and structure rather than *repositioning* to the source
+line: Ghidra inverts conditions and leaves gotos/labels, so its C structure isn't the
+source's, and repositioning would scatter/collide (verified reasoning). The annotation
+gives source correspondence without distorting the layout — `_main` statements tag across
+L31→L97, `LAB_…: // ⇐ L 58`, `if (argc < 2) // ⇐ L 51`, a one-source-line loop clusters
+on L60. `DecompLine` now carries the address; `commentFor` has a `DECOMP` case.
 
 Interim still in place: `DecompileOptions.setMaxWidth(10_000)` so long template decls don't
-wrap into orphan `;` continuation lines. Superseded once flow is address-driven.
+wrap into orphan `;` continuation lines. Could be dropped later by assembling wrapped lines
+from tokens ourselves.
 
 ## 5. Sweep findings (all fixtures, `--exclude-dir='*.old'`)
 
