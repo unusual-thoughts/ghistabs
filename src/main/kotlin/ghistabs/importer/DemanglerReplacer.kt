@@ -114,7 +114,7 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val typeRegis
                 is Skip.WouldBeCycle -> "demangler-skip-cycle"
                 is Skip.StubAlreadyMissing -> "demangler-skip-already-missing"
             }
-            ctx.diagnostics.inc(counterKey)
+            log(counterKey)
             // Only WouldBeCycle is a real degradation — we had a replacement and couldn't apply it.
             if (skip is Skip.WouldBeCycle) {
                 ctx.diagnostics.recordDegradation("demangler-skip-cycle", skip.name, skip.reason)
@@ -133,10 +133,9 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val typeRegis
             try {
                 // updateCategoryPath = false: keep replacement at its real category.
                 dtm.replaceDataType(stubDt, replDt, false)
-                ctx.diagnostics.inc("replaced-demangler")
                 log("replaced-demangler", "${stubDt.pathName} -> ${replDt.pathName}")
             } catch (e: Exception) {
-                ctx.diagnostics.inc("replaced-demangler-failed")
+                log("replaced-demangler-failed")
                 ctx.diagnostics.recordDegradation(
                     "demangler-replace-failed",
                     stubDt.pathName,

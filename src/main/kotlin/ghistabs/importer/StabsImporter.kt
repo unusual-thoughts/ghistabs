@@ -133,7 +133,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
             try {
                 val func = funcMgr.getFunctionAt(open.addr.address)
                     ?: funcMgr.getFunctionContaining(open.addr.address)?.also {
-                        ctx.diagnostics.inc("entrypoint-snapped")
+                        log("entrypoint-snapped")
                     }
                     ?: tryCreateFunctionFromStab(open) ?: run {
                     val tag: String
@@ -330,7 +330,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
         if (ctx.program.listing.getInstructionAt(addr) == null) {
             val disasm = ghidra.app.cmd.disassemble.DisassembleCommand(addr, null, true)
             if (disasm.applyTo(ctx.program, ctx.monitor) && disasm.disassembledAddressSet.numAddresses > 0) {
-                ctx.diagnostics.inc("function-create-disassembled-first")
+                log("function-create-disassembled-first")
             } else {
                 log(
                     "function-create-disasm-failed",
@@ -350,7 +350,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
             )
             return null
         }
-        ctx.diagnostics.inc("function-created-from-stab")
+        log("function-created-from-stab")
         return ctx.program.functionManager.getFunctionAt(addr)
     }
 
@@ -469,11 +469,11 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
             when (decl) {
                 is SymbolDecl.StackLocal -> {
                     if (decl.name in func.parameters.map { it.name }) {
-                        ctx.diagnostics.inc("local-var-skipped-dup-param")
+                        log("local-var-skipped-dup-param")
                         return
                     }
                     if (decl.name in func.localVariables.map { it.name }) {
-                        ctx.diagnostics.inc("local-var-skipped-dup-local")
+                        log("local-var-skipped-dup-local")
                         return
                     }
                     // gcc's frame-pointer-relative offset → Ghidra's SP-at-entry offset via the
@@ -481,7 +481,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
                     val stackOffset = loc.rawValue.toInt() - frameBias
                     val lv = LocalVariableImpl(decl.name, dt, stackOffset, ctx.program, source)
                     func.addLocalVariable(lv, source)
-                    ctx.diagnostics.inc("local-var-add-success")
+                    log("local-var-add-success")
                 }
 
                 is SymbolDecl.RegLocal -> {
@@ -496,16 +496,16 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
                         return
                     }
                     if (decl.name in func.parameters.map { it.name }) {
-                        ctx.diagnostics.inc("reglocal-skipped-dup-param")
+                        log("reglocal-skipped-dup-param")
                         return
                     }
                     if (decl.name in func.localVariables.map { it.name }) {
-                        ctx.diagnostics.inc("reglocal-skipped-dup-local")
+                        log("reglocal-skipped-dup-local")
                         return
                     }
                     val lv = LocalVariableImpl(decl.name, 0, dt, reg, ctx.program, source)
                     func.addLocalVariable(lv, source)
-                    ctx.diagnostics.inc("reglocal-add-success")
+                    log("reglocal-add-success")
                 }
             }
         } catch (e: Exception) {
