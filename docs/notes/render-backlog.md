@@ -156,6 +156,13 @@ typedefs whose alias is strictly shorter than their target, and rewrites each ta
 onto its alias wherever it appears: the target type itself and, recursively, inside
 every other templated name's parameters, applying the longest target first so nested
 reductions compose (`map<int, vector<basic_string<…> > >` → `map<int,StringVec>`).
+Only stabs-origin typedefs drive renames. Ghidra's PE loader applies a Windows
+data-type archive (`windows_vs12_32`: PVOID, BYTE, WORD, LPSTR, CONTEXT, …), and
+those would otherwise shorten base types (`unsigned char`→`BYTE`, `void *`→`PVOID`)
+— not our business. The pass keeps only typedefs whose source archive is the
+program-local one (`DataType.sourceArchive == dtm.localSourceArchive`); applied-archive
+types carry their external archive. Dropped 22 Windows-driven renames on appquery.
+
 When several typedefs name one target (libstdc++ aliases `basic_string<char, …>` as
 `string`, `_Value_type`, `_ValueType`, …) the shortest alias wins — real appquery
 output collapsed to `_Value_type` until this was added.
