@@ -171,44 +171,53 @@ class TypeResolver(
     }
 
     /**
-     * For multi-CU classes whose direct sources are all .cpp, infer the owning header by
-     * majority vote over the source attribution of N_SLINE entries inside the type's member
-     * function bodies — gcc emits `N_SOL("foo.h")` bursts inside each method that inlines
-     * header code, so the line entries point back at the declaring header.
+     * Infer a class's owning header when gcc emitted its `:Tt` definition inside a .cpp rather than
+     * a BINCL'd header — the header association is lost at emission, so the def's `id.source` is a
+     * misleading .cpp (e.g. AppImage's full def lands only in main.cpp). Majority vote over the
+     * N_SOL source of line entries inside the type's member-function bodies: gcc emits
+     * `N_SOL("foo.h")` bursts wherever a method inlines header code, so those entries point back at
+     * the declaring header (AppImage's destructors inlined into main.cpp carry appimage.h entries).
+     *
+     * Only types with a .cpp definition source are considered: a def already in a header renders
+     * correctly via `id.source`, and a hint could only drag it to a worse one. A real (non-stdlib)
+     * header vote always wins. When a type inlines only stdlib code (std::string/std::vector) it has
+     * no real-header home; fall back to the stdlib majority *only if the def is scattered across
+     * several sources*, to collapse it into one file instead of duplicating it per CU — a single
+     * .cpp-local instantiation is left in place rather than dragged into a stdlib header.
      */
     val multiSourceHeaderHints: Map<String, String> by lazy {
         val h = harvest ?: return@lazy emptyMap()
         if (h.openFunctions.isEmpty() || h.lineEntries.isEmpty()) return@lazy emptyMap()
         val funcsByMangled = h.openFunctions.filter { (it.sizeBytes ?: 0uL) > 0uL }.associateBy { it.name }
-        // Skip lookups for sources that are the type's own definition CU: those win by
-        // sheer body-size and would short-circuit the heuristic.
-        val cuSourcesByName = typeAsts.values
+        val defSourcesByName = typeAsts.values
             .filter { it.name != null }
             .groupBy({ it.name!! }, { it.id.source.filename })
             .mapValues { it.value.toSet() }
         val out = mutableMapOf<String, String>()
         for ((name, asts) in astsByName) {
-            // Only types with >1 distinct CU source need a hint — single-source types
-            // already attribute correctly via Attribution's uniquePaths path.
-            val cuSources = cuSourcesByName[name] ?: continue
-            if (cuSources.size < 2) continue
+            val defSources = defSourcesByName[name] ?: continue
+            if (defSources.all { it.hasHeaderExtension() }) continue
             val methods = asts.flatMap { (it.body as? TypeDecl.Struct<*>)?.methods.orEmpty() }
             if (methods.isEmpty()) continue
-            val tally = mutableMapOf<String, Int>()
+            // A type's own def sources win by body size, so exclude them from the vote.
+            val userVote = mutableMapOf<String, Int>()
+            val stdVote = mutableMapOf<String, Int>()
             for (m in methods) {
                 val func = funcsByMangled[m.mangled ?: continue] ?: continue
                 val lo = func.addr.address.offset
                 val hi = lo + (func.sizeBytes ?: 0uL).toLong()
                 for ((src, entries) in h.lineEntries) {
-                    if (src in cuSources) continue
-                    if (!src.hasHeaderExtension()) continue
+                    if (src in defSources || !src.hasHeaderExtension()) continue
+                    val vote = if (src.isStdMarkerPath()) stdVote else userVote
                     for (e in entries) {
                         val a = e.addr.address.offset
-                        if (a in lo until hi) tally.merge(src, 1, Int::plus)
+                        if (a in lo until hi) vote.merge(src, 1, Int::plus)
                     }
                 }
             }
-            tally.maxByOrNull { it.value }?.let { out[name] = it.key }
+            val winner = userVote.maxByOrNull { it.value }?.key
+                ?: stdVote.takeIf { defSources.size > 1 }?.maxByOrNull { it.value }?.key
+            winner?.let { out[name] = it }
         }
         out
     }
