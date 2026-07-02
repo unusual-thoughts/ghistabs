@@ -42,11 +42,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
         val harvest = harvester.passA(stabs.records)
         // Resolver: by-name/by-base-tag indices, canonicalization, divergent-collision
         // filtering. Every cross-CU lookup downstream goes through this.
-        val typeResolver = TypeResolver(
-            harvest,
-            ctx.sink,
-            ctx.diagnostics,
-        )
+        val typeResolver = TypeResolver(harvest, ctx.sink)
         recordHarvestCounters(harvest, typeResolver, stabs)
 
         // Pass B — materialise types
@@ -87,33 +83,33 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
     }
 
     private fun recordHarvestCounters(harvest: Harvest, resolver: TypeResolver, stabs: StabReader.Result) {
-        ctx.diagnostics.inc("harvest-records-read", stabs.recordCount.toLong())
-        ctx.diagnostics.inc("harvest-records-parsed", (stabs.records.size - harvest.parseErrors).toLong())
-        ctx.diagnostics.inc("harvest-parse-errors", harvest.parseErrors.toLong())
-        ctx.diagnostics.inc("harvest-functions", harvest.openFunctions.size.toLong())
+        log("harvest-records-read", count = stabs.recordCount.toLong())
+        log("harvest-records-parsed", count = (stabs.records.size - harvest.parseErrors).toLong())
+        log("harvest-parse-errors", count = harvest.parseErrors.toLong())
+        log("harvest-functions", count = harvest.openFunctions.size.toLong())
         val allSyms = harvest.symbolsByCu.values.flatten()
-        ctx.diagnostics.inc("harvest-symbols", allSyms.size.toLong())
-        ctx.diagnostics.inc("harvest-globals", allSyms.count { it.body is SymbolDecl.Global }.toLong())
-        ctx.diagnostics.inc("harvest-statics", allSyms.count { it.body is SymbolDecl.StaticVar }.toLong())
-        ctx.diagnostics.inc("harvest-typeAsts", harvest.typeAsts.size.toLong())
+        log("harvest-symbols", count = allSyms.size.toLong())
+        log("harvest-globals", count = allSyms.count { it.body is SymbolDecl.Global }.toLong())
+        log("harvest-statics", count = allSyms.count { it.body is SymbolDecl.StaticVar }.toLong())
+        log("harvest-typeAsts", count = harvest.typeAsts.size.toLong())
         val byKind = harvest.typeAsts.values.groupingBy { it.body::class.simpleName ?: "Unknown" }.eachCount()
         for ((kind, n) in byKind.toSortedMap()) {
-            ctx.diagnostics.inc("harvest-typeAsts-$kind", n.toLong())
+            log("harvest-typeAsts-$kind", count = n.toLong())
         }
-        ctx.diagnostics.inc("harvest-cus", harvest.symbolsByCu.size.toLong())
+        log("harvest-cus", count = harvest.symbolsByCu.size.toLong())
         val uniqueTypeIds = harvest.typeAsts.keys.size
-        ctx.diagnostics.inc("harvest-typeAsts-unique-by-id", uniqueTypeIds.toLong())
-        ctx.diagnostics.inc("harvest-typeAsts-dup-by-id", (harvest.typeAsts.size - uniqueTypeIds).toLong())
-        ctx.diagnostics.inc("harvest-collisions-raw", harvest.rawCollisions.size.toLong())
-        ctx.diagnostics.inc(
+        log("harvest-typeAsts-unique-by-id", count = uniqueTypeIds.toLong())
+        log("harvest-typeAsts-dup-by-id", count = (harvest.typeAsts.size - uniqueTypeIds).toLong())
+        log("harvest-collisions-raw", count = harvest.rawCollisions.size.toLong())
+        log(
             "harvest-collisions-raw-total",
-            harvest.rawCollisions.values.flatMap { it.values }.flatten().count().toLong(),
+            count = harvest.rawCollisions.values.flatMap { it.values }.flatten().count().toLong(),
         )
         // Post-filter: only genuinely divergent multi-body collisions.
-        ctx.diagnostics.inc("harvest-collisions-divergent", resolver.divergentCollisions.size.toLong())
-        ctx.diagnostics.inc(
+        log("harvest-collisions-divergent", count = resolver.divergentCollisions.size.toLong())
+        log(
             "harvest-collisions-divergent-total",
-            resolver.divergentCollisions.values.flatMap { it.values }.flatten().count().toLong(),
+            count = resolver.divergentCollisions.values.flatMap { it.values }.flatten().count().toLong(),
         )
     }
 
@@ -244,9 +240,9 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
         // we build each class once, off the most-detailed body.
         if (ctx.options.applyVtables) {
             val classBuilder = ghistabs.materialize.ClassBuilder(typeRegistry, harvest, typeResolver, ctx)
-            ctx.diagnostics.inc(
+            log(
                 "class-build-name-collisions",
-                harvest.typeAsts.values.groupingBy { it.ghidraName }.eachCount()
+                count = harvest.typeAsts.values.groupingBy { it.ghidraName }.eachCount()
                     .values.count { it > 1 }.toLong(),
             )
             for (group in typeResolver.byCanonicalKey.values) {
@@ -303,8 +299,8 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
             attempted++
             if (applyDemangling(ctx.program, sym.address, name, monitor = ctx.monitor)) demangled++
         }
-        ctx.diagnostics.inc("demangle-attempted", attempted.toLong())
-        ctx.diagnostics.inc("demangle-applied", demangled.toLong())
+        log("demangle-attempted", count = attempted.toLong())
+        log("demangle-applied", count = demangled.toLong())
     }
 
     /**

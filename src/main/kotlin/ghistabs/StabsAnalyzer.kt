@@ -101,8 +101,8 @@ class StabsAnalyzer :
                 program,
                 monitor,
                 options = StabsOptions(program.getOptions(Program.ANALYSIS_PROPERTIES).getOptions(name)),
-                // Tee onto ext.log (raw CapturingSink), NOT ext.sink (BookmarkSink that
-                // bumps ext.diagnostics) — we share diagnostics, so ext.sink would double-count.
+                // Tee the emitting terminal onto ext.log (raw CapturingSink) so tests can inspect
+                // output; counting is the shared ext.diagnostics accumulator, tee'd in ImportContext.
                 log = ext?.let { TeeSink(msgSink, it.log) } ?: msgSink,
                 diagnostics = ext?.diagnostics ?: StabsDiagnostics(),
             ),

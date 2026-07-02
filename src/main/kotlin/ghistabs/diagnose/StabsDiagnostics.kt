@@ -7,23 +7,33 @@ import ghistabs.parse.SourceFile
 
 enum class Level { DEBUG, INFO, WARN, ERROR }
 
+/**
+ * A diagnostic event. [count] lets one call stand in for a bulk tally (`log(cat, count = n)`
+ * replaces the old `inc(cat, n)`); [message] null means a silent counter bump (no output).
+ */
 interface DiagnosticSink {
-    fun log(category: String, message: String? = null, level: Level = Level.INFO, address: Address? = null)
+    fun log(
+        category: String,
+        message: String? = null,
+        level: Level = Level.INFO,
+        address: Address? = null,
+        count: Long = 1,
+    )
 }
 
 object DummySink : DiagnosticSink {
-    override fun log(category: String, message: String?, level: Level, address: Address?) {}
+    override fun log(category: String, message: String?, level: Level, address: Address?, count: Long) {}
 }
 
-/** Fan-out sink — used to tee Ghidra's truncating [MessageLog] alongside a [CapturingSink] in tests. */
+/** Fan-out sink — tees the [StabsDiagnostics] accumulator alongside a terminal (Bookmark/Capturing). */
 class TeeSink(private vararg val sinks: DiagnosticSink) : DiagnosticSink {
-    override fun log(category: String, message: String?, level: Level, address: Address?) {
-        for (s in sinks) s.log(category, message, level, address)
+    override fun log(category: String, message: String?, level: Level, address: Address?, count: Long) {
+        for (s in sinks) s.log(category, message, level, address, count)
     }
 }
 
 fun MessageLog.toSink() = object : DiagnosticSink {
-    override fun log(category: String, message: String?, level: Level, address: Address?) {
+    override fun log(category: String, message: String?, level: Level, address: Address?, count: Long) {
         if (message == null) return
         val prefix = "[Stabs][${level.name}]"
         val line = if (address != null) "$prefix $category at $address: $message" else "$prefix $category: $message"
@@ -46,10 +56,11 @@ data class AttributionTrace(
 data class DegradationRecord(val category: String, val context: String, val detail: String? = null)
 
 /**
- * Per-run diagnostic aggregator. Single-threaded. [writeSummary] is one-shot — subsequent calls
- * no-op, but counters remain readable.
+ * Per-run diagnostic aggregator — the accumulating [DiagnosticSink] terminal. Each [log] bumps the
+ * category counter (by [count]) and, when a message is present, keeps it as a capped example for the
+ * summary. Single-threaded. [writeSummary] is one-shot — subsequent calls no-op, counters stay readable.
  */
-class StabsDiagnostics {
+class StabsDiagnostics : DiagnosticSink {
     private val counters: LinkedHashMap<String, Long> = linkedMapOf()
     private val examples: MutableMap<String, MutableList<String>> = linkedMapOf()
     private val gapCensus: MutableMap<String, List<GapRecord>> = linkedMapOf()
@@ -58,7 +69,12 @@ class StabsDiagnostics {
 
     private var isSealed = false
 
-    fun inc(name: String, by: Long = 1) {
+    override fun log(category: String, message: String?, level: Level, address: Address?, count: Long) {
+        inc(category, count)
+        if (message != null) recordExample(category, message)
+    }
+
+    private fun inc(name: String, by: Long = 1) {
         val current = counters.getOrDefault(name, 0L)
         counters[name] = current + by
     }

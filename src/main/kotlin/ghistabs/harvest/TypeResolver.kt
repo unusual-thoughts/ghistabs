@@ -3,7 +3,6 @@ package ghistabs.harvest
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.DummySink
 import ghistabs.diagnose.Level
-import ghistabs.diagnose.StabsDiagnostics
 import ghistabs.parse.*
 
 /**
@@ -11,11 +10,7 @@ import ghistabs.parse.*
  * per-reason failure counters, canonical-key grouping for TypeRegistry slot assignment,
  * and content-distinct collision filtering.
  */
-class TypeResolver(
-    val harvest: Harvest,
-    private val sink: DiagnosticSink = DummySink,
-    private val diagnostics: StabsDiagnostics = StabsDiagnostics(),
-) : TypeAstOracle {
+class TypeResolver(val harvest: Harvest, private val sink: DiagnosticSink = DummySink) : TypeAstOracle {
     val typeAsts get() = harvest.typeAsts
 
     /** All named aggregate / enum ASTs, indexed by raw stabs name. */
@@ -84,7 +79,7 @@ class TypeResolver(
 
             else -> "xref-undefined"
         }
-        diagnostics.inc(counter)
+        sink.log(counter)
         sink.log("unresolved-xref", "${xref.tagName} [${xref.kind}] ${xrefDiagnosis(xref)}", Level.WARN)
         return null
     }

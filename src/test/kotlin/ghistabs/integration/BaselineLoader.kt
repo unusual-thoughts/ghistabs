@@ -42,3 +42,24 @@ object BaselineLoader {
         return json.decodeFromString(Baseline.serializer(), file.readText())
     }
 }
+
+object BaselineWriter {
+    private val json = Json {
+        prettyPrint = true
+        prettyPrintIndent = "    "
+        encodeDefaults = false
+    }
+
+    /**
+     * Overwrite [file] with an exact snapshot of [counters] (min == max == observed — the import is
+     * deterministic across run modes). Regenerate after an intentional counter change; the git diff
+     * of the baseline is then the record of exactly which counts moved.
+     */
+    fun write(file: File, counters: Map<String, Long>, source: String) {
+        val baseline = Baseline(
+            source = source,
+            counters = counters.toSortedMap().mapValues { (_, v) -> CounterRange(v, v) },
+        )
+        file.writeText(json.encodeToString(Baseline.serializer(), baseline) + "\n")
+    }
+}

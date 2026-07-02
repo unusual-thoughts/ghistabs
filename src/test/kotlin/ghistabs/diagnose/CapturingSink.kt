@@ -22,7 +22,7 @@ class CapturingSink : DiagnosticSink {
 
     internal val lines = mutableListOf<LogLine>()
 
-    override fun log(category: String, message: String?, level: Level, address: Address?) {
+    override fun log(category: String, message: String?, level: Level, address: Address?, count: Long) {
         lines.add(LogLine(tag = category, msg = message, address = address, level = level))
     }
 

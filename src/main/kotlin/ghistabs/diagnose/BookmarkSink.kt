@@ -5,27 +5,17 @@ import ghidra.program.model.listing.BookmarkType
 import ghidra.program.model.listing.Program
 
 /**
- * Facade over BookmarkManager + MessageLog. Diagnostics with no useful
- * address go to the log only; diagnostics at intrinsically-meaningful
- * addresses (function entry, data, vtable) get a bookmark too.
- *
- * All log/bookmark messages are prefixed `[Stabs] <category>: <message>`
- * for filtering.
- *
- * Tag→counter auto-bump contract: Every log(category, ...) and bookmark(category, ...)
- * call also calls diagnostics.inc(category) to maintain consistency between
- * sink output and counter state. This enables Phase 8's regression harness to
- * read counters directly from StabsDiagnostics instead of re-parsing the log.
+ * Emitting terminal: bookmarks diagnostics at intrinsically-meaningful addresses (function entry,
+ * data, vtable), then forwards to [parent] (the MessageLog adapter). Suppresses everything below
+ * [minLevel]. Counting is the [StabsDiagnostics] accumulator's job — this sink no longer touches it,
+ * so it's tee'd alongside, not chained through. Messages are prefixed `[Stabs] <category>: <message>`.
  */
 class BookmarkSink(
     private val program: Program,
     private val parent: DiagnosticSink,
-    private var diagnostics: StabsDiagnostics? = null,
     private val minLevel: Level = Level.INFO,
 ) : DiagnosticSink {
-    override fun log(category: String, message: String?, level: Level, address: Address?) {
-        // Always count for the diagnostics summary; only emit output at/above the threshold.
-        diagnostics?.inc(category)
+    override fun log(category: String, message: String?, level: Level, address: Address?, count: Long) {
         if (level < minLevel) return
         if (address != null) {
             program.bookmarkManager.setBookmark(
@@ -35,6 +25,6 @@ class BookmarkSink(
                 "[Stabs][${level.name}] $category: $message",
             )
         }
-        parent.log(category, message, level, address)
+        parent.log(category, message, level, address, count)
     }
 }
