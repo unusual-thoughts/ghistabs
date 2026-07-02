@@ -2,7 +2,6 @@
 
 package ghistabs.harvest
 
-import ghidra.app.util.demangler.DemanglerUtil
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.CategoryPath
 import ghidra.program.model.listing.Program
@@ -95,8 +94,7 @@ data class OpenFunction(
     var sizeBytes: ULong? = null,
 ) {
     fun demangledName(program: Program? = null) =
-        runCatching { DemanglerUtil.demangle(program, decl.name, addr.address) }.getOrNull()
-            ?.firstNotNullOfOrNull { it.demangledName } ?: decl.name
+        ghistabs.demangledName(program, decl.name, addr.address, fallback = decl.name)
 
     /**
      * Function signature via Ghidra's API at the function's entry address — Ghidra has
@@ -121,17 +119,7 @@ data class OpenFunction(
      * for symbols whose first segment is a substitution-prefix like
      * `St` (std) — we WANT those to keep their N_SLINE attribution.
      */
-    fun outermostClass(): String? {
-        if (!name.startsWith("_ZN")) return null
-        val i = 3
-        // First segment must be a length-prefixed name (digits).
-        if (i >= name.length || !name[i].isDigit()) return null
-        var j = i
-        while (j < name.length && name[j].isDigit()) j++
-        val len = name.substring(i, j).toIntOrNull() ?: return null
-        if (j + len > name.length) return null
-        return name.substring(j, j + len)
-    }
+    fun outermostClass(): String? = outermostClassOf(name)
 
     /**
      * gcc emits file-scope synthetic init/destruct wrappers

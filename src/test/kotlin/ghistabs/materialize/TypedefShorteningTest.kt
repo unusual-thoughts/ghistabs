@@ -1,5 +1,6 @@
 package ghistabs.materialize
 
+import ghistabs.parse.canonTemplateName
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue

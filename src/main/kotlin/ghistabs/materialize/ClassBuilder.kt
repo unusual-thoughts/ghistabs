@@ -1,9 +1,6 @@
 package ghistabs.materialize
 
-import ghidra.app.cmd.label.DemanglerCmd
 import ghidra.app.util.NamespaceUtils
-import ghidra.app.util.demangler.DemanglerOptions
-import ghidra.app.util.demangler.DemanglerUtil
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.*
 import ghidra.program.model.gclass.ClassUtils
@@ -13,13 +10,14 @@ import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.ParameterImpl
 import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
+import ghistabs.applyDemangling
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.Level
-import ghistabs.diagnose.isInlineStdMember
 import ghistabs.harvest.CanonicalGroup
 import ghistabs.harvest.Harvest
 import ghistabs.harvest.TypeResolver
 import ghistabs.importer.ImportContext
+import ghistabs.namespaceChain
 import ghistabs.parse.*
 
 /** Polymorphic-base detection helpers (extracted for pure unit testing). */
@@ -94,23 +92,9 @@ class ClassBuilder(
      */
     private fun ensureClassNamespace(name: String, body: TypeDecl.Struct<GlobalTypeId>): GhidraClass {
         val parts = body.methods.firstNotNullOfOrNull { it.mangled }
-            ?.let { namespaceChainFromMangled(it) }
-            ?: QualifiedName.split(name)
+            ?.let { namespaceChain(program, it) }
+            ?: splitQualified(name)
         return buildNamespaceChain(parts.filter { it.isNotEmpty() })
-    }
-
-    /** Demangle [mangled]; return parent-namespace chain root-first, or null if no parent. */
-    private fun namespaceChainFromMangled(mangled: String): List<String>? {
-        val obj = try {
-            DemanglerUtil.demangle(program, mangled, null).firstOrNull()
-        } catch (_: Throwable) {
-            null
-        } ?: return null
-        val parent = obj.namespace ?: return null
-        return generateSequence(parent) { it.namespace }
-            .map { it.name }
-            .toList()
-            .asReversed()
     }
 
     private fun buildNamespaceChain(parts: List<String>): GhidraClass {
@@ -224,7 +208,7 @@ class ClassBuilder(
             // Trivial implicit special members (default ctor, copy/move ctor/assignment, dtor)
             // appear in every class's stab list but get no emitted symbol. Bucket separately
             // so the unresolved-symbol log surfaces real problems.
-            if (isLikelyImplicitTrivialSpecialMember(mangled)) {
+            if (isImplicitTrivialSpecialMember(mangled)) {
                 ctx.diagnostics.inc("method-implicit-not-emitted")
             } else {
                 log("unresolved-symbol", "method $mangled (in $className)", Level.DEBUG)
@@ -246,16 +230,10 @@ class ClassBuilder(
         }
 
         // Re-parent + rename via Ghidra's demangler (reuses the GhidraClass leaf
-        // ensureClassNamespace already created). Signature/calling-convention application
-        // disabled: the stab has richer types than the mangled name, and our __thiscall
-        // choice below must win.
-        val demangleOpts = DemanglerOptions().apply {
-            setApplySignature(false)
-            setApplyCallingConvention(false)
-            setDoDisassembly(false)
-        }
-        val demangleCmd = DemanglerCmd(addr, mangled, demangleOpts)
-        if (!demangleCmd.applyTo(program)) {
+        // ensureClassNamespace already created). Signature/calling-convention application stays
+        // off (Demangler's defaults): the stab has richer types than the mangled name, and our
+        // __thiscall choice below must win.
+        if (!applyDemangling(program, addr, mangled)) {
             // Fall back to manual namespace + display-name handling.
             func.parentNamespace = ns
             val fallbackName = displayNameFor(mangled, className) ?: m.name
@@ -263,7 +241,7 @@ class ClassBuilder(
             ctx.diagnostics.recordDegradation(
                 "method-demangle-fallback",
                 "$className::${m.name}",
-                demangleCmd.statusMsg,
+                "demangler did not apply to $mangled",
             )
         }
 
@@ -630,21 +608,4 @@ class ClassBuilder(
 
     internal fun hasPolymorphicBaseSubobject(body: TypeDecl.Struct<GlobalTypeId>): Boolean =
         ClassBuilderHelpers(typeResolver).hasPolymorphicBaseSubobject(body)
-
-    /**
-     * Itanium pattern for trivial implicit special members the compiler typically omits:
-     * `_ZN<class>(C[123]|D[012]|aS)E(v|RKS_|OS_)` — ctor/dtor variant or `operator=` with
-     * no params, const-Self&, or Self&&.
-     */
-    private fun isLikelyImplicitTrivialSpecialMember(mangled: String): Boolean {
-        if (!mangled.startsWith("_ZN")) return false
-        return IMPLICIT_SPECIAL_MEMBER_TAIL.containsMatchIn(mangled)
-    }
-
-    companion object {
-        // C[123]=ctor (in-charge/not-in-charge/allocating); D[012]=dtor (deleting/in-charge/
-        // not-in-charge); aS=operator=. E closes nested-name. v=(), RKS_=(const Self&), OS_=(Self&&).
-        private val IMPLICIT_SPECIAL_MEMBER_TAIL =
-            Regex("""(?:C[123]|D[012]|aS)E(?:v|RKS_|OS_)$""")
-    }
 }
