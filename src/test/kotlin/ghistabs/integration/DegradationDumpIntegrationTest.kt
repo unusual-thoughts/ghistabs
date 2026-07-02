@@ -48,7 +48,7 @@ class DegradationDumpIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                 val ctx = ImportContext(
                     program,
                     monitor,
-                    StabsOptions(logDegradations = true),
+                    StabsOptions(),
                     CapturingSink(),
                     StabsDiagnostics(),
                 )
@@ -71,10 +71,7 @@ class DegradationDumpIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                     w.write("\n")
                     for ((cat, list) in byCategory) {
                         w.write("=== $cat (${list.size}) ===\n")
-                        for (e in list) {
-                            val detail = e.detail?.let { " :: $it" } ?: ""
-                            w.write("  ${e.context}$detail\n")
-                        }
+                        for (e in list) w.write("  ${e.detail}\n")
                         w.write("\n")
                     }
                 }

@@ -5,6 +5,7 @@ import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.GapRecord
 import ghistabs.diagnose.Level
 import ghistabs.diagnose.StabsDiagnostics
+import ghistabs.diagnose.degradation
 import ghistabs.harvest.Harvest
 import ghistabs.harvest.TypeAst
 import ghistabs.harvest.TypeResolver
@@ -120,7 +121,7 @@ class TypeRegistry(
 
     private fun recordXRefStubAt(useSite: String, at: String, dt: DataType) {
         if (dt in xrefStubs) {
-            diagnostics.recordDegradation("xref-stub-in-$useSite", at, "type=${dt.name}")
+            degradation("xref-stub-in-$useSite", at, "type=${dt.name}")
         }
     }
 
@@ -159,7 +160,7 @@ class TypeRegistry(
                 composite.allComponentsUndefined() && !sourceHasNoMembers -> "placeholder-undefined-fields"
                 else -> continue
             }
-            diagnostics.recordDegradation(
+            degradation(
                 tag,
                 "${composite.categoryPath}/${composite.name}",
                 when (tag) {
@@ -345,7 +346,7 @@ class TypeRegistry(
     ): FunctionDefinitionDataType {
         val fd = FunctionDefinitionDataType(category, name, dtm)
         fd.returnType = dataTypeFor(ret) ?: run {
-            diagnostics.recordDegradation("function-ret-untyped", at, ret.toString())
+            degradation("function-ret-untyped", at, ret.toString())
             VoidDataType()
         }
         // gcc method signatures end in a void sentinel; passing it would trip
@@ -382,7 +383,7 @@ class TypeRegistry(
     }
 
     private fun undef(category: String, at: String, decl: TypeDecl<GlobalTypeId>): DataType {
-        diagnostics.recordDegradation(category, at, decl.toString())
+        degradation(category, at, decl.toString())
         return Undefined4DataType.dataType
     }
 
@@ -425,7 +426,7 @@ class TypeRegistry(
 
     private fun recordTruncation(ast: TypeAst, originalBytes: Int, truncatedBytes: Int) {
         if (originalBytes <= truncatedBytes) return
-        diagnostics.recordDegradation(
+        degradation(
             "struct-truncated",
             ast.ghidraName,
             "stab claims $originalBytes bytes, last described byte $truncatedBytes; trimmed ${originalBytes - truncatedBytes}",
@@ -500,7 +501,7 @@ class TypeRegistry(
 
             is TypeDecl.Array -> {
                 val elem = dataTypeFor(body.element) ?: run {
-                    diagnostics.recordDegradation("array-element", ast.nameOrUnique, body.element.toString())
+                    degradation("array-element", ast.nameOrUnique, body.element.toString())
                     ByteDataType.dataType
                 }
                 recordXRefStubAt("array-element", ast.nameOrUnique, elem)
@@ -511,7 +512,7 @@ class TypeRegistry(
                 // ArrayDataType rejects length<1; FunctionDefinitionDataType reports
                 // length=0. Substitute Undefined4 to preserve the array shape.
                 val safeElem = if (elem.length < 1) {
-                    diagnostics.recordDegradation(
+                    degradation(
                         "array-element-unsized",
                         ast.nameOrUnique,
                         "${elem::class.simpleName} has length ${elem.length}; substituted Undefined4",
@@ -595,7 +596,7 @@ class TypeRegistry(
                         } else {
                             "${dt.name} (${dt.length}b) larger than gap ($gap b); synthesised $gap-byte placeholder"
                         }
-                        diagnostics.recordDegradation(
+                        degradation(
                             "base-synthesized",
                             "${ast.nameOrUnique}@+$offsetBytes",
                             reason,
@@ -635,7 +636,7 @@ class TypeRegistry(
                             )
                             log("inheritance-applied")
                         } catch (e: java.lang.IllegalArgumentException) {
-                            diagnostics.recordDegradation(
+                            degradation(
                                 "base-layout-failed",
                                 "${ast.nameOrUnique}::${op.baseSimpleName}",
                                 e.message,
@@ -673,7 +674,7 @@ class TypeRegistry(
                     val ft = resolvedFt
                         ?: undef("field-type", "${ast.ghidraName}.${field.name}", field.type)
                     if (resolvedFt != null && resolvedFt.name.startsWith("undefined")) {
-                        diagnostics.recordDegradation(
+                        degradation(
                             "field-resolved-to-undefined",
                             "${ast.ghidraName}.${field.name}",
                             "type=${resolvedFt.name} from ${field.type}",
@@ -694,7 +695,7 @@ class TypeRegistry(
                             // will fill in-place — same DTM object, mutating widens it to
                             // its real size. Only log untracked = real unresolvable XRef.
                             if (ft !in placeholders.values) {
-                                diagnostics.recordDegradation(
+                                degradation(
                                     "field-stub-padded",
                                     "${ast.ghidraName}.${field.name}",
                                     "type=${ft.name} (zero-length); padding to stab-declared $stabBytes bytes",
@@ -720,7 +721,7 @@ class TypeRegistry(
                             else -> {}
                         }
                     } catch (e: Exception) {
-                        diagnostics.recordDegradation(
+                        degradation(
                             "field-dropped",
                             "${ast.nameOrUnique}.${field.name}",
                             e.message,
@@ -743,7 +744,7 @@ class TypeRegistry(
                         val totalBytes = struct.length
                         if (totalBytes > 0 && bytesInHoles * 4 >= totalBytes) {
                             // ≥25% Undefined1 — catches the CSymLexStream "base invisible" pattern.
-                            diagnostics.recordDegradation(
+                            degradation(
                                 "struct-mostly-undefined",
                                 "$category/${ast.ghidraName}",
                                 "$bytesInHoles of $totalBytes bytes are unnamed Undefined1 across ${holes.size} run(s)",
@@ -802,7 +803,7 @@ class TypeRegistry(
                 ?: if (isVoidSelfRef(body.id) || body.id == ast.id) {
                     VoidDataType()
                 } else {
-                    diagnostics.recordDegradation(
+                    degradation(
                         "dangling-ref",
                         ast.nameOrUnique,
                         "ref to ${body.id} from ${ast.source}",
