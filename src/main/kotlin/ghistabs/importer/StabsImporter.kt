@@ -9,6 +9,7 @@ import ghistabs.applyDemangling
 import ghistabs.diagnose.ApplyErrorBucket
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.Level
+import ghistabs.diagnose.degradation
 import ghistabs.harvest.*
 import ghistabs.materialize.TypeRegistry
 import ghistabs.materialize.TypedefShortener
@@ -67,9 +68,6 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
         typeRegistry.reportSurvivingPlaceholders()
 
         ctx.diagnostics.writeSummary(ctx.sink)
-        if (ctx.options.logDegradations) {
-            ctx.diagnostics.writeDegradations(ctx.sink)
-        }
 
         return PassResult(
             recordsRead = stabs.recordCount,
@@ -169,13 +167,13 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
                             else -> "arg$i" to null
                         }
                         if (pdt == null) {
-                            ctx.diagnostics.recordDegradation(
+                            degradation(
                                 "param-untyped",
                                 "${open.name}.$pname",
                             )
                         }
                         typeRegistry.reasonFor(pdt)?.let { reason ->
-                            ctx.diagnostics.recordDegradation(
+                            degradation(
                                 "param-typed-$reason",
                                 "${open.name}.$pname",
                                 "type=${pdt?.pathName}",
@@ -450,10 +448,10 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
             else -> return
         }
         if (resolvedDt == null) {
-            ctx.diagnostics.recordDegradation("local-untyped", "${func.name}.${decl.name}]")
+            degradation("local-untyped", "${func.name}.${decl.name}]")
         }
         typeRegistry.reasonFor(resolvedDt)?.let { reason ->
-            ctx.diagnostics.recordDegradation(
+            degradation(
                 "local-typed-$reason",
                 "${func.name}.${decl.name}",
                 "type=${resolvedDt?.pathName}",
@@ -483,7 +481,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
                     val regName = dbxRegisterName(decl.regNum)
                     val reg = regName?.let { ctx.program.getRegister(it) }
                     if (reg == null) {
-                        ctx.diagnostics.recordDegradation(
+                        degradation(
                             "reglocal-unmapped-regnum",
                             "${func.name}.${decl.name}",
                             "dbx-reg=${decl.regNum} arch-ptr-size=${ctx.program.defaultPointerSize}",
@@ -541,7 +539,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
             return false
         }
         typeRegistry.reasonFor(dt)?.let { reason ->
-            ctx.diagnostics.recordDegradation(
+            degradation(
                 "global-typed-$reason",
                 decl.name,
                 "type=${dt.pathName}",
@@ -593,7 +591,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
         val addr = ctx.resolver.buildAddress(rawAddr)
         val dt = typeRegistry.dataTypeFor(decl.type) ?: return false
         typeRegistry.reasonFor(dt)?.let { reason ->
-            ctx.diagnostics.recordDegradation(
+            degradation(
                 "static-typed-$reason",
                 decl.name,
                 "type=${dt.pathName}",
