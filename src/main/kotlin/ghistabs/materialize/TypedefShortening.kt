@@ -61,9 +61,21 @@ fun typedefShorteningRenames(aliases: Map<String, String>, typeNames: Set<String
 class TypedefShortener(private val dtm: DataTypeManager, private val sink: DiagnosticSink) {
     private fun allTypes(): List<DataType> = dtm.allDataTypes.asSequence().toList()
 
+    /**
+     * A typedef the stabs importer created, as opposed to one Ghidra's PE loader applied from a
+     * data-type archive (PVOID, BYTE, DWORD, CONTEXT, …). Only stabs typedefs should drive renames —
+     * shortening `unsigned char` to `BYTE` because a Windows archive is loaded is not our business.
+     * Stabs types live in the program-local source archive; applied archive types don't.
+     */
+    private fun DataType.isStabsOrigin(): Boolean =
+        sourceArchive == null || sourceArchive.sourceArchiveID == dtm.localSourceArchive.sourceArchiveID
+
     fun renames(): List<TypedefRename> {
         val types = allTypes()
-        val aliases = types.filterIsInstance<TypeDef>().associate { it.name to it.dataType.name }
+        val aliases = types.asSequence()
+            .filterIsInstance<TypeDef>()
+            .filter { it.isStabsOrigin() }
+            .associate { it.name to it.dataType.name }
         return typedefShorteningRenames(aliases, types.mapTo(mutableSetOf()) { it.name })
     }
 
