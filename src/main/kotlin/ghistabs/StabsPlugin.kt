@@ -3,6 +3,8 @@ package ghistabs
 import docking.ActionContext
 import docking.action.DockingAction
 import docking.action.MenuData
+import docking.widgets.filechooser.GhidraFileChooser
+import docking.widgets.filechooser.GhidraFileChooserMode
 import ghidra.app.CorePluginPackage
 import ghidra.app.plugin.PluginCategoryNames
 import ghidra.app.plugin.ProgramPlugin
@@ -10,40 +12,92 @@ import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.framework.plugintool.PluginInfo
 import ghidra.framework.plugintool.PluginTool
 import ghidra.framework.plugintool.util.PluginStatus
+import ghidra.program.model.listing.Program
 import ghidra.util.Msg
+import ghidra.util.task.Task
+import ghidra.util.task.TaskLauncher
+import ghidra.util.task.TaskMonitor
+import ghistabs.diagnose.DummySink
+import ghistabs.harvest.Harvester
+import ghistabs.harvest.TypeResolver
+import ghistabs.importer.ProgramAddressResolver
+import ghistabs.parse.StabReader
+import ghistabs.render.Mode
+import ghistabs.render.Renderer
+import java.io.File
 
 /**
- * Adds a 'Tools > Stabs > Re-import' action that clears the persistent done-flag
- * and re-runs the StabsAnalyzer on the current program.
+ * `Tools > Stabs` actions: **Re-import** clears the persistent done-flag and re-runs the
+ * StabsAnalyzer; **Export decompilation…** reconstructs the per-source-file decompilation
+ * (SjLj-elided) into a chosen folder — the same output the integration harness writes.
  */
 @PluginInfo(
     status = PluginStatus.STABLE,
     packageName = CorePluginPackage.NAME,
     category = PluginCategoryNames.ANALYSIS,
-    shortDescription = "Re-run the STABS importer on the current program.",
-    description = "Adds a 'Tools > Stabs > Re-import' action" +
-        "that clears the persistent done-flag and re-runs the StabsAnalyzer.",
+    shortDescription = "Re-run the STABS importer / export its decompilation on the current program.",
+    description = "Adds 'Tools > Stabs > Re-import' (re-run the StabsAnalyzer) and " +
+        "'Tools > Stabs > Export decompilation…' (write the reconstructed decompilation to a folder).",
 )
 class StabsPlugin(tool: PluginTool) : ProgramPlugin(tool) {
     init {
-        val reimport = object : DockingAction("Stabs Re-import", getName()) {
-            override fun actionPerformed(context: ActionContext?) {
-                if (currentProgram == null) {
-                    Msg.showInfo(javaClass, null, "Stabs Re-import", "No program is open.")
-                    return
-                }
-                StabsAnalyzer.markStabsDone(currentProgram, false)
+        tool.addAction(action("Re-import", "&Re-import") { reimport(it) })
+        tool.addAction(action("Export decompilation", "&Export decompilation…") { exportDecompilation(it) })
+    }
 
-                val mgr: AutoAnalysisManager = AutoAnalysisManager.getAnalysisManager(currentProgram)
-                mgr.reAnalyzeAll(null)
+    private fun action(id: String, menu: String, perform: (Program) -> Unit) =
+        object : DockingAction("Stabs $id", getName()) {
+            override fun actionPerformed(context: ActionContext?) {
+                val program = currentProgram
+                    ?: return Msg.showInfo(javaClass, null, "Stabs", "No program is open.")
+                perform(program)
             }
 
-            override fun isEnabledForContext(context: ActionContext?): Boolean =
-                currentProgram?.memory?.getBlock(".stab") != null &&
-                    currentProgram?.memory?.getBlock(".stabstr") != null
+            override fun isEnabledForContext(context: ActionContext?) = hasStabs()
+        }.apply {
+            menuBarData = MenuData(arrayOf("&Tools", "Stabs", menu), null, "Stabs")
+            isEnabled = true
         }
-        reimport.menuBarData = MenuData(arrayOf("&Tools", "Stabs", "&Re-import"), null, "Stabs")
-        reimport.isEnabled = true
-        tool.addAction(reimport)
+
+    private fun hasStabs() =
+        currentProgram?.memory?.getBlock(".stab") != null && currentProgram?.memory?.getBlock(".stabstr") != null
+
+    private fun reimport(program: Program) {
+        StabsAnalyzer.markStabsDone(program, false)
+        AutoAnalysisManager.getAnalysisManager(program).reAnalyzeAll(null)
+    }
+
+    private fun exportDecompilation(program: Program) {
+        // The reconstruction re-harvests the stabs cheaply, but the decompilation it renders is only
+        // meaningful once the importer has applied types/locals to the program — require that first.
+        if (!StabsAnalyzer.isStabsDone(program)) {
+            return Msg.showInfo(
+                javaClass,
+                null,
+                "Stabs",
+                "Run the Stabs importer first (auto-analysis, or Tools > Stabs > Re-import).",
+            )
+        }
+        val chooser = GhidraFileChooser(tool.activeWindow).apply {
+            setFileSelectionMode(GhidraFileChooserMode.DIRECTORIES_ONLY)
+            title = "Export decompilation to folder"
+        }
+        val dir = chooser.selectedFile
+        chooser.dispose()
+        if (dir == null) return
+        TaskLauncher.launch(
+            object : Task("Stabs: export decompilation", true, false, true) {
+                override fun run(monitor: TaskMonitor) = writeDecompilation(program, dir, monitor)
+            },
+        )
+    }
+
+    private fun writeDecompilation(program: Program, dir: File, monitor: TaskMonitor) {
+        val reader = StabReader.fromProgram(program) ?: return
+        val harvest = program.runTransaction("stabs-export-harvest") {
+            Harvester(monitor, DummySink, ProgramAddressResolver(program)).passA(reader.records)
+        }
+        val written = Renderer(TypeResolver(harvest), program, Mode.ELIDE_SJLJ).use { it.renderAll(dir, monitor) }
+        Msg.showInfo(javaClass, null, "Stabs", "Wrote $written decompilation files to $dir")
     }
 }

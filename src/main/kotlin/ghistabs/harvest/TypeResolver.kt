@@ -222,6 +222,12 @@ class TypeResolver(
         out
     }
 
+    // A multi-CU class lands at the header its member SLINEs mostly point to, not the
+    // .cpp gcc emitted the body burst in.
+    fun TypeAst.effectiveSource() = name?.let { multiSourceHeaderHints[it] } ?: id.source.filename
+
+    fun effectiveSourceFor(type: TypeAst) = type.effectiveSource()
+
     /** Canonical (CategoryPath, ghidraName) → group. Drives TypeRegistry slot assignment. */
     val byCanonicalKey: Map<GhidraKey, CanonicalGroup> by lazy {
         val byGhidraName = typeAsts.values.groupBy { it.ghidraName }

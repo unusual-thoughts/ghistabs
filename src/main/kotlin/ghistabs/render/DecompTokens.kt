@@ -2,12 +2,14 @@ package ghistabs.render
 
 import ghidra.app.decompiler.ClangBreak
 import ghidra.app.decompiler.ClangCommentToken
+import ghidra.app.decompiler.ClangFuncNameToken
 import ghidra.app.decompiler.ClangFuncProto
 import ghidra.app.decompiler.ClangLine
 import ghidra.app.decompiler.ClangNode
 import ghidra.app.decompiler.ClangStatement
 import ghidra.app.decompiler.ClangToken
 import ghidra.app.decompiler.ClangTypeToken
+import ghidra.app.decompiler.ClangVariableToken
 import ghidra.app.decompiler.DecompileResults
 import ghidra.app.decompiler.component.DecompilerUtils
 import ghidra.program.model.address.Address
@@ -29,6 +31,36 @@ private fun ClangLine.content() = allTokens.filterNot { it is ClangBreak }
 private fun ClangLine.significant() = content().filter { it.text.isNotBlank() }
 private fun ClangLine.rendered() = (indentString + content().joinToString("") { it.text }).trimEnd()
 private fun ClangLine.address(): Address? = content().mapNotNull { it.minAddress }.minOrNull()
+private fun ClangLine.stackOffsets(): List<Long> = content()
+    .filterIsInstance<ClangVariableToken>()
+    .mapNotNull { it.varnode?.address?.takeIf { a -> a.isStackAddress }?.offset }
+
+private const val SJLJ_PERSONALITY = "___gxx_personality_sj0"
+private val SJLJ_CALLS = setOf("__Unwind_SjLj_Register", "__Unwind_SjLj_Unregister")
+
+/**
+ * ClangLines that are gcc SjLj exception scaffolding: the `__Unwind_SjLj_*` register/unregister
+ * calls, the personality-routine store, and every write to the write-only call-site-index slot —
+ * the SjLj context base + 4, base being the `&ctx` passed to `__Unwind_SjLj_Register`. Empty unless
+ * the SjLj personality routine appears, so DWARF-EH (ELF) binaries, which keep unwinding out of the
+ * code, match nothing.
+ */
+private fun sjljScaffolding(lines: List<ClangLine>): Set<ClangLine> {
+    if (lines.none { l -> l.content().any { it.text == SJLJ_PERSONALITY } }) return emptySet()
+    // The `&ctx` passed to __Unwind_SjLj_Register is an address-of, so its ClangVariableToken has no
+    // stack varnode — we can't read the context offset from it. Identify the call-site index by its
+    // signature instead: it's the one stack slot written on many lines as the sole variable (SjLj
+    // stores it before every protected call and never reads it).
+    val callSiteOffset = lines
+        .mapNotNull { it.stackOffsets().singleOrNull() }
+        .groupingBy { it }.eachCount()
+        .filterValues { it >= 3 }
+        .maxByOrNull { it.value }?.key
+    return lines.filterTo(mutableSetOf()) { line ->
+        line.content().any { (it is ClangFuncNameToken && it.text in SJLJ_CALLS) || it.text == SJLJ_PERSONALITY } ||
+            (callSiteOffset != null && line.stackOffsets().singleOrNull() == callSiteOffset)
+    }
+}
 
 // A line's role, read from its tokens' kinds and tree position — never from the rendered characters.
 private fun ClangLine.isComment() = significant().let { it.isNotEmpty() && it.all { t -> t is ClangCommentToken } }
@@ -44,8 +76,11 @@ private fun ClangLine.isDeclaration() = !isCode() && !isSignature() && significa
  * statements by ClangStatement ancestry, the signature by ClangFuncProto, declarations by a
  * ClangTypeToken outside both — so nothing is guessed from the rendered characters.
  */
-fun DecompileResults.compressedDecompLines(): List<DecompLine> {
-    val lines = DecompilerUtils.toLines(cCodeMarkup)
+fun DecompileResults.compressedDecompLines(elideSjlj: Boolean = false): List<DecompLine> {
+    val raw = DecompilerUtils.toLines(cCodeMarkup)
+    val victims = if (elideSjlj) sjljScaffolding(raw) else emptySet()
+    val lines = raw
+        .filterNot { it in victims }
         .dropWhile { it.isComment() || it.significant().isEmpty() }
     val bodyStart = lines.indexOfFirst { it.isCode() }
     if (bodyStart <= 0) return lines.map { DecompLine(it.rendered(), it.address()) }
