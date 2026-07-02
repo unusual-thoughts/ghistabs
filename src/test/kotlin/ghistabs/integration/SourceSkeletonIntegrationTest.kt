@@ -5,8 +5,10 @@ import ghidra.app.decompiler.DecompileOptions
 import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.app.util.importer.MessageLog
 import ghidra.app.util.importer.ProgramLoader
+import ghidra.program.model.listing.Program
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
+import ghistabs.StabsAnalyzer
 import ghistabs.diagnose.defaultContext
 import ghistabs.harvest.Harvester
 import ghistabs.harvest.TypeResolver
@@ -68,6 +70,13 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                 val ctx = program.defaultContext()
                 val mgr = AutoAnalysisManager.getAnalysisManager(program)
                 mgr.initializeOptions()
+                // Reconstruct with typedef-shortened names (string, vector<std::string>) so the
+                // skeleton and decomp read like source rather than full template spellings.
+                program.runTransaction("enable-typedef-shorten") {
+                    program.getOptions(Program.ANALYSIS_PROPERTIES)
+                        .getOptions("Stabs Importer")
+                        .setBoolean(StabsAnalyzer.OPT_SHORTEN_TYPEDEFS, true)
+                }
                 mgr.reAnalyzeAll(null)
                 program.runTransaction("skeleton-autoanalyze") {
                     mgr.startAnalysis(monitor)

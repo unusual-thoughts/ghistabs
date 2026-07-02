@@ -182,12 +182,27 @@ output collapsed to `_Value_type` until this was added.
 renames. Renaming a target onto its alias collides with the very typedef that names it
 (the `string` typedef sits in the same category as the `basic_string` struct), so the
 pass folds that typedef into its target first — `DataTypeManager.replaceDataType`
-redirects every reference and drops the typedef, freeing the name. Gated behind
-`OPT_SHORTEN_TYPEDEFS` (default off), run in the materialise transaction after
-`materialiseAll`. Pinned by `materialize/TypedefShorteningTest.kt` (pure, outputs the
+redirects every reference and drops the typedef, freeing the name. It also rewrites
+**base-class subobject field names** (`_base_<Name>`/`_vbase_<Name>` only — not user
+member fields), which embed the base type's name at build time and so aren't reached by
+datatype renaming; without this the decomp still shows
+`_base__Vector_base<std::basic_string<…>>`. Gated behind `OPT_SHORTEN_TYPEDEFS` (default
+off), run in the materialise transaction after `materialiseAll`, and enabled in the
+skeleton/decomp integration pipeline so its output reads shortened.
+
+Pure core factored into `TemplateNameShortener` (build subs once, `shorten`/
+`shortenedOrNull` any string) so the same boundary-guarded rewrite serves datatype names
+and base-field names. Pinned by `materialize/TypedefShorteningTest.kt` (pure, outputs the
 renames) and `integration/TypedefShorteningProbeIntegrationTest.kt` (real fixture DTM:
 dumps every rename to `build/test-output/typedef-renames/<fixture>.txt`, applies them,
 asserts the std::string fold+rename landed).
+
+**Decomp reads the DTM so it fully shortens** (appquery main.cpp `basic_string<char…>`
+41→6, 137 `std::string`; base fields collapse to `_base__Vector_base<std::string,…>`).
+**The skeleton renders type spellings from the harvest AST, not the DTM**, so DTM
+renaming only partially reaches it (main.cpp 13 `basic_string` remain). Fully shortening
+the skeleton needs the renderer (`render/Type.kt`) to run the same `TemplateNameShortener`
+over its AST-derived type strings — a render-layer follow-up.
 
 The rewrite is textual but boundary-guarded: each target matches only when not flanked by
 identifier chars (`(?<![A-Za-z0-9_])…(?![A-Za-z0-9_])`), so a bare-identifier target can't
