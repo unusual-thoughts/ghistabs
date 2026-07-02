@@ -1,24 +1,19 @@
 package ghistabs.diagnose
 
-import ghistabs.parse.GlobalTypeId
-import ghistabs.parse.SourceFile
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class StabsDiagnosticsTest {
-    private fun gid(cu: String, n: Int) = GlobalTypeId(SourceFile.CUSource(cu), n)
-
     @Test
     fun testDiagnosticsSummaryEmission() {
         val diag = StabsDiagnostics()
         val sink = CapturingSink()
 
-        diag.recordUnresolvedRef(null, "myFunction")
-        diag.recordPlaceholder("MyClass", "MyCategory", "fwd-decl")
-        diag.recordExample("dedup-rename", "name=SomeType detail=renamed-to-SomeType_1")
-        diag.log("dedup-rename")
-        diag.recordVtable("VirtualBase", "applied")
+        diag.log("unresolved-ref", "ref=null in myFunction")
+        diag.log("placeholder-created", "name=MyClass category=MyCategory reason=fwd-decl")
+        diag.log("dedup-rename", "name=SomeType detail=renamed-to-SomeType_1")
+        diag.log("vtable-applied", "class=VirtualBase")
 
         diag.writeSummary(sink)
         val output = sink.capturedOutput()
@@ -37,7 +32,7 @@ class StabsDiagnosticsTest {
         val diag = StabsDiagnostics()
         val sink = CapturingSink()
 
-        diag.recordUnresolvedRef(null, "fn")
+        diag.log("unresolved-ref", "ref=null in fn")
 
         diag.writeSummary(sink)
         val firstHeaderCount = sink.capturedOutput().split("=== diagnostics ===").size - 1
@@ -74,11 +69,11 @@ class StabsDiagnosticsTest {
     fun testTagCounterAutoBump() {
         val diag = StabsDiagnostics()
 
-        diag.recordUnresolvedRef(gid("cu1", 1), "f1")
-        diag.recordUnresolvedRef(gid("cu2", 2), "f2")
-        diag.recordPlaceholder("T1", "cat", "reason1")
-        diag.recordPlaceholder("T2", "cat", "reason2")
-        diag.recordPlaceholder("T3", "cat", "reason3")
+        diag.log("unresolved-ref", "ref=cu1/1 in f1")
+        diag.log("unresolved-ref", "ref=cu2/2 in f2")
+        diag.log("placeholder-created", "name=T1 category=cat reason=reason1")
+        diag.log("placeholder-created", "name=T2 category=cat reason=reason2")
+        diag.log("placeholder-created", "name=T3 category=cat reason=reason3")
 
         assertEquals(2, diag["unresolved-ref"])
         assertEquals(3, diag["placeholder-created"])
@@ -92,11 +87,11 @@ class StabsDiagnosticsTest {
     fun testCounterInsertionOrder() {
         val diag = StabsDiagnostics()
 
-        diag.recordVtable("C1", "applied")
-        diag.recordUnresolvedRef(null, "f")
-        diag.recordPlaceholder("T1", "cat", "reason")
+        diag.log("vtable-applied", "class=C1")
+        diag.log("unresolved-ref", "ref=null in f")
+        diag.log("placeholder-created", "name=T1 category=cat reason=reason")
         diag.log("dedup-rename")
-        diag.recordGlobal("0x1000", "applied", "int")
+        diag.log("global-applied", "addr=0x1000 dtKind=int")
 
         val keys = diag.snapshotCounters().keys.toList()
         assertEquals(
@@ -110,9 +105,7 @@ class StabsDiagnosticsTest {
         val diag = StabsDiagnostics()
         val sink = CapturingSink()
 
-        repeat(15) { i ->
-            diag.recordUnresolvedRef(null, "fn$i")
-        }
+        repeat(15) { i -> diag.log("unresolved-ref", "ref=null in fn$i") }
 
         diag.writeSummary(sink)
         val output = sink.capturedOutput()
@@ -122,69 +115,12 @@ class StabsDiagnosticsTest {
     }
 
     @Test
-    fun testRecordVtableWithReason() {
-        val diag = StabsDiagnostics()
-        val sink = CapturingSink()
-
-        diag.recordVtable("ClassA", "applied")
-        diag.recordVtable("ClassB", "skipped", "no-virtuals")
-        diag.recordVtable("ClassC", "failed", "unresolved-_ZTV-symbol")
-
-        diag.writeSummary(sink)
-        val output = sink.capturedOutput()
-
-        assertTrue(output.contains("vtable-applied = 1"))
-        assertTrue(output.contains("vtable-skipped = 1"))
-        assertTrue(output.contains("vtable-failed = 1"))
-        assertTrue(output.contains("class=ClassB reason=no-virtuals"))
-        assertTrue(output.contains("class=ClassC reason=unresolved-_ZTV-symbol"))
-    }
-
-    @Test
-    fun testRecordGlobalPerKind() {
-        val diag = StabsDiagnostics()
-
-        diag.recordGlobal("0x1000", "applied", "int")
-        diag.recordGlobal("0x1004", "applied", "Structure")
-        diag.recordGlobal("0x1008", "skipped", "Array", "create-data-failed")
-        diag.recordGlobal("0x100c", "skipped", "Pointer", "unresolved-symbol")
-
-        assertEquals(2, diag["global-applied"])
-        assertEquals(2, diag["global-skipped"])
-
-        val sink = CapturingSink()
-        diag.writeSummary(sink)
-        val output = sink.capturedOutput()
-
-        assertTrue(output.contains("dtKind=int"))
-        assertTrue(output.contains("dtKind=Structure"))
-        assertTrue(output.contains("dtKind=Array"))
-        assertTrue(output.contains("dtKind=Pointer"))
-    }
-
-    @Test
-    fun testRecordEmptyScope() {
-        val diag = StabsDiagnostics()
-        val sink = CapturingSink()
-
-        diag.recordEmptyScope("0x1000", "main")
-        diag.recordEmptyScope("0x1004", null)
-
-        diag.writeSummary(sink)
-        val output = sink.capturedOutput()
-
-        assertTrue(output.contains("empty-scope = 2"))
-        assertTrue(output.contains("addr=0x1000 function=main"))
-        assertTrue(output.contains("addr=0x1004"))
-    }
-
-    @Test
     fun testCountersReadableAfterSealing() {
         val diag = StabsDiagnostics()
         val sink = CapturingSink()
 
-        diag.recordUnresolvedRef(null, "f")
-        diag.recordPlaceholder("T", "cat", "reason")
+        diag.log("unresolved-ref", "ref=null in f")
+        diag.log("placeholder-created", "name=T category=cat reason=reason")
 
         diag.writeSummary(sink)
 
@@ -215,7 +151,7 @@ class StabsDiagnosticsTest {
     }
 
     @Test
-    fun testDiagnosticSinkAutoIncCounters() {
+    fun testCapturingSinkRecordsEveryTag() {
         val sink = CapturingSink()
 
         sink.log("foo-tag", "first message")

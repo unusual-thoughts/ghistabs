@@ -207,7 +207,6 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
                 functions++
             } catch (t: Throwable) {
                 val bucket = ApplyErrorBucket.bucket(t)
-                ctx.diagnostics.recordApplyError(open.name, bucket, t.message.orEmpty())
                 log("apply-error-$bucket", "function ${open.name}: ${t.message}")
                 log("apply-error", "function ${open.name}: ${t.message}", address = open.addr.address)
             }
@@ -518,7 +517,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
                 val addr = func.entryPoint.add(openOff)
 
                 if (localsInScope.isEmpty()) {
-                    ctx.diagnostics.recordEmptyScope(addr.toString(), func.name)
+                    log("empty-scope", "addr=$addr function=${func.name}", Level.DEBUG)
                     continue
                 }
                 val text = "Stabs scope locals: " + localsInScope.joinToString(", ") { it.body.name }
@@ -532,18 +531,13 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
     private fun applyGlobal(decl: SymbolDecl.Global<GlobalTypeId>, typeRegistry: TypeRegistry): Boolean {
         val addr = ctx.resolver.resolve(decl.name) ?: run {
             log("unresolved-symbol", "global ${decl.name}", Level.WARN)
-            ctx.diagnostics.recordGlobal(decl.name, "skipped", dtKind = "unknown", reason = "unresolved-symbol")
+            log("global-skipped", "addr=${decl.name} dtKind=unknown reason=unresolved-symbol", Level.DEBUG)
             return false
         }
         ensureStabLabel(addr, decl.name)
 
         val dt = typeRegistry.dataTypeFor(decl.type) ?: run {
-            ctx.diagnostics.recordGlobal(
-                addr.toString(),
-                "skipped",
-                dtKind = "unknown",
-                reason = "no-resolved-type",
-            )
+            log("global-skipped", "addr=$addr dtKind=unknown reason=no-resolved-type", Level.DEBUG)
             return false
         }
         typeRegistry.reasonFor(dt)?.let { reason ->
@@ -582,10 +576,10 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
                     "$decl.name at $addr: wrote ${dt.name} but readback is ${after?.dataType?.name}",
                 )
             }
-            ctx.diagnostics.recordGlobal(addr.toString(), "applied", dtKind = dtKind)
+            log("global-applied", "addr=$addr dtKind=$dtKind", Level.DEBUG)
         } catch (e: Exception) {
             log("apply-error", "Failed to create global data at $addr: ${e.message}")
-            ctx.diagnostics.recordGlobal(addr.toString(), "skipped", dtKind = dtKind, reason = "create-data-failed")
+            log("global-skipped", "addr=$addr dtKind=$dtKind reason=create-data-failed", Level.DEBUG)
             return false
         }
         return true

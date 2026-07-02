@@ -367,7 +367,7 @@ class ClassBuilder(
             .sortedBy { it.vtableOffsetBits ?: Long.MAX_VALUE }
         val virtuals = mergeVtableSlots(inherited, ownVirtuals)
         if (virtuals.isEmpty()) {
-            ctx.diagnostics.recordVtable(className, "skipped", reason = "no-virtuals")
+            log("vtable-skipped", "class=$className reason=no-virtuals", Level.DEBUG)
             return
         }
 
@@ -425,7 +425,7 @@ class ClassBuilder(
         runCatching { symtab.createLabel(addr, "vftable", ns, source) }
             .onFailure { log("vftable-label-failed", "$className at $addr: ${it.message}") }
         log("vtable", "applied $vtableName", address = addr)
-        ctx.diagnostics.recordVtable(className, "applied")
+        log("vtable-applied", "class=$className", Level.DEBUG)
 
         // Plate-comment each virtual. An unresolved mangled name here is expected for
         // pure virtuals (slot points at __cxa_pure_virtual, no symbol emitted) or
@@ -547,7 +547,8 @@ class ClassBuilder(
 
             else -> "truly-missing"
         }
-        ctx.diagnostics.recordVtable(className, "failed", failureBucket)
+        log("vtable-failed", "class=$className reason=$failureBucket", Level.DEBUG)
+        ctx.diagnostics.recordDegradation("vtable-failed", className, failureBucket)
         log(
             "vtable-failed-$failureBucket",
             "class '$className': vtable not found (tried ${candidates.joinToString()})",

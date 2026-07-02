@@ -2,7 +2,6 @@ package ghistabs.diagnose
 
 import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.address.Address
-import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.SourceFile
 
 enum class Level { DEBUG, INFO, WARN, ERROR }
@@ -83,51 +82,12 @@ class StabsDiagnostics : DiagnosticSink {
 
     fun snapshotCounters(): Map<String, Long> = counters.toMap()
 
-    /** Record an example for [category], capped at 10/category. */
-    fun recordExample(category: String, msg: String) {
+    /** Backing store for [log]'s example capture — capped at 10/category. */
+    private fun recordExample(category: String, msg: String) {
         val bucket = examples.getOrPut(category) { mutableListOf() }
         if (bucket.size < 10) {
             bucket.add(msg)
         }
-    }
-
-    fun recordUnresolvedRef(refKey: GlobalTypeId?, referrer: String) {
-        inc("unresolved-ref")
-        recordExample("unresolved-ref", "ref=$refKey in $referrer")
-    }
-
-    fun recordPlaceholder(name: String, category: String, reason: String) {
-        inc("placeholder-created")
-        recordExample("placeholder-created", "name=$name category=$category reason=$reason")
-    }
-
-    fun recordVtable(className: String, outcome: String, reason: String? = null) {
-        val counterName = "vtable-$outcome"
-        inc(counterName)
-        val detail = if (reason != null) "class=$className reason=$reason" else "class=$className"
-        recordExample(counterName, detail)
-        if (outcome == "failed") {
-            recordDegradation("vtable-failed", className, reason)
-        }
-    }
-
-    fun recordApplyError(funcName: String, bucket: String, detail: String) {
-        val counterName = "apply-error-$bucket"
-        inc(counterName)
-        recordExample(counterName, "func=$funcName detail=$detail")
-    }
-
-    fun recordEmptyScope(addr: String, function: String?) {
-        inc("empty-scope")
-        val detail = if (function != null) "addr=$addr function=$function" else "addr=$addr"
-        recordExample("empty-scope", detail)
-    }
-
-    fun recordGlobal(addr: String, outcome: String, dtKind: String, reason: String? = null) {
-        val counterName = "global-$outcome"
-        inc(counterName)
-        val detail = if (reason != null) "addr=$addr dtKind=$dtKind reason=$reason" else "addr=$addr dtKind=$dtKind"
-        recordExample(counterName, detail)
     }
 
     fun recordStructGaps(qualifiedName: String, gaps: List<GapRecord>) {
