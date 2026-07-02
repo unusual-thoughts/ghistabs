@@ -6,6 +6,7 @@ import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
 import ghistabs.harvest.LineEntry
 import ghistabs.harvest.TypeResolver
+import ghistabs.harvest.hasHeaderExtension
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.StabType
 import ghistabs.parse.SymbolDecl
@@ -53,12 +54,13 @@ class Renderer(val typeResolver: TypeResolver, val program: Program, val mode: M
      * is cancelled.
      */
     fun renderAll(dir: File, monitor: TaskMonitor = TaskMonitor.DUMMY): Int {
+        monitor.initialize(sources.size.toLong())
         dir.mkdirs()
         return program.runTransaction("stabs-render-all") {
-            sources.takeWhile { !monitor.isCancelled }.count { source ->
+            sources.asSequence().map { source ->
                 val out = renderSkeleton(source)
                 out.isNotBlank().also { if (it) File(dir, safeName(source)).writeText(out) }
-            }
+            }.takeWhile { runCatching { monitor.incrementProgress() }.isSuccess }.count()
         }
     }
 
@@ -119,7 +121,10 @@ private class RenderContext(val renderer: Renderer, val source: String) {
         emitFunctionBraces()
         emitTypeBodies()
         reportAnomalies()
-        renderer.decomp?.let(::applyDecompilation)
+        renderer.decomp?.let {
+            applyDecompilation(it)
+            emitIncludes()
+        }
         // Trailing blank/stale lines are trimmed only in decomp mode; skeleton output
         // stays fully source-aligned.
         return canvas.render(trim = renderer.decomp != null)
@@ -385,30 +390,45 @@ private class RenderContext(val renderer: Renderer, val source: String) {
                 }
                 if (ownLine != null) currentLine = ownLine
             }
-            val available = closeLine - r.startLine + 1
-            if (placed.size <= available) {
-                placed.forEachIndexed { i, (text, entry) ->
-                    canvas[r.startLine + i] += Fragment(
-                        code = text.toString(),
-                        note = refOf(entry),
-                        kind = FragmentKind.DECOMP,
-                    )
+            // Place each coalesced group at the source line its instructions came from (clamped to
+            // the span), spreading the body across the available room instead of packing it at the
+            // top; the head holds the signature + decls at the start line, and a group with no
+            // this-file line follows the previous one. Several groups on a line join. The `// ⇐ L NN`
+            // tag is dropped where the group already sits on its own line (the grid says it), kept
+            // when inlined-from-a-header or clamped off its line.
+            var line = r.startLine
+            placed.forEachIndexed { i, (text, entry) ->
+                val target = if (i == 0) {
+                    r.startLine
+                } else {
+                    entry?.takeIf { it.source == source }?.line?.coerceIn(r.startLine, closeLine) ?: line
                 }
-            } else {
-                for (i in 0 until available - 1) {
-                    canvas[r.startLine + i] +=
-                        Fragment(
-                            code = placed[i].first.toString(),
-                            note = refOf(placed[i].second),
-                            kind = FragmentKind.DECOMP,
-                        )
-                }
-                val rest = placed.subList(available - 1, placed.size)
-                    .map { it.first.toString().trim().trimEnd(';') }
-                    .filter { it.isNotEmpty() }
-                canvas[closeLine] += Fragment(code = rest.joinToString("; ") + ";", kind = FragmentKind.DECOMP)
+                line = target
+                val note = entry?.takeIf { it.source != source || it.line != target }?.let(::refOf)
+                canvas[target] += Fragment(code = text.toString(), note = note, kind = FragmentKind.DECOMP)
             }
             for (text in strays) canvas[closeLine] += Fragment(note = text, kind = FragmentKind.STRAY)
+        }
+    }
+
+    // The headers this file pulls in, as #include lines in the blank space above the first line of
+    // content — derived from the (non-.cpp) sources its functions' N_SLINE entries point at, i.e.
+    // the headers whose code got inlined here. Placed only within the available top room: overflow
+    // stacks on the last free line rather than pushing content down.
+    private fun emitIncludes() {
+        val headers = rawFuncs.asSequence()
+            .flatMap { it.lineEntries.asSequence() }
+            .map { it.source }
+            .filter { it != source && it.hasHeaderExtension() }
+            .distinct()
+            .sorted()
+            .map { "#include \"${it.substringAfterLast('/')}\"" }
+            .toList()
+        if (headers.isEmpty()) return
+        val room = ((1..maxLine).firstOrNull { canvas[it].fragments.isNotEmpty() } ?: (maxLine + 1)) - 1
+        if (room <= 0) return
+        headers.forEachIndexed { i, include ->
+            canvas[(i + 1).coerceAtMost(room)] += Fragment(code = include, kind = FragmentKind.OTHER)
         }
     }
 
