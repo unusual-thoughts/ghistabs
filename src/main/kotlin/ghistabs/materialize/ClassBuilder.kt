@@ -146,7 +146,7 @@ class ClassBuilder(
         )
 
         when (action) {
-            is VfptrAction.SkipInheritedFromBase -> ctx.diagnostics.inc("vfptr-inherited-from-base")
+            is VfptrAction.SkipInheritedFromBase -> log("vfptr-inherited-from-base")
 
             is VfptrAction.AlreadyCanonical -> return
 
@@ -159,7 +159,7 @@ class ClassBuilder(
                     vfptrName,
                     "vtable pointer",
                 )
-                ctx.diagnostics.inc("vfptr-inserted")
+                log("vfptr-inserted")
             }
 
             is VfptrAction.Replace -> {
@@ -171,7 +171,7 @@ class ClassBuilder(
                     vfptrName,
                     "vtable pointer (was: ${action.wasFieldName})",
                 )
-                ctx.diagnostics.inc("vfptr-normalized")
+                log("vfptr-normalized")
             }
 
             is VfptrAction.CollisionAt -> log(
@@ -209,7 +209,7 @@ class ClassBuilder(
             // appear in every class's stab list but get no emitted symbol. Bucket separately
             // so the unresolved-symbol log surfaces real problems.
             if (isImplicitTrivialSpecialMember(mangled)) {
-                ctx.diagnostics.inc("method-implicit-not-emitted")
+                log("method-implicit-not-emitted")
             } else {
                 log("unresolved-symbol", "method $mangled (in $className)", Level.DEBUG)
             }
@@ -442,7 +442,6 @@ class ClassBuilder(
                         "virtual ${m.name}; ${className}_vtable offset $off",
                     )
                 } else {
-                    ctx.diagnostics.inc("vtable-virtual-no-function")
                     log(
                         "vtable-virtual-no-function",
                         "no Function at $mAddr for virtual method ${m.name} in $className",
@@ -450,7 +449,6 @@ class ClassBuilder(
                     )
                 }
             } else {
-                ctx.diagnostics.inc("vtable-virtual-no-impl")
                 log(
                     "vtable-virtual-no-impl",
                     "virtual method '${m.name}' in $className has no resolvable implementation " +

@@ -579,9 +579,9 @@ class TypeRegistry(
                             // (libstdc++ iterator-tag bases living in headers). Skip insertion;
                             // own fields at offset 0 take the slot.
                             if (dt == null) {
-                                diagnostics.inc("base-empty-ebo-inferred")
+                                log("base-empty-ebo-inferred")
                             } else {
-                                diagnostics.inc("base-empty-ebo")
+                                log("base-empty-ebo")
                             }
                             continue
                         }
@@ -632,14 +632,14 @@ class TypeRegistry(
                                 op.fieldName,
                                 op.comment,
                             )
-                            diagnostics.inc("inheritance-applied")
+                            log("inheritance-applied")
                         } catch (e: java.lang.IllegalArgumentException) {
                             diagnostics.recordDegradation(
                                 "base-layout-failed",
                                 "${ast.nameOrUnique}::${op.baseSimpleName}",
                                 e.message,
                             )
-                            diagnostics.inc("inheritance-failed")
+                            log("inheritance-failed")
                         }
                     }
                 }
@@ -664,7 +664,7 @@ class TypeRegistry(
                                 field.offsetBits in baseOffsets
                             )
                     ) {
-                        diagnostics.inc("vptr-skipped-inherited")
+                        log("vptr-skipped-inherited")
                         continue
                     }
 
@@ -831,7 +831,6 @@ class TypeRegistry(
             "Multiple matches for '$simpleName' (preferred=$preferredCategory): " +
                 matches.joinToString { "${it.pathName}(${it::class.simpleName})" },
         )
-        diagnostics.inc("demangler-ambiguous")
         return null
     }
 }
