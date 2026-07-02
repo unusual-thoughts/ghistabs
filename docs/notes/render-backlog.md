@@ -15,22 +15,30 @@ dtor `D0`/`D1`/`D2`) collapse onto one line; decompiling each would stack
 duplicate bodies, so a single-line function is only bodied when it is the sole
 range on its line — aliases keep the skeleton's side-by-side decls.
 
-## 2. Compress declarations at the start of decompiled functions
+## 2. Render decompilation from clang tokens, not flat C text
 
-Ghidra emits every local as its own line at the top of a function
-(`ushort value;` / `ushort uVar1;` / `undefined2 in_stack_...;`). These eat
-vertical room and push the body's source-line alignment off. Use the decompiler's
-**clang token stream** (`ClangTokenGroup` from `DecompileResults.getCCodeMarkup()`)
-rather than the flat C text to identify the leading declaration block and fold it
-onto one line (or the signature line), so real statements line up with their
-N_SLINE source lines. Ties into better token-driven line flow generally
-(`cleanDecompLines` currently works on raw text).
+Rendering now works from the decompiler's **clang token stream** instead of the flat
+`.c` string. `render/DecompTokens.kt`: `DecompileResults.tokenLines()` reconstructs each
+line's text from its leaf tokens and tags it with the lowest instruction address those
+tokens map to — a declaration, brace or comment line has none, a statement line does.
+That address is the discriminator the flat text couldn't give.
 
-Interim: the harness sets `DecompileOptions.setMaxWidth(10_000)` so the
-decompiler doesn't wrap long template-typed declarations into orphan
-continuation lines (a bare `;`). This whole area — width, leading-decl folding,
-line flow — is superseded once rendering works from clang tokens instead of the
-flat C text.
+**Done (leading-decl compression):** `compressedDecompLines()` strips the banner comment,
+then folds the signature + `{` + the address-less local-declaration block onto one head
+line, so statements start at the top of the span instead of one-decl-per-line pushing
+them all down. Same-typed decls are grouped into one statement (`string *a; string *b;` →
+`string *a,*b;`) by `groupDecls` — Ghidra spells decl types as a single space-free token,
+so the type is the text before the first space and the declarator (with its `*`/`[N]`) the
+rest. appquery `names`: ~15 decl lines → one grouped head line. Replaced the text-based
+`cleanDecompLines`.
+
+**Next (source-line flow):** place each statement line on its N_SLINE source line by
+mapping its token address through the function's SLINE table (address → line), instead of
+the current sequential `startLine + i` placement with overflow cram. This is what actually
+aligns the decompilation to the source; the address is already on each `DecompLine`.
+
+Interim still in place: `DecompileOptions.setMaxWidth(10_000)` so long template decls don't
+wrap into orphan `;` continuation lines. Superseded once flow is address-driven.
 
 ## 5. Sweep findings (all fixtures, `--exclude-dir='*.old'`)
 
