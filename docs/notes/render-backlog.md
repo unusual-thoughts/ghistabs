@@ -42,9 +42,18 @@ gives source correspondence without distorting the layout — `_main` statements
 L31→L97, `LAB_…: // ⇐ L 58`, `if (argc < 2) // ⇐ L 51`, a one-source-line loop clusters
 on L60. `DecompLine` now carries the address; `commentFor` has a `DECOMP` case.
 
-Interim still in place: `DecompileOptions.setMaxWidth(10_000)` so long template decls don't
-wrap into orphan `;` continuation lines. Could be dropped later by assembling wrapped lines
-from tokens ourselves.
+**Done (coalesce runs, un-cram):** `applyDecompilation` coalesces onto one output line each
+run of statements belonging to one this-file source line — repeats of the same line plus
+inlined-header code (a foreign N_SOL folds into its call site's line). This cuts the body to
+roughly the number of source lines it touches, so it fits the span instead of cramming onto
+the close line (appquery `main` close line 8422 → 2909 chars). The folded head (index 0) is
+never a fold target. Order and structure stay the decompiler's; each output line keeps its
+`// ⇐ L NN` tag.
+
+**Done: dropped the `setMaxWidth(10_000)` stopgap.** No longer needed — the decompiler is free
+to wrap long lines, and coalescing re-joins the wrapped continuation lines by address (they
+share the statement's source line), so wrapping is transparent. Verified: zero orphan `;`
+lines after removal.
 
 ## 5. Sweep findings (all fixtures, `--exclude-dir='*.old'`)
 

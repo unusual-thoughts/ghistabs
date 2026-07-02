@@ -1,7 +1,6 @@
 package ghistabs.integration
 
 import ghidra.app.decompiler.DecompInterface
-import ghidra.app.decompiler.DecompileOptions
 import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.app.util.importer.MessageLog
 import ghidra.app.util.importer.ProgramLoader
@@ -106,16 +105,7 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                     .filter { it.isNotEmpty() }
                     .toSet()
 
-                val decomp = if (decompile) {
-                    DecompInterface().apply {
-                        // Widen output so long template-typed declarations aren't wrapped by the
-                        // decompiler into orphan continuation lines (e.g. a bare `;`).
-                        setOptions(DecompileOptions().apply { setMaxWidth(10_000) })
-                        openProgram(program)
-                    }
-                } else {
-                    null
-                }
+                val decomp = if (decompile) DecompInterface().apply { openProgram(program) } else null
                 try {
                     // Transaction: renderSkeleton defines terminated strings at undefined
                     // pointer targets it meets while rendering constant values.
