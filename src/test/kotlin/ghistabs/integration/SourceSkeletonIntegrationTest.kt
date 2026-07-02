@@ -7,6 +7,7 @@ import ghidra.program.model.listing.Program
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghistabs.StabsAnalyzer
+import ghistabs.diagnose.Level
 import ghistabs.diagnose.defaultContext
 import ghistabs.harvest.Harvester
 import ghistabs.harvest.TypeResolver
@@ -74,7 +75,10 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                 program.runTransaction("enable-typedef-shorten") {
                     program.getOptions(Program.ANALYSIS_PROPERTIES)
                         .getOptions("Stabs Importer")
-                        .setBoolean(StabsAnalyzer.OPT_SHORTEN_TYPEDEFS, true)
+                        .apply {
+                            setBoolean(StabsAnalyzer.OPT_SHORTEN_TYPEDEFS, true)
+                            setEnum(StabsAnalyzer.OPT_LOG_LEVEL, Level.DEBUG)
+                        }
                 }
                 mgr.reAnalyzeAll(null)
                 program.runTransaction("skeleton-autoanalyze") {
