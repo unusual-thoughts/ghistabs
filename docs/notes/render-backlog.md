@@ -310,6 +310,32 @@ placement rework (commit 6335c83). Four issues:
   `main`'s `closeLine` is inflated (SLINE attribution dragging header/inlined lines) or
   whether the sweep needs to exempt symbol/type fragments that own a distinct line.
 
+### Finding: vm2/vm3_trapset_names are function-local statics
+
+Confirmed from the stab: `vm2_trapset_names:S(1,367)=…` — the `:S` descriptor is a static
+variable (parser → `SymbolDecl.StaticVar`), a function-local `static const char *[65]`
+declared inside `main()` at source lines 82 / 152, which fall within `_main`'s span (49–167).
+So they are **legitimately** inside the span (not a `closeLine` bug); Ghidra's decomp of
+`main` shows the code but not the static array data. The fix is therefore in the sweep, not
+the span: keep `DECL_GLOBAL`/symbol-data fragments that own a distinct source line rendered
+as data at that line (like `vm1` at L12), and demote only type-decls / genuinely-misattributed
+fragments. vm1 (L12) renders correctly only because it sits *before* the span.
+
+### Decided direction (from user)
+
+Rework `applyDecompilation` placement + `indentFor` to:
+- **Bracket-level indentation**, K&R style: keep `{` at the end of the line (open braces at
+  EOL) and step nested blocks in by `{`/`}` depth (from the clang token stream).
+- **Group statements on the same source line onto one line**, BUT if grouping would leave
+  blank-line gaps, **spread** instead to fill the vertical space (hybrid of the coalesce and
+  source-line-placement approaches — compact where dense, spread where sparse).
+- **Always** append `// L NN` at the end of every emitted line (restore the annotation
+  unconditionally, at end-of-line not mid-line).
+
+Relevant code: `Renderer.applyDecompilation` (placement loop ~399), `Renderer.indentFor`
+(flat-4), `DecompTokens.compressedDecompLines`/`DecompLine` (token lines + addresses), the
+stray sweep (~359), and `Format.kt` (`FragmentKind.DECOMP` note rendering).
+
 ## 10. Post-diagnostics-refactor: audit every log() level (OPEN)
 
 After the diagnose refactor (log() is the single entry; degradations are WARN via the
@@ -319,3 +345,12 @@ for non-trivial-but-not-bad signals; **DEBUG** for minutiae. The record*→log c
 (§ diagnose) parked all former silent counters at DEBUG; some deserve promotion. Stale
 comment to fix while there: StabsImporter `applyAllSymbols` still says "BookmarkSink
 auto-bumps the counter" — no longer true (the accumulator counts, BookmarkSink only emits).
+
+## 11. More log() calls should carry a bookmark address (OPEN)
+
+Many diagnostics name a specific function/symbol/class but don't pass `address`, so they
+only hit the MessageLog, not Ghidra's BookmarkManager (navigable markers). Sweep the WARN/
+ERROR (and notable INFO) sites and pass the relevant address where one is in scope — e.g.
+vtable-symbol-scan-error/vtable-rdata-scan-error (class addr), method-calling-convention
+(func entry), parse-error (record addr if resolvable). Done so far: vftable-label-failed,
+apply-error, vtable already carry addresses.
