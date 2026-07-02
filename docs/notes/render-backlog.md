@@ -109,12 +109,68 @@ single source line inside `XDVImage::symbol_start`:
   compiler-generated RTTI globals are strays inside a function span and should be
   demoted to `// stray:` comments (or filed to their real home), not laid as code.
 
-## 6. Class body attributed to a .cpp instead of its header (AppImage → main.cpp)
+## 6. Class body attributed to a .cpp instead of its header (AppImage → main.cpp) — FIXED
 
-`class AppImage : public XVImage` renders in `main.cpp`, though its methods
-(`header_length`, `image_type`) correctly land in `appimage.h`. gcc emitted
-AppImage's full `:T` definition only in main.cpp's CU (where it's used), so
-`TypeAst.effectiveSource()` falls back to `id.source.filename` = main.cpp.
+gcc emits a class's `:Tt` definition wherever it's first needed; when that's a
+.cpp (AppImage's full def landed only in appquery/main.cpp — appimage.h was never
+BINCL'd as a *definition* source, only as line-entries), the header association is
+lost and the body rendered in the .cpp.
+
+`multiSourceHeaderHints` already recovers the header by majority-voting the N_SOL
+source of line entries inside the class's method bodies (gcc emits `N_SOL("foo.h")`
+bursts where methods inline header code — AppImage's destructors inlined into
+main.cpp carry appimage.h entries). Two bugs blocked it, both fixed:
+
+- The `cuSources.size < 2` guard skipped single-source classes, so AppImage never
+  got a hint. Replaced with the correct predicate: only classes with a **.cpp
+  definition source** need a hint; a def already in a header renders correctly via
+  `id.source` and a hint could only drag it somewhere worse (this is why
+  FileSystemEntry/FileSystemImage/VmInfo — defined in their headers — are left
+  alone and stay correct).
+- The vote counted inlined **stdlib** headers, so std::string/std::vector inlining
+  hijacked it (XVImage voted basic_string.h 812 > xvimage.h 84; VmInfo stl_tree.h
+  > vminfo.h). Split into a real-header tally and a stdlib tally (new
+  `String.isStdMarkerPath` in Attribution, reusing `STD_MARKERS`): a real header
+  always wins; the stdlib majority is used **only** to collapse a scattered std
+  instantiation into one file, never to pull a single .cpp-local one into a stdlib
+  header.
+
+Net vs committed baseline (appquery): AppImage main.cpp→appimage.h, XVImage
+basic_string.h→xvimage.h, VmInfo stl_tree.h→vminfo.h; everything else unchanged;
+no bodies scattered into .cpp. The renderer's `effectiveSource()` and
+`Attribution.keyFor` share the same hint map, so DTM category and skeleton file now
+agree for these. Remaining latent divergence (renderer bypasses canonical
+Attribution for the non-hint path) is not exercised by the current fixtures.
+
+## 7. Shorten long templated type names via their typedefs (DTM-level, analyzer option)
+
+Template instantiations dominate output width: `vector<std::basic_string<char,
+std::char_traits<char>, std::allocator<char> >, std::allocator<...> >` etc. When a
+typedef names such a type (`typedef ... string`, or a user `typedef vector<X> Xs`),
+render/store the typedef name instead. Do this at the **Ghidra DTM level** (not just
+in the text emitter) so both the listing and the decompiler benefit, gated behind an
+option on the stabs analyzer.
+
+Sketch: a pass *before* materialization tallies every typedef whose name is shorter
+than its target. For each, rename the target datatype to the typedef name and drop
+the typedef, then apply the same substring replacement **recursively inside all
+other templated type names** (their template parameters), watching for the extra
+spaces gcc leaves between `> >`. Longest replacements win (apply in descending
+target-length order) so nested reductions compose. Especially valuable for std::
+types; also collapses user typedefs within other classes' parameters.
+
+## 8. Stack/register local injection — status (working; caveats)
+
+Verified the injected `LocalVariableImpl`/register locals are adopted by the
+decompiler: appquery `main` shows 13/14 stabs stack locals by name (`major`,
+`xuv`, `xdv`, `used`, `trapsets`, `version`, `vminfo`, `i`, …). This also confirms
+the `getBaseStackParamOffset` frame-bias (#3) is correct — wrong offsets wouldn't
+match storage. Remaining un-named slots are *not* failed locals: `local_f4`-style
+slots are compiler SjLj exception-region indices (no stabs name), and
+`uVar`/`iVar`/`bVar`/`pxxStack_` are decompiler SSA value-temporaries. Register
+locals (`N_RSYM`) stick only partially — a register holds the source var over just
+part of its live range, so the decompiler names it elsewhere. No further work
+needed on stack locals; register-var liveness mapping is a possible future item.
 
 Real root cause (from `registry.afters/appquery-registry.after.json`): the
 **canonical registry already attributes it correctly** —
