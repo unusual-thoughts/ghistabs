@@ -2,7 +2,6 @@ package ghistabs.harvest
 
 import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.DiagnosticSink
-import ghistabs.diagnose.Level
 import ghistabs.importer.AddressResolver
 import ghistabs.parse.*
 
@@ -15,11 +14,8 @@ import ghistabs.parse.*
  * (filename, checksum) get identical GlobalTypeIds for header-attributed types
  * (stabs-canonicalization.md §3).
  */
-class Harvester(
-    private val monitor: TaskMonitor,
-    private val sink: DiagnosticSink,
-    private val resolver: AddressResolver,
-) : DiagnosticSink by sink,
+class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, private val resolver: AddressResolver) :
+    DiagnosticSink by sink,
     Globalizer {
     private val typeAsts = mutableMapOf<GlobalTypeId, TypeAst>()
     private val collidingAsts = mutableMapOf<GlobalTypeId, MutableMap<String, MutableSet<TypeDecl<GlobalTypeId>>>>()
@@ -111,10 +107,9 @@ class Harvester(
                     }
 
                     // Other record types with non-zero desc are silently dropping a line number.
-                    else -> log(
+                    else -> debug(
                         "desc-dropped-${rec.type.name.removePrefix("N_").lowercase()}",
                         "desc=${rec.desc} name=${rec.name.take(40)}",
-                        Level.DEBUG,
                     )
                 }
             }
@@ -129,10 +124,9 @@ class Harvester(
                     currentCu = SourceFile.CUSource(rec.name, pendingDirectory)
                     pendingDirectory = null
                     if (rec.value != 0L) {
-                        log(
+                        debug(
                             "file-start",
                             "${currentCu?.directory.orEmpty()}${rec.name} starts here",
-                            Level.DEBUG,
                             address = resolver.buildAddress(rec.value),
                         )
                     }
@@ -140,10 +134,9 @@ class Harvester(
 
                 StabType.N_SO -> {
                     if (rec.value != 0L) {
-                        log(
+                        debug(
                             "file-start",
                             "${currentCu?.filename} ends here",
-                            Level.DEBUG,
                             address = resolver.buildAddress(rec.value),
                         )
                     }
@@ -198,7 +191,7 @@ class Harvester(
                         }
                     } catch (e: StabsParseException) {
                         parseErrors++
-                        log("parse-error", "@$i '${rec.name.take(80)}': ${e.message}")
+                        warn("parse-error", "@$i '${rec.name.take(80)}': ${e.message}")
                     }
                 }
 
@@ -222,7 +215,7 @@ class Harvester(
                         }
                     } catch (e: StabsParseException) {
                         parseErrors++
-                        log("parse-error", "param @$i: ${e.message}")
+                        warn("parse-error", "param @$i: ${e.message}")
                     }
                 }
 
@@ -283,7 +276,7 @@ class Harvester(
                     }
                 } catch (e: StabsParseException) {
                     parseErrors++
-                    log("parse-error", "lsym @$i: ${e.message}")
+                    warn("parse-error", "lsym @$i: ${e.message}")
                 }
 
                 StabType.N_LBRAC, StabType.N_RBRAC -> currentFunction?.scopeBrackets?.add(
@@ -409,7 +402,7 @@ class Harvester(
             symbolsByCu.getOrPut(currentCu!!.filename) { mutableListOf() } += parseSymbol(rec)
         } catch (e: StabsParseException) {
             parseErrors++
-            log("parse-error", "@${rec.recordIndex} '${rec.name.take(80)}': ${e.message}")
+            warn("parse-error", "@${rec.recordIndex} '${rec.name.take(80)}': ${e.message}")
         }
     }
 
@@ -428,13 +421,21 @@ class Harvester(
             -> listOf()
 
             is TypeDecl.Const -> walk(d.inner)
+
             is TypeDecl.Volatile -> walk(d.inner)
+
             is TypeDecl.WithSizeAttr -> walk(d.inner)
+
             is TypeDecl.Pointer -> walk(d.pointee)
+
             is TypeDecl.Reference -> walk(d.referent)
+
             is TypeDecl.Array -> walk(d.element) + (d.indexType?.let { walk(it) } ?: listOf())
+
             is TypeDecl.FunctionT -> d.params.flatMap { walk(it) } + walk(d.ret)
+
             is TypeDecl.Method -> d.params.flatMap { walk(it) } + walk(d.ret) + walk(d.cls)
+
             is TypeDecl.Struct -> d.bases.flatMap { walk(it.type) } +
                 d.fields.flatMap { walk(it.type) } +
                 d.methods.flatMap { walk(it.signature) }

@@ -1,6 +1,5 @@
 package ghistabs.diagnose
 
-import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.address.Address
 import ghistabs.parse.SourceFile
 
@@ -18,6 +17,15 @@ interface DiagnosticSink {
         address: Address? = null,
         count: Long = 1,
     )
+
+    fun debug(category: String, message: String? = null, address: Address? = null, count: Long = 1) =
+        log(category, message, level = Level.DEBUG, address, count)
+
+    fun warn(category: String, message: String? = null, address: Address? = null, count: Long = 1) =
+        log(category, message, level = Level.WARN, address, count)
+
+    fun err(category: String, message: String? = null, address: Address? = null, count: Long = 1) =
+        log(category, message, level = Level.ERROR, address, count)
 }
 
 object DummySink : DiagnosticSink {
@@ -28,15 +36,6 @@ object DummySink : DiagnosticSink {
 class TeeSink(private vararg val sinks: DiagnosticSink) : DiagnosticSink {
     override fun log(category: String, message: String?, level: Level, address: Address?, count: Long) {
         for (s in sinks) s.log(category, message, level, address, count)
-    }
-}
-
-fun MessageLog.toSink() = object : DiagnosticSink {
-    override fun log(category: String, message: String?, level: Level, address: Address?, count: Long) {
-        if (message == null) return
-        val prefix = "[Stabs][${level.name}]"
-        val line = if (address != null) "$prefix $category at $address: $message" else "$prefix $category: $message"
-        if (level == Level.ERROR) appendMsg("ERROR: $line") else appendMsg(line)
     }
 }
 
@@ -62,7 +61,7 @@ const val DEGRADED_PREFIX = "degraded-"
  * [DegradationRecord] for the per-fixture dumps. [context] and [detail] are joined into the message.
  */
 fun DiagnosticSink.degradation(category: String, context: String, detail: String? = null) =
-    log("$DEGRADED_PREFIX$category", if (detail != null) "$context :: $detail" else context, Level.WARN)
+    warn("$DEGRADED_PREFIX$category", if (detail != null) "$context :: $detail" else context)
 
 /**
  * Per-run diagnostic aggregator — the accumulating [DiagnosticSink] terminal. Each [log] bumps the

@@ -81,30 +81,30 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
     }
 
     private fun recordHarvestCounters(harvest: Harvest, resolver: TypeResolver, stabs: StabReader.Result) {
-        log("harvest-records-read", count = stabs.recordCount.toLong())
-        log("harvest-records-parsed", count = (stabs.records.size - harvest.parseErrors).toLong())
-        log("harvest-parse-errors", count = harvest.parseErrors.toLong())
-        log("harvest-functions", count = harvest.openFunctions.size.toLong())
+        debug("harvest-records-read", count = stabs.recordCount.toLong())
+        debug("harvest-records-parsed", count = (stabs.records.size - harvest.parseErrors).toLong())
+        debug("harvest-parse-errors", count = harvest.parseErrors.toLong())
+        debug("harvest-functions", count = harvest.openFunctions.size.toLong())
         val allSyms = harvest.symbolsByCu.values.flatten()
-        log("harvest-symbols", count = allSyms.size.toLong())
-        log("harvest-globals", count = allSyms.count { it.body is SymbolDecl.Global }.toLong())
-        log("harvest-statics", count = allSyms.count { it.body is SymbolDecl.StaticVar }.toLong())
-        log("harvest-typeAsts", count = harvest.typeAsts.size.toLong())
+        debug("harvest-symbols", count = allSyms.size.toLong())
+        debug("harvest-globals", count = allSyms.count { it.body is SymbolDecl.Global }.toLong())
+        debug("harvest-statics", count = allSyms.count { it.body is SymbolDecl.StaticVar }.toLong())
+        debug("harvest-typeAsts", count = harvest.typeAsts.size.toLong())
         val byKind = harvest.typeAsts.values.groupingBy { it.body::class.simpleName ?: "Unknown" }.eachCount()
         for ((kind, n) in byKind.toSortedMap()) {
-            log("harvest-typeAsts-$kind", count = n.toLong())
+            debug("harvest-typeAsts-$kind", count = n.toLong())
         }
-        log("harvest-cus", count = harvest.symbolsByCu.size.toLong())
+        debug("harvest-cus", count = harvest.symbolsByCu.size.toLong())
         val uniqueTypeIds = harvest.typeAsts.keys.size
-        log("harvest-typeAsts-unique-by-id", count = uniqueTypeIds.toLong())
-        log("harvest-typeAsts-dup-by-id", count = (harvest.typeAsts.size - uniqueTypeIds).toLong())
-        log("harvest-collisions-raw", count = harvest.rawCollisions.size.toLong())
+        debug("harvest-typeAsts-unique-by-id", count = uniqueTypeIds.toLong())
+        debug("harvest-typeAsts-dup-by-id", count = (harvest.typeAsts.size - uniqueTypeIds).toLong())
+        debug("harvest-collisions-raw", count = harvest.rawCollisions.size.toLong())
         log(
             "harvest-collisions-raw-total",
             count = harvest.rawCollisions.values.flatMap { it.values }.flatten().count().toLong(),
         )
         // Post-filter: only genuinely divergent multi-body collisions.
-        log("harvest-collisions-divergent", count = resolver.divergentCollisions.size.toLong())
+        debug("harvest-collisions-divergent", count = resolver.divergentCollisions.size.toLong())
         log(
             "harvest-collisions-divergent-total",
             count = resolver.divergentCollisions.values.flatMap { it.values }.flatten().count().toLong(),
@@ -127,19 +127,15 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
             try {
                 val func = funcMgr.getFunctionAt(open.addr.address)
                     ?: funcMgr.getFunctionContaining(open.addr.address)?.also {
-                        log("entrypoint-snapped")
+                        debug("entrypoint-snapped")
                     }
                     ?: tryCreateFunctionFromStab(open) ?: run {
-                    val tag: String
-                    val level: Level
-                    if (isInlineStdMember(open.name)) {
-                        tag = "apply-error-inlined-std"
-                        level = Level.DEBUG
+                    val (tag, level) = if (isInlineStdMember(open.name)) {
+                        "apply-error-inlined-std" to Level.DEBUG
                     } else {
-                        tag = "apply-error-no-function"
-                        level = Level.INFO
+                        "apply-error-no-function" to Level.INFO
                     }
-                    // BookmarkSink auto-bumps the counter on log() — no explicit inc.
+                    // log() counts via the tee'd accumulator; BookmarkSink only emits/bookmarks.
                     log(tag, "no Function at or containing ${open.addr} for ${open.name}", level)
                     continue
                 }
@@ -205,8 +201,8 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
                 functions++
             } catch (t: Throwable) {
                 val bucket = ApplyErrorBucket.bucket(t)
-                log("apply-error-$bucket", "function ${open.name}: ${t.message}")
-                log("apply-error", "function ${open.name}: ${t.message}", address = open.addr.address)
+                err("apply-error-$bucket", "function ${open.name}: ${t.message}")
+                err("apply-error", "function ${open.name}: ${t.message}", address = open.addr.address)
             }
         }
 
@@ -224,7 +220,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
                         else -> log("unexpected-symbol", "$d")
                     }
                 } catch (t: Throwable) {
-                    log("apply-error", "symbol ${h.body.name} in $cu: ${t.message}")
+                    err("apply-error", "symbol ${h.body.name} in $cu: ${t.message}")
                 }
             }
         }
@@ -263,7 +259,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
                     classBuilder.build(group)
                     classes++
                 } catch (t: Throwable) {
-                    log("class-apply-error", "${group.key}: ${t.message}")
+                    err("class-apply-error", "${group.key}: ${t.message}")
                 }
             }
         }
@@ -296,8 +292,8 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
             attempted++
             if (applyDemangling(ctx.program, sym.address, name, monitor = ctx.monitor)) demangled++
         }
-        log("demangle-attempted", count = attempted.toLong())
-        log("demangle-applied", count = demangled.toLong())
+        debug("demangle-attempted", count = attempted.toLong())
+        debug("demangle-applied", count = demangled.toLong())
     }
 
     /**
@@ -312,8 +308,11 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
             // Inline std::/__gnu_cxx members get stabbed but the linker drops the COMDAT.
             // Bucket separately so real non-text-address problems aren't drowned out.
             val inlined = isInlineStdMember(open.name)
-            val tag = if (inlined) "function-create-inlined-std" else "function-create-skipped-non-text"
-            val level = if (inlined) Level.DEBUG else Level.WARN
+            val (tag, level) = if (inlined) {
+                "function-create-inlined-std" to Level.DEBUG
+            } else {
+                "function-create-skipped-non-text" to Level.WARN
+            }
             log(tag, "no executable block at $addr for ${open.name} (block=${block?.name})", level)
             return null
         }
@@ -323,12 +322,11 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
         if (ctx.program.listing.getInstructionAt(addr) == null) {
             val disasm = ghidra.app.cmd.disassemble.DisassembleCommand(addr, null, true)
             if (disasm.applyTo(ctx.program, ctx.monitor) && disasm.disassembledAddressSet.numAddresses > 0) {
-                log("function-create-disassembled-first")
+                debug("function-create-disassembled-first")
             } else {
-                log(
+                warn(
                     "function-create-disasm-failed",
                     "DisassembleCommand failed at $addr for ${open.name}: ${disasm.statusMsg}",
-                    Level.WARN,
                 )
                 return null
             }
@@ -336,14 +334,13 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
 
         val cmd = ghidra.app.cmd.function.CreateFunctionCmd(open.name, addr, null, SourceType.IMPORTED)
         if (!cmd.applyTo(ctx.program, ctx.monitor)) {
-            log(
+            warn(
                 "function-create-cmd-failed",
                 "CreateFunctionCmd failed at $addr for ${open.name}: ${cmd.statusMsg}",
-                Level.WARN,
             )
             return null
         }
-        log("function-created-from-stab")
+        debug("function-created-from-stab")
         return ctx.program.functionManager.getFunctionAt(addr)
     }
 
@@ -365,9 +362,10 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
         fun flushGap() {
             val start = gapStart ?: return
             val end = gapEnd ?: return
-            log(
+            debug(
                 "stabs-no-coverage",
                 "@ $start..$end (${end.offset - start.offset + 1} bytes): no stabs records cover this range",
+                address = start,
             )
             gapStart = null
             gapEnd = null
@@ -392,7 +390,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
                     is CoverageResult.Covered -> {
                         flushGap()
                         result.coverers.forEach {
-                            log("stabs-coverage", "@ $addr..$rangeEnd: covered by ${it.symbolName}")
+                            debug("stabs-coverage", "@ $addr..$rangeEnd: covered by ${it.symbolName}")
                         }
                     }
                 }
@@ -462,11 +460,11 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
             when (decl) {
                 is SymbolDecl.StackLocal -> {
                     if (decl.name in func.parameters.map { it.name }) {
-                        log("local-var-skipped-dup-param")
+                        debug("local-var-skipped-dup-param")
                         return
                     }
                     if (decl.name in func.localVariables.map { it.name }) {
-                        log("local-var-skipped-dup-local")
+                        debug("local-var-skipped-dup-local")
                         return
                     }
                     // gcc's frame-pointer-relative offset → Ghidra's SP-at-entry offset via the
@@ -474,7 +472,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
                     val stackOffset = loc.rawValue.toInt() - frameBias
                     val lv = LocalVariableImpl(decl.name, dt, stackOffset, ctx.program, source)
                     func.addLocalVariable(lv, source)
-                    log("local-var-add-success")
+                    debug("local-var-add-success")
                 }
 
                 is SymbolDecl.RegLocal -> {
@@ -489,21 +487,21 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
                         return
                     }
                     if (decl.name in func.parameters.map { it.name }) {
-                        log("reglocal-skipped-dup-param")
+                        debug("reglocal-skipped-dup-param")
                         return
                     }
                     if (decl.name in func.localVariables.map { it.name }) {
-                        log("reglocal-skipped-dup-local")
+                        debug("reglocal-skipped-dup-local")
                         return
                     }
                     val lv = LocalVariableImpl(decl.name, 0, dt, reg, ctx.program, source)
                     func.addLocalVariable(lv, source)
-                    log("reglocal-add-success")
+                    debug("reglocal-add-success")
                 }
             }
         } catch (e: Exception) {
             // local-var-error counter auto-bumps via BookmarkSink tag→counter contract
-            log("local-var-error", "Could not add local '${decl.name}' to ${func.name}: ${e.message}")
+            warn("local-var-error", "Could not add local '${decl.name}' to ${func.name}: ${e.message}")
         }
     }
 
@@ -515,27 +513,27 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
                 val addr = func.entryPoint.add(openOff)
 
                 if (localsInScope.isEmpty()) {
-                    log("empty-scope", "addr=$addr function=${func.name}", Level.DEBUG)
+                    debug("empty-scope", "addr=$addr function=${func.name}")
                     continue
                 }
                 val text = "Stabs scope locals: " + localsInScope.joinToString(", ") { it.body.name }
                 ctx.program.listing.setComment(addr, CommentType.PLATE, text)
             } catch (e: Exception) {
-                log("scope-comment-error", "Failed to set scope comment: ${e.message}")
+                warn("scope-comment-error", "Failed to set scope comment: ${e.message}")
             }
         }
     }
 
     private fun applyGlobal(decl: SymbolDecl.Global<GlobalTypeId>, typeRegistry: TypeRegistry): Boolean {
         val addr = ctx.resolver.resolve(decl.name) ?: run {
-            log("unresolved-symbol", "global ${decl.name}", Level.WARN)
-            log("global-skipped", "addr=${decl.name} dtKind=unknown reason=unresolved-symbol", Level.DEBUG)
+            warn("unresolved-symbol", "global ${decl.name}")
+            debug("global-skipped", "addr=${decl.name} dtKind=unknown reason=unresolved-symbol")
             return false
         }
         ensureStabLabel(addr, decl.name)
 
         val dt = typeRegistry.dataTypeFor(decl.type) ?: run {
-            log("global-skipped", "addr=$addr dtKind=unknown reason=no-resolved-type", Level.DEBUG)
+            debug("global-skipped", "addr=$addr dtKind=unknown reason=no-resolved-type")
             return false
         }
         typeRegistry.reasonFor(dt)?.let { reason ->
@@ -574,10 +572,10 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
                     "$decl.name at $addr: wrote ${dt.name} but readback is ${after?.dataType?.name}",
                 )
             }
-            log("global-applied", "addr=$addr dtKind=$dtKind", Level.DEBUG)
+            debug("global-applied", "addr=$addr dtKind=$dtKind")
         } catch (e: Exception) {
-            log("apply-error", "Failed to create global data at $addr: ${e.message}")
-            log("global-skipped", "addr=$addr dtKind=$dtKind reason=create-data-failed", Level.DEBUG)
+            err("apply-error", "Failed to create global data at $addr: ${e.message}")
+            debug("global-skipped", "addr=$addr dtKind=$dtKind reason=create-data-failed")
             return false
         }
         return true
@@ -603,7 +601,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
             ctx.program.listing.clearCodeUnits(addr, addr.add((dt.length - 1).toLong()), false)
             ctx.program.listing.createData(addr, dt)
         } catch (e: Exception) {
-            log("apply-error", "Failed to create static data at $addr: ${e.message}")
+            err("apply-error", "Failed to create static data at $addr: ${e.message}")
             return false
         }
         return true
@@ -620,7 +618,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
         val sym = existing ?: try {
             symtab.createLabel(addr, name, SourceType.IMPORTED)
         } catch (e: Exception) {
-            log("symbol-create-error", "$name at $addr: ${e.message}")
+            err("symbol-create-error", "$name at $addr: ${e.message}")
             return
         }
         if (!sym.isPrimary) {
@@ -628,7 +626,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
                 ghidra.app.cmd.label.SetLabelPrimaryCmd(addr, sym.name, sym.parentNamespace)
                     .applyTo(ctx.program)
             } catch (e: Exception) {
-                log("symbol-primary-error", "$name at $addr: ${e.message}")
+                err("symbol-primary-error", "$name at $addr: ${e.message}")
             }
         }
     }

@@ -9,10 +9,10 @@ import ghidra.program.model.address.AddressSetView
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
 import ghistabs.StabsAnalyzer.Companion.OPT_STABS_DONE
+import ghistabs.diagnose.BookmarkSink
 import ghistabs.diagnose.Level
 import ghistabs.diagnose.StabsDiagnostics
 import ghistabs.diagnose.TeeSink
-import ghistabs.diagnose.toSink
 import ghistabs.importer.ImportContext
 import ghistabs.importer.StabsImporter
 import ghistabs.importer.StaticContexts
@@ -87,16 +87,17 @@ class StabsAnalyzer :
         program ?: return false
         log ?: return false
         monitor ?: return false
-        val msgSink = log.toSink()
+        val options = StabsOptions(program.getOptions(Program.ANALYSIS_PROPERTIES).getOptions(name))
+        val bookmarkSink = BookmarkSink(program, log, options.minLogLevel)
         val ext = StaticContexts.get(program)
         run(
             ImportContext(
                 program,
                 monitor,
-                options = StabsOptions(program.getOptions(Program.ANALYSIS_PROPERTIES).getOptions(name)),
+                options,
                 // Tee the emitting terminal onto ext.log (raw CapturingSink) so tests can inspect
                 // output; counting is the shared ext.diagnostics accumulator, tee'd in ImportContext.
-                log = ext?.let { TeeSink(msgSink, it.log) } ?: msgSink,
+                log = ext?.let { TeeSink(bookmarkSink, it.log) } ?: bookmarkSink,
                 diagnostics = ext?.diagnostics ?: StabsDiagnostics(),
             ),
         )
