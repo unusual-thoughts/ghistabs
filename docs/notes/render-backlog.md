@@ -156,15 +156,26 @@ typedefs whose alias is strictly shorter than their target, and rewrites each ta
 onto its alias wherever it appears: the target type itself and, recursively, inside
 every other templated name's parameters, applying the longest target first so nested
 reductions compose (`map<int, vector<basic_string<…> > >` → `map<int,StringVec>`).
+When several typedefs name one target (libstdc++ aliases `basic_string<char, …>` as
+`string`, `_Value_type`, `_ValueType`, …) the shortest alias wins — real appquery
+output collapsed to `_Value_type` until this was added.
+
 `TypedefShortener(dtm, sink)` reads the aliases/names out of the DTM and applies the
-renames via `setName`. Gated behind `OPT_SHORTEN_TYPEDEFS` (default off), run in the
-materialise transaction after `materialiseAll`. Pinned by
-`materialize/TypedefShorteningTest.kt` (outputs the computed renames).
+renames. Renaming a target onto its alias collides with the very typedef that names it
+(the `string` typedef sits in the same category as the `basic_string` struct), so the
+pass folds that typedef into its target first — `DataTypeManager.replaceDataType`
+redirects every reference and drops the typedef, freeing the name. Gated behind
+`OPT_SHORTEN_TYPEDEFS` (default off), run in the materialise transaction after
+`materialiseAll`. Pinned by `materialize/TypedefShorteningTest.kt` (pure, outputs the
+renames) and `integration/TypedefShorteningProbeIntegrationTest.kt` (real fixture DTM:
+dumps every rename to `build/test-output/typedef-renames/<fixture>.txt`, applies them,
+asserts the std::string fold+rename landed).
 
 Follow-up (not done): the substring rewrite is textual; a param that *is* a template
 parameter but happens to spell the target inside a longer identifier would also match
 — fine in practice for these names, but a structural rewrite over parsed template
-args would be stricter.
+args would be stricter. Also over-eager aliases (`random_access_iterator_tag`→`_Tag`)
+are a name-quality question, not correctness.
 
 ## 8. Stack/register local injection — status (working; caveats)
 
