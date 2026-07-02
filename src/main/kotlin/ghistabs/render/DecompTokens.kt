@@ -10,6 +10,10 @@ import ghidra.app.decompiler.ClangToken
 import ghidra.app.decompiler.ClangTypeToken
 import ghidra.app.decompiler.DecompileResults
 import ghidra.app.decompiler.component.DecompilerUtils
+import ghidra.program.model.address.Address
+
+/** A rendered decompiler line and the lowest instruction address its tokens map to (null for the folded header / a structural line). */
+data class DecompLine(val text: String, val address: Address?)
 
 /** True if an ancestor group of this token is a [cls] (e.g. ClangStatement, ClangFuncProto). */
 private fun ClangToken.inside(cls: Class<out ClangNode>): Boolean {
@@ -24,6 +28,7 @@ private fun ClangToken.inside(cls: Class<out ClangNode>): Boolean {
 private fun ClangLine.content() = allTokens.filterNot { it is ClangBreak }
 private fun ClangLine.significant() = content().filter { it.text.isNotBlank() }
 private fun ClangLine.rendered() = (indentString + content().joinToString("") { it.text }).trimEnd()
+private fun ClangLine.address(): Address? = content().mapNotNull { it.minAddress }.minOrNull()
 
 // A line's role, read from its tokens' kinds and tree position — never from the rendered characters.
 private fun ClangLine.isComment() = significant().let { it.isNotEmpty() && it.all { t -> t is ClangCommentToken } }
@@ -39,16 +44,17 @@ private fun ClangLine.isDeclaration() = !isCode() && !isSignature() && significa
  * statements by ClangStatement ancestry, the signature by ClangFuncProto, declarations by a
  * ClangTypeToken outside both — so nothing is guessed from the rendered characters.
  */
-fun DecompileResults.compressedDecompLines(): List<String> {
+fun DecompileResults.compressedDecompLines(): List<DecompLine> {
     val lines = DecompilerUtils.toLines(cCodeMarkup)
         .dropWhile { it.isComment() || it.significant().isEmpty() }
     val bodyStart = lines.indexOfFirst { it.isCode() }
-    if (bodyStart <= 0) return lines.map { it.rendered() }
+    if (bodyStart <= 0) return lines.map { DecompLine(it.rendered(), it.address()) }
     val (declLines, prefix) = lines.subList(0, bodyStart).partition { it.isDeclaration() }
     val head = (prefix.map { it.rendered().trim() } + groupDecls(declLines))
         .filter { it.isNotEmpty() }
         .joinToString(" ")
-    return listOf(head) + lines.subList(bodyStart, lines.size).map { it.rendered() }
+    return listOf(DecompLine(head, null)) +
+        lines.subList(bodyStart, lines.size).map { DecompLine(it.rendered(), it.address()) }
 }
 
 /**

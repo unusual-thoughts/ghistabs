@@ -315,18 +315,27 @@ private class RenderContext(val renderer: Renderer, val source: String) {
                     true
                 }
             }
+            // Keep the decompiler's statement order; tag each line with the source line its
+            // instructions came from (address → the function's N_SLINE table), since the
+            // decompiler may invert conditions / leave gotos so its structure isn't the source's.
+            val slines = r.func.lineEntries.sortedBy { it.addr.address.offset }
+            fun sourceRef(addr: Address?): String? {
+                val e = addr?.let { a -> slines.lastOrNull { it.addr.address.offset <= a.offset } } ?: return null
+                return if (e.source == source) "L ${e.line}" else "${e.source.substringAfterLast('/')} L ${e.line}"
+            }
             val available = closeLine - r.startLine + 1
             if (cLines.size <= available) {
                 cLines.forEachIndexed { i, l ->
                     canvas[r.startLine + i] +=
-                        Fragment(code = l, kind = FragmentKind.DECOMP)
+                        Fragment(code = l.text, note = sourceRef(l.address), kind = FragmentKind.DECOMP)
                 }
             } else {
                 for (i in 0 until available - 1) {
-                    canvas[r.startLine + i] += Fragment(code = cLines[i], kind = FragmentKind.DECOMP)
+                    canvas[r.startLine + i] +=
+                        Fragment(code = cLines[i].text, note = sourceRef(cLines[i].address), kind = FragmentKind.DECOMP)
                 }
                 val rest = cLines.subList(available - 1, cLines.size)
-                    .map { it.trim().trimEnd(';') }
+                    .map { it.text.trim().trimEnd(';') }
                     .filter { it.isNotEmpty() }
                 canvas[closeLine] += Fragment(code = rest.joinToString("; ") + ";", kind = FragmentKind.DECOMP)
             }
