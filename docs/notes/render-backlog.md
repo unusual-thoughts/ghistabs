@@ -197,12 +197,19 @@ renames) and `integration/TypedefShorteningProbeIntegrationTest.kt` (real fixtur
 dumps every rename to `build/test-output/typedef-renames/<fixture>.txt`, applies them,
 asserts the std::string fold+rename landed).
 
-**Decomp reads the DTM so it fully shortens** (appquery main.cpp `basic_string<char…>`
-41→6, 137 `std::string`; base fields collapse to `_base__Vector_base<std::string,…>`).
-**The skeleton renders type spellings from the harvest AST, not the DTM**, so DTM
-renaming only partially reaches it (main.cpp 13 `basic_string` remain). Fully shortening
-the skeleton needs the renderer (`render/Type.kt`) to run the same `TemplateNameShortener`
-over its AST-derived type strings — a render-layer follow-up.
+The renderer also shortens (the skeleton spells types from the harvest AST, not the DTM,
+so DTM renaming alone didn't reach it). `harvestTemplateShortener(harvest)` seeds a
+`TemplateNameShortener` from the stabs typedefs themselves (typedef name → aliased type
+name, restricted to template targets containing `<`, which excludes base-type aliases
+without DataType lookups); `render/Type.kt`'s `render` threads it through and applies it to
+type names/tagnames, and `Renderer` applies it to the type's own declaration name. Result:
+appquery skeleton and decomp both drop to **0** `basic_string<char…>` (skeleton 47
+`std::string`, decomp 173).
+
+The "6 residual" `basic_string` once seen in the decomp were never un-renamed DTM types
+(a post-apply DTM scan found none) — they were AST-rendered type *declaration* headers
+(`class iterator_traits<std::basic_string<…>>; /* 1 bytes */`) the decomp file overlays;
+shortening the declaration name closed them.
 
 The rewrite is textual but boundary-guarded: each target matches only when not flanked by
 identifier chars (`(?<![A-Za-z0-9_])…(?![A-Za-z0-9_])`), so a bare-identifier target can't
