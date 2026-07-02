@@ -5,7 +5,6 @@ import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.SymbolTable
 import ghidra.util.task.TaskMonitor
 import ghistabs.StabsOptions
-import ghistabs.diagnose.BookmarkSink
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.StabsDiagnostics
 import ghistabs.diagnose.TeeSink
@@ -32,8 +31,9 @@ class ImportContext<Log : DiagnosticSink>(
     val dtm: DataTypeManager = program.dataTypeManager
     val symtab: SymbolTable = program.symbolTable
 
-    // Accumulator counts everything (unfiltered); BookmarkSink emits/bookmarks at/above the threshold.
-    val sink: DiagnosticSink = TeeSink(diagnostics, BookmarkSink(program, log, options.minLogLevel))
+    // Accumulator counts everything (unfiltered); the terminal [log] (BookmarkSink in prod,
+    // CapturingSink in tests) bookmarks + emits at/above its threshold. Tee'd, not chained.
+    val sink: DiagnosticSink = TeeSink(diagnostics, log)
     val resolver: AddressResolver = ProgramAddressResolver(program)
 
     /**
