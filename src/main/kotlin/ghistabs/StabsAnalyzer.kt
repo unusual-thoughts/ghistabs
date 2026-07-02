@@ -9,6 +9,7 @@ import ghidra.program.model.address.AddressSetView
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
 import ghistabs.StabsAnalyzer.Companion.OPT_STABS_DONE
+import ghistabs.diagnose.Level
 import ghistabs.diagnose.StabsDiagnostics
 import ghistabs.diagnose.TeeSink
 import ghistabs.diagnose.toSink
@@ -73,6 +74,12 @@ class StabsAnalyzer :
             "Rename long templated datatypes onto their shorter typedef aliases " +
                 "(basic_string<char, …> → string), recursively inside other templates.",
         )
+        options.registerOption(
+            OPT_LOG_LEVEL,
+            Level.INFO,
+            null,
+            "Suppress diagnostic log and bookmark messages below this level (counters still tracked).",
+        )
     }
 
     fun run(ctx: ImportContext<*>) {
@@ -109,6 +116,7 @@ class StabsAnalyzer :
         const val OPT_VTABLES: String = "Synthesise vtable structs"
         const val OPT_LOG_DEGRADATIONS: String = "Log degradations at end-of-run"
         const val OPT_SHORTEN_TYPEDEFS: String = "Shorten templated names via typedefs"
+        const val OPT_LOG_LEVEL: String = "Minimum log level"
 
         @JvmStatic
         fun isStabsDone(program: Program) = program.getOptions(Program.PROGRAM_INFO).getBoolean(OPT_STABS_DONE, false)
@@ -128,11 +136,13 @@ data class StabsOptions(
     val applyVtables: Boolean = true,
     val logDegradations: Boolean = false,
     val shortenTypedefs: Boolean = false,
+    val minLogLevel: Level = Level.INFO,
 ) {
     constructor(opts: Options) : this(
         applyPlateComments = opts.getBoolean(StabsAnalyzer.OPT_PLATE_COMMENTS, true),
         applyVtables = opts.getBoolean(StabsAnalyzer.OPT_VTABLES, true),
         logDegradations = opts.getBoolean(StabsAnalyzer.OPT_LOG_DEGRADATIONS, false),
         shortenTypedefs = opts.getBoolean(StabsAnalyzer.OPT_SHORTEN_TYPEDEFS, false),
+        minLogLevel = opts.getEnum(StabsAnalyzer.OPT_LOG_LEVEL, Level.INFO),
     )
 }
