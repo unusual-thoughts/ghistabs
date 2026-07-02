@@ -25,6 +25,9 @@ private val REAL_HEADER_EXTENSIONS = setOf("h", "hpp", "hh", "hxx", "h++", "tcc"
 /** Filename has a header extension we trust as a "real" header for attribution. */
 fun String.hasHeaderExtension(): Boolean = substringAfterLast('.', "").lowercase() in REAL_HEADER_EXTENSIONS
 
+/** Path lies under a stdlib include root — never the "home" of a user type, so excluded from attribution votes. */
+fun String.isStdMarkerPath(): Boolean = STD_MARKERS.containsMatchIn(this)
+
 /** gcc emits anonymous types with CU-local sequential names; same name in different CUs is unrelated. */
 fun TypeAst.isCuLocalName() = name != null && (name.isEmpty() || CU_LOCAL_NAME.matches(name))
 
