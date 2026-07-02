@@ -24,26 +24,3 @@ fun commentFor(line: Int, kind: FragmentKind, note: String, stale: Boolean) = wh
         "// ${lineRef(line)}$role$staleMark"
     }
 }
-
-/** Drop the decomp's leading header/warning comments and fold a lone `{` onto the signature. */
-fun cleanDecompLines(cCode: String): List<String> {
-    val raw = cCode.trim('\n').split('\n').toMutableList()
-    while (raw.isNotEmpty()) {
-        val l = raw.first().trimStart()
-        val drop = (l.startsWith("/*") && l.trimEnd().endsWith("*/")) || l.isEmpty()
-        if (!drop) break
-        raw.removeAt(0)
-    }
-    val out = mutableListOf<String>()
-    for (l in raw) {
-        if (l.trim() == "{" && out.isNotEmpty()) {
-            var idx = out.size - 1
-            while (idx > 0 && out[idx].isBlank()) idx--
-            out[idx] = out[idx].trimEnd() + " {"
-            while (out.size - 1 > idx) out.removeAt(out.size - 1)
-        } else {
-            out += l
-        }
-    }
-    return out
-}
