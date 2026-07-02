@@ -5,12 +5,14 @@ import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
 import ghistabs.harvest.LineEntry
-import ghistabs.harvest.TypeAst
 import ghistabs.harvest.TypeResolver
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.StabType
 import ghistabs.parse.SymbolDecl
 import ghistabs.parse.TypeDecl
+import ghistabs.runTransaction
+import java.io.Closeable
+import java.io.File
 
 // Aggregates the addresses of N_SLINEs sharing a (line, codeUnit) into one annotation.
 private data class SliceKey(val line: Int, val codeUnit: String)
@@ -21,23 +23,61 @@ private data class TypeDeclKey(val line: Int, val name: String, val bodyKind: St
 
 private data class DeclKey(val line: Int, val name: String)
 
-class Renderer(val typeResolver: TypeResolver, val program: Program, val decomp: DecompInterface? = null) {
-    fun renderSkeleton(source: String) = RenderContext(this, source).render()
+enum class Mode {
+    SKELETON,
+    DECOMPILE,
+
+    // Elide gcc SjLj exception scaffolding (the __Unwind_SjLj_* calls, personality store, and the
+    // per-call-site index writes) from decompilation output. No-op on DWARF-EH (ELF) binaries.
+    ELIDE_SJLJ,
 }
+
+class Renderer(val typeResolver: TypeResolver, val program: Program, val mode: Mode) : Closeable {
+    // `also`, not `apply`: inside `apply` the receiver's own (null) `program` property would shadow
+    // the constructor param, so openProgram(program) would be handed null.
+    val decomp = if (mode != Mode.SKELETON) DecompInterface().also { it.openProgram(program) } else null
+
+    val sources by lazy {
+        (
+            typeResolver.harvest.lineEntries.keys + typeResolver.functionSource.values +
+                typeResolver.harvest.typeAsts.values.map { typeResolver.effectiveSourceFor(it) }
+            ).filter { it.isNotEmpty() }.toSet()
+    }
+
+    fun renderSkeleton(source: String) = RenderContext(this, source).render()
+
+    /**
+     * Render every source into [dir], one file per source (named from the source path). Wraps the
+     * render in a transaction — it defines terminated strings at undefined pointer targets it meets
+     * while rendering constant values. Returns the number of files written; stops early if [monitor]
+     * is cancelled.
+     */
+    fun renderAll(dir: File, monitor: TaskMonitor = TaskMonitor.DUMMY): Int {
+        dir.mkdirs()
+        return program.runTransaction("stabs-render-all") {
+            sources.takeWhile { !monitor.isCancelled }.count { source ->
+                val out = renderSkeleton(source)
+                out.isNotBlank().also { if (it) File(dir, safeName(source)).writeText(out) }
+            }
+        }
+    }
+
+    // We own the DecompInterface, so terminate its process rather than just detaching the program.
+    override fun close() {
+        decomp?.dispose()
+    }
+}
+
+private fun safeName(source: String) = source.replace(Regex("[^A-Za-z0-9_.-]"), "_").trim('_')
 
 private class RenderContext(val renderer: Renderer, val source: String) {
     val harvest get() = renderer.typeResolver.harvest
     val program get() = renderer.program
 
-    // A multi-CU class lands at the header its member SLINEs mostly point to, not the
-    // .cpp gcc emitted the body burst in.
-    private fun TypeAst.effectiveSource() =
-        name?.let { renderer.typeResolver.multiSourceHeaderHints[it] } ?: id.source.filename
-
     private val rawFuncs = harvest.openFunctions.filter { renderer.typeResolver.functionSource[it] == source }
     private val lines = harvest.lineEntries[source].orEmpty()
     private val typeDecls = harvest.typeAsts.values
-        .filter { it.effectiveSource() == source && it.name != null && it.declLine > 0 }
+        .filter { renderer.typeResolver.effectiveSourceFor(it) == source && it.name != null && it.declLine > 0 }
     private val symbols = harvest.symbolsByCu[source].orEmpty()
 
     // Collapse long template spellings (basic_string<char,…> → string) in AST-rendered types,
@@ -179,7 +219,9 @@ private class RenderContext(val renderer: Renderer, val source: String) {
         val parts = literal?.let { listOf(it) } ?: addr?.let { program.initializerAt(it) }
         when {
             parts == null -> canvas[line] += Fragment(indent, "$base;", role, FragmentKind.DECL_GLOBAL)
+
             parts.size == 1 -> canvas[line] += Fragment(indent, "$base = ${parts[0]};", role, FragmentKind.DECL_GLOBAL)
+
             else -> canvas.layoutBraceBlock(
                 line,
                 Fragment(indent, "$base = {", role, FragmentKind.DECL_GLOBAL),
@@ -264,6 +306,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
                         .orEmpty()
                     "${body.kind.cxxKeyword()} $shortName$bases {"
                 }
+
                 is TypeDecl.Enum -> "enum $shortName {"
             }
             val sizeNote = when (body) {
@@ -303,7 +346,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             if (closeLine == r.startLine && spans.ranges.count { it.startLine == r.startLine } > 1) continue
             val ghFunc = program.functionManager.getFunctionAt(r.func.addr.address) ?: continue
             val cLines = runCatching { decomp.decompileFunction(ghFunc, 30, TaskMonitor.DUMMY) }
-                .getOrNull()?.compressedDecompLines() ?: continue
+                .getOrNull()?.compressedDecompLines(renderer.mode == Mode.ELIDE_SJLJ) ?: continue
 
             // Capture each surviving stray with its original line so the demoted comment
             // keeps that line's provenance tag rather than the close line's.
@@ -329,6 +372,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
                 val file = if (e.source == source) "" else "${e.source.substringAfterLast('/')} "
                 return "${file}L ${e.line}"
             }
+
             val placed = mutableListOf<Pair<StringBuilder, LineEntry?>>()
             var currentLine: Int? = null
             for ((idx, dl) in cLines.withIndex()) {

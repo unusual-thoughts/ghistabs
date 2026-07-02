@@ -1,6 +1,5 @@
 package ghistabs.integration
 
-import ghidra.app.decompiler.DecompInterface
 import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.app.util.importer.MessageLog
 import ghidra.app.util.importer.ProgramLoader
@@ -12,6 +11,7 @@ import ghistabs.diagnose.defaultContext
 import ghistabs.harvest.Harvester
 import ghistabs.harvest.TypeResolver
 import ghistabs.parse.StabReader
+import ghistabs.render.Mode
 import ghistabs.render.Renderer
 import ghistabs.runTransaction
 import org.junit.jupiter.api.Assumptions.assumeTrue
@@ -92,38 +92,13 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                     oldDir.deleteRecursively()
                     outDir.renameTo(oldDir)
                 }
-                outDir.mkdirs()
-
-                val typeResolver = TypeResolver(harvest)
-                val sources = (
-                    harvest.lineEntries.keys +
-                        typeResolver.functionSource.values +
-                        harvest.typeAsts.values.map {
-                            typeResolver.multiSourceHeaderHints[it.name] ?: it.id.source.filename
-                        }
+                val mode = if (decompile) Mode.ELIDE_SJLJ else Mode.SKELETON
+                Renderer(TypeResolver(harvest), program, mode).use { renderer ->
+                    val written = renderer.renderAll(outDir)
+                    println(
+                        "Pipeline[$binaryName, $outDirName]: ${renderer.sources.size} sources, $written files → $outDir",
                     )
-                    .filter { it.isNotEmpty() }
-                    .toSet()
-
-                val decomp = if (decompile) DecompInterface().apply { openProgram(program) } else null
-                try {
-                    // Transaction: renderSkeleton defines terminated strings at undefined
-                    // pointer targets it meets while rendering constant values.
-                    val written = program.runTransaction("skeleton-render") {
-                        var w = 0
-                        for (source in sources) {
-                            val out = Renderer(typeResolver, program, decomp).renderSkeleton(source)
-                            if (out.isBlank()) continue
-                            val safeName = source.replace(Regex("[^A-Za-z0-9_.-]"), "_").trim('_')
-                            File(outDir, safeName).writeText(out)
-                            w++
-                        }
-                        w
-                    }
-                    println("Pipeline[$binaryName, $outDirName]: ${sources.size} sources, $written files → $outDir")
                     assumeTrue(written > 0, "no output (no N_SOL/N_SLINE in this binary?)")
-                } finally {
-                    decomp?.dispose()
                 }
             }
     }
