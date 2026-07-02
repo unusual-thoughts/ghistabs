@@ -1,7 +1,9 @@
 package ghistabs.materialize
 
 import ghidra.program.model.data.BuiltInDataType
+import ghidra.program.model.data.Composite
 import ghidra.program.model.data.DataType
+import ghidra.program.model.data.DataTypeComponent
 import ghidra.program.model.data.DataTypeManager
 import ghidra.program.model.data.TypeDef
 import ghidra.program.model.data.Undefined
@@ -17,36 +19,29 @@ private val TEMPLATE_PUNCT = Regex("""\s*([<>,])\s*""")
 fun canonTemplateName(name: String): String = TEMPLATE_PUNCT.replace(name.trim()) { it.groupValues[1] }
 
 /**
- * Collapse long templated type names onto shorter typedef aliases.
+ * Collapses long templated names onto shorter typedef aliases.
  *
- * [aliases] maps each typedef's simple name to the simple name of the type it aliases; [typeNames]
- * is every datatype simple name in play. A typedef qualifies when its name is shorter than its
- * canonicalised target. Each qualifying target is rewritten to its alias wherever it appears — the
- * target type itself and, recursively, inside every other templated name's parameters — longest
- * target first so nested reductions compose (`vector<basic_string<…> >` → `vector<string>`).
- * When several typedefs name the same target (libstdc++ has `string`, `_Value_type`, … all aliasing
- * `basic_string<char, …>`) the shortest alias wins. Returns one [TypedefRename] per name whose
- * canonical text actually shrinks.
+ * [aliases] maps each typedef's simple name to the simple name of the type it aliases. A typedef
+ * qualifies when its name is shorter than its canonicalised target; each qualifying target is
+ * rewritten to its alias wherever it appears — longest target first so nested reductions compose
+ * (`vector<basic_string<…> >` → `vector<string>`), shortest alias winning when several name one
+ * target. Matching is identifier-boundary-guarded so a bare-identifier target can't rewrite a
+ * substring of a longer name (`longlong` in `longlongint`, `undefined` in `undefined4`); the
+ * `>`-terminated template targets still match, bounded by `<`, `,`, `::` or edges.
  */
-fun typedefShorteningRenames(aliases: Map<String, String>, typeNames: Set<String>): List<TypedefRename> {
-    val subs = aliases.entries
+class TemplateNameShortener(aliases: Map<String, String>) {
+    private val guarded = aliases.entries
         .groupBy({ canonTemplateName(it.value) }, { it.key })
         .mapNotNull { (target, names) ->
-            names.minBy { it.length }
-                .takeIf { it.length < target.length }
-                ?.let { target to it }
+            names.minBy { it.length }.takeIf { it.length < target.length }?.let { target to it }
         }
         .sortedByDescending { it.first.length }
-    if (subs.isEmpty()) return emptyList()
+        .map { (target, alias) -> Regex("(?<![A-Za-z0-9_])${Regex.escape(target)}(?![A-Za-z0-9_])") to alias }
 
-    // Match a target only on identifier boundaries so a bare-identifier target can't rewrite a
-    // substring of a longer name (`longlong` inside `longlongint`, `Node` inside `NodeList`). The
-    // `>`-terminated template targets still match — they're bounded by `<`, `,`, `::` or edges.
-    val guarded = subs.map { (target, alias) ->
-        Regex("(?<![A-Za-z0-9_])${Regex.escape(target)}(?![A-Za-z0-9_])") to alias
-    }
+    val isEmpty get() = guarded.isEmpty()
 
-    fun rewrite(name: String): String {
+    /** Canonicalise [name] then substitute to a fixpoint; equals the canonical input when nothing shrank. */
+    fun shorten(name: String): String {
         var s = canonTemplateName(name)
         var prev: String
         do {
@@ -56,10 +51,15 @@ fun typedefShorteningRenames(aliases: Map<String, String>, typeNames: Set<String
         return s
     }
 
-    return typeNames.mapNotNull { name ->
-        rewrite(name).takeIf { it.length < canonTemplateName(name).length }?.let { TypedefRename(name, it) }
-    }
+    /** [shorten] but null unless the text actually shrank (below the canonical spelling of [name]). */
+    fun shortenedOrNull(name: String): String? = shorten(name).takeIf { it.length < canonTemplateName(name).length }
 }
+
+/** Datatype renames [TemplateNameShortener] would make over [typeNames] — one per name whose canonical text shrinks. */
+fun typedefShorteningRenames(aliases: Map<String, String>, typeNames: Set<String>): List<TypedefRename> =
+    TemplateNameShortener(aliases).let { s ->
+        typeNames.mapNotNull { name -> s.shortenedOrNull(name)?.let { TypedefRename(name, it) } }
+    }
 
 /**
  * Opt-in DTM pass that renames long templated datatypes onto their shorter typedef aliases, so the
@@ -87,20 +87,38 @@ class TypedefShortener(private val dtm: DataTypeManager, private val sink: Diagn
      */
     private fun DataType.isGhidraBaseType(): Boolean = this is BuiltInDataType || Undefined.isUndefined(this)
 
+    /** Typedef simple name → aliased type name, restricted to stabs typedefs that don't alias a base type. */
+    private fun aliases(types: List<DataType>): Map<String, String> = types.asSequence()
+        .filterIsInstance<TypeDef>()
+        .filter { it.isStabsOrigin() && !it.dataType.isGhidraBaseType() }
+        .associate { it.name to it.dataType.name }
+
     fun renames(): List<TypedefRename> {
         val types = allTypes()
-        val aliases = types.asSequence()
-            .filterIsInstance<TypeDef>()
-            .filter { it.isStabsOrigin() && !it.dataType.isGhidraBaseType() }
-            .associate { it.name to it.dataType.name }
-        return typedefShorteningRenames(aliases, types.mapTo(mutableSetOf()) { it.name })
+        return typedefShorteningRenames(aliases(types), types.mapTo(mutableSetOf()) { it.name })
     }
 
     fun apply(): Int {
-        val byName = allTypes().groupBy { it.name }
-        return renames()
-            .sumOf { (from, to) -> byName[from].orEmpty().count { rename(it, to) } }
-            .also { sink.log("typedef-shorten", "renamed $it datatypes") }
+        val types = allTypes()
+        val shortener = TemplateNameShortener(aliases(types))
+        if (shortener.isEmpty) return 0
+        val byName = types.groupBy { it.name }
+        val typeRenamed = byName.keys.sumOf { name ->
+            shortener.shortenedOrNull(name)?.let { short -> byName.getValue(name).count { rename(it, short) } } ?: 0
+        }
+        // Base-class subobject fields (`_base_<Name>`/`_vbase_<Name>`) embed the base type's name at
+        // build time, so renaming the base datatype never reaches them — rewrite those field names too.
+        val fieldRenamed = types.filterIsInstance<Composite>()
+            .sumOf { c -> c.components.count { it.shortenBaseField(shortener) } }
+        sink.log("typedef-shorten", "renamed $typeRenamed datatypes, $fieldRenamed base fields")
+        return typeRenamed + fieldRenamed
+    }
+
+    private fun DataTypeComponent.shortenBaseField(shortener: TemplateNameShortener): Boolean {
+        val name = fieldName ?: return false
+        if (!name.startsWith("_base_") && !name.startsWith("_vbase_")) return false
+        val short = shortener.shortenedOrNull(name) ?: return false
+        return runCatching { fieldName = short }.isSuccess
     }
 
     /**
