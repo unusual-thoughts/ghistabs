@@ -66,6 +66,13 @@ class StabsAnalyzer :
             "Dump every materialization degradation (Undefined4 fallback, synthesised base, " +
                 "skipped field, dropped vtable slot, …) at end-of-run.",
         )
+        options.registerOption(
+            OPT_SHORTEN_TYPEDEFS,
+            false,
+            null,
+            "Rename long templated datatypes onto their shorter typedef aliases " +
+                "(basic_string<char, …> → string), recursively inside other templates.",
+        )
     }
 
     fun run(ctx: ImportContext<*>) {
@@ -101,6 +108,7 @@ class StabsAnalyzer :
         const val OPT_PLATE_COMMENTS: String = "Apply scope plate comments"
         const val OPT_VTABLES: String = "Synthesise vtable structs"
         const val OPT_LOG_DEGRADATIONS: String = "Log degradations at end-of-run"
+        const val OPT_SHORTEN_TYPEDEFS: String = "Shorten templated names via typedefs"
 
         @JvmStatic
         fun isStabsDone(program: Program) = program.getOptions(Program.PROGRAM_INFO).getBoolean(OPT_STABS_DONE, false)
@@ -119,10 +127,12 @@ data class StabsOptions(
     val applyPlateComments: Boolean = true,
     val applyVtables: Boolean = true,
     val logDegradations: Boolean = false,
+    val shortenTypedefs: Boolean = false,
 ) {
     constructor(opts: Options) : this(
         applyPlateComments = opts.getBoolean(StabsAnalyzer.OPT_PLATE_COMMENTS, true),
         applyVtables = opts.getBoolean(StabsAnalyzer.OPT_VTABLES, true),
         logDegradations = opts.getBoolean(StabsAnalyzer.OPT_LOG_DEGRADATIONS, false),
+        shortenTypedefs = opts.getBoolean(StabsAnalyzer.OPT_SHORTEN_TYPEDEFS, false),
     )
 }

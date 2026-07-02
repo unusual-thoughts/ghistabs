@@ -14,6 +14,7 @@ import ghistabs.diagnose.Level
 import ghistabs.diagnose.isInlineStdMember
 import ghistabs.harvest.*
 import ghistabs.materialize.TypeRegistry
+import ghistabs.materialize.TypedefShortener
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.StabReader
 import ghistabs.parse.SymbolDecl
@@ -65,6 +66,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
 
         ctx.program.runTransaction("Stabs: materialise types") {
             typeRegistry.materialiseAll()
+            if (ctx.options.shortenTypedefs) TypedefShortener(ctx.dtm, ctx.sink).apply()
         }
 
         // Pass C — apply symbols
