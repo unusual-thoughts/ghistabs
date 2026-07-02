@@ -301,9 +301,8 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             // the skeleton's side-by-side decls and only body a single-line function alone.
             if (closeLine == r.startLine && spans.ranges.count { it.startLine == r.startLine } > 1) continue
             val ghFunc = program.functionManager.getFunctionAt(r.func.addr.address) ?: continue
-            val cCode = runCatching { decomp.decompileFunction(ghFunc, 30, TaskMonitor.DUMMY) }
-                .getOrNull()?.decompiledFunction?.c ?: continue
-            val cLines = cleanDecompLines(cCode)
+            val cLines = runCatching { decomp.decompileFunction(ghFunc, 30, TaskMonitor.DUMMY) }
+                .getOrNull()?.compressedDecompLines() ?: continue
 
             // Capture each surviving stray with its original line so the demoted comment
             // keeps that line's provenance tag rather than the close line's.
