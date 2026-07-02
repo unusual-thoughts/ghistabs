@@ -39,6 +39,10 @@ private class RenderContext(val renderer: Renderer, val source: String) {
         .filter { it.effectiveSource() == source && it.name != null && it.declLine > 0 }
     private val symbols = harvest.symbolsByCu[source].orEmpty()
 
+    // Collapse long template spellings (basic_string<char,…> → string) in AST-rendered types,
+    // matching the DTM shortening pass that only the decompiler (DTM-backed) otherwise reflects.
+    private val shortener by lazy { harvestTemplateShortener(harvest) }
+
     private val spans = FunctionSpans.of(rawFuncs, source)
 
     private val maxLine = sequenceOf(
@@ -104,7 +108,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             if (!seen.add(TypeDeclKey(ast.declLine, name, body::class.simpleName ?: ""))) continue
             canvas[ast.declLine] += Fragment(
                 indentFor(ast.declLine),
-                "typedef ${body.render(harvest)} $name;",
+                "typedef ${body.render(harvest, shortener = shortener)} $name;",
                 note = "",
                 kind = FragmentKind.TYPEDEF,
                 stale = isStale(ast.declLine),
@@ -127,7 +131,13 @@ private class RenderContext(val renderer: Renderer, val source: String) {
                 if (!dedup(line, name)) return
                 val stale = span == null || line !in span
                 canvas[line] +=
-                    Fragment(indentFor(line), "${type.render(harvest)} $name;", role, FragmentKind.DECL_LOCAL, stale)
+                    Fragment(
+                        indentFor(line),
+                        "${type.render(harvest, shortener = shortener)} $name;",
+                        role,
+                        FragmentKind.DECL_LOCAL,
+                        stale,
+                    )
             }
             for (p in f.params) {
                 if (p.sourceFile != source) continue
@@ -154,7 +164,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
     private fun emitGlobal(line: Int, name: String, type: TypeDecl<GlobalTypeId>, role: String, addr: Address?) {
         if (!dedup(line, name)) return
         val indent = indentFor(line)
-        val base = "${type.render(harvest)} $name"
+        val base = "${type.render(harvest, shortener = shortener)} $name"
         // A string-valued global (pointer-to-string whose slot Ghidra left an untyped
         // scalar, or a char[N] holding an RTTI/string literal) renders as one quoted
         // literal; initializerAt would otherwise miss it or spread a per-byte list.
@@ -236,23 +246,24 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             val body = ast.body
             if (body !is TypeDecl.Struct && body !is TypeDecl.Enum) continue
             if (!seen.add(line to name)) continue
+            val shortName = shortener.shortenedOrNull(name) ?: name
 
             // Struct fields/methods are self-terminated statements; enum members carry a
             // trailing comma so the space-join in layoutBraceBlock reads as a member list.
             val members = when (body) {
-                is TypeDecl.Struct -> body.renderFull(harvest, program)
+                is TypeDecl.Struct -> body.renderFull(harvest, program, shortener)
                 is TypeDecl.Enum -> body.members.map { (mn, mv) -> "$mn = $mv," }
             }
             val openText = when (body) {
                 is TypeDecl.Struct -> {
                     val bases = body.bases.takeIf { it.isNotEmpty() }
                         ?.joinToString(", ", prefix = " : ") {
-                            "${it.access.name.lowercase()} ${it.type.render(harvest)}"
+                            "${it.access.name.lowercase()} ${it.type.render(harvest, shortener = shortener)}"
                         }
                         .orEmpty()
-                    "${body.kind.cxxKeyword()} $name$bases {"
+                    "${body.kind.cxxKeyword()} $shortName$bases {"
                 }
-                is TypeDecl.Enum -> "enum $name {"
+                is TypeDecl.Enum -> "enum $shortName {"
             }
             val sizeNote = when (body) {
                 is TypeDecl.Struct -> "/* ${body.sizeBytes} bytes */"
@@ -265,7 +276,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             } else {
                 val keyword = if (body is TypeDecl.Struct) body.kind.cxxKeyword() else "enum"
                 canvas[line] +=
-                    Fragment(indentFor(line), "$keyword $name; $sizeNote", "", FragmentKind.TYPE_BODY, stale)
+                    Fragment(indentFor(line), "$keyword $shortName; $sizeNote", "", FragmentKind.TYPE_BODY, stale)
             }
         }
     }

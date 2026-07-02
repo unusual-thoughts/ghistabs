@@ -8,6 +8,7 @@ import ghidra.program.model.data.UnsignedCharDataType
 import ghidra.program.model.listing.Program
 import ghistabs.harvest.Harvest
 import ghistabs.materialize.BuiltinTable
+import ghistabs.materialize.TemplateNameShortener
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
 
@@ -22,7 +23,11 @@ import ghistabs.parse.TypeDecl
  * on legitimately deep types (e.g. an array of const char pointers:
  * Array→InlineDef→Const→Ref→Pointer→Ref→Const→Ref→char).
  */
-fun TypeDecl<GlobalTypeId>.render(harvest: Harvest, seen: Set<GlobalTypeId> = emptySet()): String = when (this) {
+fun TypeDecl<GlobalTypeId>.render(
+    harvest: Harvest,
+    seen: Set<GlobalTypeId> = emptySet(),
+    shortener: TemplateNameShortener? = null,
+): String = when (this) {
     is TypeDecl.Ref -> {
         // Named TypeAst → use the name. Anonymous → recurse into its body so the
         // user sees `int *` rather than a raw GlobalTypeId, unless this id is
@@ -30,26 +35,26 @@ fun TypeDecl<GlobalTypeId>.render(harvest: Harvest, seen: Set<GlobalTypeId> = em
         val ast = harvest.typeAsts[id]
         val name = ast?.name
         when {
-            name != null -> name
+            name != null -> shortener?.shortenedOrNull(name) ?: name
             ast == null -> "T_$id"
             id in seen -> "…"
-            else -> ast.body.render(harvest, seen + id)
+            else -> ast.body.render(harvest, seen + id, shortener)
         }
     }
 
-    is TypeDecl.Pointer -> "${pointee.render(harvest, seen)} *"
+    is TypeDecl.Pointer -> "${pointee.render(harvest, seen, shortener)} *"
 
-    is TypeDecl.Reference -> "${referent.render(harvest, seen)} &"
+    is TypeDecl.Reference -> "${referent.render(harvest, seen, shortener)} &"
 
-    is TypeDecl.Const -> "${inner.render(harvest, seen)} const"
+    is TypeDecl.Const -> "${inner.render(harvest, seen, shortener)} const"
 
-    is TypeDecl.Volatile -> "${inner.render(harvest, seen)} volatile"
+    is TypeDecl.Volatile -> "${inner.render(harvest, seen, shortener)} volatile"
 
     is TypeDecl.Array -> {
         // gcc stores the bound in indexType (`ar<idx>;lo;hi`), leaving length null;
         // derive count as hi-lo+1, same as TypeRegistry's array materialization.
         val len = length ?: (indexType as? TypeDecl.Range)?.let { it.max - it.min + 1 }
-        "${element.render(harvest, seen)}[${len ?: ""}]"
+        "${element.render(harvest, seen, shortener)}[${len ?: ""}]"
     }
 
     is TypeDecl.Builtin,
@@ -59,26 +64,46 @@ fun TypeDecl<GlobalTypeId>.render(harvest: Harvest, seen: Set<GlobalTypeId> = em
     is TypeDecl.WithSizeAttr,
     -> BuiltinTable.resolve(this)?.name ?: this::class.simpleName?.lowercase() ?: "?"
 
-    is TypeDecl.XRef -> "${kind.cxxKeyword()} $tagName"
+    is TypeDecl.XRef -> "${kind.cxxKeyword()} ${shortener?.shortenedOrNull(tagName) ?: tagName}"
 
     is TypeDecl.Struct -> kind.cxxKeyword()
 
     is TypeDecl.Enum -> "enum"
 
     is TypeDecl.FunctionT -> {
-        val ret = ret.render(harvest, seen)
-        val params = params.joinToString(", ") { it.render(harvest, seen) }
+        val ret = ret.render(harvest, seen, shortener)
+        val params = params.joinToString(", ") { it.render(harvest, seen, shortener) }
         "$ret($params)"
     }
 
     is TypeDecl.Method -> {
-        val cls = cls.render(harvest, seen)
-        val ret = ret.render(harvest, seen)
-        val params = params.joinToString(", ") { it.render(harvest, seen) }
+        val cls = cls.render(harvest, seen, shortener)
+        val ret = ret.render(harvest, seen, shortener)
+        val params = params.joinToString(", ") { it.render(harvest, seen, shortener) }
         "$ret($cls::*)($params)"
     }
 
-    is TypeDecl.InlineDef -> body.render(harvest, seen + id)
+    is TypeDecl.InlineDef -> body.render(harvest, seen + id, shortener)
+}
+
+/**
+ * Shortener seeded from the stabs typedefs themselves (typedef name → aliased type's name), for the
+ * skeleton renderer, which spells types from the harvest AST rather than the DTM (so the DTM
+ * shortening pass doesn't reach it). Only typedefs whose target is a template instantiation (has a
+ * `<`) are used — that excludes base-type aliases (`fpos_t`→`longlong`) without DataType lookups.
+ */
+fun harvestTemplateShortener(harvest: Harvest): TemplateNameShortener {
+    fun targetName(decl: TypeDecl<GlobalTypeId>): String? = when (decl) {
+        is TypeDecl.Ref -> harvest.typeAsts[decl.id]?.name
+        is TypeDecl.XRef -> decl.tagName
+        is TypeDecl.InlineDef -> targetName(decl.body)
+        else -> null
+    }
+    val aliases = harvest.typeAsts.values.mapNotNull { ast ->
+        val name = ast.name ?: return@mapNotNull null
+        targetName(ast.body)?.takeIf { '<' in it && it.length > name.length }?.let { name to it }
+    }.toMap()
+    return TemplateNameShortener(aliases)
 }
 
 /** True if this resolves to a pointer, seeing through refs, cv-qualifiers and typedefs. */
@@ -117,12 +142,16 @@ private fun TypeDecl<GlobalTypeId>.isCharType(harvest: Harvest): Boolean = when 
 }
 
 /** Render a Struct's body members for in-skeleton expansion: one bare C-style decl per entry. */
-fun TypeDecl.Struct<GlobalTypeId>.renderFull(harvest: Harvest, program: Program): List<String> {
+fun TypeDecl.Struct<GlobalTypeId>.renderFull(
+    harvest: Harvest,
+    program: Program,
+    shortener: TemplateNameShortener? = null,
+): List<String> {
     val fieldLines = fields
         .filter { !it.isStatic }
         .sortedBy { it.offsetBits }
         .map { f ->
-            val type = f.type.render(harvest)
+            val type = f.type.render(harvest, shortener = shortener)
             "$type ${f.name};  /* +${f.offsetBits / 8}B */"
         }
     val funcByMangled = harvest.openFunctions.associateBy { it.name }
