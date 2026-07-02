@@ -163,6 +163,17 @@ those would otherwise shorten base types (`unsigned char`→`BYTE`, `void *`→`
 program-local one (`DataType.sourceArchive == dtm.localSourceArchive`); applied-archive
 types carry their external archive. Dropped 22 Windows-driven renames on appquery.
 
+Ghidra base types are never shortened either. A stabs `typedef long long fpos_t` /
+`fpos` typedef would otherwise rename the built-ins `longlong`→`fpos_t`,
+`ulonglong`→`ufpos_t`, `undefined`→`fpos` — and their short names corrupt siblings by
+substring (`undefined`→`fpos` textually hits `undefined4`→`fpos4`; `longlong` hits the
+distinct `long long int`→`fpos_tint`). Excluded via `dataType is BuiltInDataType ||
+Undefined.isUndefined` on the typedef's target. Dropped 26 base-type renames (107→81).
+
+Default template-argument elision (`vector<T, allocator<T>>` → `vector<T>`) is
+deliberately **not** done: the defaults aren't derivable from stabs, so it would need a
+hardcoded per-template assumption table.
+
 When several typedefs name one target (libstdc++ aliases `basic_string<char, …>` as
 `string`, `_Value_type`, `_ValueType`, …) the shortest alias wins — real appquery
 output collapsed to `_Value_type` until this was added.
@@ -178,11 +189,17 @@ renames) and `integration/TypedefShorteningProbeIntegrationTest.kt` (real fixtur
 dumps every rename to `build/test-output/typedef-renames/<fixture>.txt`, applies them,
 asserts the std::string fold+rename landed).
 
-Follow-up (not done): the substring rewrite is textual; a param that *is* a template
-parameter but happens to spell the target inside a longer identifier would also match
-— fine in practice for these names, but a structural rewrite over parsed template
-args would be stricter. Also over-eager aliases (`random_access_iterator_tag`→`_Tag`)
-are a name-quality question, not correctness.
+The rewrite is textual but boundary-guarded: each target matches only when not flanked by
+identifier chars (`(?<![A-Za-z0-9_])…(?![A-Za-z0-9_])`), so a bare-identifier target can't
+rewrite a substring of a longer name (`longlong` in `longlongint`, `Node` in `NodeList`) —
+`>`-terminated template targets still match, bounded by `<`, `,`, `::`. (A plain `\b\b`
+would fail here: template targets end in `>`, so a trailing `\b` requires a following word
+char that valid names never have.) This is complementary to the base-type exclusion —
+boundaries stop corruption, exclusion stops renaming the base type itself.
+
+Follow-up (not done): a fully structural rewrite over parsed template args would be stricter
+still than the boundary-guarded textual one. Over-eager but harmless aliases like
+`random_access_iterator_tag`→`_Tag` remain a name-quality question, not correctness.
 
 ## 8. Stack/register local injection — status (working; caveats)
 

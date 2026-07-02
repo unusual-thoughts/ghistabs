@@ -71,6 +71,20 @@ class TypedefShorteningTest {
     }
 
     @Test
+    fun `a bare-identifier target matches only on identifier boundaries`() {
+        // `Node`→`N` must rewrite `vector<Node>` but never a substring of `NodeList` / `TreeNode`.
+        val renames = typedefShorteningRenames(
+            mapOf("N" to "Node"),
+            setOf("Node", "NodeList", "TreeNode", "vector<Node>", "vector<NodeList>"),
+        ).associate { it.from to it.to }
+        assertEquals("N", renames["Node"])
+        assertEquals("vector<N>", renames["vector<Node>"])
+        assertNull(renames["NodeList"])
+        assertNull(renames["TreeNode"])
+        assertNull(renames["vector<NodeList>"])
+    }
+
+    @Test
     fun `a typedef no shorter than its target produces no rename`() {
         val renames = typedefShorteningRenames(
             mapOf("LongAliasName" to "int", "Foo" to "Bar"),
