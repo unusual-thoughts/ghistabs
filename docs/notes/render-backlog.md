@@ -142,22 +142,29 @@ no bodies scattered into .cpp. The renderer's `effectiveSource()` and
 agree for these. Remaining latent divergence (renderer bypasses canonical
 Attribution for the non-hint path) is not exercised by the current fixtures.
 
-## 7. Shorten long templated type names via their typedefs (DTM-level, analyzer option)
+## 7. Shorten long templated type names via their typedefs (DTM-level, analyzer option) — DONE
 
 Template instantiations dominate output width: `vector<std::basic_string<char,
 std::char_traits<char>, std::allocator<char> >, std::allocator<...> >` etc. When a
-typedef names such a type (`typedef ... string`, or a user `typedef vector<X> Xs`),
-render/store the typedef name instead. Do this at the **Ghidra DTM level** (not just
-in the text emitter) so both the listing and the decompiler benefit, gated behind an
-option on the stabs analyzer.
+typedef names such a type, store the typedef name in the DTM instead so both the
+listing and the decompiler benefit.
 
-Sketch: a pass *before* materialization tallies every typedef whose name is shorter
-than its target. For each, rename the target datatype to the typedef name and drop
-the typedef, then apply the same substring replacement **recursively inside all
-other templated type names** (their template parameters), watching for the extra
-spaces gcc leaves between `> >`. Longest replacements win (apply in descending
-target-length order) so nested reductions compose. Especially valuable for std::
-types; also collapses user typedefs within other classes' parameters.
+`materialize/TypedefShortening.kt`: `typedefShorteningRenames(aliases, typeNames)` is
+the pure core — canonicalises whitespace around template punctuation
+(`canonTemplateName`, so gcc's inconsistent `< `, `, `, ` >`, `> >` matches), keeps
+typedefs whose alias is strictly shorter than their target, and rewrites each target
+onto its alias wherever it appears: the target type itself and, recursively, inside
+every other templated name's parameters, applying the longest target first so nested
+reductions compose (`map<int, vector<basic_string<…> > >` → `map<int,StringVec>`).
+`TypedefShortener(dtm, sink)` reads the aliases/names out of the DTM and applies the
+renames via `setName`. Gated behind `OPT_SHORTEN_TYPEDEFS` (default off), run in the
+materialise transaction after `materialiseAll`. Pinned by
+`materialize/TypedefShorteningTest.kt` (outputs the computed renames).
+
+Follow-up (not done): the substring rewrite is textual; a param that *is* a template
+parameter but happens to spell the target inside a longer identifier would also match
+— fine in practice for these names, but a structural rewrite over parsed template
+args would be stricter.
 
 ## 8. Stack/register local injection — status (working; caveats)
 
