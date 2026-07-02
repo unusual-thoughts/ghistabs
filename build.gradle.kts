@@ -99,6 +99,8 @@ val integrationTest =
         maxHeapSize = "2g"
         // -Pfixture=<name> restricts fixture-parameterised probes to one binary for fast cycles.
         systemProperty("fixtureFilter", providers.gradleProperty("fixture").getOrElse(""))
+        // -PregenerateBaselines=true rewrites baseline JSONs from observed counters instead of asserting.
+        systemProperty("regenerateBaselines", providers.gradleProperty("regenerateBaselines").getOrElse(""))
         jvmArgs(
             // Ghidra installs its own ObjectInputFilter factory; under JDK 21 it must be
             // declared at JVM startup, otherwise the BuiltinFilterFactory wins the race.

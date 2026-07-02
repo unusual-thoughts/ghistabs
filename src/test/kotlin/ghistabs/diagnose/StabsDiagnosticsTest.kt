@@ -17,7 +17,7 @@ class StabsDiagnosticsTest {
         diag.recordUnresolvedRef(null, "myFunction")
         diag.recordPlaceholder("MyClass", "MyCategory", "fwd-decl")
         diag.recordExample("dedup-rename", "name=SomeType detail=renamed-to-SomeType_1")
-        diag.inc("dedup-rename")
+        diag.log("dedup-rename")
         diag.recordVtable("VirtualBase", "applied")
 
         diag.writeSummary(sink)
@@ -95,7 +95,7 @@ class StabsDiagnosticsTest {
         diag.recordVtable("C1", "applied")
         diag.recordUnresolvedRef(null, "f")
         diag.recordPlaceholder("T1", "cat", "reason")
-        diag.inc("dedup-rename")
+        diag.log("dedup-rename")
         diag.recordGlobal("0x1000", "applied", "int")
 
         val keys = diag.snapshotCounters().keys.toList()
@@ -202,9 +202,9 @@ class StabsDiagnosticsTest {
         val diag = StabsDiagnostics()
         val sink = CapturingSink()
 
-        diag.inc("counter-a", 1)
-        diag.inc("counter-b", 0)
-        diag.inc("counter-c", 3)
+        diag.log("counter-a", count = 1)
+        diag.log("counter-b", count = 0)
+        diag.log("counter-c", count = 3)
 
         diag.writeSummary(sink)
         val output = sink.capturedOutput()

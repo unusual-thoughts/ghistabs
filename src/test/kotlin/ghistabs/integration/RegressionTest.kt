@@ -245,19 +245,30 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
     @Test
     fun countersWithinBaseline() {
         assumeTrue(binaryName == "xapasmcsr.exe", "Skipping: baseline only exists for xapasmcsr.exe")
-        val tagCounts = context.log.tagFrequencies()
+        // Authoritative per-category counts. Not `log.tagFrequencies()`: that only sees categories
+        // that reach the sink (record*/direct-inc bypass it) and ignores `count = n` tallies, which
+        // made assertions on those categories (e.g. empty-scope) silently vacuous.
+        val counters = context.diagnostics.snapshotCounters()
+
+        // -PregenerateBaselines=true rewrites the baseline from the observed counts (deterministic
+        // import). The resulting git diff is the record of exactly which counters moved.
+        if (System.getProperty("regenerateBaselines") == "true") {
+            BaselineWriter.write(baselineFile, counters, "xapasmcsr.exe — generated from snapshotCounters()")
+            return
+        }
+
         val baseline = BaselineLoader.load(baselineFile)
 
         // If no stabs were found in the binary, skip the test
         // (stabs sections may not exist or may be in a non-standard format)
         assumeTrue(
-            tagCounts.isNotEmpty(),
+            counters.isNotEmpty(),
             "Skipping: No stabs counters found in binary (stabs sections absent or non-standard format)",
         )
 
         val drift = mutableListOf<String>()
         for ((counterName, range) in baseline.counters) {
-            val actual = tagCounts.getOrDefault(counterName, 0L)
+            val actual = counters.getOrDefault(counterName, 0L)
             if (actual !in range.min..range.max) {
                 drift += "Counter '$counterName' = $actual outside baseline range [${range.min}..${range.max}]"
             }

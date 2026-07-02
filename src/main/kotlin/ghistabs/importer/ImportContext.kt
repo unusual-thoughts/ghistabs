@@ -8,6 +8,7 @@ import ghistabs.StabsOptions
 import ghistabs.diagnose.BookmarkSink
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.StabsDiagnostics
+import ghistabs.diagnose.TeeSink
 import org.jetbrains.annotations.TestOnly
 import java.util.*
 
@@ -30,7 +31,9 @@ class ImportContext<Log : DiagnosticSink>(
 ) {
     val dtm: DataTypeManager = program.dataTypeManager
     val symtab: SymbolTable = program.symbolTable
-    val sink: BookmarkSink = BookmarkSink(program, log, diagnostics, options.minLogLevel)
+
+    // Accumulator counts everything (unfiltered); BookmarkSink emits/bookmarks at/above the threshold.
+    val sink: DiagnosticSink = TeeSink(diagnostics, BookmarkSink(program, log, options.minLogLevel))
     val resolver: AddressResolver = ProgramAddressResolver(program)
 
     /**
