@@ -280,3 +280,42 @@ Fix: unify — have `effectiveSource()` consult the canonical attribution
 (appimage.cpp here). Separately, appimage.h would be preferable to appimage.cpp,
 but that needs the header in defSources (it isn't) — a distinct BINCL-attribution
 gap, lower priority than making the two paths agree.
+
+## 9. Decomp layout regressions after source-line placement (OPEN)
+
+Captured from `build/test-output/decomps/appquery/main.cpp` after the source-line
+placement rework (commit 6335c83). Four issues:
+
+- **Lost the `// ⇐ L NN` source-line annotation.** §2 tagged every decomp statement
+  with the source line its instructions came from; the placement rework now sets the
+  note only when the entry's source/line differs from the placement target
+  (`note = entry?.takeIf { it.source != source || it.line != target }`), so a statement
+  placed at its own source line shows no line number. Restore the explicit line-number
+  comment on decomp statements (it confirms attribution even when the canvas line
+  already matches).
+- **Blank lines between grouped statements waste vertical space.** Placing each
+  coalesced group at its source line leaves gaps (empty canvas lines) between groups —
+  e.g. main.cpp has runs of blank lines around 155–166. Either compact the gaps or
+  reconsider placement so the body reads densely instead of scattered down the span.
+- **Indentation is flat, not block-level.** `indentFor(line)` is a flat 4 spaces for
+  anything `inFunction`, so nested decompiler blocks (loops/ifs) don't step in and the
+  crammed body sits at one column. Track `{`/`}` nesting depth from the clang token
+  stream and indent decomp statements by bracket level.
+- **Legit file-scope globals/types inside a function span get demoted to `// stray:`.**
+  main.cpp L167 dumps `vm2_trapset_names` (L82), `vm3_trapset_names` (L152) and a run
+  of type decls (L63–152) as `// stray:` comments on the close line, because the stray
+  sweep (`r.startLine..closeLine`) treats every non-decomp fragment in the span as a
+  stray. These are real declarations that fall within `main`'s (over-large?) source
+  span — they should render at their own line, not be swept. Investigate whether
+  `main`'s `closeLine` is inflated (SLINE attribution dragging header/inlined lines) or
+  whether the sweep needs to exempt symbol/type fragments that own a distinct line.
+
+## 10. Post-diagnostics-refactor: audit every log() level (OPEN)
+
+After the diagnose refactor (log() is the single entry; degradations are WARN via the
+`degradation()` extension), sweep every `log(...)` / `degradation(...)` call and set the
+level deliberately: **WARN/ERROR** for real degradations, ordered by gravity; **INFO**
+for non-trivial-but-not-bad signals; **DEBUG** for minutiae. The record*→log collapse
+(§ diagnose) parked all former silent counters at DEBUG; some deserve promotion. Stale
+comment to fix while there: StabsImporter `applyAllSymbols` still says "BookmarkSink
+auto-bumps the counter" — no longer true (the accumulator counts, BookmarkSink only emits).
