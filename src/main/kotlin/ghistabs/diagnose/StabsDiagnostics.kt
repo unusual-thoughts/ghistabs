@@ -52,7 +52,17 @@ data class AttributionTrace(
 )
 
 /** A materialisation fallback (Undefined4, dropped field, placeholder base, skipped vtable slot…). */
-data class DegradationRecord(val category: String, val context: String, val detail: String? = null)
+data class DegradationRecord(val category: String, val detail: String)
+
+const val DEGRADED_PREFIX = "degraded-"
+
+/**
+ * Record a materialisation degradation: a WARN log under `degraded-<category>` (surfaced live and
+ * counted like anything else) that the [StabsDiagnostics] accumulator also files as a structured
+ * [DegradationRecord] for the per-fixture dumps. [context] and [detail] are joined into the message.
+ */
+fun DiagnosticSink.degradation(category: String, context: String, detail: String? = null) =
+    log("$DEGRADED_PREFIX$category", if (detail != null) "$context :: $detail" else context, Level.WARN)
 
 /**
  * Per-run diagnostic aggregator — the accumulating [DiagnosticSink] terminal. Each [log] bumps the
@@ -70,7 +80,12 @@ class StabsDiagnostics : DiagnosticSink {
 
     override fun log(category: String, message: String?, level: Level, address: Address?, count: Long) {
         inc(category, count)
-        if (message != null) recordExample(category, message)
+        if (message != null) {
+            recordExample(category, message)
+            if (category.startsWith(DEGRADED_PREFIX)) {
+                degradations.add(DegradationRecord(category.removePrefix(DEGRADED_PREFIX), message))
+            }
+        }
     }
 
     private fun inc(name: String, by: Long = 1) {
@@ -119,23 +134,8 @@ class StabsDiagnostics : DiagnosticSink {
 
     fun snapshotAttributionTraces() = attributionTraces.toList()
 
-    /** Unbounded record; also bumps `degraded-$category` for the summary totals. */
-    fun recordDegradation(category: String, context: String, detail: String? = null) {
-        degradations.add(DegradationRecord(category, context, detail))
-        inc("degraded-$category")
-    }
-
+    /** Structured degradations, filed by [log] when it sees a `degraded-` category (see [degradation]). */
     fun snapshotDegradations(): List<DegradationRecord> = degradations.toList()
-
-    /** Caller gates this on the `logDegradations` analyzer option. */
-    fun writeDegradations(sink: DiagnosticSink) {
-        if (degradations.isEmpty()) return
-        sink.log("degradations", "=== degradations (${degradations.size}) ===")
-        for (d in degradations) {
-            val msg = if (d.detail != null) "${d.context} :: ${d.detail}" else d.context
-            sink.log(d.category, msg)
-        }
-    }
 
     /** One-shot — subsequent calls are no-ops. Emits counters, example buckets, and gap census. */
     fun writeSummary(sink: DiagnosticSink) {

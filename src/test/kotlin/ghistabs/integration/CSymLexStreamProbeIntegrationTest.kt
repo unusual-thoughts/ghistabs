@@ -39,7 +39,7 @@ class bouniafProbeIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             val ctx = ImportContext(
                 program,
                 monitor,
-                StabsOptions(logDegradations = true),
+                StabsOptions(),
                 CapturingSink(),
                 StabsDiagnostics(),
             )
@@ -99,7 +99,7 @@ class bouniafProbeIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
 
                 w.write("\n=== ALL degradations (${ctx.diagnostics.snapshotDegradations().size}) ===\n")
                 for (d in ctx.diagnostics.snapshotDegradations()) {
-                    w.write("  [${d.category}] ${d.context} :: ${d.detail}\n")
+                    w.write("  [${d.category}] ${d.detail}\n")
                 }
                 w.write("\n=== sink log entries mentioning bouniaf ===\n")
                 val sink = ctx.log as CapturingSink

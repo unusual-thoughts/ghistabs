@@ -3,6 +3,7 @@ package ghistabs.importer
 import ghidra.program.model.data.*
 import ghidra.program.model.data.Array
 import ghistabs.diagnose.DiagnosticSink
+import ghistabs.diagnose.degradation
 import ghistabs.materialize.TypeRegistry
 import java.util.*
 
@@ -117,7 +118,7 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val typeRegis
             log(counterKey)
             // Only WouldBeCycle is a real degradation — we had a replacement and couldn't apply it.
             if (skip is Skip.WouldBeCycle) {
-                ctx.diagnostics.recordDegradation("demangler-skip-cycle", skip.name, skip.reason)
+                degradation("demangler-skip-cycle", skip.name, skip.reason)
             }
         }
 
@@ -136,7 +137,7 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val typeRegis
                 log("replaced-demangler", "${stubDt.pathName} -> ${replDt.pathName}")
             } catch (e: Exception) {
                 log("replaced-demangler-failed")
-                ctx.diagnostics.recordDegradation(
+                degradation(
                     "demangler-replace-failed",
                     stubDt.pathName,
                     e.message,

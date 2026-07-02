@@ -13,6 +13,7 @@ import ghidra.program.model.symbol.SourceType
 import ghistabs.applyDemangling
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.Level
+import ghistabs.diagnose.degradation
 import ghistabs.harvest.CanonicalGroup
 import ghistabs.harvest.Harvest
 import ghistabs.harvest.TypeResolver
@@ -238,7 +239,7 @@ class ClassBuilder(
             func.parentNamespace = ns
             val fallbackName = displayNameFor(mangled, className) ?: m.name
             if (func.name != fallbackName) func.setName(fallbackName, source)
-            ctx.diagnostics.recordDegradation(
+            degradation(
                 "method-demangle-fallback",
                 "$className::${m.name}",
                 "demangler did not apply to $mangled",
@@ -292,7 +293,7 @@ class ClassBuilder(
         if (unresolvedCount > 0) {
             paramTypes.forEachIndexed { i, pdt ->
                 if (pdt == null) {
-                    ctx.diagnostics.recordDegradation(
+                    degradation(
                         "method-param-unresolved",
                         "$className::${m.name}[$i]",
                         paramDecls.getOrNull(i)?.toString(),
@@ -388,7 +389,7 @@ class ClassBuilder(
         while (vftable.numComponents > 0) vftable.delete(0)
         for (m in virtuals) {
             val slotType = buildVirtualSlotType(m, className, vftableCategory) ?: run {
-                ctx.diagnostics.recordDegradation(
+                degradation(
                     "vftable-slot-untyped",
                     "$className::${m.name}",
                 )
@@ -487,7 +488,7 @@ class ClassBuilder(
     ): PointerDataType? {
         val unwrapped = unwrapSignature(m.signature)
         val method = unwrapped as? TypeDecl.Method<GlobalTypeId> ?: run {
-            ctx.diagnostics.recordDegradation(
+            degradation(
                 "vftable-slot-signature-not-method",
                 "$className::${m.name}",
                 "unwrapped=${unwrapped?.let { it::class.simpleName } ?: "null"} sig=${m.signature}",
@@ -548,7 +549,7 @@ class ClassBuilder(
             else -> "truly-missing"
         }
         log("vtable-failed", "class=$className reason=$failureBucket", Level.DEBUG)
-        ctx.diagnostics.recordDegradation("vtable-failed", className, failureBucket)
+        degradation("vtable-failed", className, failureBucket)
         log(
             "vtable-failed-$failureBucket",
             "class '$className': vtable not found (tried ${candidates.joinToString()})",
