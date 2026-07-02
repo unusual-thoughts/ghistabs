@@ -57,6 +57,20 @@ class TypedefShorteningTest {
     }
 
     @Test
+    fun `when several typedefs name one target the shortest alias wins`() {
+        // libstdc++ aliases basic_string as string, _Value_type, _ValueType — string must win.
+        val renames = typedefShorteningRenames(
+            mapOf("_Value_type" to basicString, "string" to basicString, "_ValueType" to basicString),
+            setOf(basicString, "list<std::basic_string<char, std::char_traits<char>, std::allocator<char> > >"),
+        ).associate { it.from to it.to }
+        assertEquals("string", renames[basicString])
+        assertEquals(
+            "list<std::string>",
+            renames["list<std::basic_string<char, std::char_traits<char>, std::allocator<char> > >"],
+        )
+    }
+
+    @Test
     fun `a typedef no shorter than its target produces no rename`() {
         val renames = typedefShorteningRenames(
             mapOf("LongAliasName" to "int", "Foo" to "Bar"),

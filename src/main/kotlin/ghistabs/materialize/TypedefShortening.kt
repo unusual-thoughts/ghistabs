@@ -22,12 +22,18 @@ fun canonTemplateName(name: String): String = TEMPLATE_PUNCT.replace(name.trim()
  * canonicalised target. Each qualifying target is rewritten to its alias wherever it appears — the
  * target type itself and, recursively, inside every other templated name's parameters — longest
  * target first so nested reductions compose (`vector<basic_string<…> >` → `vector<string>`).
- * Returns one [TypedefRename] per name whose canonical text actually shrinks.
+ * When several typedefs name the same target (libstdc++ has `string`, `_Value_type`, … all aliasing
+ * `basic_string<char, …>`) the shortest alias wins. Returns one [TypedefRename] per name whose
+ * canonical text actually shrinks.
  */
 fun typedefShorteningRenames(aliases: Map<String, String>, typeNames: Set<String>): List<TypedefRename> {
     val subs = aliases.entries
-        .map { canonTemplateName(it.value) to it.key }
-        .filter { (target, alias) -> alias.length < target.length }
+        .groupBy({ canonTemplateName(it.value) }, { it.key })
+        .mapNotNull { (target, names) ->
+            names.minBy { it.length }
+                .takeIf { it.length < target.length }
+                ?.let { target to it }
+        }
         .sortedByDescending { it.first.length }
     if (subs.isEmpty()) return emptyList()
 
@@ -63,12 +69,26 @@ class TypedefShortener(private val dtm: DataTypeManager, private val sink: Diagn
 
     fun apply(): Int {
         val byName = allTypes().groupBy { it.name }
-        return renames().sumOf { (from, to) ->
-            byName[from].orEmpty().count { dt ->
-                runCatching { dt.name = to }
-                    .onFailure { sink.log("typedef-shorten-skip", "$from -> $to: ${it.message}") }
-                    .isSuccess
-            }
-        }.also { sink.log("typedef-shorten", "renamed $it datatypes") }
+        return renames()
+            .sumOf { (from, to) -> byName[from].orEmpty().count { rename(it, to) } }
+            .also { sink.log("typedef-shorten", "renamed $it datatypes") }
+    }
+
+    /**
+     * Rename [dt] to [to]. The alias frequently already lives in [dt]'s own category as the very
+     * typedef pointing at [dt] (`string` → `basic_string<…>`): renaming would collide. Fold that
+     * typedef into [dt] first — [DataTypeManager.replaceDataType] redirects every reference and
+     * drops the typedef — which frees the name.
+     */
+    private fun rename(dt: DataType, to: String): Boolean {
+        if (runCatching { dt.name = to }.isSuccess) return true
+        val conflict = dtm.getDataType(dt.categoryPath, to)
+        if (conflict is TypeDef && conflict.dataType == dt) {
+            runCatching { dtm.replaceDataType(conflict, dt, false) }
+                .onFailure { sink.log("typedef-shorten-skip", "fold ${conflict.pathName}: ${it.message}") }
+            return runCatching { dt.name = to }.isSuccess
+        }
+        sink.log("typedef-shorten-skip", "${dt.pathName} -> $to: name held by ${conflict?.pathName ?: "?"}")
+        return false
     }
 }
