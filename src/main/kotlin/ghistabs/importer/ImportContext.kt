@@ -30,7 +30,7 @@ class ImportContext<Log : DiagnosticSink>(
 ) {
     val dtm: DataTypeManager = program.dataTypeManager
     val symtab: SymbolTable = program.symbolTable
-    val sink: BookmarkSink = BookmarkSink(program, log, diagnostics)
+    val sink: BookmarkSink = BookmarkSink(program, log, diagnostics, options.minLogLevel)
     val resolver: AddressResolver = ProgramAddressResolver(program)
 
     /**

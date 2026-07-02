@@ -21,9 +21,12 @@ class BookmarkSink(
     private val program: Program,
     private val parent: DiagnosticSink,
     private var diagnostics: StabsDiagnostics? = null,
+    private val minLevel: Level = Level.INFO,
 ) : DiagnosticSink {
     override fun log(category: String, message: String?, level: Level, address: Address?) {
+        // Always count for the diagnostics summary; only emit output at/above the threshold.
         diagnostics?.inc(category)
+        if (level < minLevel) return
         if (address != null) {
             program.bookmarkManager.setBookmark(
                 address,

@@ -69,10 +69,11 @@ class CapturingSink : DiagnosticSink {
         .mapValues { it.value.toLong() }
 }
 
+// Tests capture at max verbosity — DEBUG and up — so log assertions see every message.
 fun Program.defaultContext() = ImportContext(
     this,
     TaskMonitor.DUMMY,
-    StabsOptions(),
+    StabsOptions(minLogLevel = Level.DEBUG),
     CapturingSink(),
     StabsDiagnostics(),
 )
