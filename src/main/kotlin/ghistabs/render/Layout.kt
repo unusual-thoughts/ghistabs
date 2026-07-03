@@ -1,5 +1,25 @@
 package ghistabs.render
 
+/**
+ * Start row for each ordered block sized [sizes] in `start+1..end`. When the blocks all fit they get
+ * their full size with the leftover height spread as even gaps between them (so a big trailing block —
+ * a run of closing braces — isn't stranded and the body fills the span); when they don't, each gets a
+ * share of the room proportional to its size (at least one row) so no block is starved to a single
+ * crammed line while others expand. A block that still overruns [end] butts against it.
+ */
+fun spreadBlocks(start: Int, end: Int, sizes: List<Int>): List<Int> {
+    if (sizes.isEmpty()) return emptyList()
+    val room = end - start
+    val total = sizes.sum()
+    val alloc = if (total <= room) sizes else sizes.map { (it.toLong() * room / total).toInt().coerceAtLeast(1) }
+    val slack = (room - alloc.sum()).coerceAtLeast(0)
+    var row = start
+    return alloc.mapIndexed { i, a ->
+        row += slack * (i + 1) / alloc.size - slack * i / alloc.size
+        (row + 1).coerceAtMost(end).also { row += a }
+    }
+}
+
 // Pure layout model: Canvas ⊃ TargetLine ⊃ Fragment.
 
 // What a fragment represents, so the decompilation overlay can decide its fate from the
@@ -59,7 +79,11 @@ class TargetLine(val line: Int) {
             comments.isEmpty() -> code
             else -> "$code  $comments"
         }
-        return " ".repeat(fragments.first().indent) + body
+        // Indent to the shallowest code fragment — when a function opener (col 0) shares a line with an
+        // indented global, the line starts at the opener, not the first-added fragment. Comment-only
+        // fragments (a stray tag) don't pull the indent in.
+        val indent = fragments.filter { it.code != null }.minOfOrNull { it.indent } ?: fragments.first().indent
+        return " ".repeat(indent) + body
     }
 }
 
