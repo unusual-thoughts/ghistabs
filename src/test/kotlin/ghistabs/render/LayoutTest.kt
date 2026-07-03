@@ -80,6 +80,17 @@ class LayoutTest {
     }
 
     @Test
+    fun `spreadBlocks gives full size with gaps when they fit, proportional shares when they don't`() {
+        // 3 blocks (2+3+4 = 9 rows) into rows 21..33 (13) → 4 slack spread as gaps; no block stranded.
+        assertEquals(listOf(22, 25, 30), spreadBlocks(20, 33, listOf(2, 3, 4)))
+        // Exact fit: no slack, blocks butt together from the top.
+        assertEquals(listOf(1, 3), spreadBlocks(0, 5, listOf(2, 3)))
+        // Overflow: 9 rows into 5 → proportional shares [1,1,2] butted from the top, none starved.
+        assertEquals(listOf(1, 2, 4), spreadBlocks(0, 5, listOf(2, 3, 4)))
+        assertEquals(emptyList<Int>(), spreadBlocks(0, 10, emptyList()))
+    }
+
+    @Test
     fun `trims trailing blank and stale-only lines`() {
         val canvas = Canvas(6).apply {
             this[2] += Fragment(0, code = "int real;", note = "(global)", kind = FragmentKind.DECL_GLOBAL)
