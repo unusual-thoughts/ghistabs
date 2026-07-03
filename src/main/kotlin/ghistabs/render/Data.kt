@@ -54,6 +54,17 @@ private fun resolvePointee(program: Program, addr: Address): Data? {
 
 private fun Data.repr() = runCatching { defaultValueRepresentation }.getOrNull()
     ?.takeIf { it.isNotEmpty() && it != "??" && !it.contains("Empty-Structure") }
+    ?.let(::cStyleNumber)
+
+// Ghidra prints scalars in its listing format — hex with a trailing `h`, all-zero runs padded.
+// Rewrite to C: `DEADCAFEh` → `0xDEADCAFE`, `0h`/`00000000` → `0`. Quoted strings, enum names and
+// decimals don't match, so they pass through untouched.
+internal fun cStyleNumber(s: String) = when {
+    s.matches(Regex("[0-9A-Fa-f]+h")) ->
+        s.dropLast(1).trimStart('0').ifEmpty { "0" }.let { if (it == "0") "0" else "0x$it" }
+    s.isNotEmpty() && s.all { it == '0' } -> "0"
+    else -> s
+}
 
 /**
  * Render a [Data] node to one inline representation, recursing through arrays and
