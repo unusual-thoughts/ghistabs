@@ -140,6 +140,12 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
                     continue
                 }
 
+                // The stabs are the authoritative, underscore-free source, so name every function
+                // from them rather than riding Ghidra's PE symbol (which leaves C names as `_main`
+                // and depends on the COFF symtab being present). Mangled names (`_ZN…`) are set raw
+                // here and resolved to `Class::method` by demangleMangledLabels below.
+                if (func.name != open.name) func.setName(open.name, source)
+
                 // Apply return type from the parsed signature.
                 val retDt = typeRegistry.dataTypeFor(open.decl.type)
                 if (retDt != null) func.setReturnType(retDt, source)
