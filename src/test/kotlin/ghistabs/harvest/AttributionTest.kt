@@ -1,9 +1,9 @@
-package ghistabs.parse
+package ghistabs.harvest
 
 import ghidra.program.model.data.CategoryPath
 import ghistabs.diagnose.StabsDiagnostics
-import ghistabs.harvest.Attribution
-import ghistabs.harvest.commonProjectPrefix
+import ghistabs.parse.HeaderFile
+import ghistabs.parse.SourceFile
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 

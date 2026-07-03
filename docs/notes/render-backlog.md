@@ -354,3 +354,33 @@ ERROR (and notable INFO) sites and pass the relevant address where one is in sco
 vtable-symbol-scan-error/vtable-rdata-scan-error (class addr), method-calling-convention
 (func entry), parse-error (record addr if resolvable). Done so far: vftable-label-failed,
 apply-error, vtable already carry addresses.
+
+## 12. Importer: are we actually renaming functions & globals? (OPEN)
+
+Prompted by review. Findings:
+- `StabsOptions.createImportedLabels` (default true) is **dead** — defined in StabsAnalyzer.kt
+  but never read. Either wire it up or delete it.
+- **Functions are not renamed from stabs.** We apply return type / params / __thiscall and let
+  Ghidra's demangler name mangled symbols, but plain names ride the PE symbol — so `main`
+  shows as `_main` (Cygwin/PE leading underscore). Globals get a label via `ensureStabLabel`
+  (symtab.createLabel), functions get no equivalent name application. Decide the policy: strip
+  the leading `_` for cdecl PE symbols and/or apply the stab N_FUN name to the function.
+
+## 13. Struct/non-pointer by-value return uses wrong calling convention (OPEN)
+
+Methods returning a `string` by value (e.g. unpackfile `FileSystemEntry::name`) come out with
+the **return `string*` in stack[4] and `this*` in stack[8]** — i.e. the hidden return-slot
+pointer (RVO) is being modelled as a stack arg instead of via the struct-return ABI. Even
+though `std::string` is pointer-sized, gcc returns it by value through the caller-allocated
+hidden pointer (first arg on x86 cdecl/thiscall), which shifts `this` down. We're not applying
+the struct-return convention for by-value aggregate/class returns. Fix: when a method/function
+returns a class/struct by value, model the hidden return pointer (Ghidra `__return_storage_ptr__`
+/ appropriate cspec) so `this` lands at the right offset.
+
+## 14. `string` typedef breaks /Demangler/string replacement (regression, needs test)
+
+The `/Demangler/string` stub is no longer replaced by our `string` type — regression, likely
+from typedef shortening (basic_string→string renames the DTM type, so DemanglerReplacer's
+lookup for the demangler stub's `string` name collides or misses). **Add a test** that pins
+DemanglerReplacer still replaces `/Demangler/string` when OPT_SHORTEN_TYPEDEFS is on. Then fix
+the ordering/lookup so shortening and demangler-stub replacement coexist.

@@ -166,7 +166,8 @@ type at zero runtime cost, so you can't pass a line number where an address is
 expected — worthwhile in this address/id-heavy code.
 
 ```kotlin
-@JvmInline value class Offset(val value: Long)
+@JvmInline
+value class Offset(val value: Long)
 ```
 
 But **don't newtype reflexively.** Reach for one only when the raw type is
@@ -220,17 +221,17 @@ is pure; never add mocks (see the memory notes).
 
 ## 9. Anti-patterns seen in generated code
 
-| Instead of | Write |
-| --- | --- |
-| `for` + `mutableListOf` accumulator | `map` / `filter` / `mapNotNull` / `buildList` |
-| manual `i` indexing | `mapIndexed`, `zipWithNext`, `withIndex` |
-| `if (x != null) { … }` nesting | `x?.let { }` / `?:` |
-| `!!` | `?:` with a real fallback or `error(...)` |
-| block body that just builds & returns one value | expression body `=` |
-| a comment restating the code | delete it, or explain the *why* |
-| hand-written `equals`/`hashCode` | `data class` |
-| `else -> {}` swallowing a sealed `when` | exhaust the cases |
-| one-use helper extracted "for clarity" | inline it; extract only at the 2nd caller |
+| Instead of                                      | Write                                         | 
+|-------------------------------------------------|-----------------------------------------------|
+| `for` + `mutableListOf` accumulator             | `map` / `filter` / `mapNotNull` / `buildList` |
+| manual `i` indexing                             | `mapIndexed`, `zipWithNext`, `withIndex`      |
+| `if (x != null) { … }` nesting                  | `x?.let { }` / `?:`                           |
+| `!!`                                            | `?:` with a real fallback or `error(...)`     |
+| block body that just builds & returns one value | expression body `=`                           |
+| a comment restating the code                    | delete it, or explain the *why*               |
+| hand-written `equals`/`hashCode`                | `data class`                                  |
+| `else -> {}` swallowing a sealed `when`         | exhaust the cases                             |
+| one-use helper extracted "for clarity"          | inline it; extract only at the 2nd caller     |
 
 When in doubt: shorter, more declarative, fewer intermediates, fewer comments.
 Match the density and idiom of the file you're editing.

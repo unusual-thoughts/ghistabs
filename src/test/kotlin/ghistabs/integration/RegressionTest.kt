@@ -186,7 +186,7 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
             // (in CONCURRENT it's fed via ExternalSinks → TeeSink). MessageLog
             // is appended for parity with Ghidra's own view, even though it
             // truncates at ~500 lines.
-            logFile.writeText(context.log.dedupedOutput() + "\n--- MessageLog ---\n" + log.toString())
+            logFile.writeText(context.terminal.dedupedOutput() + "\n--- MessageLog ---\n" + log.toString())
             writeRegistryDump()
         } catch (e: Exception) {
             assumeTrue(false, "Failed to load real binary via ProgramLoader: ${e.message}")
@@ -687,7 +687,7 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
         // For each one assert no Structure was created at its category+name.
         val reader = StabReader.fromProgram(program)!!
         val harvest = program.runTransaction("void-self-ref-harvest") {
-            Harvester(TaskMonitor.DUMMY, context.sink, context.resolver).passA(reader.records)
+            Harvester(context).passA(reader.records)
         }
         val voidAsts = harvest.typeAsts.values.filter { ast ->
             val body = ast.body
@@ -981,7 +981,7 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
         val stabs = StabReader.fromProgram(program)!!
         json.encodeToStream(stabs.records, recordsFile.outputStream())
 
-        val harvester = Harvester(TaskMonitor.DUMMY, ctx.sink, ctx.resolver)
+        val harvester = Harvester(ctx)
         // passA writes via AddressResolver.recordFromStab → symbolTable.createLabel, so it
         // needs a transaction. (We re-run it here to serialize a self-contained harvest
         // independent of setUp's own pass.)
@@ -989,7 +989,7 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
             harvester.passA(stabs.records)
         }
 
-//        json.encodeToStream(harvest, harvestFile.outputStream())
+        json.encodeToStream(harvest, harvestFile.outputStream())
 
         val classStructs = harvest.typeAsts.values
             .mapNotNull { it.asStruct() }
@@ -1019,11 +1019,6 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
                 }
             }
         }
-//        Assertions.assertFalse(doubleUnderscores.isEmpty(), "there should be double underscores")
-
-//        val doubleUnderscores = harvest.typeAsts.values.filter { it.name.startsWith("__") }.toList()
-
-//        Assertions.assertFalse(doubleUnderscores.isEmpty(), "there should be double underscores")
 
         // Aspirational: box2d_tests pulls in vendored deps (imgui, stbtt,
         // GLFW) whose stab entries are incomplete — gcc 12 emits empty
@@ -1035,7 +1030,6 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
                     "(${emptyStructs.take(5).map { (a, _) -> a.nameOrUnique }})",
             )
         }
-//        Assertions.assertFalse(classStructs.isEmpty(), "there should be class structs")
     }
 
     // ---- Mangling / execution-order assertions, shared between modes. ----

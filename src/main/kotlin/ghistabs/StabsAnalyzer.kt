@@ -9,13 +9,12 @@ import ghidra.program.model.address.AddressSetView
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
 import ghistabs.StabsAnalyzer.Companion.OPT_STABS_DONE
-import ghistabs.diagnose.BookmarkSink
-import ghistabs.diagnose.Level
-import ghistabs.diagnose.StabsDiagnostics
-import ghistabs.diagnose.TeeSink
+import ghistabs.diagnose.*
 import ghistabs.importer.ImportContext
 import ghistabs.importer.StabsImporter
 import ghistabs.importer.StaticContexts
+
+const val ANALYZER_NAME = "Stabs Importer"
 
 /**
  * Imports STABS debug info (.stab/.stabstr) into Ghidra: types, function signatures,
@@ -26,7 +25,7 @@ import ghistabs.importer.StaticContexts
  */
 class StabsAnalyzer :
     AbstractAnalyzer(
-        "Stabs Importer",
+        ANALYZER_NAME,
         "Imports STABS debug info (.stab/.stabstr) — types, function signatures, locals, C++ classes, vtables.",
         AnalyzerType.BYTE_ANALYZER,
     ) {
@@ -71,7 +70,7 @@ class StabsAnalyzer :
             OPT_LOG_LEVEL,
             Level.INFO,
             null,
-            "Suppress diagnostic log and bookmark messages below this level (counters still tracked).",
+            "Minimum level for MessageLog diagnostic output (bookmarks and counters are unaffected).",
         )
     }
 
@@ -79,25 +78,25 @@ class StabsAnalyzer :
         if (isStabsDone(ctx.program)) return
 
         val result = StabsImporter(ctx).run()
-        ctx.sink.log("done", "import complete: $result")
+        ctx.log("done", "import complete: $result")
         markStabsDone(ctx.program, true)
     }
 
-    override fun added(program: Program?, set: AddressSetView?, monitor: TaskMonitor?, log: MessageLog?): Boolean {
+    override fun added(program: Program?, set: AddressSetView?, monitor: TaskMonitor?, msg: MessageLog?): Boolean {
         program ?: return false
-        log ?: return false
+        msg ?: return false
         monitor ?: return false
-        val options = StabsOptions(program.getOptions(Program.ANALYSIS_PROPERTIES).getOptions(name))
-        val bookmarkSink = BookmarkSink(program, log, options.minLogLevel)
+        val options = StabsOptions(program)
         val ext = StaticContexts.get(program)
         run(
             ImportContext(
                 program,
                 monitor,
                 options,
+                // Bookmark every addressed diagnostic (unconditional); MessageLog gets output at/above minLevel.
                 // Tee the emitting terminal onto ext.log (raw CapturingSink) so tests can inspect
                 // output; counting is the shared ext.diagnostics accumulator, tee'd in ImportContext.
-                log = ext?.let { TeeSink(bookmarkSink, it.log) } ?: bookmarkSink,
+                terminal = TeeSink(BookmarkSink(program), MessageLogSink(msg, options.minLogLevel), ext?.terminal),
                 diagnostics = ext?.diagnostics ?: StabsDiagnostics(),
             ),
         )
@@ -135,5 +134,9 @@ data class StabsOptions(
         applyVtables = opts.getBoolean(StabsAnalyzer.OPT_VTABLES, true),
         shortenTypedefs = opts.getBoolean(StabsAnalyzer.OPT_SHORTEN_TYPEDEFS, false),
         minLogLevel = opts.getEnum(StabsAnalyzer.OPT_LOG_LEVEL, Level.INFO),
+    )
+
+    constructor(program: Program) : this(
+        program.getOptions(Program.ANALYSIS_PROPERTIES).getOptions(ANALYZER_NAME),
     )
 }

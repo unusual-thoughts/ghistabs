@@ -48,7 +48,7 @@ class XmltestDegradationProbeIntegrationTest : AbstractGhidraHeadlessIntegration
                 CapturingSink(),
                 StabsDiagnostics(),
             )
-            val harvester = Harvester(monitor, ctx.sink, ctx.resolver)
+            val harvester = Harvester(ctx)
             val harvest = program.runTransaction("xmltest-probe-harvest") {
                 harvester.passA(reader.records)
             }

@@ -33,9 +33,9 @@ object DummySink : DiagnosticSink {
 }
 
 /** Fan-out sink — tees the [StabsDiagnostics] accumulator alongside a terminal (Bookmark/Capturing). */
-class TeeSink(private vararg val sinks: DiagnosticSink) : DiagnosticSink {
+class TeeSink(private vararg val sinks: DiagnosticSink?) : DiagnosticSink {
     override fun log(category: String, message: String?, level: Level, address: Address?, count: Long) {
-        for (s in sinks) s.log(category, message, level, address, count)
+        for (s in sinks) s?.log(category, message, level, address, count)
     }
 }
 
