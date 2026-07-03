@@ -281,7 +281,7 @@ Fix: unify — have `effectiveSource()` consult the canonical attribution
 but that needs the header in defSources (it isn't) — a distinct BINCL-attribution
 gap, lower priority than making the two paths agree.
 
-## 9. Decomp layout regressions after source-line placement (OPEN)
+## 9. Decomp layout regressions after source-line placement — DONE
 
 Captured from `build/test-output/decomps/appquery/main.cpp` after the source-line
 placement rework (commit 6335c83). Four issues:
@@ -310,16 +310,23 @@ placement rework (commit 6335c83). Four issues:
   `main`'s `closeLine` is inflated (SLINE attribution dragging header/inlined lines) or
   whether the sweep needs to exempt symbol/type fragments that own a distinct line.
 
-### Finding: vm2/vm3_trapset_names are function-local statics
+### Finding: vm*_trapset_names are FILE-SCOPE statics, and `main`'s span is misattributed (CORRECTED)
 
-Confirmed from the stab: `vm2_trapset_names:S(1,367)=…` — the `:S` descriptor is a static
-variable (parser → `SymbolDecl.StaticVar`), a function-local `static const char *[65]`
-declared inside `main()` at source lines 82 / 152, which fall within `_main`'s span (49–167).
-So they are **legitimately** inside the span (not a `closeLine` bug); Ghidra's decomp of
-`main` shows the code but not the static array data. The fix is therefore in the sweep, not
-the span: keep `DECL_GLOBAL`/symbol-data fragments that own a distinct source line rendered
-as data at that line (like `vm1` at L12), and demote only type-decls / genuinely-misattributed
-fragments. vm1 (L12) renders correctly only because it sits *before* the span.
+Earlier note was wrong. The stab descriptor `:S` (`vm2_trapset_names:S(1,369)=ar…`) is a
+**file-scope** static — `:V` would be the function-local one. All fourteen (`vm1`..`vm14`) carry
+`:S`, are grouped together at file scope in the stab stream, and `vm1` (line 12) precedes `main`
+(line 49). So they are **not** declared inside `main()`.
+
+They only *appear* inside `main`'s span because that span is inflated by **cross-file line
+misattribution**. `main`'s N_SLINE table interleaves `N_SOL <header>` blocks for inlined library
+code — e.g. `N_SOL bitset` then `SLINE 166`, `SLINE 723`; `N_SOL basic_string.h`; `N_SOL
+appimage.h` — and those header line numbers (bitset:166, …) are being attributed to *main.cpp*
+line numbers. `main`'s real main.cpp lines run ~49–114; the span stretches to 166 from bitset:166,
+overlapping the file-scope `vm2`/`vm3` arrays at main.cpp 82/152. The same bug lands libstdc++
+typedefs (`typedef __true_type __Normal`, `__false_type _Trivial`) at bogus main.cpp lines
+(426/448/488) instead of their header, so they render as main.cpp typedefs and aren't flagged
+misattributed. Root fix is in the harvester's N_SOL/N_SLINE source tracking (attribute each line
+entry / type / symbol decl to the N_SOL file in effect), not the render sweep.
 
 ### Decided direction (from user)
 
@@ -335,6 +342,45 @@ Rework `applyDecompilation` placement + `indentFor` to:
 Relevant code: `Renderer.applyDecompilation` (placement loop ~399), `Renderer.indentFor`
 (flat-4), `DecompTokens.compressedDecompLines`/`DecompLine` (token lines + addresses), the
 stray sweep (~359), and `Format.kt` (`FragmentKind.DECOMP` note rendering).
+
+### Resolved
+
+Everything is read from the clang token stream / node tree, never the rendered characters —
+that's the through-line. In `DecompTokens` + `Renderer.applyDecompilation` + `Layout`:
+
+- **Indent = Ghidra's own nesting.** `DecompLine.depth` is the ClangLine's `indent` (its structural
+  level, one space per level); placed decomp fragments use it verbatim, so nested blocks step in K&R
+  style and the signature / close brace sit at column 0. No `{`/`}` character counting.
+- **Wrapped lines rejoined structurally.** Ghidra wraps one long logical line (a fat `if` condition,
+  a long call) across several ClangLines at deeper indent. `blockDepth()` — the count of enclosing
+  plain `ClangTokenGroup`s (block groups; `ClangStatement`/`ClangVariableDecl`/… are distinct
+  subclasses) — is equal for a wrapped line's continuations and their head, one deeper for a nested
+  statement, and a sibling shares the indent. So `indent > head.indent && blockDepth == head.blockDepth`
+  identifies a continuation; `compressedDecompLines` merges those onto one logical line (one address →
+  one row), and braces still get their own rows.
+- **Spread, capped at the close unless it would cram.** Statements on one this-file source line gather
+  into a `DecompRun`; `spreadBlocks` reserves rows per run *size* (a whole `while` loop coalesced onto
+  one source line gets its share of the interior blanks, not one crammed row while a small sibling
+  wastes the space) and `placeRun` lays each run's lines one per row (braces on their own line) or crams
+  where tight. The body stays inside the span when it fits, so nothing spills past the function's last
+  line; when it would otherwise cram, placement borrows the blank rows after the function up to the next
+  one (`end = if (sizes.sum() <= spanFree) closeLine else nextSpan - 1`).
+- **A line's indent is its shallowest code fragment**, not the first-added one — so a function opener at
+  column 0 sharing a row with an indented in-span global (`_ZTS*` RTTI names on the `names` L31 line)
+  starts the row at the opener, not pushed in by the global. Comment-only fragments don't pull it in.
+- **`// ⇐ L NN` on every emitted row**, naming the source line the instructions came from.
+- **Legit globals kept.** The stray sweep keeps live `DECL_GLOBAL` fragments (function-local statics
+  `vm2/vm3_trapset_names`, `__ioinit`, the `_ZTI*/_ZTS*` RTTI globals) as data at their own line and
+  flows decomp around them; only type-decls / typedefs / misattributed fragments become `// stray:`.
+- **Declarations by node type.** A declaration line *is* a `ClangVariableDecl` group (signature params
+  excluded) — the old `has-a-ClangTypeToken` heuristic false-positived a `(uint)` cast in
+  `else if ((uint)i < 4)`, so `groupDecls` mangled it into `uint )i<4)`.
+- **Calling conventions stripped.** `content()` drops `__thiscall`/`__cdecl`/… (and its trailing
+  blank), so a prototype reads `ushort Foo::m(...)`.
+- **Ghidra's blank body lines dropped** — we space with our own placement.
+
+Pure cores pinned by `LayoutTest.spreadOver`/`spreadBlocks`; verified against regenerated
+`build/test-output/decomps/{appquery,unpackfile}`.
 
 ## 10. Post-diagnostics-refactor: audit every log() level (OPEN)
 
@@ -355,16 +401,32 @@ vtable-symbol-scan-error/vtable-rdata-scan-error (class addr), method-calling-co
 (func entry), parse-error (record addr if resolvable). Done so far: vftable-label-failed,
 apply-error, vtable already carry addresses.
 
-## 12. Importer: are we actually renaming functions & globals? (OPEN)
+## 12. Importer: are we actually renaming functions & globals? — DONE
 
 Prompted by review. Findings:
-- `StabsOptions.createImportedLabels` (default true) is **dead** — defined in StabsAnalyzer.kt
-  but never read. Either wire it up or delete it.
-- **Functions are not renamed from stabs.** We apply return type / params / __thiscall and let
-  Ghidra's demangler name mangled symbols, but plain names ride the PE symbol — so `main`
-  shows as `_main` (Cygwin/PE leading underscore). Globals get a label via `ensureStabLabel`
-  (symtab.createLabel), functions get no equivalent name application. Decide the policy: strip
-  the leading `_` for cdecl PE symbols and/or apply the stab N_FUN name to the function.
+- `StabsOptions.createImportedLabels` (default true) was **dead** — defined but never read.
+  **Deleted** (no analyzer-option plumbing; renaming is core importer behaviour, not a toggle).
+- **Functions were not renamed from stabs.** We applied return type / params / __thiscall and
+  let Ghidra's demangler name mangled symbols, but plain names rode the PE symbol — so `main`
+  showed as `_main` (Cygwin/PE leading underscore). Globals already got their stab name via
+  `ensureStabLabel`; functions got no equivalent.
+
+**Fix:** `applyAllSymbols`'s function loop now applies the stab name to *every* function —
+`if (func.name != open.name) func.setName(open.name, source)`. The stabs are the authoritative,
+underscore-free source, so we name from them rather than riding the PE symbol; this is
+**PE-symbol-independent** (works on a binary stripped of its COFF symtab but carrying stabs).
+Mangled names (`_ZN…`) are set raw and resolved to `Class::method` by the existing
+`demangleMangledLabels()` pass that runs right after the loop over the whole symbol table — so
+no mangled/plain special-casing is needed.
+
+A first attempt used `ensureStabLabel` uniformly (as globals do); that **regressed** C++ names
+(`FileSystemImage::fetch32` → raw `_ZN15FileSystemImage7fetch32ERK5Imagem`) because it adds a
+*competing* label and force-sets it primary, shadowing the function symbol Ghidra had already
+demangled. `setName` (renames the one primary) + the trailing demangle pass avoids that.
+
+Verified across all six fixtures: `main`→`main`, every C++ method stays demangled, **0**
+raw-mangled function definitions anywhere. appquery decomp diff vs baseline = only `_main`→`main`
+(and its propagation into provenance annotations).
 
 ## 13. Struct/non-pointer by-value return uses wrong calling convention (OPEN)
 
@@ -376,6 +438,8 @@ hidden pointer (first arg on x86 cdecl/thiscall), which shifts `this` down. We'r
 the struct-return convention for by-value aggregate/class returns. Fix: when a method/function
 returns a class/struct by value, model the hidden return pointer (Ghidra `__return_storage_ptr__`
 / appropriate cspec) so `this` lands at the right offset.
+there are already functions that have by autodetected as __return_storage_ptr__ , maybe the string-returning functions aren't because ghidra saw that it was the same size as a pointer
+
 
 ## 14. `string` typedef breaks /Demangler/string replacement (regression, needs test)
 
@@ -384,3 +448,108 @@ from typedef shortening (basic_string→string renames the DTM type, so Demangle
 lookup for the demangler stub's `string` name collides or misses). **Add a test** that pins
 DemanglerReplacer still replaces `/Demangler/string` when OPT_SHORTEN_TYPEDEFS is on. Then fix
 the ordering/lookup so shortening and demangler-stub replacement coexist.
+
+
+## 15. Canonicalize source-file paths (one header, one output file) — OPEN
+
+**Symptom.** A single header is emitted as *two* skeleton/decomp files under two path
+spellings, splitting its content. `packfile` renders both `dspinfo.h` (bare) and
+`E__work_cc_devtools_devtools-bluelab-7-0_result_include_dspinfo_dspinfo.h` (full path):
+the full-path file gets the real `:T` definitions (`enum KalimbaArch { … }`,
+`class dspinfo { …fields… }`) while the bare file gets only forward-decl stubs
+(`typedef struct dspinfo;`).
+
+**Root cause.** gcc spells the same physical header two ways across CUs — the full
+include path where it compiles the definitions, the bare `#include "dspinfo.h"` spelling
+where another TU only forward-references it. The two `N_BINCL`s carry **different
+checksums** (149935 vs 865864 — each CU's expansion differs), so they can't be merged by
+checksum. `SourceFile`/`HeaderFile` (`parse/IdInterface.kt`) key by the raw `filename`
+string, and everything downstream (`Harvest.lineEntries` keys, `symbolsByCu`,
+`typeAsts[].id.source`, `TypeResolver.functionSource`/`effectiveSourceFor`,
+`Renderer.sources`) inherits that, so one file becomes two sources → two output files.
+
+**Fix — canonicalize to the shortest spelling.** Build one canonicalization map over all
+source filenames and route every source-string use through it:
+
+- A **bare** name (no `/` or `\`) that is the **basename of exactly one full path** also
+  present canonicalises to — and displays as — the **shorter (bare) name**; the full-path
+  source folds into it. This is the chosen policy: shorter name wins.
+- **Guard:** if two distinct full paths share a basename (`a/config.h`, `b/config.h`), do
+  **not** merge them — the bare name is ambiguous; keep them separate (and keep whatever
+  the raw keying does today). Only a *unique* basename→full-path match merges.
+- Do not rely on checksum (they differ here). Basename identity is the signal.
+
+**Where.** Cleanest as a single map computed once (TypeResolver is the natural home — it
+already derives `functionSource`/`effectiveSourceFor`) and applied at every point a source
+string is used as an output-file key or per-source filter: `Renderer.sources`, and the
+RenderContext filters (`functionSource[it] == source`, `lineEntries[source]`,
+`effectiveSourceFor(it) == source`, `symbolsByCu[source]`). `lineEntries`/`symbolsByCu` are
+keyed by the raw string, so either re-key them by canonical name or look up via a
+canonical→raw fan-in. Extract the pure canonicalisation (list of filenames → map) so it's
+Kind-1 testable.
+
+**Verify.** `packfile` decomp/skeleton has exactly one `dspinfo.h`, carrying the full
+`enum`/`class` definitions (no separate mangled full-path file, no forward-decl-only file).
+No fixture loses content.
+
+**Companion (likely same parser N_SOL-tracking family, verify together — see §9 finding).**
+Cross-file *line* misattribution: `main`'s span inflates to L166 because `N_SOL bitset;
+SLINE 166` (bitset line 166) is attributed to *main.cpp* L166 (main's real main.cpp lines
+end ~114), which is also why the file-scope `vm2`/`vm3` arrays (main.cpp 82/152) render
+"inside" main, and why libstdc++ typedefs (`__true_type __Normal`, `__false_type _Trivial`)
+land at bogus main.cpp lines 426/448/488 instead of their header. `LineEntry` already carries
+`source`; confirm the parser tags each SLINE with the *active* N_SOL (not the enclosing CU)
+and that `FunctionSpans`/attribution filter on it. If the path-canonicalisation above changes
+how `dspinfo.h`-style lines are tagged, re-check these at the same time.
+
+## 16 missing placeholder enum/struct xrefs
+the return type of   AppImage::image_type is supposed to be vm_image_type, an enum which is (i think) not defined because only referenced as an xref. there should probably still be a placeholder enum for it though, with the right name
+
+## 17. Typedefs misattributed into a .cpp (`typedef __true_type __Normal`) — DONE
+
+Template-instantiation typedefs (`__Normal`, `_Trivial`, `_ValueType`, `_Is_POD`, …) rendered as
+top-level decls in a .cpp at bogus line numbers (main.cpp:426/448/488). `isStale` (activity-extent)
+couldn't catch them: the same misattributed SLINEs inflate the extent past the typedef line. Fixed two
+ways, both principled (no name/reserved-identifier heuristic):
+
+- **Attribution from `declSourceFile`.** Each typedef TypeAst already carries the N_SOL-effective
+  source at definition time — for `__Normal` that's `bits/basic_string.h`, the real header, even though
+  `id.source` is the CU. `TypeResolver.effectiveSource()` now prefers `declSourceFile` for non-struct,
+  non-enum decls (typedefs), so they render in their header. Structs keep the §6 hint path; enums are
+  deliberately left out — their `declSourceFile` is *itself* a .cpp (harvest-level misattribution), so
+  moving them just shuffles between two wrong .cpp files (see §9/§15 root cause).
+- **Multiplicity dedup.** The residual copies whose `declSourceFile` is a .cpp appear several times in
+  one file (one per instantiation, at distinct bogus lines). `emitTypedefs` now dedups by
+  `(alias, target)` — not the declLine the old dedup keyed on, which is why it never fired — collapsing
+  the copies to one and flagging it `stale N_SOL?` (skeleton) / trimming it (decomp). Headers keep
+  theirs (they're the canonical home). Verified: appquery main.cpp no longer carries them; decl set
+  across all files unchanged (nothing lost); enums unmoved; RegressionTest green.
+
+Residual: single-occurrence .cpp-attributed instantiation typedefs (no header sibling) remain — not
+structurally distinguishable from a user typedef without a name heuristic.
+
+## 18. Decomp layout: wrap crammed conditions; drop synthetic brace tags — DONE
+
+Two fixes in the decomp overlay (`placeRun` + `Layout.wrapDecompLine`):
+
+- **Wrap long conditions into the blank rows.** A long `if` condition that Ghidra wraps and §2's
+  `compressedDecompLines` rejoins onto one 300-char row was crammed on a single line while the run's
+  blank rows sat unused (`AppImage::image_type` L25). `placeRun` now, when a run has more free rows than
+  lines, breaks an over-long statement at its **top-level `&&`/`||`** boundaries (paren/bracket depth
+  tracked so a boolean inside a call's args never splits) — operators end the row (K&R), continuations
+  step in, the trailing `{` stays. Dense runs (no spare rows) are untouched, so nothing already-tight
+  regresses. Pure core `wrapDecompLine` pinned by `LayoutTest`.
+- **Structural braces carry no source tag.** A bare `}` has no instructions and no stabs line — its
+  `DecompLine.address` is null — so `placeRun` no longer stamps it with the run's source line. A `}` on
+  the synthesised close line (`endLine+1`) was tagged with the last statement's line, reading as an
+  off-by-one (`}` at L33 tagged `⇐ L 32`). Now only real statements (incl. wrapped continuation pieces,
+  which keep their statement's address) carry `⇐ L NN`.
+
+## 19. Decomp `#include`s from type dependencies, not just inlined code — DONE
+
+The decomp `#include` list was derived only from headers whose code got **inlined** (non-.cpp N_SLINE
+sources), so a .cpp that calls everything out-of-line (appimage.cpp) got **none**. `emitIncludes` now
+also walks each function's signature/local types and resolves them to their defining header: an `XRef`
+forward-decl via `TypeResolver.byXRef` (the `this` param bottoms out at `XRef("AppImage")`, no id), a
+`Ref`/`InlineDef` via id, plus the resolved type's base classes. appimage.cpp → appimage.h + its type
+deps. No filename heuristic — the type name resolves to its actual definition's source.

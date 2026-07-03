@@ -5,6 +5,7 @@ import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
 import ghistabs.harvest.LineEntry
+import ghistabs.harvest.TypeAst
 import ghistabs.harvest.TypeResolver
 import ghistabs.harvest.hasHeaderExtension
 import ghistabs.parse.GlobalTypeId
@@ -14,19 +15,6 @@ import ghistabs.parse.TypeDecl
 import ghistabs.runTransaction
 import java.io.Closeable
 import java.io.File
-
-// Aggregates the addresses of N_SLINEs sharing a (line, codeUnit) into one annotation.
-private data class SliceKey(val line: Int, val codeUnit: String)
-
-// Dedup keys: templates instantiated many times repeat the same alias / `__val` / `__first`
-// at one header line.
-private data class TypeDeclKey(val line: Int, val name: String, val bodyKind: String)
-
-private data class DeclKey(val line: Int, val name: String)
-
-// A run of decomp statements on one source line ([entry]), keeping Ghidra's per-line brace
-// formatting so the span's blank room can be filled a line at a time (braces on their own line).
-private class DecompRun(val lines: MutableList<DecompLine>, val entry: LineEntry?)
 
 enum class Mode {
     SKELETON,
@@ -136,6 +124,8 @@ private class RenderContext(val renderer: Renderer, val source: String) {
 
     /** One `// L n @ 0xADDR[: code-unit]` annotation per (line, code-unit) group. */
     private fun emitSlineAnnotations() {
+        // Aggregates the addresses of N_SLINEs sharing a (line, codeUnit) into one annotation.
+        data class SliceKey(val line: Int, val codeUnit: String)
         val byKey = mutableMapOf<SliceKey, MutableSet<Address>>()
         for (entry in lines) {
             if (entry.line !in 1..maxLine) continue
@@ -150,22 +140,41 @@ private class RenderContext(val renderer: Renderer, val source: String) {
     }
 
     private fun emitTypedefs() {
-        val seen = mutableSetOf<TypeDeclKey>()
-        for (ast in typeDecls.filter { it.declLine in 1..maxLine }.sortedBy { it.declLine }) {
-            val name = ast.name ?: continue
-            val body = ast.body
-            if (body is TypeDecl.Struct || body is TypeDecl.Enum) continue
-            if (!seen.add(TypeDeclKey(ast.declLine, name, body::class.simpleName ?: ""))) continue
-            canvas[ast.declLine] += Fragment(
-                indentFor(ast.declLine),
-                "typedef ${body.render(harvest, shortener = shortener)} $name;",
+        data class Td(val line: Int, val name: String, val rendered: String)
+        val typedefs = typeDecls
+            .filter { it.declLine in 1..maxLine && it.body !is TypeDecl.Struct && it.body !is TypeDecl.Enum }
+            .mapNotNull { ast ->
+                ast.name?.let { Td(ast.declLine, it, ast.body.render(harvest, shortener = shortener)) }
+            }
+
+        // A genuine typedef has one definition site. The same alias+target recurring across a .cpp
+        // is stab N_SOL splaying one libstdc++ instantiation typedef (`iterator_traits<X>::_ValueType`,
+        // emitted per instantiation) whose N_SOL named the CU — flag every copy misattributed.
+        // Headers are the canonical home and keep theirs.
+        val splayed = if (source.hasHeaderExtension()) {
+            emptySet()
+        } else {
+            typedefs.groupBy { it.name to it.rendered }.filterValues { it.size > 1 }.keys
+        }
+
+        // Collapse duplicate (name, target) copies to one line. Keying on the pair — not the
+        // declLine the old dedup used — is what makes this fire when misattribution splays a
+        // typedef across several bogus lines.
+        val seen = mutableSetOf<Pair<String, String>>()
+        for (td in typedefs.sortedBy { it.line }) {
+            val key = td.name to td.rendered
+            if (!seen.add(key)) continue
+            canvas[td.line] += Fragment(
+                indentFor(td.line),
+                "typedef ${td.rendered} ${td.name};",
                 note = "",
                 kind = FragmentKind.TYPEDEF,
-                stale = isStale(ast.declLine),
+                stale = isStale(td.line) || key in splayed,
             )
         }
     }
 
+    private data class DeclKey(val line: Int, val name: String)
     private val seenDecls = mutableSetOf<DeclKey>()
 
     // One declaration per (line, name); `this` never renders. Guards every decl pass.
@@ -380,6 +389,10 @@ private class RenderContext(val renderer: Renderer, val source: String) {
                 return "${file}L ${e.line}"
             }
 
+            // A run of decomp statements on one source line ([entry]), keeping Ghidra's per-line brace
+            // formatting so the span's blank room can be filled a line at a time (braces on their own line).
+            class DecompRun(val lines: MutableList<DecompLine>, val entry: LineEntry?)
+
             // Keep the decompiler's statement order (it may invert conditions / leave gotos, so its
             // structure isn't the source's), but gather into one run each contiguous group of
             // statements belonging to one this-file source line: repeats of the line plus inlined-
@@ -424,25 +437,65 @@ private class RenderContext(val renderer: Renderer, val source: String) {
 
     // Lay a run's lines onto the free rows in [start, limit): one per row while there is room (so
     // Ghidra's `{`-ends-the-line / `}`-on-its-own-line survives), the overflow crammed onto the last.
-    // Each row carries the run's source-line tag once; indent is the line's own nesting level.
+    // A statement row carries the run's source-line tag; a structural row (a bare brace, no
+    // instructions → null address) has no stabs source line, so it carries no tag — a synthetic one
+    // would just restate its grid position and, on the synthesised close line, read as an off-by-one.
+    // Indent is the line's own nesting level.
     private fun placeRun(start: Int, limit: Int, lines: List<DecompLine>, note: String) {
         val free = (start until limit).filter { canvas[it].isEmpty() }.ifEmpty { listOf(start) }
+        // With spare rows, break over-long statements at their top-level `&&`/`||` boundaries so a
+        // crammed condition fills the blank space instead of one 300-char line; dense runs (no spare
+        // rows) place one line per row as-is. A wrapped piece keeps its statement's address; a brace
+        // keeps its null one.
+        val rows = if (free.size > lines.size) {
+            lines.flatMap { dl -> wrapDecompLine(dl.text, dl.depth).map { (d, t) -> Triple(d, t, dl.address) } }
+        } else {
+            lines.map { Triple(it.depth, it.text, it.address) }
+        }
         var prev = -1
-        lines.forEachIndexed { i, dl ->
+        rows.forEachIndexed { i, (depth, text, address) ->
             val line = free[minOf(i, free.lastIndex)]
-            canvas[line] += Fragment(dl.depth, dl.text, note.takeIf { line != prev }, FragmentKind.DECOMP)
+            val rowNote = note.takeIf { address != null && line != prev }
+            canvas[line] += Fragment(depth, text, rowNote, FragmentKind.DECOMP)
             prev = line
         }
     }
 
     // The headers this file pulls in, as #include lines in the blank space above the first line of
-    // content — derived from the (non-.cpp) sources its functions' N_SLINE entries point at, i.e.
-    // the headers whose code got inlined here. Placed only within the available top room: overflow
-    // stacks on the last free line rather than pushing content down.
+    // content: the headers whose code got inlined here (non-.cpp N_SLINE sources) plus the headers
+    // that *define the types* its functions use — the type each signature/local names, resolved to
+    // its definition (an `XRef` forward-decl via its tag, a `Ref`/`InlineDef` via its id) and that
+    // type's base classes — so a .cpp that only calls out-of-line (nothing inlined, e.g. appimage.cpp)
+    // still declares its dependencies. Placed only within the available top room; overflow stacks on
+    // the last free line rather than pushing content down.
     private fun emitIncludes() {
-        val headers = rawFuncs.asSequence()
-            .flatMap { it.lineEntries.asSequence() }
-            .map { it.source }
+        val resolver = renderer.typeResolver
+        val referenced = mutableSetOf<TypeAst>()
+        fun collect(decl: TypeDecl<GlobalTypeId>) {
+            val ast = when (decl) {
+                is TypeDecl.Ref -> harvest.typeAsts[decl.id]
+                is TypeDecl.XRef -> resolver.byXRef(decl)
+                is TypeDecl.InlineDef -> return collect(decl.body)
+                is TypeDecl.Pointer -> return collect(decl.pointee)
+                is TypeDecl.Reference -> return collect(decl.referent)
+                is TypeDecl.Const -> return collect(decl.inner)
+                is TypeDecl.Volatile -> return collect(decl.inner)
+                is TypeDecl.WithSizeAttr -> return collect(decl.inner)
+                is TypeDecl.Array -> return collect(decl.element)
+                else -> null
+            }
+            if (ast != null && referenced.add(ast)) {
+                (ast.body as? TypeDecl.Struct)?.bases?.forEach { collect(it.type) }
+            }
+        }
+        for (f in rawFuncs) {
+            collect(f.decl.type)
+            for (s in f.params + f.locals) collect(s.body.type)
+        }
+
+        val fromTypes = referenced.asSequence().map { resolver.effectiveSourceFor(it) }
+        val fromInlined = rawFuncs.asSequence().flatMap { it.lineEntries.asSequence() }.map { it.source }
+        val headers = (fromInlined + fromTypes)
             .filter { it != source && it.hasHeaderExtension() }
             .distinct()
             .sorted()
