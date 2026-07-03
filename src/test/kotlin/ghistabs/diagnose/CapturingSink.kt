@@ -5,6 +5,7 @@ import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
 import ghistabs.StabsOptions
 import ghistabs.harvest.Harvest
+import ghistabs.harvest.TypeResolver
 import ghistabs.importer.ImportContext
 import ghistabs.materialize.TypeRegistry
 
@@ -62,11 +63,6 @@ class CapturingSink : DiagnosticSink {
             }
         }
     }
-
-    fun tagFrequencies(): Map<String, Long> = lines
-        .groupingBy { it.tag }
-        .eachCount()
-        .mapValues { it.value.toLong() }
 }
 
 // Tests capture at max verbosity — DEBUG and up — so log assertions see every message.
@@ -80,5 +76,5 @@ fun Program.defaultContext() = ImportContext(
 
 fun ImportContext<*>.defaultTypeRegistry(): TypeRegistry {
     val harvest = Harvest(mapOf())
-    return TypeRegistry(dtm, sink, diagnostics, harvest, ghistabs.harvest.TypeResolver.Empty)
+    return TypeRegistry(dtm, this, diagnostics, harvest, TypeResolver.Empty)
 }

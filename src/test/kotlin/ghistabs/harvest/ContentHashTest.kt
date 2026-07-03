@@ -1,8 +1,6 @@
-package ghistabs.parse
+package ghistabs.harvest
 
-import ghistabs.harvest.TypeAst
-import ghistabs.harvest.TypeAstOracle
-import ghistabs.harvest.contentHash
+import ghistabs.parse.*
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Test
@@ -68,7 +66,7 @@ class ContentHashTest {
 
     /**
      * Per-CU `bool` slots are encoded as `WithSizeAttr(8, Builtin(-16))`
-     * after [ghistabs.harvest.Harvester.globalize] hoists the negative-id Ref. Two CUs
+     * after [Harvester.globalize] hoists the negative-id Ref. Two CUs
      * therefore both encode `bool` as `WithSizeAttr(8, Builtin(-16))`
      * — same content, must hash equally. Before the Builtin hoist this
      * was `WithSizeAttr(8, Ref([CU_X, -16]))`, which fell through to

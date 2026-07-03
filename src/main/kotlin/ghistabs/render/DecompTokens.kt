@@ -1,16 +1,6 @@
 package ghistabs.render
 
-import ghidra.app.decompiler.ClangBreak
-import ghidra.app.decompiler.ClangCommentToken
-import ghidra.app.decompiler.ClangFuncNameToken
-import ghidra.app.decompiler.ClangFuncProto
-import ghidra.app.decompiler.ClangLine
-import ghidra.app.decompiler.ClangNode
-import ghidra.app.decompiler.ClangStatement
-import ghidra.app.decompiler.ClangToken
-import ghidra.app.decompiler.ClangTypeToken
-import ghidra.app.decompiler.ClangVariableToken
-import ghidra.app.decompiler.DecompileResults
+import ghidra.app.decompiler.*
 import ghidra.app.decompiler.component.DecompilerUtils
 import ghidra.program.model.address.Address
 
@@ -77,7 +67,8 @@ private fun ClangLine.isDeclaration() = !isCode() && !isSignature() && significa
  * ClangTypeToken outside both — so nothing is guessed from the rendered characters.
  */
 fun DecompileResults.compressedDecompLines(elideSjlj: Boolean = false): List<DecompLine> {
-    val raw = DecompilerUtils.toLines(cCodeMarkup)
+    // exception in box2d, cCodeMarkup was null for some function. should log.
+    val raw = DecompilerUtils.toLines(cCodeMarkup ?: return listOf())
     val victims = if (elideSjlj) sjljScaffolding(raw) else emptySet()
     val lines = raw
         .filterNot { it in victims }

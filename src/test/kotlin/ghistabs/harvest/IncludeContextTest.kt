@@ -1,8 +1,8 @@
-package ghistabs.parse
+package ghistabs.harvest
 
 import ghistabs.diagnose.CapturingSink
-import ghistabs.harvest.HeaderRegistry
-import ghistabs.harvest.IncludeContext
+import ghistabs.parse.LocalTypeId
+import ghistabs.parse.SourceFile
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test

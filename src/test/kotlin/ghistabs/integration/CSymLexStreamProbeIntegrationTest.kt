@@ -102,7 +102,7 @@ class bouniafProbeIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                     w.write("  [${d.category}] ${d.detail}\n")
                 }
                 w.write("\n=== sink log entries mentioning bouniaf ===\n")
-                for (line in ctx.log.lines) {
+                for (line in ctx.terminal.lines) {
                     val msg = line.msg ?: continue
                     if ("bouniaf" in msg) w.write("  [${line.tag}] $msg\n")
                 }
@@ -110,7 +110,7 @@ class bouniafProbeIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                 w.write("\n=== Harvest TypeAsts for bouniaf + bouniaf + everything they ref ===\n")
                 val reader = ghistabs.parse.StabReader.fromProgram(program)!!
                 val freshHarvest = program.runTransaction("probe-harvest") {
-                    ghistabs.harvest.Harvester(monitor, ctx.sink, ctx.resolver).passA(reader.records)
+                    ghistabs.harvest.Harvester(ctx).passA(reader.records)
                 }
                 val csymAsts = freshHarvest.typeAsts.values.filter { it.name == "bouniaf" }
                 val clxAsts = freshHarvest.typeAsts.values.filter { it.name == "bouniaf" }

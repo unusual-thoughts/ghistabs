@@ -1,11 +1,9 @@
-package ghistabs.parse
+package ghistabs.harvest
 
 import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.DummySink
-import ghistabs.harvest.Harvester
-import ghistabs.harvest.HeaderRegistry
-import ghistabs.harvest.IncludeContext
 import ghistabs.importer.StabOnlyAddressResolver
+import ghistabs.parse.SourceFile
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Disabled

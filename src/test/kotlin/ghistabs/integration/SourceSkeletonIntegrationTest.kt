@@ -87,7 +87,7 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                 }
                 val reader = StabReader.fromProgram(program)!!
                 val harvest = program.runTransaction("skeleton-harvest") {
-                    Harvester(monitor, ctx.sink, ctx.resolver).passA(reader.records)
+                    Harvester(ctx).passA(reader.records)
                 }
 
                 val outDir = File("build/test-output/$outDirName/${fixture.nameWithoutExtension}")

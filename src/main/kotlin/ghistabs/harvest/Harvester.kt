@@ -3,6 +3,7 @@ package ghistabs.harvest
 import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.importer.AddressResolver
+import ghistabs.importer.ImportContext
 import ghistabs.parse.*
 
 /**
@@ -14,9 +15,12 @@ import ghistabs.parse.*
  * (filename, checksum) get identical GlobalTypeIds for header-attributed types
  * (stabs-canonicalization.md §3).
  */
+
 class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, private val resolver: AddressResolver) :
     DiagnosticSink by sink,
     Globalizer {
+    constructor(ctx: ImportContext<*>) : this(ctx.monitor, ctx, ctx.resolver)
+
     private val typeAsts = mutableMapOf<GlobalTypeId, TypeAst>()
     private val collidingAsts = mutableMapOf<GlobalTypeId, MutableMap<String, MutableSet<TypeDecl<GlobalTypeId>>>>()
     private val symbolsByCu = mutableMapOf<String, MutableList<SymbolRecord>>()

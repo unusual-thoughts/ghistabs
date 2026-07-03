@@ -22,12 +22,12 @@ private val X86_64_DBX_TO_REGISTER = listOf(
     "R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15",
 )
 
-class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.sink {
+class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx {
     fun run(): PassResult {
         val readerResult = StabReader.fromProgram(ctx.program)
         if (readerResult == null) {
             log("no-stabs", "No .stab/.stabstr block found; skipping import.")
-            ctx.diagnostics.writeSummary(ctx.sink)
+            ctx.diagnostics.writeSummary(ctx.terminal)
             return PassResult()
         }
 
@@ -39,17 +39,17 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
         ctx.monitor.message = "Stabs: parsing"
 
         // Pass A — parse + harvest
-        val harvester = Harvester(ctx.monitor, ctx.sink, ctx.resolver)
+        val harvester = Harvester(ctx)
         val harvest = harvester.passA(stabs.records)
         // Resolver: by-name/by-base-tag indices, canonicalization, divergent-collision
         // filtering. Every cross-CU lookup downstream goes through this.
-        val typeResolver = TypeResolver(harvest, ctx.sink)
+        val typeResolver = TypeResolver(harvest, ctx)
         recordHarvestCounters(harvest, typeResolver, stabs)
 
         // Pass B — materialise types
         val typeRegistry = TypeRegistry(
             ctx.dtm,
-            ctx.sink,
+            ctx,
             ctx.diagnostics,
             harvest,
             typeResolver,
@@ -57,7 +57,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
 
         ctx.program.runTransaction("Stabs: materialise types") {
             typeRegistry.materialiseAll()
-            if (ctx.options.shortenTypedefs) TypedefShortener(ctx.dtm, ctx.sink).apply()
+            if (ctx.options.shortenTypedefs) TypedefShortener(ctx.dtm, ctx).apply()
         }
 
         // Pass C — apply symbols
@@ -67,7 +67,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx.
 
         typeRegistry.reportSurvivingPlaceholders()
 
-        ctx.diagnostics.writeSummary(ctx.sink)
+        ctx.diagnostics.writeSummary(ctx.terminal)
 
         return PassResult(
             recordsRead = stabs.recordCount,

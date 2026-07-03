@@ -56,7 +56,7 @@ class ClassBuilder(
     private val harvest: Harvest,
     private val typeResolver: TypeResolver,
     private val ctx: ImportContext<*>,
-) : DiagnosticSink by ctx.sink {
+) : DiagnosticSink by ctx {
     private val source = SourceType.IMPORTED
     private val program = ctx.program
     private val resolver = ctx.resolver

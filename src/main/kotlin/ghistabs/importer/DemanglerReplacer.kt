@@ -32,7 +32,7 @@ sealed class Skip(open val reason: String) {
  * acts as the preferred-category hint when multiple candidates share a simple name.
  */
 class DemanglerReplacer(private val ctx: ImportContext<*>, private val typeRegistry: TypeRegistry) :
-    DiagnosticSink by ctx.sink {
+    DiagnosticSink by ctx {
     companion object {
         /** Pure planner: decide which stubs can be safely replaced. */
         fun decide(
