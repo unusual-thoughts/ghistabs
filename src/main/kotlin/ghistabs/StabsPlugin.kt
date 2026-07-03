@@ -18,13 +18,13 @@ import ghidra.util.task.Task
 import ghidra.util.task.TaskLauncher
 import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.DummySink
+import ghistabs.diagnose.StabsDiagnostics
 import ghistabs.harvest.Harvester
 import ghistabs.harvest.TypeResolver
-import ghistabs.importer.ProgramAddressResolver
+import ghistabs.importer.ImportContext
 import ghistabs.parse.StabReader
 import ghistabs.render.Mode
 import ghistabs.render.Renderer
-import java.io.File
 
 /**
  * `Tools > Stabs` actions: **Re-import** clears the persistent done-flag and re-runs the
@@ -85,19 +85,25 @@ class StabsPlugin(tool: PluginTool) : ProgramPlugin(tool) {
         val dir = chooser.selectedFile
         chooser.dispose()
         if (dir == null) return
-        TaskLauncher.launch(
-            object : Task("Stabs: export decompilation", true, false, true) {
-                override fun run(monitor: TaskMonitor) = writeDecompilation(program, dir, monitor)
-            },
-        )
-    }
-
-    private fun writeDecompilation(program: Program, dir: File, monitor: TaskMonitor) {
-        val reader = StabReader.fromProgram(program) ?: return
-        val harvest = program.runTransaction("stabs-export-harvest") {
-            Harvester(monitor, DummySink, ProgramAddressResolver(program)).passA(reader.records)
-        }
-        val written = Renderer(TypeResolver(harvest), program, Mode.ELIDE_SJLJ).use { it.renderAll(dir, monitor) }
-        Msg.showInfo(javaClass, null, "Stabs", "Wrote $written decompilation files to $dir")
+        TaskLauncher.launch(object : Task("Stabs: export decompilation", true, false, true) {
+            override fun run(monitor: TaskMonitor) {
+                val options = StabsOptions(program)
+                val reader = StabReader.fromProgram(program) ?: return
+                val harvest = program.runTransaction("stabs-export-harvest") {
+                    Harvester(
+                        ImportContext(
+                            program,
+                            monitor,
+                            options,
+                            terminal = DummySink,
+                            diagnostics = StabsDiagnostics(),
+                        ),
+                    ).passA(reader.records)
+                }
+                val written = Renderer(TypeResolver(harvest), program, Mode.ELIDE_SJLJ)
+                    .use { it.renderAll(dir, monitor) }
+                Msg.showInfo(javaClass, null, "Stabs", "Wrote $written decompilation files to $dir")
+            }
+        })
     }
 }

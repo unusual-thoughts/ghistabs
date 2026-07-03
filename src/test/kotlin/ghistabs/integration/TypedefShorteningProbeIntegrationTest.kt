@@ -48,7 +48,7 @@ class TypedefShorteningProbeIntegrationTest : AbstractGhidraHeadlessIntegrationT
                     mgr.waitForAnalysis(null, monitor)
                 }
 
-                val shortener = TypedefShortener(program.dataTypeManager, program.defaultContext().sink)
+                val shortener = TypedefShortener(program.dataTypeManager, program.defaultContext())
                 val renames = shortener.renames().sortedByDescending { it.from.length - it.to.length }
 
                 val outDir = File("build/test-output/typedef-renames").apply { mkdirs() }

@@ -1,9 +1,9 @@
-package ghistabs.parse
+package ghistabs.harvest
 
 import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.DummySink
-import ghistabs.harvest.Harvester
 import ghistabs.importer.StabOnlyAddressResolver
+import ghistabs.parse.*
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test

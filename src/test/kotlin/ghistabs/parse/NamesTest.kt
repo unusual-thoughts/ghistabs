@@ -1,18 +1,17 @@
-package ghistabs.util
+package ghistabs.parse
 
-import ghistabs.parse.splitQualified
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Test
 
 class NamesTest {
     @Test
     fun `splits plain namespace chain`() {
-        assertEquals(listOf("std", "vector"), splitQualified("std::vector"))
+        Assertions.assertEquals(listOf("std", "vector"), splitQualified("std::vector"))
     }
 
     @Test
     fun `keeps inner scope-sep inside angle brackets together`() {
-        assertEquals(
+        Assertions.assertEquals(
             listOf("std", "map<std::string, int>"),
             splitQualified("std::map<std::string, int>"),
         )
@@ -22,7 +21,7 @@ class NamesTest {
     fun `handles deeply nested templates`() {
         val input =
             "std::basic_string<char, std::char_traits<char>, std::allocator<char>>::basic_string"
-        assertEquals(
+        Assertions.assertEquals(
             listOf(
                 "std",
                 "basic_string<char, std::char_traits<char>, std::allocator<char>>",
@@ -34,7 +33,7 @@ class NamesTest {
 
     @Test
     fun `keeps scope-sep inside parens together`() {
-        assertEquals(
+        Assertions.assertEquals(
             listOf("ns", "f(std::pair<int, int>)"),
             splitQualified("ns::f(std::pair<int, int>)"),
         )
@@ -46,7 +45,7 @@ class NamesTest {
         // not as comparison operators — gcc writes type expressions, not
         // value expressions. We only need depth tracking that survives
         // balanced templates.
-        assertEquals(
+        Assertions.assertEquals(
             listOf("ns", "less<int>", "operator()"),
             splitQualified("ns::less<int>::operator()"),
         )
@@ -54,16 +53,16 @@ class NamesTest {
 
     @Test
     fun `empty leading separator collapses to single segment`() {
-        assertEquals(listOf("foo"), splitQualified("::foo"))
+        Assertions.assertEquals(listOf("foo"), splitQualified("::foo"))
     }
 
     @Test
     fun `single name returns itself`() {
-        assertEquals(listOf("Foo"), splitQualified("Foo"))
+        Assertions.assertEquals(listOf("Foo"), splitQualified("Foo"))
     }
 
     @Test
     fun `empty string returns empty list`() {
-        assertEquals(emptyList<String>(), splitQualified(""))
+        Assertions.assertEquals(emptyList<String>(), splitQualified(""))
     }
 }

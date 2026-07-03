@@ -21,19 +21,22 @@ data class PassResult(
     val classesApplied: Int = 0,
 )
 
-class ImportContext<Log : DiagnosticSink>(
+/**
+ * The import's shared state, and itself the [DiagnosticSink] everything logs to: each log fans out
+ * (unfiltered) to the [diagnostics] accumulator that counts + files it, and to the [terminal]
+ * (BookmarkSink+MessageLogSink in prod, CapturingSink in tests) that bookmarks + emits. So there is
+ * one place to log (`ctx`/`by ctx`), one to read counters ([diagnostics]), and one @TestOnly handle
+ * on the raw terminal ([terminal]).
+ */
+class ImportContext<Terminal : DiagnosticSink>(
     val program: Program,
     val monitor: TaskMonitor,
     val options: StabsOptions,
-    @get:TestOnly val log: Log,
+    @get:TestOnly val terminal: Terminal,
     val diagnostics: StabsDiagnostics,
-) {
+) : DiagnosticSink by TeeSink(diagnostics, terminal) {
     val dtm: DataTypeManager = program.dataTypeManager
     val symtab: SymbolTable = program.symbolTable
-
-    // Accumulator counts everything (unfiltered); the terminal [log] (BookmarkSink in prod,
-    // CapturingSink in tests) bookmarks + emits at/above its threshold. Tee'd, not chained.
-    val sink: DiagnosticSink = TeeSink(diagnostics, log)
     val resolver: AddressResolver = ProgramAddressResolver(program)
 
     /**
