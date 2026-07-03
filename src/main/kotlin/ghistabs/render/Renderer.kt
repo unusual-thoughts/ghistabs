@@ -24,6 +24,10 @@ private data class TypeDeclKey(val line: Int, val name: String, val bodyKind: St
 
 private data class DeclKey(val line: Int, val name: String)
 
+// A run of decomp statements on one source line ([entry]), keeping Ghidra's per-line brace
+// formatting so the span's blank room can be filled a line at a time (braces on their own line).
+private class DecompRun(val lines: MutableList<DecompLine>, val entry: LineEntry?)
+
 enum class Mode {
     SKELETON,
     DECOMPILE,
@@ -331,13 +335,12 @@ private class RenderContext(val renderer: Renderer, val source: String) {
     }
 
     /**
-     * Replace each function's span with its decompilation. A fragment in the span is
-     * dropped when the decomp already shows it ([FragmentKind.subsumedByDecomp]) or when
-     * it's misattributed; every other stray (a type decl / global gcc mis-filed here) is
-     * demoted to a `// stray:` comment on the close line — never code, so it can't force
-     * a cram. Decomp longer than the span crams its own overflow onto the last line. A
-     * single-line function (self-closing decl in the skeleton) has no close line of its
-     * own, so its whole body crams onto its one decl line.
+     * Replace each function's span with its decompilation. A real file-scope global/static owns its
+     * line and survives as data; every fragment the decomp already shows ([FragmentKind.subsumedByDecomp])
+     * or that's misattributed is dropped; any other stray (a type decl gcc mis-filed here) is demoted
+     * to a `// stray:` comment on the close line — never code, so it can't force a cram. The head
+     * (signature + folded decls) sits at the start line; the body groups spread K&R-indented down the
+     * span, each tagged with its source line. A single-line function has no span, so it isn't bodied.
      */
     private fun applyDecompilation(decomp: DecompInterface) {
         // Where a decl shares a line with real content, the misattributed one is noise.
@@ -352,62 +355,83 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             val ghFunc = program.functionManager.getFunctionAt(r.func.addr.address) ?: continue
             val cLines = runCatching { decomp.decompileFunction(ghFunc, 30, TaskMonitor.DUMMY) }
                 .getOrNull()?.compressedDecompLines(renderer.mode == Mode.ELIDE_SJLJ) ?: continue
+            val head = cLines.firstOrNull() ?: continue
 
-            // Capture each surviving stray with its original line so the demoted comment
-            // keeps that line's provenance tag rather than the close line's.
+            // Capture each surviving stray with its original line so the demoted comment keeps that
+            // line's provenance tag rather than the close line's. A live global stays put as data.
             val strays = mutableListOf<String>()
             for (line in r.startLine..closeLine) {
                 canvas[line].fragments.removeAll { f ->
-                    if (!f.kind.subsumedByDecomp && !f.stale) {
-                        strays += listOfNotNull(f.code, f.commentAt(line)).joinToString("  ")
+                    when {
+                        f.kind == FragmentKind.DECL_GLOBAL && !f.stale -> false
+                        f.kind.subsumedByDecomp || f.stale -> true
+                        else -> {
+                            strays += listOfNotNull(f.code, f.commentAt(line)).joinToString("  ")
+                            true
+                        }
                     }
-                    true
                 }
             }
-            // Keep the decompiler's statement order (it may invert conditions / leave gotos, so its
-            // structure isn't the source's), but coalesce onto one output line each run of statements
-            // that belongs to one source line: repeats of the same line, plus inlined-header code
-            // (a foreign N_SOL — the inlined call belongs to its call site's line). This cuts the
-            // body to roughly the number of this-file source lines it touches, so it fits the span
-            // instead of cramming onto the close line. The folded head (index 0) is never a target.
+
             val slines = r.func.lineEntries.sortedBy { it.addr.address.offset }
             fun entryFor(addr: Address?) = addr?.let { a -> slines.lastOrNull { it.addr.address.offset <= a.offset } }
-            fun refOf(e: LineEntry?): String? {
-                e ?: return null
+            fun refOf(e: LineEntry): String {
                 val file = if (e.source == source) "" else "${e.source.substringAfterLast('/')} "
                 return "${file}L ${e.line}"
             }
 
-            val placed = mutableListOf<Pair<StringBuilder, LineEntry?>>()
+            // Keep the decompiler's statement order (it may invert conditions / leave gotos, so its
+            // structure isn't the source's), but gather into one run each contiguous group of
+            // statements belonging to one this-file source line: repeats of the line plus inlined-
+            // header code (a foreign N_SOL folds into its call site's line). A run keeps Ghidra's
+            // per-line brace formatting, so it lays one line each where the span has room.
+            val runs = mutableListOf<DecompRun>()
             var currentLine: Int? = null
-            for ((idx, dl) in cLines.withIndex()) {
+            for (dl in cLines.drop(1)) {
                 val entry = entryFor(dl.address)
                 val ownLine = entry?.takeIf { it.source == source }?.line
-                if (idx > 0 && placed.size > 1 && (ownLine == null || ownLine == currentLine)) {
-                    placed.last().first.append(' ').append(dl.text.trim())
+                if (runs.isNotEmpty() && (ownLine == null || ownLine == currentLine)) {
+                    runs.last().lines += dl
                 } else {
-                    placed += StringBuilder(dl.text) to entry
+                    runs += DecompRun(mutableListOf(dl), entry)
                 }
                 if (ownLine != null) currentLine = ownLine
             }
-            // Place each coalesced group at the source line its instructions came from (clamped to
-            // the span), spreading the body across the available room instead of packing it at the
-            // top; the head holds the signature + decls at the start line, and a group with no
-            // this-file line follows the previous one. Several groups on a line join. The `// ⇐ L NN`
-            // tag is dropped where the group already sits on its own line (the grid says it), kept
-            // when inlined-from-a-header or clamped off its line.
-            var line = r.startLine
-            placed.forEachIndexed { i, (text, entry) ->
-                val target = if (i == 0) {
-                    r.startLine
-                } else {
-                    entry?.takeIf { it.source == source }?.line?.coerceIn(r.startLine, closeLine) ?: line
-                }
-                line = target
-                val note = entry?.takeIf { it.source != source || it.line != target }?.let(::refOf)
-                canvas[target] += Fragment(code = text.toString(), note = note, kind = FragmentKind.DECOMP)
+
+            canvas[r.startLine] += Fragment(code = head.text, note = "L ${r.startLine}", kind = FragmentKind.DECOMP)
+            // Spread the runs down to fill the height; each expands into the blank rows up to the next
+            // run — braces on their own lines — or crams where it's too tight. The body stays inside the
+            // span when it fits (nothing spills past the close); when it would otherwise cram, borrow the
+            // blank rows after the function up to the next one, so it can breathe instead of piling on.
+            // When the body would cram, borrow only the *contiguous* blank rows immediately after the
+            // span — the next global or function ends the run — so a dense body never smears across
+            // every blank line to the end of the file.
+            val gapEnd = ((closeLine + 1)..maxLine).takeWhile { canvas[it].isEmpty() }.lastOrNull() ?: closeLine
+            val sizes = runs.map { it.lines.size }
+            val spanFree = (r.startLine + 1..closeLine).count { canvas[it].isEmpty() }
+            val end = if (sizes.sum() <= spanFree) closeLine else gapEnd
+            // `spreadBlocks` reserves rows per run size, so a big run (a whole `while` loop coalesced
+            // onto one source line) gets its share of the interior blanks instead of cramming onto one
+            // row while a small sibling wastes the space around it.
+            val targets = spreadBlocks(r.startLine, end, sizes)
+            runs.forEachIndexed { i, run ->
+                val note = run.entry?.let(::refOf) ?: "L ${targets[i]}"
+                placeRun(targets[i], targets.getOrNull(i + 1) ?: (end + 1), run.lines, note)
             }
             for (text in strays) canvas[closeLine] += Fragment(note = text, kind = FragmentKind.STRAY)
+        }
+    }
+
+    // Lay a run's lines onto the free rows in [start, limit): one per row while there is room (so
+    // Ghidra's `{`-ends-the-line / `}`-on-its-own-line survives), the overflow crammed onto the last.
+    // Each row carries the run's source-line tag once; indent is the line's own nesting level.
+    private fun placeRun(start: Int, limit: Int, lines: List<DecompLine>, note: String) {
+        val free = (start until limit).filter { canvas[it].isEmpty() }.ifEmpty { listOf(start) }
+        var prev = -1
+        lines.forEachIndexed { i, dl ->
+            val line = free[minOf(i, free.lastIndex)]
+            canvas[line] += Fragment(dl.depth, dl.text, note.takeIf { line != prev }, FragmentKind.DECOMP)
+            prev = line
         }
     }
 
