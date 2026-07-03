@@ -217,9 +217,15 @@ class TypeResolver(val harvest: Harvest, sink: DiagnosticSink = DummySink) :
         out
     }
 
-    // A multi-CU class lands at the header its member SLINEs mostly point to, not the
-    // .cpp gcc emitted the body burst in.
-    fun TypeAst.effectiveSource() = name?.let { multiSourceHeaderHints[it] } ?: id.source.filename
+    // A multi-CU class lands at the header its member SLINEs mostly point to, not the .cpp gcc
+    // emitted the body burst in. Typedefs instead trust their N_SOL-effective declSourceFile: a
+    // template-instantiation typedef materialised inside a CU (`typedef __true_type __Normal`
+    // splayed into main.cpp) still names its real header there, so it renders in the header
+    // instead of masquerading as CU-local. Structs/enums keep the hint/CU path — a struct's `:T`
+    // body is legitimately CU-emitted (§6), and enum relocation is a broader change left for later.
+    fun TypeAst.effectiveSource() = name?.let { multiSourceHeaderHints[it] }
+        ?: declSourceFile?.takeIf { it.isNotEmpty() && body !is TypeDecl.Struct && body !is TypeDecl.Enum }
+        ?: id.source.filename
 
     fun effectiveSourceFor(type: TypeAst) = type.effectiveSource()
 

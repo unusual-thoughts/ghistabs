@@ -91,6 +91,28 @@ class LayoutTest {
     }
 
     @Test
+    fun `wrapDecompLine splits a long condition at its top-level boolean boundaries`() {
+        val text = "if ((a == 1) && (b == 2) && (c == 3)) {"
+        val rows = wrapDecompLine(text, depth = 2, minLen = 10)
+        // Cuts at the two depth-1 ` && ` (between the parenthesised clauses), not inside them; head keeps
+        // its indent, continuations step in by 2, operators end their rows, the trailing `{` stays put.
+        assertEquals(3, rows.size)
+        assertEquals(listOf(2, 4, 4), rows.map { it.first })
+        assert(rows[0].second.endsWith("&&") && rows[1].second.endsWith("&&")) { rows.toString() }
+        assert(rows.last().second.endsWith("{")) { rows.toString() }
+        // No content lost or reordered across the split.
+        assertEquals(text.filterNot { it == ' ' }, rows.joinToString("") { it.second }.filterNot { it == ' ' })
+    }
+
+    @Test
+    fun `wrapDecompLine leaves a short line, or a long one without boolean operators, intact`() {
+        assertEquals(listOf(2 to "x = f(a, b);"), wrapDecompLine("x = f(a, b);", depth = 2, minLen = 40))
+        // Long, but only commas (inside a call) — never split, so arg lists stay whole.
+        val call = "r = call(alpha, beta, gamma, delta, epsilon, zeta, eta, theta, iota, kappa);"
+        assertEquals(listOf(2 to call), wrapDecompLine(call, depth = 2, minLen = 20))
+    }
+
+    @Test
     fun `trims trailing blank and stale-only lines`() {
         val canvas = Canvas(6).apply {
             this[2] += Fragment(0, code = "int real;", note = "(global)", kind = FragmentKind.DECL_GLOBAL)

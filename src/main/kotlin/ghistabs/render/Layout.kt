@@ -20,6 +20,57 @@ fun spreadBlocks(start: Int, end: Int, sizes: List<Int>): List<Int> {
     }
 }
 
+/**
+ * Break a long decompiler statement across rows at its top-level `&&`/`||` boundaries, so a crammed
+ * `if` condition (Ghidra wraps then §9 rejoins onto one 300-char row) spreads into blank rows instead.
+ * Paren/bracket depth is tracked so a boolean operator inside a call's args never splits; the operator
+ * stays at the end of its row (K&R), continuations sit one step past [depth]. Recurses so each piece
+ * falls under [minLen] where its own shallower boundaries allow; a short line, or one with no top-level
+ * operator, stays a single row.
+ */
+fun wrapDecompLine(text: String, depth: Int, minLen: Int = 120): List<Pair<Int, String>> =
+    splitCondition(text, minLen).mapIndexed { i, s -> (if (i == 0) depth else depth + 2) to s }
+
+private fun splitCondition(text: String, minLen: Int): List<String> {
+    if (text.length <= minLen) return listOf(text)
+    val cuts = topLevelBooleanCuts(text)
+    if (cuts.isEmpty()) return listOf(text)
+    val pieces = buildList {
+        var prev = 0
+        for (c in cuts) {
+            add(text.substring(prev, c).trim())
+            prev = c
+        }
+        add(text.substring(prev).trim())
+    }
+    return pieces.flatMap { splitCondition(it, minLen) }
+}
+
+// Indices just past each shallowest-depth ` && `/` || ` in [text] — the top-level boolean joins,
+// the readable split points. Empty when the line has none at any depth.
+private fun topLevelBooleanCuts(text: String): List<Int> {
+    val cuts = mutableListOf<Pair<Int, Int>>()
+    var depth = 0
+    var i = 0
+    while (i < text.length) {
+        when (text[i]) {
+            '(', '[' -> depth++
+            ')', ']' -> depth--
+        }
+        if (text[i] == ' ' &&
+            i + 3 < text.length &&
+            (text.regionMatches(i + 1, "&& ", 0, 3) || text.regionMatches(i + 1, "|| ", 0, 3))
+        ) {
+            cuts += (i + 4) to depth
+            i += 4
+        } else {
+            i++
+        }
+    }
+    val minDepth = cuts.minOfOrNull { it.second } ?: return emptyList()
+    return cuts.filter { it.second == minDepth }.map { it.first }
+}
+
 // Pure layout model: Canvas ⊃ TargetLine ⊃ Fragment.
 
 // What a fragment represents, so the decompilation overlay can decide its fate from the
