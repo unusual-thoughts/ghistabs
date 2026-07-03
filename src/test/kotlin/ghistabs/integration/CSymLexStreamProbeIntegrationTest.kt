@@ -102,8 +102,7 @@ class CSymLexStreamProbeIntegrationTest : AbstractGhidraHeadlessIntegrationTest(
                     w.write("  [${d.category}] ${d.detail}\n")
                 }
                 w.write("\n=== sink log entries mentioning CSymLexStream ===\n")
-                val sink = ctx.log as CapturingSink
-                for (line in sink.lines) {
+                for (line in ctx.log.lines) {
                     val msg = line.msg ?: continue
                     if ("CSymLexStream" in msg) w.write("  [${line.tag}] $msg\n")
                 }
