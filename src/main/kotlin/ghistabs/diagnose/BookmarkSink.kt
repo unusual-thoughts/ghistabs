@@ -21,7 +21,7 @@ class BookmarkSink(
         if (address != null) {
             program.bookmarkManager.setBookmark(
                 address,
-                BookmarkType.WARNING,
+                level.toBookmark(),
                 "Stabs:$category",
                 "[Stabs][${level.name}] $category: $message",
             )
@@ -31,4 +31,11 @@ class BookmarkSink(
         val line = if (address != null) "$prefix $category at $address: $message" else "$prefix $category: $message"
         if (level == Level.ERROR) messageLog.appendMsg("ERROR: $line") else messageLog.appendMsg(line)
     }
+}
+
+fun Level.toBookmark() = when (this) {
+    Level.DEBUG -> BookmarkType.ANALYSIS
+    Level.INFO -> BookmarkType.INFO
+    Level.WARN -> BookmarkType.WARNING
+    Level.ERROR -> BookmarkType.ERROR
 }

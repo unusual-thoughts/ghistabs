@@ -182,9 +182,8 @@ class TypeResolver(val harvest: Harvest, sink: DiagnosticSink = DummySink) :
      * .cpp-local instantiation is left in place rather than dragged into a stdlib header.
      */
     val multiSourceHeaderHints: Map<String, String> by lazy {
-        val h = harvest ?: return@lazy emptyMap()
-        if (h.openFunctions.isEmpty() || h.lineEntries.isEmpty()) return@lazy emptyMap()
-        val funcsByMangled = h.openFunctions.filter { (it.sizeBytes ?: 0uL) > 0uL }.associateBy { it.name }
+        if (harvest.openFunctions.isEmpty() || harvest.lineEntries.isEmpty()) return@lazy emptyMap()
+        val funcsByMangled = harvest.openFunctions.filter { (it.sizeBytes ?: 0uL) > 0uL }.associateBy { it.name }
         val defSourcesByName = typeAsts.values
             .filter { it.name != null }
             .groupBy({ it.name!! }, { it.id.source.filename })
@@ -202,7 +201,7 @@ class TypeResolver(val harvest: Harvest, sink: DiagnosticSink = DummySink) :
                 val func = funcsByMangled[m.mangled ?: continue] ?: continue
                 val lo = func.addr.address.offset
                 val hi = lo + (func.sizeBytes ?: 0uL).toLong()
-                for ((src, entries) in h.lineEntries) {
+                for ((src, entries) in harvest.lineEntries) {
                     if (src in defSources || !src.hasHeaderExtension()) continue
                     val vote = if (src.isStdMarkerPath()) stdVote else userVote
                     for (e in entries) {

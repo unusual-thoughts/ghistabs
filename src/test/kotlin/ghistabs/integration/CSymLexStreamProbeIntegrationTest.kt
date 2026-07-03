@@ -102,8 +102,7 @@ class bouniafProbeIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                     w.write("  [${d.category}] ${d.detail}\n")
                 }
                 w.write("\n=== sink log entries mentioning bouniaf ===\n")
-                val sink = ctx.log as CapturingSink
-                for (line in sink.lines) {
+                for (line in ctx.log.lines) {
                     val msg = line.msg ?: continue
                     if ("bouniaf" in msg) w.write("  [${line.tag}] $msg\n")
                 }
