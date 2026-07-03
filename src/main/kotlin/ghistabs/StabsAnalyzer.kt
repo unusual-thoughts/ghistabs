@@ -123,7 +123,6 @@ class StabsAnalyzer :
 }
 
 data class StabsOptions(
-    val createImportedLabels: Boolean = true,
     val applyPlateComments: Boolean = true,
     val applyVtables: Boolean = true,
     val shortenTypedefs: Boolean = false,
