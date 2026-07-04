@@ -31,10 +31,12 @@ class Renderer(val typeResolver: TypeResolver, val program: Program, val mode: M
     val decomp = if (mode != Mode.SKELETON) DecompInterface().also { it.openProgram(program) } else null
 
     val sources by lazy {
+        // All three are already canonical (§15): the line-entry view is canonical-keyed, and
+        // functionSource / effectiveSourceFor return canonical spellings.
         (
-            typeResolver.harvest.lineEntries.keys + typeResolver.functionSource.values +
+            typeResolver.lineEntriesByCanonicalSource.keys + typeResolver.functionSource.values +
                 typeResolver.harvest.typeAsts.values.map { typeResolver.effectiveSourceFor(it) }
-            ).filter { it.isNotEmpty() }.map { typeResolver.canonicalSource(it) }.toSet()
+            ).filter { it.isNotEmpty() }.toSet()
     }
 
     fun renderSkeleton(source: String) = RenderContext(this, source).render()
@@ -68,15 +70,17 @@ private class RenderContext(val renderer: Renderer, val source: String) {
     val harvest get() = renderer.typeResolver.harvest
     val program get() = renderer.program
 
-    // Every raw source spelling is canonicalized before comparison against [source] (already
-    // canonical), so both spellings of one physical header render into this one file (§15).
+    // [source] is canonical (§15). The keyed lookups below are canonical on both sides —
+    // functionSource / effectiveSourceFor return canonical, and the line/symbol views are
+    // canonical-keyed. Only per-record raw source fields (LineEntry.source, SymbolRecord.sourceFile,
+    // id.source.filename) still need [canon] at their comparison sites.
     private val tr = renderer.typeResolver
     private fun canon(s: String) = tr.canonicalSource(s)
 
-    private val rawFuncs = harvest.openFunctions.filter { tr.functionSource[it]?.let(::canon) == source }
+    private val rawFuncs = harvest.openFunctions.filter { tr.functionSource[it] == source }
     private val lines = tr.lineEntriesByCanonicalSource[source].orEmpty()
     private val typeDecls = harvest.typeAsts.values
-        .filter { canon(tr.effectiveSourceFor(it)) == source && it.name != null && it.declLine > 0 }
+        .filter { tr.effectiveSourceFor(it) == source && it.name != null && it.declLine > 0 }
     private val symbols = tr.symbolsByCanonicalSource[source].orEmpty()
 
     // Collapse long template spellings (basic_string<char,…> → string) in AST-rendered types,
@@ -498,7 +502,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             for (s in f.params + f.locals) collect(s.body.type)
         }
 
-        val fromTypes = referenced.asSequence().map { canon(resolver.effectiveSourceFor(it)) }
+        val fromTypes = referenced.asSequence().map { resolver.effectiveSourceFor(it) }
         val fromInlined = rawFuncs.asSequence().flatMap { it.lineEntries.asSequence() }.map { canon(it.source) }
         val headers = (fromInlined + fromTypes)
             .filter { it != source && it.hasHeaderExtension() }

@@ -542,6 +542,26 @@ each fold against a clean-HEAD regeneration (the two spellings' union == the mer
 `image.h`/`xvimage.h` (two full-path spellings each) correctly stay separate. Fixtures with no
 basename collisions (xmltest) are byte-identical to clean HEAD (canon is identity there).
 
+**Follow-up (option + threading cleanup).** Gated behind analyzer option `OPT_CANONICALIZE_PATHS`
+(`StabsOptions.canonicalizePaths`, default **on**); off → `sourceCanonicalization` is empty →
+identity everywhere → the pre-§15 two-files-per-header behaviour. To drop the per-comparison
+`canon(...)` threading, `functionSource`/`effectiveSourceFor` now **return canonical** (private
+`functionSourceRaw`/`effectiveSourceRaw` seed the canon map to avoid a cycle) and `Renderer.sources`
+reads the canonical-keyed views, so the keyed-lookup sites (`sources`, `rawFuncs`, `typeDecls`,
+`emitIncludes` type deps) compare canonical-to-canonical with no `canon`. The residual `canon(...)`
+calls are irreducible per-record raw-source checks — `LineEntry.source` (`FunctionSpans.rawSpan`,
+`refOf`, `ownLine`, inlined-include list) and `id.source.filename` (`reportAnomalies`) — kept raw
+because canonicalising those fields would ripple into the delicate `multiSourceHeaderHints` vote
+(keyed on raw `id.source`/N_SOL spellings; §6/§17).
+
+**Attribution-follows-canon: attempted, reverted.** Wiring `sourceCanonicalization` into
+`Attribution.keyFor` (so a folded header's DTM *category* also collapses to the bare name, unifying
+with §8) **regressed type resolution**: folding `dspinfo`'s category made the decompiler render
+`dspinfo`/`ChipLookupResult` as anonymous `Anon_dspinfo_N_hash` (a §14-style findByName/collision
+fragility surfaced by the category move). appquery's RegressionTest stayed green, but packfile decomp
+broke, so it was backed out — canonicalisation stays **render-only**. Unifying DTM attribution would
+need the findByName/collision robustness sorted first (own change).
+
 **Companion (likely same parser N_SOL-tracking family, verify together — see §9 finding).**
 Cross-file *line* misattribution: `main`'s span inflates to L166 because `N_SOL bitset;
 SLINE 166` (bitset line 166) is attributed to *main.cpp* L166 (main's real main.cpp lines
