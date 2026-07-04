@@ -28,6 +28,35 @@ fun String.hasHeaderExtension(): Boolean = substringAfterLast('.', "").lowercase
 /** Path lies under a stdlib include root — never the "home" of a user type, so excluded from attribution votes. */
 fun String.isStdMarkerPath(): Boolean = STD_MARKERS.containsMatchIn(this)
 
+/**
+ * Canonicalize source-filename spellings so one physical file yields one output file.
+ *
+ * gcc spells the same header two ways across CUs: the full include path where it compiles the
+ * definitions, and the bare `#include "x.h"` spelling where another TU only forward-references it.
+ * Each CU's N_BINCL carries a different checksum (its own expansion), so they can't be merged by
+ * checksum — basename identity is the signal. A **bare** name (no path separator) that is the
+ * basename of **exactly one** full path also present folds that full path onto the bare spelling:
+ * the shorter name wins and is what displays. Guard: if two distinct full paths share a basename
+ * (`a/config.h`, `b/config.h`) the bare name is ambiguous, so nothing merges — only a *unique*
+ * basename→full-path match folds.
+ *
+ * Returns raw spelling → canonical spelling; every input maps to itself unless it folds. (§15)
+ */
+fun canonicalizeSourcePaths(filenames: Iterable<String>): Map<String, String> {
+    fun isBare(s: String) = '/' !in s && '\\' !in s
+    fun basename(s: String) = s.substringAfterLast('/').substringAfterLast('\\')
+
+    val all = filenames.toSet()
+    val fullPathsByBasename = all.filterNot(::isBare).groupBy(::basename)
+    val fold = mutableMapOf<String, String>()
+    for (name in all) {
+        if (!isBare(name)) continue
+        val fulls = fullPathsByBasename[name] ?: continue
+        if (fulls.size == 1) fold[fulls.single()] = name
+    }
+    return all.associateWith { fold[it] ?: it }
+}
+
 /** gcc emits anonymous types with CU-local sequential names; same name in different CUs is unrelated. */
 fun TypeAst.isCuLocalName() = name != null && (name.isEmpty() || CU_LOCAL_NAME.matches(name))
 

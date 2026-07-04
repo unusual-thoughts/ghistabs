@@ -229,6 +229,38 @@ class TypeResolver(val harvest: Harvest, sink: DiagnosticSink = DummySink) :
 
     fun effectiveSourceFor(type: TypeAst) = type.effectiveSource()
 
+    /**
+     * Fold each source-filename spelling to its canonical (shortest unambiguous) form so one
+     * physical file renders as one output file (§15). Built over every raw spelling that can key
+     * an output file: line-entry sources, per-CU symbol sources, function sources, and each type's
+     * effective source — none of which depend on canonicalization, so there's no cycle.
+     */
+    val sourceCanonicalization: Map<String, String> by lazy {
+        canonicalizeSourcePaths(
+            harvest.lineEntries.keys +
+                harvest.symbolsByCu.keys +
+                functionSource.values +
+                typeAsts.values.map { it.effectiveSource() },
+        )
+    }
+
+    /** Canonical spelling of [raw] (identity when it doesn't fold). */
+    fun canonicalSource(raw: String): String = sourceCanonicalization[raw] ?: raw
+
+    /** N_SLINE entries fanned in under the canonical source, re-sorted for a stable merged order. */
+    val lineEntriesByCanonicalSource: Map<String, List<LineEntry>> by lazy {
+        harvest.lineEntries.entries
+            .groupBy({ canonicalSource(it.key) }, { it.value })
+            .mapValues { (_, lists) -> lists.flatten().sortedWith(compareBy({ it.line }, { it.addr.offset })) }
+    }
+
+    /** Per-CU symbol records fanned in under the canonical source. */
+    val symbolsByCanonicalSource: Map<String, List<SymbolRecord>> by lazy {
+        harvest.symbolsByCu.entries
+            .groupBy({ canonicalSource(it.key) }, { it.value })
+            .mapValues { (_, lists) -> lists.flatten() }
+    }
+
     /** Canonical (CategoryPath, ghidraName) → group. Drives TypeRegistry slot assignment. */
     val byCanonicalKey: Map<GhidraKey, CanonicalGroup> by lazy {
         val byGhidraName = typeAsts.values.groupBy { it.ghidraName }

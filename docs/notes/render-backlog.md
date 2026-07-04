@@ -331,6 +331,7 @@ entry / type / symbol decl to the N_SOL file in effect), not the render sweep.
 ### Decided direction (from user)
 
 Rework `applyDecompilation` placement + `indentFor` to:
+
 - **Bracket-level indentation**, K&R style: keep `{` at the end of the line (open braces at
   EOL) and step nested blocks in by `{`/`}` depth (from the clang token stream).
 - **Group statements on the same source line onto one line**, BUT if grouping would leave
@@ -404,6 +405,7 @@ apply-error, vtable already carry addresses.
 ## 12. Importer: are we actually renaming functions & globals? — DONE
 
 Prompted by review. Findings:
+
 - `StabsOptions.createImportedLabels` (default true) was **dead** — defined but never read.
   **Deleted** (no analyzer-option plumbing; renaming is core importer behaviour, not a toggle).
 - **Functions were not renamed from stabs.** We applied return type / params / __thiscall and
@@ -428,29 +430,58 @@ Verified across all six fixtures: `main`→`main`, every C++ method stays demang
 raw-mangled function definitions anywhere. appquery decomp diff vs baseline = only `_main`→`main`
 (and its propagation into provenance annotations).
 
-## 13. Struct/non-pointer by-value return uses wrong calling convention (OPEN)
+## 13. Struct/non-pointer by-value return uses wrong calling convention — DONE
 
-Methods returning a `string` by value (e.g. unpackfile `FileSystemEntry::name`) come out with
-the **return `string*` in stack[4] and `this*` in stack[8]** — i.e. the hidden return-slot
-pointer (RVO) is being modelled as a stack arg instead of via the struct-return ABI. Even
-though `std::string` is pointer-sized, gcc returns it by value through the caller-allocated
-hidden pointer (first arg on x86 cdecl/thiscall), which shifts `this` down. We're not applying
-the struct-return convention for by-value aggregate/class returns. Fix: when a method/function
-returns a class/struct by value, model the hidden return pointer (Ghidra `__return_storage_ptr__`
-/ appropriate cspec) so `this` lands at the right offset.
-there are already functions that have by autodetected as __return_storage_ptr__ , maybe the string-returning functions aren't because ghidra saw that it was the same size as a pointer
+Methods returning a `string` by value (e.g. unpackfile `FileSystemEntry::name`, `children`) came
+out with the **return `string*` in stack[4] and `this*` in stack[8]** — the hidden return-slot
+pointer (RVO) modelled as a stack arg instead of via the struct-return ABI, so the real `this`
+landed in a phantom `in_stack_00000008`.
 
+Root cause: `x86gcc.cspec`'s output model register-returns any aggregate ≤8 bytes
+(`EAX`/`EDX:EAX`) and only force-indirects (`FAIL`→`HIDDENRET_PTRPARAM`) a return >8 bytes. But
+gcc/MinGW i386 returns *every* by-value struct/class through the caller-allocated hidden pointer.
+So `std::string` (4B) and small `list` were register-returned by Ghidra while `vector`/`XVImage`
+(≥12B) were correctly auto-injected. Ground truth: across unpackfile, 89 methods carry `this` at
+frame `+0x8` and exactly the 5 by-value-aggregate returns carry it at `+0xc` — the extra pointer
+slot is the hidden return.
 
-## 14. `string` typedef breaks /Demangler/string replacement (regression, needs test)
+Fixed as a **standalone Ghidra analyzer** (`StructReturnAnalyzer.kt`), independent of stabs and
+gated to x86:LE:32 gcc (on SysV x86-64 small PODs really do return in registers, so it must not
+run there — the box2d/xmltest ELF fixtures are left untouched). For each `Composite` return the
+cspec did not already force indirect, it re-applies the function with custom storage mirroring the
+large-return layout — a forced-indirect return + explicit `__return_storage_ptr__` first arg,
+storages computed by the model itself from an oversized-dummy prototype so offsets aren't
+hand-rolled. Runs after the Stabs Importer (`LOW_PRIORITY.after()`); idempotent via the
+`hasCustomVariableStorage` guard. Verified: `name`/`children` now render
+`T *__return_storage_ptr__, FileSystemEntry *this`; large returns unchanged; all integration
+tests green.
 
-The `/Demangler/string` stub is no longer replaced by our `string` type — regression, likely
-from typedef shortening (basic_string→string renames the DTM type, so DemanglerReplacer's
-lookup for the demangler stub's `string` name collides or misses). **Add a test** that pins
-DemanglerReplacer still replaces `/Demangler/string` when OPT_SHORTEN_TYPEDEFS is on. Then fix
-the ordering/lookup so shortening and demangler-stub replacement coexist.
+## 14. `string` typedef breaks /Demangler/string replacement (regression, needs test) — DONE
 
+Root cause pinned down: with `OPT_SHORTEN_TYPEDEFS` on, `TypedefShortener` renames the
+`basic_string<…>` **struct** onto its `string` typedef's name (folding the same-category typedef
+into the struct via `replaceDataType`, but the separate `/stabs/string` typedef in another
+category survives). So two DataTypes end up named `string` — the surviving typedef and the renamed
+struct it points at — and `TypeRegistry.findByName("string")` returned **two** matches. The
+`/Demangler/std/string` stub's preferred-category (`/std`) matched neither, so findByName logged
+`demangler-ambiguous` and returned null → `DemanglerReplacer` recorded `NoReplacement` and left the
+stub in place.
 
-## 15. Canonicalize source-file paths (one header, one output file) — OPEN
+**Fix (`TypeRegistry.findByName`).** A typedef and its own **resolved target** both matching is not
+real ambiguity — they denote one type in two guises. After the preferred-category tiebreak fails,
+drop any match a matching `TypeDef`'s `baseDataType` points at and keep the typedef; if exactly one
+survives, return it. So `string`(typedef)+`string`(struct) collapses to the typedef, the stub is
+replaced, and shortening + demangler-stub replacement coexist. Genuinely-ambiguous cases (two
+unrelated structs) are unchanged — still logged and null.
+
+**Tests.** `StringTypeProbeIntegrationTest` now builds its context with `shortenTypedefs = true`
+(it used `defaultContext()`, shortening off, so it never exercised the path). New hermetic
+`DemanglerReplaceIntegrationTest.testDemanglerStubReplacedWhenTypedefAndRenamedTargetCollide`
+registers a `string` typedef + a same-named renamed struct + a `/Demangler/std/string` stub and
+asserts the stub is replaced — verified red before the fix, green after. Existing
+`StabsAnalyzerTests.demanglerStringReplaced*` (shortening off) and the unit suite stay green.
+
+## 15. Canonicalize source-file paths (one header, one output file) — DONE
 
 **Symptom.** A single header is emitted as *two* skeleton/decomp files under two path
 spellings, splitting its content. `packfile` renders both `dspinfo.h` (bare) and
@@ -492,6 +523,25 @@ Kind-1 testable.
 `enum`/`class` definitions (no separate mangled full-path file, no forward-decl-only file).
 No fixture loses content.
 
+**DONE.** Pure `canonicalizeSourcePaths(filenames)` in `harvest/Attribution.kt` (Kind-1, pinned
+by `SourceCanonicalizationTest`) builds raw-spelling → canonical-spelling: a bare basename that
+matches **exactly one** full path folds that full path onto the bare name; two full paths sharing
+a basename leave the bare name ambiguous → nothing merges; everything else maps to itself.
+`TypeResolver` computes it once (`sourceCanonicalization`, seeded from `lineEntries.keys`,
+`symbolsByCu.keys`, `functionSource.values`, and each type's `effectiveSource()` — none depend on
+canonicalization, so no cycle) and exposes `canonicalSource(raw)` plus canonical-keyed fan-in views
+`lineEntriesByCanonicalSource` / `symbolsByCanonicalSource` (re-sorted by (line, addr)). `Renderer`
+canonicalises `sources`, and every `RenderContext` source comparison routes through `canon(...)`:
+`rawFuncs` (`functionSource`), `lines`/`symbols` (fan-in views), `typeDecls` (`effectiveSourceFor`),
+param/local `sourceFile`, `refOf`/`ownLine` decomp tags, `emitIncludes`, `reportAnomalies`, and
+`FunctionSpans.of` (canonicalizer param, applied in `rawSpan`). Verified: `packfile` renders one
+`dspinfo.h` with `enum KalimbaArch` + `class dspinfo` (full-path spelling gone); appquery folds
+`bits64image.h`/`vminfo.h`/`xdvimage.h`, `vminfo.h` genuinely merges 9+32-line spellings losslessly
+(fragments on shared source lines concatenate; content is the union). Confirmed no loss by diffing
+each fold against a clean-HEAD regeneration (the two spellings' union == the merged file). Ambiguous
+`image.h`/`xvimage.h` (two full-path spellings each) correctly stay separate. Fixtures with no
+basename collisions (xmltest) are byte-identical to clean HEAD (canon is identity there).
+
 **Companion (likely same parser N_SOL-tracking family, verify together — see §9 finding).**
 Cross-file *line* misattribution: `main`'s span inflates to L166 because `N_SOL bitset;
 SLINE 166` (bitset line 166) is attributed to *main.cpp* L166 (main's real main.cpp lines
@@ -503,7 +553,9 @@ and that `FunctionSpans`/attribution filter on it. If the path-canonicalisation 
 how `dspinfo.h`-style lines are tagged, re-check these at the same time.
 
 ## 16 missing placeholder enum/struct xrefs
-the return type of   AppImage::image_type is supposed to be vm_image_type, an enum which is (i think) not defined because only referenced as an xref. there should probably still be a placeholder enum for it though, with the right name
+
+the return type of AppImage::image_type is supposed to be vm_image_type, an enum which is (i think) not defined because
+only referenced as an xref. there should probably still be a placeholder enum for it though, with the right name
 
 ## 17. Typedefs misattributed into a .cpp (`typedef __true_type __Normal`) — DONE
 
