@@ -4,6 +4,7 @@ import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.data.CategoryPath
 import ghidra.program.model.data.DataTypeConflictHandler
 import ghidra.program.model.data.StructureDataType
+import ghidra.program.model.data.TypedefDataType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghistabs.diagnose.defaultContext
 import ghistabs.diagnose.defaultTypeRegistry
@@ -142,5 +143,55 @@ class DemanglerReplaceIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
         val projPath = CategoryPath("/proj")
         val projAfter = dtm.getDataType(projPath, "Foo")
         assertTrue(projAfter != null, "/proj/Foo should still exist after idempotent run")
+    }
+
+    /**
+     * render-backlog §14: with typedef shortening on, `basic_string<…>` is renamed onto its
+     * `string` typedef's name, so both a `string` typedef and the renamed `string` struct — the
+     * same type in two guises — end up registered under the name "string". findByName then saw
+     * two matches, the `/Demangler` preferred-category matched neither, and it returned null
+     * ("ambiguous") — so the `/Demangler/string` stub stopped being replaced.
+     *
+     * This pins the fix: a typedef and its own resolved target are collapsed, the typedef wins,
+     * and the stub is replaced. Reproduces the post-shortening registry state directly (no full
+     * analysis / OPT_SHORTEN_TYPEDEFS run needed) — both types are simply registered as "string".
+     */
+    @Test
+    fun testDemanglerStubReplacedWhenTypedefAndRenamedTargetCollide() {
+        val program = builder.program
+        val dtm = program.dataTypeManager
+
+        val ctx = program.defaultContext()
+        val registry = ctx.defaultTypeRegistry()
+
+        program.runTransaction("setup-test") {
+            // The renamed `basic_string<…>` struct: now named "string", non-empty.
+            val structDt = StructureDataType(CategoryPath("/std/stringfwd"), "string", 0)
+            val intType = dtm.getDataType(CategoryPath("/"), "int")
+            if (intType != null) structDt.add(intType, 4, "_M_p", null)
+            val registeredStruct = registry.register(structDt)
+
+            // The surviving `string` typedef pointing at that struct — same name, other category.
+            val typedef = TypedefDataType(CategoryPath("/stabs"), "string", registeredStruct)
+            registry.register(typedef)
+
+            // Ghidra's on-demand demangler stub.
+            val stub = StructureDataType(CategoryPath("/Demangler/std"), "string", 0, dtm)
+            dtm.createCategory(CategoryPath("/Demangler/std")).addDataType(stub, DataTypeConflictHandler.KEEP_HANDLER)
+        }
+
+        assertTrue(
+            dtm.getDataType(CategoryPath("/Demangler/std"), "string") != null,
+            "precondition: injected /Demangler/std/string stub should exist",
+        )
+
+        program.runTransaction("demangler-replace") {
+            DemanglerReplacer(ctx, registry).run()
+        }
+
+        assertTrue(
+            dtm.getDataType(CategoryPath("/Demangler/std"), "string") == null,
+            "/Demangler/std/string should be replaced despite the typedef/renamed-struct name collision",
+        )
     }
 }

@@ -827,6 +827,14 @@ class TypeRegistry(
         if (preferredCategory != null) {
             matches.firstOrNull { it.categoryPath == preferredCategory }?.let { return it }
         }
+        // A typedef and its own resolved target both matching is not real ambiguity: typedef
+        // shortening (OPT_SHORTEN_TYPEDEFS) renames the target struct onto the typedef's name
+        // (`basic_string<…>` → `string`), so both a `string` typedef and a `string` struct — the
+        // same type in two guises — end up named "string". Drop the target(s) a matching typedef
+        // points at and keep the typedef, so the demangler stub is still replaceable (render-backlog §14).
+        val typedefTargets = matches.filterIsInstance<TypeDef>().mapTo(mutableSetOf()) { it.baseDataType.pathName }
+        val collapsed = matches.filterNot { it.pathName in typedefTargets }
+        if (collapsed.size == 1) return collapsed.single()
         log(
             "demangler-ambiguous",
             "Multiple matches for '$simpleName' (preferred=$preferredCategory): " +
