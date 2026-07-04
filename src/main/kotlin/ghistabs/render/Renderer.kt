@@ -34,7 +34,7 @@ class Renderer(val typeResolver: TypeResolver, val program: Program, val mode: M
         (
             typeResolver.harvest.lineEntries.keys + typeResolver.functionSource.values +
                 typeResolver.harvest.typeAsts.values.map { typeResolver.effectiveSourceFor(it) }
-            ).filter { it.isNotEmpty() }.toSet()
+            ).filter { it.isNotEmpty() }.map { typeResolver.canonicalSource(it) }.toSet()
     }
 
     fun renderSkeleton(source: String) = RenderContext(this, source).render()
@@ -68,17 +68,22 @@ private class RenderContext(val renderer: Renderer, val source: String) {
     val harvest get() = renderer.typeResolver.harvest
     val program get() = renderer.program
 
-    private val rawFuncs = harvest.openFunctions.filter { renderer.typeResolver.functionSource[it] == source }
-    private val lines = harvest.lineEntries[source].orEmpty()
+    // Every raw source spelling is canonicalized before comparison against [source] (already
+    // canonical), so both spellings of one physical header render into this one file (§15).
+    private val tr = renderer.typeResolver
+    private fun canon(s: String) = tr.canonicalSource(s)
+
+    private val rawFuncs = harvest.openFunctions.filter { tr.functionSource[it]?.let(::canon) == source }
+    private val lines = tr.lineEntriesByCanonicalSource[source].orEmpty()
     private val typeDecls = harvest.typeAsts.values
-        .filter { renderer.typeResolver.effectiveSourceFor(it) == source && it.name != null && it.declLine > 0 }
-    private val symbols = harvest.symbolsByCu[source].orEmpty()
+        .filter { canon(tr.effectiveSourceFor(it)) == source && it.name != null && it.declLine > 0 }
+    private val symbols = tr.symbolsByCanonicalSource[source].orEmpty()
 
     // Collapse long template spellings (basic_string<char,…> → string) in AST-rendered types,
     // matching the DTM shortening pass that only the decompiler (DTM-backed) otherwise reflects.
     private val shortener by lazy { harvestTemplateShortener(harvest) }
 
-    private val spans = FunctionSpans.of(rawFuncs, source)
+    private val spans = FunctionSpans.of(rawFuncs, source, ::canon)
 
     private val maxLine = sequenceOf(
         spans.maxLine,
@@ -199,7 +204,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
                     )
             }
             for (p in f.params) {
-                if (p.sourceFile != source) continue
+                if (p.sourceFile?.let(::canon) != source) continue
                 when (val d = p.body) {
                     is SymbolDecl.StackParam -> place(p.declLine, d.name, d.type, "(param)")
                     is SymbolDecl.RegParam -> place(p.declLine, d.name, d.type, "(reg param)")
@@ -207,7 +212,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
                 }
             }
             for (l in f.locals) {
-                if (l.sourceFile != source) continue
+                if (l.sourceFile?.let(::canon) != source) continue
                 when (val d = l.body) {
                     is SymbolDecl.RegLocal -> place(l.declLine, d.name, d.type, "(reg local)")
                     is SymbolDecl.StackLocal -> place(l.declLine, d.name, d.type, "(stack local)")
@@ -385,7 +390,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             val slines = r.func.lineEntries.sortedBy { it.addr.address.offset }
             fun entryFor(addr: Address?) = addr?.let { a -> slines.lastOrNull { it.addr.address.offset <= a.offset } }
             fun refOf(e: LineEntry): String {
-                val file = if (e.source == source) "" else "${e.source.substringAfterLast('/')} "
+                val file = if (canon(e.source) == source) "" else "${canon(e.source).substringAfterLast('/')} "
                 return "${file}L ${e.line}"
             }
 
@@ -402,7 +407,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             var currentLine: Int? = null
             for (dl in cLines.drop(1)) {
                 val entry = entryFor(dl.address)
-                val ownLine = entry?.takeIf { it.source == source }?.line
+                val ownLine = entry?.takeIf { canon(it.source) == source }?.line
                 if (runs.isNotEmpty() && (ownLine == null || ownLine == currentLine)) {
                     runs.last().lines += dl
                 } else {
@@ -493,8 +498,8 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             for (s in f.params + f.locals) collect(s.body.type)
         }
 
-        val fromTypes = referenced.asSequence().map { resolver.effectiveSourceFor(it) }
-        val fromInlined = rawFuncs.asSequence().flatMap { it.lineEntries.asSequence() }.map { it.source }
+        val fromTypes = referenced.asSequence().map { canon(resolver.effectiveSourceFor(it)) }
+        val fromInlined = rawFuncs.asSequence().flatMap { it.lineEntries.asSequence() }.map { canon(it.source) }
         val headers = (fromInlined + fromTypes)
             .filter { it != source && it.hasHeaderExtension() }
             .distinct()
@@ -530,7 +535,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
                 }
             }
             for (ast in harvest.typeAsts.values) {
-                if (ast.id.source.filename != source || ast.declLine !in interior) continue
+                if (canon(ast.id.source.filename) != source || ast.declLine !in interior) continue
                 val name = ast.name ?: continue
                 anomalies += "skeleton[$source]: type $name declared at L${ast.declLine} $where"
             }

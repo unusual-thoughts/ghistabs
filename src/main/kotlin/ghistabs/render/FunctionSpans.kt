@@ -49,10 +49,14 @@ class FunctionSpans(val ranges: List<FuncRange>) {
          * clear of every earlier function — a min-line below a prior function's end is
          * gcc cross-attribution, so there fall back to the prologue line.
          */
-        fun of(rawFuncs: List<OpenFunction>, source: String): FunctionSpans {
+        fun of(
+            rawFuncs: List<OpenFunction>,
+            source: String,
+            canon: (String) -> String = { it },
+        ): FunctionSpans {
             var prevEnd = Int.MIN_VALUE
             val rawRanges = rawFuncs
-                .mapNotNull { it.rawSpan(source) }
+                .mapNotNull { it.rawSpan(source, canon) }
                 .sortedBy { it.prologueAddr }
                 .map { s ->
                     val start = if (s.sameSource && s.minLine > prevEnd) s.minLine else s.prologueLine
@@ -76,8 +80,8 @@ class FunctionSpans(val ranges: List<FuncRange>) {
 
         // Prefer entries tagged with `source`; with none — and not a synthetic init
         // wrapper — fall back to all entries (out-of-line copies of header methods).
-        private fun OpenFunction.rawSpan(source: String): RawSpan? {
-            val sameSource = lineEntries.filter { it.source == source }
+        private fun OpenFunction.rawSpan(source: String, canon: (String) -> String): RawSpan? {
+            val sameSource = lineEntries.filter { canon(it.source) == source }
             val inside = sameSource.ifEmpty { if (isSyntheticInit) emptyList() else lineEntries }
             if (inside.isEmpty()) return null
             val sortedByAddr = inside.sortedBy { it.addr.offset }
