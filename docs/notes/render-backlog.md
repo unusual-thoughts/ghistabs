@@ -665,3 +665,27 @@ on any fixture; RegressionTest green after one benign baseline bump (`xref-base-
 more XRefs resolve once types unify). Done **without** attribution-canon: the merge is content-driven,
 so the DTM stays keyed on raw spellings and the render §15 path canonicalization (output-*file* dedup,
 an orthogonal concern) is unchanged.
+
+## 21. Blank anonymous type names + enum double-registration (diagnosed via RegistryDump)
+
+The §20 content-merge never fired for **enums** (`EnumDSPRev`, `KalimbaArch`, `ChipLookupResult`,
+box2d `b2BodyType`/`b2ShapeType`). Root cause, found by extending `RegistryDump` (RegressionTest) with a
+grouping-diagnosis surface — per-group content hash / members / anonymous-count, content-hash classes
+spanning >1 group, source folds, and duplicate-named DataTypes — rather than by eyeballing decomp:
+
+- **Fixed: blank anonymous names.** gcc emits an anonymous aggregate/enum with a *whitespace* tag name
+  (`" "`), not empty. `Cursor.readSymbolName()` returned it verbatim, so `name = " "` passed
+  `isNullOrEmpty()` as "named" — the §20 merge counted it a distinct name (blocking the merge) and
+  `nameAnonymousTypedefTargets` skipped it. `Parser.parseSymbol` now normalises a blank symbol name to
+  `""` (`readSymbolName().ifBlank { "" }`), so "anonymous" is uniformly `name.isNullOrEmpty()`. The dump
+  then shows the enum groups collapsing to one (`EnumDSPRev` members 2→3, no enum class spanning >1
+  group). Degradation-neutral across fixtures; `xref-base-tag-resolved` 41→49 (more XRefs resolve once
+  types unify — baseline bumped).
+
+- **Open: enum double-registration → `.conflict`.** Naming the enums exposes a materialiser bug the
+  dump makes obvious: `b2BodyType` is **one** `byCanonicalKey` group (18 members, `distinct=1`, fully
+  content-equivalent) yet materialises as **two** DataTypes at the identical `/src/body.h/b2BodyType`
+  slot, so Ghidra suffixes one `.conflict` (the decomp shows `EnumDSPRev.conflict`). This is a
+  double-registration in `TypeRegistry.materialiseAll` (one content-equivalent group must yield exactly
+  one DataType), not a grouping problem. `RegistryDump.duplicateNamedTypes` lists every such collision.
+  Next step is to make the enum materialisation path register once per canonical group.
