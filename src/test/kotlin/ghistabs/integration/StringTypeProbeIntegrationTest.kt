@@ -10,7 +10,11 @@ import ghidra.program.model.data.TypeDef
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghistabs.StabsAnalyzer
-import ghistabs.diagnose.defaultContext
+import ghistabs.StabsOptions
+import ghistabs.diagnose.CapturingSink
+import ghistabs.diagnose.Level
+import ghistabs.diagnose.StabsDiagnostics
+import ghistabs.importer.ImportContext
 import ghistabs.importer.StaticContexts
 import ghistabs.runTransaction
 import org.junit.jupiter.api.Assumptions.assumeTrue
@@ -54,7 +58,16 @@ class StringTypeProbeIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         try {
             val program = loadResults.getPrimaryDomainObject(this)
             val mgr = AutoAnalysisManager.getAnalysisManager(program)
-            val ctx = program.defaultContext()
+            // Enable typedef shortening (OPT_SHORTEN_TYPEDEFS) so the probe exercises the
+            // basic_string→string rename path — the regression in render-backlog §14 (the
+            // /Demangler/string stub no longer replaced) only appears when shortening is on.
+            val ctx = ImportContext(
+                program,
+                TaskMonitor.DUMMY,
+                StabsOptions(shortenTypedefs = true, minLogLevel = Level.DEBUG),
+                CapturingSink(),
+                StabsDiagnostics(),
+            )
             StaticContexts.install(ctx)
             val options = program.getOptions(ghidra.program.model.listing.Program.ANALYSIS_PROPERTIES)
             program.runTransaction("disable-stabs-analyzer") {
