@@ -206,9 +206,34 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
         val compromised = registry.compromisedTypes().mapValues { (_, dts) ->
             dts.sortedBy { it.pathName }.map { CompromisedEntry(it.pathName, it::class.simpleName ?: "?", it.length) }
         }
+        val harvest = resolver.harvest
         val canonicalGroups = resolver.byCanonicalKey.entries
             .sortedBy { it.key.toString() }
-            .map { (key, g) -> CanonicalGroupEntry(key.toString(), g.ast.id.toString(), g.members.size, g.distinct) }
+            .map { (key, g) ->
+                CanonicalGroupEntry(
+                    key.toString(),
+                    g.ast.id.toString(),
+                    g.ast.ghidraName,
+                    resolver.contentHash(g.ast.body),
+                    g.members.size,
+                    g.members.count { harvest.typeAsts[it]?.name.isNullOrEmpty() },
+                    g.distinct,
+                )
+            }
+        // §20 diagnosis: content-equivalent classes still spanning >1 group (a merge that didn't fire),
+        // and DataTypes sharing a simple name (the `.conflict` source in the decomp).
+        val hashCollisions = resolver.byCanonicalKey.values
+            .groupBy { resolver.contentHash(it.ast.body) }
+            .filterValues { it.size > 1 }
+            .map { (hash, gs) ->
+                HashClassEntry(hash, gs.map { it.ast.ghidraName }, gs.map { it.ast.ghidraName }.toSortedSet().toList())
+            }
+            .sortedBy { it.hash }
+        val duplicateNamed = registry.allCreatedDataTypes()
+            .groupBy { it.name.substringBefore(".conflict") }
+            .filterValues { it.size > 1 }
+            .mapValues { (_, dts) -> dts.map { it.pathName }.sorted() }
+            .toSortedMap()
         val divergent = resolver.divergentCollisions.entries
             .sortedBy { it.key.toString() }
             .map { (id, byName) ->
@@ -224,6 +249,9 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
             compromised = compromised,
             canonicalGroups = canonicalGroups,
             divergentCollisions = divergent,
+            sourceFolds = resolver.sourceCanonicalization.filter { it.key != it.value }.toSortedMap(),
+            contentHashCollisions = hashCollisions,
+            duplicateNamedTypes = duplicateNamed,
         )
         registryDumpFile.outputStream().use { json.encodeToStream(dump, it) }
     }
@@ -1314,7 +1342,17 @@ private data class RegistryDump(
     val compromised: Map<String, List<CompromisedEntry>>,
     val canonicalGroups: List<CanonicalGroupEntry>,
     val divergentCollisions: List<DivergentEntry>,
+    // §20/§21 grouping diagnosis. `sourceFolds`: §15 basename canonicalisation (raw → canonical).
+    // `contentHashCollisions`: content-equivalent groups that did NOT merge into one — each is a §20
+    // merge that either fired (one group left) or a candidate that didn't (why?). `duplicateNamedTypes`:
+    // materialised DataTypes sharing a simple name (the source of `.conflict` suffixes in the decomp).
+    val sourceFolds: Map<String, String> = emptyMap(),
+    val contentHashCollisions: List<HashClassEntry> = emptyList(),
+    val duplicateNamedTypes: Map<String, List<String>> = emptyMap(),
 )
+
+@kotlinx.serialization.Serializable
+private data class HashClassEntry(val hash: Int, val groups: List<String>, val distinctNames: List<String>)
 
 @kotlinx.serialization.Serializable
 private data class DumpSummary(
@@ -1328,7 +1366,15 @@ private data class DumpSummary(
 private data class CompromisedEntry(val pathName: String, val kind: String, val length: Int)
 
 @kotlinx.serialization.Serializable
-private data class CanonicalGroupEntry(val key: String, val winnerId: String, val members: Int, val distinct: Int)
+private data class CanonicalGroupEntry(
+    val key: String,
+    val winnerId: String,
+    val winner: String,
+    val contentHash: Int,
+    val members: Int,
+    val anon: Int,
+    val distinct: Int,
+)
 
 @kotlinx.serialization.Serializable
 private data class DivergentEntry(val id: String, val byName: Map<String, Int>)

@@ -26,7 +26,11 @@ class Parser(src: String) {
      * Mirror of gdb/stabsread.c:define_symbol.
      */
     fun parseSymbol(): SymbolDecl<LocalTypeId> {
-        val name = c.readSymbolName()
+        // gcc emits anonymous aggregates/enums with a *blank* (whitespace) tag name, not an empty
+        // one. Normalise blank → "" here so "anonymous" is uniformly `name.isNullOrEmpty()` for every
+        // downstream consumer (ghidraName, the §20 content merge, nameAnonymousTypedefTargets) — a
+        // stray " " otherwise reads as a distinct named type and silently blocks unification.
+        val name = c.readSymbolName().ifBlank { "" }
         c.consume(':')
         val descriptor = c.peekOrNull()
 
