@@ -309,8 +309,8 @@
             "max": 14
         },
         "xref-base-tag-resolved": {
-            "min": 37,
-            "max": 37
+            "min": 41,
+            "max": 41
         },
         "xref-undefined": {
             "min": 62,

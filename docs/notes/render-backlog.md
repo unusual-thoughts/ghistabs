@@ -625,3 +625,43 @@ also walks each function's signature/local types and resolves them to their defi
 forward-decl via `TypeResolver.byXRef` (the `this` param bottoms out at `XRef("AppImage")`, no id), a
 `Ref`/`InlineDef` via id, plus the resolved type's base classes. appimage.cpp → appimage.h + its type
 deps. No filename heuristic — the type name resolves to its actual definition's source.
+
+## 20. Unify duplicate type identities across header spellings (anon vs named) — DONE
+
+gcc emits one physical header two ways (§15) with *different* N_BINCL checksums, so one logical
+type gets several `GlobalTypeId`s: a **named** struct/enum in one spelling
+(`.../include/dspinfo/dspinfo.h/dspinfo`), an **anonymous** copy in another (`Anon_dspinfo_4`, the
+InlineDef target of a `typedef`), plus `typedef …;` aliases. `byCanonicalKey` groups by
+`(category, ghidraName)`, so these land in *distinct* groups → the DTM materialises several
+DataTypes for one type. Ghidra's decompiler picks a struct/enum's **display** name by resolving
+across *all* same-named DataTypes plus the typedef graph, so the duplication is not inert: a
+function returning `dspinfo` renders `Anon_dspinfo_4 *`, and — because the resolution is global —
+naming/perturbing one type deterministically flips *unrelated* ones (`EnumDSPRev` → `Anon_dsp_rev_1`).
+This is why attribution-canon (folding DTM categories by source path, §15's DTM cousin) regressed:
+it only fixed the *some* spellings that folded by basename, leaving the rest duplicated.
+
+**Fix — unify by content identity, early, before the DTM (three parts):**
+
+- **`TypeResolver.mergeContentEquivalentGroups`** (the core). After the initial
+  `keyForAst` grouping, collapse groups by **content hash**: within each content-equivalence class,
+  if exactly one distinct *named* `ghidraName` appears, merge every group in the class — including
+  **anonymous** ones, which carry no name for `keyForAst` to match — into that named group's slot
+  (largest/most-resolved winner). So the anonymous `dspinfo`/`EnumDSPRev` copies alias to the one
+  named DataType, and no second DataType is ever created. Content — not source path — is the signal,
+  so it's path-canonicalization-independent and reaches headers that don't fold by basename. Classes
+  with two distinct real names (coincidentally identical layout) or no named member are left alone.
+- **`Harvester.nameAnonymousTypedefTargets`** (`anonymousTypedefTargetNames`, pure, Kind-1 tested).
+  `typedef struct {…} Name;` (InlineDef) and `typedef enum {…} Name;` (a separate anon enum + a
+  `Ref` typedef) both name their anonymous aggregate after the typedef — handles the *sole*-anon
+  case (no named counterpart for the merge to find) and lets same-name merging compose.
+- **`TypeRegistry` typedef-skip.** The typedef materialisation phase no longer registers a `/stabs`
+  `TypedefDataType` whose target already carries that exact name — that duplicate is precisely the
+  same-named DataType that destabilises the decompiler's display resolution.
+
+**Verified.** packfile `dspinfo.c`: `dspinfo * dspinfo_from_rev(EnumDSPRev rev)` — both named, **zero**
+`Anon_*` in the file (was `Anon_dspinfo_4 *`/`Anon_dsp_rev_1`). xmltest: **56 fewer** anonymous-typed
+degradations (`local-typed-anonymous` 40→0, `param-typed-anonymous` 16→0). No degradation regressions
+on any fixture; RegressionTest green after one benign baseline bump (`xref-base-tag-resolved` 37→41 —
+more XRefs resolve once types unify). Done **without** attribution-canon: the merge is content-driven,
+so the DTM stays keyed on raw spellings and the render §15 path canonicalization (output-*file* dedup,
+an orthogonal concern) is unchanged.
