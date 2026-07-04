@@ -67,6 +67,13 @@ class StabsAnalyzer :
                 "(basic_string<char, …> → string), recursively inside other templates.",
         )
         options.registerOption(
+            OPT_CANONICALIZE_PATHS,
+            true,
+            null,
+            "Fold two gcc spellings of one physical header (full include path vs bare " +
+                "#include \"x.h\") onto one rendered output file, by unique basename.",
+        )
+        options.registerOption(
             OPT_LOG_LEVEL,
             Level.INFO,
             null,
@@ -108,6 +115,7 @@ class StabsAnalyzer :
         const val OPT_PLATE_COMMENTS: String = "Apply scope plate comments"
         const val OPT_VTABLES: String = "Synthesise vtable structs"
         const val OPT_SHORTEN_TYPEDEFS: String = "Shorten templated names via typedefs"
+        const val OPT_CANONICALIZE_PATHS: String = "Canonicalize source-file paths"
         const val OPT_LOG_LEVEL: String = "Minimum log level"
 
         @JvmStatic
@@ -126,12 +134,14 @@ data class StabsOptions(
     val applyPlateComments: Boolean = true,
     val applyVtables: Boolean = true,
     val shortenTypedefs: Boolean = false,
+    val canonicalizePaths: Boolean = true,
     val minLogLevel: Level = Level.INFO,
 ) {
     constructor(opts: Options) : this(
         applyPlateComments = opts.getBoolean(StabsAnalyzer.OPT_PLATE_COMMENTS, true),
         applyVtables = opts.getBoolean(StabsAnalyzer.OPT_VTABLES, true),
         shortenTypedefs = opts.getBoolean(StabsAnalyzer.OPT_SHORTEN_TYPEDEFS, false),
+        canonicalizePaths = opts.getBoolean(StabsAnalyzer.OPT_CANONICALIZE_PATHS, true),
         minLogLevel = opts.getEnum(StabsAnalyzer.OPT_LOG_LEVEL, Level.INFO),
     )
 

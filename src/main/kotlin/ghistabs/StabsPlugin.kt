@@ -100,8 +100,11 @@ class StabsPlugin(tool: PluginTool) : ProgramPlugin(tool) {
                         ),
                     ).passA(reader.records)
                 }
-                val written = Renderer(TypeResolver(harvest), program, Mode.ELIDE_SJLJ)
-                    .use { it.renderAll(dir, monitor) }
+                val written = Renderer(
+                    TypeResolver(harvest, canonicalizePaths = options.canonicalizePaths),
+                    program,
+                    Mode.ELIDE_SJLJ,
+                ).use { it.renderAll(dir, monitor) }
                 Msg.showInfo(javaClass, null, "Stabs", "Wrote $written decompilation files to $dir")
             }
         })

@@ -9,7 +9,12 @@ import ghistabs.parse.*
  * per-reason failure counters, canonical-key grouping for TypeRegistry slot assignment,
  * and content-distinct collision filtering.
  */
-class TypeResolver(val harvest: Harvest, sink: DiagnosticSink = DummySink) :
+class TypeResolver(
+    val harvest: Harvest,
+    sink: DiagnosticSink = DummySink,
+    /** Fold two spellings of one physical header onto one rendered output file (§15). */
+    val canonicalizePaths: Boolean = true,
+) :
     DiagnosticSink by sink,
     TypeAstOracle {
     val typeAsts get() = harvest.typeAsts
@@ -144,7 +149,7 @@ class TypeResolver(val harvest: Harvest, sink: DiagnosticSink = DummySink) :
         }
     }
 
-    val functionSource by lazy {
+    private val functionSourceRaw by lazy {
         mutableMapOf<OpenFunction, String>().apply {
             for (f in harvest.openFunctions) {
                 if (f.isSyntheticInit) {
@@ -164,6 +169,11 @@ class TypeResolver(val harvest: Harvest, sink: DiagnosticSink = DummySink) :
                 f.outermostClass()?.let { classSourceByName[it] }?.let { this[f] = it }
             }
         }
+    }
+
+    /** Function → its **canonical** source file (§15), so render compares canonical to canonical. */
+    val functionSource: Map<OpenFunction, String> by lazy {
+        functionSourceRaw.mapValues { canonicalSource(it.value) }
     }
 
     /**
@@ -223,24 +233,28 @@ class TypeResolver(val harvest: Harvest, sink: DiagnosticSink = DummySink) :
     // splayed into main.cpp) still names its real header there, so it renders in the header
     // instead of masquerading as CU-local. Structs/enums keep the hint/CU path — a struct's `:T`
     // body is legitimately CU-emitted (§6), and enum relocation is a broader change left for later.
-    fun TypeAst.effectiveSource() = name?.let { multiSourceHeaderHints[it] }
+    private fun TypeAst.effectiveSourceRaw() = name?.let { multiSourceHeaderHints[it] }
         ?: declSourceFile?.takeIf { it.isNotEmpty() && body !is TypeDecl.Struct && body !is TypeDecl.Enum }
         ?: id.source.filename
 
-    fun effectiveSourceFor(type: TypeAst) = type.effectiveSource()
+    /** Type → its **canonical** rendering source (§15). */
+    fun effectiveSourceFor(type: TypeAst) = canonicalSource(type.effectiveSourceRaw())
 
     /**
      * Fold each source-filename spelling to its canonical (shortest unambiguous) form so one
-     * physical file renders as one output file (§15). Built over every raw spelling that can key
-     * an output file: line-entry sources, per-CU symbol sources, function sources, and each type's
-     * effective source — none of which depend on canonicalization, so there's no cycle.
+     * physical file renders as one output file (§15) — render-only; DTM attribution keeps the raw
+     * spelling. Built over every **raw** spelling that can key an output file: line-entry sources,
+     * per-CU symbol sources, function sources, and each type's effective source. Seeded from the
+     * `*Raw` producers — the public `functionSource`/`effectiveSourceFor` return canonical, so
+     * using them here would be a cycle.
      */
     val sourceCanonicalization: Map<String, String> by lazy {
+        if (!canonicalizePaths) return@lazy emptyMap()
         canonicalizeSourcePaths(
             harvest.lineEntries.keys +
                 harvest.symbolsByCu.keys +
-                functionSource.values +
-                typeAsts.values.map { it.effectiveSource() },
+                functionSourceRaw.values +
+                typeAsts.values.map { it.effectiveSourceRaw() },
         )
     }
 
