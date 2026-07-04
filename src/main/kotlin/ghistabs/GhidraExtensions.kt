@@ -1,5 +1,9 @@
 package ghistabs
 
+import ghidra.app.cmd.label.DemanglerCmd
+import ghidra.app.util.demangler.DemangledObject
+import ghidra.app.util.demangler.DemanglerOptions
+import ghidra.app.util.demangler.DemanglerUtil
 import ghidra.framework.model.DomainObject
 import ghidra.program.model.address.Address
 import ghidra.program.model.address.AddressRange
@@ -9,6 +13,7 @@ import ghidra.program.model.data.Structure
 import ghidra.program.model.listing.Data
 import ghidra.program.model.listing.FunctionManager
 import ghidra.program.model.listing.Program
+import ghidra.util.task.TaskMonitor
 
 /**
  * `currentAddress+10` returns a new Address
@@ -72,5 +77,44 @@ fun <T> DataTypeManager.runTransaction(description: String = "Kotlin Lambda Tran
             throw e
         }
     }
+
+// Ghidra's C++ demangler in one place — the only module that touches DemanglerUtil / DemanglerCmd /
+// DemanglerOptions. Pure name-string parsing (namespace/template splitting, mangled classification)
+// lives Ghidra-free in `ghistabs.parse` (Names.kt).
+
+/** Demangle [mangled] to a [DemangledObject], or null if it isn't a mangled name / demangling fails. */
+fun Program.demangle(mangled: String, addr: Address? = null): DemangledObject? =
+    runCatching { DemanglerUtil.demangle(this, mangled, addr).firstOrNull() }.getOrNull()
+
+/** Human-readable name for [mangled], falling back to [mangled] */
+fun Program.demangledName(mangled: String, addr: Address? = null): String =
+    demangle(mangled, addr)?.demangledName ?: mangled
+
+/** Parent-namespace chain, root-first, for [mangled] — or null if it has no enclosing namespace. */
+fun Program.namespaceChain(mangled: String): List<String>? = demangle(mangled)?.namespace?.let { parent ->
+    generateSequence(parent) { it.namespace }.map { it.name }.toList().asReversed()
+}
+
+/**
+ * Apply Ghidra's demangler to the symbol at [addr] (rename + namespace). Signature / calling-
+ * convention / disassembly application are off by default — the stab carries richer types than the
+ * mangled name. Returns whether the command applied.
+ */
+fun Program.applyDemangling(
+    addr: Address,
+    mangled: String,
+    applySignature: Boolean = false,
+    applyCallingConvention: Boolean = false,
+    doDisassembly: Boolean = false,
+    monitor: TaskMonitor = TaskMonitor.DUMMY,
+) = DemanglerCmd(
+    addr,
+    mangled,
+    DemanglerOptions().apply {
+        setApplySignature(applySignature)
+        setApplyCallingConvention(applyCallingConvention)
+        setDoDisassembly(doDisassembly)
+    },
+).run { applyTo(this@applyDemangling, monitor) && result != null }
 
 fun String.nullIfEmpty() = ifEmpty { null }

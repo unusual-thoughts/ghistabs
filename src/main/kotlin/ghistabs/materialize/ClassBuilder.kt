@@ -100,7 +100,7 @@ class ClassBuilder(
      */
     private fun ensureClassNamespace(name: String, body: TypeDecl.Struct<GlobalTypeId>): GhidraClass {
         val parts = body.methods.firstNotNullOfOrNull { it.mangled }
-            ?.let { namespaceChain(program, it) }
+            ?.let { program.namespaceChain(it) }
             ?: splitQualified(name)
         return buildNamespaceChain(parts.filter { it.isNotEmpty() })
     }
@@ -237,7 +237,7 @@ class ClassBuilder(
         // ensureClassNamespace already created). Signature/calling-convention application stays
         // off (Demangler's defaults): the stab has richer types than the mangled name, and our
         // __thiscall choice below must win.
-        if (!applyDemangling(program, addr, mangled)) {
+        if (!program.applyDemangling(addr, mangled)) {
             // Fall back to manual namespace + display-name handling.
             func.parentNamespace = ns
             val fallbackName = displayNameFor(mangled, className) ?: m.name

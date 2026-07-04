@@ -23,7 +23,7 @@ object VtableSymbolCandidates {
     /** True if [symbolName] demangles to a vtable for [className]. Handles templated `_ZTV…` names. */
     fun decodesToClass(program: Program, symbolName: String, className: String): Boolean {
         if (!looksLikeZtv(symbolName)) return false
-        val obj = demangle(program, symbolName) ?: return false
+        val obj = program.demangle(symbolName) ?: return false
         return demangledMatchesClass(obj, className)
     }
 
