@@ -296,7 +296,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
             // GnuDemangler handles both (strips one leading `_`).
             if (!name.startsWith("_Z") && !name.startsWith("__Z")) continue
             attempted++
-            if (applyDemangling(ctx.program, sym.address, name, monitor = ctx.monitor)) demangled++
+            if (ctx.program.applyDemangling(sym.address, name, monitor = ctx.monitor)) demangled++
         }
         debug("demangle-attempted", count = attempted.toLong())
         debug("demangle-applied", count = demangled.toLong())

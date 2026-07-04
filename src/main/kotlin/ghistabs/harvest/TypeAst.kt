@@ -6,6 +6,7 @@ import ghidra.program.model.address.Address
 import ghidra.program.model.data.CategoryPath
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.SymbolUtilities
+import ghistabs.demangledName
 import ghistabs.parse.*
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
@@ -93,8 +94,7 @@ data class OpenFunction(
     // Distinct from a genuine 0. Used by TypeResolver for header-hint address ranges.
     var sizeBytes: ULong? = null,
 ) {
-    fun demangledName(program: Program? = null) =
-        ghistabs.demangledName(program, decl.name, addr.address, fallback = decl.name)
+    fun demangledName(program: Program) = program.demangledName(decl.name, addr.address)
 
     /**
      * Function signature via Ghidra's API at the function's entry address — Ghidra has
