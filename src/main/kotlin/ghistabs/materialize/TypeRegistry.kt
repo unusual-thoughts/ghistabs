@@ -232,6 +232,12 @@ class TypeRegistry(
                     // DemanglerReplacer to substitute into `/Demangler/*` stubs.
                     val firstBody = asts.first().body
                     val typedefTarget = BuiltinTable.resolve(firstBody) ?: dataTypeFor(firstBody) ?: return@forEach
+                    // §20: when the target already carries this exact name (a `typedef struct {…}
+                    // Name;` whose anonymous aggregate we named after the typedef, then merged with
+                    // the named copy), a same-named `/stabs` typedef is just a second DataType with
+                    // the identical name. Ghidra resolves a struct/enum's display name across all
+                    // same-named DataTypes, so the duplicate destabilises it — the named type suffices.
+                    if (typedefTarget.name == ghidraName) return@forEach
                     val category = if (BuiltinTable.resolve(firstBody) != null) {
                         CategoryPath.ROOT
                     } else {

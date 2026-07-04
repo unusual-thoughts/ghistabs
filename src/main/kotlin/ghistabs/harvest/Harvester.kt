@@ -316,6 +316,7 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, private 
         }
 
         synthesizeXRefStubsForDanglingInheritanceRefs()
+        nameAnonymousTypedefTargets()
 
         return Harvest(
             typeAsts = typeAsts,
@@ -399,6 +400,18 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, private 
                 "${outerRewrites.size} outer struct(s) rewritten to populate bases[]",
             )
         }
+    }
+
+    /**
+     * `typedef struct {…} Name;` reaches us as an anonymous aggregate + a same-named typedef that
+     * inline-defines it. C-semantically the aggregate's name *is* the typedef's, so adopt it, so the
+     * anonymous struct/enum carries the real name and [TypeResolver.byCanonicalKey] can merge it with
+     * the named copy from another header spelling (render-backlog §20).
+     */
+    private fun nameAnonymousTypedefTargets() {
+        val renames = anonymousTypedefTargetNames(typeAsts)
+        for ((id, name) in renames) typeAsts[id] = typeAsts.getValue(id).copy(name = name)
+        if (renames.isNotEmpty()) log("typedef-named-anon-aggregate", count = renames.size.toLong())
     }
 
     private fun harvestSymbol(rec: StabRecord) {
@@ -506,4 +519,31 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, private 
         },
         lineSource,
     )
+}
+
+/**
+ * Pure core of the `typedef struct {…} Name;` naming (see [Harvester.nameAnonymousTypedefTargets]).
+ * Returns `anonymous-aggregate-id → name` for every anonymous Struct/Enum that a typedef targets,
+ * when **exactly one** typedef name claims it (ambiguous multi-name targets are left anonymous).
+ * Two stab encodings qualify: the inline form `t3=4=s…` (`InlineDef`, gcc's usual for `typedef
+ * struct {…} Name`) and the separate-then-reference form `t2=1` with `1=e…` (`Ref`, gcc's usual for
+ * `typedef enum {…} Name`). Only genuinely anonymous targets (no tag) — a bare alias to an
+ * already-named type is skipped by the target-name guard, and a builtin/pointer target by the kind
+ * guard.
+ */
+fun anonymousTypedefTargetNames(typeAsts: Map<GlobalTypeId, TypeAst>): Map<GlobalTypeId, String> {
+    val namesByTarget = mutableMapOf<GlobalTypeId, MutableSet<String>>()
+    for (td in typeAsts.values) {
+        val name = td.name?.ifEmpty { null } ?: continue
+        val targetId = when (val body = td.body) {
+            is TypeDecl.InlineDef -> body.id
+            is TypeDecl.Ref -> body.id
+            else -> continue
+        }
+        val target = typeAsts[targetId] ?: continue
+        if (!target.name.isNullOrEmpty()) continue
+        if (target.body !is TypeDecl.Struct && target.body !is TypeDecl.Enum) continue
+        namesByTarget.getOrPut(targetId) { mutableSetOf() }.add(name)
+    }
+    return namesByTarget.filterValues { it.size == 1 }.mapValues { it.value.single() }
 }

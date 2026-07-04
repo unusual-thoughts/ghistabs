@@ -282,7 +282,7 @@ class TypeResolver(
             commonProjectPrefix = commonProjectPrefix(typeAsts.values.map { it.id.source }),
             multiSourceHeaderHints = multiSourceHeaderHints,
         )
-        typeAsts.values
+        val byKey = typeAsts.values
             .filter { it.body.isXRefTarget }
             .groupBy { ast ->
                 attribution.keyForAst(
@@ -291,6 +291,48 @@ class TypeResolver(
                 )
             }
             .mapValues { (key, members) -> classifyGroup(key, members) }
+        mergeContentEquivalentGroups(byKey)
+    }
+
+    /**
+     * Unify duplicate type *identities* early (§20). gcc emits one physical header two ways (§15),
+     * so one logical type appears several times: a named struct/enum in one spelling, an anonymous
+     * copy in another, plus `typedef …;` aliases. `keyForAst` groups by `(category, ghidraName)`, so
+     * these land in distinct groups → the DTM gets several DataTypes for one type, and the
+     * decompiler's display-name resolution (which scans all same-named DataTypes) picks the wrong
+     * one. Collapse by **content hash**: within each content-equivalence class, if exactly one
+     * distinct *named* ghidraName appears, merge every group in the class — including anonymous ones,
+     * which carry no name for `keyForAst` to match — into that named group's slot (largest/most-
+     * resolved winner). Content identity, not source path, is the signal, so it needs no path
+     * canonicalization and reaches headers that don't fold by basename. Classes with two distinct
+     * real names (coincidentally identical layout) or no named member at all are left untouched.
+     */
+    private fun mergeContentEquivalentGroups(byKey: Map<GhidraKey, CanonicalGroup>): Map<GhidraKey, CanonicalGroup> {
+        val out = mutableMapOf<GhidraKey, CanonicalGroup>()
+        for ((_, groups) in byKey.values.groupBy { contentHash(it.ast.body) }) {
+            val named = groups.filter { !it.ast.name.isNullOrEmpty() }
+            if (groups.size == 1 || named.map { it.ast.ghidraName }.toSet().size != 1) {
+                for (g in groups) out[g.key] = g
+                continue
+            }
+            val winnerGroup = named.maxWithOrNull(
+                compareBy<CanonicalGroup>({ it.ast.body.sizeBytes })
+                    .thenByDescending { countUnresolvedRefs(it.ast.body) }
+                    .thenBy { it.key.toString() },
+            )!!
+            debug(
+                "canonical-content-merged",
+                "${winnerGroup.key}: ${groups.size} groups (${groups.count { it.ast.name.isNullOrEmpty() }} anon) " +
+                    "across ${groups.map { it.key.category }.toSet()}",
+            )
+            out[winnerGroup.key] = CanonicalGroup(
+                winnerGroup.key,
+                winnerGroup.ast,
+                groups.flatMap { it.members },
+                winnerGroup.distinct,
+            )
+        }
+        return out
     }
 
     private fun classifyGroup(key: GhidraKey, members: List<TypeAst>): CanonicalGroup {
