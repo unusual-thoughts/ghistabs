@@ -41,9 +41,9 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
         // Pass A — parse + harvest
         val harvester = Harvester(ctx)
         val harvest = harvester.passA(stabs.records)
-        // Resolver: by-name/by-base-tag indices, canonicalization, divergent-collision
+        // Resolver: by-name/by-base-tag indices, source folding, divergent-collision
         // filtering. Every cross-CU lookup downstream goes through this.
-        val typeResolver = TypeResolver(harvest, ctx.options.canonicalizePaths, ctx)
+        val typeResolver = TypeResolver(harvest, ctx.options.foldSources, ctx)
         recordHarvestCounters(harvest, typeResolver, stabs)
 
         // Pass B — materialise types

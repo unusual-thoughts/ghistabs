@@ -29,7 +29,7 @@ fun String.hasHeaderExtension(): Boolean = substringAfterLast('.', "").lowercase
 fun String.isStdMarkerPath(): Boolean = STD_MARKERS.containsMatchIn(this)
 
 /**
- * Canonicalize source-filename spellings so one physical file yields one output file.
+ * Fold source-filename spellings so one physical file yields one output file (§15).
  *
  * gcc spells the same header two ways across CUs: the full include path where it compiles the
  * definitions, and the bare `#include "x.h"` spelling where another TU only forward-references it.
@@ -37,12 +37,11 @@ fun String.isStdMarkerPath(): Boolean = STD_MARKERS.containsMatchIn(this)
  * checksum — basename identity is the signal. A **bare** name (no path separator) that is the
  * basename of **exactly one** full path also present folds that full path onto the bare spelling:
  * the shorter name wins and is what displays. Guard: if two distinct full paths share a basename
- * (`a/config.h`, `b/config.h`) the bare name is ambiguous, so nothing merges — only a *unique*
- * basename→full-path match folds.
+ * (`a/config.h`, `b/config.h`) the bare name is ambiguous, so nothing folds.
  *
- * Returns raw spelling → canonical spelling; every input maps to itself unless it folds. (§15)
+ * Returns raw spelling → folded spelling; every input maps to itself unless it folds.
  */
-fun canonicalizeSourcePaths(filenames: Iterable<String>): Map<String, String> {
+fun foldSourcePaths(filenames: Iterable<String>): Map<String, String> {
     fun isBare(s: String) = '/' !in s && '\\' !in s
     fun basename(s: String) = s.substringAfterLast('/').substringAfterLast('\\')
 
