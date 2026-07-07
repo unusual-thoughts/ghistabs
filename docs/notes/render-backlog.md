@@ -618,10 +618,25 @@ land at bogus main.cpp lines 426/448/488 instead of their header. `LineEntry` al
 and that `FunctionSpans`/attribution filter on it. If the path-canonicalisation above changes
 how `dspinfo.h`-style lines are tagged, re-check these at the same time.
 
-## 16 missing placeholder enum/struct xrefs
+## 16. Unresolved enum XRef stubbed as a struct → wrong return ABI — DONE
 
-the return type of AppImage::image_type is supposed to be vm_image_type, an enum which is (i think) not defined because
-only referenced as an xref. there should probably still be a placeholder enum for it though, with the right name
+Original hunch: `AppImage::image_type`'s return `vm_image_type` (an enum only ever forward-referenced,
+never defined) was "missing." Investigation showed it was worse than missing: the placeholder existed
+with the right *name* but the wrong *kind*. `makePlaceholder`'s `else` branch stubbed every unresolved
+XRef as a `StructureDataType`, ignoring the XRef's `kind` — so the enum-kind `vm_image_type` became an
+empty **struct** (a `Composite`). That tripped §13's StructReturnAnalyzer, which forced the hidden
+return-pointer ABI onto `image_type`: it rendered `vm_image_type *image_type(vm_image_type *__return_storage_ptr__, AppImage *this)`,
+returned `(vm_image_type *)0x1`/`0x0`, and — the giveaway — **every caller was corrupted**, passing
+`this` into the return-slot and losing the real `this` to a phantom `in_stack_*` (the exact §13 failure
+mode, mis-applied to a function that returns a scalar enum, not a struct).
+
+**Fix** (`makePlaceholder`): an unresolved `XRef` whose `kind == AggrKind.ENUM` stubs as an
+`EnumDataType`, not a `Structure`. Then it's not a Composite, StructReturnAnalyzer skips it (verified by
+instrumenting `needsHiddenReturn`: `image_type` return = `EnumDB`), and the decomp becomes correct:
+`vm_image_type AppImage::image_type(AppImage *this)` / `return 1;` / `return 0;`, callers
+`vVar2 = image_type(this); if (vVar2 != 0)` — no phantom `this`, no pointer compares. Registry confirms
+`/stabs/vm_image_type` is now `EnumDataType` (len 4). So §16 was a real issue after all, just mis-framed
+as "missing" rather than "wrong kind → wrong ABI."
 
 ## 17. Typedefs misattributed into a .cpp (`typedef __true_type __Normal`) — DONE
 
