@@ -63,18 +63,19 @@ Structurally sound: `T_<digits>` dangling type refs = 0; no unparseable garbage.
   closes used the demangled name; `emitFunctionBraces` now demangles both.
 - **Fixed (common case):** orphan `;` from decompiler line-wrapping — harness
   `setMaxWidth(10_000)` (see #2).
-- **Open — [C] raw mangled tags (~212):** `TypeAst.demangledName` calls the
-  deprecated `DemanglerUtil.demangle` and falls back to the raw mangled name on
-  failure, which fires **inconsistently** — the same `_ZN5ImageC1Ev` demangles to
-  `Image` in decomp mode but stays mangled in skeleton mode. Almost all are
-  ctor/dtor variants (`C1/C2/D0/D1/D2`). Fix: robust textual demangle (or special-
-  case the Itanium ctor/dtor clones) so tags are stable across modes.
-- **Open — [E] orphan punctuation (~9 files, decomp):** the decompiler still wraps
-  *extreme* `std::` template member-access chains
-  (`IncludePaths._base__Vector_base<…>._M_start`) even at width 10 000, leaving a
-  lone `.`/`;`. Subsumed by the token-based rendering rework (#2).
-- **Open — stale N_SOL in decomp (~108):** diagnostic comments that belong to
-  skeleton mode leak into decomp output; trim them in decomp mode.
+- **DONE — [C] raw mangled tags (~212):** closed by §12 (name every function from stabs +
+  run the demangle pass). Verified: **no bare ctor/dtor mangled function tags remain** in any
+  fixture. The only surviving `_ZN…C2Ev` occurrences are embedded in `_GLOBAL__I_/_GLOBAL__D_`
+  static-init/destruction thunk names (e.g. `_GLOBAL__I__ZN8XDVImageC2Ev`) — legitimate GNU
+  symbols Ghidra neither can nor should demangle, consistent across skeleton and decomp modes.
+- **Open — [E] orphan punctuation (still ~74 lone `;` lines / 38 files, decomp):** the "subsumed
+  by #2" note was optimistic. Ghidra splits an extreme `std::` member-access chain or long call
+  across lines and `compressedDecompLines`' address rejoin doesn't pull the trailing `;`, so it
+  lands alone (e.g. `image.cpp:64` `_M_start` chain; `bits64image.cpp:92`; `xmltest:349`). Merge
+  a lone trailing-punctuation continuation onto its statement's row.
+- **Open — stale N_SOL in decomp (~129):** `// … stale N_SOL?` skeleton-mode staleness markers
+  leak into decomp output, mostly on reg-locals/params (`int aEnd; // L 27 (reg local); stale
+  N_SOL?`). Trim them in decomp mode.
 - **Not our bug:** `DAT_*`/`PTR_*` in decomp bodies are Ghidra's names for data it
   didn't tie to a symbol (vtable pointers, literals); `<true,0>`/`<false,0>` are
   valid non-type template args; `/* 0 bytes */` are the documented `noEmptyStructs`
