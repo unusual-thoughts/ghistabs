@@ -414,6 +414,12 @@ class TypeRegistry(
             is TypeDecl.WithSizeAttr if ast.body.inner is TypeDecl.Enum ->
                 EnumDataType(category, ast.ghidraName, (ast.body.sizeBits + 7) / 8, dtm)
 
+            // An unresolved enum XRef (gcc only forward-referenced it, e.g. `vm_image_type`) must
+            // stub as an Enum, not a Structure: a struct stub is a Composite, so StructReturnAnalyzer
+            // (§13) would force an enum-returning method through the hidden-pointer ABI
+            // (`vm_image_type *__return_storage_ptr__`) and render its values as pointer compares.
+            is TypeDecl.XRef if ast.body.kind == AggrKind.ENUM -> EnumDataType(category, ast.ghidraName, 4, dtm)
+
             else -> StructureDataType(category, ast.ghidraName, 0, dtm)
         }
         debug("placeholder-created", "name=${ast.nameOrUnique} category=$category reason=$reason")
