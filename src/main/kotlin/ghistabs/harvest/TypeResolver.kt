@@ -80,7 +80,7 @@ class TypeResolver(val harvest: Harvest, private val foldSources: Boolean = true
 
             else -> "xref-undefined"
         }
-        log(counter)
+        debug(counter)
         debug("unresolved-xref", "${xref.tagName} [${xref.kind}] ${xrefDiagnosis(xref)}")
         return null
     }

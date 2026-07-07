@@ -191,7 +191,7 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, private 
 
                             is SymbolDecl.StaticVar -> harvestSymbol(rec)
 
-                            else -> log("unexpected-nfun", "$sym")
+                            else -> warn("unexpected-nfun", "$sym")
                         }
                     } catch (e: StabsParseException) {
                         parseErrors++
@@ -215,7 +215,7 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, private 
                         when (sym.body) {
                             is SymbolDecl.StackParam, is SymbolDecl.RegParam -> open.params += sym
                             is SymbolDecl.RegLocal -> open.locals += sym
-                            else -> log("unexpected-psym-rsym", "$sym")
+                            else -> warn("unexpected-psym-rsym", "$sym")
                         }
                     } catch (e: StabsParseException) {
                         parseErrors++
@@ -276,7 +276,7 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, private 
                         }
 
                         is SymbolDecl.Function, is SymbolDecl.Global, is SymbolDecl.RegParam, is SymbolDecl.StackParam,
-                        -> log("unexpected-lsym", "$sym")
+                        -> warn("unexpected-lsym", "$sym")
                     }
                 } catch (e: StabsParseException) {
                     parseErrors++
@@ -301,14 +301,14 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, private 
                 StabType.N_WITH,
                 StabType.N_NBTEXT, StabType.N_NBDATA, StabType.N_NBBSS,
                 StabType.N_NBSTS, StabType.N_NBLCS,
-                -> log("drop-record-${rec.type.name.removePrefix("N_").lowercase()}")
+                -> debug("drop-record-${rec.type.name.removePrefix("N_").lowercase()}")
 
                 // N_UNDF: cuOff/cuSize already advanced in StabReader. Empty N_SOL: nothing to switch to.
                 StabType.N_UNDF, StabType.N_SOL ->
-                    log("drop-record-${rec.type.name.removePrefix("N_").lowercase()}-empty")
+                    debug("drop-record-${rec.type.name.removePrefix("N_").lowercase()}-empty")
 
                 // Hard signal: byte-decoder recognised but no harvesting rule. Log once per type.
-                StabType.UNKNOWN -> log(
+                StabType.UNKNOWN -> warn(
                     "stab-unknown",
                     "rawType=0x${"%02X".format(rec.rawType)} @${rec.recordIndex} '${rec.name.take(60)}'",
                 )
@@ -413,7 +413,7 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, private 
     private fun nameAnonymousTypedefTargets() {
         val renames = anonymousTypedefTargetNames(typeAsts)
         for ((id, name) in renames) typeAsts[id] = typeAsts.getValue(id).copy(name = name)
-        if (renames.isNotEmpty()) log("typedef-named-anon-aggregate", count = renames.size.toLong())
+        if (renames.isNotEmpty()) debug("typedef-named-anon-aggregate", count = renames.size.toLong())
     }
 
     private fun harvestSymbol(rec: StabRecord) {

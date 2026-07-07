@@ -154,7 +154,7 @@ class ClassBuilder(
         )
 
         when (action) {
-            is VfptrAction.SkipInheritedFromBase -> log("vfptr-inherited-from-base")
+            is VfptrAction.SkipInheritedFromBase -> debug("vfptr-inherited-from-base")
 
             is VfptrAction.AlreadyCanonical -> return
 
@@ -167,7 +167,7 @@ class ClassBuilder(
                     vfptrName,
                     "vtable pointer",
                 )
-                log("vfptr-inserted")
+                debug("vfptr-inserted")
             }
 
             is VfptrAction.Replace -> {
@@ -179,7 +179,7 @@ class ClassBuilder(
                     vfptrName,
                     "vtable pointer (was: ${action.wasFieldName})",
                 )
-                log("vfptr-normalized")
+                debug("vfptr-normalized")
             }
 
             is VfptrAction.CollisionAt -> warn(
@@ -217,7 +217,7 @@ class ClassBuilder(
             // appear in every class's stab list but get no emitted symbol. Bucket separately
             // so the unresolved-symbol log surfaces real problems.
             if (isImplicitTrivialSpecialMember(mangled)) {
-                log("method-implicit-not-emitted")
+                debug("method-implicit-not-emitted")
             } else {
                 debug("unresolved-symbol", "method $mangled (in $className)")
             }
@@ -229,7 +229,7 @@ class ClassBuilder(
             } else {
                 "unresolved-symbol" to Level.WARN
             }
-            log(tag, "no Function at $addr for $mangled", level)
+            log(tag, "no Function at $addr for $mangled", level, addr)
             return
         }
 
@@ -255,7 +255,7 @@ class ClassBuilder(
         // func.getParameter(0)?.name to detect — for force-created functions the param list
         // isn't populated yet.
         val thiscallAccepted = runCatching { func.setCallingConvention("__thiscall") }
-            .onFailure { warn("method-calling-convention", "$className::${m.name}: ${it.message}") }
+            .onFailure { warn("method-calling-convention", "$className::${m.name}: ${it.message}", func.entryPoint) }
             .isSuccess
         val ghidraInjectsThis = thiscallAccepted && func.parentNamespace is GhidraClass
 
@@ -417,7 +417,7 @@ class ClassBuilder(
 
         val candidates = VtableSymbolCandidates.mangledZtvCandidates(className)
         if ('<' in className) {
-            log("vtable-templated-skip", "class '$className' has template args; _ZTV lookup unsupported in v1")
+            debug("vtable-templated-skip", "class '$className' has template args; _ZTV lookup unsupported in v1")
         }
         val addr = resolveVtableAddress(className, body, candidates) ?: return
 
@@ -551,7 +551,7 @@ class ClassBuilder(
         }
         debug("vtable-failed", "class=$className reason=$failureBucket")
         degradation("vtable-failed", className, failureBucket)
-        log(
+        debug(
             "vtable-failed-$failureBucket",
             "class '$className': vtable not found (tried ${candidates.joinToString()})",
         )
