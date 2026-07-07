@@ -75,3 +75,16 @@ Once `byCanonicalKey` owns the registration decision:
 Net: `TypeRegistry` shrinks to placeholder allocation + body
 materialisation + a thin `byId` cache for Ref resolution. The bookkeeping
 of "which AST won this (cat, name) slot" moves to harvest.
+
+## Status (render-backlog §22)
+
+- **Content-merge folded in.** `byCanonicalKey` is one pipeline: bucket XRef-targets into
+  `(category, ghidraName)` slots (`classifyGroup` picks each winner), then unify slots whose winners
+  are content-equivalent and share exactly one named `ghidraName`. The old standalone
+  `mergeContentEquivalentGroups` second pass is gone (the fold is provably equivalent).
+- **Attribution keys stay raw.** `keyForAst` reads raw `id.source`; the `multiSourceHeaderHints`
+  input to `Attribution` is voted on raw N_SOL spellings (a pure function, computed in the Harvester
+  *before* render-source canonicalization, stored raw on `Harvest`). §15 path-canonicalization is a
+  render-only concern applied at the data layer (`Harvest.sourceCanonicalization`); it never keys the
+  DTM. Type dedup across header spellings is content-based, not path-based, so canonical categories
+  add nothing and were reverted once for regressing (see §15/§20).

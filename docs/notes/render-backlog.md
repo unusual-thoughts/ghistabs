@@ -689,3 +689,41 @@ spanning >1 group, source folds, and duplicate-named DataTypes — rather than b
   double-registration in `TypeRegistry.materialiseAll` (one content-equivalent group must yield exactly
   one DataType), not a grouping problem. `RegistryDump.duplicateNamedTypes` lists every such collision.
   Next step is to make the enum materialisation path register once per canonical group.
+
+## 22. Single-arbiter attribution: canon at the data layer, §20 merge folded — DONE
+
+Plan `zesty-tinkering-sparkle` (single-source-of-truth attribution, remove canon threading, robust
+grouping). The §15/§20 work had left three overlapping attribution/canon paths and a `canon()` footgun
+threaded through 8 render sites.
+
+- **Phase 1 — canon once, at the data layer.** New `Harvester.canonicalizeRenderSources()` post-pass
+  (after `nameAnonymousTypedefTargets`, gated by `canonicalizePaths`) folds `LineEntry.source` /
+  `SymbolRecord.sourceFile` and re-keys `lineEntriesByFile`/`symbolsByCu` to canonical once; the fold map
+  is retained on `Harvest.sourceCanonicalization`. `id.source`/`GlobalTypeId` stay **raw** — DTM identity,
+  content hash, and §20 grouping are content/id-based, not path-based.
+- **Phase 2 — render de-threaded.** `Renderer`/`FunctionSpans` revert to ~`af16e9e`: no per-record
+  `canon()` (`it.source == source` just works, the fields are already canonical).
+  `TypeResolver.{lineEntriesByCanonicalSource,symbolsByCanonicalSource,canonicalizePaths}` removed;
+  `effectiveSource` memoised once as `effectiveSourceByType`.
+- **Phase 3 — §20 merge folded.** `mergeContentEquivalentGroups` inlined into a single `byCanonicalKey`
+  pipeline (same comparators/condition — provably equivalent).
+
+**Attribution stays raw — the crux.** `multiSourceHeaderHints` feeds `Attribution.keyFor` (DTM category)
+and is keyed on raw `id.source`/N_SOL spellings, so it's computed **before** Phase 1's rewrite (extracted
+to a pure `multiSourceHeaderHints(typeAsts, openFunctions, lineEntries)`, stored raw on `Harvest`).
+Canonicalising the hint would leak §15 folding into DTM categories — the "attribution-follows-canon" §15
+tried and reverted. Canon is render-only; type dedup is content-based (§20), not path-based.
+
+**Dump made deterministic.** `RegistryDump` no longer stores the raw `Objects.hash` ints
+(`CanonicalGroupEntry.contentHash`, `HashClassEntry.hash`): they're a JVM-run-nondeterministic hash of
+enum members, valid only for equality/grouping within a run. It now buckets by hash equality and sorts on
+`distinctNames`, so a HEAD-vs-branch dump diff is a real audit trail.
+
+**Verified — the dump diff, not decomp text.** `RegistryDump` grouping/folds/counts structurally identical
+to HEAD across all fixtures (only the now-removed hash ints moved); skeletons byte-identical;
+`DegradationDumpIntegrationTest` + demangler/typedef-shortening/idempotence/type-registry + unit tests
+(`SourceCanonicalization`/`Attribution`/`AnonymousTypedefTargetNames`) green. `StabsAnalyzerTests` == HEAD,
+including the pre-existing `xapasmcsr` CONCURRENT `xref-base-tag-resolved`=41-vs-baseline-[49] flake, which
+reproduces on unmodified HEAD (baseline too tight for CONCURRENT demangler-order nondeterminism). Decomp
+`*`/`**` return-pointer wobble is Ghidra decompiler nondeterminism (HEAD single-fixture ≠ HEAD full-suite),
+not attribution — which is why the deterministic dump, not decomp text, is the audit surface.
