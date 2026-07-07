@@ -159,7 +159,7 @@ class ClassBuilder(
             is VfptrAction.AlreadyCanonical -> return
 
             is VfptrAction.Insert -> {
-                val ptrToVtable = ensureVtableTypeAndPointer(className, category)
+                val ptrToVtable = ensureVtableTypeAndPointer(className)
                 structDt.insertAtOffset(
                     action.offsetBytes,
                     ptrToVtable,
@@ -171,7 +171,7 @@ class ClassBuilder(
             }
 
             is VfptrAction.Replace -> {
-                val ptrToVtable = ensureVtableTypeAndPointer(className, category)
+                val ptrToVtable = ensureVtableTypeAndPointer(className)
                 structDt.replaceAtOffset(
                     action.offsetBytes,
                     ptrToVtable,
@@ -195,10 +195,7 @@ class ClassBuilder(
      * under `/ClassDataTypes/<Class>/` so `RecoveredClassHelper` / shift-S round-trip
      * can find it.
      */
-    private fun ensureVtableTypeAndPointer(
-        className: String,
-        @Suppress("UNUSED_PARAMETER") category: CategoryPath,
-    ): Pointer {
+    private fun ensureVtableTypeAndPointer(className: String): Pointer {
         val vftableCategory = CategoryPath(CategoryPath(CategoryPath.ROOT, "ClassDataTypes"), className)
         val name = "${className}_vftable"
         val struct = typeRegistry.getOrRegister<DataType>(vftableCategory, name) {
@@ -466,10 +463,10 @@ class ClassBuilder(
     private fun unwrapSignature(sig: TypeDecl<GlobalTypeId>): TypeDecl<GlobalTypeId>? {
         var cur: TypeDecl<GlobalTypeId>? = sig
         while (cur != null) {
-            when (cur) {
+            cur = when (cur) {
                 is TypeDecl.Method, is TypeDecl.FunctionT -> return cur
-                is TypeDecl.Ref -> cur = harvest.getType(cur.id)?.body
-                is TypeDecl.InlineDef -> cur = cur.body
+                is TypeDecl.Ref -> harvest.getType(cur.id)?.body
+                is TypeDecl.InlineDef -> cur.body
                 else -> return null
             }
         }

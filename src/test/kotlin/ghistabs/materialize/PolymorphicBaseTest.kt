@@ -15,7 +15,7 @@ class PolymorphicBaseTest {
         ClassBuilderHelpers(TypeResolver(Harvest(typeAsts)))
 
     private fun polyStruct(hasVtableMarker: Boolean = false, methods: List<MethodDecl<GlobalTypeId>> = emptyList()) =
-        TypeDecl.Struct<GlobalTypeId>(
+        TypeDecl.Struct(
             rawKind = AggrKind.CLASS,
             sizeBytes = 8L,
             bases = emptyList(),
@@ -36,7 +36,7 @@ class PolymorphicBaseTest {
         vtableOffsetBits = 0L,
     )
 
-    private fun inlineBase(n: Int, body: TypeDecl.Struct<GlobalTypeId>) = BaseDecl<GlobalTypeId>(
+    private fun inlineBase(n: Int, body: TypeDecl.Struct<GlobalTypeId>) = BaseDecl(
         type = TypeDecl.InlineDef(gid(n), body),
         isVirtual = false,
         access = Access.PUBLIC,
@@ -46,7 +46,7 @@ class PolymorphicBaseTest {
     @Test
     fun `polyBase - direct polymorphic base detected`() {
         val base = polyStruct(hasVtableMarker = true)
-        val derived = TypeDecl.Struct<GlobalTypeId>(
+        val derived = TypeDecl.Struct(
             rawKind = AggrKind.CLASS,
             sizeBytes = 12L,
             bases = listOf(inlineBase(1, base)),
@@ -61,7 +61,7 @@ class PolymorphicBaseTest {
     @Test
     fun `nonPolyBase - no virtual methods or markers detected`() {
         val base = polyStruct(hasVtableMarker = false)
-        val derived = TypeDecl.Struct<GlobalTypeId>(
+        val derived = TypeDecl.Struct(
             rawKind = AggrKind.CLASS,
             sizeBytes = 12L,
             bases = listOf(inlineBase(1, base)),
@@ -76,7 +76,7 @@ class PolymorphicBaseTest {
     @Test
     fun `transitive - polymorphism inherited through intermediate class`() {
         val base = polyStruct(hasVtableMarker = true)
-        val middle = TypeDecl.Struct<GlobalTypeId>(
+        val middle = TypeDecl.Struct(
             rawKind = AggrKind.CLASS,
             sizeBytes = 12L,
             bases = listOf(inlineBase(1, base)),
@@ -85,7 +85,7 @@ class PolymorphicBaseTest {
             hasVTablePointerMarker = false,
             vtableTargetTypeId = null,
         )
-        val derived = TypeDecl.Struct<GlobalTypeId>(
+        val derived = TypeDecl.Struct(
             rawKind = AggrKind.CLASS,
             sizeBytes = 16L,
             bases = listOf(inlineBase(2, middle)),
@@ -106,7 +106,7 @@ class PolymorphicBaseTest {
     @Test
     fun `virtual method in base - detected as polymorphic`() {
         val base = polyStruct(methods = listOf(virtualMethod("foo")))
-        val derived = TypeDecl.Struct<GlobalTypeId>(
+        val derived = TypeDecl.Struct(
             rawKind = AggrKind.CLASS,
             sizeBytes = 12L,
             bases = listOf(inlineBase(1, base)),
@@ -124,7 +124,7 @@ class PolymorphicBaseTest {
         val base = polyStruct(methods = listOf(virtualMethod("virtualMethod")))
         val baseAst = TypeAst(cu, baseId, "Base", base)
 
-        val derived = TypeDecl.Struct<GlobalTypeId>(
+        val derived = TypeDecl.Struct(
             rawKind = AggrKind.CLASS,
             sizeBytes = 12L,
             bases = listOf(

@@ -3,8 +3,6 @@ package ghistabs.render
 import ghidra.program.model.data.ByteDataType
 import ghidra.program.model.data.CharDataType
 import ghidra.program.model.data.SignedByteDataType
-import ghidra.program.model.data.SignedCharDataType
-import ghidra.program.model.data.UnsignedCharDataType
 import ghidra.program.model.listing.Program
 import ghistabs.harvest.Harvest
 import ghistabs.materialize.BuiltinTable
@@ -134,9 +132,7 @@ private fun TypeDecl<GlobalTypeId>.isCharType(harvest: Harvest): Boolean = when 
     // Any 1-byte integer element: cygwin's named `char` resolves through its Range body to
     // Byte, not Char. The printable-run guard in stringLiteralAt keeps binary byte[] as hex.
     else -> when (BuiltinTable.resolve(this)) {
-        is CharDataType, is UnsignedCharDataType, is SignedCharDataType,
-        is ByteDataType, is SignedByteDataType,
-        -> true
+        is CharDataType, is ByteDataType, is SignedByteDataType -> true
         else -> false
     }
 }

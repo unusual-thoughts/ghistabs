@@ -73,7 +73,7 @@ class ClassBuilderTest {
     @Test
     fun testClassStructWithMethods() {
         val methodSig = TypeDecl.FunctionT<GlobalTypeId>(TypeDecl.Complex(0, 4), emptyList())
-        val method = MethodDecl<GlobalTypeId>(
+        val method = MethodDecl(
             name = "bar",
             mangled = "_ZN3Foo3barEv",
             signature = methodSig,
@@ -84,7 +84,7 @@ class ClassBuilderTest {
             vtableOffsetBits = null,
         )
 
-        val classStruct = TypeDecl.Struct<GlobalTypeId>(
+        val classStruct = TypeDecl.Struct(
             rawKind = AggrKind.CLASS,
             sizeBytes = 4,
             bases = emptyList(),
@@ -168,7 +168,7 @@ class ClassBuilderTest {
         val nonVptrFieldName = "m_member"
 
         fun isParserEmitted(name: String): Boolean =
-            name.startsWith($$"_vptr$") || name.startsWith("_vptr.") || name == "_vptr"
+            name.startsWith("_vptr$") || name.startsWith("_vptr.") || name == "_vptr"
 
         assertTrue(isParserEmitted(vptrFieldName1))
         assertTrue(isParserEmitted(vptrFieldName2))

@@ -102,7 +102,7 @@ class AttributionTest {
     @Test
     fun realHeaderWinsOverCu() {
         // b2Hull-style: mostly CUSources, one real .h header.
-        val sources = setOf<SourceFile>(
+        val sources = setOf(
             SourceFile.CUSource("/proj/a.cpp"),
             SourceFile.CUSource("/proj/b.cpp"),
             SourceFile.HeaderSource(HeaderFile("/proj/include/collision.h", checksum = 0, originatingCu = null)),
@@ -112,7 +112,7 @@ class AttributionTest {
 
     @Test
     fun lexFirstAmongMultipleRealHeaders() {
-        val sources = setOf<SourceFile>(
+        val sources = setOf(
             SourceFile.HeaderSource(HeaderFile("/proj/include/zeta.h", checksum = 0, originatingCu = null)),
             SourceFile.HeaderSource(HeaderFile("/proj/include/alpha.h", checksum = 0, originatingCu = null)),
         )
@@ -122,7 +122,7 @@ class AttributionTest {
     @Test
     fun tccHeaderCountsAsRealHeader() {
         // libstdc++ template impls (`.tcc`) — should be treated as headers.
-        val sources = setOf<SourceFile>(
+        val sources = setOf(
             SourceFile.HeaderSource(HeaderFile("/usr/include/c++/3.4.4/bits/basic_string.tcc", 0, null)),
             SourceFile.CUSource("/proj/a.cpp"),
         )
@@ -196,7 +196,7 @@ class AttributionTest {
     @Test
     fun commonProjectPrefixIgnoresHeaders() {
         // Headers can live outside the project root; LCP is computed from CUSources only.
-        val sources = listOf<SourceFile>(
+        val sources = listOf(
             SourceFile.CUSource("/xml/box2d/samples/car.cpp"),
             SourceFile.CUSource("/xml/box2d/samples/donut.cpp"),
             SourceFile.HeaderSource(HeaderFile("/usr/include/c++/3.4.4/string", checksum = 0, originatingCu = null)),
