@@ -27,7 +27,7 @@ class HeaderRegistry(sink: DiagnosticSink = DummySink) : DiagnosticSink by sink 
      * same instance — keeping cross-CU Ref identity (canonicalization.md §6 D1).
      */
     fun recall(filename: String, checksum: Long): HeaderFile = globalByFilenameChecksum.getOrPut(filename to checksum) {
-        log("forward-excl", "$filename checksum=0x${checksum.toString(16)}")
+        debug("forward-excl", "$filename checksum=0x${checksum.toString(16)}")
         HeaderFile(filename, checksum, originatingCu = null)
     }
 
@@ -63,7 +63,7 @@ class IncludeContext(
         if (includeStack.isNotEmpty()) {
             includeStack.pop()
         } else {
-            log("einc-unbalanced", "endInclude with empty stack")
+            warn("einc-unbalanced", "endInclude with empty stack")
         }
     }
 

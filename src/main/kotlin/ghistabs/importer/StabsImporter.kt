@@ -99,13 +99,13 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
         debug("harvest-typeAsts-unique-by-id", count = uniqueTypeIds.toLong())
         debug("harvest-typeAsts-dup-by-id", count = (harvest.typeAsts.size - uniqueTypeIds).toLong())
         debug("harvest-collisions-raw", count = harvest.rawCollisions.size.toLong())
-        log(
+        debug(
             "harvest-collisions-raw-total",
             count = harvest.rawCollisions.values.flatMap { it.values }.flatten().count().toLong(),
         )
         // Post-filter: only genuinely divergent multi-body collisions.
         debug("harvest-collisions-divergent", count = resolver.divergentCollisions.size.toLong())
-        log(
+        debug(
             "harvest-collisions-divergent-total",
             count = resolver.divergentCollisions.values.flatMap { it.values }.flatten().count().toLong(),
         )
@@ -136,7 +136,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
                         "apply-error-no-function" to Level.INFO
                     }
                     // log() counts via the tee'd accumulator; BookmarkSink only emits/bookmarks.
-                    log(tag, "no Function at or containing ${open.addr} for ${open.name}", level)
+                    log(tag, "no Function at or containing ${open.addr} for ${open.name}", level, open.addr.address)
                     continue
                 }
 
@@ -207,7 +207,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
                 functions++
             } catch (t: Throwable) {
                 val bucket = ApplyErrorBucket.bucket(t)
-                err("apply-error-$bucket", "function ${open.name}: ${t.message}")
+                err("apply-error-$bucket", "function ${open.name}: ${t.message}", address = open.addr.address)
                 err("apply-error", "function ${open.name}: ${t.message}", address = open.addr.address)
             }
         }
@@ -223,7 +223,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
                             if (it) globals++
                         }
 
-                        else -> log("unexpected-symbol", "$d")
+                        else -> warn("unexpected-symbol", "$d")
                     }
                 } catch (t: Throwable) {
                     err("apply-error", "symbol ${h.body.name} in $cu: ${t.message}")
@@ -239,7 +239,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
         // we build each class once, off the most-detailed body.
         if (ctx.options.applyVtables) {
             val classBuilder = ghistabs.materialize.ClassBuilder(typeRegistry, harvest, typeResolver, ctx)
-            log(
+            debug(
                 "class-build-name-collisions",
                 count = harvest.typeAsts.values.groupingBy { it.ghidraName }.eachCount()
                     .values.count { it > 1 }.toLong(),
@@ -319,7 +319,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
             } else {
                 "function-create-skipped-non-text" to Level.WARN
             }
-            log(tag, "no executable block at $addr for ${open.name} (block=${block?.name})", level)
+            log(tag, "no executable block at $addr for ${open.name} (block=${block?.name})", level, addr)
             return null
         }
 
@@ -333,6 +333,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
                 warn(
                     "function-create-disasm-failed",
                     "DisassembleCommand failed at $addr for ${open.name}: ${disasm.statusMsg}",
+                    addr,
                 )
                 return null
             }
@@ -343,6 +344,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
             warn(
                 "function-create-cmd-failed",
                 "CreateFunctionCmd failed at $addr for ${open.name}: ${cmd.statusMsg}",
+                addr,
             )
             return null
         }
@@ -506,8 +508,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
                 }
             }
         } catch (e: Exception) {
-            // local-var-error counter auto-bumps via BookmarkSink tag→counter contract
-            warn("local-var-error", "Could not add local '${decl.name}' to ${func.name}: ${e.message}")
+            warn("local-var-error", "Could not add local '${decl.name}' to ${func.name}: ${e.message}", func.entryPoint)
         }
     }
 
@@ -525,7 +526,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
                 val text = "Stabs scope locals: " + localsInScope.joinToString(", ") { it.body.name }
                 ctx.program.listing.setComment(addr, CommentType.PLATE, text)
             } catch (e: Exception) {
-                warn("scope-comment-error", "Failed to set scope comment: ${e.message}")
+                warn("scope-comment-error", "Failed to set scope comment: ${e.message}", func.entryPoint)
             }
         }
     }
@@ -573,14 +574,15 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
             val after = ctx.program.listing.getDataAt(addr)
             val stuck = after != null && after.dataType.name == dt.name
             if (!stuck) {
-                log(
+                warn(
                     "global-applied-then-overwritten",
-                    "$decl.name at $addr: wrote ${dt.name} but readback is ${after?.dataType?.name}",
+                    "${decl.name} at $addr: wrote ${dt.name} but readback is ${after?.dataType?.name}",
+                    addr,
                 )
             }
             debug("global-applied", "addr=$addr dtKind=$dtKind")
         } catch (e: Exception) {
-            err("apply-error", "Failed to create global data at $addr: ${e.message}")
+            err("apply-error", "Failed to create global data at $addr: ${e.message}", addr)
             debug("global-skipped", "addr=$addr dtKind=$dtKind reason=create-data-failed")
             return false
         }
@@ -607,7 +609,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
             ctx.program.listing.clearCodeUnits(addr, addr.add((dt.length - 1).toLong()), false)
             ctx.program.listing.createData(addr, dt)
         } catch (e: Exception) {
-            err("apply-error", "Failed to create static data at $addr: ${e.message}")
+            err("apply-error", "Failed to create static data at $addr: ${e.message}", addr)
             return false
         }
         return true
@@ -624,7 +626,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
         val sym = existing ?: try {
             symtab.createLabel(addr, name, SourceType.IMPORTED)
         } catch (e: Exception) {
-            err("symbol-create-error", "$name at $addr: ${e.message}")
+            err("symbol-create-error", "$name at $addr: ${e.message}", addr)
             return
         }
         if (!sym.isPrimary) {
@@ -632,7 +634,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
                 ghidra.app.cmd.label.SetLabelPrimaryCmd(addr, sym.name, sym.parentNamespace)
                     .applyTo(ctx.program)
             } catch (e: Exception) {
-                err("symbol-primary-error", "$name at $addr: ${e.message}")
+                err("symbol-primary-error", "$name at $addr: ${e.message}", addr)
             }
         }
     }
