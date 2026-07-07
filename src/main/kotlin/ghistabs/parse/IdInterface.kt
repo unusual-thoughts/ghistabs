@@ -100,7 +100,7 @@ fun TypeDecl<LocalTypeId>.globalize(g: Globalizer): TypeDecl<GlobalTypeId> = whe
         rawKind,
         sizeBytes,
         bases.map { BaseDecl(it.type.globalize(g), it.isVirtual, it.access, it.offsetBits) },
-        fields.map { FieldDecl(it.name, it.type.globalize(g), it.offsetBits, it.sizeBits, it.isStatic) },
+        fields.map { FieldDecl(it.name, it.type.globalize(g), it.offsetBits, it.sizeBits, it.isStatic, it.access) },
         methods.map {
             MethodDecl(
                 it.name,

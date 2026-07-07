@@ -127,6 +127,7 @@ class ContentHashTest {
                     offsetBits = 0L,
                     sizeBits = 32L,
                     isStatic = false,
+                    access = Access.PUBLIC,
                 ),
             ),
             methods = emptyList(),
@@ -154,6 +155,7 @@ class ContentHashTest {
                     offsetBits = 0L,
                     sizeBits = 32L,
                     isStatic = false,
+                    access = Access.PUBLIC,
                 ),
             ),
             methods = emptyList(),
@@ -230,7 +232,16 @@ class ContentHashTest {
             rawKind = AggrKind.STRUCT,
             sizeBytes = 216,
             bases = emptyList(),
-            fields = listOf(FieldDecl("_flags", TypeDecl.Ref(intId), 0L, 32L, false)),
+            fields = listOf(
+                FieldDecl(
+                    "_flags",
+                    TypeDecl.Ref(intId),
+                    0L,
+                    32L,
+                    false,
+                    access = Access.PUBLIC,
+                ),
+            ),
             methods = emptyList(),
             hasVTablePointerMarker = false,
             vtableTargetTypeId = null,
@@ -310,7 +321,14 @@ class ContentHashTest {
             sizeBytes = 8L,
             bases = emptyList(),
             fields = listOf(
-                FieldDecl("first", TypeDecl.Ref(intId), 0L, 32L, false),
+                FieldDecl(
+                    "first",
+                    TypeDecl.Ref(intId),
+                    0L,
+                    32L,
+                    false,
+                    access = Access.PUBLIC,
+                ),
             ),
             methods = listOf(
                 MethodDecl(

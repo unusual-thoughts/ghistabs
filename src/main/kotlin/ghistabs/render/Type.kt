@@ -7,6 +7,8 @@ import ghidra.program.model.listing.Program
 import ghistabs.harvest.Harvest
 import ghistabs.materialize.BuiltinTable
 import ghistabs.materialize.TemplateNameShortener
+import ghistabs.parse.Access
+import ghistabs.parse.AggrKind
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
 
@@ -143,20 +145,25 @@ fun TypeDecl.Struct<GlobalTypeId>.renderFull(
     program: Program,
     shortener: TemplateNameShortener? = null,
 ): List<String> {
-    val fieldLines = fields
-        .filter { !it.isStatic }
-        .sortedBy { it.offsetBits }
-        .map { f ->
-            val type = f.type.render(harvest, shortener = shortener)
-            "$type ${f.name};  /* +${f.offsetBits / 8}B */"
-        }
     val funcByMangled = harvest.openFunctions.associateBy { it.name }
-    val methodLines = methods.mapNotNull { m ->
-        m.mangled?.let { mangled ->
-            funcByMangled[mangled]?.let { func ->
-                "${func.signature(program)};"
+    val members: List<Pair<Access, String>> =
+        fields.filter { !it.isStatic }.sortedBy { it.offsetBits }.map { f ->
+            f.access to "${f.type.render(harvest, shortener = shortener)} ${f.name};  /* +${f.offsetBits / 8}B */"
+        } + methods.mapNotNull { m ->
+            m.mangled?.let { funcByMangled[it] }?.let { m.access to "${it.signature(program)};" }
+        }
+
+    // C++ access sections: emit an `access:` label only when a member deviates from the running
+    // access, starting at the type's default (private for a class, public for a struct/union), so a
+    // uniform type stays label-free and only real transitions show.
+    return buildList {
+        var current = if (kind == AggrKind.CLASS) Access.PRIVATE else Access.PUBLIC
+        for ((access, line) in members) {
+            if (access != current) {
+                add("${access.name.lowercase()}:")
+                current = access
             }
+            add(line)
         }
     }
-    return fieldLines + methodLines
 }
