@@ -191,12 +191,15 @@ class TypeRegistry(
             }
 
             // Pre-seed placeholders for every member id so Ref(id) cycle-breaks during
-            // body materialisation. Struct/Union placeholders go into the DTM up-front
-            // so later in-place mutations land on the DTM-resident object.
+            // body materialisation. Struct/Union and Enum placeholders go into the DTM
+            // up-front so later in-place mutations land on the DTM-resident object — and a
+            // Ref resolved before the winner materialises pulls in that one object, not an
+            // empty second copy that would collide with the filled type (`.conflict`).
             for (group in resolver.byCanonicalKey.values) {
                 val winner = group.ast
                 val raw = makePlaceholder(winner, group.key.category)
-                val placeholder = if (winner.body is TypeDecl.Struct) register(raw) else raw
+                val placeholder =
+                    if (winner.body is TypeDecl.Struct || raw is ghidra.program.model.data.Enum) register(raw) else raw
                 for (m in group.members) placeholders.putIfAbsent(m, placeholder)
             }
 
@@ -402,9 +405,14 @@ class TypeRegistry(
                 StructureDataType(category, ast.ghidraName, sz, dtm)
             }
 
-            // Enum placeholder MUST be EnumDataType — a Structure stub would leak via
-            // replaceAtOffset's auto-register and collide with the real Enum at the same slot.
+            // Enum placeholder MUST be an EnumDataType, correctly sized: materialiseEnum fills this
+            // same registered object in place (like structs), so a wrong kind/size would leave a
+            // colliding `.conflict` second type. Size per gdb's stabsread.c::read_enum_type —
+            // sizeof(int) unless gcc emits an explicit `@s<bits>` (`-fshort-enums`).
             is TypeDecl.Enum -> EnumDataType(category, ast.ghidraName, 4, dtm)
+
+            is TypeDecl.WithSizeAttr if ast.body.inner is TypeDecl.Enum ->
+                EnumDataType(category, ast.ghidraName, (ast.body.sizeBits + 7) / 8, dtm)
 
             else -> StructureDataType(category, ast.ghidraName, 0, dtm)
         }
@@ -463,18 +471,13 @@ class TypeRegistry(
     }
 
     /**
-     * Size enums per gdb's `stabsread.c::read_enum_type`: `sizeof(int)` unless gcc emits an
-     * explicit `@s<bits>` (`-fshort-enums`). bool doesn't reach this path — it comes through
+     * Fill the pre-registered enum [placeholder] in place (its size was fixed at creation, see
+     * [makePlaceholder]) and return it, so one DTM-resident Enum is both the cycle-break stub and
+     * the final type — no colliding second copy. bool doesn't reach this path — it comes through
      * BuiltinTable slot -16.
      */
-    private fun materialiseEnum(
-        ast: TypeAst,
-        category: CategoryPath,
-        body: TypeDecl.Enum<GlobalTypeId>,
-        explicitSizeBits: Int?,
-    ): DataType {
-        val sizeBytes = if (explicitSizeBits != null) (explicitSizeBits + 7) / 8 else 4
-        val e = EnumDataType(category, ast.ghidraName, sizeBytes, dtm)
+    private fun materialiseEnum(placeholder: DataType, body: TypeDecl.Enum<GlobalTypeId>): DataType {
+        val e = placeholder as ghidra.program.model.data.Enum
         for ((mname, mval) in body.members) e.add(mname, mval)
         return e
     }
@@ -529,11 +532,12 @@ class TypeRegistry(
                 ArrayDataType(safeElem, numElements, safeElem.length)
             }
 
-            is TypeDecl.Enum -> materialiseEnum(ast, category, body, explicitSizeBits = null)
+            is TypeDecl.Enum -> materialiseEnum(placeholder, body)
 
-            // `@s<bits>;e...;` — explicit enum size (stabs.texinfo §"String Field").
+            // `@s<bits>;e...;` — explicit enum size (stabs.texinfo §"String Field"); size already
+            // applied to the placeholder in makePlaceholder.
             is TypeDecl.WithSizeAttr if body.inner is TypeDecl.Enum ->
-                materialiseEnum(ast, category, body.inner, explicitSizeBits = body.sizeBits)
+                materialiseEnum(placeholder, body.inner)
 
             is TypeDecl.Range, is TypeDecl.Complex, is TypeDecl.Float, is TypeDecl.WithSizeAttr, is TypeDecl.Builtin ->
                 BuiltinTable.resolve(body) ?: placeholder

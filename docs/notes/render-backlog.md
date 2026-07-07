@@ -682,13 +682,19 @@ spanning >1 group, source folds, and duplicate-named DataTypes — rather than b
   group). Degradation-neutral across fixtures; `xref-base-tag-resolved` 41→49 (more XRefs resolve once
   types unify — baseline bumped).
 
-- **Open: enum double-registration → `.conflict`.** Naming the enums exposes a materialiser bug the
-  dump makes obvious: `b2BodyType` is **one** `byCanonicalKey` group (18 members, `distinct=1`, fully
-  content-equivalent) yet materialises as **two** DataTypes at the identical `/src/body.h/b2BodyType`
-  slot, so Ghidra suffixes one `.conflict` (the decomp shows `EnumDSPRev.conflict`). This is a
-  double-registration in `TypeRegistry.materialiseAll` (one content-equivalent group must yield exactly
-  one DataType), not a grouping problem. `RegistryDump.duplicateNamedTypes` lists every such collision.
-  Next step is to make the enum materialisation path register once per canonical group.
+- **DONE: enum double-registration → `.conflict`.** `b2BodyType` was **one** `byCanonicalKey` group
+  (18 members, `distinct=1`) yet materialised as **two** DataTypes at the identical `/src/body.h/b2BodyType`
+  slot → Ghidra `.conflict` (`b2BodyType`/`b2ShapeType`, `EnumDSPRev`). Root cause: `materialiseAll`
+  registered **struct** placeholders into the DTM up front and filled them *in place*, but **enum**
+  placeholders were left unregistered and `materialiseEnum` built a *brand-new* `EnumDataType`. The empty
+  placeholder leaked into the DTM via any struct-field/param `Ref` resolved (through `tryGetExisting`)
+  before the winner materialised, colliding with the filled enum under `register`'s `KEEP_HANDLER`.
+  **Fix** (`TypeRegistry.kt`): register enum placeholders up front like structs (`raw is Enum`), keep the
+  placeholder an `EnumDataType` sized correctly at creation in `makePlaceholder` (also fixes the latent
+  `-fshort-enums` case that fell to a `Structure` stub), and `materialiseEnum` fills that one registered
+  object in place. Verified: **zero `.conflict`** across all six fixtures' decomp; `duplicateNamedTypes`
+  no longer lists any enum (only same-simple-name methods at distinct class categories, and the pre-existing
+  benign `char → /char` primitive-typedef path); all integration baselines green.
 
 ## 22. Single-arbiter attribution: canon at the data layer, §20 merge folded — DONE
 
