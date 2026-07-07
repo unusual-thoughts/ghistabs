@@ -333,7 +333,7 @@ class TypeRegistry(
 
         // Aggregate bodies — meaningful only via owning TypeId; see kdoc.
         is TypeDecl.Struct, is TypeDecl.Enum, is TypeDecl.Method -> {
-            log("referenced-aggregate", "asked for ref to $decl")
+            debug("referenced-aggregate", "asked for ref to $decl")
             null
         }
     }
@@ -590,9 +590,9 @@ class TypeRegistry(
                             // (libstdc++ iterator-tag bases living in headers). Skip insertion;
                             // own fields at offset 0 take the slot.
                             if (dt == null) {
-                                log("base-empty-ebo-inferred")
+                                debug("base-empty-ebo-inferred")
                             } else {
-                                log("base-empty-ebo")
+                                debug("base-empty-ebo")
                             }
                             continue
                         }
@@ -643,14 +643,14 @@ class TypeRegistry(
                                 op.fieldName,
                                 op.comment,
                             )
-                            log("inheritance-applied")
+                            debug("inheritance-applied")
                         } catch (e: java.lang.IllegalArgumentException) {
                             degradation(
                                 "base-layout-failed",
                                 "${ast.nameOrUnique}::${op.baseSimpleName}",
                                 e.message,
                             )
-                            log("inheritance-failed")
+                            debug("inheritance-failed")
                         }
                     }
                 }
@@ -675,7 +675,7 @@ class TypeRegistry(
                                 field.offsetBits in baseOffsets
                             )
                     ) {
-                        log("vptr-skipped-inherited")
+                        debug("vptr-skipped-inherited")
                         continue
                     }
 

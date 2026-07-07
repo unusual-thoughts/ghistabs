@@ -121,10 +121,10 @@ class TypedefShortener(private val dtm: DataTypeManager, sink: DiagnosticSink) :
         val conflict = dtm.getDataType(dt.categoryPath, to)
         if (conflict is TypeDef && conflict.dataType == dt) {
             runCatching { dtm.replaceDataType(conflict, dt, false) }
-                .onFailure { log("typedef-shorten-skip", "fold ${conflict.pathName}: ${it.message}") }
+                .onFailure { debug("typedef-shorten-skip", "fold ${conflict.pathName}: ${it.message}") }
             return runCatching { dt.name = to }.isSuccess
         }
-        log("typedef-shorten-skip", "${dt.pathName} -> $to: name held by ${conflict?.pathName ?: "?"}")
+        debug("typedef-shorten-skip", "${dt.pathName} -> $to: name held by ${conflict?.pathName ?: "?"}")
         return false
     }
 }

@@ -418,24 +418,34 @@ that's the through-line. In `DecompTokens` + `Renderer.applyDecompilation` + `La
 Pure cores pinned by `LayoutTest.spreadOver`/`spreadBlocks`; verified against regenerated
 `build/test-output/decomps/{appquery,unpackfile}`.
 
-## 10. Post-diagnostics-refactor: audit every log() level (OPEN)
+## 10. Post-diagnostics-refactor: audit every log() level — DONE
 
-After the diagnose refactor (log() is the single entry; degradations are WARN via the
-`degradation()` extension), sweep every `log(...)` / `degradation(...)` call and set the
-level deliberately: **WARN/ERROR** for real degradations, ordered by gravity; **INFO**
-for non-trivial-but-not-bad signals; **DEBUG** for minutiae. The record*→log collapse
-(§ diagnose) parked all former silent counters at DEBUG; some deserve promotion. Stale
-comment to fix while there: StabsImporter `applyAllSymbols` still says "BookmarkSink
-auto-bumps the counter" — no longer true (the accumulator counts, BookmarkSink only emits).
+Swept every `log()`/`debug()`/`warn()`/`err()`/`degradation()` site (StabsImporter,
+ClassBuilder, TypeRegistry, Harvester, TypeResolver, IncludeContext, DemanglerReplacer,
+TypedefShortening). Rule applied: **WARN** for real anomalies (`unexpected-symbol`,
+`unexpected-nfun/psym-rsym/lsym`, `stab-unknown`, `einc-unbalanced`, and the previously-silent
+`global-applied-then-overwritten` — a write that didn't stick); **DEBUG** for benign structural
+counters/traces (`base-empty-ebo*`, `inheritance-applied/failed`, `vptr-*`, `vfptr-*`,
+`drop-record-*`, `referenced-aggregate`, `typedef-*-skip`, `replaced-demangler*`, the
+`harvest-collisions-*-total` siblings, `class-build-name-collisions`, `vtable-templated-skip`);
+**INFO** kept for genuine per-run summaries (`no-stabs`, `xref-stubs-synthesized`,
+`inheritance-pseudo-fields-promoted`, `typedef-shorten` totals). Logs that merely restate an
+adjacent `degradation()` WARN (`inheritance-failed`, `vtable-failed-<bucket>`,
+`replaced-demangler-failed`) dropped to DEBUG to avoid double-reporting. Levels don't change
+counters, so all baselines hold. Also fixed the stale "auto-bumps the counter" comment (removed —
+the tag→counter contract is a general fact, not per-site) and a latent `$decl.name` interpolation
+bug (was `decl.toString()+".name"`).
 
-## 11. More log() calls should carry a bookmark address (OPEN)
+## 11. More log() calls should carry a bookmark address — DONE
 
-Many diagnostics name a specific function/symbol/class but don't pass `address`, so they
-only hit the MessageLog, not Ghidra's BookmarkManager (navigable markers). Sweep the WARN/
-ERROR (and notable INFO) sites and pass the relevant address where one is in scope — e.g.
-vtable-symbol-scan-error/vtable-rdata-scan-error (class addr), method-calling-convention
-(func entry), parse-error (record addr if resolvable). Done so far: vftable-label-failed,
-apply-error, vtable already carry addresses.
+Swept the WARN/ERROR (and leveled INFO) sites and passed the in-scope `Address` so they reach
+Ghidra's BookmarkManager: `apply-error-<bucket>` (function entry), `function-create-*` +
+`no-function`/`no-executable-block` (target addr), `method-calling-convention` (func entry),
+`local-var-error`/`scope-comment-error` (func entry), `global-applied-then-overwritten` +
+`apply-error` global/static create + `symbol-create-error`/`symbol-primary-error` (data addr).
+Left address-less where none is meaningfully in scope: `parse-error` (a stab record has no memory
+address), `class-*`/`vfptr-*` (type/layout, not code), and `vtable-symbol-scan-error`/
+`vtable-rdata-scan-error` (the scan is *searching for* the address it failed to find).
 
 ## 12. Importer: are we actually renaming functions & globals? — DONE
 
