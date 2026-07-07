@@ -111,10 +111,26 @@ calling convention starts stack params — the same saved-FP slot), read once
 program-wide in `deriveStackFrameBias`. Result: appquery `local_` 1816→1562 as the
 decompiler now adopts our named locals.
 
-## 4. `_ZTS*` typeinfo-name globals + function overlap (xdvimage.cpp L131–133)
+## 4. `_ZTS*` typeinfo-name globals + function overlap (xdvimage.cpp L131–133) — DONE
 
 Three coupled defects around the RTTI typeinfo-name strings gcc attributes to a
-single source line inside `XDVImage::symbol_start`:
+single source line inside `XDVImage::symbol_start`. **Verified fixed across all
+fixtures:**
+
+- **Render as string — FIXED.** Every `_ZTS*` global now renders as a quoted literal
+  (`char const[10] _ZTS8XDVImage = "8XDVImage";`, `_ZTSSt9exception = "St9exception"`).
+  Zero per-byte brace-lists remain (grep for `_ZTS… = {` is empty).
+- **Half a declaration on L132 — FIXED.** No byte-list spill: each global is one string
+  token on its line, L132 is legitimate `symbol_start` body, and no orphaned `NNh, … };`
+  close line exists in any fixture.
+- **Indentation / overlap — superseded by §9.** §9 decided to *keep* live `DECL_GLOBAL`
+  fragments (explicitly the `_ZTI*/_ZTS*` RTTI globals) as data at their own line and flow
+  decomp around them, rather than demote to `// stray:`. They now render as valid data
+  decls, not laid as code. Residual is cosmetic: on L131 the three globals share a canvas
+  row with `symbol_start`'s tail statements, and §9's "shallowest fragment" rule sits that
+  row at column 0. §9-governed layout, not a §4 correctness bug.
+
+Original defect notes:
 
 - **Render as string.** `char const[9] _ZTS7XVImage = { 37h, 58h, 56h, 49h, 6Dh,
   61h, 67h, 65h, 0h }` is the string `"7XVImage"`. A `char[N]` global whose bytes
