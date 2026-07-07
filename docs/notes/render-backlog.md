@@ -75,9 +75,10 @@ Structurally sound: `T_<digits>` dangling type refs = 0; no unparseable garbage.
   (`;`/`)`/`.`/`,`/`->`, braces excluded so `}` keeps its row) onto the preceding statement row.
   Verified: lone-`;`/`.`/`)` across all fixtures **74 → 0**, the `;` re-attaches to its statement
   (`…_M_start ;  // ⇐ stl_iterator.h L 584`), full integration suite green.
-- **Open — stale N_SOL in decomp (~129):** `// … stale N_SOL?` skeleton-mode staleness markers
-  leak into decomp output, mostly on reg-locals/params (`int aEnd; // L 27 (reg local); stale
-  N_SOL?`). Trim them in decomp mode.
+- **Keep (not a defect) — stale N_SOL in decomp (~129):** the `// … stale N_SOL?` markers are
+  *useful* diagnostics — they flag content (reg-locals/params, misattributed fragments) that needs
+  excluding from decomp by some other mechanism, not by silencing the marker. Leave them; the real
+  work is acting on what they point at, not trimming the annotation.
 - **Not our bug:** `DAT_*`/`PTR_*` in decomp bodies are Ghidra's names for data it
   didn't tie to a symbol (vtable pointers, literals); `<true,0>`/`<false,0>` are
   valid non-type template args; `/* 0 bytes */` are the documented `noEmptyStructs`
