@@ -212,7 +212,7 @@ class ParserBugfixTest {
         val expected = SymbolDecl.TaggedType(
             name = "my_struct",
             id = LocalTypeId(0, 50),
-            type = TypeDecl.XRef<LocalTypeId>(kind = AggrKind.STRUCT, tagName = "MyStruct"),
+            type = TypeDecl.XRef(kind = AggrKind.STRUCT, tagName = "MyStruct"),
         )
         assertEquals(expected, Parser(input).parseSymbol())
     }
@@ -228,7 +228,7 @@ class ParserBugfixTest {
         val expected = SymbolDecl.TaggedType(
             name = "my_union",
             id = LocalTypeId(0, 51),
-            type = TypeDecl.XRef<LocalTypeId>(kind = AggrKind.UNION, tagName = "MyUnion"),
+            type = TypeDecl.XRef(kind = AggrKind.UNION, tagName = "MyUnion"),
         )
         assertEquals(expected, Parser(input).parseSymbol())
     }
@@ -244,7 +244,7 @@ class ParserBugfixTest {
         val expected = SymbolDecl.TaggedType(
             name = "my_enum",
             id = LocalTypeId(0, 52),
-            type = TypeDecl.XRef<LocalTypeId>(kind = AggrKind.ENUM, tagName = "MyEnum"),
+            type = TypeDecl.XRef(kind = AggrKind.ENUM, tagName = "MyEnum"),
         )
         assertEquals(expected, Parser(input).parseSymbol())
     }

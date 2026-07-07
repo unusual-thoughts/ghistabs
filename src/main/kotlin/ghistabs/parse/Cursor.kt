@@ -52,7 +52,7 @@ internal class Cursor(val src: String) {
         return src.substring(start, pos).toLong()
     }
 
-/**
+    /**
      * Range bound: decimal or octal (leading `0` followed by another digit = octal).
      * Uses `parseUnsignedLong` so `unsigned long long`'s max (`01777777777777777777777` = -1L
      * reinterpreted) doesn't overflow.
@@ -154,9 +154,5 @@ internal class Cursor(val src: String) {
             }
         }
         return sb.toString()
-    }
-
-    fun restore(saved: Int) {
-        pos = saved
     }
 }

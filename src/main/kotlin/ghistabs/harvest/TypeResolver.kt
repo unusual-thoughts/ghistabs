@@ -294,7 +294,7 @@ class TypeResolver(val harvest: Harvest, private val foldSources: Boolean = true
                     continue
                 }
                 val winner = named.maxWith(
-                    compareBy<CanonicalGroup>({ it.ast.body.sizeBytes })
+                    compareBy<CanonicalGroup> { it.ast.body.sizeBytes }
                         .thenByDescending { countUnresolvedRefs(it.ast.body) }
                         .thenBy { it.key.toString() },
                 )

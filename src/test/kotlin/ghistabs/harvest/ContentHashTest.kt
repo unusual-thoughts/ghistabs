@@ -102,7 +102,7 @@ class ContentHashTest {
     @Test
     fun unresolvedRefStillHashesDeterministically() {
         val phantom = GlobalTypeId(SourceFile.CUSource("ghost.cpp"), 999)
-        val ref = TypeDecl.Ref<GlobalTypeId>(phantom)
+        val ref = TypeDecl.Ref(phantom)
         // Two evaluations of the same unresolved ref agree with each
         // other; the unresolved branch must be deterministic so
         // collision detection isn't randomised.
@@ -116,7 +116,7 @@ class ContentHashTest {
      */
     @Test
     fun perCuTemplateClonesHashIdentically() {
-        val clone1Body = TypeDecl.Struct<GlobalTypeId>(
+        val clone1Body = TypeDecl.Struct(
             rawKind = AggrKind.STRUCT,
             sizeBytes = 8L,
             bases = emptyList(),
@@ -143,7 +143,7 @@ class ContentHashTest {
 
     @Test
     fun structurallyDifferentStructsHashDifferently() {
-        val s1 = TypeDecl.Struct<GlobalTypeId>(
+        val s1 = TypeDecl.Struct(
             rawKind = AggrKind.STRUCT,
             sizeBytes = 4L,
             bases = emptyList(),
@@ -175,7 +175,7 @@ class ContentHashTest {
      */
     @Test
     fun inlineDefHashesByBodyNotById() {
-        val body = TypeDecl.Pointer<GlobalTypeId>(TypeDecl.Ref(charInCU1.id))
+        val body = TypeDecl.Pointer(TypeDecl.Ref(charInCU1.id))
         val inline1 = TypeDecl.InlineDef(intInCU1.id, body)
         val inline2 = TypeDecl.InlineDef(intInCU2.id, body)
         assertEquals(inline1.contentHash(oracle), inline2.contentHash(oracle))
@@ -197,21 +197,16 @@ class ContentHashTest {
             body = TypeDecl.Pointer(TypeDecl.Ref(intInCU1.id)),
         )
         val asts2 = asts + (pointerToInt.id to pointerToInt)
-        val oracle2: TypeAstOracle = TypeAstOracle(asts2::get)
+        val oracle2 = TypeAstOracle(asts2::get)
         // Form A: a Ref pointing at the Pointer-to-int type.
-        val asRef = TypeDecl.Ref<GlobalTypeId>(pointerToInt.id)
+        val asRef = TypeDecl.Ref(pointerToInt.id)
         // Form B: the Pointer inlined at a different id.
-        val asInline = TypeDecl.InlineDef<GlobalTypeId>(
+        val asInline = TypeDecl.InlineDef(
             GlobalTypeId(SourceFile.CUSource("d.cpp"), 99),
             TypeDecl.Pointer(TypeDecl.Ref(intInCU1.id)),
         )
         assertEquals(asRef.contentHash(oracle2), asInline.contentHash(oracle2))
     }
-
-    /**
-     * Cycle protection: a `Range.of` always points back at the Range
-     * itself. `contentHash` must terminate.
-     */
 
     /**
      * Regression: gcc emits `InlineDef(id=98, body=XRef(STRUCT, _IO_FILE))`
@@ -231,7 +226,7 @@ class ContentHashTest {
         val id98 = GlobalTypeId(cu, 98)
         val intId = GlobalTypeId(cu, 2)
         val intAst = TypeAst(cu, intId, "int", TypeDecl.Range(intId, -2147483648L, 2147483647L))
-        val ioFileBody = TypeDecl.Struct<GlobalTypeId>(
+        val ioFileBody = TypeDecl.Struct(
             rawKind = AggrKind.STRUCT,
             sizeBytes = 216,
             bases = emptyList(),
@@ -257,7 +252,7 @@ class ContentHashTest {
         )
 
         // Ref(97) must hash to the same value as the actual struct body
-        val hashViaForwardRef = TypeDecl.Ref<GlobalTypeId>(id97).contentHash(o)
+        val hashViaForwardRef = TypeDecl.Ref(id97).contentHash(o)
         val hashViaDirectRef = ioFileBody.contentHash(o)
         assertEquals(
             hashViaDirectRef,
@@ -365,7 +360,7 @@ class ContentHashTest {
         val intAst =
             TypeAst(cu = keywordsCu, id = intId, name = "int", body = TypeDecl.Range(intId, -2147483648L, 2147483647L))
         val store = mapOf(pairId to pairCanonical, ptrAId to ptrA, ptrBId to ptrB, intId to intAst)
-        val storeOracle: TypeAstOracle = TypeAstOracle(store::get)
+        val storeOracle = TypeAstOracle(store::get)
 
         // Pre-populate the cache the same way the dump test does:
         // hash every TypeAst.body top-level, then store under its id.
@@ -401,13 +396,13 @@ class ContentHashTest {
             body = TypeDecl.Pointer(TypeDecl.Ref(pairId)),
         )
         val store = mapOf(ptrInA.id to ptrInA, ptrInB.id to ptrInB)
-        val storeOracle: TypeAstOracle = TypeAstOracle(store::get)
+        val storeOracle = TypeAstOracle(store::get)
 
         // Form A: a Ref to ptrInA.
-        val formA = TypeDecl.Ref<GlobalTypeId>(ptrInA.id)
+        val formA = TypeDecl.Ref(ptrInA.id)
         // Form B: an InlineDef wrapping the same Pointer content, with
         // a different binding id (mimics the CU2 inline path).
-        val formB = TypeDecl.InlineDef<GlobalTypeId>(
+        val formB = TypeDecl.InlineDef(
             GlobalTypeId(SourceFile.CUSource("b.cpp"), 999),
             TypeDecl.Pointer(TypeDecl.Ref(pairId)),
         )

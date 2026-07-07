@@ -13,6 +13,7 @@ import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
 import ghistabs.parse.isXRefTarget
 import ghistabs.runTransaction
+import ghidra.program.model.data.Enum as GhidraEnum
 
 class TypeRegistry(
     private val dtm: DataTypeManager,
@@ -199,7 +200,7 @@ class TypeRegistry(
                 val winner = group.ast
                 val raw = makePlaceholder(winner, group.key.category)
                 val placeholder =
-                    if (winner.body is TypeDecl.Struct || raw is ghidra.program.model.data.Enum) register(raw) else raw
+                    if (winner.body is TypeDecl.Struct || raw is GhidraEnum) register(raw) else raw
                 for (m in group.members) placeholders.putIfAbsent(m, placeholder)
             }
 
@@ -482,10 +483,9 @@ class TypeRegistry(
      * the final type — no colliding second copy. bool doesn't reach this path — it comes through
      * BuiltinTable slot -16.
      */
-    private fun materialiseEnum(placeholder: DataType, body: TypeDecl.Enum<GlobalTypeId>): DataType {
-        val e = placeholder as ghidra.program.model.data.Enum
-        for ((mname, mval) in body.members) e.add(mname, mval)
-        return e
+    private fun materialiseEnum(placeholder: GhidraEnum, body: TypeDecl.Enum<GlobalTypeId>): DataType {
+        for ((mname, mval) in body.members) placeholder.add(mname, mval)
+        return placeholder
     }
 
     private fun materialiseBody(ast: TypeAst, category: CategoryPath, placeholder: DataType): DataType =
@@ -538,12 +538,12 @@ class TypeRegistry(
                 ArrayDataType(safeElem, numElements, safeElem.length)
             }
 
-            is TypeDecl.Enum -> materialiseEnum(placeholder, body)
+            is TypeDecl.Enum -> materialiseEnum(placeholder as GhidraEnum, body)
 
             // `@s<bits>;e...;` — explicit enum size (stabs.texinfo §"String Field"); size already
             // applied to the placeholder in makePlaceholder.
             is TypeDecl.WithSizeAttr if body.inner is TypeDecl.Enum ->
-                materialiseEnum(placeholder, body.inner)
+                materialiseEnum(placeholder as GhidraEnum, body.inner)
 
             is TypeDecl.Range, is TypeDecl.Complex, is TypeDecl.Float, is TypeDecl.WithSizeAttr, is TypeDecl.Builtin ->
                 BuiltinTable.resolve(body) ?: placeholder
@@ -910,53 +910,4 @@ fun detectUndefinedRuns(
     val prevName = if (runStartIdx > 0) sorted[runStartIdx - 1].first else null
     flushRun(prevName, null)
     return out
-}
-
-fun computeGaps(componentRecords: List<Pair<String, Pair<Int, Int>>>, totalLengthBytes: Int): List<GapRecord> {
-    if (componentRecords.isEmpty()) return emptyList()
-
-    val gaps = mutableListOf<GapRecord>()
-    // Sort by offset
-    val sorted = componentRecords.sortedBy { it.second.first }
-
-    // Check for gaps between consecutive fields
-    for (i in 0 until sorted.size - 1) {
-        val (currName, currMetrics) = sorted[i]
-        val (nextName, nextMetrics) = sorted[i + 1]
-        val currOffset = currMetrics.first
-        val currLength = currMetrics.second
-        val nextOffset = nextMetrics.first
-        val currEnd = currOffset + currLength
-
-        if (currEnd < nextOffset) {
-            val gapLength = nextOffset - currEnd
-            gaps.add(
-                GapRecord(
-                    offsetBits = (currEnd * 8).toLong(),
-                    lengthBits = (gapLength * 8).toLong(),
-                    prevField = currName,
-                    nextField = nextName,
-                ),
-            )
-        }
-    }
-
-    // Check for trailing gap
-    val lastRecord = sorted.last()
-    val lastOffset = lastRecord.second.first
-    val lastLength = lastRecord.second.second
-    val lastEnd = lastOffset + lastLength
-    if (lastEnd < totalLengthBytes) {
-        val trailingGapLength = totalLengthBytes - lastEnd
-        gaps.add(
-            GapRecord(
-                offsetBits = (lastEnd * 8).toLong(),
-                lengthBits = (trailingGapLength * 8).toLong(),
-                prevField = lastRecord.first,
-                nextField = null,
-            ),
-        )
-    }
-
-    return gaps
 }
