@@ -255,7 +255,7 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
             compromised = compromised,
             canonicalGroups = canonicalGroups,
             divergentCollisions = divergent,
-            sourceFolds = resolver.harvest.sourceCanonicalization.filter { it.key != it.value }.toSortedMap(),
+            sourceFolds = resolver.sourceCanonicalization.filter { it.key != it.value }.toSortedMap(),
             contentHashCollisions = hashCollisions,
             duplicateNamedTypes = duplicateNamed,
         )
