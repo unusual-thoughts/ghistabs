@@ -838,9 +838,7 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
         // not the rule. A high count signals canonicalisation/dedup regressions like
         // the cross-CU TypeId collision fixed in 4b21a6c.
         val suffixed = program.dataTypeManager.allDataTypes
-            .asSequence()
-            .filter { Regex("""^.+_\d+$""").matches(it.name) }
-            .count()
+            .asSequence().count { Regex("""^.+_\d+$""").matches(it.name) }
         Assertions.assertTrue(
             suffixed < 200,
             "Suspiciously many _N-suffixed types: $suffixed (expected < 200)",
@@ -940,9 +938,9 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
             .filter { it.name == "DCInst_vftable" }
             .maxByOrNull { it.numComponents }
         Assertions.assertNotNull(vmethods, "DCInst_vftable not found")
-        val virtuals = (0 until vmethods!!.numComponents).map {
+        val virtuals = (0 until vmethods!!.numComponents).mapNotNull {
             vmethods.getComponent(it).fieldName
-        }.filterNotNull().toSet()
+        }.toSet()
         // DCInst's own + inherited (Inst::Get* via ExprInst → XapInst → Inst chain).
         val expected = setOf(
             "GetInstType", "__comp_dtor", "__deleting_dtor",
