@@ -13,9 +13,18 @@ class SourceFoldingTest {
     }
 
     @Test
-    fun ambiguousBasenameDoesNotMerge() {
-        // Two distinct full paths share a basename → the bare name is ambiguous; keep all three apart.
+    fun sameHeaderUnderDifferentBuildRootsFolds() {
+        // One physical header (`bouniaf/image.h`) compiled in two build trees keeps its parent dir,
+        // so both full spellings fold onto the bare name.
         val inputs = listOf("image.h", "/jenkins/project/image.h", "/work/project/image.h")
+        val map = foldSourcePaths(inputs)
+        for (i in inputs) assertEquals("image.h", map.getValue(i))
+    }
+
+    @Test
+    fun distinctHeadersSharingBasenameDoNotMerge() {
+        // Different parent dirs → genuinely distinct files; the bare name is ambiguous, nothing folds.
+        val inputs = listOf("config.h", "/proj/moduleA/config.h", "/proj/moduleB/config.h")
         val map = foldSourcePaths(inputs)
         for (i in inputs) assertEquals(i, map.getValue(i))
     }
