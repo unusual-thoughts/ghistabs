@@ -1,81 +1,86 @@
 # TODO
 
-Last triaged: 2026-06-23 (post-`af463a5`). All entries verified
-against the current degradation dumps in `build/degradations/` and
-the regression test suite (24 baseline passing).
+Materialization / degradation backlog. (Render & decompilation-output issues
+live in `docs/notes/render-backlog.md` — separate concern.)
 
-## Open
+Last triaged: 2026-07-07. Verified against the current degradation dumps in
+`build/test-output/degradations/` and the regression suite (6 fixtures:
+xapasmcsr.exe, xmltest, appquery.exe, box2d_tests, packfile.exe, unpackfile.exe).
 
-### Real, fixable
+## Open — prioritized
 
-- [ ] **Pattern B: anonymous Pointer/Array to never-bound id** (~1000
-  entries on box2d, 24 on xmltest, 5 on box2d_tests) — gcc-12 emits
-  `(0,89)=*(0,25)` where `(0,25)` is never bound by any record in this
-  binary's stab. Two possible recoveries:
-  - **DWARF-supplementary harvest**: the binaries carry `.debug_info`
-    too. Walk DWARF for the same compilation unit, find the type at the
-    matching location, materialise it.
-  - **Cross-CU id-shape matching**: for each dangling id `(CU, N)` look
-    for a TypeAst in another CU at the same `N` whose enclosing-shape
-    matches. Fragile; might bind the wrong type.
+### P1 — Untyped locals/params from never-bound gcc-12 ids (the "Pattern B" family)
 
-- [ ] **xmltest vtables** — gcc-12 omits the method section from
-  polymorphic-class stabs (XMLNode et al. — full 311-char stab ends
-  `;;` with no methods). Inheritance is now applied (the pseudo-field
-  promotion in `synthesizeXRefStubsForDanglingInheritanceRefs` works),
-  but ClassBuilder finds 0 virtuals to populate the vftable with. Same
-  Pattern B family. Likely needs DWARF-supplementary, same fix as
-  above. Two regression tests (`atLeastOneVtableStructApplied`
-  xmltest×2) currently println instead of asserting.
+**Highest-impact gap by far.** gcc-12 emits `(0,89)=*(0,25)` where `(0,25)` is
+never bound by any record in this binary's stab, so the local/param/field falls
+back to `Undefined4` and surfaces as `local-untyped`/`param-untyped` (formerly
+counted as "dangling anonymous Pointer/Array"). Current counts:
+- box2d: `local-untyped=6252`, `param-untyped=3675` (dominates its 11555 total)
+- xmltest: `param-untyped=97`, `local-untyped=54`, `dangling-ref=2`
+- box2d_tests: `field-dropped=19`, `xref-stub-in-array-element=1`
 
-- [ ] **vfptr-collision on CLexStream** (1 entry, xapasmcsr) —
-  `[vfptr-collision] CLexStream: cannot place {vfptr} at +0 (occupied
-  by <anon>)`. The synthesised 112-byte placeholder at +0 for the
-  missing `basic_ifstream` base looks like a regular component, so
-  `firstPolymorphicBase` can't see the inheritance edge. Either teach
-  `resolveBaseAstStatic` to follow the synthetic placeholder, or detect
-  the case and emit `vfptr-inherited-from-base` like the gcc-12
-  pseudo-field branch does.
+Recovery options (unchanged, still valid):
+- **DWARF-supplementary harvest** (preferred): the binaries carry `.debug_info`
+  too. Walk DWARF for the same CU, find the type at the matching location,
+  materialise it. Principled; the C fixtures (box2d) are where it pays most.
+- **Cross-CU id-shape matching**: for a dangling `(CU, N)` find a TypeAst in
+  another CU at the same `N` with matching enclosing-shape. Fragile.
 
-- [ ] **VtableSymbolCandidates: templated names not supported**
-  (VtableSymbolCandidates.kt:62) — the hand-rolled Itanium mangler for
-  `_ZTV<class>` lookup doesn't handle template arguments. Switch to
-  iterating existing `_ZTV…` symbols and demangling each via
-  `GnuDemangler` (the ClassBuilder demangler refactor makes this the
-  natural next step).
+### P2 — Anonymous aggregates get synthetic names (`noAnonymousMaterializedTypes`)
+
+Genuine anonymous struct/union/enum aggregates materialise under
+`Anon_<file>_<N>_<hash>` names. The **type is real and correct** (content-hashed,
+§20/§21) — only the name is ugly. Now the largest degradation count on
+box2d_tests (`local-typed-anonymous=407`, `param-typed-anonymous=67`). Cosmetic,
+so lower priority than P1, but high volume. Test relaxed to `println`
+(`RegressionTest.noAnonymousMaterializedTypes`). Possible: name from the sole
+containing field/typedef when unambiguous.
+
+### P3 — Admin / hygiene
+
+- [ ] **Purge forbidden words from git history**: csr/qualcomm/adk/xapasmcsr/
+  appquery/bose/qc35/bluecore. (Privacy — do before any publication.)
+- [ ] Log capture in tests — consider `Msg.debug/info/warn/error` over `MessageLog`.
+- [ ] Does the `TypeDecl` / `SymbolDecl` split make sense, or merge?
+- [ ] Add missing kdoc to remaining stab tokens in the parser (parity with N_*).
+- [ ] **Define structures in the `.stab` section itself** — `StabRecord` as a
+  Ghidra Structure overlay so the disassembler view of `.stab` shows decoded
+  fields (refs into `.stabstr`, back into code/data for symbols). Feature-sized.
 
 ### Aspirational / out-of-scope
 
-- [ ] **`noEmptyStructs` residual /std/* fwd-decls** (~5 per fixture) —
-  libstdc++ forward decls referenced by other structs. `dtm.remove()`
-  would orphan the referrer (becomes BadDataType); leaving the empty
-  Structure is the lesser evil. Test currently relaxed to println.
-- [ ] **`noAnonymousMaterializedTypes` residual `[file,N]`** — anonymous
-  types from gcc 12 stabs that resolve to a real anonymous aggregate.
-  The synthetic name is ugly but the type itself is genuine. Test
-  currently relaxed to println.
+- [ ] **`noEmptyStructs` residual /std/* fwd-decls** (~5 per fixture) — libstdc++
+  forward decls referenced by other structs. `dtm.remove()` orphans the referrer
+  (→ BadDataType); leaving the empty Structure is the lesser evil. Test → println.
+- [ ] **Library-class vtables** — `vtable-failed=2` on appquery/packfile/unpackfile
+  is `std::runtime_error`/`std::exception` `truly-missing`: their `_ZTV` isn't in
+  the binary (lives in libstdc++), so no vtable can be built. Expected, not fixable
+  here. (Was mis-scoped as "xmltest vtables" — xmltest now emits **no**
+  `vtable-failed`; the gcc-12 no-methods case is handled by pseudo-field promotion.)
 
-### Admin / housekeeping
+## Resolved since last triage (2026-06-23 → 2026-07-07)
 
-- [ ] JUnit 4 vs 5 cleanup (IntelliJ complains).
-- [ ] **investigate N_RSYM vs N_LSYM register local semantics** — when
-  parsing N_RSYM records, determine how register-based locals differ
-  from N_LSYM-declared stack locals beyond the storage class; currently
-  both go through the same applyLocal path.
-- [ ] Log capture in tests — consider `Msg.debug/info/warn/error` over
-  `MessageLog`.
-- [ ] **Purge forbidden words from git history**:
-  csr/qualcomm/adk/xapasmcsr/appquery/bose/qc35/bluecore.
-- [ ] Does the `TypeDecl` / `SymbolDecl` split make sense, or merge?
-- [ ] Add missing kdoc to remaining stab tokens in the parser
-  (similar coverage to the N_* records).
-- [ ] **Define structures in the `.stab` section itself** — turn
-  `StabRecord` into a Ghidra Structure overlay so the disassembler view
-  of `.stab` shows decoded fields (refs into `.stabstr` and back into
-  code/data for symbols).
-- [ ] `ContentHash.hashDecl` could be a `data class hashCode()` — the
-  rest of the AST is already a `data class`; only this one hand-rolled
-  hash remains.
+- [x] **vfptr-collision on CLexStream** — gone; no `vfptr-collision` in the
+  current xapasmcsr dump.
+- [x] **VtableSymbolCandidates templated names** — already handled:
+  `resolveVtableAddress` iterates `_ZTV*` symbols and `decodesToClass` demangles
+  each; `itaniumMangleClassName` deliberately returns templated names unchanged
+  for that scan fallback.
+- [x] **Enum double-registration → `.conflict`** — enum placeholders now register
+  up front and fill in place (render-backlog §21). Zero `.conflict` across fixtures.
+- [x] **Unresolved enum XRef stubbed as struct → wrong return ABI** — an enum-kind
+  XRef now stubs as `EnumDataType`, not a Composite, so `AppImage::image_type` is a
+  clean register return instead of a hidden-pointer struct return (render-backlog §16).
+
+### Retired (obsolete / decided not to do)
+
+- **JUnit 4 vs 5 cleanup** — no JUnit4 usage remains in the test sources; obsolete.
+- **N_RSYM vs N_LSYM investigation** — answered: register locals (`39a01dd`) differ
+  only in storage class, already dispatched in `applyLocal`; nothing further.
+- **`ContentHash.hashDecl` → `data class hashCode()`** — not a cleanup: the hand-
+  rolled hash is intentionally reference-aware (resolves XRefs via the oracle) and
+  cycle-detecting (`visited`); `ContentHash.kt` documents why a plain `hashCode()`
+  won't do.
 
 ### Decided not to do
 
