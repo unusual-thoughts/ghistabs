@@ -14,6 +14,7 @@ import ghistabs.StabsAnalyzer
 import ghistabs.diagnose.CapturingSink
 import ghistabs.diagnose.defaultContext
 import ghistabs.harvest.Harvester
+import ghistabs.harvest.foldSourcePaths
 import ghistabs.importer.ImportContext
 import ghistabs.importer.StaticContexts
 import ghistabs.parse.*
@@ -255,7 +256,10 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
             compromised = compromised,
             canonicalGroups = canonicalGroups,
             divergentCollisions = divergent,
-            sourceFolds = resolver.sourceCanonicalization.filter { it.key != it.value }.toSortedMap(),
+            sourceFolds = foldSourcePaths(
+                harvest.lineEntries.keys + harvest.symbolsByCu.keys +
+                    harvest.typeAsts.values.flatMap { listOfNotNull(it.id.source.filename, it.declSourceFile) },
+            ).filter { it.key != it.value }.toSortedMap(),
             contentHashCollisions = hashCollisions,
             duplicateNamedTypes = duplicateNamed,
         )

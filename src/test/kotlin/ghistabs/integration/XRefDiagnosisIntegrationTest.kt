@@ -55,7 +55,7 @@ class XRefDiagnosisIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                 val harvest = program.runTransaction("xref-diag-harvest") {
                     harvester.passA(reader.records)
                 }
-                val resolver = TypeResolver(harvest, ctx.options.canonicalizePaths, ctx)
+                val resolver = TypeResolver(harvest, ctx.options.foldSources, ctx)
 
                 // Collect every distinct XRef appearing anywhere in the harvest.
                 val xrefs = mutableSetOf<TypeDecl.XRef<*>>()
