@@ -31,10 +31,10 @@ class Renderer(val typeResolver: TypeResolver, val program: Program, val mode: M
     val decomp = if (mode != Mode.SKELETON) DecompInterface().also { it.openProgram(program) } else null
 
     val sources by lazy {
-        // All three are already canonical (§15): the line-entry view is canonical-keyed, and
-        // functionSource / effectiveSourceFor return canonical spellings.
+        // All three are already canonical (§15): line-entry sources are canonicalized at the data
+        // layer, and functionSource / effectiveSourceFor return canonical spellings.
         (
-            typeResolver.lineEntriesByCanonicalSource.keys + typeResolver.functionSource.values +
+            typeResolver.harvest.lineEntries.keys + typeResolver.functionSource.values +
                 typeResolver.harvest.typeAsts.values.map { typeResolver.effectiveSourceFor(it) }
             ).filter { it.isNotEmpty() }.toSet()
     }
@@ -70,24 +70,21 @@ private class RenderContext(val renderer: Renderer, val source: String) {
     val harvest get() = renderer.typeResolver.harvest
     val program get() = renderer.program
 
-    // [source] is canonical (§15). The keyed lookups below are canonical on both sides —
-    // functionSource / effectiveSourceFor return canonical, and the line/symbol views are
-    // canonical-keyed. Only per-record raw source fields (LineEntry.source, SymbolRecord.sourceFile,
-    // id.source.filename) still need [canon] at their comparison sites.
+    // [source] and every per-record source field are canonical (§15, folded at the data layer), so
+    // comparisons here need no per-site canonicalization — except the raw `id.source` in reportAnomalies.
     private val tr = renderer.typeResolver
-    private fun canon(s: String) = tr.canonicalSource(s)
 
     private val rawFuncs = harvest.openFunctions.filter { tr.functionSource[it] == source }
-    private val lines = tr.lineEntriesByCanonicalSource[source].orEmpty()
+    private val lines = harvest.lineEntries[source].orEmpty()
     private val typeDecls = harvest.typeAsts.values
         .filter { tr.effectiveSourceFor(it) == source && it.name != null && it.declLine > 0 }
-    private val symbols = tr.symbolsByCanonicalSource[source].orEmpty()
+    private val symbols = harvest.symbolsByCu[source].orEmpty()
 
     // Collapse long template spellings (basic_string<char,…> → string) in AST-rendered types,
     // matching the DTM shortening pass that only the decompiler (DTM-backed) otherwise reflects.
     private val shortener by lazy { harvestTemplateShortener(harvest) }
 
-    private val spans = FunctionSpans.of(rawFuncs, source, ::canon)
+    private val spans = FunctionSpans.of(rawFuncs, source)
 
     private val maxLine = sequenceOf(
         spans.maxLine,
@@ -208,7 +205,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
                     )
             }
             for (p in f.params) {
-                if (p.sourceFile?.let(::canon) != source) continue
+                if (p.sourceFile != source) continue
                 when (val d = p.body) {
                     is SymbolDecl.StackParam -> place(p.declLine, d.name, d.type, "(param)")
                     is SymbolDecl.RegParam -> place(p.declLine, d.name, d.type, "(reg param)")
@@ -216,7 +213,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
                 }
             }
             for (l in f.locals) {
-                if (l.sourceFile?.let(::canon) != source) continue
+                if (l.sourceFile != source) continue
                 when (val d = l.body) {
                     is SymbolDecl.RegLocal -> place(l.declLine, d.name, d.type, "(reg local)")
                     is SymbolDecl.StackLocal -> place(l.declLine, d.name, d.type, "(stack local)")
@@ -394,7 +391,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             val slines = r.func.lineEntries.sortedBy { it.addr.address.offset }
             fun entryFor(addr: Address?) = addr?.let { a -> slines.lastOrNull { it.addr.address.offset <= a.offset } }
             fun refOf(e: LineEntry): String {
-                val file = if (canon(e.source) == source) "" else "${canon(e.source).substringAfterLast('/')} "
+                val file = if (e.source == source) "" else "${e.source.substringAfterLast('/')} "
                 return "${file}L ${e.line}"
             }
 
@@ -411,7 +408,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             var currentLine: Int? = null
             for (dl in cLines.drop(1)) {
                 val entry = entryFor(dl.address)
-                val ownLine = entry?.takeIf { canon(it.source) == source }?.line
+                val ownLine = entry?.takeIf { it.source == source }?.line
                 if (runs.isNotEmpty() && (ownLine == null || ownLine == currentLine)) {
                     runs.last().lines += dl
                 } else {
@@ -503,7 +500,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
         }
 
         val fromTypes = referenced.asSequence().map { resolver.effectiveSourceFor(it) }
-        val fromInlined = rawFuncs.asSequence().flatMap { it.lineEntries.asSequence() }.map { canon(it.source) }
+        val fromInlined = rawFuncs.asSequence().flatMap { it.lineEntries.asSequence() }.map { it.source }
         val headers = (fromInlined + fromTypes)
             .filter { it != source && it.hasHeaderExtension() }
             .distinct()
@@ -539,7 +536,8 @@ private class RenderContext(val renderer: Renderer, val source: String) {
                 }
             }
             for (ast in harvest.typeAsts.values) {
-                if (canon(ast.id.source.filename) != source || ast.declLine !in interior) continue
+                // id.source stays raw (DTM identity), so canonicalize this one comparison explicitly.
+                if (tr.canonicalSource(ast.id.source.filename) != source || ast.declLine !in interior) continue
                 val name = ast.name ?: continue
                 anomalies += "skeleton[$source]: type $name declared at L${ast.declLine} $where"
             }
