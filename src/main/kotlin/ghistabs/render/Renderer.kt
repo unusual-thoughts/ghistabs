@@ -34,7 +34,7 @@ class Renderer(val typeResolver: TypeResolver, val program: Program, val mode: M
         // All three are already canonical (§15): line-entry sources are canonicalized at the data
         // layer, and functionSource / effectiveSourceFor return canonical spellings.
         (
-            typeResolver.harvest.lineEntries.keys + typeResolver.functionSource.values +
+            typeResolver.canonLines.keys + typeResolver.functionSource.values +
                 typeResolver.harvest.typeAsts.values.map { typeResolver.effectiveSourceFor(it) }
             ).filter { it.isNotEmpty() }.toSet()
     }
@@ -74,11 +74,11 @@ private class RenderContext(val renderer: Renderer, val source: String) {
     // comparisons here need no per-site canonicalization — except the raw `id.source` in reportAnomalies.
     private val tr = renderer.typeResolver
 
-    private val rawFuncs = harvest.openFunctions.filter { tr.functionSource[it] == source }
-    private val lines = harvest.lineEntries[source].orEmpty()
+    private val rawFuncs = tr.canonFunctions.filter { tr.functionSource[it] == source }
+    private val lines = tr.canonLines[source].orEmpty()
     private val typeDecls = harvest.typeAsts.values
         .filter { tr.effectiveSourceFor(it) == source && it.name != null && it.declLine > 0 }
-    private val symbols = harvest.symbolsByCu[source].orEmpty()
+    private val symbols = tr.canonSymbols[source].orEmpty()
 
     // Collapse long template spellings (basic_string<char,…> → string) in AST-rendered types,
     // matching the DTM shortening pass that only the decompiler (DTM-backed) otherwise reflects.
@@ -132,6 +132,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
     private fun emitSlineAnnotations() {
         // Aggregates the addresses of N_SLINEs sharing a (line, codeUnit) into one annotation.
         data class SliceKey(val line: Int, val codeUnit: String)
+
         val byKey = mutableMapOf<SliceKey, MutableSet<Address>>()
         for (entry in lines) {
             if (entry.line !in 1..maxLine) continue
@@ -181,6 +182,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
     }
 
     private data class DeclKey(val line: Int, val name: String)
+
     private val seenDecls = mutableSetOf<DeclKey>()
 
     // One declaration per (line, name); `this` never renders. Guards every decl pass.

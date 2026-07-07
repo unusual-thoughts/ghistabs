@@ -9,10 +9,13 @@ import ghistabs.parse.*
  * per-reason failure counters, canonical-key grouping for TypeRegistry slot assignment,
  * and content-distinct collision filtering.
  */
-class TypeResolver(val harvest: Harvest, sink: DiagnosticSink = DummySink) :
-    DiagnosticSink by sink,
+class TypeResolver(
+    val harvest: Harvest,
+    private val canonicalizePaths: Boolean = true,
+    sink: DiagnosticSink = DummySink,
+) : DiagnosticSink by sink,
     TypeAstOracle {
-    val typeAsts get() = harvest.typeAsts
+    private val typeAsts get() = harvest.typeAsts
 
     /** All named aggregate / enum ASTs, indexed by raw stabs name. */
     private val astsByName: Map<String, List<TypeAst>> by lazy {
@@ -117,16 +120,10 @@ class TypeResolver(val harvest: Harvest, sink: DiagnosticSink = DummySink) :
         }
     }
 
-    // Index TypeAsts by simple name → BINCL-anchored source of the
-    // type's defining declaration. Prefer concrete Struct / Enum
-    // bodies over forward-decl `XRef`s and over Refs / aliases:
-    // gcc emits XRef stubs for class names mentioned via pointer
-    // /reference inside unrelated headers (e.g. `class
-    // bouniaf;` reachable from `<iostream>` via the include
-    // graph), and those XRef stubs share the class's simple name
-    // — picking one of them would route the class's methods to
-    // `<iostream>` instead of `lexstream.h`.
-    val classSourceByName by lazy {
+    // name → its defining source. Prefer concrete Struct/Enum over forward-decl XRef stubs: gcc emits
+    // those for classes merely mentioned by pointer in unrelated headers (e.g. reachable via <iostream>),
+    // and picking one would route the class's methods to that header instead of its real home.
+    private val classSourceByName by lazy {
         mutableMapOf<String, String>().apply {
             val bestRank = mutableMapOf<String, Int>()
             for (ast in typeAsts.values) {
@@ -144,78 +141,140 @@ class TypeResolver(val harvest: Harvest, sink: DiagnosticSink = DummySink) :
         }
     }
 
-    private val functionSourceRaw by lazy {
-        mutableMapOf<OpenFunction, String>().apply {
-            for (f in harvest.openFunctions) {
-                if (f.isSyntheticInit) {
-                    this[f] = f.cu.filename
-                    continue
+    /** Function → its **canonical** source file (§15), so render compares canonical to canonical. */
+    val functionSource by lazy {
+        canonFunctions.mapNotNull { f ->
+            when {
+                f.isSyntheticInit -> f.cu.filename
+
+                // The lowest-address N_SLINE source is where gcc says the body lives (the function's own
+                // line entries suffice — no address scan). Fall back to the class-decl source only when it
+                // has no line entries (a gcc-implicit method materialised inside an unrelated header).
+                else -> f.lineEntries.minByOrNull { it.addr.address.offset }?.source ?: f.outermostClass()
+                    ?.let { classSourceByName[it] }
+            }?.let { f to canonicalSource(it) }
+        }.toMap()
+    }
+
+    /**
+     * Infer a class's owning header when gcc emitted its `:Tt` definition inside a .cpp, losing the header
+     * association so `id.source` is a misleading .cpp (e.g. AppImage's def lands only in main.cpp). Majority
+     * vote over the N_SOL source of line entries inside the type's member bodies: gcc emits `N_SOL("foo.h")`
+     * bursts wherever a method inlines header code, pointing back at the real header. A real (non-stdlib)
+     * header wins; a stdlib-only type falls back to the stdlib majority only when its def is scattered across
+     * CUs (collapse it, rather than drag a single CU-local instantiation into a stdlib header).
+     *
+     * Voted over **raw** [lineEntries] pre-§15-canonicalization, so the hint (feeding `Attribution.keyFor`)
+     * keeps DTM attribution independent of render-source folding.
+     */
+    private val multiSourceHeaderHints: Map<String, String> by lazy {
+        if (harvest.openFunctions.isEmpty() || harvest.lineEntries.isEmpty()) {
+            emptyMap()
+        } else {
+            val astsByName =
+                typeAsts.values.filter { !it.name.isNullOrEmpty() && it.body.isXRefTarget }.groupBy { it.name!! }
+            val funcsByMangled = harvest.openFunctions.filter { (it.sizeBytes ?: 0uL) > 0uL }.associateBy { it.name }
+            val defSourcesByName = typeAsts.values
+                .filter { it.name != null }
+                .groupBy({ it.name!! }, { it.id.source.filename })
+                .mapValues { it.value.toSet() }
+            buildMap {
+                for ((name, asts) in astsByName) {
+                    val defSources = defSourcesByName[name] ?: continue
+                    if (defSources.all { it.hasHeaderExtension() }) continue
+                    val methods = asts.flatMap { (it.body as? TypeDecl.Struct<*>)?.methods.orEmpty() }
+                    if (methods.isEmpty()) continue
+                    // A type's own def sources win by body size, so exclude them from the vote.
+                    val userVote = mutableMapOf<String, Int>()
+                    val stdVote = mutableMapOf<String, Int>()
+                    for (m in methods) {
+                        val func = funcsByMangled[m.mangled ?: continue] ?: continue
+                        val lo = func.addr.address.offset
+                        val hi = lo + (func.sizeBytes ?: 0uL).toLong()
+                        for ((src, entries) in harvest.lineEntries) {
+                            if (src in defSources || !src.hasHeaderExtension()) continue
+                            val vote = if (src.isStdMarkerPath()) stdVote else userVote
+                            for (e in entries) {
+                                val a = e.addr.address.offset
+                                if (a in lo until hi) vote.merge(src, 1, Int::plus)
+                            }
+                        }
+                    }
+                    val winner = userVote.maxByOrNull { it.value }?.key
+                        ?: stdVote.takeIf { defSources.size > 1 }?.maxByOrNull { it.value }?.key
+                    winner?.let { put(name, it) }
                 }
-                // Trust SLINE attribution: the source of the function's lowest-address N_SLINE
-                // is where gcc says the body lives. The function carries its own line entries
-                // (stab-stream membership), so no address-range scan is needed. Fall back to the
-                // class-declaration source only when the function has no line entries
-                // (defaulted/implicit methods gcc materialises inside an unrelated template
-                // header, e.g. EquExpression's implicit copy ctor emitted inside std::pair).
-                f.lineEntries.minByOrNull { it.addr.address.offset }?.let { prologue ->
-                    this[f] = prologue.source
-                    continue
-                }
-                f.outermostClass()?.let { classSourceByName[it] }?.let { this[f] = it }
             }
         }
     }
 
-    /** Function → its **canonical** source file (§15), so render compares canonical to canonical. */
-    val functionSource: Map<OpenFunction, String> by lazy {
-        functionSourceRaw.mapValues { canonicalSource(it.value) }
+    val sourceCanonicalization by lazy {
+        when {
+            canonicalizePaths -> canonicalizeSourcePaths(
+                harvest.lineEntries.keys + harvest.symbolsByCu.keys +
+                    typeAsts.values.flatMap { listOfNotNull(it.id.source.filename, it.declSourceFile) },
+            )
+
+            else -> emptyMap()
+        }
     }
 
-    /** Raw header-owner hints (§15-independent), computed pre-canonicalization; see [multiSourceHeaderHints]. */
-    val multiSourceHeaderHints: Map<String, String> get() = harvest.multiSourceHeaderHints
+    // Canonical spelling of [raw] (identity when it doesn't fold, §15). Only the still-raw id.source /
+    // declSourceFile need it; line/symbol sources are already canonical from the data layer.
+    private fun canonicalSource(raw: String) = sourceCanonicalization[raw] ?: raw
 
-    // A multi-CU class lands at the header its member SLINEs mostly point to, not the .cpp gcc
-    // emitted the body burst in. Typedefs instead trust their N_SOL-effective declSourceFile: a
-    // template-instantiation typedef materialised inside a CU (`typedef __true_type __Normal`
-    // splayed into main.cpp) still names its real header there, so it renders in the header
-    // instead of masquerading as CU-local. Structs/enums keep the hint/CU path — a struct's `:T`
-    // body is legitimately CU-emitted (§6), and enum relocation is a broader change left for later.
-    private fun TypeAst.effectiveSourceRaw() = name?.let { multiSourceHeaderHints[it] }
-        ?: declSourceFile?.takeIf { it.isNotEmpty() && body !is TypeDecl.Struct && body !is TypeDecl.Enum }
-        ?: id.source.filename
-
-    /** Type → its **canonical** rendering source (§15), computed once — render's sole type-attribution accessor. */
-    val effectiveSourceByType: Map<TypeAst, String> by lazy {
-        typeAsts.values.associateWith { canonicalSource(it.effectiveSourceRaw()) }
+    val canonLines by lazy {
+        harvest.lineEntries.entries
+            .groupBy({ canonicalSource(it.key) }, { it.value })
+            // Re-sort after the fold: folded raw sources each arrive (line, addr)-sorted, but their
+            // concatenation isn't — render's SLINE annotations need the merged bucket sorted too.
+            .mapValues { (k, lists) ->
+                lists.flatten().map { it.copy(source = k) }.sortedWith(compareBy({ it.line }, { it.addr.offset }))
+            }
     }
 
-    /** Type → its **canonical** rendering source (§15). */
-    fun effectiveSourceFor(type: TypeAst) = effectiveSourceByType[type] ?: canonicalSource(type.effectiveSourceRaw())
+    val canonSymbols by lazy {
+        harvest.symbolsByCu.entries
+            .groupBy({ canonicalSource(it.key) }, { it.value })
+            .mapValues { (_, lists) ->
+                lists.flatten().map { it.copy(sourceFile = it.sourceFile?.let(::canonicalSource)) }.toMutableList()
+            }
+    }
+
+    val canonFunctions by lazy {
+        harvest.openFunctions.map { f ->
+            f.copy(
+                lineEntries = f.lineEntries.map { it.copy(source = canonicalSource(it.source)) }.toMutableList(),
+                params = f.params.map { it.copy(sourceFile = it.sourceFile?.let(::canonicalSource)) }.toMutableList(),
+                locals = f.locals.map { it.copy(sourceFile = it.sourceFile?.let(::canonicalSource)) }.toMutableList(),
+            )
+        }
+    }
+
+    // Named types vote via the hint (member-SLINE header); typedefs trust their N_SOL declSourceFile (a
+    // template-instantiation typedef splayed into a CU still names its real header); structs/enums fall
+    // back to id.source (their `:T` body is legitimately CU-emitted, §6).
+    private fun TypeAst.effectiveSource() = canonicalSource(
+        name?.let { multiSourceHeaderHints[it] }
+            ?: declSourceFile?.takeIf { it.isNotEmpty() && body !is TypeDecl.Struct && body !is TypeDecl.Enum }
+            ?: id.source.filename,
+    )
+
+    private val effectiveSourceByType: Map<TypeAst, String> by lazy {
+        typeAsts.values.associateWith { it.effectiveSource() }
+    }
+
+    /** Type → its **canonical** rendering source (§15) — render's sole type-attribution accessor. */
+    fun effectiveSourceFor(type: TypeAst) = effectiveSourceByType[type] ?: type.effectiveSource()
 
     /**
-     * Canonical spelling of [raw] (identity when it doesn't fold). The fold (§15) is computed and
-     * applied at the data layer ([Harvester.canonicalizeRenderSources]); `harvest.lineEntries` /
-     * `symbolsByCu` keys and their per-record `source`/`sourceFile` are already canonical, so this
-     * is only needed for the still-raw `id.source` / `declSourceFile` in type attribution.
-     */
-    fun canonicalSource(raw: String): String = harvest.sourceCanonicalization[raw] ?: raw
-
-    /**
-     * Canonical (CategoryPath, ghidraName) → group. Drives TypeRegistry slot assignment.
-     *
-     * One grouping pass with §20 content-unification folded in. First every XRef-target type is
-     * bucketed into its `(category, ghidraName)` slot and each slot's winner is picked
-     * ([classifyGroup]). Then slots are unified by **content hash**: gcc spells one physical header
-     * two ways (§15), so one logical type appears several times — a named struct/enum in one
-     * spelling, an anonymous copy in another, plus `typedef …;` aliases — landing in distinct slots
-     * that would give the DTM several DataTypes for one type (and the decompiler's display-name
-     * resolution, scanning all same-named DataTypes, would pick the wrong one). Within each
-     * content-equivalence class that has exactly one distinct *named* ghidraName, every slot —
-     * including anonymous ones, which carry no name for `keyForAst` to match — collapses onto that
-     * name's largest/most-resolved slot. Content identity (not source path) is the signal, so it
-     * needs no path canonicalization and reaches headers that don't fold by basename. Classes with
-     * two distinct real names (coincidentally identical layout) or no named member are left as
-     * separate slots.
+     * Canonical (category, ghidraName) → group; drives TypeRegistry slot assignment. XRef-targets are
+     * bucketed into `(category, ghidraName)` slots ([classifyGroup] picks each winner), then slots are
+     * unified by **content hash** (§20): gcc spells one header two ways, so one logical type lands in
+     * several slots (named, anonymous copy, typedef aliases) → several DataTypes → the decompiler picks
+     * the wrong same-named one. Within a content class holding exactly one named ghidraName, every slot —
+     * anonymous ones included — collapses onto that name's largest slot. Content, not path, is the signal,
+     * so it reaches headers that don't fold by basename; distinct-named or unnamed classes stay separate.
      */
     val byCanonicalKey: Map<GhidraKey, CanonicalGroup> by lazy {
         val byGhidraName = typeAsts.values.groupBy { it.ghidraName }
@@ -244,10 +303,9 @@ class TypeResolver(val harvest: Harvest, sink: DiagnosticSink = DummySink) :
                 )
                 debug(
                     "canonical-content-merged",
-                    "${winner.key}: ${equivalent.size} groups (${equivalent.count {
-                        it.ast.name.isNullOrEmpty()
-                    }} anon) " +
-                        "across ${equivalent.map { it.key.category }.toSet()}",
+                    "${winner.key}: ${equivalent.size} groups (${
+                        equivalent.count { it.ast.name.isNullOrEmpty() }
+                    } anon) across ${equivalent.map { it.key.category }.toSet()}",
                 )
                 put(
                     winner.key,
@@ -313,64 +371,5 @@ class TypeResolver(val harvest: Harvest, sink: DiagnosticSink = DummySink) :
     companion object {
         /** Empty resolver — useful for tests that only need oracle defaults. */
         val Empty = TypeResolver(Harvest(emptyMap()))
-    }
-}
-
-/**
- * Infer a class's owning header when gcc emitted its `:Tt` definition inside a .cpp rather than a
- * BINCL'd header — the header association is lost at emission, so the def's `id.source` is a
- * misleading .cpp (e.g. AppImage's full def lands only in main.cpp). Majority vote over the N_SOL
- * source of line entries inside the type's member-function bodies: gcc emits `N_SOL("foo.h")` bursts
- * wherever a method inlines header code, so those entries point back at the declaring header
- * (AppImage's destructors inlined into main.cpp carry appimage.h entries).
- *
- * Only types with a .cpp definition source are considered: a def already in a header renders
- * correctly via `id.source`, and a hint could only drag it to a worse one. A real (non-stdlib)
- * header vote always wins. When a type inlines only stdlib code (std::string/std::vector) it has no
- * real-header home; fall back to the stdlib majority *only if the def is scattered across several
- * sources*, to collapse it into one file instead of duplicating it per CU — a single .cpp-local
- * instantiation is left in place rather than dragged into a stdlib header.
- *
- * Computed over **raw** [lineEntries] before §15 path-canonicalization, so the hint (which feeds
- * `Attribution.keyFor`) keeps DTM attribution independent of render-source folding.
- */
-fun multiSourceHeaderHints(
-    typeAsts: Map<GlobalTypeId, TypeAst>,
-    openFunctions: List<OpenFunction>,
-    lineEntries: Map<String, List<LineEntry>>,
-): Map<String, String> {
-    if (openFunctions.isEmpty() || lineEntries.isEmpty()) return emptyMap()
-    val astsByName = typeAsts.values.filter { !it.name.isNullOrEmpty() && it.body.isXRefTarget }.groupBy { it.name!! }
-    val funcsByMangled = openFunctions.filter { (it.sizeBytes ?: 0uL) > 0uL }.associateBy { it.name }
-    val defSourcesByName = typeAsts.values
-        .filter { it.name != null }
-        .groupBy({ it.name!! }, { it.id.source.filename })
-        .mapValues { it.value.toSet() }
-    return buildMap {
-        for ((name, asts) in astsByName) {
-            val defSources = defSourcesByName[name] ?: continue
-            if (defSources.all { it.hasHeaderExtension() }) continue
-            val methods = asts.flatMap { (it.body as? TypeDecl.Struct<*>)?.methods.orEmpty() }
-            if (methods.isEmpty()) continue
-            // A type's own def sources win by body size, so exclude them from the vote.
-            val userVote = mutableMapOf<String, Int>()
-            val stdVote = mutableMapOf<String, Int>()
-            for (m in methods) {
-                val func = funcsByMangled[m.mangled ?: continue] ?: continue
-                val lo = func.addr.address.offset
-                val hi = lo + (func.sizeBytes ?: 0uL).toLong()
-                for ((src, entries) in lineEntries) {
-                    if (src in defSources || !src.hasHeaderExtension()) continue
-                    val vote = if (src.isStdMarkerPath()) stdVote else userVote
-                    for (e in entries) {
-                        val a = e.addr.address.offset
-                        if (a in lo until hi) vote.merge(src, 1, Int::plus)
-                    }
-                }
-            }
-            val winner = userVote.maxByOrNull { it.value }?.key
-                ?: stdVote.takeIf { defSources.size > 1 }?.maxByOrNull { it.value }?.key
-            winner?.let { put(name, it) }
-        }
     }
 }
