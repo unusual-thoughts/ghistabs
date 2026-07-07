@@ -95,6 +95,14 @@ private fun ClangLine.isSignature() = content().any { it.inside(ClangFuncProto::
 // params are also ClangVariableDecls, so exclude it.
 private fun ClangLine.isDeclaration() = !isSignature() && content().any { it.inside(ClangVariableDecl::class.java) }
 
+// A wrap fragment that is only trailing punctuation (`;`/`)`/`.`/`,`) — Ghidra broke it off the end
+// of a long statement with no extra indent, so it carries no address and the depth-based rejoin can't
+// see it. Never a statement of its own, so it rejoins its predecessor unconditionally. Braces aren't
+// in the set, so a `}` still keeps its own row.
+private val TRAILING_PUNCTUATION = setOf(";", ")", ".", ",", "->")
+private fun ClangLine.isTrailingPunctuation() =
+    significant().let { toks -> toks.isNotEmpty() && toks.all { it.text in TRAILING_PUNCTUATION } }
+
 /**
  * Decompiler output with the leading declaration block folded onto the signature line and
  * same-typed locals grouped (`string *a; string *b;` → `string *a,*b;`), so statements start at
@@ -125,11 +133,9 @@ fun DecompileResults.compressedDecompLines(elideSjlj: Boolean = false): List<Dec
     // lands on one row later. Indent is the head line's own nesting level; braces stay their own lines.
     val body = lines.subList(bodyStart, lines.size).fold(mutableListOf<MutableList<ClangLine>>()) { acc, line ->
         val head = acc.lastOrNull()?.first()
-        if (head != null && line.indent > head.indent && line.blockDepth() == head.blockDepth()) {
-            acc.last() += line
-        } else {
-            acc += mutableListOf(line)
-        }
+        val continues = head != null &&
+            ((line.indent > head.indent && line.blockDepth() == head.blockDepth()) || line.isTrailingPunctuation())
+        if (continues) acc.last() += line else acc += mutableListOf(line)
         acc
     }
     return listOf(DecompLine(head, null)) +

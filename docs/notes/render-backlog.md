@@ -68,11 +68,13 @@ Structurally sound: `T_<digits>` dangling type refs = 0; no unparseable garbage.
   fixture. The only surviving `_ZN…C2Ev` occurrences are embedded in `_GLOBAL__I_/_GLOBAL__D_`
   static-init/destruction thunk names (e.g. `_GLOBAL__I__ZN8XDVImageC2Ev`) — legitimate GNU
   symbols Ghidra neither can nor should demangle, consistent across skeleton and decomp modes.
-- **Open — [E] orphan punctuation (still ~74 lone `;` lines / 38 files, decomp):** the "subsumed
-  by #2" note was optimistic. Ghidra splits an extreme `std::` member-access chain or long call
-  across lines and `compressedDecompLines`' address rejoin doesn't pull the trailing `;`, so it
-  lands alone (e.g. `image.cpp:64` `_M_start` chain; `bits64image.cpp:92`; `xmltest:349`). Merge
-  a lone trailing-punctuation continuation onto its statement's row.
+- **DONE — [E] orphan punctuation (was ~74 lone `;` / 38 files, decomp):** Ghidra split an extreme
+  `std::` member-access chain or long call and broke the trailing `;` onto its own line with no extra
+  indent; that fragment carries no address, so the depth-based rejoin couldn't see it. `compressedDecompLines`'
+  continuation test now also folds any line whose significant tokens are all trailing punctuation
+  (`;`/`)`/`.`/`,`/`->`, braces excluded so `}` keeps its row) onto the preceding statement row.
+  Verified: lone-`;`/`.`/`)` across all fixtures **74 → 0**, the `;` re-attaches to its statement
+  (`…_M_start ;  // ⇐ stl_iterator.h L 584`), full integration suite green.
 - **Open — stale N_SOL in decomp (~129):** `// … stale N_SOL?` skeleton-mode staleness markers
   leak into decomp output, mostly on reg-locals/params (`int aEnd; // L 27 (reg local); stale
   N_SOL?`). Trim them in decomp mode.
