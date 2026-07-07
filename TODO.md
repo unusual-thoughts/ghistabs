@@ -40,6 +40,16 @@ containing field/typedef when unambiguous.
 
 - [ ] **Purge forbidden words from git history**: csr/qualcomm/adk/xapasmcsr/
   appquery/bose/qc35/bluecore. (Privacy — do before any publication.)
+- [ ] **JUnit4/5 mixed-framework warning** — IntelliJ flags every integration
+  test (`Method '…' annotated with '@Test' inside class extending JUnit 4
+  TestCase`). Cause: our tests are JUnit5 (`@Test`, `@ParameterizedClass`,
+  `useJUnitPlatform`) but extend Ghidra's `AbstractGhidraHeadlessIntegrationTest`,
+  whose ancestors (`AbstractGTest`/`AbstractGenericTest`) carry JUnit4 machinery
+  (`@Rule TestName`, `org.junit.Assert`, `@After`). Cosmetic — the JUnit4 rules
+  are inert under JUnit5 and our tests do their own setup, so the suite passes.
+  Fix options: (a) suppress the inspection; (b) stop extending the Ghidra base and
+  bootstrap the headless app via a JUnit5 `@ExtendWith` extension — clean but a
+  real refactor. Low value; likely just suppress.
 - [ ] Log capture in tests — consider `Msg.debug/info/warn/error` over `MessageLog`.
 - [ ] Does the `TypeDecl` / `SymbolDecl` split make sense, or merge?
 - [ ] Add missing kdoc to remaining stab tokens in the parser (parity with N_*).
@@ -74,7 +84,6 @@ containing field/typedef when unambiguous.
 
 ### Retired (obsolete / decided not to do)
 
-- **JUnit 4 vs 5 cleanup** — no JUnit4 usage remains in the test sources; obsolete.
 - **N_RSYM vs N_LSYM investigation** — answered: register locals (`39a01dd`) differ
   only in storage class, already dispatched in `applyLocal`; nothing further.
 - **`ContentHash.hashDecl` → `data class hashCode()`** — not a cleanup: the hand-
