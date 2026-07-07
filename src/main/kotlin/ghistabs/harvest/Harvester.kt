@@ -317,8 +317,6 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, private 
 
         synthesizeXRefStubsForDanglingInheritanceRefs()
         nameAnonymousTypedefTargets()
-        // Vote for header owners on RAW sources, before canonicalizeRenderSources folds them — the
-        // hint feeds Attribution, which must stay independent of §15 render-source canonicalization.
 
         return Harvest(
             typeAsts = typeAsts,
@@ -331,13 +329,6 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, private 
             },
         )
     }
-
-    /**
-     * Fold every render-facing source spelling to its canonical (§15) form once, so render never
-     * re-canonicalizes per record: rewrites [LineEntry.source] / [SymbolRecord.sourceFile] (on the
-     * by-source indices and the per-function copies) and re-keys [lineEntriesByFile] / [symbolsByCu].
-     * `id.source` stays raw (DTM identity), so the map is returned for [Harvest] to retain.
-     */
 
     /**
      * Recover gcc 12's malformed C++ inheritance emission. Instead of the documented

@@ -30,14 +30,7 @@ class Renderer(val typeResolver: TypeResolver, val program: Program, val mode: M
     // the constructor param, so openProgram(program) would be handed null.
     val decomp = if (mode != Mode.SKELETON) DecompInterface().also { it.openProgram(program) } else null
 
-    val sources by lazy {
-        // All three are already canonical (§15): line-entry sources are canonicalized at the data
-        // layer, and functionSource / effectiveSourceFor return canonical spellings.
-        (
-            typeResolver.canonLines.keys + typeResolver.functionSource.values +
-                typeResolver.harvest.typeAsts.values.map { typeResolver.effectiveSourceFor(it) }
-            ).filter { it.isNotEmpty() }.toSet()
-    }
+    val sources get() = typeResolver.sources
 
     fun renderSkeleton(source: String) = RenderContext(this, source).render()
 
@@ -70,15 +63,15 @@ private class RenderContext(val renderer: Renderer, val source: String) {
     val harvest get() = renderer.typeResolver.harvest
     val program get() = renderer.program
 
-    // [source] and every per-record source field are canonical (§15, folded at the data layer), so
-    // comparisons here need no per-site canonicalization — except the raw `id.source` in reportAnomalies.
+    // [source] and every per-record source field come from the resolver's facade with §15 folds
+    // already applied, so comparisons here are fold-to-fold with no per-site work.
     private val tr = renderer.typeResolver
 
-    private val rawFuncs = tr.canonFunctions.filter { tr.functionSource[it] == source }
-    private val lines = tr.canonLines[source].orEmpty()
+    private val rawFuncs = tr.functions.filter { tr.functionSource[it] == source }
+    private val lines = tr.linesBySource[source].orEmpty()
     private val typeDecls = harvest.typeAsts.values
         .filter { tr.effectiveSourceFor(it) == source && it.name != null && it.declLine > 0 }
-    private val symbols = tr.canonSymbols[source].orEmpty()
+    private val symbols = tr.symbolsBySource[source].orEmpty()
 
     // Collapse long template spellings (basic_string<char,…> → string) in AST-rendered types,
     // matching the DTM shortening pass that only the decompiler (DTM-backed) otherwise reflects.
@@ -148,6 +141,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
 
     private fun emitTypedefs() {
         data class Td(val line: Int, val name: String, val rendered: String)
+
         val typedefs = typeDecls
             .filter { it.declLine in 1..maxLine && it.body !is TypeDecl.Struct && it.body !is TypeDecl.Enum }
             .mapNotNull { ast ->
@@ -381,7 +375,9 @@ private class RenderContext(val renderer: Renderer, val source: String) {
                 canvas[line].fragments.removeAll { f ->
                     when {
                         f.kind == FragmentKind.DECL_GLOBAL && !f.stale -> false
+
                         f.kind.subsumedByDecomp || f.stale -> true
+
                         else -> {
                             strays += listOfNotNull(f.code, f.commentAt(line)).joinToString("  ")
                             true
@@ -537,11 +533,9 @@ private class RenderContext(val renderer: Renderer, val source: String) {
                     anomalies += "skeleton[$source]: function $gname closes at L${g.endLine} $where"
                 }
             }
-            for (ast in harvest.typeAsts.values) {
-                // id.source stays raw (DTM identity), so canonicalize this one comparison explicitly.
-                if (tr.canonicalSource(ast.id.source.filename) != source || ast.declLine !in interior) continue
-                val name = ast.name ?: continue
-                anomalies += "skeleton[$source]: type $name declared at L${ast.declLine} $where"
+            for (ast in typeDecls) {
+                if (ast.declLine !in interior) continue
+                anomalies += "skeleton[$source]: type ${ast.name} declared at L${ast.declLine} $where"
             }
             for (s in symbols) {
                 if (s.declLine !in interior) continue
