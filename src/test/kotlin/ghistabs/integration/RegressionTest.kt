@@ -214,7 +214,6 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
                     key.toString(),
                     g.ast.id.toString(),
                     g.ast.ghidraName,
-                    resolver.contentHash(g.ast.body),
                     g.members.size,
                     g.members.count { harvest.typeAsts[it]?.name.isNullOrEmpty() },
                     g.distinct,
@@ -222,13 +221,20 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
             }
         // §20 diagnosis: content-equivalent classes still spanning >1 group (a merge that didn't fire),
         // and DataTypes sharing a simple name (the `.conflict` source in the decomp).
+        // Group by content hash (equality only — the raw value is a JVM-run-nondeterministic
+        // `Objects.hash` of enum members, so it's used to bucket but never stored/sorted on).
         val hashCollisions = resolver.byCanonicalKey.values
             .groupBy { resolver.contentHash(it.ast.body) }
             .filterValues { it.size > 1 }
-            .map { (hash, gs) ->
-                HashClassEntry(hash, gs.map { it.ast.ghidraName }, gs.map { it.ast.ghidraName }.toSortedSet().toList())
+            .map { (_, gs) ->
+                HashClassEntry(
+                    gs.map {
+                        it.ast.ghidraName
+                    }.sorted(),
+                    gs.map { it.ast.ghidraName }.toSortedSet().toList(),
+                )
             }
-            .sortedBy { it.hash }
+            .sortedBy { it.distinctNames.joinToString() }
         val duplicateNamed = registry.allCreatedDataTypes()
             .groupBy { it.name.substringBefore(".conflict") }
             .filterValues { it.size > 1 }
@@ -249,7 +255,7 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
             compromised = compromised,
             canonicalGroups = canonicalGroups,
             divergentCollisions = divergent,
-            sourceFolds = resolver.sourceCanonicalization.filter { it.key != it.value }.toSortedMap(),
+            sourceFolds = resolver.harvest.sourceCanonicalization.filter { it.key != it.value }.toSortedMap(),
             contentHashCollisions = hashCollisions,
             duplicateNamedTypes = duplicateNamed,
         )
@@ -1352,7 +1358,7 @@ private data class RegistryDump(
 )
 
 @kotlinx.serialization.Serializable
-private data class HashClassEntry(val hash: Int, val groups: List<String>, val distinctNames: List<String>)
+private data class HashClassEntry(val groups: List<String>, val distinctNames: List<String>)
 
 @kotlinx.serialization.Serializable
 private data class DumpSummary(
@@ -1370,7 +1376,6 @@ private data class CanonicalGroupEntry(
     val key: String,
     val winnerId: String,
     val winner: String,
-    val contentHash: Int,
     val members: Int,
     val anon: Int,
     val distinct: Int,
