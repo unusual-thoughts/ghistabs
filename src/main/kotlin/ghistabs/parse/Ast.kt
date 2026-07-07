@@ -157,6 +157,7 @@ data class FieldDecl<Id : IdInterface>(
     val offsetBits: Long,
     val sizeBits: Long,
     val isStatic: Boolean,
+    val access: Access,
 )
 
 @Serializable

@@ -269,12 +269,12 @@ class Parser(src: String) {
                         c.consume(',')
                         val sizeBits = c.parseInt()
                         c.consume(';')
-                        fields.add(FieldDecl(name, type, offsetBits, sizeBits, isStatic = false))
+                        fields.add(FieldDecl(name, type, offsetBits, sizeBits, isStatic = false, access))
                     } else {
                         c.consume(':')
                         c.readUntilAny(charArrayOf(';')) // mangled symbol; discarded — captured by COFF symbol table
                         c.consume(';')
-                        fields.add(FieldDecl(name, type, 0, 0, isStatic = true))
+                        fields.add(FieldDecl(name, type, 0, 0, isStatic = true, access))
                     }
                 }
 
@@ -287,7 +287,7 @@ class Parser(src: String) {
                     c.consume(',')
                     val sizeBits = c.parseInt()
                     c.consume(';')
-                    fields.add(FieldDecl(name, type, offsetBits, sizeBits, isStatic = false))
+                    fields.add(FieldDecl(name, type, offsetBits, sizeBits, isStatic = false, Access.PUBLIC))
                 }
 
                 c.startsWith("/") -> {
@@ -298,7 +298,7 @@ class Parser(src: String) {
                     c.consume(':')
                     c.readUntilAny(charArrayOf(';')) // mangled symbol; discarded — captured by COFF symbol table
                     c.consume(';')
-                    fields.add(FieldDecl(name, type, 0, 0, isStatic = true))
+                    fields.add(FieldDecl(name, type, 0, 0, isStatic = true, access))
                 }
 
                 else -> {
