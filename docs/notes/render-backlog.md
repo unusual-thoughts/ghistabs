@@ -265,7 +265,23 @@ Follow-up (not done): a fully structural rewrite over parsed template args would
 still than the boundary-guarded textual one. Over-eager but harmless aliases like
 `random_access_iterator_tag`→`_Tag` remain a name-quality question, not correctness.
 
-## 8. Stack/register local injection — status (working; caveats)
+## 8. Stack/register local injection — status (working; caveats). Part B (attribution) — RESOLVED
+
+**Re-verified (this pass).** Two unrelated topics live here.
+
+*Part A (the title) — working.* Current appquery `main` still adopts the stabs names
+(`major`, `trapsets`, `used`, `version`, `vminfo`, `xdv`, `xuv`, `minor`, `name`, `is_xuv`, `i`, …).
+Only register-var (`N_RSYM`) partial-liveness mapping remains a possible future item.
+
+*Part B (the AppImage attribution divergence, below) — RESOLVED by §6's shared hint.* AppImage now
+**renders** in `…/imageutil/appimage.h` and its **DTM category** is the same `…/appimage.h/AppImage` —
+the two paths agree. They weren't unified by pointing `effectiveSource` at `byCanonicalKey` (as the
+note proposed) but by both consulting the shared `multiSourceHeaderHints` map (`effectiveSource` =
+`hint ?: declSourceFile ?: id.source`; `Attribution.keyFor` = std → real-header → single → **hint** →
+`lex-min/multi`). Residual: the paths are still separate code and *could* diverge for a hint-less,
+real-header-less multi-source **struct** (`effectiveSource → id.source` vs `keyFor → lex-min/multi`);
+§6 flagged this "not exercised by the current fixtures" and it still isn't. The `divergentCollisions`
+dump surface is a different concern (content-distinct same-name bodies across CUs), not this split.
 
 Verified the injected `LocalVariableImpl`/register locals are adopted by the
 decompiler: appquery `main` shows 13/14 stabs stack locals by name (`major`,
