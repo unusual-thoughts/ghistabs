@@ -13,6 +13,9 @@ private val STD_MARKERS = Regex("""/(usr|lib|include)(/[^/]+)?/(mingw|cygwin|c\+
 private fun stripDriveLetter(path: String): String =
     if (path.length >= 2 && path[1] == ':' && path[0].isLetter()) path.substring(2) else path
 
+/** Path segments, drive letter dropped and both separators honoured (stabs mixes `/` and `\`). */
+private fun pathSegments(path: String) = stripDriveLetter(path).split('/', '\\').filter { it.isNotEmpty() }
+
 private val CU_LOCAL_NAME = Regex("""\.?_anon_\d+""")
 
 /**
@@ -35,15 +38,20 @@ fun String.isStdMarkerPath(): Boolean = STD_MARKERS.containsMatchIn(this)
  * definitions, and the bare `#include "x.h"` spelling where another TU only forward-references it.
  * Each CU's N_BINCL carries a different checksum (its own expansion), so they can't be merged by
  * checksum — basename identity is the signal. A **bare** name (no path separator) that is the
- * basename of **exactly one** full path also present folds that full path onto the bare spelling:
- * the shorter name wins and is what displays. Guard: if two distinct full paths share a basename
- * (`a/config.h`, `b/config.h`) the bare name is ambiguous, so nothing folds.
+ * basename of full paths also present folds those full paths onto the bare spelling: the shorter
+ * name wins and is what displays. One physical header compiled under several build roots keeps its
+ * immediate parent directory (`.../project/image.h` from a Jenkins tree and a devtools tree), so
+ * full paths fold when they **all agree on that parent** — including the single-path case. Guard:
+ * genuinely distinct headers sharing a basename (`moduleA/config.h`, `moduleB/config.h`) disagree
+ * on the parent, so nothing folds. Same-parent different-root false positives merge only render
+ * output; DTM attribution votes over raw spellings and is unaffected.
  *
  * Returns raw spelling → folded spelling; every input maps to itself unless it folds.
  */
 fun foldSourcePaths(filenames: Iterable<String>): Map<String, String> {
     fun isBare(s: String) = '/' !in s && '\\' !in s
-    fun basename(s: String) = s.substringAfterLast('/').substringAfterLast('\\')
+    fun basename(s: String) = pathSegments(s).last()
+    fun parentDir(s: String) = pathSegments(s).dropLast(1).lastOrNull().orEmpty()
 
     val all = filenames.toSet()
     val fullPathsByBasename = all.filterNot(::isBare).groupBy(::basename)
@@ -51,7 +59,7 @@ fun foldSourcePaths(filenames: Iterable<String>): Map<String, String> {
     for (name in all) {
         if (!isBare(name)) continue
         val fulls = fullPathsByBasename[name] ?: continue
-        if (fulls.size == 1) fold[fulls.single()] = name
+        if (fulls.mapTo(mutableSetOf(), ::parentDir).size == 1) fulls.forEach { fold[it] = name }
     }
     return all.associateWith { fold[it] ?: it }
 }
