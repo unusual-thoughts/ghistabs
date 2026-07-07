@@ -101,7 +101,7 @@ class StabsPlugin(tool: PluginTool) : ProgramPlugin(tool) {
                     ).passA(reader.records)
                 }
                 val written = Renderer(
-                    TypeResolver(harvest, canonicalizePaths = options.canonicalizePaths),
+                    TypeResolver(harvest),
                     program,
                     Mode.ELIDE_SJLJ,
                 ).use { it.renderAll(dir, monitor) }
