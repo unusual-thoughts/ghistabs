@@ -21,14 +21,12 @@ data class Harvest(
     /** N_SLINE entries grouped by N_SOL-effective source filename; sorted by line on insertion. */
     val lineEntries: Map<String, List<LineEntry>> = mapOf(),
     /** type name → owning-header hint (raw spelling), voted pre-canonicalization; see [multiSourceHeaderHints]. */
-    val multiSourceHeaderHints: Map<String, String> = mapOf(),
     /**
      * Raw source spelling → canonical (§15), built once at harvest and already applied to the
      * render-facing per-record fields ([LineEntry.source], [SymbolRecord.sourceFile]) and the
      * [lineEntries]/[symbolsByCu] keys. [TypeAst.id] stays raw (DTM identity), so [TypeResolver]
      * still consults this map for type render-source attribution. Empty when canonicalization is off.
      */
-    val sourceCanonicalization: Map<String, String> = mapOf(),
 ) {
 
     fun getType(id: GlobalTypeId) = typeAsts[id]

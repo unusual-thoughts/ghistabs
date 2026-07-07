@@ -16,14 +16,10 @@ import ghistabs.parse.*
  * (stabs-canonicalization.md §3).
  */
 
-class Harvester(
-    private val monitor: TaskMonitor,
-    sink: DiagnosticSink,
-    private val resolver: AddressResolver,
-    private val canonicalizePaths: Boolean = true,
-) : DiagnosticSink by sink,
+class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, private val resolver: AddressResolver) :
+    DiagnosticSink by sink,
     Globalizer {
-    constructor(ctx: ImportContext<*>) : this(ctx.monitor, ctx, ctx.resolver, ctx.options.canonicalizePaths)
+    constructor(ctx: ImportContext<*>) : this(ctx.monitor, ctx, ctx.resolver)
 
     private val typeAsts = mutableMapOf<GlobalTypeId, TypeAst>()
     private val collidingAsts = mutableMapOf<GlobalTypeId, MutableMap<String, MutableSet<TypeDecl<GlobalTypeId>>>>()
@@ -323,8 +319,6 @@ class Harvester(
         nameAnonymousTypedefTargets()
         // Vote for header owners on RAW sources, before canonicalizeRenderSources folds them — the
         // hint feeds Attribution, which must stay independent of §15 render-source canonicalization.
-        val headerHints = multiSourceHeaderHints(typeAsts, openFunctions, lineEntriesByFile)
-        val sourceCanonicalization = canonicalizeRenderSources()
 
         return Harvest(
             typeAsts = typeAsts,
@@ -335,8 +329,6 @@ class Harvester(
             lineEntries = lineEntriesByFile.mapValues { (_, v) ->
                 v.sortedWith(compareBy({ it.line }, { it.addr.offset }))
             },
-            multiSourceHeaderHints = headerHints,
-            sourceCanonicalization = sourceCanonicalization,
         )
     }
 
@@ -346,35 +338,6 @@ class Harvester(
      * by-source indices and the per-function copies) and re-keys [lineEntriesByFile] / [symbolsByCu].
      * `id.source` stays raw (DTM identity), so the map is returned for [Harvest] to retain.
      */
-    private fun canonicalizeRenderSources(): Map<String, String> {
-        if (!canonicalizePaths) return emptyMap()
-        val map = canonicalizeSourcePaths(
-            lineEntriesByFile.keys + symbolsByCu.keys +
-                typeAsts.values.flatMap { listOfNotNull(it.id.source.filename, it.declSourceFile) },
-        )
-        fun canon(s: String) = map[s] ?: s
-
-        val canonLines = lineEntriesByFile.entries
-            .groupBy({ canon(it.key) }, { it.value })
-            .mapValues { (k, lists) -> lists.flatten().map { it.copy(source = k) }.toMutableList() }
-        lineEntriesByFile.clear()
-        lineEntriesByFile.putAll(canonLines)
-
-        val canonSymbols = symbolsByCu.entries
-            .groupBy({ canon(it.key) }, { it.value })
-            .mapValues { (_, lists) ->
-                lists.flatten().map { it.copy(sourceFile = it.sourceFile?.let(::canon)) }.toMutableList()
-            }
-        symbolsByCu.clear()
-        symbolsByCu.putAll(canonSymbols)
-
-        for (f in openFunctions) {
-            f.lineEntries.replaceAll { it.copy(source = canon(it.source)) }
-            f.params.replaceAll { it.copy(sourceFile = it.sourceFile?.let(::canon)) }
-            f.locals.replaceAll { it.copy(sourceFile = it.sourceFile?.let(::canon)) }
-        }
-        return map
-    }
 
     /**
      * Recover gcc 12's malformed C++ inheritance emission. Instead of the documented
