@@ -53,9 +53,14 @@ containing field/typedef when unambiguous.
 - [ ] Log capture in tests — consider `Msg.debug/info/warn/error` over `MessageLog`.
 - [ ] Does the `TypeDecl` / `SymbolDecl` split make sense, or merge?
 - [ ] Add missing kdoc to remaining stab tokens in the parser (parity with N_*).
-- [ ] **Define structures in the `.stab` section itself** — `StabRecord` as a
-  Ghidra Structure overlay so the disassembler view of `.stab` shows decoded
-  fields (refs into `.stabstr`, back into code/data for symbols). Feature-sized.
+- [x] **Define structures in the `.stab` section itself** — `StabSectionOverlay`
+  lays a `/stabs/StabRecord` struct (+ `/stabs/StabType` 1-byte enum for `n_type`)
+  on every 12-byte record; `n_strx` references the string it names in `.stabstr`
+  (defining the terminated string there), address-bearing records (`N_FUN`,
+  `N_STSYM`, …) reference the code/data their `n_value` points at, and each record
+  gets an EOL comment (`N_FUN "main"`). Raw physical view via
+  `StabReader.physicalRecords()` (headers + continuations unmerged). Gated by the
+  `Overlay .stab section structs` analyzer option (default on). Idempotent.
 
 ### Aspirational / out-of-scope
 
