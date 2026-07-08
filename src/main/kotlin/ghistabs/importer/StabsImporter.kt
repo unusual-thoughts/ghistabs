@@ -24,14 +24,14 @@ private val X86_64_DBX_TO_REGISTER = listOf(
 
 class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx {
     fun run(): PassResult {
-        val readerResult = StabReader.fromProgram(ctx.program)
-        if (readerResult == null) {
+        val reader = StabReader.fromProgram(ctx.program)
+        if (reader == null) {
             log("no-stabs", "No .stab/.stabstr block found; skipping import.")
             ctx.diagnostics.writeSummary(ctx.terminal)
             return PassResult()
         }
 
-        return runOnRecords(readerResult)
+        return runOnRecords(reader.readAll())
     }
 
     internal fun runOnRecords(stabs: StabReader.Result): PassResult {
@@ -67,10 +67,14 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
 
         typeRegistry.reportSurvivingPlaceholders()
 
+        if (ctx.options.overlaySection) {
+            debug("stab-section-overlaid", count = StabSectionOverlay(ctx).apply().toLong())
+        }
+
         ctx.diagnostics.writeSummary(ctx.terminal)
 
         return PassResult(
-            recordsRead = stabs.recordCount,
+            recordsRead = stabs.totalRecordCount,
             recordsParsed = stabs.records.size - harvest.parseErrors,
             parseErrors = harvest.parseErrors,
             typesMaterialised = harvest.typeAsts.size,
@@ -81,7 +85,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
     }
 
     private fun recordHarvestCounters(harvest: Harvest, resolver: TypeResolver, stabs: StabReader.Result) {
-        debug("harvest-records-read", count = stabs.recordCount.toLong())
+        debug("harvest-records-read", count = stabs.totalRecordCount.toLong())
         debug("harvest-records-parsed", count = (stabs.records.size - harvest.parseErrors).toLong())
         debug("harvest-parse-errors", count = harvest.parseErrors.toLong())
         debug("harvest-functions", count = harvest.openFunctions.size.toLong())

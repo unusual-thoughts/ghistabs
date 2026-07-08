@@ -79,6 +79,12 @@ class StabsAnalyzer :
             null,
             "Minimum level for MessageLog diagnostic output (bookmarks and counters are unaffected).",
         )
+        options.registerOption(
+            OPT_OVERLAY_SECTION,
+            true,
+            null,
+            "Overlay a decoded StabRecord struct on every .stab entry (refs into .stabstr and back to code/data).",
+        )
     }
 
     fun run(ctx: ImportContext<*>) {
@@ -117,6 +123,7 @@ class StabsAnalyzer :
         const val OPT_SHORTEN_TYPEDEFS: String = "Shorten templated names via typedefs"
         const val OPT_FOLD_SOURCES: String = "Fold source-file spellings"
         const val OPT_LOG_LEVEL: String = "Minimum log level"
+        const val OPT_OVERLAY_SECTION: String = "Overlay .stab section structs"
 
         @JvmStatic
         fun isStabsDone(program: Program) = program.getOptions(Program.PROGRAM_INFO).getBoolean(OPT_STABS_DONE, false)
@@ -136,6 +143,7 @@ data class StabsOptions(
     val shortenTypedefs: Boolean = false,
     val foldSources: Boolean = true,
     val minLogLevel: Level = Level.INFO,
+    val overlaySection: Boolean = true,
 ) {
     constructor(opts: Options) : this(
         applyPlateComments = opts.getBoolean(StabsAnalyzer.OPT_PLATE_COMMENTS, true),
@@ -143,6 +151,7 @@ data class StabsOptions(
         shortenTypedefs = opts.getBoolean(StabsAnalyzer.OPT_SHORTEN_TYPEDEFS, false),
         foldSources = opts.getBoolean(StabsAnalyzer.OPT_FOLD_SOURCES, true),
         minLogLevel = opts.getEnum(StabsAnalyzer.OPT_LOG_LEVEL, Level.INFO),
+        overlaySection = opts.getBoolean(StabsAnalyzer.OPT_OVERLAY_SECTION, true),
     )
 
     constructor(program: Program) : this(
