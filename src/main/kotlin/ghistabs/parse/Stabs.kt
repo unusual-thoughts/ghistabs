@@ -1,9 +1,11 @@
 package ghistabs.parse
 
+import ghidra.app.util.bin.BinaryReader
+import ghidra.app.util.bin.ByteArrayProvider
+import ghidra.program.model.data.CategoryPath
 import ghidra.program.model.listing.Program
+import ghistabs.byteProvider
 import kotlinx.serialization.Serializable
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
 
 /** On-disk size of a single stab record (Sun a.out / PE-COFF / ELF). */
 const val STAB_RECORD_SIZE: Int = 12
@@ -12,101 +14,101 @@ const val STAB_RECORD_SIZE: Int = 12
  * Stab record type codes, mirrored from `binutils/include/aout/stab.def`.
  * Includes Apple ld / Sun cross-toolchain codes so the parser doesn't fall into UNKNOWN on them.
  */
-enum class StabType(val code: Int) {
-    UNKNOWN(-1),
+enum class StabType(val code: UByte) {
+    UNKNOWN(0xFFu),
 
     /**
      * CU header (Solaris2 / ELF stabs-in-sections). `n_value`=stabstr size for this CU,
      * `n_strx`=source filename, `n_desc`=count of upcoming symbols.
      */
-    N_UNDF(0x00),
+    N_UNDF(0x00u),
 
     /** Global variable. Only the name is significant; address is in the corresponding external symbol. */
-    N_GSYM(0x20),
+    N_GSYM(0x20u),
 
     /** Function name (for BSD Fortran). Only the name is significant; address is in the external symbol. */
-    N_FNAME(0x22),
+    N_FNAME(0x22u),
 
     /**
      * Function name / text-segment variable. Value=start address.
      * Empty-name `N_FUN` marks function *end* (value=end address); otherwise function ends at next `N_FUN`.
      */
-    N_FUN(0x24),
+    N_FUN(0x24u),
 
     /** Data-segment variable with internal linkage ("static sym"). Value is its address. */
-    N_STSYM(0x26),
+    N_STSYM(0x26u),
 
     /** BSS-segment variable with internal linkage (`.lcomm`). Value is its address. */
-    N_LCSYM(0x28),
+    N_LCSYM(0x28u),
 
     /** Name of main routine. Only the name is significant. Not used in C. */
-    N_MAIN(0x2A),
+    N_MAIN(0x2Au),
 
     /** Read-only data symbol in `.rodata` section (Solaris2). */
-    N_ROSYM(0x2C),
+    N_ROSYM(0x2Cu),
 
     /** Beginning of a relocatable function block, including stabs (macOS / Apple). */
-    N_BNSYM(0x2E),
+    N_BNSYM(0x2Eu),
 
     /** Global symbol for Pascal. Value is supposedly the line number. */
-    N_PC(0x30),
+    N_PC(0x30u),
 
     /** Number of symbols: `0, files,,funcs,lines` (Ultrix V4.0). */
-    N_NSYMS(0x32),
+    N_NSYMS(0x32u),
 
     /** No DST map for symbol — variable may have been optimized out (Ultrix V4.0). */
-    N_NOMAP(0x34),
+    N_NOMAP(0x34u),
 
     /**
      * `#define` body (GNU `-g3 -gstabs`). String=`"name body"`, `desc`=line number.
      * Documented in stabs.texinfo but absent from `stab.def`.
      */
-    N_MAC_DEFINE(0x36),
+    N_MAC_DEFINE(0x36u),
 
     /** Object file path (Solaris2 `.stab.index`). Two in a row give build dir + relative `.o` path. */
-    N_OBJ(0x38),
+    N_OBJ(0x38u),
 
     /** `#undef` (GNU `-g3 -gstabs`). String=name, `desc`=line. Absent from `stab.def`. */
-    N_MAC_UNDEF(0x3A),
+    N_MAC_UNDEF(0x3Au),
 
     /** Debugger options (Solaris2). Also emitted by Apple/GCC with `gcc2_compiled.`. */
-    N_OPT(0x3C),
+    N_OPT(0x3Cu),
 
     /** Register variable. Value is the register number. */
-    N_RSYM(0x40),
+    N_RSYM(0x40u),
 
     /** Modula-2 compilation unit. */
-    N_M2C(0x42),
+    N_M2C(0x42u),
 
     /** Line number in text segment. `desc` is the line number; value is the corresponding address. */
-    N_SLINE(0x44),
+    N_SLINE(0x44u),
 
     /** Line number in data segment. GCC2 uses the variable's own stab `desc` instead; gdb ignores since 3.5. */
-    N_DSLINE(0x46),
+    N_DSLINE(0x46u),
 
     /** Line number in BSS segment. Aliases `N_BROWS` (Sun source browser `.cb` path). */
-    N_BSLINE(0x48),
+    N_BSLINE(0x48u),
 
     /** GNU Modula-2 definition module dependency. Value is the modification time of the definition file. */
-    N_DEFD(0x4A),
+    N_DEFD(0x4Au),
 
     /** Function start/body/end line numbers (Solaris2). */
-    N_FLINE(0x4C),
+    N_FLINE(0x4Cu),
 
     /** End of a relocatable function block + debugging info (macOS / Apple). */
-    N_ENSYM(0x4E),
+    N_ENSYM(0x4Eu),
 
     /** GNU C++ exception variable. Aliases `N_MOD2` (Ultrix V4.0 Modula-2). */
-    N_EHDECL(0x50),
+    N_EHDECL(0x50u),
 
     /** GNU C++ `catch` clause. `desc == 0` = catches all; non-zero = `CAUGHT` stabs follow. */
-    N_CATCH(0x54),
+    N_CATCH(0x54u),
 
     /** Structure or union element. Value is the offset within the structure. */
-    N_SSYM(0x60),
+    N_SSYM(0x60u),
 
     /** Last stab emitted for module (Solaris2). */
-    N_ENDM(0x62),
+    N_ENDM(0x62u),
 
     /**
      * Main source file path. Value=start text address. If two appear, the one ending in `/` is build dir,
@@ -114,101 +116,100 @@ enum class StabType(val code: Int) {
      * `desc` language: 0x1=ASM, 0x2=K&R C, 0x3=ANSI C, 0x4=C++, 0x5=Fortran, 0x6=Pascal,
      * 0x7=Fortran90, 0x32=ObjC, 0x33=ObjC++.
      */
-    N_SO(0x64),
+    N_SO(0x64u),
 
     /** Apple `.o` association after `N_SO`. String=`.o` filename, value=`st_mtime`. */
-    N_OSO(0x66),
+    N_OSO(0x66u),
 
     /** Name of an alias symbol (SunPro Fortran 77). */
-    N_ALIAS(0x6C),
+    N_ALIAS(0x6Cu),
 
     /** Automatic (stack) variable; value is offset from frame pointer. Also used for type descriptions. */
-    N_LSYM(0x80),
+    N_LSYM(0x80u),
 
     /**
      * Include-file start (Sun). Linker fills `value` with a checksum of header stabs,
      * matched against `N_EXCL` for duplicate-include suppression.
      */
-    N_BINCL(0x82),
+    N_BINCL(0x82u),
 
     /** `#include`d sub-source filename. Value=start text address; used for line-number tracking only. */
-    N_SOL(0x84),
+    N_SOL(0x84u),
 
     /** Compiler parameters (Apple/Mach-O). String is the parameter name; other fields are zero. */
-    N_PARAMS(0x86),
+    N_PARAMS(0x86u),
 
     /** Compiler version string (Apple/Mach-O). String is the version; other fields are zero. */
-    N_VERSION(0x88),
+    N_VERSION(0x88u),
 
     /** Compiler `-O` optimization level (Apple/Mach-O). String is the level; other fields are zero. */
-    N_OLEVEL(0x8A),
+    N_OLEVEL(0x8Au),
 
     /** Parameter variable. Value is offset from the argument pointer. */
-    N_PSYM(0xA0),
+    N_PSYM(0xA0u),
 
     /** Include-file end. Brackets `N_BINCL`; pairs can nest. */
-    N_EINCL(0xA2),
+    N_EINCL(0xA2u),
 
     /** Alternate entry point. AIX/XCOFF `C_ENTRY` — only name is significant. */
-    N_ENTRY(0xA4),
+    N_ENTRY(0xA4u),
 
     /**
      * Lexical block start. `desc`=nesting level; value=start address (relative to source file usually,
      * relative to enclosing function in stabs-in-sections). Variables in the block *precede* this stab.
      */
-    N_LBRAC(0xC0),
+    N_LBRAC(0xC0u),
 
     /**
      * Placeholder replacing a duplicate `N_BINCL`/`N_EINCL` pair (Sun linker output).
      * Value=original `N_BINCL` checksum, matched by filename.
      */
-    N_EXCL(0xC2),
+    N_EXCL(0xC2u),
 
     /** Modula-2 scope information (Sun linker). */
-    N_SCOPE(0xC4),
+    N_SCOPE(0xC4u),
 
     /** Patch Run Time Checker marker (Solaris2). */
-    N_PATCH(0xD0),
+    N_PATCH(0xD0u),
 
     /** Lexical block end. `desc` matches `N_LBRAC`; value=end address (same relativity). */
-    N_RBRAC(0xE0),
+    N_RBRAC(0xE0u),
 
     /** Begin named common block. */
-    N_BCOMM(0xE2),
+    N_BCOMM(0xE2u),
 
     /** End named common block (name matches `N_BCOMM`). */
-    N_ECOMM(0xE4),
+    N_ECOMM(0xE4u),
 
     /** Common-block member; value=offset within block. Appears between `N_BCOMM`/`N_ECOMM`. */
-    N_ECOML(0xE8),
+    N_ECOML(0xE8u),
 
     /** Pascal `with`-statement scope: `type,,0,0,offset` (Solaris2). */
-    N_WITH(0xEA),
+    N_WITH(0xEAu),
 
-    // Gould non-base register symbols. GNU assigned these values without a Gould to verify against.
     /** Gould non-base register symbol (text). */
-    N_NBTEXT(0xF0),
+    N_NBTEXT(0xF0u),
 
     /** Gould non-base register symbol (data). */
-    N_NBDATA(0xF2),
+    N_NBDATA(0xF2u),
 
     /** Gould non-base register symbol (BSS). */
-    N_NBBSS(0xF4),
+    N_NBBSS(0xF4u),
 
     /** Gould non-base register symbol (static). */
-    N_NBSTS(0xF6),
+    N_NBSTS(0xF6u),
 
     /** Gould non-base register symbol (local common). */
-    N_NBLCS(0xF8),
+    N_NBLCS(0xF8u),
 
     /** Length-value entry for the preceding stab. */
-    N_LENG(0xFE),
+    N_LENG(0xFEu),
     ;
 
     companion object {
-        private val byCode: Map<Int, StabType> = entries.filter { it != UNKNOWN }.associateBy { it.code }
+        private val byCode: Map<UByte, StabType> = entries.filter { it != UNKNOWN }.associateBy { it.code }
 
-        fun fromCode(b: Int): StabType = byCode[b and 0xFF] ?: UNKNOWN
+        fun fromCode(b: UByte): StabType = byCode[b] ?: UNKNOWN
     }
 }
 
@@ -229,156 +230,177 @@ val TYPES_WITH_CONTINUATION: Set<StabType> = setOf(
  * absorbed continuations are not surfaced.
  */
 @Serializable
-data class StabRecord(
-    val recordIndex: Int,
-    val type: StabType,
-    val rawType: Int,
-    val other: Int,
-    val desc: Int,
-    val value: Long,
-    val name: String,
-)
+data class StabRecord(val index: Int, val type: StabType, val raw: RawHeader, var name: String = "") {
+    internal constructor(index: Int, raw: RawHeader) : this(
+        index,
+        type = StabType.fromCode(raw.type),
+        raw = raw,
+    )
+
+    internal constructor(
+        index: Int,
+        type: StabType,
+        other: Int,
+        desc: Int,
+        value: Long,
+        name: String,
+    ) : this(index, type, raw = RawHeader(0, type.code, other.toUByte(), desc, value), name)
+
+    val rawType = raw.type
+    val value = raw.value
+    val desc = raw.desc
+    val other = raw.other
+}
+
+/**
+ * One physical 12-byte stab record exactly as laid out in `.stab`, in file order — including
+ * `N_UNDF` CU headers and `\`-continuation records that [StabReader.readAll] absorbs. Used to
+ * overlay a decoded structure onto the raw section. [stabstrOffset] folds in the per-CU
+ * `.stabstr` base so it indexes straight into the string block; [name] is this record's own
+ * (unmerged) string.
+ */
+@Serializable
+data class PhysicalStab(val byteOffset: Long, val strx: Long, val stabstrOffset: Long, val record: StabRecord)
 
 /**
  * Reads stab records from raw `.stab` / `.stabstr` bytes, tracking per-CU offsets and merging
  * `\`-continuation chains. Truncated tails (size % 12 ≠ 0) are surfaced via [Result.truncatedTail].
  */
-class StabReader(
-    private val stab: ByteArray,
-    private val stabstr: ByteArray,
-    private val littleEndian: Boolean = true,
-) {
+class StabReader(private val stab: BinaryReader, private val stabStr: (Long) -> String) {
     data class Result(
         val records: List<StabRecord>,
-        val recordCount: Int,
+        val totalRecordCount: Int = records.size,
         /** Unprocessed trailing bytes (size % 12 ≠ 0). */
-        val truncatedTail: Int,
-    ) {
-        constructor(records: List<StabRecord>) : this(records, records.size, 0)
-    }
+        val truncatedTail: Long = 0,
+    )
+
+    constructor(stab: ByteArray, stabStr: ByteArray) : this(
+        BinaryReader(
+            ByteArrayProvider(
+                stab,
+            ),
+            true,
+        ),
+        { n ->
+            stabStr.asIterable().drop(n.toInt()).takeWhile { it != 0.toByte() }.toByteArray().toString(Charsets.UTF_8)
+        },
+    )
 
     fun readAll(): Result {
         val records = mutableListOf<StabRecord>()
-        val buf = ByteBuffer.wrap(stab).apply {
-            order(if (littleEndian) ByteOrder.LITTLE_ENDIAN else ByteOrder.BIG_ENDIAN)
-        }
 
-        var cuOff = 0
-        var cuSize = 0
+        var cuOff = 0L
+        var cuSize = 0L
         var physicalIndex = 0
+        var unusedHdr: RawHeader? = null
 
-        while (buf.remaining() >= STAB_RECORD_SIZE) {
-            val recordIndex = physicalIndex
-            val header = decodeRecord(buf)
-            val (nStrx, nType, nOther, nDesc, nValue) = header
-            physicalIndex++
-
-            val type = StabType.fromCode(nType)
-
-            if (type == StabType.N_UNDF) {
+        while (stab.hasNext(STAB_RECORD_SIZE)) {
+            val header = unusedHdr?.also { unusedHdr = null } ?: RawHeader(stab)
+            val record = StabRecord(physicalIndex++, header)
+            if (record.type == StabType.N_UNDF) {
                 cuOff += cuSize
-                cuSize = nValue.toInt()
-                records.add(
-                    StabRecord(
-                        recordIndex = recordIndex,
-                        type = type,
-                        rawType = nType,
-                        other = nOther,
-                        desc = nDesc,
-                        value = nValue,
-                        name = "",
-                    ),
-                )
-                continue
-            }
+                cuSize = header.value
+            } else {
+                record.name = stabStr(cuOff + header.strx)
 
-            val cuEnd = if (cuSize > 0) cuOff + cuSize else stabstr.size
-            var name = cstring(stabstr, cuOff + nStrx, cuEnd)
+                if (record.type in TYPES_WITH_CONTINUATION && record.name.endsWith("\\")) {
+                    record.name = record.name.dropLast(1)
 
-            if (type in TYPES_WITH_CONTINUATION && name.endsWith("\\")) {
-                name = name.dropLast(1)
+                    // Spec says continuation records carry 0 in non-string fields; trusted, not asserted.
+                    while (stab.hasNext(STAB_RECORD_SIZE)) {
+                        val contHeader = RawHeader(stab)
 
-                // Spec says continuation records carry 0 in non-string fields; trusted, not asserted.
-                while (buf.remaining() >= STAB_RECORD_SIZE) {
-                    val peekPos = buf.position()
-                    val contHeader = decodeRecord(buf)
+                        if (contHeader.type != record.raw.type) {
+                            unusedHdr = contHeader
+                            break
+                        }
+                        physicalIndex++
 
-                    if (StabType.fromCode(contHeader.type) != type) {
-                        buf.position(peekPos)
-                        break
-                    }
-
-                    val contName = cstring(stabstr, cuOff + contHeader.strx, cuEnd)
-                    name += if (contName.endsWith("\\")) {
-                        contName.dropLast(1)
-                    } else {
-                        contName
-                    }
-                    physicalIndex++
-
-                    if (!contName.endsWith("\\")) {
-                        break
+                        val contName = stabStr(cuOff + contHeader.strx)
+                        if (contName.endsWith("\\")) {
+                            record.name += contName.dropLast(1)
+                        } else {
+                            record.name += contName
+                            break
+                        }
                     }
                 }
             }
-
-            records.add(
-                StabRecord(
-                    recordIndex = recordIndex,
-                    type = type,
-                    rawType = nType,
-                    other = nOther,
-                    desc = nDesc,
-                    value = nValue,
-                    name = name,
-                ),
-            )
+            records.add(record)
         }
-
-        val truncatedTail = buf.remaining()
 
         return Result(
             records = records,
-            recordCount = physicalIndex,
-            truncatedTail = truncatedTail,
+            totalRecordCount = physicalIndex,
+            truncatedTail = stab.length() - stab.pointerIndex,
         )
     }
 
-    private fun decodeRecord(buf: ByteBuffer) = RawHeader(
-        strx = buf.int,
-        type = buf.get().toInt() and 0xFF,
-        other = buf.get().toInt() and 0xFF,
-        desc = buf.short.toInt() and 0xFFFF,
-        value = buf.int.toLong(),
-    )
+    /**
+     * Every physical record with its `.stabstr` offset and own string resolved — the raw view
+     * [readAll] flattens. Continuations are surfaced individually; names keep their trailing `\`.
+     */
+    fun physicalRecords(): List<PhysicalStab> {
+        var cuOff = 0L
+        var cuSize = 0L
+        return buildList {
+            var index = 0
+            while (stab.hasNext(STAB_RECORD_SIZE)) {
+                val byteOffset = stab.pointerIndex
+                val h = RawHeader(stab)
+                val record = StabRecord(index++, h)
 
-    private fun cstring(bytes: ByteArray, start: Int, endExclusive: Int): String {
-        if (start !in 0 until endExclusive) {
-            return ""
+                if (record.type == StabType.N_UNDF) {
+                    cuOff += cuSize
+                    cuSize = h.value
+                }
+                record.name = stabStr(cuOff + h.strx)
+                add(
+                    PhysicalStab(
+                        byteOffset = byteOffset,
+                        strx = h.strx,
+                        stabstrOffset = cuOff + h.strx,
+                        record,
+                    ),
+                )
+            }
         }
-        var idx = start
-        while (idx < endExclusive && bytes[idx] != 0.toByte()) {
-            idx++
-        }
-        val len = idx - start
-        return if (len > 0) String(bytes, start, len, Charsets.UTF_8) else ""
     }
 
     companion object {
         /** Read `.stab`/`.stabstr` from [program]. Returns null if either block is missing. */
-        fun fromProgram(program: Program): Result? {
+        fun fromProgram(program: Program): StabReader? {
             val mem = program.memory
             val stabBlock = mem.getBlock(".stab") ?: return null
             val stabstrBlock = mem.getBlock(".stabstr") ?: return null
-            val stab = ByteArray(stabBlock.size.toInt())
-            val stabstr = ByteArray(stabstrBlock.size.toInt())
-            stabBlock.getBytes(stabBlock.start, stab)
-            stabstrBlock.getBytes(stabstrBlock.start, stabstr)
             val littleEndian = !program.memory.isBigEndian
-            return StabReader(stab, stabstr, littleEndian).readAll()
+
+            return StabReader(
+                stab = BinaryReader(stabBlock.byteProvider, littleEndian),
+                stabStr = { off: Long -> BinaryReader(stabstrBlock.byteProvider, littleEndian).readUtf8String(off) },
+            )
         }
     }
 }
 
+private val CATEGORY = CategoryPath("/stabs")
+
 /** Raw stab header, before type interpretation. */
-private data class RawHeader(val strx: Int, val type: Int, val other: Int, val desc: Int, val value: Long)
+@Serializable
+data class RawHeader(val strx: Long, val type: UByte, val other: UByte, val desc: Int, val value: Long) {
+    constructor(reader: BinaryReader) : this(
+        strx = reader.readNextUnsignedInt(),
+        type = reader.readNextByte().toUByte(),
+        other = reader.readNextByte().toUByte(),
+        desc = reader.readNextUnsignedShort(),
+        value = reader.readNextUnsignedInt(),
+    )
+
+//    override fun toDataType(): DataType = StructureDataType(CATEGORY, "StabRecord", 0).apply {
+//        add( StructConverter.DWORD, "n_strx", "index into .stabstr (per-CU)")
+//            add(nType, "n_type", "stab type code")
+//            add(StructConverter.BYTE, "n_other", null)
+//            add(StructConverter.WORD, "n_desc", null)
+//            add(StructConverter.DWORD, "n_value", "address / offset / register (per type)")
+//    }}
+}

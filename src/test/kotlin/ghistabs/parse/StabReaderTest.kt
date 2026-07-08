@@ -25,7 +25,7 @@ class StabReaderTest {
         /**
          * Concatenate multiple stab records.
          */
-        fun stabSection(records: List<ByteArray>): ByteArray = records.fold(ByteArray(0)) { acc, r -> acc + r }
+        fun stabSection(records: List<ByteArray>) = records.fold(ByteArray(0)) { acc, r -> acc + r }
 
         /**
          * Build a stabstr with NUL-terminated strings.
@@ -66,7 +66,7 @@ class StabReaderTest {
 
         // Expect 5 records (1 N_UNDF + 4 N_LSYM, no continuation merging)
         Assertions.assertEquals(5, result.records.size, "records size")
-        Assertions.assertEquals(5, result.recordCount, "physical record count")
+        Assertions.assertEquals(5, result.totalRecordCount, "physical record count")
         Assertions.assertEquals(0, result.truncatedTail, "no truncated tail")
 
         // Check N_UNDF
@@ -107,14 +107,14 @@ class StabReaderTest {
 
         // Expect 2 records (1 N_UNDF + 1 merged N_FUN)
         Assertions.assertEquals(2, result.records.size, "records size")
-        Assertions.assertEquals(4, result.recordCount, "physical record count (1 UNDF + 3 FUN)")
+        Assertions.assertEquals(4, result.totalRecordCount, "physical record count (1 UNDF + 3 FUN)")
         Assertions.assertEquals(0, result.truncatedTail)
 
         // Check merged N_FUN: "foo\\" -> "foo" + "middle\\" -> "middle" + "tail" -> "tail"
         val merged = result.records[1]
         Assertions.assertEquals(StabType.N_FUN, merged.type)
         Assertions.assertEquals("foomiddletail", merged.name)
-        Assertions.assertEquals(1, merged.recordIndex, "first physical record index after UNDF")
+        Assertions.assertEquals(1, merged.index, "first physical record index after UNDF")
     }
 
     /**
@@ -149,7 +149,7 @@ class StabReaderTest {
 
         // Expect 4 records: 2 N_UNDF headers + 2 N_LSYM
         Assertions.assertEquals(4, result.records.size)
-        Assertions.assertEquals(4, result.recordCount)
+        Assertions.assertEquals(4, result.totalRecordCount)
 
         // Check CU1 LSYM: stabstr[0+6=6..] = "xyz"
         val cu1Record = result.records[1]
@@ -177,7 +177,7 @@ class StabReaderTest {
         Assertions.assertEquals(2, result.records.size)
         val unknownRecord = result.records[1]
         Assertions.assertEquals(StabType.UNKNOWN, unknownRecord.type)
-        Assertions.assertEquals(0xAB, unknownRecord.rawType)
+        Assertions.assertEquals(0xAB.toUByte(), unknownRecord.rawType)
         Assertions.assertEquals("test", unknownRecord.name)
     }
 
@@ -200,8 +200,62 @@ class StabReaderTest {
 
         // Should have read the 2 complete records, ignore the 5-byte tail
         Assertions.assertEquals(2, result.records.size)
-        Assertions.assertEquals(2, result.recordCount)
+        Assertions.assertEquals(2, result.totalRecordCount)
         Assertions.assertEquals(5, result.truncatedTail)
+    }
+
+    /**
+     * physicalRecords keeps every physical record (headers + continuations, unmerged), with
+     * byte offsets, per-CU-adjusted stabstr offsets, and each record's own string.
+     */
+    @Test
+    fun testPhysicalRecordsRawView() {
+        // Leading NUL: offset 0 is the empty string (real stabstr convention), so strx=0 → "".
+        // "\0foo\\\0middle\\\0tail\0" — offsets 0, 1, 6, 14.
+        val stabstr = byteArrayOf(0) + Fixture.stabstrSection(listOf("foo\\", "middle\\", "tail"))
+        val undfRec = Fixture.stabRecord(strx = 0, type = 0x00, other = 0, desc = 0, value = stabstr.size)
+        val fun1 = Fixture.stabRecord(strx = 1, type = 0x24, other = 1, desc = 100, value = 1000)
+        val fun2 = Fixture.stabRecord(strx = 6, type = 0x24, other = 0, desc = 0, value = 0)
+        val fun3 = Fixture.stabRecord(strx = 14, type = 0x24, other = 0, desc = 0, value = 0)
+
+        val stab = Fixture.stabSection(listOf(undfRec, fun1, fun2, fun3))
+
+        val physical = StabReader(stab, stabstr).physicalRecords()
+
+        // No continuation merging: all 4 physical records surface.
+        Assertions.assertEquals(4, physical.size)
+        Assertions.assertEquals(listOf(0L, 12L, 24L, 36L), physical.map { it.byteOffset })
+        Assertions.assertEquals(
+            listOf(StabType.N_UNDF, StabType.N_FUN, StabType.N_FUN, StabType.N_FUN),
+            physical.map { it.record.type },
+        )
+        // Each record keeps its own (unmerged) string, trailing `\` included.
+        Assertions.assertEquals(listOf("", "foo\\", "middle\\", "tail"), physical.map { it.record.name })
+        Assertions.assertEquals(1000L, physical[1].record.value)
+    }
+
+    /**
+     * physicalRecords applies the per-CU stabstr base to `stabstrOffset` so it indexes the
+     * whole `.stabstr` block directly.
+     */
+    @Test
+    fun testPhysicalRecordsPerCuOffset() {
+        val cu1Undf = Fixture.stabRecord(strx = 0, type = 0x00, other = 0, desc = 0, value = 10)
+        val cu1Lsym = Fixture.stabRecord(strx = 6, type = 0x80, other = 1, desc = 100, value = 1000)
+        val cu2Undf = Fixture.stabRecord(strx = 0, type = 0x00, other = 0, desc = 0, value = 8)
+        val cu2Lsym = Fixture.stabRecord(strx = 0, type = 0x80, other = 2, desc = 101, value = 1001)
+
+        val stab = Fixture.stabSection(listOf(cu1Undf, cu1Lsym, cu2Undf, cu2Lsym))
+        val stabstr = ByteArray(18)
+        ("apple".toByteArray() + byteArrayOf(0) + "xyz".toByteArray() + byteArrayOf(0)).copyInto(stabstr, 0)
+        ("banana".toByteArray() + byteArrayOf(0, 0)).copyInto(stabstr, 10)
+
+        val physical = StabReader(stab, stabstr).physicalRecords()
+
+        Assertions.assertEquals(6, physical[1].stabstrOffset)
+        Assertions.assertEquals("xyz", physical[1].record.name)
+        Assertions.assertEquals(10, physical[3].stabstrOffset)
+        Assertions.assertEquals("banana", physical[3].record.name)
     }
 
     /**
@@ -216,7 +270,7 @@ class StabReaderTest {
         val result = reader.readAll()
 
         Assertions.assertEquals(0, result.records.size)
-        Assertions.assertEquals(0, result.recordCount)
+        Assertions.assertEquals(0, result.totalRecordCount)
         Assertions.assertEquals(0, result.truncatedTail)
     }
 }
