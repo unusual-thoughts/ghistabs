@@ -31,6 +31,14 @@ object Itanium {
     const val VMI_CLASS_TYPE_INFO = "__vmi_class_type_info"
     const val BASE_CLASS_TYPE_INFO = "__base_class_type_info"
 
+    // gcc's internal per-typeinfo "pseudo" struct types (rtti.c create_pseudo_type_info): a
+    // typeinfo-vtable ptr + the __*_type_info members. Emitted alongside each _ZTI global but
+    // never given a debug definition, so they arrive as unresolved XRefs. VMI appends the base
+    // count (`__vmi_class_type_info_pseudo2`) since its __base_info[] length varies.
+    const val CLASS_TYPE_INFO_PSEUDO = "__class_type_info_pseudo"
+    const val SI_CLASS_TYPE_INFO_PSEUDO = "__si_class_type_info_pseudo"
+    const val VMI_CLASS_TYPE_INFO_PSEUDO = "__vmi_class_type_info_pseudo"
+
     // Conventional field/label names RecoveredClassHelper / shift-S round-trip on.
     const val VFTABLE = "vftable"
     const val OFFSET_TO_TOP = "offset_to_top"
@@ -41,7 +49,7 @@ object Itanium {
     val classDataTypesRoot by lazy { CategoryPath(CategoryPath.ROOT, "ClassDataTypes") }
 
     /** Vtable header before the function-pointer array: offset_to_top + rtti = 2 pointers. */
-    fun vtablePrefixBytes(ptrSize: Int) = 2 * ptrSize
+    fun vtablePrefixBytes(ptrSize: Int) = 2L * ptrSize.toLong()
 
     /** Type of the `offset_to_top` header word (a signed pointer-sized integer). */
     fun offsetToTopType(ptrSize: Int): DataType =

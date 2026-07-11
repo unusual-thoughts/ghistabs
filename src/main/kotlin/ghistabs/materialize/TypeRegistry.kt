@@ -12,6 +12,7 @@ import ghistabs.materialize.itanium.InsertOp
 import ghistabs.materialize.itanium.Itanium
 import ghistabs.materialize.itanium.Layout
 import ghistabs.materialize.itanium.ResolvedBase
+import ghistabs.materialize.itanium.RttiStructs
 import ghistabs.materialize.itanium.firstPolymorphicBase
 import ghistabs.parse.AggrKind
 import ghistabs.parse.GlobalTypeId
@@ -401,7 +402,17 @@ class TypeRegistry(
         return Undefined4DataType.dataType
     }
 
+    private val rttiStructs = RttiStructs(dtm)
+
     private fun makePlaceholder(ast: TypeAst, category: CategoryPath, reason: String = "fwd-decl"): DataType {
+        // gcc emits each _ZTI global typed as a `__*_type_info_pseudo` struct it never gives a
+        // debug definition, so it arrives here unresolved. Substitute the authoritative RttiStructs
+        // layout instead of an opaque stub (last-resort RTTI, backlog §24).
+        rttiStructs.pseudoTypeInfo(ast.ghidraName)?.let {
+            debug("rtti-pseudo-substituted", "name=${ast.ghidraName} category=$category")
+            return it
+        }
+
         val dt = when (ast.body) {
             is TypeDecl.Struct if (ast.body.rawKind == AggrKind.UNION) -> UnionDataType(category, ast.ghidraName, dtm)
 
