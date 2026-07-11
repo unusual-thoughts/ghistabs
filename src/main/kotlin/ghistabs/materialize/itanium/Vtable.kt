@@ -1,5 +1,6 @@
 package ghistabs.materialize.itanium
 
+import ghidra.program.model.address.Address
 import ghidra.program.model.data.ArrayDataType
 import ghidra.program.model.data.CharDataType
 import ghidra.program.model.data.DataType
@@ -10,10 +11,12 @@ import ghidra.program.model.data.PointerDataType
 import ghidra.program.model.data.PointerTypedef
 import ghidra.program.model.data.Structure
 import ghidra.program.model.data.StructureDataType
-import ghidra.program.model.data.Undefined4DataType
 import ghidra.program.model.data.UnsignedIntegerDataType
+import ghidra.program.model.listing.CommentType
+import ghidra.program.model.listing.Program
+import ghidra.program.model.symbol.Namespace
+import ghidra.program.model.symbol.SourceType
 import ghistabs.harvest.TypeResolver
-import ghistabs.importer.ImportContext
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.MethodDecl
 import ghistabs.parse.TypeDecl
@@ -51,30 +54,24 @@ class Virtuals(
 }
 
 /**
- * Populate the two Itanium vtable structs (both cleared first, so re-entrant):
- *   [vftable] — the function-pointer array; one slot per virtual, `name` → resolved pointer type.
- *   [vtable]  — the `_ZTV` record: `offset_to_top` + `rtti` + the embedded [vftable].
+ * Lay the Itanium vtable at [ztv] and return its address point. The `offset_to_top` + `rtti`
+ * header words go at [ztv] (which `_ZTV<class>` already labels); the [vftable] function-pointer
+ * array + a "vftable" symbol go at the address point (`ztv + 2*ptrSize`) — the value a `{vfptr}`
+ * holds — so a constructor's `this->vfptr = &<Class>::vftable` resolves to a symbol, not a raw
+ * address. The rtti pointee stays an untyped `void*` until backlog §24 wires it.
  */
-fun buildVtableRecord(
-    vtable: Structure,
-    vftable: Structure,
-    slots: List<Pair<String, DataType>>,
-    className: String,
-    ptrSize: Int,
-    dtm: DataTypeManager,
-) {
-    while (vftable.numComponents > 0) vftable.delete(0)
-    for ((name, slotType) in slots) vftable.add(slotType, ptrSize, name, "virtual $name")
+fun Program.layVtable(ztv: Address, vftable: Structure, className: String, ns: Namespace): Address {
+    val addressPoint = ztv.add(Itanium.vtablePrefixBytes(defaultPointerSize))
 
-    while (vtable.numComponents > 0) vtable.delete(0)
-    vtable.add(Itanium.offsetToTopType(ptrSize), ptrSize, Itanium.OFFSET_TO_TOP, "offset to top of complete object")
-    vtable.add(
-        PointerDataType.getPointer(Undefined4DataType.dataType, dtm),
-        ptrSize,
-        Itanium.RTTI,
-        "${Itanium.zti(className)} typeinfo pointer",
-    )
-    vtable.add(vftable, vftable.length, Itanium.VFTABLE, "virtual function table")
+    listing.clearCodeUnits(ztv, addressPoint.add(vftable.length.toLong() - 1), false)
+    listing.createData(ztv, Itanium.offsetToTopType(defaultPointerSize))
+    listing.setComment(ztv, CommentType.EOL, "${Itanium.OFFSET_TO_TOP} (to top of complete object)")
+    val rttiAddr = ztv.add(defaultPointerSize.toLong())
+    listing.createData(rttiAddr, PointerDataType(dataTypeManager))
+    listing.setComment(rttiAddr, CommentType.EOL, "${Itanium.RTTI}: ${Itanium.zti(className)} typeinfo")
+    listing.createData(addressPoint, vftable)
+    symbolTable.createLabel(addressPoint, Itanium.VFTABLE, ns, SourceType.IMPORTED)
+    return addressPoint
 }
 
 /**

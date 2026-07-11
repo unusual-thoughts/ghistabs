@@ -288,10 +288,6 @@
             "min": 2,
             "max": 2
         },
-        "vtable": {
-            "min": 17,
-            "max": 17
-        },
         "vtable-applied": {
             "min": 17,
             "max": 17

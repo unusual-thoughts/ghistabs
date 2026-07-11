@@ -770,24 +770,21 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
         // (XMLNode et al.) — same Pattern-B family as the other gcc 12
         // missing-stab issues. Surface via println so future fixture
         // changes regain coverage without flagging the run.
-        val vtables = program.dataTypeManager.allDataTypes
-            .asSequence()
-            .filterIsInstance<Structure>()
-            .filter { it.name.endsWith("_vtable") && it.numComponents > 0 }.toList()
-        if (binaryName in setOf("box2d_tests", "xmltest")) {
-            println("atLeastOneVtableStructApplied[$binaryName/$mode]: vtables=${vtables.size}")
-            return
-        }
-        Assertions.assertTrue(
-            vtables.isNotEmpty(),
-            "Expected at least one *_vtable struct with components",
-        )
-        // {vfptr} fields point at <Class>_vftable (the function pointer array),
-        // not at <Class>_vtable (the full record including offset_to_top + rtti).
+        // The applied vtable struct is the <Class>_vftable (the function-pointer array laid at
+        // the address point); there is no separate <Class>_vtable full-record struct — the
+        // offset_to_top + rtti header words are plain Data before the address point.
         val vmethods = program.dataTypeManager.allDataTypes
             .asSequence()
             .filterIsInstance<Structure>()
             .filter { it.name.endsWith("_vftable") && it.numComponents > 0 }.toList()
+        if (binaryName in setOf("box2d_tests", "xmltest")) {
+            println("atLeastOneVtableStructApplied[$binaryName/$mode]: vftables=${vmethods.size}")
+            return
+        }
+        Assertions.assertTrue(
+            vmethods.isNotEmpty(),
+            "Expected at least one *_vftable struct with components",
+        )
         val classesWithVtables = program.dataTypeManager.allDataTypes
             .asSequence()
             .filterIsInstance<Structure>()
@@ -891,16 +888,18 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
             "DCInst_vftable: only $typedSlots/$totalSlots slots are typed " +
                 "Pointer→FunctionDefinition. Slots: $slotTypeSummary",
         )
-        // Gate 2: `vftable` symbol at the DTV address. Walk the symbol table
-        // for `_ZTV6DCInst` (Itanium-mangled DTV symbol) and check siblings.
+        // Gate 2: `vftable` symbol at the vtable's *address point* (`_ZTV6DCInst` + 2*ptrSize),
+        // not at the DTV start. That's the value a `{vfptr}` holds and where constructor stores
+        // reference, so RecoveredClassHelper walks refs back from there.
         val ztv = program.symbolTable.getSymbols("__ZTV6DCInst").firstOrNull()
         assumeTrue(ztv != null, "Skipping: DCInst not resolved")
-        val sibs = program.symbolTable.getSymbols(ztv!!.address).toList()
-        val sibSummary = sibs.map { "${it.parentNamespace.name}::${it.name}" }
+        val addressPoint = ztv!!.address.add(2L * program.defaultPointerSize)
+        val syms = program.symbolTable.getSymbols(addressPoint).toList()
+        val symSummary = syms.map { "${it.parentNamespace.name}::${it.name}" }
         Assertions.assertTrue(
-            sibs.any { "vftable" in it.name },
-            "DCInst vtable address ${ztv.address} has no symbol containing 'vftable'; " +
-                "symbols there: $sibSummary",
+            syms.any { "vftable" in it.name },
+            "DCInst address point $addressPoint has no symbol containing 'vftable'; " +
+                "symbols there: $symSummary",
         )
     }
 
