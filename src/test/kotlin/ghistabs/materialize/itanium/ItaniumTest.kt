@@ -1,4 +1,4 @@
-package ghistabs.materialize
+package ghistabs.materialize.itanium
 
 import ghidra.app.util.demangler.DemangledAddressTable
 import ghidra.app.util.demangler.DemangledFunction
@@ -6,10 +6,10 @@ import ghidra.app.util.demangler.DemangledNamespaceNode
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 
-class VtableSymbolCandidatesTest {
+class ItaniumTest {
     @Test
-    fun testMangledZtvCandidatesSimpleName() {
-        val candidates = VtableSymbolCandidates.mangledZtvCandidates("CLexStream")
+    fun testZtvCandidatesSimpleName() {
+        val candidates = Itanium.ztvCandidates("CLexStream")
         assertEquals(
             listOf(
                 "_ZTV10CLexStream",
@@ -22,61 +22,61 @@ class VtableSymbolCandidatesTest {
     }
 
     @Test
-    fun testMangledZtvCandidatesNestedName() {
-        val candidates = VtableSymbolCandidates.mangledZtvCandidates("Foo::Bar")
+    fun testZtvCandidatesNestedName() {
+        val candidates = Itanium.ztvCandidates("Foo::Bar")
         assertEquals("_ZTVN3Foo3BarE", candidates[0])
         assertEquals("__ZTVN3Foo3BarE", candidates[1])
     }
 
     @Test
-    fun testItaniumMangledClassNameSimple() {
-        assertEquals("10CLexStream", VtableSymbolCandidates.itaniumMangleClassName("CLexStream"))
+    fun testMangleClassNameSimple() {
+        assertEquals("10CLexStream", Itanium.mangleClassName("CLexStream"))
     }
 
     @Test
-    fun testItaniumMangledClassNameNested() {
-        assertEquals("N3Foo3BarE", VtableSymbolCandidates.itaniumMangleClassName("Foo::Bar"))
+    fun testMangleClassNameNested() {
+        assertEquals("N3Foo3BarE", Itanium.mangleClassName("Foo::Bar"))
     }
 
     @Test
-    fun testItaniumMangledClassNameTripleNested() {
-        assertEquals("N3Foo3Bar3BazE", VtableSymbolCandidates.itaniumMangleClassName("Foo::Bar::Baz"))
+    fun testMangleClassNameTripleNested() {
+        assertEquals("N3Foo3Bar3BazE", Itanium.mangleClassName("Foo::Bar::Baz"))
     }
 
     @Test
-    fun testItaniumMangledClassNameTemplated() {
-        assertEquals("vector<int>", VtableSymbolCandidates.itaniumMangleClassName("vector<int>"))
+    fun testMangleClassNameTemplated() {
+        assertEquals("vector<int>", Itanium.mangleClassName("vector<int>"))
     }
 
     @Test
     fun testLooksLikeZtv() {
-        assertTrue(VtableSymbolCandidates.looksLikeZtv("_ZTV10CLexStream"))
-        assertTrue(VtableSymbolCandidates.looksLikeZtv("__ZTV10CLexStream"))
-        assertTrue(VtableSymbolCandidates.looksLikeZtv("ZTVbare"))
-        assertFalse(VtableSymbolCandidates.looksLikeZtv("XYZ_ZTV9CLexStream"))
-        assertFalse(VtableSymbolCandidates.looksLikeZtv("_ZN3FooC1Ev"))
+        assertTrue(Itanium.looksLikeZtv("_ZTV10CLexStream"))
+        assertTrue(Itanium.looksLikeZtv("__ZTV10CLexStream"))
+        assertTrue(Itanium.looksLikeZtv("ZTVbare"))
+        assertFalse(Itanium.looksLikeZtv("XYZ_ZTV9CLexStream"))
+        assertFalse(Itanium.looksLikeZtv("_ZN3FooC1Ev"))
     }
 
     @Test
     fun testDemangledMatchesSimpleClass() {
         val obj = vtableObj("CLexStream")
-        assertTrue(VtableSymbolCandidates.demangledMatchesClass(obj, "CLexStream"))
-        assertFalse(VtableSymbolCandidates.demangledMatchesClass(obj, "OtherClass"))
+        assertTrue(Itanium.demangledMatchesClass(obj, "CLexStream"))
+        assertFalse(Itanium.demangledMatchesClass(obj, "OtherClass"))
     }
 
     @Test
     fun testDemangledMatchesNestedClass() {
         val obj = vtableObj("Foo", "Bar")
-        assertTrue(VtableSymbolCandidates.demangledMatchesClass(obj, "Foo::Bar"))
-        assertFalse(VtableSymbolCandidates.demangledMatchesClass(obj, "Foo"))
-        assertFalse(VtableSymbolCandidates.demangledMatchesClass(obj, "Bar"))
+        assertTrue(Itanium.demangledMatchesClass(obj, "Foo::Bar"))
+        assertFalse(Itanium.demangledMatchesClass(obj, "Foo"))
+        assertFalse(Itanium.demangledMatchesClass(obj, "Bar"))
     }
 
     @Test
     fun testDemangledMatchesRejectsNonVtable() {
         val func = DemangledFunction("_ZN3FooC1Ev", "Foo::Foo()", "Foo")
         func.namespace = DemangledNamespaceNode("_ZN3FooC1Ev", "Foo", "Foo")
-        assertFalse(VtableSymbolCandidates.demangledMatchesClass(func, "Foo"))
+        assertFalse(Itanium.demangledMatchesClass(func, "Foo"))
     }
 
     /**

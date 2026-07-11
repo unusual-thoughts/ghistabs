@@ -794,3 +794,52 @@ including the pre-existing `xapasmcsr` CONCURRENT `xref-base-tag-resolved`=41-vs
 reproduces on unmodified HEAD (baseline too tight for CONCURRENT demangler-order nondeterminism). Decomp
 `*`/`**` return-pointer wobble is Ghidra decompiler nondeterminism (HEAD single-fixture ≠ HEAD full-suite),
 not attribution — which is why the deterministic dump, not decomp text, is the audit surface.
+
+## 23. C++ ABI: itanium model is flat single-vtable — open (limitation, not a bug on corpus)
+
+The `materialize/itanium/` package models the Itanium vtable as a single flat record
+(`offset_to_top` + `rtti` + one embedded `_vftable` function-pointer array), applied at the
+`_ZTV` symbol. Verified spec-correct (itanium-cxx-abi.github.io/cxx-abi/abi.html) for classes
+**without virtual bases and with single inheritance** — the whole gcc 3.4.4 corpus. Struct
+*layout* does carry virtual bases (`_vbase_` fields, `BaseDecl.isVirtual`); the vtable
+*consequences* of virtual/multiple inheritance are not modelled:
+
+- **Vcall/vbase-offset entries** (negative offsets, before `offset_to_top`): a virtual-base
+  class's `_ZTV` symbol points at the true start, which now has these leading entries, so our
+  record (starting at `offset_to_top`) would be mis-registered. Degrades, doesn't crash.
+- **Secondary vtables** (non-primary bases under MI), **VTT**, **construction vtables**: not
+  emitted. These only exist with multiple/virtual inheritance.
+
+Not modelled deliberately: the vcall/vbase/VTT lowering is ABI-level, not source-level, so it
+isn't in the stabs — recovering it means the memory-scanning machinery of Ghidra's
+`RTTIGccClassRecoverer` we chose *not* to port (stabs already give us the class model). Zero
+payoff on single-inheritance-dominant BlueCore code; revisit only if a virtual-base class shows
+up in a fixture.
+
+## 24. Last-resort RTTI typeinfo wiring — open (RttiStructs present but unwired)
+
+`itanium/Vtable.kt`'s `RttiStructs` builds the authoritative `__cxxabiv1` typeinfo structs
+(`classTypeInfoStructure` / `siClassTypeInfoStructure` / `vmiClassTypeInfoStructure(n)` /
+`baseClassTypeInfoStructure`) but nothing consumes them yet — the vtable `rtti` field points at
+`Undefined4*`. They are the implementation of last resort for the gcc-internal typeinfo records
+the stabs don't fully carry. Two levels, in priority order:
+
+- **Level B — typeinfo global present, its pseudo *type* stubbed (the common case on our exes).**
+  The stabs *do* emit the typeinfo globals — `_ZTI8CSegment`, `_ZTI4Inst`, `_ZTI8ExprInst`,
+  `_ZTI10CLexStream`, … — each typed `struct __{class,si}_class_type_info_pseudo const`. But the
+  gcc-internal pseudo struct types aren't in the stabs (libsupc++ built without them), so they land
+  as unresolved XRefs (`type=/stabs/__si_class_type_info_pseudo`) and get stubbed opaque. Fix:
+  substitute the matching `RttiStructs` impl for the stub, keyed by XRef name — hook the same
+  unresolved-XRef substitution path as commit 8936ae1 (unresolved enum → `Enum` not `Struct`).
+  Layouts already match gcc's pseudo shape: `__class_type_info_pseudo` = {typeinfo-vtable-ptr,
+  __type_name} ↔ `classTypeInfoStructure` (2 ptrs); `__si_…_pseudo` adds `__base_type` ↔
+  `siClassTypeInfoStructure` (3 ptrs). Fixed member counts — **no memory read needed.**
+- **Level A — no typeinfo global at all, or a VMI one.** Only here do you need the base count:
+  size via `RttiStructs.vmiClassTypeInfoStructure(numBaseClasses)`, reading it from the applied
+  typeinfo Data's `numBaseClasses` field (component index 3), cf.
+  `RTTIGccClassRecoverer.updateVmiTypeinfo` / `getNumberOfBaseClasses` (the essence of the old
+  commented `getVmiNumBaseClasses` stub, since removed). xapasmcsr shows **zero** `__vmi_…_pseudo`
+  — single-inheritance corpus — so this is the rarer path.
+
+Then point the vtable `rtti` pointee at the class's typeinfo struct instead of `Undefined4*`.
+Behavioural: shifts regression counters — regen baselines with `-PregenerateBaselines`.
