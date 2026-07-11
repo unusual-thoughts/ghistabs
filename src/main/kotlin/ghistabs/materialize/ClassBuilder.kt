@@ -399,11 +399,13 @@ class ClassBuilder(
         val unwrapped = unwrapSignature(m.signature)
         val method = unwrapped as? TypeDecl.Method<GlobalTypeId> ?: run {
             degradation(
-                "vftable-slot-signature-not-method",
+                "vftable-slot-untyped",
                 "$className::${m.name}",
-                "unwrapped=${unwrapped?.let { it::class.simpleName } ?: "null"} sig=${m.signature}",
+                "signature did not unwrap to a method: unwrapped=${unwrapped?.let {
+                    it::class.simpleName
+                } ?: "null"} " +
+                    "sig=${m.signature}",
             )
-            degradation("vftable-slot-untyped", "$className::${m.name}")
             return PointerDataType(Undefined4DataType.dataType, dtm)
         }
         val funcDef = typeRegistry.buildFunctionDefinition(
