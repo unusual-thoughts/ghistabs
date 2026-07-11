@@ -62,7 +62,7 @@ data class SymbolRecord(
         record: StabRecord,
         decl: SymbolDecl<GlobalTypeId>,
         sourceFile: String? = null,
-    ) : this(record.recordIndex, record.type, decl, record.value, record.desc, sourceFile)
+    ) : this(record.index, record.type, decl, record.value, record.desc, sourceFile)
 }
 
 @Serializable

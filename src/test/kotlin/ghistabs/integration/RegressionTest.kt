@@ -11,6 +11,7 @@ import ghidra.program.model.listing.Program
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghistabs.StabsAnalyzer
+import ghistabs.StabsAnalyzer.Companion.import
 import ghistabs.diagnose.CapturingSink
 import ghistabs.diagnose.defaultContext
 import ghistabs.harvest.Harvester
@@ -71,7 +72,8 @@ enum class Mode { CONCURRENT, AFTER }
 @Tag("integration")
 class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
     companion object {
-        val BINARIES = listOf("bouniafbouniaf.exe", "xmltest", "bouniaf.exe", "box2d_tests")
+        val BINARIES =
+            listOf("bouniafbouniaf.exe", "xmltest", "bouniaf.exe", "box2d_tests", "bouniaf.exe", "unbouniaf.exe")
 
         @JvmStatic
         fun testParameters() = BINARIES.flatMap { binary ->
@@ -179,7 +181,7 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
                     mgr.initializeOptions()
                     runAutoAnalysis(mgr, monitor)
                     program.runTransaction("stabs-analyze") {
-                        StabsAnalyzer().run(context)
+                        context.import()
                     }
                 }
             }
@@ -723,7 +725,7 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
     fun voidSelfRefNotMaterialised() {
         // Enumerate every void self-Ref ast in the harvest (body = Ref(self.id)).
         // For each one assert no Structure was created at its category+name.
-        val reader = StabReader.fromProgram(program)!!
+        val reader = StabReader.fromProgram(program)!!.readAll()
         val harvest = program.runTransaction("void-self-ref-harvest") {
             Harvester(context).passA(reader.records)
         }
@@ -1013,7 +1015,7 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
     @Test
     fun harvestTest() {
         val ctx = program.defaultContext()
-        val stabs = StabReader.fromProgram(program)!!
+        val stabs = StabReader.fromProgram(program)!!.readAll()
         json.encodeToStream(stabs.records, recordsFile.outputStream())
 
         val harvester = Harvester(ctx)

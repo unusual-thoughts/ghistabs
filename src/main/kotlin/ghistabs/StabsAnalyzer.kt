@@ -8,24 +8,27 @@ import ghidra.framework.options.Options
 import ghidra.program.model.address.AddressSetView
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
-import ghistabs.StabsAnalyzer.Companion.OPT_STABS_DONE
+import ghistabs.StabsOptions.Companion.isOverlayDone
+import ghistabs.StabsOptions.Companion.isStabsDone
+import ghistabs.StabsOptions.Companion.markOverlayDone
+import ghistabs.StabsOptions.Companion.markStabsDone
+import ghistabs.StabsOptions.Companion.registerStabs
 import ghistabs.diagnose.*
 import ghistabs.importer.ImportContext
+import ghistabs.importer.StabSectionOverlay
 import ghistabs.importer.StabsImporter
 import ghistabs.importer.StaticContexts
-
-const val ANALYZER_NAME = "Stabs Importer"
 
 /**
  * Imports STABS debug info (.stab/.stabstr) into Ghidra: types, function signatures,
  * locals, C++ classes, vtables. Targets PE/ELF binaries produced by Cygwin gcc 3.4.4.
  *
- * Auto-runs once per program (gated by [OPT_STABS_DONE]); re-runnable via the
+ * Auto-runs once per program (gated by [StabsOptions.STABS_DONE]); re-runnable via the
  * `Tools > Stabs > Re-import` menu action.
  */
 class StabsAnalyzer :
     AbstractAnalyzer(
-        ANALYZER_NAME,
+        NAME,
         "Imports STABS debug info (.stab/.stabstr) — types, function signatures, locals, C++ classes, vtables.",
         AnalyzerType.BYTE_ANALYZER,
     ) {
@@ -41,59 +44,12 @@ class StabsAnalyzer :
 
     override fun canAnalyze(program: Program?): Boolean {
         if (program == null) return false
-        if (isStabsDone(program)) return false
+        if (program.isStabsDone) return false
         val mem = program.memory
         return mem.getBlock(".stab") != null && mem.getBlock(".stabstr") != null
     }
 
-    override fun registerOptions(options: Options, program: Program?) {
-        options.registerOption(
-            OPT_PLATE_COMMENTS,
-            true,
-            null,
-            "Apply plate comments at lexical scopes when LBRAC/RBRAC info is present.",
-        )
-        options.registerOption(
-            OPT_VTABLES,
-            true,
-            null,
-            "Synthesise <Class>_vtable structs and apply at _ZTV addresses.",
-        )
-        options.registerOption(
-            OPT_SHORTEN_TYPEDEFS,
-            false,
-            null,
-            "Rename long templated datatypes onto their shorter typedef aliases " +
-                "(basic_string<char, …> → string), recursively inside other templates.",
-        )
-        options.registerOption(
-            OPT_FOLD_SOURCES,
-            true,
-            null,
-            "Fold two gcc spellings of one physical header (full include path vs bare " +
-                "#include \"x.h\") onto one rendered output file, by unique basename.",
-        )
-        options.registerOption(
-            OPT_LOG_LEVEL,
-            Level.INFO,
-            null,
-            "Minimum level for MessageLog diagnostic output (bookmarks and counters are unaffected).",
-        )
-        options.registerOption(
-            OPT_OVERLAY_SECTION,
-            true,
-            null,
-            "Overlay a decoded StabRecord struct on every .stab entry (refs into .stabstr and back to code/data).",
-        )
-    }
-
-    fun run(ctx: ImportContext<*>) {
-        if (isStabsDone(ctx.program)) return
-
-        val result = StabsImporter(ctx).run()
-        ctx.log("done", "import complete: $result")
-        markStabsDone(ctx.program, true)
-    }
+    override fun registerOptions(options: Options, program: Program?) = options.registerStabs()
 
     override fun added(program: Program?, set: AddressSetView?, monitor: TaskMonitor?, msg: MessageLog?): Boolean {
         program ?: return false
@@ -101,38 +57,36 @@ class StabsAnalyzer :
         monitor ?: return false
         val options = StabsOptions(program)
         val ext = StaticContexts.get(program)
-        run(
-            ImportContext(
-                program,
-                monitor,
-                options,
-                // Bookmark every addressed diagnostic (unconditional); MessageLog gets output at/above minLevel.
-                // Tee the emitting terminal onto ext.log (raw CapturingSink) so tests can inspect
-                // output; counting is the shared ext.diagnostics accumulator, tee'd in ImportContext.
-                terminal = TeeSink(BookmarkSink(program), MessageLogSink(msg, options.minLogLevel), ext?.terminal),
-                diagnostics = ext?.diagnostics ?: StabsDiagnostics(),
-            ),
-        )
+
+        ImportContext(
+            program,
+            monitor,
+            options,
+            // Bookmark every addressed diagnostic (unconditional); MessageLog gets output at/above minLevel.
+            // Tee the emitting terminal onto ext.log (raw CapturingSink) so tests can inspect
+            // output; counting is the shared ext.diagnostics accumulator, tee'd in ImportContext.
+            terminal = TeeSink(BookmarkSink(program), MessageLogSink(msg, options.minLogLevel), ext?.terminal),
+            diagnostics = ext?.diagnostics ?: StabsDiagnostics(),
+        ).import()
+
         return true
     }
 
     companion object {
-        const val OPT_STABS_DONE: String = "Stabs Imported"
-        const val OPT_PLATE_COMMENTS: String = "Apply scope plate comments"
-        const val OPT_VTABLES: String = "Synthesise vtable structs"
-        const val OPT_SHORTEN_TYPEDEFS: String = "Shorten templated names via typedefs"
-        const val OPT_FOLD_SOURCES: String = "Fold source-file spellings"
-        const val OPT_LOG_LEVEL: String = "Minimum log level"
-        const val OPT_OVERLAY_SECTION: String = "Overlay .stab section structs"
+        const val NAME = "Stabs Importer"
 
         @JvmStatic
-        fun isStabsDone(program: Program) = program.getOptions(Program.PROGRAM_INFO).getBoolean(OPT_STABS_DONE, false)
+        fun ImportContext<*>.import() {
+            if (program.isStabsDone) return
 
-        @JvmStatic
-        fun markStabsDone(program: Program, value: Boolean) {
-            program.runTransaction("Stabs: set done flag") {
-                program.getOptions(Program.PROGRAM_INFO).setBoolean(OPT_STABS_DONE, value)
+            if (options.overlaySection && !program.isOverlayDone) {
+                debug("stab-section-overlaid", count = StabSectionOverlay(this).apply().toLong())
+                program.markOverlayDone()
             }
+
+            val result = StabsImporter(this).run()
+            log("done", "import complete: $result")
+            program.markStabsDone(true)
         }
     }
 }
@@ -145,16 +99,94 @@ data class StabsOptions(
     val minLogLevel: Level = Level.INFO,
     val overlaySection: Boolean = true,
 ) {
+
+    companion object {
+        const val STABS_DONE: String = "Stabs Imported"
+        const val OVERLAY_DONE: String = "Stabs Overlaid"
+        const val PLATE_COMMENTS: String = "Apply scope plate comments"
+        const val VTABLES: String = "Synthesise vtable structs"
+        const val SHORTEN_TYPEDEFS: String = "Shorten templated names via typedefs"
+        const val FOLD_SOURCES: String = "Fold source-file spellings"
+        const val LOG_LEVEL: String = "Minimum log level"
+        const val OVERLAY_SECTION: String = "Overlay .stab section structs"
+
+        val Program.isStabsDone get() = getOptions(Program.PROGRAM_INFO).getBoolean(STABS_DONE, false)
+
+        fun Program.markStabsDone(value: Boolean) {
+            runTransaction("Stabs: set done flag") {
+                getOptions(Program.PROGRAM_INFO).setBoolean(STABS_DONE, value)
+            }
+        }
+
+        val Program.isOverlayDone get() = getOptions(Program.PROGRAM_INFO).getBoolean(OVERLAY_DONE, false)
+
+        fun Program.markOverlayDone() {
+            runTransaction("Stabs: set overlay done flag") {
+                getOptions(Program.PROGRAM_INFO).setBoolean(OVERLAY_DONE, true)
+            }
+        }
+
+        fun Options.registerStabs() {
+            registerOption(
+                PLATE_COMMENTS,
+                true,
+                null,
+                "Apply plate comments at lexical scopes when LBRAC/RBRAC info is present.",
+            )
+            registerOption(
+                VTABLES,
+                true,
+                null,
+                "Synthesise <Class>_vtable structs and apply at _ZTV addresses.",
+            )
+            registerOption(
+                SHORTEN_TYPEDEFS,
+                false,
+                null,
+                "Rename long templated datatypes onto their shorter typedef aliases " +
+                    "(basic_string<char, …> → string), recursively inside other templates.",
+            )
+            registerOption(
+                FOLD_SOURCES,
+                true,
+                null,
+                "Fold two gcc spellings of one physical header (full include path vs bare " +
+                    "#include \"x.h\") onto one rendered output file, by unique basename.",
+            )
+            registerOption(
+                LOG_LEVEL,
+                Level.INFO,
+                null,
+                "Minimum level for MessageLog diagnostic output (bookmarks and counters are unaffected).",
+            )
+            registerOption(
+                OVERLAY_SECTION,
+                true,
+                null,
+                "Overlay a decoded StabRecord struct on every .stab entry (refs into .stabstr and back to code/data).",
+            )
+        }
+
+//        fun Options.stabs() = StabsOptions(
+//            applyPlateComments = getBoolean(PLATE_COMMENTS, true),
+//            applyVtables = getBoolean(VTABLES, true),
+//            shortenTypedefs = getBoolean(SHORTEN_TYPEDEFS, false),
+//            foldSources = getBoolean(FOLD_SOURCES, true),
+//            minLogLevel = getEnum(LOG_LEVEL, Level.INFO),
+//            overlaySection = getBoolean(OVERLAY_SECTION, true),
+//        )
+    }
+
     constructor(opts: Options) : this(
-        applyPlateComments = opts.getBoolean(StabsAnalyzer.OPT_PLATE_COMMENTS, true),
-        applyVtables = opts.getBoolean(StabsAnalyzer.OPT_VTABLES, true),
-        shortenTypedefs = opts.getBoolean(StabsAnalyzer.OPT_SHORTEN_TYPEDEFS, false),
-        foldSources = opts.getBoolean(StabsAnalyzer.OPT_FOLD_SOURCES, true),
-        minLogLevel = opts.getEnum(StabsAnalyzer.OPT_LOG_LEVEL, Level.INFO),
-        overlaySection = opts.getBoolean(StabsAnalyzer.OPT_OVERLAY_SECTION, true),
+        applyPlateComments = opts.getBoolean(PLATE_COMMENTS, true),
+        applyVtables = opts.getBoolean(VTABLES, true),
+        shortenTypedefs = opts.getBoolean(SHORTEN_TYPEDEFS, false),
+        foldSources = opts.getBoolean(FOLD_SOURCES, true),
+        minLogLevel = opts.getEnum(LOG_LEVEL, Level.INFO),
+        overlaySection = opts.getBoolean(OVERLAY_SECTION, true),
     )
 
     constructor(program: Program) : this(
-        program.getOptions(Program.ANALYSIS_PROPERTIES).getOptions(ANALYZER_NAME),
+        program.getOptions(Program.ANALYSIS_PROPERTIES).getOptions(StabsAnalyzer.NAME),
     )
 }

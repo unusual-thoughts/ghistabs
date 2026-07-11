@@ -1,6 +1,7 @@
 package ghistabs
 
 import ghidra.app.cmd.label.DemanglerCmd
+import ghidra.app.util.bin.InputStreamByteProvider
 import ghidra.app.util.demangler.DemangledObject
 import ghidra.app.util.demangler.DemanglerOptions
 import ghidra.app.util.demangler.DemanglerUtil
@@ -13,6 +14,7 @@ import ghidra.program.model.data.Structure
 import ghidra.program.model.listing.Data
 import ghidra.program.model.listing.FunctionManager
 import ghidra.program.model.listing.Program
+import ghidra.program.model.mem.MemoryBlock
 import ghidra.util.task.TaskMonitor
 
 /**
@@ -117,4 +119,5 @@ fun Program.applyDemangling(
     },
 ).run { applyTo(this@applyDemangling, monitor) && result != null }
 
+val MemoryBlock.byteProvider get() = InputStreamByteProvider(data, size)
 fun String.nullIfEmpty() = ifEmpty { null }

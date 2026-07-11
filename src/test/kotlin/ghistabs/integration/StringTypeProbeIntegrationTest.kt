@@ -10,6 +10,7 @@ import ghidra.program.model.data.TypeDef
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghistabs.StabsAnalyzer
+import ghistabs.StabsAnalyzer.Companion.import
 import ghistabs.StabsOptions
 import ghistabs.diagnose.CapturingSink
 import ghistabs.diagnose.Level
@@ -79,7 +80,7 @@ class StringTypeProbeIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                     mgr.waitForAnalysis(null, monitor)
                 }
                 program.runTransaction("stabs-analyze") {
-                    StabsAnalyzer().run(ctx)
+                    ctx.import()
                 }
 
                 val out = File("build/test-output/degradations/$label.string-probe.txt")

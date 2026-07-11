@@ -2,7 +2,9 @@ package ghistabs.integration
 
 import ghidra.program.database.ProgramBuilder
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghistabs.StabsAnalyzer
+import ghistabs.StabsOptions
+import ghistabs.StabsOptions.Companion.isStabsDone
+import ghistabs.StabsOptions.Companion.markStabsDone
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -52,18 +54,18 @@ class StabsAnalyzerLifecycleIntegrationTest : AbstractGhidraHeadlessIntegrationT
         val program = builder.program
 
         // Initially, done-flag should be false
-        assertFalse(StabsAnalyzer.isStabsDone(program), "Done-flag should be false initially")
+        assertFalse(program.isStabsDone, "Done-flag should be false initially")
 
         // Mark as done
-        StabsAnalyzer.markStabsDone(program, true)
+        program.markStabsDone(true)
 
         // Verify it's now true
-        assertTrue(StabsAnalyzer.isStabsDone(program), "Done-flag should be true after marking")
+        assertTrue(program.isStabsDone, "Done-flag should be true after marking")
 
         // Verify program state persists (done by checking the internal option)
         val options = program.getOptions(ghidra.program.model.listing.Program.PROGRAM_INFO)
         assertTrue(
-            options.getBoolean(StabsAnalyzer.OPT_STABS_DONE, false),
+            options.getBoolean(StabsOptions.STABS_DONE, false),
             "Done-flag should persist in program options",
         )
     }
@@ -83,19 +85,19 @@ class StabsAnalyzerLifecycleIntegrationTest : AbstractGhidraHeadlessIntegrationT
         val program = builder.program
 
         // First, set the flag to true
-        StabsAnalyzer.markStabsDone(program, true)
-        assertTrue(StabsAnalyzer.isStabsDone(program), "Done-flag should be true after marking")
+        program.markStabsDone(true)
+        assertTrue(program.isStabsDone, "Done-flag should be true after marking")
 
         // Now clear the flag to allow re-import
-        StabsAnalyzer.markStabsDone(program, false)
+        program.markStabsDone(false)
 
         // Verify it's false again
-        assertFalse(StabsAnalyzer.isStabsDone(program), "Done-flag should be false after clearing")
+        assertFalse(program.isStabsDone, "Done-flag should be false after clearing")
 
         // Verify program state persists
         val options = program.getOptions(ghidra.program.model.listing.Program.PROGRAM_INFO)
         assertFalse(
-            options.getBoolean(StabsAnalyzer.OPT_STABS_DONE, true),
+            options.getBoolean(StabsOptions.STABS_DONE, true),
             "Done-flag should persist as false in program options after clearing",
         )
     }
