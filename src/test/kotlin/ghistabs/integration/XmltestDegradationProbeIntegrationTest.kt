@@ -40,7 +40,7 @@ class XmltestDegradationProbeIntegrationTest : AbstractGhidraHeadlessIntegration
             .load()
             .use { loadResults ->
                 val program = loadResults.getPrimaryDomainObject(this)
-                val reader = StabReader.fromProgram(program)!!
+                val reader = StabReader.fromProgram(program)!!.readAll()
                 val ctx = ImportContext(
                     program,
                     monitor,

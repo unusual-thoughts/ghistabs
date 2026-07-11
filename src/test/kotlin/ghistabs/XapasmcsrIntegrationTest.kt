@@ -84,19 +84,18 @@ class XapasmcsrIntegrationTest {
 
     private fun buildSyntheticStabRecords(): List<StabRecord> = listOf(
         // Compilation unit
-        StabRecord(0, StabType.N_SO, 0, 0, 0, 0, "xapasmcsr.cpp"),
+        StabRecord(0, StabType.N_SO, 0, 0, 0, "xapasmcsr.cpp"),
         // Struct 1: Point (simple struct with 2 fields)
-        StabRecord(1, StabType.N_LSYM, 0x100, 0, 0, 0, "Point:t(0,1)=s8x:(0,2),0,32;y:(0,2),32,32;;"),
+        StabRecord(1, StabType.N_LSYM, 0, 0, 0, "Point:t(0,1)=s8x:(0,2),0,32;y:(0,2),32,32;;"),
         // Struct 2: Rect (contains Point)
-        StabRecord(2, StabType.N_LSYM, 0x100, 0, 0, 0, "Rect:t(0,3)=s16tl:(0,1),0,64;br:(0,1),64,64;;"),
+        StabRecord(2, StabType.N_LSYM, 0, 0, 0, "Rect:t(0,3)=s16tl:(0,1),0,64;br:(0,1),64,64;;"),
         // Struct 3: Color (enum-like)
-        StabRecord(3, StabType.N_LSYM, 0x100, 0, 0, 0, "Color:t(0,4)=eRED:0,GREEN:1,BLUE:2,;"),
+        StabRecord(3, StabType.N_LSYM, 0, 0, 0, "Color:t(0,4)=eRED:0,GREEN:1,BLUE:2,;"),
         // Struct 4: PaddedStruct (with internal gaps for gap-census testing)
         // Layout: char at 0, 3-byte gap, int at 4-8, then padding to 16 bytes
         StabRecord(
             4,
             StabType.N_LSYM,
-            0x100,
             0,
             0,
             0,
@@ -106,7 +105,6 @@ class XapasmcsrIntegrationTest {
         StabRecord(
             5,
             StabType.N_LSYM,
-            0x100,
             0,
             0,
             0,
@@ -116,30 +114,29 @@ class XapasmcsrIntegrationTest {
         StabRecord(
             6,
             StabType.N_LSYM,
-            0x100,
             0,
             0,
             0,
             "Rectangle:Tt(0,7)=s24!0,(0,5);width:(0,2),64,32;height:(0,2),96,32;;",
         ),
         // Functions with parameters and locals
-        StabRecord(7, StabType.N_FUN, 0x400, 0, 0, 0, "main:F(0,2)"),
-        StabRecord(8, StabType.N_PSYM, 0x400, 0, 0, 0, "argc:p(0,2)"),
-        StabRecord(9, StabType.N_PSYM, 0x400, 0, 0, 0, "argv:p(0,8)"),
-        StabRecord(10, StabType.N_LSYM, 0x400, 0, 0, 0, "buf:(0,9)"),
-        StabRecord(11, StabType.N_LBRAC, 0x402, 0, 0, 0, ""),
-        StabRecord(12, StabType.N_RBRAC, 0x500, 0, 0, 0, ""),
-        StabRecord(13, StabType.N_FUN, 0x500, 0, 0, 0, ""), // end of main
+        StabRecord(7, StabType.N_FUN, 0, 0, 0, "main:F(0,2)"),
+        StabRecord(8, StabType.N_PSYM, 0, 0, 0, "argc:p(0,2)"),
+        StabRecord(9, StabType.N_PSYM, 0, 0, 0, "argv:p(0,8)"),
+        StabRecord(10, StabType.N_LSYM, 0, 0, 0, "buf:(0,9)"),
+        StabRecord(11, StabType.N_LBRAC, 0, 0, 0, ""),
+        StabRecord(12, StabType.N_RBRAC, 0, 0, 0, ""),
+        StabRecord(13, StabType.N_FUN, 0, 0, 0, ""), // end of main
         // Global variables
-        StabRecord(14, StabType.N_GSYM, 0x2000, 0, 0, 0, "g_count:G(0,2)"),
-        StabRecord(15, StabType.N_GSYM, 0x2004, 0, 0, 0, "g_state:G(0,4)"),
+        StabRecord(14, StabType.N_GSYM, 0, 0, 0, "g_count:G(0,2)"),
+        StabRecord(15, StabType.N_GSYM, 0, 0, 0, "g_state:G(0,4)"),
         // More functions
-        StabRecord(16, StabType.N_FUN, 0x600, 0, 0, 0, "init:F(0,2)"),
-        StabRecord(17, StabType.N_PSYM, 0x600, 0, 0, 0, "value:p(0,2)"),
-        StabRecord(18, StabType.N_FUN, 0x700, 0, 0, 0, ""), // end of init
-        StabRecord(19, StabType.N_FUN, 0x800, 0, 0, 0, "process:F(0,2)"),
-        StabRecord(20, StabType.N_PSYM, 0x800, 0, 0, 0, "data:p(0,8)"),
-        StabRecord(21, StabType.N_LSYM, 0x800, 0, 0, 0, "result:(0,2)"),
-        StabRecord(22, StabType.N_FUN, 0x900, 0, 0, 0, ""), // end of process
+        StabRecord(16, StabType.N_FUN, 0, 0, 0, "init:F(0,2)"),
+        StabRecord(17, StabType.N_PSYM, 0, 0, 0, "value:p(0,2)"),
+        StabRecord(18, StabType.N_FUN, 0, 0, 0, ""), // end of init
+        StabRecord(19, StabType.N_FUN, 0, 0, 0, "process:F(0,2)"),
+        StabRecord(20, StabType.N_PSYM, 0, 0, 0, "data:p(0,8)"),
+        StabRecord(21, StabType.N_LSYM, 0, 0, 0, "result:(0,2)"),
+        StabRecord(22, StabType.N_FUN, 0, 0, 0, ""), // end of process
     )
 }

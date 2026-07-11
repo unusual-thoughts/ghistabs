@@ -8,10 +8,7 @@ import ghistabs.harvest.LineEntry
 import ghistabs.harvest.TypeAst
 import ghistabs.harvest.TypeResolver
 import ghistabs.harvest.hasHeaderExtension
-import ghistabs.parse.GlobalTypeId
-import ghistabs.parse.StabType
-import ghistabs.parse.SymbolDecl
-import ghistabs.parse.TypeDecl
+import ghistabs.parse.*
 import ghistabs.runTransaction
 import java.io.Closeable
 import java.io.File
@@ -118,7 +115,35 @@ private class RenderContext(val renderer: Renderer, val source: String) {
         }
         // Trailing blank/stale lines are trimmed only in decomp mode; skeleton output
         // stays fully source-aligned.
-        return canvas.render(trim = renderer.decomp != null)
+        return canvas.render(trim = renderer.decomp != null) + anonAggregateAppendix()
+    }
+
+    // Anonymous aggregates carry no source line (declLine == null), so they can't be placed inline
+    // on the line-based canvas. Append them as a skeleton-only diagnostic block under their synthetic
+    // Anon_ id; decomp omits them entirely. Deduped by ghidraName (content-hashed, §20).
+    private fun anonAggregateAppendix(): String {
+        if (renderer.mode != Mode.SKELETON) return ""
+        val anon = harvest.typeAsts.values
+            .filter { it.name.isNullOrEmpty() && it.body.isXRefTarget && tr.effectiveSourceFor(it) == source }
+            .distinctBy { it.ghidraName }
+            .sortedBy { it.ghidraName }
+        if (anon.isEmpty()) return ""
+        val blocks = anon.joinToString("\n\n") { ast ->
+            when (val body = ast.body) {
+                is TypeDecl.Struct -> {
+                    val members = body.renderFull(harvest, program, shortener)
+                        .joinToString("\n    ", prefix = "\n    ", postfix = "\n")
+                    "${body.kind.cxxKeyword()} ${ast.ghidraName} {$members}; /* ${body.sizeBytes} bytes */"
+                }
+
+                is TypeDecl.Enum ->
+                    "enum ${ast.ghidraName} { ${body.members.joinToString(", ") { (n, v) -> "$n = $v" }} };" +
+                        " /* ${body.members.size} members */"
+
+                else -> ""
+            }
+        }
+        return "\n\n/* ── anonymous aggregates (no source line) ── */\n\n$blocks\n"
     }
 
     /** One `// L n @ 0xADDR[: code-unit]` annotation per (line, code-unit) group. */

@@ -66,9 +66,8 @@ class HarvesterGlobalizeTest {
         val cuName = "cu.c"
         val records = listOf(
             StabRecord(
-                recordIndex = 0,
+                index = 0,
                 type = StabType.N_SO,
-                rawType = 0x00,
                 other = 0,
                 desc = 0,
                 value = 0L,
@@ -99,9 +98,8 @@ class HarvesterGlobalizeTest {
         val cuName = "cu.c"
         val records = listOf(
             StabRecord(
-                recordIndex = 0,
+                index = 0,
                 type = StabType.N_SO,
-                rawType = 0x00,
                 other = 0,
                 desc = 0,
                 value = 0L,
@@ -136,9 +134,8 @@ class HarvesterGlobalizeTest {
         val cuName = "cu.c"
         val records = listOf(
             StabRecord(
-                recordIndex = 0,
+                index = 0,
                 type = StabType.N_SO,
-                rawType = 0x00,
                 other = 0,
                 desc = 0,
                 value = 0L,
@@ -217,9 +214,8 @@ class HarvesterGlobalizeTest {
         val cuName = "cu.c"
         val records = listOf(
             StabRecord(
-                recordIndex = 0,
+                index = 0,
                 type = StabType.N_SO,
-                rawType = 0x00,
                 other = 0,
                 desc = 0,
                 value = 0L,
@@ -275,9 +271,8 @@ class HarvesterGlobalizeTest {
         val cuName = "cu.c"
         val records = listOf(
             StabRecord(
-                recordIndex = 0,
+                index = 0,
                 type = StabType.N_SO,
-                rawType = 0x00,
                 other = 0,
                 desc = 0,
                 value = 0L,
@@ -310,18 +305,16 @@ class HarvesterGlobalizeTest {
         // Records to establish BINCL context
         val records = listOf(
             StabRecord(
-                recordIndex = 0,
+                index = 0,
                 type = StabType.N_SO,
-                rawType = 0x00,
                 other = 0,
                 desc = 0,
                 value = 0L,
                 name = cuName,
             ),
             StabRecord(
-                recordIndex = 1,
+                index = 1,
                 type = StabType.N_BINCL,
-                rawType = 0x82,
                 other = 0,
                 desc = 0,
                 value = headerChecksum,

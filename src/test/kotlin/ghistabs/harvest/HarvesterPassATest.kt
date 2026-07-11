@@ -43,9 +43,8 @@ class HarvesterPassATest {
         val harvester = createTestHarvester()
         val records = listOf(
             StabRecord(
-                recordIndex = 0,
+                index = 0,
                 type = StabType.N_SO,
-                rawType = 0x64,
                 other = 0,
                 desc = 0,
                 value = 0L,
@@ -74,18 +73,16 @@ class HarvesterPassATest {
         val harvester = createTestHarvester()
         val records = listOf(
             StabRecord(
-                recordIndex = 0,
+                index = 0,
                 type = StabType.N_SO,
-                rawType = 0x64,
                 other = 0,
                 desc = 0,
                 value = 0L,
                 name = "foo.c",
             ),
             StabRecord(
-                recordIndex = 1,
+                index = 1,
                 type = StabType.N_GSYM,
-                rawType = 0x20,
                 other = 0,
                 desc = 0,
                 value = 0L,
@@ -118,36 +115,32 @@ class HarvesterPassATest {
         val harvester = createTestHarvester()
         val records = listOf(
             StabRecord(
-                recordIndex = 0,
+                index = 0,
                 type = StabType.N_SO,
-                rawType = 0x64,
                 other = 0,
                 desc = 0,
                 value = 0L,
                 name = "foo.c",
             ),
             StabRecord(
-                recordIndex = 1,
+                index = 1,
                 type = StabType.N_FUN,
-                rawType = 0x24,
                 other = 0,
                 desc = 0,
                 value = 0L, // Avoid address resolution issues; use 0 for simplicity
                 name = "f:F(0,2)=f(0,1)",
             ),
             StabRecord(
-                recordIndex = 2,
+                index = 2,
                 type = StabType.N_LSYM,
-                rawType = 0x80,
                 other = 0,
                 desc = 0,
                 value = 4L,
                 name = "x:(0,3)", // Simple type reference — no inline def (avoids StabsParseException)
             ),
             StabRecord(
-                recordIndex = 3,
+                index = 3,
                 type = StabType.N_FUN,
-                rawType = 0x24,
                 other = 0,
                 desc = 0,
                 value = 100L, // Relative size (N_FUN close uses value as size)
@@ -183,18 +176,16 @@ class HarvesterPassATest {
         val harvester = createTestHarvester()
         val records = listOf(
             StabRecord(
-                recordIndex = 0,
+                index = 0,
                 type = StabType.N_SO,
-                rawType = 0x64,
                 other = 0,
                 desc = 0,
                 value = 0L,
                 name = "foo.c",
             ),
             StabRecord(
-                recordIndex = 1,
+                index = 1,
                 type = StabType.N_LSYM,
-                rawType = 0x80,
                 other = 0,
                 desc = 0,
                 value = 0L,
@@ -230,36 +221,32 @@ class HarvesterPassATest {
         val harvester = createTestHarvester()
         val records = listOf(
             StabRecord(
-                recordIndex = 0,
+                index = 0,
                 type = StabType.N_SO,
-                rawType = 0x64,
                 other = 0,
                 desc = 0,
                 value = 0L,
                 name = "foo.c",
             ),
             StabRecord(
-                recordIndex = 1,
+                index = 1,
                 type = StabType.N_FUN,
-                rawType = 0x24,
                 other = 0,
                 desc = 0,
                 value = 0L, // Use 0 to avoid address resolution
                 name = "fn:F(0,2)=f(0,1)",
             ),
             StabRecord(
-                recordIndex = 2,
+                index = 2,
                 type = StabType.N_LSYM,
-                rawType = 0x80,
                 other = 0,
                 desc = 0,
                 value = 8L,
                 name = "var:(0,3)", // Simple type reference — no inline def
             ),
             StabRecord(
-                recordIndex = 3,
+                index = 3,
                 type = StabType.N_FUN,
-                rawType = 0x24,
                 other = 0,
                 desc = 0,
                 value = 50L, // Function size
@@ -295,36 +282,32 @@ class HarvesterPassATest {
         val harvester = createTestHarvester()
         val records = listOf(
             StabRecord(
-                recordIndex = 0,
+                index = 0,
                 type = StabType.N_SO,
-                rawType = 0x64,
                 other = 0,
                 desc = 0,
                 value = 0L,
                 name = "foo.c",
             ),
             StabRecord(
-                recordIndex = 1,
+                index = 1,
                 type = StabType.N_BINCL,
-                rawType = 0x82,
                 other = 0,
                 desc = 0,
                 value = 42L,
                 name = "hdr.h",
             ),
             StabRecord(
-                recordIndex = 2,
+                index = 2,
                 type = StabType.N_SOL,
-                rawType = 0x84,
                 other = 0,
                 desc = 0,
                 value = 0L,
                 name = "other.h",
             ),
             StabRecord(
-                recordIndex = 3,
+                index = 3,
                 type = StabType.N_LSYM,
-                rawType = 0x80,
                 other = 0,
                 desc = 0,
                 value = 0L,
@@ -334,9 +317,8 @@ class HarvesterPassATest {
                 name = "AfterSOL:T(1,3)=s0;;",
             ),
             StabRecord(
-                recordIndex = 4,
+                index = 4,
                 type = StabType.N_EINCL,
-                rawType = 0xA2,
                 other = 0,
                 desc = 0,
                 value = 0L,
@@ -383,27 +365,24 @@ class HarvesterPassATest {
         val harvester = createTestHarvester()
         val records = listOf(
             StabRecord(
-                recordIndex = 0,
+                index = 0,
                 type = StabType.N_SO,
-                rawType = 0x64,
                 other = 0,
                 desc = 0,
                 value = 0L,
                 name = "main.c",
             ),
             StabRecord(
-                recordIndex = 1,
+                index = 1,
                 type = StabType.N_BINCL,
-                rawType = 0x82,
                 other = 0,
                 desc = 0,
                 value = 0xABCDL,
                 name = "types.h",
             ),
             StabRecord(
-                recordIndex = 2,
+                index = 2,
                 type = StabType.N_LSYM,
-                rawType = 0x80,
                 other = 0,
                 desc = 0,
                 value = 0L,
@@ -412,9 +391,8 @@ class HarvesterPassATest {
                 name = "HeaderType:T(1,7)=s0;;",
             ),
             StabRecord(
-                recordIndex = 3,
+                index = 3,
                 type = StabType.N_EINCL,
-                rawType = 0xA2,
                 other = 0,
                 desc = 0,
                 value = 0L,
@@ -470,27 +448,24 @@ class HarvesterPassATest {
         val records = listOf(
             // CU1
             StabRecord(
-                recordIndex = 0,
+                index = 0,
                 type = StabType.N_SO,
-                rawType = 0x64,
                 other = 0,
                 desc = 0,
                 value = 0L,
                 name = "cu1.c",
             ),
             StabRecord(
-                recordIndex = 1,
+                index = 1,
                 type = StabType.N_BINCL,
-                rawType = 0x82,
                 other = 0,
                 desc = 0,
                 value = 0x1234L,
                 name = "header.h",
             ),
             StabRecord(
-                recordIndex = 2,
+                index = 2,
                 type = StabType.N_LSYM,
-                rawType = 0x80,
                 other = 0,
                 desc = 0,
                 value = 0L,
@@ -498,9 +473,8 @@ class HarvesterPassATest {
                 name = "SharedType:T(1,5)=s0;;",
             ),
             StabRecord(
-                recordIndex = 3,
+                index = 3,
                 type = StabType.N_EINCL,
-                rawType = 0xA2,
                 other = 0,
                 desc = 0,
                 value = 0L,
@@ -508,27 +482,24 @@ class HarvesterPassATest {
             ),
             // CU2
             StabRecord(
-                recordIndex = 4,
+                index = 4,
                 type = StabType.N_SO,
-                rawType = 0x64,
                 other = 0,
                 desc = 0,
                 value = 0L,
                 name = "cu2.c",
             ),
             StabRecord(
-                recordIndex = 5,
+                index = 5,
                 type = StabType.N_EXCL,
-                rawType = 0xC2,
                 other = 0,
                 desc = 0,
                 value = 0x1234L,
                 name = "header.h",
             ),
             StabRecord(
-                recordIndex = 6,
+                index = 6,
                 type = StabType.N_LSYM,
-                rawType = 0x80,
                 other = 0,
                 desc = 0,
                 value = 0L,
@@ -577,9 +548,8 @@ class HarvesterPassATest {
         val harvester = createTestHarvester()
         val records = listOf(
             StabRecord(
-                recordIndex = 0,
+                index = 0,
                 type = StabType.N_SO,
-                rawType = 0x64,
                 other = 0,
                 desc = 0,
                 value = 0L,
@@ -587,18 +557,16 @@ class HarvesterPassATest {
             ),
             // Symbol in cu1.c — required so symbolsByCu gets an entry for cu1.c
             StabRecord(
-                recordIndex = 1,
+                index = 1,
                 type = StabType.N_GSYM,
-                rawType = 0x20,
                 other = 0,
                 desc = 0,
                 value = 0L,
                 name = "g1:G(0,1)",
             ),
             StabRecord(
-                recordIndex = 2,
+                index = 2,
                 type = StabType.N_SO,
-                rawType = 0x64,
                 other = 0,
                 desc = 0,
                 value = 0L,
@@ -606,18 +574,16 @@ class HarvesterPassATest {
             ),
             // Symbol in cu2.c — required so symbolsByCu gets an entry for cu2.c
             StabRecord(
-                recordIndex = 3,
+                index = 3,
                 type = StabType.N_GSYM,
-                rawType = 0x20,
                 other = 0,
                 desc = 0,
                 value = 0L,
                 name = "g2:G(0,1)",
             ),
             StabRecord(
-                recordIndex = 4,
+                index = 4,
                 type = StabType.N_SO,
-                rawType = 0x64,
                 other = 0,
                 desc = 0,
                 value = 0L,
@@ -648,27 +614,24 @@ class HarvesterPassATest {
         val harvester = createTestHarvester()
         val records = listOf(
             StabRecord(
-                recordIndex = 0,
+                index = 0,
                 type = StabType.N_SO,
-                rawType = 0x64,
                 other = 0,
                 desc = 0,
                 value = 0L,
                 name = "a.c",
             ),
             StabRecord(
-                recordIndex = 1,
+                index = 1,
                 type = StabType.N_BINCL,
-                rawType = 0x82,
                 other = 0,
                 desc = 0,
                 value = 1L,
                 name = "h1.h",
             ),
             StabRecord(
-                recordIndex = 2,
+                index = 2,
                 type = StabType.N_EINCL,
-                rawType = 0xA2,
                 other = 0,
                 desc = 0,
                 value = 0L,
@@ -676,36 +639,32 @@ class HarvesterPassATest {
             ),
             // Symbol for a.c — symbolsByCu only has entries when symbols are harvested
             StabRecord(
-                recordIndex = 3,
+                index = 3,
                 type = StabType.N_GSYM,
-                rawType = 0x20,
                 other = 0,
                 desc = 0,
                 value = 0L,
                 name = "ga:G(0,1)",
             ),
             StabRecord(
-                recordIndex = 4,
+                index = 4,
                 type = StabType.N_SO,
-                rawType = 0x64,
                 other = 0,
                 desc = 0,
                 value = 0L,
                 name = "b.c",
             ),
             StabRecord(
-                recordIndex = 5,
+                index = 5,
                 type = StabType.N_BINCL,
-                rawType = 0x82,
                 other = 0,
                 desc = 0,
                 value = 2L,
                 name = "h2.h",
             ),
             StabRecord(
-                recordIndex = 6,
+                index = 6,
                 type = StabType.N_EINCL,
-                rawType = 0xA2,
                 other = 0,
                 desc = 0,
                 value = 0L,
@@ -713,9 +672,8 @@ class HarvesterPassATest {
             ),
             // Symbol for b.c
             StabRecord(
-                recordIndex = 7,
+                index = 7,
                 type = StabType.N_GSYM,
-                rawType = 0x20,
                 other = 0,
                 desc = 0,
                 value = 0L,
