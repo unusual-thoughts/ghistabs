@@ -8,6 +8,11 @@ import ghistabs.diagnose.degradation
 import ghistabs.harvest.Harvest
 import ghistabs.harvest.TypeAst
 import ghistabs.harvest.TypeResolver
+import ghistabs.materialize.itanium.InsertOp
+import ghistabs.materialize.itanium.Itanium
+import ghistabs.materialize.itanium.Layout
+import ghistabs.materialize.itanium.ResolvedBase
+import ghistabs.materialize.itanium.firstPolymorphicBase
 import ghistabs.parse.AggrKind
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
@@ -627,15 +632,10 @@ class TypeRegistry(
                             val off = (base.offsetBits / 8).toInt()
                             val info = resolvedBaseInfo[off] ?: return@mapNotNull null
                             if (info.simpleName.startsWith("unknown_")) return@mapNotNull null
-                            val prefix = if (base.isVirtual) "_vbase_" else "_base_"
                             InsertOp(
                                 offsetBytes = off,
-                                fieldName = prefix + info.simpleName,
-                                comment = buildString {
-                                    append(base.access.name.lowercase())
-                                    if (base.isVirtual) append(" virtual")
-                                    append(" base")
-                                },
+                                fieldName = Layout.baseFieldName(base.isVirtual, info.simpleName),
+                                comment = Layout.baseComment(base),
                                 baseSimpleName = info.simpleName,
                             )
                         }
@@ -661,7 +661,7 @@ class TypeRegistry(
                     }
                 }
 
-                val polyBase = ClassBuilderHelpers(resolver).firstPolymorphicBase(body)
+                val polyBase = resolver.firstPolymorphicBase(body)
 
                 // Any vptr at a base-occupied offset is inherited — base owns it. Skip it.
                 // Catches the unresolved-base case (synthesised _base_unknown_*) where
@@ -672,10 +672,8 @@ class TypeRegistry(
                 for (field in body.fields) {
                     if (field.isStatic) continue
 
-                    val isParserEmittedVptr =
-                        field.name.startsWith("_vptr$") || field.name.startsWith("_vptr.") || field.name == "_vptr"
                     if (
-                        isParserEmittedVptr &&
+                        Itanium.isVptrField(field.name) &&
                         (
                             (polyBase != null && field.offsetBits == polyBase.offsetBits) ||
                                 field.offsetBits in baseOffsets
