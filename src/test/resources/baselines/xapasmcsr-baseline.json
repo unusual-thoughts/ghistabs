@@ -241,8 +241,12 @@
             "max": 1076
         },
         "placeholder-created": {
-            "min": 11735,
-            "max": 11735
+            "min": 11727,
+            "max": 11727
+        },
+        "rtti-pseudo-substituted": {
+            "min": 8,
+            "max": 8
         },
         "reglocal-add-success": {
             "min": 1451,

@@ -79,45 +79,53 @@ fun buildVtableRecord(
 
 /**
  * Authoritative Itanium `__cxxabiv1` typeinfo struct layouts, adapted from Ghidra's
- * `RTTIGccClassRecoverer`. Intended as the implementation of last resort for the gcc-internal
- * `__class_type_info`(-pseudo) records that are absent from the stabs on xapasmcsr etc.
+ * `RTTIGccClassRecoverer`. The implementation of last resort for the gcc-internal
+ * `__*_type_info_pseudo` records that are absent from the stabs on xapasmcsr etc:
+ * [pseudoTypeInfo] maps a stab pseudo-type name to the reference layout. Pointer size and
+ * endianness come from the [dtm]'s data organization, so no `Program` is needed.
  */
-class RttiStructs(val ctx: ImportContext<*>) {
-    val program = ctx.program
+class RttiStructs(private val dtm: DataTypeManager) {
+    private val pointerSize = dtm.dataOrganization.pointerSize
+    private val bigEndian = dtm.dataOrganization.isBigEndian
+    private val componentOffset = Itanium.vtablePrefixBytes(pointerSize)
 
-    private val componentOffset = Itanium.vtablePrefixBytes(program.defaultPointerSize).toLong()
+    /** Reference impl for a gcc typeinfo pseudo-struct [name] (`__vmi_…_pseudo<N>` carries N), else null. */
+    fun pseudoTypeInfo(name: String): DataType? = when {
+        name == Itanium.CLASS_TYPE_INFO_PSEUDO -> classTypeInfoStructure
+        name == Itanium.SI_CLASS_TYPE_INFO_PSEUDO -> siClassTypeInfoStructure
+        name.startsWith(Itanium.VMI_CLASS_TYPE_INFO_PSEUDO) ->
+            name.removePrefix(Itanium.VMI_CLASS_TYPE_INFO_PSEUDO).toIntOrNull()?.let(::vmiClassTypeInfoStructure)
+
+        else -> null
+    }
 
     val classTypeInfoStructure by lazy {
-        StructureDataType(Itanium.classDataTypesRoot, "ClassTypeInfoStructure", 0, ctx.dtm).apply {
-            add(
-                PointerTypedef(null, PointerDataType.dataType, -1, ctx.dtm, componentOffset),
-                "classTypeinfoPtr",
-                null,
-            )
-            add(dataTypeManager.getPointer(CharDataType()), "typeinfoName", null)
+        StructureDataType(Itanium.classDataTypesRoot, "ClassTypeInfoStructure", 0, dtm).apply {
+            add(PointerTypedef(null, PointerDataType.dataType, -1, dtm, componentOffset), "classTypeinfoPtr", null)
+            add(dtm.getPointer(CharDataType()), "typeinfoName", null)
             setPackingEnabled(true)
         }
     }
 
     val siClassTypeInfoStructure by lazy {
-        StructureDataType(Itanium.classDataTypesRoot, "SiClassTypeInfoStructure", 0, ctx.dtm).apply {
-            add(PointerTypedef(null, null, -1, ctx.dtm, componentOffset), "classTypeinfoPtr", null)
-            add(ctx.dtm.getPointer(CharDataType()), "typeinfoName", null)
-            add(ctx.dtm.getPointer(classTypeInfoStructure), "baseClassTypeInfoPtr", null)
+        StructureDataType(Itanium.classDataTypesRoot, "SiClassTypeInfoStructure", 0, dtm).apply {
+            add(PointerTypedef(null, null, -1, dtm, componentOffset), "classTypeinfoPtr", null)
+            add(dtm.getPointer(CharDataType()), "typeinfoName", null)
+            add(dtm.getPointer(classTypeInfoStructure), "baseClassTypeInfoPtr", null)
             setPackingEnabled(true)
         }
     }
 
     val baseClassTypeInfoStructure by lazy {
-        StructureDataType(Itanium.classDataTypesRoot, "BaseClassTypeInfoStructure", 0, ctx.dtm).apply {
-            add(ctx.dtm.getPointer(classTypeInfoStructure), "classTypeinfoPtr", null)
+        StructureDataType(Itanium.classDataTypesRoot, "BaseClassTypeInfoStructure", 0, dtm).apply {
+            add(dtm.getPointer(classTypeInfoStructure), "classTypeinfoPtr", null)
 
-            val (offsetBitSize, dataType) = when (program.defaultPointerSize) {
+            val (offsetBitSize, dataType) = when (pointerSize) {
                 8 -> 56 to LongLongDataType()
                 else -> 24 to LongDataType()
             }
 
-            if (program.memory.isBigEndian) {
+            if (bigEndian) {
                 addBitField(dataType, offsetBitSize, "baseClassOffset", "baseClassOffset")
                 addBitField(dataType, 1, "isPublicBase", "isPublicBase")
                 addBitField(dataType, 1, "isVirtualBase", "isVirtualBase")
@@ -134,9 +142,9 @@ class RttiStructs(val ctx: ImportContext<*>) {
     }
 
     fun vmiClassTypeInfoStructure(numBaseClasses: Int) =
-        StructureDataType(Itanium.classDataTypesRoot, "VmiClassTypeInfoStructure$numBaseClasses", 0, ctx.dtm).apply {
-            add(PointerTypedef(null, null, -1, ctx.dtm, componentOffset), "classTypeinfoPtr", null)
-            add(dataTypeManager.getPointer(CharDataType()), "typeinfoName", null)
+        StructureDataType(Itanium.classDataTypesRoot, "VmiClassTypeInfoStructure$numBaseClasses", 0, dtm).apply {
+            add(PointerTypedef(null, null, -1, dtm, componentOffset), "classTypeinfoPtr", null)
+            add(dtm.getPointer(CharDataType()), "typeinfoName", null)
             add(UnsignedIntegerDataType(), "flags", null)
             add(UnsignedIntegerDataType(), "numBaseClasses", null)
             add(
