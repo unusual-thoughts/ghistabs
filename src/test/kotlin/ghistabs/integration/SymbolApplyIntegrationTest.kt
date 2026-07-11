@@ -59,11 +59,11 @@ class SymbolApplyIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
 
         // Create synthetic stab records with global variables
         val records = listOf(
-            StabRecord(0, StabType.N_SO, 0, 0, 0, 0, "test.cpp"),
+            StabRecord(0, StabType.N_SO, 0, 0, 0, "test.cpp"),
             // Global variable at address 0x401000
-            StabRecord(1, StabType.N_GSYM, 0x401000, 0, 0, 0, "g_count:G(0,2)"),
+            StabRecord(1, StabType.N_GSYM, 0, 0, 0x401000, "g_count:G(0,2)"),
             // Global variable at address 0x401004
-            StabRecord(2, StabType.N_GSYM, 0x401004, 0, 0, 0, "g_state:G(0,4)"),
+            StabRecord(2, StabType.N_GSYM, 0, 0, 0x401004, "g_state:G(0,4)"),
         )
 
         // Run importer with synthetic records
@@ -93,12 +93,11 @@ class SymbolApplyIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
 
         // Create synthetic records with a malformed type declaration
         val records = listOf(
-            StabRecord(0, StabType.N_SO, 0, 0, 0, 0, "test.cpp"),
+            StabRecord(0, StabType.N_SO, 0, 0, 0, "test.cpp"),
             // Valid type declaration
             StabRecord(
                 1,
                 StabType.N_LSYM,
-                0x100,
                 0,
                 0,
                 0,
@@ -108,7 +107,6 @@ class SymbolApplyIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             StabRecord(
                 2,
                 StabType.N_LSYM,
-                0x100,
                 0,
                 0,
                 0,
@@ -118,7 +116,6 @@ class SymbolApplyIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             StabRecord(
                 3,
                 StabType.N_LSYM,
-                0x100,
                 0,
                 0,
                 0,
@@ -129,7 +126,8 @@ class SymbolApplyIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         // Run importer - should complete even with malformed input
         val ctx = program.defaultContext()
         val importer = StabsImporter(ctx)
-        val result = importer.runOnRecords(StabReader.Result(records, recordCount = records.size, truncatedTail = 0))
+        val result =
+            importer.runOnRecords(StabReader.Result(records, totalRecordCount = records.size, truncatedTail = 0))
 
         // Importer should complete without throwing (robustness test)
         assertTrue(result.recordsParsed > 0, "Importer should have parsed some records")

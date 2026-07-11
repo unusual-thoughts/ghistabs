@@ -17,6 +17,8 @@ import ghidra.util.Msg
 import ghidra.util.task.Task
 import ghidra.util.task.TaskLauncher
 import ghidra.util.task.TaskMonitor
+import ghistabs.StabsOptions.Companion.isStabsDone
+import ghistabs.StabsOptions.Companion.markStabsDone
 import ghistabs.diagnose.DummySink
 import ghistabs.diagnose.StabsDiagnostics
 import ghistabs.harvest.Harvester
@@ -63,14 +65,14 @@ class StabsPlugin(tool: PluginTool) : ProgramPlugin(tool) {
         currentProgram?.memory?.getBlock(".stab") != null && currentProgram?.memory?.getBlock(".stabstr") != null
 
     private fun reimport(program: Program) {
-        StabsAnalyzer.markStabsDone(program, false)
+        program.markStabsDone(false)
         AutoAnalysisManager.getAnalysisManager(program).reAnalyzeAll(null)
     }
 
     private fun exportDecompilation(program: Program) {
         // The reconstruction re-harvests the stabs cheaply, but the decompilation it renders is only
         // meaningful once the importer has applied types/locals to the program — require that first.
-        if (!StabsAnalyzer.isStabsDone(program)) {
+        if (!program.isStabsDone) {
             return Msg.showInfo(
                 javaClass,
                 null,
@@ -88,7 +90,7 @@ class StabsPlugin(tool: PluginTool) : ProgramPlugin(tool) {
         TaskLauncher.launch(object : Task("Stabs: export decompilation", true, false, true) {
             override fun run(monitor: TaskMonitor) {
                 val options = StabsOptions(program)
-                val reader = StabReader.fromProgram(program) ?: return
+                val reader = StabReader.fromProgram(program)?.readAll() ?: return
                 val harvest = program.runTransaction("stabs-export-harvest") {
                     Harvester(
                         ImportContext(

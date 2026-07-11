@@ -7,6 +7,7 @@ import ghidra.program.model.data.Structure
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghistabs.StabsAnalyzer
+import ghistabs.StabsAnalyzer.Companion.import
 import ghistabs.StabsOptions
 import ghistabs.diagnose.CapturingSink
 import ghistabs.diagnose.StabsDiagnostics
@@ -53,7 +54,7 @@ class bouniafProbeIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                     mgr.waitForAnalysis(null, monitor)
                 }
                 program.runTransaction("stabs-analyze") {
-                    StabsAnalyzer().run(ctx)
+                    ctx.import()
                 }
 
                 val out = File("build/test-output/degradations/bouniaffile.csymlexstream-probe.txt")
@@ -107,7 +108,7 @@ class bouniafProbeIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                     }
 
                     w.write("\n=== Harvest TypeAsts for bouniaf + bouniaf + everything they ref ===\n")
-                    val reader = ghistabs.parse.StabReader.fromProgram(program)!!
+                    val reader = ghistabs.parse.StabReader.fromProgram(program)!!.readAll()
                     val freshHarvest = program.runTransaction("probe-harvest") {
                         ghistabs.harvest.Harvester(ctx).passA(reader.records)
                     }

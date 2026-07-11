@@ -2,7 +2,7 @@ package ghistabs.integration
 
 import ghidra.program.database.ProgramBuilder
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghistabs.StabsAnalyzer
+import ghistabs.StabsOptions.Companion.markStabsDone
 import ghistabs.diagnose.defaultContext
 import ghistabs.importer.StabsImporter
 import org.junit.jupiter.api.AfterEach
@@ -65,7 +65,7 @@ class ImporterIdempotenceIntegrationTest : AbstractGhidraHeadlessIntegrationTest
         val symbolCount1 = program.symbolTable.numSymbols
 
         // Clear the done-flag to allow re-import
-        StabsAnalyzer.markStabsDone(program, false)
+        program.markStabsDone(false)
 
         // Second run: parse again with same input
         val ctx2 = program.defaultContext()
@@ -102,7 +102,7 @@ class ImporterIdempotenceIntegrationTest : AbstractGhidraHeadlessIntegrationTest
         for (i in 0..2) {
             // Clear the done-flag if this is not the first run
             if (i > 0) {
-                StabsAnalyzer.markStabsDone(program, false)
+                program.markStabsDone(false)
             }
 
             // Create context and run (this should not throw)
@@ -152,7 +152,7 @@ class ImporterIdempotenceIntegrationTest : AbstractGhidraHeadlessIntegrationTest
                 }.toMap()
 
         // Clear the done-flag to allow re-import
-        StabsAnalyzer.markStabsDone(program, false)
+        program.markStabsDone(false)
 
         // Second run: parse again with same input, fresh diagnostics
         val ctx2 = program.defaultContext()

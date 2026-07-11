@@ -44,9 +44,8 @@ class HarvesterAppendAstsTest {
         // N_SO record establishes CU context; not needed by appendAsts() but kept for structural consistency
         val records = listOf(
             StabRecord(
-                recordIndex = 0,
+                index = 0,
                 type = StabType.N_SO,
-                rawType = 0x00,
                 other = 0,
                 desc = 0,
                 value = 0L,
@@ -119,9 +118,8 @@ class HarvesterAppendAstsTest {
         // N_SO record establishes CU context; not needed by appendAsts() but kept for structural consistency
         val records = listOf(
             StabRecord(
-                recordIndex = 0,
+                index = 0,
                 type = StabType.N_SO,
-                rawType = 0x00,
                 other = 0,
                 desc = 0,
                 value = 0L,
@@ -183,9 +181,8 @@ class HarvesterAppendAstsTest {
         // N_SO record establishes CU context; not needed by appendAsts() but kept for structural consistency
         val records = listOf(
             StabRecord(
-                recordIndex = 0,
+                index = 0,
                 type = StabType.N_SO,
-                rawType = 0x00,
                 other = 0,
                 desc = 0,
                 value = 0L,
@@ -289,9 +286,8 @@ class HarvesterAppendAstsTest {
         // N_SO record establishes CU context; not needed by appendAsts() but kept for structural consistency
         val records = listOf(
             StabRecord(
-                recordIndex = 0,
+                index = 0,
                 type = StabType.N_SO,
-                rawType = 0x00,
                 other = 0,
                 desc = 0,
                 value = 0L,

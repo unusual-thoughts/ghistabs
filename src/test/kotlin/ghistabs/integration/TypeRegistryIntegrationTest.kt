@@ -63,23 +63,21 @@ class TypeRegistryIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
 
         // Create synthetic records with identical structs from different CUs
         val records = listOf(
-            StabRecord(0, StabType.N_SO, 0, 0, 0, 0, "file1.cpp"),
+            StabRecord(0, StabType.N_SO, 0, 0, 0, "file1.cpp"),
             // Struct definition in CU 0
             StabRecord(
                 1,
                 StabType.N_LSYM,
-                0x100,
                 0,
                 0,
                 0,
                 "Point:t(0,1)=s8x:(0,2),0,32;y:(0,2),32,32;;",
             ),
-            StabRecord(2, StabType.N_SO, 0, 0, 0, 0, "file2.cpp"),
+            StabRecord(2, StabType.N_SO, 0, 0, 0, "file2.cpp"),
             // Identical struct definition in CU 1 (should be deduplicated)
             StabRecord(
                 3,
                 StabType.N_LSYM,
-                0x100,
                 0,
                 0,
                 0,
@@ -113,23 +111,21 @@ class TypeRegistryIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
 
         // Create records with conflicting struct names
         val records = listOf(
-            StabRecord(0, StabType.N_SO, 0, 0, 0, 0, "file1.cpp"),
+            StabRecord(0, StabType.N_SO, 0, 0, 0, "file1.cpp"),
             // First Point with 2 fields
             StabRecord(
                 1,
                 StabType.N_LSYM,
-                0x100,
                 0,
                 0,
                 0,
                 "Point:t(0,1)=s8x:(0,2),0,32;y:(0,2),32,32;;",
             ),
-            StabRecord(2, StabType.N_SO, 0, 0, 0, 0, "file2.cpp"),
+            StabRecord(2, StabType.N_SO, 0, 0, 0, "file2.cpp"),
             // Different Point with 3 fields (causes conflict)
             StabRecord(
                 3,
                 StabType.N_LSYM,
-                0x100,
                 0,
                 0,
                 0,
@@ -159,11 +155,10 @@ class TypeRegistryIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
 
         // Create records with structs
         val records = listOf(
-            StabRecord(0, StabType.N_SO, 0, 0, 0, 0, "test.cpp"),
+            StabRecord(0, StabType.N_SO, 0, 0, 0, "test.cpp"),
             StabRecord(
                 1,
                 StabType.N_LSYM,
-                0x100,
                 0,
                 0,
                 0,
@@ -194,12 +189,11 @@ class TypeRegistryIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
 
         // Create records with self-referential struct
         val records = listOf(
-            StabRecord(0, StabType.N_SO, 0, 0, 0, 0, "test.cpp"),
+            StabRecord(0, StabType.N_SO, 0, 0, 0, "test.cpp"),
             // LinkedList with self-pointer (next points to same type)
             StabRecord(
                 1,
                 StabType.N_LSYM,
-                0x100,
                 0,
                 0,
                 0,
@@ -233,12 +227,11 @@ class TypeRegistryIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
 
         // Create records with mutually referential structs
         val records = listOf(
-            StabRecord(0, StabType.N_SO, 0, 0, 0, 0, "test.cpp"),
+            StabRecord(0, StabType.N_SO, 0, 0, 0, "test.cpp"),
             // Node A references Node B
             StabRecord(
                 1,
                 StabType.N_LSYM,
-                0x100,
                 0,
                 0,
                 0,
@@ -248,7 +241,6 @@ class TypeRegistryIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             StabRecord(
                 2,
                 StabType.N_LSYM,
-                0x100,
                 0,
                 0,
                 0,
@@ -273,8 +265,8 @@ class TypeRegistryIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     fun testNamedPrimitiveTypedef() {
         val program = builder.program
         val records = listOf(
-            StabRecord(0, StabType.N_SO, 0, 0, 0, 0, "main.cpp"),
-            StabRecord(1, StabType.N_LSYM, 0, 0, 0, 0, "unsigned int:t(0,4)=r(0,4);0000000000000;0037777777777;"),
+            StabRecord(0, StabType.N_SO, 0, 0, 0, "main.cpp"),
+            StabRecord(1, StabType.N_LSYM, 0, 0, 0, "unsigned int:t(0,4)=r(0,4);0000000000000;0037777777777;"),
         )
         val ctx = program.defaultContext()
         StabsImporter(ctx).runOnRecords(StabReader.Result(records))

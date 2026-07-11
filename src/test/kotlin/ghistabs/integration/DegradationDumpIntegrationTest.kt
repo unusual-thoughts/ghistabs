@@ -4,7 +4,7 @@ import ghidra.app.util.importer.MessageLog
 import ghidra.app.util.importer.ProgramLoader
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
-import ghistabs.StabsAnalyzer
+import ghistabs.StabsAnalyzer.Companion.import
 import ghistabs.StabsOptions
 import ghistabs.diagnose.CapturingSink
 import ghistabs.diagnose.StabsDiagnostics
@@ -53,7 +53,7 @@ class DegradationDumpIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                     StabsDiagnostics(),
                 )
                 program.runTransaction("stabs-degradation-dump") {
-                    StabsAnalyzer().run(ctx)
+                    ctx.import()
                 }
 
                 val events = ctx.diagnostics.snapshotDegradations()

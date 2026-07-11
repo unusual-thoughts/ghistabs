@@ -6,7 +6,7 @@ import ghidra.app.util.importer.ProgramLoader
 import ghidra.program.model.listing.Program
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
-import ghistabs.StabsAnalyzer
+import ghistabs.StabsOptions
 import ghistabs.diagnose.Level
 import ghistabs.diagnose.defaultContext
 import ghistabs.harvest.Harvester
@@ -76,8 +76,8 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                     program.getOptions(Program.ANALYSIS_PROPERTIES)
                         .getOptions("Stabs Importer")
                         .apply {
-                            setBoolean(StabsAnalyzer.OPT_SHORTEN_TYPEDEFS, true)
-                            setEnum(StabsAnalyzer.OPT_LOG_LEVEL, Level.DEBUG)
+                            setBoolean(StabsOptions.SHORTEN_TYPEDEFS, true)
+                            setEnum(StabsOptions.LOG_LEVEL, Level.DEBUG)
                         }
                 }
                 mgr.reAnalyzeAll(null)
@@ -85,7 +85,7 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                     mgr.startAnalysis(monitor)
                     mgr.waitForAnalysis(null, monitor)
                 }
-                val reader = StabReader.fromProgram(program)!!
+                val reader = StabReader.fromProgram(program)!!.readAll()
                 val harvest = program.runTransaction("skeleton-harvest") {
                     Harvester(ctx).passA(reader.records)
                 }

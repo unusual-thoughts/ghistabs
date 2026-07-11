@@ -11,9 +11,13 @@ import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.Level
 import ghistabs.diagnose.degradation
 import ghistabs.harvest.*
+import ghistabs.materialize.ClassBuilder.Companion.isClass
 import ghistabs.materialize.TypeRegistry
 import ghistabs.materialize.TypedefShortener
-import ghistabs.parse.*
+import ghistabs.parse.GlobalTypeId
+import ghistabs.parse.StabReader
+import ghistabs.parse.SymbolDecl
+import ghistabs.parse.isInlineStdMember
 import ghistabs.runTransaction
 
 private val X86_DBX_TO_REGISTER = listOf("EAX", "ECX", "EDX", "EBX", "ESP", "EBP", "ESI", "EDI")
@@ -66,10 +70,6 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
         }
 
         typeRegistry.reportSurvivingPlaceholders()
-
-        if (ctx.options.overlaySection) {
-            debug("stab-section-overlaid", count = StabSectionOverlay(ctx).apply().toLong())
-        }
 
         ctx.diagnostics.writeSummary(ctx.terminal)
 
@@ -249,27 +249,13 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
                     .values.count { it > 1 }.toLong(),
             )
             for (group in typeResolver.byCanonicalKey.values) {
-                if (group.ast.body !is TypeDecl.Struct) {
-                    continue
-                }
-
-                // gcc 12 emits the vfptr as a regular `_vptr.XX` field instead of the
-                // `~%<id>;` marker hasVTablePointerMarker watches for — without this check
-                // every polymorphic class in xmltest would be skipped.
-                val hasVptrField = group.ast.body.fields.any {
-                    it.name.startsWith("_vptr$") || it.name.startsWith("_vptr.") || it.name == "_vptr"
-                }
-                if (group.ast.body.methods.isEmpty() &&
-                    !group.ast.body.hasVTablePointerMarker &&
-                    !hasVptrField
-                ) {
-                    continue
-                }
-                try {
-                    classBuilder.build(group)
-                    classes++
-                } catch (t: Throwable) {
-                    err("class-apply-error", "${group.key}: ${t.message}")
+                if (group.isClass()) {
+                    try {
+                        classBuilder.build(group)
+                        classes++
+                    } catch (t: Throwable) {
+                        err("class-apply-error", "${group.key}: ${t.message}")
+                    }
                 }
             }
         }

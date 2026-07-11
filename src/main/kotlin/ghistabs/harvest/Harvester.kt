@@ -310,7 +310,7 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, private 
                 // Hard signal: byte-decoder recognised but no harvesting rule. Log once per type.
                 StabType.UNKNOWN -> warn(
                     "stab-unknown",
-                    "rawType=0x${"%02X".format(rec.rawType)} @${rec.recordIndex} '${rec.name.take(60)}'",
+                    "rawType=0x${"%02X".format(rec.rawType)} @${rec.index} '${rec.name.take(60)}'",
                 )
             }
         }
@@ -421,7 +421,7 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, private 
             symbolsByCu.getOrPut(currentCu!!.filename) { mutableListOf() } += parseSymbol(rec)
         } catch (e: StabsParseException) {
             parseErrors++
-            warn("parse-error", "@${rec.recordIndex} '${rec.name.take(80)}': ${e.message}")
+            warn("parse-error", "@${rec.index} '${rec.name.take(80)}': ${e.message}")
         }
     }
 
