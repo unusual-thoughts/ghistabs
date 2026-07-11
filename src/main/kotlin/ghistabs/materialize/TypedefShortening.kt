@@ -2,6 +2,7 @@ package ghistabs.materialize
 
 import ghidra.program.model.data.*
 import ghistabs.diagnose.DiagnosticSink
+import ghistabs.materialize.itanium.Itanium
 import ghistabs.parse.canonTemplateName
 
 /** A rename the shortening pass performs: datatype simple name [from] → [to]. */
@@ -105,7 +106,7 @@ class TypedefShortener(private val dtm: DataTypeManager, sink: DiagnosticSink) :
 
     private fun DataTypeComponent.shortenBaseField(shortener: TemplateNameShortener): Boolean {
         val name = fieldName ?: return false
-        if (!name.startsWith("_base_") && !name.startsWith("_vbase_")) return false
+        if (!Itanium.isBaseField(name)) return false
         val short = shortener.shortenedOrNull(name) ?: return false
         return runCatching { fieldName = short }.isSuccess
     }

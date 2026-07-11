@@ -52,14 +52,13 @@ class ClassBuilder(
         private val CanonicalGroup.classBody get() = ast.body as TypeDecl.Struct<GlobalTypeId>
         private val CanonicalGroup.className get() = key.name
 
-        // Two related structs under /ClassDataTypes/<Class>/:
-        //   <Class>_vftable — function-pointer array (what {vfptr} points at). Each slot is
-        //                     Pointer→FunctionDefinition(<sig>) so the decompiler resolves
-        //                     virtual calls; matches RecoveredClassHelper for shift-S round-trip.
-        //   <Class>_vtable  — full record at _ZTV: offset_to_top + rtti + embedded vftable.
+        // <Class>_vftable under /ClassDataTypes/<Class>/ — the function-pointer array {vfptr}
+        // points at, laid at the vtable's address point (_ZTV + 2*ptrSize). Each slot is
+        // Pointer→FunctionDefinition(<sig>) so the decompiler resolves virtual calls and
+        // RecoveredClassHelper / shift-S round-trip. The offset_to_top + rtti header words sit
+        // before the address point as plain Data (no enclosing struct — see buildAndApplyVtable).
         private val CanonicalGroup.vftableCategory get() = CategoryPath(Itanium.classDataTypesRoot, className)
         private val CanonicalGroup.vftableName get() = "${className}_vftable"
-        private val CanonicalGroup.vtableName get() = "${className}_vtable"
     }
 
     private val CanonicalGroup.vftable
@@ -67,13 +66,8 @@ class ClassBuilder(
             StructureDataType(vftableCategory, vftableName, 0, dtm)
         }
 
-    private val CanonicalGroup.vtable
-        get() = typeRegistry.getOrRegister<Structure>(vftableCategory, vtableName) {
-            StructureDataType(vftableCategory, vtableName, 0, dtm)
-        }
-
     /**
-     * {vfptr} points at the function-pointer array inside the vtable record
+     * {vfptr} points at the function-pointer array at the vtable's address point
      * (`_ZTV<class> + 2*ptrSize`), not at the record start. Modelled as `<Class>_vftable*`
      * under `/ClassDataTypes/<Class>/` so `RecoveredClassHelper` / shift-S round-trip
      * can find it.
@@ -345,28 +339,17 @@ class ClassBuilder(
             return
         }
 
-        val ptrSize = program.defaultPointerSize
-
-        val slots = virtuals.map { m -> m.name to buildVirtualSlotType(m) }
-        buildVtableRecord(vtable, vftable, slots, className, ptrSize, dtm)
+        while (vftable.numComponents > 0) vftable.delete(0)
+        for (m in virtuals) vftable.add(buildVirtualSlotType(m), m.name, "virtual ${m.name}")
 
         val addr = resolveVtableAddress() ?: return
-
-        program.listing.clearCodeUnits(addr, addr.add(vtable.length.toLong() - 1), false)
-        program.listing.createData(addr, vtable)
-        // RecoveredClassHelper / shift-S require a symbol containing "vftable" at the
-        // Data address. The demangler emits `<class>::vtable` (no f); this label is
-        // what makes us discoverable.
-        runCatching { symtab.createLabel(addr, Itanium.VFTABLE, ns, source) }
-            .onFailure { warn("vftable-label-failed", "$className at $addr: ${it.message}", address = addr) }
-        debug("vtable", "applied $vtableName", address = addr)
-        debug("vtable-applied", "class=$className")
+        val addressPoint = program.layVtable(addr, vftable, className, ns)
+        debug("vtable-applied", "class=$className", address = addressPoint)
 
         // Plate-comment each virtual. An unresolved mangled name here is expected for
         // pure virtuals (slot points at __cxa_pure_virtual, no symbol emitted) or
         // DLL-imported impls. Slot type was already typed from the signature.
-        var off = Itanium.vtablePrefixBytes(ptrSize).toLong()
-        for (m in virtuals) {
+        virtuals.forEachIndexed { i, m ->
             val mAddr = m.mangled?.let(resolver::resolve)
             if (mAddr != null) {
                 val func = program.functionManager.getFunctionAt(mAddr)
@@ -374,7 +357,7 @@ class ClassBuilder(
                     program.listing.setComment(
                         func.entryPoint,
                         CommentType.PLATE,
-                        "virtual ${m.name}; ${className}_vtable offset $off",
+                        "virtual ${m.name}; ${className}_vftable offset ${vftable.getComponent(i).offset}",
                     )
                 } else {
                     debug(
@@ -389,7 +372,6 @@ class ClassBuilder(
                         "(pure virtual or DLL import); slot type still applied",
                 )
             }
-            off += ptrSize
         }
     }
 
