@@ -39,7 +39,7 @@ class DegradationDumpIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         val monitor = TaskMonitor.DUMMY
         ProgramLoader.builder()
             .source(fixture)
-            .compiler(if (fixture.extension.lowercase() == "exe") "gcc" else null)
+            .compiler("gcc")
             .log(log)
             .monitor(monitor)
             .load()
