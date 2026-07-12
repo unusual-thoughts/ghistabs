@@ -53,7 +53,7 @@ class XRefDiagnosisIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                 )
                 val harvester = Harvester(ctx)
                 val harvest = program.runTransaction("xref-diag-harvest") {
-                    harvester.passA(reader.records)
+                    harvester.harvest(reader.records)
                 }
                 val resolver = TypeResolver(harvest, ctx.options.foldSources, ctx)
 

@@ -72,7 +72,7 @@ class HarvesterGapTest {
     @Test
     fun `collidingAsts field is present in Harvest`() {
         val harvester = createTestHarvester()
-        val harvest = harvester.passA(emptyList())
+        val harvest = harvester.harvest(emptyList())
 
         // Verify: collidingAsts field exists and is accessible
         assertNotNull(

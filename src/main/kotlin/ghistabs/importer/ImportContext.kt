@@ -37,7 +37,7 @@ class ImportContext<Terminal : DiagnosticSink>(
 ) : DiagnosticSink by TeeSink(diagnostics, terminal) {
     val dtm: DataTypeManager = program.dataTypeManager
     val symtab: SymbolTable = program.symbolTable
-    val resolver: AddressResolver = ProgramAddressResolver(program)
+    val resolver: AddressResolver = ProgramAddressResolver(this)
 
     /**
      * Populated at end-of-import so tests can run [DemanglerReplacer] against the same

@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 /**
- * Unit tests for Harvester.passA() and preSeedHeaders() state machine.
+ * Unit tests for Harvester.harvest() and preSeedHeaders() state machine.
  *
  * Verifies stabs-algo-audit.AC3.3: N_SO/N_FUN/N_GSYM/N_LSYM state machine,
  * N_SOL non-allocation, and BINCL/EXCL/EINCL in both passes.
@@ -23,7 +23,7 @@ import org.junit.jupiter.api.Test
  * include stack) rather than symbol parsing. Symbol parsing is tested separately
  * in HarvesterGlobalizeTest and HarvesterAppendAstsTest.
  */
-class HarvesterPassATest {
+class HarvesterTest {
     private fun createTestHarvester(): Harvester = Harvester(
         monitor = TaskMonitor.DUMMY,
         sink = DummySink,
@@ -52,9 +52,9 @@ class HarvesterPassATest {
             ),
         )
 
-        val harvest = harvester.passA(records)
+        val harvest = harvester.harvest(records)
 
-        // passA() should process the N_SO record without errors.
+        // harvest() should process the N_SO record without errors.
         // We verify the record was processed by checking parse errors is 0.
         assertEquals(0, harvest.parseErrors, "N_SO alone should not cause parse errors")
     }
@@ -90,7 +90,7 @@ class HarvesterPassATest {
             ),
         )
 
-        val harvest = harvester.passA(records)
+        val harvest = harvester.harvest(records)
 
         val harvestedSymbols = harvest.symbolsByCu.values.flatten()
         assertEquals(1, harvestedSymbols.size, "One global symbol should be harvested")
@@ -148,7 +148,7 @@ class HarvesterPassATest {
             ),
         )
 
-        val harvest = harvester.passA(records)
+        val harvest = harvester.harvest(records)
 
         assertEquals(0, harvest.parseErrors)
         assertEquals(1, harvest.openFunctions.size, "Exactly one function should be opened")
@@ -196,7 +196,7 @@ class HarvesterPassATest {
             ),
         )
 
-        val harvest = harvester.passA(records)
+        val harvest = harvester.harvest(records)
 
         assertEquals(0, harvest.parseErrors)
         assertEquals(1, harvest.typeAsts.size, "Tagged type should populate typeAsts")
@@ -254,7 +254,7 @@ class HarvesterPassATest {
             ),
         )
 
-        val harvest = harvester.passA(records)
+        val harvest = harvester.harvest(records)
 
         assertEquals(0, harvest.parseErrors)
         assertEquals(1, harvest.openFunctions.size, "Exactly one function should be recorded")
@@ -326,7 +326,7 @@ class HarvesterPassATest {
             ),
         )
 
-        val harvest = harvester.passA(records)
+        val harvest = harvester.harvest(records)
 
         assertEquals(0, harvest.parseErrors)
         // Verify: the type reference (1,3) maps to hdr.h (fileNum 1 from BINCL), not other.h.
@@ -400,7 +400,7 @@ class HarvesterPassATest {
             ),
         )
 
-        val harvest = harvester.passA(records)
+        val harvest = harvester.harvest(records)
 
         assertEquals(0, harvest.parseErrors)
         // The type inside the BINCL should be attributed to the header, not the CU
@@ -508,7 +508,7 @@ class HarvesterPassATest {
             ),
         )
 
-        val harvest = harvester.passA(records)
+        val harvest = harvester.harvest(records)
 
         assertEquals(0, harvest.parseErrors)
         // Both type stabs should deduplicate to the same GlobalTypeId.
@@ -591,7 +591,7 @@ class HarvesterPassATest {
             ),
         )
 
-        val harvest = harvester.passA(records)
+        val harvest = harvester.harvest(records)
 
         assertEquals(0, harvest.parseErrors)
         assertTrue(harvest.symbolsByCu.containsKey("cu1.c"), "CU1 should be registered in symbolsByCu")
@@ -681,7 +681,7 @@ class HarvesterPassATest {
             ),
         )
 
-        val harvest = harvester.passA(records)
+        val harvest = harvester.harvest(records)
 
         assertEquals(0, harvest.parseErrors)
         assertTrue(harvest.symbolsByCu.containsKey("a.c"), "CU a.c should be registered in symbolsByCu")

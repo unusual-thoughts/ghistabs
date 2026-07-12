@@ -91,7 +91,7 @@ class HarvesterAppendAstsTest {
         harvester.appendAsts(concreteAst)
 
         // Verify: typeAsts[id] contains Struct (replaced the XRef)
-        val passBResult = harvester.passA(emptyList())
+        val passBResult = harvester.harvest(emptyList())
         assertTrue(passBResult.typeAsts.containsKey(globalId), "Type should be in typeAsts")
         val body = passBResult.typeAsts[globalId]!!.body
         assertTrue(body is TypeDecl.Struct, "Body should be Struct, not XRef")
@@ -156,7 +156,7 @@ class HarvesterAppendAstsTest {
         harvester.appendAsts(ast1, ast2)
 
         // Verify: exactly one entry exists
-        val passBResult = harvester.passA(emptyList())
+        val passBResult = harvester.harvest(emptyList())
         assertEquals(1, passBResult.typeAsts.size, "Should have exactly one entry after same-hash append")
         // Verify: collidingAsts should NOT contain entry
         assertTrue(
@@ -257,7 +257,7 @@ class HarvesterAppendAstsTest {
         harvester.appendAsts(secondAst)
 
         // Verify: typeAsts[id].body equals first body
-        val passBResult = harvester.passA(emptyList())
+        val passBResult = harvester.harvest(emptyList())
         assertEquals(firstBody, passBResult.typeAsts[globalId]!!.body, "First writer should win")
         // Verify: collidingAsts[id] is non-empty
         assertTrue(
@@ -310,7 +310,7 @@ class HarvesterAppendAstsTest {
         harvester.appendAsts(ast)
 
         // Verify: exactly one entry
-        val passBResult = harvester.passA(emptyList())
+        val passBResult = harvester.harvest(emptyList())
         assertEquals(1, passBResult.typeAsts.size, "Should have exactly one entry after duplicate append")
         // Verify: collidingAsts should NOT contain entry
         assertTrue(

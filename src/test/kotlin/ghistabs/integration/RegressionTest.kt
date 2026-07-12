@@ -727,7 +727,7 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
         // For each one assert no Structure was created at its category+name.
         val reader = StabReader.fromProgram(program)!!.readAll()
         val harvest = program.runTransaction("void-self-ref-harvest") {
-            Harvester(context).passA(reader.records)
+            Harvester(context).harvest(reader.records)
         }
         val voidAsts = harvest.typeAsts.values.filter { ast ->
             val body = ast.body
@@ -1019,11 +1019,11 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
         json.encodeToStream(stabs.records, recordsFile.outputStream())
 
         val harvester = Harvester(ctx)
-        // passA writes via AddressResolver.recordFromStab → symbolTable.createLabel, so it
+        // harvest writes via AddressResolver.recordFromStab → symbolTable.createLabel, so it
         // needs a transaction. (We re-run it here to serialize a self-contained harvest
         // independent of setUp's own pass.)
         val harvest = program.runTransaction("stabs-harvest-dump") {
-            harvester.passA(stabs.records)
+            harvester.harvest(stabs.records)
         }
 
         json.encodeToStream(harvest, harvestFile.outputStream())

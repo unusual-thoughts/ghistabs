@@ -50,7 +50,7 @@ class XmltestDegradationProbeIntegrationTest : AbstractGhidraHeadlessIntegration
                 )
                 val harvester = Harvester(ctx)
                 val harvest = program.runTransaction("xmltest-probe-harvest") {
-                    harvester.passA(reader.records)
+                    harvester.harvest(reader.records)
                 }
 
                 val targetIds = listOf(

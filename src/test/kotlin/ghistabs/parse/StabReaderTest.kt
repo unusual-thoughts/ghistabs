@@ -69,9 +69,9 @@ class StabReaderTest {
         Assertions.assertEquals(5, result.totalRecordCount, "physical record count")
         Assertions.assertEquals(0, result.truncatedTail, "no truncated tail")
 
-        // Check N_UNDF
+        // N_UNDF surfaces its resolved filename, not an empty name.
         Assertions.assertEquals(StabType.N_UNDF, result.records[0].type)
-        Assertions.assertEquals("", result.records[0].name)
+        Assertions.assertEquals("var1", result.records[0].name)
 
         // Check N_LSYM records
         Assertions.assertEquals("var1", result.records[1].name)
@@ -205,8 +205,8 @@ class StabReaderTest {
     }
 
     /**
-     * physicalRecords keeps every physical record (headers + continuations, unmerged), with
-     * byte offsets, per-CU-adjusted stabstr offsets, and each record's own string.
+     * physicalRecords keeps every physical record (headers + continuations, unmerged), in file
+     * order with per-CU-adjusted stabstr offsets and each record's own string.
      */
     @Test
     fun testPhysicalRecordsRawView() {
@@ -220,18 +220,18 @@ class StabReaderTest {
 
         val stab = Fixture.stabSection(listOf(undfRec, fun1, fun2, fun3))
 
-        val physical = StabReader(stab, stabstr).physicalRecords()
+        val physical = StabReader(stab, stabstr).physicalRecords().toList()
 
-        // No continuation merging: all 4 physical records surface.
+        // No continuation merging: all 4 physical records surface in file order.
         Assertions.assertEquals(4, physical.size)
-        Assertions.assertEquals(listOf(0L, 12L, 24L, 36L), physical.map { it.byteOffset })
+        Assertions.assertEquals(listOf(0, 1, 2, 3), physical.map { it.index })
         Assertions.assertEquals(
             listOf(StabType.N_UNDF, StabType.N_FUN, StabType.N_FUN, StabType.N_FUN),
-            physical.map { it.record.type },
+            physical.map { it.type },
         )
         // Each record keeps its own (unmerged) string, trailing `\` included.
-        Assertions.assertEquals(listOf("", "foo\\", "middle\\", "tail"), physical.map { it.record.name })
-        Assertions.assertEquals(1000L, physical[1].record.value)
+        Assertions.assertEquals(listOf("", "foo\\", "middle\\", "tail"), physical.map { it.name })
+        Assertions.assertEquals(1000L, physical[1].value)
     }
 
     /**
@@ -250,12 +250,12 @@ class StabReaderTest {
         ("apple".toByteArray() + byteArrayOf(0) + "xyz".toByteArray() + byteArrayOf(0)).copyInto(stabstr, 0)
         ("banana".toByteArray() + byteArrayOf(0, 0)).copyInto(stabstr, 10)
 
-        val physical = StabReader(stab, stabstr).physicalRecords()
+        val physical = StabReader(stab, stabstr).physicalRecords().toList()
 
         Assertions.assertEquals(6, physical[1].stabstrOffset)
-        Assertions.assertEquals("xyz", physical[1].record.name)
+        Assertions.assertEquals("xyz", physical[1].name)
         Assertions.assertEquals(10, physical[3].stabstrOffset)
-        Assertions.assertEquals("banana", physical[3].record.name)
+        Assertions.assertEquals("banana", physical[3].name)
     }
 
     /**

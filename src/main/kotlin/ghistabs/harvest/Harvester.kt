@@ -4,11 +4,12 @@ import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.importer.AddressResolver
 import ghistabs.importer.ImportContext
+import ghistabs.importer.stabAddress
 import ghistabs.parse.*
 
 /**
  * Harvest typed symbols and ASTs from a flat stab record stream. [preSeedHeaders] populates
- * per-CU [IncludeContext]s from N_SO/N_BINCL/N_EINCL/N_EXCL; [passA] dispatches the main
+ * per-CU [IncludeContext]s from N_SO/N_BINCL/N_EINCL/N_EXCL; [harvest] dispatches the main
  * record stream into [typeAsts], [symbolsByCu], [openFunctions].
  *
  * The [HeaderRegistry] is shared across all CUs so two CUs that BINCL the same
@@ -97,7 +98,7 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, private 
         }
     }
 
-    internal fun passA(records: List<StabRecord>): Harvest {
+    internal fun harvest(records: List<StabRecord>): Harvest {
         preSeedHeaders(records)
         for ((i, rec) in records.withIndex()) {
             monitor.checkCancelled()
@@ -160,11 +161,7 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, private 
                 // already-absolute (gcc/ELF). Disambiguate by comparing to func start.
                 StabType.N_SLINE -> {
                     val source = lineSource ?: continue
-                    val funcStart = currentFunction?.addr?.address
-                    val abs = when {
-                        funcStart != null && rec.value < funcStart.offset -> funcStart.add(rec.value)
-                        else -> resolver.buildAddress(rec.value)
-                    }
+                    val abs = resolver.stabAddress(rec.value, currentFunction?.addr?.address)
                     val entry = LineEntry(rec.desc, SerializableAddress(abs), source)
                     lineEntriesByFile.getOrPut(source) { mutableListOf() } += entry
                     currentFunction?.lineEntries?.add(entry)
