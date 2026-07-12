@@ -41,7 +41,7 @@ class FuncRelativeAddressIntegrationTest : AbstractGhidraHeadlessIntegrationTest
         val monitor = TaskMonitor.DUMMY
         ProgramLoader.builder()
             .source(fixture)
-            .compiler(if (fixture.extension.lowercase() == "exe") "gcc" else null)
+            .compiler("gcc")
             .log(MessageLog()).monitor(monitor).load().use { loadResults ->
                 val program = loadResults.getPrimaryDomainObject(this)
                 val mgr = AutoAnalysisManager.getAnalysisManager(program)
