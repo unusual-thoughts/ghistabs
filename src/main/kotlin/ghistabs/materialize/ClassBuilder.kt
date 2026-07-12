@@ -35,19 +35,15 @@ class ClassBuilder(
 
     companion object {
         private val source = SourceType.IMPORTED
-
-        fun CanonicalGroup.isClass(): Boolean {
-            if (ast.body !is TypeDecl.Struct) {
-                return false
-            }
-
-            // gcc 12 emits the vfptr as a regular `_vptr.XX` field instead of the
-            // `~%<id>;` marker hasVTablePointerMarker watches for — without this check
-            // every polymorphic class in xmltest would be skipped.
-            return ast.body.methods.isNotEmpty() ||
-                ast.body.hasVTablePointerMarker ||
-                ast.body.fields.any { Itanium.isVptrField(it.name) }
-        }
+        fun CanonicalGroup.isClass() = ast.body is TypeDecl.Struct &&
+            (
+                ast.body.methods.isNotEmpty() ||
+                    ast.body.hasVTablePointerMarker ||
+                    // gcc 12 emits the vfptr as a regular `_vptr.XX` field instead of the
+                    // `~%<id>;` marker hasVTablePointerMarker watches for — without this check
+                    // every polymorphic class in xmltest would be skipped.
+                    ast.body.fields.any { Itanium.isVptrField(it.name) }
+                )
 
         private val CanonicalGroup.classBody get() = ast.body as TypeDecl.Struct<GlobalTypeId>
         private val CanonicalGroup.className get() = key.name
@@ -81,17 +77,16 @@ class ClassBuilder(
      * once, off the most-detailed body. Returns the number of classes built.
      */
     fun buildAll(): Int {
-        ctx.monitor.initialize(typeResolver.byCanonicalKey.size.toLong(), "Stabs: building classes")
+        val classes = typeResolver.byCanonicalKey.values.filter { it.isClass() }
+        ctx.monitor.initialize(classes.size.toLong(), "Stabs: building classes")
         var built = 0
-        for (group in typeResolver.byCanonicalKey.values) {
+        for (group in classes) {
             ctx.monitor.increment()
-            if (group.isClass()) {
-                try {
-                    build(group)
-                    built++
-                } catch (t: Throwable) {
-                    err("class-apply-error", "${group.key}: ${t.message}")
-                }
+            try {
+                build(group)
+                built++
+            } catch (t: Throwable) {
+                err("class-apply-error", "${group.key}: ${t.message}")
             }
         }
         return built
