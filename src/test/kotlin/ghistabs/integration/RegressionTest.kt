@@ -526,6 +526,21 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
     }
 
     @Test
+    fun typeinfoGlobalKeepsDemangledPrimary() {
+        assumeTrue(binaryName == "xapasmcsr.exe", "Skipping: EAsm typeinfo specific to xapasmcsr.exe")
+        // EAsm's typeinfo global is named by its mangled `_ZTI4EAsm` linkage name in the stab;
+        // ensureStabLabel must not promote that over the demangled `EAsm::typeinfo` already present.
+        val ti = program.symbolTable.getSymbols("typeinfo").firstOrNull { it.parentNamespace.name == "EAsm" }
+        assumeTrue(ti != null, "Skipping: EAsm::typeinfo symbol not present")
+        val primary = program.symbolTable.getPrimarySymbol(ti!!.address)
+        Assertions.assertEquals(
+            "typeinfo",
+            primary.name,
+            "primary label at EAsm typeinfo is '${primary.name}' — mangled name clobbered the demangled one",
+        )
+    }
+
+    @Test
     fun exprInstHasComponents() {
         val matches = program.dataTypeManager.allDataTypes
             .asSequence()
