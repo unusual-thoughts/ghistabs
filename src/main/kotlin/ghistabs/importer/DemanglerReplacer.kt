@@ -6,6 +6,7 @@ import ghistabs.applyDemangling
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.degradation
 import ghistabs.materialize.TypeRegistry
+import ghistabs.materialize.itanium.RttiStructs
 import java.util.*
 
 /** Pure-data input to the demangler-stub replacement planner. */
@@ -119,7 +120,9 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val typeRegis
                 .substringBeforeLast('/', missingDelimiterValue = "/")
                 .ifEmpty { "/" }
                 .let { CategoryPath(it) }
-            val candidate = typeRegistry.findByName(stub.simpleName, preferredCategory) ?: continue
+            val candidate = typeRegistry.findByName(stub.simpleName, preferredCategory)
+                ?: rtti.typeInfoLayout(stub.simpleName)?.let { dtm.resolve(it, null) }
+                ?: continue
             val deps = collectDependsOnPaths(candidate)
             replacements[stub.simpleName] = ReplacementRecord(
                 candidate.pathName,
@@ -170,6 +173,8 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val typeRegis
             }
         }
     }
+
+    private val rtti by lazy { RttiStructs(ctx.dtm) }
 
     /** Transitive dependency pathNames of [dt] (Structure components, Pointer/Array/TypeDef targets). Excludes self. */
     private fun collectDependsOnPaths(dt: DataType): Set<String> {
