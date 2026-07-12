@@ -1,0 +1,405 @@
+package ghistabs.importer
+
+import ghidra.program.model.address.Address
+import ghidra.program.model.data.Undefined4DataType
+import ghidra.program.model.listing.*
+import ghidra.program.model.listing.Function
+import ghidra.program.model.symbol.SourceType
+import ghistabs.diagnose.ApplyErrorBucket
+import ghistabs.diagnose.DiagnosticSink
+import ghistabs.diagnose.Level
+import ghistabs.diagnose.degradation
+import ghistabs.harvest.*
+import ghistabs.materialize.TypeRegistry
+import ghistabs.parse.GlobalTypeId
+import ghistabs.parse.SymbolDecl
+import ghistabs.parse.dbxRegisterName
+import ghistabs.parse.isInlineStdMember
+
+/**
+ * The apply phase: writes harvested functions, params, locals, globals, statics, labels and scope
+ * comments into the Ghidra program, then demangles and materialises classes/vtables. Caller holds
+ * the transaction.
+ */
+class SymbolApplier(
+    private val ctx: ImportContext<*>,
+    private val harvest: Harvest,
+    private val typeRegistry: TypeRegistry,
+) : DiagnosticSink by ctx {
+    val source = SourceType.IMPORTED
+    internal fun applyAllFunctions(): Int {
+        var functions = 0
+
+        for (open in harvest.openFunctions) {
+            try {
+                val func = ctx.program.functionManager.run {
+                    getFunctionAt(open.addr.address)
+                        ?: getFunctionContaining(open.addr.address)?.also {
+                            debug("entrypoint-snapped")
+                        }
+                }
+                    ?: tryCreateFunctionFromStab(open) ?: run {
+                    val (tag, level) = if (isInlineStdMember(open.name)) {
+                        "apply-error-inlined-std" to Level.DEBUG
+                    } else {
+                        "apply-error-no-function" to Level.INFO
+                    }
+                    // log() counts via the tee'd accumulator; BookmarkSink only emits/bookmarks.
+                    log(tag, "no Function at or containing ${open.addr} for ${open.name}", level, open.addr.address)
+                    continue
+                }
+
+                // The stabs are the authoritative, underscore-free source, so name every function
+                // from them rather than riding Ghidra's PE symbol (which leaves C names as `_main`
+                // and depends on the COFF symtab being present). Mangled names (`_ZN…`) are set raw
+                // here and resolved to `Class::method` by demangleMangledLabels below.
+                if (func.name != open.name) func.setName(open.name, source)
+
+                // Apply return type from the parsed signature.
+                val retDt = typeRegistry.dataTypeFor(open.decl.type)
+                if (retDt != null) func.setReturnType(retDt, source)
+
+                // Build params from N_PSYM/N_RSYM. Filter out any N_PSYM literally named
+                // `this`: gcc 3.x emits it for members but often mistypes (seen `int`
+                // instead of `<Class>*`); ClassBuilder.reparentMethod sets __thiscall and
+                // synthesises a typed `this` from the class struct, which is authoritative.
+                // Keeping the N_PSYM one produces duplicate-`this` signatures Ghidra can't evict.
+                val params = open.params
+                    .filterNot {
+                        val d = it.body
+                        (d is SymbolDecl.StackParam && d.name == "this") ||
+                            (d is SymbolDecl.RegParam && d.name == "this")
+                    }
+                    .mapIndexed { i, p ->
+                        val pdecl = p.body
+                        val (pname, pdt) = when (pdecl) {
+                            is SymbolDecl.StackParam -> pdecl.name to typeRegistry.dataTypeFor(pdecl.type)
+                            is SymbolDecl.RegParam -> pdecl.name to typeRegistry.dataTypeFor(pdecl.type)
+                            else -> "arg$i" to null
+                        }
+                        if (pdt == null) {
+                            degradation(
+                                "param-untyped",
+                                "${open.name}.$pname",
+                            )
+                        }
+                        typeRegistry.reasonFor(pdt)?.let { reason ->
+                            degradation(
+                                "param-typed-$reason",
+                                "${open.name}.$pname",
+                                "type=${pdt?.pathName}",
+                            )
+                        }
+                        ParameterImpl(
+                            pname,
+                            pdt ?: Undefined4DataType.dataType,
+                            ctx.program,
+                            source,
+                        )
+                    }
+                // Always replace (even empty list) to set the signature explicitly.
+                func.replaceParameters(
+                    params,
+                    Function.FunctionUpdateType.DYNAMIC_STORAGE_FORMAL_PARAMS,
+                    true,
+                    source,
+                )
+
+                // Apply locals.
+                for (loc in open.locals) {
+                    applyLocal(func, loc)
+                }
+
+                // Apply scope plate comments.
+                if (ctx.options.applyPlateComments) applyScopeComments(func, open)
+
+                functions++
+            } catch (t: Throwable) {
+                val bucket = ApplyErrorBucket.bucket(t)
+                err("apply-error-$bucket", "function ${open.name}: ${t.message}", address = open.addr.address)
+                err("apply-error", "function ${open.name}: ${t.message}", address = open.addr.address)
+            }
+        }
+        return functions
+    }
+
+    internal fun applyAllGlobals(): Int {
+        var globals = 0
+
+        // Globals + file-statics.
+        for ((cu, syms) in harvest.symbolsByCu) {
+            for (h in syms) {
+                try {
+                    when (val d = h.body) {
+                        is SymbolDecl.Global -> applyGlobal(d).let { if (it) globals++ }
+
+                        is SymbolDecl.StaticVar -> applyStatic(d, h.rawValue).let {
+                            if (it) globals++
+                        }
+
+                        else -> warn("unexpected-symbol", "$d")
+                    }
+                } catch (t: Throwable) {
+                    err("apply-error", "symbol ${h.body.name} in $cu: ${t.message}")
+                }
+            }
+        }
+
+        return globals
+    }
+
+    /**
+     * Force-create a function the stab asserts but Ghidra's auto-analysis missed (typical
+     * for ctors only called from data-driven init lists, or vtable-only references).
+     * Returns null if the address is in data or disassembly fails.
+     */
+    private fun tryCreateFunctionFromStab(open: OpenFunction): Function? {
+        val addr = open.addr.address
+        val block = ctx.program.memory.getBlock(addr)
+        if (block == null || !block.isExecute) {
+            // Inline std::/__gnu_cxx members get stabbed but the linker drops the COMDAT.
+            // Bucket separately so real non-text-address problems aren't drowned out.
+            val inlined = isInlineStdMember(open.name)
+            val (tag, level) = if (inlined) {
+                "function-create-inlined-std" to Level.DEBUG
+            } else {
+                "function-create-skipped-non-text" to Level.WARN
+            }
+            log(tag, "no executable block at $addr for ${open.name} (block=${block?.name})", level, addr)
+            return null
+        }
+
+        // CreateFunctionCmd refuses uninitialised code. MinGW COMDAT chunks that
+        // autoanalysis hasn't reached need a manual disassemble first.
+        if (ctx.program.listing.getInstructionAt(addr) == null) {
+            val disasm = ghidra.app.cmd.disassemble.DisassembleCommand(addr, null, true)
+            if (disasm.applyTo(ctx.program, ctx.monitor) && disasm.disassembledAddressSet.numAddresses > 0) {
+                debug("function-create-disassembled-first")
+            } else {
+                warn(
+                    "function-create-disasm-failed",
+                    "DisassembleCommand failed at $addr for ${open.name}: ${disasm.statusMsg}",
+                    addr,
+                )
+                return null
+            }
+        }
+
+        val cmd = ghidra.app.cmd.function.CreateFunctionCmd(open.name, addr, null, SourceType.IMPORTED)
+        if (!cmd.applyTo(ctx.program, ctx.monitor)) {
+            warn(
+                "function-create-cmd-failed",
+                "CreateFunctionCmd failed at $addr for ${open.name}: ${cmd.statusMsg}",
+                addr,
+            )
+            return null
+        }
+        debug("function-created-from-stab")
+        return ctx.program.functionManager.getFunctionAt(addr)
+    }
+
+    /**
+     * Bias from gcc's frame-pointer-relative stab offsets to Ghidra's stackpointer-at-entry offsets.
+     * gcc's frame origin is the saved frame pointer, one pointer below the return address; Ghidra's
+     * origin is the return address, and the convention places the first stack parameter exactly one
+     * pointer above it. Those two "one pointer" gaps are the same slot, so the bias is precisely
+     * where the convention starts stack params — [VariableUtilities.getBaseStackParamOffset] — not a
+     * hardcoded constant. Any function fixes it program-wide; absent one, fall back to a pointer.
+     */
+    private val frameBias by lazy {
+        harvest.openFunctions
+            .asSequence()
+            .mapNotNull { ctx.program.functionManager.getFunctionAt(it.addr.address) }
+            .firstNotNullOfOrNull { VariableUtilities.getBaseStackParamOffset(it) }
+            ?: ctx.program.defaultPointerSize
+    }
+
+    private fun applyLocal(func: Function, loc: SymbolRecord) {
+        val decl = loc.body
+        val resolvedDt = when (decl) {
+            is SymbolDecl.StackLocal -> typeRegistry.dataTypeFor(decl.type)
+            is SymbolDecl.RegLocal -> typeRegistry.dataTypeFor(decl.type)
+            else -> return
+        }
+        if (resolvedDt == null) {
+            degradation("local-untyped", "${func.name}.${decl.name}]")
+        }
+        typeRegistry.reasonFor(resolvedDt)?.let { reason ->
+            degradation(
+                "local-typed-$reason",
+                "${func.name}.${decl.name}",
+                "type=${resolvedDt?.pathName}",
+            )
+        }
+        val dt = resolvedDt ?: Undefined4DataType.dataType
+        try {
+            when (decl) {
+                is SymbolDecl.StackLocal -> {
+                    if (decl.name in func.parameters.map { it.name }) {
+                        debug("local-var-skipped-dup-param")
+                        return
+                    }
+                    if (decl.name in func.localVariables.map { it.name }) {
+                        debug("local-var-skipped-dup-local")
+                        return
+                    }
+                    // gcc's frame-pointer-relative offset → Ghidra's SP-at-entry offset via the
+                    // convention-derived [frameBias] (NSA/ghidra#223, #5485).
+                    val stackOffset = loc.rawValue.toInt() - frameBias
+                    val lv = LocalVariableImpl(decl.name, dt, stackOffset, ctx.program, source)
+                    func.addLocalVariable(lv, source)
+                    debug("local-var-add-success")
+                }
+
+                is SymbolDecl.RegLocal -> {
+                    val regName = dbxRegisterName(ctx.program.defaultPointerSize, decl.regNum)
+                    val reg = regName?.let { ctx.program.getRegister(it) }
+                    if (reg == null) {
+                        degradation(
+                            "reglocal-unmapped-regnum",
+                            "${func.name}.${decl.name}",
+                            "dbx-reg=${decl.regNum} arch-ptr-size=${ctx.program.defaultPointerSize}",
+                        )
+                        return
+                    }
+                    if (decl.name in func.parameters.map { it.name }) {
+                        debug("reglocal-skipped-dup-param")
+                        return
+                    }
+                    if (decl.name in func.localVariables.map { it.name }) {
+                        debug("reglocal-skipped-dup-local")
+                        return
+                    }
+                    val lv = LocalVariableImpl(decl.name, 0, dt, reg, ctx.program, source)
+                    func.addLocalVariable(lv, source)
+                    debug("reglocal-add-success")
+                }
+            }
+        } catch (e: Exception) {
+            warn("local-var-error", "Could not add local '${decl.name}' to ${func.name}: ${e.message}", func.entryPoint)
+        }
+    }
+
+    private fun applyScopeComments(func: Function, open: OpenFunction) {
+        // For each LBRAC/RBRAC pair, plate-comment the LBRAC with the in-scope locals.
+        val pairs = ScopePairs.compute(open.scopeBrackets, open.locals)
+        for ((openOff, _, localsInScope) in pairs) {
+            try {
+                val addr = func.entryPoint.add(openOff)
+
+                if (localsInScope.isEmpty()) {
+                    debug("empty-scope", "addr=$addr function=${func.name}")
+                    continue
+                }
+                val text = "Stabs scope locals: " + localsInScope.joinToString(", ") { it.body.name }
+                ctx.program.listing.setComment(addr, CommentType.PLATE, text)
+            } catch (e: Exception) {
+                warn("scope-comment-error", "Failed to set scope comment: ${e.message}", func.entryPoint)
+            }
+        }
+    }
+
+    private fun applyGlobal(decl: SymbolDecl.Global<GlobalTypeId>): Boolean {
+        val addr = ctx.resolver.resolve(decl.name) ?: run {
+            warn("unresolved-symbol", "global ${decl.name}")
+            debug("global-skipped", "addr=${decl.name} dtKind=unknown reason=unresolved-symbol")
+            return false
+        }
+        ensureStabLabel(addr, decl.name)
+
+        val dt = typeRegistry.dataTypeFor(decl.type) ?: run {
+            debug("global-skipped", "addr=$addr dtKind=unknown reason=no-resolved-type")
+            return false
+        }
+        typeRegistry.reasonFor(dt)?.let { reason ->
+            degradation(
+                "global-typed-$reason",
+                decl.name,
+                "type=${dt.pathName}",
+            )
+        }
+        val dtKind = when (dt) {
+            is ghidra.program.model.data.Structure -> "Structure"
+            is ghidra.program.model.data.Union -> "Union"
+            is ghidra.program.model.data.Array -> "Array"
+            is ghidra.program.model.data.Pointer -> "Pointer"
+            is ghidra.program.model.data.FunctionDefinition -> "FunctionDefinition"
+            is ghidra.program.model.data.Enum -> "Enum"
+            else -> dt.displayName
+        }
+        // CLEAR_ALL_CONFLICT_DATA evicts `undefined4` placeholders auto-analysis may
+        // have raced us to apply.
+        try {
+            ghidra.program.model.data.DataUtilities.createData(
+                ctx.program,
+                addr,
+                dt,
+                dt.length,
+                ghidra.program.model.data.DataUtilities.ClearDataMode.CLEAR_ALL_CONFLICT_DATA,
+            )
+            // Verify the write stuck — auto-analyser races or data-equivalence collapse
+            // can replace it; we'd otherwise silently claim success.
+            val after = ctx.program.listing.getDataAt(addr)
+            val stuck = after != null && after.dataType.name == dt.name
+            if (!stuck) {
+                warn(
+                    "global-applied-then-overwritten",
+                    "${decl.name} at $addr: wrote ${dt.name} but readback is ${after?.dataType?.name}",
+                    addr,
+                )
+            }
+            debug("global-applied", "addr=$addr dtKind=$dtKind")
+        } catch (e: Exception) {
+            err("apply-error", "Failed to create global data at $addr: ${e.message}", addr)
+            debug("global-skipped", "addr=$addr dtKind=$dtKind reason=create-data-failed")
+            return false
+        }
+        return true
+    }
+
+    private fun applyStatic(decl: SymbolDecl.StaticVar<GlobalTypeId>, rawAddr: Long): Boolean {
+        val addr = ctx.resolver.buildAddress(rawAddr)
+        val dt = typeRegistry.dataTypeFor(decl.type) ?: return false
+        typeRegistry.reasonFor(dt)?.let { reason ->
+            degradation(
+                "static-typed-$reason",
+                decl.name,
+                "type=${dt.pathName}",
+            )
+        }
+        ensureStabLabel(addr, decl.name)
+
+        try {
+            ctx.program.listing.clearCodeUnits(addr, addr.add((dt.length - 1).toLong()), false)
+            ctx.program.listing.createData(addr, dt)
+        } catch (e: Exception) {
+            err("apply-error", "Failed to create static data at $addr: ${e.message}", addr)
+            return false
+        }
+        return true
+    }
+
+    /**
+     * Make [name] (demangled source-form) the primary label at [addr]. Otherwise
+     * globals/statics keep the PE loader's `_<name>` and the demangled form is never
+     * in the symbol table. Idempotent.
+     */
+    private fun ensureStabLabel(addr: Address, name: String) {
+        val symtab = ctx.program.symbolTable
+        val existing = symtab.getSymbols(addr).firstOrNull { it.name == name }
+        val sym = existing ?: try {
+            symtab.createLabel(addr, name, SourceType.IMPORTED)
+        } catch (e: Exception) {
+            err("symbol-create-error", "$name at $addr: ${e.message}", addr)
+            return
+        }
+        if (!sym.isPrimary) {
+            try {
+                ghidra.app.cmd.label.SetLabelPrimaryCmd(addr, sym.name, sym.parentNamespace)
+                    .applyTo(ctx.program)
+            } catch (e: Exception) {
+                err("symbol-primary-error", "$name at $addr: ${e.message}", addr)
+            }
+        }
+    }
+}

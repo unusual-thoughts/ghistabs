@@ -91,21 +91,21 @@ class StabsPlugin(tool: PluginTool) : ProgramPlugin(tool) {
             override fun run(monitor: TaskMonitor) {
                 val options = StabsOptions(program)
                 val reader = StabReader.fromProgram(program)?.readAll() ?: return
+                val ctx = ImportContext(
+                    program,
+                    monitor,
+                    options,
+                    terminal = DummySink,
+                    diagnostics = StabsDiagnostics(),
+                )
                 val harvest = program.runTransaction("stabs-export-harvest") {
-                    Harvester(
-                        ImportContext(
-                            program,
-                            monitor,
-                            options,
-                            terminal = DummySink,
-                            diagnostics = StabsDiagnostics(),
-                        ),
-                    ).passA(reader.records)
+                    Harvester(ctx).harvest(reader.records)
                 }
                 val written = Renderer(
                     TypeResolver(harvest),
                     program,
                     Mode.ELIDE_SJLJ,
+                    ctx.resolver,
                 ).use { it.renderAll(dir, monitor) }
                 Msg.showInfo(javaClass, null, "Stabs", "Wrote $written decompilation files to $dir")
             }

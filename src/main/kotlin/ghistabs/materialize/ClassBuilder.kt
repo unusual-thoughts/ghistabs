@@ -74,6 +74,27 @@ class ClassBuilder(
      */
     private fun CanonicalGroup.ensureVtableTypeAndPointer(): Pointer = PointerDataType.getPointer(vftable, dtm)
 
+    /**
+     * Build every class/vtable group once. Each class header included by N CUs produces N TypeAsts
+     * with distinct ids but identical ghidraName (bouniafbouniaf: 86 names duplicated up to 11x);
+     * materialiseAll already collapsed by name, and iterating canonical groups builds each class
+     * once, off the most-detailed body. Returns the number of classes built.
+     */
+    fun buildAll(): Int {
+        var built = 0
+        for (group in typeResolver.byCanonicalKey.values) {
+            if (group.isClass()) {
+                try {
+                    build(group)
+                    built++
+                } catch (t: Throwable) {
+                    err("class-apply-error", "${group.key}: ${t.message}")
+                }
+            }
+        }
+        return built
+    }
+
     /** Materialise class struct + namespace + (optional) vtable struct, apply at _ZTV. */
     fun build(group: CanonicalGroup): Unit = group.run {
         val category = key.category

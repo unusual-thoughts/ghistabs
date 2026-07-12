@@ -8,6 +8,7 @@ import ghistabs.harvest.LineEntry
 import ghistabs.harvest.TypeAst
 import ghistabs.harvest.TypeResolver
 import ghistabs.harvest.hasHeaderExtension
+import ghistabs.importer.AddressResolver
 import ghistabs.parse.*
 import ghistabs.runTransaction
 import java.io.Closeable
@@ -22,7 +23,8 @@ enum class Mode {
     ELIDE_SJLJ,
 }
 
-class Renderer(val typeResolver: TypeResolver, val program: Program, val mode: Mode) : Closeable {
+class Renderer(val typeResolver: TypeResolver, val program: Program, val mode: Mode, val resolver: AddressResolver) :
+    Closeable {
     // `also`, not `apply`: inside `apply` the receiver's own (null) `program` property would shadow
     // the constructor param, so openProgram(program) would be handed null.
     val decomp = if (mode != Mode.SKELETON) DecompInterface().also { it.openProgram(program) } else null
@@ -59,6 +61,7 @@ private fun safeName(source: String) = source.replace(Regex("[^A-Za-z0-9_.-]"), 
 private class RenderContext(val renderer: Renderer, val source: String) {
     val harvest get() = renderer.typeResolver.harvest
     val program get() = renderer.program
+    val resolver get() = renderer.resolver
 
     // [source] and every per-record source field come from the resolver's facade with §15 folds
     // already applied, so comparisons here are fold-to-fold with no per-site work.
@@ -290,8 +293,8 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             // N_GSYM has rawValue=0 (linker resolves it from the mangled name) — look it up.
             val name = (s.body as? SymbolDecl.Global)?.name ?: (s.body as? SymbolDecl.StaticVar)?.name
             val addr = when {
-                s.rawValue != 0L -> program.addressFactory.defaultAddressSpace.getAddress(s.rawValue)
-                name != null -> program.symbolTable.getSymbols(name).firstOrNull()?.address
+                s.rawValue != 0L -> resolver.buildAddress(s.rawValue)
+                name != null -> resolver.resolve(name)
                 else -> null
             }
             when (val d = s.body) {
