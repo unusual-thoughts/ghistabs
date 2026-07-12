@@ -1,6 +1,7 @@
 package ghistabs.materialize
 
 import ghidra.program.model.data.*
+import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.GapRecord
 import ghistabs.diagnose.StabsDiagnostics
@@ -27,6 +28,7 @@ class TypeRegistry(
     private val diagnostics: StabsDiagnostics,
     private val harvest: Harvest,
     private val resolver: TypeResolver,
+    private val monitor: TaskMonitor = TaskMonitor.DUMMY,
 ) : DiagnosticSink by sink {
     private val byId = mutableMapOf<GlobalTypeId, DataType>()
     private val placeholders = mutableMapOf<GlobalTypeId, DataType>()
@@ -210,7 +212,9 @@ class TypeRegistry(
                 for (m in group.members) placeholders.putIfAbsent(m, placeholder)
             }
 
+            monitor.initialize(winnerCategory.size.toLong(), "Stabs: materialising types")
             for ((winnerId, category) in winnerCategory) {
+                monitor.increment()
                 val winner = harvest.getType(winnerId) ?: continue
                 val placeholder = placeholders[winnerId]!!
                 val materialised = materialiseBody(winner, category, placeholder)

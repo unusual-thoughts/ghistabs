@@ -34,6 +34,7 @@ object BssCoverageDecision {
  */
 fun ImportContext<*>.analyzeBssCoverage(harvest: Harvest) {
     val bssBlock = program.memory.getBlock(".bss") ?: return
+    monitor.initialize(bssBlock.size / 4, "Stabs: analysing .bss coverage")
 
     val harvestedAddrs = harvest.symbolsByCu.values.flatten().mapNotNull {
         val name = (it.body as? SymbolDecl.Global)?.name ?: return@mapNotNull null
@@ -57,7 +58,7 @@ fun ImportContext<*>.analyzeBssCoverage(harvest: Harvest) {
     }
 
     while (addr <= bssBlock.end) {
-        monitor.checkCancelled()
+        monitor.increment()
         val rangeEnd = addr.add(3)
 
         val occupied = program.symbolTable.getPrimarySymbol(addr) != null ||

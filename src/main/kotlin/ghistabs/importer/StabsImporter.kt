@@ -29,9 +29,6 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
     }
 
     internal fun runOnRecords(stabs: StabReader.Result): PassResult {
-        ctx.monitor.initialize(stabs.records.size.toLong())
-        ctx.monitor.message = "Stabs: parsing"
-
         // Pass A — parse + harvest
         val harvest = Harvester(ctx).harvest(stabs.records)
         // Resolver: by-name/by-base-tag indices, source folding, divergent-collision
@@ -40,7 +37,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
         recordHarvestCounters(harvest, typeResolver, stabs)
 
         // Pass B — materialise types
-        val typeRegistry = TypeRegistry(ctx.dtm, ctx, ctx.diagnostics, harvest, typeResolver)
+        val typeRegistry = TypeRegistry(ctx.dtm, ctx, ctx.diagnostics, harvest, typeResolver, ctx.monitor)
         ctx.program.runTransaction("Stabs: materialise types") {
             typeRegistry.materialiseAll()
             if (ctx.options.shortenTypedefs) TypedefShortener(ctx.dtm, ctx).apply()

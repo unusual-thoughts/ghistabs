@@ -99,10 +99,11 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, private 
     }
 
     internal fun harvest(records: List<StabRecord>): Harvest {
+        monitor.initialize(records.size.toLong(), "Stabs: harvesting")
+
         preSeedHeaders(records)
         for ((i, rec) in records.withIndex()) {
-            monitor.checkCancelled()
-            monitor.incrementProgress(1)
+            monitor.increment()
             if (rec.desc != 0) {
                 when (rec.type) {
                     StabType.N_FUN, StabType.N_SLINE, StabType.N_LSYM,
