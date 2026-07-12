@@ -256,9 +256,9 @@
             "min": 227,
             "max": 227
         },
-        "stabs-no-coverage": {
-            "min": 99,
-            "max": 99
+        "data-no-coverage": {
+            "min": 28,
+            "max": 28
         },
         "unresolved-symbol": {
             "min": 2998,
