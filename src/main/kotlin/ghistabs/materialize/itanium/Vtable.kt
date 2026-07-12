@@ -86,10 +86,23 @@ class RttiStructs(private val dtm: DataTypeManager) {
     private val bigEndian = dtm.dataOrganization.isBigEndian
     private val componentOffset = Itanium.vtablePrefixBytes(pointerSize)
 
-    /** Reference impl for a gcc typeinfo pseudo-struct [name] (`__vmi_…_pseudo<N>` carries N), else null. */
-    fun pseudoTypeInfo(name: String): DataType? = when {
-        name == Itanium.CLASS_TYPE_INFO_PSEUDO -> classTypeInfoStructure
-        name == Itanium.SI_CLASS_TYPE_INFO_PSEUDO -> siClassTypeInfoStructure
+    /**
+     * Reference layout for an Itanium typeinfo type named [name], keyed on both spellings it reaches
+     * us by: gcc's internal `__*_type_info_pseudo` structs (from stab XRefs via `makePlaceholder`;
+     * `__vmi_…_pseudo<N>` carries the real per-object base count N) and the abstract base classes
+     * themselves as the demangler names them (`std::type_info`, `abi::__class_type_info`,
+     * `abi::__si_class_type_info`, `abi::__vmi_class_type_info`, from libsupc++ symbols that carry no
+     * stabs, via `DemanglerReplacer`). The abstract `__vmi_class_type_info` uses its declared
+     * `__base_info[1]` shape — the class's own sizeof — vs the per-object pseudo's N. Null otherwise.
+     */
+    fun typeInfoLayout(name: String): DataType? = when {
+        name == Itanium.TYPE_INFO || name == Itanium.CLASS_TYPE_INFO || name == Itanium.CLASS_TYPE_INFO_PSEUDO ->
+            classTypeInfoStructure
+
+        name == Itanium.SI_CLASS_TYPE_INFO || name == Itanium.SI_CLASS_TYPE_INFO_PSEUDO -> siClassTypeInfoStructure
+
+        name == Itanium.VMI_CLASS_TYPE_INFO -> vmiClassTypeInfoStructure(1)
+
         name.startsWith(Itanium.VMI_CLASS_TYPE_INFO_PSEUDO) ->
             name.removePrefix(Itanium.VMI_CLASS_TYPE_INFO_PSEUDO).toIntOrNull()?.let(::vmiClassTypeInfoStructure)
 
