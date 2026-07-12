@@ -75,10 +75,11 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val typeRegis
      * Runs first in [run] so the `/Demangler/...` stubs it creates are visible to the scan below.
      */
     private fun demangleMangledLabels() {
+        ctx.monitor.initialize(ctx.program.symbolTable.numSymbols.toLong(), "Stabs: demangling labels")
         var attempted = 0
         var demangled = 0
         for (sym in ctx.program.symbolTable.symbolIterator) {
-            ctx.monitor.checkCancelled()
+            ctx.monitor.increment()
             val name = sym.name
             // Cygwin PE/COFF loader prepends `_`, so Itanium symbols appear as `__Z`.
             // GnuDemangler handles both (strips one leading `_`).

@@ -81,8 +81,10 @@ class ClassBuilder(
      * once, off the most-detailed body. Returns the number of classes built.
      */
     fun buildAll(): Int {
+        ctx.monitor.initialize(typeResolver.byCanonicalKey.size.toLong(), "Stabs: building classes")
         var built = 0
         for (group in typeResolver.byCanonicalKey.values) {
+            ctx.monitor.increment()
             if (group.isClass()) {
                 try {
                     build(group)
