@@ -60,6 +60,13 @@ val FunctionManager.functions get() = this.getFunctions(true).asIterable()
 
 val Program.functions get() = this.functionManager.getFunctions(true).asIterable()
 
+/** find a function, if any, such that [addr] falls within its convex hull [entry, body.maxAddress]  */
+fun FunctionManager.getFunctionWrapping(addr: Address) = getFunctionContaining(addr)
+    ?: getFunctions(addr, false).asIterable().firstOrNull()?.takeIf { addr <= it.body.maxAddress }
+
+/** [addr] falls within the convex hull [entry, body.maxAddress] of a function. */
+fun FunctionManager.inHull(addr: Address) = getFunctionWrapping(addr) != null
+
 fun <T> DomainObject.runTransaction(description: String = "Kotlin Lambda Transaction", transaction: () -> T): T =
     startTransaction(description).let { txID ->
         return try {

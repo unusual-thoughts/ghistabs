@@ -270,6 +270,7 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
     }
 
     private fun runAutoAnalysis(mgr: AutoAnalysisManager, monitor: TaskMonitor) {
+        mgr.reAnalyzeAll(null)
         program.runTransaction("auto-analyze") {
             mgr.startAnalysis(monitor)
             mgr.waitForAnalysis(null, monitor)
