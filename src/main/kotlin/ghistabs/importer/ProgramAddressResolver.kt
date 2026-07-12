@@ -4,17 +4,36 @@ import ghidra.app.util.opinion.ElfLoader
 import ghidra.program.model.address.Address
 import ghidra.program.model.address.AddressSpace
 import ghidra.program.model.address.GenericAddressSpace
-import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.SourceType
+import ghistabs.diagnose.DiagnosticSink
+import ghistabs.diagnose.DummySink
 import ghistabs.plus
 
 interface AddressResolver {
+    /** Where [stabAddress] tallies its relative/absolute branch counters. */
+    val sink: DiagnosticSink
     fun buildAddress(offset: Long): Address
     fun resolve(name: String): Address?
     fun recordFromStab(name: String, addr: Address): Boolean
 }
 
+/**
+ * Resolve a stab `n_value` that may be function-relative: block scopes and line numbers in
+ * stabs-in-sections are offsets from [funcStart] (a genuine offset stays below it; an already
+ * absolute value doesn't). Pass a null [funcStart] for records that are always absolute. Tallies
+ * which branch it took on the resolver's [sink] (`stab-value-func-relative` vs `stab-value-absolute`).
+ */
+fun AddressResolver.stabAddress(value: Long, funcStart: Address?): Address =
+    if (funcStart != null && value < funcStart.offset) {
+        sink.debug("stab-value-func-relative")
+        funcStart + value
+    } else {
+        sink.debug("stab-value-absolute")
+        buildAddress(value)
+    }
+
 open class StabOnlyAddressResolver : AddressResolver {
+    override val sink: DiagnosticSink = DummySink
     private val stabMap: MutableMap<String, Address> = mutableMapOf()
 
     override fun buildAddress(offset: Long): Address =
@@ -42,7 +61,10 @@ open class StabOnlyAddressResolver : AddressResolver {
  * Address resolver that creates IMPORTED labels at stab-derived addresses.
  * **Caller must hold a Program transaction** — [recordFromStab] calls `createLabel`.
  */
-class ProgramAddressResolver(private val program: Program) : StabOnlyAddressResolver() {
+class ProgramAddressResolver(private val ctx: ImportContext<*>) : StabOnlyAddressResolver() {
+    override val sink get() = ctx
+    private val program get() = ctx.program
+
     override fun recordFromStab(name: String, addr: Address): Boolean {
         if (super.recordFromStab(name, addr)) {
             val present = program.symbolTable.getSymbols(addr).any { it.name == name }

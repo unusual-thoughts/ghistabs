@@ -12,10 +12,6 @@
             "min": 10,
             "max": 10
         },
-        "class-build-name-collisions": {
-            "min": 122,
-            "max": 122
-        },
         "class-not-struct": {
             "min": 2,
             "max": 2

@@ -87,7 +87,7 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                 }
                 val reader = StabReader.fromProgram(program)!!.readAll()
                 val harvest = program.runTransaction("skeleton-harvest") {
-                    Harvester(ctx).passA(reader.records)
+                    Harvester(ctx).harvest(reader.records)
                 }
 
                 val outDir = File("build/test-output/$outDirName/${fixture.nameWithoutExtension}")
@@ -97,7 +97,7 @@ class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                     outDir.renameTo(oldDir)
                 }
                 val mode = if (decompile) Mode.ELIDE_SJLJ else Mode.SKELETON
-                Renderer(TypeResolver(harvest), program, mode).use { renderer ->
+                Renderer(TypeResolver(harvest), program, mode, ctx.resolver).use { renderer ->
                     val written = renderer.renderAll(outDir)
                     println(
                         "Pipeline[$binaryName, $outDirName]: ${renderer.sources.size} sources, $written files → $outDir",

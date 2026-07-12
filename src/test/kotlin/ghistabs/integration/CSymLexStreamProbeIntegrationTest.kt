@@ -110,7 +110,7 @@ class CSymLexStreamProbeIntegrationTest : AbstractGhidraHeadlessIntegrationTest(
                     w.write("\n=== Harvest TypeAsts for CSymLexStream + CLexStream + everything they ref ===\n")
                     val reader = ghistabs.parse.StabReader.fromProgram(program)!!.readAll()
                     val freshHarvest = program.runTransaction("probe-harvest") {
-                        ghistabs.harvest.Harvester(ctx).passA(reader.records)
+                        ghistabs.harvest.Harvester(ctx).harvest(reader.records)
                     }
                     val csymAsts = freshHarvest.typeAsts.values.filter { it.name == "CSymLexStream" }
                     val clxAsts = freshHarvest.typeAsts.values.filter { it.name == "CLexStream" }

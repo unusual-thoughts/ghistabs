@@ -2,6 +2,7 @@ package ghistabs.importer
 
 import ghidra.program.model.data.*
 import ghidra.program.model.data.Array
+import ghistabs.applyDemangling
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.degradation
 import ghistabs.materialize.TypeRegistry
@@ -67,7 +68,30 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val typeRegis
         }
     }
 
+    /**
+     * Ghidra's DemanglerAnalyzer is a BYTE_ANALYZER that only runs over loader-added symbols,
+     * missing labels we created via recordFromStab. Replicate it locally with signature /
+     * calling-convention application off — stab signatures are richer and our __thiscall must win.
+     * Runs first in [run] so the `/Demangler/...` stubs it creates are visible to the scan below.
+     */
+    private fun demangleMangledLabels() {
+        var attempted = 0
+        var demangled = 0
+        for (sym in ctx.program.symbolTable.symbolIterator) {
+            ctx.monitor.checkCancelled()
+            val name = sym.name
+            // Cygwin PE/COFF loader prepends `_`, so Itanium symbols appear as `__Z`.
+            // GnuDemangler handles both (strips one leading `_`).
+            if (!name.startsWith("_Z") && !name.startsWith("__Z")) continue
+            attempted++
+            if (ctx.program.applyDemangling(sym.address, name, monitor = ctx.monitor)) demangled++
+        }
+        debug("demangle-attempted", count = attempted.toLong())
+        debug("demangle-applied", count = demangled.toLong())
+    }
+
     fun run() {
+        demangleMangledLabels()
         val dtm = ctx.dtm
 
         val stubs = mutableListOf<StubRecord>()

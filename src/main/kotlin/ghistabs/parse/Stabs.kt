@@ -2,7 +2,15 @@ package ghistabs.parse
 
 import ghidra.app.util.bin.BinaryReader
 import ghidra.app.util.bin.ByteArrayProvider
+import ghidra.program.model.data.ByteDataType
 import ghidra.program.model.data.CategoryPath
+import ghidra.program.model.data.DWordDataType
+import ghidra.program.model.data.DataType
+import ghidra.program.model.data.DataTypeConflictHandler
+import ghidra.program.model.data.DataTypeManager
+import ghidra.program.model.data.EnumDataType
+import ghidra.program.model.data.StructureDataType
+import ghidra.program.model.data.WordDataType
 import ghidra.program.model.listing.Program
 import ghistabs.byteProvider
 import kotlinx.serialization.Serializable
@@ -226,8 +234,10 @@ val TYPES_WITH_CONTINUATION: Set<StabType> = setOf(
 
 /**
  * One assembled stab record — `name` has been resolved through `.stabstr` (per-CU offset applied)
- * and any `\`-continuation chain merged. `recordIndex` is the first physical record's index;
- * absorbed continuations are not surfaced.
+ * and any `\`-continuation chain merged. `index` is the first physical record's file-order index
+ * (its byte position is `index * `[STAB_RECORD_SIZE]); absorbed continuations are not surfaced.
+ * [stabstrOffset] is the resolved absolute `.stabstr` offset of this record's own name — overlay
+ * metadata set during the physical read, not part of the serialized value.
  */
 @Serializable
 data class StabRecord(val index: Int, val type: StabType, val raw: RawHeader, var name: String = "") {
@@ -244,23 +254,17 @@ data class StabRecord(val index: Int, val type: StabType, val raw: RawHeader, va
         desc: Int,
         value: Long,
         name: String,
-    ) : this(index, type, raw = RawHeader(0, type.code, other.toUByte(), desc, value), name)
+    ) : this(index, type, raw = RawHeader(0u, type.code, other.toUByte(), desc.toUShort(), value.toUInt()), name)
 
-    val rawType = raw.type
-    val value = raw.value
-    val desc = raw.desc
-    val other = raw.other
+    // Semantic view: RawHeader is faithfully unsigned/on-disk-width; the harvester wants
+    // ergonomic signed types for address/offset math, so widen here.
+    val rawType get() = raw.type
+    val value get() = raw.value.toLong()
+    val desc get() = raw.desc.toInt()
+    val other get() = raw.other
+
+    var stabstrOffset: Long = 0
 }
-
-/**
- * One physical 12-byte stab record exactly as laid out in `.stab`, in file order — including
- * `N_UNDF` CU headers and `\`-continuation records that [StabReader.readAll] absorbs. Used to
- * overlay a decoded structure onto the raw section. [stabstrOffset] folds in the per-CU
- * `.stabstr` base so it indexes straight into the string block; [name] is this record's own
- * (unmerged) string.
- */
-@Serializable
-data class PhysicalStab(val byteOffset: Long, val strx: Long, val stabstrOffset: Long, val record: StabRecord)
 
 /**
  * Reads stab records from raw `.stab` / `.stabstr` bytes, tracking per-CU offsets and merging
@@ -287,51 +291,11 @@ class StabReader(private val stab: BinaryReader, private val stabStr: (Long) -> 
     )
 
     fun readAll(): Result {
-        val records = mutableListOf<StabRecord>()
-
-        var cuOff = 0L
-        var cuSize = 0L
-        var physicalIndex = 0
-        var unusedHdr: RawHeader? = null
-
-        while (stab.hasNext(STAB_RECORD_SIZE)) {
-            val header = unusedHdr?.also { unusedHdr = null } ?: RawHeader(stab)
-            val record = StabRecord(physicalIndex++, header)
-            if (record.type == StabType.N_UNDF) {
-                cuOff += cuSize
-                cuSize = header.value
-            } else {
-                record.name = stabStr(cuOff + header.strx)
-
-                if (record.type in TYPES_WITH_CONTINUATION && record.name.endsWith("\\")) {
-                    record.name = record.name.dropLast(1)
-
-                    // Spec says continuation records carry 0 in non-string fields; trusted, not asserted.
-                    while (stab.hasNext(STAB_RECORD_SIZE)) {
-                        val contHeader = RawHeader(stab)
-
-                        if (contHeader.type != record.raw.type) {
-                            unusedHdr = contHeader
-                            break
-                        }
-                        physicalIndex++
-
-                        val contName = stabStr(cuOff + contHeader.strx)
-                        if (contName.endsWith("\\")) {
-                            record.name += contName.dropLast(1)
-                        } else {
-                            record.name += contName
-                            break
-                        }
-                    }
-                }
-            }
-            records.add(record)
-        }
-
+        var total = 0
+        val records = mergeContinuations(physicalRecords().onEach { total++ })
         return Result(
             records = records,
-            totalRecordCount = physicalIndex,
+            totalRecordCount = total,
             truncatedTail = stab.length() - stab.pointerIndex,
         )
     }
@@ -339,31 +303,23 @@ class StabReader(private val stab: BinaryReader, private val stabStr: (Long) -> 
     /**
      * Every physical record with its `.stabstr` offset and own string resolved — the raw view
      * [readAll] flattens. Continuations are surfaced individually; names keep their trailing `\`.
+     * Lazily walks the reader (rewound each iteration), so consuming it advances [stab].
      */
-    fun physicalRecords(): List<PhysicalStab> {
+    fun physicalRecords(): Sequence<StabRecord> = sequence {
+        stab.pointerIndex = 0
         var cuOff = 0L
         var cuSize = 0L
-        return buildList {
-            var index = 0
-            while (stab.hasNext(STAB_RECORD_SIZE)) {
-                val byteOffset = stab.pointerIndex
-                val h = RawHeader(stab)
-                val record = StabRecord(index++, h)
+        var index = 0
+        while (stab.hasNext(STAB_RECORD_SIZE)) {
+            val record = StabRecord(index++, RawHeader(stab))
 
-                if (record.type == StabType.N_UNDF) {
-                    cuOff += cuSize
-                    cuSize = h.value
-                }
-                record.name = stabStr(cuOff + h.strx)
-                add(
-                    PhysicalStab(
-                        byteOffset = byteOffset,
-                        strx = h.strx,
-                        stabstrOffset = cuOff + h.strx,
-                        record,
-                    ),
-                )
+            if (record.type == StabType.N_UNDF) {
+                cuOff += cuSize
+                cuSize = record.value
             }
+            record.stabstrOffset = cuOff + record.raw.strx.toLong()
+            record.name = stabStr(record.stabstrOffset)
+            yield(record)
         }
     }
 
@@ -383,24 +339,63 @@ class StabReader(private val stab: BinaryReader, private val stabStr: (Long) -> 
     }
 }
 
+/**
+ * Fold `\`-continuation chains over the [StabReader.physicalRecords] stream (the pure assembly step
+ * `readAll` used to do inline). A continuation's tail records share the starter's type and each end
+ * with `\` until the last; the merged record keeps the starter's index and header. A single forward
+ * pass carrying the still-`open` group needs no lookahead. Every other record, `N_UNDF` headers
+ * included, passes through untouched.
+ */
+internal fun mergeContinuations(physical: Sequence<StabRecord>): List<StabRecord> = buildList {
+    var open: StabRecord? = null
+    for (rec in physical) {
+        if (open != null && rec.type == open.type) {
+            // Continuation: fold into the starter already in the list, don't emit it.
+            open.name += rec.name.removeSuffix("\\")
+            if (!rec.name.endsWith("\\")) open = null
+        } else {
+            val starter = rec.type in TYPES_WITH_CONTINUATION && rec.name.endsWith("\\")
+            if (starter) rec.name = rec.name.dropLast(1)
+            open = rec.takeIf { starter }
+            add(rec)
+        }
+    }
+}
+
 private val CATEGORY = CategoryPath("/stabs")
 
-/** Raw stab header, before type interpretation. */
+/** Raw stab header, before type interpretation — the on-disk 12 bytes, faithfully unsigned. */
 @Serializable
-data class RawHeader(val strx: Long, val type: UByte, val other: UByte, val desc: Int, val value: Long) {
+data class RawHeader(val strx: UInt, val type: UByte, val other: UByte, val desc: UShort, val value: UInt) {
     constructor(reader: BinaryReader) : this(
-        strx = reader.readNextUnsignedInt(),
+        strx = reader.readNextUnsignedInt().toUInt(),
         type = reader.readNextByte().toUByte(),
         other = reader.readNextByte().toUByte(),
-        desc = reader.readNextUnsignedShort(),
-        value = reader.readNextUnsignedInt(),
+        desc = reader.readNextUnsignedShort().toUShort(),
+        value = reader.readNextUnsignedInt().toUInt(),
     )
+}
 
-//    override fun toDataType(): DataType = StructureDataType(CATEGORY, "StabRecord", 0).apply {
-//        add( StructConverter.DWORD, "n_strx", "index into .stabstr (per-CU)")
-//            add(nType, "n_type", "stab type code")
-//            add(StructConverter.BYTE, "n_other", null)
-//            add(StructConverter.WORD, "n_desc", null)
-//            add(StructConverter.DWORD, "n_value", "address / offset / register (per type)")
-//    }}
+/**
+ * Get-or-create the `/stabs` Ghidra datatypes on this manager — `resolve` is idempotent under
+ * `KEEP_HANDLER`, so this is safe to call repeatedly. Builds the `StabType` 1-byte enum and the
+ * 12-byte `StabRecord` layout (single source, mirroring [RawHeader]'s fields), for the .stab overlay.
+ */
+fun DataTypeManager.stabRecordDataType(): DataType = getDataType(CATEGORY, "StabRecord") ?: run {
+    val nType = resolve(
+        EnumDataType(CATEGORY, "StabType", 1).apply {
+            StabType.entries.filter { it != StabType.UNKNOWN }.forEach { add(it.name, it.code.toLong()) }
+        },
+        DataTypeConflictHandler.KEEP_HANDLER,
+    )
+    resolve(
+        StructureDataType(CATEGORY, "StabRecord", 0).apply {
+            add(DWordDataType.dataType, "n_strx", "index into .stabstr (per-CU)")
+            add(nType, "n_type", "stab type code")
+            add(ByteDataType.dataType, "n_other", null)
+            add(WordDataType.dataType, "n_desc", "line number")
+            add(DWordDataType.dataType, "n_value", "address / offset / register (per type)")
+        },
+        DataTypeConflictHandler.KEEP_HANDLER,
+    )
 }
