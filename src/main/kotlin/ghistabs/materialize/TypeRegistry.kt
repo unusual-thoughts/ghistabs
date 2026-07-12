@@ -412,7 +412,7 @@ class TypeRegistry(
         // gcc emits each _ZTI global typed as a `__*_type_info_pseudo` struct it never gives a
         // debug definition, so it arrives here unresolved. Substitute the authoritative RttiStructs
         // layout instead of an opaque stub (last-resort RTTI, backlog §24).
-        rttiStructs.pseudoTypeInfo(ast.ghidraName)?.let {
+        rttiStructs.typeInfoLayout(ast.ghidraName)?.let {
             debug("rtti-pseudo-substituted", "name=${ast.ghidraName} category=$category")
             return it
         }

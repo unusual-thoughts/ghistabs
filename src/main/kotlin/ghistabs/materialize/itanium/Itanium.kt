@@ -26,6 +26,7 @@ object Itanium {
 
     // gcc __cxxabiv1 typeinfo classes — owners of the RTTI structs (see RttiStructs).
     const val ABI_NAMESPACE = "__cxxabiv1"
+    const val TYPE_INFO = "type_info" // std::type_info — root of the __cxxabiv1 hierarchy
     const val CLASS_TYPE_INFO = "__class_type_info"
     const val SI_CLASS_TYPE_INFO = "__si_class_type_info"
     const val VMI_CLASS_TYPE_INFO = "__vmi_class_type_info"

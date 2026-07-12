@@ -18,6 +18,7 @@ import ghistabs.harvest.Harvester
 import ghistabs.harvest.foldSourcePaths
 import ghistabs.importer.ImportContext
 import ghistabs.importer.StaticContexts
+import ghistabs.materialize.itanium.Itanium
 import ghistabs.parse.*
 import ghistabs.runTransaction
 import kotlinx.serialization.ExperimentalSerializationApi
@@ -538,6 +539,30 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
             primary.name,
             "primary label at EAsm typeinfo is '${primary.name}' — mangled name clobbered the demangled one",
         )
+    }
+
+    @Test
+    fun typeInfoBaseClassesNotLeftAsStubs() {
+        assumeTrue(binaryName == "bouniafbouniaf.exe", "Skipping: libsupc++ RTTI base classes specific to bouniafbouniaf.exe")
+        // std::type_info and __cxxabiv1::__{class,si_class,vmi_class}_type_info are real libsupc++
+        // classes with methods (__do_upcast, …) but no stabs, so the demangler leaves empty /Demangler
+        // stubs. typeInfoLayout must give them the RttiStructs layout — no 0-component Structure may survive.
+        assumeTrue(
+            program.symbolTable.getNamespace(Itanium.ABI_NAMESPACE, null) != null,
+            "Skipping: no __cxxabiv1 namespace (RTTI base classes absent from this binary)",
+        )
+        val names = setOf(
+            Itanium.TYPE_INFO,
+            Itanium.CLASS_TYPE_INFO,
+            Itanium.SI_CLASS_TYPE_INFO,
+            Itanium.VMI_CLASS_TYPE_INFO,
+        )
+        val stubs = program.dataTypeManager.allDataTypes.asSequence()
+            .filterIsInstance<Structure>()
+            .filter { it.name in names && it.numComponents == 0 }
+            .map { it.pathName }
+            .toList()
+        Assertions.assertTrue(stubs.isEmpty(), "typeinfo base classes left as empty stubs: $stubs")
     }
 
     @Test
