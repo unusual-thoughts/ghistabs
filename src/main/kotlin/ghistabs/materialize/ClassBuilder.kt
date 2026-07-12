@@ -104,9 +104,14 @@ class ClassBuilder(
             return
         }
 
+        // A derived class inherits its base's vtable without re-marking the overrides virtual
+        // (gcc 3.4.4: CPackedSegList's GetSeg/AddSeg are `virt=NORMAL`), so a polymorphic base
+        // subobject is itself the signal — without it buildAndApplyVtable never runs and _ZTV<class>
+        // is left unannotated. Virtuals.process walks bases, so the slots still resolve.
         val isPoly = classBody.hasVTablePointerMarker ||
             classBody.methods.any { it.virt == VirtKind.VIRTUAL } ||
-            classBody.fields.any { Itanium.isVptrField(it.name) }
+            classBody.fields.any { Itanium.isVptrField(it.name) } ||
+            typeResolver.hasPolymorphicBaseSubobject(classBody)
         if (isPoly) ensureVfptrFirstField(structDt)
 
         val ns = ensureClassNamespace()

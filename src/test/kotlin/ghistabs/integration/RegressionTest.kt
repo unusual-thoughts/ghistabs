@@ -510,6 +510,22 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
     }
 
     @Test
+    fun cPackedSegListVtableAnnotated() {
+        assumeTrue(binaryName == "xapasmcsr.exe", "Skipping: CPackedSegList specific to xapasmcsr.exe")
+        // CPackedSegList inherits its vtable from a polymorphic base and gcc marks none of its
+        // overrides virtual (all NORMAL) with no vptr marker, so the old isPoly gate skipped it.
+        // hasPolymorphicBaseSubobject reopens the gate — the vftable must be built and populated.
+        val vftable = program.dataTypeManager.allDataTypes.asSequence()
+            .filterIsInstance<Structure>()
+            .filter { it.name == "CPackedSegList_vftable" }
+            .maxByOrNull { it.numComponents }
+        Assertions.assertTrue(
+            vftable != null && vftable.numComponents > 0,
+            "CPackedSegList_vftable missing or empty — inherited-vtable class not annotated",
+        )
+    }
+
+    @Test
     fun exprInstHasComponents() {
         val matches = program.dataTypeManager.allDataTypes
             .asSequence()
