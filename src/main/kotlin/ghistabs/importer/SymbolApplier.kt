@@ -28,9 +28,11 @@ class SymbolApplier(
 ) : DiagnosticSink by ctx {
     val source = SourceType.IMPORTED
     internal fun applyAllFunctions(): Int {
+        ctx.monitor.initialize(harvest.openFunctions.size.toLong(), "Stabs: applying functions")
         var functions = 0
 
         for (open in harvest.openFunctions) {
+            ctx.monitor.increment()
             try {
                 val func = ctx.program.functionManager.run {
                     getFunctionAt(open.addr.address)
@@ -124,11 +126,13 @@ class SymbolApplier(
     }
 
     internal fun applyAllGlobals(): Int {
+        ctx.monitor.initialize(harvest.symbolsByCu.values.sumOf { it.size }.toLong(), "Stabs: applying globals")
         var globals = 0
 
         // Globals + file-statics.
         for ((cu, syms) in harvest.symbolsByCu) {
             for (h in syms) {
+                ctx.monitor.increment()
                 try {
                     when (val d = h.body) {
                         is SymbolDecl.Global -> applyGlobal(d).let { if (it) globals++ }
