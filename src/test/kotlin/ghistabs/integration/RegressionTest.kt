@@ -133,7 +133,7 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
             loadResults = ProgramLoader
                 .builder()
                 .source(fixture)
-                .compiler(if (fixture.extension.lowercase() == "exe") "gcc" else null)
+                .compiler("gcc")
                 .log(log)
                 .monitor(monitor)
                 .load()
@@ -687,7 +687,7 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
         )
 
         program.runTransaction("rerun-demangler-replacer") {
-            ghistabs.importer.DemanglerReplacer(context, typeRegistry!!).run()
+            ghistabs.importer.DemanglerReplacer(context, typeRegistry!!).replace()
         }
 
         Assertions.assertNull(

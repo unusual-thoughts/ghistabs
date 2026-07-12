@@ -72,7 +72,7 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val typeRegis
      * Ghidra's DemanglerAnalyzer is a BYTE_ANALYZER that only runs over loader-added symbols,
      * missing labels we created via recordFromStab. Replicate it locally with signature /
      * calling-convention application off — stab signatures are richer and our __thiscall must win.
-     * Runs first in [run] so the `/Demangler/...` stubs it creates are visible to the scan below.
+     * Runs first in [replace] so the `/Demangler/...` stubs it creates are visible to the scan below.
      */
     private fun demangleMangledLabels() {
         ctx.monitor.initialize(ctx.program.symbolTable.numSymbols.toLong(), "Stabs: demangling labels")
@@ -91,7 +91,7 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val typeRegis
         debug("demangle-applied", count = demangled.toLong())
     }
 
-    fun run() {
+    fun replace() {
         demangleMangledLabels()
         val dtm = ctx.dtm
 

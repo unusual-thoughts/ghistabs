@@ -1,6 +1,7 @@
 package ghistabs.importer
 
 import ghistabs.diagnose.DiagnosticSink
+import ghistabs.diagnose.analyzeDataCoverage
 import ghistabs.harvest.Harvest
 import ghistabs.harvest.Harvester
 import ghistabs.harvest.TypeResolver
@@ -44,20 +45,19 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
         }
 
         // Pass C — apply symbols, then build classes/vtables, demangle, and replace demangler stubs
-        val (functions, globals, classes) = ctx.program.runTransaction("Stabs: apply symbols") {
+        var classes = 0
+        val (functions, globals) = ctx.program.runTransaction("Stabs: apply symbols") {
             val applier = SymbolApplier(ctx, harvest, typeRegistry)
             val functions = applier.applyAllFunctions()
             val globals = applier.applyAllGlobals()
-            ctx.analyzeBssCoverage(harvest)
-            val classes = if (ctx.options.applyVtables) {
-                ClassBuilder(typeRegistry, harvest, typeResolver, ctx).buildAll()
-            } else {
-                0
+            if (ctx.options.applyVtables) {
+                classes = ClassBuilder(typeRegistry, harvest, typeResolver, ctx).buildAll()
             }
-            DemanglerReplacer(ctx, typeRegistry).run()
-            Triple(functions, globals, classes)
+            DemanglerReplacer(ctx, typeRegistry).replace()
+            functions to globals
         }
 
+        ctx.analyzeDataCoverage()
         typeRegistry.reportSurvivingPlaceholders()
         ctx.diagnostics.writeSummary(ctx.terminal)
         ctx.typeRegistry = typeRegistry
