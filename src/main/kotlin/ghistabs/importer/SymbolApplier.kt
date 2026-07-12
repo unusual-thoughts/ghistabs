@@ -5,6 +5,7 @@ import ghidra.program.model.data.Undefined4DataType
 import ghidra.program.model.listing.*
 import ghidra.program.model.listing.Function
 import ghidra.program.model.symbol.SourceType
+import ghistabs.demangle
 import ghistabs.diagnose.ApplyErrorBucket
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.Level
@@ -390,6 +391,12 @@ class SymbolApplier(
      */
     private fun ensureStabLabel(addr: Address, name: String) {
         val symtab = ctx.program.symbolTable
+        // Compiler-generated globals (typeinfo, typeinfo-name) carry their mangled `_ZTI…`/`_ZTS…`
+        // linkage name in the stab. If the demangled label (`EAsm::typeinfo`) is already at this
+        // address, leave it primary rather than promoting the raw mangled string over it.
+        val demangledSimple = ctx.program.demangle(name, addr)?.name
+        if (demangledSimple != null && symtab.getSymbols(addr).any { it.name == demangledSimple }) return
+
         val existing = symtab.getSymbols(addr).firstOrNull { it.name == name }
         val sym = existing ?: try {
             symtab.createLabel(addr, name, SourceType.IMPORTED)
