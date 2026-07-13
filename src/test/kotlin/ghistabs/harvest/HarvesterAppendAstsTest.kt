@@ -271,6 +271,68 @@ class HarvesterAppendAstsTest {
     }
 
     /**
+     * Test: a lone self-referential typedef (`void:t(0,20)=(0,20)`) survives rather than being
+     * skipped — TypeRegistry's void detection needs the ast present to map it to VoidDataType.
+     */
+    @Test
+    fun testLoneSelfRefTypedefSurvives() {
+        val cuName = "cu.c"
+        val harvester = createTestHarvester(listOf(StabRecord(0, StabType.N_SO, 0, 0, 0L, cuName)))
+        val id = GlobalTypeId(SourceFile.CUSource(cuName), 20)
+        harvester.appendAsts(TypeAst(cu = SourceFile.CUSource(cuName), id = id, name = "void", body = TypeDecl.Ref(id)))
+
+        val body = harvester.harvest(emptyList()).typeAsts[id]?.body
+        assertTrue(body is TypeDecl.Ref && body.id == id, "lone self-ref (void) must survive, not be skipped")
+    }
+
+    /**
+     * Test: a concrete body always wins over a self-ref at the same id, in either arrival order.
+     * This is the box2d case — a bare re-declaration must not demote a real struct to void.
+     */
+    @Test
+    fun testConcreteBodySupersedesSelfRef() {
+        val cuName = "cu.c"
+        val records = listOf(StabRecord(0, StabType.N_SO, 0, 0, 0L, cuName))
+        val id = GlobalTypeId(SourceFile.CUSource(cuName), 20)
+        val selfRef = TypeAst(cu = SourceFile.CUSource(cuName), id = id, name = "Foo", body = TypeDecl.Ref(id))
+        val struct = TypeDecl.Struct<GlobalTypeId>(
+            rawKind = AggrKind.STRUCT,
+            sizeBytes = 8L,
+            bases = emptyList(),
+            fields = listOf(
+                FieldDecl(
+                    "x",
+                    TypeDecl.Ref(GlobalTypeId(SourceFile.CUSource(cuName), 1)),
+                    0L,
+                    32L,
+                    false,
+                    Access.PUBLIC,
+                ),
+            ),
+            methods = emptyList(),
+            hasVTablePointerMarker = false,
+            vtableTargetTypeId = null,
+        )
+        val concrete = TypeAst(cu = SourceFile.CUSource(cuName), id = id, name = "Foo", body = struct)
+
+        val selfRefFirst = createTestHarvester(records).apply {
+            appendAsts(selfRef)
+            appendAsts(concrete)
+        }
+        assertEquals(struct, selfRefFirst.harvest(emptyList()).typeAsts[id]!!.body, "real body supersedes self-ref")
+
+        val concreteFirst = createTestHarvester(records).apply {
+            appendAsts(concrete)
+            appendAsts(selfRef)
+        }
+        assertEquals(
+            struct,
+            concreteFirst.harvest(emptyList()).typeAsts[id]!!.body,
+            "self-ref never demotes a real body",
+        )
+    }
+
+    /**
      * Test: Same type twice from same CU (duplicate with same hash).
      *
      * This mirrors the appquery same-hash pattern. Two stabs records in the same CU
