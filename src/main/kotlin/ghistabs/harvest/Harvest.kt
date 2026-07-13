@@ -3,6 +3,7 @@
 package ghistabs.harvest
 
 import ghistabs.parse.GlobalTypeId
+import ghistabs.parse.SymbolDecl
 import ghistabs.parse.TypeDecl
 import kotlinx.serialization.Serializable
 
@@ -20,6 +21,8 @@ data class Harvest(
     val openFunctions: List<OpenFunction> = listOf(),
     /** N_SLINE entries grouped by N_SOL-effective source filename; sorted by line on insertion. */
     val lineEntries: Map<String, List<LineEntry>> = mapOf(),
+    /** Addressless `:c` compile-time constants — applied as equates + a synthetic enum catalog. */
+    val constants: List<SymbolDecl.Constant<GlobalTypeId>> = listOf(),
 ) {
 
     fun getType(id: GlobalTypeId) = typeAsts[id]

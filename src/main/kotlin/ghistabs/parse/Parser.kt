@@ -16,6 +16,12 @@ package ghistabs.parse
  * multiple records or filtering trailing input as needed.
  */
 class Parser(src: String) {
+    private companion object {
+        // gcc builtin negative type number for `int` (see BuiltinTable): the implicit type of
+        // a value-only `:c=` constant.
+        const val BUILTIN_INT = -1
+    }
+
     private val c = Cursor(src)
 
     /**
@@ -79,7 +85,20 @@ class Parser(src: String) {
 
             't' -> parseTypedef(name)
 
-            else -> SymbolDecl.StackLocal(name, parseType())
+            'c' -> parseConstant(name)
+
+            // No symbol-descriptor letter: a stack local whose type follows immediately, always
+            // a type-number ref or inline def (`(cu,n)`, a bare number, or a negative builtin).
+            // Any other letter is a symbol descriptor we don't implement — surface it, don't
+            // silently misread it as a type (e.g. `a`/`s`/`x`/`R` would parse as array/struct/…).
+            '(', '-' -> SymbolDecl.StackLocal(name, parseType())
+
+            else ->
+                if (descriptor?.isDigit() == true) {
+                    SymbolDecl.StackLocal(name, parseType())
+                } else {
+                    throw StabsParseException(c.pos, c.src, "unhandled symbol descriptor '$descriptor'")
+                }
         }
     }
 
@@ -102,6 +121,31 @@ class Parser(src: String) {
         val id = c.parseTypeId()
         val body = if (c.consumeIf('=')) parseType() else TypeDecl.Ref(id)
         return SymbolDecl.TaggedType(name, id, body)
+    }
+
+    /**
+     * Parse `:c=<form>` — an addressless compile-time constant. Unlike every other symbol
+     * descriptor, `c` is not followed by type information but by `=` and a form letter:
+     * `i`/`b`/`c` integral value, `e <type>,<value>` typed integral, `r` real / `s` string /
+     * `S` set (non-integral, unseen from g++/x86 — payload consumed, value 0).
+     * Mirror of gdb/stabsread.c:define_symbol (c case).
+     */
+    private fun parseConstant(name: String): SymbolDecl.Constant<LocalTypeId> {
+        c.consume('c')
+        c.consume('=')
+        return when (c.advance()) {
+            'i', 'b', 'c' -> SymbolDecl.Constant(name, TypeDecl.Builtin(BUILTIN_INT), c.parseInt())
+            'e' -> {
+                val type = parseType()
+                c.consume(',')
+                SymbolDecl.Constant(name, type, c.parseInt())
+            }
+
+            else -> {
+                c.readUntilAny(charArrayOf(';'))
+                SymbolDecl.Constant(name, TypeDecl.Builtin(BUILTIN_INT), 0)
+            }
+        }
     }
 
     /**
@@ -240,7 +284,7 @@ class Parser(src: String) {
         val methods = mutableListOf<MethodDecl<LocalTypeId>>()
 
         while (c.peekOrNull() != ';' && !c.eof) {
-            val name = c.readUntilAny(charArrayOf(':', '/'))
+            val name = c.readMemberName()
 
             when {
                 c.startsWith("::") -> {

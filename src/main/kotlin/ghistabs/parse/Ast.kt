@@ -211,7 +211,8 @@ sealed interface SymbolDecl<Id : IdInterface> {
     data class RegLocal<Id : IdInterface>(override val name: String, override val type: TypeDecl<Id>, val regNum: Int) :
         SymbolDecl<Id>
 
-    /** Plain stack local (a `:` descriptor with no class letter, or `:V` static-local). */
+    /** Plain stack local — a `:` descriptor with no class letter (gdb's `l`/`s`, i.e. the type
+     *  number follows immediately). `:V` is a procedure-scope static and maps to [StaticVar]. */
     @Serializable
     data class StackLocal<Id : IdInterface>(override val name: String, override val type: TypeDecl<Id>) : SymbolDecl<Id>
 
@@ -242,10 +243,23 @@ sealed interface SymbolDecl<Id : IdInterface> {
         override val type: TypeDecl<Id>,
         val isFunctionLocal: Boolean,
     ) : SymbolDecl<Id>
+
+    /**
+     * `:c=` addressless compile-time constant. Integral forms (`i`/`e`/`b`/`c`) carry the
+     * value; `e` also carries an explicit type, the others a synthesized builtin int.
+     * Non-integral forms (`r`/`s`/`S`) are consumed but not represented (value 0) — g++/x86
+     * never emits them.
+     */
+    @Serializable
+    data class Constant<Id : IdInterface>(
+        override val name: String,
+        override val type: TypeDecl<Id>,
+        val value: Long,
+    ) : SymbolDecl<Id>
 }
 
 class StabsParseException(val pos: Int, val src: String, msg: String) :
-    RuntimeException("at $pos in '${src.take(120)}': $msg") {
+    RuntimeException("at $pos in '$src': $msg") {
     /** Returns a one-line excerpt with a `^` caret at `pos`. */
     fun excerpt(): String {
         val start = (pos - 30).coerceAtLeast(0)
