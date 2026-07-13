@@ -28,6 +28,7 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, private 
     private val openFunctions = mutableListOf<OpenFunction>()
     private val includesByFile = mutableMapOf<String, IncludeContext>()
     private var parseErrors = 0
+    private val constants = mutableListOf<SymbolDecl.Constant<GlobalTypeId>>()
 
     private var currentCu: SourceFile.CUSource? = null
     private var currentFunction: OpenFunction? = null
@@ -273,6 +274,10 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, private 
                             symbolsByCu.getOrPut(currentCu!!.filename) { mutableListOf() } += sym
                         }
 
+                        // Addressless compile-time constant — no address, so it's applied as an
+                        // equate + synthetic enum catalog rather than data (see SymbolApplier).
+                        is SymbolDecl.Constant -> constants += decl
+
                         is SymbolDecl.Function, is SymbolDecl.Global, is SymbolDecl.RegParam, is SymbolDecl.StackParam,
                         -> warn("unexpected-lsym", "$sym")
                     }
@@ -315,6 +320,7 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, private 
 
         synthesizeXRefStubsForDanglingInheritanceRefs()
         nameAnonymousTypedefTargets()
+        debug("harvest-constants", count = constants.size.toLong())
 
         return Harvest(
             typeAsts = typeAsts,
@@ -325,6 +331,7 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, private 
             lineEntries = lineEntriesByFile.mapValues { (_, v) ->
                 v.sortedWith(compareBy({ it.line }, { it.addr.offset }))
             },
+            constants = constants,
         )
     }
 

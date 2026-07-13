@@ -1,6 +1,9 @@
 package ghistabs.importer
 
 import ghidra.program.model.address.Address
+import ghidra.program.model.data.CategoryPath
+import ghidra.program.model.data.DataTypeConflictHandler
+import ghidra.program.model.data.EnumDataType
 import ghidra.program.model.data.Undefined4DataType
 import ghidra.program.model.listing.*
 import ghidra.program.model.listing.Function
@@ -12,6 +15,7 @@ import ghistabs.diagnose.Level
 import ghistabs.diagnose.degradation
 import ghistabs.harvest.*
 import ghistabs.materialize.TypeRegistry
+import ghistabs.namespaceChain
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.SymbolDecl
 import ghistabs.parse.dbxRegisterName
@@ -151,6 +155,58 @@ class SymbolApplier(
         }
 
         return globals
+    }
+
+    /**
+     * Apply addressless `:c` constants. They have no use-site, so instead of a data definition
+     * we give them two synthetic homes: an equate per constant (value↔name, applicable wherever
+     * the scalar shows up) and a browsable per-(namespace, byte-size) enum catalog under
+     * `/stabs/constants`. Grouping by size keeps each enum's width honest — no 8-byte grab-bag.
+     * The catalog enum is explicitly synthetic; real enums only ever come from `TypeDecl.Enum`.
+     */
+    internal fun applyAllConstants(): Int {
+        if (harvest.constants.isEmpty()) return 0
+        val equates = ctx.program.equateTable
+        // (namespace-chain, byte-size) → leaf-name → value
+        val enums = LinkedHashMap<Pair<List<String>, Int>, LinkedHashMap<String, Long>>()
+        var applied = 0
+
+        for (c in harvest.constants) {
+            // demangledName() is the unqualified leaf; rebuild the qualified name from the
+            // namespace chain so the equate reads `CryptoPP::INFINITE_TIME`, not `INFINITE_TIME`.
+            val ns = ctx.program.namespaceChain(c.name).orEmpty()
+            val leaf = ctx.program.demangle(c.name)?.name ?: c.name
+            val qualified = (ns + leaf).joinToString("::")
+
+            when (val existing = equates.getEquate(qualified)) {
+                null -> runCatching { equates.createEquate(qualified, c.value) }.onSuccess { applied++ }
+                else -> if (existing.value != c.value) {
+                    warn("constant-equate-conflict", "$qualified = ${existing.value} vs ${c.value}")
+                }
+            }
+            enums.getOrPut(ns to byteSize(c.value)) { LinkedHashMap() }.putIfAbsent(leaf, c.value)
+        }
+
+        val dtm = ctx.program.dataTypeManager
+        for ((key, members) in enums) {
+            val (ns, size) = key
+            val category = ns.fold(CategoryPath("/stabs/constants")) { path, seg -> CategoryPath(path, seg) }
+            val enum = EnumDataType(category, "size_${size}b", size, dtm)
+            members.forEach { (n, v) -> enum.add(n, v) }
+            dtm.addDataType(enum, DataTypeConflictHandler.REPLACE_HANDLER)
+        }
+
+        debug("apply-constants", count = applied.toLong())
+        debug("apply-constant-enums", count = enums.size.toLong())
+        return applied
+    }
+
+    /** Minimal enum width (1/2/4/8 bytes) that holds [v] in either signed or unsigned range. */
+    private fun byteSize(v: Long) = when (v) {
+        in -0x80L..0xFFL -> 1
+        in -0x8000L..0xFFFFL -> 2
+        in -0x8000_0000L..0xFFFF_FFFFL -> 4
+        else -> 8
     }
 
     /**
