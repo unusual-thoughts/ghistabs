@@ -245,24 +245,22 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, private 
                         }
 
                         is SymbolDecl.Typedef -> {
-                            // `name:t(cu,n)` with no `=body` parses as a self-Ref Typedef:
-                            // adds a name but no new body. Skip it — emitting an ast would
-                            // collide with the real definition at the same id in another CU
-                            // (every box2d typedef hit this).
-                            if (decl.type !is TypeDecl.Ref || decl.type.id != decl.id) {
-                                val outer = TypeAst(
-                                    currentCu!!,
-                                    decl.id,
-                                    decl.name,
-                                    decl.type,
-                                    declLine = sym.declLine,
-                                    declSourceFile = sym.sourceFile,
-                                )
-                                appendAsts(
-                                    outer,
-                                    *walkDefinitions(decl.type, sym.declLine, sym.sourceFile).toTypedArray(),
-                                )
-                            }
+                            // Emit self-ref typedefs too (`void:t(0,20)=(0,20)` — gcc's void, and
+                            // bare `name:t(cu,n)` re-declarations). appendAsts lets a real definition
+                            // at the same id supersede the self-ref, so void stays resolvable while a
+                            // concrete body elsewhere (box2d) still wins over a bare re-declaration.
+                            val outer = TypeAst(
+                                currentCu!!,
+                                decl.id,
+                                decl.name,
+                                decl.type,
+                                declLine = sym.declLine,
+                                declSourceFile = sym.sourceFile,
+                            )
+                            appendAsts(
+                                outer,
+                                *walkDefinitions(decl.type, sym.declLine, sym.sourceFile).toTypedArray(),
+                            )
                         }
 
                         is SymbolDecl.StackLocal, is SymbolDecl.RegLocal -> {
@@ -481,6 +479,9 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, private 
         return walk(decl)
     }
 
+    /** gcc emits `void` (and bare re-declarations) as a typedef whose body refers to its own id. */
+    private fun TypeAst.isSelfRef() = body.let { it is TypeDecl.Ref && it.id == id }
+
     /**
      * Accumulate asts with first-writer-wins on GlobalTypeId. XRef placeholders are replaced
      * by any concrete body. Collisions go into [collidingAsts] for post-harvest classification —
@@ -492,7 +493,17 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, private 
         val collisions = new.keys.intersect(typeAsts.keys).filter { typeAsts[it]?.body !is TypeDecl.XRef }
         for (id in collisions) {
             val ex = typeAsts[id]!!
-            val incoming = new[id]!!
+
+            // `void:t(0,20)=(0,20)` and bare re-declarations parse as self-refs. They must never
+            // shadow a concrete body: a real incoming supersedes a self-ref `ex` (box2d re-decl over
+            // its real struct), and self-ref incomings are dropped when `ex` is already concrete. A
+            // lone self-ref (no concrete body at this id) survives and resolves to void downstream.
+            val incoming = new[id]!!.filterNot { it.isSelfRef() }
+            if (ex.isSelfRef()) {
+                incoming.firstOrNull()?.let { typeAsts[id] = it }
+                continue
+            }
+            if (incoming.isEmpty()) continue
 
             // Name-promotion: an anonymous InlineDef ast can be superseded by an explicit
             // named Typedef at the same id. Range's `of` self-ref differs between forms so
