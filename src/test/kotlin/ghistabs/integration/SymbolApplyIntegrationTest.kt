@@ -8,11 +8,13 @@ import ghistabs.parse.StabReader
 import ghistabs.parse.StabRecord
 import ghistabs.parse.StabType
 import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
+import ghidra.program.model.data.Enum as GhidraEnum
 
 /**
  * Real Ghidra headless integration tests for symbol applying during import.
@@ -135,5 +137,36 @@ class SymbolApplyIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         assertTrue(result.parseErrors > 0, "Importer should report parse error for malformed record")
         // But other records should still be processed
         assertTrue(result.typesMaterialised > 0, "Importer should have materialized valid types despite errors")
+    }
+
+    /**
+     * A `:c=i` constant applies as an equate (value↔name) plus a catalog enum under
+     * /stabs/constants sized to the value's width. `INFINITE_TIME = 0xFFFFFFFF` → 4-byte enum.
+     * Asserts on the mechanism, not the demangled spelling: ProgramBuilder's synthetic program
+     * has no demangler, so the name falls back to the mangled form (real fixtures do demangle).
+     */
+    @Test
+    fun testConstantAppliesEquateAndEnum() {
+        val program = builder.program
+        val records = listOf(
+            StabRecord(0, StabType.N_SO, 0, 0, 0, "test.cpp"),
+            StabRecord(1, StabType.N_LSYM, 0, 0, 0, "_ZN8CryptoPP13INFINITE_TIMEE:c=i4294967295"),
+        )
+
+        val ctx = program.defaultContext()
+        val result = StabsImporter(ctx).runOnRecords(
+            StabReader.Result(records, totalRecordCount = records.size, truncatedTail = 0),
+        )
+
+        assertEquals(1, result.constantsApplied, "one constant should apply")
+
+        val equate = program.equateTable.equates.asSequence().single()
+        assertEquals(0xFFFFFFFFL, equate.value, "equate carries the constant value")
+
+        val enum = program.dataTypeManager.allDataTypes.asSequence()
+            .filterIsInstance<GhidraEnum>()
+            .single { it.categoryPath.path.startsWith("/stabs/constants") }
+        assertEquals(4, enum.length, "0xFFFFFFFF sizes to a 4-byte enum")
+        assertEquals(0xFFFFFFFFL, enum.values.single(), "sole member carries the value")
     }
 }

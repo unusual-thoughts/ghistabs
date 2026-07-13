@@ -130,4 +130,5 @@ fun SymbolDecl<LocalTypeId>.globalize(g: Globalizer) = when (this) {
     is SymbolDecl.StaticVar -> SymbolDecl.StaticVar(name, type.globalize(g), isFunctionLocal)
     is SymbolDecl.TaggedType -> SymbolDecl.TaggedType(name, g.globalIdFor(id), type.globalize(g))
     is SymbolDecl.Typedef -> SymbolDecl.Typedef(name, g.globalIdFor(id), type.globalize(g))
+    is SymbolDecl.Constant -> SymbolDecl.Constant(name, type.globalize(g), value)
 }

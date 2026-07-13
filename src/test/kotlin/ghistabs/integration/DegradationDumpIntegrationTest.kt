@@ -29,6 +29,15 @@ class DegradationDumpIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     @ValueSource(
         strings = [
             "bouniafbouniaf.exe", "xmltest", "bouniaf.exe", "box2d", "box2d_tests", "unbouniaf.exe", "bouniaf.exe",
+            // gcc 4.2.1 / 3.4.5 stabs corpus (crypto / locale / xmltest), incl. PE-symbol-stripped variants
+            "crypto_mi_test_gcc421.exe", "crypto_mi_test_gcc421_fullstabs.exe",
+            "crypto_mi_test_gcc421_stripped.exe", "crypto_mi_test_gcc421_fullstabs_stripped.exe",
+            "crypto_mi_test_gcc345.exe", "crypto_mi_test_gcc345_fullstabs.exe",
+            "locale_test_customlibstdcxx.exe", "locale_test_customlibstdcxx_stripped.exe",
+            "locale_test_gcc345_fullstabs.exe",
+            "xmltest_gcc421.exe", "xmltest_gcc421_fullstabs.exe",
+            "xmltest_gcc421_stripped.exe", "xmltest_gcc421_fullstabs_stripped.exe",
+            "xmltest_gcc345.exe", "xmltest_gcc345_fullstabs.exe",
         ],
     )
     fun dumpDegradations(binaryName: String) {
@@ -75,6 +84,12 @@ class DegradationDumpIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                         w.write("\n")
                     }
                 }
+                // Full untruncated run log (CapturingSink holds every level, unfiltered),
+                // mirroring StabsAnalyzerTests so import diagnostics are inspectable per fixture.
+                val logFile = File("build/test-output/logs/${fixture.nameWithoutExtension}.degradation.log")
+                logFile.parentFile.mkdirs()
+                logFile.writeText(ctx.terminal.dedupedOutput() + "\n--- MessageLog ---\n" + log.toString())
+
                 println("[$binaryName] wrote ${events.size} events to ${out.absolutePath}")
                 for ((cat, list) in byCategory) println("  $cat = ${list.size}")
 

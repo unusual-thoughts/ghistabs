@@ -60,6 +60,51 @@ class ParserPrimitiveTest {
     }
 
     @Test
+    fun testInt128WithSizeAttrOctal() {
+        // gcc 3.4.5 emits 128-bit types with a 96+-bit octal upper bound that overflows a
+        // 64-bit parse; it must fold to the low 64 bits (all ones = -1L) rather than throw.
+        val input = "__int128:t(0,25)=@s128;r(0,25);000000000000000000000000;037777777777777777777777777777777;"
+        val expected = SymbolDecl.Typedef(
+            name = "__int128",
+            id = LocalTypeId(0, 25),
+            type = TypeDecl.WithSizeAttr(
+                sizeBits = 128,
+                inner = TypeDecl.Range(
+                    of = LocalTypeId(0, 25),
+                    min = 0L,
+                    max = -1L, // octal 037777777777777777777777777777777 truncated to low 64 bits
+                ),
+            ),
+        )
+        assertEquals(expected, Parser(input).parseSymbol())
+    }
+
+    @Test
+    fun testIntegerConstantDescriptor() {
+        // gcc emits static-const integral members as `name:c=iVALUE` (no type info). The value
+        // may exceed signed int (INFINITE_TIME = 0xFFFFFFFF) but fits in Long.
+        val input = "_ZN8CryptoPP13INFINITE_TIMEE:c=i4294967295"
+        val expected = SymbolDecl.Constant(
+            name = "_ZN8CryptoPP13INFINITE_TIMEE",
+            type = TypeDecl.Builtin(-1),
+            value = 4294967295L,
+        )
+        assertEquals(expected, Parser(input).parseSymbol())
+    }
+
+    @Test
+    fun testTypedEnumConstantDescriptor() {
+        // `c=e<type>,<value>` carries an explicit type before the value.
+        val input = "kBlue:c=e(0,3),2"
+        val expected = SymbolDecl.Constant(
+            name = "kBlue",
+            type = TypeDecl.Ref(LocalTypeId(0, 3)),
+            value = 2L,
+        )
+        assertEquals(expected, Parser(input).parseSymbol())
+    }
+
+    @Test
     fun testComplexFloat() {
         val input = "complex float:t(0,16)=R3;8;0;"
         val expected = SymbolDecl.Typedef(

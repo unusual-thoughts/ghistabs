@@ -19,6 +19,7 @@ data class PassResult(
     val functionsApplied: Int = 0,
     val globalsApplied: Int = 0,
     val classesApplied: Int = 0,
+    val constantsApplied: Int = 0,
 )
 
 /**

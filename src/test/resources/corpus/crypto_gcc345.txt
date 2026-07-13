@@ -1,0 +1,4 @@
+AllocatorWithCleanup<CryptoPP::word16, false>:T(55,4)=s1AllocatorBase<CryptoPP::word16>:(55,3),0,64;;
+BitBucket:T(0,31)=s12Bufferless<CryptoPP::Sink>:(0,34),0,768;;
+value_ptr<CryptoPP::ECP>:T(3,16)=s4member_ptr<CryptoPP::ECP>:(3,13),0,256;;
+__uint128_t:t(0,25)=@s128;r(0,25);000000000000000000000000;0377777777777777777777777777777777;

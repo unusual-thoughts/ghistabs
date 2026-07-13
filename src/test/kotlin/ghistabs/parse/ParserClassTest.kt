@@ -129,6 +129,48 @@ class ParserClassTest {
     }
 
     @Test
+    fun testBaseClassAsFieldWithQualifiedTemplateName() {
+        // gcc 3.4.5 spells a base class out as a pseudo-field whose name carries qualified
+        // template args (`CryptoPP::word16`). The `::` inside `<...>` must not be read as a
+        // method marker — the field name runs to the `:` after the closing `>`.
+        val input = "AllocatorWithCleanup<CryptoPP::word16>:T(55,4)=s1AllocatorBase<CryptoPP::word16>:(55,3),0,64;;"
+        val expected = SymbolDecl.TaggedType(
+            name = "AllocatorWithCleanup<CryptoPP::word16>",
+            id = LocalTypeId(55, 4),
+            type = TypeDecl.Struct(
+                rawKind = AggrKind.STRUCT,
+                sizeBytes = 1,
+                bases = emptyList(),
+                fields = listOf(
+                    FieldDecl(
+                        "AllocatorBase<CryptoPP::word16>",
+                        TypeDecl.Ref(LocalTypeId(55, 3)),
+                        offsetBits = 0,
+                        sizeBits = 64,
+                        isStatic = false,
+                        access = Access.PUBLIC,
+                    ),
+                ),
+                methods = emptyList(),
+                hasVTablePointerMarker = false,
+                vtableTargetTypeId = null,
+            ),
+        )
+        assertEquals(expected, Parser(input).parseSymbol())
+    }
+
+    @Test
+    fun testOperatorMethodWithAngleBrackets() {
+        // `operator<<` keeps its angle brackets as operator tokens; they must not open
+        // template depth (which would swallow the `::` method marker).
+        val input = "Str:T(0,9)=s1operator<<::(0,10)=#(0,9),(0,1),(0,2);:_ZN3StrlsEi;2A.;;"
+        val parsed = Parser(input).parseSymbol() as SymbolDecl.TaggedType
+        val struct = parsed.type as TypeDecl.Struct
+        assertEquals(1, struct.methods.size)
+        assertEquals("operator<<", struct.methods.single().name)
+    }
+
+    @Test
     fun testVirtualMethod() {
         val input = "Qux:T(0,9)=s4doIt::(0,10)=#(0,9),(0,1),(0,2);:_ZN3Qux4doItEi;2A*0;(0,9);;;"
         val expected = SymbolDecl.TaggedType(

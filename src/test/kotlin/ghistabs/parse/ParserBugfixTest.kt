@@ -61,6 +61,22 @@ class ParserBugfixTest {
     }
 
     /**
+     * An unimplemented symbol descriptor must throw rather than be misread as a stack local
+     * with an array/struct type. `a` (array-arg) is a real gdb descriptor g++/x86 never emits;
+     * if it ever appears we want a hard parse-error, not a silently-wrong type.
+     */
+    @Test
+    fun testUnknownSymbolDescriptorThrows() {
+        val exception = assertThrows(StabsParseException::class.java) {
+            Parser("weird:a(0,1)").parseSymbol()
+        }
+        assertTrue(
+            exception.message!!.contains("unhandled symbol descriptor 'a'"),
+            "message should name the descriptor: ${exception.message}",
+        )
+    }
+
+    /**
      * AC2.7: Recursive type definitions must not cause infinite recursion.
      * Parse a type that references itself through a pointer, which the parser
      * handles via forward references (Ref nodes) — no infinite recursion should occur.
@@ -174,6 +190,23 @@ class ParserBugfixTest {
             .filterNot { it.matches(Regex("^[A-Za-z]:/.*")) } // Windows drive-letter paths
             .filterNot { it.endsWith("/") } // Unix directory paths
         assertTrue(lines.size >= 1000, "Corpus should have at least 1000 descriptor lines, got ${lines.size}")
+
+        // Parse each line; none should throw
+        for ((lineNum, line) in lines.withIndex()) {
+            assertDoesNotThrow({
+                Parser(line).parseSymbol()
+            }, "Line ${lineNum + 1} should parse: ${line.take(100)}")
+        }
+    }
+
+    @Test
+    fun testGcc345ParsingErrorDoubleColon() {
+        val resourceUrl = javaClass.classLoader.getResource("corpus/crypto_gcc345.txt")
+        val corpusFile = if (resourceUrl != null) File(resourceUrl.toURI()) else File("")
+
+        Assumptions.assumeTrue(corpusFile.exists(), "crypto_gcc345 corpus file not present")
+
+        val lines = corpusFile.readLines()
 
         // Parse each line; none should throw
         for ((lineNum, line) in lines.withIndex()) {
