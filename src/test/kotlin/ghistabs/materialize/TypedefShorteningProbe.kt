@@ -1,4 +1,4 @@
-package ghistabs.integration
+package ghistabs.materialize
 
 import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.app.util.importer.MessageLog
@@ -24,8 +24,8 @@ import java.io.File
  * canonical std::string collapse actually landed, so the DTM plumbing — not just the pure
  * algorithm ([ghistabs.materialize.typedefShorteningRenames]) — is exercised.
  */
-@Tag("integration")
-class TypedefShorteningProbeIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
+@Tag("probe")
+class TypedefShorteningProbe : AbstractGhidraHeadlessIntegrationTest() {
     @ParameterizedTest
     @ValueSource(strings = ["appquery.exe", "xapasmcsr.exe"])
     fun dumpRenames(binaryName: String) {

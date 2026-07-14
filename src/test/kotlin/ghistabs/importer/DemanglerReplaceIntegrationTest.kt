@@ -1,4 +1,4 @@
-package ghistabs.integration
+package ghistabs.importer
 
 import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.data.CategoryPath
@@ -59,7 +59,7 @@ class DemanglerReplaceIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
      * - Assert /proj/Foo still exists and has the same int32 field
      */
     @Test
-    fun testDemanglerStubReplacedByDerivedType() {
+    fun demanglerStubReplacedByDerivedType() {
         val program = builder.program
         val dtm = program.dataTypeManager
 
@@ -115,7 +115,7 @@ class DemanglerReplaceIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
      * - Assert /proj/Foo still exists (unchanged)
      */
     @Test
-    fun testDemanglerReplacementIdempotentWhenStubMissing() {
+    fun demanglerReplacementIdempotentWhenStubMissing() {
         val program = builder.program
         val dtm = program.dataTypeManager
 
@@ -157,7 +157,7 @@ class DemanglerReplaceIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
      * analysis / OPT_SHORTEN_TYPEDEFS run needed) — both types are simply registered as "string".
      */
     @Test
-    fun testDemanglerStubReplacedWhenTypedefAndRenamedTargetCollide() {
+    fun demanglerStubReplacedWhenTypedefAndRenamedTargetCollide() {
         val program = builder.program
         val dtm = program.dataTypeManager
 

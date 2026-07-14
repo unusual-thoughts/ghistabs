@@ -1,4 +1,4 @@
-package ghistabs.integration
+package ghistabs.importer
 
 import ghidra.program.database.ProgramBuilder
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
@@ -52,7 +52,7 @@ class ImporterIdempotenceIntegrationTest : AbstractGhidraHeadlessIntegrationTest
      * - Assert counts are identical: same types, same symbols, no duplicates
      */
     @Test
-    fun testSecondRunProducesSameParseResults() {
+    fun secondRunProducesSameParseResults() {
         val program = builder.program
 
         // First run: parse and materialize
@@ -95,7 +95,7 @@ class ImporterIdempotenceIntegrationTest : AbstractGhidraHeadlessIntegrationTest
      * - Assert program state is stable across runs
      */
     @Test
-    fun testRepeatedRunsDoNotThrow() {
+    fun repeatedRunsDoNotThrow() {
         val program = builder.program
 
         // Run importer multiple times
@@ -134,7 +134,7 @@ class ImporterIdempotenceIntegrationTest : AbstractGhidraHeadlessIntegrationTest
      * is idempotent by structure. Once the harness is fixed, this test will run.
      */
     @Test
-    fun testResolverCountersIdempotent() {
+    fun resolverCountersIdempotent() {
         val program = builder.program
 
         // First run: parse and materialize

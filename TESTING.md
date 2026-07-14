@@ -1,0 +1,65 @@
+# Testing
+
+Three test tiers, split by JUnit tag. Pick the narrowest one for the change you made.
+
+| Task                        | What runs                                                                                            | Speed    | When                                                           |
+| --------------------------- | ---------------------------------------------------------------------------------------------------- | -------- | -------------------------------------------------------------- |
+| `./gradlew test`            | Unit tests — pure logic, synthetic inputs (no Ghidra headless boot). Excludes `integration`/`probe`. | seconds  | every change                                                   |
+| `./gradlew integrationTest` | `@Tag("integration")` — real-fixture assertion suite + synthetic-program behavioural tests.          | ~minutes | before pushing; after touching the import/materialize pipeline |
+| `./gradlew probeDump`       | `@Tag("probe")` — diagnostic generators (no pass/fail). Writes dumps under `build/test-output/`.     | ~minutes | on demand, when investigating                                  |
+
+All three print per-test PASS/FAIL/SKIP and a final summary line to the console of the same
+command (no XML/HTML spelunking), and archive their report to a per-run timestamped dir
+(`build/reports/tests/<task>/<stamp>/index.html`) so a later run never clobbers an earlier one.
+`integrationTest`/`probeDump` always re-run (they never report `UP-TO-DATE`).
+
+## Flags
+
+- **`-Pfixture=<exact filename>`** — narrow every parameterised suite to one binary *at the source*
+  (via `IntegrationFixtures`), so only that binary is imported. The name is the exact filename,
+  **extension included**: `xapasmcsr.exe`, `xmltest`, `appquery.exe`, `box2d_tests`, `packfile.exe`,
+  `unpackfile.exe` (+ the extended gcc-4.2.1/3.4.5 corpus). A name not in a suite's list errors loudly.
+  ```
+  ./gradlew integrationTest -Pfixture=xapasmcsr.exe
+  ```
+- **`-PregenerateBaselines=true`** — rewrite the baseline JSONs from observed counters instead of
+  asserting against them (`StabsImportRegressionTest.countersWithinBaseline`). Review the diff.
+
+`ktlint` runs separately: `./gradlew ktlintFormat` (autofix) / `ktlintCheck` (verify). Run before committing.
+
+## Fixtures & baselines
+
+- Binaries live in `src/test/resources/binaries/` — hand-placed, **gitignored** (EULA-restricted).
+  A missing fixture makes the test *skip*, not fail.
+- Baselines live in `src/test/resources/baselines/` (tracked). Generated dumps go to
+  `build/test-output/` so `./gradlew clean` regenerates them.
+
+## Where the tests live
+
+**Every test — unit, integration, or probe — lives in the package of the code it tests**, not in a
+dedicated folder. The `@Tag` (`integration`/`probe`, or none for unit), not the location, is what
+decides which task runs it. So a class's unit test, integration test, and probe all sit together next
+to the SUT — e.g. `ghistabs.importer` holds `DemanglerReplaceCoreTest` (unit) and
+`DemanglerReplaceIntegrationTest` (integration) side by side.
+
+Run **`./gradlew listTests`** to see every test class grouped by tag, with its package, file, and test
+count — the way to find where a test lives.
+
+- **`StabsImportRegressionTest`** (`ghistabs`) — the core suite. Runs the full import over each fixture
+  in both analyzer modes (`CONCURRENT`/`AFTER`) and asserts the materialised output + baseline counters.
+  Most fixture-specific assertions live here.
+- **Synthetic behavioural** (fast, build a tiny `ProgramBuilder` program, no fixture): the
+  `*IntegrationTest` classes under `ghistabs.importer` / `ghistabs.materialize` / `ghistabs` +
+  `RttiStructsDedupIntegrationTest` (`materialize.itanium`).
+- **Probes** (`@Tag("probe")`, generators only, run via `probeDump`): `DegradationDumpProbe` (`ghistabs`),
+  `SourceSkeletonProbe` (`render`), `StringTypeProbe` / `TypedefShorteningProbe` (`materialize`).
+
+`IntegrationFixtures` (`ghistabs`) is the single source of the fixture corpus and the `-Pfixture`
+narrowing — parameterised suites draw their list from it (`select(...)` or `@MethodSource`).
+
+## Adding a test
+
+- A fixture-wide invariant about imported output → a method on `StabsImportRegressionTest` (it already
+  imports every fixture; gate to a fixture subset with `assumeTrue(binaryName in IntegrationFixtures.CORE)`).
+- Logic testable without a real binary → a `test` (unit) test, or a synthetic behavioural class.
+- A diagnostic dump with no assertion → tag it `@Tag("probe")`, not `integration`.

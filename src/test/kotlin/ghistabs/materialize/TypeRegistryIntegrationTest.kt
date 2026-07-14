@@ -1,4 +1,4 @@
-package ghistabs.integration
+package ghistabs.materialize
 
 import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.data.TypeDef
@@ -58,7 +58,7 @@ class TypeRegistryIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
      * - Assert that importer completes without exceptions (dedup handled internally)
      */
     @Test
-    fun testCrossUDedup() {
+    fun crossUDedup() {
         val program = builder.program
 
         // Create synthetic records with identical structs from different CUs
@@ -106,7 +106,7 @@ class TypeRegistryIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
      * - Assert importer completes without losing either type
      */
     @Test
-    fun testConflictNaming() {
+    fun conflictNaming() {
         val program = builder.program
 
         // Create records with conflicting struct names
@@ -150,7 +150,7 @@ class TypeRegistryIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
      * - Assert types are materialized and assigned to correct categories
      */
     @Test
-    fun testAttribution() {
+    fun attribution() {
         val program = builder.program
 
         // Create records with structs
@@ -184,7 +184,7 @@ class TypeRegistryIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
      * - Assert types are correctly materialized
      */
     @Test
-    fun testSelfPointerCycle() {
+    fun selfPointerCycle() {
         val program = builder.program
 
         // Create records with self-referential struct
@@ -222,7 +222,7 @@ class TypeRegistryIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
      * - Assert both types are correctly materialized
      */
     @Test
-    fun testMutualCycle() {
+    fun mutualCycle() {
         val program = builder.program
 
         // Create records with mutually referential structs
@@ -262,7 +262,7 @@ class TypeRegistryIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
 
     /** Named primitive typedef: `unsigned int:t(0,4)=r(0,4);0;4294967295;` → /unsignedint TypeDef. */
     @Test
-    fun testNamedPrimitiveTypedef() {
+    fun namedPrimitiveTypedef() {
         val program = builder.program
         val records = listOf(
             StabRecord(0, StabType.N_SO, 0, 0, 0, "main.cpp"),
