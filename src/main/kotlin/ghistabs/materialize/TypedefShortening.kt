@@ -45,6 +45,18 @@ class TemplateNameShortener(aliases: Map<String, String>) {
     fun shortenedOrNull(name: String): String? = shorten(name).takeIf { it.length < canonTemplateName(name).length }
 }
 
+/**
+ * Ghidra base type — a built-in (`int`, `longlong`, `char *`) or an undefined placeholder. Never an
+ * alias target: a `typedef long long fpos_t` must not rename `longlong` to `fpos_t`, and such short
+ * names corrupt siblings by substring (`longlong` in `longlongint`, `undefined` in `undefined4`).
+ */
+fun DataType.isGhidraBaseType(): Boolean = this is BuiltInDataType || Undefined.isUndefined(this)
+
+/** Typedef simple name → aliased type name, over [types], excluding typedefs onto a base type. */
+fun typedefAliases(types: Iterable<DataType>): Map<String, String> = types.filterIsInstance<TypeDef>()
+    .filter { !it.dataType.isGhidraBaseType() }
+    .associate { it.name to it.dataType.name }
+
 /** Datatype renames [TemplateNameShortener] would make over [typeNames] — one per name whose canonical text shrinks. */
 fun typedefShorteningRenames(aliases: Map<String, String>, typeNames: Set<String>): List<TypedefRename> =
     TemplateNameShortener(aliases).let { s ->
@@ -58,7 +70,7 @@ fun typedefShorteningRenames(aliases: Map<String, String>, typeNames: Set<String
  * [typedefShorteningRenames]; this reads the aliases and names out of the DTM and applies them.
  */
 class TypedefShortener(private val dtm: DataTypeManager, sink: DiagnosticSink) : DiagnosticSink by sink {
-    private fun allTypes(): List<DataType> = dtm.allDataTypes.asSequence().toList()
+    private val allTypes by lazy { dtm.allDataTypes.asSequence().toList() }
 
     /**
      * A typedef the stabs importer created, as opposed to one Ghidra's PE loader applied from a
@@ -69,36 +81,27 @@ class TypedefShortener(private val dtm: DataTypeManager, sink: DiagnosticSink) :
     private fun DataType.isStabsOrigin(): Boolean =
         sourceArchive == null || sourceArchive.sourceArchiveID == dtm.localSourceArchive.sourceArchiveID
 
-    /**
-     * Ghidra base type — a built-in (`int`, `longlong`, `char *`, …) or an undefined placeholder
-     * (`undefined`, `undefined4`). Never shorten these: a stabs `typedef long long fpos_t` must not
-     * rename Ghidra's `longlong` to `fpos_t`, and their short names also corrupt siblings by
-     * substring (`longlong` inside `longlongint`, `undefined` inside `undefined4`).
-     */
-    private fun DataType.isGhidraBaseType(): Boolean = this is BuiltInDataType || Undefined.isUndefined(this)
-
     /** Typedef simple name → aliased type name, restricted to stabs typedefs that don't alias a base type. */
-    private fun aliases(types: List<DataType>): Map<String, String> = types.asSequence()
-        .filterIsInstance<TypeDef>()
-        .filter { it.isStabsOrigin() && !it.dataType.isGhidraBaseType() }
-        .associate { it.name to it.dataType.name }
+    private fun aliases(types: List<DataType>): Map<String, String> =
+        typedefAliases(types.filter { it.isStabsOrigin() })
 
-    fun renames(): List<TypedefRename> {
-        val types = allTypes()
-        return typedefShorteningRenames(aliases(types), types.mapTo(mutableSetOf()) { it.name })
-    }
+    fun renames(): List<TypedefRename> = typedefShorteningRenames(
+        aliases(allTypes),
+        allTypes.mapTo(mutableSetOf()) {
+            it.name
+        },
+    )
 
     fun apply(): Int {
-        val types = allTypes()
-        val shortener = TemplateNameShortener(aliases(types))
+        val shortener = TemplateNameShortener(aliases(allTypes))
         if (shortener.isEmpty) return 0
-        val byName = types.groupBy { it.name }
+        val byName = allTypes.groupBy { it.name }
         val typeRenamed = byName.keys.sumOf { name ->
             shortener.shortenedOrNull(name)?.let { short -> byName.getValue(name).count { rename(it, short) } } ?: 0
         }
         // Base-class subobject fields (`_base_<Name>`/`_vbase_<Name>`) embed the base type's name at
         // build time, so renaming the base datatype never reaches them — rewrite those field names too.
-        val fieldRenamed = types.filterIsInstance<Composite>()
+        val fieldRenamed = allTypes.filterIsInstance<Composite>()
             .sumOf { c -> c.components.count { it.shortenBaseField(shortener) } }
         log("typedef-shorten", "renamed $typeRenamed datatypes, $fieldRenamed base fields")
         return typeRenamed + fieldRenamed
