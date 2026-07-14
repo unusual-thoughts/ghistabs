@@ -1,4 +1,4 @@
-package ghistabs.integration
+package ghistabs.importer
 
 import ghidra.program.database.ProgramBuilder
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
@@ -56,7 +56,7 @@ class SymbolApplyIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
      *   with minimal synthetic stabs, globalsApplied may be 0 but that's acceptable
      */
     @Test
-    fun testGlobalSymbolHarvesting() {
+    fun globalSymbolHarvesting() {
         val program = builder.program
 
         // Create synthetic stab records with global variables
@@ -90,7 +90,7 @@ class SymbolApplyIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
      * - Assert that valid records are still processed
      */
     @Test
-    fun testContinuesOnParseError() {
+    fun continuesOnParseError() {
         val program = builder.program
 
         // Create synthetic records with a malformed type declaration
@@ -146,7 +146,7 @@ class SymbolApplyIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
      * has no demangler, so the name falls back to the mangled form (real fixtures do demangle).
      */
     @Test
-    fun testConstantAppliesEquateAndEnum() {
+    fun constantAppliesEquateAndEnum() {
         val program = builder.program
         val records = listOf(
             StabRecord(0, StabType.N_SO, 0, 0, 0, "test.cpp"),

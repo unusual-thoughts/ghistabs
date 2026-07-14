@@ -1,4 +1,4 @@
-package ghistabs.integration
+package ghistabs.baseline
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
