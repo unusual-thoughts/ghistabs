@@ -54,22 +54,54 @@ class Virtuals(
     }
 }
 
+/** Upper bound on vbase/vcall-offset words scanned before giving up on locating the rtti header. */
+private const val MAX_VTABLE_PREFIX_WORDS = 64
+
+/** Pointer-sized word at [a] from initialised memory (endianness-aware), or null if unmapped. */
+private fun Program.readWord(a: Address): Long? = runCatching {
+    if (defaultPointerSize == 8) memory.getLong(a) else memory.getInt(a).toLong() and 0xFFFFFFFFL
+}.getOrNull()
+
 /**
- * Lay the Itanium vtable at [ztv] and return its address point. The `offset_to_top` + `rtti`
- * header words go at [ztv] (which `_ZTV<class>` already labels); the [vftable] function-pointer
- * array + a "vftable" symbol go at the address point (`ztv + 2*ptrSize`) — the value a `{vfptr}`
- * holds — so a constructor's `this->vfptr = &<Class>::vftable` resolves to a symbol, not a raw
- * address. The rtti pointee stays an untyped `void*` until backlog §24 wires it.
+ * Lay the Itanium vtable at [ztv] and return its address point. The header is
+ * `[vbase/vcall offsets…] offset_to_top rtti` and the [vftable] function-pointer array + a
+ * "vftable" symbol go at the address point — the value a `{vfptr}` holds — so a constructor's
+ * `this->vfptr = &<Class>::vftable` resolves to a symbol, not a raw address.
+ *
+ * The address point is *not* a fixed `ztv + 2*ptrSize`: a class with a virtual base anywhere in
+ * its hierarchy (anything derived from an iostream — `basic_istream` virtually inherits
+ * `basic_ios`) has vbase/vcall-offset words before offset_to_top, so `_ZTV<class>` points that
+ * many words early. Locate the rtti header word (the slot holding &`_ZTI<class>`, given as
+ * [rttiAddr]); offset_to_top is the word before it, the address point the word after. When
+ * [rttiAddr] is null (templates, missing rtti) or not found, fall back to the canonical 2*ptr
+ * shape. The rtti pointee stays an untyped `void*` until backlog §24 wires it.
  */
-fun Program.layVtable(ztv: Address, vftable: Structure, className: String, ns: Namespace): Address {
-    val addressPoint = ztv.add(Itanium.vtablePrefixBytes(defaultPointerSize))
+fun Program.layVtable(
+    ztv: Address,
+    vftable: Structure,
+    className: String,
+    ns: Namespace,
+    rttiAddr: Address?,
+): Address {
+    val ptr = defaultPointerSize.toLong()
+    val rttiSlot = rttiAddr?.let { target ->
+        generateSequence(ztv) { it.add(ptr) }
+            .take(MAX_VTABLE_PREFIX_WORDS)
+            .firstOrNull { readWord(it) == target.offset }
+    }
+    val topSlot = rttiSlot?.subtract(ptr) ?: ztv
+    val rttiHeader = rttiSlot ?: ztv.add(ptr)
+    val addressPoint = rttiSlot?.add(ptr) ?: ztv.add(Itanium.vtablePrefixBytes(defaultPointerSize))
 
     listing.clearCodeUnits(ztv, addressPoint.add(vftable.length.toLong() - 1), false)
-    listing.createData(ztv, Itanium.offsetToTopType(defaultPointerSize))
-    listing.setComment(ztv, CommentType.EOL, "${Itanium.OFFSET_TO_TOP} (to top of complete object)")
-    val rttiAddr = ztv.add(defaultPointerSize.toLong())
-    listing.createData(rttiAddr, PointerDataType(dataTypeManager))
-    listing.setComment(rttiAddr, CommentType.EOL, "${Itanium.RTTI}: ${Itanium.zti(className)} typeinfo")
+    generateSequence(ztv) { it.add(ptr) }.takeWhile { it < topSlot }.forEach {
+        listing.createData(it, Itanium.offsetToTopType(defaultPointerSize))
+        listing.setComment(it, CommentType.EOL, "vbase/vcall offset")
+    }
+    listing.createData(topSlot, Itanium.offsetToTopType(defaultPointerSize))
+    listing.setComment(topSlot, CommentType.EOL, "${Itanium.OFFSET_TO_TOP} (to top of complete object)")
+    listing.createData(rttiHeader, PointerDataType(dataTypeManager))
+    listing.setComment(rttiHeader, CommentType.EOL, "${Itanium.RTTI}: ${Itanium.zti(className)} typeinfo")
     listing.createData(addressPoint, vftable)
     symbolTable.createLabel(addressPoint, Itanium.VFTABLE, ns, SourceType.IMPORTED)
     return addressPoint
