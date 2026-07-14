@@ -4,6 +4,7 @@ import ghidra.program.model.address.Address
 import ghidra.program.model.data.ArrayDataType
 import ghidra.program.model.data.CharDataType
 import ghidra.program.model.data.DataType
+import ghidra.program.model.data.DataTypeConflictHandler
 import ghidra.program.model.data.DataTypeManager
 import ghidra.program.model.data.LongDataType
 import ghidra.program.model.data.LongLongDataType
@@ -109,12 +110,21 @@ class RttiStructs(private val dtm: DataTypeManager) {
         else -> null
     }
 
+    // Resolve each layout into the DTM once and hand out the resolved, DTM-resident type. gcc 3.4.5
+    // emits every _ZTI typeinfo global as a per-CU COMDAT (e.g. _ZTISt9exception in 42 CUs), so the
+    // same layout is applied to that address dozens of times. Handing createData the unresolved
+    // template each time re-resolves it, and an auto-named PointerTypedef field never compares
+    // isEquivalent to its own resolved form, so DEFAULT_HANDLER forks `.conflict` on every reapply.
+    // getDataType-first also makes re-imports idempotent. Mirrors DataTypeManager.stabRecordDataType.
+    private fun StructureDataType.intoDtm(): DataType =
+        dtm.getDataType(categoryPath, name) ?: dtm.resolve(this, DataTypeConflictHandler.KEEP_HANDLER)
+
     val classTypeInfoStructure by lazy {
         StructureDataType(Itanium.classDataTypesRoot, "ClassTypeInfoStructure", 0, dtm).apply {
             add(PointerTypedef(null, PointerDataType.dataType, -1, dtm, componentOffset), "classTypeinfoPtr", null)
             add(dtm.getPointer(CharDataType()), "typeinfoName", null)
             setPackingEnabled(true)
-        }
+        }.intoDtm()
     }
 
     val siClassTypeInfoStructure by lazy {
@@ -123,7 +133,7 @@ class RttiStructs(private val dtm: DataTypeManager) {
             add(dtm.getPointer(CharDataType()), "typeinfoName", null)
             add(dtm.getPointer(classTypeInfoStructure), "baseClassTypeInfoPtr", null)
             setPackingEnabled(true)
-        }
+        }.intoDtm()
     }
 
     val baseClassTypeInfoStructure by lazy {
@@ -148,7 +158,7 @@ class RttiStructs(private val dtm: DataTypeManager) {
             }
 
             setPackingEnabled(true)
-        }
+        }.intoDtm()
     }
 
     fun vmiClassTypeInfoStructure(numBaseClasses: Int) =
@@ -163,5 +173,5 @@ class RttiStructs(private val dtm: DataTypeManager) {
                 null,
             )
             setPackingEnabled(true)
-        }
+        }.intoDtm()
 }
