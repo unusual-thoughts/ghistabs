@@ -45,6 +45,29 @@ class TypeRegistry(
     /** Id-less DataType registrations (typedefs, vftable/vtable composites, FunctionDefinitions). */
     private val extrasByName = LinkedHashMap<String, LinkedHashSet<DataType>>()
 
+    /** Every DataType this importer materialised or registered. */
+    internal val allCreatedDataTypes by lazy {
+        LinkedHashSet<DataType>().apply {
+            addAll(byId.values)
+            for (bucket in extrasByName.values) addAll(bucket)
+        }
+    }
+
+    /** Demangler-stub name resolution, built lazily once materialisation has populated the registry. */
+    private val demanglerIndex by lazy {
+        DemanglerTypeIndex(allCreatedDataTypes, this) { simpleName ->
+            (extrasByName[simpleName].orEmpty() + byId.values.filter { it.name == simpleName }).distinct()
+        }
+    }
+
+    /**
+     * Find a DataType by simple name across [allCreatedDataTypes]. Used by DemanglerReplacer
+     * to match `/Demangler/std/string` stubs to our `/std/string`. Disambiguates by
+     * [preferredCategory] when multiple match.
+     */
+    fun findByName(simpleName: String, preferredCategory: CategoryPath? = null): DataType? =
+        demanglerIndex.findByName(simpleName, preferredCategory)
+
     /**
      * Compromised DataTypes — anonymous (no name in stab), empty-placeholder (body never
      * materialised), or all-Undefined (body ran but bound nothing). Lazily computed from
@@ -124,14 +147,6 @@ class TypeRegistry(
 
     @PublishedApi
     internal fun dtmLookup(category: CategoryPath, name: String): DataType? = dtm.getDataType(category, name)
-
-    /** Every DataType this importer materialised or registered. */
-    fun allCreatedDataTypes(): Set<DataType> {
-        val result = LinkedHashSet<DataType>()
-        result.addAll(byId.values)
-        for (bucket in extrasByName.values) result.addAll(bucket)
-        return result
-    }
 
     private fun recordXRefStubAt(useSite: String, at: String, dt: DataType) {
         if (dt in xrefStubs) {
@@ -863,38 +878,6 @@ class TypeRegistry(
                     Undefined4DataType.dataType
                 }
         }
-
-    /**
-     * Find a DataType by simple name across [allCreatedDataTypes]. Used by DemanglerReplacer
-     * to match `/Demangler/std/string` stubs to our `/std/string`. Disambiguates by
-     * [preferredCategory] when multiple match.
-     */
-    fun findByName(simpleName: String, preferredCategory: CategoryPath? = null): DataType? {
-        val fromExtras = extrasByName[simpleName].orEmpty()
-        // byId is GlobalTypeId-keyed, not name-indexed — linear scan for residual
-        // aliases set via byId.putIfAbsent that didn't go through register(dt).
-        val fromById = byId.values.filter { it.name == simpleName }
-        val matches = (fromExtras + fromById).distinct()
-        if (matches.isEmpty()) return null
-        if (matches.size == 1) return matches.single()
-        if (preferredCategory != null) {
-            matches.firstOrNull { it.categoryPath == preferredCategory }?.let { return it }
-        }
-        // A typedef and its own resolved target both matching is not real ambiguity: typedef
-        // shortening (OPT_SHORTEN_TYPEDEFS) renames the target struct onto the typedef's name
-        // (`basic_string<…>` → `string`), so both a `string` typedef and a `string` struct — the
-        // same type in two guises — end up named "string". Drop the target(s) a matching typedef
-        // points at and keep the typedef, so the demangler stub is still replaceable (render-backlog §14).
-        val typedefTargets = matches.filterIsInstance<TypeDef>().mapTo(mutableSetOf()) { it.baseDataType.pathName }
-        val collapsed = matches.filterNot { it.pathName in typedefTargets }
-        if (collapsed.size == 1) return collapsed.single()
-        log(
-            "demangler-ambiguous",
-            "Multiple matches for '$simpleName' (preferred=$preferredCategory): " +
-                matches.joinToString { "${it.pathName}(${it::class.simpleName})" },
-        )
-        return null
-    }
 }
 
 /**
