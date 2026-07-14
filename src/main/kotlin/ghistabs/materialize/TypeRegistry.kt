@@ -1,5 +1,6 @@
 package ghistabs.materialize
 
+import ghidra.program.database.data.DataTypeUtilities
 import ghidra.program.model.data.*
 import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.DiagnosticSink
@@ -32,6 +33,11 @@ class TypeRegistry(
 ) : DiagnosticSink by sink {
     private val byId = mutableMapOf<GlobalTypeId, DataType>()
     private val placeholders = mutableMapOf<GlobalTypeId, DataType>()
+
+    // Baseline the DTM's `.conflict` census at construction (before any of our passes touch the DTM;
+    // harvest doesn't). Ghidra's own analysis may have forked some, so the end-of-import delta
+    // ([reportConflictDelta]) attributes only the forks the stabs import introduced.
+    private val conflictsBefore = dtm.conflictCount()
 
     /** XRef stubs that fell through to placeholders. Use sites are flagged via [recordXRefStubAt]. */
     private val xrefStubs = mutableSetOf<DataType>()
@@ -177,6 +183,24 @@ class TypeRegistry(
                 },
             )
         }
+    }
+
+    /** DTM-wide `.conflict` census (name-suffixed forks: `.conflict`, `.conflict1`, …). */
+    private fun DataTypeManager.conflictCount(): Long =
+        allDataTypes.asSequence().count { DataTypeUtilities.isConflictDataType(it) }.toLong()
+
+    /**
+     * A `.conflict` fork means a type was applied whose layout didn't compare equal to an existing
+     * type of the same name — usually re-resolving an unresolved template ([RttiStructs] per-CU-COMDAT
+     * typeinfo was the offender) rather than a genuine ODR clash. Report how many the import added
+     * over the construction-time baseline; a nonzero delta is a WARN.
+     */
+    fun reportConflictDelta() {
+        val after = dtm.conflictCount()
+        debug("dtm-conflicts-pre", count = conflictsBefore)
+        debug("dtm-conflicts-post", count = after)
+        val added = after - conflictsBefore
+        if (added > 0) warn("dtm-conflicts-created", "import forked $added .conflict data types", count = added)
     }
 
     /** Every component is in the `UndefinedN` family — distinguishes "body ran but bound nothing" from "body never ran". */
