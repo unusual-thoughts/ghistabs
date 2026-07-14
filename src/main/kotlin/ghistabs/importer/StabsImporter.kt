@@ -61,6 +61,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
 
         ctx.analyzeDataCoverage()
         typeRegistry.reportSurvivingPlaceholders()
+        typeRegistry.reportConflictDelta()
         ctx.diagnostics.writeSummary(ctx.terminal)
         ctx.typeRegistry = typeRegistry
         ctx.typeResolver = typeResolver

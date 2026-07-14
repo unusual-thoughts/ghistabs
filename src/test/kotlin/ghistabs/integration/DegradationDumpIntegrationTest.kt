@@ -41,6 +41,8 @@ class DegradationDumpIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         ],
     )
     fun dumpDegradations(binaryName: String) {
+        val filter = System.getProperty("fixtureFilter").orEmpty()
+        assumeTrue(filter.isEmpty() || filter == binaryName, "fixture filtered out by -Pfixture")
         val fixture = File("src/test/resources/binaries/$binaryName")
         assumeTrue(fixture.exists(), "fixture absent")
 
