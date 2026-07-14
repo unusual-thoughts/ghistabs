@@ -1,4 +1,4 @@
-package ghistabs.integration
+package ghistabs.render
 
 import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.app.util.importer.MessageLog
@@ -18,7 +18,7 @@ import ghistabs.runTransaction
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.MethodSource
 import java.io.File
 
 /**
@@ -39,24 +39,21 @@ import java.io.File
  *    that would collide with the next function's start (in which case
  *    the close moves up onto the last-statement line).
  *
- * Probe semantics: writes to `build/test-output/skeletons/<fixture>/`
- * and only asserts that at least one skeleton was produced.
+ * Probe semantics: writes to `build/test-output/skeletons/<fixture>/` and only asserts that at
+ * least one skeleton was produced. A generator — tagged `probe`, excluded from the default
+ * `integrationTest`; run via `probeDump`.
  */
-@Tag("integration")
-class SourceSkeletonIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
+@Tag("probe")
+class SourceSkeletonProbe : AbstractGhidraHeadlessIntegrationTest() {
     @ParameterizedTest
-    @ValueSource(strings = ["bouniafbouniaf.exe", "xmltest", "bouniaf.exe", "box2d_tests"])
+    @MethodSource("ghistabs.IntegrationFixtures#skeleton")
     fun writeSkeletons(binaryName: String) = runPipeline(binaryName, decompile = false)
 
     @ParameterizedTest
-    @ValueSource(
-        strings = ["bouniafbouniaf.exe", "xmltest", "bouniaf.exe", "box2d_tests", "bouniaf.exe", "unbouniaf.exe"],
-    )
+    @MethodSource("ghistabs.IntegrationFixtures#core")
     fun writeDecompilations(binaryName: String) = runPipeline(binaryName, decompile = true)
 
     private fun runPipeline(binaryName: String, decompile: Boolean) {
-        val filter = System.getProperty("fixtureFilter").orEmpty()
-        assumeTrue(filter.isEmpty() || filter == binaryName, "fixture filtered out by -Pfixture")
         val fixture = File("src/test/resources/binaries/$binaryName")
         assumeTrue(fixture.exists(), "fixture absent")
         val outDirName = if (decompile) "decomps" else "skeletons"

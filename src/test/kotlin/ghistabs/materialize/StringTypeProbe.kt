@@ -1,4 +1,4 @@
-package ghistabs.integration
+package ghistabs.materialize
 
 import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.app.util.importer.MessageLog
@@ -31,8 +31,8 @@ import java.io.File
  *    transitively and flag any Undefined* slot — the "this string type is
  *    fully resolved" check.
  */
-@Tag("integration")
-class StringTypeProbeIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
+@Tag("probe")
+class StringTypeProbe : AbstractGhidraHeadlessIntegrationTest() {
     @Test
     fun probebouniafbouniaf() {
         val fixture = File("src/test/resources/binaries/bouniafbouniaf.exe")

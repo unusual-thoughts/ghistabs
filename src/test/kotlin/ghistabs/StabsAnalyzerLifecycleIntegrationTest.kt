@@ -1,4 +1,4 @@
-package ghistabs.integration
+package ghistabs
 
 import ghidra.program.database.ProgramBuilder
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
@@ -50,7 +50,7 @@ class StabsAnalyzerLifecycleIntegrationTest : AbstractGhidraHeadlessIntegrationT
      * - Verify the state persists after the transaction
      */
     @Test
-    fun testFirstRunSetsFlag() {
+    fun firstRunSetsFlag() {
         val program = builder.program
 
         // Initially, done-flag should be false
@@ -81,7 +81,7 @@ class StabsAnalyzerLifecycleIntegrationTest : AbstractGhidraHeadlessIntegrationT
      * - Verify state persists after the transaction
      */
     @Test
-    fun testReimportAfterFlagClear() {
+    fun reimportAfterFlagClear() {
         val program = builder.program
 
         // First, set the flag to true

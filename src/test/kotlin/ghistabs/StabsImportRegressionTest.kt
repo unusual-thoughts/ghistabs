@@ -1,9 +1,10 @@
-package ghistabs.integration
+package ghistabs
 
 import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.app.util.importer.MessageLog
 import ghidra.app.util.importer.ProgramLoader
 import ghidra.app.util.opinion.LoadResults
+import ghidra.program.model.address.Address
 import ghidra.program.model.data.*
 import ghidra.program.model.data.Array
 import ghidra.program.model.data.Enum
@@ -12,19 +13,21 @@ import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghistabs.StabsAnalyzer
 import ghistabs.StabsAnalyzer.Companion.import
+import ghistabs.baseline.BaselineLoader
+import ghistabs.baseline.BaselineWriter
 import ghistabs.diagnose.CapturingSink
 import ghistabs.diagnose.defaultContext
+import ghistabs.diagnose.dumpJson
+import ghistabs.diagnose.writeRegistryDump
 import ghistabs.harvest.Harvester
-import ghistabs.harvest.foldSourcePaths
 import ghistabs.importer.ImportContext
 import ghistabs.importer.StaticContexts
+import ghistabs.importer.stabAddress
 import ghistabs.materialize.itanium.Itanium
 import ghistabs.parse.*
 import ghistabs.runTransaction
 import kotlinx.serialization.ExperimentalSerializationApi
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.encodeToStream
-import kotlinx.serialization.modules.SerializersModule
 import org.junit.jupiter.api.*
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.parallel.Execution
@@ -71,15 +74,14 @@ enum class Mode { CONCURRENT, AFTER }
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @Execution(ExecutionMode.CONCURRENT)
 @Tag("integration")
-class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
+class StabsImportRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
     companion object {
-        val BINARIES =
-            listOf("bouniafbouniaf.exe", "xmltest", "bouniaf.exe", "box2d_tests", "bouniaf.exe", "unbouniaf.exe")
-
+        // -Pfixture=<exact filename> narrows the fixture set at the source (via IntegrationFixtures),
+        // so a single-fixture run imports+analyses one binary × both modes instead of the whole corpus.
         @JvmStatic
-        fun testParameters() = BINARIES.flatMap { binary ->
-            Mode.entries.map { mode -> Arguments.of(binary, mode) }
-        }.stream()
+        fun testParameters(): java.util.stream.Stream<Arguments> = IntegrationFixtures.select(IntegrationFixtures.ALL)
+            .flatMap { binary -> Mode.entries.map { mode -> Arguments.of(binary, mode) } }
+            .stream()
     }
 
     // Both fields injected per parameterized invocation before @BeforeParameterizedClassInvocation.
@@ -105,17 +107,6 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
     private lateinit var loadResults: LoadResults<Program>
     private lateinit var context: ImportContext<CapturingSink>
     private val program get() = context.program
-
-    @OptIn(ExperimentalSerializationApi::class)
-    private val json by lazy {
-        Json {
-            serializersModule = SerializersModule {
-                contextual(IdInterface::class, ToStringSerializer())
-                contextual(CategoryPath::class, ToStringSerializer())
-                prettyPrint = true
-            }
-        }
-    }
 
     @BeforeParameterizedClassInvocation
     fun setUp() {
@@ -191,82 +182,12 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
             // is appended for parity with Ghidra's own view, even though it
             // truncates at ~500 lines.
             logFile.writeText(context.terminal.dedupedOutput() + "\n--- MessageLog ---\n" + log.toString())
-            writeRegistryDump()
+            val registry = context.typeRegistry
+            val resolver = context.typeResolver
+            if (registry != null && resolver != null) writeRegistryDump(registry, resolver, registryDumpFile)
         } catch (e: Exception) {
             assumeTrue(false, "Failed to load real binary via ProgramLoader: ${e.message}")
         }
-    }
-
-    /**
-     * Snapshot what the importer actually produced: compromised DataTypes (anonymous /
-     * empty-placeholder / all-Undefined / xref-stub), canonical groups, divergent collisions.
-     * Lets us spot misattributions visually without relying on individual degradation events.
-     */
-    @OptIn(ExperimentalSerializationApi::class)
-    private fun writeRegistryDump() {
-        val registry = context.typeRegistry ?: return
-        val resolver = context.typeResolver ?: return
-        registryDumpFile.parentFile.mkdirs()
-        val compromised = registry.compromisedTypes().mapValues { (_, dts) ->
-            dts.sortedBy { it.pathName }.map { CompromisedEntry(it.pathName, it::class.simpleName ?: "?", it.length) }
-        }
-        val harvest = resolver.harvest
-        val canonicalGroups = resolver.byCanonicalKey.entries
-            .sortedBy { it.key.toString() }
-            .map { (key, g) ->
-                CanonicalGroupEntry(
-                    key.toString(),
-                    g.ast.id.toString(),
-                    g.ast.ghidraName,
-                    g.members.size,
-                    g.members.count { harvest.typeAsts[it]?.name.isNullOrEmpty() },
-                    g.distinct,
-                )
-            }
-        // §20 diagnosis: content-equivalent classes still spanning >1 group (a merge that didn't fire),
-        // and DataTypes sharing a simple name (the `.conflict` source in the decomp).
-        // Group by content hash (equality only — the raw value is a JVM-run-nondeterministic
-        // `Objects.hash` of enum members, so it's used to bucket but never stored/sorted on).
-        val hashCollisions = resolver.byCanonicalKey.values
-            .groupBy { resolver.contentHash(it.ast.body) }
-            .filterValues { it.size > 1 }
-            .map { (_, gs) ->
-                HashClassEntry(
-                    gs.map {
-                        it.ast.ghidraName
-                    }.sorted(),
-                    gs.map { it.ast.ghidraName }.toSortedSet().toList(),
-                )
-            }
-            .sortedBy { it.distinctNames.joinToString() }
-        val duplicateNamed = registry.allCreatedDataTypes()
-            .groupBy { it.name.substringBefore(".conflict") }
-            .filterValues { it.size > 1 }
-            .mapValues { (_, dts) -> dts.map { it.pathName }.sorted() }
-            .toSortedMap()
-        val divergent = resolver.divergentCollisions.entries
-            .sortedBy { it.key.toString() }
-            .map { (id, byName) ->
-                DivergentEntry(id.toString(), byName.mapValues { (_, bodies) -> bodies.size })
-            }
-        val dump = RegistryDump(
-            summary = DumpSummary(
-                registeredDataTypes = registry.allCreatedDataTypes().size,
-                compromisedCounts = compromised.mapValues { it.value.size },
-                canonicalGroups = canonicalGroups.size,
-                divergentCollisions = divergent.size,
-            ),
-            compromised = compromised,
-            canonicalGroups = canonicalGroups,
-            divergentCollisions = divergent,
-            sourceFolds = foldSourcePaths(
-                harvest.lineEntries.keys + harvest.symbolsByCu.keys +
-                    harvest.typeAsts.values.flatMap { listOfNotNull(it.id.source.filename, it.declSourceFile) },
-            ).filter { it.key != it.value }.toSortedMap(),
-            contentHashCollisions = hashCollisions,
-            duplicateNamedTypes = duplicateNamed,
-        )
-        registryDumpFile.outputStream().use { json.encodeToStream(dump, it) }
     }
 
     private fun runAutoAnalysis(mgr: AutoAnalysisManager, monitor: TaskMonitor) {
@@ -524,6 +445,30 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
         Assertions.assertTrue(
             vftable != null && vftable.numComponents > 0,
             "CPackedSegList_vftable missing or empty — inherited-vtable class not annotated",
+        )
+    }
+
+    @Test
+    fun cSymLexStreamVtableAddressPointSkipsVbaseOffset() {
+        assumeTrue(binaryName == "bouniafbouniaf.exe", "Skipping: bouniaf specific to bouniafbouniaf.exe")
+        // bouniaf derives (via bouniaf → basic_ifstream) from basic_istream, which
+        // virtually inherits basic_ios, so _ZTV13bouniaf is preceded by a vbase-offset word:
+        //   [vbase_offset] [offset_to_top=0] [rtti] [address point → virtuals…]
+        // The address point is ztv+3*ptr, not the canonical ztv+2*ptr. layVtable must find the
+        // rtti header word and put the `vftable` symbol after it.
+        val ztv = program.symbolTable.getSymbols("__ZTV13bouniaf").firstOrNull()
+        assumeTrue(ztv != null, "Skipping: bouniaf vtable not resolved")
+        val ptr = program.defaultPointerSize.toLong()
+        val addressPoint = ztv!!.address.add(3L * ptr)
+        val wrongPoint = ztv.address.add(2L * ptr)
+        Assertions.assertTrue(
+            program.symbolTable.getSymbols(addressPoint).any { "vftable" in it.name },
+            "no vftable symbol at bouniaf address point $addressPoint (ztv+3*ptr); " +
+                "symbols there: ${program.symbolTable.getSymbols(addressPoint).map { it.name }}",
+        )
+        Assertions.assertFalse(
+            program.symbolTable.getSymbols(wrongPoint).any { "vftable" in it.name },
+            "vftable symbol mislaid on the rtti word at $wrongPoint (ztv+2*ptr) — vbase offset not skipped",
         )
     }
 
@@ -1073,7 +1018,7 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
     fun harvestTest() {
         val ctx = program.defaultContext()
         val stabs = StabReader.fromProgram(program)!!.readAll()
-        json.encodeToStream(stabs.records, recordsFile.outputStream())
+        dumpJson.encodeToStream(stabs.records, recordsFile.outputStream())
 
         val harvester = Harvester(ctx)
         // harvest writes via AddressResolver.recordFromStab → symbolTable.createLabel, so it
@@ -1083,7 +1028,7 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
             harvester.harvest(stabs.records)
         }
 
-        json.encodeToStream(harvest, harvestFile.outputStream())
+        dumpJson.encodeToStream(harvest, harvestFile.outputStream())
 
         val classStructs = harvest.typeAsts.values
             .mapNotNull { it.asStruct() }
@@ -1400,46 +1345,61 @@ class StabsAnalyzerTests : AbstractGhidraHeadlessIntegrationTest() {
         Assertions.assertEquals(236, csymFields["RecoverySet"]?.offset, "RecoverySet expected at +236")
         Assertions.assertEquals(40, csymFields["RecoverySet"]?.length, "RecoverySet expected to span 40 bytes")
     }
+
+    /**
+     * FillerByteAnalyzer is the only source of [AlignmentDataType] in the pipeline, so a nonzero
+     * count is exactly its hits. Scoped to [IntegrationFixtures.CORE] where it was validated.
+     * (Folded from the former FillerByteAnalyzerIntegrationTest — rides on setUp's autoanalysis.)
+     */
+    @Test
+    fun fillerBytesCollapsedToAlignment() {
+        assumeTrue(binaryName in IntegrationFixtures.CORE, "filler-byte check scoped to core fixtures")
+        val data = program.listing.getDefinedData(true)
+        var runs = 0
+        while (data.hasNext()) if (data.next().dataType is AlignmentDataType) runs++
+        Assertions.assertTrue(runs > 0, "FillerByteAnalyzer collapsed no padding in $binaryName")
+    }
+
+    /**
+     * The function-relative address heuristic ([stabAddress]): every `N_SLINE`/`N_LBRAC`/`N_RBRAC`
+     * record, resolved against its enclosing `N_FUN`, must land in executable memory. A value left
+     * un-rebased resolves to a tiny address in no code block. Not asserted against the *enclosing*
+     * function specifically — gcc clones ctors/dtors, so a stab function's line range legitimately
+     * spans sibling clones. Scoped to [IntegrationFixtures.CORE]. (Folded from the former
+     * FuncRelativeAddressIntegrationTest.)
+     */
+    @Test
+    fun funcRelativeAddressesLandInExecutableCode() {
+        assumeTrue(binaryName in IntegrationFixtures.CORE, "func-relative check scoped to core fixtures")
+        val resolver = program.defaultContext().resolver
+        val reader = StabReader.fromProgram(program)
+        assumeTrue(reader != null, "no .stab in $binaryName")
+
+        var funcStart: Address? = null
+        var checked = 0
+        val notCode = mutableListOf<String>()
+        for (rec in reader!!.physicalRecords()) {
+            when (rec.type) {
+                StabType.N_FUN ->
+                    funcStart = rec.name.ifEmpty { null }?.let { resolver.buildAddress(rec.value) }
+
+                StabType.N_SLINE, StabType.N_LBRAC, StabType.N_RBRAC -> {
+                    val fs = funcStart ?: continue
+                    val target = resolver.stabAddress(rec.value, fs)
+                    checked++
+                    if (program.memory.getBlock(target)?.isExecute != true) {
+                        notCode += "${rec.type} @${rec.index} value=0x${rec.value.toString(16)} → $target (from $fs)"
+                    }
+                }
+
+                else -> {}
+            }
+        }
+        assumeTrue(checked > 0, "no func-relative records in $binaryName")
+        Assertions.assertTrue(
+            notCode.isEmpty(),
+            "func-relative stab values resolved outside executable code in $binaryName " +
+                "(${notCode.size}/$checked):\n${notCode.take(20).joinToString("\n")}",
+        )
+    }
 }
-
-@kotlinx.serialization.Serializable
-private data class RegistryDump(
-    val summary: DumpSummary,
-    val compromised: Map<String, List<CompromisedEntry>>,
-    val canonicalGroups: List<CanonicalGroupEntry>,
-    val divergentCollisions: List<DivergentEntry>,
-    // §20/§21 grouping diagnosis. `sourceFolds`: §15 basename canonicalisation (raw → canonical).
-    // `contentHashCollisions`: content-equivalent groups that did NOT merge into one — each is a §20
-    // merge that either fired (one group left) or a candidate that didn't (why?). `duplicateNamedTypes`:
-    // materialised DataTypes sharing a simple name (the source of `.conflict` suffixes in the decomp).
-    val sourceFolds: Map<String, String> = emptyMap(),
-    val contentHashCollisions: List<HashClassEntry> = emptyList(),
-    val duplicateNamedTypes: Map<String, List<String>> = emptyMap(),
-)
-
-@kotlinx.serialization.Serializable
-private data class HashClassEntry(val groups: List<String>, val distinctNames: List<String>)
-
-@kotlinx.serialization.Serializable
-private data class DumpSummary(
-    val registeredDataTypes: Int,
-    val compromisedCounts: Map<String, Int>,
-    val canonicalGroups: Int,
-    val divergentCollisions: Int,
-)
-
-@kotlinx.serialization.Serializable
-private data class CompromisedEntry(val pathName: String, val kind: String, val length: Int)
-
-@kotlinx.serialization.Serializable
-private data class CanonicalGroupEntry(
-    val key: String,
-    val winnerId: String,
-    val winner: String,
-    val members: Int,
-    val anon: Int,
-    val distinct: Int,
-)
-
-@kotlinx.serialization.Serializable
-private data class DivergentEntry(val id: String, val byName: Map<String, Int>)

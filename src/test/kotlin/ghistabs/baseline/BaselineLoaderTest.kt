@@ -1,7 +1,7 @@
 package ghistabs.baseline
 
-import ghistabs.integration.BaselineLoader
-import ghistabs.integration.CounterRange
+import ghistabs.baseline.BaselineLoader
+import ghistabs.baseline.CounterRange
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test

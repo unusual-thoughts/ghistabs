@@ -1,4 +1,4 @@
-package ghistabs.integration
+package ghistabs
 
 import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.address.Address
