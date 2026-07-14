@@ -10,12 +10,7 @@ import ghistabs.diagnose.degradation
 import ghistabs.harvest.Harvest
 import ghistabs.harvest.TypeAst
 import ghistabs.harvest.TypeResolver
-import ghistabs.materialize.itanium.InsertOp
-import ghistabs.materialize.itanium.Itanium
-import ghistabs.materialize.itanium.Layout
-import ghistabs.materialize.itanium.ResolvedBase
-import ghistabs.materialize.itanium.RttiStructs
-import ghistabs.materialize.itanium.firstPolymorphicBase
+import ghistabs.materialize.itanium.*
 import ghistabs.parse.AggrKind
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
@@ -52,21 +47,6 @@ class TypeRegistry(
             for (bucket in extrasByName.values) addAll(bucket)
         }
     }
-
-    /** Demangler-stub name resolution, built lazily once materialisation has populated the registry. */
-    private val demanglerIndex by lazy {
-        DemanglerTypeIndex(allCreatedDataTypes, this) { simpleName ->
-            (extrasByName[simpleName].orEmpty() + byId.values.filter { it.name == simpleName }).distinct()
-        }
-    }
-
-    /**
-     * Find a DataType by simple name across [allCreatedDataTypes]. Used by DemanglerReplacer
-     * to match `/Demangler/std/string` stubs to our `/std/string`. Disambiguates by
-     * [preferredCategory] when multiple match.
-     */
-    fun findByName(simpleName: String, preferredCategory: CategoryPath? = null): DataType? =
-        demanglerIndex.findByName(simpleName, preferredCategory)
 
     /**
      * Compromised DataTypes — anonymous (no name in stab), empty-placeholder (body never
