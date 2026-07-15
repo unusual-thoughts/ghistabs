@@ -15,12 +15,13 @@ command (no XML/HTML spelunking), and archive their report to a per-run timestam
 
 ## Flags
 
-- **`-Pfixture=<exact filename>`** — narrow every parameterised suite to one binary *at the source*
-  (via `IntegrationFixtures`), so only that binary is imported. The name is the exact filename,
-  **extension included**: `bouniafbouniaf.exe`, `xmltest`, `bouniaf.exe`, `box2d_tests`, `bouniaf.exe`,
-  `unbouniaf.exe` (+ the extended gcc-4.2.1/3.4.5 corpus). A name not in a suite's list errors loudly.
+- **`-Pfixture=<filename>[,<filename>…]`** — narrow every parameterised suite *at the source* (via
+  `IntegrationFixtures`) to the listed binaries, so only those are imported. A comma-separated list of
+  exact filenames, **extension included**: `bouniafbouniaf.exe`, `xmltest`, `bouniaf.exe`, `box2d_tests`,
+  `bouniaf.exe`, `unbouniaf.exe` (+ the extended gcc-4.2.1/3.4.5 corpus). A filter that selects
+  nothing from a suite errors loudly.
   ```
-  ./gradlew integrationTest -Pfixture=bouniafbouniaf.exe
+  ./gradlew integrationTest -Pfixture=bouniafbouniaf.exe,box2d_tests
   ```
 - **`-PregenerateBaselines=true`** — rewrite the baseline JSONs from observed counters instead of
   asserting against them (`StabsImportRegressionTest.countersWithinBaseline`). Review the diff.
