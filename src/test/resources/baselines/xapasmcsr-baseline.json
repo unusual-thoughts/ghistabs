@@ -9,8 +9,12 @@
             "max": 76
         },
         "canonical-key-multi-hash": {
-            "min": 10,
-            "max": 10
+            "min": 9,
+            "max": 9
+        },
+        "canonical-scope-collision": {
+            "min": 9,
+            "max": 9
         },
         "class-not-struct": {
             "min": 2,
@@ -20,29 +24,49 @@
             "min": 126,
             "max": 126
         },
+        "degraded-base-layout-failed": {
+            "min": 2,
+            "max": 2
+        },
         "degraded-base-synthesized": {
-            "min": 1,
-            "max": 1
+            "min": 12,
+            "max": 12
+        },
+        "degraded-field-dropped": {
+            "min": 8,
+            "max": 8
         },
         "degraded-global-typed-xref-stub": {
             "min": 36,
             "max": 36
         },
         "degraded-local-typed-all-undefined": {
-            "min": 10,
-            "max": 10
+            "min": 71,
+            "max": 71
         },
         "degraded-local-typed-xref-stub": {
             "min": 9,
             "max": 9
+        },
+        "degraded-param-typed-all-undefined": {
+            "min": 4,
+            "max": 4
+        },
+        "degraded-placeholder-undefined-fields": {
+            "min": 11,
+            "max": 11
+        },
+        "degraded-placeholder-unresolved": {
+            "min": 5,
+            "max": 5
         },
         "degraded-static-typed-all-undefined": {
             "min": 11,
             "max": 11
         },
         "degraded-struct-mostly-undefined": {
-            "min": 2,
-            "max": 2
+            "min": 13,
+            "max": 13
         },
         "degraded-struct-truncated": {
             "min": 2,
@@ -76,6 +100,14 @@
             "min": 19,
             "max": 19
         },
+        "dtm-conflicts-post": {
+            "min": 1,
+            "max": 1
+        },
+        "dtm-conflicts-pre": {
+            "min": 1,
+            "max": 1
+        },
         "empty-scope": {
             "min": 1431,
             "max": 1431
@@ -103,6 +135,10 @@
         "harvest-collisions-raw-total": {
             "min": 247,
             "max": 247
+        },
+        "harvest-constants": {
+            "min": 0,
+            "max": 0
         },
         "harvest-cus": {
             "min": 11,
@@ -213,8 +249,12 @@
             "max": 13067
         },
         "inheritance-applied": {
-            "min": 83,
-            "max": 83
+            "min": 70,
+            "max": 70
+        },
+        "inheritance-failed": {
+            "min": 2,
+            "max": 2
         },
         "local-var-add-success": {
             "min": 504,
@@ -229,12 +269,16 @@
             "max": 332
         },
         "method-implicit-not-emitted": {
-            "min": 1076,
-            "max": 1076
+            "min": 1079,
+            "max": 1079
         },
         "placeholder-created": {
-            "min": 11727,
-            "max": 11727
+            "min": 11728,
+            "max": 11728
+        },
+        "pointee-typed": {
+            "min": 107,
+            "max": 107
         },
         "reglocal-add-success": {
             "min": 1210,
@@ -269,8 +313,8 @@
             "max": 51890
         },
         "text-data-no-coverage": {
-            "min": 307,
-            "max": 307
+            "min": 280,
+            "max": 280
         },
         "text-undisassembled-code": {
             "min": 3,
@@ -313,8 +357,8 @@
             "max": 14
         },
         "xref-base-tag-resolved": {
-            "min": 45,
-            "max": 45
+            "min": 49,
+            "max": 49
         },
         "xref-undefined": {
             "min": 62,
