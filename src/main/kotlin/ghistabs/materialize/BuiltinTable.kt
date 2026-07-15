@@ -44,7 +44,11 @@ object BuiltinTable {
 
             when (sizeBits) {
                 0 -> VoidDataType()
-                8 if signed && decl.min == -128L && decl.max == 127L -> CharDataType()
+                // gcc encodes plain `char` as range 0..127 and `signed char` as -128..127; both
+                // are the source `char`, so map to CharDataType — otherwise `char*` renders as
+                // `byte*`. (`unsigned char` 0..255 stays a byte, see testClassifyUnsignedByte.)
+                8 if decl.min == -128L && decl.max == 127L -> CharDataType()
+                8 if decl.min == 0L && decl.max == 127L -> CharDataType()
                 8 if signed -> SignedByteDataType()
                 8 -> ByteDataType()
                 16 if signed -> ShortDataType()

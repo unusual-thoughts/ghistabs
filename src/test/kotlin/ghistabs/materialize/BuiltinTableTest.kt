@@ -33,6 +33,14 @@ class BuiltinTableTest {
     }
 
     @Test
+    fun testClassifyPlainChar() {
+        // gcc emits plain `char` as range 0..127 (not -128..127); it must map to char, not byte.
+        val kind = BuiltinTable.resolve(TypeDecl.Range(GlobalTypeId(cu, 1), 0L, 127L))
+        assertInstanceOf<CharDataType>(kind)
+        assertEquals(1, kind.length)
+    }
+
+    @Test
     fun testClassifyWithSizeAttr64ULL() {
         val kind = BuiltinTable.resolve(TypeDecl.WithSizeAttr(64, TypeDecl.Range(GlobalTypeId(cu, 6), 0L, -1L)))
         assertInstanceOf<UnsignedLongLongDataType>(kind)
