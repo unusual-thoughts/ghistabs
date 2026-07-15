@@ -314,7 +314,9 @@ class Parser(src: String) {
                         consume(',')
                         val sizeBits = readInt()
                         consume(';')
-                        fields.add(FieldDecl(name, type, offsetBits, sizeBits, isStatic = false, access))
+                        // `,0,0` shape is static here too (see the plain `:` branch below).
+                        val isStatic = offsetBits == 0L && sizeBits == 0L
+                        fields.add(FieldDecl(name, type, offsetBits, sizeBits, isStatic, access))
                     } else {
                         consume(':')
                         readUntilAny(charArrayOf(';')) // mangled symbol; discarded — captured by COFF symbol table
@@ -332,7 +334,11 @@ class Parser(src: String) {
                     consume(',')
                     val sizeBits = readInt()
                     consume(';')
-                    fields.add(FieldDecl(name, type, offsetBits, sizeBits, isStatic = false, Access.PUBLIC))
+                    // Without -gstabs+, gcc emits a static data member (a VAR_DECL) as `,0,0`
+                    // instead of the `:mangled` form; offset-and-size both zero is a shape a
+                    // real field can't take, so it marks the member static.
+                    val isStatic = offsetBits == 0L && sizeBits == 0L
+                    fields.add(FieldDecl(name, type, offsetBits, sizeBits, isStatic, Access.PUBLIC))
                 }
 
                 peekFollows("/") -> {
