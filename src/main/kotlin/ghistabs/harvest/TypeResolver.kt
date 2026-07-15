@@ -249,6 +249,7 @@ class TypeResolver(val harvest: Harvest, private val foldSources: Boolean = true
         functions.mapNotNull { f ->
             when {
                 f.isSyntheticInit -> foldSource(f.cu.filename)
+
                 else -> f.lineEntries.minByOrNull { it.addr.address.offset }?.source
                     ?: f.outermostClass()?.let { classSourceByName[it] }?.let(::foldSource)
             }?.let { f to it }
@@ -279,12 +280,48 @@ class TypeResolver(val harvest: Harvest, private val foldSources: Boolean = true
             commonProjectPrefix = commonProjectPrefix(typeAsts.values.map { it.id.source }),
             multiSourceHeaderHints = multiSourceHeaderHints,
         )
+
+        fun headerKey(ast: TypeAst) =
+            attribution.keyForAst(ast, byGhidraName.getValue(ast.ghidraName).map { it.id.source }.toSet())
+
+        fun scopeKey(ast: TypeAst): GhidraKey? {
+            val path = ast.demangledClassPath() ?: return null
+            // Name the DTM slot by the demangler's leaf when it's a bare identifier — that's exactly what
+            // Ghidra's this-param class-struct creator looks up, so an abbreviation-expanded STL type
+            // (`Ss` → `string`) lands at `/std/string` and Ghidra reuses it instead of forging an empty
+            // shadow, independent of typedef shortening (a render pref, not a correctness lever). Templated
+            // leaves keep the stabs spelling: the demangler's exact byte-spelling drifts from ours, so it
+            // would only relocate a shadow. [TypeRegistry.makePlaceholder] honours this key name.
+            val leaf = path.last()
+            val name = if ('<' in leaf) ast.ghidraName else leaf
+            return GhidraKey(scopeCategory(path.dropLast(1)), name)
+        }
+
+        // Scope→header→hash ladder. A type whose enclosing C++ scope is derivable (any member's
+        // mangled name yields one) files under that namespace category — matching where Ghidra's
+        // this-param class-struct creator looks, so our filled type is the one it reuses instead of
+        // synthesising an empty stub. Header attribution is the fallback for method-less types (C
+        // aggregates, gcc anonymous copies) AND the collision-breaker: a scope key holding genuinely
+        // divergent content (same (scope,name), several bodies) demotes each body to its header key.
         val slots = typeAsts.values
             .filter { it.body.isXRefTarget }
-            .groupBy { ast ->
-                attribution.keyForAst(ast, byGhidraName.getValue(ast.ghidraName).map { it.id.source }.toSet())
+            .groupBy(::scopeKey)
+            .flatMap { (scopeKey, members) ->
+                if (scopeKey == null) {
+                    members.groupBy { headerKey(it) }.map { (k, ms) -> classifyGroup(k, ms) }
+                } else {
+                    val byHash = members.groupBy { contentHash(it.body) }
+                    if (byHash.size == 1) {
+                        listOf(classifyGroup(scopeKey, members))
+                    } else {
+                        debug(
+                            "canonical-scope-collision",
+                            "$scopeKey: ${byHash.size} divergent bodies → demoted to header keys",
+                        )
+                        members.groupBy { headerKey(it) }.map { (k, ms) -> classifyGroup(k, ms) }
+                    }
+                }
             }
-            .map { (key, members) -> classifyGroup(key, members) }
 
         buildMap {
             for ((_, equivalent) in slots.groupBy { contentHash(it.ast.body) }) {
