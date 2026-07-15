@@ -1361,6 +1361,26 @@ class StabsImportRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
     }
 
     /**
+     * The GAS jump-over-fill idiom (`eb 0d 90…`: an unconditional forward JMP to the aligned boundary,
+     * NOPs behind it) must also collapse — not just plain NOP runs. In xapasmcsr.exe these appear both
+     * before a function (e.g. 0042bc31) and before a string block gcc parked in `.text` (00421aa1);
+     * either way the Alignment must start on the JMP opcode. Asserts at least one such run exists.
+     */
+    @Test
+    fun jumpOverFillCollapsedToAlignment() {
+        assumeTrue(binaryName == "xapasmcsr.exe", "jump-over-fill check scoped to xapasmcsr.exe")
+        val data = program.listing.getDefinedData(true)
+        var jumpFills = 0
+        while (data.hasNext()) {
+            val d = data.next()
+            if (d.dataType !is AlignmentDataType) continue
+            val opcode = runCatching { d.bytes.firstOrNull()?.toInt()?.and(0xff) }.getOrNull()
+            if (opcode == 0xeb || opcode == 0xe9) jumpFills++
+        }
+        Assertions.assertTrue(jumpFills > 0, "no jump-over-fill padding collapsed in $binaryName")
+    }
+
+    /**
      * The function-relative address heuristic ([stabAddress]): every `N_SLINE`/`N_LBRAC`/`N_RBRAC`
      * record, resolved against its enclosing `N_FUN`, must land in executable memory. A value left
      * un-rebased resolves to a tiny address in no code block. Not asserted against the *enclosing*
