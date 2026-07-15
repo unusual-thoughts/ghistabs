@@ -20,9 +20,19 @@ class Parser(src: String) {
         // gcc builtin negative type number for `int` (see BuiltinTable): the implicit type of
         // a value-only `:c=` constant.
         const val BUILTIN_INT = -1
+
+        // Symbol chars that may follow `operator` in a method name (arithmetic, logical,
+        // comparison, shift). Brackets/parens/comma are excluded — they carry no `<>` and
+        // need no protection from template-depth tracking.
+        const val OPERATOR_SYMBOLS = "+-*/%^&|~!=<>"
     }
 
     private val c = Cursor(src)
+
+    /**
+     * Parse a type descriptor body, exposed for testing.
+     */
+    fun parseTypeBody(): TypeDecl<LocalTypeId> = c.parseType()
 
     /**
      * Parse a symbol declaration: `name:descriptor` where descriptor may be
@@ -31,53 +41,53 @@ class Parser(src: String) {
      *
      * Mirror of gdb/stabsread.c:define_symbol.
      */
-    fun parseSymbol(): SymbolDecl<LocalTypeId> {
+    fun parseSymbol() = c.parseSymbol()
+
+    private fun Cursor.parseSymbol(): SymbolDecl<LocalTypeId> {
         // gcc emits anonymous aggregates/enums with a *blank* (whitespace) tag name, not an empty
         // one. Normalise blank → "" here so "anonymous" is uniformly `name.isNullOrEmpty()` for every
         // downstream consumer (ghidraName, the §20 content merge, nameAnonymousTypedefTargets) — a
         // stray " " otherwise reads as a distinct named type and silently blocks unification.
-        val name = c.readSymbolName().ifBlank { "" }
-        c.consume(':')
-        val descriptor = c.peekOrNull()
-
-        return when (descriptor) {
+        val name = readSymbolName().ifBlank { "" }
+        consume(':')
+        return when (val descriptor = peekOrNull()) {
             'F' -> {
-                c.advance()
+                advance()
                 SymbolDecl.Function(name, isFileStatic = false, type = parseType())
             }
 
             'f' -> {
-                c.advance()
+                advance()
                 SymbolDecl.Function(name, isFileStatic = true, type = parseType())
             }
 
             'p' -> {
-                c.advance()
+                advance()
                 SymbolDecl.StackParam(name, parseType())
             }
 
             'P' -> {
-                c.advance()
+                advance()
                 SymbolDecl.RegParam(name, parseType(), regNum = readTrailingReg())
             }
 
             'r' -> {
-                c.advance()
+                advance()
                 SymbolDecl.RegLocal(name, parseType(), regNum = readTrailingReg())
             }
 
             'G' -> {
-                c.advance()
+                advance()
                 SymbolDecl.Global(name, parseType())
             }
 
             'S' -> {
-                c.advance()
+                advance()
                 SymbolDecl.StaticVar(name, parseType(), isFunctionLocal = false)
             }
 
             'V' -> {
-                c.advance()
+                advance()
                 SymbolDecl.StaticVar(name, parseType(), isFunctionLocal = true)
             }
 
@@ -91,21 +101,11 @@ class Parser(src: String) {
             // a type-number ref or inline def (`(cu,n)`, a bare number, or a negative builtin).
             // Any other letter is a symbol descriptor we don't implement — surface it, don't
             // silently misread it as a type (e.g. `a`/`s`/`x`/`R` would parse as array/struct/…).
-            '(', '-' -> SymbolDecl.StackLocal(name, parseType())
+            else if (peekStartsTypeId()) -> SymbolDecl.StackLocal(name, parseType())
 
-            else ->
-                if (descriptor?.isDigit() == true) {
-                    SymbolDecl.StackLocal(name, parseType())
-                } else {
-                    throw StabsParseException(c.pos, c.src, "unhandled symbol descriptor '$descriptor'")
-                }
+            else -> throw StabsParseException(pos, src, "unhandled symbol descriptor '$descriptor'")
         }
     }
-
-    /**
-     * Parse a type descriptor body, exposed for testing.
-     */
-    fun parseTypeBody(): TypeDecl<LocalTypeId> = parseType()
 
     // ===== Symbol-level productions =====
 
@@ -115,11 +115,11 @@ class Parser(src: String) {
      * here but its body is defined by a later stab. Mirror of
      * `gdb/stabsread.c:define_symbol` (T case).
      */
-    private fun parseTagged(name: String): SymbolDecl.TaggedType<LocalTypeId> {
-        c.consume('T')
-        c.consumeIf('t') // GCC emits Tt for combined tagged-type+typedef (e.g. typedef struct foo {} foo)
-        val id = c.parseTypeId()
-        val body = if (c.consumeIf('=')) parseType() else TypeDecl.Ref(id)
+    private fun Cursor.parseTagged(name: String): SymbolDecl.TaggedType<LocalTypeId> {
+        consume('T')
+        consumeIf('t') // GCC emits Tt for combined tagged-type+typedef (e.g. typedef struct foo {} foo)
+        val id = readTypeId()
+        val body = if (consumeIf('=')) parseType() else TypeDecl.Ref(id)
         return SymbolDecl.TaggedType(name, id, body)
     }
 
@@ -130,19 +130,20 @@ class Parser(src: String) {
      * `S` set (non-integral, unseen from g++/x86 — payload consumed, value 0).
      * Mirror of gdb/stabsread.c:define_symbol (c case).
      */
-    private fun parseConstant(name: String): SymbolDecl.Constant<LocalTypeId> {
-        c.consume('c')
-        c.consume('=')
-        return when (c.advance()) {
-            'i', 'b', 'c' -> SymbolDecl.Constant(name, TypeDecl.Builtin(BUILTIN_INT), c.parseInt())
+    private fun Cursor.parseConstant(name: String): SymbolDecl.Constant<LocalTypeId> {
+        consume('c')
+        consume('=')
+        return when (advance()) {
+            'i', 'b', 'c' -> SymbolDecl.Constant(name, TypeDecl.Builtin(BUILTIN_INT), readInt())
+
             'e' -> {
                 val type = parseType()
-                c.consume(',')
-                SymbolDecl.Constant(name, type, c.parseInt())
+                consume(',')
+                SymbolDecl.Constant(name, type, readInt())
             }
 
             else -> {
-                c.readUntilAny(charArrayOf(';'))
+                readUntilAny(charArrayOf(';'))
                 SymbolDecl.Constant(name, TypeDecl.Builtin(BUILTIN_INT), 0)
             }
         }
@@ -154,10 +155,10 @@ class Parser(src: String) {
      * separate stab — common with cygwin gcc 13+ on box2d-style C++23
      * code). Mirror of `gdb/stabsread.c:define_symbol` (t case).
      */
-    private fun parseTypedef(name: String): SymbolDecl.Typedef<LocalTypeId> {
-        c.consume('t')
-        val id = c.parseTypeId()
-        val body = if (c.consumeIf('=')) parseType() else TypeDecl.Ref(id)
+    private fun Cursor.parseTypedef(name: String): SymbolDecl.Typedef<LocalTypeId> {
+        consume('t')
+        val id = readTypeId()
+        val body = if (consumeIf('=')) parseType() else TypeDecl.Ref(id)
         return SymbolDecl.Typedef(name, id, body)
     }
 
@@ -171,7 +172,7 @@ class Parser(src: String) {
      *
      * Mirror of gdb/stabsread.c:read_type.
      */
-    private fun parseType(): TypeDecl<LocalTypeId> = when (val ch = c.peekOrNull()) {
+    private fun Cursor.parseType(): TypeDecl<LocalTypeId> = when (val ch = peekOrNull()) {
         'a' -> parseArray()
 
         'e' -> parseEnum()
@@ -189,47 +190,47 @@ class Parser(src: String) {
         '@' -> parseSizeAttr()
 
         '*' -> {
-            c.advance()
+            advance()
             TypeDecl.Pointer(parseType())
         }
 
         '&' -> {
-            c.advance()
+            advance()
             TypeDecl.Reference(parseType())
         }
 
         'k' -> {
-            c.advance()
+            advance()
             TypeDecl.Const(parseType())
         }
 
         'B' -> {
-            c.advance()
+            advance()
             TypeDecl.Volatile(parseType())
         }
 
         's' -> {
-            c.advance()
+            advance()
             parseStruct(AggrKind.STRUCT)
         }
 
         'u' -> {
-            c.advance()
+            advance()
             parseStruct(AggrKind.UNION)
         }
 
         'Y' -> {
-            c.advance()
+            advance()
             parseStruct(AggrKind.CLASS)
         }
 
-        else if (ch == '(' || ch == '-' || ch?.isDigit() == null) -> {
+        else if (peekStartsTypeId()) -> {
             // Forward reference, inline definition, or builtin slot: (cu,n) /
             // bare n, possibly followed by =.
-            val id = c.parseTypeId()
+            val id = readTypeId()
             when {
                 // Inline definition: parse the body recursively and wrap in InlineDef
-                c.consumeIf('=') -> TypeDecl.InlineDef(id, parseType())
+                consumeIf('=') -> TypeDecl.InlineDef(id, parseType())
 
                 // Negative type number = gcc XCOFF builtin slot. Per the
                 // stabs spec: "the idea of negative type numbers is simply
@@ -244,7 +245,7 @@ class Parser(src: String) {
             }
         }
 
-        else -> throw StabsParseException(c.pos, c.src, "unexpected character '$ch' in type descriptor")
+        else -> throw StabsParseException(pos, src, "unexpected character '$ch' in type descriptor")
     }
 
     // ===== Type productions =====
@@ -255,21 +256,21 @@ class Parser(src: String) {
      *
      * Mirror of gdb/stabsread.c:read_struct_type.
      */
-    private fun parseStruct(kind: AggrKind): TypeDecl.Struct<LocalTypeId> {
-        val sizeBytes = c.parseInt()
+    private fun Cursor.parseStruct(kind: AggrKind): TypeDecl.Struct<LocalTypeId> {
+        val sizeBytes = readInt()
 
         // Parse optional inheritance section
-        val bases = if (c.consumeIf('!')) {
+        val bases = if (consumeIf('!')) {
             parseInheritanceList()
         } else {
             emptyList()
         }
 
         // Parse optional vtable pointer marker
-        val (hasVTablePointer, vtableTypeId) = if (c.consumeIf('~')) {
-            c.consume('%')
-            val id = c.parseTypeId()
-            c.consume(';')
+        val (hasVTablePointer, vtableTypeId) = if (consumeIf('~')) {
+            consume('%')
+            val id = readTypeId()
+            consume(';')
             Pair(true, id)
         } else {
             Pair(false, null)
@@ -283,75 +284,75 @@ class Parser(src: String) {
         val fields = mutableListOf<FieldDecl<LocalTypeId>>()
         val methods = mutableListOf<MethodDecl<LocalTypeId>>()
 
-        while (c.peekOrNull() != ';' && !c.eof) {
-            val name = c.readMemberName()
+        while (peekOrNull() != ';' && !eof) {
+            val name = readMemberName()
 
             when {
-                c.startsWith("::") -> {
+                peekFollows("::") -> {
                     // Method: name::<overload1>[<overload2>...];
                     // GCC emits multiple overloads consecutively: after each overload's virt
                     // char (without a trailing ';'), the next overload TypeId follows immediately.
-                    c.advance()
-                    c.advance()
+                    advance()
+                    advance()
                     methods.add(parseMethodBlock(name))
-                    while (c.peekOrNull().let { it == '(' || (it != null && it.isDigit()) }) {
+                    while (peekStartsTypeId()) {
                         methods.add(parseMethodBlock(name))
                     }
                 }
 
-                c.startsWith(":/") -> {
+                peekFollows(":/") -> {
                     // Field with access specifier: name:/<access><type>...
                     // Static:     name:/<access><type>:<mangled>;
                     // Non-static: name:/<access><type>,<offset>,<size>;
-                    c.advance()
-                    c.advance()
-                    val access = parseAccess(if (!c.eof) c.advance() else '2')
+                    advance()
+                    advance()
+                    val access = accessOf(if (!eof) advance() else '2')
                     val type = parseType()
-                    if (c.peekOrNull() == ',') {
-                        c.consume(',')
-                        val offsetBits = c.parseInt()
-                        c.consume(',')
-                        val sizeBits = c.parseInt()
-                        c.consume(';')
+                    if (peekOrNull() == ',') {
+                        consume(',')
+                        val offsetBits = readInt()
+                        consume(',')
+                        val sizeBits = readInt()
+                        consume(';')
                         fields.add(FieldDecl(name, type, offsetBits, sizeBits, isStatic = false, access))
                     } else {
-                        c.consume(':')
-                        c.readUntilAny(charArrayOf(';')) // mangled symbol; discarded — captured by COFF symbol table
-                        c.consume(';')
+                        consume(':')
+                        readUntilAny(charArrayOf(';')) // mangled symbol; discarded — captured by COFF symbol table
+                        consume(';')
                         fields.add(FieldDecl(name, type, 0, 0, isStatic = true, access))
                     }
                 }
 
-                c.startsWith(":") -> {
+                peekFollows(":") -> {
                     // Normal field: name:<type>,<offset>,<size>;
-                    c.advance()
+                    advance()
                     val type = parseType()
-                    c.consume(',')
-                    val offsetBits = c.parseInt()
-                    c.consume(',')
-                    val sizeBits = c.parseInt()
-                    c.consume(';')
+                    consume(',')
+                    val offsetBits = readInt()
+                    consume(',')
+                    val sizeBits = readInt()
+                    consume(';')
                     fields.add(FieldDecl(name, type, offsetBits, sizeBits, isStatic = false, Access.PUBLIC))
                 }
 
-                c.startsWith("/") -> {
+                peekFollows("/") -> {
                     // Static field starting with /
-                    c.advance()
-                    val access = parseAccess(if (!c.eof) c.advance() else '2')
+                    advance()
+                    val access = accessOf(if (!eof) advance() else '2')
                     val type = parseType()
-                    c.consume(':')
-                    c.readUntilAny(charArrayOf(';')) // mangled symbol; discarded — captured by COFF symbol table
-                    c.consume(';')
+                    consume(':')
+                    readUntilAny(charArrayOf(';')) // mangled symbol; discarded — captured by COFF symbol table
+                    consume(';')
                     fields.add(FieldDecl(name, type, 0, 0, isStatic = true, access))
                 }
 
                 else -> {
-                    throw StabsParseException(c.pos, c.src, "unexpected character in struct field")
+                    throw StabsParseException(pos, src, "unexpected character in struct field")
                 }
             }
         }
 
-        c.consume(';') // struct terminator
+        consume(';') // struct terminator
 
         return TypeDecl.Struct(
             rawKind = kind,
@@ -371,22 +372,21 @@ class Parser(src: String) {
      *
      * Mirror of gdb/stabsread.c:read_cpp_abbrev.
      */
-    private fun parseInheritanceList(): List<BaseDecl<LocalTypeId>> {
-        val count = c.parseInt().toInt()
-        c.consume(',')
+    private fun Cursor.parseInheritanceList(): List<BaseDecl<LocalTypeId>> {
+        val count = readInt().toInt()
+        consume(',')
 
-        val bases = mutableListOf<BaseDecl<LocalTypeId>>()
-        repeat(count) {
-            val virt = c.advance() == '1'
-            val access = parseAccess(c.advance())
-            val offsetBits = c.parseInt()
-            c.consume(',')
-            val baseType = parseType() // handles (cu,n) ref and (cu,n)=<inline-def> forms
-            c.consume(';')
-            bases.add(BaseDecl(baseType, virt, access, offsetBits))
+        return buildList {
+            repeat(count) {
+                val virt = advance() == '1'
+                val access = accessOf(advance())
+                val offsetBits = readInt()
+                consume(',')
+                val baseType = parseType() // handles (cu,n) ref and (cu,n)=<inline-def> forms
+                consume(';')
+                add(BaseDecl(baseType, virt, access, offsetBits))
+            }
         }
-
-        return bases
     }
 
     /**
@@ -398,48 +398,48 @@ class Parser(src: String) {
      *
      * Mirror of gdb/stabsread.c:read_member_functions.
      */
-    private fun parseMethodBlock(name: String): MethodDecl<LocalTypeId> {
+    private fun Cursor.parseMethodBlock(name: String): MethodDecl<LocalTypeId> {
         val signature = parseType()
 
-        val mangled = if (!c.eof && c.peekOrNull() == ':') {
-            c.advance()
-            val mangledName = c.readUntilAny(charArrayOf(';'))
-            c.consume(';')
+        val mangled = if (!eof && peekOrNull() == ':') {
+            advance()
+            val mangledName = readUntilAny(charArrayOf(';'))
+            consume(';')
             mangledName
         } else {
             null
         }
 
-        val access = parseAccess(if (!c.eof && c.peekOrNull()?.isDigit() == true) c.advance() else '2')
-        val modifier = if (!c.eof) c.advance() else 'A'
+        val access = accessOf(if (!eof && peekOrNull()?.isDigit() == true) advance() else '2')
+        val modifier = if (!eof) advance() else 'A'
         val isConst = modifier == 'C'
         val isVolatile = modifier == 'V'
 
         var vtableOffsetBits: Long? = null
         val virt = when {
-            c.peekOrNull() == '*' -> {
-                c.advance()
-                vtableOffsetBits = c.parseInt()
-                c.consume(';')
+            peekOrNull() == '*' -> {
+                advance()
+                vtableOffsetBits = readInt()
+                consume(';')
                 parseType() // vthistype (consumed, not stored)
-                c.consume(';')
+                consume(';')
                 VirtKind.VIRTUAL
             }
 
-            c.peekOrNull() == '.' -> {
-                c.advance()
+            peekOrNull() == '.' -> {
+                advance()
                 VirtKind.NORMAL
             }
 
-            c.peekOrNull() == '?' -> {
-                c.advance()
+            peekOrNull() == '?' -> {
+                advance()
                 VirtKind.PURE_VIRTUAL
             }
 
             else -> VirtKind.NORMAL
         }
 
-        c.consumeIf(';')
+        consumeIf(';')
 
         return MethodDecl(
             name = name,
@@ -459,21 +459,21 @@ class Parser(src: String) {
      *
      * Mirror of gdb/stabsread.c:read_enum_type.
      */
-    private fun parseEnum(): TypeDecl.Enum<LocalTypeId> {
-        c.consume('e')
-        val members = mutableListOf<Pair<String, Long>>()
+    private fun Cursor.parseEnum() = TypeDecl.Enum<LocalTypeId>(
+        buildList {
+            consume('e')
 
-        while (!c.startsWith(";") && !c.eof) {
-            val name = c.readUntilAny(charArrayOf(':'))
-            c.consume(':')
-            val value = c.parseInt()
-            c.consumeIf(',')
-            members.add(Pair(name, value))
-        }
+            while (!peekFollows(";") && !eof) {
+                val name = readUntilAny(charArrayOf(':'))
+                consume(':')
+                val value = readInt()
+                consumeIf(',')
+                add(Pair(name, value))
+            }
 
-        c.consume(';')
-        return TypeDecl.Enum(members)
-    }
+            consume(';')
+        },
+    )
 
     /**
      * Parse a range type: `r<id>;<min>;<max>;`
@@ -485,18 +485,18 @@ class Parser(src: String) {
      *
      * Mirror of gdb/stabsread.c:read_range_type.
      */
-    private fun parseRange(): TypeDecl<LocalTypeId> {
-        c.consume('r')
-        val typeId = c.parseTypeId()
+    private fun Cursor.parseRange(): TypeDecl<LocalTypeId> {
+        consume('r')
+        val typeId = readTypeId()
         // GCC may define the base type inline: r(cu,n)=<inner-type>;lo;hi;
-        if (c.consumeIf('=')) {
+        if (consumeIf('=')) {
             parseType() // parse and discard the inline base-type definition
         }
-        c.consume(';')
-        val min = c.parseRangeBound()
-        c.consume(';')
-        val max = c.parseRangeBound()
-        c.consume(';')
+        consume(';')
+        val min = readRangeBound()
+        consume(';')
+        val max = readRangeBound()
+        consume(';')
         if (max == 0L && min > 0L) {
             return TypeDecl.Float(min.toInt())
         }
@@ -509,14 +509,14 @@ class Parser(src: String) {
      *
      * Mirror of gcc/dbxout.c:dbxout_type (COMPLEX_TYPE case).
      */
-    private fun parseComplex(): TypeDecl.Complex<LocalTypeId> {
-        c.consume('R')
-        val rCode = c.parseInt().toInt()
-        c.consume(';')
-        val sizeBytes = c.parseInt().toInt()
-        c.consume(';')
-        c.consume('0')
-        c.consume(';')
+    private fun Cursor.parseComplex(): TypeDecl.Complex<LocalTypeId> {
+        consume('R')
+        val rCode = readInt().toInt()
+        consume(';')
+        val sizeBytes = readInt().toInt()
+        consume(';')
+        consume('0')
+        consume(';')
         return TypeDecl.Complex(rCode, sizeBytes)
     }
 
@@ -526,17 +526,17 @@ class Parser(src: String) {
      *
      * Mirror of gdb/stabsread.c:read_cross_ref and stabs.html §4.6.
      */
-    private fun parseXRef(): TypeDecl.XRef<LocalTypeId> {
-        c.consume('x')
-        val kind = when (val kindChar = c.advance()) {
+    private fun Cursor.parseXRef(): TypeDecl.XRef<LocalTypeId> {
+        consume('x')
+        val kind = when (val kindChar = advance()) {
             's' -> AggrKind.STRUCT
             'u' -> AggrKind.UNION
             'e' -> AggrKind.ENUM
             'c', 'Y' -> AggrKind.CLASS
-            else -> throw StabsParseException(c.pos - 1, c.src, "unknown cross-ref kind '$kindChar'")
+            else -> throw StabsParseException(pos - 1, src, "unknown cross-ref kind '$kindChar'")
         }
-        val tagName = c.readXRefTagName() // skips :: inside <>, stops at single ':' at depth 0
-        c.consume(':')
+        val tagName = readXRefTagName() // skips :: inside <>, stops at single ':' at depth 0
+        consume(':')
         return TypeDecl.XRef(kind, tagName)
     }
 
@@ -546,11 +546,11 @@ class Parser(src: String) {
      *
      * Mirror of gcc/dbxout.c:dbxout_type (size-attribute emission).
      */
-    private fun parseSizeAttr(): TypeDecl.WithSizeAttr<LocalTypeId> {
-        c.consume('@')
-        c.consume('s')
-        val sizeBits = c.parseInt().toInt()
-        c.consume(';')
+    private fun Cursor.parseSizeAttr(): TypeDecl.WithSizeAttr<LocalTypeId> {
+        consume('@')
+        consume('s')
+        val sizeBits = readInt().toInt()
+        consume(';')
         val inner = parseType()
         return TypeDecl.WithSizeAttr(sizeBits, inner)
     }
@@ -561,8 +561,8 @@ class Parser(src: String) {
      *
      * Mirror of gdb/stabsread.c:read_array_type.
      */
-    private fun parseArray(): TypeDecl.Array<LocalTypeId> {
-        c.consume('a')
+    private fun Cursor.parseArray(): TypeDecl.Array<LocalTypeId> {
+        consume('a')
         val indexType = parseType()
         // parseRange (the typical index type) already consumes its own trailing ';',
         // so NO separator between index type and element type.
@@ -577,8 +577,8 @@ class Parser(src: String) {
      *
      * Mirror of gdb/stabsread.c:read_type (f case).
      */
-    private fun parseFunctionT(): TypeDecl.FunctionT<LocalTypeId> {
-        c.consume('f')
+    private fun Cursor.parseFunctionT(): TypeDecl.FunctionT<LocalTypeId> {
+        consume('f')
         val retType = parseType()
         return TypeDecl.FunctionT(retType, emptyList())
     }
@@ -589,27 +589,123 @@ class Parser(src: String) {
      *
      * Mirror of gdb/stabsread.c:read_type (# case) and gdb/stabsread.c:read_member_functions.
      */
-    private fun parseMethod(): TypeDecl.Method<LocalTypeId> {
-        c.consume('#')
+    private fun Cursor.parseMethod(): TypeDecl.Method<LocalTypeId> {
+        consume('#')
         val clsType = parseType()
-        c.consume(',')
+        consume(',')
         val retType = parseType()
 
         val params = mutableListOf<TypeDecl<LocalTypeId>>()
-        while (c.consumeIf(',')) {
+        while (consumeIf(',')) {
             params.add(parseType())
         }
 
-        c.consume(';')
+        consume(';')
         return TypeDecl.Method(clsType, retType, params)
     }
+
+    // ===== Lexical token readers (Cursor extensions) =====
+
+    /** Read `(cu,n)` or bare `n`. */
+    private fun Cursor.readTypeId(): LocalTypeId {
+        if (consumeIf('(')) {
+            val cu = readInt().toInt()
+            consume(',')
+            val n = readInt().toInt()
+            consume(')')
+            return LocalTypeId(cu, n)
+        }
+        val n = readInt().toInt()
+        return LocalTypeId(0, n)
+    }
+
+    /** True at the start of a type-id: `(cu,n)`, a bare `n`, or a negative builtin `-n`. */
+    private fun Cursor.peekStartsTypeId(): Boolean =
+        peekOrNull()?.let { it == '(' || it == '-' || it.isDigit() } == true
+
+    /** Read up to the descriptor `:`. `::` (C++ scope) is preserved; only a single `:` terminates. */
+    private fun Cursor.readSymbolName() = StringBuilder().apply {
+        while (!eof) {
+            if (src[pos] == ':') {
+                if (peekOrNull(1) == ':') feed(2) else break
+            } else {
+                feed()
+            }
+        }
+    }.toString()
+
+    /**
+     * Read a struct member / base-class name up to the terminating `:` or `/` at template
+     * depth 0. Two wrinkles gcc emits inside such names:
+     *  - a base class spelled out as a pseudo-field carries qualified template args, e.g.
+     *    `AllocatorBase<CryptoPP::word16>` — the `::` there is part of the name, not a
+     *    method marker, so `::` inside `<...>` is consumed;
+     *  - `operator<`, `operator<<`, `operator>=`, … keep their angle brackets as operator
+     *    tokens rather than opening template depth (they are unbalanced otherwise).
+     */
+    private fun Cursor.readMemberName() = StringBuilder().apply {
+        var depth = 0
+        while (!eof) {
+            when (src[pos]) {
+                '<' -> {
+                    feed()
+                    depth++
+                }
+
+                '>' -> {
+                    feed()
+                    if (depth > 0) depth--
+                }
+
+                ':' if depth > 0 && peekOrNull(1) == ':' -> feed(2)
+
+                ':' -> break
+
+                '/' if depth == 0 -> break
+
+                else if depth == 0 &&
+                    peekFollows("operator") &&
+                    peekOrNull(8)?.let { it in OPERATOR_SYMBOLS } == true -> {
+                    feed(8)
+                    while (!eof && src[pos] in OPERATOR_SYMBOLS) feed()
+                }
+
+                else -> feed()
+            }
+        }
+    }.toString()
+
+    /** Read an XRef tag name. `::` is preserved only inside `<>` template-arg depth > 0. */
+    private fun Cursor.readXRefTagName() = StringBuilder().apply {
+        var depth = 0
+        while (!eof) {
+            when (src[pos]) {
+                '<' -> {
+                    feed()
+                    depth++
+                }
+
+                '>' -> {
+                    feed()
+                    if (depth > 0) depth--
+                }
+
+                ':' if peekOrNull(1) == ':' && depth > 0 -> feed(2)
+
+                // single `:` or `::` at depth 0
+                ':' -> break
+
+                else -> feed()
+            }
+        }
+    }.toString()
 
     // ===== Helpers =====
 
     /**
      * Parse an access specifier: 0=private, 1=protected, 2=public.
      */
-    private fun parseAccess(ch: Char): Access = when (ch) {
+    private fun accessOf(ch: Char): Access = when (ch) {
         '0' -> Access.PRIVATE
         '1' -> Access.PROTECTED
         '2' -> Access.PUBLIC
