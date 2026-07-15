@@ -13,7 +13,9 @@ import ghistabs.diagnose.ApplyErrorBucket
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.Level
 import ghistabs.diagnose.degradation
-import ghistabs.harvest.*
+import ghistabs.harvest.Harvest
+import ghistabs.harvest.OpenFunction
+import ghistabs.harvest.SymbolRecord
 import ghistabs.materialize.TypeRegistry
 import ghistabs.namespaceChain
 import ghistabs.parse.GlobalTypeId
@@ -174,12 +176,13 @@ class SymbolApplier(
         for (c in harvest.constants) {
             // demangledName() is the unqualified leaf; rebuild the qualified name from the
             // namespace chain so the equate reads `CryptoPP::INFINITE_TIME`, not `INFINITE_TIME`.
-            val ns = ctx.program.namespaceChain(c.name).orEmpty()
-            val leaf = ctx.program.demangle(c.name)?.name ?: c.name
+            val ns = namespaceChain(c.name).orEmpty()
+            val leaf = demangle(c.name)?.name ?: c.name
             val qualified = (ns + leaf).joinToString("::")
 
             when (val existing = equates.getEquate(qualified)) {
                 null -> runCatching { equates.createEquate(qualified, c.value) }.onSuccess { applied++ }
+
                 else -> if (existing.value != c.value) {
                     warn("constant-equate-conflict", "$qualified = ${existing.value} vs ${c.value}")
                 }
@@ -450,7 +453,7 @@ class SymbolApplier(
         // Compiler-generated globals (typeinfo, typeinfo-name) carry their mangled `_ZTI…`/`_ZTS…`
         // linkage name in the stab. If the demangled label (`EAsm::typeinfo`) is already at this
         // address, leave it primary rather than promoting the raw mangled string over it.
-        val demangledSimple = ctx.program.demangle(name, addr)?.name
+        val demangledSimple = demangle(name)?.name
         if (demangledSimple != null && symtab.getSymbols(addr).any { it.name == demangledSimple }) return
 
         val existing = symtab.getSymbols(addr).firstOrNull { it.name == name }

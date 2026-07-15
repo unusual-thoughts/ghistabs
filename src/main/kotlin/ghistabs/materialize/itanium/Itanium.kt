@@ -6,8 +6,8 @@ import ghidra.program.model.data.CategoryPath
 import ghidra.program.model.data.DataType
 import ghidra.program.model.data.IntegerDataType
 import ghidra.program.model.data.LongLongDataType
-import ghidra.program.model.listing.Program
 import ghistabs.demangle
+import ghistabs.materialize.itanium.Itanium.decodesToClass
 import ghistabs.parse.splitQualified
 
 /**
@@ -86,9 +86,9 @@ object Itanium {
     }
 
     /** True if [symbolName] demangles to a vtable for [className]. Handles templated `_ZTV…` names. */
-    fun decodesToClass(program: Program, symbolName: String, className: String): Boolean {
+    fun decodesToClass(symbolName: String, className: String): Boolean {
         if (!looksLikeZtv(symbolName)) return false
-        val obj = program.demangle(symbolName) ?: return false
+        val obj = demangle(symbolName) ?: return false
         return demangledMatchesClass(obj, className)
     }
 

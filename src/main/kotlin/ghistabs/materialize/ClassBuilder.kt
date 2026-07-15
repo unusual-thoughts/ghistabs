@@ -126,7 +126,7 @@ class ClassBuilder(
      */
     private fun CanonicalGroup.ensureClassNamespace(): GhidraClass {
         val parts = classBody.methods.firstNotNullOfOrNull { it.mangled }
-            ?.let { program.namespaceChain(it) }
+            ?.let { namespaceChain(it) }
             ?: splitQualified(className)
         return buildNamespaceChain(parts.filter { it.isNotEmpty() })
     }
@@ -425,9 +425,11 @@ class ClassBuilder(
             degradation(
                 "vftable-slot-untyped",
                 "$className::${m.name}",
-                "signature did not unwrap to a method: unwrapped=${unwrapped?.let {
-                    it::class.simpleName
-                } ?: "null"} " +
+                "signature did not unwrap to a method: unwrapped=${
+                    unwrapped?.let {
+                        it::class.simpleName
+                    } ?: "null"
+                } " +
                     "sig=${m.signature}",
             )
             return PointerDataType(Undefined4DataType.dataType, dtm)
@@ -452,7 +454,7 @@ class ClassBuilder(
 
         try {
             symtab.symbolIterator.firstOrNull {
-                Itanium.decodesToClass(program, it.name, className)
+                Itanium.decodesToClass(it.name, className)
             }?.let { return it.address }
         } catch (e: IllegalArgumentException) {
             warn("vtable-symbol-scan-error", "exception scanning symbol table for $className: ${e.message}")
@@ -464,7 +466,7 @@ class ClassBuilder(
                 symtab.getSymbolIterator(rdataBlock.start, true)
                     .asIterable()
                     .takeWhile { it.address < rdataBlock.end }
-                    .firstOrNull { Itanium.decodesToClass(program, it.name, className) }
+                    .firstOrNull { Itanium.decodesToClass(it.name, className) }
                     ?.let { return it.address }
             } catch (e: IllegalArgumentException) {
                 warn("vtable-rdata-scan-error", "exception scanning .rdata for $className: ${e.message}")
