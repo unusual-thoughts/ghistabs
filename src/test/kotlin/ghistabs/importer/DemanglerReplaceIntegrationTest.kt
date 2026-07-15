@@ -194,4 +194,38 @@ class DemanglerReplaceIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
             "/Demangler/std/string should be replaced despite the typedef/renamed-struct name collision",
         )
     }
+
+    /**
+     * A type materialised in both its CU/include category (resolved) and `/stabs` (a ref-stub
+     * placeholder) registers twice under one name. The `/Demangler/std` stub's preferred category
+     * matches neither, so findByName saw two matches and returned null — leaving every locale facet
+     * stub empty. This pins the tiebreaker: the `/stabs` placeholder loses to the real candidate.
+     */
+    @Test
+    fun demanglerStubReplacedWhenStabsPlaceholderShadowsRealType() {
+        val program = builder.program
+        val dtm = program.dataTypeManager
+
+        val ctx = program.defaultContext()
+        val registry = ctx.defaultTypeRegistry()
+
+        program.runTransaction("setup-test") {
+            val real = StructureDataType(CategoryPath("/src/codecvt.cc/multi"), "codecvt<char,char,int>", 0)
+            dtm.getDataType(CategoryPath("/"), "int")?.let { real.add(it, 4, "_M_c", null) }
+            registry.register(real)
+            registry.register(StructureDataType(CategoryPath("/stabs"), "codecvt<char,char,int>", 0))
+
+            val stub = StructureDataType(CategoryPath("/Demangler/std"), "codecvt<char,char,int>", 0, dtm)
+            dtm.createCategory(CategoryPath("/Demangler/std")).addDataType(stub, DataTypeConflictHandler.KEEP_HANDLER)
+        }
+
+        program.runTransaction("demangler-replace") {
+            DemanglerReplacer(ctx, registry).replace()
+        }
+
+        assertTrue(
+            dtm.getDataType(CategoryPath("/Demangler/std"), "codecvt<char,char,int>") == null,
+            "/Demangler/std stub should be replaced by the real candidate, not left ambiguous with the /stabs placeholder",
+        )
+    }
 }
