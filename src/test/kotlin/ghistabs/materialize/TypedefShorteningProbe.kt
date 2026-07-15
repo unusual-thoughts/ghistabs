@@ -6,6 +6,7 @@ import ghidra.app.util.importer.ProgramLoader
 import ghidra.program.model.data.Composite
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
+import ghistabs.IntegrationFixtures
 import ghistabs.diagnose.defaultContext
 import ghistabs.materialize.TypedefShortener
 import ghistabs.runTransaction
@@ -29,8 +30,7 @@ class TypedefShorteningProbe : AbstractGhidraHeadlessIntegrationTest() {
     @ParameterizedTest
     @ValueSource(strings = ["appquery.exe", "xapasmcsr.exe"])
     fun dumpRenames(binaryName: String) {
-        val filter = System.getProperty("fixtureFilter").orEmpty()
-        assumeTrue(filter.isEmpty() || filter == binaryName, "fixture filtered out by -Pfixture")
+        assumeTrue(IntegrationFixtures.accepts(binaryName), "fixture filtered out by -Pfixture")
         val fixture = File("src/test/resources/binaries/$binaryName")
         assumeTrue(fixture.exists(), "fixture absent")
 

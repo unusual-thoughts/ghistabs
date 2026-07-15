@@ -3,12 +3,12 @@ package ghistabs
 import java.util.stream.Stream
 
 /**
- * Single source of truth for the fixture corpus and the `-Pfixture=<exact filename>`
- * (→ `-DfixtureFilter`) narrowing. Parameterised suites draw their fixture list from here via
- * `@MethodSource("ghistabs.integration.IntegrationFixtures#…")`, so one flag narrows every suite at
- * the source (no per-test `assumeTrue` skip that still pays a full import). Binaries are hand-placed
- * under `src/test/resources/binaries/` (gitignored, EULA-restricted); an absent one is skipped by
- * the individual test, not here.
+ * Single source of truth for the fixture corpus and the `-Pfixture=<exact filename>[,<filename>…]`
+ * (→ `-DfixtureFilter`) narrowing — a comma-separated list of exact filenames. Parameterised suites
+ * draw their fixture list from here via `@MethodSource("ghistabs.integration.IntegrationFixtures#…")`,
+ * so one flag narrows every suite at the source (no per-test `assumeTrue` skip that still pays a full
+ * import). Binaries are hand-placed under `src/test/resources/binaries/` (gitignored, EULA-restricted);
+ * an absent one is skipped by the individual test, not here.
  */
 object IntegrationFixtures {
     val CORE = listOf(
@@ -35,12 +35,19 @@ object IntegrationFixtures {
     val ALL = CORE + EXTENDED
     val SKELETON = listOf("xapasmcsr.exe", "xmltest", "appquery.exe", "box2d_tests")
 
-    /** [names] narrowed by `-Pfixture`; blank filter keeps all. Errors on a filter that matches nothing. */
+    /** The `-Pfixture` filter as a set of exact filenames (comma-separated); empty means "all". */
+    private fun wantedFixtures(): Set<String> = System.getProperty("fixtureFilter").orEmpty()
+        .split(',').map { it.trim() }.filterTo(mutableSetOf()) { it.isNotEmpty() }
+
+    /** [names] narrowed by `-Pfixture`; blank keeps all. Errors when the filter selects nothing here. */
     fun select(names: List<String>): List<String> {
-        val filter = System.getProperty("fixtureFilter").orEmpty()
-        if (filter.isBlank()) return names
-        return names.filter { it == filter }.ifEmpty { error("fixture '$filter' not in this suite: $names") }
+        val wanted = wantedFixtures()
+        if (wanted.isEmpty()) return names
+        return names.filter { it in wanted }.ifEmpty { error("none of $wanted in this suite: $names") }
     }
+
+    /** Whether [name] passes the `-Pfixture` filter — for suites that skip via `assumeTrue` per name. */
+    fun accepts(name: String): Boolean = wantedFixtures().let { it.isEmpty() || name in it }
 
     @JvmStatic fun core(): Stream<String> = select(CORE).stream()
 
