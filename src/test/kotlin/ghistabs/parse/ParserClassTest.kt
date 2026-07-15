@@ -92,6 +92,16 @@ class ParserClassTest {
     }
 
     @Test
+    fun testDtorPseudoNameTrailingSpaceStripped() {
+        // gcc emits special-member pseudo-names with a space before `::` (`__comp_dtor ::`).
+        // The space must not survive into the name, or the vtable field and its FD type diverge.
+        val input = "Q:T(0,9)=s4__comp_dtor ::(0,10):_ZN1QD1Ev;2A*0;(0,9);;;"
+        val method = (Parser(input).parseSymbol() as SymbolDecl.TaggedType).type
+            .let { it as TypeDecl.Struct }.methods.single()
+        assertEquals("__comp_dtor", method.name)
+    }
+
+    @Test
     fun testMethodWithMangledSymbol() {
         val input = "Qux:T(0,9)=s4doIt::(0,10)=#(0,9),(0,1),(0,2);:_ZN3Qux4doItEi;2A.;;"
         val expected = SymbolDecl.TaggedType(

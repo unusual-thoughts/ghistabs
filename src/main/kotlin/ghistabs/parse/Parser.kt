@@ -679,7 +679,10 @@ class Parser(src: String) {
                 else -> feed()
             }
         }
-    }.toString()
+        // gcc spells its special-member pseudo-names with a space before `::`
+        // (`__comp_dtor ::`, `__base_dtor ::`); drop the trailing space so the name matches
+        // between the vtable field and its function-pointer type.
+    }.toString().trimEnd()
 
     /** Read an XRef tag name. `::` is preserved only inside `<>` template-arg depth > 0. */
     private fun Cursor.readXRefTagName() = StringBuilder().apply {
