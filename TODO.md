@@ -10,12 +10,8 @@ xapasmcsr.exe, xmltest, appquery.exe, box2d_tests, packfile.exe, unpackfile.exe)
 ## new issues
 
 (Issues 1–6 moved to the `## Research — new issues (2026-07-12)` section below,
-each with its original note quoted verbatim.)
-
-- running the decomp export in ghidra improves the ghidra view quite a lot wrt to data segments, because it forces more
-  globals (esp strings) to have the proper types, which is very useful. it should be done out of the box by the
-  importer (not do a full decomp but only the part that sweeps the globals/statics for anonymous statics that they
-  reference)
+each with its original note quoted verbatim. The decomp-export data sweep is
+fixed — see Done.)
 
 ## Research — new issues (2026-07-12)
 
@@ -197,6 +193,13 @@ containing field/typedef when unambiguous.
 - [x] **`-Pfixture` accepts a comma-separated list** — `1085472`. `IntegrationFixtures.select` parses a
   set of exact filenames + an `accepts(name)` for the `assumeTrue`-style suites, so one
   `-Pfixture=a.exe,b.exe` narrows every `@MethodSource` suite to a chosen subset.
+- [x] **Sweep global/static pointees to types at import time (`## new issues`)** — `03a5fcd`. The useful
+  part of Ghidra's decomp-export data sweep, done by the importer without a full decompile.
+  `SymbolApplier` chases each applied global/static pointer to its target: a `char*`/`byte*` or shapeless
+  `void*`/undefined pointer whose target is an ASCII NUL-run becomes a `TerminatedString` (targets are
+  often left undefined or mis-disassembled as code), and a typed pointer lays its concrete pointee.
+  `resolvePointee` moved from `render/Data.kt` (render-time) into the new `PointeeSweep.kt` (import-time);
+  render still calls it for string-follow display. Tests in `SymbolApplyIntegrationTest`.
 
 ### Session 2026-07-13
 
