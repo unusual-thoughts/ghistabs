@@ -51,14 +51,25 @@ object BaselineWriter {
     }
 
     /**
-     * Overwrite [file] with an exact snapshot of [counters] (min == max == observed — the import is
-     * deterministic across run modes). Regenerate after an intentional counter change; the git diff
-     * of the baseline is then the record of exactly which counts moved.
+     * Overwrite [file] with a snapshot of [counters] (min == max == observed). Regenerate after an
+     * intentional counter change; the git diff of the baseline is then the record of exactly which
+     * counts moved. The import is deterministic per run mode, but a few counters differ between the
+     * CONCURRENT and AFTER modes the suite runs (e.g. `xref-base-tag-resolved`: AFTER sees the whole
+     * Ghidra type set and resolves a few more xrefs). Such counters carry an intentional `min < max`
+     * range in the file; regen preserves that range as long as the newly-observed value still falls
+     * inside it, so a single-mode regen doesn't pin it back to a point and break the other mode.
      */
     fun write(file: File, counters: Map<String, Long>, source: String) {
+        val prior = if (file.exists()) {
+            runCatching { BaselineLoader.load(file).counters }.getOrDefault(emptyMap())
+        } else {
+            emptyMap()
+        }
         val baseline = Baseline(
             source = source,
-            counters = counters.toSortedMap().mapValues { (_, v) -> CounterRange(v, v) },
+            counters = counters.toSortedMap().mapValues { (name, v) ->
+                prior[name]?.takeIf { it.min < it.max && v in it.min..it.max } ?: CounterRange(v, v)
+            },
         )
         file.writeText(json.encodeToString(Baseline.serializer(), baseline) + "\n")
     }

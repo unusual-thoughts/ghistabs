@@ -105,16 +105,23 @@ class TypeRegistry(
         out
     }
 
+    // Replace-empty, not keep: when we file a type under its namespace category (scope attribution), it
+    // collides with the empty this-param shadow Ghidra's demangler forged there (`std::X::method` → empty
+    // `/std/X`). KEEP_HANDLER would return that empty shadow and discard our filled type, so every
+    // reference resolves to undefined; REPLACE_EMPTY_STRUCTS fills the shadow with ours (and still
+    // RENAME_AND_ADDs two genuinely-distinct non-empty types, like DEFAULT_HANDLER).
+    private val conflictHandler = DataTypeConflictHandler.REPLACE_EMPTY_STRUCTS_OR_RENAME_AND_ADD_HANDLER
+
     /** Resolve [dt] into the DTM and remember it. Returns the DTM-resolved instance (may differ). */
     fun register(dt: DataType): DataType {
-        val resolved = dtm.resolve(dt, DataTypeConflictHandler.KEEP_HANDLER)
+        val resolved = dtm.resolve(dt, conflictHandler)
         extrasByName.getOrPut(resolved.name) { LinkedHashSet() }.add(resolved)
         return resolved
     }
 
     /** Like [register] but caches the result under [id] for [dataTypeFor]. */
     fun register(dt: DataType, id: GlobalTypeId): DataType {
-        val resolved = dtm.resolve(dt, DataTypeConflictHandler.KEEP_HANDLER)
+        val resolved = dtm.resolve(dt, conflictHandler)
         byId[id] = resolved
         return resolved
     }
@@ -432,8 +439,8 @@ class TypeRegistry(
         category: CategoryPath,
         reason: String = "fwd-decl",
         // The canonical slot name — defaults to the stabs identity, but a scope-attributed group passes
-        // its key name so an abbreviation-expanded STL type materialises at the demangler's spelling
-        // (`/std/string`, not `/std/basic_string<…>`), which Ghidra's this-param creator then reuses.
+        // its key name (the demangler's leaf) so the type materialises at the demangler's spelling
+        // (`/std/string`, not `/std/basic_string<…>`), the slot Ghidra's this-param creator then reuses.
         name: String = ast.ghidraName,
     ): DataType {
         // gcc emits each _ZTI global typed as a `__*_type_info_pseudo` struct it never gives a
