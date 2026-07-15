@@ -842,4 +842,4 @@ the stabs don't fully carry. Two levels, in priority order:
   — single-inheritance corpus — so this is the rarer path.
 
 Then point the vtable `rtti` pointee at the class's typeinfo struct instead of `Undefined4*`.
-Behavioural: shifts regression counters — regen baselines with `-PregenerateBaselines`.
+Behavioural: shifts regression counters — regen baselines with `-PregenerateBaselines=true`.
