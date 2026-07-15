@@ -1,12 +1,19 @@
 package ghistabs.importer
 
 import ghidra.program.database.ProgramBuilder
+import ghidra.program.model.address.Address
+import ghidra.program.model.data.CharDataType
+import ghidra.program.model.data.IntegerDataType
+import ghidra.program.model.data.PointerDataType
+import ghidra.program.model.data.StructureDataType
+import ghidra.program.model.data.Undefined4DataType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghistabs.diagnose.defaultContext
 import ghistabs.importer.StabsImporter
 import ghistabs.parse.StabReader
 import ghistabs.parse.StabRecord
 import ghistabs.parse.StabType
+import ghistabs.runTransaction
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -168,5 +175,70 @@ class SymbolApplyIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             .single { it.categoryPath.path.startsWith("/stabs/constants") }
         assertEquals(4, enum.length, "0xFFFFFFFF sizes to a 4-byte enum")
         assertEquals(0xFFFFFFFFL, enum.values.single(), "sole member carries the value")
+    }
+
+    private fun addr(off: Long): Address = builder.program.addressFactory.defaultAddressSpace.getAddress(off)
+
+    /**
+     * [sweepPointees] chases a `char*` global to its undefined target and lays a terminated
+     * string there — the anonymous static gcc emits without a stab.
+     */
+    @Test
+    fun sweepDefinesStringAtCharPointerTarget() {
+        val program = builder.program
+        builder.setBytes("0x401000", "10 10 40 00") // little-endian 0x00401010
+        builder.setBytes("0x401010", "68 69 00") // "hi\0"
+
+        val defined = program.runTransaction("sweep") {
+            sweepPointees(program, program.listing.createData(addr(0x401000), PointerDataType(CharDataType.dataType)))
+        }
+
+        assertEquals(1, defined, "one target newly defined")
+        val target = program.listing.getDataAt(addr(0x401010))
+        assertTrue(target.isDefined && target.value is String, "char* target typed as a string")
+        assertEquals("hi", target.value)
+    }
+
+    /**
+     * The sweep is not string-only: a pointer whose declared pointee is a concrete sized type
+     * lays that type verbatim at the target.
+     */
+    private fun point(): StructureDataType = StructureDataType("Point", 0).apply {
+        add(IntegerDataType.dataType, "x", null)
+        add(IntegerDataType.dataType, "y", null)
+    }
+
+    @Test
+    fun sweepLaysConcretePointeeTypeAtTarget() {
+        val program = builder.program
+        val point = point()
+        builder.setBytes("0x401000", "10 10 40 00") // → 0x00401010
+
+        val defined = program.runTransaction("sweep") {
+            sweepPointees(program, program.listing.createData(addr(0x401000), PointerDataType(point)))
+        }
+
+        assertEquals(1, defined, "one target newly defined")
+        val target = program.listing.getDataAt(addr(0x401010))
+        assertEquals("Point", target.dataType.name, "concrete pointee laid verbatim, not a string")
+    }
+
+    /**
+     * A placeholder auto-analysis dropped at the target (an `undefined4`) is not "precise
+     * enough" — the sweep overwrites it with the pointee's real type rather than deferring.
+     */
+    @Test
+    fun sweepOverwritesUndefinedPlaceholderWithPreciseType() {
+        val program = builder.program
+        val point = point()
+        builder.setBytes("0x401000", "10 10 40 00") // → 0x00401010
+
+        val defined = program.runTransaction("sweep") {
+            program.listing.createData(addr(0x401010), Undefined4DataType.dataType) // auto-analysis guess
+            sweepPointees(program, program.listing.createData(addr(0x401000), PointerDataType(point)))
+        }
+
+        assertEquals(1, defined, "placeholder overwritten counts as one defined")
+        assertEquals("Point", program.listing.getDataAt(addr(0x401010)).dataType.name)
     }
 }

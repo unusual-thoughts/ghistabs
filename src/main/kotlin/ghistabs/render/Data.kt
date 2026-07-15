@@ -1,56 +1,10 @@
 package ghistabs.render
 
 import ghidra.program.model.address.Address
-import ghidra.program.model.data.DataUtilities
-import ghidra.program.model.data.DataUtilities.ClearDataMode
-import ghidra.program.model.data.TerminatedStringDataType
 import ghidra.program.model.listing.Data
 import ghidra.program.model.listing.Program
 import ghidra.program.model.scalar.Scalar
-import ghidra.util.ascii.AsciiCharSetRecognizer
-
-/**
- * Length (including the terminator) of the NUL-terminated run of characters Ghidra's
- * string charset ([AsciiCharSetRecognizer], the recogniser its StringSearcher wraps)
- * accepts at [addr], or null if [addr] doesn't begin one. A point query — we already
- * hold the exact address, so there's nothing to search for.
- */
-private fun asciiStringLen(program: Program, addr: Address, max: Int = 4096): Int? {
-    val charSet = AsciiCharSetRecognizer()
-    val bytes = ByteArray(max)
-    val n = runCatching { program.memory.getBytes(addr, bytes) }.getOrNull() ?: return null
-    for (i in 0 until n) {
-        val b = bytes[i].toInt() and 0xff
-        if (b == 0) return if (i > 0) i + 1 else null
-        if (!charSet.contains(b)) return null
-    }
-    return null
-}
-
-/**
- * Data a pointer targets, defining a string at [addr] when its bytes are an ASCII run
- * Ghidra's string detector recognises. Such a run is often left undefined or, worse,
- * mis-disassembled as code (`char const * align_prefix` → "#!ALIGN "); since
- * createData's ClearDataMode only clears conflicting *data*, the mis-identified code
- * units are cleared first. An already-defined string is kept as-is. Returns the resolved
- * data, else the existing data. Requires an open transaction (the render loop opens one).
- */
-private fun resolvePointee(program: Program, addr: Address): Data? {
-    val existing = program.listing.getDataAt(addr)
-    if (existing != null && existing.isDefined && existing.value is String) return existing
-    val len = asciiStringLen(program, addr) ?: return existing
-    runCatching {
-        program.listing.clearCodeUnits(addr, addr.add((len - 1).toLong()), false)
-        DataUtilities.createData(
-            program,
-            addr,
-            TerminatedStringDataType.dataType,
-            -1, // dynamic — Ghidra sizes the terminated string itself
-            ClearDataMode.CLEAR_ALL_CONFLICT_DATA,
-        )
-    }.getOrNull()?.let { return it }
-    return existing
-}
+import ghistabs.importer.resolvePointee
 
 private fun Data.repr() = runCatching { defaultValueRepresentation }.getOrNull()
     ?.takeIf { it.isNotEmpty() && it != "??" && !it.contains("Empty-Structure") }
