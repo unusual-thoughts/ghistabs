@@ -35,6 +35,11 @@ class ClassBuilder(
 
     companion object {
         private val source = SourceType.IMPORTED
+
+        // Injected/hidden params that must not be mistaken for source-level formals when
+        // harvesting N_PSYM names: Ghidra's __thiscall `this` and StructReturnAnalyzer's
+        // by-value return pointer.
+        private val HIDDEN_PARAM_NAMES = setOf("this", "__return_storage_ptr__")
         fun CanonicalGroup.isClass() = ast.body is TypeDecl.Struct &&
             (
                 ast.body.methods.isNotEmpty() ||
@@ -318,13 +323,16 @@ class ClassBuilder(
         } else {
             emptyList()
         }
-        // Preserve N_PSYM-derived names set in StabsImporter.passB — those are
-        // the only source-level names we have. When Ghidra injects `this` at slot 0,
-        // user params start at index 1 in func.parameters.
-        val priorOffset = if (ghidraInjectsThis) 1 else 0
+        // Preserve N_PSYM-derived names set in StabsImporter.passB — the only source-level
+        // names we have. Index them by their own position, not func.parameters', which by now
+        // also holds injected `this` and (for by-value struct returns) StructReturnAnalyzer's
+        // `__return_storage_ptr__` — a fixed offset misaligns and stamps `this` onto formal 0.
+        val priorNames = func.parameters
+            .filterNot { it.isAutoParameter || it.name in HIDDEN_PARAM_NAMES }
+            .map { it.name }
         val formals = paramTypes.mapIndexed { i, pdt ->
             ParameterImpl(
-                func.parameters.getOrNull(i + priorOffset)?.name ?: "arg$i",
+                priorNames.getOrNull(i) ?: "arg$i",
                 pdt ?: Undefined4DataType.dataType,
                 program,
                 source,
