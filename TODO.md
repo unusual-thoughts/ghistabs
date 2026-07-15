@@ -60,6 +60,23 @@ un-folded/duplicated so no alias matches. Should largely clear once 1 and 4 are 
 
 ## Open — prioritized
 
+### P2b — Namespace categories for *all* method-bearing types (not just abbreviations)
+
+The `Ss`→`string` fix (Done issue 1) re-homes only abbreviation-spelled types to their namespace category;
+the goal is **namespace category when possible, header only on genuine (scope,name) content collision** —
+so `std::CClass` lands at `/std/CClass` throughout. A first broad attempt (`815c7ed`, since narrowed)
+regressed xapasmcsr badly: `local-typed-all-undefined` 10→71, `inheritance-applied` 83→70, new
+`dtm-conflicts`/`field-dropped`/`base-layout-failed`. Root-caused (broad-run `xapasmcsr.concurrent.log`):
+under scope-grouping the STL iterators' **base-subobject Ref goes unresolved** — `_Rb_tree_iterator<…>@+0
+:: Ref unresolved, synthesised 4-byte placeholder` → `4 of 4 bytes Undefined1`. Two compounding causes:
+(1) the demangler emits **inconsistent spellings** for one type across CUs (`std::pair<const int,…>` vs
+`…<constint,…>`, spacing), so keying by demangler-leaf *fragments* one type into many near-duplicate
+`/std/_Rb_tree_iterator<…>` slots; (2) that fragmentation breaks the byId member-aliasing the base Ref
+relies on. Naming slots by the demangler leaf (to match Ghidra's this-param spelling) did **not** help —
+still 71. So the blocker is materialization-layer (base-subobject resolution under coarser grouping), not
+naming. Needs: a spelling-canonical scope key (fold the demangler's const/space variants) and/or fixing
+base-Ref resolution to survive scope-grouping, before widening past abbreviation types.
+
 ### P1 — Untyped locals/params from never-bound gcc-12 ids (the "Pattern B" family)
 
 **Highest-impact gap by far.** gcc-12 emits `(0,89)=*(0,25)` where `(0,25)` is
@@ -177,15 +194,16 @@ containing field/typedef when unambiguous.
   `std::string::*` method (decompiler shows `undefined4`). Root cause: we filed the type under its
   *header* category (`/std/stringfwd`) named `basic_string<…>`, so Ghidra's `isNamespaceCategoryMatch`
   never found ours and made its own — and because it forms after our import, no post-hoc replacement can
-  catch it. Fix (`TypeResolver.byCanonicalKey` + `Attribution` + `TypeRegistry`): attribute a
-  method-bearing type to its **namespace** category via a scope→header→hash ladder (scope read off any
-  member's mangled name through the demangler), and take the demangler's own **leaf** as the canonical
-  slot name — bare leaves only, so `Ss` → `string` but templated leaves keep the stabs spelling.
-  `makePlaceholder` now honours the key name, so the filled type materialises at exactly `/std/string`
-  and Ghidra reuses it — no shadow, independent of typedef shortening. Guarded by
-  `StringDedupIntegrationTest` (both shortening modes) and the headless `EnclosingScopeTest`.
-  (Supersedes the earlier §20-content-folding hypothesis, which did **not** actually prevent the empty
-  `/std/string` — the stub persisted in both modes.)
+  catch it. Fix (`TypeResolver.scopeKey`/`byCanonicalKey` + `Attribution` + `TypeRegistry`): re-home
+  **only abbreviation-spelled types** — those whose demangler leaf is a bare identifier differing from
+  the stabs name (`Ss` → `string` vs `basic_string<…>`) — to their namespace category, named by the
+  demangler leaf, so the filled type materialises at exactly `/std/string` and Ghidra's
+  `isNamespaceCategoryMatch` reuses it (independent of typedef shortening). `makePlaceholder` honours the
+  key name. Guarded by `StringDedupIntegrationTest` (both shortening modes) and the headless
+  `EnclosingScopeTest`. Narrowed from an initial broad "every method-bearing type → namespace" scheme
+  (`815c7ed`) that regressed STL resolution — see the open item below. (Supersedes the earlier
+  §20-content-folding hypothesis, which did **not** prevent the empty `/std/string` — it persisted in
+  both modes.)
 - [x] **Demangler needs no Program/Address** — `16d11da`. GnuDemangler demangles from an initialised
   Application alone (it invokes the bundled native `demangler_gnu`); `demangle` / `demangledName` /
   `namespaceChain` are now top-level over one shared `GnuDemangler`, dropping the `Program` receiver
