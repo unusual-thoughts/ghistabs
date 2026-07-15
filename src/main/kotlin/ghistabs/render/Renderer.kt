@@ -309,7 +309,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
     private fun emitFunctionBraces() {
         for (r in spans.ranges) {
             val sig = r.func.signature(program)
-            val name = r.func.demangledName(program)
+            val name = r.func.demangledName
             val openText = if (r.isSingleLine) "$sig;" else "$sig {"
             val openNote = if (r.isSingleLine) name else "opens $name"
             canvas[r.startLine].fragments.add(
@@ -321,7 +321,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             if (closeLine !in 1..maxLine) continue
             canvas[closeLine] += Fragment(
                 code = "}",
-                note = "closes ${r.func.demangledName(program)}",
+                note = "closes ${r.func.demangledName}",
                 kind = FragmentKind.FUNC_DELIM,
             )
         }
@@ -548,11 +548,11 @@ private class RenderContext(val renderer: Renderer, val source: String) {
         for (r in spans.ranges) {
             val closeLine = spans.closeLine(r.func) ?: continue
             val interior = (r.startLine + 1) until closeLine
-            val fname = r.func.demangledName(program)
+            val fname = r.func.demangledName
             val where = "inside $fname [L${r.startLine}..L$closeLine]"
             for (g in spans.ranges) {
                 if (g.func === r.func) continue
-                val gname = g.func.demangledName(program)
+                val gname = g.func.demangledName
                 if (gname == fname) continue
                 if (g.startLine in interior) {
                     anomalies += "skeleton[$source]: function $gname opens at L${g.startLine} $where"

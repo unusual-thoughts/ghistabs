@@ -94,7 +94,7 @@ data class OpenFunction(
     // Distinct from a genuine 0. Used by TypeResolver for header-hint address ranges.
     var sizeBytes: ULong? = null,
 ) {
-    fun demangledName(program: Program) = program.demangledName(decl.name, addr.address)
+    val demangledName by lazy { demangledName(decl.name) }
 
     /**
      * Function signature via Ghidra's API at the function's entry address — Ghidra has
