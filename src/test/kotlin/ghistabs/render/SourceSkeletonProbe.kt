@@ -46,11 +46,11 @@ import java.io.File
 @Tag("probe")
 class SourceSkeletonProbe : AbstractGhidraHeadlessIntegrationTest() {
     @ParameterizedTest
-    @MethodSource("ghistabs.IntegrationFixtures#skeleton")
+    @MethodSource("ghistabs.IntegrationFixtures#all")
     fun writeSkeletons(binaryName: String) = runPipeline(binaryName, decompile = false)
 
     @ParameterizedTest
-    @MethodSource("ghistabs.IntegrationFixtures#core")
+    @MethodSource("ghistabs.IntegrationFixtures#all")
     fun writeDecompilations(binaryName: String) = runPipeline(binaryName, decompile = true)
 
     private fun runPipeline(binaryName: String, decompile: Boolean) {
