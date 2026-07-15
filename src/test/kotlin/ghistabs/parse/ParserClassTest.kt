@@ -235,6 +235,38 @@ class ParserClassTest {
         assertEquals(expected, Parser(input).parseSymbol())
     }
 
+    /**
+     * Without `-gstabs+`, gcc emits a static data member as the bare `name:type,0,0` rather than
+     * the `:mangled` form — recognised by offset and size both being zero (gcc-4.2.1 libstdc++).
+     */
+    @Test
+    fun testStaticFieldGstabsNoExtensions() {
+        val input = "Quux:T(0,11)=s4id:(0,1),0,0;;;;"
+        val expected = SymbolDecl.TaggedType(
+            name = "Quux",
+            id = LocalTypeId(0, 11),
+            type = TypeDecl.Struct(
+                rawKind = AggrKind.STRUCT,
+                sizeBytes = 4,
+                bases = emptyList(),
+                fields = listOf(
+                    FieldDecl(
+                        name = "id",
+                        type = TypeDecl.Ref(LocalTypeId(0, 1)),
+                        offsetBits = 0,
+                        sizeBits = 0,
+                        isStatic = true,
+                        access = Access.PUBLIC,
+                    ),
+                ),
+                methods = emptyList(),
+                hasVTablePointerMarker = false,
+                vtableTargetTypeId = null,
+            ),
+        )
+        assertEquals(expected, Parser(input).parseSymbol())
+    }
+
     @Test
     fun testMethodNoParametersVoidSentinel() {
         // Method with implicit this but no explicit parameters.
