@@ -225,7 +225,7 @@ class TypeRegistry(
             // empty second copy that would collide with the filled type (`.conflict`).
             for (group in resolver.byCanonicalKey.values) {
                 val winner = group.ast
-                val raw = makePlaceholder(winner, group.key.category)
+                val raw = makePlaceholder(winner, group.key.category, name = group.key.name)
                 val placeholder =
                     if (winner.body is TypeDecl.Struct || raw is GhidraEnum) register(raw) else raw
                 for (m in group.members) placeholders.putIfAbsent(m, placeholder)
@@ -427,7 +427,15 @@ class TypeRegistry(
 
     private val rttiStructs = RttiStructs(dtm)
 
-    private fun makePlaceholder(ast: TypeAst, category: CategoryPath, reason: String = "fwd-decl"): DataType {
+    private fun makePlaceholder(
+        ast: TypeAst,
+        category: CategoryPath,
+        reason: String = "fwd-decl",
+        // The canonical slot name — defaults to the stabs identity, but a scope-attributed group passes
+        // its key name so an abbreviation-expanded STL type materialises at the demangler's spelling
+        // (`/std/string`, not `/std/basic_string<…>`), which Ghidra's this-param creator then reuses.
+        name: String = ast.ghidraName,
+    ): DataType {
         // gcc emits each _ZTI global typed as a `__*_type_info_pseudo` struct it never gives a
         // debug definition, so it arrives here unresolved. Substitute the authoritative RttiStructs
         // layout instead of an opaque stub (last-resort RTTI, backlog §24).
@@ -437,30 +445,30 @@ class TypeRegistry(
         }
 
         val dt = when (ast.body) {
-            is TypeDecl.Struct if (ast.body.rawKind == AggrKind.UNION) -> UnionDataType(category, ast.ghidraName, dtm)
+            is TypeDecl.Struct if (ast.body.rawKind == AggrKind.UNION) -> UnionDataType(category, name, dtm)
 
             is TypeDecl.Struct -> {
                 val sz = usefulStructSize(ast.body)
                 recordTruncation(ast, ast.body.sizeBytes.toInt(), sz)
-                StructureDataType(category, ast.ghidraName, sz, dtm)
+                StructureDataType(category, name, sz, dtm)
             }
 
             // Enum placeholder MUST be an EnumDataType, correctly sized: materialiseEnum fills this
             // same registered object in place (like structs), so a wrong kind/size would leave a
             // colliding `.conflict` second type. Size per gdb's stabsread.c::read_enum_type —
             // sizeof(int) unless gcc emits an explicit `@s<bits>` (`-fshort-enums`).
-            is TypeDecl.Enum -> EnumDataType(category, ast.ghidraName, 4, dtm)
+            is TypeDecl.Enum -> EnumDataType(category, name, 4, dtm)
 
             is TypeDecl.WithSizeAttr if ast.body.inner is TypeDecl.Enum ->
-                EnumDataType(category, ast.ghidraName, (ast.body.sizeBits + 7) / 8, dtm)
+                EnumDataType(category, name, (ast.body.sizeBits + 7) / 8, dtm)
 
             // An unresolved enum XRef (gcc only forward-referenced it, e.g. `vm_image_type`) must
             // stub as an Enum, not a Structure: a struct stub is a Composite, so StructReturnAnalyzer
             // (§13) would force an enum-returning method through the hidden-pointer ABI
             // (`vm_image_type *__return_storage_ptr__`) and render its values as pointer compares.
-            is TypeDecl.XRef if ast.body.kind == AggrKind.ENUM -> EnumDataType(category, ast.ghidraName, 4, dtm)
+            is TypeDecl.XRef if ast.body.kind == AggrKind.ENUM -> EnumDataType(category, name, 4, dtm)
 
-            else -> StructureDataType(category, ast.ghidraName, 0, dtm)
+            else -> StructureDataType(category, name, 0, dtm)
         }
         debug("placeholder-created", "name=${ast.nameOrUnique} category=$category reason=$reason")
         return dt

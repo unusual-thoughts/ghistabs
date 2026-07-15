@@ -32,7 +32,7 @@ sealed class Skip(open val reason: String) {
 
 /**
  * Replaces empty `/Demangler/...` stubs with our registered types. Candidates come from
- * [TypeRegistry.findByName] only — no DTM-wide heuristics. The stub's path (sans `/Demangler`)
+ * [TypeRegistry.allCreatedDataTypes] only — no DTM-wide heuristics. The stub's path (sans `/Demangler`)
  * acts as the preferred-category hint when multiple candidates share a simple name.
  */
 class DemanglerReplacer(private val ctx: ImportContext<*>, private val typeRegistry: TypeRegistry) :

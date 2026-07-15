@@ -1,7 +1,11 @@
 package ghistabs.harvest
 
+import ghidra.program.model.data.CategoryPath
 import ghistabs.diagnose.StabsDiagnostics
+import ghistabs.namespaceChain
+import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.SourceFile
+import ghistabs.parse.TypeDecl
 
 /**
  * Stdlib path marker. Requires `/usr|lib|include/` (plus one optional segment) before a stdlib
@@ -66,6 +70,28 @@ fun foldSourcePaths(filenames: Iterable<String>): Map<String, String> {
 
 /** gcc emits anonymous types with CU-local sequential names; same name in different CUs is unrelated. */
 fun TypeAst.isCuLocalName() = name != null && (name.isEmpty() || CU_LOCAL_NAME.matches(name))
+
+/**
+ * The type's own demangled path, root-first (`std::string::_M_replace` → `["std", "string"]`), or null
+ * when the stab carries no scope signal (method-less, or no member's mangled name demangles). Read off
+ * any member's Itanium-mangled name: [namespaceChain] yields the method's namespace, which IS the class's
+ * full path. The leaf is the name Ghidra's `this`-param class-struct creator uses — which diverges from
+ * the stabs spelling for abbreviation/typedef'd STL types (`Ss` demangles to `std::string`, not
+ * `std::basic_string<char,…>`) — so it's what our type must be named to be reused rather than shadowed.
+ */
+fun TypeAst.demangledClassPath(): List<String>? {
+    val methods = (body as? TypeDecl.Struct<GlobalTypeId>)?.methods ?: return null
+    return methods.firstNotNullOfOrNull { it.mangled?.let(::namespaceChain) }
+}
+
+/** The type's enclosing C++ scope, root-first — the category a namespace-organised DTM files it under
+ *  (`std::string` → `["std"]` → `/std`; a global class → `[]` → ROOT). Null falls back to header
+ *  attribution. See [demangledClassPath]. */
+fun TypeAst.enclosingScope(): List<String>? = demangledClassPath()?.dropLast(1)
+
+/** A root-first scope path (from [enclosingScope]) as a DTM category; the empty scope is ROOT. */
+fun scopeCategory(scope: List<String>): CategoryPath =
+    scope.fold(CategoryPath.ROOT) { acc, seg -> CategoryPath(acc, seg) }
 
 /**
  * Longest common path prefix across CUSource filenames in [sources]. Used to strip project
