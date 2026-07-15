@@ -277,6 +277,12 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val typeRegis
         val typedefTargets = matches.filterIsInstance<TypeDef>().mapTo(mutableSetOf()) { it.baseDataType.pathName }
         val collapsed = matches.filterNot { it.pathName in typedefTargets }
         if (collapsed.size == 1) return collapsed.single()
+        // A `/stabs/…` candidate is a ref-stub placeholder (makePlaceholder's home); the same
+        // simple name in a CU/include category is the resolved type. When that leaves exactly
+        // one non-placeholder, it's not real ambiguity — take it (locale facets hit this: the
+        // demangler stub is `/Demangler/std/…`, matching neither the `/src/…` nor `/stabs/` home).
+        collapsed.filterNot { it.categoryPath.path.startsWith("/stabs") }
+            .singleOrNull()?.let { return it }
         log(
             "demangler-ambiguous",
             "Multiple matches for '$simpleName' (preferred=$preferredCategory): " +
