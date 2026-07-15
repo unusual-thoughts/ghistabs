@@ -60,23 +60,6 @@ un-folded/duplicated so no alias matches. Should largely clear once 1 and 4 are 
 
 ## Open — prioritized
 
-### P2b — Namespace categories for *all* method-bearing types (not just abbreviations)
-
-The `Ss`→`string` fix (Done issue 1) re-homes only abbreviation-spelled types to their namespace category;
-the goal is **namespace category when possible, header only on genuine (scope,name) content collision** —
-so `std::CClass` lands at `/std/CClass` throughout. A first broad attempt (`815c7ed`, since narrowed)
-regressed xapasmcsr badly: `local-typed-all-undefined` 10→71, `inheritance-applied` 83→70, new
-`dtm-conflicts`/`field-dropped`/`base-layout-failed`. Root-caused (broad-run `xapasmcsr.concurrent.log`):
-under scope-grouping the STL iterators' **base-subobject Ref goes unresolved** — `_Rb_tree_iterator<…>@+0
-:: Ref unresolved, synthesised 4-byte placeholder` → `4 of 4 bytes Undefined1`. Two compounding causes:
-(1) the demangler emits **inconsistent spellings** for one type across CUs (`std::pair<const int,…>` vs
-`…<constint,…>`, spacing), so keying by demangler-leaf *fragments* one type into many near-duplicate
-`/std/_Rb_tree_iterator<…>` slots; (2) that fragmentation breaks the byId member-aliasing the base Ref
-relies on. Naming slots by the demangler leaf (to match Ghidra's this-param spelling) did **not** help —
-still 71. So the blocker is materialization-layer (base-subobject resolution under coarser grouping), not
-naming. Needs: a spelling-canonical scope key (fold the demangler's const/space variants) and/or fixing
-base-Ref resolution to survive scope-grouping, before widening past abbreviation types.
-
 ### P1 — Untyped locals/params from never-bound gcc-12 ids (the "Pattern B" family)
 
 **Highest-impact gap by far.** gcc-12 emits `(0,89)=*(0,25)` where `(0,25)` is
@@ -188,22 +171,24 @@ containing field/typedef when unambiguous.
 
 ### Session 2026-07-14
 
-- [x] **std::string materialised as an empty /std/string shadow (research issue 1)** — `815c7ed`.
-  Ghidra's demangler expands the `Ss` abbreviation to a std::string class and, running *after* our whole
-  import, synthesises an empty `/std/string` this-param struct that shadows the filled type for every
-  `std::string::*` method (decompiler shows `undefined4`). Root cause: we filed the type under its
-  *header* category (`/std/stringfwd`) named `basic_string<…>`, so Ghidra's `isNamespaceCategoryMatch`
-  never found ours and made its own — and because it forms after our import, no post-hoc replacement can
-  catch it. Fix (`TypeResolver.scopeKey`/`byCanonicalKey` + `Attribution` + `TypeRegistry`): re-home
-  **only abbreviation-spelled types** — those whose demangler leaf is a bare identifier differing from
-  the stabs name (`Ss` → `string` vs `basic_string<…>`) — to their namespace category, named by the
-  demangler leaf, so the filled type materialises at exactly `/std/string` and Ghidra's
-  `isNamespaceCategoryMatch` reuses it (independent of typedef shortening). `makePlaceholder` honours the
-  key name. Guarded by `StringDedupIntegrationTest` (both shortening modes) and the headless
-  `EnclosingScopeTest`. Narrowed from an initial broad "every method-bearing type → namespace" scheme
-  (`815c7ed`) that regressed STL resolution — see the open item below. (Supersedes the earlier
-  §20-content-folding hypothesis, which did **not** prevent the empty `/std/string` — it persisted in
-  both modes.)
+- [x] **Namespace categories for method-bearing types; std::string shadow fix (research issue 1)** —
+  Ghidra's demangler expands `Ss` to a std::string class and, running *after* our import, forges an empty
+  `/std/string` this-param struct that shadows the filled type for every `std::string::*` method
+  (decompiler shows `undefined4`) — and more broadly forges an empty `/std/X` for every `std::X::method`.
+  Root cause: we filed types under *header* categories, so Ghidra's `isNamespaceCategoryMatch` never found
+  ours and made its own empty shadow; and because it forms after our import, no post-hoc replacement
+  catches it. **Fix, two parts** (`TypeResolver.scopeKey`/`byCanonicalKey` + `TypeRegistry`): (1) file
+  **every** method-bearing type under its namespace category, named by the demangler's own leaf — the
+  exact `(category, name)` Ghidra's this-param creator uses — so our filled slot *is* the slot it would
+  forge; byCanonicalKey demotes to header only on a genuine content collision. (2) `register()` uses
+  `REPLACE_EMPTY_STRUCTS_OR_RENAME_AND_ADD_HANDLER` instead of `KEEP_HANDLER`, so our filled type
+  **replaces** Ghidra's empty shadow at the colliding path (KEEP kept the empty shadow and discarded ours
+  → every reference to the type resolved to undefined). The mid-journey narrow-to-abbreviations-only step
+  is superseded. Guarded by `StringDedupIntegrationTest` (both shortening modes) + headless
+  `EnclosingScopeTest`; xapasmcsr baseline regen back to pre-session (only `canonical-scope-collision` /
+  `dtm-conflicts-created` new; `xref-base-tag-resolved` now mode-variable `[45,49]` — AFTER resolves a few
+  more xrefs — so `BaselineWriter` preserves an intentional range across single-mode regen). (Supersedes
+  the earlier §20-content-folding hypothesis, which did **not** prevent the empty `/std/string`.)
 - [x] **Demangler needs no Program/Address** — `16d11da`. GnuDemangler demangles from an initialised
   Application alone (it invokes the bundled native `demangler_gnu`); `demangle` / `demangledName` /
   `namespaceChain` are now top-level over one shared `GnuDemangler`, dropping the `Program` receiver

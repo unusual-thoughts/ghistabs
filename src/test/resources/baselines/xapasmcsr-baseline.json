@@ -9,8 +9,12 @@
             "max": 76
         },
         "canonical-key-multi-hash": {
-            "min": 10,
-            "max": 10
+            "min": 9,
+            "max": 9
+        },
+        "canonical-scope-collision": {
+            "min": 9,
+            "max": 9
         },
         "class-not-struct": {
             "min": 2,
@@ -57,8 +61,8 @@
             "max": 2455
         },
         "demangler-skip-no-replacement": {
-            "min": 74,
-            "max": 74
+            "min": 67,
+            "max": 67
         },
         "desc-dropped-undf": {
             "min": 1,
@@ -76,9 +80,13 @@
             "min": 19,
             "max": 19
         },
+        "dtm-conflicts-created": {
+            "min": 2,
+            "max": 2
+        },
         "dtm-conflicts-post": {
-            "min": 1,
-            "max": 1
+            "min": 3,
+            "max": 3
         },
         "dtm-conflicts-pre": {
             "min": 1,
@@ -241,12 +249,12 @@
             "max": 332
         },
         "method-implicit-not-emitted": {
-            "min": 1076,
-            "max": 1076
+            "min": 1079,
+            "max": 1079
         },
         "placeholder-created": {
-            "min": 11727,
-            "max": 11727
+            "min": 11728,
+            "max": 11728
         },
         "pointee-typed": {
             "min": 107,
@@ -265,8 +273,8 @@
             "max": 809
         },
         "replaced-demangler": {
-            "min": 66,
-            "max": 66
+            "min": 73,
+            "max": 73
         },
         "rtti-pseudo-substituted": {
             "min": 8,
@@ -330,12 +338,12 @@
         },
         "xref-base-tag-resolved": {
             "min": 45,
-            "max": 45
+            "max": 49
         },
         "xref-undefined": {
             "min": 62,
             "max": 62
         }
     },
-    "source": "xapasmcsr.exe — generated from snapshotCounters()"
+    "source": "xapasmcsr.exe \u2014 generated from snapshotCounters()"
 }
