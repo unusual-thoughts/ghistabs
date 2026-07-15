@@ -20,81 +20,10 @@ each with its original note quoted verbatim.)
 ## Research — new issues (2026-07-12)
 
 Root-cause investigation of the `## new issues` above. Each subsection quotes the
-original note verbatim, then records findings. No code changed yet.
+original note verbatim, then records findings. Issues 1, 2, 3, 5 and the RTTI-base-class
+part of 4 are fixed — see Done; 4 (`_Rb_tree`) and 6 remain open below.
 
-### 1. `/std/stringfwd/string` (filled) vs `/std/string/string` (stub) duplication
-
-> - in xapasmcsr, there is now (with typedef shortener enabled)  `/std/stringfwd/string` (struct, filled) and
-    > `/std/string/string` (stub
-    > struct, empty but refrerenced) .
-    >
-
-- why is that and why was it not caught by the string test ? (which should be tried with and without tpedef
-  > shortening btw).
-
->     - the `/stabs/string` typedef points to the filled one
->     - the demangler stub does get replaced (`/Demangler/std/string`)
->     - without typedef shortening, the filled struct is called
-
-        > `/std/stringfwd/basic_string<char,std::char_traits<char>,std::allocator<char>>` but otherwise the same,
-        > `/std/string/string` still there as a stub struct which gets referenced by eg `std::string::append()`, should
-        be a
-        > typedef to the filled struct ? or `/stabs/string` itself should really be located at `/std/string/string` ?
-
-Category provenance, not a shortening bug. Confirmed from `xapasmcsr.string-probe.txt`: `/stabs/string` Typedef →
-`/std/stringfwd/string` Structure (len=4). The `basic_string` body is materialised under the header that *declared*
-it — libstdc++ puts the definition in `bits/stringfwd.h` → `/std/stringfwd/`; `TypedefShortener.rename`
-(`TypedefShortening.kt:121`) then renames it `basic_string<…>` → `string` in place.
-
-`/std/string/string` is a *separate* empty XRef stub — a forward-decl referenced from `<string>`
-(`std::string::append()`'s `this` type), living in a different category, so nothing folds it into the filled struct.
-`DemanglerReplacer` fixes `/Demangler/std/string` only because it scans exclusively `/Demangler`-prefixed structures
-(`DemanglerReplacer.kt:103`); `/std/string/string` was never `/Demangler`-prefixed, so it's out of scope.
-
-Fix: make the `/std/string/string` XRef-stub resolve to a typedef → filled struct (same content-hash), or canonicalise
-`basic_string` at `/std/string/`. Test gap the note calls out is real: `StringTypeProbeIntegrationTest` /
-`RegressionTest.kt:651` only exercise the `/Demangler` path, shortening ON. Parameterise with/without shortening and
-assert no second `string` stub survives.
-
-### 2. CSymLexStream vtable has an extra word before the vftable
-
-> - vtable for CSymLexStream has wrong shape!
-    >
-
-- there is an extra field somehow before the vftable! it goes offset_to_top (=0x118 ??), then a zero word (!), then
-  > the typeinfo pointer (rtti) and then the vftable.
-
->     - why is that ? looks like its the only one with this issue too ?
->     - note the symbol "CLexStream-in-CSymLexStream::construction-vtable" exists.
-
-`layVtable` (`Vtable.kt:63`) hardcodes the address point at `ztv + 2*ptrSize` — `Itanium.vtablePrefixBytes` counts
-offset_to_top + rtti only, ignoring the vcall/vbase-offset words that precede the *primary* vtable of a class with a
-polymorphic base. CSymLexStream derives from CLexStream (`_base_CLexStream` at +0, 192b — see
-`csymlexstream-probe.txt`; the `construction-vtable` symbol confirms the polymorphic base), so the `_ZTV` symbol points
-one word before the real offset_to_top. Result: the 0x118 vcall-offset word gets mislabeled `offset_to_top`, the real
-(zero) offset_to_top becomes "a zero word", and rtti+vftable shift by one word. Only class in the corpus with this
-inheritance shape reaching the vtable path, hence unique.
-
-Fix: derive the true address point (from the demangled `DemangledAddressTable`, or by counting vcall/vbase slots from
-the class's virtual-base set) instead of assuming `2*ptr`. Most involved fix of the batch.
-
-### 3. CPackedSegList vtable never annotated
-
-> - CPackedSegList 's vtable doesnt get annotated somehow
-
-**Confirmed from the harvest dump** (`harvest.afters/xapasmcsr-harvest.after.json`): CPackedSegList has
-`hasVTablePointerMarker=false`, 1 PUBLIC base, 4 fields (no `_vptr`), and 11 methods **all `virt=NORMAL`** — including
-the `GetSeg`/`AddSeg`/`SetSeg` overrides. Its polymorphism is *inherited* from the base (in `Keywords.cpp`); gcc's stab
-for the derived class doesn't re-mark the overrides virtual. `isClass()` passes (methods non-empty) so `build()` runs,
-but `isPoly` (`ClassBuilder.kt:107`) = `hasVTablePointerMarker || any VIRTUAL method || any _vptr field` = **false**, so
-`buildAndApplyVtable` is skipped with no `vtable-failed` degradation.
-
-Fix (one line): add `|| typeResolver.hasPolymorphicBaseSubobject(classBody)` to the `isPoly` expression. That helper
-(`Layout.kt:74`) already recurses bases for exactly this signal and is in scope in `build()` (used already by
-`ensureVfptrFirstField`). `collectAllVirtuals()` walks bases, so once the gate opens it gathers the inherited virtuals
-and `resolveVtableAddress` finds `_ZTV14CPackedSegList`. Smallest correctness fix of the batch.
-
-### 4. Leftover Demangler stubs + wire RttiStructs into DemanglerReplacer
+### 4. Leftover Demangler stubs (`_Rb_tree`, STL templates)
 
 > - should be an integration test to make sure there are no leftover demangler stubs
     >   -
@@ -107,49 +36,23 @@ and `resolveVtableAddress` finds `_ZTV14CPackedSegList`. Smallest correctness fi
   > `Demangler/__cxxabiv1/__si_class_type_info`,  `Demangler/__cxxabiv1/__vmi_class_type_info` should have been caught
   > by RttiStructs too, maybe wire DemanglerReplacer to it too
 
-Two independent gaps.
+The abstract RTTI base-class stubs (`type_info`, `__cxxabiv1::__{class,si,vmi}_type_info`) are now typed — see
+[Session 2026-07-12] in Done. What remains: `_Rb_tree<…>` and the STL template zoo
+(`__codecvt_abstract_base`, `__timepunct`, `__normal_iterator.conflict`, …) plus the nested
+`__class_type_info::__{dyncast,upcast}_result` result structs. `DemanglerReplacer` matches only via
+`typeRegistry.findByName(simpleName, …)` (`DemanglerReplacer.kt:122`); these were never materialised as registered
+types (or their canonicalised name differs) → `findByName` null → `Skip.NoReplacement`, left as empty `/Demangler`
+stubs.
 
-1. `_Rb_tree<…>` — `DemanglerReplacer` matches only via `typeRegistry.findByName(simpleName, …)`
-   (`DemanglerReplacer.kt:122`). That templated type was never materialised as a registered type (or its canonicalised
-   name differs) → `findByName` returns null → `Skip.NoReplacement`, left in place.
-2. `type_info` / `__cxxabiv1::__{class,si_class,vmi_class}_type_info` are the **real abstract base classes** from
-   libstdc++/libsupc++ — compiled into the binary with actual member functions (`__do_upcast`, `__do_dyncast`, …,
-   demangled from their `_ZN…` symbols) but **no stabs** (libsupc++ isn't built `-gstabs`). The `/Demangler/…` stub is
-   the `this` type of those methods, so giving it the RttiStructs layout makes those decompilations real — **not
-   cosmetic.** They reach the DTM *only* as Ghidra-demangler artifacts: the harvest (stab model) holds **only** the
-   `_pseudo` spellings (`__class_type_info_pseudo` ×12, `__si_class_type_info_pseudo` ×12) and **zero** non-pseudo. So
-   the placeholder path can't reach them (`makePlaceholder` runs on stab ASTs only) — a demangler-side replacement is
-   required. `findByName` can't bridge it either: the layouts register as `ClassTypeInfoStructure`, not
-   `__class_type_info`.
-
-   **Done (2026-07-12):** unified the two RttiStructs methods into one `typeInfoLayout(name)` (`Vtable.kt`) keyed on
-   *both* spellings — the gcc `__*_type_info_pseudo` structs (stab path, via `makePlaceholder`) and the demangled
-   abstract bases (demangler path, via `DemanglerReplacer` falling back after `findByName` and resolving into the DTM):
-   `type_info` / `__class_type_info` → `classTypeInfoStructure`, `__si_class_type_info` → `siClassTypeInfoStructure`,
-   `__vmi_class_type_info` → `vmiClassTypeInfoStructure(1)`. The `<N>` only varies for the per-object *data* pseudos;
-   the abstract class type itself has the fixed declared `__base_info[1]` shape (the class's own sizeof).
-
-The requested corpus-wide "zero empty `/Demangler` structs remain after import" integration assertion doesn't exist yet
-(`RegressionTest.kt:651` injects only one `/Demangler/std/string`).
-
-### 5. Global names clobber already-demangled labels
-
-> - looks like when applying global variable names, we are not checking if there is already its demangled version name
-    > already applied
-    >
-
-- so for `EAsm::typeinfo` for instance (`__ZTI4EAsm` and `.data$_ZTI4EAsm` in PE symbols) we are adding a
-  > `_ZTI4EAsm` name on top of the nice demangled `EAsm::typeinfo` that is already there, and `ZTI4EAsm` becomes the
-  > primary label name for some reason, hiding the better demangled name that has a namespace
-
->     - same for `EAsm::typeinfo-name`
-
-`ensureStabLabel` (`SymbolApplier.kt:391`) unconditionally `SetLabelPrimaryCmd`s the *stab* name, which for typeinfo
-globals is the mangled `_ZTI4EAsm` — clobbering the loader's already-applied `EAsm::typeinfo`. (`ZTI4EAsm` without the
-underscore = loader strips one leading `_`.) Same path hits `_ZTS4EAsm` (`typeinfo-name`). Globals bypass the
-`demangleMangledLabels` path (`DemanglerReplacer.kt:77`) that code labels get. Fix: before promoting, skip the
-raw-mangled promotion when a demangled label already exists at the address (or run it through the demangler first).
-Smallest self-contained fix of the batch.
+**Known residual gap, not a regression — minimise it.** The broad `demanglerHasNoEmptyStubs` /
+`noEmptyDemanglerStubsRemain` tests fail on this and have since they were added; the count is the metric to
+drive down (**75 residual stubs on xapasmcsr, AFTER mode**, was 76). Two reasons a stub survives: (a) we never
+registered a matching type (`_Rb_tree<…>` etc. materialise per-instantiation and their demangled spelling drifts
+from ours), or (b) we *do* have the type but `findByName`'s **preferred-category** hint no longer lines up. Since
+scope-attribution now files method-bearing types under their **namespace** category (`/std`, `/__gnu_cxx`, …)
+rather than a header category, the stub-path→preferred-category derivation in `DemanglerReplacer` should be
+revisited to match on the namespace path — likely recovers several of the 75. Normalised-spelling matching for the
+templated `_Rb_tree<…>` zoo is the harder remainder.
 
 ### 6. Many `_base_*` members not shortened
 
@@ -269,6 +172,64 @@ containing field/typedef when unambiguous.
   place (vftable/vtable layout, `/ClassDataTypes/<Class>/` category).
 
 ## Done (recent)
+
+### Session 2026-07-14
+
+- [x] **std::string materialised as an empty /std/string shadow (research issue 1)** — `815c7ed`.
+  Ghidra's demangler expands the `Ss` abbreviation to a std::string class and, running *after* our whole
+  import, synthesises an empty `/std/string` this-param struct that shadows the filled type for every
+  `std::string::*` method (decompiler shows `undefined4`). Root cause: we filed the type under its
+  *header* category (`/std/stringfwd`) named `basic_string<…>`, so Ghidra's `isNamespaceCategoryMatch`
+  never found ours and made its own — and because it forms after our import, no post-hoc replacement can
+  catch it. Fix (`TypeResolver.byCanonicalKey` + `Attribution` + `TypeRegistry`): attribute a
+  method-bearing type to its **namespace** category via a scope→header→hash ladder (scope read off any
+  member's mangled name through the demangler), and take the demangler's own **leaf** as the canonical
+  slot name — bare leaves only, so `Ss` → `string` but templated leaves keep the stabs spelling.
+  `makePlaceholder` now honours the key name, so the filled type materialises at exactly `/std/string`
+  and Ghidra reuses it — no shadow, independent of typedef shortening. Guarded by
+  `StringDedupIntegrationTest` (both shortening modes) and the headless `EnclosingScopeTest`.
+  (Supersedes the earlier §20-content-folding hypothesis, which did **not** actually prevent the empty
+  `/std/string` — the stub persisted in both modes.)
+- [x] **Demangler needs no Program/Address** — `16d11da`. GnuDemangler demangles from an initialised
+  Application alone (it invokes the bundled native `demangler_gnu`); `demangle` / `demangledName` /
+  `namespaceChain` are now top-level over one shared `GnuDemangler`, dropping the `Program` receiver
+  from every call site (SymbolApplier, ClassBuilder, Itanium, Renderer, `OpenFunction.demangledName`).
+- [x] **`-Pfixture` accepts a comma-separated list** — `1085472`. `IntegrationFixtures.select` parses a
+  set of exact filenames + an `accepts(name)` for the `assumeTrue`-style suites, so one
+  `-Pfixture=a.exe,b.exe` narrows every `@MethodSource` suite to a chosen subset.
+
+### Session 2026-07-13
+
+- [x] **Vtable address point skips vbase/vcall offsets (research issue 2)** — `layVtable`
+  (`Vtable.kt`) no longer assumes the address point is `_ZTV<class> + 2*ptr`. For a class whose
+  hierarchy reaches a virtual base (e.g. anything derived from an iostream — `basic_istream`
+  virtually inherits `basic_ios`), `_ZTV` is preceded by vbase/vcall-offset words, so `2*ptr`
+  landed the `vftable` symbol on the rtti word. Now scans from `ztv` for the slot holding the
+  resolved `_ZTI<class>` address; offset_to_top is the word before it, the address point the word
+  after, and the preceding vbase/vcall words are laid as signed data. Falls back to `2*ptr` when
+  rtti is unresolvable (templates) — DCInst and other non-vbase classes are unchanged. Caller
+  (`ClassBuilder.buildAndApplyVtable`) resolves `_ZTI<class>` and passes it. Regression test
+  `cSymLexStreamVtableAddressPointSkipsVbaseOffset`.
+
+### Session 2026-07-12
+
+- [x] **Inherited-vtable annotation on polymorphic-base classes** — `b65bd33`. `isPoly`
+  (`ClassBuilder.kt`) gains `|| typeResolver.hasPolymorphicBaseSubobject(classBody)`. CPackedSegList
+  inherits its vtable from a base but gcc 3.4.4 marks none of its overrides virtual (all `NORMAL`) and
+  emits no vptr marker, so `buildAndApplyVtable` was silently skipped. `Virtuals.process` already walks
+  bases, so the vftable builds and `_ZTV14CPackedSegList` resolves. Test `cPackedSegListVtableAnnotated`.
+- [x] **Don't clobber demangled labels with mangled stab names** — `9488d1f`. `ensureStabLabel`
+  (`SymbolApplier.kt`) skips promoting the raw mangled `_ZTI4EAsm` to primary when the demangled
+  `EAsm::typeinfo` already sits at the address (`demangle(name)?.name` match). Test
+  `typeinfoGlobalKeepsDemangledPrimary`.
+- [x] **Type demangled RTTI base classes from RttiStructs** — `1a1ebed`. Unified `pseudoTypeInfo` +
+  the abstract-base mapping into one `RttiStructs.typeInfoLayout(name)` (`Vtable.kt`) keyed on both
+  spellings: gcc `__*_type_info_pseudo` (stab path, via `makePlaceholder`) and the demangled
+  `type_info` / `__cxxabiv1::__{class,si,vmi}_class_type_info` (demangler path, via `DemanglerReplacer`
+  falling back after `findByName`). `__vmi` → `vmiClassTypeInfoStructure(1)` (declared `__base_info[1]`
+  shape; per-object pseudos keep the real `<N>`). These are real libsupc++ classes with methods
+  (`__do_upcast`, …) but no stabs, so the stub is the `this` type of those methods. Test
+  `typeInfoBaseClassesNotLeftAsStubs`.
 
 ### Session 2026-06-23
 
