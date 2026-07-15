@@ -9,12 +9,8 @@
             "max": 76
         },
         "canonical-key-multi-hash": {
-            "min": 9,
-            "max": 9
-        },
-        "canonical-scope-collision": {
-            "min": 9,
-            "max": 9
+            "min": 10,
+            "max": 10
         },
         "class-not-struct": {
             "min": 2,
@@ -24,49 +20,29 @@
             "min": 126,
             "max": 126
         },
-        "degraded-base-layout-failed": {
-            "min": 2,
-            "max": 2
-        },
         "degraded-base-synthesized": {
-            "min": 12,
-            "max": 12
-        },
-        "degraded-field-dropped": {
-            "min": 8,
-            "max": 8
+            "min": 1,
+            "max": 1
         },
         "degraded-global-typed-xref-stub": {
             "min": 36,
             "max": 36
         },
         "degraded-local-typed-all-undefined": {
-            "min": 71,
-            "max": 71
+            "min": 10,
+            "max": 10
         },
         "degraded-local-typed-xref-stub": {
             "min": 9,
             "max": 9
-        },
-        "degraded-param-typed-all-undefined": {
-            "min": 4,
-            "max": 4
-        },
-        "degraded-placeholder-undefined-fields": {
-            "min": 11,
-            "max": 11
-        },
-        "degraded-placeholder-unresolved": {
-            "min": 5,
-            "max": 5
         },
         "degraded-static-typed-all-undefined": {
             "min": 11,
             "max": 11
         },
         "degraded-struct-mostly-undefined": {
-            "min": 13,
-            "max": 13
+            "min": 2,
+            "max": 2
         },
         "degraded-struct-truncated": {
             "min": 2,
@@ -249,12 +225,8 @@
             "max": 13067
         },
         "inheritance-applied": {
-            "min": 70,
-            "max": 70
-        },
-        "inheritance-failed": {
-            "min": 2,
-            "max": 2
+            "min": 83,
+            "max": 83
         },
         "local-var-add-success": {
             "min": 504,
@@ -269,12 +241,12 @@
             "max": 332
         },
         "method-implicit-not-emitted": {
-            "min": 1079,
-            "max": 1079
+            "min": 1076,
+            "max": 1076
         },
         "placeholder-created": {
-            "min": 11728,
-            "max": 11728
+            "min": 11727,
+            "max": 11727
         },
         "pointee-typed": {
             "min": 107,
@@ -357,8 +329,8 @@
             "max": 14
         },
         "xref-base-tag-resolved": {
-            "min": 49,
-            "max": 49
+            "min": 45,
+            "max": 45
         },
         "xref-undefined": {
             "min": 62,
