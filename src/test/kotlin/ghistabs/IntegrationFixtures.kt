@@ -33,7 +33,6 @@ object IntegrationFixtures {
     )
 
     val ALL = CORE + EXTENDED
-    val SKELETON = listOf("xapasmcsr.exe", "xmltest", "appquery.exe", "box2d_tests")
 
     /** The `-Pfixture` filter as a set of exact filenames (comma-separated); empty means "all". */
     private fun wantedFixtures(): Set<String> = System.getProperty("fixtureFilter").orEmpty()
@@ -54,6 +53,4 @@ object IntegrationFixtures {
     @JvmStatic fun all(): Stream<String> = select(ALL).stream()
 
     @JvmStatic fun allWithBox2d(): Stream<String> = select(ALL + "box2d").stream()
-
-    @JvmStatic fun skeleton(): Stream<String> = select(SKELETON).stream()
 }
