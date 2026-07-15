@@ -286,15 +286,16 @@ class TypeResolver(val harvest: Harvest, private val foldSources: Boolean = true
 
         fun scopeKey(ast: TypeAst): GhidraKey? {
             val path = ast.demangledClassPath() ?: return null
-            // Name the DTM slot by the demangler's leaf when it's a bare identifier — that's exactly what
-            // Ghidra's this-param class-struct creator looks up, so an abbreviation-expanded STL type
-            // (`Ss` → `string`) lands at `/std/string` and Ghidra reuses it instead of forging an empty
-            // shadow, independent of typedef shortening (a render pref, not a correctness lever). Templated
-            // leaves keep the stabs spelling: the demangler's exact byte-spelling drifts from ours, so it
-            // would only relocate a shadow. [TypeRegistry.makePlaceholder] honours this key name.
             val leaf = path.last()
-            val name = if ('<' in leaf) ast.ghidraName else leaf
-            return GhidraKey(scopeCategory(path.dropLast(1)), name)
+            // Re-home ONLY abbreviation-spelled types: those whose demangler leaf is a bare identifier
+            // that differs from the stabs name (`Ss` → `string` vs `basic_string<…>`). For those, filing
+            // under the namespace category with the demangler's leaf name (`/std/string`) is exactly what
+            // Ghidra's this-param class-struct creator looks up, so it reuses ours instead of forging an
+            // empty shadow. Every other method-bearing type keeps header attribution — moving all of them
+            // to namespace categories regressed STL container/iterator resolution (`_Rb_tree_iterator<…>`
+            // materialised all-undefined). [TypeRegistry.makePlaceholder] honours this key name.
+            if ('<' in leaf || leaf == ast.ghidraName) return null
+            return GhidraKey(scopeCategory(path.dropLast(1)), leaf)
         }
 
         // Scope→header→hash ladder. A type whose enclosing C++ scope is derivable (any member's
