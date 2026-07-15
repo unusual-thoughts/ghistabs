@@ -83,16 +83,42 @@ class StabsImportRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
             .flatMap { binary -> Mode.entries.map { mode -> Arguments.of(binary, mode) } }
             .stream()
 
-        // Demangler stubs with no concrete type to bind to: bare (unparameterised) template names
-        // the demangler emits from template-template params / substitutions, plus builtin-spelling
-        // artifacts. These have no instantiation to resolve to and are expected to stay empty; a
-        // stub outside this set is a real materialisation gap. Add consciously when reviewed.
+        // Demangler stubs with no concrete type to bind to across the corpus: types the demangler
+        // names from mangled symbols that this binary only forward-declares (RTTI / EH surface) or
+        // references unparameterised — no full class stab to resolve to, so they stay empty. A stub
+        // outside this set is a real materialisation gap. Global for now; add consciously when
+        // reviewed. Known real gaps deliberately excluded: `_Rb_tree_node`, `__normal_iterator.conflict`.
         val ALLOWED_EMPTY_DEMANGLER_STUBS = setOf(
+            // bare (unparameterised) template names + builtin-spelling artifacts
             "allocator", "new_allocator", "codecvt", "collate", "ctype", "messages",
             "moneypunct", "money_get", "money_put", "num_get", "num_put", "numpunct",
             "time_get", "time_put", "istreambuf_iterator", "__normal_iterator",
             "__moneypunct_cache", "__numpunct_cache", "__timepunct", "__timepunct_cache",
-            "_Rope_RopeRep", "signed", "__gthread_mutex_t", "_Unwind_Context",
+            "_Rope_RopeRep", "signed", "__gthread_mutex_t", "bitset", "less", "pair",
+            "vector", "facet",
+            // std exception / EH hierarchy (forward-declared for RTTI, never fully defined)
+            "exception", "bad_alloc", "bad_cast", "bad_exception", "bad_typeid", "failure",
+            "logic_error", "runtime_error", "domain_error", "invalid_argument", "length_error",
+            "out_of_range", "overflow_error", "range_error", "underflow_error",
+            // libsupc++ / libgcc unwinder + RTTI internals
+            "_Unwind_Context", "_Unwind_Exception", "lsda_header_info", "__dyncast_result",
+            "__upcast_result",
+            // locale facets forward-declared in non-libstdc++ fixtures (full instantiations elsewhere)
+            "__codecvt_abstract_base<char,char,int>", "__ctype_abstract_base<char>",
+            "__timepunct<char>", "codecvt<char,char,int>", "codecvt_byname<char,char,int>",
+            "collate<char>", "collate_byname<char>", "ctype<char>", "ctype_byname<char>",
+            "messages<char>", "messages_byname<char>", "numpunct<char>", "numpunct_byname<char>",
+            "moneypunct<char,false>", "moneypunct<char,true>",
+            "moneypunct_byname<char,false>", "moneypunct_byname<char,true>",
+            "stdio_filebuf<char,std::char_traits<char>>",
+            "money_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>",
+            "money_put<char,std::ostreambuf_iterator<char,std::char_traits<char>>>",
+            "num_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>",
+            "num_put<char,std::ostreambuf_iterator<char,std::char_traits<char>>>",
+            "time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>",
+            "time_get_byname<char,std::istreambuf_iterator<char,std::char_traits<char>>>",
+            "time_put<char,std::ostreambuf_iterator<char,std::char_traits<char>>>",
+            "time_put_byname<char,std::ostreambuf_iterator<char,std::char_traits<char>>>",
         )
     }
 
