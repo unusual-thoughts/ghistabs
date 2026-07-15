@@ -4,7 +4,9 @@ import ghidra.app.cmd.label.DemanglerCmd
 import ghidra.app.util.bin.InputStreamByteProvider
 import ghidra.app.util.demangler.DemangledObject
 import ghidra.app.util.demangler.DemanglerOptions
-import ghidra.app.util.demangler.DemanglerUtil
+import ghidra.app.util.demangler.MangledContext
+import ghidra.app.util.demangler.gnu.GnuDemangler
+import ghidra.app.util.demangler.gnu.GnuDemanglerOptions
 import ghidra.framework.model.DomainObject
 import ghidra.program.model.address.Address
 import ghidra.program.model.address.AddressRange
@@ -90,17 +92,18 @@ fun <T> DataTypeManager.runTransaction(description: String = "Kotlin Lambda Tran
 // Ghidra's C++ demangler in one place — the only module that touches DemanglerUtil / DemanglerCmd /
 // DemanglerOptions. Pure name-string parsing (namespace/template splitting, mangled classification)
 // lives Ghidra-free in `ghistabs.parse` (Names.kt).
+val demangler by lazy { GnuDemangler() }
 
 /** Demangle [mangled] to a [DemangledObject], or null if it isn't a mangled name / demangling fails. */
-fun Program.demangle(mangled: String, addr: Address? = null): DemangledObject? =
-    runCatching { DemanglerUtil.demangle(this, mangled, addr).firstOrNull() }.getOrNull()
+fun demangle(mangled: String): DemangledObject? = runCatching {
+    demangler.demangle(MangledContext(null, GnuDemanglerOptions(), mangled, null))
+}.getOrNull()
 
 /** Human-readable name for [mangled], falling back to [mangled] */
-fun Program.demangledName(mangled: String, addr: Address? = null): String =
-    demangle(mangled, addr)?.demangledName ?: mangled
+fun demangledName(mangled: String): String = demangle(mangled)?.demangledName ?: mangled
 
 /** Parent-namespace chain, root-first, for [mangled] — or null if it has no enclosing namespace. */
-fun Program.namespaceChain(mangled: String): List<String>? = demangle(mangled)?.namespace?.let { parent ->
+fun namespaceChain(mangled: String): List<String>? = demangle(mangled)?.namespace?.let { parent ->
     generateSequence(parent) { it.namespace }.map { it.name }.toList().asReversed()
 }
 
