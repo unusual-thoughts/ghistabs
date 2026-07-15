@@ -412,6 +412,8 @@ class SymbolApplier(
                     addr,
                 )
             }
+            after?.let { sweepPointees(ctx.program, it) }
+                .takeIf { (it ?: 0) > 0 }?.let { debug("pointee-typed", address = addr, count = it.toLong()) }
             debug("global-applied", "addr=$addr dtKind=$dtKind")
         } catch (e: Exception) {
             err("apply-error", "Failed to create global data at $addr: ${e.message}", addr)
@@ -435,7 +437,9 @@ class SymbolApplier(
 
         try {
             ctx.program.listing.clearCodeUnits(addr, addr.add((dt.length - 1).toLong()), false)
-            ctx.program.listing.createData(addr, dt)
+            val data = ctx.program.listing.createData(addr, dt)
+            sweepPointees(ctx.program, data).takeIf { it > 0 }
+                ?.let { debug("pointee-typed", address = addr, count = it.toLong()) }
         } catch (e: Exception) {
             err("apply-error", "Failed to create static data at $addr: ${e.message}", addr)
             return false
