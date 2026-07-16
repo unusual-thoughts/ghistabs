@@ -229,6 +229,7 @@ class StabsImportRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
     }
 
     private fun runAutoAnalysis(mgr: AutoAnalysisManager, monitor: TaskMonitor) {
+        program.disableWindowsResourceAnalyzer()
         mgr.reAnalyzeAll(null)
         program.runTransaction("auto-analyze") {
             mgr.startAnalysis(monitor)

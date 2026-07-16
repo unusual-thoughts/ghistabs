@@ -8,6 +8,7 @@ import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghistabs.IntegrationFixtures
 import ghistabs.diagnose.defaultContext
+import ghistabs.disableWindowsResourceAnalyzer
 import ghistabs.materialize.TypedefShortener
 import ghistabs.runTransaction
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -42,6 +43,7 @@ class TypedefShorteningProbe : AbstractGhidraHeadlessIntegrationTest() {
                 val program = loadResults.getPrimaryDomainObject(this)
                 val mgr = AutoAnalysisManager.getAnalysisManager(program)
                 mgr.initializeOptions()
+                program.disableWindowsResourceAnalyzer()
                 mgr.reAnalyzeAll(null)
                 program.runTransaction("probe-autoanalyze") {
                     mgr.startAnalysis(monitor)
