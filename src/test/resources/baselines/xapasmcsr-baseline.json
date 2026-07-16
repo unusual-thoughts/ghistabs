@@ -5,16 +5,16 @@
             "max": 21
         },
         "canonical-key-merged": {
-            "min": 76,
-            "max": 76
+            "min": 85,
+            "max": 85
         },
         "canonical-key-multi-hash": {
-            "min": 9,
-            "max": 9
+            "min": 0,
+            "max": 0
         },
         "canonical-scope-collision": {
-            "min": 9,
-            "max": 9
+            "min": 0,
+            "max": 0
         },
         "class-not-struct": {
             "min": 2,
@@ -105,12 +105,12 @@
             "max": 118
         },
         "harvest-collisions-divergent": {
-            "min": 1,
-            "max": 1
+            "min": 0,
+            "max": 0
         },
         "harvest-collisions-divergent-total": {
-            "min": 2,
-            "max": 2
+            "min": 0,
+            "max": 0
         },
         "harvest-collisions-raw": {
             "min": 40,
@@ -337,8 +337,8 @@
             "max": 14
         },
         "xref-base-tag-resolved": {
-            "min": 45,
-            "max": 49
+            "min": 18,
+            "max": 18
         },
         "xref-undefined": {
             "min": 62,
