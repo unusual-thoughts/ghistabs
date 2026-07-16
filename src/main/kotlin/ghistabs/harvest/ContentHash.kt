@@ -66,12 +66,17 @@ fun TypeDecl<GlobalTypeId>.contentHash(
 
     // members: List<Pair<String, Long>> — no ids
 
+    // Layout-only equivalence: the DTM struct has no static members or methods, and both are
+    // cycle sources (libstdc++ `basic_string ↔ _Rep` recurse through static `_S_empty_rep_storage`
+    // and method signatures). Hashing them makes the traversal-order-dependent BACK_EDGE land on
+    // different nodes per CU, forking `.conflict` on layout-identical types. Static fields are
+    // dropped here; methods are hashed by mangled name only (see MethodDecl.contentHash).
     is TypeDecl.Struct -> Objects.hash(
         "Struct",
         rawKind,
         sizeBytes,
         bases.map { it.contentHash(oracle, cache, visited) },
-        fields.map { it.contentHash(oracle, cache, visited) },
+        fields.filter { !it.isStatic }.map { it.contentHash(oracle, cache, visited) },
         methods.map { it.contentHash(oracle, cache, visited) },
         hasVTablePointerMarker,
         vtableTargetTypeId?.refKey(oracle, cache, visited),
@@ -163,8 +168,10 @@ private fun MethodDecl<GlobalTypeId>.contentHash(
 ) = Objects.hash(
     "Method",
     name,
+    // The mangled name already encodes the full signature, so hashing it identifies the method
+    // without recursing into return/param types — which, for a method referencing its own class
+    // (basic_string↔_Rep), would re-enter the type graph and make the hash order-dependent.
     mangled,
-    signature.contentHash(oracle, cache, visited),
     access,
     virt,
     isConst,
