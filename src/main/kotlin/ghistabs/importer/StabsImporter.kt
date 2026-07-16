@@ -52,7 +52,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
             val functions = applier.applyAllFunctions()
             val globals = applier.applyAllGlobals()
             constants = applier.applyAllConstants()
-            if (ctx.options.applyVtables) {
+            if (ctx.options.buildClasses) {
                 classes = ClassBuilder(typeRegistry, harvest, typeResolver, ctx).buildAll()
             }
             DemanglerReplacer(ctx, typeRegistry).replace()
@@ -63,6 +63,8 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
         typeRegistry.reportSurvivingPlaceholders()
         typeRegistry.reportConflictDelta()
         ctx.diagnostics.writeSummary(ctx.terminal)
+        ctx.records = stabs.records
+        ctx.harvest = harvest
         ctx.typeRegistry = typeRegistry
         ctx.typeResolver = typeResolver
 
