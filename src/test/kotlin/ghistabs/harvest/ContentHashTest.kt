@@ -420,6 +420,40 @@ class ContentHashTest {
         assertEquals(h0, h1, "variant_0 (Ref param) and variant_1 (InlineDef param) must hash identically")
     }
 
+    /**
+     * gcc spells `char` three ways across CUs — `Range(0,127)`, `WithSizeAttr(8, Range(0,127))`,
+     * and the hoisted `Builtin(-2)` slot — all of which [ghistabs.materialize.BuiltinTable]
+     * materializes to `CharDataType`. They must share one content hash, else a struct carrying a
+     * bare `char` (char_type/traits in `basic_ios<char>` &co.) forks a `.conflict` per spelling.
+     * `signed char`'s `Range(-128,127)` is also `CharDataType` and collapses with them, exactly as
+     * BuiltinTable maps it.
+     */
+    @Test
+    fun charBuiltinSpellingsHashEqual() {
+        val range = TypeDecl.Range(GlobalTypeId(SourceFile.CUSource("a.cpp"), 2), 0L, 127L)
+        val sized = TypeDecl.WithSizeAttr(8, range)
+        val slot = TypeDecl.Builtin<GlobalTypeId>(-2)
+        val signedCharRange = TypeDecl.Range(GlobalTypeId(SourceFile.CUSource("a.cpp"), 14), -128L, 127L)
+        assertEquals(range.contentHash(oracle), sized.contentHash(oracle))
+        assertEquals(range.contentHash(oracle), slot.contentHash(oracle))
+        assertEquals(range.contentHash(oracle), signedCharRange.contentHash(oracle))
+    }
+
+    /**
+     * The normalization is narrow: distinct primitives keep distinct hashes. `unsigned char`
+     * (`Range(0,255)` → byte) and `wchar_t`-as-range (`Range(0,65535)` → unsigned short) must not
+     * collapse into `char`.
+     */
+    @Test
+    fun distinctPrimitivesStayDistinct() {
+        val char = TypeDecl.Range(GlobalTypeId(SourceFile.CUSource("a.cpp"), 2), 0L, 127L)
+        val unsignedChar = TypeDecl.Range(GlobalTypeId(SourceFile.CUSource("a.cpp"), 11), 0L, 255L)
+        val wcharRange = TypeDecl.Range(GlobalTypeId(SourceFile.CUSource("a.cpp"), 30), 0L, 65535L)
+        assertNotEquals(char.contentHash(oracle), unsignedChar.contentHash(oracle))
+        assertNotEquals(char.contentHash(oracle), wcharRange.contentHash(oracle))
+        assertNotEquals(unsignedChar.contentHash(oracle), wcharRange.contentHash(oracle))
+    }
+
     @Test
     fun refToSeparatelyEmittedTypeEqualsEquivalentInlineDef() {
         // pair_id is the outer "pair" struct's GlobalTypeId.
