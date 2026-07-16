@@ -53,6 +53,16 @@ class ImportContext<Terminal : DiagnosticSink>(
     @get:TestOnly
     var typeResolver: ghistabs.harvest.TypeResolver? = null
         internal set
+
+    /** The parsed records and the harvest, cached at end-of-import so the record/harvest dumps reuse
+     * them instead of re-reading and re-harvesting (companions to [typeRegistry]/[typeResolver]). */
+    @get:TestOnly
+    var records: List<ghistabs.parse.StabRecord>? = null
+        internal set
+
+    @get:TestOnly
+    var harvest: ghistabs.harvest.Harvest? = null
+        internal set
 }
 
 /** Test-only side-channel for [ghistabs.StabsAnalyzer.added] to tee output into [ImportContext.log]. */

@@ -93,7 +93,7 @@ class StabsAnalyzer :
 
 data class StabsOptions(
     val applyPlateComments: Boolean = true,
-    val applyVtables: Boolean = true,
+    val buildClasses: Boolean = true,
     val shortenTypedefs: Boolean = false,
     val foldSources: Boolean = true,
     val minLogLevel: Level = Level.INFO,
@@ -104,7 +104,7 @@ data class StabsOptions(
         const val STABS_DONE: String = "Stabs Imported"
         const val OVERLAY_DONE: String = "Stabs Overlaid"
         const val PLATE_COMMENTS: String = "Apply scope plate comments"
-        const val VTABLES: String = "Synthesise vtable structs"
+        const val CLASSES: String = "Reconstruct C++ classes"
         const val SHORTEN_TYPEDEFS: String = "Shorten templated names via typedefs"
         const val FOLD_SOURCES: String = "Fold source-file spellings"
         const val LOG_LEVEL: String = "Minimum log level"
@@ -134,10 +134,12 @@ data class StabsOptions(
                 "Apply plate comments at lexical scopes when LBRAC/RBRAC info is present.",
             )
             registerOption(
-                VTABLES,
+                CLASSES,
                 true,
                 null,
-                "Synthesise <Class>_vtable structs and apply at _ZTV addresses.",
+                "Reconstruct C++ classes: class namespaces, member methods (this-typed via __thiscall), " +
+                    "and <Class>_vftable structs applied at _ZTV for virtual dispatch. Off leaves plain " +
+                    "structs — member calls lose their this/args and virtual calls stay unresolved.",
             )
             registerOption(
                 SHORTEN_TYPEDEFS,
@@ -169,7 +171,7 @@ data class StabsOptions(
 
 //        fun Options.stabs() = StabsOptions(
 //            applyPlateComments = getBoolean(PLATE_COMMENTS, true),
-//            applyVtables = getBoolean(VTABLES, true),
+//            buildClasses = getBoolean(CLASSES, true),
 //            shortenTypedefs = getBoolean(SHORTEN_TYPEDEFS, false),
 //            foldSources = getBoolean(FOLD_SOURCES, true),
 //            minLogLevel = getEnum(LOG_LEVEL, Level.INFO),
@@ -179,7 +181,7 @@ data class StabsOptions(
 
     constructor(opts: Options) : this(
         applyPlateComments = opts.getBoolean(PLATE_COMMENTS, true),
-        applyVtables = opts.getBoolean(VTABLES, true),
+        buildClasses = opts.getBoolean(CLASSES, true),
         shortenTypedefs = opts.getBoolean(SHORTEN_TYPEDEFS, false),
         foldSources = opts.getBoolean(FOLD_SOURCES, true),
         minLogLevel = opts.getEnum(LOG_LEVEL, Level.INFO),
