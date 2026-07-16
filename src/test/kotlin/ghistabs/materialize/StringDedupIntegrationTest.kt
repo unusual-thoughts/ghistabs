@@ -12,6 +12,7 @@ import ghistabs.StabsOptions
 import ghistabs.diagnose.CapturingSink
 import ghistabs.diagnose.Level
 import ghistabs.diagnose.StabsDiagnostics
+import ghistabs.disableWindowsResourceAnalyzer
 import ghistabs.importer.ImportContext
 import ghistabs.importer.StaticContexts
 import ghistabs.runTransaction
@@ -79,6 +80,7 @@ class StringDedupIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                     options.getOptions(ourName).setBoolean(StabsOptions.SHORTEN_TYPEDEFS, shorten)
                 }
                 mgr.initializeOptions()
+                program.disableWindowsResourceAnalyzer()
                 mgr.scheduleOneTimeAnalysis(discovered, program.memory)
                 mgr.reAnalyzeAll(null)
                 program.runTransaction("auto-analyze") {
