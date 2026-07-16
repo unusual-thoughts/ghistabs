@@ -79,6 +79,16 @@ object BuiltinTable {
     }
 
     /**
+     * Stable identity of the Ghidra primitive [decl] would materialize to via [resolve], or null
+     * when [decl] isn't a primitive. `ghistabs.harvest.contentHash` hashes builtins by this so the
+     * several stab spellings of one primitive — `char` as `Range(0,127)`, `WithSizeAttr(8, …)`, or
+     * `Builtin(-2)` — collapse to one content hash instead of forking a `.conflict` in the DTM.
+     * Distinct primitives keep distinct keys: `unsigned char` (`Range(0,255)` → byte) stays apart
+     * from `char`.
+     */
+    fun canonicalKey(decl: TypeDecl<GlobalTypeId>): String? = resolve(decl)?.javaClass?.name
+
+    /**
      * gcc XCOFF builtin slot → Ghidra type. Slot numbers per stabs spec / gcc `dbxout.c`.
      * Only slots seen on cygwin gcc 3.4.4 XAP2/CSR binaries are mapped; unknowns return null.
      */
