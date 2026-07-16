@@ -23,11 +23,7 @@ import ghidra.util.task.TaskMonitor
 import ghistabs.StabsAnalyzer
 import ghistabs.StabsAnalyzer.Companion.import
 import ghistabs.StabsOptions
-import ghistabs.diagnose.DiagnosticSink
-import ghistabs.diagnose.Level
-import ghistabs.diagnose.StabsDiagnostics
-import ghistabs.diagnose.dumpJson
-import ghistabs.diagnose.writeRegistryDump
+import ghistabs.diagnose.*
 import ghistabs.harvest.Harvester
 import ghistabs.harvest.TypeResolver
 import ghistabs.importer.ImportContext
@@ -35,7 +31,6 @@ import ghistabs.parse.StabReader
 import ghistabs.render.Mode
 import ghistabs.render.Renderer
 import ghistabs.runTransaction
-import kotlinx.serialization.encodeToString
 import java.io.Flushable
 
 fun main(args: Array<String>) = NoOpCliktCommand(name = "ghidra-stabs")
@@ -57,7 +52,10 @@ private class DecompCommand :
     ) {
     // Cygwin/PE binaries use SjLj EH, so elision is the readable default; --no-elide-sjlj yields the
     // raw decompilation (Mode.DECOMPILE). Either way a no-op on DWARF-EH (ELF).
-    private val elideSjlj by option("--elide-sjlj").flag("--no-elide-sjlj", default = true)
+    private val elideSjlj by option(
+        "--elide-sjlj",
+        help = "elide gcc SjLj exception scaffolding from the decompilation (default; no-op on ELF/DWARF-EH)",
+    ).flag("--no-elide-sjlj", default = true)
     override val mode get() = if (elideSjlj) Mode.ELIDE_SJLJ else Mode.DECOMPILE
 }
 
@@ -78,12 +76,20 @@ private abstract class RenderCommand(name: String, help: String) : CliktCommand(
     private val outDir by option("-d", "--target-dir", help = "directory to write the rendered per-source files into")
         .file(canBeFile = false).required()
 
-    private val plateComments by option("--plate-comments").flag("--no-plate-comments", default = true)
-    private val vtables by option("--vtables").flag("--no-vtables", default = true)
-    private val shortenTypedefs by option("--shorten-typedefs").flag("--no-shorten-typedefs", default = false)
-    private val foldSources by option("--fold-sources").flag("--no-fold-sources", default = true)
-    private val overlaySection by option("--overlay-section").flag("--no-overlay-section", default = true)
-    private val logLevel by option("--log-level", help = "minimum level streamed to the log").enum<Level>()
+    private val buildClasses by option(
+        "--classes",
+        help = "reconstruct C++ classes — namespaces, this-typed member methods, vtable structs; " +
+            "--no-classes leaves plain structs (member calls lose this/args, virtual calls unresolved)",
+    ).flag("--no-classes", default = true)
+    private val shortenTypedefs by option(
+        "--shorten-typedefs",
+        help = "rename long templated types onto their shorter typedef aliases (basic_string<char,…> → string)",
+    ).flag("--no-shorten-typedefs", default = false)
+    private val foldSources by option(
+        "--fold-sources",
+        help = "fold gcc's two spellings of one header (full include path vs bare name) onto one output file",
+    ).flag("--no-fold-sources", default = true)
+    private val logLevel by option("-v", "--log-level", help = "minimum level streamed to the log").enum<Level>()
         .default(Level.INFO)
 
     private val recordsJson by option("--records-json", help = "dump parsed StabRecords as JSON").file(canBeDir = false)
@@ -94,8 +100,9 @@ private abstract class RenderCommand(name: String, help: String) : CliktCommand(
     private val degradationLog by option("--degradation-log", help = "write grouped materialisation degradations here")
         .file(canBeDir = false)
 
-    private val options get() =
-        StabsOptions(plateComments, vtables, shortenTypedefs, foldSources, logLevel, overlaySection)
+    private val options
+        get() =
+            StabsOptions(false, buildClasses, shortenTypedefs, foldSources, logLevel, false)
 
     override fun run() {
         if (!Application.isInitialized()) {
@@ -119,7 +126,7 @@ private abstract class RenderCommand(name: String, help: String) : CliktCommand(
                     program.runTransaction("stabs-cli-import") { ctx.import() }
                     msgLog.toString().takeIf { it.isNotBlank() }?.let { out.append("--- loader MessageLog ---\n$it\n") }
 
-                    writeDumps(program, ctx)
+                    writeDumps(ctx)
                     render(program, ctx)
                 } finally {
                     program.release(consumer)
@@ -131,8 +138,12 @@ private abstract class RenderCommand(name: String, help: String) : CliktCommand(
         }
     }
 
-    // Let autoanalysis (esp. the demangler) settle first with our analyzer off, then import manually
-    // so the run honours the CLI's StabsOptions rather than the program options DB.
+    // Import ourselves (StabsAnalyzer disabled) instead of scheduling it into autoanalysis, so we keep
+    // the ImportContext it populates — the record/harvest/registry dumps read its cached records,
+    // harvest, typeRegistry and typeResolver. Scheduling the analyzer (the CONCURRENT path) would match
+    // the GUI/plugin workflow more faithfully, but it builds its own private context, leaving those
+    // caches unreachable. Ordering holds either way: full autoanalysis runs the demangler (~897) before
+    // our import, exactly as StabsAnalyzer's LOW_PRIORITY guarantees in the analyzer path.
     private fun autoAnalyze(program: Program, monitor: TaskMonitor) {
         val mgr = AutoAnalysisManager.getAnalysisManager(program)
         program.runTransaction("cli-disable-stabs-analyzer") {
@@ -146,26 +157,21 @@ private abstract class RenderCommand(name: String, help: String) : CliktCommand(
         }
     }
 
-    private fun writeDumps(program: Program, ctx: ImportContext<*>) {
+    private fun writeDumps(ctx: ImportContext<*>) {
         recordsJson?.let { f ->
-            val records = StabReader.fromProgram(program)!!.readAll().records
-            f.parentFile?.mkdirs()
-            f.writeText(dumpJson.encodeToString(records))
+            ctx.records?.let { records ->
+                f.parentFile?.mkdirs()
+                f.writeText(dumpJson.encodeToString(records))
+            }
         }
         harvestJson?.let { f ->
-            val records = StabReader.fromProgram(program)!!.readAll().records
-            val harvest = program.runTransaction("cli-harvest-dump") { Harvester(ctx).harvest(records) }
-            f.parentFile?.mkdirs()
-            f.writeText(dumpJson.encodeToString(harvest))
+            ctx.harvest?.let { harvest ->
+                f.parentFile?.mkdirs()
+                f.writeText(dumpJson.encodeToString(harvest))
+            }
         }
         registryJson?.let { f ->
-            val registry = ctx.typeRegistry
-            val resolver = ctx.typeResolver
-            if (registry != null && resolver != null) {
-                writeRegistryDump(registry, resolver, f)
-            } else {
-                echo("registry dump skipped: import populated no registry (no stabs?)", err = true)
-            }
+            ctx.writeRegistryDump(f)
         }
         degradationLog?.let { f ->
             val byCategory = ctx.diagnostics.snapshotDegradations()
@@ -201,8 +207,8 @@ private abstract class RenderCommand(name: String, help: String) : CliktCommand(
 /** Streams each diagnostic line at or above [minLevel] to [out], flushing so the log is live. */
 private class StreamSink(private val minLevel: Level, private val out: Appendable) : DiagnosticSink {
     override fun log(category: String, message: String?, level: Level, address: Address?, count: Long) {
-        if (message == null || level.ordinal < minLevel.ordinal) return
-        val at = address?.let { " at @$it" } ?: ""
+        if (message == null || level < minLevel) return
+        val at = address?.let { "[@$it]" } ?: ""
         out.append("[$level][$category]$at $message\n")
         (out as? Flushable)?.flush()
     }

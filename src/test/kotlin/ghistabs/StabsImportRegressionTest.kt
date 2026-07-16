@@ -11,7 +11,6 @@ import ghidra.program.model.data.Enum
 import ghidra.program.model.listing.Program
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
-import ghistabs.StabsAnalyzer
 import ghistabs.StabsAnalyzer.Companion.import
 import ghistabs.baseline.BaselineLoader
 import ghistabs.baseline.BaselineWriter
@@ -25,7 +24,6 @@ import ghistabs.importer.StaticContexts
 import ghistabs.importer.stabAddress
 import ghistabs.materialize.itanium.Itanium
 import ghistabs.parse.*
-import ghistabs.runTransaction
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.encodeToStream
 import org.junit.jupiter.api.*
@@ -220,9 +218,7 @@ class StabsImportRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
             // is appended for parity with Ghidra's own view, even though it
             // truncates at ~500 lines.
             logFile.writeText(context.terminal.dedupedOutput() + "\n--- MessageLog ---\n" + log.toString())
-            val registry = context.typeRegistry
-            val resolver = context.typeResolver
-            if (registry != null && resolver != null) writeRegistryDump(registry, resolver, registryDumpFile)
+            context.writeRegistryDump(registryDumpFile)
         } catch (e: Exception) {
             assumeTrue(false, "Failed to load real binary via ProgramLoader: ${e.message}")
         }
@@ -766,9 +762,9 @@ class StabsImportRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
     fun voidSelfRefNotMaterialised() {
         // Enumerate every void self-Ref ast in the harvest (body = Ref(self.id)).
         // For each one assert no Structure was created at its category+name.
-        val reader = StabReader.fromProgram(program)!!.readAll()
-        val harvest = program.runTransaction("void-self-ref-harvest") {
-            Harvester(context).harvest(reader.records)
+        // Reuse setUp's cached harvest; re-harvest only in CONCURRENT mode (analyzer's own context).
+        val harvest = context.harvest ?: program.runTransaction("void-self-ref-harvest") {
+            Harvester(context).harvest(StabReader.fromProgram(program)!!.readAll().records)
         }
         val voidAsts = harvest.typeAsts.values.filter { ast ->
             val body = ast.body
@@ -1057,18 +1053,14 @@ class StabsImportRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
     @OptIn(ExperimentalSerializationApi::class)
     @Test
     fun harvestTest() {
-        val ctx = program.defaultContext()
-        val stabs = StabReader.fromProgram(program)!!.readAll()
-        dumpJson.encodeToStream(stabs.records, recordsFile.outputStream())
+        // Reuse the records + harvest setUp's import cached on `context`; re-read / re-harvest only in
+        // CONCURRENT mode, where the analyzer imports into its own context and leaves ours unpopulated.
+        // (Harvesting writes labels via AddressResolver.recordFromStab, so the fallback needs a transaction.)
+        val records = context.records ?: StabReader.fromProgram(program)!!.readAll().records
+        dumpJson.encodeToStream(records, recordsFile.outputStream())
 
-        val harvester = Harvester(ctx)
-        // harvest writes via AddressResolver.recordFromStab → symbolTable.createLabel, so it
-        // needs a transaction. (We re-run it here to serialize a self-contained harvest
-        // independent of setUp's own pass.)
-        val harvest = program.runTransaction("stabs-harvest-dump") {
-            harvester.harvest(stabs.records)
-        }
-
+        val harvest = context.harvest
+            ?: program.runTransaction("stabs-harvest-dump") { Harvester(context).harvest(records) }
         dumpJson.encodeToStream(harvest, harvestFile.outputStream())
 
         val classStructs = harvest.typeAsts.values
