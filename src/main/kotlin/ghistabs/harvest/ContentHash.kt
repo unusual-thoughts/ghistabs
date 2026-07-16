@@ -1,5 +1,6 @@
 package ghistabs.harvest
 
+import ghistabs.materialize.BuiltinTable
 import ghistabs.parse.*
 import java.util.*
 
@@ -42,7 +43,10 @@ fun TypeDecl<GlobalTypeId>.contentHash(
 ): Int = when (this) {
     is TypeDecl.Ref -> id.refKey(oracle, cache, visited)
 
-    is TypeDecl.Range -> Objects.hash("Range", of.refKey(oracle, cache, visited), min, max)
+    // Normalize primitives to the Ghidra type they materialize to (see BuiltinTable.canonicalKey),
+    // so char's `Range(0,127)` / `WithSizeAttr(8, …)` / `Builtin(-2)` spellings share one hash and
+    // don't fork a `.conflict`. Non-primitive shapes fall through to their structural hash.
+    is TypeDecl.Range -> builtinHash() ?: Objects.hash("Range", of.refKey(oracle, cache, visited), min, max)
 
     // gcc's `r<base>;<size>;0;` has `<base>` purely decorative (varies per CU). Hash by size only.
     is TypeDecl.Float -> Objects.hash("Float", sizeBytes)
@@ -103,9 +107,9 @@ fun TypeDecl<GlobalTypeId>.contentHash(
     is TypeDecl.XRef -> oracle.byXRef(this)?.id?.refKey(oracle, cache, visited) ?: hashCode()
 
     // Source-independent: same slot in every CU = same primitive.
-    is TypeDecl.Builtin -> Objects.hash("Builtin", slot)
+    is TypeDecl.Builtin -> builtinHash() ?: Objects.hash("Builtin", slot)
 
-    is TypeDecl.WithSizeAttr -> Objects.hash(
+    is TypeDecl.WithSizeAttr -> builtinHash() ?: Objects.hash(
         "WithSizeAttr",
         sizeBits,
         inner.contentHash(oracle, cache, visited),
@@ -139,6 +143,9 @@ private fun GlobalTypeId.refKey(
     cache?.put(this, h)
     return h
 }
+
+// Class-name key is stable across CUs and equal for every stab spelling of the same primitive.
+private fun TypeDecl<GlobalTypeId>.builtinHash(): Int? = BuiltinTable.canonicalKey(this)?.hashCode()
 
 private val BACK_EDGE_HASH = Objects.hash("back-edge")
 
