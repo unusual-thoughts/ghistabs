@@ -229,31 +229,62 @@ dependencies {
     "cliImplementation"("com.github.ajalt.clikt:clikt:4.4.0")
 }
 
-// Run the CLI against the `cli` runtime classpath (Ghidra jars + main output + clikt). We boot Ghidra
-// from a flat classpath rather than via `ghidra.Ghidra`/GhidraClassLoader, so — like the headless test
-// harness — we need the java.base concurrency add-opens under JDK 21. Unlike that harness we DON'T set
-// `-Djdk.serialFilterFactory`: HeadlessGhidraApplicationConfiguration installs the Ghidra factory
-// programmatically (the test harness only sets the -D because its own serialization runs before init),
-// and setting both throws "filter factory already instantiated". Pass args with
-// `-Pargs="skeleton <binary> -d out"`.
+// We boot Ghidra from a flat classpath rather than via `ghidra.Ghidra`/GhidraClassLoader, so — like the
+// headless test harness — we need the java.base concurrency add-opens under JDK 21. Unlike that harness
+// we DON'T set `-Djdk.serialFilterFactory`: HeadlessGhidraApplicationConfiguration installs the Ghidra
+// factory programmatically (the test harness only sets the -D because its own serialization runs before
+// init), and setting both throws "filter factory already instantiated".
+val cliJvmArgs = listOf(
+    "-Xmx2g",
+    "-Djava.awt.headless=true",
+    "-Dfile.encoding=UTF8",
+    "-Duser.country=US",
+    "-Duser.language=en",
+    "--enable-native-access=ALL-UNNAMED",
+    "--add-opens=java.base/java.util.concurrent=ALL-UNNAMED",
+    "--add-opens=java.desktop/sun.awt=ALL-UNNAMED",
+    "--add-opens=java.desktop/java.awt=ALL-UNNAMED",
+)
+
+// Run the CLI in-process against the `cli` runtime classpath (Ghidra jars + main output + clikt).
+// Pass args with `-Pargs="skeleton <binary> -d out"`.
 tasks.register<JavaExec>("runCli") {
     group = "application"
     description = "Run the headless skeleton/decomp CLI (ghistabs.cli.MainKt)"
     dependsOn(cli.classesTaskName)
     classpath = cli.runtimeClasspath
     mainClass.set("ghistabs.cli.MainKt")
-    maxHeapSize = "2g"
-    jvmArgs(
-        "-Djava.awt.headless=true",
-        "-Dfile.encoding=UTF8",
-        "-Duser.country=US",
-        "-Duser.language=en",
-        "--enable-native-access=ALL-UNNAMED",
-        "--add-opens=java.base/java.util.concurrent=ALL-UNNAMED",
-        "--add-opens=java.desktop/sun.awt=ALL-UNNAMED",
-        "--add-opens=java.desktop/java.awt=ALL-UNNAMED",
-    )
+    jvmArgs(cliJvmArgs)
     args = providers.gradleProperty("args").getOrElse("").split(" ").filter { it.isNotEmpty() }
+}
+
+// Emit a standalone launcher script so the CLI can run without Gradle. It bakes in the resolved
+// classpath (Ghidra jars in /opt/ghidra, the built classes, and the maven deps from the Gradle cache,
+// all referenced in place — no fat jar) plus the JVM args. Regenerate after a Ghidra reinstall or a
+// dep change, since those paths are captured at generation time. `./gradlew buildCli` → run
+// `build/cli/ghidra-stabs skeleton <binary> -d out`.
+tasks.register("buildCli") {
+    group = "application"
+    description = "Generate a standalone launcher script for the CLI at build/cli/ghidra-stabs"
+    dependsOn(cli.classesTaskName)
+    val script = layout.buildDirectory.file("cli/ghidra-stabs")
+    val classpath = cli.runtimeClasspath
+    val jvmArgs = cliJvmArgs
+    outputs.file(script)
+    doLast {
+        val f = script.get().asFile
+        f.parentFile.mkdirs()
+        f.writeText(
+            """
+            |#!/usr/bin/env bash
+            |exec java ${jvmArgs.joinToString(" ")} \
+            |  -cp "${classpath.asPath}" \
+            |  ghistabs.cli.MainKt "${'$'}@"
+            """.trimMargin() + "\n",
+        )
+        f.setExecutable(true)
+        logger.lifecycle("Wrote $f")
+    }
 }
 
 tasks.register("installExtension") {
