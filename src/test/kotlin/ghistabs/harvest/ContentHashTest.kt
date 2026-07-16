@@ -169,6 +169,34 @@ class ContentHashTest {
     }
 
     /**
+     * Static members occupy no layout and are a cross-type cycle source (libstdc++
+     * `_S_empty_rep_storage: _Rep`), so they're excluded from the hash: two structs with identical
+     * non-static layout hash equally regardless of their static members.
+     */
+    @Test
+    fun staticMembersExcludedFromLayoutHash() {
+        val base = TypeDecl.Struct(
+            rawKind = AggrKind.STRUCT,
+            sizeBytes = 4L,
+            bases = emptyList(),
+            fields = listOf(
+                FieldDecl("x", TypeDecl.Ref(intInCU1.id), 0L, 32L, isStatic = false, Access.PUBLIC),
+            ),
+            methods = emptyList(),
+            hasVTablePointerMarker = false,
+            vtableTargetTypeId = null,
+        )
+        val withStaticInt = base.copy(
+            fields = base.fields + FieldDecl("s", TypeDecl.Ref(intInCU1.id), 0L, 0L, isStatic = true, Access.PUBLIC),
+        )
+        val withStaticChar = base.copy(
+            fields = base.fields + FieldDecl("s", TypeDecl.Ref(charInCU1.id), 0L, 0L, isStatic = true, Access.PUBLIC),
+        )
+        assertEquals(base.contentHash(oracle), withStaticInt.contentHash(oracle))
+        assertEquals(withStaticInt.contentHash(oracle), withStaticChar.contentHash(oracle))
+    }
+
+    /**
      * `InlineDef` carries its own GlobalTypeId for local-binding
      * purposes, but the identity is the body. Two InlineDefs with the
      * same body but different binding ids must hash identically — as
