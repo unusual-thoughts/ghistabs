@@ -23,7 +23,12 @@ class TemplateNameShortener(aliases: Map<String, String>) {
     private val guarded = aliases.entries
         .groupBy({ canonTemplateName(it.value) }, { it.key })
         .mapNotNull { (target, names) ->
-            names.minBy { it.length }.takeIf { it.length < target.length }?.let { target to it }
+            // Prefer a readable alias over compiler-internal shorthands: libstdc++'s explicit-
+            // instantiation TUs emit `typedef basic_string<…> S;` and `__string_type`, and the raw
+            // shortest-name rule picks `S` over `string`. Drop single-letter and `__`-reserved
+            // names unless they're the only alias for this target.
+            val readable = names.filterNot { it.length == 1 || it.startsWith("__") }
+            readable.ifEmpty { names }.minBy { it.length }.takeIf { it.length < target.length }?.let { target to it }
         }
         .sortedByDescending { it.first.length }
         .map { (target, alias) -> Regex("(?<![A-Za-z0-9_])${Regex.escape(target)}(?![A-Za-z0-9_])") to alias }
