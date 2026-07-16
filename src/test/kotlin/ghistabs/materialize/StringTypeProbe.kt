@@ -15,6 +15,7 @@ import ghistabs.StabsOptions
 import ghistabs.diagnose.CapturingSink
 import ghistabs.diagnose.Level
 import ghistabs.diagnose.StabsDiagnostics
+import ghistabs.disableWindowsResourceAnalyzer
 import ghistabs.importer.ImportContext
 import ghistabs.importer.StaticContexts
 import ghistabs.runTransaction
@@ -75,6 +76,7 @@ class StringTypeProbe : AbstractGhidraHeadlessIntegrationTest() {
                     options.setBoolean(StabsAnalyzer().name, false)
                 }
                 mgr.initializeOptions()
+                program.disableWindowsResourceAnalyzer()
                 program.runTransaction("auto-analyze") {
                     mgr.startAnalysis(monitor)
                     mgr.waitForAnalysis(null, monitor)

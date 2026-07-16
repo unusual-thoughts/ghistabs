@@ -211,6 +211,51 @@ val ghidraInstallDir =
 
 apply(from = File(ghidraInstallDir).canonicalPath + "/support/buildExtension.gradle")
 
+// The freestanding headless CLI lives in its own `cli` source set so neither it nor its clikt
+// dependency land on the main runtimeClasspath — buildExtension's copyDependencies would otherwise
+// bundle clikt into the extension zip's lib/. `cliImplementation` inherits main's deps (`api` carries
+// the Ghidra jars, `implementation` the serialization libs) plus the main output and clikt.
+val cli = sourceSets.create("cli")
+configurations["cliImplementation"].extendsFrom(configurations["api"], configurations["implementation"])
+
+// Friend the cli compilation to main so it sees main's `internal` API (Harvester.harvest etc.) —
+// the same association the test compilation gets automatically.
+kotlin.target.compilations.named("cli") {
+    associateWith(kotlin.target.compilations.getByName("main"))
+}
+
+dependencies {
+    "cliImplementation"(sourceSets["main"].output)
+    "cliImplementation"("com.github.ajalt.clikt:clikt:4.4.0")
+}
+
+// Run the CLI against the `cli` runtime classpath (Ghidra jars + main output + clikt). We boot Ghidra
+// from a flat classpath rather than via `ghidra.Ghidra`/GhidraClassLoader, so — like the headless test
+// harness — we need the java.base concurrency add-opens under JDK 21. Unlike that harness we DON'T set
+// `-Djdk.serialFilterFactory`: HeadlessGhidraApplicationConfiguration installs the Ghidra factory
+// programmatically (the test harness only sets the -D because its own serialization runs before init),
+// and setting both throws "filter factory already instantiated". Pass args with
+// `-Pargs="skeleton <binary> -d out"`.
+tasks.register<JavaExec>("runCli") {
+    group = "application"
+    description = "Run the headless skeleton/decomp CLI (ghistabs.cli.MainKt)"
+    dependsOn(cli.classesTaskName)
+    classpath = cli.runtimeClasspath
+    mainClass.set("ghistabs.cli.MainKt")
+    maxHeapSize = "2g"
+    jvmArgs(
+        "-Djava.awt.headless=true",
+        "-Dfile.encoding=UTF8",
+        "-Duser.country=US",
+        "-Duser.language=en",
+        "--enable-native-access=ALL-UNNAMED",
+        "--add-opens=java.base/java.util.concurrent=ALL-UNNAMED",
+        "--add-opens=java.desktop/sun.awt=ALL-UNNAMED",
+        "--add-opens=java.desktop/java.awt=ALL-UNNAMED",
+    )
+    args = providers.gradleProperty("args").getOrElse("").split(" ").filter { it.isNotEmpty() }
+}
+
 tasks.register("installExtension") {
     group = "ghidra"
     description = "Build and install the extension into the Ghidra user extensions directory"
@@ -262,4 +307,20 @@ tasks.register("installExtension") {
         logger.lifecycle("Installed ${zip.name} → $targetDir")
         logger.lifecycle("Restart Ghidra to load the new build.")
     }
+}
+
+// buildExtension zips the whole projectDir with only a tiny exclude list, but this repo keeps research
+// corpora, a git worktree (prout/), IDE/tooling dirs, and scratch files at the root — none of which
+// belong in the shipped extension. Trim them so the zip is just extension.properties + Module.manifest
+// + lib/ (the extension jar and its runtime deps) + os/ + ghidra_scripts/. (`*.gradle` in the base
+// excludes doesn't catch `.gradle.kts`; add it.)
+tasks.named<Zip>("buildExtension") {
+    includeEmptyDirs = false
+    exclude(
+        "corpus/**", "corpus.new/**", "prout/**", "docs/**",
+        ".claude/**", ".idea/**", ".vscode/**", ".kotlin/**", ".gradle/**",
+        "..bfg-report/**", ".bfg-report/**", "**/__pycache__/**", "gradle/**",
+        ".vscode-ctags", ".editorconfig", ".gitignore",
+        "*.gradle.kts", "compare_gdb.py", "gdb.txt", "TODO.md", "TESTING.md",
+    )
 }

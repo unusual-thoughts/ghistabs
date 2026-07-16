@@ -9,6 +9,7 @@ import ghidra.util.task.TaskMonitor
 import ghistabs.StabsOptions
 import ghistabs.diagnose.Level
 import ghistabs.diagnose.defaultContext
+import ghistabs.disableWindowsResourceAnalyzer
 import ghistabs.harvest.Harvester
 import ghistabs.harvest.TypeResolver
 import ghistabs.parse.StabReader
@@ -47,16 +48,24 @@ import java.io.File
 class SourceSkeletonProbe : AbstractGhidraHeadlessIntegrationTest() {
     @ParameterizedTest
     @MethodSource("ghistabs.IntegrationFixtures#all")
-    fun writeSkeletons(binaryName: String) = runPipeline(binaryName, decompile = false)
+    fun writeSkeletons(binaryName: String) = runPipeline(binaryName, Mode.SKELETON)
 
     @ParameterizedTest
     @MethodSource("ghistabs.IntegrationFixtures#all")
-    fun writeDecompilations(binaryName: String) = runPipeline(binaryName, decompile = true)
+    fun writeDecompilations(binaryName: String) = runPipeline(binaryName, Mode.DECOMPILE)
 
-    private fun runPipeline(binaryName: String, decompile: Boolean) {
+    @ParameterizedTest
+    @MethodSource("ghistabs.IntegrationFixtures#all")
+    fun writeDecompilationsElideSjlj(binaryName: String) = runPipeline(binaryName, Mode.ELIDE_SJLJ)
+
+    private fun runPipeline(binaryName: String, mode: Mode) {
         val fixture = File("src/test/resources/binaries/$binaryName")
         assumeTrue(fixture.exists(), "fixture absent")
-        val outDirName = if (decompile) "decomps" else "skeletons"
+        val outDirName = when (mode) {
+            Mode.SKELETON -> "skeletons"
+            Mode.DECOMPILE -> "decomps"
+            Mode.ELIDE_SJLJ -> "decomps_elide_sjlj"
+        }
         val log = MessageLog()
         val monitor = TaskMonitor.DUMMY
         ProgramLoader.builder()
@@ -77,6 +86,7 @@ class SourceSkeletonProbe : AbstractGhidraHeadlessIntegrationTest() {
                             setEnum(StabsOptions.LOG_LEVEL, Level.DEBUG)
                         }
                 }
+                program.disableWindowsResourceAnalyzer()
                 mgr.reAnalyzeAll(null)
                 program.runTransaction("skeleton-autoanalyze") {
                     mgr.startAnalysis(monitor)
@@ -93,7 +103,6 @@ class SourceSkeletonProbe : AbstractGhidraHeadlessIntegrationTest() {
                     oldDir.deleteRecursively()
                     outDir.renameTo(oldDir)
                 }
-                val mode = if (decompile) Mode.ELIDE_SJLJ else Mode.SKELETON
                 Renderer(TypeResolver(harvest), program, mode, ctx.resolver).use { renderer ->
                     val written = renderer.renderAll(outDir)
                     println(
