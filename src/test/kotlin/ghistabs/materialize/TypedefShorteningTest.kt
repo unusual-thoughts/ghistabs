@@ -72,6 +72,25 @@ class TypedefShorteningTest {
     }
 
     @Test
+    fun `a readable alias beats shorter compiler-internal shorthands`() {
+        // libstdc++ instantiation TUs emit `typedef basic_string<…> S` and `__string_type`; the raw
+        // shortest-name rule would pick `S`. `string` must win over both.
+        val renames = typedefShorteningRenames(
+            mapOf("S" to basicString, "__string_type" to basicString, "string" to basicString),
+            setOf(basicString),
+        ).associate { it.from to it.to }
+        assertEquals("string", renames[basicString])
+    }
+
+    @Test
+    fun `a single-letter alias is still used when it is the only one`() {
+        // The internal-name filter must fall back rather than skip the rename entirely.
+        val renames = typedefShorteningRenames(mapOf("N" to "Node"), setOf("Node"))
+            .associate { it.from to it.to }
+        assertEquals("N", renames["Node"])
+    }
+
+    @Test
     fun `a bare-identifier target matches only on identifier boundaries`() {
         // `Node`→`N` must rewrite `vector<Node>` but never a substring of `NodeList` / `TreeNode`.
         val renames = typedefShorteningRenames(
