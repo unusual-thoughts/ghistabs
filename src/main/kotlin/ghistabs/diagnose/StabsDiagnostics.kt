@@ -50,13 +50,13 @@ data class AttributionTrace(
     val routedTo: String,
 )
 
-/** A materialisation fallback (Undefined4, dropped field, placeholder base, skipped vtable slot…). */
+/** A materialization fallback (Undefined4, dropped field, placeholder base, skipped vtable slot…). */
 data class DegradationRecord(val category: String, val detail: String)
 
 const val DEGRADED_PREFIX = "degraded-"
 
 /**
- * Record a materialisation degradation: a WARN log under `degraded-<category>` (surfaced live and
+ * Record a materialization degradation: a WARN log under `degraded-<category>` (surfaced live and
  * counted like anything else) that the [StabsDiagnostics] accumulator also files as a structured
  * [DegradationRecord] for the per-fixture dumps. [context] and [detail] are joined into the message.
  */

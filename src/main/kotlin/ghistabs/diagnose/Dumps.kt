@@ -7,6 +7,7 @@ import ghidra.program.model.data.DataType
 import ghistabs.harvest.GhidraKey
 import ghistabs.harvest.foldSourcePaths
 import ghistabs.importer.ImportContext
+import ghistabs.materialize.compromisedTypes
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.IdInterface
 import ghistabs.parse.ToStringSerializer
@@ -56,7 +57,7 @@ private data class RegistryDump(
     // §20/§21 grouping diagnosis. `sourceFolds`: §15 basename canonicalisation (raw → canonical).
     // `contentHashCollisions`: content-equivalent groups that did NOT merge into one — each is a §20
     // merge that either fired (one group left) or a candidate that didn't (why?). `duplicateNamedTypes`:
-    // materialised DataTypes sharing a simple name (the source of `.conflict` suffixes in the decomp).
+    // materialized DataTypes sharing a simple name (the source of `.conflict` suffixes in the decomp).
     val sourceFolds: Map<String, String> = emptyMap(),
     val contentHashCollisions: List<HashCollision> = emptyList(),
     val allTypes: Map<GhidraKey, Type> = emptyMap(),

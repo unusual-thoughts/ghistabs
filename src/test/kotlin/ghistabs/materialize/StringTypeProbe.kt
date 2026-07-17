@@ -28,7 +28,7 @@ import java.io.File
  * One-shot probe focused on `std::basic_string<…>` / `string`:
  *  - Where do the `string`-named Structures live (and which categories
  *    contain the Demangler stubs that aren't getting replaced)?
- *  - For the materialised `basic_string<…>` Structure, walk every field
+ *  - For the materialized `basic_string<…>` Structure, walk every field
  *    transitively and flag any Undefined* slot — the "this string type is
  *    fully resolved" check.
  */

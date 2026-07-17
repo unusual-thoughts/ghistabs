@@ -79,8 +79,8 @@ class ImporterIdempotenceIntegrationTest : AbstractGhidraHeadlessIntegrationTest
         // Assert idempotence: counts should be identical
         assertEquals(result1.parseErrors, result2.parseErrors, "Parse error counts should be identical")
         assertEquals(
-            result1.typesMaterialised,
-            result2.typesMaterialised,
+            result1.typesMaterialized,
+            result2.typesMaterialized,
             "Type materialization counts should be identical",
         )
         assertEquals(symbolCount1, symbolCount2, "Symbol count should be identical on second run")
@@ -114,7 +114,7 @@ class ImporterIdempotenceIntegrationTest : AbstractGhidraHeadlessIntegrationTest
 
             // Verify result is reasonable (no negative counts)
             assertTrue(result.recordsRead >= 0, "Records read should be non-negative in run $i")
-            assertTrue(result.typesMaterialised >= 0, "Types materialised should be non-negative in run $i")
+            assertTrue(result.typesMaterialized >= 0, "Types materialized should be non-negative in run $i")
         }
     }
 

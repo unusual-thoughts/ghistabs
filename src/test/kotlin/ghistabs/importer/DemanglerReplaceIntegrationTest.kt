@@ -196,7 +196,7 @@ class DemanglerReplaceIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
     }
 
     /**
-     * A type materialised in both its CU/include category (resolved) and `/stabs` (a ref-stub
+     * A type materialized in both its CU/include category (resolved) and `/stabs` (a ref-stub
      * placeholder) registers twice under one name. The `/Demangler/std` stub's preferred category
      * matches neither, so findByName saw two matches and returned null — leaving every locale facet
      * stub empty. This pins the tiebreaker: the `/stabs` placeholder loses to the real candidate.

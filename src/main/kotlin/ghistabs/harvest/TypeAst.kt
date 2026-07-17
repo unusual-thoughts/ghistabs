@@ -32,7 +32,7 @@ data class TypeAst(
      * same tag — e.g. `__si_class_type_info_pseudo` — collapse to the same name and
      *  byHash dedup actually fires). Otherwise, fall back to the synthetic.
      */
-    val nameOrUnique get() = name?.ifEmpty { null } ?: (body as? TypeDecl.XRef)?.tagName?.ifEmpty { null } ?: uniqueName
+    val nameOrUnique = name?.ifEmpty { null } ?: (body as? TypeDecl.XRef)?.tagName?.ifEmpty { null } ?: uniqueName
 
     val ghidraName: String = SymbolUtilities.replaceInvalidChars(nameOrUnique, false).ifEmpty { uniqueName }
 
@@ -111,8 +111,8 @@ data class OpenFunction(
      * `_ZN7CParser11ParseSymbolEv` → `CParser`. Used to look up the
      * class's `declSourceFile` and pin the function there when N_SLINE
      * would otherwise drag a defaulted/implicit method into whichever
-     * header materialised it (e.g. gcc's implicit `EquExpression` copy
-     * ctor materialised inside `std::pair<…, EquExpression>` lands at
+     * header materialized it (e.g. gcc's implicit `EquExpression` copy
+     * ctor materialized inside `std::pair<…, EquExpression>` lands at
      * `stl_pair.h:84`; the class itself lives elsewhere).
      *
      * Returns null for non-nested-name mangles (`_Z…` without `N`) and
@@ -149,6 +149,6 @@ data class GhidraKey(val category: CategoryPath, val name: String) {
     override fun toString() = "$category/$name"
 }
 
-/** TypeAsts collapsed onto one DTM slot. `ast` materialises; `members` is for diagnostics. */
+/** TypeAsts collapsed onto one DTM slot. `ast` materializes; `members` is for diagnostics. */
 @Serializable
 data class CanonicalGroup(val key: GhidraKey, val ast: TypeAst, val members: List<GlobalTypeId>, val distinct: Int)
