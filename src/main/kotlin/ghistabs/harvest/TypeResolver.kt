@@ -61,7 +61,7 @@ class TypeResolver(val harvest: Harvest, private val foldSources: Boolean = true
 
         if (sameKind.isNotEmpty() && distinctSizes.size == 1) {
             val resolved = sameKind.first()
-            debug("xref-base-tag-resolved", "'${xref.tagName}' → '${resolved.nameOrUnique}'")
+            debug("xref-base-tag-resolved", "'${xref.tagName}' → '${resolved.ghidraName}'")
             return resolved
         }
 

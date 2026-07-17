@@ -97,7 +97,7 @@ private abstract class RenderCommand(name: String, help: String) : CliktCommand(
     private val registryJson by option("--registry-json", help = "dump type registry as JSON").file(canBeDir = false)
     private val logFile by option("--log", help = "redirect the live import log to this file instead of stderr")
         .file(canBeDir = false)
-    private val degradationLog by option("--degradation-log", help = "write grouped materialisation degradations here")
+    private val degradationLog by option("--degradation-log", help = "write grouped materialization degradations here")
         .file(canBeDir = false)
 
     private val options

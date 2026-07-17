@@ -21,7 +21,7 @@ import java.io.File
 
 /**
  * Runs the #7 typedef-shortening pass against a real fixture DTM after full autoanalyze
- * (which materialises the stabs types) and dumps every rename it computes to
+ * (which materializes the stabs types) and dumps every rename it computes to
  * `build/test-output/typedef-renames/<fixture>.txt`. Then applies them and asserts the
  * canonical std::string collapse actually landed, so the DTM plumbing — not just the pure
  * algorithm ([ghistabs.materialize.typedefShorteningRenames]) — is exercised.

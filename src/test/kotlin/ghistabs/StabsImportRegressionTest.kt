@@ -84,7 +84,7 @@ class StabsImportRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
         // Demangler stubs with no concrete type to bind to across the corpus: types the demangler
         // names from mangled symbols that this binary only forward-declares (RTTI / EH surface) or
         // references unparameterised — no full class stab to resolve to, so they stay empty. A stub
-        // outside this set is a real materialisation gap. Global for now; add consciously when
+        // outside this set is a real materialization gap. Global for now; add consciously when
         // reviewed. Known real gaps deliberately excluded: `_Rb_tree_node`, `__normal_iterator.conflict`.
         val ALLOWED_EMPTY_DEMANGLER_STUBS = setOf(
             // bare (unparameterised) template names + builtin-spelling artifacts
@@ -440,7 +440,7 @@ class StabsImportRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
     }
 
     @Test
-    fun cparserMaterialised() {
+    fun cparserMaterialized() {
         assumeTrue(binaryName == "bouniafbouniaf.exe", "Skipping: CParser/Token_Type/EAsm specific to bouniafbouniaf.exe")
         // CParser, Token_Type and EAsm all canonicalise to the same TypeId because
         // gcc reuses local ids inside BINCL blocks per CU. Each must still reach the DTM.
@@ -460,7 +460,7 @@ class StabsImportRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
             .toList()
         // bouniaf is defined inside STL headers (only entry points are template
         // instantiations) so it ends up under /std/<sorted-first-header>/ rather than
-        // a project category. What matters is that it materialised as a non-empty
+        // a project category. What matters is that it materialized as a non-empty
         // Structure that ClassBuilder can find via Attribution (i.e. the dedup +
         // sort-stable attribution agree on the same category).
         val best = all.firstOrNull { "(StructureDB" in it }
@@ -695,7 +695,7 @@ class StabsImportRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
      *
      * Uses [ImportContext.typeRegistry] — the populated registry the
      * importer set at end-of-import. Constructing a fresh one would mean
-     * either (a) re-running materialiseAll (creates `.conflict`
+     * either (a) re-running materializeAll (creates `.conflict`
      * duplicates that race other @Test methods under
      * @Execution(CONCURRENT)) or (b) leaving it empty (findByName always
      * returns null and we can't test the substitution path at all).
@@ -759,7 +759,7 @@ class StabsImportRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
      * (stdlib.h-derived `div_t` ctors) must not survive.
      */
     @Test
-    fun voidSelfRefNotMaterialised() {
+    fun voidSelfRefNotMaterialized() {
         // Enumerate every void self-Ref ast in the harvest (body = Ref(self.id)).
         // For each one assert no Structure was created at its category+name.
         // Reuse setUp's cached harvest; re-harvest only in CONCURRENT mode (analyzer's own context).
@@ -773,7 +773,7 @@ class StabsImportRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
         assumeTrue(voidAsts.isNotEmpty(), "no void self-Refs in this fixture's harvest")
 
         val leaked = voidAsts.mapNotNull { ast ->
-            // A void self-Ref must NOT materialise as a Structure under any
+            // A void self-Ref must NOT materialize as a Structure under any
             // category bearing its synthetic ghidraName.
             program.dataTypeManager.allDataTypes.asSequence()
                 .filterIsInstance<Structure>()
@@ -1099,7 +1099,7 @@ class StabsImportRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
         if (emptyStructs.isNotEmpty()) {
             println(
                 "harvestTest[$binaryName/$mode]: ${emptyStructs.size} empty structs in harvest " +
-                    "(${emptyStructs.take(5).map { (a, _) -> a.nameOrUnique }})",
+                    "(${emptyStructs.take(5).map { (a, _) -> a.ghidraName }})",
             )
         }
     }
@@ -1169,7 +1169,7 @@ class StabsImportRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
     @Test
     fun knownDemanglerStubsReplaced() {
         // Names known to be both demangled (so the demangler creates a stub) and
-        // materialised from stabs (so a real type exists to replace the stub).
+        // materialized from stabs (so a real type exists to replace the stub).
         val knownNames = setOf("bouniaf", "bouniaf", "bouniaf")
         val leftover = program.dataTypeManager.allDataTypes
             .asSequence()
@@ -1202,7 +1202,7 @@ class StabsImportRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
         Assertions.assertTrue(
             applied > 0,
             "Expected inheritance-applied counter > 0, got $applied " +
-                "(no C++ inheritance edges were materialised)",
+                "(no C++ inheritance edges were materialized)",
         )
     }
 
@@ -1302,7 +1302,7 @@ class StabsImportRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
      *
      * This also requires the truncate to happen at placeholder-creation
      * time (not later), so the size is consistent across pre-seed and
-     * the materialise-winner loop regardless of order: bouniaf's
+     * the materialize-winner loop regardless of order: bouniaf's
      * base loop sees bouniaf's already-truncated placeholder.
      */
     @Test

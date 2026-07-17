@@ -5,16 +5,14 @@ import ghistabs.diagnose.analyzeDataCoverage
 import ghistabs.harvest.Harvest
 import ghistabs.harvest.Harvester
 import ghistabs.harvest.TypeResolver
-import ghistabs.materialize.ClassBuilder
-import ghistabs.materialize.TypeRegistry
-import ghistabs.materialize.TypedefShortener
+import ghistabs.materialize.*
 import ghistabs.parse.StabReader
 import ghistabs.parse.SymbolDecl
 import ghistabs.runTransaction
 
 /**
- * Orchestrates the stabs import pipeline: harvest records → materialise types → apply symbols.
- * The heavy lifting lives in [Harvester] (harvest), [TypeRegistry] (materialise) and
+ * Orchestrates the stabs import pipeline: harvest records → materialize types → apply symbols.
+ * The heavy lifting lives in [Harvester] (harvest), [TypeRegistry] (materialize) and
  * [SymbolApplier] (apply); this class only sequences them and tallies the result.
  */
 class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx {
@@ -37,10 +35,10 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
         val typeResolver = TypeResolver(harvest, ctx.options.foldSources, ctx)
         recordHarvestCounters(harvest, typeResolver, stabs)
 
-        // Pass B — materialise types
+        // Pass B — materialize types
         val typeRegistry = TypeRegistry(ctx.dtm, ctx, ctx.diagnostics, harvest, typeResolver, ctx.monitor)
-        ctx.program.runTransaction("Stabs: materialise types") {
-            typeRegistry.materialiseAll()
+        ctx.program.runTransaction("Stabs: materialize types") {
+            typeRegistry.materializeAll()
             if (ctx.options.shortenTypedefs) TypedefShortener(ctx.dtm, ctx).apply()
         }
 
@@ -72,7 +70,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
             recordsRead = stabs.totalRecordCount,
             recordsParsed = stabs.records.size - harvest.parseErrors,
             parseErrors = harvest.parseErrors,
-            typesMaterialised = harvest.typeAsts.size,
+            typesMaterialized = harvest.typeAsts.size,
             functionsApplied = functions,
             globalsApplied = globals,
             classesApplied = classes,

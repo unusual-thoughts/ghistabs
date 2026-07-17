@@ -47,7 +47,7 @@ Run **`./gradlew listTests`** to see every test class grouped by tag, with its p
 count — the way to find where a test lives.
 
 - **`StabsImportRegressionTest`** (`ghistabs`) — the core suite. Runs the full import over each fixture
-  in both analyzer modes (`CONCURRENT`/`AFTER`) and asserts the materialised output + baseline counters.
+  in both analyzer modes (`CONCURRENT`/`AFTER`) and asserts the materialized output + baseline counters.
   Most fixture-specific assertions live here.
 - **Synthetic behavioural** (fast, build a tiny `ProgramBuilder` program, no fixture): the
   `*IntegrationTest` classes under `ghistabs.importer` / `ghistabs.materialize` / `ghistabs` +
