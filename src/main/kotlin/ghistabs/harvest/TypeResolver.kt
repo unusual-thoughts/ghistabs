@@ -1,5 +1,6 @@
 package ghistabs.harvest
 
+import ghidra.program.model.data.CategoryPath
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.DummySink
 import ghistabs.parse.*
@@ -284,16 +285,55 @@ class TypeResolver(val harvest: Harvest, private val foldSources: Boolean = true
         fun headerKey(ast: TypeAst) =
             attribution.keyForAst(ast, byGhidraName.getValue(ast.ghidraName).map { it.id.source }.toSet())
 
+        // Category each C++ class files its own nested members under, keyed by the class's canonicalised
+        // stab name. Every method-bearing type contributes its own scope (`basic_string<char,…>` →
+        // `/std/string`); method-less nested types below borrow it. Keyed by the stab name (not the
+        // demangler leaf, which abbreviates `Ss`→`string`) because that is the spelling a nested type's
+        // qualifier or its containing field carries; canonTemplateName erases the whitespace gcc varies.
+        val memberCategoryByClass: Map<String, CategoryPath> = buildMap {
+            for (ast in typeAsts.values) {
+                val path = ast.demangledClassPath() ?: continue
+                ast.name?.let { putIfAbsent(canonTemplateName(it), scopeCategory(path)) }
+            }
+        }
+
+        // Reverse the by-value member edge: nested member type id → the struct that holds it as a field.
+        // gcc emits `basic_string<char>::_Alloc_hider` both fully-qualified-with-methods (already
+        // scoped) and bare-and-method-less; the bare one is only reachable as `basic_string._M_dataplus`.
+        // Drop ids held by two distinct enclosers — no single owning scope.
+        val enclosingByNestedId: Map<GlobalTypeId, TypeAst> = buildMap {
+            val ambiguous = mutableSetOf<GlobalTypeId>()
+            for (ast in typeAsts.values) {
+                val struct = ast.body as? TypeDecl.Struct ?: continue
+                for (field in struct.fields) {
+                    if (field.isStatic) continue
+                    val nestedId = byValueStructId(field.type) ?: continue
+                    val prev = putIfAbsent(nestedId, ast)
+                    if (prev != null && prev.id != ast.id) ambiguous += nestedId
+                }
+            }
+            ambiguous.forEach(::remove)
+        }
+
         fun scopeKey(ast: TypeAst): GhidraKey? {
-            val path = ast.demangledClassPath() ?: return null
-            // File every method-bearing type under its namespace category, named by the demangler's own
-            // leaf — the exact (category, name) Ghidra's this-param class-struct creator uses (same
-            // GnuDemangler). So our filled slot IS the slot Ghidra would otherwise forge empty, and it
-            // reuses ours. byCanonicalKey demotes to header only on a genuine content collision within a
-            // (scope, leaf). REQUIRES [TypeRegistry.register] to replace Ghidra's empty namespace shadows
-            // (REPLACE_EMPTY_STRUCTS handler) — otherwise `dtm.resolve` keeps the empty shadow at the
-            // colliding path and every reference to the type resolves to it (all-undefined).
-            return GhidraKey(scopeCategory(path.dropLast(1)), path.last())
+            // Method-bearing: file under the demangler's namespace category, named by its own leaf — the
+            // exact (category, name) Ghidra's this-param class-struct creator uses (same GnuDemangler), so
+            // our filled slot IS the slot it would otherwise forge empty. byCanonicalKey demotes to header
+            // only on a genuine content collision within a (scope, leaf). REQUIRES [TypeRegistry.register]
+            // to replace Ghidra's empty namespace shadows (REPLACE_EMPTY_STRUCTS) — else `dtm.resolve`
+            // keeps the empty shadow at the colliding path and every reference resolves to it (all-undef).
+            ast.demangledClassPath()?.let { return GhidraKey(scopeCategory(it.dropLast(1)), it.last()) }
+
+            // Method-less nested member type (`_Alloc_hider`, `_Rep`, `sentry`) — no mangled method to
+            // scope it, so it otherwise collides char-vs-wchar under one bare-name header key. Recover the
+            // enclosing template from its own `Outer::Inner` stab name, else from the struct that holds it
+            // by value, and file it under that template's member category — the slot its qualified,
+            // method-bearing sibling already occupies, so the two unify instead of forking a `.conflict`.
+            val (enclosingName, leaf) = ast.name?.let(::splitQualified)?.takeIf { it.size > 1 }
+                ?.let { it.dropLast(1).joinToString("::") to it.last() }
+                ?: enclosingByNestedId[ast.id]?.name?.let { it to ast.ghidraName }
+                ?: return null
+            return memberCategoryByClass[canonTemplateName(enclosingName)]?.let { GhidraKey(it, leaf) }
         }
 
         // Scope→header→hash ladder. A type whose enclosing C++ scope is derivable (any member's
@@ -309,14 +349,17 @@ class TypeResolver(val harvest: Harvest, private val foldSources: Boolean = true
                 if (scopeKey == null) {
                     members.groupBy { headerKey(it) }.map { (k, ms) -> classifyGroup(k, ms) }
                 } else {
-                    val byHash = members.groupBy { contentHash(it.body) }
-                    if (byHash.size == 1) {
-                        listOf(classifyGroup(scopeKey, members))
+                    // Divergence is decided by the scope-owning (method-bearing) members alone. A
+                    // method-less nested type recovered into this slot is the same type as its qualified
+                    // sibling — layout-identical, differing only in emitted methods, which never enter the
+                    // DTM struct — so it rides along and aliases onto the owners' winner instead of forking
+                    // the group. Genuine divergence among the owners still demotes every member to header.
+                    val owners = members.filter { it.demangledClassPath() != null }.ifEmpty { members }
+                    if (owners.groupBy { contentHash(it.body) }.size == 1) {
+                        val group = classifyGroup(scopeKey, owners)
+                        listOf(if (owners.size == members.size) group else group.copy(members = members.map { it.id }))
                     } else {
-                        debug(
-                            "canonical-scope-collision",
-                            "$scopeKey: ${byHash.size} divergent bodies → demoted to header keys",
-                        )
+                        debug("canonical-scope-collision", "$scopeKey: divergent bodies → demoted to header keys")
                         members.groupBy { headerKey(it) }.map { (k, ms) -> classifyGroup(k, ms) }
                     }
                 }
@@ -389,6 +432,16 @@ class TypeResolver(val harvest: Harvest, private val foldSources: Boolean = true
     private fun countUnresolvedRefs(body: TypeDecl<GlobalTypeId>): Int {
         if (body !is TypeDecl.Struct) return 0
         return body.fields.count { f -> walksToUnresolvedRef(f.type) }
+    }
+
+    /** Id of the struct/union [t] embeds by value (through Ref/InlineDef/Const/Volatile only, never a
+     *  pointer/array), or null — the containment edge that scopes a method-less nested member type. */
+    private tailrec fun byValueStructId(t: TypeDecl<GlobalTypeId>): GlobalTypeId? = when (t) {
+        is TypeDecl.Ref -> t.id.takeIf { typeAsts[it]?.body is TypeDecl.Struct }
+        is TypeDecl.InlineDef -> if (t.body is TypeDecl.Struct) t.id else byValueStructId(t.body)
+        is TypeDecl.Const -> byValueStructId(t.inner)
+        is TypeDecl.Volatile -> byValueStructId(t.inner)
+        else -> null
     }
 
     private tailrec fun walksToUnresolvedRef(t: TypeDecl<GlobalTypeId>): Boolean = when (t) {
