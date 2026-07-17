@@ -15,7 +15,7 @@ data class PassResult(
     val recordsRead: Int = 0,
     val recordsParsed: Int = 0,
     val parseErrors: Int = 0,
-    val typesMaterialised: Int = 0,
+    val typesMaterialized: Int = 0,
     val functionsApplied: Int = 0,
     val globalsApplied: Int = 0,
     val classesApplied: Int = 0,
@@ -42,7 +42,7 @@ class ImportContext<Terminal : DiagnosticSink>(
 
     /**
      * Populated at end-of-import so tests can run [DemanglerReplacer] against the same
-     * `byCanonicalKey` indices the analyzer used — avoids a second `materialiseAll` that
+     * `byCanonicalKey` indices the analyzer used — avoids a second `materializeAll` that
      * would race `.conflict` artifacts under `@Execution(CONCURRENT)`. Null in production.
      */
     @get:TestOnly

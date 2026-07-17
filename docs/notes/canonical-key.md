@@ -35,7 +35,7 @@ F. per group: pick winner, emit diagnostics, drop intermediates.
 Bodies that produce a stable `(CategoryPath, name)` slot in the DTM:
 `Struct` (covers struct/union/class via `kind`), `Enum`, `Typedef`.
 Everything else (Pointer, Reference, FunctionT, InlineDef, Method, …)
-is materialised on demand via `byId`, never indexed by canonical key.
+is materialized on demand via `byId`, never indexed by canonical key.
 
 ## What's certain vs heuristic
 
@@ -67,13 +67,13 @@ Once `byCanonicalKey` owns the registration decision:
   decided upstream with full provenance.
 - `TypeRegistry.byHash` (cross-CU canonical) is subsumed: members of a
   CanonicalGroup share a winner.
-- `materialiseAll`'s placeholder pre-seeding still needed for cycle
-  breaking. `resolve`/`materialiseBody` still needed for body rendering.
+- `materializeAll`'s placeholder pre-seeding still needed for cycle
+  breaking. `resolve`/`materializeBody` still needed for body rendering.
 - `dataTypeFor` (decl → DataType) is the actual "resolver" surface;
   stays. `harvest.getByXRef` (name → AST) also stays, broadened.
 
 Net: `TypeRegistry` shrinks to placeholder allocation + body
-materialisation + a thin `byId` cache for Ref resolution. The bookkeeping
+materialization + a thin `byId` cache for Ref resolution. The bookkeeping
 of "which AST won this (cat, name) slot" moves to harvest.
 
 ## Status (render-backlog §22)

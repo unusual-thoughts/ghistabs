@@ -518,11 +518,11 @@ This section evaluates the pipeline layering, data-flow boundaries, and context 
 
 **TypeResolver (src/main/kotlin/ghistabs/builder/TypeRegistry.kt computed property `typeResolver`)** — Computed property on `Harvest` returning `TypeResolver(typeAsts)`. Lightweight helper providing three queries: `getTypeFor(GlobalTypeId)`, `getBodyFor<T>(GlobalTypeId)`, `getStructByName(name)`. Used by `TypeRegistry` and `ClassBuilder` to look up type definitions during materialization and class construction.
 
-**TypeRegistry (src/main/kotlin/ghistabs/builder/TypeRegistry.kt)** — Stateful Ghidra DataTypeManager wrapper; transforms `Harvest` output (`TypeAst` map) into Ghidra `DataType` objects. Responsibility: placeholder allocation, byId/byHash dedup (keying on `GlobalTypeId` and content hash), cross-CU collision handling (merge via `StructuralDiff` or rename), attribute computation (`Attribution.categoryFor()` for namespace routing). Materializes types transactionally via `materialiseAll()` and `resolve()` methods. Uses `TypeResolver` to resolve nested type references.
+**TypeRegistry (src/main/kotlin/ghistabs/builder/TypeRegistry.kt)** — Stateful Ghidra DataTypeManager wrapper; transforms `Harvest` output (`TypeAst` map) into Ghidra `DataType` objects. Responsibility: placeholder allocation, byId/byHash dedup (keying on `GlobalTypeId` and content hash), cross-CU collision handling (merge via `StructuralDiff` or rename), attribute computation (`Attribution.categoryFor()` for namespace routing). Materializes types transactionally via `materializeAll()` and `resolve()` methods. Uses `TypeResolver` to resolve nested type references.
 
 **ClassBuilder (src/main/kotlin/ghistabs/builder/ClassBuilder.kt)** — Stateful Ghidra program updater; constructs GhidraClass namespaces, applies methods, builds vtables. Responsibility: polymorphism detection (`ClassBuilderHelpers.firstPolymorphicBase()`), vfptr placement decision (`VfptrDecision`), inherited virtual method collection, vtable struct building, method reparenting with `__thiscall` calling convention. Uses `TypeResolver` to resolve base types during inheritance chain traversal.
 
-**StabsImporter (src/main/kotlin/ghistabs/importer/StabsImporter.kt)** — Orchestrator coordinating three passes: Pass A (Harvester), Pass B (TypeRegistry.materialiseAll), Pass C (applyAllSymbols). Responsibility: transaction management, diagnostic counter recording, symbol application (functions, globals, class vtables), demangler stub replacement, final Itanium-mangled label demangling. Uses `StabReader` to extract stab section, `AddressResolver` to map stab values to program addresses.
+**StabsImporter (src/main/kotlin/ghistabs/importer/StabsImporter.kt)** — Orchestrator coordinating three passes: Pass A (Harvester), Pass B (TypeRegistry.materializeAll), Pass C (applyAllSymbols). Responsibility: transaction management, diagnostic counter recording, symbol application (functions, globals, class vtables), demangler stub replacement, final Itanium-mangled label demangling. Uses `StabReader` to extract stab section, `AddressResolver` to map stab values to program addresses.
 
 ### 9.2 Parser / Harvester Boundary
 
@@ -548,7 +548,7 @@ However:
 - `parseErrors: Int` — error count
 
 **TypeRegistry consumption:**
-- `materialiseAll(typeAsts.values)` uses only the `TypeAst` list.
+- `materializeAll(typeAsts.values)` uses only the `TypeAst` list.
 - `typeResolver` computed property wraps only `typeAsts`.
 - `collidingAsts` is NOT consumed by TypeRegistry; the deviation table flags this as pending audit (D6).
 
@@ -582,13 +582,13 @@ However:
 
 | Location                                | Pattern                                             | Purpose                                                                     | Justified?                                                                            |
 | --------------------------------------- | --------------------------------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| TypeRegistry.materialiseAll lines 44–61 | `val byName = asts.groupBy { it.name }`             | Pre-seed placeholders per unique name; later dedup by name within the batch | Yes — ensures forward refs resolve via placeholders                                   |
+| TypeRegistry.materializeAll lines 44–61 | `val byName = asts.groupBy { it.name }`             | Pre-seed placeholders per unique name; later dedup by name within the batch | Yes — ensures forward refs resolve via placeholders                                   |
 | TypeRegistry.resolve lines 178, 194     | `byName[ast.name]?.map { it.id.source }?.toSet()`   | Compute union of defining CUs for attribution                               | Yes — needed for correct category computation                                         |
 | TypeRegistry.byHash lines 17            | `byHash: Map<Pair<String, Int>, DataType>`          | Cross-CU dedup: same name + same hash                                       | Yes — efficient by-hash lookup keyed on (name, hash) for idempotent reruns            |
 | StabsImporter.applyAllSymbols lines 232 | `harvest.typeAsts.values.groupBy { it.ghidraName }` | Dedupe class ASTs by display name                                           | Yes — multiple ASTs from different CUs may have the same name; take the most detailed |
 
 **Specific case — same name, different IDs:** When two `TypeAst`s have the same `ghidraName` but different `GlobalTypeId`s (e.g., a struct defined in two different CUs with the same name but different bodies):
-- In `materialiseAll`: Both materialise into the DTM as separate `DataType` objects (keyed by `(name, hash)`); the byId map keeps first-writer-wins for ref resolution.
+- In `materializeAll`: Both materialize into the DTM as separate `DataType` objects (keyed by `(name, hash)`); the byId map keeps first-writer-wins for ref resolution.
 - In `StabsImporter`: Classes are deduplicated by name; the most-detailed one (max methods, then fields) is chosen for vtable construction.
 - In `Attribution.categoryFor()`: Both types may get different category paths if the dedup rule disagrees (e.g., one is multi-CU, one is single-CU).
 

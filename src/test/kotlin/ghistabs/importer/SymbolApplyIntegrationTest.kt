@@ -143,7 +143,7 @@ class SymbolApplyIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         // The malformed record should result in a parse error
         assertTrue(result.parseErrors > 0, "Importer should report parse error for malformed record")
         // But other records should still be processed
-        assertTrue(result.typesMaterialised > 0, "Importer should have materialized valid types despite errors")
+        assertTrue(result.typesMaterialized > 0, "Importer should have materialized valid types despite errors")
     }
 
     /**

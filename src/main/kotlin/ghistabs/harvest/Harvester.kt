@@ -346,7 +346,7 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, private 
     private fun synthesizeXRefStubsForDanglingInheritanceRefs() {
         val synthetic = mutableListOf<TypeAst>()
         // Outer struct id → its inheritance-pseudo-fields. Rewriting moves them to `bases`
-        // so the materialiser's BaseInsertionPlanner / firstPolymorphicBase / vtable wiring
+        // so the materializer's BaseInsertionPlanner / firstPolymorphicBase / vtable wiring
         // sees the inheritance.
         val outerRewrites =
             mutableMapOf<GlobalTypeId, MutableList<FieldDecl<GlobalTypeId>>>()
@@ -360,7 +360,7 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, private 
                 // Rewrite fires regardless of whether the Ref is bound — the bogus-bitsize
                 // signal is independent of cross-CU resolution.
                 outerRewrites.getOrPut(ast.id) { mutableListOf() }.add(field)
-                // Stub only needed when the Ref has no binding (materialiser resolves
+                // Stub only needed when the Ref has no binding (materializer resolves
                 // bound Refs directly).
                 if (ref.id in typeAsts) continue
                 synthetic.add(

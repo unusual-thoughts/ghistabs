@@ -78,7 +78,7 @@ class ClassBuilder(
     /**
      * Build every class/vtable group once. Each class header included by N CUs produces N TypeAsts
      * with distinct ids but identical ghidraName (xapasmcsr: 86 names duplicated up to 11x);
-     * materialiseAll already collapsed by name, and iterating canonical groups builds each class
+     * materializeAll already collapsed by name, and iterating canonical groups builds each class
      * once, off the most-detailed body. Returns the number of classes built.
      */
     fun buildAll(): Int {
@@ -97,7 +97,7 @@ class ClassBuilder(
         return built
     }
 
-    /** Materialise class struct + namespace + (optional) vtable struct, apply at _ZTV. */
+    /** Materialize class struct + namespace + (optional) vtable struct, apply at _ZTV. */
     fun build(group: CanonicalGroup): Unit = group.run {
         val category = key.category
         val structDt = typeRegistry.dataTypeFor(ast.id)
@@ -275,7 +275,7 @@ class ClassBuilder(
             else -> return
         }
 
-        typeRegistry.dataTypeFor(retDecl)?.let { ret ->
+        typeRegistry.resolveRef(retDecl)?.let { ret ->
             func.setReturnType(ret, source)
         } ?: degradation(
             "method-ret-unresolved",
@@ -287,7 +287,7 @@ class ClassBuilder(
         // unresolved types. Early-returning left Ghidra's auto-guessed signature in
         // place; combined with newly-applied __thiscall (which prepends its own `this`)
         // that produced double-`this` like `void Foo::Dump(Foo *this, ushort this, ...)`.
-        val resolvedParams = paramDecls.map { typeRegistry.dataTypeFor(it) }
+        val resolvedParams = paramDecls.map { typeRegistry.resolveRef(it) }
         for ((decl, dt) in paramDecls.zip(resolvedParams)) {
             if (dt == null) {
                 degradation(
@@ -447,7 +447,7 @@ class ClassBuilder(
             name = m.name,
             ret = method.ret,
             params = method.params,
-            thisType = typeRegistry.dataTypeFor(method.cls) ?: PointerDataType(VoidDataType(), dtm),
+            thisType = typeRegistry.resolveRef(method.cls) ?: PointerDataType(VoidDataType(), dtm),
             callingConvention = "__thiscall",
             at = "$className::${m.name}",
         )

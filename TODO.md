@@ -36,14 +36,14 @@ The abstract RTTI base-class stubs (`type_info`, `__cxxabiv1::__{class,si,vmi}_t
 [Session 2026-07-12] in Done. What remains: `_Rb_tree<…>` and the STL template zoo
 (`__codecvt_abstract_base`, `__timepunct`, `__normal_iterator.conflict`, …) plus the nested
 `__class_type_info::__{dyncast,upcast}_result` result structs. `DemanglerReplacer` matches only via
-`typeRegistry.findByName(simpleName, …)` (`DemanglerReplacer.kt:122`); these were never materialised as registered
+`typeRegistry.findByName(simpleName, …)` (`DemanglerReplacer.kt:122`); these were never materialized as registered
 types (or their canonicalised name differs) → `findByName` null → `Skip.NoReplacement`, left as empty `/Demangler`
 stubs.
 
 **Known residual gap, not a regression — minimise it.** The broad `demanglerHasNoEmptyStubs` /
 `noEmptyDemanglerStubsRemain` tests fail on this and have since they were added; the count is the metric to
 drive down (**75 residual stubs on xapasmcsr, AFTER mode**, was 76). Two reasons a stub survives: (a) we never
-registered a matching type (`_Rb_tree<…>` etc. materialise per-instantiation and their demangled spelling drifts
+registered a matching type (`_Rb_tree<…>` etc. materialize per-instantiation and their demangled spelling drifts
 from ours), or (b) we *do* have the type but `findByName`'s **preferred-category** hint no longer lines up. Since
 scope-attribution now files method-bearing types under their **namespace** category (`/std`, `/__gnu_cxx`, …)
 rather than a header category, the stub-path→preferred-category derivation in `DemanglerReplacer` should be
@@ -75,13 +75,13 @@ Recovery options (unchanged, still valid):
 
 - **DWARF-supplementary harvest** (preferred): the binaries carry `.debug_info`
   too. Walk DWARF for the same CU, find the type at the matching location,
-  materialise it. Principled; the C fixtures (box2d) are where it pays most.
+  materialize it. Principled; the C fixtures (box2d) are where it pays most.
 - **Cross-CU id-shape matching**: for a dangling `(CU, N)` find a TypeAst in
   another CU at the same `N` with matching enclosing-shape. Fragile.
 
 ### P2 — Anonymous aggregates get synthetic names (`noAnonymousMaterializedTypes`)
 
-Genuine anonymous struct/union/enum aggregates materialise under
+Genuine anonymous struct/union/enum aggregates materialize under
 `Anon_<file>_<N>_<hash>` names. The **type is real and correct** (content-hashed,
 §20/§21) — only the name is ugly. Now the largest degradation count on
 box2d_tests (`local-typed-anonymous=407`, `param-typed-anonymous=67`). Cosmetic,
@@ -250,7 +250,7 @@ containing field/typedef when unambiguous.
 - [x] **Demangler-string regression test against real registry** —
   `814342c`. `ImportContext.typeRegistry` now exposes the populated
   registry so the post-import injection test can drive a real
-  DemanglerReplacer without re-running materialiseAll (would create
+  DemanglerReplacer without re-running materializeAll (would create
   `.conflict` artifacts that race other tests under
   `@Execution(CONCURRENT)`).
 - [x] **Build-resource hygiene** — `af463a5`. `src/test/resources/`
@@ -269,7 +269,7 @@ containing field/typedef when unambiguous.
   placeholder already cached) to `resolve()` BEFORE
   `placeholders.getOrPut`. Trailing void sentinel dropped from method
   param lists, mid-list void substituted with Undefined4. Regression
-  tests `voidSelfRefNotMaterialised` +
+  tests `voidSelfRefNotMaterialized` +
   `demanglerStringReplacedAfterStubInjection`.
 - [x] **DemanglerReplacer multi-candidate match** — `fddcb65`. Three
   `string` candidates (`/string` built-in, `/stabs/string` typedef,
@@ -324,7 +324,7 @@ containing field/typedef when unambiguous.
   to `usefulStructSize`; cascades fix base-subobject placement for
   CSymLexStream's `_base_CLexStream`. Regression test
   `cLexStreamAndCSymLexStreamTruncated`.
-- [x] **string typedef materialised** — `e641db7`. The named-typedef
+- [x] **string typedef materialized** — `e641db7`. The named-typedef
   loop now tries `dataTypeFor(body)` after `BuiltinTable.resolve`, so
   `string:t = basic_string<…>` emits a TypedefDataType at `/stabs/string`
   instead of leaking through resolve()'s placeholder branch.
@@ -345,7 +345,7 @@ containing field/typedef when unambiguous.
 - CONCURRENT vs AFTER mode parameterisation.
 - `__thiscall` + `this: <Class>*` (`0e51c73`).
 - Vtable split: `<Class>_vftable` + `<Class>_vtable` (`3513f77`).
-- CParser/Token_Type/EAsm materialisation (`e9be41b`).
+- CParser/Token_Type/EAsm materialization (`e9be41b`).
 - `[class-not-struct]` spam 705 → 3 (`29a2b90`).
 - `apply-error-no-function` 489 → 0 (`4804887`).
 - PE/Cygwin underscore demangling (`7b22264`).

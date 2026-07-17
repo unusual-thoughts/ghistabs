@@ -230,7 +230,7 @@ redirects every reference and drops the typedef, freeing the name. It also rewri
 member fields), which embed the base type's name at build time and so aren't reached by
 datatype renaming; without this the decomp still shows
 `_base__Vector_base<std::basic_string<…>>`. Gated behind `OPT_SHORTEN_TYPEDEFS` (default
-off), run in the materialise transaction after `materialiseAll`, and enabled in the
+off), run in the materialize transaction after `materializeAll`, and enabled in the
 skeleton/decomp integration pipeline so its output reads shortened.
 
 Pure core factored into `TemplateNameShortener` (build subs once, `shorten`/
@@ -693,7 +693,7 @@ gcc emits one physical header two ways (§15) with *different* N_BINCL checksums
 type gets several `GlobalTypeId`s: a **named** struct/enum in one spelling
 (`.../include/dspinfo/dspinfo.h/dspinfo`), an **anonymous** copy in another (`Anon_dspinfo_4`, the
 InlineDef target of a `typedef`), plus `typedef …;` aliases. `byCanonicalKey` groups by
-`(category, ghidraName)`, so these land in *distinct* groups → the DTM materialises several
+`(category, ghidraName)`, so these land in *distinct* groups → the DTM materializes several
 DataTypes for one type. Ghidra's decompiler picks a struct/enum's **display** name by resolving
 across *all* same-named DataTypes plus the typedef graph, so the duplication is not inert: a
 function returning `dspinfo` renders `Anon_dspinfo_4 *`, and — because the resolution is global —
@@ -715,7 +715,7 @@ it only fixed the *some* spellings that folded by basename, leaving the rest dup
   `typedef struct {…} Name;` (InlineDef) and `typedef enum {…} Name;` (a separate anon enum + a
   `Ref` typedef) both name their anonymous aggregate after the typedef — handles the *sole*-anon
   case (no named counterpart for the merge to find) and lets same-name merging compose.
-- **`TypeRegistry` typedef-skip.** The typedef materialisation phase no longer registers a `/stabs`
+- **`TypeRegistry` typedef-skip.** The typedef materialization phase no longer registers a `/stabs`
   `TypedefDataType` whose target already carries that exact name — that duplicate is precisely the
   same-named DataType that destabilises the decompiler's display resolution.
 
@@ -744,15 +744,15 @@ spanning >1 group, source folds, and duplicate-named DataTypes — rather than b
   types unify — baseline bumped).
 
 - **DONE: enum double-registration → `.conflict`.** `b2BodyType` was **one** `byCanonicalKey` group
-  (18 members, `distinct=1`) yet materialised as **two** DataTypes at the identical `/src/body.h/b2BodyType`
-  slot → Ghidra `.conflict` (`b2BodyType`/`b2ShapeType`, `EnumDSPRev`). Root cause: `materialiseAll`
+  (18 members, `distinct=1`) yet materialized as **two** DataTypes at the identical `/src/body.h/b2BodyType`
+  slot → Ghidra `.conflict` (`b2BodyType`/`b2ShapeType`, `EnumDSPRev`). Root cause: `materializeAll`
   registered **struct** placeholders into the DTM up front and filled them *in place*, but **enum**
-  placeholders were left unregistered and `materialiseEnum` built a *brand-new* `EnumDataType`. The empty
+  placeholders were left unregistered and `materializeEnum` built a *brand-new* `EnumDataType`. The empty
   placeholder leaked into the DTM via any struct-field/param `Ref` resolved (through `tryGetExisting`)
-  before the winner materialised, colliding with the filled enum under `register`'s `KEEP_HANDLER`.
+  before the winner materialized, colliding with the filled enum under `register`'s `KEEP_HANDLER`.
   **Fix** (`TypeRegistry.kt`): register enum placeholders up front like structs (`raw is Enum`), keep the
   placeholder an `EnumDataType` sized correctly at creation in `makePlaceholder` (also fixes the latent
-  `-fshort-enums` case that fell to a `Structure` stub), and `materialiseEnum` fills that one registered
+  `-fshort-enums` case that fell to a `Structure` stub), and `materializeEnum` fills that one registered
   object in place. Verified: **zero `.conflict`** across all six fixtures' decomp; `duplicateNamedTypes`
   no longer lists any enum (only same-simple-name methods at distinct class categories, and the pre-existing
   benign `char → /char` primitive-typedef path); all integration baselines green.

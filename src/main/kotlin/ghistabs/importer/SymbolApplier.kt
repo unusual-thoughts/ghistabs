@@ -17,6 +17,8 @@ import ghistabs.harvest.Harvest
 import ghistabs.harvest.OpenFunction
 import ghistabs.harvest.SymbolRecord
 import ghistabs.materialize.TypeRegistry
+import ghistabs.materialize.reasonFor
+import ghistabs.materialize.resolveRef
 import ghistabs.namespaceChain
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.SymbolDecl
@@ -25,7 +27,7 @@ import ghistabs.parse.isInlineStdMember
 
 /**
  * The apply phase: writes harvested functions, params, locals, globals, statics, labels and scope
- * comments into the Ghidra program, then demangles and materialises classes/vtables. Caller holds
+ * comments into the Ghidra program, then demangles and materializes classes/vtables. Caller holds
  * the transaction.
  */
 class SymbolApplier(
@@ -65,7 +67,7 @@ class SymbolApplier(
                 if (func.name != open.name) func.setName(open.name, source)
 
                 // Apply return type from the parsed signature.
-                val retDt = typeRegistry.dataTypeFor(open.decl.type)
+                val retDt = typeRegistry.resolveRef(open.decl.type)
                 if (retDt != null) func.setReturnType(retDt, source)
 
                 // Build params from N_PSYM/N_RSYM. Filter out any N_PSYM literally named
@@ -82,8 +84,8 @@ class SymbolApplier(
                     .mapIndexed { i, p ->
                         val pdecl = p.body
                         val (pname, pdt) = when (pdecl) {
-                            is SymbolDecl.StackParam -> pdecl.name to typeRegistry.dataTypeFor(pdecl.type)
-                            is SymbolDecl.RegParam -> pdecl.name to typeRegistry.dataTypeFor(pdecl.type)
+                            is SymbolDecl.StackParam -> pdecl.name to typeRegistry.resolveRef(pdecl.type)
+                            is SymbolDecl.RegParam -> pdecl.name to typeRegistry.resolveRef(pdecl.type)
                             else -> "arg$i" to null
                         }
                         if (pdt == null) {
@@ -281,8 +283,8 @@ class SymbolApplier(
     private fun applyLocal(func: Function, loc: SymbolRecord) {
         val decl = loc.body
         val resolvedDt = when (decl) {
-            is SymbolDecl.StackLocal -> typeRegistry.dataTypeFor(decl.type)
-            is SymbolDecl.RegLocal -> typeRegistry.dataTypeFor(decl.type)
+            is SymbolDecl.StackLocal -> typeRegistry.resolveRef(decl.type)
+            is SymbolDecl.RegLocal -> typeRegistry.resolveRef(decl.type)
             else -> return
         }
         if (resolvedDt == null) {
@@ -371,7 +373,7 @@ class SymbolApplier(
         }
         ensureStabLabel(addr, decl.name)
 
-        val dt = typeRegistry.dataTypeFor(decl.type) ?: run {
+        val dt = typeRegistry.resolveRef(decl.type) ?: run {
             debug("global-skipped", "addr=$addr dtKind=unknown reason=no-resolved-type")
             return false
         }
@@ -425,7 +427,7 @@ class SymbolApplier(
 
     private fun applyStatic(decl: SymbolDecl.StaticVar<GlobalTypeId>, rawAddr: Long): Boolean {
         val addr = ctx.resolver.buildAddress(rawAddr)
-        val dt = typeRegistry.dataTypeFor(decl.type) ?: return false
+        val dt = typeRegistry.resolveRef(decl.type) ?: return false
         typeRegistry.reasonFor(dt)?.let { reason ->
             degradation(
                 "static-typed-$reason",

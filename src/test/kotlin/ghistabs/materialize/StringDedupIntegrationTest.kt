@@ -23,13 +23,13 @@ import org.junit.jupiter.api.Test
 import java.io.File
 
 /**
- * Guards TODO issue 1: `std::string` must materialise as a single filled struct that Ghidra reuses as
+ * Guards TODO issue 1: `std::string` must materialize as a single filled struct that Ghidra reuses as
  * the `this` type of every `std::string::*` method. Ghidra's GNU demangler expands the `Ss` abbreviation
  * to a `std::string` class and — running AFTER our whole import — creates an empty `/std/string` class
  * struct unless one already sits there. The fix is two-fold and independent of typedef shortening (a
  * render pref): scope-attribution files our type under its namespace category (`/std`), and the canonical
  * key takes the demangler's own leaf spelling (`string`, not `basic_string<char,…>`) as the DTM slot
- * name, so the filled type materialises at exactly `/std/string`; Ghidra's `isNamespaceCategoryMatch`
+ * name, so the filled type materializes at exactly `/std/string`; Ghidra's `isNamespaceCategoryMatch`
  * then finds and reuses it — no empty shadow, in either shortening mode.
  *
  * Runs the analyzer in CONCURRENT mode (scheduled alongside full auto-analysis, incl. the demangler) so
