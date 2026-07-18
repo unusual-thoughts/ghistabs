@@ -9,6 +9,7 @@ import ghistabs.materialize.TemplateNameShortener
 import ghistabs.materialize.TypeRegistry
 import ghistabs.materialize.itanium.RttiStructs
 import ghistabs.materialize.typedefAliases
+import ghistabs.parse.CATEGORY
 import java.util.*
 
 /** Pure-data input to the demangler-stub replacement planner. */
@@ -281,7 +282,7 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val typeRegis
         // simple name in a CU/include category is the resolved type. When that leaves exactly
         // one non-placeholder, it's not real ambiguity — take it (locale facets hit this: the
         // demangler stub is `/Demangler/std/…`, matching neither the `/src/…` nor `/stabs/` home).
-        collapsed.filterNot { it.categoryPath.path.startsWith("/stabs") }
+        collapsed.filterNot { CATEGORY.isAncestorOrSelf(it.categoryPath) }
             .singleOrNull()?.let { return it }
         log(
             "demangler-ambiguous",

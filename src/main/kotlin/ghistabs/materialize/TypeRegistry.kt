@@ -10,6 +10,7 @@ import ghistabs.diagnose.StabsDiagnostics
 import ghistabs.harvest.Harvest
 import ghistabs.harvest.TypeResolver
 import ghistabs.materialize.itanium.RttiStructs
+import ghistabs.parse.CATEGORY
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
 
@@ -93,7 +94,7 @@ class TypeRegistry(
                 // Struct/Union: empty placeholder so self-recursive Refs cycle-break;
                 // mutated in-place when materializeAll reaches this id.
                 ?: if (raw.body is TypeDecl.Struct) {
-                    makePlaceholder(raw, CategoryPath("/stabs")).also { placeholders[gId] = it }
+                    makePlaceholder(raw, CATEGORY).also { placeholders[gId] = it }
                 } else {
                     // Pointer/Array/Const/etc. — materializable now. Without this,
                     // a calling field-fill path would store an empty placeholder
