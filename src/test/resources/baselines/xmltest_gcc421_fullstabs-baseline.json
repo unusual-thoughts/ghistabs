@@ -1,0 +1,377 @@
+{
+    "counters": {
+        "apply-constant-enums": {
+            "min": 4,
+            "max": 4
+        },
+        "apply-constants": {
+            "min": 10,
+            "max": 10
+        },
+        "apply-error": {
+            "min": 8,
+            "max": 8
+        },
+        "apply-error-duplicate-name": {
+            "min": 8,
+            "max": 8
+        },
+        "base-empty-ebo": {
+            "min": 42,
+            "max": 42
+        },
+        "canonical-key-merged": {
+            "min": 457,
+            "max": 457
+        },
+        "canonical-key-multi-hash": {
+            "min": 31,
+            "max": 31
+        },
+        "canonical-key-multi-kind": {
+            "min": 4,
+            "max": 4
+        },
+        "canonical-scope-collision": {
+            "min": 18,
+            "max": 18
+        },
+        "data-no-coverage": {
+            "min": 172,
+            "max": 172
+        },
+        "degraded-base-layout-failed": {
+            "min": 1,
+            "max": 1
+        },
+        "degraded-base-synthesized": {
+            "min": 10,
+            "max": 10
+        },
+        "degraded-field-dropped": {
+            "min": 1,
+            "max": 1
+        },
+        "degraded-global-typed-all-undefined": {
+            "min": 1,
+            "max": 1
+        },
+        "degraded-local-typed-all-undefined": {
+            "min": 40,
+            "max": 40
+        },
+        "degraded-static-typed-all-undefined": {
+            "min": 4,
+            "max": 4
+        },
+        "degraded-struct-mostly-undefined": {
+            "min": 36,
+            "max": 36
+        },
+        "degraded-struct-truncated": {
+            "min": 40,
+            "max": 40
+        },
+        "degraded-vtable-failed": {
+            "min": 121,
+            "max": 121
+        },
+        "demangle-applied": {
+            "min": 3667,
+            "max": 3667
+        },
+        "demangle-attempted": {
+            "min": 6954,
+            "max": 6954
+        },
+        "demangler-skip-no-replacement": {
+            "min": 23,
+            "max": 23
+        },
+        "desc-dropped-so": {
+            "min": 123,
+            "max": 123
+        },
+        "desc-dropped-undf": {
+            "min": 1,
+            "max": 1
+        },
+        "drop-record-bnsym": {
+            "min": 2806,
+            "max": 2806
+        },
+        "drop-record-ensym": {
+            "min": 2806,
+            "max": 2806
+        },
+        "drop-record-opt": {
+            "min": 64,
+            "max": 64
+        },
+        "drop-record-undf-empty": {
+            "min": 15,
+            "max": 15
+        },
+        "dtm-conflicts-created": {
+            "min": 6,
+            "max": 6
+        },
+        "dtm-conflicts-post": {
+            "min": 6,
+            "max": 6
+        },
+        "dtm-conflicts-pre": {
+            "min": 0,
+            "max": 0
+        },
+        "empty-scope": {
+            "min": 916,
+            "max": 916
+        },
+        "file-start": {
+            "min": 128,
+            "max": 128
+        },
+        "global-applied": {
+            "min": 148,
+            "max": 148
+        },
+        "harvest-collisions-divergent": {
+            "min": 0,
+            "max": 0
+        },
+        "harvest-collisions-divergent-total": {
+            "min": 0,
+            "max": 0
+        },
+        "harvest-collisions-raw": {
+            "min": 0,
+            "max": 0
+        },
+        "harvest-collisions-raw-total": {
+            "min": 0,
+            "max": 0
+        },
+        "harvest-constants": {
+            "min": 36,
+            "max": 36
+        },
+        "harvest-cus": {
+            "min": 25,
+            "max": 25
+        },
+        "harvest-functions": {
+            "min": 3183,
+            "max": 3183
+        },
+        "harvest-globals": {
+            "min": 148,
+            "max": 148
+        },
+        "harvest-parse-errors": {
+            "min": 0,
+            "max": 0
+        },
+        "harvest-records-parsed": {
+            "min": 62336,
+            "max": 62336
+        },
+        "harvest-records-read": {
+            "min": 62336,
+            "max": 62336
+        },
+        "harvest-statics": {
+            "min": 70,
+            "max": 70
+        },
+        "harvest-symbols": {
+            "min": 218,
+            "max": 218
+        },
+        "harvest-typeAsts": {
+            "min": 56957,
+            "max": 56957
+        },
+        "harvest-typeAsts-Array": {
+            "min": 651,
+            "max": 651
+        },
+        "harvest-typeAsts-Complex": {
+            "min": 189,
+            "max": 189
+        },
+        "harvest-typeAsts-Const": {
+            "min": 3483,
+            "max": 3483
+        },
+        "harvest-typeAsts-Enum": {
+            "min": 1509,
+            "max": 1509
+        },
+        "harvest-typeAsts-Float": {
+            "min": 195,
+            "max": 195
+        },
+        "harvest-typeAsts-FunctionT": {
+            "min": 2879,
+            "max": 2879
+        },
+        "harvest-typeAsts-InlineDef": {
+            "min": 1470,
+            "max": 1470
+        },
+        "harvest-typeAsts-Method": {
+            "min": 24327,
+            "max": 24327
+        },
+        "harvest-typeAsts-Pointer": {
+            "min": 6685,
+            "max": 6685
+        },
+        "harvest-typeAsts-Range": {
+            "min": 355,
+            "max": 355
+        },
+        "harvest-typeAsts-Ref": {
+            "min": 3444,
+            "max": 3444
+        },
+        "harvest-typeAsts-Reference": {
+            "min": 2193,
+            "max": 2193
+        },
+        "harvest-typeAsts-Struct": {
+            "min": 7652,
+            "max": 7652
+        },
+        "harvest-typeAsts-Volatile": {
+            "min": 2,
+            "max": 2
+        },
+        "harvest-typeAsts-WithSizeAttr": {
+            "min": 470,
+            "max": 470
+        },
+        "harvest-typeAsts-XRef": {
+            "min": 1453,
+            "max": 1453
+        },
+        "harvest-typeAsts-dup-by-id": {
+            "min": 0,
+            "max": 0
+        },
+        "harvest-typeAsts-unique-by-id": {
+            "min": 56957,
+            "max": 56957
+        },
+        "inheritance-applied": {
+            "min": 233,
+            "max": 233
+        },
+        "inheritance-failed": {
+            "min": 1,
+            "max": 1
+        },
+        "inheritance-pseudo-fields-promoted": {
+            "min": 1,
+            "max": 1
+        },
+        "local-var-add-success": {
+            "min": 2738,
+            "max": 2740
+        },
+        "local-var-skipped-dup-local": {
+            "min": 93,
+            "max": 93
+        },
+        "local-var-skipped-dup-param": {
+            "min": 343,
+            "max": 345
+        },
+        "method-implicit-not-emitted": {
+            "min": 126,
+            "max": 126
+        },
+        "placeholder-created": {
+            "min": 40856,
+            "max": 40856
+        },
+        "pointee-typed": {
+            "min": 119,
+            "max": 119
+        },
+        "reglocal-add-success": {
+            "min": 1,
+            "max": 1
+        },
+        "replaced-demangler": {
+            "min": 169,
+            "max": 169
+        },
+        "rtti-pseudo-substituted": {
+            "min": 5,
+            "max": 5
+        },
+        "stab-section-overlaid": {
+            "min": 62336,
+            "max": 62336
+        },
+        "stab-value-absolute": {
+            "min": 10141,
+            "max": 10141
+        },
+        "stab-value-func-relative": {
+            "min": 42704,
+            "max": 42704
+        },
+        "text-data-no-coverage": {
+            "min": 3,
+            "max": 3
+        },
+        "text-undisassembled-code": {
+            "min": 305,
+            "max": 305
+        },
+        "typedef-named-anon-aggregate": {
+            "min": 3,
+            "max": 3
+        },
+        "unresolved-symbol": {
+            "min": 987,
+            "max": 987
+        },
+        "unresolved-xref": {
+            "min": 12,
+            "max": 12
+        },
+        "vfptr-inherited-from-base": {
+            "min": 113,
+            "max": 113
+        },
+        "vfptr-normalized": {
+            "min": 15,
+            "max": 15
+        },
+        "vtable-failed": {
+            "min": 121,
+            "max": 121
+        },
+        "vtable-failed-truly-missing": {
+            "min": 121,
+            "max": 121
+        },
+        "vtable-skipped": {
+            "min": 8,
+            "max": 8
+        },
+        "xref-base-tag-resolved": {
+            "min": 56,
+            "max": 56
+        },
+        "xref-undefined": {
+            "min": 12,
+            "max": 12
+        }
+    },
+    "source": "xmltest_gcc421_fullstabs \u2014 generated from per-mode regression logs"
+}
