@@ -159,6 +159,8 @@ class StabsImportRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
     private val recordsFile get() = outputFile("record")
     private val harvestFile get() = outputFile("harvest.${mode.name.lowercase()}")
     private val registryDumpFile get() = outputFile("registry.${mode.name.lowercase()}")
+    private val degradationFile
+        get() = File("build/test-output/degradations/${fixture.nameWithoutExtension}.${mode.name.lowercase()}.txt")
     private val logFile
         get() = File("build/test-output/logs/${fixture.nameWithoutExtension}.${mode.name.lowercase()}.log")
 
@@ -243,6 +245,7 @@ class StabsImportRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
             // truncates at ~500 lines.
             logFile.writeText(context.terminal.dedupedOutput() + "\n--- MessageLog ---\n" + log.toString())
             context.writeRegistryDump(registryDumpFile)
+            writeDegradationDump()
         } catch (e: org.opentest4j.TestAbortedException) {
             throw e // the load-failure skip above — propagate as a skip, not a failure
         } catch (e: Exception) {
@@ -264,6 +267,26 @@ class StabsImportRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
         }
     }
 
+    // The CLI's `--degradation-log` dump, grouped by category, so one integrationTest run emits the
+    // full CLI dump set (records/harvest/registry already written above) without a separate probe pass.
+    private fun writeDegradationDump() {
+        val byCategory = context.diagnostics.snapshotDegradations()
+            .groupBy { it.category }.toList().sortedByDescending { it.second.size }
+        degradationFile.parentFile.mkdirs()
+        degradationFile.writeText(
+            buildString {
+                appendLine("fixture: $binaryName ($mode)")
+                appendLine("total degradations: ${byCategory.sumOf { it.second.size }}")
+                appendLine("\ncounts by category:")
+                byCategory.forEach { (cat, list) -> appendLine("  $cat = ${list.size}") }
+                byCategory.forEach { (cat, list) ->
+                    appendLine("\n=== $cat (${list.size}) ===")
+                    list.forEach { appendLine("  ${it.detail}") }
+                }
+            },
+        )
+    }
+
     @AfterParameterizedClassInvocation
     fun tearDown() {
         StaticContexts.clear(program)
@@ -273,7 +296,7 @@ class StabsImportRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
 
     @Test
     fun countersWithinBaseline() {
-        assumeTrue(binaryName == "xapasmcsr.exe", "Skipping: baseline only exists for xapasmcsr.exe")
+        assumeTrue(baselineFile.exists(), "Skipping: no committed baseline for $binaryName")
         // Authoritative per-category counts. Not `log.tagFrequencies()`: that only sees categories
         // that reach the sink (record*/direct-inc bypass it) and ignores `count = n` tallies, which
         // made assertions on those categories (e.g. empty-scope) silently vacuous.
