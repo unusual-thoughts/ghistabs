@@ -40,10 +40,6 @@
             "min": 1064,
             "max": 1064
         },
-        "degraded-base-layout-failed": {
-            "min": 1,
-            "max": 1
-        },
         "degraded-base-synthesized": {
             "min": 8,
             "max": 8
@@ -57,8 +53,8 @@
             "max": 14
         },
         "degraded-global-typed-xref-stub": {
-            "min": 1322,
-            "max": 1322
+            "min": 85,
+            "max": 85
         },
         "degraded-local-typed-all-undefined": {
             "min": 21,
@@ -281,12 +277,8 @@
             "max": 48213
         },
         "inheritance-applied": {
-            "min": 601,
-            "max": 601
-        },
-        "inheritance-failed": {
-            "min": 1,
-            "max": 1
+            "min": 602,
+            "max": 602
         },
         "inheritance-pseudo-fields-promoted": {
             "min": 1,
@@ -313,12 +305,12 @@
             "max": 601
         },
         "placeholder-created": {
-            "min": 25945,
-            "max": 25945
+            "min": 25949,
+            "max": 25949
         },
         "pointee-typed": {
-            "min": 15,
-            "max": 15
+            "min": 16,
+            "max": 16
         },
         "reglocal-add-success": {
             "min": 149,
@@ -337,8 +329,8 @@
             "max": 718
         },
         "rtti-pseudo-substituted": {
-            "min": 146,
-            "max": 146
+            "min": 152,
+            "max": 152
         },
         "stab-section-overlaid": {
             "min": 133162,
@@ -373,8 +365,8 @@
             "max": 1363
         },
         "unresolved-xref": {
-            "min": 246,
-            "max": 246
+            "min": 104,
+            "max": 104
         },
         "vfptr-inherited-from-base": {
             "min": 63,
@@ -409,8 +401,8 @@
             "max": 73
         },
         "xref-undefined": {
-            "min": 210,
-            "max": 210
+            "min": 68,
+            "max": 68
         }
     },
     "source": "crypto_mi_test_gcc345_fullstabs \u2014 generated from per-mode regression logs"

@@ -40,10 +40,6 @@
             "min": 1070,
             "max": 1070
         },
-        "degraded-base-layout-failed": {
-            "min": 1,
-            "max": 1
-        },
         "degraded-base-synthesized": {
             "min": 8,
             "max": 8
@@ -57,8 +53,8 @@
             "max": 14
         },
         "degraded-global-typed-xref-stub": {
-            "min": 1320,
-            "max": 1320
+            "min": 85,
+            "max": 85
         },
         "degraded-local-typed-all-undefined": {
             "min": 41,
@@ -281,12 +277,8 @@
             "max": 48057
         },
         "inheritance-applied": {
-            "min": 601,
-            "max": 601
-        },
-        "inheritance-failed": {
-            "min": 1,
-            "max": 1
+            "min": 602,
+            "max": 602
         },
         "inheritance-pseudo-fields-promoted": {
             "min": 1,
@@ -313,8 +305,8 @@
             "max": 625
         },
         "placeholder-created": {
-            "min": 25776,
-            "max": 25776
+            "min": 25780,
+            "max": 25780
         },
         "pointee-typed": {
             "min": 28,
@@ -337,8 +329,8 @@
             "max": 699
         },
         "rtti-pseudo-substituted": {
-            "min": 144,
-            "max": 144
+            "min": 150,
+            "max": 150
         },
         "stab-section-overlaid": {
             "min": 162645,
@@ -373,8 +365,8 @@
             "max": 1471
         },
         "unresolved-xref": {
-            "min": 244,
-            "max": 244
+            "min": 104,
+            "max": 104
         },
         "vfptr-inherited-from-base": {
             "min": 63,
@@ -409,8 +401,8 @@
             "max": 71
         },
         "xref-undefined": {
-            "min": 208,
-            "max": 208
+            "min": 68,
+            "max": 68
         }
     },
     "source": "crypto_mi_test_gcc345 \u2014 generated from per-mode regression logs"

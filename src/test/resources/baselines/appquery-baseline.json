@@ -28,10 +28,6 @@
             "min": 1,
             "max": 1
         },
-        "degraded-global-typed-xref-stub": {
-            "min": 14,
-            "max": 14
-        },
         "degraded-local-typed-all-undefined": {
             "min": 5,
             "max": 5
@@ -301,8 +297,8 @@
             "max": 1492
         },
         "unresolved-xref": {
-            "min": 61,
-            "max": 61
+            "min": 52,
+            "max": 52
         },
         "vfptr-inherited-from-base": {
             "min": 5,
@@ -329,8 +325,8 @@
             "max": 24
         },
         "xref-undefined": {
-            "min": 61,
-            "max": 61
+            "min": 52,
+            "max": 52
         }
     },
     "source": "appquery \u2014 generated from per-mode regression logs"

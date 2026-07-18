@@ -338,13 +338,20 @@ structure — `_ZTISt9exception :: /ClassDataTypes/ClassTypeInfoStructure`,
 `_ZTIN8CryptoPP9ExceptionE :: SiClassTypeInfoStructure`. The output is *right*; it's the
 degradation *reporting* that's wrong.
 
-**Fix.** In the degradation-emitting path (where `degraded-<scope>-typed-xref-stub` is raised —
-`SymbolApplier` / `TypeDiagnostics`), suppress it when the applied type is one of the RTTI
-structures (`ClassTypeInfoStructure` / `SiClassTypeInfoStructure` / `VmiClassTypeInfoStructure*`)
-or when the symbol name is a `_ZTI*` typeinfo. These are handled by `rtti-pseudo-substituted`
-and are correct-by-construction, not a materialization gap. Leaving them makes the counter
-useless — the *non-`_ZTI`* xref-stub globals (real forward-decl gaps) are drowned out. After
-this, the counter should reflect only genuine gaps.
+**Fix (DONE — root cause, not a suppression).** The false alarm was a conflation in `makePlaceholder`:
+it returned *either* an empty cycle-break stub *or* a fully-resolved authoritative RTTI struct (the
+`typeInfoLayout` short-circuit). The RTTI struct then flowed through `materializeBody`'s XRef-fallback
+(`?: placeholder.also { xrefStubs.add(it) }`) and got filed under `xrefStubs` as if it were an
+unresolved stub — so `reasonFor` returned `xref-stub` for a type that is correct-by-construction.
+
+Reworked so authoritative substitution is a distinct concept from placeholder creation:
+`TypeRegistry.substitute(ast)` resolves primitives (`BuiltinTable`) and `__*_type_info_pseudo` RTTI
+records (`RttiStructs.typeInfoLayout`) to their *final* type and caches it in `byId`. Both
+`getOrMaterialize` and `materializeTopLevel` call `substitute` **before** any placeholder/xref-stub
+path, so an RTTI struct never reaches `xrefStubs`. `makePlaceholder` now honestly returns only empty
+mutable stubs. No name-matching suppression in the reporting path — the `degraded-*-typed-xref-stub`
+counter now reflects only genuine forward-decl gaps (the non-`_ZTI*` remainder). Baselines
+regenerated (`-PregenerateBaselines`) to record the drop.
 
 ---
 

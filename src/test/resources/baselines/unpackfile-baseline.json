@@ -16,10 +16,6 @@
             "min": 82,
             "max": 82
         },
-        "degraded-global-typed-xref-stub": {
-            "min": 10,
-            "max": 10
-        },
         "degraded-local-typed-all-undefined": {
             "min": 4,
             "max": 4
@@ -285,8 +281,8 @@
             "max": 1200
         },
         "unresolved-xref": {
-            "min": 45,
-            "max": 45
+            "min": 38,
+            "max": 38
         },
         "vfptr-inherited-from-base": {
             "min": 3,
@@ -313,8 +309,8 @@
             "max": 9
         },
         "xref-undefined": {
-            "min": 45,
-            "max": 45
+            "min": 38,
+            "max": 38
         }
     },
     "source": "unpackfile \u2014 generated from per-mode regression logs"

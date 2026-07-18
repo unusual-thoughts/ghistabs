@@ -28,10 +28,6 @@
             "min": 1,
             "max": 1
         },
-        "degraded-global-typed-xref-stub": {
-            "min": 36,
-            "max": 36
-        },
         "degraded-local-typed-all-undefined": {
             "min": 10,
             "max": 10
@@ -305,8 +301,8 @@
             "max": 2997
         },
         "unresolved-xref": {
-            "min": 76,
-            "max": 76
+            "min": 68,
+            "max": 68
         },
         "vfptr-collision": {
             "min": 1,
@@ -341,8 +337,8 @@
             "max": 18
         },
         "xref-undefined": {
-            "min": 62,
-            "max": 62
+            "min": 54,
+            "max": 54
         }
     },
     "source": "xapasmcsr.exe \u2014 generated from snapshotCounters()"
