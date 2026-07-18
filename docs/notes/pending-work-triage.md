@@ -69,7 +69,7 @@ Errors / degradations (corpus total, and the fixture with the max):
 | `inheritance-failed`                                     | 11        | 1 crypto_gcc345                      | one edge each on a few fixtures.                                                                                                                                           |
 | `degraded-base-layout-failed`                            | 11        | 1 crypto_gcc345                      | inspect.                                                                                                                                                                   |
 | `vfptr-collision`                                        | 1         | 1 xapasmcsr                          | residual static-member/anon-at-0.                                                                                                                                          |
-| **`harvest-collisions-divergent`**                       | **5**     | 1 crypto_gcc345                      | ⚠️ **invariant broken** — this is the "keep at 0" §20 invariant; regressed to 5 (crypto_gcc345, crypto_gcc345_fullstabs, …). Investigate first among the "real bug" items. |
+| `harvest-collisions-divergent`                           | 5         | 1 (each gcc345 fixture)              | "keep at 0" invariant technically broken, but all 5 are the SAME anon `libgcc2.c:24` type (`Anon_libgcc2_24_…`, gcc-3.4.5 `file:line` id reuse) — benign, low priority. See reprioritization below. |
 
 Positive / context (corpus total): `inheritance-applied = 6208`, `vtable-applied = 34` (**19 on xapasmcsr — the real
 target now lays vtables; was 0 in the old triage**), `replaced-demangler = 4444`, `canonical-key-merged = 16924`,
@@ -87,20 +87,24 @@ demangler output exactly — not realistic. So these are **expected, irreducible
 
 ### Reprioritized next work (spelling removed as a dead end)
 
-1. **`harvest-collisions-divergent = 5` — the broken invariant.** Highest priority: it's the explicit "keep at 0"
-   §20 correctness invariant, now regressed (crypto_gcc345 + gcc345_fullstabs). Content-equivalent dedup is either
-   mis-merging or failing to distinguish 5 real cases — foundational to type resolution and small enough to
-   root-cause. Start here.
-2. **`apply-error = 235` (actual `[ERROR]`s).** Real, visible RE impact (functions/globals that never get their
-   name or signature) and contained fixes: guard `setName` on the COMDAT-folded placement `operator new`/`delete`,
-   dedupe params on template `operator+`, and investigate the "invalid input" on nested CryptoPP template
-   signatures (`apply-error-invalid-input = 96`).
-3. **§F `degraded-global-typed-xref-stub = 3084` — reporting fix.** Suppress the `_ZTI*` / RTTI-struct entries
+**`harvest-collisions-divergent = 5` is NOT a systemic dedup failure — downgraded.** Inspecting
+`.divergentCollisions` across the dumps: all 5 are the *same* anonymous compiler-internal type,
+`Anon_libgcc2_24_77114901` from gcc-3.4.5 `libgcc2.c:24` (the `DWunion` 64-bit-arithmetic union area),
+replicated across the 5 gcc-3.4.5 fixtures. gcc reused a `file:line`-derived synthetic id for two different
+anonymous bodies, so they collide under one id and the winner is arbitrary. Benign, low RE impact. The real fix
+is disambiguating anon-type ids by content/index rather than `file:line` — worth doing eventually, but not #1.
+
+1. **`apply-error = 235` (actual `[ERROR]`s).** Highest priority: real, visible RE impact (functions/globals that
+   never get their name or signature) and contained fixes — guard `setName` on the COMDAT-folded placement
+   `operator new`/`delete`, dedupe params on template `operator+`, and investigate the "invalid input" on
+   nested CryptoPP template signatures (`apply-error-invalid-input = 96`).
+2. **§F `degraded-global-typed-xref-stub = 3084` — reporting fix.** Suppress the `_ZTI*` / RTTI-struct entries
    (they're correct-by-construction, `rtti-pseudo-substituted`); pure noise reduction that makes the counter
    surface real forward-decl gaps. Trivial, high signal-to-noise gain.
-4. Then the genuine materialization gaps: §C vtables-not-laid (but note xapasmcsr already lays 19), §D void
+3. Then the genuine materialization gaps: §C vtables-not-laid (but note xapasmcsr already lays 19), §D void
    self-ref (4), §E app-template stubs (tinyxml2/CryptoPP — these ARE the binary's own types, unlike the STL
    spelling noise). The `xmltest_gcc421_stripped` thiscall miss stays low — it's a reduced-stabs edge case.
+4. **`harvest-collisions-divergent`** (the libgcc2 anon-id collision above) — cheap, do opportunistically.
 
 Reference fixture `xmltest_gcc421_fullstabs` AFTER degradations still total **254** (vtable-failed 121, struct-truncated
 40, local-typed-all-undefined 40, struct-mostly-undefined 36, base-synthesized 10, static-typed-all-undefined 4,
