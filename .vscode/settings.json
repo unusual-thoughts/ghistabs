@@ -309,5 +309,6 @@
     }
   },
   "python.analysis.stubPath": "/opt/ghidra/docs/ghidra_stubs/typestubs",
-  "search.useIgnoreFiles": false
+  "search.useIgnoreFiles": false,
+  "editor.formatOnSave": true
 }
