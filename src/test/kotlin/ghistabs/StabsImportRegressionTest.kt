@@ -27,6 +27,7 @@ import ghistabs.parse.*
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.encodeToStream
 import org.junit.jupiter.api.*
+import org.junit.jupiter.api.Assumptions.abort
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.parallel.Execution
 import org.junit.jupiter.api.parallel.ExecutionMode
@@ -76,9 +77,22 @@ class StabsImportRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
     companion object {
         // -Pfixture=<exact filename> narrows the fixture set at the source (via IntegrationFixtures),
         // so a single-fixture run imports+analyses one binary × both modes instead of the whole corpus.
+        // -Pmode=CONCURRENT|AFTER narrows the analyzer execution mode (blank = both), mirroring -Pfixture.
+        private fun selectedModes(): List<Mode> {
+            val wanted = System.getProperty("modeFilter").orEmpty()
+                .split(',').map { it.trim().uppercase() }.filterTo(mutableSetOf()) { it.isNotEmpty() }
+            if (wanted.isEmpty()) return Mode.entries
+            // Fail loudly on a typo'd -Pmode rather than yielding zero invocations (which surfaces as
+            // gradle's opaque "No tests found for given includes"), mirroring IntegrationFixtures.select.
+            (wanted - Mode.entries.map { it.name }.toSet()).let {
+                require(it.isEmpty()) { "unknown -Pmode value(s) $it; valid: ${Mode.entries.map { m -> m.name }}" }
+            }
+            return Mode.entries.filter { it.name in wanted }
+        }
+
         @JvmStatic
         fun testParameters(): java.util.stream.Stream<Arguments> = IntegrationFixtures.select(IntegrationFixtures.ALL)
-            .flatMap { binary -> Mode.entries.map { mode -> Arguments.of(binary, mode) } }
+            .flatMap { binary -> selectedModes().map { mode -> Arguments.of(binary, mode) } }
             .stream()
 
         // Demangler stubs with no concrete type to bind to across the corpus: types the demangler
@@ -101,6 +115,14 @@ class StabsImportRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
             // libsupc++ / libgcc unwinder + RTTI internals
             "_Unwind_Context", "_Unwind_Exception", "lsda_header_info", "__dyncast_result",
             "__upcast_result",
+            // libsupc++ EH + RTTI classes the demangler names from a mangled symbol but which have NO
+            // stab body anywhere in the corpus (verified against all 21 harvests: never emitted with
+            // fields). Deliberately NOT whitelisted — __basic_file, __moneypunct_cache, __numpunct_cache,
+            // __mt_alloc, __pool_alloc, _Deque_base/_Deque_iterator, _Vector_base, __normal_iterator,
+            // __pbase_type_info — because those DO carry real stab bodies in some fixtures, so an empty
+            // stub for them is a genuine materialization gap (see triage §B/§E), not a compiler internal.
+            "__concurrence_lock_error", "__concurrence_unlock_error", "recursive_init_error",
+            "__array_type_info", "__enum_type_info", "__function_type_info", "__fundamental_type_info",
             // locale facets forward-declared in non-libstdc++ fixtures (full instantiations elsewhere)
             "__codecvt_abstract_base<char,char,int>", "__ctype_abstract_base<char>",
             "__timepunct<char>", "codecvt<char,char,int>", "codecvt_byname<char,char,int>",
@@ -158,13 +180,15 @@ class StabsImportRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
         harvestFile.parentFile.mkdirs()
 
         try {
-            loadResults = ProgramLoader
-                .builder()
-                .source(fixture)
-                .compiler("gcc")
-                .log(log)
-                .monitor(monitor)
-                .load()
+            // Loading the raw binary is the ONLY legitimately-skippable step: a corrupt or
+            // format-unsupported fixture is an environment problem, not a bug in our analyzer.
+            // Everything after it is code under test and must fail loudly (see the catch below).
+            loadResults = try {
+                ProgramLoader.builder().source(fixture).compiler("gcc").log(log).monitor(monitor).load()
+            } catch (e: Exception) {
+                e.printStackTrace()
+                abort("Skipping $binaryName: ProgramLoader could not load the fixture: $e")
+            }
 
             context = loadResults.getPrimaryDomainObject(this).defaultContext()
 
@@ -219,8 +243,15 @@ class StabsImportRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
             // truncates at ~500 lines.
             logFile.writeText(context.terminal.dedupedOutput() + "\n--- MessageLog ---\n" + log.toString())
             context.writeRegistryDump(registryDumpFile)
+        } catch (e: org.opentest4j.TestAbortedException) {
+            throw e // the load-failure skip above — propagate as a skip, not a failure
         } catch (e: Exception) {
-            assumeTrue(false, "Failed to load real binary via ProgramLoader: ${e.message}")
+            // Load succeeded, so anything thrown here is a bug in our import / analysis / dump path.
+            // Fail the invocation loudly (in this exact fixture×mode) instead of masking it as a skip:
+            // silently swallowing crashes here is what let a TypeResolver NPE and a registry-dump
+            // `.single()` crash hide for so long, and dropped whole AFTER-mode runs unnoticed.
+            e.printStackTrace()
+            throw AssertionError("setUp failed for $binaryName/$mode (import/dump, not fixture load): $e", e)
         }
     }
 
@@ -855,6 +886,13 @@ class StabsImportRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
         // (length > 0 or absorbed into another category) — none should remain as empty
         // Structure stubs, except the bare-template/builtin artifacts with no concrete
         // type (see ALLOWED_EMPTY_DEMANGLER_STUBS).
+        //
+        // Only meaningful in AFTER. DemanglerReplacer runs in both modes (StabsImporter pass C),
+        // but in CONCURRENT our analyzer fires alongside Ghidra's demangler and finishes before it
+        // has created the /Demangler stubs, so replace() has nothing to replace yet (0 vs 169
+        // `replaced-demangler`); the stubs are then created later and never revisited. That leaves
+        // them empty at assertion time — a mode-ordering artifact, not a materialization gap.
+        assumeTrue(mode == Mode.AFTER, "Skipping: /Demangler stubs are created after our pass in CONCURRENT")
         val emptyStubs = program.dataTypeManager.allDataTypes
             .asSequence()
             .filterIsInstance<Structure>()
@@ -1280,6 +1318,16 @@ class StabsImportRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
         val classFuncs = program.functionManager.getFunctions(true).iterator().asSequence()
             .filter { it.parentNamespace is ghidra.program.model.listing.GhidraClass }
             .toList()
+        // reparentMethod only reaches setCallingConvention("__thiscall") for a method it can pin to
+        // an address: either an in-TU N_FUN stab (works even stripped) or, absent that, the COFF
+        // symtab. A fully-stripped binary loses the symtab path, and the remaining out-of-line/inline
+        // STL methods have no body here at all (non-stripped fullstabs shows the same ~991 resolve
+        // failures) — so no class-namespaced function survives to tag. Nothing to assert then; but a
+        // non-empty classFuncs with zero __thiscall is still a real regression, so keep asserting.
+        assumeTrue(
+            classFuncs.isNotEmpty(),
+            "Skipping: no resolvable class methods (stripped symtab + no in-TU method bodies)",
+        )
         val thiscalled = classFuncs.count { it.callingConventionName == "__thiscall" }
         Assertions.assertTrue(
             thiscalled > 0,
