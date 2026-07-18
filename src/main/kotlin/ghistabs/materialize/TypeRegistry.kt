@@ -68,6 +68,20 @@ class TypeRegistry(
 
     internal val rttiStructs by lazy { RttiStructs(dtm) }
 
+    // ── The only writers of byId / placeholders / xrefStubs. [cache] sets the authoritative
+    // resolution for an id; [cacheIfAbsent] is the alias/member fan-out that must not clobber a
+    // winner already in the slot; [seedPlaceholder] registers an empty cycle-break stub that
+    // [materializeAll] later fills in place; [markXRefStub] tags a placeholder that never resolved,
+    // for degradation reporting. Each returns its dt so it composes inside a resolution chain. ──
+
+    internal fun <T : DataType> cache(id: GlobalTypeId, dt: T): T = dt.also { byId[id] = it }
+
+    internal fun cacheIfAbsent(id: GlobalTypeId, dt: DataType): DataType = byId.getOrPut(id) { dt }
+
+    internal fun seedPlaceholder(id: GlobalTypeId, dt: DataType): DataType = placeholders.getOrPut(id) { dt }
+
+    internal fun markXRefStub(dt: DataType): DataType = dt.also { xrefStubs.add(it) }
+
     /**
      * Resolve [dt] into the DTM and remember it. Returns the DTM-resolved instance (may differ).
      * If there is an id attached to the type, caches the result under [id] for [dataTypeFor].
@@ -77,7 +91,7 @@ class TypeRegistry(
         val resolved = dtm.resolve(dt, conflictHandler)
         when (id) {
             null -> extrasByName.getOrPut(resolved.name) { LinkedHashSet() }.add(resolved)
-            else -> byId[id] = resolved
+            else -> cache(id, resolved)
         }
         return resolved
     }
@@ -100,9 +114,9 @@ class TypeRegistry(
      */
     internal fun getOrMaterialize(id: GlobalTypeId): DataType? =
         byId[id] ?: placeholders[id] ?: harvest.getType(id)?.let { ast ->
-            substitute(ast)?.also { byId[id] = it }
+            substitute(ast)?.let { cache(id, it) }
                 ?: if (ast.body is TypeDecl.Struct) {
-                    makePlaceholder(ast, CATEGORY).also { placeholders[id] = it }
+                    seedPlaceholder(id, makePlaceholder(ast, CATEGORY))
                 } else {
                     materializeTopLevel(ast)
                 }
