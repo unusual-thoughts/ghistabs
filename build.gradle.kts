@@ -155,6 +155,7 @@ fun Test.reportWithConsoleSummary(name: String) {
         .count { File(binDir, it).isFile }
     val plannedTotal = (plannedFixtures * (if (modeSel.isNotEmpty()) modeSel.size else 2)).coerceAtLeast(1)
     val invRe = Regex("""binaryName=([^,]+), mode=(\w+)""")
+    val invocationSuite = Regex(""".*\[\d+]$""")
     val runStart = AtomicLong(0L)
     val done = AtomicInteger(0)
     fun hms(ms: Long) = "%dm%02ds".format(ms / 60000, (ms / 1000) % 60)
@@ -169,13 +170,19 @@ fun Test.reportWithConsoleSummary(name: String) {
         }
 
         override fun afterSuite(suite: TestDescriptor, result: TestResult) {
-            invRe.find(suite.name)?.let { m ->
+            // A parameterized-class invocation finishes as a suite named `<Class>[<n>]` with a null
+            // className. gradle's `name` is only `StabsImportRegressionTest[1]`, but its `displayName`
+            // carries the `binaryName=…, mode=…` args — pull the fixture/mode from there, falling back
+            // to the bracketed name so the line still renders if that ever changes.
+            if (suite.className == null && suite.name.matches(invocationSuite)) {
                 val n = done.incrementAndGet()
+                val label = invRe.find(suite.displayName)?.let { "${it.groupValues[1]}/${it.groupValues[2]}" }
+                    ?: suite.name.substringAfterLast('.')
                 val elapsed = System.currentTimeMillis() - runStart.get()
                 val eta = if (n < plannedTotal) (elapsed.toDouble() / n * (plannedTotal - n)).toLong() else 0L
                 log.lifecycle(
-                    "  ✓ [%d/%d] %s / %s — %dp %df %ds in %ds | elapsed %s, ETA ~%s".format(
-                        n, plannedTotal, m.groupValues[1], m.groupValues[2],
+                    "  ✓ [%d/%d] %s — %dp %df %ds in %ds | elapsed %s, ETA ~%s".format(
+                        n, plannedTotal, label,
                         result.successfulTestCount, result.failedTestCount, result.skippedTestCount,
                         (result.endTime - result.startTime) / 1000, hms(elapsed), hms(eta),
                     ),
