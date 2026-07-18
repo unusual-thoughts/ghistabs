@@ -52,28 +52,59 @@ concrete work.
 
 Errors / degradations (corpus total, and the fixture with the max):
 
-| counter                              | total | max (fixture)                             | note |
-|--------------------------------------|-------|-------------------------------------------|------|
-| `apply-error`                        | 235   | 54 crypto_gcc421_fullstabs                | `[ERROR]` placement new/delete COMDAT-fold + template signature apply. |
-| `apply-error-duplicate-name`         | 130   | 25 crypto_gcc421_fullstabs                | subset of the above. |
-| `apply-error-invalid-input`          | 96    | 24 crypto_gcc345                          | deeply-nested CryptoPP template signatures. |
-| `demangler-skip-no-replacement`      | 1230  | 207 crypto_gcc421                         | **mostly the builtin-spelling mismatch** (`unsignedint` vs `unsigned_int`) — the recommended next fix, not §B. |
-| `degraded-global-typed-xref-stub`    | 3084  | 1322 crypto_gcc345_fullstabs              | §F — mostly the `_ZTI*` RTTI false alarm; stop emitting. |
-| `canonical-key-multi-hash`           | 1296  | 246 crypto_gcc421_fullstabs_stripped      | name-matching / spelling; falls with the spelling fix. |
-| `xref-ambiguous` / `-base-tag-ambiguous` | 308 / 308 | 51 crypto_gcc421_fullstabs_stripped   | same family. |
-| `degraded-vtable-failed` = `vtable-failed-truly-missing` | 1056 | 122 locale_customlibstdcxx_stripped | §C — structs built, not laid. |
-| `canonical-scope-collision`          | 123   | 18 xmltest_gcc421_fullstabs_stripped      | §A. |
-| `degraded-field-dropped`             | 94    | 19 box2d_tests                            | up from ~1 on the reference; box2d-heavy — inspect. |
-| `dtm-conflicts-created`              | 42    | 10 crypto_gcc421_fullstabs_stripped       | §B forks. |
-| `class-not-struct`                   | 28    | 4 crypto_gcc345                           | class canonicalised to a Union. |
-| `inheritance-failed`                 | 11    | 1 crypto_gcc345                           | one edge each on a few fixtures. |
-| `degraded-base-layout-failed`        | 11    | 1 crypto_gcc345                           | inspect. |
-| `vfptr-collision`                    | 1     | 1 xapasmcsr                               | residual static-member/anon-at-0. |
-| **`harvest-collisions-divergent`**   | **5** | 1 crypto_gcc345                           | ⚠️ **invariant broken** — this is the "keep at 0" §20 invariant; regressed to 5 (crypto_gcc345, crypto_gcc345_fullstabs, …). Investigate first among the "real bug" items. |
+| counter                                                  | total     | max (fixture)                        | note                                                                                                                                                                       |
+|----------------------------------------------------------|-----------|--------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `apply-error`                                            | 235       | 54 crypto_gcc421_fullstabs           | `[ERROR]` placement new/delete COMDAT-fold + template signature apply.                                                                                                     |
+| `apply-error-duplicate-name`                             | 130       | 25 crypto_gcc421_fullstabs           | subset of the above.                                                                                                                                                       |
+| `apply-error-invalid-input`                              | 96        | 24 crypto_gcc345                     | deeply-nested CryptoPP template signatures.                                                                                                                                |
+| `demangler-skip-no-replacement`                          | 1230      | 207 crypto_gcc421                    | **mostly IRREDUCIBLE** builtin/template spelling mismatch (`unsignedint` vs `unsigned_int`) — see the spelling note below. Not §B, and not fixable generally.               |
+| `degraded-global-typed-xref-stub`                        | 3084      | 1322 crypto_gcc345_fullstabs         | §F — mostly the `_ZTI*` RTTI false alarm; stop emitting.                                                                                                                   |
+| `canonical-key-multi-hash`                               | 1296      | 246 crypto_gcc421_fullstabs_stripped | name-matching; partly the same irreducible spelling, partly char/wchar + §B. Won't fully clear.                                                                            |
+| `xref-ambiguous` / `-base-tag-ambiguous`                 | 308 / 308 | 51 crypto_gcc421_fullstabs_stripped  | same family.                                                                                                                                                               |
+| `degraded-vtable-failed` = `vtable-failed-truly-missing` | 1056      | 122 locale_customlibstdcxx_stripped  | §C — structs built, not laid.                                                                                                                                              |
+| `canonical-scope-collision`                              | 123       | 18 xmltest_gcc421_fullstabs_stripped | §A.                                                                                                                                                                        |
+| `degraded-field-dropped`                                 | 94        | 19 box2d_tests                       | up from ~1 on the reference; box2d-heavy — inspect.                                                                                                                        |
+| `dtm-conflicts-created`                                  | 42        | 10 crypto_gcc421_fullstabs_stripped  | §B forks.                                                                                                                                                                  |
+| `class-not-struct`                                       | 28        | 4 crypto_gcc345                      | class canonicalised to a Union.                                                                                                                                            |
+| `inheritance-failed`                                     | 11        | 1 crypto_gcc345                      | one edge each on a few fixtures.                                                                                                                                           |
+| `degraded-base-layout-failed`                            | 11        | 1 crypto_gcc345                      | inspect.                                                                                                                                                                   |
+| `vfptr-collision`                                        | 1         | 1 xapasmcsr                          | residual static-member/anon-at-0.                                                                                                                                          |
+| **`harvest-collisions-divergent`**                       | **5**     | 1 crypto_gcc345                      | ⚠️ **invariant broken** — this is the "keep at 0" §20 invariant; regressed to 5 (crypto_gcc345, crypto_gcc345_fullstabs, …). Investigate first among the "real bug" items. |
 
-Positive / context (corpus total): `inheritance-applied = 6208`, `vtable-applied = 34` (**19 on xapasmcsr — the real target now lays vtables; was 0 in the old triage**), `replaced-demangler = 4444`, `canonical-key-merged = 16924`, `rtti-pseudo-substituted = 512`.
+Positive / context (corpus total): `inheritance-applied = 6208`, `vtable-applied = 34` (**19 on xapasmcsr — the real
+target now lays vtables; was 0 in the old triage**), `replaced-demangler = 4444`, `canonical-key-merged = 16924`,
+`rtti-pseudo-substituted = 512`.
 
-Reference fixture `xmltest_gcc421_fullstabs` AFTER degradations still total **254** (vtable-failed 121, struct-truncated 40, local-typed-all-undefined 40, struct-mostly-undefined 36, base-synthesized 10, static-typed-all-undefined 4, field-dropped 1, base-layout-failed 1, global-typed-all-undefined 1).
+### Spelling is NOT fixable — don't chase it
+
+`demangler-skip-no-replacement` (1230) and much of `canonical-key-multi-hash` are gcc-stab type names not
+matching Ghidra's demangler spelling (`unsigned int` → our `unsignedint` vs demangler `unsigned_int`, west/east
+const, spacing, template arg formatting). Const-placement normalization was already tried (`eb722e9`) and barely
+moved the needle. Fully reconciling the two would mean **re-mangling arbitrary type names** to reproduce Ghidra's
+demangler output exactly — not realistic. So these are **expected, irreducible noise**, not a fixable gap:
+`demanglerHasNoEmptyStubs` will stay red on STL-template instantiations regardless. Action here is to the *test*
+(accept/relax for `<…>`-templated STL internals), not the importer. **Do not attempt general name reconciliation.**
+
+### Reprioritized next work (spelling removed as a dead end)
+
+1. **`harvest-collisions-divergent = 5` — the broken invariant.** Highest priority: it's the explicit "keep at 0"
+   §20 correctness invariant, now regressed (crypto_gcc345 + gcc345_fullstabs). Content-equivalent dedup is either
+   mis-merging or failing to distinguish 5 real cases — foundational to type resolution and small enough to
+   root-cause. Start here.
+2. **`apply-error = 235` (actual `[ERROR]`s).** Real, visible RE impact (functions/globals that never get their
+   name or signature) and contained fixes: guard `setName` on the COMDAT-folded placement `operator new`/`delete`,
+   dedupe params on template `operator+`, and investigate the "invalid input" on nested CryptoPP template
+   signatures (`apply-error-invalid-input = 96`).
+3. **§F `degraded-global-typed-xref-stub = 3084` — reporting fix.** Suppress the `_ZTI*` / RTTI-struct entries
+   (they're correct-by-construction, `rtti-pseudo-substituted`); pure noise reduction that makes the counter
+   surface real forward-decl gaps. Trivial, high signal-to-noise gain.
+4. Then the genuine materialization gaps: §C vtables-not-laid (but note xapasmcsr already lays 19), §D void
+   self-ref (4), §E app-template stubs (tinyxml2/CryptoPP — these ARE the binary's own types, unlike the STL
+   spelling noise). The `xmltest_gcc421_stripped` thiscall miss stays low — it's a reduced-stabs edge case.
+
+Reference fixture `xmltest_gcc421_fullstabs` AFTER degradations still total **254** (vtable-failed 121, struct-truncated
+40, local-typed-all-undefined 40, struct-mostly-undefined 36, base-synthesized 10, static-typed-all-undefined 4,
+field-dropped 1, base-layout-failed 1, global-typed-all-undefined 1).
 
 ---
 
@@ -147,7 +178,7 @@ All in `src/test/kotlin/ghistabs/StabsImportRegressionTest.kt` unless noted.
 `/std/iostream`, `/std/ostream/sentry`, `/std/istream/sentry`, … "divergent bodies →
 demoted to header keys". Forks the nested `sentry` types → the empty
 `std::{i,o,wi,wo}stream::sentry` demangler stubs.
- 
+
 **Root cause.** `TypeResolver.byCanonicalKey` (`TypeResolver.kt:358`) demotes a scope-keyed
 group to header keys when its method-bearing owners don't all share one conten<<t hash:
 `if (owners.groupBy { contentHash(it.body) }.size == 1)`. But the owners *do* have identical
