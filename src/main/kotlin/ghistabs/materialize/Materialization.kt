@@ -4,10 +4,7 @@ import ghidra.program.model.data.*
 import ghistabs.diagnose.degradation
 import ghistabs.harvest.TypeAst
 import ghistabs.materialize.itanium.*
-import ghistabs.parse.AggrKind
-import ghistabs.parse.GlobalTypeId
-import ghistabs.parse.TypeDecl
-import ghistabs.parse.isXRefTarget
+import ghistabs.parse.*
 import ghistabs.runTransaction
 import ghidra.program.model.data.Enum as GhidraEnum
 
@@ -319,16 +316,14 @@ internal fun TypeRegistry.materializeBody(ast: TypeAst, category: CategoryPath, 
             at = ast.ghidraName,
         )
 
-        is TypeDecl.XRef -> {
-            // Alias to the canonical Struct for (kind, tagName). Without this,
-            // gcc's ABI-internal typeinfo helpers (`__si_class_type_info_pseudo`)
-            // emit `InlineDef(id, XRef(STRUCT,"Foo"))` and we'd materialize an
-            // empty `XRef_[...]` Structure at the typeinfo location.
-            // Resolver buckets its own degradations for failed lookups.
-            resolver.lookupByXRef(body)
-                ?.let { canonical -> getOrMaterialize(canonical.id)?.also { byId[ast.id] = it } }
-                ?: placeholder.also { xrefStubs.add(it) }
-        }
+        // Alias to the canonical Struct for (kind, tagName). Without this,
+        // gcc's ABI-internal typeinfo helpers (`__si_class_type_info_pseudo`)
+        // emit `InlineDef(id, XRef(STRUCT,"Foo"))` and we'd materialize an
+        // empty `XRef_[...]` Structure at the typeinfo location.
+        // Resolver buckets its own degradations for failed lookups.
+        is TypeDecl.XRef -> resolver.lookupByXRef(body)
+            ?.let { canonical -> getOrMaterialize(canonical.id)?.also { byId[ast.id] = it } }
+            ?: placeholder.also { xrefStubs.add(it) }
 
         is TypeDecl.Ref -> getOrMaterialize(body.id)
             ?: if (ast.isVoidSelfRef()) {
@@ -476,14 +471,8 @@ fun TypeRegistry.materializeAll() {
     // slot and alias members to it; (2) non-registerable top-level asts
     // (FunctionT, Method, XRef aliases) via materializeTopLevel() — byId only, no DTM slot.
     dtm.runTransaction("ghidra-stabs build types") {
-        val memberToWinner: Map<GlobalTypeId, TypeAst> = buildMap {
-            for (group in resolver.byCanonicalKey.values) {
-                for (m in group.members) put(m, group.ast)
-            }
-        }
-        val winnerCategory: Map<GlobalTypeId, CategoryPath> = buildMap {
-            for (group in resolver.byCanonicalKey.values) put(group.ast.id, group.key.category)
-        }
+        val memberToWinner = resolver.byCanonicalKey.values.flatMap { g -> g.members.map { it to g.ast } }.toMap()
+        val winnerCategory = resolver.byCanonicalKey.values.associate { it.ast.id to it.key.category }
 
         // Pre-seed placeholders for every member id so Ref(id) cycle-breaks during
         // body materialization. Struct/Union and Enum placeholders go into the DTM
@@ -554,7 +543,7 @@ private fun TypeRegistry.registerNamedPrimitiveTypedefs() {
             val category = if (BuiltinTable.resolve(firstBody) != null) {
                 CategoryPath.ROOT
             } else {
-                CategoryPath("/stabs")
+                CATEGORY
             }
             register(TypedefDataType(category, ghidraName, typedefTarget, dtm))
         }
@@ -577,9 +566,9 @@ internal fun TypeRegistry.materializeTopLevel(ast: TypeAst): DataType {
         return void
     }
     val placeholder = placeholders.getOrPut(ast.id) {
-        makePlaceholder(ast, CategoryPath("/stabs"), "ref-stub")
+        makePlaceholder(ast, CATEGORY, "ref-stub")
     }
-    val materialized = materializeBody(ast, CategoryPath("/stabs"), placeholder)
-    byId.putIfAbsent(ast.id, materialized)
-    return materialized
+    return materializeBody(ast, CATEGORY, placeholder).also { materialized ->
+        byId.putIfAbsent(ast.id, materialized)
+    }
 }
