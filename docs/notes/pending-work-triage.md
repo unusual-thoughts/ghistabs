@@ -35,18 +35,45 @@ reasons + setUp aborts), timestamped `results-history/` archiving. See [[referen
 
 **First honest full run (2h6m, all 21 fixtures × BOTH modes) — real failure landscape:**
 
-| test | # cfgs | verdict |
-|------|--------|---------|
-| `demanglerHasNoEmptyStubs` | 15 (AFTER) | Whitelist expanded with **only 7 verified compiler-internals** (`__concurrence_lock_error`, `__concurrence_unlock_error`, `recursive_init_error`, `__array_type_info`, `__enum_type_info`, `__function_type_info`, `__fundamental_type_info` — never emitted with a body in any of the 21 harvests). **The earlier suggested additions were WRONG:** `__mt_alloc`, `__pool_alloc`, `__basic_file`, `_Deque_base`, `_Deque_iterator`, `_Vector_base`, `__normal_iterator`, `__pbase_type_info`, `__moneypunct_cache`, `__numpunct_cache` all carry **real stab bodies** in some fixtures → they're genuine §B/§E materialization gaps and must stay flagged. App templates (`tinyxml2::DynArray/MemPoolT`, `CryptoPP::AlgorithmImpl/BlockCipherFinal/…`) confirmed real §E gaps. |
-| `mingwClassMethodsCarryThiscall` | 2 — `xmltest_gcc421_stripped`, both modes | **Item 1 (§Part 2) was a REAL bug, not a spurious skip.** This fixture builds class namespaces (so `classFuncs` is non-empty) but the methods never get `__thiscall`. The semantic `classFuncs.isNotEmpty()` gate correctly *surfaces* it — a `contains("stripped")` skip would have masked a real bug. Root cause still open. |
-| `atLeastOneVtableStructApplied` | 8 | §C — structs built, not laid. |
-| `fewSuffixedConflictRenames` | 8 | §B — multi-category duplication. |
-| `voidSelfRefNotMaterialized` | 4 | §D — void self-ref leaks as Structure. |
-| `countersWithinBaseline` | 7 (AFTER) | Baseline drift, **only** `xref-base-tag-resolved` (+1..+3 — the mode-sensitive counter `BaselineWriter` documents; the NPE fix restored the resolution). Baselines regenerated in place from the drift messages (no rerun). |
+| test                             | # cfgs                                    | verdict                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+|----------------------------------|-------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `demanglerHasNoEmptyStubs`       | 15 (AFTER)                                | Whitelist expanded with **only 7 verified compiler-internals** (`__concurrence_lock_error`, `__concurrence_unlock_error`, `recursive_init_error`, `__array_type_info`, `__enum_type_info`, `__function_type_info`, `__fundamental_type_info` — never emitted with a body in any of the 21 harvests). **The earlier suggested additions were WRONG:** `__mt_alloc`, `__pool_alloc`, `__basic_file`, `_Deque_base`, `_Deque_iterator`, `_Vector_base`, `__normal_iterator`, `__pbase_type_info`, `__moneypunct_cache`, `__numpunct_cache` all carry **real stab bodies** in some fixtures → they're genuine §B/§E materialization gaps and must stay flagged. App templates (`tinyxml2::DynArray/MemPoolT`, `CryptoPP::AlgorithmImpl/BlockCipherFinal/…`) confirmed real §E gaps. |
+| `mingwClassMethodsCarryThiscall` | 2 — `xmltest_gcc421_stripped`, both modes | **Item 1 (§Part 2) was a REAL bug, not a spurious skip.** This fixture builds class namespaces (so `classFuncs` is non-empty) but the methods never get `__thiscall`. The semantic `classFuncs.isNotEmpty()` gate correctly *surfaces* it — a `contains("stripped")` skip would have masked a real bug. Root cause still open.                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `atLeastOneVtableStructApplied`  | 8                                         | §C — structs built, not laid.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `fewSuffixedConflictRenames`     | 8                                         | §B — multi-category duplication.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `voidSelfRefNotMaterialized`     | 4                                         | §D — void self-ref leaks as Structure.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `countersWithinBaseline`         | 7 (AFTER)                                 | Baseline drift, **only** `xref-base-tag-resolved` (+1..+3 — the mode-sensitive counter `BaselineWriter` documents; the NPE fix restored the resolution). Baselines regenerated in place from the drift messages (no rerun).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 
 Net: Part 2 is settled (gates justified + whitelist precise + void twin gone). §A/§B/§C/§D/§E remain
 open and are now measured honestly per-fixture. The `xmltest_gcc421_stripped` thiscall bug is new,
 concrete work.
+
+### Refreshed counters — summed across all 21 fixtures × AFTER (Part 4 below is the OLD degraded numbers, stale)
+
+Errors / degradations (corpus total, and the fixture with the max):
+
+| counter                              | total | max (fixture)                             | note |
+|--------------------------------------|-------|-------------------------------------------|------|
+| `apply-error`                        | 235   | 54 crypto_gcc421_fullstabs                | `[ERROR]` placement new/delete COMDAT-fold + template signature apply. |
+| `apply-error-duplicate-name`         | 130   | 25 crypto_gcc421_fullstabs                | subset of the above. |
+| `apply-error-invalid-input`          | 96    | 24 crypto_gcc345                          | deeply-nested CryptoPP template signatures. |
+| `demangler-skip-no-replacement`      | 1230  | 207 crypto_gcc421                         | **mostly the builtin-spelling mismatch** (`unsignedint` vs `unsigned_int`) — the recommended next fix, not §B. |
+| `degraded-global-typed-xref-stub`    | 3084  | 1322 crypto_gcc345_fullstabs              | §F — mostly the `_ZTI*` RTTI false alarm; stop emitting. |
+| `canonical-key-multi-hash`           | 1296  | 246 crypto_gcc421_fullstabs_stripped      | name-matching / spelling; falls with the spelling fix. |
+| `xref-ambiguous` / `-base-tag-ambiguous` | 308 / 308 | 51 crypto_gcc421_fullstabs_stripped   | same family. |
+| `degraded-vtable-failed` = `vtable-failed-truly-missing` | 1056 | 122 locale_customlibstdcxx_stripped | §C — structs built, not laid. |
+| `canonical-scope-collision`          | 123   | 18 xmltest_gcc421_fullstabs_stripped      | §A. |
+| `degraded-field-dropped`             | 94    | 19 box2d_tests                            | up from ~1 on the reference; box2d-heavy — inspect. |
+| `dtm-conflicts-created`              | 42    | 10 crypto_gcc421_fullstabs_stripped       | §B forks. |
+| `class-not-struct`                   | 28    | 4 crypto_gcc345                           | class canonicalised to a Union. |
+| `inheritance-failed`                 | 11    | 1 crypto_gcc345                           | one edge each on a few fixtures. |
+| `degraded-base-layout-failed`        | 11    | 1 crypto_gcc345                           | inspect. |
+| `vfptr-collision`                    | 1     | 1 xapasmcsr                               | residual static-member/anon-at-0. |
+| **`harvest-collisions-divergent`**   | **5** | 1 crypto_gcc345                           | ⚠️ **invariant broken** — this is the "keep at 0" §20 invariant; regressed to 5 (crypto_gcc345, crypto_gcc345_fullstabs, …). Investigate first among the "real bug" items. |
+
+Positive / context (corpus total): `inheritance-applied = 6208`, `vtable-applied = 34` (**19 on xapasmcsr — the real target now lays vtables; was 0 in the old triage**), `replaced-demangler = 4444`, `canonical-key-merged = 16924`, `rtti-pseudo-substituted = 512`.
+
+Reference fixture `xmltest_gcc421_fullstabs` AFTER degradations still total **254** (vtable-failed 121, struct-truncated 40, local-typed-all-undefined 40, struct-mostly-undefined 36, base-synthesized 10, static-typed-all-undefined 4, field-dropped 1, base-layout-failed 1, global-typed-all-undefined 1).
 
 ---
 
@@ -120,7 +147,7 @@ All in `src/test/kotlin/ghistabs/StabsImportRegressionTest.kt` unless noted.
 `/std/iostream`, `/std/ostream/sentry`, `/std/istream/sentry`, … "divergent bodies →
 demoted to header keys". Forks the nested `sentry` types → the empty
 `std::{i,o,wi,wo}stream::sentry` demangler stubs.
-
+ 
 **Root cause.** `TypeResolver.byCanonicalKey` (`TypeResolver.kt:358`) demotes a scope-keyed
 group to header keys when its method-bearing owners don't all share one conten<<t hash:
 `if (owners.groupBy { contentHash(it.body) }.size == 1)`. But the owners *do* have identical
@@ -293,7 +320,7 @@ corpus-wide (biggest on `crypto_mi_test_gcc345` / `xapasmcsr`). Grouped by verdi
 | `degraded-local-untyped` / `degraded-param-untyped`  | 56 (crypto)                   | **Missed originally.** Local/param with no type at all (optimized-out slots, tinyxml `XMLUtil` digits). Expected.                                                                                                                               |
 
 ### 4c — expected / structural (libstdc++ RTTI-only surface), low priority
- 
+
 | counter                                              | count    | verdict                                                                                                                  |
 |------------------------------------------------------|----------|--------------------------------------------------------------------------------------------------------------------------|
 | `degraded-struct-truncated`                          | 40       | Facets trimmed to last-described byte (forward-decl-only CUs). Cross-check the static-member `,0,0` handling.            |
