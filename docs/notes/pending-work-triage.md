@@ -38,7 +38,7 @@ reasons + setUp aborts), timestamped `results-history/` archiving. See [[referen
 | test                             | # cfgs                                    | verdict                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 |----------------------------------|-------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `demanglerHasNoEmptyStubs`       | 15 (AFTER)                                | Whitelist expanded with **only 7 verified compiler-internals** (`__concurrence_lock_error`, `__concurrence_unlock_error`, `recursive_init_error`, `__array_type_info`, `__enum_type_info`, `__function_type_info`, `__fundamental_type_info` — never emitted with a body in any of the 21 harvests). **The earlier suggested additions were WRONG:** `__mt_alloc`, `__pool_alloc`, `__basic_file`, `_Deque_base`, `_Deque_iterator`, `_Vector_base`, `__normal_iterator`, `__pbase_type_info`, `__moneypunct_cache`, `__numpunct_cache` all carry **real stab bodies** in some fixtures → they're genuine §B/§E materialization gaps and must stay flagged. App templates (`tinyxml2::DynArray/MemPoolT`, `CryptoPP::AlgorithmImpl/BlockCipherFinal/…`) confirmed real §E gaps. |
-| `mingwClassMethodsCarryThiscall` | 2 — `xmltest_gcc421_stripped`, both modes | **Item 1 (§Part 2) was a REAL bug, not a spurious skip.** This fixture builds class namespaces (so `classFuncs` is non-empty) but the methods never get `__thiscall`. The semantic `classFuncs.isNotEmpty()` gate correctly *surfaces* it — a `contains("stripped")` skip would have masked a real bug. Root cause still open.                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `mingwClassMethodsCarryThiscall` | 2 — `xmltest_gcc421_stripped`, both modes | **Item 1 (§Part 2) was a REAL bug, not a spurious skip.** Correction: it's **stripped-specific, not reduced-stabs** — `xmltest_gcc421_stripped` builds `inheritance-applied=68`, the SAME as the non-stripped `xmltest_gcc421` (which passes). So the classes build fine; the missing COFF symtab is what stops the methods getting `__thiscall`. The semantic `classFuncs.isNotEmpty()` gate correctly surfaces it. Root cause (why stripped method-tagging fails despite N_FUN stab addresses) still open. |
 | `atLeastOneVtableStructApplied`  | 8                                         | §C — structs built, not laid.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `fewSuffixedConflictRenames`     | 8                                         | §B — multi-category duplication.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `voidSelfRefNotMaterialized`     | 4                                         | §D — void self-ref leaks as Structure.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
@@ -109,10 +109,11 @@ dominated by noise/expected/irreducible causes** (spelling, benign new/delete re
 false alarm, libstdc++ facets not in the binary). The highest-value next work is a cheap **noise-suppression pass**,
 after which the real signal (§E) is visible:
 
-1. **Noise suppression (cheap, makes the suite trustworthy):** skip `setName`-if-already-named (clears the 17
-   new/delete addresses); §F suppress `_ZTI*`/RTTI-struct `xref-stub` degradations (clears 3084); relax
-   `demanglerHasNoEmptyStubs` for `<…>`-templated STL internals (spelling is irreducible). Also dedupe the
-   `operator+` param name.
+1. **Noise suppression (cheap, makes the suite trustworthy):** ✅ **DONE `b853aad`** — drop the redundant
+   same-name symbol before `func.setName` (clears the ~130 folded new/delete `apply-error-duplicate-name`;
+   verified apply-error 8→0 on xmltest_gcc421_fullstabs, no regression). Remaining: §F suppress `_ZTI*`/RTTI-struct
+   `xref-stub` degradations (clears 3084, **gcc-3.4.5-only — see patterns**); relax `demanglerHasNoEmptyStubs`
+   for `<…>`-templated STL internals (spelling is irreducible); dedupe the `operator+` param name (5).
 2. **Top REAL gap — §E app-template stubs.** `tinyxml2::DynArray/MemPoolT`, `CryptoPP::AlgorithmImpl/BlockCipherFinal`:
    the binary's *own* instantiated templates left empty (unlike the STL spelling noise, these have real bodies to
    materialize). This is where actual RE value is lost.
@@ -123,6 +124,24 @@ after which the real signal (§E) is visible:
 Reference fixture `xmltest_gcc421_fullstabs` AFTER degradations still total **254** (vtable-failed 121, struct-truncated
 40, local-typed-all-undefined 40, struct-mostly-undefined 36, base-synthesized 10, static-typed-all-undefined 4,
 field-dropped 1, base-layout-failed 1, global-typed-all-undefined 1).
+
+### Variant patterns (gcc345/421 × fullstabs/- × stripped/-)
+
+One clean signal per axis (from the xmltest/crypto variant matrix):
+
+- **stripped vs not — the sharpest.** Everything *stab-derived* is IDENTICAL stripped vs not (stripping doesn't
+  touch `.stab`): `inheritance-applied`, `canonical-key-merged`, `canonical-key-multi-hash`, `vtable-failed`,
+  `dtm-conflicts` all match to the number. Everything *symbol-table-derived* goes to **zero** when stripped:
+  `replaced-demangler`, `demangler-skip-no-replacement`, `apply-error` — Ghidra's demangler has no COFF symbols,
+  so it makes no `/Demangler` stubs and there are no PE-symbol collisions. `unresolved-symbol` rises. **⇒ the whole
+  demangler-stub (1230) and apply-error (235) surface exists ONLY on non-stripped fixtures.**
+- **fullstabs vs not — quantity.** fullstabs reconstructs 2–3.5× more (inheritance 68→233, merges 241→457) and
+  therefore surfaces more *failures* (`vtable-failed` 0→121, `unresolved-symbol` 0→987) because it references every
+  libstdc++ internal, most absent from the binary. Non-fullstabs is quieter because it carries less type info.
+- **gcc345 vs gcc421 — RTTI.** `degraded-global-typed-xref-stub` (the §F false alarm, 3084 corpus) is **124–1322 on
+  every gcc-3.4.5 fixture, exactly 0 on every gcc-4.2.1 fixture** — 3.4.5 emits `_ZTI*` RTTI type_info stabs that
+  4.2.1 doesn't. `rtti-pseudo-substituted` and `canonical-key-merged` also much higher on 345. So the single largest
+  degradation counter is entirely a compiler-version artifact.
 
 ---
 
