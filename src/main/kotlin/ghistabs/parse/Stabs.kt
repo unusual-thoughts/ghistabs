@@ -2,15 +2,7 @@ package ghistabs.parse
 
 import ghidra.app.util.bin.BinaryReader
 import ghidra.app.util.bin.ByteArrayProvider
-import ghidra.program.model.data.ByteDataType
-import ghidra.program.model.data.CategoryPath
-import ghidra.program.model.data.DWordDataType
-import ghidra.program.model.data.DataType
-import ghidra.program.model.data.DataTypeConflictHandler
-import ghidra.program.model.data.DataTypeManager
-import ghidra.program.model.data.EnumDataType
-import ghidra.program.model.data.StructureDataType
-import ghidra.program.model.data.WordDataType
+import ghidra.program.model.data.*
 import ghidra.program.model.listing.Program
 import ghistabs.byteProvider
 import kotlinx.serialization.Serializable
@@ -362,7 +354,7 @@ internal fun mergeContinuations(physical: Sequence<StabRecord>): List<StabRecord
     }
 }
 
-private val CATEGORY = CategoryPath("/stabs")
+val CATEGORY = CategoryPath("/stabs")
 
 /** Raw stab header, before type interpretation — the on-disk 12 bytes, faithfully unsigned. */
 @Serializable
