@@ -11,8 +11,8 @@ import ghistabs.parse.*
  * and content-distinct collision filtering.
  */
 class TypeResolver(val harvest: Harvest, private val foldSources: Boolean = true, sink: DiagnosticSink = DummySink) :
-    DiagnosticSink by sink,
-    TypeAstOracle {
+    ContentHasher(),
+    DiagnosticSink by sink {
     private val typeAsts get() = harvest.typeAsts
 
     /** All named aggregate / enum ASTs, indexed by raw stabs name. */
@@ -29,11 +29,12 @@ class TypeResolver(val harvest: Harvest, private val foldSources: Boolean = true
             .groupBy { baseTag(it.name!!) }
     }
 
-    private val hashCache: MutableMap<GlobalTypeId, Int> by lazy {
-        // Pre-warm with empty `visited` so collision classification isn't biased by traversal order.
-        mutableMapOf<GlobalTypeId, Int>().also { c ->
-            for (ast in typeAsts.values) c[ast.id] = ast.body.contentHash(this, c)
-        }
+    // Pre-warm with empty `visited` so collision classification isn't biased by traversal order.
+    // Must stay below astsByName/astsByBaseTag: contentHash resolves xrefs through them, and a `by
+    // lazy` delegate field is only assigned when construction reaches its declaration — an init block
+    // placed above them reads a still-null delegate (NPE, silently swallowed under CONCURRENT analysis).
+    init {
+        for (ast in typeAsts.values) hashCache[ast.id] = contentHash(ast.body)
     }
 
     override fun byId(id: GlobalTypeId): TypeAst? = typeAsts[id]
@@ -103,9 +104,6 @@ class TypeResolver(val harvest: Harvest, private val foldSources: Boolean = true
         }
         return "exact=${summarise(exact)} baseTag='$tag' byBaseTag=${summarise(byBase)}"
     }
-
-    /** Content hash of [body] under this resolver's oracle, sharing the content-hash cache. */
-    fun contentHash(body: TypeDecl<GlobalTypeId>): Int = body.contentHash(this, hashCache)
 
     /** Multi-body collisions after content-equivalence filtering — only genuinely divergent ones. */
     val divergentCollisions: Map<GlobalTypeId, Map<String, Set<TypeDecl<GlobalTypeId>>>> by lazy {
