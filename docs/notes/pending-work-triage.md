@@ -54,7 +54,7 @@ Errors / degradations (corpus total, and the fixture with the max):
 
 | counter                                                  | total     | max (fixture)                        | note                                                                                                                                                                       |
 |----------------------------------------------------------|-----------|--------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `apply-error`                                            | 235       | 54 crypto_gcc421_fullstabs           | `[ERROR]` placement new/delete COMDAT-fold + template signature apply.                                                                                                     |
+| `apply-error`                                            | 235       | 54 crypto_gcc421_fullstabs           | **mostly benign** — ~130 are 17 COMDAT-folded new/delete addresses re-named per-CU (output already correct); real subset is 14 by-value-return funcs. See reprioritization. |
 | `apply-error-duplicate-name`                             | 130       | 25 crypto_gcc421_fullstabs           | subset of the above.                                                                                                                                                       |
 | `apply-error-invalid-input`                              | 96        | 24 crypto_gcc345                     | deeply-nested CryptoPP template signatures.                                                                                                                                |
 | `demangler-skip-no-replacement`                          | 1230      | 207 crypto_gcc421                    | **mostly IRREDUCIBLE** builtin/template spelling mismatch (`unsignedint` vs `unsigned_int`) — see the spelling note below. Not §B, and not fixable generally.               |
@@ -94,17 +94,31 @@ replicated across the 5 gcc-3.4.5 fixtures. gcc reused a `file:line`-derived syn
 anonymous bodies, so they collide under one id and the winner is arbitrary. Benign, low RE impact. The real fix
 is disambiguating anon-type ids by content/index rather than `file:line` — worth doing eventually, but not #1.
 
-1. **`apply-error = 235` (actual `[ERROR]`s).** Highest priority: real, visible RE impact (functions/globals that
-   never get their name or signature) and contained fixes — guard `setName` on the COMDAT-folded placement
-   `operator new`/`delete`, dedupe params on template `operator+`, and investigate the "invalid input" on
-   nested CryptoPP template signatures (`apply-error-invalid-input = 96`).
-2. **§F `degraded-global-typed-xref-stub = 3084` — reporting fix.** Suppress the `_ZTI*` / RTTI-struct entries
-   (they're correct-by-construction, `rtti-pseudo-substituted`); pure noise reduction that makes the counter
-   surface real forward-decl gaps. Trivial, high signal-to-noise gain.
-3. Then the genuine materialization gaps: §C vtables-not-laid (but note xapasmcsr already lays 19), §D void
-   self-ref (4), §E app-template stubs (tinyxml2/CryptoPP — these ARE the binary's own types, unlike the STL
-   spelling noise). The `xmltest_gcc421_stripped` thiscall miss stays low — it's a reduced-stabs edge case.
-4. **`harvest-collisions-divergent`** (the libgcc2 anon-id collision above) — cheap, do opportunistically.
+**`apply-error = 235` is NOT substantial either — mostly benign, downgraded.** Breakdown from the logs:
+- **~130 `apply-error-duplicate-name`** = only **17 distinct addresses** of `_ZnwjPv` / `_ZdlPvS_` (operator new /
+  placement delete), COMDAT-folded to one address so every CU re-attempts `setName` on the *already-correctly-named*
+  symbol ("already exists at this address"). Output is correct; the `[ERROR]` is a redundant re-name inflated by CU
+  count. Fix = skip `setName` when the symbol already carries that name — cheap noise removal, no output change.
+- **~96 `apply-error-invalid-input`** = **14 distinct functions** returning a large struct *by value* (`CryptoPP::Integer`,
+  12–20 bytes) where storage is 4-byte `EAX` ("Storage can't be expanded"). The one genuinely-real subset — a by-value
+  struct-return signature gap (`StructReturnAnalyzer` / render-backlog #13), but narrow (CryptoPP templates).
+- **~5 `apply-error-parameter-mismatch`** = duplicate param name `__lhs` on `operator+`; one-line dedupe.
+
+**The honest conclusion: there is no single big bug left — the importer is sound, and the large counters are
+dominated by noise/expected/irreducible causes** (spelling, benign new/delete re-names, the `_ZTI*` RTTI reporting
+false alarm, libstdc++ facets not in the binary). The highest-value next work is a cheap **noise-suppression pass**,
+after which the real signal (§E) is visible:
+
+1. **Noise suppression (cheap, makes the suite trustworthy):** skip `setName`-if-already-named (clears the 17
+   new/delete addresses); §F suppress `_ZTI*`/RTTI-struct `xref-stub` degradations (clears 3084); relax
+   `demanglerHasNoEmptyStubs` for `<…>`-templated STL internals (spelling is irreducible). Also dedupe the
+   `operator+` param name.
+2. **Top REAL gap — §E app-template stubs.** `tinyxml2::DynArray/MemPoolT`, `CryptoPP::AlgorithmImpl/BlockCipherFinal`:
+   the binary's *own* instantiated templates left empty (unlike the STL spelling noise, these have real bodies to
+   materialize). This is where actual RE value is lost.
+3. Then: by-value struct returns (the 14 `invalid-input` funcs), §C vtables for present classes (xapasmcsr already
+   lays 19), §D void self-ref (4), the libgcc2 anon-id collision. The `xmltest_gcc421_stripped` thiscall miss stays
+   low (reduced-stabs edge case).
 
 Reference fixture `xmltest_gcc421_fullstabs` AFTER degradations still total **254** (vtable-failed 121, struct-truncated
 40, local-typed-all-undefined 40, struct-mostly-undefined 36, base-synthesized 10, static-typed-all-undefined 4,
