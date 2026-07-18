@@ -7,6 +7,11 @@ import ghistabs.parse.AggrKind
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
 
+/**
+ * Empty, mutable stub for [ast]: an EnumDataType (correctly sized), or an empty Structure/Union that
+ * [materializeAll] fills in place. Authoritative substitutions (primitives, RTTI pseudo-types) are
+ * *not* placeholders — see [TypeRegistry.substitute]; callers resolve those first.
+ */
 internal fun TypeRegistry.makePlaceholder(
     ast: TypeAst,
     category: CategoryPath,
@@ -16,14 +21,6 @@ internal fun TypeRegistry.makePlaceholder(
     // (`/std/string`, not `/std/basic_string<…>`), the slot Ghidra's this-param creator then reuses.
     name: String = ast.ghidraName,
 ): DataType {
-    // gcc emits each _ZTI global typed as a `__*_type_info_pseudo` struct it never gives a
-    // debug definition, so it arrives here unresolved. Substitute the authoritative RttiStructs
-    // layout instead of an opaque stub (last-resort RTTI, backlog §24).
-    rttiStructs.typeInfoLayout(ast.ghidraName)?.let {
-        debug("rtti-pseudo-substituted", "name=${ast.ghidraName} category=$category")
-        return it
-    }
-
     val dt = when (ast.body) {
         is TypeDecl.Struct if (ast.body.rawKind == AggrKind.UNION) -> UnionDataType(category, name, dtm)
 
