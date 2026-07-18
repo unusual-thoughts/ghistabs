@@ -36,10 +36,6 @@
             "min": 93,
             "max": 93
         },
-        "degraded-base-layout-failed": {
-            "min": 1,
-            "max": 1
-        },
         "degraded-base-synthesized": {
             "min": 5,
             "max": 5
@@ -51,10 +47,6 @@
         "degraded-global-typed-all-undefined": {
             "min": 1,
             "max": 1
-        },
-        "degraded-global-typed-xref-stub": {
-            "min": 120,
-            "max": 120
         },
         "degraded-local-typed-all-undefined": {
             "min": 21,
@@ -257,12 +249,8 @@
             "max": 32349
         },
         "inheritance-applied": {
-            "min": 92,
-            "max": 92
-        },
-        "inheritance-failed": {
-            "min": 1,
-            "max": 1
+            "min": 93,
+            "max": 93
         },
         "local-var-add-success": {
             "min": 1367,
@@ -285,12 +273,12 @@
             "max": 621
         },
         "placeholder-created": {
-            "min": 17825,
-            "max": 17825
+            "min": 17829,
+            "max": 17829
         },
         "pointee-typed": {
-            "min": 15,
-            "max": 15
+            "min": 16,
+            "max": 16
         },
         "reglocal-add-success": {
             "min": 147,
@@ -309,8 +297,8 @@
             "max": 113
         },
         "rtti-pseudo-substituted": {
-            "min": 53,
-            "max": 53
+            "min": 50,
+            "max": 50
         },
         "stab-section-overlaid": {
             "min": 40448,
@@ -345,8 +333,8 @@
             "max": 1440
         },
         "unresolved-xref": {
-            "min": 83,
-            "max": 83
+            "min": 34,
+            "max": 34
         },
         "vfptr-inherited-from-base": {
             "min": 61,
@@ -381,8 +369,8 @@
             "max": 80
         },
         "xref-undefined": {
-            "min": 81,
-            "max": 81
+            "min": 32,
+            "max": 32
         }
     },
     "source": "locale_test_gcc345_fullstabs \u2014 generated from per-mode regression logs"

@@ -551,6 +551,13 @@ private fun TypeRegistry.registerNamedPrimitiveTypedefs() {
 
 /** Materialize a non-registerable top-level ast (XRef alias, FunctionT, Method). */
 internal fun TypeRegistry.materializeTopLevel(ast: TypeAst): DataType {
+    // RTTI pseudo-types and primitives resolve to their authoritative layout — a final type, so it
+    // must not fall through to the XRef-stub path below (which would file it under xrefStubs and
+    // flag every _ZTI global as a `degraded-*-typed-xref-stub` false alarm).
+    substitute(ast)?.let {
+        byId[ast.id] = it
+        return it
+    }
     if (ast.body is TypeDecl.XRef) {
         resolver.byXRef(ast.body)?.let { canonical ->
             val dt = byId[canonical.id] ?: materializeTopLevel(canonical)

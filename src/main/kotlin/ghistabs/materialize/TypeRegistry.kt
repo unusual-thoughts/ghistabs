@@ -8,6 +8,7 @@ import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.StabsDiagnostics
 import ghistabs.harvest.Harvest
+import ghistabs.harvest.TypeAst
 import ghistabs.harvest.TypeResolver
 import ghistabs.materialize.itanium.RttiStructs
 import ghistabs.parse.CATEGORY
@@ -88,19 +89,33 @@ class TypeRegistry(
             else -> register(build()) as T
         }
 
-    internal fun getOrMaterialize(gId: GlobalTypeId) =
-        byId[gId] ?: placeholders[gId] ?: harvest.getType(gId)?.let { raw ->
-            BuiltinTable.resolve(raw.body)?.also { byId[gId] = it }
-                // Struct/Union: empty placeholder so self-recursive Refs cycle-break;
-                // mutated in-place when materializeAll reaches this id.
-                ?: if (raw.body is TypeDecl.Struct) {
-                    makePlaceholder(raw, CATEGORY).also { placeholders[gId] = it }
+    /**
+     * Id → DataType, resolved lazily. Returns the cached type or its in-flight cycle-break
+     * placeholder if present; otherwise resolves the harvested ast:
+     *  - an authoritative [substitute] (primitive / RTTI pseudo) is a *final* type, cached in [byId];
+     *  - a Struct/Union gets an empty placeholder so self-recursive Refs cycle-break — [materializeAll]
+     *    fills it in place;
+     *  - anything else (Pointer/Array/Const/…) is materialized now, so a field-fill path stores e.g.
+     *    `char *`, not an empty placeholder (`_Alloc_hider._M_p` regression).
+     */
+    internal fun getOrMaterialize(id: GlobalTypeId): DataType? =
+        byId[id] ?: placeholders[id] ?: harvest.getType(id)?.let { ast ->
+            substitute(ast)?.also { byId[id] = it }
+                ?: if (ast.body is TypeDecl.Struct) {
+                    makePlaceholder(ast, CATEGORY).also { placeholders[id] = it }
                 } else {
-                    // Pointer/Array/Const/etc. — materializable now. Without this,
-                    // a calling field-fill path would store an empty placeholder
-                    // instead of e.g. `char *` (`_Alloc_hider._M_p` regression).
-                    materializeTopLevel(raw)
+                    materializeTopLevel(ast)
                 }
+        }
+
+    /**
+     * Authoritative, fully-resolved type for an ast gcc references but never defines: a primitive via
+     * [BuiltinTable], or a `__*_type_info_pseudo` RTTI record via [RttiStructs]. These are final types,
+     * not cycle-break stubs — callers cache them in [byId] and must never file them under [xrefStubs].
+     */
+    internal fun substitute(ast: TypeAst): DataType? = BuiltinTable.resolve(ast.body)
+        ?: rttiStructs.typeInfoLayout(ast.ghidraName)?.also {
+            debug("rtti-pseudo-substituted", "name=${ast.ghidraName}")
         }
 
     /** Materialized DataType for [id], authoritative for `(category, name)`. Prefer over `dtm.getDataType`. */
