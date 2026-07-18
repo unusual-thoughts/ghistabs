@@ -1,7 +1,12 @@
 import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 import org.gradle.api.tasks.testing.logging.TestLogEvent
+import java.io.File
+import java.time.Instant
 import java.time.LocalDateTime
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 import java.util.zip.ZipFile
 import kotlin.io.path.Path
 import kotlin.io.path.relativeTo
@@ -100,17 +105,82 @@ fun Test.reportWithConsoleSummary(name: String) {
     // re-run so a fresh result + summary print every invocation.
     outputs.upToDateWhen { false }
 
+    // LiveTestReporter (JUnit SPI, runs in-fork) appends per-fork result files here; a run's
+    // `cat build/test-output/results/*.txt` should show only that run, so before each run archive the
+    // previous results into a timestamped backup rather than deleting them. Captured as Files (not a
+    // `project` ref) to stay configuration-cache friendly.
+    val resultsDir = project.layout.buildDirectory.dir("test-output/results").get().asFile
+    val resultsHistory = project.layout.buildDirectory.dir("test-output/results-history").get().asFile
+    doFirst {
+        if (resultsDir.isDirectory && resultsDir.list()?.isNotEmpty() == true) {
+            // Archive under the PREVIOUS run's own stamp (each run records its `.run-stamp`), not
+            // now() — tagging old results with the current time would be a lie. Fall back to the
+            // results' mtime for pre-existing runs that never wrote a stamp.
+            val prev = resultsDir.resolve(".run-stamp").takeIf { it.isFile }?.readText()?.trim()
+                ?: LocalDateTime.ofInstant(
+                    Instant.ofEpochMilli(resultsDir.lastModified()),
+                    ZoneId.systemDefault(),
+                ).format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"))
+            resultsHistory.mkdirs()
+            resultsDir.renameTo(resultsHistory.resolve(prev))
+        }
+        resultsDir.mkdirs()
+        resultsDir.resolve(".run-stamp").writeText(stamp) // tag THIS run so the next archive is accurate
+    }
+
     val log = logger
     val htmlDir = reports.html.outputLocation
     val failures = mutableListOf<String>()
+
+    // Live per-fixture progress + ETA for the slow integration corpus (each fixture×mode is a full
+    // load+autoanalysis+import). Planned count = (fixtures present on disk that pass -Pfixture) ×
+    // (modes that pass -Pmode); ETA uses observed wall-clock throughput so it self-adjusts to how
+    // many forks are actually running. Fires only for parameterized `binaryName=…, mode=…` suites,
+    // so it's inert for the unit-test task.
+    val binDir = project.layout.projectDirectory.dir("src/test/resources/binaries").asFile
+    val fixtureSel = providers.gradleProperty("fixture").getOrElse("").split(",").map {
+        it.trim()
+    }.filter { it.isNotEmpty() }
+    val modeSel = providers.gradleProperty("mode").getOrElse("").split(",").map { it.trim() }.filter { it.isNotEmpty() }
+    val plannedFixtures = (
+        if (fixtureSel.isNotEmpty()) {
+            fixtureSel
+        } else {
+            (
+                binDir.listFiles()?.map { it.name }
+                    ?: emptyList()
+                )
+        }
+        )
+        .count { File(binDir, it).isFile }
+    val plannedTotal = (plannedFixtures * (if (modeSel.isNotEmpty()) modeSel.size else 2)).coerceAtLeast(1)
+    val invRe = Regex("""binaryName=([^,]+), mode=(\w+)""")
+    val runStart = AtomicLong(0L)
+    val done = AtomicInteger(0)
+    fun hms(ms: Long) = "%dm%02ds".format(ms / 60000, (ms / 1000) % 60)
+
     addTestListener(object : TestListener {
-        override fun beforeSuite(suite: TestDescriptor) = Unit
+        override fun beforeSuite(suite: TestDescriptor) {
+            runStart.compareAndSet(0L, System.currentTimeMillis())
+        }
         override fun beforeTest(testDescriptor: TestDescriptor) = Unit
         override fun afterTest(d: TestDescriptor, result: TestResult) {
             if (result.resultType == TestResult.ResultType.FAILURE) failures += "${d.className}.${d.displayName}"
         }
 
         override fun afterSuite(suite: TestDescriptor, result: TestResult) {
+            invRe.find(suite.name)?.let { m ->
+                val n = done.incrementAndGet()
+                val elapsed = System.currentTimeMillis() - runStart.get()
+                val eta = if (n < plannedTotal) (elapsed.toDouble() / n * (plannedTotal - n)).toLong() else 0L
+                log.lifecycle(
+                    "  ✓ [%d/%d] %s / %s — %dp %df %ds in %ds | elapsed %s, ETA ~%s".format(
+                        n, plannedTotal, m.groupValues[1], m.groupValues[2],
+                        result.successfulTestCount, result.failedTestCount, result.skippedTestCount,
+                        (result.endTime - result.startTime) / 1000, hms(elapsed), hms(eta),
+                    ),
+                )
+            }
             if (suite.parent != null) return
             log.lifecycle(
                 "\n$name: ${result.resultType} — ${result.testCount} tests, ${result.successfulTestCount} passed, " +
@@ -118,6 +188,9 @@ fun Test.reportWithConsoleSummary(name: String) {
             )
             failures.forEach { log.lifecycle("  FAILED $it") }
             log.lifecycle("HTML report: ${htmlDir.get().asFile}/index.html")
+            log.lifecycle(
+                "Per-test results (status + skip reasons + setUp aborts): cat build/test-output/results/*.txt",
+            )
         }
     })
 }
@@ -140,6 +213,8 @@ fun Test.headlessGhidraConfig(reportName: String) {
     maxHeapSize = "2g"
     // -Pfixture=<exact filename> narrows the fixture set (at the source, via IntegrationFixtures).
     systemProperty("fixtureFilter", providers.gradleProperty("fixture").getOrElse(""))
+    // -Pmode=CONCURRENT|AFTER narrows the analyzer execution mode similarly (blank = both).
+    systemProperty("modeFilter", providers.gradleProperty("mode").getOrElse(""))
     // -PregenerateBaselines=true rewrites baseline JSONs from observed counters instead of asserting.
     systemProperty("regenerateBaselines", providers.gradleProperty("regenerateBaselines").getOrElse(""))
     jvmArgs(
