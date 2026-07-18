@@ -17,6 +17,7 @@ import ghistabs.diagnose.degradation
 import ghistabs.harvest.CanonicalGroup
 import ghistabs.harvest.Harvest
 import ghistabs.harvest.TypeResolver
+import ghistabs.harvest.demangledClassPath
 import ghistabs.importer.ImportContext
 import ghistabs.materialize.itanium.*
 import ghistabs.namespaceChain
@@ -66,6 +67,17 @@ class ClassBuilder(
         get() = typeRegistry.getOrRegister<Structure>(vftableCategory, vftableName) {
             StructureDataType(vftableCategory, vftableName, 0, dtm)
         }
+
+    // Fully-qualified C++ name (`std::basic_ostream<char,…>`), for matching a demangled `_ZTV`
+    // symbol's namespace chain. `className` (key.name) is only the leaf now that byCanonicalKey
+    // files the scope into the category, so it can't match the demangler's full chain. Recover the
+    // chain from a method-bearing member's mangled name — the exact form GnuDemangler emits.
+    private val CanonicalGroup.qualifiedClassName: String
+        get() = (sequenceOf(ast) + members.mapNotNull { harvest.typeAsts[it] })
+            .firstNotNullOfOrNull { it.demangledClassPath() }?.joinToString("::") ?: className
+
+    private fun CanonicalGroup.decodesToClass(symbolName: String) =
+        Itanium.decodesToClass(symbolName, qualifiedClassName)
 
     /**
      * {vfptr} points at the function-pointer array at the vtable's address point
@@ -462,7 +474,7 @@ class ClassBuilder(
 
         try {
             symtab.symbolIterator.firstOrNull {
-                Itanium.decodesToClass(it.name, className)
+                decodesToClass(it.name)
             }?.let { return it.address }
         } catch (e: IllegalArgumentException) {
             warn("vtable-symbol-scan-error", "exception scanning symbol table for $className: ${e.message}")
@@ -474,7 +486,7 @@ class ClassBuilder(
                 symtab.getSymbolIterator(rdataBlock.start, true)
                     .asIterable()
                     .takeWhile { it.address < rdataBlock.end }
-                    .firstOrNull { Itanium.decodesToClass(it.name, className) }
+                    .firstOrNull { decodesToClass(it.name) }
                     ?.let { return it.address }
             } catch (e: IllegalArgumentException) {
                 warn("vtable-rdata-scan-error", "exception scanning .rdata for $className: ${e.message}")
