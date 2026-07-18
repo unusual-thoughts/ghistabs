@@ -9,6 +9,7 @@ import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.address.AddressRange
 import ghidra.program.model.address.AddressSet
 import ghidra.program.model.address.AddressSetView
+import ghidra.program.model.listing.BookmarkType
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
 
@@ -26,7 +27,7 @@ class HullDisassemblyAnalyzer :
     AbstractAnalyzer(
         NAME,
         "Disassembles undefined code inside function bodies (hot/cold holes, EH landing pads).",
-        AnalyzerType.BYTE_ANALYZER,
+        AnalyzerType.FUNCTION_ANALYZER,
     ) {
     init {
         priority = AnalysisPriority.FUNCTION_ANALYSIS.after()
@@ -55,6 +56,15 @@ class HullDisassemblyAnalyzer :
         }
         if (!recover.isEmpty) {
             DisassembleCommand(recover, null, true).applyTo(program, monitor)
+            for (range in recover) {
+                val fn = fm.getFunctionWrapping(range.minAddress)
+                program.bookmarkManager.setBookmark(
+                    range.minAddress,
+                    BookmarkType.ANALYSIS,
+                    NAME,
+                    "Disassembled because inside $fn 's hull",
+                )
+            }
             log?.appendMsg(NAME, "recovered ${recover.numAddresses} in-function code bytes")
         }
         return true
