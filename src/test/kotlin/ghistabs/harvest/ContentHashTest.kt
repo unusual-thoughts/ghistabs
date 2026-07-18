@@ -5,6 +5,11 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Test
 
+open class TestHasher(val asts: Map<GlobalTypeId, TypeAst>) : ContentHasher() {
+    override fun byId(id: GlobalTypeId): TypeAst? = asts[id]
+    override fun byXRef(xref: TypeDecl.XRef<GlobalTypeId>): TypeAst? = null
+}
+
 /**
  * Pins the content-equivalence semantics of [contentHash]: per-CU
  * template-instantiation clones must collapse into a single canonical
@@ -43,7 +48,7 @@ class ContentHashTest {
         charInCU1.id to charInCU1,
     )
 
-    private val oracle = TypeAstOracle(asts::get)
+    private val oracle = TestHasher(asts)
 
     /**
      * `Ref(cu=a.cpp, n=1)` and `Ref(cu=b.cpp, n=1)` both point at "int"
@@ -89,7 +94,7 @@ class ContentHashTest {
             body = TypeDecl.WithSizeAttr(8, TypeDecl.Builtin(-16)),
         )
         val store = mapOf(boolInCU1.id to boolInCU1, boolInCU2.id to boolInCU2)
-        val o = TypeAstOracle(store::get)
+        val o = TestHasher(store)
         assertEquals(boolInCU1.body.contentHash(o), boolInCU2.body.contentHash(o))
         // And the Refs into them — what the surrounding struct's field
         // type expression actually looks like — must agree too.
@@ -227,7 +232,7 @@ class ContentHashTest {
             body = TypeDecl.Pointer(TypeDecl.Ref(intInCU1.id)),
         )
         val asts2 = asts + (pointerToInt.id to pointerToInt)
-        val oracle2 = TypeAstOracle(asts2::get)
+        val oracle2 = TestHasher(asts2)
         // Form A: a Ref pointing at the Pointer-to-int type.
         val asRef = TypeDecl.Ref(pointerToInt.id)
         // Form B: the Pointer inlined at a different id.
@@ -285,10 +290,12 @@ class ContentHashTest {
         )
 
         val store = mapOf(id97 to forwardAlias, id98 to ioFileAst, intId to intAst)
-        val o = TypeAstOracle(
-            byId = store::get,
-            byXRef = { xref -> store.values.firstOrNull { it.name == xref.tagName } },
-        )
+        val o = object : TestHasher(
+            store,
+        ) {
+            override fun byXRef(xref: TypeDecl.XRef<GlobalTypeId>) =
+                store.values.firstOrNull { it.name == xref.tagName }
+        }
 
         // Ref(97) must hash to the same value as the actual struct body
         val hashViaForwardRef = TypeDecl.Ref(id97).contentHash(o)
@@ -406,17 +413,16 @@ class ContentHashTest {
         val intAst =
             TypeAst(cu = keywordsCu, id = intId, name = "int", body = TypeDecl.Range(intId, -2147483648L, 2147483647L))
         val store = mapOf(pairId to pairCanonical, ptrAId to ptrA, ptrBId to ptrB, intId to intAst)
-        val storeOracle = TypeAstOracle(store::get)
+        val storeOracle = TestHasher(store)
 
         // Pre-populate the cache the same way the dump test does:
         // hash every TypeAst.body top-level, then store under its id.
-        val cache = mutableMapOf<GlobalTypeId, Int>()
         for (ast in store.values) {
-            cache[ast.id] = ast.body.contentHash(storeOracle, cache)
+            storeOracle.hashCache[ast.id] = ast.body.contentHash(storeOracle)
         }
 
-        val h0 = variant0.contentHash(storeOracle, cache)
-        val h1 = variant1.contentHash(storeOracle, cache)
+        val h0 = variant0.contentHash(storeOracle)
+        val h1 = variant1.contentHash(storeOracle)
         assertEquals(h0, h1, "variant_0 (Ref param) and variant_1 (InlineDef param) must hash identically")
     }
 
@@ -476,7 +482,7 @@ class ContentHashTest {
             body = TypeDecl.Pointer(TypeDecl.Ref(pairId)),
         )
         val store = mapOf(ptrInA.id to ptrInA, ptrInB.id to ptrInB)
-        val storeOracle = TypeAstOracle(store::get)
+        val storeOracle = TestHasher(store)
 
         // Form A: a Ref to ptrInA.
         val formA = TypeDecl.Ref(ptrInA.id)
