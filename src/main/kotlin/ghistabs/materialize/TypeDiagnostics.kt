@@ -9,6 +9,7 @@ import ghistabs.diagnose.GapRecord
 import ghistabs.diagnose.degradation
 import ghistabs.harvest.TypeAst
 import ghistabs.parse.TypeDecl
+import ghistabs.parse.ownsMaterializedType
 
 /**
  * Compromised DataTypes — anonymous (no name in stab), empty-placeholder (body never
@@ -24,28 +25,16 @@ internal fun TypeRegistry.computeDegraded(): Map<DataType, String> = buildMap {
             put(dt, "xref-stub")
             return
         }
-        // Skip wrapper / alias bodies — their byId points to the wrapped target's dt.
-        // An anonymous `InlineDef(id, Pointer(X))` aliases to `X *32` (Ghidra auto-named
-        // from its target); an XRef body that resolved via `resolver.byXRef` aliases to
-        // the canonical struct's dt. Letting those classify would misattribute named
-        // targets as anonymous. Only Struct/Enum/FunctionT/Method bodies actually own
-        // their own dt with their own ghidraName.
-        when (ast.body) {
-            is TypeDecl.Ref, is TypeDecl.InlineDef,
-            is TypeDecl.Pointer, is TypeDecl.Reference,
-            is TypeDecl.Const, is TypeDecl.Volatile,
-            is TypeDecl.Array, is TypeDecl.WithSizeAttr,
-            is TypeDecl.Builtin, is TypeDecl.Range, is TypeDecl.Float, is TypeDecl.Complex,
-            is TypeDecl.XRef,
-            -> return
-
-            else -> when {
-                ast.name == null -> "anonymous"
-                dt is Composite && dt.numComponents == 0 -> "empty-placeholder"
-                dt is Composite && dt.allComponentsUndefined() -> "all-undefined"
-                else -> null
-            }?.let { reason -> put(dt, reason) }
-        }
+        // Wrapper / alias bodies point their byId at the wrapped target's dt (an anonymous
+        // `InlineDef(id, Pointer(X))` aliases `X *32`; a resolved XRef aliases the canonical
+        // struct). Classifying them would misattribute named targets as anonymous — skip.
+        if (!ast.body.ownsMaterializedType) return
+        when {
+            ast.name == null -> "anonymous"
+            dt is Composite && dt.numComponents == 0 -> "empty-placeholder"
+            dt is Composite && dt.allComponentsUndefined() -> "all-undefined"
+            else -> null
+        }?.let { reason -> put(dt, reason) }
     }
     // Canonical-group winners: the ast that actually built the dt. Non-winner
     // member ids alias to the same dt — don't let an anonymous member misclassify

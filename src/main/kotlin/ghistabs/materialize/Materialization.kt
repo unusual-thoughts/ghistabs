@@ -32,9 +32,7 @@ internal fun TypeRegistry.materializeBody(ast: TypeAst, category: CategoryPath, 
         // gcc emits anonymous nested aggregates as InlineDef(id, <aggregate body>);
         // resolveRef(body) picks up the harvested ast via getOrMaterialize(body.id)
         // instead of hitting the null `referenced-aggregate` branch.
-        is TypeDecl.InlineDef -> resolveRef(body)?.also {
-            byId[body.id] = it
-        } ?: placeholder
+        is TypeDecl.InlineDef -> resolveRef(body)?.let { cache(body.id, it) } ?: placeholder
 
         is TypeDecl.Array -> {
             val elem = resolveRef(body.element) ?: run {
@@ -322,8 +320,8 @@ internal fun TypeRegistry.materializeBody(ast: TypeAst, category: CategoryPath, 
         // empty `XRef_[...]` Structure at the typeinfo location.
         // Resolver buckets its own degradations for failed lookups.
         is TypeDecl.XRef -> resolver.lookupByXRef(body)
-            ?.let { canonical -> getOrMaterialize(canonical.id)?.also { byId[ast.id] = it } }
-            ?: placeholder.also { xrefStubs.add(it) }
+            ?.let { canonical -> getOrMaterialize(canonical.id)?.let { cache(ast.id, it) } }
+            ?: markXRefStub(placeholder)
 
         is TypeDecl.Ref -> getOrMaterialize(body.id)
             ?: if (ast.isVoidSelfRef()) {
@@ -362,11 +360,7 @@ fun TypeRegistry.resolveRef(decl: TypeDecl<GlobalTypeId>): DataType? = when (dec
     is TypeDecl.Ref -> getOrMaterialize(decl.id)
         ?: if (harvest.getType(decl.id)?.isVoidSelfRef() == true) VoidDataType() else null
 
-    is TypeDecl.InlineDef -> {
-        getOrMaterialize(decl.id) ?: resolveRef(decl.body)?.apply {
-            byId[decl.id] = this
-        }
-    }
+    is TypeDecl.InlineDef -> getOrMaterialize(decl.id) ?: resolveRef(decl.body)?.let { cache(decl.id, it) }
 
     is TypeDecl.Range, is TypeDecl.Complex, is TypeDecl.Float, is TypeDecl.WithSizeAttr, is TypeDecl.Builtin -> {
         BuiltinTable.resolve(decl)
@@ -484,7 +478,7 @@ fun TypeRegistry.materializeAll() {
             val raw = makePlaceholder(winner, group.key.category, name = group.key.name)
             val placeholder =
                 if (winner.body is TypeDecl.Struct || raw is GhidraEnum) register(raw) else raw
-            for (m in group.members) placeholders.putIfAbsent(m, placeholder)
+            for (m in group.members) seedPlaceholder(m, placeholder)
         }
 
         monitor.initialize(winnerCategory.size.toLong(), "Stabs: materializing types")
@@ -493,14 +487,10 @@ fun TypeRegistry.materializeAll() {
             val winner = harvest.getType(winnerId) ?: continue
             val placeholder = placeholders[winnerId]!!
             val materialized = materializeBody(winner, category, placeholder)
-            if (materialized === placeholder) {
-                byId[winnerId] = placeholder
-            } else {
-                register(materialized, winnerId)
-            }
+            if (materialized === placeholder) cache(winnerId, placeholder) else register(materialized, winnerId)
         }
         for ((memberId, winner) in memberToWinner) {
-            byId[winner.id]?.let { byId.putIfAbsent(memberId, it) }
+            byId[winner.id]?.let { cacheIfAbsent(memberId, it) }
         }
 
         registerNamedPrimitiveTypedefs()
@@ -528,7 +518,7 @@ private fun TypeRegistry.registerNamedPrimitiveTypedefs() {
             // produce wrong field sizes and `bool.conflict` in the DTM.
             for (ast in asts) {
                 val resolved = BuiltinTable.resolve(ast.body) ?: resolveRef(ast.body) ?: continue
-                byId.putIfAbsent(ast.id, resolved)
+                cacheIfAbsent(ast.id, resolved)
             }
             // One shared typedef under /stabs (or root for primitives) for
             // DemanglerReplacer to substitute into `/Demangler/*` stubs.
@@ -554,28 +544,16 @@ internal fun TypeRegistry.materializeTopLevel(ast: TypeAst): DataType {
     // RTTI pseudo-types and primitives resolve to their authoritative layout — a final type, so it
     // must not fall through to the XRef-stub path below (which would file it under xrefStubs and
     // flag every _ZTI global as a `degraded-*-typed-xref-stub` false alarm).
-    substitute(ast)?.let {
-        byId[ast.id] = it
-        return it
-    }
+    substitute(ast)?.let { return cache(ast.id, it) }
     if (ast.body is TypeDecl.XRef) {
         resolver.byXRef(ast.body)?.let { canonical ->
-            val dt = byId[canonical.id] ?: materializeTopLevel(canonical)
-            byId[ast.id] = dt
-            return dt
+            return cache(ast.id, byId[canonical.id] ?: materializeTopLevel(canonical))
         }
     }
     // Void self-ref: resolve before any placeholder is created, otherwise
     // getOrMaterialize returns the placeholder and the VoidDataType fallback never fires.
-    if (ast.body is TypeDecl.Ref && ast.body.id == ast.id) {
-        val void = VoidDataType()
-        byId[ast.id] = void
-        return void
-    }
-    val placeholder = placeholders.getOrPut(ast.id) {
-        makePlaceholder(ast, CATEGORY, "ref-stub")
-    }
-    return materializeBody(ast, CATEGORY, placeholder).also { materialized ->
-        byId.putIfAbsent(ast.id, materialized)
-    }
+    if (ast.body is TypeDecl.Ref && ast.body.id == ast.id) return cache(ast.id, VoidDataType())
+
+    val placeholder = placeholders[ast.id] ?: seedPlaceholder(ast.id, makePlaceholder(ast, CATEGORY, "ref-stub"))
+    return materializeBody(ast, CATEGORY, placeholder).also { cacheIfAbsent(ast.id, it) }
 }
