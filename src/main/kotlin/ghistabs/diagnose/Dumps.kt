@@ -157,9 +157,13 @@ private fun ImportContext<*>.registryDump(): RegistryDump? {
         .filterValues { it.size > 1 }
         .mapValues { (_, dts) -> dts.map { it.pathName }.sorted() }
         .toSortedMap()
+    // One entry per (category, name). `allCreatedDataTypes` can hold >1 DataType for a key (a stale
+    // pre-conflict object plus its DTM-live replacement); the duplicates are surfaced in
+    // `duplicateNamed` above, so keep the first deterministically here rather than `single()` (which
+    // threw on duplicate-heavy fixtures and aborted the whole AFTER-mode dump).
     val allTypes =
         registry.allCreatedDataTypes.groupBy { GhidraKey(it.categoryPath, it.name) }
-            .mapValues { RegistryDump.Type(it.value.single()) }
+            .mapValues { RegistryDump.Type(it.value.first()) }
     val divergent = resolver.divergentCollisions.entries
         .sortedBy { it.key.toString() }
         .map { (id, byName) ->
