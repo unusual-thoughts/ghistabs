@@ -1,13 +1,16 @@
 package ghistabs.importer
 
+import ghidra.app.cmd.disassemble.DisassembleCommand
+import ghidra.app.cmd.function.CreateFunctionCmd
+import ghidra.app.cmd.label.SetLabelPrimaryCmd
 import ghidra.program.model.address.Address
-import ghidra.program.model.data.CategoryPath
-import ghidra.program.model.data.DataTypeConflictHandler
-import ghidra.program.model.data.EnumDataType
-import ghidra.program.model.data.Undefined4DataType
+import ghidra.program.model.data.*
+import ghidra.program.model.data.Array
+import ghidra.program.model.data.Enum
 import ghidra.program.model.listing.*
 import ghidra.program.model.listing.Function
 import ghidra.program.model.symbol.SourceType
+import ghidra.program.model.symbol.SymbolTable
 import ghistabs.demangle
 import ghistabs.diagnose.ApplyErrorBucket
 import ghistabs.diagnose.DiagnosticSink
@@ -36,6 +39,10 @@ class SymbolApplier(
     private val typeRegistry: TypeRegistry,
 ) : DiagnosticSink by ctx {
     val source = SourceType.IMPORTED
+    val symtab: SymbolTable get() = ctx.program.symbolTable
+    val funMgr: FunctionManager get() = ctx.program.functionManager
+    val pointerSize = ctx.program.defaultPointerSize
+
     internal fun applyAllFunctions(): Int {
         ctx.monitor.initialize(harvest.openFunctions.size.toLong(), "Stabs: applying functions")
         var functions = 0
@@ -43,13 +50,12 @@ class SymbolApplier(
         for (open in harvest.openFunctions) {
             ctx.monitor.increment()
             try {
-                val func = ctx.program.functionManager.run {
+                val func = funMgr.run {
                     getFunctionAt(open.addr.address)
                         ?: getFunctionContaining(open.addr.address)?.also {
                             debug("entrypoint-snapped")
                         }
-                }
-                    ?: tryCreateFunctionFromStab(open) ?: run {
+                } ?: tryCreateFunctionFromStab(open) ?: run {
                     val (tag, level) = if (isInlineStdMember(open.name)) {
                         "apply-error-inlined-std" to Level.DEBUG
                     } else {
@@ -64,7 +70,17 @@ class SymbolApplier(
                 // from them rather than riding Ghidra's PE symbol (which leaves C names as `_main`
                 // and depends on the COFF symtab being present). Mangled names (`_ZN…`) are set raw
                 // here and resolved to `Class::method` by demangleMangledLabels below.
-                if (func.name != open.name) func.setName(open.name, source)
+                if (func.name != open.name) {
+                    // COMDAT-folded placement `operator new`/`delete` (and any `recordFromStab` label)
+                    // put `open.name` on a *separate* symbol at this shared address, so renaming the
+                    // function symbol throws "already exists at this address" — once per referencing CU,
+                    // the bulk of `apply-error-duplicate-name`. Drop those redundant same-name symbols
+                    // first; the function then adopts the name (correct output, no error).
+                    symtab.getSymbols(func.entryPoint)
+                        .filter { it != func.symbol && it.name == open.name }
+                        .forEach { it.delete() }
+                    func.setName(open.name, source)
+                }
 
                 // Apply return type from the parsed signature.
                 val retDt = typeRegistry.resolveRef(open.decl.type)
@@ -238,7 +254,7 @@ class SymbolApplier(
         // CreateFunctionCmd refuses uninitialised code. MinGW COMDAT chunks that
         // autoanalysis hasn't reached need a manual disassemble first.
         if (ctx.program.listing.getInstructionAt(addr) == null) {
-            val disasm = ghidra.app.cmd.disassemble.DisassembleCommand(addr, null, true)
+            val disasm = DisassembleCommand(addr, null, true)
             if (disasm.applyTo(ctx.program, ctx.monitor) && disasm.disassembledAddressSet.numAddresses > 0) {
                 debug("function-create-disassembled-first")
             } else {
@@ -251,7 +267,7 @@ class SymbolApplier(
             }
         }
 
-        val cmd = ghidra.app.cmd.function.CreateFunctionCmd(open.name, addr, null, SourceType.IMPORTED)
+        val cmd = CreateFunctionCmd(open.name, addr, null, SourceType.IMPORTED)
         if (!cmd.applyTo(ctx.program, ctx.monitor)) {
             warn(
                 "function-create-cmd-failed",
@@ -261,7 +277,7 @@ class SymbolApplier(
             return null
         }
         debug("function-created-from-stab")
-        return ctx.program.functionManager.getFunctionAt(addr)
+        return funMgr.getFunctionAt(addr)
     }
 
     /**
@@ -275,9 +291,9 @@ class SymbolApplier(
     private val frameBias by lazy {
         harvest.openFunctions
             .asSequence()
-            .mapNotNull { ctx.program.functionManager.getFunctionAt(it.addr.address) }
+            .mapNotNull { funMgr.getFunctionAt(it.addr.address) }
             .firstNotNullOfOrNull { VariableUtilities.getBaseStackParamOffset(it) }
-            ?: ctx.program.defaultPointerSize
+            ?: pointerSize
     }
 
     private fun applyLocal(func: Function, loc: SymbolRecord) {
@@ -318,13 +334,13 @@ class SymbolApplier(
                 }
 
                 is SymbolDecl.RegLocal -> {
-                    val regName = dbxRegisterName(ctx.program.defaultPointerSize, decl.regNum)
+                    val regName = dbxRegisterName(pointerSize, decl.regNum)
                     val reg = regName?.let { ctx.program.getRegister(it) }
                     if (reg == null) {
                         degradation(
                             "reglocal-unmapped-regnum",
                             "${func.name}.${decl.name}",
-                            "dbx-reg=${decl.regNum} arch-ptr-size=${ctx.program.defaultPointerSize}",
+                            "dbx-reg=${decl.regNum} arch-ptr-size=$pointerSize",
                         )
                         return
                     }
@@ -385,23 +401,23 @@ class SymbolApplier(
             )
         }
         val dtKind = when (dt) {
-            is ghidra.program.model.data.Structure -> "Structure"
-            is ghidra.program.model.data.Union -> "Union"
-            is ghidra.program.model.data.Array -> "Array"
-            is ghidra.program.model.data.Pointer -> "Pointer"
-            is ghidra.program.model.data.FunctionDefinition -> "FunctionDefinition"
-            is ghidra.program.model.data.Enum -> "Enum"
+            is Structure -> "Structure"
+            is Union -> "Union"
+            is Array -> "Array"
+            is Pointer -> "Pointer"
+            is FunctionDefinition -> "FunctionDefinition"
+            is Enum -> "Enum"
             else -> dt.displayName
         }
         // CLEAR_ALL_CONFLICT_DATA evicts `undefined4` placeholders auto-analysis may
         // have raced us to apply.
         try {
-            ghidra.program.model.data.DataUtilities.createData(
+            DataUtilities.createData(
                 ctx.program,
                 addr,
                 dt,
                 dt.length,
-                ghidra.program.model.data.DataUtilities.ClearDataMode.CLEAR_ALL_CONFLICT_DATA,
+                DataUtilities.ClearDataMode.CLEAR_ALL_CONFLICT_DATA,
             )
             // Verify the write stuck — auto-analyser races or data-equivalence collapse
             // can replace it; we'd otherwise silently claim success.
@@ -455,7 +471,6 @@ class SymbolApplier(
      * in the symbol table. Idempotent.
      */
     private fun ensureStabLabel(addr: Address, name: String) {
-        val symtab = ctx.program.symbolTable
         // Compiler-generated globals (typeinfo, typeinfo-name) carry their mangled `_ZTI…`/`_ZTS…`
         // linkage name in the stab. If the demangled label (`EAsm::typeinfo`) is already at this
         // address, leave it primary rather than promoting the raw mangled string over it.
@@ -471,8 +486,7 @@ class SymbolApplier(
         }
         if (!sym.isPrimary) {
             try {
-                ghidra.app.cmd.label.SetLabelPrimaryCmd(addr, sym.name, sym.parentNamespace)
-                    .applyTo(ctx.program)
+                SetLabelPrimaryCmd(addr, sym.name, sym.parentNamespace).applyTo(ctx.program)
             } catch (e: Exception) {
                 err("symbol-primary-error", "$name at $addr: ${e.message}", addr)
             }
