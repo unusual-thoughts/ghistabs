@@ -321,7 +321,7 @@ internal fun TypeRegistry.materializeBody(ast: TypeAst, category: CategoryPath, 
         // Resolver buckets its own degradations for failed lookups.
         is TypeDecl.XRef -> resolver.byXRef(body)
             ?.let { canonical -> getOrMaterialize(canonical.id)?.let { cache(ast.id, it) } }
-            ?: markXRefStub(placeholder)
+            ?: placeholder.markXRefStub()
 
         is TypeDecl.Ref -> getOrMaterialize(body.id)
             ?: if (ast.isVoidSelfRef()) {
@@ -476,7 +476,7 @@ fun TypeRegistry.materializeAll() {
             // Winners are always XRef-targets (Struct/Union/Enum), so the stub always goes into the
             // DTM up front — in-place fill then lands on the DTM-resident object — and is shared across
             // the group's member ids so a Ref resolved before the winner materializes pulls in that one.
-            val placeholder = resolveIntoDtm(makePlaceholder(group.ast, group.key.category, name = group.key.name))
+            val placeholder = makePlaceholder(group.ast, group.key.category, name = group.key.name).resolveIntoDtm()
             for (m in group.members) sharePlaceholder(m, placeholder)
         }
 
@@ -543,7 +543,7 @@ internal fun TypeRegistry.materializeTopLevel(ast: TypeAst): DataType {
     // RTTI pseudo-types and primitives resolve to their authoritative layout — a final type, so it
     // must not fall through to the XRef-stub path below (which would file it under xrefStubs and
     // flag every _ZTI global as a `degraded-*-typed-xref-stub` false alarm).
-    substitute(ast)?.let { return cache(ast.id, it) }
+    ast.substitute()?.let { return cache(ast.id, it) }
     if (ast.body is TypeDecl.XRef) {
         resolver.byXRef(ast.body)?.let { canonical ->
             return cache(ast.id, byId[canonical.id] ?: materializeTopLevel(canonical))
@@ -553,6 +553,6 @@ internal fun TypeRegistry.materializeTopLevel(ast: TypeAst): DataType {
     // getOrMaterialize returns the placeholder and the VoidDataType fallback never fires.
     if (ast.body is TypeDecl.Ref && ast.body.id == ast.id) return cache(ast.id, VoidDataType())
 
-    val placeholder = seedPlaceholder(ast, CATEGORY, "ref-stub")
+    val placeholder = ast.seedPlaceholder(reason = "ref-stub")
     return materializeBody(ast, CATEGORY, placeholder).also { cacheIfAbsent(ast.id, it) }
 }
