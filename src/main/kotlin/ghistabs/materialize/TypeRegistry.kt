@@ -7,6 +7,7 @@ import ghidra.program.model.data.DataTypeManager
 import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.StabsDiagnostics
+import ghistabs.harvest.CanonicalGroup
 import ghistabs.harvest.Harvest
 import ghistabs.harvest.TypeAst
 import ghistabs.harvest.TypeResolver
@@ -85,10 +86,15 @@ class TypeRegistry(
     internal fun TypeAst.seedPlaceholder(category: CategoryPath = CATEGORY, reason: String = "fwd-decl"): DataType =
         placeholders.getOrPut(id) { makePlaceholder(this, category, reason) }
 
-    /** Point [id] at an already-built placeholder — the canonical-group fan-out where every member id
-     *  shares its winner's in-flight stub. */
-    internal fun sharePlaceholder(id: GlobalTypeId, placeholder: DataType): DataType =
-        placeholders.getOrPut(id) { placeholder }
+    /** Canonical-group fan-out where every member id  shares its winner's in-flight stub.
+     * Winners are always XRef-targets (Struct/Union/Enum), so the stub always goes into the
+     * DTM up front — in-place fill then lands on the DTM-resident object — and is shared across
+     * the group's member ids so a Ref resolved before the winner materializes pulls in that one.
+     */
+    internal fun CanonicalGroup.seedPlaceholder() {
+        val placeholder = makePlaceholder(ast, key.category, name = key.name).resolveIntoDtm()
+        for (m in members) placeholders.putIfAbsent(m, placeholder)
+    }
 
     internal fun DataType.markXRefStub(): DataType = apply { xrefStubs.add(this) }
 
