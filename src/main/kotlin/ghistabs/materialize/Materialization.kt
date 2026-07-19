@@ -478,7 +478,7 @@ fun TypeRegistry.materializeAll() {
             val raw = makePlaceholder(winner, group.key.category, name = group.key.name)
             val placeholder =
                 if (winner.body is TypeDecl.Struct || raw is GhidraEnum) register(raw) else raw
-            for (m in group.members) seedPlaceholder(m, placeholder)
+            for (m in group.members) sharePlaceholder(m, placeholder)
         }
 
         monitor.initialize(winnerCategory.size.toLong(), "Stabs: materializing types")
@@ -554,6 +554,6 @@ internal fun TypeRegistry.materializeTopLevel(ast: TypeAst): DataType {
     // getOrMaterialize returns the placeholder and the VoidDataType fallback never fires.
     if (ast.body is TypeDecl.Ref && ast.body.id == ast.id) return cache(ast.id, VoidDataType())
 
-    val placeholder = placeholders[ast.id] ?: seedPlaceholder(ast.id, makePlaceholder(ast, CATEGORY, "ref-stub"))
+    val placeholder = seedPlaceholder(ast, CATEGORY, "ref-stub")
     return materializeBody(ast, CATEGORY, placeholder).also { cacheIfAbsent(ast.id, it) }
 }

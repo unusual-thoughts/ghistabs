@@ -70,15 +70,24 @@ class TypeRegistry(
 
     // ── The only writers of byId / placeholders / xrefStubs. [cache] sets the authoritative
     // resolution for an id; [cacheIfAbsent] is the alias/member fan-out that must not clobber a
-    // winner already in the slot; [seedPlaceholder] registers an empty cycle-break stub that
-    // [materializeAll] later fills in place; [markXRefStub] tags a placeholder that never resolved,
-    // for degradation reporting. Each returns its dt so it composes inside a resolution chain. ──
+    // winner already in the slot; [seedPlaceholder] builds an empty cycle-break stub that
+    // [materializeAll] later fills in place and [sharePlaceholder] points a member id at one;
+    // [markXRefStub] tags a placeholder that never resolved, for degradation reporting. Each
+    // returns its dt so it composes inside a resolution chain. ([register] layers dtm.resolve +
+    // [cache] for freshly-built types — the DTM-registering counterpart to bare [cache].) ──
 
     internal fun <T : DataType> cache(id: GlobalTypeId, dt: T): T = dt.also { byId[id] = it }
 
     internal fun cacheIfAbsent(id: GlobalTypeId, dt: DataType): DataType = byId.getOrPut(id) { dt }
 
-    internal fun seedPlaceholder(id: GlobalTypeId, dt: DataType): DataType = placeholders.getOrPut(id) { dt }
+    /** Get-or-create the empty cycle-break stub for [ast] under [category]; [materializeAll] fills it. */
+    internal fun seedPlaceholder(ast: TypeAst, category: CategoryPath, reason: String = "fwd-decl"): DataType =
+        placeholders.getOrPut(ast.id) { makePlaceholder(ast, category, reason) }
+
+    /** Point [id] at an already-built placeholder — the canonical-group fan-out where every member id
+     *  shares its winner's in-flight stub. */
+    internal fun sharePlaceholder(id: GlobalTypeId, placeholder: DataType): DataType =
+        placeholders.getOrPut(id) { placeholder }
 
     internal fun markXRefStub(dt: DataType): DataType = dt.also { xrefStubs.add(it) }
 
@@ -116,7 +125,7 @@ class TypeRegistry(
         byId[id] ?: placeholders[id] ?: harvest.getType(id)?.let { ast ->
             substitute(ast)?.let { cache(id, it) }
                 ?: if (ast.body is TypeDecl.Struct) {
-                    seedPlaceholder(id, makePlaceholder(ast, CATEGORY))
+                    seedPlaceholder(ast, CATEGORY)
                 } else {
                     materializeTopLevel(ast)
                 }
