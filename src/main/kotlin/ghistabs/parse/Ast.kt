@@ -129,8 +129,7 @@ val TypeDecl<*>.isXRefTarget get() = this is TypeDecl.Struct || this is TypeDecl
 
 /** Bodies that materialize their own named DataType (own their ghidraName), as opposed to
  *  wrappers/refs/aliases whose byId entry points at another type's dt. Only these are classified. */
-val TypeDecl<*>.ownsMaterializedType get() =
-    isXRefTarget || this is TypeDecl.FunctionT || this is TypeDecl.Method
+val TypeDecl<*>.ownsMaterializedType get() = isXRefTarget || this is TypeDecl.FunctionT || this is TypeDecl.Method
 
 val TypeDecl<*>.isComplete
     get() = when (this) {
