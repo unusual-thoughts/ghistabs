@@ -203,7 +203,7 @@ class StringTypeProbe : AbstractGhidraHeadlessIntegrationTest() {
         out: MutableSet<String>,
     ) {
         if (!visited.add(dt.pathName)) return
-        if (dt.name.startsWith("undefined") || dt.name.startsWith("Undefined")) {
+        if (dt.isUndefined) {
             out.add(dt.pathName)
             return
         }
