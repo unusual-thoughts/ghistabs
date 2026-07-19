@@ -73,7 +73,7 @@ class TypeRegistry(
     // winner already in the slot; [seedPlaceholder] builds an empty cycle-break stub that
     // [materializeAll] later fills in place and [sharePlaceholder] points a member id at one;
     // [markXRefStub] tags a placeholder that never resolved, for degradation reporting. Each
-    // returns its dt so it composes inside a resolution chain. ([register] layers dtm.resolve +
+    // returns its dt so it composes inside a resolution chain. ([register] layers [resolveIntoDtm] +
     // [cache] for freshly-built types — the DTM-registering counterpart to bare [cache].) ──
 
     internal fun <T : DataType> cache(id: GlobalTypeId, dt: T): T = dt.also { byId[id] = it }
@@ -91,13 +91,16 @@ class TypeRegistry(
 
     internal fun markXRefStub(dt: DataType): DataType = dt.also { xrefStubs.add(it) }
 
+    /** Resolve [dt] into the DTM under the shared conflict handler; returns the DTM-resident instance
+     *  (may differ from [dt]). No id/name bookkeeping — for stubs whose id lands in [byId] later. */
+    internal fun resolveIntoDtm(dt: DataType): DataType = dtm.resolve(dt, conflictHandler)
+
     /**
-     * Resolve [dt] into the DTM and remember it. Returns the DTM-resolved instance (may differ).
-     * If there is an id attached to the type, caches the result under [id] for [dataTypeFor].
-     * Otherwise save it to extrasByName
+     * [resolveIntoDtm] + remember. Returns the DTM-resolved instance (may differ). With an [id],
+     * caches it under [id] for [dataTypeFor]; id-less, buckets it by name in extrasByName.
      */
     internal fun register(dt: DataType, id: GlobalTypeId? = null): DataType {
-        val resolved = dtm.resolve(dt, conflictHandler)
+        val resolved = resolveIntoDtm(dt)
         when (id) {
             null -> extrasByName.getOrPut(resolved.name) { LinkedHashSet() }.add(resolved)
             else -> cache(id, resolved)

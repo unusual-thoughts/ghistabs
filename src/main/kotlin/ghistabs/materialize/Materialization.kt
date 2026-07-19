@@ -474,10 +474,10 @@ fun TypeRegistry.materializeAll() {
         // Ref resolved before the winner materializes pulls in that one object, not an
         // empty second copy that would collide with the filled type (`.conflict`).
         for (group in resolver.byCanonicalKey.values) {
-            val winner = group.ast
-            val raw = makePlaceholder(winner, group.key.category, name = group.key.name)
-            val placeholder =
-                if (winner.body is TypeDecl.Struct || raw is GhidraEnum) register(raw) else raw
+            // Winners are always XRef-targets (Struct/Union/Enum), so the stub always goes into the
+            // DTM up front — in-place fill then lands on the DTM-resident object — and is shared across
+            // the group's member ids so a Ref resolved before the winner materializes pulls in that one.
+            val placeholder = resolveIntoDtm(makePlaceholder(group.ast, group.key.category, name = group.key.name))
             for (m in group.members) sharePlaceholder(m, placeholder)
         }
 
