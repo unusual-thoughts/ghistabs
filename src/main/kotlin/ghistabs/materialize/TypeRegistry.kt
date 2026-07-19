@@ -31,7 +31,7 @@ class TypeRegistry(
     internal val resolver: TypeResolver,
     internal val monitor: TaskMonitor = TaskMonitor.DUMMY,
 ) : DiagnosticSink by sink {
-    internal val byId = mutableMapOf<GlobalTypeId, DataType>()
+    private val byId = mutableMapOf<GlobalTypeId, DataType>()
     internal val placeholders = mutableMapOf<GlobalTypeId, DataType>()
 
     // Baseline the DTM's `.conflict` census at construction (before any of our passes touch the DTM;
