@@ -78,7 +78,8 @@ class TypeRegistry(
 
     internal fun <T : DataType> cache(id: GlobalTypeId, dt: T): T = dt.also { byId[id] = it }
 
-    internal fun cacheIfAbsent(id: GlobalTypeId, dt: DataType): DataType = byId.getOrPut(id) { dt }
+    internal fun cacheIfAbsent(id: GlobalTypeId, build: () -> DataType): DataType = byId.getOrPut(id, build)
+    internal fun cacheIfAbsent(id: GlobalTypeId, dt: DataType?): DataType? = dt?.let { byId.getOrPut(id) { it } }
 
     /** Get-or-create the empty cycle-break stub for [this] under [category]; [materializeAll] fills it. */
     internal fun TypeAst.seedPlaceholder(category: CategoryPath = CATEGORY, reason: String = "fwd-decl"): DataType =
