@@ -4,7 +4,10 @@ import ghidra.program.model.data.*
 import ghistabs.diagnose.degradation
 import ghistabs.harvest.TypeAst
 import ghistabs.materialize.itanium.*
-import ghistabs.parse.*
+import ghistabs.parse.CATEGORY
+import ghistabs.parse.GlobalTypeId
+import ghistabs.parse.TypeDecl
+import ghistabs.parse.isXRefTarget
 import ghistabs.runTransaction
 import ghidra.program.model.data.Enum as GhidraEnum
 
@@ -478,7 +481,6 @@ fun TypeRegistry.materializeAll() {
 
         // Non-registerable top-level typeAsts (XRef body, FunctionT, Method, …)
         for (ast in harvest.typeAsts.values) {
-            if (ast.id in byId) continue
             materializeTopLevel(ast)
         }
     }
@@ -520,20 +522,17 @@ private fun TypeRegistry.registerNamedPrimitiveTypedefs() {
 }
 
 /** Materialize a non-registerable top-level ast (XRef alias, FunctionT, Method). */
-internal fun TypeRegistry.materializeTopLevel(ast: TypeAst): DataType {
+internal fun TypeRegistry.materializeTopLevel(ast: TypeAst): DataType = cacheIfAbsent(ast.id) {
     // RTTI pseudo-types and primitives resolve to their authoritative layout — a final type, so it
     // must not fall through to the XRef-stub path below (which would file it under xrefStubs and
     // flag every _ZTI global as a `degraded-*-typed-xref-stub` false alarm).
-    ast.substitute()?.let { return cache(ast.id, it) }
-    if (ast.body is TypeDecl.XRef) {
-        resolver.byXRef(ast.body)?.let { canonical ->
-            return cache(ast.id, byId[canonical.id] ?: materializeTopLevel(canonical))
-        }
+    ast.substitute() ?: resolver.byXRef(ast)?.let { canonical ->
+        materializeTopLevel(canonical)
+    } ?: if (ast.isVoidSelfRef()) {
+        // resolve before any placeholder is created, otherwise
+        // getOrMaterialize returns the placeholder and the VoidDataType fallback never fires.
+        VoidDataType()
+    } else {
+        materializeBody(ast, CATEGORY, ast.seedPlaceholder(reason = "ref-stub"))
     }
-    // Void self-ref: resolve before any placeholder is created, otherwise
-    // getOrMaterialize returns the placeholder and the VoidDataType fallback never fires.
-    if (ast.body is TypeDecl.Ref && ast.body.id == ast.id) return cache(ast.id, VoidDataType())
-
-    val placeholder = ast.seedPlaceholder(reason = "ref-stub")
-    return materializeBody(ast, CATEGORY, placeholder).also { cacheIfAbsent(ast.id, it) }
 }
