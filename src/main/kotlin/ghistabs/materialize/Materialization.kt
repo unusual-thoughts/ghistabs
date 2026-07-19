@@ -319,7 +319,7 @@ internal fun TypeRegistry.materializeBody(ast: TypeAst, category: CategoryPath, 
         // emit `InlineDef(id, XRef(STRUCT,"Foo"))` and we'd materialize an
         // empty `XRef_[...]` Structure at the typeinfo location.
         // Resolver buckets its own degradations for failed lookups.
-        is TypeDecl.XRef -> resolver.lookupByXRef(body)
+        is TypeDecl.XRef -> resolver.byXRef(body)
             ?.let { canonical -> getOrMaterialize(canonical.id)?.let { cache(ast.id, it) } }
             ?: markXRefStub(placeholder)
 

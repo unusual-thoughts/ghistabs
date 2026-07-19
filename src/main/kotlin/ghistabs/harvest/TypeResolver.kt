@@ -42,15 +42,13 @@ class TypeResolver(val harvest: Harvest, private val foldSources: Boolean = true
     /** Convenience: id → struct body (null if not a struct). */
     fun getStruct(id: GlobalTypeId): TypeDecl.Struct<GlobalTypeId>? = typeAsts[id]?.body as? TypeDecl.Struct
 
-    override fun byXRef(xref: TypeDecl.XRef<GlobalTypeId>): TypeAst? = lookupByXRef(xref, silent = true)
-
     /**
      * Resolve [xref] to its canonical [TypeAst]. Tries exact-name, then base-tag fallback
      * (commits only when all same-kind candidates agree on size). On miss bumps
      * `xref-undefined` / `xref-kind-mismatch` / `xref-ambiguous`. [silent] is for the
      * contentHash oracle path which expects misses.
      */
-    fun lookupByXRef(xref: TypeDecl.XRef<GlobalTypeId>, silent: Boolean = false): TypeAst? {
+    override fun byXRef(xref: TypeDecl.XRef<GlobalTypeId>, silent: Boolean): TypeAst? {
         astsByName[xref.tagName]
             ?.firstOrNull { it.body.matchesXRefKind(xref.kind) }
             ?.let { return it }
@@ -85,6 +83,13 @@ class TypeResolver(val harvest: Harvest, private val foldSources: Boolean = true
         debug(counter)
         debug("unresolved-xref", "${xref.tagName} [${xref.kind}] ${xrefDiagnosis(xref)}")
         return null
+    }
+
+    // Silent: this is materializeTopLevel's routing probe. On a miss it falls through to
+    // materializeBody's XRef case, which is the authoritative counter — counting here too would
+    // tally the same unresolved xref twice.
+    fun byXRef(ast: TypeAst): TypeAst? = (ast.body as? TypeDecl.XRef)?.let { xref ->
+        byXRef(xref, silent = true)
     }
 
     /** One-line snapshot of harvest contents under [xref]'s exact tag and base tag. */

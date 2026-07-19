@@ -40,14 +40,14 @@ internal fun TypeRegistry.computeDegraded(): Map<DataType, String> = buildMap {
     // member ids alias to the same dt — don't let an anonymous member misclassify
     // a named winner's dt.
     for (group in resolver.byCanonicalKey.values) {
-        byId[group.ast.id]?.let { classify(group.ast, it) }
+        dataTypeFor(group.ast.id)?.let { classify(group.ast, it) }
     }
     // Non-canonical top-level asts (XRef aliases, FunctionT, Method, …) that
     // materialized through resolve(); their own ast.id owns the dt directly.
     val canonicalIds = resolver.byCanonicalKey.values.flatMap { it.members }.toSet()
     for (ast in harvest.typeAsts.values) {
         if (ast.id in canonicalIds) continue
-        byId[ast.id]?.let { classify(ast, it) }
+        dataTypeFor(ast.id)?.let { classify(ast, it) }
     }
 }
 
