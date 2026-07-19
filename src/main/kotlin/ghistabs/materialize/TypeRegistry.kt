@@ -96,6 +96,13 @@ class TypeRegistry(
         for (m in members) placeholders.putIfAbsent(m, placeholder)
     }
 
+    internal fun CanonicalGroup.materialize() {
+        val placeholder = placeholders[ast.id]!!
+        val materialized = materializeBody(ast, key.category, placeholder)
+        if (materialized === placeholder) cache(ast.id, placeholder) else register(materialized, ast.id)
+        for (memberId in members) cacheIfAbsent(memberId, materialized)
+    }
+
     internal fun DataType.markXRefStub(): DataType = apply { xrefStubs.add(this) }
 
     /** Resolve [this] into the DTM under the shared conflict handler; returns the DTM-resident instance
