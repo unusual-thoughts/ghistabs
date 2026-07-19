@@ -8,17 +8,6 @@ import ghistabs.parse.*
 import ghistabs.runTransaction
 import ghidra.program.model.data.Enum as GhidraEnum
 
-/**
- * Fill the pre-registered enum [placeholder] in place (its size was fixed at creation, see
- * [makePlaceholder]) and return it, so one DTM-resident Enum is both the cycle-break stub and
- * the final type — no colliding second copy. bool doesn't reach this path — it comes through
- * BuiltinTable slot -16.
- */
-private fun materializeEnum(placeholder: GhidraEnum, body: TypeDecl.Enum<GlobalTypeId>): DataType {
-    for ((mname, mval) in body.members) placeholder.add(mname, mval)
-    return placeholder
-}
-
 internal fun TypeRegistry.materializeBody(ast: TypeAst, category: CategoryPath, placeholder: DataType): DataType =
     when (val body = ast.body) {
         is TypeDecl.Pointer -> pointerTo(body.pointee, "body-pointer-pointee", ast.ghidraName)
@@ -40,10 +29,7 @@ internal fun TypeRegistry.materializeBody(ast: TypeAst, category: CategoryPath, 
                 ByteDataType.dataType
             }
             recordXRefStubAt("array-element", ast.ghidraName, elem)
-            val rangeLen = (body.indexType as? TypeDecl.Range)
-                ?.let { it.max - it.min + 1 }
-                ?.takeIf { it > 0 }
-            val numElements = (body.length ?: rangeLen ?: 1L).toInt().coerceAtLeast(1)
+
             // ArrayDataType rejects length<1; FunctionDefinitionDataType reports
             // length=0. Substitute Undefined4 to preserve the array shape.
             val safeElem = if (elem.length < 1) {
@@ -56,15 +42,14 @@ internal fun TypeRegistry.materializeBody(ast: TypeAst, category: CategoryPath, 
             } else {
                 elem
             }
-            ArrayDataType(safeElem, numElements, safeElem.length)
+            body.buildArray(safeElem)
         }
 
-        is TypeDecl.Enum -> materializeEnum(placeholder as GhidraEnum, body)
+        is TypeDecl.Enum -> body.fillEnum(placeholder as GhidraEnum)
 
         // `@s<bits>;e...;` — explicit enum size (stabs.texinfo §"String Field"); size already
         // applied to the placeholder in makePlaceholder.
-        is TypeDecl.WithSizeAttr if body.inner is TypeDecl.Enum ->
-            materializeEnum(placeholder as GhidraEnum, body.inner)
+        is TypeDecl.WithSizeAttr if body.inner is TypeDecl.Enum -> body.inner.fillEnum(placeholder as GhidraEnum)
 
         is TypeDecl.Range, is TypeDecl.Complex, is TypeDecl.Float, is TypeDecl.WithSizeAttr, is TypeDecl.Builtin ->
             resolveRef(body) ?: placeholder
@@ -373,20 +358,10 @@ fun TypeRegistry.resolveRef(decl: TypeDecl<GlobalTypeId>): DataType? = when (dec
 
     is TypeDecl.Volatile -> resolveRef(decl.inner)
 
-    is TypeDecl.Array -> {
-        // ByteDataType (not Undefined1) for unresolved elements: Undefined1 is
-        // type-equivalent to Ghidra's auto-analysis "undefined" bytes, so a downstream
-        // data-ref analyzer will recoalesce our array into `undefined4`.
-        val elem = resolveRef(decl.element) ?: ByteDataType.dataType
-        // Length: decl.length, else derive from indexType Range as max-min+1
-        // (gcc often omits length, encodes bound only via Range — e.g.
-        // BranchInstructions indexed 0..15 → 16 elements), else 1.
-        val rangeLen = (decl.indexType as? TypeDecl.Range)
-            ?.let { it.max - it.min + 1 }
-            ?.takeIf { it > 0 }
-        val numElements = (decl.length ?: rangeLen ?: 1L).toInt().coerceAtLeast(1)
-        ArrayDataType(elem, numElements, elem.length)
-    }
+    // ByteDataType (not Undefined1) for unresolved elements: Undefined1 is
+    // type-equivalent to Ghidra's auto-analysis "undefined" bytes, so a downstream
+    // data-ref analyzer will recoalesce our array into `undefined4`.
+    is TypeDecl.Array -> decl.buildArray(resolveRef(decl.element) ?: ByteDataType.dataType)
 
     is TypeDecl.FunctionT -> buildFunctionDefinition(
         category = CategoryPath("/stabs/unnamed"),
@@ -405,6 +380,27 @@ fun TypeRegistry.resolveRef(decl: TypeDecl<GlobalTypeId>): DataType? = when (dec
         debug("referenced-aggregate", "asked for ref to $decl")
         null
     }
+}
+
+/**
+ * Fill the pre-registered enum [placeholder] in place (its size was fixed at creation, see
+ * [makePlaceholder]) and return it, so one DTM-resident Enum is both the cycle-break stub and
+ * the final type — no colliding second copy. bool doesn't reach this path — it comes through
+ * BuiltinTable slot -16.
+ */
+private fun TypeDecl.Enum<GlobalTypeId>.fillEnum(placeholder: GhidraEnum): DataType = placeholder.apply {
+    for ((mname, mval) in members) add(mname, mval)
+}
+
+fun TypeDecl.Array<*>.buildArray(elem: DataType): ArrayDataType {
+    // Length: this.length, else derive from indexType Range as max-min+1
+    // (gcc often omits length, encodes bound only via Range — e.g.
+    // BranchInstructions indexed 0..15 → 16 elements), else 1.
+    val rangeLen = (indexType as? TypeDecl.Range)
+        ?.let { it.max - it.min + 1 }
+        ?.takeIf { it > 0 }
+    val numElements = (length ?: rangeLen ?: 1L).toInt().coerceAtLeast(1)
+    return ArrayDataType(elem, numElements, elem.length)
 }
 
 /**
