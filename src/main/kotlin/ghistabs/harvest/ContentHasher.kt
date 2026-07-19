@@ -11,7 +11,7 @@ import java.util.*
  */
 abstract class ContentHasher(val hashCache: MutableMap<GlobalTypeId, Int> = mutableMapOf()) {
     abstract fun byId(id: GlobalTypeId): TypeAst?
-    abstract fun byXRef(xref: TypeDecl.XRef<GlobalTypeId>): TypeAst?
+    abstract fun byXRef(xref: TypeDecl.XRef<GlobalTypeId>, silent: Boolean = false): TypeAst?
 
     /**
      * Content-equivalence hash for a [TypeDecl] tree.
@@ -90,7 +90,7 @@ abstract class ContentHasher(val hashCache: MutableMap<GlobalTypeId, Int> = muta
             // Resolve XRef to its struct definition so a forward-declaration-only CU hashes any
             // surrounding type identically to a full-definition CU. Falls back to (kind, tagName)
             // when truly unresolved.
-            is TypeDecl.XRef -> byXRef(this)?.id?.let { refKey(it, visited) } ?: hashCode()
+            is TypeDecl.XRef -> byXRef(this, silent = true)?.id?.let { refKey(it, visited) } ?: hashCode()
 
             // Source-independent: same slot in every CU = same primitive.
             is TypeDecl.Builtin -> builtinHash() ?: Objects.hash("Builtin", slot)
