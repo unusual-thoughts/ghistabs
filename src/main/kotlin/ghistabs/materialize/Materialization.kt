@@ -459,9 +459,6 @@ fun TypeRegistry.materializeAll() {
     // slot and alias members to it; (2) non-registerable top-level asts
     // (FunctionT, Method, XRef aliases) via materializeTopLevel() — byId only, no DTM slot.
     dtm.runTransaction("ghidra-stabs build types") {
-        val memberToWinner = resolver.byCanonicalKey.values.flatMap { g -> g.members.map { it to g.ast } }.toMap()
-        val winnerCategory = resolver.byCanonicalKey.values.associate { it.ast.id to it.key.category }
-
         // Pre-seed placeholders for every member id so Ref(id) cycle-breaks during
         // body materialization. Struct/Union and Enum placeholders go into the DTM
         // up-front so later in-place mutations land on the DTM-resident object — and a
@@ -471,16 +468,10 @@ fun TypeRegistry.materializeAll() {
             group.seedPlaceholder()
         }
 
-        monitor.initialize(winnerCategory.size.toLong(), "Stabs: materializing types")
-        for ((winnerId, category) in winnerCategory) {
+        monitor.initialize(resolver.byCanonicalKey.size.toLong(), "Stabs: materializing types")
+        for (group in resolver.byCanonicalKey.values) {
             monitor.increment()
-            val winner = harvest.getType(winnerId) ?: continue
-            val placeholder = placeholders[winnerId]!!
-            val materialized = materializeBody(winner, category, placeholder)
-            if (materialized === placeholder) cache(winnerId, placeholder) else register(materialized, winnerId)
-        }
-        for ((memberId, winner) in memberToWinner) {
-            byId[winner.id]?.let { cacheIfAbsent(memberId, it) }
+            group.materialize()
         }
 
         registerNamedPrimitiveTypedefs()
