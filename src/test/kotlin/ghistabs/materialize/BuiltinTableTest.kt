@@ -13,21 +13,21 @@ class BuiltinTableTest {
 
     @Test
     fun testClassifySignedInt32() {
-        val kind = BuiltinTable.resolve(TypeDecl.Range(GlobalTypeId(cu, 1), -2147483648L, 2147483647L))
+        val kind = TypeDecl.Range(GlobalTypeId(cu, 1), -2147483648L, 2147483647L).resolveBuiltin()
         assertInstanceOf<IntegerDataType>(kind)
         assertEquals(4, kind.length)
     }
 
     @Test
     fun testClassifyUnsignedInt32() {
-        val kind = BuiltinTable.resolve(TypeDecl.Range(GlobalTypeId(cu, 1), 0L, 4294967295L))
+        val kind = TypeDecl.Range(GlobalTypeId(cu, 1), 0L, 4294967295L).resolveBuiltin()
         assertInstanceOf<UnsignedIntegerDataType>(kind)
         assertEquals(4, kind.length)
     }
 
     @Test
     fun testClassifyUnsignedByte() {
-        val kind = BuiltinTable.resolve(TypeDecl.Range(GlobalTypeId(cu, 1), 0L, 255L))
+        val kind = TypeDecl.Range(GlobalTypeId(cu, 1), 0L, 255L).resolveBuiltin()
         assertInstanceOf<ByteDataType>(kind)
         assertEquals(1, kind.length)
     }
@@ -35,14 +35,14 @@ class BuiltinTableTest {
     @Test
     fun testClassifyPlainChar() {
         // gcc emits plain `char` as range 0..127 (not -128..127); it must map to char, not byte.
-        val kind = BuiltinTable.resolve(TypeDecl.Range(GlobalTypeId(cu, 1), 0L, 127L))
+        val kind = TypeDecl.Range(GlobalTypeId(cu, 1), 0L, 127L).resolveBuiltin()
         assertInstanceOf<CharDataType>(kind)
         assertEquals(1, kind.length)
     }
 
     @Test
     fun testClassifyWithSizeAttr64ULL() {
-        val kind = BuiltinTable.resolve(TypeDecl.WithSizeAttr(64, TypeDecl.Range(GlobalTypeId(cu, 6), 0L, -1L)))
+        val kind = TypeDecl.WithSizeAttr(64, TypeDecl.Range(GlobalTypeId(cu, 6), 0L, -1L)).resolveBuiltin()
         assertInstanceOf<UnsignedLongLongDataType>(kind)
         assertEquals(8, kind.length)
     }
@@ -52,7 +52,7 @@ class BuiltinTableTest {
         // gdb stabs encodes _Bool as (0,-16); after globalize the inner Ref to
         // a negative slot is hoisted into [TypeDecl.Builtin] so cross-CU
         // bool slots share one canonical hash and one Ghidra DataType.
-        val kind = BuiltinTable.resolve(TypeDecl.WithSizeAttr(8, TypeDecl.Builtin(-16)))
+        val kind = TypeDecl.WithSizeAttr<GlobalTypeId>(8, TypeDecl.Builtin(-16)).resolveBuiltin()
         assertInstanceOf<BooleanDataType>(kind)
         assertEquals(1, kind.length)
     }
@@ -61,28 +61,28 @@ class BuiltinTableTest {
     fun testClassifyBuiltinSlotDirect() {
         // Builtin slot resolved standalone (no WithSizeAttr wrapper) — gcc
         // sometimes emits a bare `(0,-N)` Ref as a typedef body.
-        assertInstanceOf<IntegerDataType>(BuiltinTable.resolve(TypeDecl.Builtin(-1)))
-        assertInstanceOf<BooleanDataType>(BuiltinTable.resolve(TypeDecl.Builtin(-16)))
-        assertInstanceOf<VoidDataType>(BuiltinTable.resolve(TypeDecl.Builtin(-11)))
+        assertInstanceOf<IntegerDataType>(TypeDecl.Builtin<GlobalTypeId>(-1).resolveBuiltin())
+        assertInstanceOf<BooleanDataType>(TypeDecl.Builtin<GlobalTypeId>(-16).resolveBuiltin())
+        assertInstanceOf<VoidDataType>(TypeDecl.Builtin<GlobalTypeId>(-11).resolveBuiltin())
     }
 
     @Test
     fun testClassifyComplex8() {
-        val kind = BuiltinTable.resolve(TypeDecl.Complex(3, 8))
+        val kind = TypeDecl.Complex<GlobalTypeId>(3, 8).resolveBuiltin()
         assertInstanceOf<Complex8DataType>(kind)
         assertEquals(8, kind.length)
     }
 
     @Test
     fun testClassifyComplex16() {
-        val kind = BuiltinTable.resolve(TypeDecl.Complex(4, 16))
+        val kind = TypeDecl.Complex<GlobalTypeId>(4, 16).resolveBuiltin()
         assertInstanceOf<Complex16DataType>(kind)
         assertEquals(16, kind.length)
     }
 
     @Test
     fun testClassifyNonPrimitive() {
-        val kind = BuiltinTable.resolve(TypeDecl.Pointer(TypeDecl.Ref(GlobalTypeId(cu, 1))))
+        val kind = TypeDecl.Pointer(TypeDecl.Ref(GlobalTypeId(cu, 1))).resolveBuiltin()
         assertEquals(null, kind)
     }
 }

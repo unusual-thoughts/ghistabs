@@ -1,7 +1,7 @@
 package ghistabs.harvest
 
 import ghistabs.harvest.ContentHasher.Companion.BACK_EDGE_HASH
-import ghistabs.materialize.BuiltinTable
+import ghistabs.materialize.ghidraClassName
 import ghistabs.parse.*
 import java.util.*
 
@@ -141,7 +141,7 @@ abstract class ContentHasher(val hashCache: MutableMap<GlobalTypeId, Int> = muta
 
     companion object {
         // Class-name key is stable across CUs and equal for every stab spelling of the same primitive.
-        private fun TypeDecl<GlobalTypeId>.builtinHash(): Int? = BuiltinTable.canonicalKey(this)?.hashCode()
+        private fun TypeDecl<GlobalTypeId>.builtinHash(): Int? = ghidraClassName()?.hashCode()
 
         private val BACK_EDGE_HASH = Objects.hash("back-edge")
 
