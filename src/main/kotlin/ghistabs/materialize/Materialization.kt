@@ -468,11 +468,7 @@ fun TypeRegistry.materializeAll() {
         // Ref resolved before the winner materializes pulls in that one object, not an
         // empty second copy that would collide with the filled type (`.conflict`).
         for (group in resolver.byCanonicalKey.values) {
-            // Winners are always XRef-targets (Struct/Union/Enum), so the stub always goes into the
-            // DTM up front — in-place fill then lands on the DTM-resident object — and is shared across
-            // the group's member ids so a Ref resolved before the winner materializes pulls in that one.
-            val placeholder = makePlaceholder(group.ast, group.key.category, name = group.key.name).resolveIntoDtm()
-            for (m in group.members) sharePlaceholder(m, placeholder)
+            group.seedPlaceholder()
         }
 
         monitor.initialize(winnerCategory.size.toLong(), "Stabs: materializing types")
@@ -511,8 +507,7 @@ private fun TypeRegistry.registerNamedPrimitiveTypedefs() {
             // `bool:t=int` (4B). Sharing one typedef across all ids would
             // produce wrong field sizes and `bool.conflict` in the DTM.
             for (ast in asts) {
-                val resolved = ast.body.resolveBuiltin() ?: resolveRef(ast.body) ?: continue
-                cacheIfAbsent(ast.id, resolved)
+                cacheIfAbsent(ast.id, ast.body.resolveBuiltin() ?: resolveRef(ast.body))
             }
             // One shared typedef under /stabs (or root for primitives) for
             // DemanglerReplacer to substitute into `/Demangler/*` stubs.
