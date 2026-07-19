@@ -80,27 +80,27 @@ class TypeRegistry(
 
     internal fun cacheIfAbsent(id: GlobalTypeId, dt: DataType): DataType = byId.getOrPut(id) { dt }
 
-    /** Get-or-create the empty cycle-break stub for [ast] under [category]; [materializeAll] fills it. */
-    internal fun seedPlaceholder(ast: TypeAst, category: CategoryPath, reason: String = "fwd-decl"): DataType =
-        placeholders.getOrPut(ast.id) { makePlaceholder(ast, category, reason) }
+    /** Get-or-create the empty cycle-break stub for [this] under [category]; [materializeAll] fills it. */
+    internal fun TypeAst.seedPlaceholder(category: CategoryPath = CATEGORY, reason: String = "fwd-decl"): DataType =
+        placeholders.getOrPut(id) { makePlaceholder(this, category, reason) }
 
     /** Point [id] at an already-built placeholder — the canonical-group fan-out where every member id
      *  shares its winner's in-flight stub. */
     internal fun sharePlaceholder(id: GlobalTypeId, placeholder: DataType): DataType =
         placeholders.getOrPut(id) { placeholder }
 
-    internal fun markXRefStub(dt: DataType): DataType = dt.also { xrefStubs.add(it) }
+    internal fun DataType.markXRefStub(): DataType = apply { xrefStubs.add(this) }
 
-    /** Resolve [dt] into the DTM under the shared conflict handler; returns the DTM-resident instance
-     *  (may differ from [dt]). No id/name bookkeeping — for stubs whose id lands in [byId] later. */
-    internal fun resolveIntoDtm(dt: DataType): DataType = dtm.resolve(dt, conflictHandler)
+    /** Resolve [this] into the DTM under the shared conflict handler; returns the DTM-resident instance
+     *  (may differ from [this]). No id/name bookkeeping — for stubs whose id lands in [byId] later. */
+    internal fun DataType.resolveIntoDtm(): DataType = dtm.resolve(this, conflictHandler)
 
     /**
      * [resolveIntoDtm] + remember. Returns the DTM-resolved instance (may differ). With an [id],
      * caches it under [id] for [dataTypeFor]; id-less, buckets it by name in extrasByName.
      */
     internal fun register(dt: DataType, id: GlobalTypeId? = null): DataType {
-        val resolved = resolveIntoDtm(dt)
+        val resolved = dt.resolveIntoDtm()
         when (id) {
             null -> extrasByName.getOrPut(resolved.name) { LinkedHashSet() }.add(resolved)
             else -> cache(id, resolved)
@@ -126,9 +126,9 @@ class TypeRegistry(
      */
     internal fun getOrMaterialize(id: GlobalTypeId): DataType? =
         byId[id] ?: placeholders[id] ?: harvest.getType(id)?.let { ast ->
-            substitute(ast)?.let { cache(id, it) }
+            ast.substitute()?.let { cache(id, it) }
                 ?: if (ast.body is TypeDecl.Struct) {
-                    seedPlaceholder(ast, CATEGORY)
+                    ast.seedPlaceholder()
                 } else {
                     materializeTopLevel(ast)
                 }
@@ -139,9 +139,9 @@ class TypeRegistry(
      * [resolveBuiltin], or a `__*_type_info_pseudo` RTTI record via [RttiStructs]. These are final types,
      * not cycle-break stubs — callers cache them in [byId] and must never file them under [xrefStubs].
      */
-    internal fun substitute(ast: TypeAst): DataType? = ast.body.resolveBuiltin()
-        ?: rttiStructs.typeInfoLayout(ast.ghidraName)?.also {
-            debug("rtti-pseudo-substituted", "name=${ast.ghidraName}")
+    internal fun TypeAst.substitute(): DataType? = body.resolveBuiltin()
+        ?: rttiStructs.typeInfoLayout(ghidraName)?.also {
+            debug("rtti-pseudo-substituted", "name=$ghidraName")
         }
 
     /** Materialized DataType for [id], authoritative for `(category, name)`. Prefer over `dtm.getDataType`. */
