@@ -362,9 +362,8 @@ fun TypeRegistry.resolveRef(decl: TypeDecl<GlobalTypeId>): DataType? = when (dec
 
     is TypeDecl.InlineDef -> getOrMaterialize(decl.id) ?: resolveRef(decl.body)?.let { cache(decl.id, it) }
 
-    is TypeDecl.Range, is TypeDecl.Complex, is TypeDecl.Float, is TypeDecl.WithSizeAttr, is TypeDecl.Builtin -> {
-        BuiltinTable.resolve(decl)
-    }
+    is TypeDecl.Range, is TypeDecl.Complex, is TypeDecl.Float, is TypeDecl.WithSizeAttr, is TypeDecl.Builtin ->
+        decl.resolveBuiltin()
 
     is TypeDecl.Pointer -> pointerTo(decl.pointee, "pointer-pointee", "(anon)")
 
@@ -517,20 +516,20 @@ private fun TypeRegistry.registerNamedPrimitiveTypedefs() {
             // `bool:t=int` (4B). Sharing one typedef across all ids would
             // produce wrong field sizes and `bool.conflict` in the DTM.
             for (ast in asts) {
-                val resolved = BuiltinTable.resolve(ast.body) ?: resolveRef(ast.body) ?: continue
+                val resolved = ast.body.resolveBuiltin() ?: resolveRef(ast.body) ?: continue
                 cacheIfAbsent(ast.id, resolved)
             }
             // One shared typedef under /stabs (or root for primitives) for
             // DemanglerReplacer to substitute into `/Demangler/*` stubs.
             val firstBody = asts.first().body
-            val typedefTarget = BuiltinTable.resolve(firstBody) ?: resolveRef(firstBody) ?: return@forEach
+            val typedefTarget = firstBody.resolveBuiltin() ?: resolveRef(firstBody) ?: return@forEach
             // §20: when the target already carries this exact name (a `typedef struct {…}
             // Name;` whose anonymous aggregate we named after the typedef, then merged with
             // the named copy), a same-named `/stabs` typedef is just a second DataType with
             // the identical name. Ghidra resolves a struct/enum's display name across all
             // same-named DataTypes, so the duplicate destabilises it — the named type suffices.
             if (typedefTarget.name == ghidraName) return@forEach
-            val category = if (BuiltinTable.resolve(firstBody) != null) {
+            val category = if (firstBody.resolveBuiltin() != null) {
                 CategoryPath.ROOT
             } else {
                 CATEGORY
