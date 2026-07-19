@@ -7,7 +7,7 @@ import org.junit.jupiter.api.Test
 
 open class TestHasher(val asts: Map<GlobalTypeId, TypeAst>) : ContentHasher() {
     override fun byId(id: GlobalTypeId): TypeAst? = asts[id]
-    override fun byXRef(xref: TypeDecl.XRef<GlobalTypeId>): TypeAst? = null
+    override fun byXRef(xref: TypeDecl.XRef<GlobalTypeId>, silent: Boolean): TypeAst? = null
 }
 
 /**
@@ -293,7 +293,7 @@ class ContentHashTest {
         val o = object : TestHasher(
             store,
         ) {
-            override fun byXRef(xref: TypeDecl.XRef<GlobalTypeId>) =
+            override fun byXRef(xref: TypeDecl.XRef<GlobalTypeId>, silent: Boolean): TypeAst? =
                 store.values.firstOrNull { it.name == xref.tagName }
         }
 
