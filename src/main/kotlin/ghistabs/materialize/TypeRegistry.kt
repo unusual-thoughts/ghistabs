@@ -136,10 +136,10 @@ class TypeRegistry(
 
     /**
      * Authoritative, fully-resolved type for an ast gcc references but never defines: a primitive via
-     * [BuiltinTable], or a `__*_type_info_pseudo` RTTI record via [RttiStructs]. These are final types,
+     * [resolveBuiltin], or a `__*_type_info_pseudo` RTTI record via [RttiStructs]. These are final types,
      * not cycle-break stubs — callers cache them in [byId] and must never file them under [xrefStubs].
      */
-    internal fun substitute(ast: TypeAst): DataType? = BuiltinTable.resolve(ast.body)
+    internal fun substitute(ast: TypeAst): DataType? = ast.body.resolveBuiltin()
         ?: rttiStructs.typeInfoLayout(ast.ghidraName)?.also {
             debug("rtti-pseudo-substituted", "name=${ast.ghidraName}")
         }

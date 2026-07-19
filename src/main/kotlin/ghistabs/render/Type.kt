@@ -5,8 +5,8 @@ import ghidra.program.model.data.CharDataType
 import ghidra.program.model.data.SignedByteDataType
 import ghidra.program.model.listing.Program
 import ghistabs.harvest.Harvest
-import ghistabs.materialize.BuiltinTable
 import ghistabs.materialize.TemplateNameShortener
+import ghistabs.materialize.resolveBuiltin
 import ghistabs.parse.Access
 import ghistabs.parse.AggrKind
 import ghistabs.parse.GlobalTypeId
@@ -14,7 +14,7 @@ import ghistabs.parse.TypeDecl
 
 /**
  * Best-effort C-style rendering of a [TypeDecl]. Primitives go
- * through [BuiltinTable] so they come out as `int` / `uchar` /
+ * through [resolveBuiltin] so they come out as `int` / `uchar` /
  * `double` etc; named composite types are looked up by id in
  * [Harvest.typeAsts]. Cycles (gcc's recursive
  * `std::basic_string<…>::operator=` taking `std::string&`) are broken
@@ -62,7 +62,7 @@ fun TypeDecl<GlobalTypeId>.render(
     is TypeDecl.Float,
     is TypeDecl.Complex,
     is TypeDecl.WithSizeAttr,
-    -> BuiltinTable.resolve(this)?.name ?: this::class.simpleName?.lowercase() ?: "?"
+    -> resolveBuiltin()?.name ?: this::class.simpleName?.lowercase() ?: "?"
 
     is TypeDecl.XRef -> "${kind.cxxKeyword()} ${shortener?.shortenedOrNull(tagName) ?: tagName}"
 
@@ -133,7 +133,7 @@ private fun TypeDecl<GlobalTypeId>.isCharType(harvest: Harvest): Boolean = when 
     is TypeDecl.Ref -> harvest.typeAsts[id]?.body?.isCharType(harvest) ?: false
     // Any 1-byte integer element: cygwin's named `char` resolves through its Range body to
     // Byte, not Char. The printable-run guard in stringLiteralAt keeps binary byte[] as hex.
-    else -> when (BuiltinTable.resolve(this)) {
+    else -> when (resolveBuiltin()) {
         is CharDataType, is ByteDataType, is SignedByteDataType -> true
         else -> false
     }
