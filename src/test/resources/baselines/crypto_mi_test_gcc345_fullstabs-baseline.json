@@ -1,11 +1,11 @@
 {
     "counters": {
         "apply-error": {
-            "min": 24,
+            "min": 0,
             "max": 24
         },
         "apply-error-invalid-input": {
-            "min": 24,
+            "min": 0,
             "max": 24
         },
         "base-empty-ebo": {
@@ -13,8 +13,8 @@
             "max": 38
         },
         "canonical-content-merged": {
-            "min": 1,
-            "max": 1
+            "min": 25,
+            "max": 25
         },
         "canonical-key-merged": {
             "min": 1414,
@@ -23,10 +23,6 @@
         "canonical-key-multi-hash": {
             "min": 106,
             "max": 106
-        },
-        "canonical-scope-collision": {
-            "min": 2,
-            "max": 2
         },
         "class-not-struct": {
             "min": 4,
@@ -37,8 +33,8 @@
             "max": 1064
         },
         "degraded-base-synthesized": {
-            "min": 8,
-            "max": 8
+            "min": 7,
+            "max": 7
         },
         "degraded-field-dropped": {
             "min": 5,
@@ -73,12 +69,12 @@
             "max": 11
         },
         "degraded-struct-mostly-undefined": {
-            "min": 55,
-            "max": 55
+            "min": 56,
+            "max": 56
         },
         "degraded-struct-truncated": {
-            "min": 12,
-            "max": 12
+            "min": 11,
+            "max": 11
         },
         "degraded-vtable-failed": {
             "min": 68,
@@ -277,8 +273,8 @@
             "max": 48213
         },
         "inheritance-applied": {
-            "min": 602,
-            "max": 602
+            "min": 601,
+            "max": 601
         },
         "inheritance-pseudo-fields-promoted": {
             "min": 1,
@@ -305,8 +301,8 @@
             "max": 601
         },
         "placeholder-created": {
-            "min": 25949,
-            "max": 25949
+            "min": 25916,
+            "max": 25916
         },
         "pointee-typed": {
             "min": 16,
@@ -332,21 +328,13 @@
             "min": 152,
             "max": 152
         },
-        "stab-section-overlaid": {
-            "min": 133162,
-            "max": 133162
-        },
-        "stab-string-create-failed": {
-            "min": 2,
-            "max": 2
-        },
         "stab-value-absolute": {
-            "min": 19447,
-            "max": 19447
+            "min": 16,
+            "max": 16
         },
         "stab-value-func-relative": {
-            "min": 91380,
-            "max": 91380
+            "min": 43487,
+            "max": 43487
         },
         "text-data-no-coverage": {
             "min": 82,
@@ -397,8 +385,8 @@
             "max": 36
         },
         "xref-base-tag-resolved": {
-            "min": 73,
-            "max": 73
+            "min": 77,
+            "max": 77
         },
         "xref-undefined": {
             "min": 68,

@@ -53,8 +53,8 @@
             "max": 4
         },
         "degraded-struct-mostly-undefined": {
-            "min": 72,
-            "max": 72
+            "min": 73,
+            "max": 73
         },
         "degraded-struct-truncated": {
             "min": 17,
@@ -264,17 +264,9 @@
             "min": 274,
             "max": 274
         },
-        "stab-section-overlaid": {
-            "min": 121557,
-            "max": 121557
-        },
-        "stab-value-absolute": {
-            "min": 17929,
-            "max": 17929
-        },
         "stab-value-func-relative": {
-            "min": 74834,
-            "max": 74834
+            "min": 35846,
+            "max": 35846
         },
         "text-data-no-coverage": {
             "min": 531,

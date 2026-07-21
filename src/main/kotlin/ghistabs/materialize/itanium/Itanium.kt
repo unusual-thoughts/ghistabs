@@ -7,7 +7,6 @@ import ghidra.program.model.data.DataType
 import ghidra.program.model.data.IntegerDataType
 import ghidra.program.model.data.LongLongDataType
 import ghistabs.demangle
-import ghistabs.materialize.itanium.Itanium.decodesToClass
 import ghistabs.parse.splitQualified
 
 /**
@@ -74,7 +73,7 @@ object Itanium {
         }
     }
 
-    /** Closed-form `_ZTV` candidates for [className]. Templates have no closed form — use [decodesToClass]. */
+    /** Closed-form `_ZTV` candidates for [className]. Templates have no closed form — use [vtableClassOf]. */
     fun ztvCandidates(className: String): List<String> {
         val mangled = mangleClassName(className)
         return listOf(
@@ -85,24 +84,28 @@ object Itanium {
         )
     }
 
-    /** True if [symbolName] demangles to a vtable for [className]. Handles templated `_ZTV…` names. */
-    fun decodesToClass(symbolName: String, className: String): Boolean {
-        if (!looksLikeZtv(symbolName)) return false
-        val obj = demangle(symbolName) ?: return false
-        return demangledMatchesClass(obj, className)
+    /** The qualified class name a `_ZTV<class>` [symbolName] names (e.g. `std::basic_ios<char,…>`), or
+     *  null if it isn't a vtable. Lets a caller demangle the symbol table once into a class→address index
+     *  instead of re-scanning + re-demangling every symbol per class ([ClassBuilder.resolveVtableAddress]). */
+    fun vtableClassOf(symbolName: String): String? {
+        if (!looksLikeZtv(symbolName)) return null
+        return demangle(symbolName)?.let(::demangledVtableClass)
     }
 
     /** String-level pre-filter so we don't pay the demangler cost on every label. */
     internal fun looksLikeZtv(symbolName: String) = symbolName.trimStart('_').startsWith("ZTV")
 
     /** Pure inspection of a demangled object — extracted for unit testing without a real `Program`. */
-    internal fun demangledMatchesClass(obj: DemangledObject, className: String): Boolean {
-        if (obj !is DemangledAddressTable || obj.name != DEMANGLED_VTABLE) return false
-        val chain = generateSequence(obj.namespace) { it.namespace }
+    internal fun demangledMatchesClass(obj: DemangledObject, className: String) = demangledVtableClass(obj) == className
+
+    /** Qualified class name of a demangled vtable object (`::`-joined namespace chain), or null if [obj]
+     *  isn't a vtable address-table. */
+    internal fun demangledVtableClass(obj: DemangledObject): String? {
+        if (obj !is DemangledAddressTable || obj.name != DEMANGLED_VTABLE) return null
+        return generateSequence(obj.namespace) { it.namespace }
             .map { it.name }
             .toList()
             .asReversed()
             .joinToString("::")
-        return chain == className
     }
 }
