@@ -16,6 +16,10 @@ import ghistabs.runTransaction
  * [SymbolApplier] (apply); this class only sequences them and tallies the result.
  */
 class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx {
+    /** The materialized state, set once [runOnRecords] completes; null after a no-stabs [run]. */
+    internal var artifacts: ImportArtifacts? = null
+        private set
+
     fun run(): PassResult {
         val reader = StabReader.fromProgram(ctx.program)
         if (reader == null) {
@@ -61,10 +65,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
         typeRegistry.reportSurvivingPlaceholders()
         typeRegistry.reportConflictDelta()
         ctx.diagnostics.writeSummary(ctx.terminal)
-        ctx.records = stabs.records
-        ctx.harvest = harvest
-        ctx.typeRegistry = typeRegistry
-        ctx.typeResolver = typeResolver
+        artifacts = ImportArtifacts(typeRegistry, typeResolver, harvest, stabs.records)
 
         return PassResult(
             recordsRead = stabs.totalRecordCount,

@@ -14,10 +14,7 @@ import ghistabs.StabsOptions.Companion.markOverlayDone
 import ghistabs.StabsOptions.Companion.markStabsDone
 import ghistabs.StabsOptions.Companion.registerStabs
 import ghistabs.diagnose.*
-import ghistabs.importer.ImportContext
-import ghistabs.importer.StabSectionOverlay
-import ghistabs.importer.StabsImporter
-import ghistabs.importer.StaticContexts
+import ghistabs.importer.*
 
 /**
  * Imports STABS debug info (.stab/.stabstr) into Ghidra: types, function signatures,
@@ -56,18 +53,22 @@ class StabsAnalyzer :
         msg ?: return false
         monitor ?: return false
         val options = StabsOptions(program)
-        val ext = StaticContexts.get(program)
+        val probe = ImportProbe.get(program)
 
-        ImportContext(
+        val ctx = ImportContext(
             program,
             monitor,
             options,
             // Bookmark every addressed diagnostic (unconditional); MessageLog gets output at/above minLevel.
-            // Tee the emitting terminal onto ext.log (raw CapturingSink) so tests can inspect
-            // output; counting is the shared ext.diagnostics accumulator, tee'd in ImportContext.
-            terminal = TeeSink(BookmarkSink(program), MessageLogSink(msg, options.minLogLevel), ext?.terminal),
-            diagnostics = ext?.diagnostics ?: StabsDiagnostics(),
-        ).import()
+            // Tee the emitting terminal onto the probe's raw CapturingSink so tests can inspect output;
+            // counting is the shared probe.diagnostics accumulator, tee'd in ImportContext.
+            terminal = TeeSink(BookmarkSink(program), MessageLogSink(msg, options.minLogLevel), probe?.terminal),
+            diagnostics = probe?.diagnostics ?: StabsDiagnostics(),
+        )
+        // A test installed `probe` to read what the analyzer built (registry dump, DemanglerReplacer);
+        // hand back the materialized artifacts. Null on a re-fired pass (import short-circuits on
+        // isStabsDone) — don't clobber. No-op in production (probe == null).
+        ctx.import()?.let { probe?.artifacts = it }
 
         return true
     }
@@ -76,17 +77,18 @@ class StabsAnalyzer :
         const val NAME = "Stabs Importer"
 
         @JvmStatic
-        fun ImportContext<*>.import() {
-            if (program.isStabsDone) return
+        fun ImportContext<*>.import(): ImportArtifacts? {
+            if (program.isStabsDone) return null
 
             if (options.overlaySection && !program.isOverlayDone) {
                 debug("stab-section-overlaid", count = StabSectionOverlay(this).apply().toLong())
                 program.markOverlayDone()
             }
 
-            val result = StabsImporter(this).run()
-            log("done", "import complete: $result")
+            val importer = StabsImporter(this)
+            log("done", "import complete: ${importer.run()}")
             program.markStabsDone(true)
+            return importer.artifacts
         }
     }
 }

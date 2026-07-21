@@ -9,7 +9,6 @@ import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.StabsDiagnostics
 import ghistabs.diagnose.TeeSink
 import org.jetbrains.annotations.TestOnly
-import java.util.*
 
 data class PassResult(
     val recordsRead: Int = 0,
@@ -38,47 +37,5 @@ class ImportContext<Terminal : DiagnosticSink>(
 ) : DiagnosticSink by TeeSink(diagnostics, terminal) {
     val dtm: DataTypeManager = program.dataTypeManager
     val symtab: SymbolTable = program.symbolTable
-    val resolver: AddressResolver = ProgramAddressResolver(this)
-
-    /**
-     * Populated at end-of-import so tests can run [DemanglerReplacer] against the same
-     * `byCanonicalKey` indices the analyzer used — avoids a second `materializeAll` that
-     * would race `.conflict` artifacts under `@Execution(CONCURRENT)`. Null in production.
-     */
-    @get:TestOnly
-    var typeRegistry: ghistabs.materialize.TypeRegistry? = null
-        internal set
-
-    /** Companion to [typeRegistry] for test introspection (canonical-key index, divergent collisions). */
-    @get:TestOnly
-    var typeResolver: ghistabs.harvest.TypeResolver? = null
-        internal set
-
-    /** The parsed records and the harvest, cached at end-of-import so the record/harvest dumps reuse
-     * them instead of re-reading and re-harvesting (companions to [typeRegistry]/[typeResolver]). */
-    @get:TestOnly
-    var records: List<ghistabs.parse.StabRecord>? = null
-        internal set
-
-    @get:TestOnly
-    var harvest: ghistabs.harvest.Harvest? = null
-        internal set
-}
-
-/** Test-only side-channel for [ghistabs.StabsAnalyzer.added] to tee output into [ImportContext.log]. */
-object StaticContexts {
-    private val map = WeakHashMap<Program, ImportContext<*>>()
-
-    @Synchronized
-    fun install(ctx: ImportContext<*>) {
-        map[ctx.program] = ctx
-    }
-
-    @Synchronized
-    fun clear(program: Program) {
-        map.remove(program)
-    }
-
-    @Synchronized
-    fun get(program: Program): ImportContext<*>? = map[program]
+    val resolver: AddressResolver = ProgramAddressResolver(program, this)
 }

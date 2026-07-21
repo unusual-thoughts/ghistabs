@@ -4,6 +4,7 @@ import ghidra.app.util.opinion.ElfLoader
 import ghidra.program.model.address.Address
 import ghidra.program.model.address.AddressSpace
 import ghidra.program.model.address.GenericAddressSpace
+import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.SourceType
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.DummySink
@@ -61,10 +62,8 @@ open class StabOnlyAddressResolver : AddressResolver {
  * Address resolver that creates IMPORTED labels at stab-derived addresses.
  * **Caller must hold a Program transaction** — [recordFromStab] calls `createLabel`.
  */
-class ProgramAddressResolver(private val ctx: ImportContext<*>) : StabOnlyAddressResolver() {
-    override val sink get() = ctx
-    private val program get() = ctx.program
-
+class ProgramAddressResolver(private val program: Program, override val sink: DiagnosticSink) :
+    StabOnlyAddressResolver() {
     override fun recordFromStab(name: String, addr: Address): Boolean {
         if (super.recordFromStab(name, addr)) {
             val present = program.symbolTable.getSymbols(addr).any { it.name == name }

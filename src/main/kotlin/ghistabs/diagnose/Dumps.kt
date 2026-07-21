@@ -6,7 +6,7 @@ import ghidra.program.model.data.CategoryPath
 import ghidra.program.model.data.DataType
 import ghistabs.harvest.GhidraKey
 import ghistabs.harvest.foldSourcePaths
-import ghistabs.importer.ImportContext
+import ghistabs.importer.ImportArtifacts
 import ghistabs.materialize.compromisedTypes
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.IdInterface
@@ -41,11 +41,9 @@ val dumpJson by lazy {
  * spot misattributions visually without relying on individual degradation events.
  */
 @OptIn(ExperimentalSerializationApi::class)
-fun ImportContext<*>.writeRegistryDump(outFile: File) = registryDump()?.let { dump ->
+fun ImportArtifacts.writeRegistryDump(outFile: File) {
     outFile.parentFile.mkdirs()
-    outFile.outputStream().use { dumpJson.encodeToStream(dump, it) }
-} ?: run {
-    err("dump-skipped", "registry dump skipped: import populated no registry (no stabs?)")
+    outFile.outputStream().use { dumpJson.encodeToStream(registryDump(), it) }
 }
 
 @Serializable
@@ -117,16 +115,12 @@ private data class RegistryDump(
     )
 }
 
-private fun ImportContext<*>.registryDump(): RegistryDump? {
-    val registry = typeRegistry ?: return null
-    val resolver = typeResolver ?: return null
-    val harvest = harvest ?: return null
-
-    val compromised = registry.compromisedTypes().mapValues { (_, dts) ->
+private fun ImportArtifacts.registryDump(): RegistryDump {
+    val compromised = typeRegistry.compromisedTypes().mapValues { (_, dts) ->
         dts.sortedBy { it.pathName }
             .map { RegistryDump.Type(it) }
     }
-    val canonicalGroups = resolver.byCanonicalKey.entries
+    val canonicalGroups = typeResolver.byCanonicalKey.entries
         .sortedBy { it.key.toString() }
         .map { (key, g) ->
             RegistryDump.Group(
@@ -142,8 +136,8 @@ private fun ImportContext<*>.registryDump(): RegistryDump? {
     // and DataTypes sharing a simple name (the `.conflict` source in the decomp).
     // Group by content hash (equality only — the raw value is a JVM-run-nondeterministic
     // `Objects.hash` of enum members, so it's used to bucket but never stored/sorted on).
-    val hashCollisions = resolver.byCanonicalKey.values
-        .groupBy { resolver.contentHash(it.ast.body) }
+    val hashCollisions = typeResolver.byCanonicalKey.values
+        .groupBy { typeResolver.contentHash(it.ast.body) }
         .filterValues { it.size > 1 }
         .map { (_, gs) ->
             RegistryDump.HashCollision(
@@ -152,7 +146,7 @@ private fun ImportContext<*>.registryDump(): RegistryDump? {
             )
         }
         .sortedBy { it.distinctNames.joinToString() }
-    val duplicateNamed = registry.allCreatedDataTypes
+    val duplicateNamed = typeRegistry.allCreatedDataTypes
         .groupBy { it.name.substringBefore(".conflict") }
         .filterValues { it.size > 1 }
         .mapValues { (_, dts) -> dts.map { it.pathName }.sorted() }
@@ -162,9 +156,9 @@ private fun ImportContext<*>.registryDump(): RegistryDump? {
     // `duplicateNamed` above, so keep the first deterministically here rather than `single()` (which
     // threw on duplicate-heavy fixtures and aborted the whole AFTER-mode dump).
     val allTypes =
-        registry.allCreatedDataTypes.groupBy { GhidraKey(it.categoryPath, it.name) }
+        typeRegistry.allCreatedDataTypes.groupBy { GhidraKey(it.categoryPath, it.name) }
             .mapValues { RegistryDump.Type(it.value.first()) }
-    val divergent = resolver.divergentCollisions.entries
+    val divergent = typeResolver.divergentCollisions.entries
         .sortedBy { it.key.toString() }
         .map { (id, byName) ->
             RegistryDump.IdCollision(
