@@ -17,7 +17,7 @@ import ghistabs.diagnose.Level
 import ghistabs.diagnose.StabsDiagnostics
 import ghistabs.disableWindowsResourceAnalyzer
 import ghistabs.importer.ImportContext
-import ghistabs.importer.StaticContexts
+import ghistabs.importer.ImportProbe
 import ghistabs.runTransaction
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
@@ -70,7 +70,7 @@ class StringTypeProbe : AbstractGhidraHeadlessIntegrationTest() {
                     CapturingSink(),
                     StabsDiagnostics(),
                 )
-                StaticContexts.install(ctx)
+                ImportProbe.install(ctx)
                 val options = program.getOptions(ghidra.program.model.listing.Program.ANALYSIS_PROPERTIES)
                 program.runTransaction("disable-stabs-analyzer") {
                     options.setBoolean(StabsAnalyzer().name, false)

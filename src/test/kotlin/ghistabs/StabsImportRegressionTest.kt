@@ -19,8 +19,9 @@ import ghistabs.diagnose.defaultContext
 import ghistabs.diagnose.dumpJson
 import ghistabs.diagnose.writeRegistryDump
 import ghistabs.harvest.Harvester
+import ghistabs.importer.ImportArtifacts
 import ghistabs.importer.ImportContext
-import ghistabs.importer.StaticContexts
+import ghistabs.importer.ImportProbe
 import ghistabs.importer.stabAddress
 import ghistabs.materialize.itanium.Itanium
 import ghistabs.parse.*
@@ -166,6 +167,7 @@ class StabsImportRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
 
     private lateinit var loadResults: LoadResults<Program>
     private lateinit var context: ImportContext<CapturingSink>
+    private var artifacts: ImportArtifacts? = null
     private val program get() = context.program
 
     @BeforeParameterizedClassInvocation
@@ -212,7 +214,7 @@ class StabsImportRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
                     // output to that sink in addition to Ghidra's truncating MessageLog,
                     // so we get the full, untruncated log here while autoanalysis still
                     // sees its own logs in MessageLog.
-                    StaticContexts.install(context)
+                    val probe = ImportProbe.install(context)
 
                     // BYTE_ANALYZER auto-fires on byte changes; on a freshly-
                     // loaded program nothing has "changed" since the loader put
@@ -222,6 +224,7 @@ class StabsImportRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
                     options.setBoolean(ourName, true)
                     mgr.scheduleOneTimeAnalysis(discovered, program.memory)
                     runAutoAnalysis(mgr, monitor)
+                    artifacts = probe.artifacts
                 }
 
                 Mode.AFTER -> {
@@ -235,7 +238,7 @@ class StabsImportRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
                     mgr.initializeOptions()
                     runAutoAnalysis(mgr, monitor)
                     program.runTransaction("stabs-analyze") {
-                        context.import()
+                        artifacts = context.import()
                     }
                 }
             }
@@ -244,7 +247,8 @@ class StabsImportRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
             // is appended for parity with Ghidra's own view, even though it
             // truncates at ~500 lines.
             logFile.writeText(context.terminal.dedupedOutput() + "\n--- MessageLog ---\n" + log.toString())
-            context.writeRegistryDump(registryDumpFile)
+            // Stripped/no-stabs fixtures produce no artifacts; nothing to dump.
+            artifacts?.writeRegistryDump(registryDumpFile)
             writeDegradationDump()
         } catch (e: org.opentest4j.TestAbortedException) {
             throw e // the load-failure skip above — propagate as a skip, not a failure
@@ -289,7 +293,7 @@ class StabsImportRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
 
     @AfterParameterizedClassInvocation
     fun tearDown() {
-        StaticContexts.clear(program)
+        ImportProbe.clear(program)
         program.release(this)
         loadResults.close()
     }
@@ -757,8 +761,8 @@ class StabsImportRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
     @Test
     fun demanglerStringReplacedAfterStubInjection() {
         assumeTrue(binaryName == "xapasmcsr.exe" || binaryName == "appquery.exe")
-        val typeRegistry = context.typeRegistry
-        assumeTrue(typeRegistry != null, "import didn't populate typeRegistry on ctx")
+        val typeRegistry = artifacts?.typeRegistry
+        assumeTrue(typeRegistry != null, "import didn't populate artifacts")
         val demanglerCat = CategoryPath("/Demangler/std")
         program.runTransaction("inject-demangler-stub") {
             program.dataTypeManager.createCategory(demanglerCat)
@@ -816,8 +820,8 @@ class StabsImportRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
     fun voidSelfRefNotMaterialized() {
         // Enumerate every void self-Ref ast in the harvest (body = Ref(self.id)).
         // For each one assert no Structure was created at its category+name.
-        // Reuse setUp's cached harvest; re-harvest only in CONCURRENT mode (analyzer's own context).
-        val harvest = context.harvest ?: program.runTransaction("void-self-ref-harvest") {
+        // Reuse setUp's harvest; re-harvest only when the import produced none (no stabs).
+        val harvest = artifacts?.harvest ?: program.runTransaction("void-self-ref-harvest") {
             Harvester(context).harvest(StabReader.fromProgram(program)!!.readAll().records)
         }
         val voidAsts = harvest.typeAsts.values.filter { ast ->
@@ -1114,13 +1118,12 @@ class StabsImportRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
     @OptIn(ExperimentalSerializationApi::class)
     @Test
     fun harvestTest() {
-        // Reuse the records + harvest setUp's import cached on `context`; re-read / re-harvest only in
-        // CONCURRENT mode, where the analyzer imports into its own context and leaves ours unpopulated.
+        // Reuse setUp's import artifacts; re-read / re-harvest only when it produced none (no stabs).
         // (Harvesting writes labels via AddressResolver.recordFromStab, so the fallback needs a transaction.)
-        val records = context.records ?: StabReader.fromProgram(program)!!.readAll().records
+        val records = artifacts?.records ?: StabReader.fromProgram(program)!!.readAll().records
         dumpJson.encodeToStream(records, recordsFile.outputStream())
 
-        val harvest = context.harvest
+        val harvest = artifacts?.harvest
             ?: program.runTransaction("stabs-harvest-dump") { Harvester(context).harvest(records) }
         dumpJson.encodeToStream(harvest, harvestFile.outputStream())
 

@@ -14,7 +14,7 @@ import ghistabs.diagnose.Level
 import ghistabs.diagnose.StabsDiagnostics
 import ghistabs.disableWindowsResourceAnalyzer
 import ghistabs.importer.ImportContext
-import ghistabs.importer.StaticContexts
+import ghistabs.importer.ImportProbe
 import ghistabs.runTransaction
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Assumptions.assumeTrue
@@ -66,7 +66,7 @@ class StringDedupIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                     CapturingSink(),
                     StabsDiagnostics(),
                 )
-                StaticContexts.install(ctx)
+                ImportProbe.install(ctx)
 
                 // CONCURRENT: schedule our analyzer for the next pass so it runs at LOW_PRIORITY
                 // alongside Ghidra's demangler (which creates the `/std/string` class struct).
