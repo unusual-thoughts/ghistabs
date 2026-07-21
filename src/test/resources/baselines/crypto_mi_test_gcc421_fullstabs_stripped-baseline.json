@@ -32,10 +32,6 @@
             "min": 1775,
             "max": 1775
         },
-        "degraded-base-layout-failed": {
-            "min": 1,
-            "max": 1
-        },
         "degraded-base-synthesized": {
             "min": 17,
             "max": 17
@@ -93,6 +89,10 @@
             "max": 155
         },
         "desc-dropped-undf": {
+            "min": 1,
+            "max": 1
+        },
+        "done": {
             "min": 1,
             "max": 1
         },
@@ -273,12 +273,8 @@
             "max": 92230
         },
         "inheritance-applied": {
-            "min": 983,
-            "max": 983
-        },
-        "inheritance-failed": {
-            "min": 1,
-            "max": 1
+            "min": 984,
+            "max": 984
         },
         "inheritance-pseudo-fields-promoted": {
             "min": 1,
@@ -301,8 +297,8 @@
             "max": 105
         },
         "placeholder-created": {
-            "min": 52349,
-            "max": 52349
+            "min": 52354,
+            "max": 52354
         },
         "pointee-typed": {
             "min": 99,
@@ -317,8 +313,8 @@
             "max": 274
         },
         "rtti-pseudo-substituted": {
-            "min": 5,
-            "max": 5
+            "min": 37,
+            "max": 37
         },
         "stab-section-overlaid": {
             "min": 177877,
@@ -357,8 +353,8 @@
             "max": 113
         },
         "vfptr-normalized": {
-            "min": 60,
-            "max": 60
+            "min": 61,
+            "max": 61
         },
         "vtable-failed": {
             "min": 121,
@@ -389,5 +385,5 @@
             "max": 30
         }
     },
-    "source": "crypto_mi_test_gcc421_fullstabs_stripped \u2014 generated from per-mode regression logs"
+    "source": "crypto_mi_test_gcc421_fullstabs_stripped.exe - generated from snapshotCounters()"
 }

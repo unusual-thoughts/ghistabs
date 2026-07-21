@@ -45,12 +45,12 @@
             "max": 11
         },
         "demangle-applied": {
-            "min": 627,
-            "max": 627
+            "min": 584,
+            "max": 584
         },
         "demangle-attempted": {
-            "min": 3508,
-            "max": 3508
+            "min": 3465,
+            "max": 3465
         },
         "demangler-skip-no-replacement": {
             "min": 44,
@@ -61,6 +61,10 @@
             "max": 5
         },
         "desc-dropped-undf": {
+            "min": 1,
+            "max": 1
+        },
+        "done": {
             "min": 1,
             "max": 1
         },
@@ -225,8 +229,8 @@
             "max": 10
         },
         "placeholder-created": {
-            "min": 667,
-            "max": 667
+            "min": 668,
+            "max": 668
         },
         "pointee-typed": {
             "min": 2,
@@ -235,10 +239,6 @@
         "replaced-demangler": {
             "min": 117,
             "max": 117
-        },
-        "rtti-pseudo-substituted": {
-            "min": 1,
-            "max": 1
         },
         "stab-section-overlaid": {
             "min": 6485,
@@ -277,5 +277,5 @@
             "max": 60
         }
     },
-    "source": "xmltest_gcc421 \u2014 generated from per-mode regression logs"
+    "source": "xmltest_gcc421.exe - generated from snapshotCounters()"
 }

@@ -1,13 +1,5 @@
 {
     "counters": {
-        "apply-error": {
-            "min": 7,
-            "max": 7
-        },
-        "apply-error-duplicate-name": {
-            "min": 7,
-            "max": 7
-        },
         "base-empty-ebo": {
             "min": 12,
             "max": 12
@@ -69,18 +61,22 @@
             "max": 61
         },
         "demangle-applied": {
-            "min": 2307,
-            "max": 2307
+            "min": 2187,
+            "max": 2187
         },
         "demangle-attempted": {
-            "min": 4438,
-            "max": 4438
+            "min": 4318,
+            "max": 4318
         },
         "demangler-skip-no-replacement": {
             "min": 24,
             "max": 24
         },
         "desc-dropped-undf": {
+            "min": 1,
+            "max": 1
+        },
+        "done": {
             "min": 1,
             "max": 1
         },
@@ -377,5 +373,5 @@
             "max": 40
         }
     },
-    "source": "xmltest_gcc345_fullstabs \u2014 generated from per-mode regression logs"
+    "source": "xmltest_gcc345_fullstabs.exe - generated from snapshotCounters()"
 }
