@@ -24,10 +24,8 @@ import ghistabs.StabsAnalyzer
 import ghistabs.StabsAnalyzer.Companion.import
 import ghistabs.StabsOptions
 import ghistabs.diagnose.*
-import ghistabs.harvest.Harvester
-import ghistabs.harvest.TypeResolver
+import ghistabs.importer.ImportArtifacts
 import ghistabs.importer.ImportContext
-import ghistabs.parse.StabReader
 import ghistabs.render.Mode
 import ghistabs.render.Renderer
 import ghistabs.runTransaction
@@ -121,13 +119,13 @@ private abstract class RenderCommand(name: String, help: String) : CliktCommand(
             ProgramLoader.builder().source(binary).compiler("gcc").log(msgLog).monitor(monitor).load().use { results ->
                 val program = results.getPrimaryDomainObject(consumer)
                 try {
-                    autoAnalyze(program, monitor)
                     val ctx = ImportContext(program, monitor, options, StreamSink(logLevel, out), StabsDiagnostics())
-                    program.runTransaction("stabs-cli-import") { ctx.import() }
+                    ctx.autoAnalyze()
+                    val artifacts = program.runTransaction("stabs-cli-import") { ctx.import() }
                     msgLog.toString().takeIf { it.isNotBlank() }?.let { out.append("--- loader MessageLog ---\n$it\n") }
 
-                    writeDumps(ctx)
-                    render(program, ctx)
+                    ctx.writeDumps(artifacts)
+                    ctx.render(artifacts)
                 } finally {
                     program.release(consumer)
                 }
@@ -144,7 +142,7 @@ private abstract class RenderCommand(name: String, help: String) : CliktCommand(
     // the GUI/plugin workflow more faithfully, but it builds its own private context, leaving those
     // caches unreachable. Ordering holds either way: full autoanalysis runs the demangler (~897) before
     // our import, exactly as StabsAnalyzer's LOW_PRIORITY guarantees in the analyzer path.
-    private fun autoAnalyze(program: Program, monitor: TaskMonitor) {
+    private fun ImportContext<*>.autoAnalyze() {
         val mgr = AutoAnalysisManager.getAnalysisManager(program)
         program.runTransaction("cli-disable-stabs-analyzer") {
             program.getOptions(Program.ANALYSIS_PROPERTIES).setBoolean(StabsAnalyzer.NAME, false)
@@ -157,24 +155,24 @@ private abstract class RenderCommand(name: String, help: String) : CliktCommand(
         }
     }
 
-    private fun writeDumps(ctx: ImportContext<*>) {
+    private fun ImportContext<*>.writeDumps(artifacts: ImportArtifacts?) {
         recordsJson?.let { f ->
-            ctx.records?.let { records ->
+            artifacts?.records?.let { records ->
                 f.parentFile?.mkdirs()
                 f.writeText(dumpJson.encodeToString(records))
             }
         }
         harvestJson?.let { f ->
-            ctx.harvest?.let { harvest ->
+            artifacts?.harvest?.let { harvest ->
                 f.parentFile?.mkdirs()
                 f.writeText(dumpJson.encodeToString(harvest))
             }
         }
         registryJson?.let { f ->
-            ctx.writeRegistryDump(f)
+            artifacts?.writeRegistryDump(f)
         }
         degradationLog?.let { f ->
-            val byCategory = ctx.diagnostics.snapshotDegradations()
+            val byCategory = diagnostics.snapshotDegradations()
                 .groupBy { it.category }.toList().sortedByDescending { it.second.size }
             f.parentFile?.mkdirs()
             f.writeText(
@@ -191,13 +189,9 @@ private abstract class RenderCommand(name: String, help: String) : CliktCommand(
         }
     }
 
-    private fun render(program: Program, ctx: ImportContext<*>) {
-        val reader = StabReader.fromProgram(program) ?: run {
-            echo("no .stab section; nothing to render", err = true)
-            return
-        }
-        val harvest = program.runTransaction("cli-render-harvest") { Harvester(ctx).harvest(reader.readAll().records) }
-        Renderer(TypeResolver(harvest, foldSources, ctx), program, mode, ctx.resolver).use { renderer ->
+    private fun ImportContext<*>.render(artifacts: ImportArtifacts?) {
+        artifacts ?: return
+        Renderer(artifacts.typeResolver, program, mode, resolver).use { renderer ->
             val written = renderer.renderAll(outDir)
             echo("rendered ${renderer.sources.size} sources -> $written files in $outDir")
         }
