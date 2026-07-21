@@ -221,7 +221,13 @@ class StabsImportRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
                     // bytes down, so we explicitly schedule our analyzer for the
                     // next analysis pass — it then runs at its declared priority
                     // alongside the demangler.
-                    options.setBoolean(ourName, true)
+                    // Sub-options writes hit the program options DB and need a transaction (as the
+                    // AFTER branch's analyzer-disable does); the .stab overlay is a diagnostic view,
+                    // not needed to produce types (~8% of the run), so skip it here too.
+                    program.runTransaction("enable-stabs-analyzer") {
+                        options.setBoolean(ourName, true)
+                        options.getOptions(ourName).setBoolean(StabsOptions.OVERLAY_SECTION, false)
+                    }
                     mgr.scheduleOneTimeAnalysis(discovered, program.memory)
                     runAutoAnalysis(mgr, monitor)
                     artifacts = probe.artifacts

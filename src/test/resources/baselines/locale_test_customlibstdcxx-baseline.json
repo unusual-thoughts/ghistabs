@@ -24,10 +24,6 @@
             "min": 2,
             "max": 2
         },
-        "canonical-scope-collision": {
-            "min": 18,
-            "max": 18
-        },
         "data-no-coverage": {
             "min": 192,
             "max": 192
@@ -69,8 +65,8 @@
             "max": 6252
         },
         "demangler-skip-no-replacement": {
-            "min": 27,
-            "max": 27
+            "min": 23,
+            "max": 23
         },
         "desc-dropped-so": {
             "min": 122,
@@ -285,24 +281,20 @@
             "max": 1
         },
         "replaced-demangler": {
-            "min": 164,
-            "max": 164
+            "min": 168,
+            "max": 168
         },
         "rtti-pseudo-substituted": {
             "min": 38,
             "max": 38
         },
-        "stab-section-overlaid": {
-            "min": 58624,
-            "max": 58624
-        },
         "stab-value-absolute": {
-            "min": 10276,
-            "max": 10276
+            "min": 11,
+            "max": 11
         },
         "stab-value-func-relative": {
-            "min": 39092,
-            "max": 39092
+            "min": 18272,
+            "max": 18272
         },
         "text-data-no-coverage": {
             "min": 3,
@@ -353,8 +345,8 @@
             "max": 6
         },
         "xref-base-tag-resolved": {
-            "min": 227,
-            "max": 227
+            "min": 262,
+            "max": 262
         },
         "xref-undefined": {
             "min": 12,

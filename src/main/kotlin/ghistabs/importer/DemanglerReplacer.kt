@@ -1,5 +1,7 @@
 package ghistabs.importer
 
+import ghidra.program.database.data.DataTypeManagerDB
+import ghidra.program.database.data.replaceDataTypesBatched
 import ghidra.program.model.data.*
 import ghidra.program.model.data.Array
 import ghistabs.applyDemangling
@@ -156,27 +158,20 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val typeRegis
             }
         }
 
-        for (op in ops) {
-            val stubDt = stubDtByPath[op.stubPath] ?: continue
-            val replDt = replacements.values
-                .firstOrNull { it.first.pathName == op.replacementPath }
-                ?.second
-                ?: continue
-
-            if (!dtm.contains(stubDt)) continue
-
-            try {
-                // updateCategoryPath = false: keep replacement at its real category.
-                dtm.replaceDataType(stubDt, replDt, false)
-                debug("replaced-demangler", "${stubDt.pathName} -> ${replDt.pathName}")
-            } catch (e: Exception) {
-                debug("replaced-demangler-failed")
-                degradation(
-                    "demangler-replace-failed",
-                    stubDt.pathName,
-                    e.message,
-                )
-            }
+        val pairs = ops.mapNotNull { op ->
+            val stubDt = stubDtByPath[op.stubPath] ?: return@mapNotNull null
+            val replDt = replacements.values.firstOrNull { it.first.pathName == op.replacementPath }?.second
+                ?: return@mapNotNull null
+            if (dtm.contains(stubDt)) stubDt to replDt else null
+        }
+        // Batched: one whole-program reference sweep for all replacements (updateCategoryPath=false keeps
+        // each at its real category), instead of Ghidra's per-`replaceDataType` sweep — O(stubs × program).
+        try {
+            (dtm as DataTypeManagerDB).replaceDataTypesBatched(pairs)
+            pairs.forEach { (stub, repl) -> debug("replaced-demangler", "${stub.pathName} -> ${repl.pathName}") }
+        } catch (e: Exception) {
+            debug("replaced-demangler-failed")
+            degradation("demangler-replace-failed", "batch of ${pairs.size}", e.message)
         }
     }
 

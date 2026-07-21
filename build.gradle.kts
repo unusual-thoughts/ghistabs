@@ -229,6 +229,12 @@ fun Test.headlessGhidraConfig(reportName: String) {
         "--add-opens=java.desktop/javax.swing=ALL-UNNAMED",
         "--add-opens=java.desktop/javax.swing.text=ALL-UNNAMED",
     )
+    // -Pjfr=<file>: record a JFR profile from JVM start (captures load + autoanalysis + import),
+    // dumped on exit. Force a single fork so one fixture's whole run lands in one recording.
+    providers.gradleProperty("jfr").orNull?.let { jfrFile ->
+        maxParallelForks = 1
+        jvmArgs("-XX:StartFlightRecording=settings=profile,dumponexit=true,maxsize=500m,filename=$jfrFile")
+    }
 }
 
 val integrationTest = tasks.register<Test>("integrationTest") {

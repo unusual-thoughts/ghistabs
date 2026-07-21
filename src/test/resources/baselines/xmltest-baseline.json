@@ -244,17 +244,9 @@
             "min": 22,
             "max": 22
         },
-        "stab-section-overlaid": {
-            "min": 10338,
-            "max": 10338
-        },
-        "stab-value-absolute": {
-            "min": 587,
-            "max": 587
-        },
         "stab-value-func-relative": {
-            "min": 13912,
-            "max": 13912
+            "min": 6376,
+            "max": 6376
         },
         "vfptr-normalized": {
             "min": 4,

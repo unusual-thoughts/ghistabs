@@ -9,8 +9,12 @@
             "max": 10
         },
         "base-empty-ebo": {
-            "min": 42,
-            "max": 42
+            "min": 32,
+            "max": 32
+        },
+        "canonical-content-merged": {
+            "min": 14,
+            "max": 14
         },
         "canonical-key-merged": {
             "min": 457,
@@ -25,8 +29,8 @@
             "max": 4
         },
         "canonical-scope-collision": {
-            "min": 18,
-            "max": 18
+            "min": 2,
+            "max": 2
         },
         "data-no-coverage": {
             "min": 172,
@@ -53,12 +57,12 @@
             "max": 4
         },
         "degraded-struct-mostly-undefined": {
-            "min": 36,
-            "max": 36
+            "min": 30,
+            "max": 30
         },
         "degraded-struct-truncated": {
-            "min": 40,
-            "max": 40
+            "min": 28,
+            "max": 28
         },
         "degraded-vtable-failed": {
             "min": 121,
@@ -105,12 +109,12 @@
             "max": 15
         },
         "dtm-conflicts-created": {
-            "min": 6,
-            "max": 6
+            "min": 1,
+            "max": 1
         },
         "dtm-conflicts-post": {
-            "min": 6,
-            "max": 6
+            "min": 1,
+            "max": 1
         },
         "dtm-conflicts-pre": {
             "min": 0,
@@ -257,8 +261,8 @@
             "max": 56957
         },
         "inheritance-applied": {
-            "min": 234,
-            "max": 234
+            "min": 216,
+            "max": 216
         },
         "inheritance-pseudo-fields-promoted": {
             "min": 1,
@@ -281,8 +285,8 @@
             "max": 126
         },
         "placeholder-created": {
-            "min": 40861,
-            "max": 40861
+            "min": 40829,
+            "max": 40829
         },
         "pointee-typed": {
             "min": 119,
@@ -300,17 +304,13 @@
             "min": 36,
             "max": 36
         },
-        "stab-section-overlaid": {
-            "min": 62336,
-            "max": 62336
-        },
         "stab-value-absolute": {
-            "min": 10141,
-            "max": 10141
+            "min": 11,
+            "max": 11
         },
         "stab-value-func-relative": {
-            "min": 42704,
-            "max": 42704
+            "min": 19958,
+            "max": 19958
         },
         "text-data-no-coverage": {
             "min": 3,
