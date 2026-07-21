@@ -506,7 +506,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
         fun collect(decl: TypeDecl<GlobalTypeId>) {
             val ast = when (decl) {
                 is TypeDecl.Ref -> harvest.typeAsts[decl.id]
-                is TypeDecl.XRef -> resolver.byXRef(decl)
+                is TypeDecl.XRef -> resolver.byXRef(decl, silent = true)
                 is TypeDecl.InlineDef -> return collect(decl.body)
                 is TypeDecl.Pointer -> return collect(decl.pointee)
                 is TypeDecl.Reference -> return collect(decl.referent)

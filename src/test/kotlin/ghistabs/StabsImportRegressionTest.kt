@@ -309,7 +309,7 @@ class StabsImportRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
         // -PregenerateBaselines=true rewrites the baseline from the observed counts (deterministic
         // import). The resulting git diff is the record of exactly which counters moved.
         if (System.getProperty("regenerateBaselines") == "true") {
-            BaselineWriter.write(baselineFile, counters, "bouniafbouniaf.exe — generated from snapshotCounters()")
+            BaselineWriter.write(baselineFile, counters, "$binaryName - generated from snapshotCounters()")
             return
         }
 
