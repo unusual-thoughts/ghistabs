@@ -8,14 +8,6 @@
             "min": 10,
             "max": 10
         },
-        "apply-error": {
-            "min": 8,
-            "max": 8
-        },
-        "apply-error-duplicate-name": {
-            "min": 8,
-            "max": 8
-        },
         "base-empty-ebo": {
             "min": 42,
             "max": 42
@@ -39,10 +31,6 @@
         "data-no-coverage": {
             "min": 172,
             "max": 172
-        },
-        "degraded-base-layout-failed": {
-            "min": 1,
-            "max": 1
         },
         "degraded-base-synthesized": {
             "min": 10,
@@ -77,12 +65,12 @@
             "max": 121
         },
         "demangle-applied": {
-            "min": 3667,
-            "max": 3667
+            "min": 3495,
+            "max": 3495
         },
         "demangle-attempted": {
-            "min": 6954,
-            "max": 6954
+            "min": 6782,
+            "max": 6782
         },
         "demangler-skip-no-replacement": {
             "min": 23,
@@ -93,6 +81,10 @@
             "max": 123
         },
         "desc-dropped-undf": {
+            "min": 1,
+            "max": 1
+        },
+        "done": {
             "min": 1,
             "max": 1
         },
@@ -265,12 +257,8 @@
             "max": 56957
         },
         "inheritance-applied": {
-            "min": 233,
-            "max": 233
-        },
-        "inheritance-failed": {
-            "min": 1,
-            "max": 1
+            "min": 234,
+            "max": 234
         },
         "inheritance-pseudo-fields-promoted": {
             "min": 1,
@@ -293,8 +281,8 @@
             "max": 126
         },
         "placeholder-created": {
-            "min": 40856,
-            "max": 40856
+            "min": 40861,
+            "max": 40861
         },
         "pointee-typed": {
             "min": 119,
@@ -309,8 +297,8 @@
             "max": 169
         },
         "rtti-pseudo-substituted": {
-            "min": 5,
-            "max": 5
+            "min": 36,
+            "max": 36
         },
         "stab-section-overlaid": {
             "min": 62336,
@@ -349,8 +337,8 @@
             "max": 113
         },
         "vfptr-normalized": {
-            "min": 15,
-            "max": 15
+            "min": 16,
+            "max": 16
         },
         "vtable-failed": {
             "min": 121,
@@ -373,5 +361,5 @@
             "max": 12
         }
     },
-    "source": "xmltest_gcc421_fullstabs \u2014 generated from per-mode regression logs"
+    "source": "xmltest_gcc421_fullstabs.exe - generated from snapshotCounters()"
 }

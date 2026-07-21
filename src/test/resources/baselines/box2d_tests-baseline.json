@@ -56,6 +56,10 @@
             "min": 1,
             "max": 1
         },
+        "done": {
+            "min": 1,
+            "max": 1
+        },
         "drop-record-opt": {
             "min": 56,
             "max": 56
@@ -201,8 +205,8 @@
             "max": 1682
         },
         "placeholder-created": {
-            "min": 4785,
-            "max": 4785
+            "min": 4773,
+            "max": 4773
         },
         "stab-section-overlaid": {
             "min": 66926,
@@ -217,13 +221,13 @@
             "max": 90522
         },
         "unresolved-xref": {
-            "min": 29,
-            "max": 29
+            "min": 39,
+            "max": 39
         },
         "xref-undefined": {
-            "min": 29,
-            "max": 29
+            "min": 39,
+            "max": 39
         }
     },
-    "source": "box2d_tests \u2014 generated from per-mode regression logs"
+    "source": "box2d_tests - generated from snapshotCounters()"
 }

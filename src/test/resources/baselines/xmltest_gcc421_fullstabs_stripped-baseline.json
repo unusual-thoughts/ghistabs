@@ -32,10 +32,6 @@
             "min": 291,
             "max": 291
         },
-        "degraded-base-layout-failed": {
-            "min": 1,
-            "max": 1
-        },
         "degraded-base-synthesized": {
             "min": 10,
             "max": 10
@@ -77,6 +73,10 @@
             "max": 123
         },
         "desc-dropped-undf": {
+            "min": 1,
+            "max": 1
+        },
+        "done": {
             "min": 1,
             "max": 1
         },
@@ -257,12 +257,8 @@
             "max": 56957
         },
         "inheritance-applied": {
-            "min": 233,
-            "max": 233
-        },
-        "inheritance-failed": {
-            "min": 1,
-            "max": 1
+            "min": 234,
+            "max": 234
         },
         "inheritance-pseudo-fields-promoted": {
             "min": 1,
@@ -285,8 +281,8 @@
             "max": 126
         },
         "placeholder-created": {
-            "min": 40856,
-            "max": 40856
+            "min": 40861,
+            "max": 40861
         },
         "pointee-typed": {
             "min": 99,
@@ -297,8 +293,8 @@
             "max": 1
         },
         "rtti-pseudo-substituted": {
-            "min": 5,
-            "max": 5
+            "min": 36,
+            "max": 36
         },
         "stab-section-overlaid": {
             "min": 62336,
@@ -337,8 +333,8 @@
             "max": 113
         },
         "vfptr-normalized": {
-            "min": 15,
-            "max": 15
+            "min": 16,
+            "max": 16
         },
         "vtable-failed": {
             "min": 121,
@@ -361,5 +357,5 @@
             "max": 12
         }
     },
-    "source": "xmltest_gcc421_fullstabs_stripped \u2014 generated from per-mode regression logs"
+    "source": "xmltest_gcc421_fullstabs_stripped.exe - generated from snapshotCounters()"
 }
