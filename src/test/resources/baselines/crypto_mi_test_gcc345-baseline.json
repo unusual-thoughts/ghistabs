@@ -1,15 +1,11 @@
 {
     "counters": {
         "apply-error": {
-            "min": 17,
-            "max": 41
-        },
-        "apply-error-duplicate-name": {
-            "min": 17,
-            "max": 17
+            "min": 24,
+            "max": 24
         },
         "apply-error-invalid-input": {
-            "min": 0,
+            "min": 24,
             "max": 24
         },
         "base-empty-ebo": {
@@ -45,8 +41,8 @@
             "max": 8
         },
         "degraded-field-dropped": {
-            "min": 6,
-            "max": 6
+            "min": 5,
+            "max": 5
         },
         "degraded-global-typed-all-undefined": {
             "min": 14,
@@ -89,12 +85,12 @@
             "max": 68
         },
         "demangle-applied": {
-            "min": 18480,
-            "max": 18480
+            "min": 16616,
+            "max": 16616
         },
         "demangle-attempted": {
-            "min": 29857,
-            "max": 29857
+            "min": 27993,
+            "max": 27993
         },
         "demangler-normalized-match": {
             "min": 5,
@@ -105,6 +101,10 @@
             "max": 182
         },
         "desc-dropped-undf": {
+            "min": 1,
+            "max": 1
+        },
+        "done": {
             "min": 1,
             "max": 1
         },
@@ -405,5 +405,5 @@
             "max": 68
         }
     },
-    "source": "crypto_mi_test_gcc345 \u2014 generated from per-mode regression logs"
+    "source": "crypto_mi_test_gcc345.exe - generated from snapshotCounters()"
 }

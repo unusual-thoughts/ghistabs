@@ -9,19 +9,15 @@
             "max": 6
         },
         "apply-error": {
-            "min": 17,
-            "max": 45
-        },
-        "apply-error-duplicate-name": {
-            "min": 17,
-            "max": 17
+            "min": 28,
+            "max": 28
         },
         "apply-error-invalid-input": {
-            "min": 0,
+            "min": 24,
             "max": 24
         },
         "apply-error-parameter-mismatch": {
-            "min": 0,
+            "min": 4,
             "max": 4
         },
         "base-empty-ebo": {
@@ -81,12 +77,12 @@
             "max": 17
         },
         "demangle-applied": {
-            "min": 17004,
-            "max": 17004
+            "min": 15147,
+            "max": 15147
         },
         "demangle-attempted": {
-            "min": 29212,
-            "max": 29212
+            "min": 27355,
+            "max": 27355
         },
         "demangler-normalized-match": {
             "min": 5,
@@ -101,6 +97,10 @@
             "max": 33
         },
         "desc-dropped-undf": {
+            "min": 1,
+            "max": 1
+        },
+        "done": {
             "min": 1,
             "max": 1
         },
@@ -269,8 +269,8 @@
             "max": 708
         },
         "placeholder-created": {
-            "min": 12226,
-            "max": 12226
+            "min": 12227,
+            "max": 12227
         },
         "reglocal-add-success": {
             "min": 3,
@@ -279,10 +279,6 @@
         "replaced-demangler": {
             "min": 707,
             "max": 707
-        },
-        "rtti-pseudo-substituted": {
-            "min": 1,
-            "max": 1
         },
         "stab-section-overlaid": {
             "min": 121557,
@@ -333,5 +329,5 @@
             "max": 345
         }
     },
-    "source": "crypto_mi_test_gcc421 \u2014 generated from per-mode regression logs"
+    "source": "crypto_mi_test_gcc421.exe - generated from snapshotCounters()"
 }

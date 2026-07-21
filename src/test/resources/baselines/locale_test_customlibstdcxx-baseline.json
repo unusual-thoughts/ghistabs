@@ -8,14 +8,6 @@
             "min": 3,
             "max": 3
         },
-        "apply-error": {
-            "min": 8,
-            "max": 8
-        },
-        "apply-error-duplicate-name": {
-            "min": 8,
-            "max": 8
-        },
         "base-empty-ebo": {
             "min": 19,
             "max": 19
@@ -39,10 +31,6 @@
         "data-no-coverage": {
             "min": 192,
             "max": 192
-        },
-        "degraded-base-layout-failed": {
-            "min": 1,
-            "max": 1
         },
         "degraded-base-synthesized": {
             "min": 8,
@@ -73,12 +61,12 @@
             "max": 121
         },
         "demangle-applied": {
-            "min": 3229,
-            "max": 3229
+            "min": 3097,
+            "max": 3097
         },
         "demangle-attempted": {
-            "min": 6384,
-            "max": 6384
+            "min": 6252,
+            "max": 6252
         },
         "demangler-skip-no-replacement": {
             "min": 27,
@@ -89,6 +77,10 @@
             "max": 122
         },
         "desc-dropped-undf": {
+            "min": 1,
+            "max": 1
+        },
+        "done": {
             "min": 1,
             "max": 1
         },
@@ -264,10 +256,6 @@
             "min": 155,
             "max": 155
         },
-        "inheritance-failed": {
-            "min": 1,
-            "max": 1
-        },
         "local-var-add-success": {
             "min": 2604,
             "max": 2606
@@ -285,8 +273,8 @@
             "max": 121
         },
         "placeholder-created": {
-            "min": 43359,
-            "max": 43359
+            "min": 43362,
+            "max": 43362
         },
         "pointee-typed": {
             "min": 130,
@@ -301,8 +289,8 @@
             "max": 164
         },
         "rtti-pseudo-substituted": {
-            "min": 4,
-            "max": 4
+            "min": 38,
+            "max": 38
         },
         "stab-section-overlaid": {
             "min": 58624,
@@ -373,5 +361,5 @@
             "max": 12
         }
     },
-    "source": "locale_test_customlibstdcxx \u2014 generated from per-mode regression logs"
+    "source": "locale_test_customlibstdcxx.exe - generated from snapshotCounters()"
 }

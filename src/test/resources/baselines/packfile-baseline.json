@@ -41,18 +41,22 @@
             "max": 2
         },
         "demangle-applied": {
-            "min": 411,
-            "max": 411
+            "min": 403,
+            "max": 403
         },
         "demangle-attempted": {
-            "min": 2148,
-            "max": 2148
+            "min": 2140,
+            "max": 2140
         },
         "demangler-skip-no-replacement": {
             "min": 65,
             "max": 65
         },
         "desc-dropped-undf": {
+            "min": 1,
+            "max": 1
+        },
+        "done": {
             "min": 1,
             "max": 1
         },
@@ -337,5 +341,5 @@
             "max": 21
         }
     },
-    "source": "packfile \u2014 generated from per-mode regression logs"
+    "source": "packfile.exe - generated from snapshotCounters()"
 }

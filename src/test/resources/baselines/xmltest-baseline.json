@@ -1,13 +1,5 @@
 {
     "counters": {
-        "apply-error": {
-            "min": 17,
-            "max": 17
-        },
-        "apply-error-duplicate-name": {
-            "min": 17,
-            "max": 17
-        },
         "canonical-content-merged": {
             "min": 2,
             "max": 2
@@ -49,8 +41,8 @@
             "max": 56
         },
         "degraded-param-untyped": {
-            "min": 100,
-            "max": 100
+            "min": 101,
+            "max": 101
         },
         "degraded-placeholder-undefined-fields": {
             "min": 2,
@@ -65,12 +57,12 @@
             "max": 1
         },
         "demangle-applied": {
-            "min": 1530,
-            "max": 1530
+            "min": 1096,
+            "max": 1096
         },
         "demangle-attempted": {
-            "min": 1530,
-            "max": 1530
+            "min": 1096,
+            "max": 1096
         },
         "demangler-skip-no-replacement": {
             "min": 12,
@@ -81,6 +73,10 @@
             "max": 2
         },
         "desc-dropped-undf": {
+            "min": 1,
+            "max": 1
+        },
+        "done": {
             "min": 1,
             "max": 1
         },
@@ -101,8 +97,8 @@
             "max": 0
         },
         "empty-scope": {
-            "min": 491,
-            "max": 491
+            "min": 503,
+            "max": 503
         },
         "file-start": {
             "min": 4,
@@ -229,16 +225,16 @@
             "max": 1
         },
         "local-var-add-success": {
-            "min": 479,
-            "max": 479
+            "min": 512,
+            "max": 512
         },
         "local-var-skipped-dup-local": {
             "min": 694,
             "max": 694
         },
         "placeholder-created": {
-            "min": 207,
-            "max": 207
+            "min": 206,
+            "max": 206
         },
         "pointee-typed": {
             "min": 18,
@@ -273,5 +269,5 @@
             "max": 1
         }
     },
-    "source": "xmltest \u2014 generated from per-mode regression logs"
+    "source": "xmltest - generated from snapshotCounters()"
 }

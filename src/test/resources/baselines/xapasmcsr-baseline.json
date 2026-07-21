@@ -8,14 +8,6 @@
             "min": 85,
             "max": 85
         },
-        "canonical-key-multi-hash": {
-            "min": 0,
-            "max": 0
-        },
-        "canonical-scope-collision": {
-            "min": 0,
-            "max": 0
-        },
         "class-not-struct": {
             "min": 2,
             "max": 2
@@ -49,12 +41,12 @@
             "max": 2
         },
         "demangle-applied": {
-            "min": 535,
-            "max": 535
+            "min": 449,
+            "max": 449
         },
         "demangle-attempted": {
-            "min": 2455,
-            "max": 2455
+            "min": 2369,
+            "max": 2369
         },
         "demangler-skip-no-replacement": {
             "min": 67,
@@ -341,5 +333,5 @@
             "max": 54
         }
     },
-    "source": "xapasmcsr.exe \u2014 generated from snapshotCounters()"
+    "source": "xapasmcsr.exe - generated from snapshotCounters()"
 }
