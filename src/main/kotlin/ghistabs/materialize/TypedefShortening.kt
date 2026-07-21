@@ -20,7 +20,7 @@ data class TypedefRename(val from: String, val to: String)
  * `>`-terminated template targets still match, bounded by `<`, `,`, `::` or edges.
  */
 class TemplateNameShortener(aliases: Map<String, String>) {
-    private val guarded = aliases.entries
+    private val aliasByTarget = aliases.entries
         .groupBy({ canonTemplateName(it.value) }, { it.key })
         .mapNotNull { (target, names) ->
             // Prefer a readable alias over compiler-internal shorthands: libstdc++'s explicit-
@@ -31,19 +31,32 @@ class TemplateNameShortener(aliases: Map<String, String>) {
             readable.ifEmpty { names }.minBy { it.length }.takeIf { it.length < target.length }?.let { target to it }
         }
         .sortedByDescending { it.first.length }
-        .map { (target, alias) -> Regex("(?<![A-Za-z0-9_])${Regex.escape(target)}(?![A-Za-z0-9_])") to alias }
+        .toMap()
 
-    val isEmpty get() = guarded.isEmpty()
+    // One alternation regex over all targets (longest first, so it prefers the outer match) — a single
+    // Matcher per fixpoint pass instead of a fresh Regex.replace per alias over every name.
+    private val combined = aliasByTarget.keys.takeIf { it.isNotEmpty() }?.let { keys ->
+        Regex("(?<![A-Za-z0-9_])(" + keys.joinToString("|") { Regex.escape(it) } + ")(?![A-Za-z0-9_])")
+    }
+
+    // A name with no `<` can't contain any template target, so the fixpoint is a guaranteed no-op — skip
+    // it (most created types aren't templated). Only valid when every target is itself templated.
+    private val allTargetsTemplated = aliasByTarget.keys.all { '<' in it }
+    private val cache = HashMap<String, String>()
+
+    val isEmpty get() = aliasByTarget.isEmpty()
 
     /** Canonicalise [name] then substitute to a fixpoint; equals the canonical input when nothing shrank. */
-    fun shorten(name: String): String {
+    fun shorten(name: String): String = cache.getOrPut(name) {
         var s = canonTemplateName(name)
-        var prev: String
-        do {
-            prev = s
-            for ((re, alias) in guarded) s = re.replace(s) { alias }
-        } while (s != prev)
-        return s
+        if (combined != null && (!allTargetsTemplated || '<' in s)) {
+            var prev: String
+            do {
+                prev = s
+                s = combined.replace(s) { aliasByTarget.getValue(it.groupValues[1]) }
+            } while (s != prev)
+        }
+        s
     }
 
     /** [shorten] but null unless the text actually shrank (below the canonical spelling of [name]). */

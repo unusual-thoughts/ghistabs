@@ -176,6 +176,18 @@ class TypeResolver(val harvest: Harvest, private val foldSources: Boolean = true
             .filter { it.name != null }
             .groupBy({ it.name!! }, { it.id.source.filename })
             .mapValues { it.value.toSet() }
+        // Header line-entries sorted by address once, so each method's [lo,hi) range is a binary-searched
+        // slice instead of a full scan of every source's entries per method (was O(types × methods ×
+        // entries)). Non-header sources never vote, so they're dropped up front.
+        val hdrEntries = harvest.lineEntries.entries
+            .filter { it.key.hasHeaderExtension() }
+            .flatMap { (src, entries) ->
+                val std = src.isStdMarkerPath()
+                entries.map { Triple(it.addr.address.offset, src, std) }
+            }
+            .sortedBy { it.first }
+        val hdrOffsets = LongArray(hdrEntries.size) { hdrEntries[it].first }
+
         buildMap {
             for ((name, asts) in astsByName) {
                 val defSources = defSourcesByName[name] ?: continue
@@ -189,13 +201,10 @@ class TypeResolver(val harvest: Harvest, private val foldSources: Boolean = true
                     val func = funcsByMangled[m.mangled ?: continue] ?: continue
                     val lo = func.addr.address.offset
                     val hi = lo + (func.sizeBytes ?: 0uL).toLong()
-                    for ((src, entries) in harvest.lineEntries) {
-                        if (src in defSources || !src.hasHeaderExtension()) continue
-                        val vote = if (src.isStdMarkerPath()) stdVote else userVote
-                        for (e in entries) {
-                            val a = e.addr.address.offset
-                            if (a in lo until hi) vote.merge(src, 1, Int::plus)
-                        }
+                    var i = hdrOffsets.lowerBound(lo)
+                    while (i < hdrEntries.size && hdrOffsets[i] < hi) {
+                        val (_, src, isStd) = hdrEntries[i++]
+                        if (src !in defSources) (if (isStd) stdVote else userVote).merge(src, 1, Int::plus)
                     }
                 }
                 val winner = userVote.maxByOrNull { it.value }?.key
@@ -203,6 +212,17 @@ class TypeResolver(val harvest: Harvest, private val foldSources: Boolean = true
                 winner?.let { put(name, it) }
             }
         }
+    }
+
+    /** First index into a sorted [LongArray] whose value is `>= target` (binary lower-bound). */
+    private fun LongArray.lowerBound(target: Long): Int {
+        var lo = 0
+        var hi = size
+        while (lo < hi) {
+            val mid = (lo + hi) ushr 1
+            if (this[mid] < target) lo = mid + 1 else hi = mid
+        }
+        return lo
     }
 
     // Named types vote via the hint (member-SLINE header); typedefs trust their N_SOL declSourceFile (a
@@ -371,14 +391,21 @@ class TypeResolver(val harvest: Harvest, private val foldSources: Boolean = true
             }
 
         buildMap {
-            for ((_, equivalent) in slots.groupBy { contentHash(it.ast.body) }) {
+            // §B: merge by layout, not content — a class's method-less header/`multi` copies share the
+            // scope-keyed method-bearing copy's layout (methods never enter the DTM struct), so they fold
+            // onto it instead of forking a duplicate slot. The `ghidraName` guard keeps genuinely
+            // different same-layout classes apart; the winner prefers the method-bearing copy.
+            for ((_, equivalent) in slots.groupBy { layoutHash(it.ast.body) }) {
                 val named = equivalent.filter { !it.ast.name.isNullOrEmpty() }
                 if (equivalent.size == 1 || named.map { it.ast.ghidraName }.toSet().size != 1) {
                     for (g in equivalent) put(g.key, g)
                     continue
                 }
+                // Same layout ⇒ same size, so the size tiebreak ties; prefer the method-bearing copy so
+                // its methods (§C vtables / __thiscall) and its scope category win over a method-less copy.
                 val winner = named.maxWith(
                     compareBy<CanonicalGroup> { it.ast.body.sizeBytes }
+                        .thenBy { (it.ast.body as? TypeDecl.Struct)?.methods?.size ?: 0 }
                         .thenByDescending { countUnresolvedRefs(it.ast.body) }
                         .thenBy { it.key.toString() },
                 )

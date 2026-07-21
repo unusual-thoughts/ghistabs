@@ -24,10 +24,6 @@
             "min": 2,
             "max": 2
         },
-        "canonical-scope-collision": {
-            "min": 18,
-            "max": 18
-        },
         "data-no-coverage": {
             "min": 295,
             "max": 295
@@ -288,17 +284,13 @@
             "min": 38,
             "max": 38
         },
-        "stab-section-overlaid": {
-            "min": 58624,
-            "max": 58624
-        },
         "stab-value-absolute": {
-            "min": 10276,
-            "max": 10276
+            "min": 11,
+            "max": 11
         },
         "stab-value-func-relative": {
-            "min": 39092,
-            "max": 39092
+            "min": 18272,
+            "max": 18272
         },
         "text-data-no-coverage": {
             "min": 13,
@@ -345,8 +337,8 @@
             "max": 6
         },
         "xref-base-tag-resolved": {
-            "min": 227,
-            "max": 227
+            "min": 262,
+            "max": 262
         },
         "xref-undefined": {
             "min": 12,

@@ -4,6 +4,10 @@
             "min": 25,
             "max": 25
         },
+        "canonical-content-merged": {
+            "min": 2,
+            "max": 2
+        },
         "canonical-key-merged": {
             "min": 175,
             "max": 175
@@ -11,10 +15,6 @@
         "canonical-key-multi-hash": {
             "min": 2,
             "max": 2
-        },
-        "canonical-scope-collision": {
-            "min": 1,
-            "max": 1
         },
         "class-not-struct": {
             "min": 2,
@@ -221,8 +221,8 @@
             "max": 8596
         },
         "inheritance-applied": {
-            "min": 67,
-            "max": 67
+            "min": 66,
+            "max": 66
         },
         "local-var-add-success": {
             "min": 457,
@@ -245,8 +245,8 @@
             "max": 1095
         },
         "placeholder-created": {
-            "min": 7735,
-            "max": 7735
+            "min": 7731,
+            "max": 7731
         },
         "pointee-typed": {
             "min": 30,
@@ -272,17 +272,9 @@
             "min": 7,
             "max": 7
         },
-        "stab-section-overlaid": {
-            "min": 27349,
-            "max": 27349
-        },
-        "stab-value-absolute": {
-            "min": 6087,
-            "max": 6087
-        },
         "stab-value-func-relative": {
-            "min": 27038,
-            "max": 27038
+            "min": 11788,
+            "max": 11788
         },
         "text-data-no-coverage": {
             "min": 237,

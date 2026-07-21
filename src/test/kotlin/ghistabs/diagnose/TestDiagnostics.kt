@@ -72,7 +72,9 @@ class CapturingSink : DiagnosticSink {
 fun Program.defaultContext() = ImportContext(
     this,
     TaskMonitor.DUMMY,
-    StabsOptions(minLogLevel = Level.DEBUG),
+    // overlaySection off: the decoded-struct .stab overlay is a diagnostic view, not needed to produce
+    // types, and it's ~8% of the run. StabSectionOverlayIntegrationTest exercises it directly.
+    StabsOptions(minLogLevel = Level.DEBUG, overlaySection = false),
     CapturingSink(),
     StabsDiagnostics(),
 )

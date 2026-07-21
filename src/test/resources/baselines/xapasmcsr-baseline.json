@@ -268,17 +268,13 @@
             "min": 8,
             "max": 8
         },
-        "stab-section-overlaid": {
-            "min": 48341,
-            "max": 48341
-        },
         "stab-value-absolute": {
-            "min": 11617,
-            "max": 11617
+            "min": 36,
+            "max": 36
         },
         "stab-value-func-relative": {
-            "min": 51890,
-            "max": 51890
+            "min": 23824,
+            "max": 23824
         },
         "text-data-no-coverage": {
             "min": 258,

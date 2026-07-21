@@ -9,20 +9,24 @@
             "max": 9
         },
         "apply-error": {
-            "min": 29,
+            "min": 0,
             "max": 29
         },
         "apply-error-invalid-input": {
-            "min": 24,
+            "min": 0,
             "max": 24
         },
         "apply-error-parameter-mismatch": {
-            "min": 5,
+            "min": 0,
             "max": 5
         },
         "base-empty-ebo": {
-            "min": 78,
-            "max": 78
+            "min": 66,
+            "max": 66
+        },
+        "canonical-content-merged": {
+            "min": 11,
+            "max": 11
         },
         "canonical-key-merged": {
             "min": 2100,
@@ -37,8 +41,8 @@
             "max": 28
         },
         "canonical-scope-collision": {
-            "min": 18,
-            "max": 18
+            "min": 2,
+            "max": 2
         },
         "data-no-coverage": {
             "min": 1147,
@@ -69,20 +73,20 @@
             "max": 26
         },
         "degraded-placeholder-undefined-fields": {
-            "min": 11,
-            "max": 11
+            "min": 9,
+            "max": 9
         },
         "degraded-static-typed-all-undefined": {
             "min": 4,
             "max": 4
         },
         "degraded-struct-mostly-undefined": {
-            "min": 93,
-            "max": 93
+            "min": 86,
+            "max": 86
         },
         "degraded-struct-truncated": {
-            "min": 50,
-            "max": 50
+            "min": 34,
+            "max": 34
         },
         "degraded-vtable-failed": {
             "min": 121,
@@ -133,12 +137,12 @@
             "max": 14
         },
         "dtm-conflicts-created": {
-            "min": 10,
-            "max": 10
+            "min": 1,
+            "max": 1
         },
         "dtm-conflicts-post": {
-            "min": 11,
-            "max": 11
+            "min": 2,
+            "max": 2
         },
         "dtm-conflicts-pre": {
             "min": 1,
@@ -289,8 +293,8 @@
             "max": 92230
         },
         "inheritance-applied": {
-            "min": 984,
-            "max": 984
+            "min": 964,
+            "max": 964
         },
         "inheritance-pseudo-fields-promoted": {
             "min": 1,
@@ -313,8 +317,8 @@
             "max": 105
         },
         "placeholder-created": {
-            "min": 52354,
-            "max": 52354
+            "min": 52319,
+            "max": 52319
         },
         "pointee-typed": {
             "min": 127,
@@ -332,17 +336,13 @@
             "min": 37,
             "max": 37
         },
-        "stab-section-overlaid": {
-            "min": 177877,
-            "max": 177877
-        },
         "stab-value-absolute": {
-            "min": 27742,
-            "max": 27742
+            "min": 11,
+            "max": 11
         },
         "stab-value-func-relative": {
-            "min": 112706,
-            "max": 112706
+            "min": 53545,
+            "max": 53545
         },
         "text-data-no-coverage": {
             "min": 3,

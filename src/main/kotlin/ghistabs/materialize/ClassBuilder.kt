@@ -76,9 +76,6 @@ class ClassBuilder(
         get() = (sequenceOf(ast) + members.mapNotNull { harvest.typeAsts[it] })
             .firstNotNullOfOrNull { it.demangledClassPath() }?.joinToString("::") ?: className
 
-    private fun CanonicalGroup.decodesToClass(symbolName: String) =
-        Itanium.decodesToClass(symbolName, qualifiedClassName)
-
     /**
      * {vfptr} points at the function-pointer array at the vtable's address point
      * (`_ZTV<class> + 2*ptrSize`), not at the record start. Modelled as `<Class>_vftable*`
@@ -467,31 +464,23 @@ class ClassBuilder(
         return PointerDataType(resolved, dtm)
     }
 
-    /** Resolve _ZTV<class> address: try AddressResolver candidates, then symbol-table scan, then .rdata scan. */
+    /** `_ZTV<class>` demangled qualified-class-name → address, built once. Replaces the per-class
+     *  `O(classes × symbols)` demangle scan that made [resolveVtableAddress] pathological on CryptoPP
+     *  (thousands of classes × thousands of symbols). First symbol per class wins (iteration order). */
+    private val vtableAddressByClass: Map<String, Address> by lazy {
+        buildMap {
+            for (sym in symtab.symbolIterator) {
+                Itanium.vtableClassOf(sym.name)?.let { putIfAbsent(it, sym.address) }
+            }
+        }
+    }
+
+    /** Resolve _ZTV<class> address: try AddressResolver candidates, then the demangled-vtable index. */
     private fun CanonicalGroup.resolveVtableAddress(): Address? {
         val candidates = Itanium.ztvCandidates(className)
         candidates.firstNotNullOfOrNull { resolver.resolve(it) }?.let { return it }
 
-        try {
-            symtab.symbolIterator.firstOrNull {
-                decodesToClass(it.name)
-            }?.let { return it.address }
-        } catch (e: IllegalArgumentException) {
-            warn("vtable-symbol-scan-error", "exception scanning symbol table for $className: ${e.message}")
-        }
-
-        val rdataBlock = program.memory.getBlock(".rdata")
-        if (rdataBlock != null) {
-            try {
-                symtab.getSymbolIterator(rdataBlock.start, true)
-                    .asIterable()
-                    .takeWhile { it.address < rdataBlock.end }
-                    .firstOrNull { decodesToClass(it.name) }
-                    ?.let { return it.address }
-            } catch (e: IllegalArgumentException) {
-                warn("vtable-rdata-scan-error", "exception scanning .rdata for $className: ${e.message}")
-            }
-        }
+        vtableAddressByClass[qualifiedClassName]?.let { return it }
 
         val failureBucket = when {
             classBody.hasVTablePointerMarker && classBody.methods.none { it.virt == VirtKind.VIRTUAL } ->

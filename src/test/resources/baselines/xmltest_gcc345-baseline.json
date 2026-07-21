@@ -5,8 +5,8 @@
             "max": 12
         },
         "canonical-content-merged": {
-            "min": 1,
-            "max": 1
+            "min": 22,
+            "max": 22
         },
         "canonical-key-merged": {
             "min": 1129,
@@ -15,10 +15,6 @@
         "canonical-key-multi-hash": {
             "min": 7,
             "max": 7
-        },
-        "canonical-scope-collision": {
-            "min": 2,
-            "max": 2
         },
         "class-not-struct": {
             "min": 4,
@@ -29,8 +25,8 @@
             "max": 99
         },
         "degraded-base-synthesized": {
-            "min": 4,
-            "max": 4
+            "min": 3,
+            "max": 3
         },
         "degraded-field-dropped": {
             "min": 2,
@@ -53,8 +49,8 @@
             "max": 20
         },
         "degraded-struct-truncated": {
-            "min": 8,
-            "max": 8
+            "min": 7,
+            "max": 7
         },
         "degraded-vtable-failed": {
             "min": 61,
@@ -245,8 +241,8 @@
             "max": 31280
         },
         "inheritance-applied": {
-            "min": 102,
-            "max": 102
+            "min": 100,
+            "max": 100
         },
         "inheritance-pseudo-fields-promoted": {
             "min": 1,
@@ -273,8 +269,8 @@
             "max": 630
         },
         "placeholder-created": {
-            "min": 16754,
-            "max": 16754
+            "min": 16724,
+            "max": 16724
         },
         "pointee-typed": {
             "min": 30,
@@ -300,21 +296,13 @@
             "min": 49,
             "max": 49
         },
-        "stab-section-overlaid": {
-            "min": 73301,
-            "max": 73301
-        },
-        "stab-string-create-failed": {
-            "min": 2,
-            "max": 2
-        },
         "stab-value-absolute": {
-            "min": 9594,
-            "max": 9594
+            "min": 16,
+            "max": 16
         },
         "stab-value-func-relative": {
-            "min": 52384,
-            "max": 52384
+            "min": 21290,
+            "max": 21290
         },
         "text-data-no-coverage": {
             "min": 307,
@@ -365,8 +353,8 @@
             "max": 2
         },
         "xref-base-tag-resolved": {
-            "min": 59,
-            "max": 59
+            "min": 63,
+            "max": 63
         },
         "xref-undefined": {
             "min": 40,
