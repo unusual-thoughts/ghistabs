@@ -358,7 +358,9 @@ class TypeResolver(val harvest: Harvest, private val foldSources: Boolean = true
                     // DTM struct — so it rides along and aliases onto the owners' winner instead of forking
                     // the group. Genuine divergence among the owners still demotes every member to header.
                     val owners = members.filter { it.demangledClassPath() != null }.ifEmpty { members }
-                    if (owners.groupBy { contentHash(it.body) }.size == 1) {
+                    // Layout-only: owners diverge only in per-CU method flags/order (gcc VIRTUAL vs NORMAL,
+                    // reordering), which never enter the DTM struct — don't let that noise demote the group.
+                    if (owners.groupBy { layoutHash(it.body) }.size == 1) {
                         val group = classifyGroup(scopeKey, owners)
                         listOf(if (owners.size == members.size) group else group.copy(members = members.map { it.id }))
                     } else {

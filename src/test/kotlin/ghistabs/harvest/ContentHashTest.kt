@@ -495,4 +495,38 @@ class ContentHashTest {
 
         assertEquals(formA.contentHash(storeOracle), formB.contentHash(storeOracle))
     }
+
+    /**
+     * gcc emits a virtual as VIRTUAL (vtoff set) in its defining CU and NORMAL (vtoff null) elsewhere,
+     * and reorders methods per CU: layout-identical, but [ContentHasher.contentHash] is method-aware so
+     * the two forms hash differently. [ContentHasher.layoutHash] drops a struct's own methods, so a
+     * scope group isn't demoted to header keys over that per-CU method noise (TypeResolver §A).
+     */
+    @Test
+    fun layoutHashIgnoresPerCuMethodDivergence() {
+        fun method(virt: VirtKind, vtoff: Long?) = MethodDecl(
+            name = "f",
+            mangled = "_ZN1C1fEv",
+            signature = TypeDecl.Ref(intInCU1.id),
+            access = Access.PUBLIC,
+            virt = virt,
+            isConst = false,
+            isVolatile = false,
+            vtableOffsetBits = vtoff,
+        )
+        fun cls(method: MethodDecl<GlobalTypeId>) = TypeDecl.Struct(
+            rawKind = AggrKind.CLASS,
+            sizeBytes = 4,
+            bases = emptyList(),
+            fields = listOf(FieldDecl("x", TypeDecl.Ref(intInCU1.id), 0, 32, false, Access.PUBLIC)),
+            methods = listOf(method),
+            hasVTablePointerMarker = false,
+            vtableTargetTypeId = null,
+        )
+        val definingCu = cls(method(VirtKind.VIRTUAL, 0L))
+        val referencingCu = cls(method(VirtKind.NORMAL, null))
+
+        assertEquals(oracle.layoutHash(definingCu), oracle.layoutHash(referencingCu), "layout ignores methods")
+        assertNotEquals(oracle.contentHash(definingCu), oracle.contentHash(referencingCu), "contentHash keeps them")
+    }
 }
