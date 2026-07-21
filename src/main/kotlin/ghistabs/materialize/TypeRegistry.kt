@@ -72,7 +72,7 @@ class TypeRegistry(
     // ── The only writers of byId / placeholders / xrefStubs. [cache] sets the authoritative
     // resolution for an id; [cacheIfAbsent] is the alias/member fan-out that must not clobber a
     // winner already in the slot; [seedPlaceholder] builds an empty cycle-break stub that
-    // [materializeAll] later fills in place and [sharePlaceholder] points a member id at one;
+    // [materializeAll] later fills in place, fanning it out across a group's member ids;
     // [markXRefStub] tags a placeholder that never resolved, for degradation reporting. Each
     // returns its dt so it composes inside a resolution chain. ([register] layers [resolveIntoDtm] +
     // [cache] for freshly-built types — the DTM-registering counterpart to bare [cache].) ──
