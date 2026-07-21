@@ -26,14 +26,14 @@ dependencies {
 }
 
 // Add Ghidra test JARs for integration tests (AbstractGhidraHeadlessIntegrationTest)
-val ghidraInstallDirForTests =
+val ghidraInstallDir =
     System.getenv("GHIDRA_INSTALL_DIR") ?: project.properties["GHIDRA_INSTALL_DIR"]?.toString() ?: "/opt/ghidra"
 
 dependencies {
     testImplementation(
         fileTree(
             mapOf(
-                "dir" to "$ghidraInstallDirForTests/Ghidra/Features/Base/lib",
+                "dir" to "$ghidraInstallDir/Ghidra/Features/Base/lib",
                 "include" to "Base.jar",
             ),
         ),
@@ -43,7 +43,7 @@ dependencies {
     testImplementation(
         fileTree(
             mapOf(
-                "dir" to "$ghidraInstallDirForTests/Ghidra/Test",
+                "dir" to "$ghidraInstallDir/Ghidra/Test",
                 "include" to listOf("**/lib/*.jar"),
             ),
         ),
@@ -87,8 +87,7 @@ tasks.test {
 // timestamped dir so a later run never clobbers an earlier one — and two concurrent runs don't
 // collide on the shared `in-progress-results-generic.bin` (the NoSuchFileException we hit).
 fun Test.reportWithConsoleSummary(name: String) {
-    val stamp = LocalDateTime.now()
-        .format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss-SSS")) +
+    val stamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss-SSS")) +
         "-${ProcessHandle.current().pid()}"
     binaryResultsDirectory.set(project.layout.buildDirectory.dir("test-results/$name/$stamp/binary"))
     reports {
@@ -128,7 +127,6 @@ fun Test.reportWithConsoleSummary(name: String) {
         resultsDir.resolve(".run-stamp").writeText(stamp) // tag THIS run so the next archive is accurate
     }
 
-    val log = logger
     val htmlDir = reports.html.outputLocation
     val failures = mutableListOf<String>()
 
@@ -138,21 +136,12 @@ fun Test.reportWithConsoleSummary(name: String) {
     // many forks are actually running. Fires only for parameterized `binaryName=…, mode=…` suites,
     // so it's inert for the unit-test task.
     val binDir = project.layout.projectDirectory.dir("src/test/resources/binaries").asFile
-    val fixtureSel = providers.gradleProperty("fixture").getOrElse("").split(",").map {
-        it.trim()
-    }.filter { it.isNotEmpty() }
+    val fixtureSel = providers.gradleProperty("fixture").getOrElse("").split(",")
+        .map { it.trim() }.filter { it.isNotEmpty() }
     val modeSel = providers.gradleProperty("mode").getOrElse("").split(",").map { it.trim() }.filter { it.isNotEmpty() }
-    val plannedFixtures = (
-        if (fixtureSel.isNotEmpty()) {
-            fixtureSel
-        } else {
-            (
-                binDir.listFiles()?.map { it.name }
-                    ?: emptyList()
-                )
-        }
-        )
-        .count { File(binDir, it).isFile }
+    val plannedFixtures = fixtureSel.ifEmpty {
+        binDir.listFiles()?.map { it.name } ?: emptyList()
+    }.count { File(binDir, it).isFile }
     val plannedTotal = (plannedFixtures * (if (modeSel.isNotEmpty()) modeSel.size else 2)).coerceAtLeast(1)
     val invRe = Regex("""binaryName=([^,]+), mode=(\w+)""")
     val invocationSuite = Regex(""".*\[\d+]$""")
@@ -180,8 +169,8 @@ fun Test.reportWithConsoleSummary(name: String) {
                     ?: suite.name.substringAfterLast('.')
                 val elapsed = System.currentTimeMillis() - runStart.get()
                 val eta = if (n < plannedTotal) (elapsed.toDouble() / n * (plannedTotal - n)).toLong() else 0L
-                log.lifecycle(
-                    "  ✓ [%d/%d] %s — %dp %df %ds in %ds | elapsed %s, ETA ~%s".format(
+                logger.lifecycle(
+                    "  ✓ [%d/%d] %s — [%dP:%dF:%dS] in %ds | elapsed %s, ETA ~%s".format(
                         n, plannedTotal, label,
                         result.successfulTestCount, result.failedTestCount, result.skippedTestCount,
                         (result.endTime - result.startTime) / 1000, hms(elapsed), hms(eta),
@@ -189,13 +178,13 @@ fun Test.reportWithConsoleSummary(name: String) {
                 )
             }
             if (suite.parent != null) return
-            log.lifecycle(
+            logger.lifecycle(
                 "\n$name: ${result.resultType} — ${result.testCount} tests, ${result.successfulTestCount} passed, " +
                     "${result.failedTestCount} failed, ${result.skippedTestCount} skipped",
             )
-            failures.forEach { log.lifecycle("  FAILED $it") }
-            log.lifecycle("HTML report: ${htmlDir.get().asFile}/index.html")
-            log.lifecycle(
+            failures.forEach { logger.lifecycle("  FAILED $it") }
+            logger.lifecycle("HTML report: ${htmlDir.get().asFile}/index.html")
+            logger.lifecycle(
                 "Per-test results (status + skip reasons + setUp aborts): cat build/test-output/results/*.txt",
             )
         }
@@ -242,21 +231,19 @@ fun Test.headlessGhidraConfig(reportName: String) {
     )
 }
 
-val integrationTest =
-    tasks.register<Test>("integrationTest") {
-        description = "Real-binary assertion tests against binary fixtures (@Tag(\"integration\"))"
-        useJUnitPlatform { includeTags("integration") }
-        headlessGhidraConfig("integrationTest")
-    }
+val integrationTest = tasks.register<Test>("integrationTest") {
+    description = "Real-binary assertion tests against binary fixtures (@Tag(\"integration\"))"
+    useJUnitPlatform { includeTags("integration") }
+    headlessGhidraConfig("integrationTest")
+}
 
 // Diagnostic generators (degradation dumps, source skeletons, type probes) — @Tag("probe"), split
 // out of `integrationTest` so they don't run in CI. Run on demand, narrow with -Pfixture=<name>.
-val probeDump =
-    tasks.register<Test>("probeDump") {
-        description = "Run @Tag(\"probe\") diagnostic dumps (not part of integrationTest)"
-        useJUnitPlatform { includeTags("probe") }
-        headlessGhidraConfig("probeDump")
-    }
+val probeDump = tasks.register<Test>("probeDump") {
+    description = "Run @Tag(\"probe\") diagnostic dumps (not part of integrationTest)"
+    useJUnitPlatform { includeTags("probe") }
+    headlessGhidraConfig("probeDump")
+}
 
 // List every test class grouped by its tag (unit / integration / probe) with its package + file, so
 // tests are discoverable even though integration/probe tests are co-located in their SUT's package
@@ -287,9 +274,6 @@ tasks.register("listTests") {
         logger.lifecycle("\nRun: ./gradlew test | integrationTest [-Pfixture=<name>] | probeDump")
     }
 }
-
-val ghidraInstallDir =
-    System.getenv("GHIDRA_INSTALL_DIR") ?: project.properties["GHIDRA_INSTALL_DIR"]?.toString() ?: "/opt/ghidra"
 
 apply(from = File(ghidraInstallDir).canonicalPath + "/support/buildExtension.gradle")
 
