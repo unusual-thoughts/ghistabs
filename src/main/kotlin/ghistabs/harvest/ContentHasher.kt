@@ -10,6 +10,10 @@ import java.util.*
  * so a `XRef(STRUCT, "Foo")` resolves to the same struct content as a `Ref(id_of_Foo)`.
  */
 abstract class ContentHasher(val hashCache: MutableMap<GlobalTypeId, Int> = mutableMapOf()) {
+    // Method-dropped counterpart to [hashCache] for the [layoutHash] path — kept separate so its values
+    // never poison the method-aware content hash. Memoizes so recursion stays linear on diamond graphs.
+    private val layoutCache = mutableMapOf<GlobalTypeId, Int>()
+
     abstract fun byId(id: GlobalTypeId): TypeAst?
     abstract fun byXRef(xref: TypeDecl.XRef<GlobalTypeId>, silent: Boolean = false): TypeAst?
 
@@ -25,64 +29,69 @@ abstract class ContentHasher(val hashCache: MutableMap<GlobalTypeId, Int> = muta
      * Cycles break via [visited]: a re-entry returns the fixed [BACK_EDGE_HASH].
      * [hashCache] memoizes successful (non-back-edge) results.
      */
-    fun contentHash(decl: TypeDecl<GlobalTypeId>, visited: Set<GlobalTypeId> = emptySet()): Int = decl.run {
+    fun contentHash(
+        decl: TypeDecl<GlobalTypeId>,
+        visited: Set<GlobalTypeId> = emptySet(),
+        layoutOnly: Boolean = false,
+    ): Int = decl.run {
         when (this) {
-            is TypeDecl.Ref -> refKey(id, visited)
+            is TypeDecl.Ref -> refKey(id, visited, layoutOnly)
 
             // Normalize primitives to the Ghidra type they materialize to (see BuiltinTable.canonicalKey),
             // so char's `Range(0,127)` / `WithSizeAttr(8, …)` / `Builtin(-2)` spellings share one hash and
             // don't fork a `.conflict`. Non-primitive shapes fall through to their structural hash.
-            is TypeDecl.Range -> builtinHash() ?: Objects.hash("Range", refKey(of, visited), min, max)
+            is TypeDecl.Range -> builtinHash() ?: Objects.hash("Range", refKey(of, visited, layoutOnly), min, max)
 
             // gcc's `r<base>;<size>;0;` has `<base>` purely decorative (varies per CU). Hash by size only.
             is TypeDecl.Float -> Objects.hash("Float", sizeBytes)
 
-            is TypeDecl.Pointer -> Objects.hash("Pointer", contentHash(pointee, visited))
+            is TypeDecl.Pointer -> Objects.hash("Pointer", contentHash(pointee, visited, layoutOnly))
 
-            is TypeDecl.Reference -> Objects.hash("Reference", contentHash(referent, visited))
+            is TypeDecl.Reference -> Objects.hash("Reference", contentHash(referent, visited, layoutOnly))
 
-            is TypeDecl.Const -> Objects.hash("Const", contentHash(inner, visited))
+            is TypeDecl.Const -> Objects.hash("Const", contentHash(inner, visited, layoutOnly))
 
-            is TypeDecl.Volatile -> Objects.hash("Volatile", contentHash(inner, visited))
+            is TypeDecl.Volatile -> Objects.hash("Volatile", contentHash(inner, visited, layoutOnly))
 
             is TypeDecl.Array -> Objects.hash(
                 "Array",
-                contentHash(element, visited),
+                contentHash(element, visited, layoutOnly),
                 length,
-                indexType?.hash(visited),
+                indexType?.hash(visited, layoutOnly),
             )
 
             is TypeDecl.Enum -> hashCode()
 
             // members: List<Pair<String, Long>> — no ids
 
-            // Layout-only equivalence: the DTM struct has no static members or methods, and both are
-            // cycle sources (libstdc++ `basic_string ↔ _Rep` recurse through static `_S_empty_rep_storage`
-            // and method signatures). Hashing them makes the traversal-order-dependent BACK_EDGE land on
-            // different nodes per CU, forking `.conflict` on layout-identical types. Static fields are
-            // dropped here; methods are hashed by mangled name only (see MethodDecl.contentHash).
+            // The DTM struct has no static members or methods, and both are cycle sources (libstdc++
+            // `basic_string ↔ _Rep` recurse through static `_S_empty_rep_storage` and method signatures) —
+            // hashing them makes the traversal-order BACK_EDGE land on different nodes per CU, forking
+            // `.conflict` on layout-identical types. Static fields are always dropped; methods are dropped
+            // under [layoutOnly] (recursively — bases carry the same per-CU virt/order noise), else hashed
+            // by mangled name ([MethodDecl.contentHash]).
             is TypeDecl.Struct -> Objects.hash(
                 "Struct",
                 rawKind,
                 sizeBytes,
-                bases.map { it.hash(visited) },
-                fields.filter { !it.isStatic }.map { it.hash(visited) },
-                methods.map { it.contentHash() },
+                bases.map { it.hash(visited, layoutOnly) },
+                fields.filter { !it.isStatic }.map { it.hash(visited, layoutOnly) },
+                if (layoutOnly) emptyList<Int>() else methods.map { it.contentHash() },
                 hasVTablePointerMarker,
-                vtableTargetTypeId?.let { refKey(it, visited) },
+                vtableTargetTypeId?.let { refKey(it, visited, layoutOnly) },
             )
 
             is TypeDecl.FunctionT -> Objects.hash(
                 "FunctionT",
-                ret.hash(visited),
-                params.map { it.hash(visited) },
+                ret.hash(visited, layoutOnly),
+                params.map { it.hash(visited, layoutOnly) },
             )
 
             is TypeDecl.Method -> Objects.hash(
                 "Method",
-                cls.hash(visited),
-                ret.hash(visited),
-                params.map { it.hash(visited) },
+                cls.hash(visited, layoutOnly),
+                ret.hash(visited, layoutOnly),
+                params.map { it.hash(visited, layoutOnly) },
             )
 
             is TypeDecl.Complex -> hashCode()
@@ -90,7 +99,8 @@ abstract class ContentHasher(val hashCache: MutableMap<GlobalTypeId, Int> = muta
             // Resolve XRef to its struct definition so a forward-declaration-only CU hashes any
             // surrounding type identically to a full-definition CU. Falls back to (kind, tagName)
             // when truly unresolved.
-            is TypeDecl.XRef -> byXRef(this, silent = true)?.id?.let { refKey(it, visited) } ?: hashCode()
+            is TypeDecl.XRef ->
+                byXRef(this, silent = true)?.id?.let { refKey(it, visited, layoutOnly) } ?: hashCode()
 
             // Source-independent: same slot in every CU = same primitive.
             is TypeDecl.Builtin -> builtinHash() ?: Objects.hash("Builtin", slot)
@@ -98,7 +108,7 @@ abstract class ContentHasher(val hashCache: MutableMap<GlobalTypeId, Int> = muta
             is TypeDecl.WithSizeAttr -> builtinHash() ?: Objects.hash(
                 "WithSizeAttr",
                 sizeBits,
-                inner.hash(visited),
+                inner.hash(visited, layoutOnly),
             )
 
             // Skip the visited guard when body is an XRef: byXRef resolution must still be able to
@@ -106,38 +116,49 @@ abstract class ContentHasher(val hashCache: MutableMap<GlobalTypeId, Int> = muta
             //   InlineDef(id=B, body=XRef(STRUCT, Foo))   resolving to id=B's own Struct
             // would pre-mark B and make refKey(B) return BACK_EDGE_HASH instead of struct content.
             // For non-XRef bodies the guard IS required (a Ref(id) in a Struct body must not recurse).
-            is TypeDecl.InlineDef -> body.hash(if (body is TypeDecl.XRef) visited else visited + id)
+            is TypeDecl.InlineDef -> body.hash(if (body is TypeDecl.XRef) visited else visited + id, layoutOnly)
         }
     }
 
     /**
-     * Resolve [id] and recurse into the referenced body. Memoizes successful
-     * (non-back-edge) results in [hashCache]. For mutually-recursive types the first computation wins —
-     * deterministic across calls; good enough for collision detection and DTM dedup.
+     * Layout-only hash — [contentHash] with every struct's methods dropped, recursively. gcc emits a
+     * virtual as VIRTUAL (vtoff set) in its defining CU and NORMAL (vtoff null) elsewhere, and reorders
+     * methods per CU, so a layout-identical class hashes differently across CUs — and the divergence
+     * propagates through method-bearing bases (`basic_istream : virtual basic_ios`). Group scope owners
+     * by this so per-CU method noise doesn't falsely demote a scope group to header keys.
      */
-    fun refKey(id: GlobalTypeId, visited: Set<GlobalTypeId>): Int {
+    fun layoutHash(body: TypeDecl<GlobalTypeId>): Int = contentHash(body, layoutOnly = true)
+
+    /**
+     * Resolve [id] and recurse into the referenced body. Memoizes successful (non-back-edge) results in
+     * [hashCache] for [contentHash], in [layoutCache] for [layoutHash] (`layoutOnly`). Mutually-recursive
+     * types: first computation wins — deterministic across calls; good enough for collision detection.
+     */
+    fun refKey(id: GlobalTypeId, visited: Set<GlobalTypeId>, layoutOnly: Boolean = false): Int {
         if (id in visited) return Objects.hash("back-edge")
-        hashCache[id]?.let { return it }
+        val cache = if (layoutOnly) layoutCache else hashCache
+        cache[id]?.let { return it }
         // Source-independent fallback for any unresolved id that slipped past the globalize-time
         // Builtin hoist. Hashing the full GlobalTypeId would bake `source` in and let per-CU
         // slots for the same logical builtin diverge.
         val referenced = byId(id) ?: return Objects.hash("unresolved", id.n)
-        return contentHash(referenced.body, visited + id).also { hashCache[id] = it }
+        return contentHash(referenced.body, visited + id, layoutOnly).also { cache[id] = it }
     }
 
-    private fun TypeDecl<GlobalTypeId>.hash(visited: Set<GlobalTypeId> = emptySet()) = contentHash(this, visited)
+    private fun TypeDecl<GlobalTypeId>.hash(visited: Set<GlobalTypeId> = emptySet(), layoutOnly: Boolean = false) =
+        contentHash(this, visited, layoutOnly)
 
-    private fun FieldDecl<GlobalTypeId>.hash(visited: Set<GlobalTypeId>) = Objects.hash(
+    private fun FieldDecl<GlobalTypeId>.hash(visited: Set<GlobalTypeId>, layoutOnly: Boolean) = Objects.hash(
         "Field",
         name,
-        contentHash(type, visited),
+        contentHash(type, visited, layoutOnly),
         offsetBits,
         sizeBits,
         isStatic,
     )
 
-    private fun BaseDecl<GlobalTypeId>.hash(visited: Set<GlobalTypeId>) =
-        Objects.hash("Base", contentHash(type, visited), isVirtual, access, offsetBits)
+    private fun BaseDecl<GlobalTypeId>.hash(visited: Set<GlobalTypeId>, layoutOnly: Boolean) =
+        Objects.hash("Base", contentHash(type, visited, layoutOnly), isVirtual, access, offsetBits)
 
     companion object {
         // Class-name key is stable across CUs and equal for every stab spelling of the same primitive.
