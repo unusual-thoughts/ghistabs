@@ -13,16 +13,20 @@
             "max": 19
         },
         "canonical-key-merged": {
-            "min": 311,
-            "max": 311
+            "min": 313,
+            "max": 313
         },
         "canonical-key-multi-hash": {
-            "min": 25,
-            "max": 25
+            "min": 23,
+            "max": 23
         },
         "canonical-key-multi-kind": {
             "min": 2,
             "max": 2
+        },
+        "canonical-scope-collision": {
+            "min": 16,
+            "max": 16
         },
         "data-no-coverage": {
             "min": 192,
@@ -63,6 +67,10 @@
         "demangle-attempted": {
             "min": 6252,
             "max": 6252
+        },
+        "demangler-ambiguous": {
+            "min": 2,
+            "max": 2
         },
         "demangler-skip-no-replacement": {
             "min": 23,
@@ -349,8 +357,8 @@
             "max": 6
         },
         "xref-base-tag-resolved": {
-            "min": 262,
-            "max": 262
+            "min": 332,
+            "max": 332
         },
         "xref-undefined": {
             "min": 12,

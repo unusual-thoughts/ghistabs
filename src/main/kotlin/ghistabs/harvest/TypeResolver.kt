@@ -113,10 +113,10 @@ class TypeResolver(val harvest: Harvest, private val foldSources: Boolean = true
     /** Multi-body collisions after content-equivalence filtering — only genuinely divergent ones. */
     val divergentCollisions: Map<GlobalTypeId, Map<String, Set<TypeDecl<GlobalTypeId>>>> by lazy {
         harvest.rawCollisions.filterValues { byName ->
-            byName.values.flatten().map { contentHash(it) }.toSet().size > 1
+            groupByContent(byName.values.flatten()) { it }.size > 1
         }.mapValues { (_, byName) ->
             byName.mapValues { (_, types) ->
-                types.groupBy { contentHash(it) }.map { it.value.first() }.toSet()
+                groupByContent(types) { it }.map { it.first() }.toSet()
             }
         }
     }
@@ -380,7 +380,7 @@ class TypeResolver(val harvest: Harvest, private val foldSources: Boolean = true
                     val owners = members.filter { it.demangledClassPath() != null }.ifEmpty { members }
                     // Layout-only: owners diverge only in per-CU method flags/order (gcc VIRTUAL vs NORMAL,
                     // reordering), which never enter the DTM struct — don't let that noise demote the group.
-                    if (owners.groupBy { layoutHash(it.body) }.size == 1) {
+                    if (groupByContent(owners) { it.body }.size == 1) {
                         val group = classifyGroup(scopeKey, owners)
                         listOf(if (owners.size == members.size) group else group.copy(members = members.map { it.id }))
                     } else {
@@ -395,7 +395,7 @@ class TypeResolver(val harvest: Harvest, private val foldSources: Boolean = true
             // scope-keyed method-bearing copy's layout (methods never enter the DTM struct), so they fold
             // onto it instead of forking a duplicate slot. The `ghidraName` guard keeps genuinely
             // different same-layout classes apart; the winner prefers the method-bearing copy.
-            for ((_, equivalent) in slots.groupBy { layoutHash(it.ast.body) }) {
+            for (equivalent in groupByContent(slots) { it.ast.body }) {
                 val named = equivalent.filter { !it.ast.name.isNullOrEmpty() }
                 if (equivalent.size == 1 || named.map { it.ast.ghidraName }.toSet().size != 1) {
                     for (g in equivalent) put(g.key, g)
@@ -438,11 +438,11 @@ class TypeResolver(val harvest: Harvest, private val foldSources: Boolean = true
                 "$key: ${distinctKinds.map { it.simpleName }}",
             )
         }
-        val byHash = members.groupBy { contentHash(it.body) }
+        val contentClasses = groupByContent(members) { it.body }
         when {
-            byHash.size > 1 -> debug(
+            contentClasses.size > 1 -> debug(
                 "canonical-key-multi-hash",
-                "$key: ${byHash.size} distinct bodies across " +
+                "$key: ${contentClasses.size} distinct bodies across " +
                     members.map { it.id.source.filename }.toSet(),
             )
 
@@ -458,7 +458,7 @@ class TypeResolver(val harvest: Harvest, private val foldSources: Boolean = true
                 .thenByDescending { countUnresolvedRefs(it.body) }
                 .thenBy { it.id.source.filename },
         )!!
-        return CanonicalGroup(key, winner, members.map { it.id }, byHash.size)
+        return CanonicalGroup(key, winner, members.map { it.id }, contentClasses.size)
     }
 
     private fun countUnresolvedRefs(body: TypeDecl<GlobalTypeId>): Int {

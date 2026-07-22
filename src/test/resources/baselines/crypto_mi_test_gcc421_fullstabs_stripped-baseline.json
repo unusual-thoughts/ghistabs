@@ -9,28 +9,32 @@
             "max": 9
         },
         "base-empty-ebo": {
-            "min": 66,
-            "max": 66
+            "min": 78,
+            "max": 78
         },
         "canonical-content-merged": {
             "min": 11,
             "max": 11
         },
         "canonical-key-merged": {
-            "min": 2100,
-            "max": 2100
+            "min": 2099,
+            "max": 2099
         },
         "canonical-key-multi-hash": {
-            "min": 246,
-            "max": 246
+            "min": 247,
+            "max": 247
         },
         "canonical-key-multi-kind": {
             "min": 28,
             "max": 28
         },
         "canonical-scope-collision": {
-            "min": 2,
-            "max": 2
+            "min": 16,
+            "max": 16
+        },
+        "contenthash-collision": {
+            "min": 4,
+            "max": 4
         },
         "data-no-coverage": {
             "min": 1775,
@@ -57,20 +61,20 @@
             "max": 26
         },
         "degraded-placeholder-undefined-fields": {
-            "min": 9,
-            "max": 9
+            "min": 11,
+            "max": 11
         },
         "degraded-static-typed-all-undefined": {
             "min": 4,
             "max": 4
         },
         "degraded-struct-mostly-undefined": {
-            "min": 86,
-            "max": 86
+            "min": 93,
+            "max": 93
         },
         "degraded-struct-truncated": {
-            "min": 34,
-            "max": 34
+            "min": 50,
+            "max": 50
         },
         "degraded-vtable-failed": {
             "min": 121,
@@ -117,12 +121,12 @@
             "max": 14
         },
         "dtm-conflicts-created": {
-            "min": 1,
-            "max": 1
+            "min": 10,
+            "max": 10
         },
         "dtm-conflicts-post": {
-            "min": 1,
-            "max": 1
+            "min": 10,
+            "max": 10
         },
         "dtm-conflicts-pre": {
             "min": 0,
@@ -281,8 +285,8 @@
             "max": 92230
         },
         "inheritance-applied": {
-            "min": 964,
-            "max": 964
+            "min": 980,
+            "max": 980
         },
         "inheritance-pseudo-fields-promoted": {
             "min": 1,
@@ -305,8 +309,8 @@
             "max": 105
         },
         "placeholder-created": {
-            "min": 52319,
-            "max": 52319
+            "min": 52341,
+            "max": 52341
         },
         "pointee-typed": {
             "min": 99,
@@ -357,8 +361,8 @@
             "max": 113
         },
         "vfptr-normalized": {
-            "min": 61,
-            "max": 61
+            "min": 57,
+            "max": 57
         },
         "vtable-failed": {
             "min": 121,
@@ -369,8 +373,8 @@
             "max": 121
         },
         "vtable-skipped": {
-            "min": 53,
-            "max": 53
+            "min": 49,
+            "max": 49
         },
         "xref-ambiguous": {
             "min": 51,

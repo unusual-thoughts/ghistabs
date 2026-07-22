@@ -20,6 +20,10 @@
             "min": 4,
             "max": 4
         },
+        "contenthash-collision": {
+            "min": 3,
+            "max": 3
+        },
         "data-no-coverage": {
             "min": 99,
             "max": 99
@@ -357,8 +361,8 @@
             "max": 2
         },
         "xref-base-tag-resolved": {
-            "min": 63,
-            "max": 63
+            "min": 70,
+            "max": 70
         },
         "xref-undefined": {
             "min": 40,
