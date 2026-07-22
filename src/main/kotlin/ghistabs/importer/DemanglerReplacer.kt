@@ -128,8 +128,16 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val typeRegis
                 .substringBeforeLast('/', missingDelimiterValue = "/")
                 .ifEmpty { "/" }
                 .let { CategoryPath(it) }
-            val candidate = findByName(stub.simpleName, preferredCategory)
+            // Priority: exact DTM name → exact demangler-link (byDemangledClass) → normalized-spelling
+            // reconstruction (last resort) → RTTI layout. The last-resort `demangler-normalized-match`
+            // count quantifies what the const/typedef reconstruction uniquely resolves.
+            val candidate = findByExactName(stub.simpleName, preferredCategory)?.also { debug("demangler-exact-match") }
+                ?: typeRegistry.byDemangledClass[stub.pathName]?.also { debug("demangler-reverse-demangle-match") }
+                ?: findByNormalizedName(stub.simpleName, preferredCategory)?.also {
+                    debug("demangler-normalized-match")
+                }
                 ?: rtti.typeInfoLayout(stub.simpleName)?.let { dtm.resolve(it, null) }
+                    ?.also { debug("demangler-rtti-match") }
                 ?: continue
             val deps = collectDependsOnPaths(candidate)
             replacements[stub.simpleName] = ReplacementRecord(
@@ -240,28 +248,29 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val typeRegis
         typeRegistry.allCreatedDataTypes.groupBy { normalizedSpelling(it.name) }
     }
 
+    /** Exact DTM-name match for a demangler stub — no spelling normalization. */
+    fun findByExactName(simpleName: String, preferredCategory: CategoryPath? = null): DataType? =
+        disambiguate(byExactName[simpleName].orEmpty(), simpleName, preferredCategory)
+
     /**
-     * Resolves a GNU-demangler stub's simple name to one of our stab-derived datatypes, bridging the two
-     * spellings of the same C++ type. The demangler keeps STL typedef shorthand and spells template const
-     * east, glued (`std::string const` → `std::string_const`); gcc's stabs expand the typedef
-     * (`std::basic_string<char, …>`) and spell const west, glued (`conststd::…`). [normalizedSpelling]
-     * reduces both to one form so a stub still finds its type.
-     *
-     * Used to match `/Demangler/std/string` stubs to our `/std/string`. Disambiguates by
-     * [preferredCategory] when multiple match.
+     * Last-resort reconstruction match, reached only after exact-name and the [TypeRegistry.byDemangledClass]
+     * demangler-link both miss. Bridges the two spellings of the same C++ type: the demangler keeps STL
+     * typedef shorthand and spells template const east, glued (`std::string const` → `std::string_const`);
+     * gcc's stabs expand the typedef (`std::basic_string<char, …>`) and spell const west, glued
+     * (`conststd::…`). [normalizedSpelling] reduces both to one form so a stub still finds its type.
      */
-    fun findByName(simpleName: String, preferredCategory: CategoryPath? = null): DataType? {
-        val exact = byExactName[simpleName]
-        // Typedef-expansion / east-west-const mismatch: an exact miss may still be the same type under
-        // the demangler's shorthand+east spelling. Only trust a unique bucket — const-variant pairs
-        // and same-shape distinct instantiations stay ambiguous.
-        val matches = exact ?: byNormalizedName[normalizedSpelling(simpleName)].orEmpty()
+    fun findByNormalizedName(simpleName: String, preferredCategory: CategoryPath? = null): DataType? =
+        // Only trust a unique bucket — const-variant pairs and same-shape distinct instantiations stay ambiguous.
+        disambiguate(byNormalizedName[normalizedSpelling(simpleName)].orEmpty(), simpleName, preferredCategory)
+
+    /** Pick a single winner from [matches]; null when empty or genuinely ambiguous. */
+    private fun disambiguate(
+        matches: Collection<DataType>,
+        simpleName: String,
+        preferredCategory: CategoryPath?,
+    ): DataType? {
         if (matches.isEmpty()) return null
-        if (matches.size == 1) {
-            return matches.single().also {
-                if (exact == null) debug("demangler-normalized-match", "$simpleName -> ${it.pathName}")
-            }
-        }
+        if (matches.size == 1) return matches.single()
         if (preferredCategory != null) {
             matches.firstOrNull { it.categoryPath == preferredCategory }?.let { return it }
         }

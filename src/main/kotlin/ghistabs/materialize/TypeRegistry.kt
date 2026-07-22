@@ -1,19 +1,23 @@
 package ghistabs.materialize
 
+import ghidra.app.util.demangler.Demangled
 import ghidra.program.model.data.CategoryPath
 import ghidra.program.model.data.DataType
 import ghidra.program.model.data.DataTypeConflictHandler
 import ghidra.program.model.data.DataTypeManager
 import ghidra.util.task.TaskMonitor
+import ghistabs.demangle
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.StabsDiagnostics
 import ghistabs.harvest.CanonicalGroup
 import ghistabs.harvest.Harvest
+import ghistabs.harvest.OpenFunction
 import ghistabs.harvest.TypeAst
 import ghistabs.harvest.TypeResolver
 import ghistabs.materialize.itanium.RttiStructs
 import ghistabs.parse.CATEGORY
 import ghistabs.parse.GlobalTypeId
+import ghistabs.parse.SymbolDecl
 import ghistabs.parse.TypeDecl
 
 /**
@@ -160,4 +164,34 @@ class TypeRegistry(
 
     /** Materialized DataType for [id], authoritative for `(category, name)`. Prefer over `dtm.getDataType`. */
     fun dataTypeFor(id: GlobalTypeId): DataType? = byId[id]
+
+    /**
+     * Materialized type indexed by the full `/Demangler/...` category path the demangler would mint for
+     * its enclosing class — the bridge for typedef-spelled template instantiations the demangler can't
+     * match to our stab spelling (`__normal_iterator<CryptoPP::word32*,…>` vs demangled `<unsigned int*,…>`).
+     * Every out-of-line member function ties its mangled name to our stab type via the `this`-param
+     * pointee, and the demangler builds the class's stub path from the same [Demangled] namespace chain —
+     * so keying by that path (not the leaf name, which collides across nested `iterator`/`Item`/…) matches
+     * `StubRecord.pathName` exactly, no spelling reconstruction. Built once, O(member functions).
+     */
+    val byDemangledClass: Map<String, DataType> by lazy {
+        buildMap {
+            for (fn in harvest.openFunctions) {
+                val dt = fn.thisParamTypeId()?.let { dataTypeFor(it) } ?: continue
+                demangle(fn.name)?.namespace?.let { putIfAbsent(demanglerPath(it).path, dt) }
+            }
+        }
+    }
+
+    /** Replicates the (protected) `DemangledDataType.getDemanglerCategoryPath` + leaf: `/Demangler/<ns…>/<name>`. */
+    private fun demanglerPath(d: Demangled): CategoryPath =
+        (d.namespace?.let { demanglerPath(it) } ?: CategoryPath.ROOT.extend("Demangler")).extend(d.name)
+
+    /** Pointee type-id of a member function's leading `this` param (`InlineDef?→Pointer→Ref`), else null. */
+    private fun OpenFunction.thisParamTypeId(): GlobalTypeId? {
+        val p = params.firstOrNull()?.body as? SymbolDecl.StackParam ?: return null
+        if (p.name != "this") return null
+        val inner = (p.type as? TypeDecl.InlineDef)?.body ?: p.type
+        return ((inner as? TypeDecl.Pointer)?.pointee as? TypeDecl.Ref)?.id
+    }
 }

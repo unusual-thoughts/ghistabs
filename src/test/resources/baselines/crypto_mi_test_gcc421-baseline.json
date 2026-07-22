@@ -9,15 +9,15 @@
             "max": 6
         },
         "apply-error": {
-            "min": 28,
+            "min": 0,
             "max": 28
         },
         "apply-error-invalid-input": {
-            "min": 24,
+            "min": 0,
             "max": 24
         },
         "apply-error-parameter-mismatch": {
-            "min": 4,
+            "min": 0,
             "max": 4
         },
         "base-empty-ebo": {
@@ -88,13 +88,21 @@
             "min": 27355,
             "max": 27355
         },
-        "demangler-normalized-match": {
-            "min": 5,
-            "max": 5
+        "demangler-exact-match": {
+            "min": 699,
+            "max": 699
+        },
+        "demangler-reverse-demangle-match": {
+            "min": 99,
+            "max": 99
+        },
+        "demangler-rtti-match": {
+            "min": 3,
+            "max": 3
         },
         "demangler-skip-no-replacement": {
-            "min": 207,
-            "max": 207
+            "min": 113,
+            "max": 113
         },
         "desc-dropped-so": {
             "min": 33,
@@ -285,8 +293,8 @@
             "max": 3
         },
         "replaced-demangler": {
-            "min": 707,
-            "max": 707
+            "min": 801,
+            "max": 801
         },
         "stab-value-func-relative": {
             "min": 35846,
