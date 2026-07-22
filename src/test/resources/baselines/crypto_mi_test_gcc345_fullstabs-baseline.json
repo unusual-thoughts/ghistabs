@@ -1,11 +1,11 @@
 {
     "counters": {
         "apply-error": {
-            "min": 0,
+            "min": 24,
             "max": 24
         },
         "apply-error-invalid-input": {
-            "min": 0,
+            "min": 24,
             "max": 24
         },
         "base-empty-ebo": {
@@ -27,6 +27,10 @@
         "class-not-struct": {
             "min": 4,
             "max": 4
+        },
+        "contenthash-collision": {
+            "min": 3,
+            "max": 3
         },
         "data-no-coverage": {
             "min": 1064,
@@ -69,8 +73,8 @@
             "max": 11
         },
         "degraded-struct-mostly-undefined": {
-            "min": 56,
-            "max": 56
+            "min": 55,
+            "max": 55
         },
         "degraded-struct-truncated": {
             "min": 11,
@@ -389,8 +393,8 @@
             "max": 36
         },
         "xref-base-tag-resolved": {
-            "min": 77,
-            "max": 77
+            "min": 84,
+            "max": 84
         },
         "xref-undefined": {
             "min": 68,

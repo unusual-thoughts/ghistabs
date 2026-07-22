@@ -12,6 +12,10 @@
             "min": 4,
             "max": 4
         },
+        "canonical-scope-collision": {
+            "min": 4,
+            "max": 4
+        },
         "class-not-struct": {
             "min": 2,
             "max": 2
