@@ -7,10 +7,8 @@ import ghidra.program.model.data.Array
 import ghistabs.applyDemangling
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.degradation
-import ghistabs.materialize.TemplateNameShortener
 import ghistabs.materialize.TypeRegistry
 import ghistabs.materialize.itanium.RttiStructs
-import ghistabs.materialize.typedefAliases
 import ghistabs.parse.CATEGORY
 import java.util.*
 
@@ -72,9 +70,6 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val typeRegis
 
             return ops to skips
         }
-
-        /** West `const<leaf>` at a type-start boundary → captures the leaf for east relocation. */
-        val EAST_CONST_LEAF = Regex("(?<=[<,(&*]|^)const([\\w:]+)")
     }
 
     /**
@@ -128,14 +123,9 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val typeRegis
                 .substringBeforeLast('/', missingDelimiterValue = "/")
                 .ifEmpty { "/" }
                 .let { CategoryPath(it) }
-            // Priority: exact DTM name → exact demangler-link (byDemangledClass) → normalized-spelling
-            // reconstruction (last resort) → RTTI layout. The last-resort `demangler-normalized-match`
-            // count quantifies what the const/typedef reconstruction uniquely resolves.
+            // Priority: exact DTM name → exact demangler-link (byDemangledClass) → RTTI layout.
             val candidate = findByExactName(stub.simpleName, preferredCategory)?.also { debug("demangler-exact-match") }
                 ?: typeRegistry.byDemangledClass[stub.pathName]?.also { debug("demangler-reverse-demangle-match") }
-                ?: findByNormalizedName(stub.simpleName, preferredCategory)?.also {
-                    debug("demangler-normalized-match")
-                }
                 ?: rtti.typeInfoLayout(stub.simpleName)?.let { dtm.resolve(it, null) }
                     ?.also { debug("demangler-rtti-match") }
                 ?: continue
@@ -234,34 +224,12 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val typeRegis
         return visited
     }
 
-    /** Folds our typedef targets onto their aliases (`std::basic_string<…>` → `std::string`) — see [normalizedSpelling]. */
-    private val nameShortener by lazy { TemplateNameShortener(typedefAliases(typeRegistry.allCreatedDataTypes)) }
-
     /** Every datatype the registry materialized, by name (checked first, so exact names never go through normalization) */
     private val byExactName = typeRegistry.allCreatedDataTypes.groupBy { it.name }.mapValues { it.value.toSet() }
-
-    /**
-     * [typeRegistry.allCreatedDataTypes] grouped by [normalizedSpelling] — the fallback index. `iterator` and
-     * `const_iterator` stay in distinct buckets, each matchable, since const is kept.
-     */
-    private val byNormalizedName: Map<String, List<DataType>> by lazy {
-        typeRegistry.allCreatedDataTypes.groupBy { normalizedSpelling(it.name) }
-    }
 
     /** Exact DTM-name match for a demangler stub — no spelling normalization. */
     fun findByExactName(simpleName: String, preferredCategory: CategoryPath? = null): DataType? =
         disambiguate(byExactName[simpleName].orEmpty(), simpleName, preferredCategory)
-
-    /**
-     * Last-resort reconstruction match, reached only after exact-name and the [TypeRegistry.byDemangledClass]
-     * demangler-link both miss. Bridges the two spellings of the same C++ type: the demangler keeps STL
-     * typedef shorthand and spells template const east, glued (`std::string const` → `std::string_const`);
-     * gcc's stabs expand the typedef (`std::basic_string<char, …>`) and spell const west, glued
-     * (`conststd::…`). [normalizedSpelling] reduces both to one form so a stub still finds its type.
-     */
-    fun findByNormalizedName(simpleName: String, preferredCategory: CategoryPath? = null): DataType? =
-        // Only trust a unique bucket — const-variant pairs and same-shape distinct instantiations stay ambiguous.
-        disambiguate(byNormalizedName[normalizedSpelling(simpleName)].orEmpty(), simpleName, preferredCategory)
 
     /** Pick a single winner from [matches]; null when empty or genuinely ambiguous. */
     private fun disambiguate(
@@ -295,23 +263,4 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val typeRegis
         )
         return null
     }
-
-    /**
-     * A demangler stub name and our stab name for the same type, reduced to one spelling. Shorten
-     * first — folding `std::basic_string<char, …>` onto `std::string` collapses the template to a
-     * leaf — then [normalizeConst], which relies on that leaf to relocate west const without landing
-     * inside template args.
-     */
-    private fun normalizedSpelling(name: String): String = normalizeConst(nameShortener.shorten(name))
-
-    /**
-     * Reduce cv-const spelling to the demangler's east form, glued: `conststd::string` and
-     * `std::string_const` both become `std::stringconst`. West const (source spelling) is relocated
-     * after the leaf type it qualifies — a boundary-anchored identifier run, since const only
-     * qualifies a leaf here (templates are folded by [normalizedSpelling] first); east const just loses
-     * its `_`/space separator. Const is kept, so const/non-const variants stay distinct.
-     */
-    private fun normalizeConst(name: String): String = name.replace(" const", "const")
-        .replace("_const", "const")
-        .replace(EAST_CONST_LEAF) { "${it.groupValues[1]}const" }
 }
