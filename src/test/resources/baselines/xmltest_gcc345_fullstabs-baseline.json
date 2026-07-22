@@ -68,6 +68,10 @@
             "min": 4318,
             "max": 4318
         },
+        "demangler-exact-match": {
+            "min": 119,
+            "max": 119
+        },
         "demangler-skip-no-replacement": {
             "min": 24,
             "max": 24
