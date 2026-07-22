@@ -8,6 +8,9 @@ import java.lang.Long.compareUnsigned
 fun TypeDecl<*>.resolveBuiltin(): DataType? = when (this) {
     is TypeDecl.Builtin -> resolveSlot(slot)
 
+    // gcc's void — a type explicitly defined as itself (`(x,y)=(x,y)`), recognised at parse.
+    TypeDecl.Void -> VoidDataType()
+
     // Legacy form: `t<n>=@s<bits>;-<slot>` lands here after globalize hoists the
     // negative-id Ref. Bool is the recurring case.
     is TypeDecl.WithSizeAttr if inner is TypeDecl.Builtin ->

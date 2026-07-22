@@ -173,12 +173,16 @@
             "max": 152
         },
         "harvest-typeAsts-Ref": {
-            "min": 274,
-            "max": 274
+            "min": 234,
+            "max": 234
         },
         "harvest-typeAsts-Struct": {
             "min": 1907,
             "max": 1907
+        },
+        "harvest-typeAsts-Void": {
+            "min": 40,
+            "max": 40
         },
         "harvest-typeAsts-XRef": {
             "min": 92,
@@ -205,8 +209,8 @@
             "max": 1682
         },
         "placeholder-created": {
-            "min": 4773,
-            "max": 4773
+            "min": 4774,
+            "max": 4774
         },
         "stab-value-func-relative": {
             "min": 42189,
