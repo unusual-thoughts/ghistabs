@@ -108,7 +108,7 @@ class StabsImportRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
             "time_get", "time_put", "istreambuf_iterator", "__normal_iterator",
             "__moneypunct_cache", "__numpunct_cache", "__timepunct", "__timepunct_cache",
             "_Rope_RopeRep", "signed", "__gthread_mutex_t", "bitset", "less", "pair",
-            "vector", "facet",
+            "vector",
             // std exception / EH hierarchy (forward-declared for RTTI, never fully defined)
             "exception", "bad_alloc", "bad_cast", "bad_exception", "bad_typeid", "failure",
             "logic_error", "runtime_error", "domain_error", "invalid_argument", "length_error",
@@ -158,6 +158,9 @@ class StabsImportRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
     private val fixture get() = File("src/test/resources/binaries/$binaryName")
     private val baselineFile get() = File("src/test/resources/baselines/${fixture.nameWithoutExtension}-baseline.json")
     private val recordsFile get() = outputFile("record")
+    private val emptyStubDumpFile get() = File(
+        "build/test-output/demangler-empty-stubs/${fixture.nameWithoutExtension}.txt",
+    )
     private val harvestFile get() = outputFile("harvest.${mode.name.lowercase()}")
     private val registryDumpFile get() = outputFile("registry.${mode.name.lowercase()}")
     private val degradationFile
@@ -916,19 +919,39 @@ class StabsImportRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
         // `replaced-demangler`); the stubs are then created later and never revisited. That leaves
         // them empty at assertion time — a mode-ordering artifact, not a materialization gap.
         assumeTrue(mode == Mode.AFTER, "Skipping: /Demangler stubs are created after our pass in CONCURRENT")
-        val emptyStubs = program.dataTypeManager.allDataTypes
+        val allEmpty = program.dataTypeManager.allDataTypes
             .asSequence()
             .filterIsInstance<Structure>()
             .filter { it.categoryPath.path.startsWith("/Demangler") }
             .filter { it.isZeroLength || it.numComponents == 0 }
+            .toList()
+        // Dump the pre-whitelist empty-stub names so [whitelistEntriesAreLive] can audit the whitelist
+        // across the whole corpus — an entry live in no fixture is dead and should be pruned.
+        emptyStubDumpFile.apply { parentFile.mkdirs() }
+            .writeText(allEmpty.map { it.name }.toSortedSet().joinToString("\n"))
+        val emptyStubs = allEmpty
             .filterNot { it.name in ALLOWED_EMPTY_DEMANGLER_STUBS }
             .map { "${it.categoryPath.path}/${it.name}" }
-            .toList()
         Assertions.assertTrue(
             emptyStubs.isEmpty(),
             "Expected zero unexpected empty /Demangler/* stubs, found ${emptyStubs.size}: " +
                 emptyStubs.take(10).joinToString(),
         )
+    }
+
+    /**
+     * Whitelist hygiene: every [ALLOWED_EMPTY_DEMANGLER_STUBS] entry must correspond to a real empty
+     * stub in at least one fixture — else it's dead cruft (e.g. now filled by the demangler
+     * reverse-index bridge). Reads the per-fixture dumps [demanglerHasNoEmptyStubs] writes; runs once
+     * (fixture-independent) and only when a full corpus has been dumped, so a partial run can't misfire.
+     */
+    @Test
+    fun whitelistEntriesAreLive() {
+        val dumps = File("build/test-output/demangler-empty-stubs").listFiles { f -> f.extension == "txt" }.orEmpty()
+        assumeTrue(dumps.size >= 15, "need a full-corpus empty-stub dump (have ${dumps.size})")
+        val live = dumps.flatMap { it.readLines() }.filter { it.isNotBlank() }.toSet()
+        val dead = ALLOWED_EMPTY_DEMANGLER_STUBS.filterNot { it in live }
+        Assertions.assertTrue(dead.isEmpty(), "Dead ALLOWED_EMPTY_DEMANGLER_STUBS entries (prune): $dead")
     }
 
     @Test

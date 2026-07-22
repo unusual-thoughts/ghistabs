@@ -52,6 +52,14 @@
             "min": 2140,
             "max": 2140
         },
+        "demangler-exact-match": {
+            "min": 53,
+            "max": 53
+        },
+        "demangler-rtti-match": {
+            "min": 4,
+            "max": 4
+        },
         "demangler-skip-no-replacement": {
             "min": 65,
             "max": 65

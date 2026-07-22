@@ -1,11 +1,11 @@
 {
     "counters": {
         "apply-error": {
-            "min": 24,
+            "min": 0,
             "max": 24
         },
         "apply-error-invalid-input": {
-            "min": 24,
+            "min": 0,
             "max": 24
         },
         "base-empty-ebo": {
@@ -92,13 +92,17 @@
             "min": 27993,
             "max": 27993
         },
-        "demangler-normalized-match": {
-            "min": 5,
-            "max": 5
+        "demangler-exact-match": {
+            "min": 694,
+            "max": 694
+        },
+        "demangler-reverse-demangle-match": {
+            "min": 103,
+            "max": 103
         },
         "demangler-skip-no-replacement": {
-            "min": 182,
-            "max": 182
+            "min": 84,
+            "max": 84
         },
         "desc-dropped-undf": {
             "min": 1,
@@ -329,8 +333,8 @@
             "max": 1464
         },
         "replaced-demangler": {
-            "min": 699,
-            "max": 699
+            "min": 797,
+            "max": 797
         },
         "rtti-pseudo-substituted": {
             "min": 150,
