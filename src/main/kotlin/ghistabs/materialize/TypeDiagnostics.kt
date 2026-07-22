@@ -103,11 +103,19 @@ internal fun DataTypeManager.conflictCount(): Long =
  * over the construction-time baseline; a nonzero delta is a WARN.
  */
 fun TypeRegistry.reportConflictDelta() {
-    val after = dtm.conflictCount()
+    val conflicts = dtm.allDataTypes.asSequence().filter { DataTypeUtilities.isConflictDataType(it) }.toList()
     debug("dtm-conflicts-pre", count = conflictsBefore)
-    debug("dtm-conflicts-post", count = after)
-    val added = after - conflictsBefore
-    if (added > 0) warn("dtm-conflicts-created", "import forked $added .conflict data types", count = added)
+    debug("dtm-conflicts-post", count = conflicts.size.toLong())
+    val added = conflicts.size - conflictsBefore
+    if (added > 0) {
+        warn("dtm-conflicts-created", count = added)
+        // Name the forked types (pointers/arrays collapsed onto their conflict base) as examples,
+        // so "top examples" answers *which* types clashed, not just how many.
+        conflicts.asSequence()
+            .map { (DataTypeUtilities.getBaseDataType(it) ?: it).pathName }
+            .distinct().sorted().take(10)
+            .forEach { debug("dtm-conflicts-created", it, count = 0) }
+    }
 }
 
 // Ghidra's gap-fill byte is DataType.DEFAULT (DefaultDataType), which does NOT implement Undefined,
