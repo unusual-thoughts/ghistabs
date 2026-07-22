@@ -812,33 +812,23 @@ class StabsImportRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
     }
 
     /**
-     * gcc/gdb encode void as a TypeAst with body `Ref(self.id)`. These show
-     * up in method signatures as both the return type (every void-returning
-     * ctor) and the trailing end-of-args sentinel. Without recognition
-     * they'd surface as empty-Structure placeholders named `[<file>,N]`
-     * polluting every demangled signature.
-     *
-     * The check: no DTM Structure should have a synthetic `[file,N]`-shaped
-     * name, AND for xapasmcsr the specific path that prompted the discovery
-     * (stdlib.h-derived `div_t` ctors) must not survive.
+     * gcc encodes void as a type explicitly defined as itself (`(x,y)=(x,y)`), which the parser
+     * lowers to [TypeDecl.Void]. It must materialize to VoidDataType — never an empty-Structure
+     * placeholder named `[<file>,N]` polluting demangled signatures. (A *bare* `name:t(x,y)` with
+     * no `=` is a forward reference, not void, and legitimately becomes an incomplete Structure —
+     * that case is not checked here.)
      */
     @Test
     fun voidSelfRefNotMaterialized() {
-        // Enumerate every void self-Ref ast in the harvest (body = Ref(self.id)).
-        // For each one assert no Structure was created at its category+name.
         // Reuse setUp's harvest; re-harvest only when the import produced none (no stabs).
         val harvest = artifacts?.harvest ?: program.runTransaction("void-self-ref-harvest") {
             Harvester(context).harvest(StabReader.fromProgram(program)!!.readAll().records)
         }
-        val voidAsts = harvest.typeAsts.values.filter { ast ->
-            val body = ast.body
-            body is TypeDecl.Ref && body.id == ast.id
-        }
-        assumeTrue(voidAsts.isNotEmpty(), "no void self-Refs in this fixture's harvest")
+        val voidAsts = harvest.typeAsts.values.filter { it.body is TypeDecl.Void }
+        assumeTrue(voidAsts.isNotEmpty(), "no gcc-void asts in this fixture's harvest")
 
         val leaked = voidAsts.mapNotNull { ast ->
-            // A void self-Ref must NOT materialize as a Structure under any
-            // category bearing its synthetic ghidraName.
+            // A void ast must NOT materialize as a Structure under any category bearing its ghidraName.
             program.dataTypeManager.allDataTypes.asSequence()
                 .filterIsInstance<Structure>()
                 .firstOrNull { it.name == ast.ghidraName }
@@ -846,7 +836,7 @@ class StabsImportRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
         }
         Assertions.assertTrue(
             leaked.isEmpty(),
-            "void self-Refs leaked as Structures: $leaked (out of ${voidAsts.size} void asts)",
+            "gcc-void asts leaked as Structures: $leaked (out of ${voidAsts.size} void asts)",
         )
 
         // The original report (xapasmcsr): `(3,7)` in stdlib.h consumed by

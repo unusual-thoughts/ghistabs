@@ -245,10 +245,10 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, private 
                         }
 
                         is SymbolDecl.Typedef -> {
-                            // Emit self-ref typedefs too (`void:t(0,20)=(0,20)` — gcc's void, and
-                            // bare `name:t(cu,n)` re-declarations). appendAsts lets a real definition
-                            // at the same id supersede the self-ref, so void stays resolvable while a
-                            // concrete body elsewhere (box2d) still wins over a bare re-declaration.
+                            // Emit bare `name:t(cu,n)` forward-declarations too (body = self-Ref).
+                            // appendAsts lets a real definition at the same id supersede the self-ref,
+                            // so a concrete body elsewhere (box2d) wins over a bare re-declaration.
+                            // (gcc's explicit void `(x,y)=(x,y)` is a distinct TypeDecl.Void, not a self-ref.)
                             val outer = TypeAst(
                                 currentCu!!,
                                 decl.id,
@@ -439,7 +439,7 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, private 
     ): List<TypeAst> {
         fun walk(d: TypeDecl<GlobalTypeId>): List<TypeAst> = when (d) {
             is TypeDecl.Builtin, is TypeDecl.Complex, is TypeDecl.Float, is TypeDecl.Enum, is TypeDecl.Range,
-            is TypeDecl.Ref, is TypeDecl.XRef,
+            is TypeDecl.Ref, is TypeDecl.XRef, TypeDecl.Void,
             -> listOf()
 
             is TypeDecl.Const -> walk(d.inner)

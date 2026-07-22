@@ -189,8 +189,8 @@
             "max": 55
         },
         "harvest-typeAsts-Ref": {
-            "min": 646,
-            "max": 646
+            "min": 642,
+            "max": 642
         },
         "harvest-typeAsts-Reference": {
             "min": 2146,
@@ -199,6 +199,10 @@
         "harvest-typeAsts-Struct": {
             "min": 852,
             "max": 852
+        },
+        "harvest-typeAsts-Void": {
+            "min": 4,
+            "max": 4
         },
         "harvest-typeAsts-Volatile": {
             "min": 3,
