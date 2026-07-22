@@ -1,11 +1,17 @@
 package ghistabs.harvest
 
+import ghistabs.diagnose.DiagnosticSink
+import ghistabs.diagnose.DummySink
 import ghistabs.parse.*
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
-open class TestHasher(val asts: Map<GlobalTypeId, TypeAst>) : ContentHasher() {
+open class TestHasher(val asts: Map<GlobalTypeId, TypeAst>) :
+    ContentHasher(),
+    DiagnosticSink by DummySink {
     override fun byId(id: GlobalTypeId): TypeAst? = asts[id]
     override fun byXRef(xref: TypeDecl.XRef<GlobalTypeId>, silent: Boolean): TypeAst? = null
 }
@@ -498,12 +504,12 @@ class ContentHashTest {
 
     /**
      * gcc emits a virtual as VIRTUAL (vtoff set) in its defining CU and NORMAL (vtoff null) elsewhere,
-     * and reorders methods per CU: layout-identical, but [ContentHasher.contentHash] is method-aware so
-     * the two forms hash differently. [ContentHasher.layoutHash] drops a struct's own methods, so a
-     * scope group isn't demoted to header keys over that per-CU method noise (TypeResolver §A).
+     * and reorders methods per CU: layout-identical, but the method flags/order never enter the DTM
+     * struct. [ContentHasher.contentHash] drops a struct's own methods, so the two forms hash equal —
+     * a scope/canonical group isn't split over that per-CU method noise (TypeResolver §A/§B).
      */
     @Test
-    fun layoutHashIgnoresPerCuMethodDivergence() {
+    fun contentHashIgnoresPerCuMethodDivergence() {
         fun method(virt: VirtKind, vtoff: Long?) = MethodDecl(
             name = "f",
             mangled = "_ZN1C1fEv",
@@ -526,7 +532,31 @@ class ContentHashTest {
         val definingCu = cls(method(VirtKind.VIRTUAL, 0L))
         val referencingCu = cls(method(VirtKind.NORMAL, null))
 
-        assertEquals(oracle.layoutHash(definingCu), oracle.layoutHash(referencingCu), "layout ignores methods")
-        assertNotEquals(oracle.contentHash(definingCu), oracle.contentHash(referencingCu), "contentHash keeps them")
+        assertEquals(
+            oracle.contentHash(definingCu),
+            oracle.contentHash(referencingCu),
+            "contentHash ignores per-CU method virt/order noise",
+        )
+        assertTrue(oracle.contentEq(definingCu, referencingCu), "contentEq: layout-equal despite method divergence")
+    }
+
+    @Test
+    fun contentEqDistinguishesLayoutAndAgreesWithHashBucketing() {
+        fun cls(fieldType: TypeDecl<GlobalTypeId>) = TypeDecl.Struct(
+            rawKind = AggrKind.CLASS,
+            sizeBytes = 4,
+            bases = emptyList(),
+            fields = listOf(FieldDecl("x", fieldType, 0, 32, false, Access.PUBLIC)),
+            methods = emptyList(),
+            hasVTablePointerMarker = false,
+            vtableTargetTypeId = null,
+        )
+        val a = cls(TypeDecl.Ref(intInCU1.id))
+        val b = cls(TypeDecl.Float(8))
+        assertFalse(oracle.contentEq(a, b), "different field type ⇒ not content-equal")
+        // Consistency the bucket-then-split relies on: content-equal ⇒ equal hash (a real class is never
+        // split across buckets); a hash *collision* still can't merge a and b because contentEq is the split.
+        assertEquals(oracle.contentHash(a), oracle.contentHash(cls(TypeDecl.Ref(intInCU1.id))))
+        assertTrue(oracle.contentEq(a, cls(TypeDecl.Ref(intInCU1.id))))
     }
 }
