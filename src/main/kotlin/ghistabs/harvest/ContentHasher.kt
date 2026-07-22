@@ -35,6 +35,8 @@ abstract class ContentHasher(val hashCache: MutableMap<GlobalTypeId, Int> = muta
         layoutOnly: Boolean = false,
     ): Int = decl.run {
         when (this) {
+            TypeDecl.Void -> Objects.hash("Void")
+
             is TypeDecl.Ref -> refKey(id, visited, layoutOnly)
 
             // Normalize primitives to the Ghidra type they materialize to (see BuiltinTable.canonicalKey),

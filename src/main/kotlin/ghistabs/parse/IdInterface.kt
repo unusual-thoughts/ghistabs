@@ -68,7 +68,7 @@ interface Globalizer {
  */
 @Suppress("UNCHECKED_CAST")
 fun TypeDecl<LocalTypeId>.globalize(g: Globalizer): TypeDecl<GlobalTypeId> = when (this) {
-    is TypeDecl.Complex, is TypeDecl.Float, is TypeDecl.Enum, is TypeDecl.XRef, is TypeDecl.Builtin ->
+    is TypeDecl.Complex, is TypeDecl.Float, is TypeDecl.Enum, is TypeDecl.XRef, is TypeDecl.Builtin, TypeDecl.Void ->
         this as TypeDecl<GlobalTypeId>
 
     is TypeDecl.Range -> TypeDecl.Range(g.globalIdFor(of), min, max)

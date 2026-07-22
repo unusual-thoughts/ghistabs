@@ -42,6 +42,14 @@ sealed interface TypeDecl<out Id : IdInterface> {
     @Serializable
     data class Ref<Id : IdInterface>(@Contextual val id: Id) : TypeDecl<Id>
 
+    /**
+     * gcc's void: a type *explicitly* defined as itself (`(x,y)=(x,y)`). Only the `=`-definition
+     * form is void — a bare `name:t(x,y)` (no `=`) is a [Ref] forward reference, resolved elsewhere.
+     * Materializes to Ghidra's VoidDataType.
+     */
+    @Serializable
+    data object Void : TypeDecl<Nothing>
+
     /** Sun range descriptor: `r<id>;<min>;<max>;` — encodes integer/char widths. */
     @Serializable
     data class Range<Id : IdInterface>(@Contextual val of: Id, val min: Long, val max: Long) : TypeDecl<Id>

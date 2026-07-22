@@ -88,9 +88,14 @@ internal fun TypeRegistry.materializeBody(ast: TypeAst, category: CategoryPath, 
             ?.let { canonical -> getOrMaterialize(canonical.id)?.let { cache(ast.id, it) } }
             ?: placeholder.markXRefStub()
 
+        is TypeDecl.Void -> VoidDataType()
+
+        // A bare `name:t(id)` forward reference. Resolves to id's real definition when one exists;
+        // an unresolved self-loop (id never defined in scope) falls back to the empty [placeholder]
+        // stub — an incomplete type, gdb-style. Only a Ref to a *different*, absent id is dangling.
         is TypeDecl.Ref -> getOrMaterialize(body.id)
-            ?: if (ast.isVoidSelfRef()) {
-                VoidDataType()
+            ?: if (body.id == ast.id) {
+                placeholder
             } else {
                 degradation(
                     "dangling-ref",
@@ -336,16 +341,14 @@ private fun TypeRegistry.undef(category: String, at: String, decl: TypeDecl<Glob
 private fun TypeRegistry.pointerTo(pointee: TypeDecl<GlobalTypeId>, label: String, at: String): PointerDataType =
     PointerDataType(resolveRef(pointee) ?: undef(label, at, pointee), dtm.dataOrganization.pointerSize, dtm)
 
-/** gcc/gdb (stabsread.c): `Ref(self.id)` encodes void — used for void returns and method-args sentinel. */
-internal fun TypeAst.isVoidSelfRef(): Boolean = body is TypeDecl.Ref && body.id == id
-
 /**
  * Resolve a TypeDecl reference site to a DataType. Struct/Enum/Method/XRef return null (they
  * only have identity through their owning TypeAst id; use [TypeRegistry.getOrMaterialize] for those).
  */
 fun TypeRegistry.resolveRef(decl: TypeDecl<GlobalTypeId>): DataType? = when (decl) {
+    is TypeDecl.Void -> VoidDataType()
+
     is TypeDecl.Ref -> getOrMaterialize(decl.id)
-        ?: if (harvest.getType(decl.id)?.isVoidSelfRef() == true) VoidDataType() else null
 
     is TypeDecl.InlineDef -> getOrMaterialize(decl.id) ?: resolveRef(decl.body)?.let { cache(decl.id, it) }
 
@@ -528,11 +531,5 @@ internal fun TypeRegistry.materializeTopLevel(ast: TypeAst): DataType = cacheIfA
     // flag every _ZTI global as a `degraded-*-typed-xref-stub` false alarm).
     ast.substitute() ?: resolver.byXRef(ast)?.let { canonical ->
         materializeTopLevel(canonical)
-    } ?: if (ast.isVoidSelfRef()) {
-        // resolve before any placeholder is created, otherwise
-        // getOrMaterialize returns the placeholder and the VoidDataType fallback never fires.
-        VoidDataType()
-    } else {
-        materializeBody(ast, CATEGORY, ast.seedPlaceholder(reason = "ref-stub"))
-    }
+    } ?: materializeBody(ast, CATEGORY, ast.seedPlaceholder(reason = "ref-stub"))
 }

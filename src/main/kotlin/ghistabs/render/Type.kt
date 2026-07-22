@@ -28,6 +28,8 @@ fun TypeDecl<GlobalTypeId>.render(
     seen: Set<GlobalTypeId> = emptySet(),
     shortener: TemplateNameShortener? = null,
 ): String = when (this) {
+    TypeDecl.Void -> "void"
+
     is TypeDecl.Ref -> {
         // Named TypeAst → use the name. Anonymous → recurse into its body so the
         // user sees `int *` rather than a raw GlobalTypeId, unless this id is

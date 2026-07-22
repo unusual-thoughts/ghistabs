@@ -119,7 +119,7 @@ class Parser(src: String) {
         consume('T')
         consumeIf('t') // GCC emits Tt for combined tagged-type+typedef (e.g. typedef struct foo {} foo)
         val id = readTypeId()
-        val body = if (consumeIf('=')) parseType() else TypeDecl.Ref(id)
+        val body = if (consumeIf('=')) selfDefToVoid(id, parseType()) else TypeDecl.Ref(id)
         return SymbolDecl.TaggedType(name, id, body)
     }
 
@@ -158,9 +158,17 @@ class Parser(src: String) {
     private fun Cursor.parseTypedef(name: String): SymbolDecl.Typedef<LocalTypeId> {
         consume('t')
         val id = readTypeId()
-        val body = if (consumeIf('=')) parseType() else TypeDecl.Ref(id)
+        val body = if (consumeIf('=')) selfDefToVoid(id, parseType()) else TypeDecl.Ref(id)
         return SymbolDecl.Typedef(name, id, body)
     }
+
+    /**
+     * gcc encodes void as a type explicitly defined as itself: `(x,y)=(x,y)`. Recognise that at the
+     * definition (`=`) site so it becomes [TypeDecl.Void]; a bare `name:t(x,y)` (no `=`, handled by
+     * the caller's else-branch) stays a [TypeDecl.Ref] forward reference — it is *not* void.
+     */
+    private fun selfDefToVoid(id: LocalTypeId, body: TypeDecl<LocalTypeId>): TypeDecl<LocalTypeId> =
+        if (body is TypeDecl.Ref && body.id == id) TypeDecl.Void else body
 
     // ===== Type descriptor dispatch =====
 
@@ -230,7 +238,7 @@ class Parser(src: String) {
             val id = readTypeId()
             when {
                 // Inline definition: parse the body recursively and wrap in InlineDef
-                consumeIf('=') -> TypeDecl.InlineDef(id, parseType())
+                consumeIf('=') -> TypeDecl.InlineDef(id, selfDefToVoid(id, parseType()))
 
                 // Negative type number = gcc XCOFF builtin slot. Per the
                 // stabs spec: "the idea of negative type numbers is simply
