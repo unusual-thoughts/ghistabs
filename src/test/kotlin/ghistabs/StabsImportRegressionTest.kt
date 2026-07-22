@@ -23,6 +23,7 @@ import ghistabs.importer.ImportArtifacts
 import ghistabs.importer.ImportContext
 import ghistabs.importer.ImportProbe
 import ghistabs.importer.stabAddress
+import ghistabs.materialize.conflictCount
 import ghistabs.materialize.itanium.Itanium
 import ghistabs.parse.*
 import kotlinx.serialization.ExperimentalSerializationApi
@@ -972,22 +973,19 @@ class StabsImportRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
     }
 
     @Test
-    @ExpectedToFail(
-        fixtures = [
-            "crypto_mi_test_gcc421.exe", "crypto_mi_test_gcc421_stripped.exe",
-            "crypto_mi_test_gcc421_fullstabs.exe", "crypto_mi_test_gcc421_fullstabs_stripped.exe",
-        ],
-        reason = "gcc 12 crypto fixtures over-produce _N conflict renames (>200)",
-    )
-    fun fewSuffixedConflictRenames() {
-        // Types renamed to `<name>_<N>` by conflict-dedup should be the exception,
-        // not the rule. A high count signals canonicalisation/dedup regressions like
-        // the cross-CU TypeId collision fixed in 4b21a6c.
-        val suffixed = program.dataTypeManager.allDataTypes
-            .asSequence().count { Regex("""^.+_\d+$""").matches(it.name) }
+    fun fewConflictRenames() {
+        // Ghidra forks a `.conflict` type when two distinct types collide on one (category, name).
+        // Those renames should be the exception — a spike signals a canonicalisation/dedup regression
+        // like the cross-CU TypeId collision fixed in 4b21a6c. Reuses the production census
+        // ([conflictCount], the `dtm-conflicts-created` source); corpus-wide it sits at 0.
+        //
+        // The earlier `^.+_\d+$` heuristic mismeasured badly: we never suffix names with `_N`, so it
+        // caught gcc anonymous `$_N` aggregates and legitimately-numbered Win32 structs (JOB_INFO_1,
+        // PRINTER_INFO_6, pulled in via mingw headers) — 250–920 "renames" for a real count of ~0.
+        val conflicts = program.dataTypeManager.conflictCount()
         Assertions.assertTrue(
-            suffixed < 200,
-            "Suspiciously many _N-suffixed types: $suffixed (expected < 200)",
+            conflicts < 25,
+            "Suspiciously many .conflict-renamed types: $conflicts (expected < 25)",
         )
     }
 
