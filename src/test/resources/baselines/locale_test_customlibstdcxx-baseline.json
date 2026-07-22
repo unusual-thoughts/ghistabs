@@ -69,8 +69,8 @@
             "max": 6252
         },
         "demangler-ambiguous": {
-            "min": 4,
-            "max": 4
+            "min": 2,
+            "max": 2
         },
         "demangler-exact-match": {
             "min": 166,
