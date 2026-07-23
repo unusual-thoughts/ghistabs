@@ -1,5 +1,8 @@
 package ghistabs.parse
 
+import ghistabs.diagnose.DiagnosticSink
+import ghistabs.diagnose.DummySink
+
 /**
  * Recursive-descent parser for stabs type and symbol descriptors.
  * Implements Sun + GCC stabs grammar as emitted by Cygwin gcc 3.4.4.
@@ -15,7 +18,7 @@ package ghistabs.parse
  * silently ignored. This is intentional — the caller is responsible for processing
  * multiple records or filtering trailing input as needed.
  */
-class Parser(src: String) {
+class Parser(src: String, sink: DiagnosticSink = DummySink) : DiagnosticSink by sink {
     private companion object {
         // gcc builtin negative type number for `int` (see BuiltinTable): the implicit type of
         // a value-only `:c=` constant.
@@ -45,7 +48,13 @@ class Parser(src: String) {
      *
      * Mirror of gdb/stabsread.c:define_symbol.
      */
-    fun parseSymbol() = c.parseSymbol()
+    fun parseSymbol() = c.parseSymbol().apply {
+        // A fully-parsed record ends at a terminator run; anything else is an unimplemented section
+        // silently dropped by the parser's leniency (the `~%` bug was one such tail, once struct-local).
+        if (remaining.any { it != ';' && !it.isWhitespace() }) {
+            warn("unparsed-trailing", "@'${c.src.take(80)}': +'${remaining.trim().take(40)}'")
+        }
+    }
 
     /** Unconsumed tail after [parseSymbol]/[parseTypeBody] — the caller checks for full consumption. */
     val remaining get() = c.remaining

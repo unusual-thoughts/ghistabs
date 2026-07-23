@@ -10,7 +10,7 @@ import ghistabs.parse.*
 /**
  * Harvest typed symbols and ASTs from a flat stab record stream. [preSeedHeaders] populates
  * per-CU [IncludeContext]s from N_SO/N_BINCL/N_EINCL/N_EXCL; [harvest] dispatches the main
- * record stream into [typeAsts], [symbolsByCu], [openFunctions].
+ * record stream into [store], [symbolsByCu], [openFunctions].
  *
  * The [HeaderRegistry] is shared across all CUs so two CUs that BINCL the same
  * (filename, checksum) get identical GlobalTypeIds for header-attributed types
@@ -22,8 +22,7 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, private 
     Globalizer {
     constructor(ctx: ImportContext<*>) : this(ctx.monitor, ctx, ctx.resolver)
 
-    private val typeAsts = mutableMapOf<GlobalTypeId, TypeAst>()
-    private val collidingAsts = mutableMapOf<GlobalTypeId, MutableMap<String, MutableSet<TypeDecl<GlobalTypeId>>>>()
+    private val store = AstStore(sink = sink)
     private val symbolsByCu = mutableMapOf<String, MutableList<SymbolRecord>>()
     private val openFunctions = mutableListOf<OpenFunction>()
     private val includesByFile = mutableMapOf<String, IncludeContext>()
@@ -230,7 +229,7 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, private 
                             // uses inline ids heavily for field types (anon pointers, arrays,
                             // function pointers); without walkDefinitions those become
                             // dangling Refs and undefined field types downstream.
-                            val outer = TypeAst(
+                            store += TypeAst(
                                 currentCu!!,
                                 decl.id,
                                 decl.name,
@@ -238,10 +237,7 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, private 
                                 declLine = sym.declLine,
                                 declSourceFile = sym.sourceFile,
                             )
-                            appendAsts(
-                                outer,
-                                *walkDefinitions(decl.type, sym.declLine, sym.sourceFile).toTypedArray(),
-                            )
+                            store.hoistSymbolDefs(sym, currentCu!!)
                         }
 
                         is SymbolDecl.Typedef -> {
@@ -249,7 +245,7 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, private 
                             // appendAsts lets a real definition at the same id supersede the self-ref,
                             // so a concrete body elsewhere (box2d) wins over a bare re-declaration.
                             // (gcc's explicit void `(x,y)=(x,y)` is a distinct TypeDecl.Void, not a self-ref.)
-                            val outer = TypeAst(
+                            store += TypeAst(
                                 currentCu!!,
                                 decl.id,
                                 decl.name,
@@ -257,10 +253,7 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, private 
                                 declLine = sym.declLine,
                                 declSourceFile = sym.sourceFile,
                             )
-                            appendAsts(
-                                outer,
-                                *walkDefinitions(decl.type, sym.declLine, sym.sourceFile).toTypedArray(),
-                            )
+                            store.hoistSymbolDefs(sym, currentCu!!)
                         }
 
                         is SymbolDecl.StackLocal, is SymbolDecl.RegLocal -> {
@@ -316,107 +309,20 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, private 
             }
         }
 
-        synthesizeXRefStubsForDanglingInheritanceRefs()
-        nameAnonymousTypedefTargets()
+        val (typeAsts, rawCollisions) = store.toHarvest()
         debug("harvest-constants", count = constants.size.toLong())
 
         return Harvest(
-            typeAsts = typeAsts,
-            parseErrors = parseErrors,
-            rawCollisions = collidingAsts,
-            symbolsByCu = symbolsByCu,
-            openFunctions = openFunctions,
+            typeAsts,
+            parseErrors,
+            rawCollisions,
+            symbolsByCu,
+            openFunctions,
             lineEntries = lineEntriesByFile.mapValues { (_, v) ->
                 v.sortedWith(compareBy({ it.line }, { it.addr.offset }))
             },
-            constants = constants,
+            constants,
         )
-    }
-
-    /**
-     * Recover gcc 12's malformed C++ inheritance emission. Instead of the documented
-     * `!N,<bases>;` form, gcc 12 emits inheritance as a leading pseudo-field whose bitsize
-     * is bytes×64 (a double byte→bit conversion bug; gdb itself crashes on these). Example:
-     * `XMLText:T(0,81)=s112XMLNode:(0,25),0,6656;…` — XMLNode is 104B (832b) but stab says 6656.
-     *
-     * Detect via `field.sizeBits > struct.sizeBytes * 8` (real fields can't exceed their
-     * enclosing struct), then move the field into `bases[]` and — if the Ref id is
-     * dangling — synthesise an XRef-stub named after the field for cross-CU resolution.
-     */
-    private fun synthesizeXRefStubsForDanglingInheritanceRefs() {
-        val synthetic = mutableListOf<TypeAst>()
-        // Outer struct id → its inheritance-pseudo-fields. Rewriting moves them to `bases`
-        // so the materializer's BaseInsertionPlanner / firstPolymorphicBase / vtable wiring
-        // sees the inheritance.
-        val outerRewrites =
-            mutableMapOf<GlobalTypeId, MutableList<FieldDecl<GlobalTypeId>>>()
-        for (ast in typeAsts.values) {
-            val struct = ast.body as? TypeDecl.Struct ?: continue
-            val structBits = struct.sizeBytes * 8
-            for (field in struct.fields) {
-                val ref = field.type as? TypeDecl.Ref ?: continue
-                if (field.name.isEmpty()) continue
-                if (field.sizeBits <= structBits) continue
-                // Rewrite fires regardless of whether the Ref is bound — the bogus-bitsize
-                // signal is independent of cross-CU resolution.
-                outerRewrites.getOrPut(ast.id) { mutableListOf() }.add(field)
-                // Stub only needed when the Ref has no binding (materializer resolves
-                // bound Refs directly).
-                if (ref.id in typeAsts) continue
-                synthetic.add(
-                    TypeAst(
-                        cu = ast.cu,
-                        id = ref.id,
-                        name = field.name,
-                        body = TypeDecl.XRef(AggrKind.STRUCT, field.name),
-                        declLine = ast.declLine,
-                        declSourceFile = ast.declSourceFile,
-                    ),
-                )
-            }
-        }
-        if (synthetic.isNotEmpty()) {
-            log(
-                "xref-stubs-synthesized",
-                "${synthetic.size} inheritance-pseudo-field Refs → synthetic XRef stubs",
-            )
-            appendAsts(*synthetic.toTypedArray())
-        }
-        for ((outerId, pseudoFields) in outerRewrites) {
-            val outer = typeAsts[outerId] ?: continue
-            val struct = outer.body as? TypeDecl.Struct ?: continue
-            val pseudoSet = pseudoFields.toSet()
-            val newBases = struct.bases + pseudoFields.map { f ->
-                BaseDecl(
-                    type = f.type,
-                    isVirtual = false,
-                    access = Access.PUBLIC,
-                    offsetBits = f.offsetBits,
-                )
-            }
-            val newFields = struct.fields.filter { it !in pseudoSet }
-            typeAsts[outerId] = outer.copy(
-                body = struct.copy(bases = newBases, fields = newFields),
-            )
-        }
-        if (outerRewrites.isNotEmpty()) {
-            log(
-                "inheritance-pseudo-fields-promoted",
-                "${outerRewrites.size} outer struct(s) rewritten to populate bases[]",
-            )
-        }
-    }
-
-    /**
-     * `typedef struct {…} Name;` reaches us as an anonymous aggregate + a same-named typedef that
-     * inline-defines it. C-semantically the aggregate's name *is* the typedef's, so adopt it, so the
-     * anonymous struct/enum carries the real name and [TypeResolver.byCanonicalKey] can merge it with
-     * the named copy from another header spelling (render-backlog §20).
-     */
-    private fun nameAnonymousTypedefTargets() {
-        val renames = anonymousTypedefTargetNames(typeAsts)
-        for ((id, name) in renames) typeAsts[id] = typeAsts.getValue(id).copy(name = name)
-        if (renames.isNotEmpty()) debug("typedef-named-anon-aggregate", count = renames.size.toLong())
     }
 
     private fun harvestSymbol(rec: StabRecord) {
@@ -428,146 +334,11 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, private 
         }
     }
 
-    /**
-     * Gather TypeAsts for every InlineDef in [decl]. The nested asts inherit the
-     * enclosing declaration's source location.
-     */
-    fun walkDefinitions(
-        decl: TypeDecl<GlobalTypeId>,
-        declLine: Int = 0,
-        declSourceFile: String? = null,
-    ): List<TypeAst> {
-        fun walk(d: TypeDecl<GlobalTypeId>): List<TypeAst> = when (d) {
-            is TypeDecl.Builtin, is TypeDecl.Complex, is TypeDecl.Float, is TypeDecl.Enum, is TypeDecl.Range,
-            is TypeDecl.Ref, is TypeDecl.XRef, TypeDecl.Void,
-            -> listOf()
-
-            is TypeDecl.Const -> walk(d.inner)
-
-            is TypeDecl.Volatile -> walk(d.inner)
-
-            is TypeDecl.WithSizeAttr -> walk(d.inner)
-
-            is TypeDecl.Pointer -> walk(d.pointee)
-
-            is TypeDecl.Reference -> walk(d.referent)
-
-            is TypeDecl.Array -> walk(d.element) + (d.indexType?.let { walk(it) } ?: listOf())
-
-            is TypeDecl.FunctionT -> d.params.flatMap { walk(it) } + walk(d.ret)
-
-            is TypeDecl.Method -> d.params.flatMap { walk(it) } + walk(d.ret) + walk(d.cls)
-
-            is TypeDecl.Struct -> d.bases.flatMap { walk(it.type) } +
-                d.fields.flatMap { walk(it.type) } +
-                d.methods.flatMap { walk(it.signature) } +
-                (d.vptrBasetype?.let { walk(it) } ?: emptyList())
-
-            // Emit the InlineDef ast AND recurse — gcc nests them (e.g. Method whose
-            // return is an inline-defined Pointer-to-X). Without recursion the inner
-            // ids are referenced but never registered → dangling Refs + false collisions.
-            is TypeDecl.InlineDef -> listOf(
-                TypeAst(
-                    currentCu!!,
-                    d.id,
-                    null,
-                    d.body,
-                    declLine = declLine,
-                    declSourceFile = declSourceFile,
-                ),
-            ) + walk(d.body)
-        }
-        return walk(decl)
+    fun parseSymbol(rec: StabRecord) = SymbolRecord(
+        rec,
+        Parser(rec.name, this).parseSymbol().globalize(this),
+        lineSource,
+    ).also {
+        store.hoistSymbolDefs(it, currentCu!!)
     }
-
-    /** gcc emits `void` (and bare re-declarations) as a typedef whose body refers to its own id. */
-    private fun TypeAst.isSelfRef() = body.let { it is TypeDecl.Ref && it.id == id }
-
-    /**
-     * Accumulate asts with first-writer-wins on GlobalTypeId. XRef placeholders are replaced
-     * by any concrete body. Collisions go into [collidingAsts] for post-harvest classification —
-     * no per-collision Ref-walking here (slow on template-heavy binaries);
-     * `Harvest.classifyCollisions` runs once at the end against a memoized hashCache.
-     */
-    fun appendAsts(vararg asts: TypeAst) {
-        val new = asts.groupBy { it.id }
-        val collisions = new.keys.intersect(typeAsts.keys).filter { typeAsts[it]?.body !is TypeDecl.XRef }
-        for (id in collisions) {
-            val ex = typeAsts[id]!!
-
-            // `void:t(0,20)=(0,20)` and bare re-declarations parse as self-refs. They must never
-            // shadow a concrete body: a real incoming supersedes a self-ref `ex` (box2d re-decl over
-            // its real struct), and self-ref incomings are dropped when `ex` is already concrete. A
-            // lone self-ref (no concrete body at this id) survives and resolves to void downstream.
-            val incoming = new[id]!!.filterNot { it.isSelfRef() }
-            if (ex.isSelfRef()) {
-                incoming.firstOrNull()?.let { typeAsts[id] = it }
-                continue
-            }
-            if (incoming.isEmpty()) continue
-
-            // Name-promotion: an anonymous InlineDef ast can be superseded by an explicit
-            // named Typedef at the same id. Range's `of` self-ref differs between forms so
-            // we don't require body equality — both non-XRefTarget + existing unnamed.
-            val namedIncoming = incoming.firstOrNull { it.name != null && !it.body.isXRefTarget }
-            if (namedIncoming != null && ex.name == null && !ex.body.isXRefTarget) {
-                typeAsts[id] = namedIncoming
-                continue
-            }
-
-            // Structural-equality skip (no Ref-walk): literal re-emissions aren't worth
-            // recording. classifyCollisions does the deeper check for survivors.
-            val alternates = incoming.filter { it.body != ex.body }.map { it.body }
-            if (alternates.isEmpty()) continue
-            val bucket = collidingAsts
-                .getOrPut(id) { mutableMapOf() }
-                .getOrPut(ex.nameOrUnique) { mutableSetOf() }
-            bucket.add(ex.body)
-            bucket.addAll(alternates)
-        }
-
-        for (ast in asts.filter { !collisions.contains(it.id) }) {
-            typeAsts[ast.id] = ast
-        }
-    }
-
-    fun parseSymbol(rec: StabRecord): SymbolRecord {
-        val parser = Parser(rec.name)
-        val sym = parser.parseSymbol().globalize(this).also {
-            appendAsts(*walkDefinitions(it.type, rec.desc, lineSource).toTypedArray())
-        }
-        // A fully-parsed record ends at a terminator run; anything else is an unimplemented section
-        // silently dropped by the parser's leniency (the `~%` bug was one such tail, once struct-local).
-        if (parser.remaining.any { it != ';' && !it.isWhitespace() }) {
-            warn("unparsed-trailing", "@${rec.index} '${rec.name.take(80)}': +'${parser.remaining.trim().take(40)}'")
-        }
-        return SymbolRecord(rec, sym, lineSource)
-    }
-}
-
-/**
- * Pure core of the `typedef struct {…} Name;` naming (see [Harvester.nameAnonymousTypedefTargets]).
- * Returns `anonymous-aggregate-id → name` for every anonymous Struct/Enum that a typedef targets,
- * when **exactly one** typedef name claims it (ambiguous multi-name targets are left anonymous).
- * Two stab encodings qualify: the inline form `t3=4=s…` (`InlineDef`, gcc's usual for `typedef
- * struct {…} Name`) and the separate-then-reference form `t2=1` with `1=e…` (`Ref`, gcc's usual for
- * `typedef enum {…} Name`). Only genuinely anonymous targets (no tag) — a bare alias to an
- * already-named type is skipped by the target-name guard, and a builtin/pointer target by the kind
- * guard.
- */
-fun anonymousTypedefTargetNames(typeAsts: Map<GlobalTypeId, TypeAst>): Map<GlobalTypeId, String> {
-    val namesByTarget = mutableMapOf<GlobalTypeId, MutableSet<String>>()
-    for (td in typeAsts.values) {
-        val name = td.name?.ifEmpty { null } ?: continue
-        val targetId = when (val body = td.body) {
-            is TypeDecl.InlineDef -> body.id
-            is TypeDecl.Ref -> body.id
-            else -> continue
-        }
-        val target = typeAsts[targetId] ?: continue
-        if (!target.name.isNullOrEmpty()) continue
-        if (target.body !is TypeDecl.Struct && target.body !is TypeDecl.Enum) continue
-        namesByTarget.getOrPut(targetId) { mutableSetOf() }.add(name)
-    }
-    return namesByTarget.filterValues { it.size == 1 }.mapValues { it.value.single() }
 }
