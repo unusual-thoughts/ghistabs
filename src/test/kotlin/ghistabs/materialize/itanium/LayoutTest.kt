@@ -138,8 +138,7 @@ class PolymorphicBaseTest {
             bases = emptyList(),
             fields = emptyList(),
             methods = methods,
-            hasVTablePointerMarker = hasVtableMarker,
-            vtableTargetTypeId = null,
+            vptrBasetype = if (hasVtableMarker) TypeDecl.Ref(gid(0)) else null,
         )
 
     private fun virtualMethod(name: String) = MethodDecl<GlobalTypeId>(
@@ -169,8 +168,7 @@ class PolymorphicBaseTest {
             bases = listOf(inlineBase(1, base)),
             fields = emptyList(),
             methods = emptyList(),
-            hasVTablePointerMarker = false,
-            vtableTargetTypeId = null,
+            vptrBasetype = null,
         )
         assertTrue(TypeResolver.Empty.hasPolymorphicBaseSubobject(derived))
     }
@@ -184,8 +182,7 @@ class PolymorphicBaseTest {
             bases = listOf(inlineBase(1, base)),
             fields = emptyList(),
             methods = emptyList(),
-            hasVTablePointerMarker = false,
-            vtableTargetTypeId = null,
+            vptrBasetype = null,
         )
         assertFalse(TypeResolver.Empty.hasPolymorphicBaseSubobject(derived))
     }
@@ -199,8 +196,7 @@ class PolymorphicBaseTest {
             bases = listOf(inlineBase(1, base)),
             fields = emptyList(),
             methods = emptyList(),
-            hasVTablePointerMarker = false,
-            vtableTargetTypeId = null,
+            vptrBasetype = null,
         )
         val derived = TypeDecl.Struct(
             rawKind = AggrKind.CLASS,
@@ -208,8 +204,7 @@ class PolymorphicBaseTest {
             bases = listOf(inlineBase(2, middle)),
             fields = emptyList(),
             methods = emptyList(),
-            hasVTablePointerMarker = false,
-            vtableTargetTypeId = null,
+            vptrBasetype = null,
         )
         assertTrue(TypeResolver.Empty.hasPolymorphicBaseSubobject(derived))
     }
@@ -229,8 +224,7 @@ class PolymorphicBaseTest {
             bases = listOf(inlineBase(1, base)),
             fields = emptyList(),
             methods = emptyList(),
-            hasVTablePointerMarker = false,
-            vtableTargetTypeId = null,
+            vptrBasetype = null,
         )
         assertTrue(TypeResolver.Empty.hasPolymorphicBaseSubobject(derived))
     }
@@ -254,8 +248,7 @@ class PolymorphicBaseTest {
             ),
             fields = emptyList(),
             methods = emptyList(),
-            hasVTablePointerMarker = false,
-            vtableTargetTypeId = null,
+            vptrBasetype = null,
         )
         assertTrue(TypeResolver(Harvest(mapOf(baseId to baseAst))).hasPolymorphicBaseSubobject(derived))
     }

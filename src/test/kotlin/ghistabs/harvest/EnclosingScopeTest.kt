@@ -35,8 +35,7 @@ class EnclosingScopeTest : AbstractGhidraHeadlessIntegrationTest() {
         bases = emptyList(),
         fields = emptyList(),
         methods = methods.toList(),
-        hasVTablePointerMarker = false,
-        vtableTargetTypeId = null,
+        vptrBasetype = null,
     )
 
     private fun ast(name: String?, body: TypeDecl<GlobalTypeId>) =

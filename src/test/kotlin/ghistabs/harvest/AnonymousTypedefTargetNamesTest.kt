@@ -16,8 +16,7 @@ class AnonymousTypedefTargetNamesTest {
         bases = emptyList(),
         fields = emptyList(),
         methods = emptyList(),
-        hasVTablePointerMarker = false,
-        vtableTargetTypeId = null,
+        vptrBasetype = null,
     )
     private fun ast(n: Int, name: String?, body: TypeDecl<GlobalTypeId>) =
         TypeAst(cu = cu, id = id(n), name = name, body = body)

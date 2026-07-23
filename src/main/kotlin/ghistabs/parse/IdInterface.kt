@@ -113,8 +113,7 @@ fun TypeDecl<LocalTypeId>.globalize(g: Globalizer): TypeDecl<GlobalTypeId> = whe
                 it.vtableOffsetBits,
             )
         },
-        hasVTablePointerMarker,
-        vtableTargetTypeId?.let { g.globalIdFor(it) },
+        vptrBasetype?.globalize(g),
     )
 
     is TypeDecl.InlineDef -> TypeDecl.InlineDef(g.globalIdFor(id), body.globalize(g))

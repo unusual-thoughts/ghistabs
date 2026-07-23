@@ -47,8 +47,7 @@ class NestedScopeKeyTest : AbstractGhidraHeadlessIntegrationTest() {
         bases = emptyList(),
         fields = fields,
         methods = methods,
-        hasVTablePointerMarker = false,
-        vtableTargetTypeId = null,
+        vptrBasetype = null,
     )
 
     private fun ast(id: GlobalTypeId, name: String?, body: TypeDecl<GlobalTypeId>) =
