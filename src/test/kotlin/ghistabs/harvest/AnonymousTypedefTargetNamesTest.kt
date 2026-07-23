@@ -20,24 +20,24 @@ class AnonymousTypedefTargetNamesTest {
     )
     private fun ast(n: Int, name: String?, body: TypeDecl<GlobalTypeId>) =
         TypeAst(cu = cu, id = id(n), name = name, body = body)
-    private fun map(vararg asts: TypeAst) = asts.associateBy { it.id }
+    private fun map(vararg asts: TypeAst) = AstStore(asts.associateBy { it.id }.toMutableMap())
 
     @Test fun namesAnonymousInlineStruct() {
         val typedef = ast(3, "dspinfo", TypeDecl.InlineDef(id(4), struct(36)))
         val anon = ast(4, null, struct(36))
-        assertEquals(mapOf(id(4) to "dspinfo"), anonymousTypedefTargetNames(map(typedef, anon)))
+        assertEquals(mapOf(id(4) to "dspinfo"), map(typedef, anon).anonymousTypedefTargetNames())
     }
 
     @Test fun leavesTaggedStructAlone() {
         val typedef = ast(3, "Name", TypeDecl.InlineDef(id(4), struct()))
         val tagged = ast(4, "Tag", struct())
-        assertEquals(emptyMap<GlobalTypeId, String>(), anonymousTypedefTargetNames(map(typedef, tagged)))
+        assertEquals(emptyMap<GlobalTypeId, String>(), map(typedef, tagged).anonymousTypedefTargetNames())
     }
 
     @Test fun ignoresNonAggregateInlineDef() {
         val arr = TypeDecl.Array<GlobalTypeId>(TypeDecl.Builtin(0), 5L, null)
         val typedef = ast(3, "Name", TypeDecl.InlineDef(id(4), arr))
-        assertEquals(emptyMap<GlobalTypeId, String>(), anonymousTypedefTargetNames(map(typedef, ast(4, null, arr))))
+        assertEquals(emptyMap<GlobalTypeId, String>(), map(typedef, ast(4, null, arr)).anonymousTypedefTargetNames())
     }
 
     @Test fun ambiguousNamesAreSkipped() {
@@ -45,7 +45,7 @@ class AnonymousTypedefTargetNamesTest {
         val td2 = ast(4, "Beta", TypeDecl.InlineDef(id(5), struct()))
         assertEquals(
             emptyMap<GlobalTypeId, String>(),
-            anonymousTypedefTargetNames(map(td1, td2, ast(5, null, struct()))),
+            map(td1, td2, ast(5, null, struct())).anonymousTypedefTargetNames(),
         )
     }
 
@@ -53,7 +53,7 @@ class AnonymousTypedefTargetNamesTest {
         // gcc's `typedef enum {…} Name;` — separate anon enum + a Ref typedef.
         val typedef = ast(3, "EnumDSPRev", TypeDecl.Ref(id(4)))
         val anon = ast(4, null, TypeDecl.Enum(listOf("A" to 0L)))
-        assertEquals(mapOf(id(4) to "EnumDSPRev"), anonymousTypedefTargetNames(map(typedef, anon)))
+        assertEquals(mapOf(id(4) to "EnumDSPRev"), map(typedef, anon).anonymousTypedefTargetNames())
     }
 
     @Test fun refToNamedTypeDoesNotRename() {
@@ -61,7 +61,7 @@ class AnonymousTypedefTargetNamesTest {
         val typedef = ast(3, "Alias", TypeDecl.Ref(id(4)))
         assertEquals(
             emptyMap<GlobalTypeId, String>(),
-            anonymousTypedefTargetNames(map(typedef, ast(4, "Existing", struct()))),
+            map(typedef, ast(4, "Existing", struct())).anonymousTypedefTargetNames(),
         )
     }
 }
