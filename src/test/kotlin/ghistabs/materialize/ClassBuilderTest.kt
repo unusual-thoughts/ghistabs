@@ -90,8 +90,7 @@ class ClassBuilderTest {
             bases = emptyList(),
             fields = emptyList(),
             methods = listOf(method),
-            hasVTablePointerMarker = false,
-            vtableTargetTypeId = null,
+            vptrBasetype = null,
         )
 
         assertEquals(1, classStruct.methods.size)

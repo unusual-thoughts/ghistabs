@@ -25,6 +25,10 @@ class Parser(src: String) {
         // comparison, shift). Brackets/parens/comma are excluded — they carry no `<>` and
         // need no protection from template-depth tracking.
         const val OPERATOR_SYMBOLS = "+-*/%^&|~!=<>"
+
+        // Chars that may legitimately follow a fully-parsed struct body: field/base/symbol
+        // terminator or an inline-def field separator.
+        val BOUNDARY_CHARS = setOf(';', ',')
     }
 
     private val c = Cursor(src)
@@ -42,6 +46,9 @@ class Parser(src: String) {
      * Mirror of gdb/stabsread.c:define_symbol.
      */
     fun parseSymbol() = c.parseSymbol()
+
+    /** Unconsumed tail after [parseSymbol]/[parseTypeBody] — the caller checks for full consumption. */
+    val remaining get() = c.remaining
 
     private fun Cursor.parseSymbol(): SymbolDecl<LocalTypeId> {
         // gcc emits anonymous aggregates/enums with a *blank* (whitespace) tag name, not an empty
@@ -260,9 +267,10 @@ class Parser(src: String) {
 
     /**
      * Parse a struct/union/class body.
-     * Format: `<size>[!<inheritance>][~%<vtable-id>;]<fields-and-methods>;;`
+     * Format: `<size>[!<inheritance>]<fields-and-methods>;[~%<vptr-owner-id>;]`
      *
-     * Mirror of gdb/stabsread.c:read_struct_type.
+     * Mirror of gdb/stabsread.c:read_struct_type. The `~%` tilde field is the LAST section,
+     * after member functions — not after inheritance (read_tilde_fields runs last).
      */
     private fun Cursor.parseStruct(kind: AggrKind): TypeDecl.Struct<LocalTypeId> {
         val sizeBytes = readInt()
@@ -272,16 +280,6 @@ class Parser(src: String) {
             parseInheritanceList()
         } else {
             emptyList()
-        }
-
-        // Parse optional vtable pointer marker
-        val (hasVTablePointer, vtableTypeId) = if (consumeIf('~')) {
-            consume('%')
-            val id = readTypeId()
-            consume(';')
-            Pair(true, id)
-        } else {
-            Pair(false, null)
         }
 
         // Parse fields and methods.
@@ -368,14 +366,28 @@ class Parser(src: String) {
 
         consume(';') // struct terminator
 
+        // Trailing tilde field `~%<type>;` — vptr-owning base of a polymorphic class. The target is a
+        // full read_type (gdb read_tilde_fields): a bare ref, or an inline forward-xref for RTTI classes.
+        val vptrBasetype = if (consumeIf('~')) {
+            consume('%')
+            parseType().also { consume(';') }
+        } else {
+            null
+        }
+
+        // A fully-consumed struct is followed only by a boundary: symbol/field/base terminator
+        // or eof. Anything else is an unparsed section (the bug that hid `~%` for years).
+        if (peekOrNull()?.let { it !in BOUNDARY_CHARS } == true) {
+            throw StabsParseException(pos, src, "unconsumed struct section")
+        }
+
         return TypeDecl.Struct(
             rawKind = kind,
             sizeBytes = sizeBytes,
             bases = bases,
             fields = fields,
             methods = methods,
-            hasVTablePointerMarker = hasVTablePointer,
-            vtableTargetTypeId = vtableTypeId,
+            vptrBasetype = vptrBasetype,
         )
     }
 

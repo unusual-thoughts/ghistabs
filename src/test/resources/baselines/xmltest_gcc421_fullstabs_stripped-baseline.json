@@ -13,24 +13,24 @@
             "max": 42
         },
         "canonical-content-merged": {
-            "min": 14,
-            "max": 14
+            "min": 4,
+            "max": 4
         },
         "canonical-key-merged": {
-            "min": 459,
-            "max": 459
+            "min": 453,
+            "max": 453
         },
         "canonical-key-multi-hash": {
-            "min": 29,
-            "max": 29
+            "min": 35,
+            "max": 35
         },
         "canonical-key-multi-kind": {
             "min": 4,
             "max": 4
         },
         "canonical-scope-collision": {
-            "min": 16,
-            "max": 16
+            "min": 22,
+            "max": 22
         },
         "data-no-coverage": {
             "min": 291,
@@ -265,8 +265,8 @@
             "max": 56957
         },
         "inheritance-applied": {
-            "min": 228,
-            "max": 228
+            "min": 252,
+            "max": 252
         },
         "inheritance-pseudo-fields-promoted": {
             "min": 1,
@@ -289,8 +289,8 @@
             "max": 126
         },
         "placeholder-created": {
-            "min": 40845,
-            "max": 40845
+            "min": 40875,
+            "max": 40875
         },
         "pointee-typed": {
             "min": 99,
@@ -337,8 +337,8 @@
             "max": 113
         },
         "vfptr-normalized": {
-            "min": 12,
-            "max": 12
+            "min": 16,
+            "max": 16
         },
         "vtable-failed": {
             "min": 121,
@@ -349,8 +349,8 @@
             "max": 121
         },
         "vtable-skipped": {
-            "min": 4,
-            "max": 4
+            "min": 8,
+            "max": 8
         },
         "xref-base-tag-resolved": {
             "min": 56,

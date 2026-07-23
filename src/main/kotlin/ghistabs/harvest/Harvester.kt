@@ -460,7 +460,8 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, private 
 
             is TypeDecl.Struct -> d.bases.flatMap { walk(it.type) } +
                 d.fields.flatMap { walk(it.type) } +
-                d.methods.flatMap { walk(it.signature) }
+                d.methods.flatMap { walk(it.signature) } +
+                (d.vptrBasetype?.let { walk(it) } ?: emptyList())
 
             // Emit the InlineDef ast AND recurse — gcc nests them (e.g. Method whose
             // return is an inline-defined Pointer-to-X). Without recursion the inner
@@ -530,13 +531,18 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, private 
         }
     }
 
-    fun parseSymbol(rec: StabRecord) = SymbolRecord(
-        rec,
-        Parser(rec.name).parseSymbol().globalize(this).also {
+    fun parseSymbol(rec: StabRecord): SymbolRecord {
+        val parser = Parser(rec.name)
+        val sym = parser.parseSymbol().globalize(this).also {
             appendAsts(*walkDefinitions(it.type, rec.desc, lineSource).toTypedArray())
-        },
-        lineSource,
-    )
+        }
+        // A fully-parsed record ends at a terminator run; anything else is an unimplemented section
+        // silently dropped by the parser's leniency (the `~%` bug was one such tail, once struct-local).
+        if (parser.remaining.any { it != ';' && !it.isWhitespace() }) {
+            warn("unparsed-trailing", "@${rec.index} '${rec.name.take(80)}': +'${parser.remaining.trim().take(40)}'")
+        }
+        return SymbolRecord(rec, sym, lineSource)
+    }
 }
 
 /**

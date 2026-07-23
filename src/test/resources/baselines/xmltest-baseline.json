@@ -260,6 +260,10 @@
             "min": 6376,
             "max": 6376
         },
+        "unparsed-trailing": {
+            "min": 11,
+            "max": 11
+        },
         "vfptr-normalized": {
             "min": 4,
             "max": 4

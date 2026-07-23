@@ -1,6 +1,7 @@
 package ghistabs.parse
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 
 /**
@@ -38,8 +39,7 @@ class ParserClassTest {
                     ),
                 ),
                 methods = emptyList(),
-                hasVTablePointerMarker = false,
-                vtableTargetTypeId = null,
+                vptrBasetype = null,
             ),
         )
         assertEquals(expected, Parser(input).parseSymbol())
@@ -65,8 +65,7 @@ class ParserClassTest {
                 ),
                 fields = emptyList(),
                 methods = emptyList(),
-                hasVTablePointerMarker = false,
-                vtableTargetTypeId = null,
+                vptrBasetype = null,
             ),
         )
         assertEquals(expected, Parser(input).parseSymbol())
@@ -74,7 +73,8 @@ class ParserClassTest {
 
     @Test
     fun testClassWithVTablePointerMarker() {
-        val input = "Baz:T(0,7)=s8~%(0,8);;;"
+        // `~%<id>;` is the LAST section, after the field-list terminator — not right after size.
+        val input = "Baz:T(0,7)=s8;~%(0,8);"
         val expected = SymbolDecl.TaggedType(
             name = "Baz",
             id = LocalTypeId(0, 7),
@@ -84,8 +84,7 @@ class ParserClassTest {
                 bases = emptyList(),
                 fields = emptyList(),
                 methods = emptyList(),
-                hasVTablePointerMarker = true,
-                vtableTargetTypeId = LocalTypeId(0, 8),
+                vptrBasetype = TypeDecl.Ref(LocalTypeId(0, 8)),
             ),
         )
         assertEquals(expected, Parser(input).parseSymbol())
@@ -131,8 +130,7 @@ class ParserClassTest {
                         vtableOffsetBits = null,
                     ),
                 ),
-                hasVTablePointerMarker = false,
-                vtableTargetTypeId = null,
+                vptrBasetype = null,
             ),
         )
         assertEquals(expected, Parser(input).parseSymbol())
@@ -162,8 +160,7 @@ class ParserClassTest {
                     ),
                 ),
                 methods = emptyList(),
-                hasVTablePointerMarker = false,
-                vtableTargetTypeId = null,
+                vptrBasetype = null,
             ),
         )
         assertEquals(expected, Parser(input).parseSymbol())
@@ -210,8 +207,7 @@ class ParserClassTest {
                         vtableOffsetBits = 0L,
                     ),
                 ),
-                hasVTablePointerMarker = false,
-                vtableTargetTypeId = null,
+                vptrBasetype = null,
             ),
         )
         assertEquals(expected, Parser(input).parseSymbol())
@@ -238,8 +234,7 @@ class ParserClassTest {
                     ),
                 ),
                 methods = emptyList(),
-                hasVTablePointerMarker = false,
-                vtableTargetTypeId = null,
+                vptrBasetype = null,
             ),
         )
         assertEquals(expected, Parser(input).parseSymbol())
@@ -270,8 +265,7 @@ class ParserClassTest {
                     ),
                 ),
                 methods = emptyList(),
-                hasVTablePointerMarker = false,
-                vtableTargetTypeId = null,
+                vptrBasetype = null,
             ),
         )
         assertEquals(expected, Parser(input).parseSymbol())
@@ -310,8 +304,7 @@ class ParserClassTest {
                         vtableOffsetBits = null,
                     ),
                 ),
-                hasVTablePointerMarker = false,
-                vtableTargetTypeId = null,
+                vptrBasetype = null,
             ),
         )
         assertEquals(expected, Parser(input).parseSymbol())
@@ -354,10 +347,38 @@ class ParserClassTest {
                         vtableOffsetBits = 0L,
                     ),
                 ),
-                hasVTablePointerMarker = false,
-                vtableTargetTypeId = null,
+                vptrBasetype = null,
             ),
         )
         assertEquals(expected, Parser(input).parseSymbol())
+    }
+
+    @Test
+    fun testTildeFieldFollowsMethods() {
+        // `~%` is the LAST section — after member functions, not after size. Corpus shape:
+        // `<method>;;~%<owner>;`. Regression for the years-long misparse that read it after size.
+        val input = "P:T(0,5)=s8vmethod::(0,31)=#(0,5),(0,1),(0,2);:_ZN1P7vmethodEi;2A*0;(0,5);;;~%(0,9);"
+        val struct = (Parser(input).parseSymbol() as SymbolDecl.TaggedType).type as TypeDecl.Struct
+        assertEquals(TypeDecl.Ref(LocalTypeId(0, 9)), struct.vptrBasetype)
+        assertEquals(1, struct.methods.size)
+    }
+
+    @Test
+    fun testTildeFieldInlineForwardXref() {
+        // The `~%` target is a full read_type, not just an id: RTTI/exception classes emit an inline
+        // forward-xref `(cu,n)=xsName:`. Regression for the guard dropping the whole class on `=`.
+        val input = "underflow_error:T(0,5)=s8;~%(0,6)=xstype_info:;"
+        val struct = (Parser(input).parseSymbol() as SymbolDecl.TaggedType).type as TypeDecl.Struct
+        assertEquals(
+            TypeDecl.InlineDef(LocalTypeId(0, 6), TypeDecl.XRef(AggrKind.STRUCT, "type_info")),
+            struct.vptrBasetype,
+        )
+    }
+
+    @Test
+    fun testUnconsumedStructSectionRejected() {
+        // A struct section we don't handle must fail loudly, not get silently dropped as
+        // trailing input (the leniency that hid `~%`).
+        assertThrows(StabsParseException::class.java) { Parser("X:T(0,5)=s4;Zjunk").parseSymbol() }
     }
 }

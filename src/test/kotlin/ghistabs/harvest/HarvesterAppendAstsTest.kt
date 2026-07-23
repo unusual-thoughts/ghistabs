@@ -76,8 +76,7 @@ class HarvesterAppendAstsTest {
                 ),
             ),
             methods = emptyList(),
-            hasVTablePointerMarker = false,
-            vtableTargetTypeId = null,
+            vptrBasetype = null,
         )
         val concreteAst = TypeAst(
             cu = SourceFile.CUSource(cuName),
@@ -129,14 +128,13 @@ class HarvesterAppendAstsTest {
         val harvester = createTestHarvester(records = records)
 
         val globalId = GlobalTypeId(SourceFile.CUSource(cuName), 20)
-        val body = TypeDecl.Struct(
+        val body = TypeDecl.Struct<GlobalTypeId>(
             rawKind = AggrKind.STRUCT,
             sizeBytes = 8L,
             bases = emptyList(),
             fields = emptyList(),
             methods = emptyList(),
-            hasVTablePointerMarker = false,
-            vtableTargetTypeId = null,
+            vptrBasetype = null,
         )
 
         val ast1 = TypeAst(
@@ -208,8 +206,7 @@ class HarvesterAppendAstsTest {
                 ),
             ),
             methods = emptyList(),
-            hasVTablePointerMarker = false,
-            vtableTargetTypeId = null,
+            vptrBasetype = null,
         )
 
         val secondBody = TypeDecl.Struct(
@@ -235,8 +232,7 @@ class HarvesterAppendAstsTest {
                 ),
             ),
             methods = emptyList(),
-            hasVTablePointerMarker = false,
-            vtableTargetTypeId = null,
+            vptrBasetype = null,
         )
 
         val firstAst = TypeAst(
@@ -310,8 +306,7 @@ class HarvesterAppendAstsTest {
                 ),
             ),
             methods = emptyList(),
-            hasVTablePointerMarker = false,
-            vtableTargetTypeId = null,
+            vptrBasetype = null,
         )
         val concrete = TypeAst(cu = SourceFile.CUSource(cuName), id = id, name = "Foo", body = struct)
 

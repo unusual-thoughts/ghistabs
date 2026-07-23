@@ -9,16 +9,16 @@
             "max": 14
         },
         "canonical-key-merged": {
-            "min": 1189,
-            "max": 1189
+            "min": 1188,
+            "max": 1188
         },
         "canonical-key-multi-hash": {
-            "min": 7,
-            "max": 7
+            "min": 8,
+            "max": 8
         },
         "canonical-scope-collision": {
-            "min": 1,
-            "max": 1
+            "min": 2,
+            "max": 2
         },
         "class-not-struct": {
             "min": 4,
@@ -73,12 +73,12 @@
             "max": 3635
         },
         "demangler-exact-match": {
-            "min": 115,
-            "max": 115
+            "min": 114,
+            "max": 114
         },
         "demangler-skip-no-replacement": {
-            "min": 24,
-            "max": 24
+            "min": 25,
+            "max": 25
         },
         "desc-dropped-undf": {
             "min": 1,
@@ -301,8 +301,8 @@
             "max": 33
         },
         "replaced-demangler": {
-            "min": 115,
-            "max": 115
+            "min": 114,
+            "max": 114
         },
         "rtti-pseudo-substituted": {
             "min": 50,
@@ -327,6 +327,10 @@
         "typedef-named-anon-aggregate": {
             "min": 121,
             "max": 121
+        },
+        "unparsed-trailing": {
+            "min": 2,
+            "max": 2
         },
         "unresolved-symbol": {
             "min": 1440,
@@ -365,8 +369,8 @@
             "max": 2
         },
         "xref-base-tag-resolved": {
-            "min": 97,
-            "max": 97
+            "min": 94,
+            "max": 94
         },
         "xref-undefined": {
             "min": 32,

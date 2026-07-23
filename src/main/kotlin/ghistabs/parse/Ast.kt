@@ -88,9 +88,13 @@ sealed interface TypeDecl<out Id : IdInterface> {
         val bases: List<BaseDecl<Id>>,
         val fields: List<FieldDecl<Id>>,
         val methods: List<MethodDecl<Id>>,
-        val hasVTablePointerMarker: Boolean,
-        @Contextual val vtableTargetTypeId: Id?,
+        // Trailing `~%<type>;` section: the vptr-owning base (gdb's VPTR_BASETYPE), a full read_type —
+        // usually a `Ref`, but an inline forward-xref (`(cu,n)=xsName:`) for RTTI/exception classes.
+        // Non-null iff the class is polymorphic; supersedes the separate boolean marker gcc used to emit.
+        val vptrBasetype: TypeDecl<Id>? = null,
     ) : TypeDecl<Id> {
+        val hasVTablePointerMarker get() = vptrBasetype != null
+
         // gcc 3.x stabs emit `s` for both `struct` and `class`; promote to "class" when
         // any method or base carries non-public access, OR when there are any methods
         // at all (plain C structs have none — the presence of methods means C++).
