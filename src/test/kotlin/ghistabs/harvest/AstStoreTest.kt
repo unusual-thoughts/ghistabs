@@ -1,8 +1,5 @@
 package ghistabs.harvest
 
-import ghidra.util.task.TaskMonitor
-import ghistabs.diagnose.DummySink
-import ghistabs.importer.StabOnlyAddressResolver
 import ghistabs.parse.*
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -17,16 +14,7 @@ import org.junit.jupiter.api.Test
  * Tests are pure unit tests (Kind 1): no Program/DataTypeManager/Listing,
  * only TaskMonitor.DUMMY, DummySink, and constructed test data.
  */
-class HarvesterAppendAstsTest {
-    private fun createTestHarvester(records: List<StabRecord> = emptyList()): Harvester {
-        val harvester = Harvester(
-            monitor = TaskMonitor.DUMMY,
-            sink = DummySink,
-            resolver = StabOnlyAddressResolver(),
-        )
-        harvester.preSeedHeaders(records)
-        return harvester
-    }
+class AstStoreTest {
 
     /**
      * Test: XRef body replaced by concrete definition.
@@ -40,19 +28,8 @@ class HarvesterAppendAstsTest {
      */
     @Test
     fun testXRefReplacedByConcreteDefinition() {
+        val store = AstStore()
         val cuName = "cu.c"
-        // N_SO record establishes CU context; not needed by appendAsts() but kept for structural consistency
-        val records = listOf(
-            StabRecord(
-                index = 0,
-                type = StabType.N_SO,
-                other = 0,
-                desc = 0,
-                value = 0L,
-                name = cuName,
-            ),
-        )
-        val harvester = createTestHarvester(records = records)
 
         val globalId = GlobalTypeId(SourceFile.CUSource(cuName), 10)
         val xrefAst = TypeAst(
@@ -86,17 +63,17 @@ class HarvesterAppendAstsTest {
         )
 
         // Append XRef first, then concrete definition
-        harvester.appendAsts(xrefAst)
-        harvester.appendAsts(concreteAst)
+        store += xrefAst
+        store += concreteAst
 
         // Verify: typeAsts[id] contains Struct (replaced the XRef)
-        val passBResult = harvester.harvest(emptyList())
-        assertTrue(passBResult.typeAsts.containsKey(globalId), "Type should be in typeAsts")
-        val body = passBResult.typeAsts[globalId]!!.body
+        val (typeAsts, rawCollisions) = store.toHarvest()
+        assertTrue(typeAsts.containsKey(globalId), "Type should be in typeAsts")
+        val body = typeAsts[globalId]!!.body
         assertTrue(body is TypeDecl.Struct, "Body should be Struct, not XRef")
         // Verify: collidingAsts should NOT contain entry
         assertTrue(
-            !passBResult.rawCollisions.containsKey(globalId),
+            !rawCollisions.containsKey(globalId),
             "XRef replacement should not create collision entry",
         )
     }
@@ -113,19 +90,8 @@ class HarvesterAppendAstsTest {
      */
     @Test
     fun testSameHashSuppression() {
+        val store = AstStore()
         val cuName = "cu.c"
-        // N_SO record establishes CU context; not needed by appendAsts() but kept for structural consistency
-        val records = listOf(
-            StabRecord(
-                index = 0,
-                type = StabType.N_SO,
-                other = 0,
-                desc = 0,
-                value = 0L,
-                name = cuName,
-            ),
-        )
-        val harvester = createTestHarvester(records = records)
 
         val globalId = GlobalTypeId(SourceFile.CUSource(cuName), 20)
         val body = TypeDecl.Struct<GlobalTypeId>(
@@ -151,14 +117,15 @@ class HarvesterAppendAstsTest {
         )
 
         // Append both (same hash)
-        harvester.appendAsts(ast1, ast2)
+        store += ast1
+        store += ast2
 
         // Verify: exactly one entry exists
-        val passBResult = harvester.harvest(emptyList())
-        assertEquals(1, passBResult.typeAsts.size, "Should have exactly one entry after same-hash append")
+        val (typeAsts, rawCollisions) = store.toHarvest()
+        assertEquals(1, typeAsts.size, "Should have exactly one entry after same-hash append")
         // Verify: collidingAsts should NOT contain entry
         assertTrue(
-            !passBResult.rawCollisions.containsKey(globalId),
+            !rawCollisions.containsKey(globalId),
             "Same-hash should not create collision entry",
         )
     }
@@ -175,19 +142,8 @@ class HarvesterAppendAstsTest {
      */
     @Test
     fun testHashDifferingFirstWriterWins() {
+        val store = AstStore()
         val cuName = "cu.c"
-        // N_SO record establishes CU context; not needed by appendAsts() but kept for structural consistency
-        val records = listOf(
-            StabRecord(
-                index = 0,
-                type = StabType.N_SO,
-                other = 0,
-                desc = 0,
-                value = 0L,
-                name = cuName,
-            ),
-        )
-        val harvester = createTestHarvester(records = records)
 
         val globalId = GlobalTypeId(SourceFile.CUSource(cuName), 30)
 
@@ -249,19 +205,19 @@ class HarvesterAppendAstsTest {
         )
 
         // Append first, then second (different hashes)
-        harvester.appendAsts(firstAst)
-        harvester.appendAsts(secondAst)
+        store += firstAst
+        store += secondAst
 
         // Verify: typeAsts[id].body equals first body
-        val passBResult = harvester.harvest(emptyList())
-        assertEquals(firstBody, passBResult.typeAsts[globalId]!!.body, "First writer should win")
+        val (typeAsts, rawCollisions) = store.toHarvest()
+        assertEquals(firstBody, typeAsts[globalId]!!.body, "First writer should win")
         // Verify: collidingAsts[id] is non-empty
         assertTrue(
-            passBResult.rawCollisions.containsKey(globalId),
+            rawCollisions.containsKey(globalId),
             "Hash-differing bodies should create collision entry",
         )
         assertTrue(
-            passBResult.rawCollisions[globalId]!!.isNotEmpty(),
+            rawCollisions[globalId]!!.isNotEmpty(),
             "Collision entry should be non-empty",
         )
     }
@@ -272,12 +228,13 @@ class HarvesterAppendAstsTest {
      */
     @Test
     fun testLoneSelfRefTypedefSurvives() {
+        val store = AstStore()
         val cuName = "cu.c"
-        val harvester = createTestHarvester(listOf(StabRecord(0, StabType.N_SO, 0, 0, 0L, cuName)))
         val id = GlobalTypeId(SourceFile.CUSource(cuName), 20)
-        harvester.appendAsts(TypeAst(cu = SourceFile.CUSource(cuName), id = id, name = "void", body = TypeDecl.Ref(id)))
+        store += TypeAst(cu = SourceFile.CUSource(cuName), id = id, name = "void", body = TypeDecl.Ref(id))
 
-        val body = harvester.harvest(emptyList()).typeAsts[id]?.body
+        val (typeAsts, _) = store.toHarvest()
+        val body = typeAsts[id]?.body
         assertTrue(body is TypeDecl.Ref && body.id == id, "lone self-ref (void) must survive, not be skipped")
     }
 
@@ -287,8 +244,8 @@ class HarvesterAppendAstsTest {
      */
     @Test
     fun testConcreteBodySupersedesSelfRef() {
+        val store = AstStore()
         val cuName = "cu.c"
-        val records = listOf(StabRecord(0, StabType.N_SO, 0, 0, 0L, cuName))
         val id = GlobalTypeId(SourceFile.CUSource(cuName), 20)
         val selfRef = TypeAst(cu = SourceFile.CUSource(cuName), id = id, name = "Foo", body = TypeDecl.Ref(id))
         val struct = TypeDecl.Struct<GlobalTypeId>(
@@ -310,19 +267,19 @@ class HarvesterAppendAstsTest {
         )
         val concrete = TypeAst(cu = SourceFile.CUSource(cuName), id = id, name = "Foo", body = struct)
 
-        val selfRefFirst = createTestHarvester(records).apply {
-            appendAsts(selfRef)
-            appendAsts(concrete)
+        val selfRefFirst = AstStore().apply {
+            this += selfRef
+            this += concrete
         }
-        assertEquals(struct, selfRefFirst.harvest(emptyList()).typeAsts[id]!!.body, "real body supersedes self-ref")
+        assertEquals(struct, selfRefFirst.toHarvest().first[id]!!.body, "real body supersedes self-ref")
 
-        val concreteFirst = createTestHarvester(records).apply {
-            appendAsts(concrete)
-            appendAsts(selfRef)
+        val concreteFirst = AstStore().apply {
+            this += concrete
+            this += selfRef
         }
         assertEquals(
             struct,
-            concreteFirst.harvest(emptyList()).typeAsts[id]!!.body,
+            concreteFirst.toHarvest().first[id]!!.body,
             "self-ref never demotes a real body",
         )
     }
@@ -339,19 +296,8 @@ class HarvesterAppendAstsTest {
      */
     @Test
     fun testSameTypeTwiceFromSameCU() {
+        val store = AstStore()
         val cuName = "cu.c"
-        // N_SO record establishes CU context; not needed by appendAsts() but kept for structural consistency
-        val records = listOf(
-            StabRecord(
-                index = 0,
-                type = StabType.N_SO,
-                other = 0,
-                desc = 0,
-                value = 0L,
-                name = cuName,
-            ),
-        )
-        val harvester = createTestHarvester(records = records)
 
         val globalId = GlobalTypeId(SourceFile.CUSource(cuName), 40)
         val body = TypeDecl.Enum<GlobalTypeId>(members = listOf("A" to 0L, "B" to 1L))
@@ -363,15 +309,15 @@ class HarvesterAppendAstsTest {
         )
 
         // Append twice
-        harvester.appendAsts(ast)
-        harvester.appendAsts(ast)
+        store += ast
+        store += ast
 
         // Verify: exactly one entry
-        val passBResult = harvester.harvest(emptyList())
-        assertEquals(1, passBResult.typeAsts.size, "Should have exactly one entry after duplicate append")
+        val (typeAsts, rawCollisions) = store.toHarvest()
+        assertEquals(1, typeAsts.size, "Should have exactly one entry after duplicate append")
         // Verify: collidingAsts should NOT contain entry
         assertTrue(
-            !passBResult.rawCollisions.containsKey(globalId),
+            !rawCollisions.containsKey(globalId),
             "Duplicate should not create collision entry",
         )
     }

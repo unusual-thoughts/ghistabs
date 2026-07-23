@@ -208,50 +208,46 @@ class HarvesterGlobalizeTest {
      * Source: stabs-canonicalization.md §5 — InlineDef side-effect.
      */
     @Test
-    fun testGlobalizeInlineDefWithWalkDefinitions() {
+    fun testGlobalizeInlineDefWithHoistSymbolDefs() {
         val cuName = "cu.c"
-        val records = listOf(
-            StabRecord(
-                index = 0,
-                type = StabType.N_SO,
-                other = 0,
-                desc = 0,
-                value = 0L,
-                name = cuName,
-            ),
-        )
-        val harvester = createTestHarvester(records = records)
+        val cu = SourceFile.CUSource(cuName)
+        val store = AstStore()
 
-        val inlineDefId = LocalTypeId(0, 7)
-        val input = TypeDecl.InlineDef(
-            id = inlineDefId,
-            body = TypeDecl.Struct(
-                rawKind = AggrKind.STRUCT,
-                sizeBytes = 4L,
-                bases = emptyList(),
-                fields = listOf(
-                    FieldDecl(
-                        name = "field",
-                        type = TypeDecl.Ref(LocalTypeId(0, 1)),
-                        offsetBits = 0L,
-                        sizeBits = 32L,
-                        isStatic = false,
-                        access = Access.PUBLIC,
+        val input = SymbolRecord(
+            1,
+            StabType.N_LSYM,
+            SymbolDecl.StackLocal(
+                "local",
+                TypeDecl.InlineDef(
+                    id = GlobalTypeId(cu, 7),
+                    body = TypeDecl.Struct(
+                        rawKind = AggrKind.STRUCT,
+                        sizeBytes = 4L,
+                        bases = emptyList(),
+                        fields = listOf(
+                            FieldDecl(
+                                name = "field",
+                                type = TypeDecl.Ref(GlobalTypeId(cu, 1)),
+                                offsetBits = 0L,
+                                sizeBits = 32L,
+                                isStatic = false,
+                                access = Access.PUBLIC,
+                            ),
+                        ),
+                        methods = emptyList(),
+                        vptrBasetype = null,
                     ),
                 ),
-                methods = emptyList(),
-                vptrBasetype = null,
             ),
+            0,
         )
 
-        // Globalize the InlineDef
-        val result = input.globalize(harvester)
-
         // walkDefinitions should extract the emitted TypeAst
-        val asts = harvester.walkDefinitions(result)
+        store.hoistSymbolDefs(input, cu)
+        val (asts, _) = store.toHarvest()
 
         assertEquals(1, asts.size, "walkDefinitions should return exactly one TypeAst from InlineDef")
-        val ast = asts[0]
+        val ast = asts.values.first()
         assertEquals(GlobalTypeId(SourceFile.CUSource(cuName), 7), ast.id)
         assertEquals(cuName, ast.cu.filename)
     }
