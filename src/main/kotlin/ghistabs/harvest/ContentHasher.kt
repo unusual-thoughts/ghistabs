@@ -18,7 +18,7 @@ abstract class ContentHasher(val hashCache: MutableMap<GlobalTypeId, Int> = muta
      * Layout-equivalence hash for a [TypeDecl] tree.
      *
      * Differences from `data class hashCode()`:
-     *  - Id-bearing nodes (`Ref`, `Range.of`, `Struct.vtableTargetTypeId`, `InlineDef.id`) resolve
+     *  - Id-bearing nodes (`Ref`, `Range.of`, `Struct.vptrBasetype`, `InlineDef.id`) resolve
      *    and hash by the referenced body, so `Ref(id)` and inline `InlineDef(id, body)`
      *    forms (gcc emits either depending on per-CU history) collapse to the same hash.
      *  - `"Ref"` and `"InlineDef"` wrapper tags are omitted — they reduce to their wrapped content.
@@ -68,8 +68,7 @@ abstract class ContentHasher(val hashCache: MutableMap<GlobalTypeId, Int> = muta
                 sizeBytes,
                 bases.map { it.hash(visited) },
                 fields.filter { !it.isStatic }.map { it.hash(visited) },
-                hasVTablePointerMarker,
-                vtableTargetTypeId?.let { refKey(it, visited) },
+                vptrBasetype?.hash(visited),
             )
 
             is TypeDecl.FunctionT -> Objects.hash("FunctionT", ret.hash(visited), params.map { it.hash(visited) })
@@ -170,7 +169,7 @@ abstract class ContentHasher(val hashCache: MutableMap<GlobalTypeId, Int> = muta
                     fields.filter { !it.isStatic }.joinToString(",", "[", "]") {
                         "${it.name}:${describe(it.type, visited)}@${it.offsetBits}/${it.sizeBits}"
                     } +
-                    ";$hasVTablePointerMarker;${vtableTargetTypeId?.let { refStr(it, visited) }}}"
+                    ";${vptrBasetype?.let { describe(it, visited) }}}"
             is TypeDecl.FunctionT -> "F(${describe(ret, visited)};${params.joinToString(",") {
                 describe(it, visited)
             }})"

@@ -9,12 +9,16 @@
             "max": 22
         },
         "canonical-key-merged": {
-            "min": 1129,
-            "max": 1129
+            "min": 1128,
+            "max": 1128
         },
         "canonical-key-multi-hash": {
-            "min": 7,
-            "max": 7
+            "min": 8,
+            "max": 8
+        },
+        "canonical-scope-collision": {
+            "min": 1,
+            "max": 1
         },
         "class-not-struct": {
             "min": 4,
@@ -173,8 +177,8 @@
             "max": 493
         },
         "harvest-typeAsts": {
-            "min": 31280,
-            "max": 31280
+            "min": 31281,
+            "max": 31281
         },
         "harvest-typeAsts-Array": {
             "min": 639,
@@ -241,16 +245,16 @@
             "max": 513
         },
         "harvest-typeAsts-XRef": {
-            "min": 161,
-            "max": 161
+            "min": 162,
+            "max": 162
         },
         "harvest-typeAsts-dup-by-id": {
             "min": 0,
             "max": 0
         },
         "harvest-typeAsts-unique-by-id": {
-            "min": 31280,
-            "max": 31280
+            "min": 31281,
+            "max": 31281
         },
         "inheritance-applied": {
             "min": 100,
@@ -365,8 +369,8 @@
             "max": 2
         },
         "xref-base-tag-resolved": {
-            "min": 70,
-            "max": 70
+            "min": 64,
+            "max": 64
         },
         "xref-undefined": {
             "min": 40,

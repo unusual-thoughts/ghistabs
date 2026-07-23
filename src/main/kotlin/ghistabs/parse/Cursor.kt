@@ -13,6 +13,9 @@ internal class Cursor(val src: String) {
 
     val eof get() = pos >= src.length
 
+    /** Unconsumed tail after the last production returned. */
+    val remaining get() = src.substring(pos)
+
     fun peek(): Char = if (eof) {
         throw StabsParseException(pos, src, "unexpected end of input")
     } else {

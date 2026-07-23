@@ -13,20 +13,20 @@
             "max": 19
         },
         "canonical-key-merged": {
-            "min": 313,
-            "max": 313
+            "min": 302,
+            "max": 302
         },
         "canonical-key-multi-hash": {
-            "min": 23,
-            "max": 23
+            "min": 34,
+            "max": 34
         },
         "canonical-key-multi-kind": {
             "min": 2,
             "max": 2
         },
         "canonical-scope-collision": {
-            "min": 16,
-            "max": 16
+            "min": 27,
+            "max": 27
         },
         "data-no-coverage": {
             "min": 192,

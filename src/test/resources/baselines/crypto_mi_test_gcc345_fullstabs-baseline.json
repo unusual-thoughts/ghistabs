@@ -17,12 +17,16 @@
             "max": 25
         },
         "canonical-key-merged": {
-            "min": 1414,
-            "max": 1414
+            "min": 1413,
+            "max": 1413
         },
         "canonical-key-multi-hash": {
-            "min": 106,
-            "max": 106
+            "min": 107,
+            "max": 107
+        },
+        "canonical-scope-collision": {
+            "min": 1,
+            "max": 1
         },
         "class-not-struct": {
             "min": 4,
@@ -360,6 +364,10 @@
             "min": 121,
             "max": 121
         },
+        "unparsed-trailing": {
+            "min": 2,
+            "max": 2
+        },
         "unresolved-symbol": {
             "min": 1363,
             "max": 1363
@@ -397,8 +405,8 @@
             "max": 36
         },
         "xref-base-tag-resolved": {
-            "min": 84,
-            "max": 84
+            "min": 78,
+            "max": 78
         },
         "xref-undefined": {
             "min": 68,

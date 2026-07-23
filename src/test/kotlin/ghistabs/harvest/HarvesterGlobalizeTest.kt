@@ -167,8 +167,7 @@ class HarvesterGlobalizeTest {
                 ),
             ),
             methods = emptyList(),
-            hasVTablePointerMarker = false,
-            vtableTargetTypeId = null,
+            vptrBasetype = null,
         )
         val result = input.globalize(harvester)
 
@@ -196,8 +195,7 @@ class HarvesterGlobalizeTest {
                 ),
             ),
             methods = emptyList(),
-            hasVTablePointerMarker = false,
-            vtableTargetTypeId = null,
+            vptrBasetype = null,
         )
         assertEquals(expected, result)
     }
@@ -242,8 +240,7 @@ class HarvesterGlobalizeTest {
                     ),
                 ),
                 methods = emptyList(),
-                hasVTablePointerMarker = false,
-                vtableTargetTypeId = null,
+                vptrBasetype = null,
             ),
         )
 

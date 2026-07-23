@@ -142,8 +142,7 @@ class ContentHashTest {
                 ),
             ),
             methods = emptyList(),
-            hasVTablePointerMarker = false,
-            vtableTargetTypeId = null,
+            vptrBasetype = null,
         )
         val clone2Body = clone1Body.copy(
             fields = listOf(
@@ -170,8 +169,7 @@ class ContentHashTest {
                 ),
             ),
             methods = emptyList(),
-            hasVTablePointerMarker = false,
-            vtableTargetTypeId = null,
+            vptrBasetype = null,
         )
         val s2 = s1.copy(
             fields = listOf(s1.fields[0].copy(type = TypeDecl.Ref(charInCU1.id))),
@@ -194,8 +192,7 @@ class ContentHashTest {
                 FieldDecl("x", TypeDecl.Ref(intInCU1.id), 0L, 32L, isStatic = false, Access.PUBLIC),
             ),
             methods = emptyList(),
-            hasVTablePointerMarker = false,
-            vtableTargetTypeId = null,
+            vptrBasetype = null,
         )
         val withStaticInt = base.copy(
             fields = base.fields + FieldDecl("s", TypeDecl.Ref(intInCU1.id), 0L, 0L, isStatic = true, Access.PUBLIC),
@@ -282,8 +279,7 @@ class ContentHashTest {
                 ),
             ),
             methods = emptyList(),
-            hasVTablePointerMarker = false,
-            vtableTargetTypeId = null,
+            vptrBasetype = null,
         )
         val ioFileAst = TypeAst(cu, id98, "_IO_FILE", ioFileBody)
         // id 97: InlineDef(id=98, body=XRef(STRUCT, _IO_FILE)) — the forward-ref alias
@@ -390,8 +386,7 @@ class ContentHashTest {
                     vtableOffsetBits = null,
                 ),
             ),
-            hasVTablePointerMarker = false,
-            vtableTargetTypeId = null,
+            vptrBasetype = null,
         )
 
         val variant0 = makePairBody(TypeDecl.Ref(ptrAId))
@@ -526,8 +521,7 @@ class ContentHashTest {
             bases = emptyList(),
             fields = listOf(FieldDecl("x", TypeDecl.Ref(intInCU1.id), 0, 32, false, Access.PUBLIC)),
             methods = listOf(method),
-            hasVTablePointerMarker = false,
-            vtableTargetTypeId = null,
+            vptrBasetype = null,
         )
         val definingCu = cls(method(VirtKind.VIRTUAL, 0L))
         val referencingCu = cls(method(VirtKind.NORMAL, null))
@@ -548,8 +542,7 @@ class ContentHashTest {
             bases = emptyList(),
             fields = listOf(FieldDecl("x", fieldType, 0, 32, false, Access.PUBLIC)),
             methods = emptyList(),
-            hasVTablePointerMarker = false,
-            vtableTargetTypeId = null,
+            vptrBasetype = null,
         )
         val a = cls(TypeDecl.Ref(intInCU1.id))
         val b = cls(TypeDecl.Float(8))
