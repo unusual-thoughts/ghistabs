@@ -60,12 +60,12 @@ class Parser(src: String) {
         return when (val descriptor = peekOrNull()) {
             'F' -> {
                 advance()
-                SymbolDecl.Function(name, isFileStatic = false, type = parseType())
+                SymbolDecl.Function(name, isFileStatic = false, type = parseType()).also { skipScopeSpecifier() }
             }
 
             'f' -> {
                 advance()
-                SymbolDecl.Function(name, isFileStatic = true, type = parseType())
+                SymbolDecl.Function(name, isFileStatic = true, type = parseType()).also { skipScopeSpecifier() }
             }
 
             'p' -> {
@@ -112,6 +112,16 @@ class Parser(src: String) {
 
             else -> throw StabsParseException(pos, src, "unhandled symbol descriptor '$descriptor'")
         }
+    }
+
+    /**
+     * Optional nested-function scope specifier `,<proc>,<enclosing>` after a function's type
+     * (stabs.texinfo §Nested Procedures). The proc name is redundant with the symbol name and the
+     * enclosing link is already carried by the Itanium mangling, so — like gdb — we drop it. Consumed
+     * (not left trailing) to keep the unparsed-trailing guard reserved for genuinely-unmodeled input.
+     */
+    private fun Cursor.skipScopeSpecifier() {
+        if (consumeIf(',')) readUntilAny(charArrayOf(';'))
     }
 
     // ===== Symbol-level productions =====

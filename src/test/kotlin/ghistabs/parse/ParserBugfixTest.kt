@@ -353,4 +353,19 @@ class ParserBugfixTest {
         )
         assertEquals(expected, Parser(input).parseSymbol())
     }
+
+    /**
+     * stabs.texinfo §Nested Procedures: a function stab may carry a trailing `,<proc>,<enclosing>`
+     * scope specifier (gcc, for function-local classes/functions). It's redundant with the symbol
+     * name + the Itanium mangling, so it's consumed and dropped — not left as unparsed trailing.
+     */
+    @Test
+    fun testNestedFunctionScopeSpecifierConsumed() {
+        val parser = Parser("Push:f(0,1),Push,main")
+        assertEquals(
+            SymbolDecl.Function("Push", isFileStatic = true, type = TypeDecl.Ref(LocalTypeId(0, 1))),
+            parser.parseSymbol(),
+        )
+        assertEquals("", parser.remaining, "scope specifier must be fully consumed")
+    }
 }

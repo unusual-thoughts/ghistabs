@@ -332,10 +332,6 @@
             "min": 121,
             "max": 121
         },
-        "unparsed-trailing": {
-            "min": 2,
-            "max": 2
-        },
         "unresolved-symbol": {
             "min": 1350,
             "max": 1350
