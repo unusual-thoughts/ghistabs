@@ -57,12 +57,16 @@ data class SymbolRecord(
     val rawValue: Long,
     val declLine: Int = 0,
     val sourceFile: String? = null,
+    /** Enclosing function (mangled/linkage name) when harvested inside a function scope — set for
+     *  procedure-scope (`V`) statics so the applier can annotate which function owns them. */
+    val enclosingFunction: String? = null,
 ) {
     constructor(
         record: StabRecord,
         decl: SymbolDecl<GlobalTypeId>,
         sourceFile: String? = null,
-    ) : this(record.index, record.type, decl, record.value, record.desc, sourceFile)
+        enclosingFunction: String? = null,
+    ) : this(record.index, record.type, decl, record.value, record.desc, sourceFile, enclosingFunction)
 }
 
 @Serializable

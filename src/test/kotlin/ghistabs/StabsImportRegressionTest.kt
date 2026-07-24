@@ -1155,6 +1155,21 @@ class StabsImportRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
         )
     }
 
+    /**
+     * Function-local (`V` descriptor) statics get a PLATE comment naming their enclosing function,
+     * attributed via the harvest-time `currentFunction`. box2d emits ~32 (e.g. `once` in
+     * b2PairQueryCallback, `s_next` in b2ValidateReplay).
+     */
+    @Test
+    fun functionLocalStaticsGetEnclosingFunctionComment() {
+        assumeTrue(binaryName == "box2d_tests", "Skipping: needs a fixture with function-local (V) statics")
+        val plated = context.diagnostics.snapshotCounters()["static-local-plate"] ?: 0L
+        Assertions.assertTrue(
+            plated > 0,
+            "expected function-local (V) statics to get 'static local of <fn>' plate comments; got $plated",
+        )
+    }
+
     @OptIn(ExperimentalSerializationApi::class)
     @Test
     fun harvestTest() {

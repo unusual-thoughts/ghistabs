@@ -12,6 +12,7 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.symbol.SourceType
 import ghidra.program.model.symbol.SymbolTable
 import ghistabs.demangle
+import ghistabs.demangledName
 import ghistabs.diagnose.ApplyErrorBucket
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.Level
@@ -162,7 +163,7 @@ class SymbolApplier(
                     when (val d = h.body) {
                         is SymbolDecl.Global -> applyGlobal(d).let { if (it) globals++ }
 
-                        is SymbolDecl.StaticVar -> applyStatic(d, h.rawValue).let {
+                        is SymbolDecl.StaticVar -> applyStatic(d, h.rawValue, h.enclosingFunction).let {
                             if (it) globals++
                         }
 
@@ -441,7 +442,11 @@ class SymbolApplier(
         return true
     }
 
-    private fun applyStatic(decl: SymbolDecl.StaticVar<GlobalTypeId>, rawAddr: Long): Boolean {
+    private fun applyStatic(
+        decl: SymbolDecl.StaticVar<GlobalTypeId>,
+        rawAddr: Long,
+        enclosingFunction: String?,
+    ): Boolean {
         val addr = ctx.resolver.buildAddress(rawAddr)
         val dt = typeRegistry.resolveRef(decl.type) ?: return false
         typeRegistry.reasonFor(dt)?.let { reason ->
@@ -452,6 +457,11 @@ class SymbolApplier(
             )
         }
         ensureStabLabel(addr, decl.name)
+        if (ctx.options.applyPlateComments && decl.isFunctionLocal && enclosingFunction != null) {
+            val note = "static local of ${demangledName(enclosingFunction)}()"
+            ctx.program.listing.setComment(addr, CommentType.PLATE, note)
+            debug("static-local-plate", address = addr)
+        }
 
         try {
             ctx.program.listing.clearCodeUnits(addr, addr.add((dt.length - 1).toLong()), false)
