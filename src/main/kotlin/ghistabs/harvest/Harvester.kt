@@ -4,7 +4,6 @@ import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.importer.AddressResolver
 import ghistabs.importer.ImportContext
-import ghistabs.importer.stabAddress
 import ghistabs.parse.*
 
 /**
@@ -176,7 +175,6 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, private 
                     finaliseGcc12FunctionSize()
                     val addr = resolver.buildAddress(rec.value)
                     val mangled = rec.name.substringBefore(':')
-                    resolver.recordFromStab(mangled, addr)
                     try {
                         val sym = parseSymbol(rec)
                         when (sym.body) {
@@ -199,12 +197,9 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, private 
 
                 StabType.N_GSYM -> harvestSymbol(rec)
 
-                StabType.N_STSYM, StabType.N_LCSYM -> {
-                    val addr = resolver.buildAddress(rec.value)
-                    val mangled = rec.name.substringBefore(':')
-                    resolver.recordFromStab(mangled, addr)
-                    harvestSymbol(rec)
-                }
+                // Address-bearing statics: N_STSYM=data, N_LCSYM=bss, N_ROSYM=rodata
+                // (stabs.texinfo §"Static Variables"). Section differs; n_value carries the address.
+                StabType.N_STSYM, StabType.N_LCSYM, StabType.N_ROSYM -> harvestSymbol(rec)
 
                 StabType.N_PSYM, StabType.N_RSYM -> {
                     val open = currentFunction ?: continue
@@ -290,7 +285,7 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, private 
                 StabType.N_SCOPE, StabType.N_BCOMM, StabType.N_ECOMM, StabType.N_ECOML,
                 StabType.N_ENTRY, StabType.N_MAC_DEFINE, StabType.N_MAC_UNDEF,
                 // Apple/Sun cross-toolchain codes; benign on x86 PE/ELF.
-                StabType.N_ROSYM, StabType.N_BNSYM, StabType.N_ENSYM, StabType.N_OBJ,
+                StabType.N_BNSYM, StabType.N_ENSYM, StabType.N_OBJ,
                 StabType.N_ALIAS, StabType.N_NSYMS, StabType.N_NOMAP, StabType.N_PATCH,
                 StabType.N_WITH,
                 StabType.N_NBTEXT, StabType.N_NBDATA, StabType.N_NBBSS,

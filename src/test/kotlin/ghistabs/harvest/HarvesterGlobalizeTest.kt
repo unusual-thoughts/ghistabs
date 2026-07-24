@@ -2,7 +2,6 @@ package ghistabs.harvest
 
 import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.DummySink
-import ghistabs.importer.StabOnlyAddressResolver
 import ghistabs.parse.*
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -22,7 +21,7 @@ class HarvesterGlobalizeTest {
         val harvester = Harvester(
             monitor = TaskMonitor.DUMMY,
             sink = DummySink,
-            resolver = StabOnlyAddressResolver(),
+            resolver = GenericAddressResolver(),
         )
         harvester.preSeedHeaders(records)
         return harvester

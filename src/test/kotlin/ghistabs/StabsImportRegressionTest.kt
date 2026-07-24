@@ -22,7 +22,6 @@ import ghistabs.harvest.Harvester
 import ghistabs.importer.ImportArtifacts
 import ghistabs.importer.ImportContext
 import ghistabs.importer.ImportProbe
-import ghistabs.importer.stabAddress
 import ghistabs.materialize.conflictCount
 import ghistabs.materialize.itanium.Itanium
 import ghistabs.parse.*
@@ -1160,12 +1159,11 @@ class StabsImportRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
     @Test
     fun harvestTest() {
         // Reuse setUp's import artifacts; re-read / re-harvest only when it produced none (no stabs).
-        // (Harvesting writes labels via AddressResolver.recordFromStab, so the fallback needs a transaction.)
+        // Harvest is a pure producer (no Program mutation), so the fallback needs no transaction.
         val records = artifacts?.records ?: StabReader.fromProgram(program)!!.readAll().records
         dumpJson.encodeToStream(records, recordsFile.outputStream())
 
-        val harvest = artifacts?.harvest
-            ?: program.runTransaction("stabs-harvest-dump") { Harvester(context).harvest(records) }
+        val harvest = artifacts?.harvest ?: Harvester(context).harvest(records)
         dumpJson.encodeToStream(harvest, harvestFile.outputStream())
 
         val classStructs = harvest.typeAsts.values
@@ -1238,8 +1236,9 @@ class StabsImportRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
 
     /**
      * Ghidra's demangler runs once at priority ~897 over loader-added
-     * symbols; our stab-derived labels (`recordFromStab` → `createLabel`)
-     * appear later and would be missed. [StabsImporter.demangleMangledLabels]
+     * symbols; the raw mangled names we set from the stabs (function
+     * names in applyAllFunctions) appear later and would be missed.
+     * [StabsImporter.demangleMangledLabels]
      * sweeps every IMPORTED `_Z` / `__Z` symbol at the end of the import
      * with `DemanglerCmd`, with signature/calling-convention application
      * disabled so our stab-derived prototype and `__thiscall` choice

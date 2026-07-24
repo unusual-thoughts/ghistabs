@@ -1,8 +1,12 @@
 package ghistabs.harvest
 
+import ghidra.program.model.address.Address
+import ghidra.program.model.address.AddressSpace
+import ghidra.program.model.address.GenericAddressSpace
 import ghidra.util.task.TaskMonitor
+import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.DummySink
-import ghistabs.importer.StabOnlyAddressResolver
+import ghistabs.importer.AddressResolver
 import ghistabs.parse.SourceFile
 import ghistabs.parse.StabRecord
 import ghistabs.parse.StabType
@@ -23,11 +27,26 @@ import org.junit.jupiter.api.Test
  * include stack) rather than symbol parsing. Symbol parsing is tested separately
  * in HarvesterGlobalizeTest and HarvesterAppendAstsTest.
  */
+/**
+ * Program-less [AddressResolver] for harvest unit tests: builds addresses in a standalone generic space
+ * and resolves no names (name→address lookup needs a Program's symbol table). Harvest only ever calls
+ * [buildAddress] / [ghistabs.importer.AddressResolver.stabAddress], never [resolve].
+ */
+class GenericAddressResolver : AddressResolver {
+    override val sink: DiagnosticSink = DummySink
+
+    override fun buildAddress(offset: Long): Address =
+        GenericAddressSpace("generic", 8, AddressSpace.TYPE_RAM, 0).getAddress(offset)
+
+    override fun resolve(name: String): Address? = null
+}
+
 class HarvesterTest {
+
     private fun createTestHarvester(): Harvester = Harvester(
         monitor = TaskMonitor.DUMMY,
         sink = DummySink,
-        resolver = StabOnlyAddressResolver(),
+        resolver = GenericAddressResolver(),
     )
 
     /**
