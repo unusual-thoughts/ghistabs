@@ -333,6 +333,7 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, private 
         rec,
         Parser(rec.name, this).parseSymbol().globalize(this),
         lineSource,
+        currentFunction?.name,
     ).also {
         store.hoistSymbolDefs(it, currentCu!!)
     }
