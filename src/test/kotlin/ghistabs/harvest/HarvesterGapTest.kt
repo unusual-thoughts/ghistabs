@@ -2,7 +2,6 @@ package ghistabs.harvest
 
 import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.DummySink
-import ghistabs.importer.StabOnlyAddressResolver
 import ghistabs.parse.SourceFile
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertSame
@@ -16,7 +15,7 @@ class HarvesterGapTest {
     private fun createTestHarvester(): Harvester = Harvester(
         monitor = TaskMonitor.DUMMY,
         sink = DummySink,
-        resolver = StabOnlyAddressResolver(),
+        resolver = GenericAddressResolver(),
     )
 
     /**

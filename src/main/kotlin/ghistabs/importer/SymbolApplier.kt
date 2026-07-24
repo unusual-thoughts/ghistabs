@@ -71,11 +71,11 @@ class SymbolApplier(
                 // and depends on the COFF symtab being present). Mangled names (`_ZN…`) are set raw
                 // here and resolved to `Class::method` by demangleMangledLabels below.
                 if (func.name != open.name) {
-                    // COMDAT-folded placement `operator new`/`delete` (and any `recordFromStab` label)
-                    // put `open.name` on a *separate* symbol at this shared address, so renaming the
-                    // function symbol throws "already exists at this address" — once per referencing CU,
-                    // the bulk of `apply-error-duplicate-name`. Drop those redundant same-name symbols
-                    // first; the function then adopts the name (correct output, no error).
+                    // COMDAT-folded placement `operator new`/`delete` put `open.name` on a *separate*
+                    // symbol at this shared address, so renaming the function symbol throws "already
+                    // exists at this address" — once per referencing CU, the bulk of
+                    // `apply-error-duplicate-name`. Drop those redundant same-name symbols first; the
+                    // function then adopts the name (correct output, no error).
                     symtab.getSymbols(func.entryPoint)
                         .filter { it != func.symbol && it.name == open.name }
                         .forEach { it.delete() }
