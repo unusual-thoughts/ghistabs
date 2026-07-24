@@ -73,8 +73,9 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val typeRegis
     }
 
     /**
-     * Ghidra's DemanglerAnalyzer is a BYTE_ANALYZER that only runs over loader-added symbols,
-     * missing labels we created via recordFromStab. Replicate it locally with signature /
+     * Ghidra's DemanglerAnalyzer is a BYTE_ANALYZER that only runs over loader-added symbols, missing the
+     * raw mangled names we set from the stabs (function names in [SymbolApplier.applyAllFunctions], mangled
+     * static labels in [SymbolApplier.ensureStabLabel]). Replicate it locally with signature /
      * calling-convention application off — stab signatures are richer and our __thiscall must win.
      * Runs first in [replace] so the `/Demangler/...` stubs it creates are visible to the scan below.
      */
