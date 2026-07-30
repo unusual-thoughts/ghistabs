@@ -66,51 +66,6 @@ enum class Mode { CONCURRENT, AFTER }
 abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode) :
     AbstractGhidraHeadlessIntegrationTest() {
     companion object {
-        // Demangler stubs with no concrete type to bind to across the corpus: types the demangler
-        // names from mangled symbols that this binary only forward-declares (RTTI / EH surface) or
-        // references unparameterised — no full class stab to resolve to, so they stay empty. A stub
-        // outside this set is a real materialization gap. Global for now; add consciously when
-        // reviewed. Known real gaps deliberately excluded: `_Rb_tree_node`, `__normal_iterator.conflict`.
-        val ALLOWED_EMPTY_DEMANGLER_STUBS = setOf(
-            // bare (unparameterised) template names + builtin-spelling artifacts
-            "allocator", "new_allocator", "codecvt", "collate", "ctype", "messages",
-            "moneypunct", "money_get", "money_put", "num_get", "num_put", "numpunct",
-            "time_get", "time_put", "istreambuf_iterator", "__normal_iterator",
-            "__moneypunct_cache", "__numpunct_cache", "__timepunct", "__timepunct_cache",
-            "_Rope_RopeRep", "signed", "__gthread_mutex_t", "bitset", "less", "pair",
-            "vector",
-            // std exception / EH hierarchy (forward-declared for RTTI, never fully defined)
-            "exception", "bad_alloc", "bad_cast", "bad_exception", "bad_typeid", "failure",
-            "logic_error", "runtime_error", "domain_error", "invalid_argument", "length_error",
-            "out_of_range", "overflow_error", "range_error", "underflow_error",
-            // libsupc++ / libgcc unwinder + RTTI internals
-            "_Unwind_Context", "_Unwind_Exception", "lsda_header_info", "__dyncast_result",
-            "__upcast_result",
-            // libsupc++ EH + RTTI classes the demangler names from a mangled symbol but which have NO
-            // stab body anywhere in the corpus (verified against all 21 harvests: never emitted with
-            // fields). Deliberately NOT whitelisted — __basic_file, __moneypunct_cache, __numpunct_cache,
-            // __mt_alloc, __pool_alloc, _Deque_base/_Deque_iterator, _Vector_base, __normal_iterator,
-            // __pbase_type_info — because those DO carry real stab bodies in some fixtures, so an empty
-            // stub for them is a genuine materialization gap (see triage §B/§E), not a compiler internal.
-            "__concurrence_lock_error", "__concurrence_unlock_error", "recursive_init_error",
-            "__array_type_info", "__enum_type_info", "__function_type_info", "__fundamental_type_info",
-            // locale facets forward-declared in non-libstdc++ fixtures (full instantiations elsewhere)
-            "__codecvt_abstract_base<char,char,int>", "__ctype_abstract_base<char>",
-            "__timepunct<char>", "codecvt<char,char,int>", "codecvt_byname<char,char,int>",
-            "collate<char>", "collate_byname<char>", "ctype<char>", "ctype_byname<char>",
-            "messages<char>", "messages_byname<char>", "numpunct<char>", "numpunct_byname<char>",
-            "moneypunct<char,false>", "moneypunct<char,true>",
-            "moneypunct_byname<char,false>", "moneypunct_byname<char,true>",
-            "stdio_filebuf<char,std::char_traits<char>>",
-            "money_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>",
-            "money_put<char,std::ostreambuf_iterator<char,std::char_traits<char>>>",
-            "num_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>",
-            "num_put<char,std::ostreambuf_iterator<char,std::char_traits<char>>>",
-            "time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>",
-            "time_get_byname<char,std::istreambuf_iterator<char,std::char_traits<char>>>",
-            "time_put<char,std::ostreambuf_iterator<char,std::char_traits<char>>>",
-            "time_put_byname<char,std::ostreambuf_iterator<char,std::char_traits<char>>>",
-        )
     }
 
     // Manual inputs live under src/test/resources/ (binaries — gitignored,
@@ -899,7 +854,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         // DemanglerReplacer. After import these should all be resolved to real types
         // (length > 0 or absorbed into another category) — none should remain as empty
         // Structure stubs, except the bare-template/builtin artifacts with no concrete
-        // type (see ALLOWED_EMPTY_DEMANGLER_STUBS).
+        // type (see DemanglerWhitelist.ALLOWED).
         //
         // Only meaningful in AFTER. DemanglerReplacer runs in both modes (StabsImporter pass C),
         // but in CONCURRENT our analyzer fires alongside Ghidra's demangler and finishes before it
@@ -913,39 +868,18 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             .filter { it.categoryPath.path.startsWith("/Demangler") }
             .filter { it.isZeroLength || it.numComponents == 0 }
             .toList()
-        // Dump the pre-whitelist empty-stub names so [whitelistEntriesAreLive] can audit the whitelist
+        // Dump the pre-whitelist empty-stub names so [DemanglerWhitelistAuditTest] can audit the whitelist
         // across the whole corpus — an entry live in no fixture is dead and should be pruned.
         emptyStubDumpFile.apply { parentFile.mkdirs() }
             .writeText(allEmpty.map { it.name }.toSortedSet().joinToString("\n"))
         val emptyStubs = allEmpty
-            .filterNot { it.name in ALLOWED_EMPTY_DEMANGLER_STUBS }
+            .filterNot { it.name in DemanglerWhitelist.ALLOWED }
             .map { "${it.categoryPath.path}/${it.name}" }
         Assertions.assertTrue(
             emptyStubs.isEmpty(),
             "Expected zero unexpected empty /Demangler/* stubs, found ${emptyStubs.size}: " +
                 emptyStubs.take(10).joinToString(),
         )
-    }
-
-    /**
-     * Whitelist hygiene: every [ALLOWED_EMPTY_DEMANGLER_STUBS] entry must correspond to a real empty
-     * stub in at least one fixture — else it's dead cruft (e.g. now filled by the demangler
-     * reverse-index bridge). Reads the per-fixture dumps [demanglerHasNoEmptyStubs] writes; runs once
-     * (fixture-independent) and only when a full corpus has been dumped, so a partial run can't misfire.
-     */
-    @Test
-    fun whitelistEntriesAreLive() {
-        val dumps = File("build/test-output/demangler-empty-stubs").listFiles { f -> f.extension == "txt" }.orEmpty()
-        // Corpus-wide audit: only meaningful once EVERY fixture has dumped. A count threshold isn't
-        // enough — stale dumps from an earlier partial run satisfy it while misrepresenting the
-        // corpus (seen calling `less`/`exception` dead). Under parallel forks each class runs this
-        // in its own JVM, so whichever finishes last sees the complete set and audits; the rest skip.
-        val expected = IntegrationFixtures.ALL.map { it.substringBeforeLast('.') }.toSet()
-        val have = dumps.map { it.nameWithoutExtension }.toSet()
-        assumeTrue(have.containsAll(expected), "need a full-corpus dump (missing ${expected - have})")
-        val live = dumps.flatMap { it.readLines() }.filter { it.isNotBlank() }.toSet()
-        val dead = ALLOWED_EMPTY_DEMANGLER_STUBS.filterNot { it in live }
-        Assertions.assertTrue(dead.isEmpty(), "Dead ALLOWED_EMPTY_DEMANGLER_STUBS entries (prune): $dead")
     }
 
     @Test
