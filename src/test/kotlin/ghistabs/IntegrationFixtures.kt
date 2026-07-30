@@ -11,28 +11,15 @@ import java.util.stream.Stream
  * an absent one is skipped by the individual test, not here.
  */
 object IntegrationFixtures {
-    val CORE = listOf(
-        "bouniafbouniaf.exe",
-        "xmltest",
-        "bouniaf.exe",
-        "box2d_tests",
-        "bouniaf.exe",
-        "unbouniaf.exe",
-    )
+    /** Where the hand-placed fixture binaries live (gitignored, bouniaf). */
+    val DIR = java.io.File("src/test/resources/binaries")
 
-    // gcc 4.2.1 / 3.4.5 stabs corpus (crypto / locale / xmltest), incl. PE-symbol-stripped variants.
-    private val EXTENDED = listOf(
-        "crypto_mi_test_gcc421.exe", "crypto_mi_test_gcc421_fullstabs.exe",
-        "crypto_mi_test_gcc421_stripped.exe", "crypto_mi_test_gcc421_fullstabs_stripped.exe",
-        "crypto_mi_test_gcc345.exe", "crypto_mi_test_gcc345_fullstabs.exe",
-        "locale_test_customlibstdcxx.exe", "locale_test_customlibstdcxx_stripped.exe",
-        "locale_test_gcc345_fullstabs.exe",
-        "xmltest_gcc421.exe", "xmltest_gcc421_fullstabs.exe",
-        "xmltest_gcc421_stripped.exe", "xmltest_gcc421_fullstabs_stripped.exe",
-        "xmltest_gcc345.exe", "xmltest_gcc345_fullstabs.exe",
-    )
-
-    val ALL = CORE + EXTENDED
+    /**
+     * Every binary in [DIR], sorted — the directory listing IS the corpus, so a fixture can never be
+     * on disk yet silently untested (that drift hid `box2d` and `tinyxml2.cpp.o`; both now live in
+     * `src/test/resources/fixtures.bak/`). One generated test class per name — see generateFixtureTests.
+     */
+    val ALL: List<String> get() = DIR.listFiles()?.filter { it.isFile }?.map { it.name }?.sorted().orEmpty()
 
     /** The `-Pfixture` filter as a set of exact filenames (comma-separated); empty means "all". */
     private fun wantedFixtures(): Set<String> = System.getProperty("fixtureFilter").orEmpty()
@@ -48,9 +35,5 @@ object IntegrationFixtures {
     /** Whether [name] passes the `-Pfixture` filter — for suites that skip via `assumeTrue` per name. */
     fun accepts(name: String): Boolean = wantedFixtures().let { it.isEmpty() || name in it }
 
-    @JvmStatic fun core(): Stream<String> = select(CORE).stream()
-
     @JvmStatic fun all(): Stream<String> = select(ALL).stream()
-
-    @JvmStatic fun allWithBox2d(): Stream<String> = select(ALL + "box2d").stream()
 }

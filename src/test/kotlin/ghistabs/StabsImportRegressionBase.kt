@@ -36,7 +36,6 @@ import org.junit.jupiter.params.AfterParameterizedClassInvocation
 import org.junit.jupiter.params.BeforeParameterizedClassInvocation
 import org.junit.jupiter.params.Parameter
 import org.junit.jupiter.params.ParameterizedClass
-import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
 import java.io.File
 
@@ -69,17 +68,18 @@ enum class Mode { CONCURRENT, AFTER }
  * Runs full analysis pipeline and validates counters against committed baseline.
  * Skips gracefully if fixture is absent (bouniaf, not in repo).
  */
-@ParameterizedClass
-@MethodSource("testParameters")
+@ParameterizedClass(name = "{0}")
+@MethodSource("selectedModes")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @Execution(ExecutionMode.CONCURRENT)
 @Tag("integration")
-class StabsImportRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
+abstract class StabsImportRegressionBase(val binaryName: String) : AbstractGhidraHeadlessIntegrationTest() {
     companion object {
         // -Pfixture=<exact filename> narrows the fixture set at the source (via IntegrationFixtures),
         // so a single-fixture run imports+analyses one binary × both modes instead of the whole corpus.
         // -Pmode=CONCURRENT|AFTER narrows the analyzer execution mode (blank = both), mirroring -Pfixture.
-        private fun selectedModes(): List<Mode> {
+        @JvmStatic
+        fun selectedModes(): List<Mode> {
             val wanted = System.getProperty("modeFilter").orEmpty()
                 .split(',').map { it.trim().uppercase() }.filterTo(mutableSetOf()) { it.isNotEmpty() }
             if (wanted.isEmpty()) return Mode.entries
@@ -90,11 +90,6 @@ class StabsImportRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
             }
             return Mode.entries.filter { it.name in wanted }
         }
-
-        @JvmStatic
-        fun testParameters(): java.util.stream.Stream<Arguments> = IntegrationFixtures.select(IntegrationFixtures.ALL)
-            .flatMap { binary -> selectedModes().map { mode -> Arguments.of(binary, mode) } }
-            .stream()
 
         // Demangler stubs with no concrete type to bind to across the corpus: types the demangler
         // names from mangled symbols that this binary only forward-declares (RTTI / EH surface) or
@@ -143,11 +138,9 @@ class StabsImportRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
         )
     }
 
-    // Both fields injected per parameterized invocation before @BeforeParameterizedClassInvocation.
+    // Injected per parameterized invocation before @BeforeParameterizedClassInvocation; the
+    // fixture itself is fixed per subclass (one generated class per binary — see generateFixtureTests).
     @Parameter(0)
-    lateinit var binaryName: String
-
-    @Parameter(1)
     lateinit var mode: Mode
 
     // Manual inputs live under src/test/resources/ (binaries — gitignored,
@@ -1500,12 +1493,11 @@ class StabsImportRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
 
     /**
      * FillerByteAnalyzer is the only source of [AlignmentDataType] in the pipeline, so a nonzero
-     * count is exactly its hits. Scoped to [IntegrationFixtures.CORE] where it was validated.
+     * count is exactly its hits. Runs on every fixture.
      * (Folded from the former FillerByteAnalyzerIntegrationTest — rides on setUp's autoanalysis.)
      */
     @Test
     fun fillerBytesCollapsedToAlignment() {
-        assumeTrue(binaryName in IntegrationFixtures.CORE, "filler-byte check scoped to core fixtures")
         val data = program.listing.getDefinedData(true)
         var runs = 0
         while (data.hasNext()) if (data.next().dataType is AlignmentDataType) runs++
@@ -1537,12 +1529,11 @@ class StabsImportRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
      * record, resolved against its enclosing `N_FUN`, must land in executable memory. A value left
      * un-rebased resolves to a tiny address in no code block. Not asserted against the *enclosing*
      * function specifically — gcc clones ctors/dtors, so a stab function's line range legitimately
-     * spans sibling clones. Scoped to [IntegrationFixtures.CORE]. (Folded from the former
+     * spans sibling clones. Runs on every fixture. (Folded from the former
      * FuncRelativeAddressIntegrationTest.)
      */
     @Test
     fun funcRelativeAddressesLandInExecutableCode() {
-        assumeTrue(binaryName in IntegrationFixtures.CORE, "func-relative check scoped to core fixtures")
         val resolver = program.defaultContext().resolver
         val reader = StabReader.fromProgram(program)
         assumeTrue(reader != null, "no .stab in $binaryName")
