@@ -9,8 +9,9 @@ import java.io.File
 /**
  * The demangler-stub whitelist, and the audit that keeps it honest. Lives in its own class because
  * it is a CORPUS-level invariant, not a per-fixture one: it reads the per-fixture dumps that
- * [StabsImportRegressionBase.demanglerHasNoEmptyStubs] writes, so hanging it off a fixture class ran
- * it once per fixture (42x) to check one global property, coupled through the filesystem.
+ * [StabsImportRegressionBase.demanglerHasNoEmptyStubs] writes. Tagged `audit` and run by the
+ * :auditWhitelist task, which `integrationTest` is finalizedBy — as a plain `integration` class it
+ * raced the fixtures that produce its input and silently skipped.
  */
 object DemanglerWhitelist {
     // Demangler stubs with no concrete type to bind to across the corpus: types the demangler
@@ -60,7 +61,7 @@ object DemanglerWhitelist {
     )
 }
 
-@Tag("integration")
+@Tag("audit")
 class DemanglerWhitelistAuditTest {
     /**
      * Whitelist hygiene: every [DemanglerWhitelist.ALLOWED] entry must correspond to a real empty
