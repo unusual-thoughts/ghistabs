@@ -135,16 +135,12 @@ fun Test.reportWithConsoleSummary(name: String) {
     // (modes that pass -Pmode); ETA uses observed wall-clock throughput so it self-adjusts to how
     // many forks are actually running. Fires only for parameterized `binaryName=…, mode=…` suites,
     // so it's inert for the unit-test task.
-    val binDir = project.layout.projectDirectory.dir("src/test/resources/binaries").asFile
-    val fixtureSel = providers.gradleProperty("fixture").getOrElse("").split(",")
-        .map { it.trim() }.filter { it.isNotEmpty() }
-    val modeSel = providers.gradleProperty("mode").getOrElse("").split(",").map { it.trim() }.filter { it.isNotEmpty() }
-    val plannedFixtures = fixtureSel.ifEmpty {
-        binDir.listFiles()?.map { it.name } ?: emptyList()
-    }.count { File(binDir, it).isFile }
-    val plannedTotal = (plannedFixtures * (if (modeSel.isNotEmpty()) modeSel.size else 2)).coerceAtLeast(1)
-    val invRe = Regex("""binaryName=([^,]+), mode=(\w+)""")
-    val invocationSuite = Regex(""".*\[\d+]$""")
+    val plannedTotal = (selectedFixtures().size * selectedModes().size).coerceAtLeast(1)
+    // Generated class FQN -> "fixture/MODE" label, from the same fixtureClassName the generator
+    // uses, so the progress line survives any renaming of the generated classes.
+    val suiteLabels = fixtureBinaries()
+        .flatMap { b -> fixtureModes.map { m -> "ghistabs.fixtures.${fixtureClassName(b, m)}" to "$b/$m" } }
+        .toMap()
     val runStart = AtomicLong(0L)
     val done = AtomicInteger(0)
     fun hms(ms: Long) = "%dm%02ds".format(ms / 60000, (ms / 1000) % 60)
@@ -159,14 +155,13 @@ fun Test.reportWithConsoleSummary(name: String) {
         }
 
         override fun afterSuite(suite: TestDescriptor, result: TestResult) {
-            // A parameterized-class invocation finishes as a suite named `<Class>[<n>]` with a null
-            // className. gradle's `name` is only `StabsImportRegressionTest[1]`, but its `displayName`
-            // carries the `binaryName=…, mode=…` args — pull the fixture/mode from there, falling back
-            // to the bracketed name so the line still renders if that ever changes.
-            if (suite.className == null && suite.name.matches(invocationSuite)) {
+            // Each fixture×mode is now its own generated class, so one class suite == one unit of
+            // work. Match on the known generated FQNs (suiteLabels) rather than a name shape, which
+            // also keeps the root/fork suites out of the count.
+            val known = suite.className?.let { suiteLabels[it] }
+            if (known != null) {
                 val n = done.incrementAndGet()
-                val label = invRe.find(suite.displayName)?.let { "${it.groupValues[1]}/${it.groupValues[2]}" }
-                    ?: suite.name.substringAfterLast('.')
+                val label = known
                 val elapsed = System.currentTimeMillis() - runStart.get()
                 val eta = if (n < plannedTotal) (elapsed.toDouble() / n * (plannedTotal - n)).toLong() else 0L
                 logger.lifecycle(
@@ -191,34 +186,17 @@ fun Test.reportWithConsoleSummary(name: String) {
     })
 }
 
-// One test class per fixture binary, generated from the directory listing (the authoritative
-// corpus — see IntegrationFixtures.ALL). Gradle schedules whole *classes* onto forks, so a single
-// @ParameterizedClass over every fixture can never parallelise: one fork runs them all serially.
-// A class per fixture lets maxParallelForks distribute them across JVMs, which also keeps each
-// fixture's state process-isolated (JUnit-thread concurrency corrupts the shared PER_CLASS instance).
-val fixturesDir = layout.projectDirectory.dir("src/test/resources/binaries")
-
-/** Fixture filename (+ analyzer mode) -> generated class name. MUST match the filters below. */
-fun fixtureClassName(binary: String, mode: String = "") =
-    binary.split(Regex("[^A-Za-z0-9]+")).filter { it.isNotEmpty() }.joinToString("") { part ->
-        part.replaceFirstChar { it.uppercase() }
-    } + mode.lowercase().replaceFirstChar { it.uppercase() } + "Test"
-
-/** The analyzer modes each fixture is generated for — mirrors ghistabs.Mode. */
-val fixtureModes = listOf("CONCURRENT", "AFTER")
-
 val generateFixtureTests by tasks.registering {
     description = "Generate one StabsImportRegressionBase subclass per fixture binary"
     val outDir = layout.buildDirectory.dir("generated/sources/fixtureTests/kotlin")
-    val dir = fixturesDir.asFile
     // Listing is an input so adding/removing a binary regenerates; the task is cheap either way.
-    inputs.property("fixtures", provider { dir.listFiles()?.filter { it.isFile }?.map { it.name }?.sorted().orEmpty() })
+    inputs.property("fixtures", provider { fixtureBinaries() })
     outputs.dir(outDir)
     doLast {
         val root = outDir.get().asFile
         root.deleteRecursively()
         root.resolve("ghistabs/fixtures").mkdirs()
-        val names = dir.listFiles()?.filter { it.isFile }?.map { it.name }?.sorted().orEmpty()
+        val names = fixtureBinaries()
         names.forEach { binary ->
             fixtureModes.forEach { mode ->
                 val cls = fixtureClassName(binary, mode)
@@ -248,6 +226,34 @@ val generateFixtureTests by tasks.registering {
 
 kotlin.sourceSets["test"].kotlin.srcDir(generateFixtureTests)
 
+// ── Fixture corpus ───────────────────────────────────────────────────────────────────────────
+// The binaries directory IS the corpus — IntegrationFixtures.ALL lists the same directory at
+// runtime. Gradle schedules whole test *classes* onto forks, so :generateFixtureTests emits one
+// class per fixture × mode; without that a single parameterized class pins the whole corpus to one
+// fork. -Pfixture/-Pmode select those classes by name, so unselected combinations never boot a JVM.
+val fixturesDir = layout.projectDirectory.dir("src/test/resources/binaries")
+
+/** Analyzer modes each fixture is generated for — mirrors ghistabs.Mode. */
+val fixtureModes = listOf("CONCURRENT", "AFTER")
+
+/** Every fixture binary on disk, sorted. */
+fun fixtureBinaries(): List<String> =
+    fixturesDir.asFile.listFiles()?.filter { it.isFile }?.map { it.name }?.sorted().orEmpty()
+
+/** Fixture filename + analyzer mode -> generated class name. Shared by generator, filter, listener. */
+fun fixtureClassName(binary: String, mode: String) =
+    binary.split(Regex("[^A-Za-z0-9]+")).filter { it.isNotEmpty() }.joinToString("") { part ->
+        part.replaceFirstChar { it.uppercase() }
+    } + mode.lowercase().replaceFirstChar { it.uppercase() } + "Test"
+
+/** `-Pfixture=<file>[,…]`, defaulting to the whole corpus. */
+fun selectedFixtures(): List<String> = providers.gradleProperty("fixture").orNull.orEmpty()
+    .split(',').map { it.trim() }.filter { it.isNotEmpty() }.ifEmpty { fixtureBinaries() }
+
+/** `-Pmode=CONCURRENT|AFTER`, defaulting to both. */
+fun selectedModes(): List<String> = providers.gradleProperty("mode").orNull.orEmpty()
+    .split(',').map { it.trim().uppercase() }.filter { it.isNotEmpty() }.ifEmpty { fixtureModes }
+
 // Shared config for the headless-Ghidra test tasks: classpath, one-Ghidra-per-fork parallelism,
 // -Pfixture/-PregenerateBaselines wiring, JVM args, and the console summary + archived reports.
 // JVM args mirror ~/git/ghidra/gradle/javaTestProject.gradle:initTestJVM so Ghidra's
@@ -272,19 +278,11 @@ fun Test.headlessGhidraConfig(reportName: String) {
     // class (skips a stray invocation), and the gradle filter drops the generated classes outright
     // so unselected fixtures never boot a JVM at all.
     systemProperty("fixtureFilter", providers.gradleProperty("fixture").getOrElse(""))
-    // Both filters select generated classes: -Pfixture=<file>[,…] and/or -Pmode=CONCURRENT|AFTER.
-    // Their intersection is what runs, so unselected combinations never boot a JVM.
-    val wantFixtures = providers.gradleProperty("fixture").orNull.orEmpty()
-        .split(',').map { it.trim() }.filter { it.isNotEmpty() }
-    val wantModes = providers.gradleProperty("mode").orNull.orEmpty()
-        .split(',').map { it.trim().uppercase() }.filter { it.isNotEmpty() }.ifEmpty { fixtureModes }
-    if (wantFixtures.isNotEmpty() || wantModes != fixtureModes) {
+    // -Pfixture and -Pmode intersect, selecting generated classes by name.
+    if (selectedFixtures() != fixtureBinaries() || selectedModes() != fixtureModes) {
         filter {
-            val binaries = wantFixtures.ifEmpty {
-                fixturesDir.asFile.listFiles()?.filter { it.isFile }?.map { it.name }.orEmpty()
-            }
-            binaries.forEach { b ->
-                wantModes.forEach { m -> includeTestsMatching("ghistabs.fixtures.${fixtureClassName(b, m)}") }
+            selectedFixtures().forEach { b ->
+                selectedModes().forEach { m -> includeTestsMatching("ghistabs.fixtures.${fixtureClassName(b, m)}") }
             }
             isFailOnNoMatchingTests = false
         }
