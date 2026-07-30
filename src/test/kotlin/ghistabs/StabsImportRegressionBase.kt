@@ -30,13 +30,6 @@ import kotlinx.serialization.json.encodeToStream
 import org.junit.jupiter.api.*
 import org.junit.jupiter.api.Assumptions.abort
 import org.junit.jupiter.api.Assumptions.assumeTrue
-import org.junit.jupiter.api.parallel.Execution
-import org.junit.jupiter.api.parallel.ExecutionMode
-import org.junit.jupiter.params.AfterParameterizedClassInvocation
-import org.junit.jupiter.params.BeforeParameterizedClassInvocation
-import org.junit.jupiter.params.Parameter
-import org.junit.jupiter.params.ParameterizedClass
-import org.junit.jupiter.params.provider.MethodSource
 import java.io.File
 
 /**
@@ -68,29 +61,11 @@ enum class Mode { CONCURRENT, AFTER }
  * Runs full analysis pipeline and validates counters against committed baseline.
  * Skips gracefully if fixture is absent (bouniaf, not in repo).
  */
-@ParameterizedClass(name = "{0}")
-@MethodSource("selectedModes")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
-@Execution(ExecutionMode.CONCURRENT)
 @Tag("integration")
-abstract class StabsImportRegressionBase(val binaryName: String) : AbstractGhidraHeadlessIntegrationTest() {
+abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode) :
+    AbstractGhidraHeadlessIntegrationTest() {
     companion object {
-        // -Pfixture=<exact filename> narrows the fixture set at the source (via IntegrationFixtures),
-        // so a single-fixture run imports+analyses one binary × both modes instead of the whole corpus.
-        // -Pmode=CONCURRENT|AFTER narrows the analyzer execution mode (blank = both), mirroring -Pfixture.
-        @JvmStatic
-        fun selectedModes(): List<Mode> {
-            val wanted = System.getProperty("modeFilter").orEmpty()
-                .split(',').map { it.trim().uppercase() }.filterTo(mutableSetOf()) { it.isNotEmpty() }
-            if (wanted.isEmpty()) return Mode.entries
-            // Fail loudly on a typo'd -Pmode rather than yielding zero invocations (which surfaces as
-            // gradle's opaque "No tests found for given includes"), mirroring IntegrationFixtures.select.
-            (wanted - Mode.entries.map { it.name }.toSet()).let {
-                require(it.isEmpty()) { "unknown -Pmode value(s) $it; valid: ${Mode.entries.map { m -> m.name }}" }
-            }
-            return Mode.entries.filter { it.name in wanted }
-        }
-
         // Demangler stubs with no concrete type to bind to across the corpus: types the demangler
         // names from mangled symbols that this binary only forward-declares (RTTI / EH surface) or
         // references unparameterised — no full class stab to resolve to, so they stay empty. A stub
@@ -138,11 +113,6 @@ abstract class StabsImportRegressionBase(val binaryName: String) : AbstractGhidr
         )
     }
 
-    // Injected per parameterized invocation before @BeforeParameterizedClassInvocation; the
-    // fixture itself is fixed per subclass (one generated class per binary — see generateFixtureTests).
-    @Parameter(0)
-    lateinit var mode: Mode
-
     // Manual inputs live under src/test/resources/ (binaries — gitignored,
     // user-placed — and baselines — tracked); test-generated dumps go to
     // build/test-output/ so `./gradlew clean` regenerates them. See README
@@ -168,7 +138,7 @@ abstract class StabsImportRegressionBase(val binaryName: String) : AbstractGhidr
     private var artifacts: ImportArtifacts? = null
     private val program get() = context.program
 
-    @BeforeParameterizedClassInvocation
+    @BeforeAll
     fun setUp() {
         assumeTrue(
             fixture.exists(),
@@ -301,7 +271,7 @@ abstract class StabsImportRegressionBase(val binaryName: String) : AbstractGhidr
         )
     }
 
-    @AfterParameterizedClassInvocation
+    @AfterAll
     fun tearDown() {
         ImportProbe.clear(program)
         program.release(this)
@@ -966,7 +936,13 @@ abstract class StabsImportRegressionBase(val binaryName: String) : AbstractGhidr
     @Test
     fun whitelistEntriesAreLive() {
         val dumps = File("build/test-output/demangler-empty-stubs").listFiles { f -> f.extension == "txt" }.orEmpty()
-        assumeTrue(dumps.size >= 15, "need a full-corpus empty-stub dump (have ${dumps.size})")
+        // Corpus-wide audit: only meaningful once EVERY fixture has dumped. A count threshold isn't
+        // enough — stale dumps from an earlier partial run satisfy it while misrepresenting the
+        // corpus (seen calling `less`/`exception` dead). Under parallel forks each class runs this
+        // in its own JVM, so whichever finishes last sees the complete set and audits; the rest skip.
+        val expected = IntegrationFixtures.ALL.map { it.substringBeforeLast('.') }.toSet()
+        val have = dumps.map { it.nameWithoutExtension }.toSet()
+        assumeTrue(have.containsAll(expected), "need a full-corpus dump (missing ${expected - have})")
         val live = dumps.flatMap { it.readLines() }.filter { it.isNotBlank() }.toSet()
         val dead = ALLOWED_EMPTY_DEMANGLER_STUBS.filterNot { it in live }
         Assertions.assertTrue(dead.isEmpty(), "Dead ALLOWED_EMPTY_DEMANGLER_STUBS entries (prune): $dead")
