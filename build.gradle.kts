@@ -205,7 +205,13 @@ fun Test.headlessGhidraConfig(reportName: String) {
     classpath = sourceSets["test"].runtimeClasspath
     shouldRunAfter("test")
     forkEvery = 0
-    maxParallelForks = (Runtime.getRuntime().availableProcessors() / 2).coerceIn(1, 4)
+    // Single fork on purpose. StabsImportRegressionTest is one @ParameterizedClass, so gradle can't
+    // split its per-fixture invocations across forks — one fork runs them all serially and dominates
+    // the wall time regardless. Extra forks only run the handful of short integration classes
+    // alongside it, which buys little and makes every per-fixture timing unreliable: the same commit
+    // measured 122–142s under parallel forks vs 131–137s isolated (±16% → ±4.5% spread), enough
+    // jitter to fake a 20–30% regression. Raise it only if the long class is ever split.
+    maxParallelForks = 1
     maxHeapSize = "2g"
     // -Pfixture=<exact filename> narrows the fixture set (at the source, via IntegrationFixtures).
     systemProperty("fixtureFilter", providers.gradleProperty("fixture").getOrElse(""))
@@ -229,11 +235,16 @@ fun Test.headlessGhidraConfig(reportName: String) {
         "--add-opens=java.desktop/javax.swing=ALL-UNNAMED",
         "--add-opens=java.desktop/javax.swing.text=ALL-UNNAMED",
     )
-    // -Pjfr=<file>: record a JFR profile from JVM start (captures load + autoanalysis + import),
-    // dumped on exit. Force a single fork so one fixture's whole run lands in one recording.
-    providers.gradleProperty("jfr").orNull?.let { jfrFile ->
-        maxParallelForks = 1
-        jvmArgs("-XX:StartFlightRecording=settings=profile,dumponexit=true,maxsize=500m,filename=$jfrFile")
+    // -Pjfr[=<file>]: record a JFR profile from JVM start (captures load + autoanalysis + import),
+    // dumped on exit. Defaults under build/test-output/jfr/; `%p` keeps forks distinct if ever >1.
+    // Analyse with the jdk.jfr.consumer RecordingFile API, NOT `jfr print`/`jfr view` — both die with
+    // StringIndexOutOfBoundsException in ValueFormatter.formatMethod on Kotlin synthetic frames.
+    providers.gradleProperty("jfr").orNull?.let { jfr ->
+        val path = jfr.ifBlank { "${layout.buildDirectory.get().asFile}/test-output/jfr/$reportName-%p.jfr" }
+        // JFR won't create missing directories — it aborts JVM startup instead ("Could not start
+        // recording, not able to write to file"), taking the whole test run with it.
+        file(path).parentFile?.mkdirs()
+        jvmArgs("-XX:StartFlightRecording=settings=profile,dumponexit=true,maxsize=500m,filename=$path")
     }
 }
 
