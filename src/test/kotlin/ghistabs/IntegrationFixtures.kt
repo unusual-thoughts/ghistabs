@@ -1,39 +1,31 @@
 package ghistabs
 
+import java.io.File
 import java.util.stream.Stream
 
 /**
- * Single source of truth for the fixture corpus and the `-Pfixture=<exact filename>[,<filename>…]`
- * (→ `-DfixtureFilter`) narrowing — a comma-separated list of exact filenames. Parameterised suites
- * draw their fixture list from here via `@MethodSource("ghistabs.integration.IntegrationFixtures#…")`,
- * so one flag narrows every suite at the source (no per-test `assumeTrue` skip that still pays a full
- * import). Binaries are hand-placed under `src/test/resources/binaries/`;
- * an absent one is skipped by the individual test, not here.
+ * Fixture corpus for the parameterised probe suites, narrowed by `-Pfixture=<filename>[,…]`
+ * (→ `-DfixtureFilter`). The regression suite does not use this: it has one generated class per
+ * fixture × mode, selected by gradle's test filter (see `:generateFixtureTests`). Binaries are
+ * hand-placed under `src/test/resources/binaries/`; an absent one is
+ * skipped by the individual test.
  */
 object IntegrationFixtures {
-    /** Where the hand-placed fixture binaries live (gitignored, bouniaf). */
-    val DIR = java.io.File("src/test/resources/binaries")
+    private val dir = File("src/test/resources/binaries")
 
-    /**
-     * Every binary in [DIR], sorted — the directory listing IS the corpus, so a fixture can never be
-     * on disk yet silently untested (that drift hid `box2d` and `tinyxml2.cpp.o`; both now live in
-     * `src/test/resources/fixtures.bak/`). One generated test class per name — see generateFixtureTests.
-     */
-    val ALL: List<String> get() = DIR.listFiles()?.filter { it.isFile }?.map { it.name }?.sorted().orEmpty()
+    /** The directory listing IS the corpus — a binary on disk can never sit silently untested. */
+    val ALL: List<String> get() = dir.listFiles()?.filter { it.isFile }?.map { it.name }?.sorted().orEmpty()
 
-    /** The `-Pfixture` filter as a set of exact filenames (comma-separated); empty means "all". */
-    private fun wantedFixtures(): Set<String> = System.getProperty("fixtureFilter").orEmpty()
-        .split(',').map { it.trim() }.filterTo(mutableSetOf()) { it.isNotEmpty() }
+    private val wanted: Set<String>
+        get() = System.getProperty("fixtureFilter").orEmpty()
+            .split(',').map { it.trim() }.filterTo(mutableSetOf()) { it.isNotEmpty() }
 
-    /** [names] narrowed by `-Pfixture`; blank keeps all. Errors when the filter selects nothing here. */
-    fun select(names: List<String>): List<String> {
-        val wanted = wantedFixtures()
-        if (wanted.isEmpty()) return names
-        return names.filter { it in wanted }.ifEmpty { error("none of $wanted in this suite: $names") }
-    }
+    /** Whether [name] passes `-Pfixture` — for suites that skip per name rather than at the source. */
+    fun accepts(name: String) = wanted.let { it.isEmpty() || name in it }
 
-    /** Whether [name] passes the `-Pfixture` filter — for suites that skip via `assumeTrue` per name. */
-    fun accepts(name: String): Boolean = wantedFixtures().let { it.isEmpty() || name in it }
-
-    @JvmStatic fun all(): Stream<String> = select(ALL).stream()
+    /** [ALL] narrowed by `-Pfixture`; errors on a filter that matches nothing, so a typo fails loudly. */
+    @JvmStatic
+    fun all(): Stream<String> = ALL.filter(::accepts)
+        .also { check(it.isNotEmpty() || wanted.isEmpty()) { "no fixture matches -Pfixture=$wanted" } }
+        .stream()
 }
