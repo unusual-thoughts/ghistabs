@@ -167,6 +167,8 @@ class StabsImportRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
         get() = File("build/test-output/degradations/${fixture.nameWithoutExtension}.${mode.name.lowercase()}.txt")
     private val logFile
         get() = File("build/test-output/logs/${fixture.nameWithoutExtension}.${mode.name.lowercase()}.log")
+    private val analysisTimesFile
+        get() = File("build/test-output/analysis-times/${fixture.nameWithoutExtension}.${mode.name.lowercase()}.txt")
 
     private lateinit var loadResults: LoadResults<Program>
     private lateinit var context: ImportContext<CapturingSink>
@@ -278,6 +280,12 @@ class StabsImportRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
             mgr.startAnalysis(monitor)
             mgr.waitForAnalysis(null, monitor)
         }
+        // Ghidra's own per-analyzer wall times. The gradle listener only reports whole-invocation
+        // time, which also carries fixture load, our import and the dumps; this attributes the
+        // analysis share to individual analyzers, so a perf change can be localised without a
+        // profiler. Written per fixture×mode alongside the other dumps.
+        analysisTimesFile.apply { parentFile.mkdirs() }
+            .writeText("total = ${mgr.totalTimeInMillis} ms\n\n${mgr.taskTimesString}")
     }
 
     // The CLI's `--degradation-log` dump, grouped by category, so one integrationTest run emits the
