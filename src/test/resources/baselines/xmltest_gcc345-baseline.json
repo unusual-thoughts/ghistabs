@@ -41,16 +41,12 @@
             "max": 2
         },
         "degraded-global-typed-all-undefined": {
-            "min": 1,
-            "max": 1
+            "min": 5,
+            "max": 5
         },
         "degraded-local-typed-all-undefined": {
             "min": 41,
             "max": 41
-        },
-        "degraded-static-typed-all-undefined": {
-            "min": 4,
-            "max": 4
         },
         "degraded-struct-mostly-undefined": {
             "min": 20,
@@ -117,8 +113,8 @@
             "max": 6
         },
         "global-applied": {
-            "min": 461,
-            "max": 461
+            "min": 491,
+            "max": 491
         },
         "global-skipped": {
             "min": 2,
@@ -319,6 +315,10 @@
         "stab-value-func-relative": {
             "min": 21290,
             "max": 21290
+        },
+        "static-local-plate": {
+            "min": 2,
+            "max": 2
         },
         "text-data-no-coverage": {
             "min": 307,

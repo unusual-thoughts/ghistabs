@@ -16,6 +16,7 @@ import ghidra.program.model.data.Structure
 import ghidra.program.model.listing.Data
 import ghidra.program.model.listing.FunctionManager
 import ghidra.program.model.listing.Program
+import ghidra.program.model.mem.Memory
 import ghidra.program.model.mem.MemoryBlock
 import ghidra.util.task.TaskMonitor
 
@@ -130,4 +131,7 @@ fun Program.applyDemangling(
 ).run { applyTo(this@applyDemangling, monitor) && result != null }
 
 val MemoryBlock.byteProvider get() = InputStreamByteProvider(data, size)
+
+fun Memory.getBlockContaining(addr: Address) = blocks.find { it.addressRange.contains(addr) }
+
 fun String.nullIfEmpty() = ifEmpty { null }

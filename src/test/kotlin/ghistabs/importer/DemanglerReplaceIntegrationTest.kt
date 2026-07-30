@@ -8,7 +8,6 @@ import ghidra.program.model.data.TypedefDataType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghistabs.diagnose.defaultContext
 import ghistabs.diagnose.defaultTypeRegistry
-import ghistabs.importer.DemanglerReplacer
 import ghistabs.runTransaction
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertTrue

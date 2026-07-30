@@ -2,7 +2,6 @@ package ghistabs
 
 import ghidra.program.database.ProgramBuilder
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghistabs.StabsOptions
 import ghistabs.StabsOptions.Companion.isStabsDone
 import ghistabs.StabsOptions.Companion.markStabsDone
 import org.junit.jupiter.api.AfterEach
