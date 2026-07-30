@@ -1,13 +1,5 @@
 {
     "counters": {
-        "apply-error": {
-            "min": 0,
-            "max": 24
-        },
-        "apply-error-invalid-input": {
-            "min": 0,
-            "max": 24
-        },
         "base-empty-ebo": {
             "min": 38,
             "max": 38
@@ -49,8 +41,8 @@
             "max": 5
         },
         "degraded-global-typed-all-undefined": {
-            "min": 14,
-            "max": 14
+            "min": 25,
+            "max": 25
         },
         "degraded-global-typed-xref-stub": {
             "min": 85,
@@ -71,10 +63,6 @@
         "degraded-placeholder-undefined-fields": {
             "min": 4,
             "max": 4
-        },
-        "degraded-static-typed-all-undefined": {
-            "min": 11,
-            "max": 11
         },
         "degraded-struct-mostly-undefined": {
             "min": 55,
@@ -145,8 +133,8 @@
             "max": 5
         },
         "global-applied": {
-            "min": 2950,
-            "max": 2950
+            "min": 3155,
+            "max": 3155
         },
         "global-applied-then-overwritten": {
             "min": 5,
@@ -351,6 +339,10 @@
         "stab-value-func-relative": {
             "min": 43487,
             "max": 43487
+        },
+        "static-local-plate": {
+            "min": 23,
+            "max": 23
         },
         "text-data-no-coverage": {
             "min": 82,

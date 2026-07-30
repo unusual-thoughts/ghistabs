@@ -9,7 +9,6 @@ import ghidra.util.task.TaskMonitor
 import ghistabs.IntegrationFixtures
 import ghistabs.diagnose.defaultContext
 import ghistabs.disableWindowsResourceAnalyzer
-import ghistabs.materialize.TypedefShortener
 import ghistabs.runTransaction
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue

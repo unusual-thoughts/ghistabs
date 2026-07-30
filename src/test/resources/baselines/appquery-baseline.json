@@ -1,5 +1,9 @@
 {
     "counters": {
+        "apply-error": {
+            "min": 3,
+            "max": 3
+        },
         "base-empty-ebo": {
             "min": 12,
             "max": 12
@@ -28,6 +32,10 @@
             "min": 1,
             "max": 1
         },
+        "degraded-global-typed-all-undefined": {
+            "min": 4,
+            "max": 4
+        },
         "degraded-local-typed-all-undefined": {
             "min": 5,
             "max": 5
@@ -35,10 +43,6 @@
         "degraded-local-typed-xref-stub": {
             "min": 10,
             "max": 10
-        },
-        "degraded-static-typed-all-undefined": {
-            "min": 4,
-            "max": 4
         },
         "degraded-struct-mostly-undefined": {
             "min": 1,
@@ -105,8 +109,8 @@
             "max": 16
         },
         "global-applied": {
-            "min": 31,
-            "max": 31
+            "min": 55,
+            "max": 55
         },
         "harvest-collisions-divergent": {
             "min": 0,
@@ -265,8 +269,8 @@
             "max": 5695
         },
         "pointee-typed": {
-            "min": 37,
-            "max": 37
+            "min": 35,
+            "max": 35
         },
         "reglocal-add-success": {
             "min": 359,
@@ -293,8 +297,8 @@
             "max": 4058
         },
         "text-data-no-coverage": {
-            "min": 236,
-            "max": 236
+            "min": 243,
+            "max": 243
         },
         "text-undisassembled-code": {
             "min": 2,

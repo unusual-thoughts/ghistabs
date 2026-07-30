@@ -2,22 +2,15 @@ package ghistabs.importer
 
 import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.address.Address
-import ghidra.program.model.data.CharDataType
-import ghidra.program.model.data.IntegerDataType
-import ghidra.program.model.data.PointerDataType
-import ghidra.program.model.data.StructureDataType
-import ghidra.program.model.data.Undefined4DataType
+import ghidra.program.model.data.*
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghistabs.diagnose.defaultContext
-import ghistabs.importer.StabsImporter
 import ghistabs.parse.StabReader
 import ghistabs.parse.StabRecord
 import ghistabs.parse.StabType
 import ghistabs.runTransaction
 import org.junit.jupiter.api.AfterEach
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertFalse
-import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
@@ -190,7 +183,7 @@ class SymbolApplyIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         builder.setBytes("0x401010", "68 69 00") // "hi\0"
 
         val defined = program.runTransaction("sweep") {
-            sweepPointees(program, program.listing.createData(addr(0x401000), PointerDataType(CharDataType.dataType)))
+            program.sweepPointees(program.listing.createData(addr(0x401000), PointerDataType(CharDataType.dataType)))
         }
 
         assertEquals(1, defined, "one target newly defined")
@@ -215,7 +208,7 @@ class SymbolApplyIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         builder.setBytes("0x401000", "10 10 40 00") // → 0x00401010
 
         val defined = program.runTransaction("sweep") {
-            sweepPointees(program, program.listing.createData(addr(0x401000), PointerDataType(point)))
+            program.sweepPointees(program.listing.createData(addr(0x401000), PointerDataType(point)))
         }
 
         assertEquals(1, defined, "one target newly defined")
@@ -235,7 +228,7 @@ class SymbolApplyIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
 
         val defined = program.runTransaction("sweep") {
             program.listing.createData(addr(0x401010), Undefined4DataType.dataType) // auto-analysis guess
-            sweepPointees(program, program.listing.createData(addr(0x401000), PointerDataType(point)))
+            program.sweepPointees(program.listing.createData(addr(0x401000), PointerDataType(point)))
         }
 
         assertEquals(1, defined, "placeholder overwritten counts as one defined")

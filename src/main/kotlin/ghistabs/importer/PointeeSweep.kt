@@ -1,32 +1,23 @@
 package ghistabs.importer
 
 import ghidra.program.model.address.Address
-import ghidra.program.model.data.ByteDataType
-import ghidra.program.model.data.CharDataType
-import ghidra.program.model.data.DataType
-import ghidra.program.model.data.DataUtilities
+import ghidra.program.model.data.*
 import ghidra.program.model.data.DataUtilities.ClearDataMode
-import ghidra.program.model.data.DefaultDataType
-import ghidra.program.model.data.Pointer
-import ghidra.program.model.data.SignedByteDataType
-import ghidra.program.model.data.TerminatedStringDataType
-import ghidra.program.model.data.TypeDef
-import ghidra.program.model.data.Undefined
-import ghidra.program.model.data.VoidDataType
 import ghidra.program.model.listing.Data
 import ghidra.program.model.listing.Program
+import ghidra.program.model.mem.Memory
 import ghidra.util.ascii.AsciiCharSetRecognizer
 
 /**
- * Length (including the terminator) of the NUL-terminated run of characters Ghidra's
- * string charset ([AsciiCharSetRecognizer], the recogniser its StringSearcher wraps)
- * accepts at [addr], or null if [addr] doesn't begin one. A point query — we already
- * hold the exact address, so there's nothing to search for.
+ * Length (including the terminator) of the NUL-terminated run of characters Ghidra's string
+ * charset ([AsciiCharSetRecognizer], the recogniser its StringSearcher wraps) accepts at [addr],
+ * or null if [addr] doesn't begin one. A point query — we already hold the exact address, so
+ * there's nothing to search for.
  */
-private fun asciiStringLen(program: Program, addr: Address, max: Int = 4096): Int? {
+private fun Memory.utf8StringLen(addr: Address, max: Int = 4096): Int? {
     val charSet = AsciiCharSetRecognizer()
     val bytes = ByteArray(max)
-    val n = runCatching { program.memory.getBytes(addr, bytes) }.getOrNull() ?: return null
+    val n = runCatching { getBytes(addr, bytes) }.getOrNull() ?: return null
     for (i in 0 until n) {
         val b = bytes[i].toInt() and 0xff
         if (b == 0) return if (i > 0) i + 1 else null
@@ -52,9 +43,9 @@ private fun DataType?.isStringPointee(): Boolean {
 }
 
 /** The type (and byte length to clear) to lay for a pointer whose pointee is [pointee]. */
-private fun desiredPointee(program: Program, addr: Address, pointee: DataType?): Pair<DataType, Int>? = when {
+private fun Program.desiredPointee(addr: Address, pointee: DataType?): Pair<DataType, Int>? = when {
     !pointee.isStringPointee() && pointee!!.length > 0 -> pointee to pointee.length
-    else -> asciiStringLen(program, addr)?.let { TerminatedStringDataType.dataType to it }
+    else -> memory.utf8StringLen(addr)?.let { TerminatedStringDataType.dataType to it }
 }
 
 /**
@@ -80,13 +71,13 @@ private fun Data.satisfiedBy(desired: DataType): Boolean = when {
  * (or pre-existing) data, else null. Requires an open transaction (the apply/render loops
  * open one).
  */
-fun resolvePointee(program: Program, addr: Address, pointee: DataType? = null): Data? {
-    val existing = program.listing.getDataAt(addr)
-    val (dt, len) = desiredPointee(program, addr, pointee) ?: return existing
+fun Program.resolvePointee(addr: Address, pointee: DataType? = null): Data? {
+    val existing = listing.getDataAt(addr)
+    val (dt, len) = desiredPointee(addr, pointee) ?: return existing
     if (existing != null && existing.satisfiedBy(dt)) return existing
     return runCatching {
-        program.listing.clearCodeUnits(addr, addr.add((len - 1).toLong()), false)
-        DataUtilities.createData(program, addr, dt, -1, ClearDataMode.CLEAR_ALL_CONFLICT_DATA)
+        listing.clearCodeUnits(addr, addr.add((len - 1).toLong()), false)
+        DataUtilities.createData(this, addr, dt, -1, ClearDataMode.CLEAR_ALL_CONFLICT_DATA)
     }.getOrNull() ?: existing
 }
 
@@ -98,15 +89,15 @@ fun resolvePointee(program: Program, addr: Address, pointee: DataType? = null): 
  * already carrying a precise type is left to whichever referrer first reached it. [depth]
  * guards pointer cycles. Returns the number of targets (re)defined.
  */
-fun sweepPointees(program: Program, data: Data, depth: Int = 0): Int {
+fun Program.sweepPointees(data: Data, depth: Int = 0): Int {
     if (depth > 12) return 0
     (data.value as? Address)?.let { target ->
-        val before = program.listing.getDataAt(target)?.takeIf { it.isDefined }?.dataType
-        val resolved = resolvePointee(program, target, (data.dataType as? Pointer)?.dataType) ?: return 0
+        val before = listing.getDataAt(target)?.takeIf { it.isDefined }?.dataType
+        val resolved = resolvePointee(target, (data.dataType as? Pointer)?.dataType) ?: return 0
         if (before != null && resolved.dataType.isEquivalent(before)) return 0
-        return 1 + sweepPointees(program, resolved, depth + 1)
+        return 1 + sweepPointees(resolved, depth + 1)
     }
     return (0 until data.numComponents).sumOf { i ->
-        data.getComponent(i)?.let { sweepPointees(program, it, depth + 1) } ?: 0
+        data.getComponent(i)?.let { sweepPointees(it, depth + 1) } ?: 0
     }
 }

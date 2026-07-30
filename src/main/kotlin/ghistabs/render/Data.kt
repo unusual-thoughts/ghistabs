@@ -16,7 +16,9 @@ private fun Data.repr() = runCatching { defaultValueRepresentation }.getOrNull()
 internal fun cStyleNumber(s: String) = when {
     s.matches(Regex("[0-9A-Fa-f]+h")) ->
         s.dropLast(1).trimStart('0').ifEmpty { "0" }.let { if (it == "0") "0" else "0x$it" }
+
     s.isNotEmpty() && s.all { it == '0' } -> "0"
+
     else -> s
 }
 
@@ -33,7 +35,7 @@ fun Data.render(program: Program, depth: Int = 0): String? {
     if (value is String) return repr()
     // pointer — chase the target, defining a string there if it's an undefined run.
     (value as? Address)?.let { ptr ->
-        resolvePointee(program, ptr)?.takeIf { it.isDefined }?.let {
+        program.resolvePointee(ptr)?.takeIf { it.isDefined }?.let {
             return it.render(program, depth + 1) ?: repr()
         }
         return repr()
@@ -54,8 +56,7 @@ fun Data.render(program: Program, depth: Int = 0): String? {
  * as one (recursively rendered) element per component. Returns null when nothing
  * informative is found. Callers render a single element inline (`= v;`) and spread a
  * multi-element list.
- */
-/**
+ *
  * The string a pointer-typed global points at when Ghidra left its slot an untyped
  * scalar (mis-disassembled data), so [initializerAt] would print the raw address. Reads
  * the stored value as an address and, if the target is an ASCII run, defines and returns
@@ -64,7 +65,7 @@ fun Data.render(program: Program, depth: Int = 0): String? {
 fun Program.pointerString(addr: Address): String? {
     val target = (listing.getDataAt(addr)?.value as? Scalar)
         ?.let { addressFactory.defaultAddressSpace.getAddress(it.value) } ?: return null
-    return resolvePointee(this, target)?.takeIf { it.isDefined && it.value is String }?.render(this)
+    return resolvePointee(target)?.takeIf { it.isDefined && it.value is String }?.render(this)
 }
 
 /**
@@ -74,7 +75,7 @@ fun Program.pointerString(addr: Address): String? {
  * as one literal keeps the global on its own line instead of spreading a per-byte list.
  */
 fun Program.stringLiteralAt(addr: Address): String? =
-    resolvePointee(this, addr)?.takeIf { it.isDefined && it.value is String }?.render(this)
+    resolvePointee(addr)?.takeIf { it.isDefined && it.value is String }?.render(this)
 
 fun Program.initializerAt(addr: Address): List<String>? {
     val data = listing.getDataAt(addr) ?: return null

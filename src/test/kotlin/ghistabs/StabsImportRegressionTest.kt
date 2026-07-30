@@ -360,7 +360,7 @@ class StabsImportRegressionTest : AbstractGhidraHeadlessIntegrationTest() {
      * and falls back to Undefined1 elements on resolution failure.
      *
      * Must hold in both modes — CONCURRENT mode races autoanalysis's
-     * `undefined4` placeholders, which `applyGlobal` now evicts via
+     * `undefined4` placeholders, which `applyGlobalOrStatic` now evicts via
      * `DataUtilities.CLEAR_ALL_CONFLICT_DATA`.
      */
     @Test

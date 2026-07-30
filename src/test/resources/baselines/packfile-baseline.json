@@ -28,6 +28,10 @@
             "min": 82,
             "max": 82
         },
+        "degraded-global-typed-all-undefined": {
+            "min": 3,
+            "max": 3
+        },
         "degraded-local-typed-all-undefined": {
             "min": 5,
             "max": 5
@@ -35,10 +39,6 @@
         "degraded-local-typed-xref-stub": {
             "min": 12,
             "max": 12
-        },
-        "degraded-static-typed-all-undefined": {
-            "min": 3,
-            "max": 3
         },
         "degraded-vtable-failed": {
             "min": 2,
@@ -101,8 +101,8 @@
             "max": 16
         },
         "global-applied": {
-            "min": 32,
-            "max": 32
+            "min": 73,
+            "max": 73
         },
         "harvest-collisions-divergent": {
             "min": 0,
@@ -291,6 +291,10 @@
         "stab-value-func-relative": {
             "min": 11788,
             "max": 11788
+        },
+        "static-local-plate": {
+            "min": 32,
+            "max": 32
         },
         "text-data-no-coverage": {
             "min": 237,

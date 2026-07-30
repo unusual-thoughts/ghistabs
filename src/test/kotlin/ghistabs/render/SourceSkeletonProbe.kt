@@ -13,8 +13,6 @@ import ghistabs.disableWindowsResourceAnalyzer
 import ghistabs.harvest.Harvester
 import ghistabs.harvest.TypeResolver
 import ghistabs.parse.StabReader
-import ghistabs.render.Mode
-import ghistabs.render.Renderer
 import ghistabs.runTransaction
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
