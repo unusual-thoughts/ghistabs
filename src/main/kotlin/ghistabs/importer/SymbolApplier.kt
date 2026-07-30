@@ -5,8 +5,6 @@ import ghidra.app.cmd.function.CreateFunctionCmd
 import ghidra.app.cmd.label.SetLabelPrimaryCmd
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.*
-import ghidra.program.model.data.Array
-import ghidra.program.model.data.Enum
 import ghidra.program.model.listing.*
 import ghidra.program.model.listing.Function
 import ghidra.program.model.symbol.SourceType
@@ -24,7 +22,6 @@ import ghistabs.materialize.TypeRegistry
 import ghistabs.materialize.reasonFor
 import ghistabs.materialize.resolveRef
 import ghistabs.namespaceChain
-import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.SymbolDecl
 import ghistabs.parse.dbxRegisterName
 import ghistabs.parse.isInlineStdMember
@@ -83,9 +80,8 @@ class SymbolApplier(
                     func.setName(open.name, source)
                 }
 
-                // Apply return type from the parsed signature.
+                // Resolve return type from the parsed signature; applied with the params below.
                 val retDt = typeRegistry.resolveRef(open.decl.type)
-                if (retDt != null) func.setReturnType(retDt, source)
 
                 // Build params from N_PSYM/N_RSYM. Filter out any N_PSYM literally named
                 // `this`: gcc 3.x emits it for members but often mistypes (seen `int`
@@ -125,8 +121,13 @@ class SymbolApplier(
                             source,
                         )
                     }
-                // Always replace (even empty list) to set the signature explicitly.
-                func.replaceParameters(
+                // Set return + params in one dynamic-storage update so Ghidra recomputes storage from
+                // the calling convention. Critical for by-value struct returns >8 bytes (hidden return
+                // pointer): setReturnType alone keeps the 4-byte EAX register slot and throws "Storage
+                // can't be expanded to N bytes: EAX:4".
+                func.updateFunction(
+                    null,
+                    retDt?.let { ReturnParameterImpl(it, ctx.program) } ?: func.getReturn(),
                     params,
                     Function.FunctionUpdateType.DYNAMIC_STORAGE_FORMAL_PARAMS,
                     true,
@@ -157,20 +158,12 @@ class SymbolApplier(
 
         // Globals + file-statics.
         for ((cu, syms) in harvest.symbolsByCu) {
-            for (h in syms) {
+            for (sym in syms) {
                 ctx.monitor.increment()
                 try {
-                    when (val d = h.body) {
-                        is SymbolDecl.Global -> applyGlobal(d).let { if (it) globals++ }
-
-                        is SymbolDecl.StaticVar -> applyStatic(d, h.rawValue, h.enclosingFunction).let {
-                            if (it) globals++
-                        }
-
-                        else -> warn("unexpected-symbol", "$d")
-                    }
+                    if (applyGlobalOrStatic(sym)) globals++
                 } catch (t: Throwable) {
-                    err("apply-error", "symbol ${h.body.name} in $cu: ${t.message}")
+                    err("apply-error", "symbol ${sym.body.name} in $cu: ${t.message}")
                 }
             }
         }
@@ -382,36 +375,45 @@ class SymbolApplier(
         }
     }
 
-    private fun applyGlobal(decl: SymbolDecl.Global<GlobalTypeId>): Boolean {
-        val addr = ctx.resolver.resolve(decl.name) ?: run {
-            warn("unresolved-symbol", "global ${decl.name}")
-            debug("global-skipped", "addr=${decl.name} dtKind=unknown reason=unresolved-symbol")
-            return false
-        }
-        ensureStabLabel(addr, decl.name)
+    private fun applyGlobalOrStatic(sym: SymbolRecord): Boolean {
+        val addr = when (val decl = sym.body) {
+            is SymbolDecl.StaticVar -> ctx.resolver.buildAddress(sym.rawValue)
 
-        val dt = typeRegistry.resolveRef(decl.type) ?: run {
-            debug("global-skipped", "addr=$addr dtKind=unknown reason=no-resolved-type")
-            return false
+            is SymbolDecl.Global -> ctx.resolver.resolve(decl.name) ?: run {
+                warn("unresolved-symbol", "global ${decl.name}")
+                debug("global-skipped", "addr=${decl.name} reason=unresolved-symbol")
+                return false
+            }
+
+            else -> {
+                warn("unexpected-symbol", "$decl")
+                return false
+            }
         }
+        ensureStabLabel(addr, sym.body.name)
+
+        val dt = typeRegistry.resolveRef(sym.body.type) ?: return false
         typeRegistry.reasonFor(dt)?.let { reason ->
             degradation(
                 "global-typed-$reason",
-                decl.name,
+                sym.body.name,
                 "type=${dt.pathName}",
             )
         }
-        val dtKind = when (dt) {
-            is Structure -> "Structure"
-            is Union -> "Union"
-            is Array -> "Array"
-            is Pointer -> "Pointer"
-            is FunctionDefinition -> "FunctionDefinition"
-            is Enum -> "Enum"
-            else -> dt.displayName
+
+        if (ctx.options.applyPlateComments &&
+            (sym.body as? SymbolDecl.StaticVar)?.isFunctionLocal == true &&
+            sym.enclosingFunction != null
+        ) {
+            ctx.program.listing.setComment(
+                addr,
+                CommentType.PLATE,
+                "static local of ${demangledName(sym.enclosingFunction)}()",
+            )
+            debug("static-local-plate", address = addr)
         }
-        // CLEAR_ALL_CONFLICT_DATA evicts `undefined4` placeholders auto-analysis may
-        // have raced us to apply.
+
+        // CLEAR_ALL_CONFLICT_DATA evicts `undefined4` placeholders auto-analysis may have raced us to apply.
         try {
             DataUtilities.createData(
                 ctx.program,
@@ -420,56 +422,25 @@ class SymbolApplier(
                 dt.length,
                 DataUtilities.ClearDataMode.CLEAR_ALL_CONFLICT_DATA,
             )
-            // Verify the write stuck — auto-analyser races or data-equivalence collapse
-            // can replace it; we'd otherwise silently claim success.
+
+            // Confirm createData actually placed dt. On some stab addresses nothing lands (getDataAt
+            // null — unmapped/uninitialised target or a silent conflict; cause unconfirmed, see
+            // pending-work-triage.md). Synchronous inside our transaction, so this reflects createData's
+            // own result, not a later auto-analysis overwrite. isEquivalent (not identity) so the
+            // DTM-resolved copy of dt isn't a false mismatch.
             val after = ctx.program.listing.getDataAt(addr)
-            val stuck = after != null && after.dataType.name == dt.name
-            if (!stuck) {
+            if (after?.dataType?.isEquivalent(dt) != true) {
                 warn(
                     "global-applied-then-overwritten",
-                    "${decl.name} at $addr: wrote ${dt.name} but readback is ${after?.dataType?.name}",
+                    "${sym.body.name} at $addr: wrote ${dt.name} but readback is ${after?.dataType?.name}",
                     addr,
                 )
             }
-            after?.let { sweepPointees(ctx.program, it) }
+            after?.let { ctx.program.sweepPointees(it) }
                 .takeIf { (it ?: 0) > 0 }?.let { debug("pointee-typed", address = addr, count = it.toLong()) }
-            debug("global-applied", "addr=$addr dtKind=$dtKind")
+            debug("global-applied", "dt=${dt.displayName}", address = addr)
         } catch (e: Exception) {
             err("apply-error", "Failed to create global data at $addr: ${e.message}", addr)
-            debug("global-skipped", "addr=$addr dtKind=$dtKind reason=create-data-failed")
-            return false
-        }
-        return true
-    }
-
-    private fun applyStatic(
-        decl: SymbolDecl.StaticVar<GlobalTypeId>,
-        rawAddr: Long,
-        enclosingFunction: String?,
-    ): Boolean {
-        val addr = ctx.resolver.buildAddress(rawAddr)
-        val dt = typeRegistry.resolveRef(decl.type) ?: return false
-        typeRegistry.reasonFor(dt)?.let { reason ->
-            degradation(
-                "static-typed-$reason",
-                decl.name,
-                "type=${dt.pathName}",
-            )
-        }
-        ensureStabLabel(addr, decl.name)
-        if (ctx.options.applyPlateComments && decl.isFunctionLocal && enclosingFunction != null) {
-            val note = "static local of ${demangledName(enclosingFunction)}()"
-            ctx.program.listing.setComment(addr, CommentType.PLATE, note)
-            debug("static-local-plate", address = addr)
-        }
-
-        try {
-            ctx.program.listing.clearCodeUnits(addr, addr.add((dt.length - 1).toLong()), false)
-            val data = ctx.program.listing.createData(addr, dt)
-            sweepPointees(ctx.program, data).takeIf { it > 0 }
-                ?.let { debug("pointee-typed", address = addr, count = it.toLong()) }
-        } catch (e: Exception) {
-            err("apply-error", "Failed to create static data at $addr: ${e.message}", addr)
             return false
         }
         return true

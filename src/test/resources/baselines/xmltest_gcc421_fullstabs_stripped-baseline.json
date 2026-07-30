@@ -44,13 +44,13 @@
             "min": 1,
             "max": 1
         },
+        "degraded-global-typed-all-undefined": {
+            "min": 4,
+            "max": 4
+        },
         "degraded-local-typed-all-undefined": {
             "min": 40,
             "max": 40
-        },
-        "degraded-static-typed-all-undefined": {
-            "min": 4,
-            "max": 4
         },
         "degraded-struct-mostly-undefined": {
             "min": 36,
@@ -127,6 +127,10 @@
         "function-created-from-stab": {
             "min": 33,
             "max": 33
+        },
+        "global-applied": {
+            "min": 70,
+            "max": 70
         },
         "global-skipped": {
             "min": 148,
@@ -311,6 +315,10 @@
         "stab-value-func-relative": {
             "min": 19958,
             "max": 19958
+        },
+        "static-local-plate": {
+            "min": 7,
+            "max": 7
         },
         "text-data-no-coverage": {
             "min": 14,

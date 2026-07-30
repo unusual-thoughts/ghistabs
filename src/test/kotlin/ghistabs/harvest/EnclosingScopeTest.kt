@@ -29,7 +29,7 @@ class EnclosingScopeTest : AbstractGhidraHeadlessIntegrationTest() {
         vtableOffsetBits = null,
     )
 
-    private fun struct(vararg methods: MethodDecl<GlobalTypeId>) = TypeDecl.Struct<GlobalTypeId>(
+    private fun struct(vararg methods: MethodDecl<GlobalTypeId>) = TypeDecl.Struct(
         rawKind = AggrKind.STRUCT,
         sizeBytes = 4L,
         bases = emptyList(),

@@ -9,9 +9,7 @@ import ghistabs.diagnose.defaultContext
 import ghistabs.importer.StabSectionOverlay
 import ghistabs.parse.STAB_RECORD_SIZE
 import org.junit.jupiter.api.AfterEach
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertNotNull
-import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
@@ -93,6 +91,6 @@ class StabSectionOverlayIntegrationTest : AbstractGhidraHeadlessIntegrationTest(
         StabSectionOverlay(program.defaultContext()).apply()
         val again = StabSectionOverlay(program.defaultContext()).apply()
         assertEquals(3, again, "re-apply reuses the StabRecord datatype and re-overlays cleanly")
-        assertEquals(1, program.dataTypeManager.getAllStructures().asSequence().count { it.name == "StabRecord" })
+        assertEquals(1, program.dataTypeManager.allStructures.asSequence().count { it.name == "StabRecord" })
     }
 }

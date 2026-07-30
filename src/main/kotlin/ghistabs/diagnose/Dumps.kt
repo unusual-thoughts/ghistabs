@@ -24,7 +24,6 @@ import java.io.File
  */
 
 /** Shared JSON config for the snapshot dumps (ids/paths → their `toString`). */
-@OptIn(ExperimentalSerializationApi::class)
 val dumpJson by lazy {
     Json {
         serializersModule = SerializersModule {

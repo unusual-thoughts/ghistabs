@@ -3,9 +3,7 @@ package ghistabs.harvest
 import ghidra.program.model.data.CategoryPath
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghistabs.parse.*
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertNotEquals
-import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 
@@ -41,7 +39,7 @@ class NestedScopeKeyTest : AbstractGhidraHeadlessIntegrationTest() {
     private fun struct(
         methods: List<MethodDecl<GlobalTypeId>> = emptyList(),
         fields: List<FieldDecl<GlobalTypeId>> = emptyList(),
-    ) = TypeDecl.Struct<GlobalTypeId>(
+    ) = TypeDecl.Struct(
         rawKind = AggrKind.STRUCT,
         sizeBytes = 4L,
         bases = emptyList(),

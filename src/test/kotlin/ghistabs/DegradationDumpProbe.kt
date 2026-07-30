@@ -5,11 +5,9 @@ import ghidra.app.util.importer.ProgramLoader
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghistabs.StabsAnalyzer.Companion.import
-import ghistabs.StabsOptions
 import ghistabs.diagnose.CapturingSink
 import ghistabs.diagnose.StabsDiagnostics
 import ghistabs.importer.ImportContext
-import ghistabs.runTransaction
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.TestInstance

@@ -244,11 +244,10 @@ class AstStoreTest {
      */
     @Test
     fun testConcreteBodySupersedesSelfRef() {
-        val store = AstStore()
         val cuName = "cu.c"
         val id = GlobalTypeId(SourceFile.CUSource(cuName), 20)
         val selfRef = TypeAst(cu = SourceFile.CUSource(cuName), id = id, name = "Foo", body = TypeDecl.Ref(id))
-        val struct = TypeDecl.Struct<GlobalTypeId>(
+        val struct = TypeDecl.Struct(
             rawKind = AggrKind.STRUCT,
             sizeBytes = 8L,
             bases = emptyList(),

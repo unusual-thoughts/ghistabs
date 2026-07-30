@@ -45,16 +45,12 @@
             "max": 1
         },
         "degraded-global-typed-all-undefined": {
-            "min": 1,
-            "max": 1
+            "min": 5,
+            "max": 5
         },
         "degraded-local-typed-all-undefined": {
             "min": 40,
             "max": 40
-        },
-        "degraded-static-typed-all-undefined": {
-            "min": 4,
-            "max": 4
         },
         "degraded-struct-mostly-undefined": {
             "min": 36,
@@ -137,8 +133,8 @@
             "max": 128
         },
         "global-applied": {
-            "min": 148,
-            "max": 148
+            "min": 218,
+            "max": 218
         },
         "harvest-collisions-divergent": {
             "min": 0,
@@ -323,6 +319,10 @@
         "stab-value-func-relative": {
             "min": 19958,
             "max": 19958
+        },
+        "static-local-plate": {
+            "min": 7,
+            "max": 7
         },
         "text-data-no-coverage": {
             "min": 3,

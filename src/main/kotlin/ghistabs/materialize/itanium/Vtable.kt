@@ -1,18 +1,7 @@
 package ghistabs.materialize.itanium
 
 import ghidra.program.model.address.Address
-import ghidra.program.model.data.ArrayDataType
-import ghidra.program.model.data.CharDataType
-import ghidra.program.model.data.DataType
-import ghidra.program.model.data.DataTypeConflictHandler
-import ghidra.program.model.data.DataTypeManager
-import ghidra.program.model.data.LongDataType
-import ghidra.program.model.data.LongLongDataType
-import ghidra.program.model.data.PointerDataType
-import ghidra.program.model.data.PointerTypedef
-import ghidra.program.model.data.Structure
-import ghidra.program.model.data.StructureDataType
-import ghidra.program.model.data.UnsignedIntegerDataType
+import ghidra.program.model.data.*
 import ghidra.program.model.listing.CommentType
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Namespace
@@ -155,7 +144,7 @@ class RttiStructs(private val dtm: DataTypeManager) {
         StructureDataType(Itanium.classDataTypesRoot, "ClassTypeInfoStructure", 0, dtm).apply {
             add(PointerTypedef(null, PointerDataType.dataType, -1, dtm, componentOffset), "classTypeinfoPtr", null)
             add(dtm.getPointer(CharDataType()), "typeinfoName", null)
-            setPackingEnabled(true)
+            isPackingEnabled = true
         }.intoDtm()
     }
 
@@ -164,7 +153,7 @@ class RttiStructs(private val dtm: DataTypeManager) {
             add(PointerTypedef(null, null, -1, dtm, componentOffset), "classTypeinfoPtr", null)
             add(dtm.getPointer(CharDataType()), "typeinfoName", null)
             add(dtm.getPointer(classTypeInfoStructure), "baseClassTypeInfoPtr", null)
-            setPackingEnabled(true)
+            isPackingEnabled = true
         }.intoDtm()
     }
 
@@ -189,7 +178,7 @@ class RttiStructs(private val dtm: DataTypeManager) {
                 addBitField(dataType, offsetBitSize, "baseClassOffset", "baseClassOffset")
             }
 
-            setPackingEnabled(true)
+            isPackingEnabled = true
         }.intoDtm()
     }
 
@@ -204,6 +193,6 @@ class RttiStructs(private val dtm: DataTypeManager) {
                 "baseClassPtrArray",
                 null,
             )
-            setPackingEnabled(true)
+            isPackingEnabled = true
         }.intoDtm()
 }
