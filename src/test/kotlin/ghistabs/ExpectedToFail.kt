@@ -28,7 +28,7 @@ class ExpectedToFailExtension : InvocationInterceptor {
         extensionContext: ExtensionContext,
     ) {
         val expected = extensionContext.requiredTestMethod.getAnnotation(ExpectedToFail::class.java)
-        val binaryName = (extensionContext.requiredTestInstance as StabsImportRegressionTest).binaryName
+        val binaryName = (extensionContext.requiredTestInstance as StabsImportRegressionBase).binaryName
         if (binaryName !in expected.fixtures) return invocation.proceed().let { }
 
         try {

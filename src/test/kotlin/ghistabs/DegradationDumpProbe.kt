@@ -25,7 +25,7 @@ import java.io.File
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class DegradationDumpProbe : AbstractGhidraHeadlessIntegrationTest() {
     @ParameterizedTest
-    @MethodSource("ghistabs.IntegrationFixtures#allWithBox2d")
+    @MethodSource("ghistabs.IntegrationFixtures#all")
     fun dumpDegradations(binaryName: String) {
         val fixture = File("src/test/resources/binaries/$binaryName")
         assumeTrue(fixture.exists(), "fixture absent")
