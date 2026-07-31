@@ -203,7 +203,20 @@ data class MethodDecl<Id : IdInterface>(
     val isVolatile: Boolean,
     /** Vtable offset in bits when `virt == VIRTUAL`, else null. */
     val vtableOffsetBits: Long?,
-)
+) {
+    /** `virtual `/`static ` — Ghidra's prototypeString models neither, so the stab is the only source. */
+    val declPrefix get() = when (virt) {
+        VirtKind.VIRTUAL -> "virtual "
+        VirtKind.STATIC -> "static "
+        VirtKind.NORMAL -> ""
+    }
+
+    /** Trailing cv-qualifiers, which in C++ sit after the parameter list: `int at(size_t) const;`. */
+    val declSuffix get() = buildString {
+        if (isConst) append(" const")
+        if (isVolatile) append(" volatile")
+    }
+}
 
 /** Symbol AST: what one stab record's `name:descriptor` decodes to. */
 @Serializable

@@ -308,7 +308,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
     // Openers at startLine (self-closing decl when single-line), closers at the close line.
     private fun emitFunctionBraces() {
         for (r in spans.ranges) {
-            val sig = r.func.signature(program)
+            val sig = r.func.sourceSignature(program)
             val name = r.func.demangledName
             val openText = if (r.isSingleLine) "$sig;" else "$sig {"
             val openNote = if (r.isSingleLine) name else "opens $name"

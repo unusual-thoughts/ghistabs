@@ -112,6 +112,14 @@ data class OpenFunction(
         program.functionManager.getFunctionAt(addr.address)?.signature?.prototypeString ?: name
 
     /**
+     * [signature] with the `static` gcc emitted as `:f` (internal linkage) restored. Ghidra models
+     * no linkage, so its prototypeString can't carry it and a file-static renders like any other
+     * free function — the stab is the only place that distinction survives.
+     */
+    fun sourceSignature(program: Program) =
+        if (decl.isFileStatic) "static ${signature(program)}" else signature(program)
+
+    /**
      * Pull the outermost class / namespace name out of an Itanium-ABI
      * mangled symbol — e.g. `_ZN13EquExpressionC1ERKS_` → `EquExpression`,
      * `_ZN7CParser11ParseSymbolEv` → `CParser`. Used to look up the
