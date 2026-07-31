@@ -360,6 +360,10 @@
             "min": 43,
             "max": 43
         },
+        "static-member-unresolved": {
+            "min": 498,
+            "max": 498
+        },
         "text-data-no-coverage": {
             "min": 14,
             "max": 14

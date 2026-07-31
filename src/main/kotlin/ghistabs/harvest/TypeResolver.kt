@@ -488,6 +488,6 @@ class TypeResolver(val harvest: Harvest, private val foldSources: Boolean = true
 
     companion object {
         /** Empty resolver — useful for tests that only need oracle defaults. */
-        val Empty = TypeResolver(Harvest(emptyMap()))
+        val Empty = TypeResolver(Harvest.of(emptyMap()))
     }
 }

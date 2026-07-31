@@ -29,8 +29,8 @@
             "max": 27
         },
         "data-no-coverage": {
-            "min": 192,
-            "max": 192
+            "min": 199,
+            "max": 199
         },
         "degraded-base-synthesized": {
             "min": 8,
@@ -323,6 +323,14 @@
         "static-local-plate": {
             "min": 5,
             "max": 5
+        },
+        "static-member-applied": {
+            "min": 120,
+            "max": 120
+        },
+        "static-member-unresolved": {
+            "min": 378,
+            "max": 378
         },
         "text-data-no-coverage": {
             "min": 3,

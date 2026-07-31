@@ -320,6 +320,10 @@
             "min": 5,
             "max": 5
         },
+        "static-member-unresolved": {
+            "min": 498,
+            "max": 498
+        },
         "text-data-no-coverage": {
             "min": 13,
             "max": 13

@@ -29,8 +29,8 @@
             "max": 3
         },
         "data-no-coverage": {
-            "min": 93,
-            "max": 93
+            "min": 98,
+            "max": 98
         },
         "degraded-base-synthesized": {
             "min": 5,
@@ -80,9 +80,13 @@
             "min": 114,
             "max": 114
         },
+        "demangler-reverse-demangle-match": {
+            "min": 1,
+            "max": 1
+        },
         "demangler-skip-no-replacement": {
-            "min": 25,
-            "max": 25
+            "min": 24,
+            "max": 24
         },
         "desc-dropped-undf": {
             "min": 1,
@@ -309,8 +313,8 @@
             "max": 33
         },
         "replaced-demangler": {
-            "min": 114,
-            "max": 114
+            "min": 115,
+            "max": 115
         },
         "rtti-pseudo-substituted": {
             "min": 50,
@@ -327,6 +331,14 @@
         "static-local-plate": {
             "min": 2,
             "max": 2
+        },
+        "static-member-applied": {
+            "min": 149,
+            "max": 149
+        },
+        "static-member-unresolved": {
+            "min": 379,
+            "max": 379
         },
         "text-data-no-coverage": {
             "min": 64,

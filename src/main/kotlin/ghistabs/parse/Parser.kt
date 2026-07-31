@@ -341,7 +341,7 @@ class Parser(src: String, sink: DiagnosticSink = DummySink) : DiagnosticSink by 
                         consume(';')
                         // `,0,0` shape is static here too (see the plain `:` branch below).
                         val isStatic = offsetBits == 0L && sizeBits == 0L
-                        fields.add(FieldDecl(name, type, offsetBits, sizeBits, isStatic, access))
+                        fields.add(FieldDecl(name, type, offsetBits, sizeBits, isStatic, access, mangled = null))
                     } else {
                         consume(':')
                         val mangled = readUntilAny(charArrayOf(';'))
@@ -363,7 +363,7 @@ class Parser(src: String, sink: DiagnosticSink = DummySink) : DiagnosticSink by 
                     // instead of the `:mangled` form; offset-and-size both zero is a shape a
                     // real field can't take, so it marks the member static.
                     val isStatic = offsetBits == 0L && sizeBits == 0L
-                    fields.add(FieldDecl(name, type, offsetBits, sizeBits, isStatic, Access.PUBLIC))
+                    fields.add(FieldDecl(name, type, offsetBits, sizeBits, isStatic, Access.PUBLIC, mangled = null))
                 }
 
                 peekFollows("/") -> {

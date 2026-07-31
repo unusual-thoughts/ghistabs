@@ -250,6 +250,6 @@ class PolymorphicBaseTest {
             methods = emptyList(),
             vptrBasetype = null,
         )
-        assertTrue(TypeResolver(Harvest(mapOf(baseId to baseAst))).hasPolymorphicBaseSubobject(derived))
+        assertTrue(TypeResolver(Harvest.of(mapOf(baseId to baseAst))).hasPolymorphicBaseSubobject(derived))
     }
 }

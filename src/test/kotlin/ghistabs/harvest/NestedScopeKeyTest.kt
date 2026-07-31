@@ -34,7 +34,7 @@ class NestedScopeKeyTest : AbstractGhidraHeadlessIntegrationTest() {
     )
 
     private fun field(name: String, type: TypeDecl<GlobalTypeId>) =
-        FieldDecl(name, type, 0, 32, isStatic = false, access = Access.PUBLIC)
+        FieldDecl(name, type, 0, 32, isStatic = false, access = Access.PUBLIC, mangled = null)
 
     private fun struct(
         methods: List<MethodDecl<GlobalTypeId>> = emptyList(),
@@ -52,7 +52,7 @@ class NestedScopeKeyTest : AbstractGhidraHeadlessIntegrationTest() {
         TypeAst(cu = cu, id = id, name = name, body = body)
 
     private fun resolverOf(vararg asts: TypeAst) =
-        TypeResolver(Harvest(asts.associateBy { it.id }), foldSources = false)
+        TypeResolver(Harvest.of(asts.associateBy { it.id }), foldSources = false)
 
     private val charString = "basic_string<char,std::char_traits<char>,std::allocator<char> >"
     private val wcharString = "basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t> >"
