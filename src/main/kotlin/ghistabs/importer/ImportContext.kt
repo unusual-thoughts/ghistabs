@@ -11,15 +11,31 @@ import ghistabs.diagnose.TeeSink
 import org.jetbrains.annotations.TestOnly
 
 data class PassResult(
-    val recordsRead: Int = 0,
-    val recordsParsed: Int = 0,
-    val parseErrors: Int = 0,
-    val typesMaterialized: Int = 0,
-    val functionsApplied: Int = 0,
-    val globalsApplied: Int = 0,
-    val classesApplied: Int = 0,
-    val constantsApplied: Int = 0,
-)
+    val recordsRead: Int,
+    val recordsParsed: Int,
+    val parseErrors: Int,
+    val typesMaterialized: Int,
+    val functionsApplied: Int,
+    val globalsApplied: Int,
+    val classesApplied: Int,
+    val constantsApplied: Int,
+    val staticMembersApplied: Int,
+) {
+    companion object {
+        /** Nothing ran — the no-stabs path. Spelled out so a new field must be considered here too. */
+        val NOTHING = PassResult(
+            recordsRead = 0,
+            recordsParsed = 0,
+            parseErrors = 0,
+            typesMaterialized = 0,
+            functionsApplied = 0,
+            globalsApplied = 0,
+            classesApplied = 0,
+            constantsApplied = 0,
+            staticMembersApplied = 0,
+        )
+    }
+}
 
 /**
  * The import's shared state, and itself the [DiagnosticSink] everything logs to: each log fans out

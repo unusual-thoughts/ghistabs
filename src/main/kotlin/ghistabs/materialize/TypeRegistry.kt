@@ -180,6 +180,19 @@ class TypeRegistry(
                 val dt = fn.thisParamTypeId()?.let { dataTypeFor(it) } ?: continue
                 demangle(fn.name)?.namespace?.let { putIfAbsent(demanglerPath(it).path, dt) }
             }
+            // A member function is not the only symbol that ties a class to its demangled path: a
+            // static data member's linkage name carries the same chain, and is the *only* one a
+            // pure-constants class has. `std::ctype_base` and `std::__ios_flags` declare no member
+            // functions at all, so the loop above can never reach them and their stub had no
+            // candidate. Here the owning AST supplies the type directly — no `this` param needed.
+            for ((id, ast) in harvest.typeAsts) {
+                val body = ast.body as? TypeDecl.Struct<GlobalTypeId> ?: continue
+                val dt = dataTypeFor(id) ?: continue
+                for (field in body.fields) {
+                    val mangled = field.mangled?.takeIf { field.isStatic } ?: continue
+                    demangle(mangled)?.namespace?.let { putIfAbsent(demanglerPath(it).path, dt) }
+                }
+            }
         }
     }
 

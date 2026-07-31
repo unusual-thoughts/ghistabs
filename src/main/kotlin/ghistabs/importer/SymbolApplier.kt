@@ -22,9 +22,7 @@ import ghistabs.materialize.TypeRegistry
 import ghistabs.materialize.reasonFor
 import ghistabs.materialize.resolveRef
 import ghistabs.namespaceChain
-import ghistabs.parse.SymbolDecl
-import ghistabs.parse.dbxRegisterName
-import ghistabs.parse.isInlineStdMember
+import ghistabs.parse.*
 
 /**
  * The apply phase: writes harvested functions, params, locals, globals, statics, labels and scope
@@ -449,6 +447,57 @@ class SymbolApplier(
             return false
         }
         return true
+    }
+
+    /**
+     * Apply C++ static data members (`alnum:/2(5,44):_ZNSt10ctype_base5alnumE;`). They occupy no
+     * storage, so materialization drops them from the class layout and they reach Ghidra only as
+     * whatever the demangler named the emitted symbol — carrying no type at all.
+     *
+     * The field's linkage name is the *only* link back to that symbol: none of them carry a `G`/`S`
+     * address stab of their own (verified across the corpus), and `applyGlobalOrStatic` therefore
+     * never sees them. That makes this a real lookup of a name gcc wrote down, not the reconstruction
+     * of a spelling — the distinction that sank the normalization tier removed in 17442c7. It is also
+     * why reconstruction could not have worked here: every one of these is a template or nested
+     * libstdc++ type, which has no closed-form mangled name to rebuild.
+     *
+     * Symbol-table-bound, so a stripped binary resolves none of them — counted, not warned.
+     */
+    internal fun applyAllStaticMembers(): Int {
+        // One class is re-declared per including CU, so the same member arrives N times.
+        val seen = mutableSetOf<String>()
+        var applied = 0
+        for (ast in harvest.typeAsts.values) {
+            val body = ast.body as? TypeDecl.Struct<GlobalTypeId> ?: continue
+            for (field in body.fields) {
+                val mangled = field.mangled ?: continue
+                if (!field.isStatic || !seen.add(mangled)) continue
+                val addr = ctx.resolver.resolve(mangled) ?: run {
+                    debug("static-member-unresolved", mangled)
+                    continue
+                }
+                val dt = typeRegistry.resolveRef(field.type) ?: run {
+                    degradation("static-member-untyped", mangled)
+                    continue
+                }
+                // Names it `Class::member` when the demangler hasn't already; typed below regardless.
+                ensureStabLabel(addr, mangled)
+                try {
+                    DataUtilities.createData(
+                        ctx.program,
+                        addr,
+                        dt,
+                        dt.length,
+                        DataUtilities.ClearDataMode.CLEAR_ALL_CONFLICT_DATA,
+                    )
+                    applied++
+                    debug("static-member-applied", "$mangled dt=${dt.displayName}", address = addr)
+                } catch (e: Exception) {
+                    err("apply-error", "static member $mangled at $addr: ${e.message}", addr)
+                }
+            }
+        }
+        return applied
     }
 
     /**
