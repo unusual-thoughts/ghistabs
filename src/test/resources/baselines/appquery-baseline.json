@@ -1,9 +1,5 @@
 {
     "counters": {
-        "apply-error": {
-            "min": 14,
-            "max": 14
-        },
         "base-empty-ebo": {
             "min": 12,
             "max": 12
@@ -23,6 +19,10 @@
         "class-not-struct": {
             "min": 2,
             "max": 2
+        },
+        "code-cleared-for-data": {
+            "min": 14,
+            "max": 14
         },
         "data-no-coverage": {
             "min": 80,
@@ -117,8 +117,8 @@
             "max": 16
         },
         "global-applied": {
-            "min": 55,
-            "max": 55
+            "min": 58,
+            "max": 58
         },
         "harvest-collisions-divergent": {
             "min": 0,
@@ -281,8 +281,8 @@
             "max": 5695
         },
         "pointee-typed": {
-            "min": 35,
-            "max": 35
+            "min": 37,
+            "max": 37
         },
         "reglocal-add-success": {
             "min": 246,
@@ -309,16 +309,16 @@
             "max": 4058
         },
         "static-member-applied": {
-            "min": 94,
-            "max": 94
+            "min": 105,
+            "max": 105
         },
         "static-member-unresolved": {
             "min": 393,
             "max": 393
         },
         "text-data-no-coverage": {
-            "min": 243,
-            "max": 243
+            "min": 236,
+            "max": 236
         },
         "text-undisassembled-code": {
             "min": 2,

@@ -11,10 +11,13 @@ import ghidra.framework.model.DomainObject
 import ghidra.program.model.address.Address
 import ghidra.program.model.address.AddressRange
 import ghidra.program.model.address.AddressRangeImpl
+import ghidra.program.model.data.DataType
 import ghidra.program.model.data.DataTypeManager
+import ghidra.program.model.data.DataUtilities
 import ghidra.program.model.data.Structure
 import ghidra.program.model.listing.Data
 import ghidra.program.model.listing.FunctionManager
+import ghidra.program.model.listing.Listing
 import ghidra.program.model.listing.Program
 import ghidra.program.model.mem.Memory
 import ghidra.program.model.mem.MemoryBlock
@@ -129,6 +132,33 @@ fun Program.applyDemangling(
         setDoDisassembly(doDisassembly)
     },
 ).run { applyTo(this@applyDemangling, monitor) && result != null }
+
+/** Clear any instructions covering [addr]..+[length]; true if there were any. An unsized [length]
+ *  (a `Dynamic` type that would not resolve) clears nothing rather than guess a span. */
+fun Listing.clearAnyDisassembly(addr: Address, length: Int): Boolean {
+    if (length <= 0 || getInstructionContaining(addr) == null) return false
+    clearCodeUnits(addr, addr + (length - 1), false)
+    return true
+}
+
+/**
+ * Lay [dt] at [addr] over whatever is there — conflicting data *and* disassembly. Every
+ * [DataUtilities.ClearDataMode] clears data only, and createData refuses an instruction address
+ * outright, so a caller that knows the address holds data has to clear the code itself.
+ *
+ * [length] is both what gets cleared and what createData is given; a `Dynamic` type passing -1 sizes
+ * itself and so clears nothing. [onClearedCode] fires only when there was disassembly to remove, for
+ * a caller that wants to count or report it. Throws like the API it wraps.
+ */
+fun Program.forceCreateData(
+    addr: Address,
+    dt: DataType,
+    length: Int = dt.length,
+    onClearedCode: () -> Unit = {},
+): Data {
+    if (listing.clearAnyDisassembly(addr, length)) onClearedCode()
+    return DataUtilities.createData(this, addr, dt, length, DataUtilities.ClearDataMode.CLEAR_ALL_CONFLICT_DATA)
+}
 
 val MemoryBlock.byteProvider get() = InputStreamByteProvider(data, size)
 

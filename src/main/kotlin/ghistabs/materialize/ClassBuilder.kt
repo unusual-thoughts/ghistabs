@@ -134,14 +134,10 @@ class ClassBuilder(
     }
 
     /**
-     * Derive the class's namespace chain. Prefers demangling an Itanium symbol the class owns
-     * (handles templates) over splitting the source-form name, which only carries the leaf.
-     *
-     * A static data member's linkage name serves as well as a method's — `_ZNSt10ctype_base5alnumE`
-     * demangles to `std::ctype_base::alnum`, whose parent chain is the class. That matters for a
-     * pure-constants class: `std::ctype_base` and `std::__ios_flags` declare no member functions at
-     * all, so the method route yields nothing and they were built as root-level `ctype_base` rather
-     * than under `std`.
+     * Derive the class's namespace chain by demangling any Itanium symbol the class owns (handles
+     * templates), falling back to the source-form name, which carries only the leaf. A static
+     * member's linkage name serves as well as a method's, and is all a pure-constants class like
+     * `std::ctype_base` has — without it those land at the root instead of under `std`.
      */
     private fun CanonicalGroup.ensureClassNamespace(): GhidraClass {
         val parts = (
@@ -312,7 +308,6 @@ class ClassBuilder(
         val paramDecls = when (sig) {
             is TypeDecl.Method -> if (ghidraInjectsThis) sig.params.drop(1) else sig.params
             is TypeDecl.FunctionT -> sig.params
-            else -> return
         }
 
         // Always replace the formal-param list, falling back to Undefined4 for

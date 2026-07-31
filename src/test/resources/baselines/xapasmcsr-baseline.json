@@ -1,9 +1,5 @@
 {
     "counters": {
-        "apply-error": {
-            "min": 2,
-            "max": 2
-        },
         "base-empty-ebo": {
             "min": 21,
             "max": 21
@@ -13,6 +9,10 @@
             "max": 85
         },
         "class-not-struct": {
+            "min": 2,
+            "max": 2
+        },
+        "code-cleared-for-data": {
             "min": 2,
             "max": 2
         },
@@ -305,8 +305,8 @@
             "max": 23824
         },
         "static-member-applied": {
-            "min": 103,
-            "max": 103
+            "min": 105,
+            "max": 105
         },
         "static-member-unresolved": {
             "min": 409,
