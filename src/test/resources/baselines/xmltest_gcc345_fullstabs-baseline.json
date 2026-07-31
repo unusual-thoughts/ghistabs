@@ -68,6 +68,10 @@
             "min": 4318,
             "max": 4318
         },
+        "demangle-displaced-function-renamed": {
+            "min": 0,
+            "max": 0
+        },
         "demangle-displaced-label-dropped": {
             "min": 1611,
             "max": 1611
@@ -297,12 +301,12 @@
             "max": 17
         },
         "reglocal-add-success": {
-            "min": 147,
-            "max": 147
+            "min": 106,
+            "max": 106
         },
         "reglocal-skipped-dup-local": {
-            "min": 8,
-            "max": 8
+            "min": 49,
+            "max": 49
         },
         "reglocal-skipped-dup-param": {
             "min": 33,

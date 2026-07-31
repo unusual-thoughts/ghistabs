@@ -231,6 +231,9 @@ class ParserClassTest {
                         sizeBits = 0,
                         isStatic = true,
                         access = Access.PRIVATE,
+                        // The member's linkage name: stabs' only link from a static member to its
+                        // emitted symbol, since these carry no `G`/`S` address stab of their own.
+                        mangled = "_ZN4Quux5countE",
                     ),
                 ),
                 methods = emptyList(),

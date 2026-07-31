@@ -460,6 +460,34 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     }
 
     /**
+     * A register local lands in the register its stab names. The number is the record's n_value —
+     * `w:r(0,5)` carries no register in the descriptor — and `readTrailingReg()` used to return a
+     * hardcoded 0, so every register local in every fixture was placed in dbx 0 = EAX. Nothing
+     * caught it: `reglocal-unmapped-regnum` can't fire when the number is always mappable.
+     *
+     * `FileSystemImage::fetch16FromOctet` holds `wordOffset` in ESI (n_value 6) and `value` in EDI
+     * (7) — two registers in one function, so a per-record read is the only way to satisfy both; a
+     * restored constant could not. Register locals that shadow a parameter name are skipped by
+     * `applyLocal` (`reglocal-skipped-dup-param`), so these are deliberately non-parameter locals.
+     */
+    @Test
+    fun registerLocalUsesTheStabsRegister() {
+        val func = program.functionManager.getFunctions(true).asIterable()
+            .firstOrNull { it.name == "fetch16FromOctet" && it.parentNamespace.name == "FileSystemImage" }
+        assumeTrue(func != null, "Skipping: FileSystemImage::fetch16FromOctet not found")
+        val storage = func!!.localVariables
+            .filter { it.name in setOf("wordOffset", "value") }
+            .associate { it.name to it.variableStorage.toString() }
+        // `value` is a 2-byte type, so Ghidra narrows EDI to its 16-bit sub-register — the storage
+        // is sized from the variable's type, the register chosen from the stab.
+        Assertions.assertEquals(
+            mapOf("wordOffset" to "ESI:4", "value" to "DI:2"),
+            storage,
+            "register locals must land where their stab's n_value says; all-EAX means the number was lost",
+        )
+    }
+
+    /**
      * No symbol may carry a raw Itanium-mangled name inside a non-global namespace. The Cygwin PE
      * loader's own `__Z…` symbols live in the global namespace and are fine; a mangled leaf under
      * a class (`FileSystemImage::_ZN15FileSystemImage7fetch32ERK5Imagem`) is the fingerprint of a

@@ -175,6 +175,13 @@ data class FieldDecl<Id : IdInterface>(
     val sizeBits: Long,
     val isStatic: Boolean,
     val access: Access,
+    /**
+     * Linkage name of a static data member (`alnum:/2(5,44):_ZNSt10ctype_base5alnumE;`). It is the
+     * only link stabs give between the member and its emitted symbol — none of these carry their own
+     * `G`/`S` address stab — so it is what lets a global be typed from its member declaration rather
+     * than left to the demangler. Null for ordinary members.
+     */
+    val mangled: String? = null,
 )
 
 @Serializable
@@ -220,12 +227,12 @@ sealed interface SymbolDecl<Id : IdInterface> {
 
     /** `:P` (register param) or `:R` (alt). */
     @Serializable
-    data class RegParam<Id : IdInterface>(override val name: String, override val type: TypeDecl<Id>, val regNum: Int) :
+    data class RegParam<Id : IdInterface>(override val name: String, override val type: TypeDecl<Id>) :
         SymbolDecl<Id>
 
     /** `:r` register variable. */
     @Serializable
-    data class RegLocal<Id : IdInterface>(override val name: String, override val type: TypeDecl<Id>, val regNum: Int) :
+    data class RegLocal<Id : IdInterface>(override val name: String, override val type: TypeDecl<Id>) :
         SymbolDecl<Id>
 
     /** Plain stack local — a `:` descriptor with no class letter (gdb's `l`/`s`, i.e. the type
