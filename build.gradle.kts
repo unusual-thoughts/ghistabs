@@ -263,7 +263,7 @@ fun Test.reportWithConsoleSummary(name: String) {
 // is idempotent, so classes in one JVM share one install; we don't fork per class (forkEvery=0) and
 // parallelise across forks instead. Each fork needs a real heap — loading a fixture + autoanalysis
 // overflows the -Xmx512m default and crashes the worker with a NoSuchFileException on the result bin.
-fun Test.headlessGhidraConfig(reportName: String) {
+fun Test.headlessGhidraConfig(reportName: String, narrowGeneratedClasses: Boolean = false) {
     group = "verification"
     reportWithConsoleSummary(reportName)
     testClassesDirs = sourceSets["test"].output.classesDirs
@@ -281,8 +281,12 @@ fun Test.headlessGhidraConfig(reportName: String) {
     // class (skips a stray invocation), and the gradle filter drops the generated classes outright
     // so unselected fixtures never boot a JVM at all.
     systemProperty("fixtureFilter", providers.gradleProperty("fixture").getOrElse(""))
-    // -Pfixture and -Pmode intersect, selecting generated classes by name.
-    if (selectedFixtures != fixtureBinaries || selectedModes != fixtureModes) {
+    // -PdisableAnalyzers=<name substring>[,…] turns those analyzers off, for A/B probe runs.
+    systemProperty("disableAnalyzers", providers.gradleProperty("disableAnalyzers").getOrElse(""))
+    // -Pfixture and -Pmode intersect, selecting generated classes by name. Only the regression suite
+    // has generated classes: applying this to probeDump would intersect with its `--tests` pattern and
+    // silently select nothing (Gradle ANDs commandLineIncludePatterns with the build-script filter).
+    if (narrowGeneratedClasses && (selectedFixtures != fixtureBinaries || selectedModes != fixtureModes)) {
         filter {
             selectedFixtures.forEach { b ->
                 selectedModes.forEach { m -> includeTestsMatching("ghistabs.fixtures.${fixtureClassName(b, m)}") }
@@ -319,7 +323,7 @@ fun Test.headlessGhidraConfig(reportName: String) {
 tasks.register<Test>("integrationTest") {
     description = "Real-binary assertion tests against binary fixtures (@Tag(\"integration\"))"
     useJUnitPlatform { includeTags("integration") }
-    headlessGhidraConfig("integrationTest")
+    headlessGhidraConfig("integrationTest", narrowGeneratedClasses = true)
     finalizedBy(auditWhitelist)
 }
 

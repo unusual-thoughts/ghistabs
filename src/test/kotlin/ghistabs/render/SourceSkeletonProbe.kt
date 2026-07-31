@@ -9,6 +9,7 @@ import ghidra.util.task.TaskMonitor
 import ghistabs.StabsOptions
 import ghistabs.diagnose.Level
 import ghistabs.diagnose.defaultContext
+import ghistabs.disableAnalyzersFromProperty
 import ghistabs.disableWindowsResourceAnalyzer
 import ghistabs.harvest.Harvester
 import ghistabs.harvest.TypeResolver
@@ -85,6 +86,9 @@ class SourceSkeletonProbe : AbstractGhidraHeadlessIntegrationTest() {
                         }
                 }
                 program.disableWindowsResourceAnalyzer()
+                // -PdisableAnalyzers=<substring> — render the same fixture twice, once without an
+                // analyzer, and diff `<dir>.old` against `<dir>` to see exactly what it changes.
+                program.disableAnalyzersFromProperty().forEach { println("Pipeline[$binaryName]: disabled $it") }
                 mgr.reAnalyzeAll(null)
                 program.runTransaction("skeleton-autoanalyze") {
                     mgr.startAnalysis(monitor)
