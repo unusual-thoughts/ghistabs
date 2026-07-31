@@ -6,6 +6,7 @@ import com.github.ajalt.clikt.core.subcommands
 import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.options.default
 import com.github.ajalt.clikt.parameters.options.flag
+import com.github.ajalt.clikt.parameters.options.multiple
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.options.required
 import com.github.ajalt.clikt.parameters.types.enum
@@ -17,6 +18,7 @@ import ghidra.app.util.importer.MessageLog
 import ghidra.app.util.importer.ProgramLoader
 import ghidra.framework.Application
 import ghidra.framework.HeadlessGhidraApplicationConfiguration
+import ghidra.framework.options.OptionType
 import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
@@ -89,6 +91,11 @@ private abstract class RenderCommand(name: String, help: String) : CliktCommand(
     ).flag("--no-fold-sources", default = true)
     private val logLevel by option("-v", "--log-level", help = "minimum level streamed to the log").enum<Level>()
         .default(Level.INFO)
+    private val disableAnalyzers by option(
+        "--disable-analyzer",
+        help = "turn off every analyzer whose name contains this, case-insensitively (repeatable). " +
+            "Render the same binary with and without one to A/B what it actually changes.",
+    ).multiple()
 
     private val recordsJson by option("--records-json", help = "dump parsed StabRecords as JSON").file(canBeDir = false)
     private val harvestJson by option("--harvest-json", help = "dump the harvest as JSON").file(canBeDir = false)
@@ -145,7 +152,16 @@ private abstract class RenderCommand(name: String, help: String) : CliktCommand(
     private fun ImportContext<*>.autoAnalyze() {
         val mgr = AutoAnalysisManager.getAnalysisManager(program)
         program.runTransaction("cli-disable-stabs-analyzer") {
-            program.getOptions(Program.ANALYSIS_PROPERTIES).setBoolean(StabsAnalyzer.NAME, false)
+            val analysis = program.getOptions(Program.ANALYSIS_PROPERTIES)
+            analysis.setBoolean(StabsAnalyzer.NAME, false)
+            disableAnalyzers.flatMap { needle ->
+                analysis.optionNames.filter {
+                    it.contains(needle, ignoreCase = true) && analysis.getType(it) == OptionType.BOOLEAN_TYPE
+                }
+            }.forEach {
+                analysis.setBoolean(it, false)
+                echo("disabled analyzer: $it")
+            }
         }
         mgr.initializeOptions()
         mgr.reAnalyzeAll(null)
