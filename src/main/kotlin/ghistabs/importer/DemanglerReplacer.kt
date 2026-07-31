@@ -29,6 +29,8 @@ sealed class Skip(open val reason: String) {
 class DemanglerReplacer(private val ctx: ImportContext<*>, private val typeRegistry: TypeRegistry) :
     DiagnosticSink by ctx {
     companion object {
+        val DEMANGLER_CATEGORY: CategoryPath = CategoryPath.ROOT.extend("Demangler")
+
         /**
          * Pure planner: which stubs can be safely replaced, and why the rest can't. Ghidra's
          * DataTypes are plain objects — no Application runtime — so this stays a unit test.
@@ -110,24 +112,13 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val typeRegis
     }
 
     /**
-     * Drop the mangled labels the demangle passes leave inside a class namespace. When the primary
-     * symbol at an address is a FUNCTION, `SetLabelPrimaryCmd` keeps that symbol, renames it to the
-     * demangled form, and *re-creates its displaced name as a label in the same namespace*. Since
-     * [SymbolApplier.applyAllFunctions] parks the raw stab name on the function symbol, a function
-     * the demangler had already filed under `FileSystemImage` came back out carrying the hybrid
-     * `FileSystemImage::_ZN15FileSystemImage7fetch32ERK5Imagem` — which no later pass can clear,
-     * because by then the address demangles as already-done.
+     * Drop the mangled names a demangle pass displaces into a class namespace: `SetLabelPrimaryCmd`
+     * renames the function symbol to the demangled form and re-creates the old name as a label
+     * beside it, which nothing later clears since the address then reads as already-demangled.
      *
-     * Only namespaced symbols are touched: a mangled one in the *global* namespace is the loader's
-     * own (or ours on a stripped binary), and stock Ghidra keeps it too — it is what
-     * [ProgramAddressResolver.resolve] looks methods up by.
-     *
-     * A displaced LABEL is dropped outright. A displaced FUNCTION can't be — deleting it would take
-     * the function's only symbol — and it is the mirror of the same fault: the demangled name landed
-     * on a sibling label while the function kept the mangled one, so `isAlreadyDemangled` finds that
-     * sibling, calls the address done, and never renames the function back (seen on locale_test's
-     * `__gnu_cxx::_ZN9__gnu_cxx27__verbose_terminate_handlerEv`). Make the function the bearer of the
-     * demangled name instead, evicting the sibling that held it.
+     * Global-namespace mangled symbols stay — that is the loader's own (or ours on a stripped
+     * binary), and what [ProgramAddressResolver.resolve] looks methods up by. A displaced LABEL is
+     * deleted; a FUNCTION is renamed instead, since deleting takes its only symbol.
      */
     private fun dropDisplacedMangledLabels() {
         val displaced = ctx.program.symbolTable.symbolIterator
@@ -162,7 +153,7 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val typeRegis
         val dtm = ctx.dtm
 
         val stubs = dtm.allDataTypes.asSequence()
-            .filter { it.categoryPath.isAncestorOrSelf(TypeRegistry.DEMANGLER_CATEGORY) }
+            .filter { it.categoryPath.isAncestorOrSelf(DEMANGLER_CATEGORY) }
             .filterIsInstance<Structure>()
             .toList()
         val replacements = mutableMapOf<String, DataType>()
@@ -173,7 +164,7 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val typeRegis
             // The stub's own category with the /Demangler root lifted off (`/Demangler/std` → `/std`),
             // as the hint for which of several same-named candidates is meant.
             val preferredCategory = CategoryPath.ROOT.extend(
-                stub.categoryPath.pathElements.drop(TypeRegistry.DEMANGLER_CATEGORY.pathElements.size),
+                stub.categoryPath.pathElements.drop(DEMANGLER_CATEGORY.pathElements.size),
             )
             // Priority: exact DTM name → exact demangler-link (byDemangledClass) → RTTI layout.
             val candidate = findByExactName(stub.name, preferredCategory)?.also { debug("demangler-exact-match") }

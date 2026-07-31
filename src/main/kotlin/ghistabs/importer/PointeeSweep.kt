@@ -2,11 +2,11 @@ package ghistabs.importer
 
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.*
-import ghidra.program.model.data.DataUtilities.ClearDataMode
 import ghidra.program.model.listing.Data
 import ghidra.program.model.listing.Program
 import ghidra.program.model.mem.Memory
 import ghidra.util.ascii.AsciiCharSetRecognizer
+import ghistabs.forceCreateData
 
 /**
  * Length (including the terminator) of the NUL-terminated run of characters Ghidra's string
@@ -65,20 +65,15 @@ private fun Data.satisfiedBy(desired: DataType): Boolean = when {
  * concrete sized type is laid verbatim; a char/byte/void/undefined pointee (or none) falls
  * back to a terminated string when the bytes are an ASCII run Ghidra recognises. A target
  * already carrying an at-least-as-precise type ([satisfiedBy]) is kept; a mere placeholder
- * is overwritten. Such targets are often left undefined or, worse, mis-disassembled as code
- * (`char const * align_prefix` → "#!ALIGN "); since createData's ClearDataMode only clears
- * conflicting *data*, the mis-identified code units are cleared first. Returns the resolved
- * (or pre-existing) data, else null. Requires an open transaction (the apply/render loops
- * open one).
+ * is overwritten. Such targets are often mis-disassembled as code (`char const * align_prefix` →
+ * "#!ALIGN "), hence [forceCreateData]. Returns the resolved (or pre-existing) data, else null.
+ * Requires an open transaction (the apply/render loops open one).
  */
 fun Program.resolvePointee(addr: Address, pointee: DataType? = null): Data? {
     val existing = listing.getDataAt(addr)
     val (dt, len) = desiredPointee(addr, pointee) ?: return existing
     if (existing != null && existing.satisfiedBy(dt)) return existing
-    return runCatching {
-        listing.clearCodeUnits(addr, addr.add((len - 1).toLong()), false)
-        DataUtilities.createData(this, addr, dt, -1, ClearDataMode.CLEAR_ALL_CONFLICT_DATA)
-    }.getOrNull() ?: existing
+    return runCatching { forceCreateData(addr, dt, len) }.getOrNull() ?: existing
 }
 
 /**

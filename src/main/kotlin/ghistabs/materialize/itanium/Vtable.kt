@@ -6,6 +6,7 @@ import ghidra.program.model.listing.CommentType
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
+import ghistabs.forceCreateData
 import ghistabs.harvest.TypeResolver
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.MethodDecl
@@ -82,16 +83,15 @@ fun Program.layVtable(
     val rttiHeader = rttiSlot ?: ztv.add(ptr)
     val addressPoint = rttiSlot?.add(ptr) ?: ztv.add(Itanium.vtablePrefixBytes(defaultPointerSize))
 
-    listing.clearCodeUnits(ztv, addressPoint.add(vftable.length.toLong() - 1), false)
     generateSequence(ztv) { it.add(ptr) }.takeWhile { it < topSlot }.forEach {
-        listing.createData(it, Itanium.offsetToTopType(defaultPointerSize))
+        forceCreateData(it, Itanium.offsetToTopType(defaultPointerSize))
         listing.setComment(it, CommentType.EOL, "vbase/vcall offset")
     }
-    listing.createData(topSlot, Itanium.offsetToTopType(defaultPointerSize))
+    forceCreateData(topSlot, Itanium.offsetToTopType(defaultPointerSize))
     listing.setComment(topSlot, CommentType.EOL, "${Itanium.OFFSET_TO_TOP} (to top of complete object)")
-    listing.createData(rttiHeader, PointerDataType(dataTypeManager))
+    forceCreateData(rttiHeader, PointerDataType(dataTypeManager))
     listing.setComment(rttiHeader, CommentType.EOL, "${Itanium.RTTI}: ${Itanium.zti(className)} typeinfo")
-    listing.createData(addressPoint, vftable)
+    forceCreateData(addressPoint, vftable)
     symbolTable.createLabel(addressPoint, Itanium.VFTABLE, ns, SourceType.IMPORTED)
     return addressPoint
 }

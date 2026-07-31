@@ -53,7 +53,7 @@ class FillerByteAnalyzer :
             monitor.checkCancelled()
             val len = leadingFillerLength(pdis, range)
             if (len > 0 &&
-                runCatching { listing.createData(range.minAddress, AlignmentDataType(), len.toInt()) }
+                runCatching { program.forceCreateData(range.minAddress, AlignmentDataType(), len.toInt()) }
                     .isSuccess
             ) {
                 bookmarks.setBookmark(range.minAddress, BookmarkType.ANALYSIS, NAME, "collapsed $len filler bytes")

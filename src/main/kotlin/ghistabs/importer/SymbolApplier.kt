@@ -15,6 +15,7 @@ import ghistabs.diagnose.ApplyErrorBucket
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.Level
 import ghistabs.diagnose.degradation
+import ghistabs.forceCreateData
 import ghistabs.harvest.Harvest
 import ghistabs.harvest.OpenFunction
 import ghistabs.harvest.SymbolRecord
@@ -416,21 +417,13 @@ class SymbolApplier(
             debug("static-local-plate", address = addr)
         }
 
-        // CLEAR_ALL_CONFLICT_DATA evicts `undefined4` placeholders auto-analysis may have raced us to apply.
         try {
-            DataUtilities.createData(
-                ctx.program,
-                addr,
-                dt,
-                dt.length,
-                DataUtilities.ClearDataMode.CLEAR_ALL_CONFLICT_DATA,
-            )
+            // Cygwin PE with no .rdata section puts const data in .text, where it gets disassembled.
+            ctx.program.forceCreateData(addr, dt) { debug("code-cleared-for-data", sym.body.name, address = addr) }
 
-            // Confirm createData actually placed dt. On some stab addresses nothing lands (getDataAt
-            // null — unmapped/uninitialised target or a silent conflict; cause unconfirmed, see
-            // pending-work-triage.md). Synchronous inside our transaction, so this reflects createData's
-            // own result, not a later auto-analysis overwrite. isEquivalent (not identity) so the
-            // DTM-resolved copy of dt isn't a false mismatch.
+            // Some stab addresses silently take nothing (cause unconfirmed, see
+            // pending-work-triage.md). Same transaction, so this is forceCreateData's own result, not
+            // a later overwrite; isEquivalent because the DTM-resolved copy of dt is not identical.
             val after = ctx.program.listing.getDataAt(addr)
             if (after?.dataType?.isEquivalent(dt) != true) {
                 warn(
@@ -443,25 +436,16 @@ class SymbolApplier(
                 .takeIf { (it ?: 0) > 0 }?.let { debug("pointee-typed", address = addr, count = it.toLong()) }
             debug("global-applied", "dt=${dt.displayName}", address = addr)
         } catch (e: Exception) {
-            err("apply-error", "Failed to create global data at $addr: ${e.message}", addr)
+            err("apply-error", "global ${sym.body.name} at $addr: ${e.message}", addr)
             return false
         }
         return true
     }
 
     /**
-     * Apply C++ static data members (`alnum:/2(5,44):_ZNSt10ctype_base5alnumE;`). They occupy no
-     * storage, so materialization drops them from the class layout and they reach Ghidra only as
-     * whatever the demangler named the emitted symbol — carrying no type at all.
-     *
-     * The field's linkage name is the *only* link back to that symbol: none of them carry a `G`/`S`
-     * address stab of their own (verified across the corpus), and `applyGlobalOrStatic` therefore
-     * never sees them. That makes this a real lookup of a name gcc wrote down, not the reconstruction
-     * of a spelling — the distinction that sank the normalization tier removed in 17442c7. It is also
-     * why reconstruction could not have worked here: every one of these is a template or nested
-     * libstdc++ type, which has no closed-form mangled name to rebuild.
-     *
-     * Symbol-table-bound, so a stripped binary resolves none of them — counted, not warned.
+     * Apply C++ static data members (`alnum:/2(5,44):_ZNSt10ctype_base5alnumE;`). They carry no
+     * `G`/`S` address stab, so [applyGlobalOrStatic] never sees them and this linkage name is their
+     * only link to the emitted symbol. Symbol-table-bound: a stripped binary resolves none.
      */
     internal fun applyAllStaticMembers(): Int {
         // One class is re-declared per including CU, so the same member arrives N times.
@@ -483,13 +467,7 @@ class SymbolApplier(
                 // Names it `Class::member` when the demangler hasn't already; typed below regardless.
                 ensureStabLabel(addr, mangled)
                 try {
-                    DataUtilities.createData(
-                        ctx.program,
-                        addr,
-                        dt,
-                        dt.length,
-                        DataUtilities.ClearDataMode.CLEAR_ALL_CONFLICT_DATA,
-                    )
+                    ctx.program.forceCreateData(addr, dt) { debug("code-cleared-for-data", mangled, address = addr) }
                     applied++
                     debug("static-member-applied", "$mangled dt=${dt.displayName}", address = addr)
                 } catch (e: Exception) {

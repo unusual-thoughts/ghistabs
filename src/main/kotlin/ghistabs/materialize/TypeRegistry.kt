@@ -10,6 +10,7 @@ import ghistabs.demangle
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.StabsDiagnostics
 import ghistabs.harvest.*
+import ghistabs.importer.DemanglerReplacer.Companion.DEMANGLER_CATEGORY
 import ghistabs.materialize.itanium.RttiStructs
 import ghistabs.parse.CATEGORY
 import ghistabs.parse.GlobalTypeId
@@ -174,7 +175,7 @@ class TypeRegistry(
         buildMap {
             for (fn in harvest.openFunctions) {
                 val dt = fn.thisParamTypeId()?.let { dataTypeFor(it) } ?: continue
-                demangle(fn.name)?.namespace?.let { putIfAbsent(demanglerPath(it).path, dt) }
+                demangle(fn.name)?.namespace?.let { putIfAbsent(it.categoryPath.path, dt) }
             }
             // A member function is not the only symbol that ties a class to its demangled path: a
             // static data member's linkage name carries the same chain, and is the *only* one a
@@ -186,25 +187,21 @@ class TypeRegistry(
                 val dt = dataTypeFor(id) ?: continue
                 for (field in body.fields) {
                     val mangled = field.mangled?.takeIf { field.isStatic } ?: continue
-                    demangle(mangled)?.namespace?.let { putIfAbsent(demanglerPath(it).path, dt) }
+                    demangle(mangled)?.namespace?.let { putIfAbsent(it.categoryPath.path, dt) }
                 }
             }
         }
     }
+}
 
-    companion object {
-        val DEMANGLER_CATEGORY: CategoryPath = CategoryPath.ROOT.extend("Demangler")
+/** Replicates the (protected) `DemangledDataType.getDemanglerCategoryPath` + leaf: `/Demangler/<ns…>/<name>`. */
+private val Demangled.categoryPath get(): CategoryPath =
+    (namespace?.categoryPath ?: DEMANGLER_CATEGORY).extend(name)
 
-        /** Replicates the (protected) `DemangledDataType.getDemanglerCategoryPath` + leaf: `/Demangler/<ns…>/<name>`. */
-        private fun demanglerPath(d: Demangled): CategoryPath =
-            (d.namespace?.let { demanglerPath(it) } ?: DEMANGLER_CATEGORY).extend(d.name)
-
-        /** Pointee type-id of a member function's leading `this` param (`InlineDef?→Pointer→Ref`), else null. */
-        private fun OpenFunction.thisParamTypeId(): GlobalTypeId? {
-            val p = params.firstOrNull()?.body as? SymbolDecl.StackParam ?: return null
-            if (p.name != "this") return null
-            val inner = (p.type as? TypeDecl.InlineDef)?.body ?: p.type
-            return ((inner as? TypeDecl.Pointer)?.pointee as? TypeDecl.Ref)?.id
-        }
-    }
+/** Pointee type-id of a member function's leading `this` param (`InlineDef?→Pointer→Ref`), else null. */
+private fun OpenFunction.thisParamTypeId(): GlobalTypeId? {
+    val p = params.firstOrNull()?.body as? SymbolDecl.StackParam ?: return null
+    if (p.name != "this") return null
+    val inner = (p.type as? TypeDecl.InlineDef)?.body ?: p.type
+    return ((inner as? TypeDecl.Pointer)?.pointee as? TypeDecl.Ref)?.id
 }
