@@ -25,6 +25,8 @@ data class TypeAst(
     val declSourceFile: String? = null,
 ) {
     val source get() = id.source
+
+    @OptIn(ExperimentalStdlibApi::class)
     private val uniqueName
         get() = "Anon_${Path(id.source.filename).nameWithoutExtension}_${id.n}_${id.hashCode().toHexString()}"
 
