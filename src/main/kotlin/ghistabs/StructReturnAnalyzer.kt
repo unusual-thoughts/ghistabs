@@ -9,7 +9,17 @@ import ghidra.program.model.address.AddressSetView
 import ghidra.program.model.data.Composite
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
+import ghidra.program.model.pcode.XmlEncode
 import ghidra.util.task.TaskMonitor
+import org.w3c.dom.Element
+import org.xml.sax.InputSource
+import java.io.StringReader
+import java.io.StringWriter
+import javax.xml.parsers.DocumentBuilderFactory
+import javax.xml.transform.OutputKeys
+import javax.xml.transform.TransformerFactory
+import javax.xml.transform.dom.DOMSource
+import javax.xml.transform.stream.StreamResult
 
 const val STRUCT_RETURN_ANALYZER_NAME = "Struct-return ABI (x86 gcc)"
 
@@ -17,18 +27,12 @@ const val STRUCT_RETURN_ANALYZER_NAME = "Struct-return ABI (x86 gcc)"
 val CORRECTABLE_CONVENTIONS = setOf("__cdecl", "__thiscall")
 
 /** Which way round the epilogue says the cspec has a function's aggregate return. */
-enum class Correction(val suffix: String, internal val outputRules: String) {
+enum class Correction(val suffix: String) {
     /** Aggregates go back through a caller-allocated pointer; scalars still use the pentries. */
-    TO_MEMORY(
-        "_memret",
-        """
-        <rule><datatype name="struct"/><hidden_return/></rule>
-        <rule><datatype name="union"/><hidden_return/></rule>
-        """,
-    ),
+    TO_MEMORY("_memret"),
 
-    /** No rule at all, so aggregates fall through to the EAX / EDX:EAX pentries. */
-    TO_REGISTER("_regret", ""),
+    /** No aggregate rule at all, so they fall through to the EAX / EDX:EAX pentries. */
+    TO_REGISTER("_regret"),
     ;
 
     fun conventionFor(base: String) = "$base$suffix"
@@ -114,7 +118,7 @@ class StructReturnAnalyzer :
     }
 
     private fun install(program: Program, base: String, fix: Correction, log: MessageLog?): Boolean = runCatching {
-        val xml = conventionXml(base, fix)
+        val xml = derivedConventionXml(program, base, fix)
         SpecExtension(program).run {
             if (SpecExtension.getCompilerSpecExtension(program, testExtensionDocument(xml)) == null) {
                 addReplaceCompilerSpecExtension(xml, TaskMonitor.DUMMY)
@@ -143,29 +147,43 @@ class StructReturnAnalyzer :
 }
 
 /**
- * x86gcc's `__cdecl`/`__thiscall` body — they are identical bar the aggregate rule — with [fix]'s
- * rules spliced into the output. `hasthis` must be explicit: auto-`this` is otherwise keyed off the
- * literal model name `__thiscall` (PrototypeModel ~line 647), so a derived name would lose it.
+ * The program's own [base] model, re-encoded and adjusted for [fix]. Derived rather than transcribed,
+ * so a derived convention tracks whatever the installed cspec currently says — `<returnaddress>`,
+ * `hasthis`, register sets, and any rule added to that prototype later all come along by construction.
+ * [PrototypeModel.encode] emits exactly the grammar [SpecExtension] parses, rules included.
+ *
+ * Aggregate `<hidden_return/>` rules are dropped either way and re-added only for [Correction.TO_MEMORY]:
+ * the model is assigned solely to functions whose purge already settled the question, so a size-filtered
+ * rule in the base has nothing left to decide.
  */
-private fun conventionXml(base: String, fix: Correction) =
-    """
-    <prototype name="${fix.conventionFor(base)}" extrapop="4" stackshift="4" hasthis="${base == "__thiscall"}">
-      <input>
-        <pentry minsize="1" maxsize="500" align="4"><addr offset="4" space="stack"/></pentry>
-      </input>
-      <output killedbycall="true">
-        <pentry minsize="4" maxsize="10" metatype="float" extension="float"><register name="ST0"/></pentry>
-        <pentry minsize="1" maxsize="4"><register name="EAX"/></pentry>
-        <pentry minsize="5" maxsize="8"><addr space="join" piece1="EDX" piece2="EAX"/></pentry>
-        ${fix.outputRules.trim()}
-      </output>
-      <unaffected>
-        <register name="ESP"/><register name="EBP"/><register name="ESI"/>
-        <register name="EDI"/><register name="EBX"/>
-      </unaffected>
-      <killedbycall>
-        <register name="ECX"/><register name="EDX"/><register name="ST0"/><register name="ST1"/>
-      </killedbycall>
-      <likelytrash><register name="EAX"/></likelytrash>
-    </prototype>
-    """.trimIndent()
+private fun derivedConventionXml(program: Program, base: String, fix: Correction): String {
+    val model = requireNotNull(program.compilerSpec.getCallingConvention(base)) { "no calling convention $base" }
+    val encoded = XmlEncode(true).apply { model.encode(this, program.compilerSpec.pcodeInjectLibrary) }.toString()
+    val doc = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(InputSource(StringReader(encoded)))
+
+    doc.documentElement.setAttribute("name", fix.conventionFor(base))
+    val output = doc.documentElement.children("output").single()
+    output.children("rule").filter { it.children("hidden_return").isNotEmpty() }.forEach(output::removeChild)
+    if (fix == Correction.TO_MEMORY) {
+        // struct and union are distinct metatypes to string2metatype, so neither covers the other.
+        listOf("struct", "union").forEach { metatype ->
+            output.appendChild(
+                doc.createElement("rule").apply {
+                    appendChild(doc.createElement("datatype").apply { setAttribute("name", metatype) })
+                    appendChild(doc.createElement("hidden_return"))
+                },
+            )
+        }
+    }
+    return StringWriter().also {
+        TransformerFactory.newInstance().newTransformer().apply {
+            setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes")
+        }.transform(DOMSource(doc), StreamResult(it))
+    }.toString()
+}
+
+private fun Element.children(tag: String) =
+    childNodes.let { kids -> (0 until kids.length).map(kids::item) }.filterIsInstance<Element>().filter {
+        it.tagName ==
+            tag
+    }
