@@ -9,11 +9,7 @@ import ghidra.util.task.TaskMonitor
 import ghistabs.demangle
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.StabsDiagnostics
-import ghistabs.harvest.CanonicalGroup
-import ghistabs.harvest.Harvest
-import ghistabs.harvest.OpenFunction
-import ghistabs.harvest.TypeAst
-import ghistabs.harvest.TypeResolver
+import ghistabs.harvest.*
 import ghistabs.materialize.itanium.RttiStructs
 import ghistabs.parse.CATEGORY
 import ghistabs.parse.GlobalTypeId
@@ -196,15 +192,19 @@ class TypeRegistry(
         }
     }
 
-    /** Replicates the (protected) `DemangledDataType.getDemanglerCategoryPath` + leaf: `/Demangler/<ns…>/<name>`. */
-    private fun demanglerPath(d: Demangled): CategoryPath =
-        (d.namespace?.let { demanglerPath(it) } ?: CategoryPath.ROOT.extend("Demangler")).extend(d.name)
+    companion object {
+        val DEMANGLER_CATEGORY: CategoryPath = CategoryPath.ROOT.extend("Demangler")
 
-    /** Pointee type-id of a member function's leading `this` param (`InlineDef?→Pointer→Ref`), else null. */
-    private fun OpenFunction.thisParamTypeId(): GlobalTypeId? {
-        val p = params.firstOrNull()?.body as? SymbolDecl.StackParam ?: return null
-        if (p.name != "this") return null
-        val inner = (p.type as? TypeDecl.InlineDef)?.body ?: p.type
-        return ((inner as? TypeDecl.Pointer)?.pointee as? TypeDecl.Ref)?.id
+        /** Replicates the (protected) `DemangledDataType.getDemanglerCategoryPath` + leaf: `/Demangler/<ns…>/<name>`. */
+        private fun demanglerPath(d: Demangled): CategoryPath =
+            (d.namespace?.let { demanglerPath(it) } ?: DEMANGLER_CATEGORY).extend(d.name)
+
+        /** Pointee type-id of a member function's leading `this` param (`InlineDef?→Pointer→Ref`), else null. */
+        private fun OpenFunction.thisParamTypeId(): GlobalTypeId? {
+            val p = params.firstOrNull()?.body as? SymbolDecl.StackParam ?: return null
+            if (p.name != "this") return null
+            val inner = (p.type as? TypeDecl.InlineDef)?.body ?: p.type
+            return ((inner as? TypeDecl.Pointer)?.pointee as? TypeDecl.Ref)?.id
+        }
     }
 }
