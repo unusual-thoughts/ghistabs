@@ -2,12 +2,12 @@ package ghistabs.importer
 
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.*
-import ghidra.program.model.data.DataUtilities.ClearDataMode
 import ghidra.program.model.listing.CommentType
 import ghidra.program.model.mem.MemoryBlock
 import ghidra.program.model.symbol.RefType
 import ghidra.program.model.symbol.SourceType
 import ghistabs.diagnose.DiagnosticSink
+import ghistabs.forceCreateData
 import ghistabs.parse.STAB_RECORD_SIZE
 import ghistabs.parse.StabReader
 import ghistabs.parse.StabRecord
@@ -70,13 +70,7 @@ class StabSectionOverlay(private val ctx: ImportContext<*>) : DiagnosticSink by 
         get() = if (name.isEmpty()) type.name else "${type.name} \"$name\""
 
     private fun StabRecord.overlay(funcStart: Address?) {
-        DataUtilities.createData(
-            program,
-            addr,
-            stabRecordStruct,
-            stabRecordStruct.length,
-            ClearDataMode.CLEAR_ALL_CONFLICT_DATA,
-        )
+        program.forceCreateData(addr, stabRecordStruct)
         program.listing.setComment(addr, CommentType.EOL, comment)
 
         // n_strx (field 0) → the string it names in .stabstr; define that string if untouched.
@@ -84,13 +78,7 @@ class StabSectionOverlay(private val ctx: ImportContext<*>) : DiagnosticSink by 
             addRef(addr, nameAddr)
             if (program.listing.getDefinedDataContaining(nameAddr) == null) {
                 runCatching {
-                    DataUtilities.createData(
-                        program,
-                        nameAddr,
-                        TerminatedStringDataType.dataType,
-                        -1,
-                        ClearDataMode.CLEAR_ALL_CONFLICT_DATA,
-                    )
+                    program.forceCreateData(nameAddr, TerminatedStringDataType.dataType, length = -1)
                 }.onFailure { warn("stab-string-create-failed", "$nameAddr: ${it.message}", nameAddr) }
             }
         }
