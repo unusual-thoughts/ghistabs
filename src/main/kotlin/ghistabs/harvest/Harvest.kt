@@ -15,15 +15,27 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class Harvest(
     val typeAsts: Map<GlobalTypeId, TypeAst>,
-    val parseErrors: Int = 0,
-    val rawCollisions: Map<GlobalTypeId, Map<String, Set<TypeDecl<GlobalTypeId>>>> = mapOf(),
-    val symbolsByCu: Map<String, List<SymbolRecord>> = mapOf(),
-    val openFunctions: List<OpenFunction> = listOf(),
+    val parseErrors: Int,
+    val rawCollisions: Map<GlobalTypeId, Map<String, Set<TypeDecl<GlobalTypeId>>>>,
+    val symbolsByCu: Map<String, List<SymbolRecord>>,
+    val openFunctions: List<OpenFunction>,
     /** N_SLINE entries grouped by N_SOL-effective source filename; sorted by line on insertion. */
-    val lineEntries: Map<String, List<LineEntry>> = mapOf(),
+    val lineEntries: Map<String, List<LineEntry>>,
     /** Addressless `:c` compile-time constants — applied as equates + a synthetic enum catalog. */
-    val constants: List<SymbolDecl.Constant<GlobalTypeId>> = listOf(),
+    val constants: List<SymbolDecl.Constant<GlobalTypeId>>,
 ) {
+    companion object {
+        /** A harvest of nothing but [typeAsts] — for resolvers/tests that need no symbol side. */
+        fun of(typeAsts: Map<GlobalTypeId, TypeAst>) = Harvest(
+            typeAsts = typeAsts,
+            parseErrors = 0,
+            rawCollisions = mapOf(),
+            symbolsByCu = mapOf(),
+            openFunctions = listOf(),
+            lineEntries = mapOf(),
+            constants = listOf(),
+        )
+    }
 
     fun getType(id: GlobalTypeId) = typeAsts[id]
 }
