@@ -59,6 +59,9 @@ private val TEMPLATE_PUNCT = Regex("""\s*([<>,])\s*""")
  */
 fun canonTemplateName(name: String): String = TEMPLATE_PUNCT.replace(name.trim()) { it.groupValues[1] }
 
+/** An Itanium-mangled name. The Cygwin PE/COFF loader prepends `_`, so they also appear as `__Z…`. */
+fun isMangled(name: String): Boolean = name.startsWith("_Z") || name.startsWith("__Z")
+
 /**
  * Itanium-mangled `_ZN…` whose first scope is `std::`, `__gnu_cxx::`, or an STL shortcut
  * (`Ss`/`Sa`/`Si`/`So`/`Sd`/`St`). gcc declares these in stabs even when COMDAT-dropped, so a

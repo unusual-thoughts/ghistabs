@@ -52,6 +52,10 @@
             "min": 588,
             "max": 588
         },
+        "demangle-displaced-label-dropped": {
+            "min": 0,
+            "max": 0
+        },
         "desc-dropped-so": {
             "min": 5,
             "max": 5
