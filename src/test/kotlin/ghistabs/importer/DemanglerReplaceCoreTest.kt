@@ -1,100 +1,109 @@
 package ghistabs.importer
 
-import org.junit.jupiter.api.Assertions
+import ghidra.program.model.data.CategoryPath
+import ghidra.program.model.data.DataType
+import ghidra.program.model.data.PointerDataType
+import ghidra.program.model.data.Structure
+import ghidra.program.model.data.StructureDataType
+import ghidra.program.model.data.TypedefDataType
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertInstanceOf
+import org.junit.jupiter.api.Assertions.assertSame
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 /**
- * Pure unit tests for DemanglerReplaceCore.
- * No Ghidra imports, no mockito — operates entirely on POKOs.
+ * Pure unit tests for [DemanglerReplacer.decide].
+ *
+ * On real Ghidra DataTypes rather than stand-in records: they are plain objects, so building and
+ * walking them needs no `Application.initialize()` and this stays an ordinary unit test. The planner
+ * then sees exactly what production hands it — `numComponents`, `pathName` and the TypeDef check are
+ * the real ones, not a hand-maintained mirror that can drift from them.
  */
 class DemanglerReplaceCoreTest {
-    /**
-     * Test 1: Stub with matching replacement → emit ReplaceOp.
-     */
-    @Test
-    fun testMatchingReplacement() {
-        val stubs = listOf(StubRecord("/Demangler/Foo", "Foo", true))
-        val fooReplacement = ReplacementRecord("/proj/Foo", "Foo", emptySet())
-        val replacements = mapOf("Foo" to fooReplacement)
+    private fun stub(path: String, name: String): Structure = StructureDataType(CategoryPath(path), name, 0)
 
-        val (ops, skips) = DemanglerReplacer.decide(stubs, replacements)
-        Assertions.assertEquals(1, ops.size, "Should have 1 op")
-        Assertions.assertEquals(0, skips.size, "Should have 0 skips")
-        Assertions.assertEquals("/Demangler/Foo", ops[0].stubPath)
-        Assertions.assertEquals("/proj/Foo", ops[0].replacementPath)
+    /** A non-empty structure — the shape [DemanglerReplacer.decide] must leave alone. */
+    private fun filled(path: String, name: String): Structure =
+        StructureDataType(CategoryPath(path), name, 0).apply { add(PointerDataType(), "p", null) }
+
+    @Test
+    fun replacesAnEmptyStubThatHasACandidate() {
+        val foo = stub("/Demangler", "Foo")
+        val real = filled("/proj", "Foo")
+
+        val (ops, skips) = DemanglerReplacer.decide(listOf(foo), mapOf("Foo" to real))
+
+        assertTrue(skips.isEmpty(), "no skips expected")
+        assertSame(foo, ops.single().first)
+        assertSame(real, ops.single().second)
+    }
+
+    @Test
+    fun skipsAStubWithNoCandidate() {
+        val (ops, skips) = DemanglerReplacer.decide(listOf(stub("/Demangler", "Foo")), emptyMap())
+
+        assertTrue(ops.isEmpty())
+        assertInstanceOf(Skip.NoReplacement::class.java, skips.single())
+    }
+
+    @Test
+    fun leavesANonEmptyStubAlone() {
+        val foo = filled("/Demangler", "Foo")
+
+        val (ops, skips) = DemanglerReplacer.decide(listOf(foo), mapOf("Foo" to filled("/proj", "Foo")))
+
+        assertTrue(ops.isEmpty(), "a stub with components is already resolved")
+        assertTrue(skips.isEmpty(), "and is not a degradation either")
+    }
+
+    /** Foo→Bar where Bar transitively contains Foo would make the type contain itself post-replace. */
+    @Test
+    fun skipsAReplacementThatWouldContainTheStub() {
+        val foo = stub("/Demangler", "Foo")
+        val cyclic = StructureDataType(CategoryPath("/proj"), "Foo", 0)
+            .apply { add(PointerDataType(foo), "back", null) }
+
+        val (ops, skips) = DemanglerReplacer.decide(listOf(foo), mapOf("Foo" to cyclic))
+
+        assertTrue(ops.isEmpty())
+        assertInstanceOf(Skip.WouldBeCycle::class.java, skips.single())
     }
 
     /**
-     * Test 2: Stub without replacement → emit NoReplacement skip.
+     * The cycle guard's one exemption, and the reason it exists: `std::string` → `basic_string<…>`
+     * yields a typedef→struct→typedef graph that is self-containing on paper but which
+     * `replaceDataType` handles (render-backlog §14). A typedef replacement must go through even
+     * when its target reaches back to the stub — the branch the record-based tests never reached,
+     * because every one of them took `isTypedef`'s default.
      */
     @Test
-    fun testNoReplacement() {
-        val stubs = listOf(StubRecord("/Demangler/Foo", "Foo", true))
-        val replacements = emptyMap<String, ReplacementRecord>()
+    fun aTypedefReplacementIsExemptFromTheCycleGuard() {
+        val stringStub = stub("/Demangler/std", "string")
+        val basicString = StructureDataType(CategoryPath("/std"), "basic_string", 0)
+            .apply { add(PointerDataType(stringStub), "self", null) }
+        val alias: DataType = TypedefDataType(CategoryPath("/std"), "string", basicString)
 
-        val (ops, skips) = DemanglerReplacer.decide(stubs, replacements)
-        Assertions.assertEquals(0, ops.size, "Should have 0 ops")
-        Assertions.assertEquals(1, skips.size, "Should have 1 skip")
-        Assertions.assertTrue(skips[0] is Skip.NoReplacement, "Skip should be NoReplacement")
+        val (ops, skips) = DemanglerReplacer.decide(listOf(stringStub), mapOf("string" to alias))
+
+        assertTrue(skips.isEmpty(), "a typedef replacement must not trip the cycle guard")
+        assertSame(alias, ops.single().second)
     }
 
-    /**
-     * Test 3: Circular dependency (replacement depends on stub) → emit WouldBeCycle skip.
-     */
     @Test
-    fun testWouldBeCycle() {
-        val stubs = listOf(StubRecord("/Demangler/Foo", "Foo", true))
-        val fooReplacement =
-            ReplacementRecord(
-                "/std/Foo",
-                "Foo",
-                setOf("/Demangler/Foo"),
-            )
-        val replacements = mapOf("Foo" to fooReplacement)
+    fun reportsEachStubIndependently() {
+        val foo = stub("/Demangler", "Foo")
+        val bar = stub("/Demangler", "Bar")
+        val baz = stub("/Demangler", "Baz")
+        val cyclicBaz = StructureDataType(CategoryPath("/proj"), "Baz", 0)
+            .apply { add(PointerDataType(baz), "b", null) }
 
-        val (ops, skips) = DemanglerReplacer.decide(stubs, replacements)
-        Assertions.assertEquals(0, ops.size, "Should have 0 ops")
-        Assertions.assertEquals(1, skips.size, "Should have 1 skip")
-        Assertions.assertTrue(skips[0] is Skip.WouldBeCycle, "Skip should be WouldBeCycle")
-    }
+        val (ops, skips) = DemanglerReplacer.decide(
+            listOf(foo, bar, baz),
+            mapOf("Foo" to filled("/proj", "Foo"), "Baz" to cyclicBaz),
+        )
 
-    /**
-     * Test 4: Non-empty stub → ignored entirely.
-     */
-    @Test
-    fun testNonEmptyStubIgnored() {
-        val stubs = listOf(StubRecord("/Demangler/Foo", "Foo", false)) // not empty
-        val fooReplacement = ReplacementRecord("/proj/Foo", "Foo", emptySet())
-        val replacements = mapOf("Foo" to fooReplacement)
-
-        val (ops, skips) = DemanglerReplacer.decide(stubs, replacements)
-        Assertions.assertEquals(0, ops.size, "Non-empty stub should not produce op")
-        Assertions.assertEquals(0, skips.size, "Non-empty stub should not produce skip")
-    }
-
-    /**
-     * Test 5: Multiple stubs, mixed outcomes.
-     */
-    @Test
-    fun testMixedOutcomes() {
-        val foo = StubRecord("/Demangler/Foo", "Foo", true)
-        val bar = StubRecord("/Demangler/Bar", "Bar", true)
-        val baz = StubRecord("/Demangler/Baz", "Baz", true)
-        val stubs = listOf(foo, bar, baz)
-
-        val fooRepl = ReplacementRecord("/proj/Foo", "Foo", emptySet())
-        val bazRepl =
-            ReplacementRecord(
-                "/proj/Baz",
-                "Baz",
-                setOf("/Demangler/Baz"),
-            )
-        val replacements = mapOf("Foo" to fooRepl, "Baz" to bazRepl)
-
-        val (ops, skips) = DemanglerReplacer.decide(stubs, replacements)
-        Assertions.assertEquals(1, ops.size, "Should have 1 op (Foo)")
-        Assertions.assertEquals(2, skips.size, "Should have 2 skips (Bar + Baz)")
-        Assertions.assertTrue(skips.any { it is Skip.NoReplacement }, "Should have NoReplacement skip")
-        Assertions.assertTrue(skips.any { it is Skip.WouldBeCycle }, "Should have WouldBeCycle skip")
+        assertEquals(listOf(foo), ops.map { it.first })
+        assertEquals(listOf(Skip.NoReplacement("Bar"), Skip.WouldBeCycle("Baz")), skips)
     }
 }
