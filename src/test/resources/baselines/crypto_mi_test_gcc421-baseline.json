@@ -72,6 +72,10 @@
             "min": 27355,
             "max": 27355
         },
+        "demangle-displaced-label-dropped": {
+            "min": 7586,
+            "max": 7586
+        },
         "demangler-exact-match": {
             "min": 699,
             "max": 699

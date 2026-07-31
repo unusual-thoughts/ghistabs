@@ -432,6 +432,54 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         )
     }
 
+    /**
+     * A `?`-flagged static member function takes no `this`. `FileSystemImage::isValidMagic` is
+     * `static bool isValidMagic(unsigned long w)` — one N_PSYM param, no `this` slot. Parsing `?`
+     * as pure-virtual made ClassBuilder treat it as an instance method: forced __thiscall, injected
+     * a phantom `FileSystemImage *this`, and replaced the N_PSYM params with the empty list its
+     * `f(ret)` signature carries, rendering `bool __thiscall isValidMagic(FileSystemImage *this)`.
+     */
+    @Test
+    fun staticMemberFunctionTakesNoThis() {
+        val func = program.functionManager.getFunctions(true).asIterable()
+            .firstOrNull { it.name == "isValidMagic" && it.parentNamespace.name == "FileSystemImage" }
+        assumeTrue(func != null, "Skipping: FileSystemImage::isValidMagic not found")
+        val params = (0 until func!!.parameterCount)
+            .map { func.getParameter(it) }
+            .map { "${it?.dataType?.name} ${it?.name}" }
+        Assertions.assertNotEquals(
+            "__thiscall",
+            func.callingConventionName,
+            "static isValidMagic must not be __thiscall; params: $params",
+        )
+        Assertions.assertEquals(
+            listOf("uint w"),
+            params,
+            "static isValidMagic should carry only its N_PSYM param `unsigned long w`",
+        )
+    }
+
+    /**
+     * No symbol may carry a raw Itanium-mangled name inside a non-global namespace. The Cygwin PE
+     * loader's own `__Z…` symbols live in the global namespace and are fine; a mangled leaf under
+     * a class (`FileSystemImage::_ZN15FileSystemImage7fetch32ERK5Imagem`) is the fingerprint of a
+     * name we set raw on a function symbol that a later demangle pass displaced —
+     * `SetLabelPrimaryCmd` re-creates the displaced name as a label in the same namespace.
+     */
+    @Test
+    fun noMangledNameInsideANamespace() {
+        val offenders = program.symbolTable.symbolIterator.iterator().asSequence()
+            .filter { isMangled(it.name) && !it.parentNamespace.isGlobal }
+            .map { "${it.address} ${it.parentNamespace.getName(true)}::${it.name} (${it.symbolType})" }
+            .take(20)
+            .toList()
+        Assertions.assertTrue(
+            offenders.isEmpty(),
+            "Found ${offenders.size} mangled symbols inside a namespace (showing first 20):\n" +
+                offenders.joinToString("\n") { "  $it" },
+        )
+    }
+
     @Test
     fun cparserMaterialized() {
         assumeTrue(binaryName == "bouniafbouniaf.exe", "Skipping: CParser/Token_Type/EAsm specific to bouniafbouniaf.exe")
