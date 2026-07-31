@@ -57,6 +57,14 @@ repositories {
 
 kotlin {
     jvmToolchain(21)
+    // Ghidra puts every installed extension's lib/ on one classpath, so the oldest kotlin-stdlib
+    // among them can win over the one we ship. GhidraJupyterKotlin pins kotlinVersion=1.9.23
+    // (its gradle.properties, still on main), which is the floor. Binding above it fails only at
+    // runtime in the GUI — `sequenceOf(x)` resolved to the 2.x single-arg overload and threw
+    // NoSuchMethodError, while every test passed against our own 2.3.21 on the test classpath.
+    // apiVersion hides post-1.9 declarations from resolution, so that call goes back to the vararg
+    // overload and the compiler also stops emitting coroutine spilling intrinsics 1.9.23 lacks.
+    compilerOptions { apiVersion.set(org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_1_9) }
 }
 
 ktlint {
