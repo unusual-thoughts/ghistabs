@@ -3,6 +3,7 @@ package ghistabs.render
 import ghidra.app.decompiler.*
 import ghidra.app.decompiler.component.DecompilerUtils
 import ghidra.program.model.address.Address
+import ghistabs.Correction
 
 /**
  * A rendered decompiler line, the lowest instruction address its tokens map to (null for the folded
@@ -31,7 +32,10 @@ private fun ClangLine.blockDepth() = significant().minOfOrNull { tok ->
 } ?: 0
 
 // The x86 calling-convention keywords Ghidra prints in a prototype; noise in a source skeleton.
+// Derived spellings included: StructReturnAnalyzer installs `__thiscall_memret`/`__cdecl_regret` as
+// ordinary prototype models, so Ghidra prints them here exactly like a stock convention.
 private val CALLING_CONVENTIONS = setOf("__thiscall", "__cdecl", "__stdcall", "__fastcall", "__vectorcall")
+    .let { base -> base + base.flatMap { c -> Correction.entries.map { c + it.suffix } } }
 
 // Tokens carrying text, minus line breaks and the calling-convention keyword (with the one blank
 // that trails it, so `ushort __thiscall Foo::m` reads `ushort Foo::m`, not `ushort  Foo::m`).
