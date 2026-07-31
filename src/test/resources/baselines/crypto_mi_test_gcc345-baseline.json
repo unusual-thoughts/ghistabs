@@ -64,6 +64,10 @@
             "min": 4,
             "max": 4
         },
+        "degraded-reglocal-unmapped-regnum": {
+            "min": 4,
+            "max": 4
+        },
         "degraded-struct-mostly-undefined": {
             "min": 55,
             "max": 55
@@ -83,6 +87,10 @@
         "demangle-attempted": {
             "min": 27993,
             "max": 27993
+        },
+        "demangle-displaced-function-renamed": {
+            "min": 0,
+            "max": 0
         },
         "demangle-displaced-label-dropped": {
             "min": 8775,
@@ -289,20 +297,20 @@
             "max": 1
         },
         "local-var-add-success": {
-            "min": 3035,
-            "max": 3045
+            "min": 3029,
+            "max": 3029
         },
         "local-var-error": {
-            "min": 25,
-            "max": 25
+            "min": 23,
+            "max": 23
         },
         "local-var-skipped-dup-local": {
-            "min": 2278,
-            "max": 2278
+            "min": 2293,
+            "max": 2293
         },
         "local-var-skipped-dup-param": {
-            "min": 1229,
-            "max": 1247
+            "min": 1248,
+            "max": 1248
         },
         "method-implicit-not-emitted": {
             "min": 625,
@@ -321,16 +329,16 @@
             "max": 28
         },
         "reglocal-add-success": {
-            "min": 2122,
-            "max": 2122
+            "min": 1497,
+            "max": 1497
         },
         "reglocal-skipped-dup-local": {
-            "min": 1271,
-            "max": 1271
+            "min": 1886,
+            "max": 1886
         },
         "reglocal-skipped-dup-param": {
-            "min": 1464,
-            "max": 1464
+            "min": 1472,
+            "max": 1472
         },
         "replaced-demangler": {
             "min": 797,

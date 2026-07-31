@@ -100,7 +100,9 @@ fun TypeDecl<LocalTypeId>.globalize(g: Globalizer): TypeDecl<GlobalTypeId> = whe
         rawKind,
         sizeBytes,
         bases.map { BaseDecl(it.type.globalize(g), it.isVirtual, it.access, it.offsetBits) },
-        fields.map { FieldDecl(it.name, it.type.globalize(g), it.offsetBits, it.sizeBits, it.isStatic, it.access) },
+        fields.map {
+            FieldDecl(it.name, it.type.globalize(g), it.offsetBits, it.sizeBits, it.isStatic, it.access, it.mangled)
+        },
         methods.map {
             MethodDecl(
                 it.name,
@@ -122,8 +124,8 @@ fun TypeDecl<LocalTypeId>.globalize(g: Globalizer): TypeDecl<GlobalTypeId> = whe
 fun SymbolDecl<LocalTypeId>.globalize(g: Globalizer) = when (this) {
     is SymbolDecl.Function -> SymbolDecl.Function(name, isFileStatic, type.globalize(g))
     is SymbolDecl.Global -> SymbolDecl.Global(name, type.globalize(g))
-    is SymbolDecl.RegLocal -> SymbolDecl.RegLocal(name, type.globalize(g), regNum)
-    is SymbolDecl.RegParam -> SymbolDecl.RegLocal(name, type.globalize(g), regNum)
+    is SymbolDecl.RegLocal -> SymbolDecl.RegLocal(name, type.globalize(g))
+    is SymbolDecl.RegParam -> SymbolDecl.RegLocal(name, type.globalize(g))
     is SymbolDecl.StackLocal -> SymbolDecl.StackLocal(name, type.globalize(g))
     is SymbolDecl.StackParam -> SymbolDecl.StackParam(name, type.globalize(g))
     is SymbolDecl.StaticVar -> SymbolDecl.StaticVar(name, type.globalize(g), isFunctionLocal)

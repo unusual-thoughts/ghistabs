@@ -64,6 +64,10 @@
             "min": 3147,
             "max": 3147
         },
+        "demangle-displaced-function-renamed": {
+            "min": 0,
+            "max": 0
+        },
         "demangle-displaced-label-dropped": {
             "min": 0,
             "max": 0

@@ -84,12 +84,12 @@ class Parser(src: String, sink: DiagnosticSink = DummySink) : DiagnosticSink by 
 
             'P' -> {
                 advance()
-                SymbolDecl.RegParam(name, parseType(), regNum = readTrailingReg())
+                SymbolDecl.RegParam(name, parseType())
             }
 
             'r' -> {
                 advance()
-                SymbolDecl.RegLocal(name, parseType(), regNum = readTrailingReg())
+                SymbolDecl.RegLocal(name, parseType())
             }
 
             'G' -> {
@@ -344,9 +344,9 @@ class Parser(src: String, sink: DiagnosticSink = DummySink) : DiagnosticSink by 
                         fields.add(FieldDecl(name, type, offsetBits, sizeBits, isStatic, access))
                     } else {
                         consume(':')
-                        readUntilAny(charArrayOf(';')) // mangled symbol; discarded — captured by COFF symbol table
+                        val mangled = readUntilAny(charArrayOf(';'))
                         consume(';')
-                        fields.add(FieldDecl(name, type, 0, 0, isStatic = true, access))
+                        fields.add(FieldDecl(name, type, 0, 0, isStatic = true, access, mangled))
                     }
                 }
 
@@ -372,9 +372,9 @@ class Parser(src: String, sink: DiagnosticSink = DummySink) : DiagnosticSink by 
                     val access = accessOf(if (!eof) advance() else '2')
                     val type = parseType()
                     consume(':')
-                    readUntilAny(charArrayOf(';')) // mangled symbol; discarded — captured by COFF symbol table
+                    val mangled = readUntilAny(charArrayOf(';'))
                     consume(';')
-                    fields.add(FieldDecl(name, type, 0, 0, isStatic = true, access))
+                    fields.add(FieldDecl(name, type, 0, 0, isStatic = true, access, mangled))
                 }
 
                 else -> {
@@ -763,12 +763,4 @@ class Parser(src: String, sink: DiagnosticSink = DummySink) : DiagnosticSink by 
         '2' -> Access.PUBLIC
         else -> Access.PUBLIC // default
     }
-
-    /**
-     * Read a trailing register number (after `:P`, `:r`, etc.).
-     * Format: type-info followed by `;` and register number.
-     *
-     * Register number comes from n_value in the stab record, not the descriptor string.
-     */
-    private fun readTrailingReg(): Int = 0
 }
