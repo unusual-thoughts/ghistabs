@@ -92,7 +92,7 @@ sealed interface TypeDecl<out Id : IdInterface> {
         // Trailing `~%<type>;` section: the vptr-owning base (gdb's VPTR_BASETYPE), a full read_type —
         // usually a `Ref`, but an inline forward-xref (`(cu,n)=xsName:`) for RTTI/exception classes.
         // Non-null iff the class is polymorphic; supersedes the separate boolean marker gcc used to emit.
-        val vptrBasetype: TypeDecl<Id>? = null,
+        val vptrBasetype: TypeDecl<Id>?,
     ) : TypeDecl<Id> {
         val hasVTablePointerMarker get() = vptrBasetype != null
 
@@ -180,8 +180,10 @@ data class FieldDecl<Id : IdInterface>(
      * only link stabs give between the member and its emitted symbol — none of these carry their own
      * `G`/`S` address stab — so it is what lets a global be typed from its member declaration rather
      * than left to the demangler. Null for ordinary members.
+     *
+     * No default: a `globalize`-shaped rebuild that forgets it would silently drop the link.
      */
-    val mangled: String? = null,
+    val mangled: String?,
 )
 
 @Serializable

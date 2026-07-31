@@ -1,5 +1,9 @@
 {
     "counters": {
+        "apply-error": {
+            "min": 2,
+            "max": 2
+        },
         "base-empty-ebo": {
             "min": 21,
             "max": 21
@@ -13,8 +17,8 @@
             "max": 2
         },
         "data-no-coverage": {
-            "min": 126,
-            "max": 126
+            "min": 125,
+            "max": 125
         },
         "degraded-base-synthesized": {
             "min": 1,
@@ -300,9 +304,17 @@
             "min": 23824,
             "max": 23824
         },
+        "static-member-applied": {
+            "min": 103,
+            "max": 103
+        },
+        "static-member-unresolved": {
+            "min": 409,
+            "max": 409
+        },
         "text-data-no-coverage": {
-            "min": 258,
-            "max": 258
+            "min": 256,
+            "max": 256
         },
         "text-undisassembled-code": {
             "min": 146,

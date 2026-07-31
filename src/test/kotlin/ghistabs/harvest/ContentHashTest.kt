@@ -139,6 +139,7 @@ class ContentHashTest {
                     sizeBits = 32L,
                     isStatic = false,
                     access = Access.PUBLIC,
+                    mangled = null,
                 ),
             ),
             methods = emptyList(),
@@ -166,6 +167,7 @@ class ContentHashTest {
                     sizeBits = 32L,
                     isStatic = false,
                     access = Access.PUBLIC,
+                    mangled = null,
                 ),
             ),
             methods = emptyList(),
@@ -189,16 +191,20 @@ class ContentHashTest {
             sizeBytes = 4L,
             bases = emptyList(),
             fields = listOf(
-                FieldDecl("x", TypeDecl.Ref(intInCU1.id), 0L, 32L, isStatic = false, Access.PUBLIC),
+                FieldDecl("x", TypeDecl.Ref(intInCU1.id), 0L, 32L, isStatic = false, Access.PUBLIC, mangled = null),
             ),
             methods = emptyList(),
             vptrBasetype = null,
         )
         val withStaticInt = base.copy(
-            fields = base.fields + FieldDecl("s", TypeDecl.Ref(intInCU1.id), 0L, 0L, isStatic = true, Access.PUBLIC),
+            fields =
+            base.fields +
+                FieldDecl("s", TypeDecl.Ref(intInCU1.id), 0L, 0L, isStatic = true, Access.PUBLIC, mangled = null),
         )
         val withStaticChar = base.copy(
-            fields = base.fields + FieldDecl("s", TypeDecl.Ref(charInCU1.id), 0L, 0L, isStatic = true, Access.PUBLIC),
+            fields =
+            base.fields +
+                FieldDecl("s", TypeDecl.Ref(charInCU1.id), 0L, 0L, isStatic = true, Access.PUBLIC, mangled = null),
         )
         assertEquals(base.contentHash(oracle), withStaticInt.contentHash(oracle))
         assertEquals(withStaticInt.contentHash(oracle), withStaticChar.contentHash(oracle))
@@ -276,6 +282,7 @@ class ContentHashTest {
                     32L,
                     false,
                     access = Access.PUBLIC,
+                    mangled = null,
                 ),
             ),
             methods = emptyList(),
@@ -365,6 +372,7 @@ class ContentHashTest {
                     32L,
                     false,
                     access = Access.PUBLIC,
+                    mangled = null,
                 ),
             ),
             methods = listOf(
@@ -519,7 +527,7 @@ class ContentHashTest {
             rawKind = AggrKind.CLASS,
             sizeBytes = 4,
             bases = emptyList(),
-            fields = listOf(FieldDecl("x", TypeDecl.Ref(intInCU1.id), 0, 32, false, Access.PUBLIC)),
+            fields = listOf(FieldDecl("x", TypeDecl.Ref(intInCU1.id), 0, 32, false, Access.PUBLIC, mangled = null)),
             methods = listOf(method),
             vptrBasetype = null,
         )
@@ -540,7 +548,7 @@ class ContentHashTest {
             rawKind = AggrKind.CLASS,
             sizeBytes = 4,
             bases = emptyList(),
-            fields = listOf(FieldDecl("x", fieldType, 0, 32, false, Access.PUBLIC)),
+            fields = listOf(FieldDecl("x", fieldType, 0, 32, false, Access.PUBLIC, mangled = null)),
             methods = emptyList(),
             vptrBasetype = null,
         )

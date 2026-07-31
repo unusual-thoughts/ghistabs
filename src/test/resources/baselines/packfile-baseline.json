@@ -1,5 +1,9 @@
 {
     "counters": {
+        "apply-error": {
+            "min": 11,
+            "max": 11
+        },
         "base-empty-ebo": {
             "min": 25,
             "max": 25
@@ -25,8 +29,8 @@
             "max": 2
         },
         "data-no-coverage": {
-            "min": 82,
-            "max": 82
+            "min": 80,
+            "max": 80
         },
         "degraded-global-typed-all-undefined": {
             "min": 3,
@@ -307,6 +311,14 @@
         "static-local-plate": {
             "min": 32,
             "max": 32
+        },
+        "static-member-applied": {
+            "min": 95,
+            "max": 95
+        },
+        "static-member-unresolved": {
+            "min": 406,
+            "max": 406
         },
         "text-data-no-coverage": {
             "min": 237,
