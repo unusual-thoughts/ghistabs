@@ -4,12 +4,16 @@ import ghidra.program.database.data.DataTypeManagerDB
 import ghidra.program.database.data.replaceDataTypesBatched
 import ghidra.program.model.data.*
 import ghidra.program.model.data.Array
+import ghidra.program.model.symbol.SourceType
+import ghidra.program.model.symbol.SymbolType
 import ghistabs.applyDemangling
+import ghistabs.demangle
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.degradation
 import ghistabs.materialize.TypeRegistry
 import ghistabs.materialize.itanium.RttiStructs
 import ghistabs.parse.CATEGORY
+import ghistabs.parse.isMangled
 import java.util.*
 
 /** Pure-data input to the demangler-stub replacement planner. */
@@ -86,9 +90,7 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val typeRegis
         for (sym in ctx.program.symbolTable.symbolIterator) {
             ctx.monitor.increment()
             val name = sym.name
-            // Cygwin PE/COFF loader prepends `_`, so Itanium symbols appear as `__Z`.
-            // GnuDemangler handles both (strips one leading `_`).
-            if (!name.startsWith("_Z") && !name.startsWith("__Z")) continue
+            if (!isMangled(name)) continue
             attempted++
             if (ctx.program.applyDemangling(sym.address, name, monitor = ctx.monitor)) demangled++
         }
@@ -96,8 +98,56 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val typeRegis
         debug("demangle-applied", count = demangled.toLong())
     }
 
+    /**
+     * Drop the mangled labels the demangle passes leave inside a class namespace. When the primary
+     * symbol at an address is a FUNCTION, `SetLabelPrimaryCmd` keeps that symbol, renames it to the
+     * demangled form, and *re-creates its displaced name as a label in the same namespace*. Since
+     * [SymbolApplier.applyAllFunctions] parks the raw stab name on the function symbol, a function
+     * the demangler had already filed under `FileSystemImage` came back out carrying the hybrid
+     * `FileSystemImage::_ZN15FileSystemImage7fetch32ERK5Imagem` — which no later pass can clear,
+     * because by then the address demangles as already-done.
+     *
+     * Only namespaced symbols are touched: a mangled one in the *global* namespace is the loader's
+     * own (or ours on a stripped binary), and stock Ghidra keeps it too — it is what
+     * [ProgramAddressResolver.resolve] looks methods up by.
+     *
+     * A displaced LABEL is dropped outright. A displaced FUNCTION can't be — deleting it would take
+     * the function's only symbol — and it is the mirror of the same fault: the demangled name landed
+     * on a sibling label while the function kept the mangled one, so `isAlreadyDemangled` finds that
+     * sibling, calls the address done, and never renames the function back (seen on locale_test's
+     * `__gnu_cxx::_ZN9__gnu_cxx27__verbose_terminate_handlerEv`). Make the function the bearer of the
+     * demangled name instead, evicting the sibling that held it.
+     */
+    private fun dropDisplacedMangledLabels() {
+        val displaced = ctx.program.symbolTable.symbolIterator
+            .filter { isMangled(it.name) && !it.parentNamespace.isGlobal }
+            .toList()
+        var dropped = 0
+        var renamed = 0
+        for (sym in displaced) {
+            val leaf = demangle(sym.name)?.name
+            when {
+                sym.symbolType == SymbolType.LABEL -> {
+                    sym.delete()
+                    dropped++
+                }
+
+                leaf != null -> {
+                    ctx.program.symbolTable.getSymbols(sym.address)
+                        .filter { it != sym && it.name == leaf }
+                        .forEach { it.delete() }
+                    sym.setName(leaf, SourceType.IMPORTED)
+                    renamed++
+                }
+            }
+        }
+        debug("demangle-displaced-label-dropped", count = dropped.toLong())
+        debug("demangle-displaced-function-renamed", count = renamed.toLong())
+    }
+
     fun replace() {
         demangleMangledLabels()
+        dropDisplacedMangledLabels()
         val dtm = ctx.dtm
 
         val stubs = mutableListOf<StubRecord>()

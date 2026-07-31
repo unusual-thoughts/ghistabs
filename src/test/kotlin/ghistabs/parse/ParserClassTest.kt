@@ -375,6 +375,40 @@ class ParserClassTest {
         )
     }
 
+    /**
+     * `?` in a method trailer is a *static* member function (gdb stabsread.c `case '?'`), not a
+     * pure virtual. Corpus shape from unbouniaf's `FileSystemImage`: a static's signature is a
+     * plain `f(ret)`, never a `#(cls,…)` method type, and it takes no `this`.
+     */
+    @Test
+    fun testStaticMemberFunction() {
+        val input = "FileSystemImage:T(0,5)=s40" +
+            "isValidMagic::(0,21)=f(0,9):_ZN15FileSystemImage12isValidMagicEm;0A?;;;"
+        val struct = (Parser(input).parseSymbol() as SymbolDecl.TaggedType).type as TypeDecl.Struct
+        val m = struct.methods.single()
+        assertEquals(VirtKind.STATIC, m.virt)
+        assertEquals(Access.PRIVATE, m.access)
+        assertEquals(
+            TypeDecl.InlineDef(LocalTypeId(0, 21), TypeDecl.FunctionT(TypeDecl.Ref(LocalTypeId(0, 9)), emptyList())),
+            m.signature,
+        )
+        assertEquals(false, m.isConst)
+        assertEquals(null, m.vtableOffsetBits)
+    }
+
+    /** cv-qualifier letter: `A` none, `B` const, `C` volatile, `D` const volatile. */
+    @Test
+    fun testMethodCvQualifierLetters() {
+        fun virtOf(letter: Char): MethodDecl<LocalTypeId> {
+            val input = "S:T(0,5)=s4f::(0,10)=#(0,5),(0,1);:_ZNK1S1fEv;2$letter.;;;"
+            return ((Parser(input).parseSymbol() as SymbolDecl.TaggedType).type as TypeDecl.Struct).methods.single()
+        }
+        assertEquals(false to false, virtOf('A').let { it.isConst to it.isVolatile })
+        assertEquals(true to false, virtOf('B').let { it.isConst to it.isVolatile })
+        assertEquals(false to true, virtOf('C').let { it.isConst to it.isVolatile })
+        assertEquals(true to true, virtOf('D').let { it.isConst to it.isVolatile })
+    }
+
     @Test
     fun testUnconsumedStructSectionRejected() {
         // A struct section we don't handle must fail loudly, not get silently dropped as

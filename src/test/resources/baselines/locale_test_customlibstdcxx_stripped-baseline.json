@@ -64,6 +64,10 @@
             "min": 3147,
             "max": 3147
         },
+        "demangle-displaced-label-dropped": {
+            "min": 0,
+            "max": 0
+        },
         "desc-dropped-so": {
             "min": 122,
             "max": 122
@@ -279,6 +283,10 @@
         "method-implicit-not-emitted": {
             "min": 121,
             "max": 121
+        },
+        "method-static-no-this": {
+            "min": 86,
+            "max": 86
         },
         "placeholder-created": {
             "min": 43362,

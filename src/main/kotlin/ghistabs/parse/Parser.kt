@@ -456,9 +456,10 @@ class Parser(src: String, sink: DiagnosticSink = DummySink) : DiagnosticSink by 
         }
 
         val access = accessOf(if (!eof && peekOrNull()?.isDigit() == true) advance() else '2')
+        // cv-qualifier letter: A none, B const, C volatile, D const volatile.
         val modifier = if (!eof) advance() else 'A'
-        val isConst = modifier == 'C'
-        val isVolatile = modifier == 'V'
+        val isConst = modifier == 'B' || modifier == 'D'
+        val isVolatile = modifier == 'C' || modifier == 'D'
 
         var vtableOffsetBits: Long? = null
         val virt = when {
@@ -476,9 +477,12 @@ class Parser(src: String, sink: DiagnosticSink = DummySink) : DiagnosticSink by 
                 VirtKind.NORMAL
             }
 
+            // `?` is a *static* member function (stabsread.c `case '?'`), not a pure virtual —
+            // its signature is a plain `f(ret)` rather than a `#(cls,…)` method type, and it
+            // takes no `this`. gcc has no distinct marker for pure virtuals; they ride `*`.
             peekOrNull() == '?' -> {
                 advance()
-                VirtKind.PURE_VIRTUAL
+                VirtKind.STATIC
             }
 
             else -> VirtKind.NORMAL

@@ -265,22 +265,13 @@ class ClassBuilder(
             )
         }
 
-        // Mark __thiscall. The x86gcc cspec routes `this` as the first stack argument
-        // (MSVC's x86win routes it via ECX); either way, accepted __thiscall + GhidraClass
-        // namespace = Ghidra auto-injects hidden `this: Class*` at render time. Don't probe
-        // func.getParameter(0)?.name to detect — for force-created functions the param list
-        // isn't populated yet.
-        val thiscallAccepted = runCatching { func.setCallingConvention("__thiscall") }
-            .onFailure { warn("method-calling-convention", "$className::${m.name}: ${it.message}", func.entryPoint) }
-            .isSuccess
-        val ghidraInjectsThis = thiscallAccepted && func.parentNamespace is GhidraClass
-
-        // gcc 3.x Method signatures: `[this, p1..pN, void_sentinel]`. FunctionT (free
-        // functions) carries no inline params (they arrive via N_PSYM). Both adjustments
-        // are Method-only. Walk Ref/InlineDef wrappers before pattern-matching.
-        val (retDecl, paramDecls) = when (val sig = unwrapSignature(m.signature)) {
-            is TypeDecl.Method -> sig.ret to if (ghidraInjectsThis) sig.params.drop(1) else sig.params
-            is TypeDecl.FunctionT -> sig.ret to sig.params
+        // gcc 3.x Method signatures: `[this, p1..pN, void_sentinel]`. FunctionT carries no inline
+        // params — free functions and `?`-flagged statics alike get theirs from N_PSYM. Walk
+        // Ref/InlineDef wrappers before pattern-matching.
+        val sig = unwrapSignature(m.signature)
+        val retDecl = when (sig) {
+            is TypeDecl.Method -> sig.ret
+            is TypeDecl.FunctionT -> sig.ret
             else -> return
         }
 
@@ -291,6 +282,31 @@ class ClassBuilder(
             "$className::${m.name}",
             retDecl.toString(),
         )
+
+        // A static member takes no `this`, so it keeps the default convention and the params
+        // applyAllFunctions already read off its N_PSYMs. Falling through forced __thiscall
+        // (a phantom `FileSystemImage *this`) and then replaced the real params with the empty
+        // list its `f(ret)` signature carries.
+        if (m.virt == VirtKind.STATIC) {
+            debug("method-static-no-this")
+            return
+        }
+
+        // Mark __thiscall. The x86gcc cspec routes `this` as the first stack argument
+        // (MSVC's x86win routes it via ECX); either way, accepted __thiscall + GhidraClass
+        // namespace = Ghidra auto-injects hidden `this: Class*` at render time. Don't probe
+        // func.getParameter(0)?.name to detect — for force-created functions the param list
+        // isn't populated yet.
+        val thiscallAccepted = runCatching { func.setCallingConvention("__thiscall") }
+            .onFailure { warn("method-calling-convention", "$className::${m.name}: ${it.message}", func.entryPoint) }
+            .isSuccess
+        val ghidraInjectsThis = thiscallAccepted && func.parentNamespace is GhidraClass
+
+        val paramDecls = when (sig) {
+            is TypeDecl.Method -> if (ghidraInjectsThis) sig.params.drop(1) else sig.params
+            is TypeDecl.FunctionT -> sig.params
+            else -> return
+        }
 
         // Always replace the formal-param list, falling back to Undefined4 for
         // unresolved types. Early-returning left Ghidra's auto-guessed signature in
@@ -307,9 +323,8 @@ class ClassBuilder(
             }
         }
 
-        // Drop the void sentinel — only on Method-shape signatures; check the
-        // UNWRAPPED form (m.signature is typically a Ref/InlineDef wrapper).
-        val paramTypes = if (unwrapSignature(m.signature) is TypeDecl.Method) {
+        // Drop the void sentinel — only on Method-shape signatures.
+        val paramTypes = if (sig is TypeDecl.Method) {
             resolvedParams.dropLastWhile { it is VoidDataType }
         } else {
             resolvedParams

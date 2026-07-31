@@ -67,7 +67,9 @@ class SymbolApplier(
                 // The stabs are the authoritative, underscore-free source, so name every function
                 // from them rather than riding Ghidra's PE symbol (which leaves C names as `_main`
                 // and depends on the COFF symtab being present). Mangled names (`_ZN…`) are set raw
-                // here and resolved to `Class::method` by demangleMangledLabels below.
+                // here and resolved to `Class::method` by demangleMangledLabels below — the raw name
+                // is also load-bearing as ClassBuilder's method-address index, which on a stripped
+                // binary has no other symbol to look up (see DemanglerReplacer.dropDisplacedMangledLabels).
                 if (func.name != open.name) {
                     // COMDAT-folded placement `operator new`/`delete` put `open.name` on a *separate*
                     // symbol at this shared address, so renaming the function symbol throws "already

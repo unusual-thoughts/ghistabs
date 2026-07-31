@@ -9,7 +9,8 @@ import kotlinx.serialization.json.JsonClassDiscriminator
 
 enum class Access { PRIVATE, PROTECTED, PUBLIC }
 
-enum class VirtKind { NORMAL, STATIC, VIRTUAL, PURE_VIRTUAL }
+/** Method kind from the stabs method-block trailer: `.` normal, `?` static, `*` virtual. */
+enum class VirtKind { NORMAL, STATIC, VIRTUAL }
 
 enum class AggrKind {
     STRUCT,
