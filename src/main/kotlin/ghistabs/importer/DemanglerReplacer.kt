@@ -155,7 +155,7 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val typeRegis
         val stubDtByPath = mutableMapOf<String, DataType>()
 
         for (dt in dtm.allDataTypes) {
-            if (dt.categoryPath.path.startsWith("/Demangler") && dt is Structure) {
+            if (dt.categoryPath.isAncestorOrSelf(TypeRegistry.DEMANGLER_CATEGORY) && dt is Structure) {
                 stubs.add(
                     StubRecord(
                         pathName = dt.pathName,
@@ -170,10 +170,11 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val typeRegis
         // Only types WE registered qualify — swapping one Ghidra-bundled stub for another
         // is meaningless. Verified 2026-06-23: leaving non-registered stubs in place is a no-op.
         for (stub in stubs) {
-            val preferredCategory = stub.pathName.removePrefix("/Demangler")
-                .substringBeforeLast('/', missingDelimiterValue = "/")
-                .ifEmpty { "/" }
-                .let { CategoryPath(it) }
+            // The stub's own category with the /Demangler root lifted off (`/Demangler/std` → `/std`),
+            // as the hint for which of several same-named candidates is meant.
+            val preferredCategory = CategoryPath.ROOT.extend(
+                stub.categoryPath.pathElements.drop(TypeRegistry.DEMANGLER_CATEGORY.pathElements.size),
+            )
             // Priority: exact DTM name → exact demangler-link (byDemangledClass) → RTTI layout.
             val candidate = findByExactName(stub.simpleName, preferredCategory)?.also { debug("demangler-exact-match") }
                 ?: typeRegistry.byDemangledClass[stub.pathName]?.also { debug("demangler-reverse-demangle-match") }
@@ -305,7 +306,7 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val typeRegis
         // simple name in a CU/include category is the resolved type. When that leaves exactly
         // one non-placeholder, it's not real ambiguity — take it (locale facets hit this: the
         // demangler stub is `/Demangler/std/…`, matching neither the `/src/…` nor `/stabs/` home).
-        collapsed.filterNot { CATEGORY.isAncestorOrSelf(it.categoryPath) }
+        collapsed.filterNot { it.categoryPath.isAncestorOrSelf(CATEGORY) }
             .singleOrNull()?.let { return it }
         log(
             "demangler-ambiguous",

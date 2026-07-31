@@ -495,6 +495,15 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             .mapNotNull { program.symbolTable.getSymbols(it).firstOrNull() }
             .firstOrNull()
         assumeTrue(sym != null, "Skipping: std::string::npos not present")
+        // Plain `-gstabs` (no `+`) on gcc 4.2.1 emits static members as the bare `name:type,0,0`
+        // with no linkage name at all — `_ZNSs4nposE` appears 0 times in crypto_mi_test_gcc421 but
+        // 37 times in its _fullstabs twin. There is then nothing to reconcile *from*, so this is a
+        // property of the debug info, not of the importer: gate on the link actually being present.
+        val declared = artifacts?.harvest?.typeAsts?.values.orEmpty()
+            .mapNotNull { it.body as? TypeDecl.Struct }
+            .flatMap { it.fields }
+            .any { it.name == "npos" && it.mangled != null }
+        assumeTrue(declared, "Skipping: this build's stabs carry no linkage name for npos")
         val dt = program.listing.getDataAt(sym!!.address)?.dataType
         Assertions.assertNotNull(dt, "no data applied at std::string::npos (${sym.address})")
         Assertions.assertFalse(
