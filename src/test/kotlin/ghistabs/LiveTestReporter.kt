@@ -20,10 +20,17 @@ import java.util.Optional
 class LiveTestReporter : TestWatcher {
     private val out = File("build/test-output/results/fork-${ProcessHandle.current().pid()}.txt")
 
-    /** Walk enclosing contexts for the `binaryName=…, mode=…` invocation label so lines self-locate. */
+    /**
+     * Fixture/mode label so lines self-locate. The regression suite is one generated class per
+     * fixture × mode (`:generateFixtureTests`), so the identity lives on the test instance — the
+     * same place [ExpectedToFailExtension] reads it. The `binaryName=…, mode=…` display name is a
+     * `@ParameterizedClass` invocation label, kept for any suite still shaped that way.
+     */
     private fun where(context: ExtensionContext): String {
         var c: ExtensionContext? = context
         while (c != null) {
+            (c.testInstance.orElse(null) as? StabsImportRegressionBase)
+                ?.let { return "${it.binaryName}/${it.mode}" }
             invocation.find(c.displayName)?.let { return "${it.groupValues[1]}/${it.groupValues[2]}" }
             c = c.parent.orElse(null)
         }
