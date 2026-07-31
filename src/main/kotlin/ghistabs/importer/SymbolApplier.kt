@@ -330,13 +330,16 @@ class SymbolApplier(
                 }
 
                 is SymbolDecl.RegLocal -> {
-                    val regName = dbxRegisterName(pointerSize, decl.regNum)
+                    // The dbx register number is the stab's n_value, not part of the descriptor
+                    // (`w:r(0,5)` ends at the type) — same field the stack offset above comes from.
+                    val dbxNum = loc.rawValue.toInt()
+                    val regName = dbxRegisterName(pointerSize, dbxNum)
                     val reg = regName?.let { ctx.program.getRegister(it) }
                     if (reg == null) {
                         degradation(
                             "reglocal-unmapped-regnum",
                             "${func.name}.${decl.name}",
-                            "dbx-reg=${decl.regNum} arch-ptr-size=$pointerSize",
+                            "dbx-reg=$dbxNum arch-ptr-size=$pointerSize",
                         )
                         return
                     }

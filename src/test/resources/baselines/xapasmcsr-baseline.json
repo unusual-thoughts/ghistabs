@@ -48,6 +48,10 @@
             "min": 2369,
             "max": 2369
         },
+        "demangle-displaced-function-renamed": {
+            "min": 0,
+            "max": 0
+        },
         "demangle-displaced-label-dropped": {
             "min": 293,
             "max": 293
@@ -241,12 +245,12 @@
             "max": 83
         },
         "local-var-add-success": {
-            "min": 504,
-            "max": 504
+            "min": 497,
+            "max": 497
         },
         "local-var-skipped-dup-local": {
-            "min": 262,
-            "max": 262
+            "min": 269,
+            "max": 269
         },
         "local-var-skipped-dup-param": {
             "min": 332,
@@ -269,12 +273,12 @@
             "max": 91
         },
         "reglocal-add-success": {
-            "min": 1210,
-            "max": 1210
+            "min": 903,
+            "max": 903
         },
         "reglocal-skipped-dup-local": {
-            "min": 285,
-            "max": 285
+            "min": 592,
+            "max": 592
         },
         "reglocal-skipped-dup-param": {
             "min": 809,
