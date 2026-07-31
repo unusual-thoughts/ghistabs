@@ -843,3 +843,24 @@ the stabs don't fully carry. Two levels, in priority order:
 
 Then point the vtable `rtti` pointee at the class's typeinfo struct instead of `Undefined4*`.
 Behavioural: shifts regression counters — regen baselines with `-PregenerateBaselines=true`.
+
+## 25. `_ZTV` symbols with no stabs class are never annotated — open
+
+`buildAndApplyVtable` runs per `CanonicalGroup`, i.e. only for classes we harvested a `T`-stab
+body for. libsupc++ is linked without stabs, so its own polymorphic classes — `std::type_info`,
+`__cxxabiv1::__{class,si_class,vmi_class}_type_info` — have a `_ZTV…` symbol and a real vtable in
+`.data` but no group, and `resolveVtableAddress` is never called for them. On unpackfile,
+`__ZTVN10__cxxabiv120__si_class_type_infoE` at `0043e954` is the canonical 2-word shape
+(`offset_to_top=0`, `rtti=0043e34c`, address point `0043e95c`), yet the address point keeps
+Ghidra's auto-generated `PTR_~__si_class_type_info_0043e95c` instead of a `vftable` symbol +
+`<Class>_vftable` struct.
+
+§24 covers the same classes at the *typeinfo record* level (`RttiStructs` → `DemanglerReplacer`);
+this is the vtable level. Fix: after the per-group pass, sweep `Itanium.vtableClassOf`-matching
+symbols with no group and `layVtable` them. Lossy — with no method list the slot types can only
+come from the demangled signatures of the functions the slots point at, so decide whether to lay
+header + address-point label only, or synthesise the vftable struct from the slot targets.
+
+Neither `dcinstShiftSCompatibility` nor `cSymLexStreamVtableAddressPointSkipsVbaseOffset` covers
+this: both assert on the output of `buildAndApplyVtable` for a stabs-bearing class and skip
+outright on any fixture without it.
