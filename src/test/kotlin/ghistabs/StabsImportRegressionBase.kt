@@ -460,6 +460,51 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     }
 
     /**
+     * A class whose only Itanium symbols are static data members still lands in its real namespace.
+     * `ensureClassNamespace` read the chain off a *method's* mangled name, so `std::ctype_base` —
+     * which declares no member functions at all, only `alnum`/`alpha`/`digit`/… — fell back to the
+     * source-form leaf and was built as a root-level `ctype_base`. Its members' linkage names
+     * (`_ZNSt10ctype_base5alnumE`) carry the same chain.
+     */
+    @Test
+    fun constantsOnlyClassLandsInItsNamespace() {
+        val cls = program.symbolTable.getSymbols("ctype_base")
+            .firstOrNull { it.symbolType == ghidra.program.model.symbol.SymbolType.CLASS }
+        assumeTrue(cls != null, "Skipping: ctype_base class namespace absent")
+        Assertions.assertEquals(
+            "std",
+            cls!!.parentNamespace.name,
+            "ctype_base sits under '${cls.parentNamespace.getName(true)}' — the class's namespace " +
+                "chain was not recovered from its static members' linkage names",
+        )
+    }
+
+    /**
+     * A static data member gets the type its class declares. These carry no `G`/`S` address stab, so
+     * `applyGlobalOrStatic` never sees them and they used to reach Ghidra as a demangler-named
+     * address with auto-analysis's guess for a type. `FieldDecl.mangled` is the only link from the
+     * member back to its symbol — and being a real name gcc wrote, it works where reconstructing a
+     * spelling cannot: every one of these is a template or nested libstdc++ type.
+     *
+     * `std::string::npos` is `static const size_type npos;` — 4 bytes, and emphatically not
+     * `undefined4`.
+     */
+    @Test
+    fun staticDataMemberIsTypedFromItsDeclaration() {
+        val sym = sequenceOf("_ZNSs4nposE", "__ZNSs4nposE")
+            .mapNotNull { program.symbolTable.getSymbols(it).firstOrNull() }
+            .firstOrNull()
+        assumeTrue(sym != null, "Skipping: std::string::npos not present")
+        val dt = program.listing.getDataAt(sym!!.address)?.dataType
+        Assertions.assertNotNull(dt, "no data applied at std::string::npos (${sym.address})")
+        Assertions.assertFalse(
+            dt is Undefined,
+            "std::string::npos is ${dt?.name} — the static member's declared type never reached it",
+        )
+        Assertions.assertEquals(4, dt!!.length, "std::string::npos should be 4 bytes, got ${dt.name}")
+    }
+
+    /**
      * A register local lands in the register its stab names. The number is the record's n_value —
      * `w:r(0,5)` carries no register in the descriptor — and `readTrailingReg()` used to return a
      * hardcoded 0, so every register local in every fixture was placed in dbx 0 = EAX. Nothing

@@ -134,13 +134,20 @@ class ClassBuilder(
     }
 
     /**
-     * Derive the class's namespace chain. Prefers demangling a method's Itanium symbol
-     * (handles templates) over splitting the source-form name (handles classes with no
-     * methods or unmangleable symbols).
+     * Derive the class's namespace chain. Prefers demangling an Itanium symbol the class owns
+     * (handles templates) over splitting the source-form name, which only carries the leaf.
+     *
+     * A static data member's linkage name serves as well as a method's — `_ZNSt10ctype_base5alnumE`
+     * demangles to `std::ctype_base::alnum`, whose parent chain is the class. That matters for a
+     * pure-constants class: `std::ctype_base` and `std::__ios_flags` declare no member functions at
+     * all, so the method route yields nothing and they were built as root-level `ctype_base` rather
+     * than under `std`.
      */
     private fun CanonicalGroup.ensureClassNamespace(): GhidraClass {
-        val parts = classBody.methods.firstNotNullOfOrNull { it.mangled }
-            ?.let { namespaceChain(it) }
+        val parts = (
+            classBody.methods.firstNotNullOfOrNull { it.mangled }
+                ?: classBody.fields.firstNotNullOfOrNull { it.mangled }
+            )?.let { namespaceChain(it) }
             ?: splitQualified(className)
         return buildNamespaceChain(parts.filter { it.isNotEmpty() })
     }
