@@ -151,8 +151,15 @@ fun TypeDecl.Struct<GlobalTypeId>.renderFull(
     val members: List<Pair<Access, String>> =
         fields.filter { !it.isStatic }.sortedBy { it.offsetBits }.map { f ->
             f.access to "${f.type.render(harvest, shortener = shortener)} ${f.name};  /* +${f.offsetBits / 8}B */"
+        } + fields.filter { it.isStatic }.map { f ->
+            // Static members occupy no storage, so they have no offset to sort by and were dropped
+            // outright. Their linkage name is the only stabs link to the emitted symbol, so show it.
+            val link = f.mangled?.let { "  /* $it */" }.orEmpty()
+            f.access to "static ${f.type.render(harvest, shortener = shortener)} ${f.name};$link"
         } + methods.mapNotNull { m ->
-            m.mangled?.let { funcByMangled[it] }?.let { m.access to "${it.signature(program)};" }
+            m.mangled?.let { funcByMangled[it] }?.let {
+                m.access to "${m.declPrefix}${it.signature(program)}${m.declSuffix};"
+            }
         }
 
     // C++ access sections: emit an `access:` label only when a member deviates from the running
