@@ -12,12 +12,19 @@
   <BODY>
     <H1><A name="Stabs"></A>STABS Importer</H1>
 
-    <P>Imports <B>STABS</B> debug information (the <CODE>.stab</CODE> / <CODE>.stabstr</CODE>
-    section pair) into the program: data types, function signatures, parameters and locals,
-    C++ classes and vtables, constants and static data members. It targets the debug info
-    <B>gcc 2.9x&ndash;3.4</B> emits for Cygwin/MinGW PE binaries, which neither the DWARF nor
-    the PDB importer can read; x86-64 ELF binaries built with <CODE>-gstabs</CODE> are also
-    handled.</P>
+    <P>Imports <B>STABS</B> debug information into the program: data types, function
+    signatures, parameters and locals, C++ classes and vtables, constants and static data
+    members. Neither the DWARF nor the PDB importer can read this format, so without it the
+    debug info stays in the program as opaque bytes.</P>
+
+    <P>The format is also called <B>DBX</B>, after the BSD debugger it was written for;
+    "stabs" is short for the <I>symbol table strings</I> it hides the debug info in.</P>
+
+    <P>Supported across gcc <B>3.2 through 12</B>, on both Unix and Cygwin targets, and across
+    ELF, PE/COFF and a.out images &mdash; in a.out the records live in the linker symbol table
+    rather than in debug sections, which the importer reads via the loader's
+    <CODE>.symtab</CODE>/<CODE>.strtab</CODE> blocks. (<CODE>-gstabs</CODE> was deprecated in
+    gcc 12 and removed outright in gcc 13, so 12 is a hard ceiling.)</P>
 
     <P>Everything is driven by the <A href="#Stabs_Importer_Analyzer">Stabs Importer</A>
     analyzer. Three <A href="#Stabs_Supporting_Analyzers">supporting analyzers</A> clean up
@@ -25,8 +32,8 @@
     menu re-runs the import or exports a reconstructed decompilation.</P>
 
     <BLOCKQUOTE>
-      <P><B>Note:</B> The extension does nothing on a
-      program that has no <CODE>.stab</CODE> and <CODE>.stabstr</CODE> memory blocks; the
+      <P><B>Note:</B> The extension does nothing on a program that carries no stabs &mdash;
+      neither a <CODE>.stab</CODE>/<CODE>.stabstr</CODE> pair nor an a.out symbol table. The
       analyzer does not appear as applicable and the menu actions stay disabled.</P>
     </BLOCKQUOTE>
 
@@ -109,10 +116,10 @@
         <TR>
           <TD><B>Overlay .stab section structs</B></TD>
           <TD>on</TD>
-          <TD>Decode every entry of the <CODE>.stab</CODE> section into a
-          <CODE>StabRecord</CODE> structure, with references into <CODE>.stabstr</CODE> and
-          back to the code or data the record describes. Useful for inspecting the raw debug
-          info in the Listing; costs nothing else.</TD>
+          <TD>Decode every stab record into a <CODE>StabRecord</CODE> structure &mdash; in
+          the <CODE>.stab</CODE> section, or in the a.out symbol table &mdash; with references
+          to the string it names and back to the code or data it describes. Useful for
+          inspecting the raw debug info in the Listing; costs nothing else.</TD>
         </TR>
 
         <TR>
@@ -135,8 +142,8 @@
 
     <H2><A name="Stabs_Tools_Menu"></A>Tools &rarr; Stabs</H2>
 
-    <P>Both actions require the current program to have <CODE>.stab</CODE> and
-    <CODE>.stabstr</CODE> blocks; they are disabled otherwise.</P>
+    <P>Both actions require the current program to carry stabs, in either location; they are
+    disabled otherwise.</P>
 
     <H3><A name="Stabs_Reimport"></A>Re-import</H3>
 

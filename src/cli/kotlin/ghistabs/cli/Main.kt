@@ -70,7 +70,7 @@ private class DecompCommand :
 private abstract class RenderCommand(name: String, help: String) : CliktCommand(name = name, help = help) {
     protected abstract val mode: Mode
 
-    private val binary by argument(help = "PE/ELF binary carrying .stab/.stabstr debug info (Cygwin gcc)")
+    private val binary by argument(help = "ELF/PE binary carrying .stab/.stabstr debug info (gcc 3.2–12)")
         .file(mustExist = true, canBeDir = false, mustBeReadable = true)
 
     private val outDir by option("-d", "--target-dir", help = "directory to write the rendered per-source files into")
