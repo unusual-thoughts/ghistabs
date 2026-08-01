@@ -13,12 +13,12 @@
             "max": 78
         },
         "canonical-content-merged": {
-            "min": 3,
-            "max": 3
+            "min": 4,
+            "max": 4
         },
         "canonical-key-merged": {
-            "min": 2093,
-            "max": 2093
+            "min": 2092,
+            "max": 2092
         },
         "canonical-key-multi-hash": {
             "min": 253,
@@ -45,8 +45,8 @@
             "max": 17
         },
         "degraded-field-dropped": {
-            "min": 13,
-            "max": 13
+            "min": 11,
+            "max": 11
         },
         "degraded-global-typed-all-undefined": {
             "min": 19,
@@ -69,8 +69,8 @@
             "max": 11
         },
         "degraded-struct-mostly-undefined": {
-            "min": 93,
-            "max": 93
+            "min": 94,
+            "max": 94
         },
         "degraded-struct-truncated": {
             "min": 50,
@@ -164,10 +164,6 @@
             "min": 366,
             "max": 366
         },
-        "global-applied-then-overwritten": {
-            "min": 5,
-            "max": 5
-        },
         "harvest-collisions-divergent": {
             "min": 0,
             "max": 0
@@ -237,8 +233,8 @@
             "max": 3522
         },
         "harvest-typeAsts-Enum": {
-            "min": 3409,
-            "max": 3409
+            "min": 3376,
+            "max": 3376
         },
         "harvest-typeAsts-Float": {
             "min": 285,
@@ -285,8 +281,8 @@
             "max": 2
         },
         "harvest-typeAsts-WithSizeAttr": {
-            "min": 486,
-            "max": 486
+            "min": 519,
+            "max": 519
         },
         "harvest-typeAsts-XRef": {
             "min": 2453,
@@ -309,12 +305,12 @@
             "max": 1
         },
         "local-var-add-success": {
-            "min": 4934,
-            "max": 4942
+            "min": 4892,
+            "max": 4892
         },
         "local-var-skipped-dup-local": {
-            "min": 513,
-            "max": 530
+            "min": 580,
+            "max": 580
         },
         "local-var-skipped-dup-param": {
             "min": 1018,
@@ -329,8 +325,8 @@
             "max": 85
         },
         "placeholder-created": {
-            "min": 52375,
-            "max": 52375
+            "min": 52371,
+            "max": 52371
         },
         "pointee-typed": {
             "min": 127,

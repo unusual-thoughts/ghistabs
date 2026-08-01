@@ -419,21 +419,23 @@ class SymbolApplier(
 
         try {
             // Cygwin PE with no .rdata section puts const data in .text, where it gets disassembled.
-            ctx.program.forceCreateData(addr, dt) { debug("code-cleared-for-data", sym.body.name, address = addr) }
+            val placed = ctx.program
+                .forceCreateData(addr, dt) { debug("code-cleared-for-data", sym.body.name, address = addr) }
 
-            // Some stab addresses silently take nothing (cause unconfirmed, see
-            // pending-work-triage.md). Same transaction, so this is forceCreateData's own result, not
-            // a later overwrite; isEquivalent because the DTM-resolved copy of dt is not identical.
-            val after = ctx.program.listing.getDataAt(addr)
-            if (after?.dataType?.isEquivalent(dt) != true) {
+            // createData returns the data *covering* addr, which under CLEAR_ALL_CONFLICT_DATA can be
+            // a larger item that already holds this type — isExistingNonDynamicType returns it as a
+            // success without placing anything here. Compare where it actually starts.
+            if (placed.minAddress != addr) {
                 warn(
-                    "global-applied-then-overwritten",
-                    "${sym.body.name} at $addr: wrote ${dt.name} but readback is ${after?.dataType?.name}",
+                    "global-offcut-in-larger-data",
+                    "${sym.body.name} at $addr: ${dt.name} lands inside " +
+                        "${placed.dataType.name}@${placed.minAddress}",
                     addr,
                 )
+            } else {
+                ctx.program.sweepPointees(placed)
+                    .takeIf { it > 0 }?.let { debug("pointee-typed", address = addr, count = it.toLong()) }
             }
-            after?.let { ctx.program.sweepPointees(it) }
-                .takeIf { (it ?: 0) > 0 }?.let { debug("pointee-typed", address = addr, count = it.toLong()) }
             debug("global-applied", "dt=${dt.displayName}", address = addr)
         } catch (e: Exception) {
             err("apply-error", "global ${sym.body.name} at $addr: ${e.message}", addr)

@@ -480,6 +480,30 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     }
 
     /**
+     * A 1-byte bool global occupies 1 byte, and its neighbour is reachable.
+     *
+     * Without `-gstabs+` gcc spells `bool` as an enum over False/True (`gcc/dbxout.c`), losing the
+     * width; as a sizeof(int) enum it swallowed the three globals after it, so five of CryptoPP's
+     * eight adjacent `g_has*` flags had no data of their own — `createData` returns the containing
+     * item as a success, so nothing threw.
+     */
+    @Test
+    fun adjacentBoolGlobalsEachOwnTheirByte() {
+        val flags = listOf("_ZN8CryptoPP9g_hasISSEE", "_ZN8CryptoPP9g_hasSSE2E", "_ZN8CryptoPP10g_hasSSSE3E")
+            .mapNotNull { n ->
+                sequenceOf(n, "_$n").mapNotNull { program.symbolTable.getSymbols(it).firstOrNull() }.firstOrNull()
+            }
+        assumeTrue(flags.size == 3, "Skipping: CryptoPP g_has* flags absent")
+        val sizes = flags.associate { s ->
+            s.name to program.listing.getDataAt(s.address)?.let { "${it.dataType.name}(${it.length})" }
+        }
+        Assertions.assertTrue(
+            sizes.values.all { it != null && it.endsWith("(1)") },
+            "each bool flag should own exactly its own byte; got $sizes",
+        )
+    }
+
+    /**
      * A static data member gets the type its class declares. These carry no `G`/`S` address stab, so
      * `applyGlobalOrStatic` never sees them and they used to reach Ghidra as a demangler-named
      * address with auto-analysis's guess for a type. `FieldDecl.mangled` is the only link from the
