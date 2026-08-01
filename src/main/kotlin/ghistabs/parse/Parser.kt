@@ -24,6 +24,11 @@ class Parser(src: String, sink: DiagnosticSink = DummySink) : DiagnosticSink by 
         // a value-only `:c=` constant.
         const val BUILTIN_INT = -1
 
+        // gcc's XCOFF builtin slot for bool, and the shape its `-gstabs+` spelling decodes to.
+        const val BUILTIN_BOOL = -16
+        const val BITS_PER_BYTE = 8
+        val BOOL_ENUM_MEMBERS = listOf("False" to 0L, "True" to 1L)
+
         // Symbol chars that may follow `operator` in a method name (arithmetic, logical,
         // comparison, shift). Brackets/parens/comma are excluded — they carry no `<>` and
         // need no protection from template-depth tracking.
@@ -503,12 +508,41 @@ class Parser(src: String, sink: DiagnosticSink = DummySink) : DiagnosticSink by 
     }
 
     /**
-     * Parse an enum body.
-     * Format: `<name>:<value>,<name>:<value>,...;`
-     *
-     * Mirror of gdb/stabsread.c:read_enum_type.
+     * Parse an enum body. Format: `<name>:<value>,<name>:<value>,...;`. Mirror of
+     * gdb/stabsread.c:read_enum_type, except for bool — see [boolOrEnum].
      */
-    private fun Cursor.parseEnum() = TypeDecl.Enum<LocalTypeId>(
+    private fun Cursor.parseEnum(): TypeDecl<LocalTypeId> = boolOrEnum(parseEnumBody())
+
+    /**
+     * Classic stabs has no boolean descriptor, so without `-gstabs+` gcc cannot record bool's width
+     * at all — `gcc/dbxout.c`:
+     *
+     * ```
+     * case BOOLEAN_TYPE:
+     *   if (use_gnu_debug_info_extensions) { "@s" <BITS_PER_UNIT * int_size_in_bytes(type)> ";-16;" }
+     *   else / * Define as enumeral type (False, True) * / "eFalse:0,True:1,;"
+     * ```
+     *
+     * Both branches describe the same BOOLEAN_TYPE, so decode the fallback to what the extension
+     * branch would have written. Left as an enum it takes sizeof(int) — as it does in gdb's
+     * read_enum_type, which sets the length unconditionally — and a 1-byte bool global then swallows
+     * the three after it.
+     *
+     * Keyed on the members, not the name: gcc emits this literal wherever a bool appears, including
+     * unnamed and inline (xmltest carries both `bool:t(0,9)=eFalse:0,True:1,;` and a bare
+     * `(0,8)=eFalse:0,True:1,;` as a return type). Converting only the named one orphans the other
+     * from the content merge that had been giving it the name. The cost is that a hand-written
+     * `enum Flag { False, True }` decodes to bool too — gcc's spelling is identical to it — and this
+     * way at least every occurrence agrees rather than half of them.
+     */
+    private fun boolOrEnum(body: TypeDecl.Enum<LocalTypeId>): TypeDecl<LocalTypeId> =
+        if (body.members == BOOL_ENUM_MEMBERS) {
+            TypeDecl.WithSizeAttr(BITS_PER_BYTE, TypeDecl.Builtin(BUILTIN_BOOL))
+        } else {
+            body
+        }
+
+    private fun Cursor.parseEnumBody() = TypeDecl.Enum<LocalTypeId>(
         buildList {
             consume('e')
 

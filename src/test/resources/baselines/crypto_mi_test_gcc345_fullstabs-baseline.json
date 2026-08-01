@@ -5,12 +5,12 @@
             "max": 38
         },
         "canonical-content-merged": {
-            "min": 25,
-            "max": 25
+            "min": 26,
+            "max": 26
         },
         "canonical-key-merged": {
-            "min": 1413,
-            "max": 1413
+            "min": 1412,
+            "max": 1412
         },
         "canonical-key-multi-hash": {
             "min": 107,
@@ -37,8 +37,8 @@
             "max": 7
         },
         "degraded-field-dropped": {
-            "min": 5,
-            "max": 5
+            "min": 1,
+            "max": 1
         },
         "degraded-global-typed-all-undefined": {
             "min": 25,
@@ -65,8 +65,8 @@
             "max": 4
         },
         "degraded-struct-mostly-undefined": {
-            "min": 55,
-            "max": 55
+            "min": 56,
+            "max": 56
         },
         "degraded-struct-truncated": {
             "min": 11,
@@ -144,10 +144,6 @@
             "min": 3155,
             "max": 3155
         },
-        "global-applied-then-overwritten": {
-            "min": 5,
-            "max": 5
-        },
         "global-skipped": {
             "min": 2,
             "max": 2
@@ -221,8 +217,8 @@
             "max": 896
         },
         "harvest-typeAsts-Enum": {
-            "min": 489,
-            "max": 489
+            "min": 456,
+            "max": 456
         },
         "harvest-typeAsts-Float": {
             "min": 261,
@@ -269,8 +265,8 @@
             "max": 12
         },
         "harvest-typeAsts-WithSizeAttr": {
-            "min": 533,
-            "max": 533
+            "min": 566,
+            "max": 566
         },
         "harvest-typeAsts-XRef": {
             "min": 664,
@@ -301,8 +297,8 @@
             "max": 10
         },
         "local-var-skipped-dup-local": {
-            "min": 410,
-            "max": 410
+            "min": 416,
+            "max": 416
         },
         "local-var-skipped-dup-param": {
             "min": 788,
@@ -317,8 +313,8 @@
             "max": 66
         },
         "placeholder-created": {
-            "min": 25916,
-            "max": 25916
+            "min": 25912,
+            "max": 25912
         },
         "pointee-typed": {
             "min": 16,

@@ -13,8 +13,8 @@
             "max": 16
         },
         "canonical-key-merged": {
-            "min": 241,
-            "max": 241
+            "min": 240,
+            "max": 240
         },
         "canonical-key-multi-hash": {
             "min": 8,
@@ -27,10 +27,6 @@
         "degraded-base-synthesized": {
             "min": 2,
             "max": 2
-        },
-        "degraded-field-dropped": {
-            "min": 1,
-            "max": 1
         },
         "degraded-global-typed-all-undefined": {
             "min": 4,
@@ -181,8 +177,8 @@
             "max": 15
         },
         "harvest-typeAsts-Enum": {
-            "min": 169,
-            "max": 169
+            "min": 164,
+            "max": 164
         },
         "harvest-typeAsts-Float": {
             "min": 15,
@@ -213,6 +209,10 @@
             "max": 858
         },
         "harvest-typeAsts-Void": {
+            "min": 5,
+            "max": 5
+        },
+        "harvest-typeAsts-WithSizeAttr": {
             "min": 5,
             "max": 5
         },
@@ -249,8 +249,8 @@
             "max": 10
         },
         "placeholder-created": {
-            "min": 668,
-            "max": 668
+            "min": 667,
+            "max": 667
         },
         "pointee-typed": {
             "min": 2,
