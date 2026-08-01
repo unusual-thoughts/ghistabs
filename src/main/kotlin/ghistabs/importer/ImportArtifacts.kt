@@ -36,11 +36,13 @@ class ImportProbe(val diagnostics: StabsDiagnostics, val terminal: DiagnosticSin
         private val map = WeakHashMap<Program, ImportProbe>()
 
         @Synchronized
-        fun install(ctx: ImportContext<*>): ImportProbe =
+        @TestOnly
+        internal fun install(ctx: ImportContext<*>): ImportProbe =
             ImportProbe(ctx.diagnostics, ctx.terminal).also { map[ctx.program] = it }
 
         @Synchronized
-        fun clear(program: Program) {
+        @TestOnly
+        internal fun clear(program: Program) {
             map.remove(program)
         }
 
