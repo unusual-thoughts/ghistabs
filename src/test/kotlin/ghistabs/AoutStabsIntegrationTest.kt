@@ -31,15 +31,23 @@ import java.io.File
  * `N_UNDF` header rebasing it per compilation unit. Ghidra's `UnixAoutLoader` discards the records but
  * exposes both tables as `.symtab`/`.strtab`, which is what [ghistabs.parse.Layout.SYMTAB] reads.
  *
- * Two fixtures, kept out of `binaries/`'s gitignore rule (see `.gitignore`) because reproducing them
- * needs a 1997 toolchain — Debian bo's `aout-binutils` assembler fed from gcc 2.95 `-gstabs` output in a
- * period container. (bo's own gcc 2.7 cannot run on a modern kernel: libc5's `sbrk` requires `brk()` to
- * return the exact unaligned address it asked for, and today's kernel page-aligns it.)
+ * Two committed fixtures, both expensive to reproduce — a 1990s toolchain is required, and the
+ * compilers cannot run on a modern kernel at all: libc5's `sbrk` needs `brk()` to return the exact
+ * unaligned address it asked for, which Linux has page-aligned for years. They are built under
+ * `qemu-system-i386` running a 2.4.18 kernel (old enough for that `brk`, new enough for qemu's
+ * `-kernel` boot protocol), with a Debian potato root and period compilers layered in.
  *
  *  - `hello_aout_gcc295.o` — one CU, C: typedef, enum, struct with a self-referential pointer and an
- *    array member, static vs global data and functions.
- *  - `tinyxml_aout_gcc295.o` — four C++ CUs merged with `ld -r -m i386linux`, giving a virtual class
- *    hierarchy and the multi-CU case that has no `N_UNDF` delimiters to lean on.
+ *    array member, static vs global data and functions. Built via gcc 2.95 assembly through Debian
+ *    bo's 1997 a.out assembler, so it retains that era's dialect.
+ *  - `zlib_aout_gcc263.o` — zlib 1.1.4's fourteen C translation units from Debian buzz's **gcc
+ *    2.6.3** targeting `i486-linuxaout` directly, merged with `ld -r`. Covers the multi-CU case,
+ *    which has no `N_UNDF` delimiters to lean on, plus unions, forward references and 294 register
+ *    variables. Its scope brackets balance exactly (140 `N_LBRAC` / 140 `N_RBRAC`).
+ *
+ * gcc 2.6.3 **C++** is a step too far: its class stabs are a pre-2.7 grammar (`Tt` combined
+ * tag+typedef, bare integer type ids, `##` method forms, `/24:` visibility markers, `$` in
+ * qualified names) that the parser does not implement. C from the same compiler parses cleanly.
  */
 @Tag("integration")
 class AoutStabsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
@@ -114,26 +122,32 @@ class AoutStabsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     }
 
     /**
-     * TinyXML 1.x, four translation units merged with `ld -r -m i386linux` into one relocatable a.out.
-     * The single-CU fixture can't reach this: a.out has no `N_UNDF` headers delimiting compilation
-     * units, so cross-CU type identity rests entirely on `N_SO` — and the classes here carry virtual
-     * methods and a base-class list, which the hello fixture has none of.
+     * zlib's fourteen translation units merged into one relocatable a.out. The single-CU fixture
+     * can't reach this: a.out has no `N_UNDF` headers delimiting compilation units, so cross-CU type
+     * identity rests entirely on `N_SO`.
      */
     @Test
-    fun harvestsEveryCompilationUnitOfAMergedCxxObject() {
-        load("tinyxml_aout_gcc295.o")
+    fun harvestsEveryCompilationUnitOfAMergedObject() {
+        load("zlib_aout_gcc263.o")
         program.defaultContext().import()
 
         val dtm = program.dataTypeManager
         fun find(name: String) = dtm.getAllDataTypes().asSequence().firstOrNull { it.name == name }
 
-        // One type from each of two different translation units: proves N_SO-delimited CU tracking,
-        // not just that the first unit parsed.
-        assertNotNull(find("TiXmlString"), "TiXmlString (tinystr.cpp) was not materialized")
-        assertNotNull(find("TiXmlElement"), "TiXmlElement (tinyxml.cpp) was not materialized")
+        // One type from each of two different translation units — proves N_SO-delimited CU tracking
+        // rather than just that the first unit parsed.
+        val gz = find("gz_stream")
+        assertNotNull(gz, "gz_stream (gzio.c) was not materialized")
+        assertEquals(100, (gz as Composite).length, "gz_stream has the wrong size")
 
-        val node = find("TiXmlNode")
-        assertNotNull(node, "TiXmlNode, the polymorphic base of the hierarchy, was not materialized")
-        assertTrue((node as Composite).length > 0, "TiXmlNode materialized with no layout")
+        val blocks = find("inflate_blocks_state")
+        assertNotNull(blocks, "inflate_blocks_state (infblock.c) was not materialized")
+        assertEquals(64, (blocks as Composite).length, "inflate_blocks_state has the wrong size")
+
+        assertNotNull(find("config_s"), "config_s (deflate.c) was not materialized")
+
+        // zlib also gives a divergent cross-CU definition for free: `internal_state` is a 4-byte
+        // opaque stub in zlib.h but the real 5816-byte struct inside deflate.c. Not asserted here —
+        // which of the two should win is a question about collision policy, not about a.out.
     }
 }
