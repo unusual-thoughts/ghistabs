@@ -135,9 +135,16 @@ class SymbolApplier(
                     source,
                 )
 
-                // Apply locals.
+                // Apply locals. Dedupe against the stabs parameter list, not a re-read of
+                // func.parameters: in CONCURRENT mode another analyzer can mutate the function
+                // between updateFunction above and this loop, which flipped locals between added
+                // and skipped from run to run. This is `open.params`, before the `this` filter —
+                // gcc also emits `this` as a register local at -O0, and that copy is redundant
+                // once ClassBuilder has synthesised a typed one. A plain function whose own local
+                // is called `this` has no such N_PSYM, so it keeps the local.
+                val paramNames = open.params.mapTo(mutableSetOf()) { it.body.name }
                 for (loc in open.locals) {
-                    applyLocal(func, loc)
+                    applyLocal(func, loc, paramNames)
                 }
 
                 // Apply scope plate comments.
@@ -291,7 +298,7 @@ class SymbolApplier(
             ?: pointerSize
     }
 
-    private fun applyLocal(func: Function, loc: SymbolRecord) {
+    private fun applyLocal(func: Function, loc: SymbolRecord, paramNames: Set<String>) {
         val decl = loc.body
         val resolvedDt = when (decl) {
             is SymbolDecl.StackLocal -> typeRegistry.resolveRef(decl.type)
@@ -312,7 +319,7 @@ class SymbolApplier(
         try {
             when (decl) {
                 is SymbolDecl.StackLocal -> {
-                    if (decl.name in func.parameters.map { it.name }) {
+                    if (decl.name in paramNames) {
                         debug("local-var-skipped-dup-param")
                         return
                     }
@@ -342,7 +349,7 @@ class SymbolApplier(
                         )
                         return
                     }
-                    if (decl.name in func.parameters.map { it.name }) {
+                    if (decl.name in paramNames) {
                         debug("reglocal-skipped-dup-param")
                         return
                     }
