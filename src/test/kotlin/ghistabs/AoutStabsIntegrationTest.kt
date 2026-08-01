@@ -45,9 +45,15 @@ import java.io.File
  *    which has no `N_UNDF` delimiters to lean on, plus unions, forward references and 294 register
  *    variables. Its scope brackets balance exactly (140 `N_LBRAC` / 140 `N_RBRAC`).
  *
- * gcc 2.6.3 **C++** is a step too far: its class stabs are a pre-2.7 grammar (`Tt` combined
- * tag+typedef, bare integer type ids, `##` method forms, `/24:` visibility markers, `$` in
- * qualified names) that the parser does not implement. C from the same compiler parses cleanly.
+ * gcc 2.6.3 **C++** is a step too far: its class stabs predate three changes that all landed by
+ * gcc 3.0, and the parser implements only the later forms. C from the same compiler parses cleanly.
+ *
+ *  - bare integer type ids. `DBX_USE_BINCL` — and with it the `(file,type)` pair — did not exist
+ *    before gcc 2.8.0; 2.6.3 emits `TYPE_SYMTAB_ADDRESS` unconditionally on every target.
+ *  - `Tt` on *explicit* typedefs. The `DECL_ARTIFICIAL` guard that restricts the combined
+ *    tag+typedef shortcut to C++'s implicit typedefs only arrived in 2.8.0.
+ *  - `##` method forms. `flag_minimal_debug` defaulted on ("argument types are encoded in the
+ *    method name") and was deleted outright in gcc 3.0.
  */
 @Tag("integration")
 class AoutStabsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
