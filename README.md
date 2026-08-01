@@ -5,26 +5,33 @@ info (`.stab` / `.stabstr`) into a program: data types, function signatures, par
 C++ classes and vtables, constants and static members. On top of the import it can reconstruct, per
 source file, a line-aligned **source skeleton** or an annotated **decompilation**.
 
-The format is also called **DBX**, after the BSD debugger it was written for; "stabs" is short
-for the *symbol table strings* it hides the debug info in.
+STABS — also called **DBX**, after the original BSD debugger it was written for — is an ancient
+text-based predecessor to DWARF, named for the *symbol table strings* it hides the debug info in.
 
-Ghidra has no stabs importer — DWARF and PDB don't apply, and the debug info sits in the program
-as opaque bytes. This fills that gap for **ELF, PE/COFF and a.out** images, on both Unix and
-Cygwin targets, from gcc **at least as far back as 3.2** — the oldest tested — through gcc
-**12**, the last release able to emit the format at all. (`-gstabs` was deprecated in 12 and removed
-outright in 13, which ships no `dbxout`, so that end of the range is a hard ceiling.)
+It was the default debug symbol format `-g` gave you on the prehistoric a.out binary format,
+and on ELF targets until they moved to DWARF-2 in gcc **3.1** (2002), while the Windows targets —
+Cygwin and MinGW alike, which share one gcc configuration — kept it until **4.3.0** (2008). So
+stabs found in the wild are often old MinGW .exe's.
 
-Which format plain `-g` gave you depended on the target, and the two parted company for six
-years. ELF moved to DWARF-2 in gcc **3.1** (2002), when the default was hoisted into the generic
-`config/elfos.h` — taking every ELF target with it — whereas Cygwin/MinGW kept stabs until
-**4.3.0** (2008), through `PREFERRED_DEBUGGING_TYPE` in `config/i386/cygming.h`. So stabs found in
-the wild are nearly always old Cygwin/MinGW builds; on ELF they appear only when someone asked for
-them by name.
+Ghidra has no built-in stabs importer — the records sit in the program as opaque data. This fills
+that gap.
 
-Tested against fixtures spanning that range — gcc 3.2.3, 3.4.5 and 4.2.1 on PE/COFF
-(x86:LE:32), gcc 12.2 on ELF (x86-64), gcc 2.95 on a.out (i386) — including stripped and
-full-stabs variants. Older gcc is untested, though the C++ encoder in `dbxout.c` emits the same
-grammar back to 2.95.
+## Supported configurations
+
+**Ghidra:** 12.x
+
+| Container          | Where the stabs live          | Processor    |
+| ------------------ | ----------------------------- | ------------ |
+| **PE/COFF**        | `.stab` / `.stabstr` sections | x86 / x86-64 |
+| **ELF**            | `.stab` / `.stabstr` sections | x86 / x86-64 |
+| **a.out** (OMAGIC) | symbol table (`N_STAB` mask)  | i386         |
+
+**Compilers:** gcc, on both Unix and Cygwin/MinGW targets — **C** from at least 2.6.3, **C++**
+from 3.2, through gcc **12**, the last release able to emit the format (`-gstabs` was deprecated
+in 12 and removed outright in 13). Non-gcc stabs producers are out of scope but might mostly work.
+
+**Also:** `-gstabs` and `-gstabs+` alike, object files and linked images alike, and images whose
+symbol table has been stripped, provided the stabs themselves survive.
 
 ## What it gives you
 
@@ -76,10 +83,10 @@ Grab the zip matching your Ghidra version from `dist/`, then either
   extensions dir, e.g. `~/.config/ghidra/ghidra_12.1.2_DEV/Extensions`; set `GHIDRA_USER_DIR`
   to override), then restart Ghidra.
 
+## Building
+
 Requires Ghidra 12.x and a JDK 21 toolchain. An extension zip only loads into the Ghidra
 release it was built against.
-
-## Build
 
 ```bash
 export GHIDRA_INSTALL_DIR=/opt/ghidra   # or pass -PGHIDRA_INSTALL_DIR=...
@@ -101,14 +108,14 @@ re-analysis won't redo the work. Also available as one-time analysis
 
 Options (`Analysis > Auto Analyze… > Stabs Importer`):
 
-| Option                                    | Default | Effect                                                                                                                  |
-| ----------------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------- |
-| **Reconstruct C++ classes**               | on      | Class namespaces, this-typed member methods, `<Class>_vftable` structs at `_ZTV`. Off leaves plain structs — member calls lose `this`/args and virtual calls stay unresolved. |
-| **Apply scope plate comments**            | on      | Plate comments at lexical scopes where `N_LBRAC`/`N_RBRAC` info exists.                                                   |
-| **Shorten templated names via typedefs**  | off     | Rename long templated types onto their shorter aliases (`basic_string<char, …>` → `string`), recursively inside other templates. |
-| **Fold source-file spellings**            | on      | Collapse gcc's two spellings of one physical header (full include path vs bare `#include "x.h"`) onto one rendered output file, by unique basename. |
-| **Overlay `.stab` section structs**       | on      | Decode every `.stab` entry into a `StabRecord` struct with references into `.stabstr` and back to the code/data it describes. |
-| **Minimum log level**                     | `INFO`  | Floor for diagnostics written to the analysis log. Bookmarks and counters are emitted regardless.                          |
+| Option                                   | Default | Effect                                                                                                                                                                        |
+| ---------------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Reconstruct C++ classes**              | on      | Class namespaces, this-typed member methods, `<Class>_vftable` structs at `_ZTV`. Off leaves plain structs — member calls lose `this`/args and virtual calls stay unresolved. |
+| **Apply scope plate comments**           | on      | Plate comments at lexical scopes where `N_LBRAC`/`N_RBRAC` info exists.                                                                                                       |
+| **Shorten templated names via typedefs** | off     | Rename long templated types onto their shorter aliases (`basic_string<char, …>` → `string`), recursively inside other templates.                                              |
+| **Fold source-file spellings**           | on      | Collapse gcc's two spellings of one physical header (full include path vs bare `#include "x.h"`) onto one rendered output file, by unique basename.                           |
+| **Overlay `.stab` section structs**      | on      | Decode every `.stab` entry into a `StabRecord` struct with references into `.stabstr` and back to the code/data it describes.                                                 |
+| **Minimum log level**                    | `INFO`  | Floor for diagnostics written to the analysis log. Bookmarks and counters are emitted regardless.                                                                             |
 
 Diagnostics land in three places: the analysis **MessageLog** (filtered by the log level),
 an **`Analysis` bookmark** at every addressed diagnostic, and a summary of counters at the
@@ -184,17 +191,17 @@ code.
 
 Shared options:
 
-| Option                    | Default   | Effect                                                                       |
-| ------------------------- | --------- | ---------------------------------------------------------------------------- |
-| `-d`, `--target-dir`      | required  | Output directory; one file per source, named from the source path.            |
-| `--classes` / `--no-classes` | on     | Same as the analyzer's class reconstruction.                                  |
-| `--shorten-typedefs`      | off       | Same as the analyzer's typedef shortening.                                    |
-| `--fold-sources` / `--no-fold-sources` | on | Same as the analyzer's source folding.                                  |
-| `-v`, `--log-level`       | `INFO`    | `DEBUG`/`INFO`/`WARN`/`ERROR`; the log streams live to stderr.                |
-| `--log FILE`              | stderr    | Redirect the import log to a file.                                            |
-| `--disable-analyzer NAME` | —         | Turn off every analyzer whose name contains `NAME` (repeatable). Render the same binary with and without one to A/B what it changes. |
-| `--records-json`, `--harvest-json`, `--registry-json` | — | Dump the parsed stab records / harvest / materialized type registry as JSON. |
-| `--degradation-log FILE`  | —         | Grouped report of every type that materialized to something weaker than the stabs described. |
+| Option                                                | Default  | Effect                                                                                                                               |
+| ----------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `-d`, `--target-dir`                                  | required | Output directory; one file per source, named from the source path.                                                                   |
+| `--classes` / `--no-classes`                          | on       | Same as the analyzer's class reconstruction.                                                                                         |
+| `--shorten-typedefs`                                  | off      | Same as the analyzer's typedef shortening.                                                                                           |
+| `--fold-sources` / `--no-fold-sources`                | on       | Same as the analyzer's source folding.                                                                                               |
+| `-v`, `--log-level`                                   | `INFO`   | `DEBUG`/`INFO`/`WARN`/`ERROR`; the log streams live to stderr.                                                                       |
+| `--log FILE`                                          | stderr   | Redirect the import log to a file.                                                                                                   |
+| `--disable-analyzer NAME`                             | —        | Turn off every analyzer whose name contains `NAME` (repeatable). Render the same binary with and without one to A/B what it changes. |
+| `--records-json`, `--harvest-json`, `--registry-json` | —        | Dump the parsed stab records / harvest / materialized type registry as JSON.                                                         |
+| `--degradation-log FILE`                              | —        | Grouped report of every type that materialized to something weaker than the stabs described.                                         |
 
 ## Status
 
@@ -209,10 +216,9 @@ but still under active work.
 
 ## Technical notes: what's parsed, and how
 
-This section is about the format rather than the tool. Every production implemented here is
-cross-checked against three upstream sources: Sun's *Stabs Interface* manual, gdb's
-`stabsread.c`, and gcc's `dbxout.c` — the last being the one that actually decides what a gcc
-binary contains.
+This section is about the format rather than the tool. The reference sources are Sun's *Stabs
+Interface* manual, gdb's `stabsread.c`, and gcc's `dbxout.c` — the last being the one that
+actually decides what a gcc binary contains.
 
 **Records consumed.** `N_FUN` (function, with its signature), `N_PSYM`/`N_RSYM` (stack and
 register parameters), `N_LSYM` (locals and type definitions), `N_GSYM`/`N_STSYM`/`N_LCSYM`
@@ -222,13 +228,11 @@ before parsing, and each compilation unit's `.stabstr` offsets are resolved duri
 
 **Independent of the symbol table.** Names, types and addresses all come from the stabs, so an
 image whose symbol table has been removed but whose `.stab`/`.stabstr` sections survive still
-imports in full. No toolchain is known to produce that combination on its own — the stripped
-fixtures in the corpus are constructed deliberately, as a guard against the importer quietly
-coming to depend on the symbol table instead.
+imports in full.
 
 **a.out.** The format stabs originated in has no debug *sections* — its records are entries in the
-linker symbol table, identified by the `N_STAB` mask (0340) and interleaved with the link-time symbols, all
-sharing one flat string table. Ghidra's a.out loader discards the records themselves, but exposes
+linker symbol table, identified by the `N_STAB` mask (0340) and interleaved with the link-time
+symbols, all sharing one flat string table. Ghidra's a.out loader discards the records themselves, but exposes
 the two tables as `.symtab`/`.strtab` blocks, which is what the importer reads. Two things follow
 from the flat string table: `n_strx` is an absolute offset, with no `N_UNDF` header rebasing it
 per compilation unit, and the link-time symbols sharing the table have to be filtered out.
@@ -301,3 +305,40 @@ useful for reading the raw debug info in the Listing.
 gcc has no escape for it — Sun's `N_XLINE` exists for this and gcc never emits it). `using`
 declarations and directives leave no trace at all. Bitfields are currently laid at their
 containing byte rather than as bitfields.
+
+---
+
+## Bibliography
+
+**The format.** There is no standard — stabs is a semi-documented convention, and the two
+manuals disagree with each other and with what gcc emits.
+
+- *STABS Debug Format*, Menapace, Kingdon & MacKenzie (Free Software Foundation) — the GNU
+  reference, distributed with gdb.
+  [HTML](https://sourceware.org/gdb/onlinedocs/stabs.html/) ·
+  [PDF](https://sourceware.org/gdb/onlinedocs/stabs.pdf)
+- *Stabs Interface*, Sun Microsystems (Sun Studio 11) —
+  [PDF](https://web.archive.org/web/20061115071332/http://dsc.sun.com/sunstudio/documentation/ss11/stabs.pdf). Describes constructs
+  gcc never emits, and omits GNU extensions gcc emits constantly.
+- [Stabs](https://en.wikipedia.org/wiki/Stabs) on Wikipedia, for orientation.
+
+**The implementations**, which settle what a real binary actually contains when the manuals
+disagree.
+
+- [`gcc/dbxout.c`](https://gcc.gnu.org/git/?p=gcc.git;a=history;f=gcc/dbxout.c;hb=refs/tags/releases/gcc-12.3.0)
+  — the emitter. Deleted in gcc 13; the link is pinned to 12.3.0, the last release that has it.
+- [`gdb/stabsread.c`](https://sourceware.org/git/?p=binutils-gdb.git;a=history;f=gdb/stabsread.c;hb=refs/tags/gdb-12.1-release)
+  — the reader. Also since removed from gdb.
+- [`include/aout/stab.def`](https://sourceware.org/git/?p=binutils-gdb.git;a=blob;f=include/aout/stab.def)
+  — the record-type table, still in binutils.
+- [gcc 3.1 release notes](https://gcc.gnu.org/gcc-3.1/changes.html) — "The default debugging
+  format for most ELF platforms … has changed from stabs to DWARF2."
+
+**Prior art.**
+
+- [RidgeX/ghidra-gcc2-stabs](https://github.com/RidgeX/ghidra-gcc2-stabs) — a Ghidra script
+  parsing GCC 2.x stabs.
+- [chaoticgd/ccc](https://github.com/chaoticgd/ccc) — library and tools for debugging symbols in
+  PS2 games, focused on STABS in `.mdebug` sections.
+- [uyjulian/stab_debuginfo_utils](https://github.com/uyjulian/stab_debuginfo_utils) — STAB
+  debug information utilities, for x86 and r3000 MIPS.
