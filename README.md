@@ -1,28 +1,71 @@
 # ghidra-stabs
 
-A Ghidra extension that imports [**STABS**](https://sourceware.org/gdb/onlinedocs/stabs.pdf) 
-debug info (`.stab` / `.stabstr`) into a program:
-data types, function signatures, parameters and locals, C++ classes and vtables, constants and
-static members. On top of the import it can reconstruct, per source file, a line-aligned
-**source skeleton** or an annotated **decompilation**.
+A Ghidra extension that imports [**STABS**](https://sourceware.org/gdb/onlinedocs/stabs.pdf) debug
+info (`.stab` / `.stabstr`) into a program: data types, function signatures, parameters and locals,
+C++ classes and vtables, constants and static members. On top of the import it can reconstruct, per
+source file, a line-aligned **source skeleton** or an annotated **decompilation**.
 
-Written for the debug info gcc 2.9x–3.4 emits for Cygwin/MinGW PE binaries — the case where
-Ghidra has no importer at all (its DWARF and PDB loaders don't apply, and the stabs are just
-two opaque sections). Development target is Cygwin **gcc 3.4.4** PE; x86-64 ELF binaries built
-with `-gstabs` also parse and import.
+The format is also called **DBX**, after the BSD debugger it was written for; "stabs" is short
+for the *symbol table strings* it hides the debug info in.
 
-## What it recovers
+Ghidra has no stabs importer — DWARF and PDB don't apply, and the debug info sits in the program
+as opaque bytes. This fills that gap for **ELF, PE/COFF and a.out** images, on both Unix and
+Cygwin targets, from gcc **at least as far back as 3.2** — the oldest tested — through gcc
+**12**, the last release able to emit the format at all. (`-gstabs` was deprecated in 12 and removed
+outright in 13, which ships no `dbxout`, so that end of the range is a hard ceiling.)
 
-| From the stabs                        | What lands in the program                                                             |
-| ------------------------------------- | ------------------------------------------------------------------------------------- |
-| Type definitions (`N_LSYM`, cross-CU) | Structs, unions, enums, typedefs, pointers, arrays, function pointers in the DTM       |
-| Function stabs (`N_FUN`)              | Return type + parameter signature, demangled names, correct calling convention         |
-| `N_PSYM` / `N_LSYM` / `N_RSYM`        | Stack and register locals and parameters, with their real names and types              |
-| `N_LBRAC` / `N_RBRAC`                 | Lexical scope plate comments                                                           |
-| C++ class stabs                       | Class namespaces, this-typed methods (`__thiscall`), base-class embedding, Itanium vtable structs applied at `_ZTV` |
-| `:c=` constants, static data members  | Equates and reconciled globals                                                         |
-| `N_SO` / `N_SOL` / `N_SLINE`          | Per-source-file line map, driving the skeleton/decompilation render                    |
-| `.stab` section itself                | An optional decoded `StabRecord` overlay, one struct per record, cross-referencing `.stabstr` and the code/data each record describes |
+Which format plain `-g` gave you depended on the target, and the two parted company for six
+years. ELF moved to DWARF-2 in gcc **3.1** (2002), when the default was hoisted into the generic
+`config/elfos.h` — taking every ELF target with it — whereas Cygwin/MinGW kept stabs until
+**4.3.0** (2008), through `PREFERRED_DEBUGGING_TYPE` in `config/i386/cygming.h`. So stabs found in
+the wild are nearly always old Cygwin/MinGW builds; on ELF they appear only when someone asked for
+them by name.
+
+Tested against fixtures spanning that range — gcc 3.2.3, 3.4.5 and 4.2.1 on PE/COFF
+(x86:LE:32), gcc 12.2 on ELF (x86-64), gcc 2.95 on a.out (i386) — including stripped and
+full-stabs variants. Older gcc is untested, though the C++ encoder in `dbxout.c` emits the same
+grammar back to 2.95.
+
+## What it gives you
+
+- **Real function signatures.** Return types and full parameter lists, applied to every function
+  the compiler described — including functions Ghidra's analysis missed entirely, which are
+  created from the debug info rather than left as undefined bytes.
+- **Names as the compiler recorded them.** Functions take the name from the debug info rather
+  than whatever the symbol table happens to carry, so file-local statics get their real names
+  instead of `FUN_00401000`, and mangled C++ names resolve to `Class::method`.
+- **Named, typed locals and parameters.** Parameters and locals alike — stack slots and register
+  variables — recover their source names and types, replacing default decompiler names like
+  `local_1c` and `uVar3`.
+- **The real type graph.** Structs, unions, enums, typedefs, pointers, references, arrays and
+  function pointers, deduplicated across the whole program — one `std::string`, not one per
+  compilation unit that happened to mention it.
+- **C++ structure that Ghidra can act on.** Classes become real namespaces with their methods
+  inside them, taking a properly typed `this`. Base classes are embedded at their true offsets,
+  vtables are built and applied at their symbols, and virtual call sites resolve to named
+  methods instead of dead-ending in an indirect jump.
+- **Data laid out and named.** Globals and statics defined at their addresses with their real
+  types; C strings defined where pointers lead; static class members reconnected to the symbols
+  they were emitted as.
+- **Constants you can actually use.** Compile-time constants become equates, so a bare `0x1F4`
+  in the listing can be displayed as `Timeout::DEFAULT_MS`, and are additionally collected into
+  enum datatypes (grouped by namespace and width) you can apply to fields and parameters.
+- **Types filed where you'd look for them.** Everything lands in a browsable tree that mirrors
+  the program's own layout instead of one flat pile: a class from `net/socket.h` under
+  `/net/socket.h`, standard-library types under `/std/…`, and C++ namespaces as categories, so
+  `std::string` sits at `/std`. Path boilerplate common to every source file is stripped, so the
+  tree starts somewhere meaningful rather than at `/home/someone/build/…`.
+- **Source-level orientation.** Lexical scopes are annotated, and the line map ties every
+  instruction back to the source line it came from — which is what the skeleton and
+  decompilation renders are built on.
+
+On a C++ binary the mangled symbols already carry a lot on their own: `_ZN3app4Conn4sendEPKcj`
+demangles to `app::Conn::send(char const*, unsigned int)` — namespace, class, method and parameter
+types, with no debug info at all. What the mangling never encodes is the return type, parameter
+names, the type of a data symbol, and anything about layout: field names and offsets, enum values,
+typedefs, and which methods are virtual and in what slot order. That is the gap this fills, and
+Ghidra's own demangler output is reconciled against the imported types, so its synthesised
+placeholder structs are replaced by the real definitions rather than competing with them.
 
 ## Install
 
@@ -109,8 +152,8 @@ source file — no GUI, no Ghidra project. (`./gradlew runCli -Pargs="…"` runs
 point in-process.)
 
 ```bash
-build/cli/ghidra-stabs skeleton unpackfile.exe -d out/skeletons
-build/cli/ghidra-stabs decomp   unpackfile.exe -d out/decomps --shorten-typedefs
+build/cli/ghidra-stabs skeleton myprogram.exe -d out/skeletons
+build/cli/ghidra-stabs decomp   myprogram.exe -d out/decomps --shorten-typedefs
 ```
 
 The two modes are not the same output with decompilation bolted on — they answer different
@@ -156,9 +199,105 @@ Shared options:
 ## Status
 
 The importer is the mature part; skeleton and especially decompilation rendering are usable
-but still under active work — see `docs/notes/render-backlog.md` for known output issues.
+but still under active work.
 
 ## Development
 
-`CLAUDE.md` (repo orientation and conventions), `TESTING.md` (test tiers and flags),
-`docs/kotlin-style.md` (house style), `docs/notes/` (design notes and backlogs).
+`CLAUDE.md` (repo orientation and conventions) and `TESTING.md` (test tiers and flags).
+
+---
+
+## Technical notes: what's parsed, and how
+
+This section is about the format rather than the tool. Every production implemented here is
+cross-checked against three upstream sources: Sun's *Stabs Interface* manual, gdb's
+`stabsread.c`, and gcc's `dbxout.c` — the last being the one that actually decides what a gcc
+binary contains.
+
+**Records consumed.** `N_FUN` (function, with its signature), `N_PSYM`/`N_RSYM` (stack and
+register parameters), `N_LSYM` (locals and type definitions), `N_GSYM`/`N_STSYM`/`N_LCSYM`
+(globals and statics), `N_LBRAC`/`N_RBRAC` (lexical scopes), `N_SO`/`N_SOL`/`N_SLINE` (the source
+and line map), `N_BINCL`/`N_EINCL`/`N_EXCL` (include bracketing). `\`-continuation chains are merged
+before parsing, and each compilation unit's `.stabstr` offsets are resolved during the read.
+
+**Independent of the symbol table.** Names, types and addresses all come from the stabs, so an
+image whose symbol table has been removed but whose `.stab`/`.stabstr` sections survive still
+imports in full. No toolchain is known to produce that combination on its own — the stripped
+fixtures in the corpus are constructed deliberately, as a guard against the importer quietly
+coming to depend on the symbol table instead.
+
+**a.out.** The format stabs originated in has no debug *sections* — its records are entries in the
+linker symbol table, identified by the `N_STAB` mask (0340) and interleaved with the link-time symbols, all
+sharing one flat string table. Ghidra's a.out loader discards the records themselves, but exposes
+the two tables as `.symtab`/`.strtab` blocks, which is what the importer reads. Two things follow
+from the flat string table: `n_strx` is an absolute offset, with no `N_UNDF` header rebasing it
+per compilation unit, and the link-time symbols sharing the table have to be filtered out.
+
+**Type identity across compilation units.** gcc numbers types per compilation unit, so the same
+`std::string` appears as a different `(cu,n)` in every unit that includes it, each with its own
+body. The importer content-hashes the parsed bodies and canonicalises, which is what collapses a
+corpus of thousands of near-duplicate definitions down to one datatype each. Divergent
+collisions — the same name with genuinely different bodies — are detected and kept apart rather
+than merged.
+
+**Attribution — where a type ends up in the tree.** Stabs say which source files *mentioned* a
+type, never which one owns it, so the owning file is inferred. In precedence order:
+
+1. **C++ scope from the mangled name.** A method-bearing class is filed under its namespace as a
+   category, named by its own leaf. This is deliberately the exact slot Ghidra's demangler would
+   create for a `this` parameter — filling that slot means the two agree instead of forking into
+   a real type beside an empty placeholder.
+2. **Compilation-unit-local anonymous types** → that unit's path plus `/anon`.
+3. **Standard library** → `/std/<path after the stdlib marker>`, so `bits/stl_vector.h` files
+   identically no matter which toolchain prefix it was included through.
+4. **A real header wins over a `.cpp`.** gcc's include bracketing surfaces sibling `.cpp` files
+   as if they were headers; `.h/.hpp/.hh/.hxx/.tcc` beat them.
+5. **One defining source** → that file's path.
+6. **Several sources, no header owner** → the lexicographically first, suffixed `/multi`. A hint
+   map built from the majority source line of the class's own member functions is consulted
+   first, since that usually names the real header gcc failed to bracket.
+
+Paths are normalised on the way in — drive letters dropped, `/` and `\` both honoured, `..`
+collapsed — and the longest prefix common to every compilation unit is stripped so categories
+start at the project root rather than at the build machine's directory layout. Each decision is
+recorded in an attribution trace, so a type in a surprising place can be explained rather than
+guessed at.
+
+Other fixed locations: constants at `/stabs/constants/<namespace>/size_Nb`, unnamed aggregates at
+`/stabs/unnamed`, the decoded `.stab` overlay types at `/stabs`, and vtable structs under the
+class's own category.
+
+**Type grammar.** Descriptor dispatch covers `*` `&` `k` `B` `a` `e` `s` `u` `Y` `f` `#` `r` `R`
+`x` `@` plus bare and parenthesised type references. Two of those are GNU extensions absent from
+the Sun spec: `#` (pointer-to-member-function) and `@s<bits>` (size attribute, which gcc emits on
+`_Bool` and `long long` where the range bounds alone don't pin the width). Forward references
+(`x` + `s`/`u`/`c`/`Y`) are resolved back to their definitions; gcc's `c` and `Y` kinds are its
+own additions to Sun's `e`/`s`/`u`.
+
+**C++ encodings.** The inheritance list (`!<count>,<virt><access><offset>,<base>;`), the method
+block with its access/virtuality markers, and the trailing `~%<type>;` vptr-basetype section that
+marks a class polymorphic and names the base owning the vptr. gcc 3.x emits `s` for both `struct`
+and `class`, so the importer promotes to "class" on the evidence — any method, or any non-public
+base. Vtable layout follows the Itanium ABI, modelled as a single flat vtable — which does not
+cover every multiple-inheritance case.
+
+**Register numbering.** Register variables carry gcc's `dbx_register_map` numbers, which are
+*not* the DWARF numbers — the two disagree on `%ebp`/`%esp` (stabs: 4 and 5; DWARF: the reverse).
+Ghidra ships only the DWARF spelling, so the map is reimplemented in `parse/DbxRegisters.kt`.
+
+**Constants.** Addressless `:c=` constants have no storage to attach to, so they're applied as
+equates under their qualified name and collected into `/stabs/constants/<namespace>/size_Nb` enum
+datatypes, bucketed by the minimal width that holds the value.
+
+**Static data members** carry a linkage name in the member declaration and no address stab of
+their own — that name is the only link back to the emitted symbol, and it's what lets the global
+be typed from the class declaration instead of left to the demangler.
+
+**The `.stab` section itself** can be overlaid with one decoded `StabRecord` struct per 12-byte
+entry, with references into `.stabstr` and back to the code or data each record describes —
+useful for reading the raw debug info in the Listing.
+
+**Format limits.** Line numbers past 65535 are unrepresentable (the `desc` field is 16 bits, and
+gcc has no escape for it — Sun's `N_XLINE` exists for this and gcc never emits it). `using`
+declarations and directives leave no trace at all. Bitfields are currently laid at their
+containing byte rather than as bitfields.

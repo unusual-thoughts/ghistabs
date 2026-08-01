@@ -51,8 +51,9 @@ baseline GDB reader.
 
 ### 1. No Negative Builtin Type IDs
 
-**Deviation:** Sun's stabs allowed negative type ID ranges (e.g., `-1` to `-34` for builtins). Cygwin gcc 3.4.4 does not
-emit these.
+**Deviation:** Negative type ID ranges (`-1` to `-34` for builtins) are a **GNU/gdb** convention, not a Sun one — the Sun
+spec (see References) never uses them, numbering every type with a `(file,type)` pair. Cygwin gcc 3.4.4 does not emit
+them either.
 
 **Implication:** The parser does not recognize or special-case negative IDs; all forward references use non-negative
 `(cu, n)` pairs. The builtin type table (Phase 3) is consulted only for positive IDs like `(0, 21)` for `_Bool`.
@@ -91,10 +92,32 @@ constant marker indicating "no scale factor."
 
 ### 6. Cross-Reference Kinds
 
-**Deviation:** Cygwin gcc 3.4.4 uses `x<kind>` with kind ∈ {s, u, c, Y} (Y for class is gcc-2 holdover). Modern GDB also
-recognizes this; Sun stabs did not standardize cross-references.
+**Deviation:** Sun *does* standardize the forward reference — `x [ e | s | u | Type ] name`, and its worked example emits
+the same `xsS:` gcc does. The divergence is narrower than "gcc invented it": gcc adds the kinds `c` (class) and `Y`
+(gcc-2 class holdover) to Sun's `e`/`s`/`u`, and Sun additionally allows a **type pair** in the kind position
+(`x(0,5)name`), which gcc never emits and this parser does not accept.
 
-**Implication:** The parser accepts all four kinds and maps them to `AggrKind`.
+**Implication:** The parser accepts the four gcc kinds and maps them to `AggrKind`. A Sun-produced binary using the
+type-pair form would fail to parse — out of scope, but the reason is a real grammar gap, not an unsupported dialect.
+
+## Sun-Only Constructs (verified absent from gcc's emitter)
+
+Checked by diffing the Sun spec's descriptor inventory against `gcc/dbxout.c` emission sites. None of these can appear
+in a binary this importer targets, so the parser's silence on them is correct, not a gap:
+
+| Sun construct | What it is | gcc emission sites |
+|---|---|---|
+| `b`, `D`, `F`, `g`, `K`, `z` | basic integer, dope vector, function parameter, function-with-prototype, restricted, C99 VLA | **0** — gcc never emits any of them |
+| `d`, `S` | Pascal `FILE_TYPE`; `SET_TYPE` (prefixed `@S;`) | 1 each, but only from the Pascal/Modula front ends — unreachable from C/C++ |
+| `Y…` family (`Ya`, `Yn`, `YM`, `YD`, `YT`, `YI`, `YR`) | Sun's C++ encodings: anonymous unions, namespaces, pointer-to-member, templates, RTTI | gcc uses `Y` only as the gcc-2 class descriptor; the two-letter forms are Sun-only |
+| `N_XLINE` (0x45) | line numbers > 65535: sets a state variable OR-ed into the high 16 bits of subsequent `N_SLINE`s | never emitted — gcc has no escape for the 16-bit `desc`, so line numbers past 65535 are simply unrepresentable |
+| `N_USING` (0xc4) | C++ `using` declarations and directives | never emitted — a `using` leaves no trace in gcc stabs |
+| `N_TCOMM`, `N_TFLSYM`, `N_TLCSYM`, `N_TSTSYM` | thread-local storage | never emitted |
+| `N_SO_C`, `N_SO_CC`, `N_SO_FORTRAN`, … | source-language codes carried in `N_SO`'s `desc` | gcc leaves `desc` at 0 |
+
+Two GNU constructs run the other way — `#` (pointer-to-member-function) and `@s<bits>` (size attribute) are emitted by
+gcc and absent from the Sun spec, which has no type-attribute mechanism at all. The self-referential void idiom
+(`(x,y)=(x,y)`) is likewise undocumented by Sun; it stays a gcc convention established by reverse engineering.
 
 ## Testing Against These Deviations
 
@@ -110,6 +133,11 @@ The test suite (`ParserPrimitiveTest`, `ParserClassTest`, `ParserBugfixTest` in 
 6. **Cross-references:** `xs…:`, `xu…:`, `xc…:`, `xY…:` all produce `XRef` with correct `AggrKind`.
 
 ## References
+
+- **Sun *Stabs Interface* manual**, Sun Studio 10, June 2004 (170 pp):
+  <https://www.filibeto.org/sun/lib/development/studio_10/stabs.pdf>
+    - The authoritative Sun-side spec, and far more complete than stabs.html on the `N_*` inventory (60 types) and on
+      Sun's own C++ encodings. The `§` numbers cited in the table above are **stabs.html's**, not this document's.
 
 - **stabs.html** (GNU Binutils documentation): <https://sourceware.org/binutils/docs/stabs/>
     - Section 2: "Symbol Types" and descriptors
@@ -131,8 +159,7 @@ The test suite (`ParserPrimitiveTest`, `ParserClassTest`, `ParserBugfixTest` in 
     - `dbxout_type()` - Type emission (search for "COMPLEX_TYPE", "@s" size attributes)
     - `dbxout_class_name_qualifiers()` - Class/method name handling
 
-- **Cygwin GCC 3.4.4 Specifics:**
-    - The parser targets gcc-3.4.4 as used in CSR/Qualcomm ADK 4.0.1 firmware builds (circa 2006–2008).
+- **Cygwin GCC 3.4.x Specifics:**
     - No modern C++11+ features in stabs output (no `rvalue references (&& )`, no `noexcept`, etc.).
     - The `typedef` and `tagged type` `:t` / `:T` records are the primary way types are exposed; the parser must
       correctly parse both the inline body and the optional separate record.

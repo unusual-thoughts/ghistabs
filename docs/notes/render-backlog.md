@@ -864,3 +864,22 @@ header + address-point label only, or synthesise the vftable struct from the slo
 Neither `dcinstShiftSCompatibility` nor `cSymLexStreamVtableAddressPointSkipsVbaseOffset` covers
 this: both assert on the output of `buildAndApplyVtable` for a stabs-bearing class and skip
 outright on any fixture without it.
+
+## 26. Bitfields are laid at their containing byte, not as bitfields — open
+
+`FieldDecl` (`parse/Ast.kt`) carries `offsetBits`/`sizeBits` faithfully, but every consumer
+divides by 8. `fillComposite` (`materialize/Materialization.kt`) ends in
+`placeholder.replaceAtOffset((field.offsetBits / 8).toInt(), ft, …)`, so `unsigned a:3;
+unsigned b:5;` both resolve to byte offset 0 and the second call overwrites the first: one
+field disappears, the survivor gets its declared type's full width rather than its bit width.
+
+Ghidra has `Structure.insertBitFieldAt(byteOffset, byteWidth, bitOffset, dt, bitSize, name,
+comment)`. The codebase already calls `addBitField`, but only in `materialize/itanium/Vtable.kt`
+for the hand-built `__base_class_type_info` — never for a type parsed from stabs.
+
+Detection is `offsetBits % 8 != 0`, or a `sizeBits` that doesn't match the resolved datatype's
+size. The trap is bit numbering: Ghidra's `bitOffset` counts from the least significant bit of
+the storage unit, which is not necessarily how the stabs `offsetBits` is anchored — verify
+against a fixture on both endiannesses (x86:LE:32 PE, x86-64 ELF are both in the corpus) rather
+than deriving it. Check whether any current fixture even contains a packed bitfield struct
+before building one.
