@@ -12,21 +12,13 @@
             "min": 40,
             "max": 40
         },
-        "degraded-field-dropped": {
-            "min": 19,
-            "max": 19
-        },
         "degraded-global-typed-anonymous": {
-            "min": 3,
-            "max": 3
+            "min": 2,
+            "max": 2
         },
         "degraded-local-typed-anonymous": {
-            "min": 407,
-            "max": 407
-        },
-        "degraded-param-typed-anonymous": {
-            "min": 67,
-            "max": 67
+            "min": 284,
+            "max": 284
         },
         "degraded-struct-mostly-undefined": {
             "min": 17,
@@ -153,8 +145,8 @@
             "max": 175
         },
         "harvest-typeAsts-Enum": {
-            "min": 154,
-            "max": 154
+            "min": 119,
+            "max": 119
         },
         "harvest-typeAsts-Float": {
             "min": 9,
@@ -188,6 +180,10 @@
             "min": 40,
             "max": 40
         },
+        "harvest-typeAsts-WithSizeAttr": {
+            "min": 35,
+            "max": 35
+        },
         "harvest-typeAsts-XRef": {
             "min": 92,
             "max": 92
@@ -201,20 +197,16 @@
             "max": 6360
         },
         "local-var-add-success": {
-            "min": 6358,
-            "max": 6358
-        },
-        "local-var-error": {
-            "min": 2,
-            "max": 2
+            "min": 6346,
+            "max": 6346
         },
         "local-var-skipped-dup-local": {
-            "min": 1682,
-            "max": 1682
+            "min": 1696,
+            "max": 1696
         },
         "placeholder-created": {
-            "min": 4774,
-            "max": 4774
+            "min": 4739,
+            "max": 4739
         },
         "stab-value-func-relative": {
             "min": 42189,

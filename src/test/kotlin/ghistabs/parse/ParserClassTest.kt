@@ -416,6 +416,35 @@ class ParserClassTest {
         assertEquals(true to true, virtOf('D').let { it.isConst to it.isVolatile })
     }
 
+    /**
+     * Without `-gstabs+` gcc has no boolean descriptor to emit, so it writes `bool` as an enum over
+     * False/True (`gcc/dbxout.c`, the `else` of `use_gnu_debug_info_extensions`) and the width is
+     * lost. Decode it to what the extension branch would have written, so it does not reach Ghidra
+     * as a sizeof(int) enum.
+     */
+    @Test
+    fun testBoolSpelledAsEnumDecodesToTheBuiltin() {
+        val enumForm = (Parser("bool:t(0,4)=eFalse:0,True:1,;").parseSymbol() as SymbolDecl.Typedef).type
+        val extensionForm = TypeDecl.WithSizeAttr<LocalTypeId>(8, TypeDecl.Builtin(-16))
+        assertEquals(extensionForm, enumForm)
+    }
+
+    /**
+     * gcc emits the same spelling unnamed and inline, so the decode keys on the members alone — a
+     * name gate converted only the typedef and orphaned the inline copy from the content merge that
+     * had been naming it, leaving 56 bool variables on an anonymous type. A user-written
+     * `enum Flag { False, True }` is therefore read as bool as well; gcc's spelling is identical.
+     */
+    @Test
+    fun testTheSameSpellingDecodesWhereverItAppears() {
+        val decoded = TypeDecl.WithSizeAttr<LocalTypeId>(8, TypeDecl.Builtin(-16))
+        val named = (Parser("bool:t(0,4)=eFalse:0,True:1,;").parseSymbol() as SymbolDecl.Typedef).type
+        assertEquals(decoded, named)
+        // An inline `(cu,n)=<body>` keeps its id binding; the body is what must match.
+        val inlineUnnamed = (Parser("f:F(0,8)=eFalse:0,True:1,;").parseSymbol() as SymbolDecl.Function).type
+        assertEquals(TypeDecl.InlineDef(LocalTypeId(0, 8), decoded), inlineUnnamed)
+    }
+
     @Test
     fun testUnconsumedStructSectionRejected() {
         // A struct section we don't handle must fail loudly, not get silently dropped as

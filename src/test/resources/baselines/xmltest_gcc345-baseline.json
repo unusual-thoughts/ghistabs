@@ -9,8 +9,8 @@
             "max": 22
         },
         "canonical-key-merged": {
-            "min": 1128,
-            "max": 1128
+            "min": 1127,
+            "max": 1127
         },
         "canonical-key-multi-hash": {
             "min": 8,
@@ -37,8 +37,8 @@
             "max": 3
         },
         "degraded-field-dropped": {
-            "min": 2,
-            "max": 2
+            "min": 1,
+            "max": 1
         },
         "degraded-global-typed-all-undefined": {
             "min": 5,
@@ -201,8 +201,8 @@
             "max": 772
         },
         "harvest-typeAsts-Enum": {
-            "min": 309,
-            "max": 309
+            "min": 304,
+            "max": 304
         },
         "harvest-typeAsts-Float": {
             "min": 171,
@@ -249,8 +249,8 @@
             "max": 12
         },
         "harvest-typeAsts-WithSizeAttr": {
-            "min": 513,
-            "max": 513
+            "min": 518,
+            "max": 518
         },
         "harvest-typeAsts-XRef": {
             "min": 162,
@@ -273,16 +273,16 @@
             "max": 1
         },
         "local-var-add-success": {
-            "min": 1015,
-            "max": 1015
+            "min": 1014,
+            "max": 1014
         },
         "local-var-error": {
             "min": 23,
             "max": 23
         },
         "local-var-skipped-dup-local": {
-            "min": 2000,
-            "max": 2000
+            "min": 2001,
+            "max": 2001
         },
         "local-var-skipped-dup-param": {
             "min": 587,
@@ -297,8 +297,8 @@
             "max": 36
         },
         "placeholder-created": {
-            "min": 16724,
-            "max": 16724
+            "min": 16723,
+            "max": 16723
         },
         "pointee-typed": {
             "min": 30,
