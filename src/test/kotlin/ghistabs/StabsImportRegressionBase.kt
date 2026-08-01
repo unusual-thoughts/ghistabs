@@ -946,10 +946,8 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         fixtures = [
             "crypto_mi_test_gcc421.exe", "crypto_mi_test_gcc421_stripped.exe",
             "xmltest_gcc421.exe", "xmltest_gcc421_stripped.exe",
-            // a.out: hello is plain C (no classes at all); tinyxml is gcc 2.95, which predates the
-            // Itanium ABI — its vtables are `__vt$Class`, not `_ZTV…`, so Itanium.vtableClassOf
-            // matches nothing (verified: 0 _ZTV vs 24 __vt symbols in the fixture).
-            "hello_aout_gcc295.o", "tinyxml_aout_gcc295.o",
+            // a.out: both fixtures are plain C, so there are no classes and no vtables at all.
+            "hello_aout_gcc295.o", "zlib_aout_gcc263.o",
         ],
         reason = "gcc 12 omits the method stab section for polymorphic classes, so no vftable is applied",
     )
@@ -1380,8 +1378,8 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
      */
     @Test
     @ExpectedToFail(
-        fixtures = ["hello_aout_gcc295.o"],
-        reason = "plain C fixture — no C++ inheritance edges exist to materialize",
+        fixtures = ["hello_aout_gcc295.o", "zlib_aout_gcc263.o"],
+        reason = "plain C fixtures — no C++ inheritance edges exist to materialize",
     )
     fun inheritanceWasApplied() {
         val applied = context.diagnostics.snapshotCounters()["inheritance-applied"] ?: 0L
@@ -1609,7 +1607,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
      */
     @Test
     @ExpectedToFail(
-        fixtures = ["tinyxml_aout_gcc295.o"],
+        fixtures = ["zlib_aout_gcc263.o"],
         reason = "relocatable object (ld -r): sections all sit at 0 unrelocated, so stab values " +
             "cannot resolve into executable code",
     )
