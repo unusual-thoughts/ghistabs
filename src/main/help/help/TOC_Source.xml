@@ -49,9 +49,14 @@
 
 
 <tocroot>
-	<!-- Uncomment and adjust fields to add help topic to help system's Table of Contents
 	<tocref id="Ghidra Functionality">
-		<tocdef id="HelpAnchor" text="My Feature" target="help/topics/my_topic/help.html" />
+		<tocdef id="Stabs" text="STABS Importer" target="help/topics/Stabs/help.html" >
+			<tocdef id="Stabs_Importer_Analyzer" text="Stabs Importer Analyzer"
+			         target="help/topics/Stabs/help.html#Stabs_Importer_Analyzer" />
+			<tocdef id="Stabs_Tools_Menu" text="Tools &#x2192; Stabs"
+			         target="help/topics/Stabs/help.html#Stabs_Tools_Menu" />
+			<tocdef id="Stabs_Supporting_Analyzers" text="Supporting Analyzers"
+			         target="help/topics/Stabs/help.html#Stabs_Supporting_Analyzers" />
+		</tocdef>
 	</tocref>
-	-->
 </tocroot>

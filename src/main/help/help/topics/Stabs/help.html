@@ -1,0 +1,225 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+
+<HTML>
+  <HEAD>
+    <META http-equiv="Content-Language" content="en-us">
+    <META http-equiv="Content-Type" content="text/html; charset=windows-1252">
+
+    <TITLE>STABS Importer</TITLE>
+    <LINK rel="stylesheet" type="text/css" href="help/shared/DefaultStyle.css">
+  </HEAD>
+
+  <BODY>
+    <H1><A name="Stabs"></A>STABS Importer</H1>
+
+    <P>Imports <B>STABS</B> debug information (the <CODE>.stab</CODE> / <CODE>.stabstr</CODE>
+    section pair) into the program: data types, function signatures, parameters and locals,
+    C++ classes and vtables, constants and static data members. It targets the debug info
+    <B>gcc 2.9x&ndash;3.4</B> emits for Cygwin/MinGW PE binaries, which neither the DWARF nor
+    the PDB importer can read; x86-64 ELF binaries built with <CODE>-gstabs</CODE> are also
+    handled.</P>
+
+    <P>Everything is driven by the <A href="#Stabs_Importer_Analyzer">Stabs Importer</A>
+    analyzer. Three <A href="#Stabs_Supporting_Analyzers">supporting analyzers</A> clean up
+    code and ABI details around it, and the <A href="#Stabs_Tools_Menu">Tools &rarr; Stabs</A>
+    menu re-runs the import or exports a reconstructed decompilation.</P>
+
+    <BLOCKQUOTE>
+      <P><B>Note:</B> The extension does nothing on a
+      program that has no <CODE>.stab</CODE> and <CODE>.stabstr</CODE> memory blocks; the
+      analyzer does not appear as applicable and the menu actions stay disabled.</P>
+    </BLOCKQUOTE>
+
+    <H2><A name="Stabs_Importer_Analyzer"></A>Stabs Importer Analyzer</H2>
+
+    <P>Runs automatically during auto-analysis, at low priority &mdash; deliberately after
+    Ghidra's demangler, whose results it builds on. The import happens <B>once per program</B>:
+    a <CODE>Stabs Imported</CODE> flag is written to the program information, and later
+    re-analysis passes short-circuit on it. To force another pass use
+    <A href="#Stabs_Reimport">Tools &rarr; Stabs &rarr; Re-import</A>.</P>
+
+    <P>What it applies to the program:</P>
+
+    <UL>
+      <LI>Structs, unions, enums, typedefs, pointers, arrays and function pointers, resolved
+      across compilation units, into the data type manager.</LI>
+
+      <LI>Function return types and parameter lists, with the parameter and local variable
+      names and types recorded by the compiler &mdash; stack slots and register variables
+      alike.</LI>
+
+      <LI>C++ class namespaces, member methods typed with a real <CODE>this</CODE>, embedded
+      base classes, and Itanium <CODE>&lt;Class&gt;_vftable</CODE> structures applied at the
+      <CODE>_ZTV</CODE> symbols so virtual dispatch resolves.</LI>
+
+      <LI>Compile-time constants as equates, and static data members reconciled with their
+      linkage names.</LI>
+
+      <LI>Plate comments marking lexical scopes, and an optional decoded overlay of the
+      <CODE>.stab</CODE> section itself.</LI>
+    </UL>
+
+    <H3><A name="Stabs_Options"></A>Options</H3>
+
+    <P>Set these under <B>Analysis &rarr; Auto Analyze&hellip; &rarr; Stabs Importer</B>.
+    Because the import runs only once, change the options <I>before</I> the first analysis, or
+    change them and then use <A href="#Stabs_Reimport">Re-import</A>.</P>
+
+    <BLOCKQUOTE>
+      <TABLE border="1" width="100%">
+        <TR>
+          <TH width="30%">Option</TH>
+          <TH width="10%">Default</TH>
+          <TH>Description</TH>
+        </TR>
+
+        <TR>
+          <TD><B>Reconstruct C++ classes</B></TD>
+          <TD>on</TD>
+          <TD>Build class namespaces, this-typed member methods (<CODE>__thiscall</CODE>) and
+          <CODE>&lt;Class&gt;_vftable</CODE> structs applied at <CODE>_ZTV</CODE>. Turning it
+          off leaves plain structs: member calls lose their <CODE>this</CODE> and arguments,
+          and virtual calls stay unresolved.</TD>
+        </TR>
+
+        <TR>
+          <TD><B>Apply scope plate comments</B></TD>
+          <TD>on</TD>
+          <TD>Place plate comments at lexical scope boundaries wherever the compiler emitted
+          scope records.</TD>
+        </TR>
+
+        <TR>
+          <TD><B>Shorten templated names via typedefs</B></TD>
+          <TD>off</TD>
+          <TD>Rename long templated data types onto their shorter typedef aliases
+          (<CODE>basic_string&lt;char, &hellip;&gt;</CODE> &rarr; <CODE>string</CODE>),
+          recursively inside other templates. Much more readable on C++ code; the original
+          spelling is lost from the type name.</TD>
+        </TR>
+
+        <TR>
+          <TD><B>Fold source-file spellings</B></TD>
+          <TD>on</TD>
+          <TD>gcc records one physical header under two spellings &mdash; its full include
+          path and the bare name from <CODE>#include "x.h"</CODE>. Folding merges them, by
+          unique basename, onto a single rendered output file.</TD>
+        </TR>
+
+        <TR>
+          <TD><B>Overlay .stab section structs</B></TD>
+          <TD>on</TD>
+          <TD>Decode every entry of the <CODE>.stab</CODE> section into a
+          <CODE>StabRecord</CODE> structure, with references into <CODE>.stabstr</CODE> and
+          back to the code or data the record describes. Useful for inspecting the raw debug
+          info in the Listing; costs nothing else.</TD>
+        </TR>
+
+        <TR>
+          <TD><B>Minimum log level</B></TD>
+          <TD>INFO</TD>
+          <TD>Floor for messages written to the analysis log: <CODE>DEBUG</CODE>,
+          <CODE>INFO</CODE>, <CODE>WARN</CODE> or <CODE>ERROR</CODE>. Bookmarks and the
+          end-of-import counter summary are emitted regardless.</TD>
+        </TR>
+      </TABLE>
+    </BLOCKQUOTE>
+
+    <H3><A name="Stabs_Diagnostics"></A>Diagnostics</H3>
+
+    <P>The import reports in three ways: filtered messages in the analysis log, an
+    <CODE>Analysis</CODE> bookmark at every diagnostic that has an address (so the Bookmarks
+    window doubles as a worklist of things it could not fully translate), and a summary of
+    counters &mdash; records read and parsed, types materialized, functions, globals, classes
+    and constants applied &mdash; at the end of the run.</P>
+
+    <H2><A name="Stabs_Tools_Menu"></A>Tools &rarr; Stabs</H2>
+
+    <P>Both actions require the current program to have <CODE>.stab</CODE> and
+    <CODE>.stabstr</CODE> blocks; they are disabled otherwise.</P>
+
+    <H3><A name="Stabs_Reimport"></A>Re-import</H3>
+
+    <P>Clears the <CODE>Stabs Imported</CODE> flag and re-runs auto-analysis, so the importer
+    executes again over the current program. This is the way to pick up changed analyzer
+    options. Types and symbols already applied are updated in place rather than duplicated,
+    but the pass is not free &mdash; on a large C++ binary it takes as long as the first
+    import did.</P>
+
+    <H3><A name="Stabs_Export_Decompilation"></A>Export decompilation&hellip;</H3>
+
+    <P>Prompts for a target folder and writes a reconstructed <B>decompilation</B> into it:
+    one file per source file the debug info names, laid out at the original source lines, with
+    Ghidra's decompiled statements placed across each function's line span and each tagged with
+    the source line its instructions came from. gcc's SjLj exception scaffolding is elided (a
+    no-op on ELF binaries, which use DWARF exception handling).</P>
+
+    <P>Within a function's span the declarations give way to the code. Everything the
+    decompilation already shows &mdash; the address annotations, brace delimiters and local
+    variable declarations &mdash; is dropped; declarations that gcc's source-file records
+    misattributed to this file are purged where they share a line with real content; and
+    anything else stranded on those lines is demoted to a <CODE>// stray:</CODE> comment
+    carrying its original line's provenance. Real file-scope globals keep their line.
+    <CODE>#include</CODE> lines are reconstructed and trailing blank lines trimmed.</P>
+
+    <P>The headless driver also offers a <B>skeleton</B> mode, which does none of that: it
+    keeps every declaration at its original line, misattributions included and flagged, plus a
+    trailing block for anonymous aggregates that have no line to sit on. Use the skeleton to
+    see what the debug info claimed, and the decompilation to read the code.</P>
+
+    <P>The importer must have run first &mdash; the render reads the types and signatures it
+    applied. If it hasn't, the action says so and does nothing.</P>
+
+    <BLOCKQUOTE>
+      <P><B>Note:</B> A headless command-line driver ships alongside the extension and renders
+      both modes, with the render options exposed as flags. See the project README.</P>
+    </BLOCKQUOTE>
+
+    <H2><A name="Stabs_Supporting_Analyzers"></A>Supporting Analyzers</H2>
+
+    <P>Three analyzers ship with the extension that do not read stabs at all. They are enabled
+    by default, can be re-run, and are each available as one-shot analysis.</P>
+
+    <BLOCKQUOTE>
+      <TABLE border="1" width="100%">
+        <TR>
+          <TH width="30%">Analyzer</TH>
+          <TH>Description</TH>
+        </TR>
+
+        <TR>
+          <TD><B>Struct-return ABI (x86 gcc)</B></TD>
+          <TD>x86:LE:32 gcc programs only. gcc returns a class through a hidden,
+          caller-allocated pointer whenever it is non-trivial for calls &mdash; regardless of
+          size &mdash; while trivial small aggregates really do come back in
+          <CODE>EAX</CODE>/<CODE>EDX:EAX</CODE>. No compiler-spec rule can express that
+          distinction, so the shipped <CODE>x86gcc</CODE> spec is wrong in both directions at
+          once. The callee's stack purge settles it (<CODE>RET 0x4</CODE> versus a bare
+          <CODE>RET</CODE>); where that disagrees with the spec, the function is reassigned to
+          a derived calling convention (<CODE>__thiscall_memret</CODE>,
+          <CODE>__cdecl_regret</CODE>, &hellip;) installed as a program specification
+          extension. The correction is therefore visible as a named convention, and can be
+          undone by hand.</TD>
+        </TR>
+
+        <TR>
+          <TD><B>In-Function Gap Disassembler</B></TD>
+          <TD>Disassembles undefined bytes lying <I>inside</I> a function's extent &mdash;
+          hot/cold split holes and exception landing pads reachable only by unwinding, which
+          normal flow-following never reaches. Only applied where every byte of the gap
+          decodes cleanly, so undefined bytes outside any function are left as data.</TD>
+        </TR>
+
+        <TR>
+          <TD><B>Filler Byte Condenser</B></TD>
+          <TD>Collapses compiler alignment padding in executable memory &mdash; NOP idioms and
+          the jump-over-fill form GAS emits for <CODE>.p2align</CODE> &mdash; into
+          <CODE>Alignment</CODE> data, so it is not mistaken for undescribed data. Real data
+          following the padding is left alone.</TD>
+        </TR>
+      </TABLE>
+    </BLOCKQUOTE>
+
+    <P class="providedbyplugin">Provided by: <I>StabsPlugin</I></P>
+  </BODY>
+</HTML>

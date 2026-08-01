@@ -13,6 +13,7 @@ import ghidra.framework.plugintool.PluginInfo
 import ghidra.framework.plugintool.PluginTool
 import ghidra.framework.plugintool.util.PluginStatus
 import ghidra.program.model.listing.Program
+import ghidra.util.HelpLocation
 import ghidra.util.Msg
 import ghidra.util.task.Task
 import ghidra.util.task.TaskLauncher
@@ -43,11 +44,15 @@ import ghistabs.render.Renderer
 )
 class StabsPlugin(tool: PluginTool) : ProgramPlugin(tool) {
     init {
-        tool.addAction(action("Re-import", "&Re-import") { reimport(it) })
-        tool.addAction(action("Export decompilation", "&Export decompilation…") { exportDecompilation(it) })
+        tool.addAction(action("Re-import", "&Re-import", "Stabs_Reimport") { reimport(it) })
+        tool.addAction(
+            action("Export decompilation", "&Export decompilation…", "Stabs_Export_Decompilation") {
+                exportDecompilation(it)
+            },
+        )
     }
 
-    private fun action(id: String, menu: String, perform: (Program) -> Unit) =
+    private fun action(id: String, menu: String, helpAnchor: String, perform: (Program) -> Unit) =
         object : DockingAction("Stabs $id", getName()) {
             override fun actionPerformed(context: ActionContext?) {
                 val program = currentProgram
@@ -58,6 +63,7 @@ class StabsPlugin(tool: PluginTool) : ProgramPlugin(tool) {
             override fun isEnabledForContext(context: ActionContext?) = hasStabs()
         }.apply {
             menuBarData = MenuData(arrayOf("&Tools", "Stabs", menu), null, "Stabs")
+            helpLocation = HelpLocation(HELP_TOPIC, helpAnchor)
             isEnabled = true
         }
 
@@ -104,5 +110,10 @@ class StabsPlugin(tool: PluginTool) : ProgramPlugin(tool) {
                 Msg.showInfo(javaClass, null, "Stabs", "Wrote $written decompilation files to $dir")
             }
         })
+    }
+
+    private companion object {
+        /** `src/main/help/help/topics/Stabs/` — the topic dir name is the topic id. */
+        const val HELP_TOPIC = "Stabs"
     }
 }
