@@ -1,0 +1,165 @@
+{
+    "counters": {
+        "apply-error": {
+            "min": 2,
+            "max": 2
+        },
+        "demangle-applied": {
+            "min": 0,
+            "max": 0
+        },
+        "demangle-attempted": {
+            "min": 0,
+            "max": 0
+        },
+        "demangle-displaced-function-renamed": {
+            "min": 0,
+            "max": 0
+        },
+        "demangle-displaced-label-dropped": {
+            "min": 0,
+            "max": 0
+        },
+        "done": {
+            "min": 1,
+            "max": 1
+        },
+        "drop-record-bcomm": {
+            "min": 2,
+            "max": 2
+        },
+        "drop-record-opt": {
+            "min": 1,
+            "max": 1
+        },
+        "dtm-conflicts-post": {
+            "min": 0,
+            "max": 0
+        },
+        "dtm-conflicts-pre": {
+            "min": 0,
+            "max": 0
+        },
+        "file-start": {
+            "min": 1,
+            "max": 1
+        },
+        "global-applied": {
+            "min": 1,
+            "max": 1
+        },
+        "harvest-collisions-divergent": {
+            "min": 0,
+            "max": 0
+        },
+        "harvest-collisions-divergent-total": {
+            "min": 0,
+            "max": 0
+        },
+        "harvest-collisions-raw": {
+            "min": 0,
+            "max": 0
+        },
+        "harvest-collisions-raw-total": {
+            "min": 0,
+            "max": 0
+        },
+        "harvest-constants": {
+            "min": 0,
+            "max": 0
+        },
+        "harvest-cus": {
+            "min": 1,
+            "max": 1
+        },
+        "harvest-functions": {
+            "min": 2,
+            "max": 2
+        },
+        "harvest-globals": {
+            "min": 2,
+            "max": 2
+        },
+        "harvest-parse-errors": {
+            "min": 0,
+            "max": 0
+        },
+        "harvest-records-parsed": {
+            "min": 51,
+            "max": 51
+        },
+        "harvest-records-read": {
+            "min": 51,
+            "max": 51
+        },
+        "harvest-statics": {
+            "min": 1,
+            "max": 1
+        },
+        "harvest-symbols": {
+            "min": 3,
+            "max": 3
+        },
+        "harvest-typeAsts": {
+            "min": 24,
+            "max": 24
+        },
+        "harvest-typeAsts-Array": {
+            "min": 1,
+            "max": 1
+        },
+        "harvest-typeAsts-Enum": {
+            "min": 1,
+            "max": 1
+        },
+        "harvest-typeAsts-Float": {
+            "min": 6,
+            "max": 6
+        },
+        "harvest-typeAsts-Pointer": {
+            "min": 1,
+            "max": 1
+        },
+        "harvest-typeAsts-Range": {
+            "min": 11,
+            "max": 11
+        },
+        "harvest-typeAsts-Ref": {
+            "min": 1,
+            "max": 1
+        },
+        "harvest-typeAsts-Struct": {
+            "min": 2,
+            "max": 2
+        },
+        "harvest-typeAsts-Void": {
+            "min": 1,
+            "max": 1
+        },
+        "harvest-typeAsts-dup-by-id": {
+            "min": 0,
+            "max": 0
+        },
+        "harvest-typeAsts-unique-by-id": {
+            "min": 24,
+            "max": 24
+        },
+        "local-var-add-success": {
+            "min": 2,
+            "max": 2
+        },
+        "placeholder-created": {
+            "min": 6,
+            "max": 6
+        },
+        "stab-value-absolute": {
+            "min": 6,
+            "max": 6
+        },
+        "stab-value-func-relative": {
+            "min": 6,
+            "max": 6
+        }
+    },
+    "source": "hello_aout_gcc295.o - generated from snapshotCounters()"
+}

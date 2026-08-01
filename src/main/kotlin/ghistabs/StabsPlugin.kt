@@ -67,8 +67,7 @@ class StabsPlugin(tool: PluginTool) : ProgramPlugin(tool) {
             isEnabled = true
         }
 
-    private fun hasStabs() =
-        currentProgram?.memory?.getBlock(".stab") != null && currentProgram?.memory?.getBlock(".stabstr") != null
+    private fun hasStabs() = currentProgram?.let(StabReader::hasStabs) == true
 
     private fun reimport(program: Program) {
         program.markStabsDone(false)

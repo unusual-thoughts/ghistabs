@@ -3,7 +3,6 @@ package ghistabs.importer
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.*
 import ghidra.program.model.listing.CommentType
-import ghidra.program.model.mem.MemoryBlock
 import ghidra.program.model.symbol.RefType
 import ghidra.program.model.symbol.SourceType
 import ghistabs.diagnose.DiagnosticSink
@@ -45,31 +44,35 @@ private val VALUE_IS_FUNC_RELATIVE = setOf(StabType.N_SLINE, StabType.N_LBRAC, S
  */
 class StabSectionOverlay(private val ctx: ImportContext<*>) : DiagnosticSink by ctx {
     private val program = ctx.program
-    val stabBlock: MemoryBlock by lazy { program.memory.getBlock(".stab") }
-    val stabstrBlock: MemoryBlock by lazy { program.memory.getBlock(".stabstr") }
 
     fun apply(): Int {
-        val records = StabReader.fromProgram(program)?.physicalRecords()?.toList()
-        if (records.isNullOrEmpty()) return 0
+        // Whichever blocks the reader used: `.stab`/`.stabstr` on ELF/PE, `.symtab`/`.strtab` on a.out,
+        // where the records are entries in the linker symbol table. Record N sits at
+        // N * STAB_RECORD_SIZE either way — StabReader indexes every physical entry, including the
+        // link-time symbols it skips under SYMTAB.
+        val source = StabReader.sourceOf(program) ?: return 0
+        val records = StabReader.fromProgram(program)?.physicalRecords()?.toList().orEmpty()
+        if (records.isEmpty()) return 0
 
-        program.runTransaction("Stabs: overlay .stab section") {
+        program.runTransaction("Stabs: overlay stab records") {
             var funcStart: Address? = null
             records.forEach { rec ->
                 if (rec.type == StabType.N_FUN) {
                     funcStart = rec.name.ifEmpty { null }?.let { ctx.resolver.buildAddress(rec.value) }
                 }
-                rec.overlay(funcStart)
+                rec.overlay(source, funcStart)
             }
         }
         return records.size
     }
 
-    val StabRecord.addr get() = stabBlock.start + index.toLong() * STAB_RECORD_SIZE
-    val StabRecord.nameAddr get() = stabstrBlock.start + stabstrOffset
-    val StabRecord.comment
+    private val StabRecord.comment
         get() = if (name.isEmpty()) type.name else "${type.name} \"$name\""
 
-    private fun StabRecord.overlay(funcStart: Address?) {
+    private fun StabRecord.overlay(source: StabReader.Source, funcStart: Address?) {
+        val addr = source.records.start + index.toLong() * STAB_RECORD_SIZE
+        val nameAddr = source.strings.start + stabstrOffset
+
         program.forceCreateData(addr, stabRecordStruct)
         program.listing.setComment(addr, CommentType.EOL, comment)
 
