@@ -15,10 +15,13 @@ import ghistabs.StabsOptions.Companion.markStabsDone
 import ghistabs.StabsOptions.Companion.registerStabs
 import ghistabs.diagnose.*
 import ghistabs.importer.*
+import ghistabs.parse.StabReader
 
 /**
  * Imports STABS debug info (.stab/.stabstr) into Ghidra: types, function signatures,
- * locals, C++ classes, vtables. Targets PE/ELF binaries produced by Cygwin gcc 3.4.4.
+ * locals, C++ classes, vtables. Covers gcc 3.2 through 12 — 13 dropped stabs emission — on both
+ * Unix and Cygwin targets, across ELF, PE/COFF and a.out (where the records live in the linker
+ * symbol table rather than in debug sections).
  *
  * Auto-runs once per program (gated by [StabsOptions.STABS_DONE]); re-runnable via the
  * `Tools > Stabs > Re-import` menu action.
@@ -42,8 +45,7 @@ class StabsAnalyzer :
     override fun canAnalyze(program: Program?): Boolean {
         if (program == null) return false
         if (program.isStabsDone) return false
-        val mem = program.memory
-        return mem.getBlock(".stab") != null && mem.getBlock(".stabstr") != null
+        return StabReader.hasStabs(program)
     }
 
     override fun registerOptions(options: Options, program: Program?) = options.registerStabs()

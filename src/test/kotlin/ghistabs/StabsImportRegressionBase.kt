@@ -235,18 +235,21 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
 
     @Test
     fun countersWithinBaseline() {
-        assumeTrue(baselineFile.exists(), "Skipping: no committed baseline for $binaryName")
         // Authoritative per-category counts. Not `log.tagFrequencies()`: that only sees categories
         // that reach the sink (record*/direct-inc bypass it) and ignores `count = n` tallies, which
         // made assertions on those categories (e.g. empty-scope) silently vacuous.
         val counters = context.diagnostics.snapshotCounters()
 
         // -PregenerateBaselines=true rewrites the baseline from the observed counts (deterministic
-        // import). The resulting git diff is the record of exactly which counters moved.
+        // import). The resulting git diff is the record of exactly which counters moved. This has to
+        // precede the exists() check below, or a newly added fixture can never get a first baseline:
+        // the assumption skips the test before it can write one.
         if (System.getProperty("regenerateBaselines") == "true") {
             BaselineWriter.write(baselineFile, counters, "$binaryName - generated from snapshotCounters()")
             return
         }
+
+        assumeTrue(baselineFile.exists(), "Skipping: no committed baseline for $binaryName")
 
         val baseline = BaselineLoader.load(baselineFile)
 
@@ -943,6 +946,10 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         fixtures = [
             "crypto_mi_test_gcc421.exe", "crypto_mi_test_gcc421_stripped.exe",
             "xmltest_gcc421.exe", "xmltest_gcc421_stripped.exe",
+            // a.out: hello is plain C (no classes at all); tinyxml is gcc 2.95, which predates the
+            // Itanium ABI — its vtables are `__vt$Class`, not `_ZTV…`, so Itanium.vtableClassOf
+            // matches nothing (verified: 0 _ZTV vs 24 __vt symbols in the fixture).
+            "hello_aout_gcc295.o", "tinyxml_aout_gcc295.o",
         ],
         reason = "gcc 12 omits the method stab section for polymorphic classes, so no vftable is applied",
     )
@@ -1196,6 +1203,12 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     }
 
     @Test
+    @ExpectedToFail(
+        fixtures = ["hello_aout_gcc295.o"],
+        reason = "a.out N_GSYM globals get no address: Ghidra's UnixAoutProgramLoader places symbols " +
+            "at dataBlock.start + n_value although n_value is already image-relative, so they land " +
+            "one text-segment past their block and no Data can be created",
+    )
     fun globalsCoverEachDataTypeKind() {
         val seenKinds = mutableSetOf<String>()
         program.listing.getDefinedData(true).forEach { data ->
@@ -1372,6 +1385,10 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
      * AFTER mode (CONCURRENT mode feeds through MessageSinkAdapter→MessageLog).
      */
     @Test
+    @ExpectedToFail(
+        fixtures = ["hello_aout_gcc295.o"],
+        reason = "plain C fixture — no C++ inheritance edges exist to materialize",
+    )
     fun inheritanceWasApplied() {
         val applied = context.diagnostics.snapshotCounters()["inheritance-applied"] ?: 0L
         // box2d_tests has no detectable inheritance in our scan (no mangled
@@ -1597,6 +1614,11 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
      * FuncRelativeAddressIntegrationTest.)
      */
     @Test
+    @ExpectedToFail(
+        fixtures = ["tinyxml_aout_gcc295.o"],
+        reason = "relocatable object (ld -r): sections all sit at 0 unrelocated, so stab values " +
+            "cannot resolve into executable code",
+    )
     fun funcRelativeAddressesLandInExecutableCode() {
         val resolver = program.defaultContext().resolver
         val reader = StabReader.fromProgram(program)

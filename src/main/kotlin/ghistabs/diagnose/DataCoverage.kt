@@ -9,7 +9,8 @@ import ghistabs.inHull
 import ghistabs.parse.StabReader
 import ghistabs.parse.StabType
 
-private val NON_DATA_BLOCKS = setOf(".stab", ".stabstr", ".comment")
+// a.out keeps its stabs in the linker symbol table, so `.symtab`/`.strtab` are debug info here too.
+private val NON_DATA_BLOCKS = setOf(".stab", ".stabstr", ".symtab", ".strtab", ".comment")
 
 // Each CU's .bss segment is 16-byte aligned (variables pack within it), so the undefined gap at a
 // CU boundary is ≤15 bytes of alignment padding — a run this long or longer is undescribed data.

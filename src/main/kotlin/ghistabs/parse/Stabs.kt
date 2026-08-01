@@ -4,11 +4,19 @@ import ghidra.app.util.bin.BinaryReader
 import ghidra.app.util.bin.ByteArrayProvider
 import ghidra.program.model.data.*
 import ghidra.program.model.listing.Program
+import ghidra.program.model.mem.MemoryBlock
 import ghistabs.byteProvider
 import kotlinx.serialization.Serializable
 
 /** On-disk size of a single stab record (Sun a.out / PE-COFF / ELF). */
 const val STAB_RECORD_SIZE: Int = 12
+
+/**
+ * `N_STAB` from `<a.out.h>` (0340): the mask marking an entry in an a.out symbol table as a
+ * *debugging* symbol. Any bit set means the entry is a stab; clear means it is a link-time symbol
+ * (`N_UNDF`/`N_ABS`/`N_TEXT`/`N_DATA`/`N_BSS`/`N_INDR`/`N_FN`, the low bit being `N_EXT`).
+ */
+const val N_STAB_MASK: Int = 0xE0
 
 /**
  * Stab record type codes, mirrored from `binutils/include/aout/stab.def`.
@@ -258,11 +266,27 @@ data class StabRecord(val index: Int, val type: StabType, val raw: RawHeader, va
     var stabstrOffset: Long = 0
 }
 
+/** Where the records came from, which decides how `n_strx` reads and what else shares the table. */
+enum class Layout {
+    /** ELF/PE `.stab`: every record is a stab, and an `N_UNDF` header rebases `n_strx` per CU. */
+    SECTION,
+
+    /**
+     * a.out: the symbol table *is* the stab table. One flat string table, so `n_strx` is absolute,
+     * and the debugging symbols ([N_STAB_MASK]) are interleaved with the link-time symbols.
+     */
+    SYMTAB,
+}
+
 /**
- * Reads stab records from raw `.stab` / `.stabstr` bytes, tracking per-CU offsets and merging
- * `\`-continuation chains. Truncated tails (size % 12 ≠ 0) are surfaced via [Result.truncatedTail].
+ * Reads stab records from raw record/string bytes, tracking per-CU offsets ([Layout.SECTION]) and
+ * merging `\`-continuation chains. Truncated tails (size % 12 ≠ 0) surface via [Result.truncatedTail].
  */
-class StabReader(private val stab: BinaryReader, private val stabStr: (Long) -> String) {
+class StabReader(
+    private val stab: BinaryReader,
+    private val stabStr: (Long) -> String,
+    private val layout: Layout = Layout.SECTION,
+) {
     data class Result(
         val records: List<StabRecord>,
         val totalRecordCount: Int = records.size,
@@ -305,7 +329,10 @@ class StabReader(private val stab: BinaryReader, private val stabStr: (Long) -> 
         while (stab.hasNext(STAB_RECORD_SIZE)) {
             val record = StabRecord(index++, RawHeader(stab))
 
-            if (record.type == StabType.N_UNDF) {
+            // Under SYMTAB the table also holds the link-time symbols; only debugging symbols are ours.
+            if (layout == Layout.SYMTAB && (record.raw.type.toInt() and N_STAB_MASK) == 0) continue
+
+            if (layout == Layout.SECTION && record.type == StabType.N_UNDF) {
                 cuOff += cuSize
                 cuSize = record.value
             }
@@ -315,17 +342,41 @@ class StabReader(private val stab: BinaryReader, private val stabStr: (Long) -> 
         }
     }
 
-    companion object {
-        /** Read `.stab`/`.stabstr` from [program]. Returns null if either block is missing. */
-        fun fromProgram(program: Program): StabReader? {
-            val mem = program.memory
-            val stabBlock = mem.getBlock(".stab") ?: return null
-            val stabstrBlock = mem.getBlock(".stabstr") ?: return null
-            val littleEndian = !program.memory.isBigEndian
+    /** Blocks holding the records and their strings, and how to read them. */
+    data class Source(val records: MemoryBlock, val strings: MemoryBlock, val layout: Layout)
 
-            return StabReader(
-                stab = BinaryReader(stabBlock.byteProvider, littleEndian),
-                stabStr = { off: Long -> BinaryReader(stabstrBlock.byteProvider, littleEndian).readUtf8String(off) },
+    companion object {
+        /** Where the formats keep stabs, in precedence order: ELF/PE sections, then the a.out symtab. */
+        private val SOURCES = listOf(
+            Triple(".stab", ".stabstr", Layout.SECTION),
+            Triple(".symtab", ".strtab", Layout.SYMTAB),
+        )
+
+        /** Which blocks [program] keeps its stabs in, for callers that need the bytes' addresses. */
+        fun sourceOf(program: Program): Source? = SOURCES.firstNotNullOfOrNull { (records, strings, layout) ->
+            program.memory.getBlock(records)?.let { r ->
+                program.memory.getBlock(strings)?.let { s -> Source(r, s, layout) }
+            }
+        }
+
+        /**
+         * Whether [program] carries stabs at all — block lookups only, opening no streams and reading no
+         * bytes. The gate for `canAnalyze` and the menu actions, which must stay cheap and are asked
+         * about every program.
+         */
+        fun hasStabs(program: Program): Boolean = sourceOf(program) != null
+
+        /**
+         * Stabs from [program], wherever the format keeps them: dedicated `.stab`/`.stabstr` sections
+         * (ELF/PE), else the a.out linker symbol table, which Ghidra's loader exposes as
+         * `.symtab`/`.strtab`. Null when the program carries neither pair.
+         */
+        fun fromProgram(program: Program): StabReader? = sourceOf(program)?.let { (records, strings, layout) ->
+            val littleEndian = !program.memory.isBigEndian
+            StabReader(
+                stab = BinaryReader(records.byteProvider, littleEndian),
+                stabStr = { off: Long -> BinaryReader(strings.byteProvider, littleEndian).readUtf8String(off) },
+                layout = layout,
             )
         }
     }

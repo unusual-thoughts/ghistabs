@@ -28,9 +28,6 @@ Thumbs.db
 
 *.log
 
-# Manual test fixtures (binaries placed locally, never committed; survive
-# `./gradlew clean` since they're in src/ rather than build/test-output/).
-src/test/resources/binaries/
 
 # Local-only scratch & working copies kept out of git
 src/test/resources.bak/
