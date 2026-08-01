@@ -112,10 +112,10 @@ val ghidraJvmArgs = listOf(
 /** Analyzer modes each fixture is generated for — mirrors ghistabs.Mode. */
 val fixtureModes = listOf("CONCURRENT", "AFTER")
 
-/** Every fixture binary on disk, sorted. */
+/** Every fixture binary on disk, sorted. `.md` is the folder's own README, not a fixture. */
 val fixtureBinaries by lazy {
     layout.projectDirectory.dir("src/test/resources/binaries").asFile
-        .listFiles()?.filter { it.isFile }?.map { it.name }?.sorted().orEmpty()
+        .listFiles()?.filter { it.isFile && it.extension != "md" }?.map { it.name }?.sorted().orEmpty()
 }
 
 /** Fixture filename + analyzer mode -> generated class name. Shared by generator, filter, listener. */

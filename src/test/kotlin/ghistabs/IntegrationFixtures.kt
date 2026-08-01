@@ -13,8 +13,10 @@ import java.util.stream.Stream
 object IntegrationFixtures {
     private val dir = File("src/test/resources/binaries")
 
-    /** The directory listing IS the corpus — a binary on disk can never sit silently untested. */
-    val ALL: List<String> get() = dir.listFiles()?.filter { it.isFile }?.map { it.name }?.sorted().orEmpty()
+    /** The directory listing IS the corpus — a binary on disk can never sit silently untested.
+     *  `.md` is the folder's own README, not a fixture. */
+    val ALL: List<String> get() = dir.listFiles()
+        ?.filter { it.isFile && it.extension != "md" }?.map { it.name }?.sorted().orEmpty()
 
     private val wanted: Set<String>
         get() = System.getProperty("fixtureFilter").orEmpty()
