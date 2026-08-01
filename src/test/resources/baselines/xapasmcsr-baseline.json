@@ -277,16 +277,16 @@
             "max": 91
         },
         "reglocal-add-success": {
-            "min": 903,
-            "max": 903
+            "min": 866,
+            "max": 866
         },
         "reglocal-skipped-dup-local": {
-            "min": 592,
-            "max": 592
+            "min": 572,
+            "max": 572
         },
         "reglocal-skipped-dup-param": {
-            "min": 809,
-            "max": 809
+            "min": 866,
+            "max": 866
         },
         "replaced-demangler": {
             "min": 73,
