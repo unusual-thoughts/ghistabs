@@ -1203,12 +1203,6 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     }
 
     @Test
-    @ExpectedToFail(
-        fixtures = ["hello_aout_gcc295.o"],
-        reason = "a.out N_GSYM globals get no address: Ghidra's UnixAoutProgramLoader places symbols " +
-            "at dataBlock.start + n_value although n_value is already image-relative, so they land " +
-            "one text-segment past their block and no Data can be created",
-    )
     fun globalsCoverEachDataTypeKind() {
         val seenKinds = mutableSetOf<String>()
         program.listing.getDefinedData(true).forEach { data ->

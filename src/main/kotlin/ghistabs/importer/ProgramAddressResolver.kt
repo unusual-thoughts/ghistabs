@@ -4,6 +4,7 @@ import ghidra.app.util.opinion.ElfLoader
 import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Program
 import ghistabs.diagnose.DiagnosticSink
+import ghistabs.parse.StabReader
 import ghistabs.plus
 
 interface AddressResolver {
@@ -45,7 +46,17 @@ class ProgramAddressResolver(private val program: Program, override val sink: Di
      * Resolve [name]: symbol table → `_<name>` (MinGW/PE cdecl underscore prefix —
      * `Foo`→`_Foo`, `_ZTI4Foo`→`__ZTI4Foo`).
      */
+    /**
+     * a.out link-time symbols straight from the file, which outrank Ghidra's for this format:
+     * `UnixAoutProgramLoader` places them at `dataBlock.getStart().add(symbol.value)` although
+     * `n_value` is already image-relative, so its symbols sit one text-segment too high (verified on
+     * `hello_aout_gcc295.o`: `global_total` has `n_value=0x74` with `.data` at `0x64`, and Ghidra
+     * reports `0xd8`). Empty for ELF/PE, where Ghidra's symbol table is the only source.
+     */
+    private val linkSymbols: Map<String, Long> by lazy { StabReader.linkSymbolsOf(program) }
+
     override fun resolve(name: String): Address? {
+        linkSymbols[name]?.let { return buildAddress(it) }
         program.symbolTable.getSymbols(name).firstOrNull()?.let { return it.address }
         program.symbolTable.getSymbols("_$name").firstOrNull()?.let { return it.address }
         return null

@@ -345,6 +345,26 @@ class StabReader(
     /** Blocks holding the records and their strings, and how to read them. */
     data class Source(val records: MemoryBlock, val strings: MemoryBlock, val layout: Layout)
 
+    /**
+     * Link-time symbols as name → `n_value`: the half of an a.out symbol table [physicalRecords] skips.
+     * An `N_GSYM` carries no address of its own — the format keeps it in the companion link-time symbol
+     * — so this is how an a.out global gets placed. Empty under [Layout.SECTION].
+     *
+     * Consumes the reader (the backing provider cannot seek backwards), so call it on its own instance.
+     */
+    fun linkSymbols(): Map<String, Long> {
+        if (layout != Layout.SYMTAB) return emptyMap()
+        stab.pointerIndex = 0
+        return buildMap {
+            while (stab.hasNext(STAB_RECORD_SIZE)) {
+                val raw = RawHeader(stab)
+                if (raw.type.toInt() and N_STAB_MASK == 0 && raw.strx != 0u) {
+                    putIfAbsent(stabStr(raw.strx.toLong()), raw.value.toLong())
+                }
+            }
+        }
+    }
+
     companion object {
         /** Where the formats keep stabs, in precedence order: ELF/PE sections, then the a.out symtab. */
         private val SOURCES = listOf(
@@ -371,6 +391,15 @@ class StabReader(
          * (ELF/PE), else the a.out linker symbol table, which Ghidra's loader exposes as
          * `.symtab`/`.strtab`. Null when the program carries neither pair.
          */
+        /**
+         * [linkSymbols] for [program], on a reader of its own. Empty — and costing only the two block
+         * lookups, with no reader built and no streams opened — unless the program is a.out.
+         */
+        fun linkSymbolsOf(program: Program): Map<String, Long> =
+            sourceOf(program)?.takeIf { it.layout == Layout.SYMTAB }
+                ?.let { fromProgram(program)?.linkSymbols() }
+                .orEmpty()
+
         fun fromProgram(program: Program): StabReader? = sourceOf(program)?.let { (records, strings, layout) ->
             val littleEndian = !program.memory.isBigEndian
             StabReader(
