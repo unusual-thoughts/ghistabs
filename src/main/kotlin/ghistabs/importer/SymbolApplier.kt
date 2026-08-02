@@ -414,19 +414,32 @@ class SymbolApplier(
     }
 
     /**
-     * One `type name  [header:line]` line per local. gcc emits a fresh copy of an inlinee's locals
-     * at every inline expansion, each in its own block, and only the first of a given name survives
-     * as a real Ghidra variable — for the rest this comment is the only record that they exist.
+     * One `type name  storage  [header:line]` line per local, frame order first (deepest slot up),
+     * registers after. gcc emits a fresh copy of an inlinee's locals at every inline expansion, each
+     * in its own block, and a stack slot it reuses across disjoint scopes holds only one Ghidra
+     * variable — Ghidra's frame maps an offset to at most one — so for everything shadowed there,
+     * this comment is the only surviving record of the name, type and slot.
      */
     private fun scopeCommentText(locals: List<SymbolRecord>): String {
-        val rows = locals.map { loc ->
+        fun storage(loc: SymbolRecord) = when (loc.body) {
+            is SymbolDecl.StackLocal -> (loc.rawValue.toInt() - frameBias).let {
+                if (it < 0) "Stack[-0x${(-it).toString(16)}]" else "Stack[0x${it.toString(16)}]"
+            }
+
+            is SymbolDecl.RegLocal -> dbxRegisterName(pointerSize, loc.rawValue.toInt()) ?: "r${loc.rawValue}"
+            else -> ""
+        }
+
+        val (stack, registers) = locals.partition { it.body is SymbolDecl.StackLocal }
+        val rows = (stack.sortedBy { it.rawValue.toInt() } + registers.sortedBy { it.body.name }).map { loc ->
             val type = typeRegistry.resolveRef(loc.body.type)?.displayName ?: "?"
             val origin = loc.sourceFile?.pathBasename()?.let { "[$it:${loc.declLine}]" } ?: "[line ${loc.declLine}]"
-            "$type ${loc.body.name}" to origin
+            Triple("$type ${loc.body.name}", storage(loc), origin)
         }
-        val width = rows.maxOf { it.first.length }
-        return rows.joinToString("\n", "Stabs scope locals:\n") { (decl, origin) ->
-            "  ${decl.padEnd(width)}  $origin".trimEnd()
+        val declWidth = rows.maxOf { it.first.length }
+        val storageWidth = rows.maxOf { it.second.length }
+        return rows.joinToString("\n", "Stabs scope locals:\n") { (decl, storage, origin) ->
+            "  ${decl.padEnd(declWidth)}  ${storage.padEnd(storageWidth)}  $origin".trimEnd()
         }
     }
 
