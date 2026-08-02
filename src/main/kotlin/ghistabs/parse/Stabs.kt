@@ -337,7 +337,9 @@ class StabReader(
                 cuSize = record.value
             }
             record.stabstrOffset = cuOff + record.raw.strx.toLong()
-            record.name = stabStr(record.stabstrOffset)
+            // strx 0 is a.out's "no name" — gcc uses it for the end-of-function and end-of-source
+            // markers. Offset 0 is never a string there: it is the string table's own length field.
+            record.name = if (layout == Layout.SYMTAB && record.raw.strx == 0u) "" else stabStr(record.stabstrOffset)
             yield(record)
         }
     }
