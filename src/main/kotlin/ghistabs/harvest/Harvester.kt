@@ -48,16 +48,13 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, private 
     /**
      * gcc 12 (and modern ELF emitters) omit the empty-name N_FUN end marker, delimiting
      * with the outermost N_RBRAC instead. Compute size from brackets before swapping
-     * function context. N_RBRAC value is absolute-or-relative like N_SLINE.
+     * function context.
      */
     private fun finaliseGcc12FunctionSize() {
         val f = currentFunction ?: return
         if (f.sizeBytes != null) return
-        val rbracs = f.scopeBrackets.filter { it.first == StabType.N_RBRAC }
-        if (rbracs.isEmpty()) return
-        val funcStart = f.addr.offset
-        val maxRbrac = rbracs.maxOf { it.second }
-        f.sizeBytes = (if (maxRbrac > funcStart) maxRbrac - funcStart else maxRbrac).toULong()
+        val lastRbrac = f.scopeBrackets.filter { it.type == StabType.N_RBRAC }.maxOfOrNull { it.addr.offset } ?: return
+        f.sizeBytes = (lastRbrac - f.addr.offset).toULong()
     }
 
     // ONE shared registry across all per-CU IncludeContexts — same (filename, checksum)
@@ -272,9 +269,9 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, private 
                     warn("parse-error", "lsym @$i: ${e.message}")
                 }
 
-                StabType.N_LBRAC, StabType.N_RBRAC -> currentFunction?.scopeBrackets?.add(
-                    Triple(rec.type, rec.value, i),
-                )
+                StabType.N_LBRAC, StabType.N_RBRAC -> currentFunction?.let {
+                    it.scopeBrackets += Bracket(rec.type, resolver.stabAddress(rec.value, it.addr), i)
+                }
 
                 // Known-irrelevant for type/symbol harvesting.
                 StabType.N_DSLINE, StabType.N_BSLINE, StabType.N_FLINE,
@@ -303,6 +300,8 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, private 
                 )
             }
         }
+
+        openFunctions.forEach { it.resolveBlocks() }
 
         val (typeAsts, rawCollisions) = store.toHarvest()
         debug("harvest-constants", count = constants.size.toLong())

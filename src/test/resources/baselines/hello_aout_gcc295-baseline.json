@@ -153,12 +153,12 @@
             "max": 1
         },
         "stab-value-absolute": {
-            "min": 6,
-            "max": 6
+            "min": 8,
+            "max": 8
         },
         "stab-value-func-relative": {
-            "min": 6,
-            "max": 6
+            "min": 8,
+            "max": 8
         }
     },
     "source": "hello_aout_gcc295.o - generated from snapshotCounters()"

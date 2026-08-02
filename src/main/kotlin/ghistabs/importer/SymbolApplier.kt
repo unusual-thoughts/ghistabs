@@ -16,9 +16,11 @@ import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.Level
 import ghistabs.diagnose.degradation
 import ghistabs.forceCreateData
+import ghistabs.harvest.BlockScope
 import ghistabs.harvest.Harvest
 import ghistabs.harvest.OpenFunction
 import ghistabs.harvest.SymbolRecord
+import ghistabs.harvest.pathBasename
 import ghistabs.materialize.TypeRegistry
 import ghistabs.materialize.reasonFor
 import ghistabs.materialize.resolveRef
@@ -367,21 +369,37 @@ class SymbolApplier(
     }
 
     private fun applyScopeComments(func: Function, open: OpenFunction) {
-        // For each LBRAC/RBRAC pair, plate-comment the LBRAC with the in-scope locals.
-        val pairs = ScopePairs.compute(open.scopeBrackets, open.locals)
-        for ((openOff, _, localsInScope) in pairs) {
-            try {
-                val addr = func.entryPoint.add(openOff)
-
-                if (localsInScope.isEmpty()) {
-                    debug("empty-scope", "addr=$addr function=${func.name}")
-                    continue
+        fun comment(blocks: List<BlockScope>) {
+            for (block in blocks) {
+                try {
+                    if (block.locals.isEmpty()) {
+                        debug("empty-scope", "function=${func.name}", address = block.start)
+                    } else {
+                        ctx.program.listing.setComment(block.start, CommentType.PLATE, scopeCommentText(block.locals))
+                    }
+                } catch (e: Exception) {
+                    warn("scope-comment-error", "Failed to set scope comment: ${e.message}", func.entryPoint)
                 }
-                val text = "Stabs scope locals: " + localsInScope.joinToString(", ") { it.body.name }
-                ctx.program.listing.setComment(addr, CommentType.PLATE, text)
-            } catch (e: Exception) {
-                warn("scope-comment-error", "Failed to set scope comment: ${e.message}", func.entryPoint)
+                comment(block.children)
             }
+        }
+        comment(open.blocks)
+    }
+
+    /**
+     * One `type name  [header:line]` line per local. gcc emits a fresh copy of an inlinee's locals
+     * at every inline expansion, each in its own block, and only the first of a given name survives
+     * as a real Ghidra variable — for the rest this comment is the only record that they exist.
+     */
+    private fun scopeCommentText(locals: List<SymbolRecord>): String {
+        val rows = locals.map { loc ->
+            val type = typeRegistry.resolveRef(loc.body.type)?.displayName ?: "?"
+            val origin = loc.sourceFile?.pathBasename()?.let { "[$it:${loc.declLine}]" } ?: "[line ${loc.declLine}]"
+            "$type ${loc.body.name}" to origin
+        }
+        val width = rows.maxOf { it.first.length }
+        return rows.joinToString("\n", "Stabs scope locals:\n") { (decl, origin) ->
+            "  ${decl.padEnd(width)}  $origin".trimEnd()
         }
     }
 

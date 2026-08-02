@@ -61,6 +61,8 @@ data class SymbolRecord(
     val body: SymbolDecl<GlobalTypeId>,
     val rawValue: Long,
     val declLine: Int = 0,
+    /** N_SOL in effect when the record was read — except for function-scope symbols, where the
+     *  N_SOL is meaningless and [resolveBlocks] repoints this at the block's real source. */
     val sourceFile: String? = null,
     /** Enclosing function (mangled/linkage name) when harvested inside a function scope — set for
      *  procedure-scope (`V`) statics so the applier can annotate which function owns them. */
@@ -89,6 +91,14 @@ class AddressSerializer : KSerializer<Address> {
 }
 
 @Serializable
+data class Bracket(
+    val type: StabType,
+    @Serializable(with = AddressSerializer::class)
+    val addr: Address,
+    val index: Int,
+)
+
+@Serializable
 data class OpenFunction(
     val name: String,
     @Serializable(with = AddressSerializer::class)
@@ -97,7 +107,9 @@ data class OpenFunction(
     val cu: SourceFile.CUSource,
     val locals: MutableList<SymbolRecord> = mutableListOf(),
     val params: MutableList<SymbolRecord> = mutableListOf(),
-    val scopeBrackets: MutableList<Triple<StabType, Long, Int>> = mutableListOf(),
+    // N_LBRAC/N_RBRAC as (type, absolute address, stream index); [blocks] is the tree built from them.
+    val scopeBrackets: MutableList<Bracket> = mutableListOf(),
+    var blocks: List<BlockScope> = emptyList(),
     // N_SLINEs emitted between this function's N_FUN and the next, in stab-stream order.
     // This is the authoritative membership: it includes exception-handler / landing-pad
     // lines that gcc attributes to the function but Ghidra's CFG-based body omits (nothing

@@ -229,12 +229,12 @@
             "max": 261
         },
         "stab-value-absolute": {
-            "min": 35,
-            "max": 35
+            "min": 68,
+            "max": 68
         },
         "stab-value-func-relative": {
-            "min": 1420,
-            "max": 1420
+            "min": 1983,
+            "max": 1983
         },
         "unresolved-symbol": {
             "min": 27,

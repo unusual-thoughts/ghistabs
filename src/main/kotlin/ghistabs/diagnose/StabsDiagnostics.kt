@@ -91,7 +91,10 @@ class StabsDiagnostics : DiagnosticSink {
         counters.getOrPut(name) { mutableMapOf() }.compute(level) { _, lng -> (lng ?: 0) + by }
     }
 
-    operator fun get(name: String, level: Level = Level.INFO): Long = counters[name]?.get(level) ?: 0L
+    /** How often the category fired, at any level — the level is a reporting attribute, not identity. */
+    operator fun get(name: String): Long = counters[name]?.values?.sum() ?: 0L
+
+    operator fun get(name: String, level: Level): Long = counters[name]?.get(level) ?: 0L
 
     fun snapshotCounters(): Map<String, Long> = counters.mapValues { it.value.values.sum() }
 
