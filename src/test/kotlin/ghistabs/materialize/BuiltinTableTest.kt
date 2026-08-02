@@ -48,6 +48,23 @@ class BuiltinTableTest {
     }
 
     @Test
+    fun testSizeAttrOutranksRangeBounds() {
+        // `@s128;r(0,25);0;0377…;` — the 128-bit max truncates to -1L, so the bounds alone claim
+        // 8 bytes. The attribute must win, or __int128 materializes at half its width.
+        val kind = TypeDecl.WithSizeAttr(128, TypeDecl.Range(GlobalTypeId(cu, 25), 0L, -1L)).resolveBuiltin()
+        assertInstanceOf<UnsignedInteger16DataType>(kind)
+        assertEquals(16, kind.length)
+    }
+
+    @Test
+    fun testSizeAttrKeepsCharIdentity() {
+        // `@s8;r(0,10);-128;127;` — the attribute governs width, not identity: still char, not int8.
+        val kind = TypeDecl.WithSizeAttr(8, TypeDecl.Range(GlobalTypeId(cu, 10), -128L, 127L)).resolveBuiltin()
+        assertInstanceOf<CharDataType>(kind)
+        assertEquals(1, kind.length)
+    }
+
+    @Test
     fun testClassifyBool() {
         // gdb stabs encodes _Bool as (0,-16); after globalize the inner Ref to
         // a negative slot is hoisted into [TypeDecl.Builtin] so cross-CU
