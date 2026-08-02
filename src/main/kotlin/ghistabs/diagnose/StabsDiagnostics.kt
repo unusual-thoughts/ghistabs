@@ -69,7 +69,7 @@ fun DiagnosticSink.degradation(category: String, context: String, detail: String
  * summary. Single-threaded. [writeSummary] is one-shot — subsequent calls no-op, counters stay readable.
  */
 class StabsDiagnostics : DiagnosticSink {
-    private val counters: LinkedHashMap<String, Long> = linkedMapOf()
+    private val counters: MutableMap<String, MutableMap<Level, Long>> = linkedMapOf()
     private val examples: MutableMap<String, MutableList<String>> = linkedMapOf()
     private val gapCensus: MutableMap<String, List<GapRecord>> = linkedMapOf()
     private val attributionTraces: MutableList<AttributionTrace> = mutableListOf()
@@ -78,7 +78,7 @@ class StabsDiagnostics : DiagnosticSink {
     private var isSealed = false
 
     override fun log(category: String, message: String?, level: Level, address: Address?, count: Long) {
-        inc(category, count)
+        inc(category, level, count)
         if (message != null) {
             recordExample(category, message)
             if (category.startsWith(DEGRADED_PREFIX)) {
@@ -87,14 +87,13 @@ class StabsDiagnostics : DiagnosticSink {
         }
     }
 
-    private fun inc(name: String, by: Long = 1) {
-        val current = counters.getOrDefault(name, 0L)
-        counters[name] = current + by
+    private fun inc(name: String, level: Level, by: Long = 1) {
+        counters.getOrPut(name) { mutableMapOf() }.compute(level) { _, lng -> (lng ?: 0) + by }
     }
 
-    operator fun get(name: String): Long = counters.getOrDefault(name, 0L)
+    operator fun get(name: String, level: Level = Level.INFO): Long = counters[name]?.get(level) ?: 0L
 
-    fun snapshotCounters(): Map<String, Long> = counters.toMap()
+    fun snapshotCounters(): Map<String, Long> = counters.mapValues { it.value.values.sum() }
 
     /** Backing store for [log]'s example capture — capped at 10/category. */
     private fun recordExample(category: String, msg: String) {
@@ -128,7 +127,7 @@ class StabsDiagnostics : DiagnosticSink {
                 ),
             )
         }
-        inc(counter)
+        inc(counter, Level.DEBUG)
     }
 
     fun snapshotAttributionTraces() = attributionTraces.toList()
@@ -145,26 +144,28 @@ class StabsDiagnostics : DiagnosticSink {
 
         sink.log("diagnostics", "=== diagnostics ===")
 
-        for ((name, value) in counters) {
-            sink.log("diagnostics", "$name = $value")
+        for ((name, levels) in counters) {
+            for ((level, value) in levels) {
+                sink.log("diagnostics", "$name = $value", level = level)
+            }
         }
 
         for ((category, msgs) in examples) {
             if (msgs.isNotEmpty()) {
-                sink.log("diagnostics", "$category top examples:")
+                sink.debug("diagnostics", "$category top examples:")
                 for (msg in msgs) {
-                    sink.log("diagnostics", "  - $msg")
+                    sink.debug("diagnostics", "  - $msg")
                 }
             }
         }
 
         if (gapCensus.isNotEmpty()) {
-            sink.log("diagnostics", "gap census:")
+            sink.debug("diagnostics", "gap census:")
             for ((qualifiedName, gaps) in gapCensus) {
                 for (gap in gaps) {
                     val prevStr = gap.prevField ?: "(start)"
                     val nextStr = gap.nextField ?: "(end)"
-                    sink.log(
+                    sink.debug(
                         "diagnostics",
                         "  $qualifiedName: gap @+${gap.offsetBits} bits len=${gap.lengthBits} between $prevStr..$nextStr",
                     )
