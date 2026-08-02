@@ -6,6 +6,7 @@ import kotlinx.serialization.Contextual
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonClassDiscriminator
+import java.lang.Long.compareUnsigned
 
 enum class Access { PRIVATE, PROTECTED, PUBLIC }
 
@@ -39,6 +40,24 @@ enum class AggrKind {
 /** Type AST. Sealed; every grammar form has a constructor here. */
 @Serializable
 sealed interface TypeDecl<out Id : IdInterface> {
+    /**
+     * Width in bytes as stated or implied by the stab itself, or null when the stab doesn't
+     * determine it — [Pointer]/[Reference] (program address size) and unresolved [Ref]/[XRef].
+     * Never guesses a target ABI; callers that need a concrete size for those must ask the
+     * program's data organization.
+     */
+    val sizeBytes: Long? get() = null
+
+    /**
+     * Width in bits, and the authoritative one: [WithSizeAttr] overrides it with gcc's exact
+     * `@s<n>`, the one width a stab states outright rather than implying from bounds. Everything
+     * else derives it from [sizeBytes]×8.
+     */
+    val sizeBits: Long? get() = sizeBytes?.times(8)
+
+    /** Directly nested TypeDecls, in declaration order */
+    val children: List<TypeDecl<Id>> get() = listOf()
+
     /** Forward reference to a type defined elsewhere by id. */
     @Serializable
     data class Ref<Id : IdInterface>(@Contextual val id: Id) : TypeDecl<Id>
@@ -49,43 +68,81 @@ sealed interface TypeDecl<out Id : IdInterface> {
      * Materializes to Ghidra's VoidDataType.
      */
     @Serializable
-    data object Void : TypeDecl<Nothing>
+    data object Void : TypeDecl<Nothing> {
+        override val sizeBytes = 0L
+    }
 
     /** Sun range descriptor: `r<id>;<min>;<max>;` — encodes integer/char widths. */
     @Serializable
-    data class Range<Id : IdInterface>(@Contextual val of: Id, val min: Long, val max: Long) : TypeDecl<Id>
+    data class Range<Id : IdInterface>(@Contextual val of: Id, val min: Long, val max: Long) : TypeDecl<Id> {
+        // Unsigned max is 2^n-1, which [Cursor.readRangeBound] truncates to the low 64 bits —
+        // `unsigned long long`'s 01777777777777777777777 arrives as -1L. Compare unsigned.
+        override val sizeBytes = when {
+            min == 0L && max == 0L -> 0L
+            min == 0L -> when {
+                compareUnsigned(max, 0xFFL) <= 0 -> 1L
+                compareUnsigned(max, 0xFFFFL) <= 0 -> 2L
+                compareUnsigned(max, 0xFFFFFFFFL) <= 0 -> 4L
+                else -> 8L
+            }
+            min < 0 -> when {
+                min >= -0x80L -> 1L
+                min >= -0x8000L -> 2L
+                min >= -0x80000000L -> 4L
+                else -> 8L
+            }
+            else -> 4L
+        }
+    }
 
     /**
      * GCC float encoding `r<base>;<NBYTES>;0;`. `<base>` is decorative (per stabs spec / gdb
      * `read_range_type`) — hashing by size only keeps cross-CU floats content-equivalent.
      */
     @Serializable
-    data class Float<Id : IdInterface>(val sizeBytes: Int) : TypeDecl<Id>
+    data class Float<Id : IdInterface>(override val sizeBytes: Long) : TypeDecl<Id>
 
+    // Both are address-sized, which the stab never states — leave sizeBytes null
     @Serializable
-    data class Pointer<Id : IdInterface>(val pointee: TypeDecl<Id>) : TypeDecl<Id>
+    data class Pointer<Id : IdInterface>(val pointee: TypeDecl<Id>) : TypeDecl<Id> {
+        override val children get() = listOf(pointee)
+    }
 
     /** C++ reference */
     @Serializable
-    data class Reference<Id : IdInterface>(val referent: TypeDecl<Id>) : TypeDecl<Id>
+    data class Reference<Id : IdInterface>(val referent: TypeDecl<Id>) : TypeDecl<Id> {
+        override val children get() = listOf(referent)
+    }
 
     @Serializable
-    data class Const<Id : IdInterface>(val inner: TypeDecl<Id>) : TypeDecl<Id>
+    data class Const<Id : IdInterface>(val inner: TypeDecl<Id>) : TypeDecl<Id> {
+        override val children get() = listOf(inner)
+        override val sizeBytes get() = inner.sizeBytes
+    }
 
     @Serializable
-    data class Volatile<Id : IdInterface>(val inner: TypeDecl<Id>) : TypeDecl<Id>
+    data class Volatile<Id : IdInterface>(val inner: TypeDecl<Id>) : TypeDecl<Id> {
+        override val children get() = listOf(inner)
+        override val sizeBytes get() = inner.sizeBytes
+    }
 
     @Serializable
     data class Array<Id : IdInterface>(val element: TypeDecl<Id>, val length: Long?, val indexType: TypeDecl<Id>?) :
-        TypeDecl<Id>
+        TypeDecl<Id> {
+        override val children get() = listOf(element)
+        override val sizeBytes get() = element.sizeBytes?.let { elementSize -> length?.let { it * elementSize } }
+    }
 
     @Serializable
-    data class Enum<Id : IdInterface>(val members: List<Pair<String, Long>>) : TypeDecl<Id>
+    data class Enum<Id : IdInterface>(val members: List<Pair<String, Long>>) : TypeDecl<Id> {
+        // GCC default
+        override val sizeBytes = 4L
+    }
 
     @Serializable
     data class Struct<Id : IdInterface>(
         val rawKind: AggrKind,
-        val sizeBytes: Long,
+        override val sizeBytes: Long,
         val bases: List<BaseDecl<Id>>,
         val fields: List<FieldDecl<Id>>,
         val methods: List<MethodDecl<Id>>,
@@ -99,24 +156,32 @@ sealed interface TypeDecl<out Id : IdInterface> {
         // gcc 3.x stabs emit `s` for both `struct` and `class`; promote to "class" when
         // any method or base carries non-public access, OR when there are any methods
         // at all (plain C structs have none — the presence of methods means C++).
-        val kind
-            get() = when (rawKind) {
-                AggrKind.STRUCT if (methods.isNotEmpty() || bases.any { it.access != Access.PUBLIC }) -> AggrKind.CLASS
-                else -> rawKind
-            }
+        val kind get() = when (rawKind) {
+            AggrKind.STRUCT if (methods.isNotEmpty() || bases.any { it.access != Access.PUBLIC }) -> AggrKind.CLASS
+            else -> rawKind
+        }
+
+        override val children get() = bases.map { it.type } +
+            fields.map { it.type } +
+            methods.map { it.signature } +
+            (vptrBasetype?.let { listOf(it) } ?: emptyList())
     }
 
     @Serializable
-    data class FunctionT<Id : IdInterface>(val ret: TypeDecl<Id>, val params: List<TypeDecl<Id>>) : TypeDecl<Id>
+    data class FunctionT<Id : IdInterface>(val ret: TypeDecl<Id>, val params: List<TypeDecl<Id>>) : TypeDecl<Id> {
+        override val children get() = listOf(ret) + params
+    }
 
     /** Pointer-to-member-function (the `#` descriptor body). */
     @Serializable
     data class Method<Id : IdInterface>(val cls: TypeDecl<Id>, val ret: TypeDecl<Id>, val params: List<TypeDecl<Id>>) :
-        TypeDecl<Id>
+        TypeDecl<Id> {
+        override val children get() = listOf(cls, ret) + params
+    }
 
     /** GCC complex/floating: `R<n>;<size>;0;`. n encodes 3=cfloat, 4=cdouble, 5=cldouble per gcc/dbxout. */
     @Serializable
-    data class Complex<Id : IdInterface>(val rCode: Int, val sizeBytes: Int) : TypeDecl<Id>
+    data class Complex<Id : IdInterface>(val rCode: Int, override val sizeBytes: Long) : TypeDecl<Id>
 
     /** Cross-reference: `xs<name>:` / `xu<name>:` / `xc<name>:` — incomplete tag. */
     @Serializable
@@ -124,7 +189,11 @@ sealed interface TypeDecl<out Id : IdInterface> {
 
     /** Wrapper carrying an `@s<n>;` size attribute around an inner type. */
     @Serializable
-    data class WithSizeAttr<Id : IdInterface>(val sizeBits: Int, val inner: TypeDecl<Id>) : TypeDecl<Id>
+    data class WithSizeAttr<Id : IdInterface>(override val sizeBits: Long, val inner: TypeDecl<Id>) : TypeDecl<Id> {
+        override val children get() = listOf(inner)
+
+        override val sizeBytes get() = (sizeBits + 7) / 8
+    }
 
     /**
      * gcc/XCOFF builtin slot (`(0,-N)`). No defining stab — same slot means same primitive
@@ -135,37 +204,28 @@ sealed interface TypeDecl<out Id : IdInterface> {
 
     /** Inline type definition: `(cu,n)=<body>` where the binding `(cu,n)` is preserved for Phase 3. */
     @Serializable
-    data class InlineDef<Id : IdInterface>(@Contextual val id: Id, val body: TypeDecl<Id>) : TypeDecl<Id>
-}
+    data class InlineDef<Id : IdInterface>(@Contextual val id: Id, val body: TypeDecl<Id>) : TypeDecl<Id> {
+        override val children get() = listOf(body)
+    }
 
-val TypeDecl<*>.isXRefTarget get() = this is TypeDecl.Struct || this is TypeDecl.Enum
+    val isXRefTarget get() = this is TypeDecl.Struct || this is TypeDecl.Enum
 
-/** Bodies that materialize their own named DataType (own their ghidraName), as opposed to
- *  wrappers/refs/aliases whose byId entry points at another type's dt. Only these are classified. */
-val TypeDecl<*>.ownsMaterializedType get() = isXRefTarget || this is TypeDecl.FunctionT || this is TypeDecl.Method
+    /** Bodies that materialize their own named DataType (own their ghidraName), as opposed to
+     *  wrappers/refs/aliases whose byId entry points at another type's dt. Only these are classified. */
+    val ownsMaterializedType get() = isXRefTarget || this is TypeDecl.FunctionT || this is TypeDecl.Method
 
-val TypeDecl<*>.isComplete
-    get() = when (this) {
+    val isComplete get() = when (this) {
         is TypeDecl.Struct -> sizeBytes > 0
         is TypeDecl.Enum -> members.isNotEmpty()
         else -> false
     }
 
-fun TypeDecl<*>.matchesXRefKind(xref: AggrKind) = when (this) {
-    is TypeDecl.Struct -> rawKind == xref
-    is TypeDecl.Enum -> xref == AggrKind.ENUM
-    else -> false
-}
-
-val TypeDecl<*>.sizeBytes
-    get() = when (this) {
-        is TypeDecl.Struct -> sizeBytes
-
-        is TypeDecl.Enum -> 4L
-
-        // gcc default
-        else -> 0L
+    fun matchesXRefKind(xref: AggrKind) = when (this) {
+        is TypeDecl.Struct -> rawKind == xref
+        is TypeDecl.Enum -> xref == AggrKind.ENUM
+        else -> false
     }
+}
 
 @Serializable
 data class FieldDecl<Id : IdInterface>(
@@ -295,16 +355,4 @@ sealed interface SymbolDecl<Id : IdInterface> {
         override val type: TypeDecl<Id>,
         val value: Long,
     ) : SymbolDecl<Id>
-}
-
-class StabsParseException(val pos: Int, val src: String, msg: String) :
-    RuntimeException("at $pos in '$src': $msg") {
-    /** Returns a one-line excerpt with a `^` caret at `pos`. */
-    fun excerpt(): String {
-        val start = (pos - 30).coerceAtLeast(0)
-        val end = (pos + 30).coerceAtMost(src.length)
-        val window = src.substring(start, end)
-        val caret = " ".repeat(pos - start) + "^"
-        return "$window\n$caret"
-    }
 }

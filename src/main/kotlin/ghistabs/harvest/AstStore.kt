@@ -20,31 +20,6 @@ class AstStore(
      */
     fun hoistSymbolDefs(sym: SymbolRecord, cu: SourceFile.CUSource) {
         fun TypeDecl<GlobalTypeId>.walk(): List<TypeAst> = when (this) {
-            is TypeDecl.Builtin, is TypeDecl.Complex, is TypeDecl.Float, is TypeDecl.Enum, is TypeDecl.Range,
-            is TypeDecl.Ref, is TypeDecl.XRef, TypeDecl.Void,
-            -> listOf()
-
-            is TypeDecl.Const -> inner.walk()
-
-            is TypeDecl.Volatile -> inner.walk()
-
-            is TypeDecl.WithSizeAttr -> inner.walk()
-
-            is TypeDecl.Pointer -> pointee.walk()
-
-            is TypeDecl.Reference -> referent.walk()
-
-            is TypeDecl.Array -> element.walk() + (indexType?.walk() ?: listOf())
-
-            is TypeDecl.FunctionT -> params.flatMap { it.walk() } + ret.walk()
-
-            is TypeDecl.Method -> params.flatMap { it.walk() } + ret.walk() + cls.walk()
-
-            is TypeDecl.Struct -> bases.flatMap { it.type.walk() } +
-                fields.flatMap { it.type.walk() } +
-                methods.flatMap { it.signature.walk() } +
-                (vptrBasetype?. walk() ?: emptyList())
-
             // Emit the InlineDef ast AND recurse — gcc nests them (e.g. Method whose
             // return is an inline-defined Pointer-to-X). Without recursion the inner
             // ids are referenced but never registered → dangling Refs + false collisions.
@@ -58,6 +33,8 @@ class AstStore(
                     declSourceFile = sym.sourceFile,
                 ),
             ) + body.walk()
+
+            else -> children.flatMap { it.walk() }
         }
         append(*sym.body.type.walk().toTypedArray())
     }

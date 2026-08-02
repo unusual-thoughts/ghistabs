@@ -9,7 +9,6 @@ import ghistabs.diagnose.GapRecord
 import ghistabs.diagnose.degradation
 import ghistabs.harvest.TypeAst
 import ghistabs.parse.TypeDecl
-import ghistabs.parse.ownsMaterializedType
 
 /**
  * Compromised DataTypes — anonymous (no name in stab), empty-placeholder (body never

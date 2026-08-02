@@ -86,3 +86,15 @@ internal class Cursor(val src: String) {
         return src.substring(start, pos)
     }
 }
+
+class StabsParseException(val pos: Int, val src: String, msg: String) :
+    RuntimeException("at $pos in '$src': $msg") {
+    /** Returns a one-line excerpt with a `^` caret at `pos`. */
+    fun excerpt(): String {
+        val start = (pos - 30).coerceAtLeast(0)
+        val end = (pos + 30).coerceAtMost(src.length)
+        val window = src.substring(start, end)
+        val caret = " ".repeat(pos - start) + "^"
+        return "$window\n$caret"
+    }
+}

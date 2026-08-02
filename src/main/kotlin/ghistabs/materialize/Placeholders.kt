@@ -37,7 +37,7 @@ internal fun TypeRegistry.makePlaceholder(
         is TypeDecl.Enum -> EnumDataType(category, name, 4, dtm)
 
         is TypeDecl.WithSizeAttr if ast.body.inner is TypeDecl.Enum ->
-            EnumDataType(category, name, (ast.body.sizeBits + 7) / 8, dtm)
+            EnumDataType(category, name, ast.body.sizeBytes.toInt(), dtm)
 
         // An unresolved enum XRef (gcc only forward-referenced it, e.g. `vm_image_type`) must
         // stub as an Enum, not a Structure: a struct stub is a Composite, so StructReturnAnalyzer
