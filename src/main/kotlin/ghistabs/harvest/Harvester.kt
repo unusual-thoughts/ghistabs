@@ -7,97 +7,25 @@ import ghistabs.importer.ImportContext
 import ghistabs.parse.*
 
 /**
- * Harvest typed symbols and ASTs from a flat stab record stream. [preSeedHeaders] populates
- * per-CU [IncludeContext]s from N_SO/N_BINCL/N_EINCL/N_EXCL; [harvest] dispatches the main
- * record stream into [store], [symbolsByCu], [openFunctions].
- *
- * The [HeaderRegistry] is shared across all CUs so two CUs that BINCL the same
- * (filename, checksum) get identical GlobalTypeIds for header-attributed types
- * (stabs-canonicalization.md §3).
+ * Harvest typed symbols and ASTs from a flat stab record stream. [cursor] holds the stream
+ * position (CU, include context, source file, open function) and the N_SLINE entries; [store]
+ * accumulates type ASTs. [harvest] is the dispatch loop that feeds both and collects the
+ * address-bearing symbols into [symbolsByCu].
  */
-
-class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, private val resolver: AddressResolver) :
-    DiagnosticSink by sink,
-    Globalizer {
+class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, resolver: AddressResolver) :
+    DiagnosticSink by sink {
     constructor(ctx: ImportContext<*>) : this(ctx.monitor, ctx, ctx.resolver)
 
     private val store = AstStore(sink = sink)
+    private val cursor = StabCursor(resolver, sink)
     private val symbolsByCu = mutableMapOf<String, MutableList<SymbolRecord>>()
-    private val openFunctions = mutableListOf<OpenFunction>()
-    private val includesByFile = mutableMapOf<String, IncludeContext>()
-    private var parseErrors = 0
     private val constants = mutableListOf<SymbolDecl.Constant<GlobalTypeId>>()
-
-    private var currentCu: SourceFile.CUSource? = null
-    private var currentFunction: OpenFunction? = null
-
-    /**
-     * Pending compilation directory from a trailing-slash N_SO (stabs.texinfo §"Source
-     * Files": gcc emits dir-N_SO then filename-N_SO back-to-back; we pair them).
-     */
-    private var pendingDirectory: String? = null
-
-    /**
-     * Active filename for N_SLINE attribution. N_SOL switches it; N_SO end-of-CU clears.
-     * Without this, lines inside #include'd headers would file under the enclosing CU.
-     */
-    private var currentSourceForLines: String? = null
-    private val lineSource get() = currentSourceForLines ?: currentCu?.filename
-    private val lineEntriesByFile = mutableMapOf<String, MutableList<LineEntry>>()
-
-    /**
-     * gcc 12 (and modern ELF emitters) omit the empty-name N_FUN end marker, delimiting
-     * with the outermost N_RBRAC instead. Compute size from brackets before swapping
-     * function context.
-     */
-    private fun finaliseGcc12FunctionSize() {
-        val f = currentFunction ?: return
-        if (f.sizeBytes != null) return
-        val lastRbrac = f.scopeBrackets.filter { it.type == StabType.N_RBRAC }.maxOfOrNull { it.addr.offset } ?: return
-        f.sizeBytes = (lastRbrac - f.addr.offset).toULong()
-    }
-
-    // ONE shared registry across all per-CU IncludeContexts — same (filename, checksum)
-    // BINCL across CUs gets the same HeaderFile instance.
-    val sharedHeaderRegistry = HeaderRegistry(this)
-
-    val currentInclude get() = includesByFile[currentCu?.filename]
-    override fun globalIdFor(id: LocalTypeId) = GlobalTypeId(currentInclude?.sourceFor(id) ?: currentCu!!, id.n)
-
-    internal fun preSeedHeaders(records: List<StabRecord>) {
-        for (rec in records) {
-            when (rec.type) {
-                StabType.N_SO if (rec.name.endsWith('/')) -> {
-                    pendingDirectory = rec.name
-                }
-
-                StabType.N_SO if (rec.name.isNotEmpty()) -> {
-                    val cu = SourceFile.CUSource(rec.name, pendingDirectory)
-                    currentCu = cu
-                    includesByFile[rec.name] = IncludeContext(cu, this, sharedHeaderRegistry)
-                    pendingDirectory = null
-                }
-
-                StabType.N_SO -> {
-                    currentCu = null
-                    pendingDirectory = null
-                }
-
-                StabType.N_BINCL -> currentInclude?.beginInclude(rec.name, rec.value)
-
-                StabType.N_EINCL -> currentInclude?.endInclude()
-
-                StabType.N_EXCL -> currentInclude?.remount(rec.name, rec.value)
-
-                else -> {}
-            }
-        }
-    }
+    private var parseErrors = 0
 
     internal fun harvest(records: List<StabRecord>): Harvest {
         monitor.initialize(records.size.toLong(), "Stabs: harvesting")
 
-        preSeedHeaders(records)
+        cursor.preSeedHeaders(records)
         for ((i, rec) in records.withIndex()) {
             monitor.increment()
             if (rec.desc != 0) {
@@ -117,79 +45,27 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, private 
             }
 
             when (rec.type) {
-                StabType.N_SO if (rec.name.endsWith('/')) -> {
-                    pendingDirectory = rec.name
-                }
-
-                StabType.N_SO if (rec.name.isNotEmpty()) -> {
-                    finaliseGcc12FunctionSize()
-                    currentCu = SourceFile.CUSource(rec.name, pendingDirectory)
-                    pendingDirectory = null
-                    if (rec.value != 0L) {
-                        debug(
-                            "file-start",
-                            "${currentCu?.directory.orEmpty()}${rec.name} starts here",
-                            address = resolver.buildAddress(rec.value),
-                        )
-                    }
-                }
-
-                StabType.N_SO -> {
-                    if (rec.value != 0L) {
-                        debug(
-                            "file-start",
-                            "${currentCu?.filename} ends here",
-                            address = resolver.buildAddress(rec.value),
-                        )
-                    }
-                    finaliseGcc12FunctionSize()
-                    currentCu = null
-                    pendingDirectory = null
-                    currentSourceForLines = null
-                }
+                StabType.N_SO -> cursor.sourceUnit(rec)
 
                 StabType.N_BINCL, StabType.N_EINCL, StabType.N_EXCL -> {}
 
-                StabType.N_SOL if rec.name.isNotEmpty() -> {
-                    currentSourceForLines = rec.name
-                }
+                StabType.N_SOL if rec.name.isNotEmpty() -> cursor.switchSource(rec.name)
 
-                // N_SLINE: desc=line, value is function-relative (gcc/COFF on PE) or
-                // already-absolute (gcc/ELF). Disambiguate by comparing to func start.
-                StabType.N_SLINE -> {
-                    val source = lineSource ?: continue
-                    val abs = resolver.stabAddress(rec.value, currentFunction?.addr)
-                    val entry = LineEntry(rec.desc, abs, source)
-                    lineEntriesByFile.getOrPut(source) { mutableListOf() } += entry
-                    currentFunction?.lineEntries?.add(entry)
-                }
+                StabType.N_SLINE -> cursor.lineEntry(rec)
 
-                StabType.N_FUN -> if (rec.name.isEmpty()) {
-                    // End-of-function marker: rec.value = size relative to start.
-                    currentFunction?.let { it.sizeBytes = rec.value.toULong() }
-                    currentFunction = null
-                } else {
-                    finaliseGcc12FunctionSize()
-                    val addr = resolver.buildAddress(rec.value)
-                    val mangled = rec.name.substringBefore(':')
-                    try {
-                        val sym = parseSymbol(rec)
-                        when (sym.body) {
-                            is SymbolDecl.Function -> currentFunction = OpenFunction(
-                                name = mangled,
-                                addr = addr,
-                                decl = sym.body,
-                                cu = currentCu!!,
-                            ).also { openFunctions += it }
+                StabType.N_FUN if rec.name.isEmpty() -> cursor.closeFunction(rec)
+                StabType.N_FUN -> try {
+                    val sym = parseSymbol(rec)
+                    when (sym.body) {
+                        is SymbolDecl.Function -> cursor.openFunction(rec, sym.body)
 
-                            is SymbolDecl.StaticVar -> harvestSymbol(rec)
+                        is SymbolDecl.StaticVar -> harvestSymbol(rec)
 
-                            else -> warn("unexpected-nfun", "$sym")
-                        }
-                    } catch (e: StabsParseException) {
-                        parseErrors++
-                        warn("parse-error", "@$i '${rec.name.take(80)}': ${e.message}")
+                        else -> warn("unexpected-nfun", "$sym")
                     }
+                } catch (e: StabsParseException) {
+                    parseErrors++
+                    warn("parse-error", "@$i '${rec.name.take(80)}': ${e.message}")
                 }
 
                 StabType.N_GSYM -> harvestSymbol(rec)
@@ -199,7 +75,7 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, private 
                 StabType.N_STSYM, StabType.N_LCSYM, StabType.N_ROSYM -> harvestSymbol(rec)
 
                 StabType.N_PSYM, StabType.N_RSYM -> {
-                    val open = currentFunction ?: continue
+                    val open = cursor.currentFunction ?: continue
                     try {
                         val sym = parseSymbol(rec)
                         when (sym.body) {
@@ -216,46 +92,16 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, private 
                 StabType.N_LSYM -> try {
                     val sym = parseSymbol(rec)
                     when (val decl = sym.body) {
-                        is SymbolDecl.TaggedType -> {
-                            // Outer ast + every InlineDef bound inside the struct body. gcc
-                            // uses inline ids heavily for field types (anon pointers, arrays,
-                            // function pointers); without walkDefinitions those become
-                            // dangling Refs and undefined field types downstream.
-                            store += TypeAst(
-                                currentCu!!,
-                                decl.id,
-                                decl.name,
-                                decl.type,
-                                declLine = sym.declLine,
-                                declSourceFile = sym.sourceFile,
-                            )
-                            store.hoistSymbolDefs(sym, currentCu!!)
-                        }
+                        // Bare `name:t(cu,n)` forward-declarations (body = self-Ref) are stored
+                        // unfiltered; AstStore lets a real definition at the same id supersede them.
+                        is SymbolDecl.TaggedType -> store += sym.typeAst(decl.id, decl.name, decl.type)
+                        is SymbolDecl.Typedef -> store += sym.typeAst(decl.id, decl.name, decl.type)
 
-                        is SymbolDecl.Typedef -> {
-                            // Emit bare `name:t(cu,n)` forward-declarations too (body = self-Ref).
-                            // appendAsts lets a real definition at the same id supersede the self-ref,
-                            // so a concrete body elsewhere (box2d) wins over a bare re-declaration.
-                            // (gcc's explicit void `(x,y)=(x,y)` is a distinct TypeDecl.Void, not a self-ref.)
-                            store += TypeAst(
-                                currentCu!!,
-                                decl.id,
-                                decl.name,
-                                decl.type,
-                                declLine = sym.declLine,
-                                declSourceFile = sym.sourceFile,
-                            )
-                            store.hoistSymbolDefs(sym, currentCu!!)
-                        }
+                        is SymbolDecl.StackLocal, is SymbolDecl.RegLocal ->
+                            cursor.currentFunction?.locals?.add(sym)
 
-                        is SymbolDecl.StackLocal, is SymbolDecl.RegLocal -> {
-                            currentFunction?.locals?.add(sym)
-                        }
-
-                        is SymbolDecl.StaticVar -> {
-                            // Function-scope statics get their address from rec.value.
-                            symbolsByCu.getOrPut(currentCu!!.filename) { mutableListOf() } += sym
-                        }
+                        // Function-scope statics get their address from rec.value.
+                        is SymbolDecl.StaticVar -> record(sym)
 
                         // Addressless compile-time constant — no address, so it's applied as an
                         // equate + synthetic enum catalog rather than data (see SymbolApplier).
@@ -269,9 +115,7 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, private 
                     warn("parse-error", "lsym @$i: ${e.message}")
                 }
 
-                StabType.N_LBRAC, StabType.N_RBRAC -> currentFunction?.let {
-                    it.scopeBrackets += Bracket(rec.type, resolver.stabAddress(rec.value, it.addr), i)
-                }
+                StabType.N_LBRAC, StabType.N_RBRAC -> cursor.bracket(rec, i)
 
                 // Known-irrelevant for type/symbol harvesting.
                 StabType.N_DSLINE, StabType.N_BSLINE, StabType.N_FLINE,
@@ -301,39 +145,35 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, private 
             }
         }
 
-        openFunctions.forEach { it.resolveBlocks() }
-
+        val (openFunctions, lineEntries) = cursor.toHarvest()
         val (typeAsts, rawCollisions) = store.toHarvest()
         debug("harvest-constants", count = constants.size.toLong())
 
-        return Harvest(
-            typeAsts,
-            parseErrors,
-            rawCollisions,
-            symbolsByCu,
-            openFunctions,
-            lineEntries = lineEntriesByFile.mapValues { (_, v) ->
-                v.sortedWith(compareBy({ it.line }, { it.addr.offset }))
-            },
-            constants,
-        )
+        return Harvest(typeAsts, parseErrors, rawCollisions, symbolsByCu, openFunctions, lineEntries, constants)
+    }
+
+    private fun SymbolRecord.typeAst(id: GlobalTypeId, name: String, body: TypeDecl<GlobalTypeId>) =
+        TypeAst(cursor.cu, id, name, body, declLine, sourceFile)
+
+    private fun record(sym: SymbolRecord) {
+        symbolsByCu.getOrPut(cursor.cu.filename) { mutableListOf() } += sym
     }
 
     private fun harvestSymbol(rec: StabRecord) {
         try {
-            symbolsByCu.getOrPut(currentCu!!.filename) { mutableListOf() } += parseSymbol(rec)
+            record(parseSymbol(rec))
         } catch (e: StabsParseException) {
             parseErrors++
             warn("parse-error", "@${rec.index} '${rec.name.take(80)}': ${e.message}")
         }
     }
 
-    fun parseSymbol(rec: StabRecord) = SymbolRecord(
+    private fun parseSymbol(rec: StabRecord) = SymbolRecord(
         rec,
-        Parser(rec.name, this).parseSymbol().globalize(this),
-        lineSource,
-        currentFunction?.name,
+        Parser(rec.name, cursor).parseSymbol().globalize(cursor),
+        cursor.lineSource,
+        cursor.currentFunction?.name,
     ).also {
-        store.hoistSymbolDefs(it, currentCu!!)
+        store.hoistSymbolDefs(it, cursor.cu)
     }
 }
