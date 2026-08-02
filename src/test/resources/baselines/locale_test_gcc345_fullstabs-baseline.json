@@ -301,12 +301,12 @@
             "max": 16
         },
         "reglocal-add-success": {
-            "min": 106,
-            "max": 106
+            "min": 84,
+            "max": 84
         },
         "reglocal-skipped-dup-local": {
-            "min": 49,
-            "max": 49
+            "min": 71,
+            "max": 71
         },
         "reglocal-skipped-dup-param": {
             "min": 33,

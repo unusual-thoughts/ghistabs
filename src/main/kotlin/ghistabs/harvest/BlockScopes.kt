@@ -88,6 +88,23 @@ internal fun List<BlockScope>.attributedSources(lines: List<LineEntry>, function
 }
 
 /**
+ * Local `recordIndex` → the offset from [entry] at which its block opens. gcc's lexical scope *is*
+ * the live range, which is what Ghidra's `firstUseOffset` wants: a register local declared from
+ * entry claims the register for the whole function, so N inlined copies of the same name collapse
+ * onto one variable and all but the first are dropped.
+ */
+internal fun List<BlockScope>.firstUseOffsets(entry: Address): Map<Int, Int> = buildMap {
+    fun walk(blocks: List<BlockScope>) {
+        blocks.forEach { block ->
+            val offset = (block.start.offset - entry.offset).toInt()
+            block.locals.forEach { put(it.recordIndex, offset) }
+            walk(block.children)
+        }
+    }
+    walk(this@firstUseOffsets)
+}
+
+/**
  * Resolve the block tree and repoint every function-scope symbol at the source file it was really
  * compiled from. Params belong to the function; locals to their block (see [attributedSources]).
  */
