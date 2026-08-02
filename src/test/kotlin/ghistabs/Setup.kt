@@ -12,6 +12,7 @@ import ghistabs.diagnose.Level
 import ghistabs.diagnose.StabsDiagnostics
 import ghistabs.harvest.Harvest
 import ghistabs.harvest.Harvester
+import ghistabs.harvest.StabCursor
 import ghistabs.harvest.TypeResolver
 import ghistabs.importer.AddressResolver
 import ghistabs.importer.ImportContext
@@ -39,6 +40,8 @@ fun dummyHarvester() = Harvester(
     sink = DummySink,
     resolver = GenericAddressResolver,
 )
+
+fun dummyCursor() = StabCursor(GenericAddressResolver, DummySink)
 
 // Tests capture at max verbosity — DEBUG and up — so log assertions see every message.
 fun Program.defaultContext() = ImportContext(

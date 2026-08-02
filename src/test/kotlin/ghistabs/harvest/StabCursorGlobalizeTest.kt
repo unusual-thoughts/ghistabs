@@ -1,13 +1,13 @@
 package ghistabs.harvest
 
-import ghistabs.dummyHarvester
+import ghistabs.dummyCursor
 import ghistabs.parse.*
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 /**
- * Unit tests for Harvester.globalize() behavior.
+ * Unit tests for StabCursor.globalIdFor() — the Globalizer behind globalize().
  *
  * Verifies stabs-algo-audit.AC3.1: recursive type ID globalization,
  * terminal pass-through, and InlineDef side effects.
@@ -15,9 +15,9 @@ import org.junit.jupiter.api.Test
  * Tests are pure unit tests (Kind 1): no Program/DataTypeManager/Listing,
  * only TaskMonitor.DUMMY, DummySink, and constructed test data.
  */
-class HarvesterGlobalizeTest {
-    private fun createTestHarvester(records: List<StabRecord> = emptyList()) =
-        dummyHarvester().apply { preSeedHeaders(records) }
+class StabCursorGlobalizeTest {
+    private fun createTestCursor(records: List<StabRecord> = emptyList()) =
+        dummyCursor().apply { preSeedHeaders(records) }
 
     /**
      * Test: Identity on terminal types (Complex, XRef, Enum, Builtin, Void).
@@ -27,21 +27,21 @@ class HarvesterGlobalizeTest {
      */
     @Test
     fun testGlobalizeTerminalTypes() {
-        val harvester = createTestHarvester(records = listOf())
+        val cursor = createTestCursor(records = listOf())
 
         // TypeDecl.Complex: terminal
         val complex = TypeDecl.Complex<LocalTypeId>(rCode = 3, sizeBytes = 128)
-        val globalizedComplex = complex.globalize(harvester)
+        val globalizedComplex = complex.globalize(cursor)
         assertEquals(complex, globalizedComplex)
 
         // TypeDecl.Enum: terminal
         val enumType = TypeDecl.Enum<LocalTypeId>(members = listOf("A" to 0L, "B" to 1L))
-        val globalizedEnum = enumType.globalize(harvester)
+        val globalizedEnum = enumType.globalize(cursor)
         assertEquals(enumType, globalizedEnum)
 
         // TypeDecl.XRef: terminal
         val xref = TypeDecl.XRef<LocalTypeId>(kind = AggrKind.STRUCT, tagName = "Foo")
-        val globalizedXref = xref.globalize(harvester)
+        val globalizedXref = xref.globalize(cursor)
         assertEquals(xref, globalizedXref)
     }
 
@@ -65,12 +65,12 @@ class HarvesterGlobalizeTest {
                 name = cuName,
             ),
         )
-        val harvester = createTestHarvester(records = records)
+        val cursor = createTestCursor(records = records)
 
         val input = TypeDecl.Pointer(
             pointee = TypeDecl.Ref(LocalTypeId(0, 5)),
         )
-        val result = input.globalize(harvester)
+        val result = input.globalize(cursor)
 
         val expected = TypeDecl.Pointer(
             pointee = TypeDecl.Ref(GlobalTypeId(SourceFile.CUSource(cuName), 5)),
@@ -97,14 +97,14 @@ class HarvesterGlobalizeTest {
                 name = cuName,
             ),
         )
-        val harvester = createTestHarvester(records = records)
+        val cursor = createTestCursor(records = records)
 
         val input = TypeDecl.Array(
             element = TypeDecl.Ref(LocalTypeId(0, 3)),
             length = 10L,
             indexType = TypeDecl.Ref(LocalTypeId(0, 4)),
         )
-        val result = input.globalize(harvester)
+        val result = input.globalize(cursor)
 
         val expected = TypeDecl.Array(
             element = TypeDecl.Ref(GlobalTypeId(SourceFile.CUSource(cuName), 3)),
@@ -133,7 +133,7 @@ class HarvesterGlobalizeTest {
                 name = cuName,
             ),
         )
-        val harvester = createTestHarvester(records = records)
+        val cursor = createTestCursor(records = records)
 
         val input = TypeDecl.Struct(
             rawKind = AggrKind.STRUCT,
@@ -162,7 +162,7 @@ class HarvesterGlobalizeTest {
             methods = emptyList(),
             vptrBasetype = null,
         )
-        val result = input.globalize(harvester)
+        val result = input.globalize(cursor)
 
         val globalCuSource = SourceFile.CUSource(cuName)
         val expected = TypeDecl.Struct(
@@ -268,10 +268,10 @@ class HarvesterGlobalizeTest {
                 name = cuName,
             ),
         )
-        val harvester = createTestHarvester(records = records)
+        val cursor = createTestCursor(records = records)
 
         val input = TypeDecl.Ref(LocalTypeId(0, 5))
-        val result = input.globalize(harvester)
+        val result = input.globalize(cursor)
 
         val expected = TypeDecl.Ref(GlobalTypeId(SourceFile.CUSource(cuName), 5))
         assertEquals(expected, result)
@@ -310,11 +310,11 @@ class HarvesterGlobalizeTest {
                 name = headerName,
             ),
         )
-        val harvester = createTestHarvester(records = records)
+        val cursor = createTestCursor(records = records)
 
         // Now globalize a Ref to file 1 (the header)
         val input = TypeDecl.Ref(LocalTypeId(1, 3))
-        val result = input.globalize(harvester)
+        val result = input.globalize(cursor)
 
         // The result should have a GlobalTypeId with a HeaderSource
         val resultRef = result as TypeDecl.Ref<GlobalTypeId>
