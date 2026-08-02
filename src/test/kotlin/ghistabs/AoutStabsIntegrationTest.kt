@@ -15,9 +15,7 @@ import ghistabs.diagnose.StabsDiagnostics
 import ghistabs.diagnose.defaultContext
 import ghistabs.importer.ImportContext
 import org.junit.jupiter.api.AfterEach
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertNotNull
-import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
@@ -81,7 +79,7 @@ class AoutStabsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         program.defaultContext().import()
 
         val dtm = program.dataTypeManager
-        fun find(name: String) = dtm.getAllDataTypes().asSequence().firstOrNull { it.name == name }
+        fun find(name: String) = dtm.allDataTypes.asSequence().firstOrNull { it.name == name }
 
         val message = find("message")
         assertNotNull(message, "struct 'message' was not materialized from the a.out symbol table")
@@ -138,7 +136,7 @@ class AoutStabsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         program.defaultContext().import()
 
         val dtm = program.dataTypeManager
-        fun find(name: String) = dtm.getAllDataTypes().asSequence().firstOrNull { it.name == name }
+        fun find(name: String) = dtm.allDataTypes.asSequence().firstOrNull { it.name == name }
 
         // One type from each of two different translation units — proves N_SO-delimited CU tracking
         // rather than just that the first unit parsed.
