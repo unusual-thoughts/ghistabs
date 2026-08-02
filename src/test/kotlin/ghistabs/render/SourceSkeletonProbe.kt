@@ -39,32 +39,27 @@ import java.io.File
  *    that would collide with the next function's start (in which case
  *    the close moves up onto the last-statement line).
  *
- * Probe semantics: writes to `build/test-output/skeletons/<fixture>/` and only asserts that at
- * least one skeleton was produced. A generator — tagged `probe`, excluded from the default
- * `integrationTest`; run via `probeDump`.
+ * Probe semantics: writes every [Mode] to `build/test-output/{skeletons,decomps,decomps_elide_sjlj}/
+ * <fixture>/` (previous run rotated to `<dir>.old`) and only asserts that something was produced.
+ * A generator — tagged `probe`, excluded from the default `integrationTest`; run via `probeDump`.
  */
 @Tag("probe")
 class SourceSkeletonProbe : AbstractGhidraHeadlessIntegrationTest() {
     @ParameterizedTest
     @MethodSource("ghistabs.IntegrationFixtures#all")
-    fun writeSkeletons(binaryName: String) = runPipeline(binaryName, Mode.SKELETON)
+    fun writeRenderings(binaryName: String) = runPipeline(binaryName)
 
-    @ParameterizedTest
-    @MethodSource("ghistabs.IntegrationFixtures#all")
-    fun writeDecompilations(binaryName: String) = runPipeline(binaryName, Mode.DECOMPILE)
+    private val Mode.outDirName get() = when (this) {
+        Mode.SKELETON -> "skeletons"
+        Mode.DECOMPILE -> "decomps"
+        Mode.ELIDE_SJLJ -> "decomps_elide_sjlj"
+    }
 
-    @ParameterizedTest
-    @MethodSource("ghistabs.IntegrationFixtures#all")
-    fun writeDecompilationsElideSjlj(binaryName: String) = runPipeline(binaryName, Mode.ELIDE_SJLJ)
-
-    private fun runPipeline(binaryName: String, mode: Mode) {
+    // Load + auto-analyse + harvest once, then render every mode off that one harvest: the analysis
+    // is ~95% of the runtime and only the Renderer differs per mode.
+    private fun runPipeline(binaryName: String) {
         val fixture = File("src/test/resources/binaries/$binaryName")
         assumeTrue(fixture.exists(), "fixture absent")
-        val outDirName = when (mode) {
-            Mode.SKELETON -> "skeletons"
-            Mode.DECOMPILE -> "decomps"
-            Mode.ELIDE_SJLJ -> "decomps_elide_sjlj"
-        }
         val log = MessageLog()
         val monitor = TaskMonitor.DUMMY
         ProgramLoader.builder()
@@ -99,19 +94,24 @@ class SourceSkeletonProbe : AbstractGhidraHeadlessIntegrationTest() {
                     Harvester(ctx).harvest(reader.records)
                 }
 
-                val outDir = File("build/test-output/$outDirName/${fixture.nameWithoutExtension}")
-                if (outDir.exists()) {
-                    val oldDir = File("${outDir.path}.old")
-                    oldDir.deleteRecursively()
-                    outDir.renameTo(oldDir)
+                val typeResolver = TypeResolver(harvest)
+                val written = Mode.entries.sumOf { mode ->
+                    val outDir = File("build/test-output/${mode.outDirName}/${fixture.nameWithoutExtension}")
+                    if (outDir.exists()) {
+                        val oldDir = File("${outDir.path}.old")
+                        oldDir.deleteRecursively()
+                        outDir.renameTo(oldDir)
+                    }
+                    Renderer(typeResolver, program, mode, ctx.resolver).use { renderer ->
+                        renderer.renderAll(outDir).also {
+                            println(
+                                "Pipeline[$binaryName, ${mode.outDirName}]: " +
+                                    "${renderer.sources.size} sources, $it files → $outDir",
+                            )
+                        }
+                    }
                 }
-                Renderer(TypeResolver(harvest), program, mode, ctx.resolver).use { renderer ->
-                    val written = renderer.renderAll(outDir)
-                    println(
-                        "Pipeline[$binaryName, $outDirName]: ${renderer.sources.size} sources, $written files → $outDir",
-                    )
-                    assumeTrue(written > 0, "no output (no N_SOL/N_SLINE in this binary?)")
-                }
+                assumeTrue(written > 0, "no output (no N_SOL/N_SLINE in this binary?)")
             }
     }
 }
