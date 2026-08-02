@@ -91,24 +91,17 @@ class AddressSerializer : KSerializer<Address> {
 }
 
 @Serializable
-data class Bracket(
-    val type: StabType,
-    @Serializable(with = AddressSerializer::class)
-    val addr: Address,
-    val index: Int,
-)
-
-@Serializable
 data class OpenFunction(
     val name: String,
     @Serializable(with = AddressSerializer::class)
     val addr: Address,
     val decl: SymbolDecl.Function<GlobalTypeId>,
     val cu: SourceFile.CUSource,
-    val locals: MutableList<SymbolRecord> = mutableListOf(),
-    val params: MutableList<SymbolRecord> = mutableListOf(),
-    // N_LBRAC/N_RBRAC as (type, absolute address, stream index); [blocks] is the tree built from them.
-    val scopeBrackets: MutableList<Bracket> = mutableListOf(),
+    // Both assigned once, by BlockTreeBuilder.finish, when the function's last record has been seen:
+    // a function-scope symbol's source isn't knowable until then, so there is no window in which
+    // these hold records that are about to be corrected.
+    var locals: List<SymbolRecord> = emptyList(),
+    var params: List<SymbolRecord> = emptyList(),
     var blocks: List<BlockScope> = emptyList(),
     // N_SLINEs emitted between this function's N_FUN and the next, in stab-stream order.
     // This is the authoritative membership: it includes exception-handler / landing-pad

@@ -79,8 +79,8 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, resolver
                     try {
                         val sym = parseSymbol(rec)
                         when (sym.body) {
-                            is SymbolDecl.StackParam, is SymbolDecl.RegParam -> open.params += sym
-                            is SymbolDecl.RegLocal -> open.locals += sym
+                            is SymbolDecl.StackParam, is SymbolDecl.RegParam -> cursor.param(sym)
+                            is SymbolDecl.RegLocal -> cursor.local(sym)
                             else -> warn("unexpected-psym-rsym", "$sym")
                         }
                     } catch (e: StabsParseException) {
@@ -104,7 +104,7 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, resolver
                         )
 
                         is SymbolDecl.StackLocal, is SymbolDecl.RegLocal ->
-                            cursor.currentFunction?.locals?.add(sym)
+                            cursor.local(sym)
 
                         // Function-scope statics get their address from rec.value.
                         is SymbolDecl.StaticVar -> record(sym)
@@ -121,7 +121,7 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, resolver
                     warn("parse-error", "lsym @$i: ${e.message}")
                 }
 
-                StabType.N_LBRAC, StabType.N_RBRAC -> cursor.bracket(rec, i)
+                StabType.N_LBRAC, StabType.N_RBRAC -> cursor.bracket(rec)
 
                 // Known-irrelevant for type/symbol harvesting.
                 StabType.N_DSLINE, StabType.N_BSLINE, StabType.N_FLINE,
