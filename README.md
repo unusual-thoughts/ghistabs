@@ -18,20 +18,15 @@ that gap.
 
 ## Supported configurations
 
-**Ghidra:** 12.x
-
-| Container          | Where the stabs live          | Processor    |
-| ------------------ | ----------------------------- | ------------ |
-| **PE/COFF**        | `.stab` / `.stabstr` sections | x86 / x86-64 |
-| **ELF**            | `.stab` / `.stabstr` sections | x86 / x86-64 |
-| **a.out** (OMAGIC) | symbol table (`N_STAB` mask)  | i386         |
-
-**Compilers:** gcc, on both Unix and Cygwin/MinGW targets — **C** from at least 2.6.3, **C++**
-from 3.2, through gcc **12**, the last release able to emit the format (`-gstabs` was deprecated
-in 12 and removed outright in 13). Non-gcc stabs producers are out of scope but might mostly work.
-
-**Also:** `-gstabs` and `-gstabs+` alike, object files and linked images alike, and images whose
-symbol table has been stripped, provided the stabs themselves survive.
+|                       | Supported                                                                                                                                                                                             |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Ghidra**            | **12.x**                                                                                                                                                                                              |
+| **Binary containers** | **PE/COFF**, **ELF** and **a.out** (OMAGIC)                                                                                                                                                           |
+| **Instruction sets**  | `i386` / `x86-64`                                                                                                                                                                                     |
+| **Compiler**          | **gcc**, on both Unix and Cygwin/MinGW targets, up to gcc **12** (`-gstabs` was deprecated in 12 and removed outright in 13). Stabs produced by other compilers are out of scope but may mostly work. |
+| **Languages**         | **C** from at least gcc **2.6.3** <br> **C++** from gcc **3.2**                                                                                                                                       |
+| **Formats**           | `-gstabs` and `-gstabs+` alike                                                                                                                                                                        |
+| **Also**              | object files and linked images alike, and images whose  symbol table has been stripped, provided the stabs themselves survive.                                                                        |
 
 ## What it gives you
 
