@@ -1,7 +1,6 @@
 package ghistabs.harvest
 
-import ghidra.util.task.TaskMonitor
-import ghistabs.diagnose.DummySink
+import ghistabs.dummyHarvester
 import ghistabs.parse.*
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -17,15 +16,8 @@ import org.junit.jupiter.api.Test
  * only TaskMonitor.DUMMY, DummySink, and constructed test data.
  */
 class HarvesterGlobalizeTest {
-    private fun createTestHarvester(records: List<StabRecord> = emptyList()): Harvester {
-        val harvester = Harvester(
-            monitor = TaskMonitor.DUMMY,
-            sink = DummySink,
-            resolver = GenericAddressResolver(),
-        )
-        harvester.preSeedHeaders(records)
-        return harvester
-    }
+    private fun createTestHarvester(records: List<StabRecord> = emptyList()) =
+        dummyHarvester().apply { preSeedHeaders(records) }
 
     /**
      * Test: Identity on terminal types (Complex, XRef, Enum, Builtin, Void).
