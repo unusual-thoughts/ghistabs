@@ -94,8 +94,14 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, resolver
                     when (val decl = sym.body) {
                         // Bare `name:t(cu,n)` forward-declarations (body = self-Ref) are stored
                         // unfiltered; AstStore lets a real definition at the same id supersede them.
-                        is SymbolDecl.TaggedType -> store += sym.typeAst(decl.id, decl.name, decl.type)
-                        is SymbolDecl.Typedef -> store += sym.typeAst(decl.id, decl.name, decl.type)
+                        is SymbolDecl.NamedType -> store += TypeAst(
+                            cursor.cu,
+                            decl.id,
+                            decl.name,
+                            decl.type,
+                            declLine = sym.declLine,
+                            declSourceFile = sym.sourceFile,
+                        )
 
                         is SymbolDecl.StackLocal, is SymbolDecl.RegLocal ->
                             cursor.currentFunction?.locals?.add(sym)
@@ -151,9 +157,6 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, resolver
 
         return Harvest(typeAsts, parseErrors, rawCollisions, symbolsByCu, openFunctions, lineEntries, constants)
     }
-
-    private fun SymbolRecord.typeAst(id: GlobalTypeId, name: String, body: TypeDecl<GlobalTypeId>) =
-        TypeAst(cursor.cu, id, name, body, declLine, sourceFile)
 
     private fun record(sym: SymbolRecord) {
         symbolsByCu.getOrPut(cursor.cu.filename) { mutableListOf() } += sym

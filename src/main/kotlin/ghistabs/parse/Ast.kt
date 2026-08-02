@@ -13,6 +13,9 @@ enum class Access { PRIVATE, PROTECTED, PUBLIC }
 /** Method kind from the stabs method-block trailer: `.` normal, `?` static, `*` virtual. */
 enum class VirtKind { NORMAL, STATIC, VIRTUAL }
 
+/** What a [SymbolDecl.NamedType] binds: `:T` a tag (struct/union/class/enum), `:t` a typedef alias. */
+enum class TypeNameKind { TAG, TYPEDEF }
+
 enum class AggrKind {
     STRUCT,
     UNION,
@@ -315,18 +318,15 @@ sealed interface SymbolDecl<Id : IdInterface> {
     @Serializable
     data class StackLocal<Id : IdInterface>(override val name: String, override val type: TypeDecl<Id>) : SymbolDecl<Id>
 
-    /** `:T` tagged type (struct/union/class/enum tag). */
+    /**
+     * `:T` tag or `:t` typedef — a name bound to a type id. The two are one form: gcc emits `Tt`
+     * for `typedef struct foo {} foo`, and everything downstream treats them alike (both register
+     * a [ghistabs.harvest.TypeAst] at [id]). [kind] keeps the source spelling for rendering.
+     */
     @Serializable
-    data class TaggedType<Id : IdInterface>(
+    data class NamedType<Id : IdInterface>(
         override val name: String,
-        @Contextual val id: Id,
-        override val type: TypeDecl<Id>,
-    ) : SymbolDecl<Id>
-
-    /** `:t` typedef. */
-    @Serializable
-    data class Typedef<Id : IdInterface>(
-        override val name: String,
+        val kind: TypeNameKind,
         @Contextual val id: Id,
         override val type: TypeDecl<Id>,
     ) : SymbolDecl<Id>

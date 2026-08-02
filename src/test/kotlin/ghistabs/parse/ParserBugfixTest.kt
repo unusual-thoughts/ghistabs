@@ -91,7 +91,7 @@ class ParserBugfixTest {
             val symbol = Parser(input).parseSymbol()
 
             assertNotNull(symbol, "Parse result should not be null")
-            if (symbol is SymbolDecl.Typedef) {
+            if (symbol is SymbolDecl.NamedType) {
                 val ptr = symbol.type
                 if (ptr is TypeDecl.Pointer) {
                     // The pointer should reference (0,30), which is the type being defined
@@ -123,7 +123,7 @@ class ParserBugfixTest {
             val symbol = Parser(input).parseSymbol()
 
             assertNotNull(symbol, "Parse result should not be null")
-            if (symbol is SymbolDecl.TaggedType) {
+            if (symbol is SymbolDecl.NamedType) {
                 val struct = symbol.type
                 if (struct is TypeDecl.Struct) {
                     // Should have 2 fields
@@ -242,7 +242,8 @@ class ParserBugfixTest {
     @Test
     fun testStructXRef() {
         val input = "my_struct:T(0,50)=xsMyStruct:"
-        val expected = SymbolDecl.TaggedType(
+        val expected = SymbolDecl.NamedType(
+            kind = TypeNameKind.TAG,
             name = "my_struct",
             id = LocalTypeId(0, 50),
             type = TypeDecl.XRef(kind = AggrKind.STRUCT, tagName = "MyStruct"),
@@ -258,7 +259,8 @@ class ParserBugfixTest {
     @Test
     fun testUnionXRef() {
         val input = "my_union:T(0,51)=xuMyUnion:"
-        val expected = SymbolDecl.TaggedType(
+        val expected = SymbolDecl.NamedType(
+            kind = TypeNameKind.TAG,
             name = "my_union",
             id = LocalTypeId(0, 51),
             type = TypeDecl.XRef(kind = AggrKind.UNION, tagName = "MyUnion"),
@@ -274,7 +276,8 @@ class ParserBugfixTest {
     @Test
     fun testEnumXRef() {
         val input = "my_enum:T(0,52)=xeMyEnum:"
-        val expected = SymbolDecl.TaggedType(
+        val expected = SymbolDecl.NamedType(
+            kind = TypeNameKind.TAG,
             name = "my_enum",
             id = LocalTypeId(0, 52),
             type = TypeDecl.XRef(kind = AggrKind.ENUM, tagName = "MyEnum"),
@@ -302,7 +305,8 @@ class ParserBugfixTest {
         // Outer: (0,60) = (0,61) = struct { inner : (0,62) = ... }
         // Inner: (0,62) = (0,63) = struct { value : (0,64) = range }
         val input = "nested:T(0,60)=(0,61)=s8inner:(0,62)=(0,63)=s4value:(0,64)=r(0,1);0;32;,0,32;;,0,64;;"
-        val expected = SymbolDecl.TaggedType(
+        val expected = SymbolDecl.NamedType(
+            kind = TypeNameKind.TAG,
             name = "nested",
             id = LocalTypeId(0, 60),
             type = TypeDecl.InlineDef(

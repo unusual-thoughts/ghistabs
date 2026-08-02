@@ -112,9 +112,9 @@ class Parser(src: String, sink: DiagnosticSink = DummySink) : DiagnosticSink by 
                 SymbolDecl.StaticVar(name, parseType(), isFunctionLocal = true)
             }
 
-            'T' -> parseTagged(name)
+            'T' -> parseNamedType(name, TypeNameKind.TAG)
 
-            't' -> parseTypedef(name)
+            't' -> parseNamedType(name, TypeNameKind.TYPEDEF)
 
             'c' -> parseConstant(name)
 
@@ -141,17 +141,18 @@ class Parser(src: String, sink: DiagnosticSink = DummySink) : DiagnosticSink by 
     // ===== Symbol-level productions =====
 
     /**
-     * Parse `:T(cu,n)=<body>` (tagged type), or the body-less forward-
-     * declaration form `:T(cu,n)` that gcc emits when the tag is named
-     * here but its body is defined by a later stab. Mirror of
-     * `gdb/stabsread.c:define_symbol` (T case).
+     * Parse `:T(cu,n)=<body>` (tag) or `:t(cu,n)=<body>` (typedef), and the body-less
+     * forward-declaration forms `:T(cu,n)` / `:t(cu,n)` that gcc emits when the name is bound here
+     * but the body is defined by a later stab (the `t` case is common with cygwin gcc 13+ on
+     * box2d-style C++23 code). Mirror of `gdb/stabsread.c:define_symbol` (T and t cases).
      */
-    private fun Cursor.parseTagged(name: String): SymbolDecl.TaggedType<LocalTypeId> {
-        consume('T')
-        consumeIf('t') // GCC emits Tt for combined tagged-type+typedef (e.g. typedef struct foo {} foo)
+    private fun Cursor.parseNamedType(name: String, kind: TypeNameKind): SymbolDecl.NamedType<LocalTypeId> {
+        advance()
+        // GCC emits Tt for combined tag+typedef (e.g. typedef struct foo {} foo).
+        if (kind == TypeNameKind.TAG) consumeIf('t')
         val id = readTypeId()
         val body = if (consumeIf('=')) selfDefToVoid(id, parseType()) else TypeDecl.Ref(id)
-        return SymbolDecl.TaggedType(name, id, body)
+        return SymbolDecl.NamedType(name, kind, id, body)
     }
 
     /**
@@ -178,19 +179,6 @@ class Parser(src: String, sink: DiagnosticSink = DummySink) : DiagnosticSink by 
                 SymbolDecl.Constant(name, TypeDecl.Builtin(BUILTIN_INT), 0)
             }
         }
-    }
-
-    /**
-     * Parse `:t(cu,n)=<body>` (typedef), or the body-less forward-
-     * declaration form `:t(cu,n)` (the binding for the body lives in a
-     * separate stab — common with cygwin gcc 13+ on box2d-style C++23
-     * code). Mirror of `gdb/stabsread.c:define_symbol` (t case).
-     */
-    private fun Cursor.parseTypedef(name: String): SymbolDecl.Typedef<LocalTypeId> {
-        consume('t')
-        val id = readTypeId()
-        val body = if (consumeIf('=')) selfDefToVoid(id, parseType()) else TypeDecl.Ref(id)
-        return SymbolDecl.Typedef(name, id, body)
     }
 
     /**

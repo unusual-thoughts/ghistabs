@@ -12,7 +12,7 @@ class SelfRefVoidTest {
     @Test
     fun explicitSelfDefIsVoid() {
         assertEquals(
-            SymbolDecl.Typedef("void", LocalTypeId(0, 20), TypeDecl.Void),
+            SymbolDecl.NamedType("void", TypeNameKind.TYPEDEF, LocalTypeId(0, 20), TypeDecl.Void),
             Parser("void:t(0,20)=(0,20)").parseSymbol(),
         )
     }
@@ -20,7 +20,7 @@ class SelfRefVoidTest {
     @Test
     fun explicitSelfDefIsVoidForTaggedType() {
         assertEquals(
-            SymbolDecl.TaggedType("void", LocalTypeId(0, 20), TypeDecl.Void),
+            SymbolDecl.NamedType("void", TypeNameKind.TAG, LocalTypeId(0, 20), TypeDecl.Void),
             Parser("void:T(0,20)=(0,20)").parseSymbol(),
         )
     }
@@ -28,7 +28,7 @@ class SelfRefVoidTest {
     @Test
     fun bareTypedefIsForwardRefNotVoid() {
         assertEquals(
-            SymbolDecl.Typedef("FILE", LocalTypeId(0, 116), TypeDecl.Ref(LocalTypeId(0, 116))),
+            SymbolDecl.NamedType("FILE", TypeNameKind.TYPEDEF, LocalTypeId(0, 116), TypeDecl.Ref(LocalTypeId(0, 116))),
             Parser("FILE:t(0,116)").parseSymbol(),
         )
     }
@@ -36,7 +36,7 @@ class SelfRefVoidTest {
     @Test
     fun bareForwardDeclaredStructIsRefNotVoid() {
         assertEquals(
-            SymbolDecl.Typedef("b2World", LocalTypeId(1, 27), TypeDecl.Ref(LocalTypeId(1, 27))),
+            SymbolDecl.NamedType("b2World", TypeNameKind.TYPEDEF, LocalTypeId(1, 27), TypeDecl.Ref(LocalTypeId(1, 27))),
             Parser("b2World:t(1,27)").parseSymbol(),
         )
     }
@@ -45,8 +45,9 @@ class SelfRefVoidTest {
     fun inlineSelfDefIsVoid() {
         // `(0,6)=(0,6)` nested inside a typedef: the inline binding survives, its body is void.
         assertEquals(
-            SymbolDecl.Typedef(
+            SymbolDecl.NamedType(
                 "x",
+                TypeNameKind.TYPEDEF,
                 LocalTypeId(0, 5),
                 TypeDecl.InlineDef(LocalTypeId(0, 6), TypeDecl.Void),
             ),

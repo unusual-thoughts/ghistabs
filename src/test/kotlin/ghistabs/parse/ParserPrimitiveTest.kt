@@ -12,7 +12,8 @@ class ParserPrimitiveTest {
     @Test
     fun testBoolWithSizeAttr() {
         val input = "_Bool:t(0,21)=@s8;-16"
-        val expected = SymbolDecl.Typedef(
+        val expected = SymbolDecl.NamedType(
+            kind = TypeNameKind.TYPEDEF,
             name = "_Bool",
             id = LocalTypeId(0, 21),
             type = TypeDecl.WithSizeAttr(
@@ -29,7 +30,8 @@ class ParserPrimitiveTest {
     @Test
     fun testIntRange() {
         val input = "int:t(0,1)=r(0,1);-2147483648;2147483647;"
-        val expected = SymbolDecl.Typedef(
+        val expected = SymbolDecl.NamedType(
+            kind = TypeNameKind.TYPEDEF,
             name = "int",
             id = LocalTypeId(0, 1),
             type = TypeDecl.Range(
@@ -44,7 +46,8 @@ class ParserPrimitiveTest {
     @Test
     fun testLongLongIntWithSizeAttrOctal() {
         val input = "long long int:t(0,6)=@s64;r(0,6);0000000000000;01777777777777777777777;"
-        val expected = SymbolDecl.Typedef(
+        val expected = SymbolDecl.NamedType(
+            kind = TypeNameKind.TYPEDEF,
             name = "long long int",
             id = LocalTypeId(0, 6),
             type = TypeDecl.WithSizeAttr(
@@ -64,7 +67,8 @@ class ParserPrimitiveTest {
         // gcc 3.4.5 emits 128-bit types with a 96+-bit octal upper bound that overflows a
         // 64-bit parse; it must fold to the low 64 bits (all ones = -1L) rather than throw.
         val input = "__int128:t(0,25)=@s128;r(0,25);000000000000000000000000;037777777777777777777777777777777;"
-        val expected = SymbolDecl.Typedef(
+        val expected = SymbolDecl.NamedType(
+            kind = TypeNameKind.TYPEDEF,
             name = "__int128",
             id = LocalTypeId(0, 25),
             type = TypeDecl.WithSizeAttr(
@@ -107,7 +111,8 @@ class ParserPrimitiveTest {
     @Test
     fun testComplexFloat() {
         val input = "complex float:t(0,16)=R3;8;0;"
-        val expected = SymbolDecl.Typedef(
+        val expected = SymbolDecl.NamedType(
+            kind = TypeNameKind.TYPEDEF,
             name = "complex float",
             id = LocalTypeId(0, 16),
             type = TypeDecl.Complex(rCode = 3, sizeBytes = 8),
@@ -118,7 +123,8 @@ class ParserPrimitiveTest {
     @Test
     fun testComplexDouble() {
         val input = "complex double:t(0,17)=R4;16;0;"
-        val expected = SymbolDecl.Typedef(
+        val expected = SymbolDecl.NamedType(
+            kind = TypeNameKind.TYPEDEF,
             name = "complex double",
             id = LocalTypeId(0, 17),
             type = TypeDecl.Complex(rCode = 4, sizeBytes = 16),
@@ -129,7 +135,8 @@ class ParserPrimitiveTest {
     @Test
     fun testPointerToInt() {
         val input = "pi:t(0,30)=*(0,1)"
-        val expected = SymbolDecl.Typedef(
+        val expected = SymbolDecl.NamedType(
+            kind = TypeNameKind.TYPEDEF,
             name = "pi",
             id = LocalTypeId(0, 30),
             type = TypeDecl.Pointer(TypeDecl.Ref(LocalTypeId(0, 1))),
@@ -140,7 +147,8 @@ class ParserPrimitiveTest {
     @Test
     fun testConstPointerToInt() {
         val input = "cpi:t(0,31)=k*(0,1)"
-        val expected = SymbolDecl.Typedef(
+        val expected = SymbolDecl.NamedType(
+            kind = TypeNameKind.TYPEDEF,
             name = "cpi",
             id = LocalTypeId(0, 31),
             type = TypeDecl.Const(TypeDecl.Pointer(TypeDecl.Ref(LocalTypeId(0, 1)))),
@@ -154,7 +162,8 @@ class ParserPrimitiveTest {
         // stabs PDF §5.3: array of 10 ints (0..9)
         // Note: Parser stores the index type (range) and element type; length is null.
         val input = "int_array:t(0,32)=ar(0,1);0;9;(0,1)"
-        val expected = SymbolDecl.Typedef(
+        val expected = SymbolDecl.NamedType(
+            kind = TypeNameKind.TYPEDEF,
             name = "int_array",
             id = LocalTypeId(0, 32),
             type = TypeDecl.Array(
@@ -175,7 +184,8 @@ class ParserPrimitiveTest {
         // C++ reference descriptor: &<referent-type>
         // stabs PDF §5.6
         val input = "ref_int:t(0,33)=&(0,1)"
-        val expected = SymbolDecl.Typedef(
+        val expected = SymbolDecl.NamedType(
+            kind = TypeNameKind.TYPEDEF,
             name = "ref_int",
             id = LocalTypeId(0, 33),
             type = TypeDecl.Reference(TypeDecl.Ref(LocalTypeId(0, 1))),
@@ -188,7 +198,8 @@ class ParserPrimitiveTest {
         // Volatile qualifier: B<inner-type>
         // stabs PDF §5.7
         val input = "vol_int:t(0,34)=B(0,1)"
-        val expected = SymbolDecl.Typedef(
+        val expected = SymbolDecl.NamedType(
+            kind = TypeNameKind.TYPEDEF,
             name = "vol_int",
             id = LocalTypeId(0, 34),
             type = TypeDecl.Volatile(TypeDecl.Ref(LocalTypeId(0, 1))),
@@ -201,7 +212,8 @@ class ParserPrimitiveTest {
         // Function type descriptor: f<return-type>
         // stabs PDF §5.5
         val input = "fn_type:t(0,35)=f(0,1)"
-        val expected = SymbolDecl.Typedef(
+        val expected = SymbolDecl.NamedType(
+            kind = TypeNameKind.TYPEDEF,
             name = "fn_type",
             id = LocalTypeId(0, 35),
             type = TypeDecl.FunctionT(ret = TypeDecl.Ref(LocalTypeId(0, 1)), params = emptyList()),
