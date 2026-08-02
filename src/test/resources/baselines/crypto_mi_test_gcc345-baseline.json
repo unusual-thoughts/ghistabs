@@ -293,16 +293,16 @@
             "max": 1
         },
         "local-var-add-success": {
-            "min": 2988,
-            "max": 2988
+            "min": 2982,
+            "max": 2982
         },
         "local-var-error": {
             "min": 23,
             "max": 23
         },
         "local-var-skipped-dup-local": {
-            "min": 2012,
-            "max": 2012
+            "min": 2018,
+            "max": 2018
         },
         "local-var-skipped-dup-param": {
             "min": 1570,
@@ -325,12 +325,12 @@
             "max": 28
         },
         "reglocal-add-success": {
-            "min": 1393,
-            "max": 1393
+            "min": 779,
+            "max": 779
         },
         "reglocal-skipped-dup-local": {
-            "min": 1820,
-            "max": 1820
+            "min": 2434,
+            "max": 2434
         },
         "reglocal-skipped-dup-param": {
             "min": 1642,
