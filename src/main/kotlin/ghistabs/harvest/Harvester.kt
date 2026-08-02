@@ -55,7 +55,7 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, private 
         if (f.sizeBytes != null) return
         val rbracs = f.scopeBrackets.filter { it.first == StabType.N_RBRAC }
         if (rbracs.isEmpty()) return
-        val funcStart = f.addr.address.offset
+        val funcStart = f.addr.offset
         val maxRbrac = rbracs.maxOf { it.second }
         f.sizeBytes = (if (maxRbrac > funcStart) maxRbrac - funcStart else maxRbrac).toULong()
     }
@@ -161,8 +161,8 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, private 
                 // already-absolute (gcc/ELF). Disambiguate by comparing to func start.
                 StabType.N_SLINE -> {
                     val source = lineSource ?: continue
-                    val abs = resolver.stabAddress(rec.value, currentFunction?.addr?.address)
-                    val entry = LineEntry(rec.desc, SerializableAddress(abs), source)
+                    val abs = resolver.stabAddress(rec.value, currentFunction?.addr)
+                    val entry = LineEntry(rec.desc, abs, source)
                     lineEntriesByFile.getOrPut(source) { mutableListOf() } += entry
                     currentFunction?.lineEntries?.add(entry)
                 }
@@ -180,7 +180,7 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, private 
                         when (sym.body) {
                             is SymbolDecl.Function -> currentFunction = OpenFunction(
                                 name = mangled,
-                                addr = SerializableAddress(addr),
+                                addr = addr,
                                 decl = sym.body,
                                 cu = currentCu!!,
                             ).also { openFunctions += it }
