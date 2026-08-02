@@ -1,7 +1,6 @@
 package ghistabs.harvest
 
 import ghidra.program.model.address.Address
-import ghistabs.parse.StabType
 import kotlinx.serialization.Serializable
 
 /**
@@ -49,20 +48,18 @@ internal class BlockTreeBuilder {
         pending += record
     }
 
-    fun bracket(type: StabType, addr: Address) {
-        when (type) {
-            StabType.N_LBRAC -> frames += Frame(addr, claim())
+    /** N_LBRAC: opens a scope owning the run of locals since the last bracket. */
+    fun open(addr: Address) {
+        frames += Frame(addr, claim())
+    }
 
-            StabType.N_RBRAC -> {
-                lastClose = addr
-                // An unbalanced close can't own anything; leave its run pending to end up an orphan.
-                val frame = frames.removeLastOrNull() ?: return
-                val block = BlockScope(frame.start, addr, frame.locals + claim(), frame.children)
-                (frames.lastOrNull()?.children ?: roots) += block
-            }
-
-            else -> {}
-        }
+    /** N_RBRAC: closes the innermost scope into its parent. */
+    fun close(addr: Address) {
+        lastClose = addr
+        // An unbalanced close can't own anything; leave its run pending to end up an orphan.
+        val frame = frames.removeLastOrNull() ?: return
+        val block = BlockScope(frame.start, addr, frame.locals + claim(), frame.children)
+        (frames.lastOrNull()?.children ?: roots) += block
     }
 
     private fun claim() = pending.also { pending = mutableListOf() }

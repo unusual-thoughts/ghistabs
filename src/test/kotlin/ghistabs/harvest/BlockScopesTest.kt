@@ -31,27 +31,27 @@ class BlockScopesTest {
         ),
     )
 
-    private fun BlockTreeBuilder.open(offset: Long) = bracket(StabType.N_LBRAC, addr(offset)).also { nextIndex++ }
+    private fun BlockTreeBuilder.openAt(offset: Long) = open(addr(offset)).also { nextIndex++ }
 
-    private fun BlockTreeBuilder.close(offset: Long) = bracket(StabType.N_RBRAC, addr(offset)).also { nextIndex++ }
+    private fun BlockTreeBuilder.closeAt(offset: Long) = close(addr(offset)).also { nextIndex++ }
 
     /** main's records, in stream order. */
     private fun mainBuilder() = BlockTreeBuilder().apply {
         local("fs", 89)
-        open(0x5d)
+        openAt(0x5d)
         local("this", 664)
-        open(0x11f)
-        close(0x122)
+        openAt(0x11f)
+        closeAt(0x122)
         local("__str", 953)
-        open(0x15d)
+        openAt(0x15d)
         local("this", 665)
-        open(0x1b2)
-        close(0x1b5)
+        openAt(0x1b2)
+        closeAt(0x1b5)
         local("__val", 38)
-        open(0x1b5)
-        close(0x1c2)
-        close(0x1de)
-        close(0xad2)
+        openAt(0x1b5)
+        closeAt(0x1c2)
+        closeAt(0x1de)
+        closeAt(0xad2)
     }
 
     private val lines = listOf(

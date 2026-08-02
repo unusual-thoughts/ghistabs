@@ -164,8 +164,14 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
         currentScope = null
     }
 
-    fun bracket(rec: StabRecord) {
-        currentScope?.let { it.blocks.bracket(rec.type, resolver.stabAddress(rec.value, it.function.addr)) }
+    /** N_LBRAC: open a lexical scope, which owns the locals emitted just before it. */
+    fun openScope(rec: StabRecord) {
+        currentScope?.let { it.blocks.open(resolver.stabAddress(rec.value, it.function.addr)) }
+    }
+
+    /** N_RBRAC: close the innermost lexical scope. */
+    fun closeScope(rec: StabRecord) {
+        currentScope?.let { it.blocks.close(resolver.stabAddress(rec.value, it.function.addr)) }
     }
 
     /**
