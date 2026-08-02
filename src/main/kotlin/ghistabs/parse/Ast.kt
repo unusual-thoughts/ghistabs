@@ -23,15 +23,6 @@ enum class AggrKind {
     ENUM,
     ;
 
-    /**
-     * Best-effort C++-style declaration from the stab function name.
-     * Ghidra's `DemangledFunction.signature` prepends Ghidra's guess at
-     * the calling convention (often the wrong `__rustcall` for Itanium
-     * `_ZN…` symbols because the unified demangler can't distinguish
-     * gcc-Itanium from legacy-Rust at the entry point). Strip any
-     * leading `__*call ` token and rebuild from the demangler's name +
-     * params instead.
-     */
     fun cxxKeyword() = when (this) {
         STRUCT -> "struct"
         UNION -> "union"
@@ -211,21 +202,21 @@ sealed interface TypeDecl<out Id : IdInterface> {
         override val children get() = listOf(body)
     }
 
-    val isXRefTarget get() = this is TypeDecl.Struct || this is TypeDecl.Enum
+    val isXRefTarget get() = this is Struct || this is Enum
 
     /** Bodies that materialize their own named DataType (own their ghidraName), as opposed to
      *  wrappers/refs/aliases whose byId entry points at another type's dt. Only these are classified. */
-    val ownsMaterializedType get() = isXRefTarget || this is TypeDecl.FunctionT || this is TypeDecl.Method
+    val ownsMaterializedType get() = isXRefTarget || this is FunctionT || this is Method
 
     val isComplete get() = when (this) {
-        is TypeDecl.Struct -> sizeBytes > 0
-        is TypeDecl.Enum -> members.isNotEmpty()
+        is Struct -> sizeBytes > 0
+        is Enum -> members.isNotEmpty()
         else -> false
     }
 
     fun matchesXRefKind(xref: AggrKind) = when (this) {
-        is TypeDecl.Struct -> rawKind == xref
-        is TypeDecl.Enum -> xref == AggrKind.ENUM
+        is Struct -> rawKind == xref
+        is Enum -> xref == AggrKind.ENUM
         else -> false
     }
 }

@@ -65,8 +65,6 @@ enum class Mode { CONCURRENT, AFTER }
 @Tag("integration")
 abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode) :
     AbstractGhidraHeadlessIntegrationTest() {
-    companion object {
-    }
 
     // Manual inputs live under src/test/resources/ (binaries — gitignored,
     // user-placed — and baselines — tracked); test-generated dumps go to
@@ -494,7 +492,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     fun adjacentBoolGlobalsEachOwnTheirByte() {
         val flags = listOf("_ZN8CryptoPP9g_hasISSEE", "_ZN8CryptoPP9g_hasSSE2E", "_ZN8CryptoPP10g_hasSSSE3E")
             .mapNotNull { n ->
-                sequenceOf(n, "_$n").mapNotNull { program.symbolTable.getSymbols(it).firstOrNull() }.firstOrNull()
+                sequenceOf(n, "_$n").firstNotNullOfOrNull { program.symbolTable.getSymbols(it).firstOrNull() }
             }
         assumeTrue(flags.size == 3, "Skipping: CryptoPP g_has* flags absent")
         val sizes = flags.associate { s ->
@@ -518,9 +516,9 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
      */
     @Test
     fun staticDataMemberIsTypedFromItsDeclaration() {
-        val sym = sequenceOf("_ZNSs4nposE", "__ZNSs4nposE")
-            .mapNotNull { program.symbolTable.getSymbols(it).firstOrNull() }
-            .firstOrNull()
+        val sym = sequenceOf("_ZNSs4nposE", "__ZNSs4nposE").firstNotNullOfOrNull {
+            program.symbolTable.getSymbols(it).firstOrNull()
+        }
         assumeTrue(sym != null, "Skipping: std::string::npos not present")
         // Plain `-gstabs` (no `+`) on gcc 4.2.1 emits static members as the bare `name:type,0,0`
         // with no linkage name at all — `_ZNSs4nposE` appears 0 times in crypto_mi_test_gcc421 but
