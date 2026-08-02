@@ -183,7 +183,7 @@ class TypeResolver(val harvest: Harvest, private val foldSources: Boolean = true
             .filter { it.key.hasHeaderExtension() }
             .flatMap { (src, entries) ->
                 val std = src.isStdMarkerPath()
-                entries.map { Triple(it.addr.address.offset, src, std) }
+                entries.map { Triple(it.addr.offset, src, std) }
             }
             .sortedBy { it.first }
         val hdrOffsets = LongArray(hdrEntries.size) { hdrEntries[it].first }
@@ -199,7 +199,7 @@ class TypeResolver(val harvest: Harvest, private val foldSources: Boolean = true
                 val stdVote = mutableMapOf<String, Int>()
                 for (m in methods) {
                     val func = funcsByMangled[m.mangled ?: continue] ?: continue
-                    val lo = func.addr.address.offset
+                    val lo = func.addr.offset
                     val hi = lo + (func.sizeBytes ?: 0uL).toLong()
                     var i = hdrOffsets.lowerBound(lo)
                     while (i < hdrEntries.size && hdrOffsets[i] < hi) {
@@ -274,7 +274,7 @@ class TypeResolver(val harvest: Harvest, private val foldSources: Boolean = true
             when {
                 f.isSyntheticInit -> foldSource(f.cu.filename)
 
-                else -> f.lineEntries.minByOrNull { it.addr.address.offset }?.source
+                else -> f.lineEntries.minByOrNull { it.addr.offset }?.source
                     ?: f.outermostClass()?.let { classSourceByName[it] }?.let(::foldSource)
             }?.let { f to it }
         }.toMap()

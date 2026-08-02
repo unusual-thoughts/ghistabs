@@ -48,10 +48,9 @@ class SymbolApplier(
             ctx.monitor.increment()
             try {
                 val func = funMgr.run {
-                    getFunctionAt(open.addr.address)
-                        ?: getFunctionContaining(open.addr.address)?.also {
-                            debug("entrypoint-snapped")
-                        }
+                    getFunctionAt(open.addr) ?: getFunctionContaining(open.addr)?.also {
+                        debug("entrypoint-snapped")
+                    }
                 } ?: tryCreateFunctionFromStab(open) ?: run {
                     val (tag, level) = if (isInlineStdMember(open.name)) {
                         "apply-error-inlined-std" to Level.DEBUG
@@ -59,7 +58,7 @@ class SymbolApplier(
                         "apply-error-no-function" to Level.INFO
                     }
                     // log() counts via the tee'd accumulator; BookmarkSink only emits/bookmarks.
-                    log(tag, "no Function at or containing ${open.addr} for ${open.name}", level, open.addr.address)
+                    log(tag, "no Function at or containing ${open.addr} for ${open.name}", level, open.addr)
                     continue
                 }
 
@@ -153,8 +152,8 @@ class SymbolApplier(
                 functions++
             } catch (t: Throwable) {
                 val bucket = ApplyErrorBucket.bucket(t)
-                err("apply-error-$bucket", "function ${open.name}: ${t.message}", address = open.addr.address)
-                err("apply-error", "function ${open.name}: ${t.message}", address = open.addr.address)
+                err("apply-error-$bucket", "function ${open.name}: ${t.message}", address = open.addr)
+                err("apply-error", "function ${open.name}: ${t.message}", address = open.addr)
             }
         }
         return functions
@@ -238,7 +237,7 @@ class SymbolApplier(
      * Returns null if the address is in data or disassembly fails.
      */
     private fun tryCreateFunctionFromStab(open: OpenFunction): Function? {
-        val addr = open.addr.address
+        val addr = open.addr
         val block = ctx.program.memory.getBlock(addr)
         if (block == null || !block.isExecute) {
             // Inline std::/__gnu_cxx members get stabbed but the linker drops the COMDAT.
@@ -293,7 +292,7 @@ class SymbolApplier(
     private val frameBias by lazy {
         harvest.openFunctions
             .asSequence()
-            .mapNotNull { funMgr.getFunctionAt(it.addr.address) }
+            .mapNotNull { funMgr.getFunctionAt(it.addr) }
             .firstNotNullOfOrNull { VariableUtilities.getBaseStackParamOffset(it) }
             ?: pointerSize
     }

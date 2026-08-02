@@ -157,8 +157,8 @@ private class RenderContext(val renderer: Renderer, val source: String) {
         val byKey = mutableMapOf<SliceKey, MutableSet<Address>>()
         for (entry in lines) {
             if (entry.line !in 1..maxLine) continue
-            val codeUnit = entry.addr.address.render(program) ?: ""
-            byKey.getOrPut(SliceKey(entry.line, codeUnit)) { sortedSetOf() } += entry.addr.address
+            val codeUnit = entry.addr.render(program) ?: ""
+            byKey.getOrPut(SliceKey(entry.line, codeUnit)) { sortedSetOf() } += entry.addr
         }
         for ((key, addrs) in byKey) {
             val runs = formatAddrRuns(addrs.toList(), program)
@@ -391,7 +391,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             // source line; decompiling each would stack duplicate bodies, so leave those as
             // the skeleton's side-by-side decls and only body a single-line function alone.
             if (closeLine == r.startLine && spans.ranges.count { it.startLine == r.startLine } > 1) continue
-            val ghFunc = program.functionManager.getFunctionAt(r.func.addr.address) ?: continue
+            val ghFunc = program.functionManager.getFunctionAt(r.func.addr) ?: continue
             val cLines = runCatching { decomp.decompileFunction(ghFunc, 30, TaskMonitor.DUMMY) }
                 .getOrNull()?.compressedDecompLines(renderer.mode == Mode.ELIDE_SJLJ) ?: continue
             val head = cLines.firstOrNull() ?: continue
@@ -414,8 +414,8 @@ private class RenderContext(val renderer: Renderer, val source: String) {
                 }
             }
 
-            val slines = r.func.lineEntries.sortedBy { it.addr.address.offset }
-            fun entryFor(addr: Address?) = addr?.let { a -> slines.lastOrNull { it.addr.address.offset <= a.offset } }
+            val slines = r.func.lineEntries.sortedBy { it.addr.offset }
+            fun entryFor(addr: Address?) = addr?.let { a -> slines.lastOrNull { it.addr.offset <= a.offset } }
             fun refOf(e: LineEntry): String {
                 val file = if (e.source == source) "" else "${e.source.substringAfterLast('/')} "
                 return "${file}L ${e.line}"
