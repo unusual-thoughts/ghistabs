@@ -7,8 +7,8 @@ import ghidra.program.model.listing.Program
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghistabs.StabsOptions
+import ghistabs.defaultContext
 import ghistabs.diagnose.Level
-import ghistabs.diagnose.defaultContext
 import ghistabs.disableAnalyzersFromProperty
 import ghistabs.disableWindowsResourceAnalyzer
 import ghistabs.harvest.Harvester

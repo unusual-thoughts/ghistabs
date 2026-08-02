@@ -1,6 +1,6 @@
 package ghistabs.render
 
-import ghidra.program.model.address.AddressSpace
+import ghistabs.GenericAddressResolver
 import ghistabs.harvest.LineEntry
 import ghistabs.harvest.OpenFunction
 import ghistabs.parse.SourceFile
@@ -21,10 +21,10 @@ class FunctionSpansTest {
     // lowest-address entry, i.e. the prologue; `lines` order therefore sets the prologue.
     private fun fn(name: String, base: Long, source: String, lines: List<Int>) = OpenFunction(
         name = name,
-        addr = AddressSpace.OTHER_SPACE.getAddress(base),
+        addr = GenericAddressResolver.buildAddress(base),
         decl = SymbolDecl.Function(name, false, TypeDecl.Builtin(-1)),
         cu = SourceFile.CUSource(source),
-        lineEntries = lines.mapIndexed { i, l -> LineEntry(l, AddressSpace.OTHER_SPACE.getAddress(base + i), source) }
+        lineEntries = lines.mapIndexed { i, l -> LineEntry(l, GenericAddressResolver.buildAddress(base + i), source) }
             .toMutableList(),
     )
 

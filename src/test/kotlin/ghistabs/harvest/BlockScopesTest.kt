@@ -1,6 +1,6 @@
 package ghistabs.harvest
 
-import ghidra.program.model.address.AddressSpace
+import ghistabs.GenericAddressResolver
 import ghistabs.parse.StabType
 import ghistabs.parse.SymbolDecl
 import ghistabs.parse.TypeDecl
@@ -22,7 +22,7 @@ class BlockScopesTest {
         sourceFile = "unpackfile.cpp", // the trailing N_SOL gcc leaves in effect — always this, never useful
     )
 
-    private fun addr(offset: Long) = AddressSpace.OTHER_SPACE.getAddress(offset)
+    private fun addr(offset: Long) = GenericAddressResolver.buildAddress(offset)
 
     private fun line(line: Int, offset: Long, source: String) = LineEntry(line, addr(offset), source)
 
