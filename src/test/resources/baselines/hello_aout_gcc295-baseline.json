@@ -20,10 +20,6 @@
             "min": 1,
             "max": 1
         },
-        "drop-record-bcomm": {
-            "min": 2,
-            "max": 2
-        },
         "drop-record-opt": {
             "min": 1,
             "max": 1
@@ -35,6 +31,10 @@
         "dtm-conflicts-pre": {
             "min": 0,
             "max": 0
+        },
+        "empty-scope": {
+            "min": 2,
+            "max": 2
         },
         "file-start": {
             "min": 1,
@@ -81,12 +81,12 @@
             "max": 0
         },
         "harvest-records-parsed": {
-            "min": 51,
-            "max": 51
+            "min": 54,
+            "max": 54
         },
         "harvest-records-read": {
-            "min": 51,
-            "max": 51
+            "min": 54,
+            "max": 54
         },
         "harvest-statics": {
             "min": 1,

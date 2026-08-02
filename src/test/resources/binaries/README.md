@@ -32,7 +32,8 @@ fixture named `README.md`.
 | `locale_test_customlibstdcxx_stripped.exe`     | PE32 i386         | MinGW GCC **4.2.1**   | locale-facet driver | + libstdc++ | **none**      |
 | `xmltest`                                      | ELF x86-64 PIE    | Debian GCC **12.2.0** | TinyXML **2**       | own code    | ELF `.symtab` |
 | `box2d_tests`                                  | ELF x86-64 PIE    | Debian GCC **12.2.0** | Box2D test driver   | own code    | ELF `.symtab` |
-| `hello_aout_gcc295.o`                          | a.out OMAGIC i386 | GCC **2.95**          | hand-written C      | own code    | in symtab     |
+| `hello_aout_gcc295.o`                          | a.out OMAGIC i386 | GCC **2.95.2**        | hand-written C      | own code    | in symtab     |
+| `tinyxml_aout_gcc295.o`                        | a.out OMAGIC i386 | GCC **2.95.2**        | TinyXML 1.x (C++)   | own code    | in symtab     |
 | `zlib_aout_gcc263.o`                           | a.out OMAGIC i386 | GCC **2.6.3**         | zlib 1.1.4          | own code    | in symtab     |
 
 Spread: **GCC 2.6.3 → 12.2.0**, three container formats, 32- and 64-bit, Windows and Linux.
@@ -66,13 +67,32 @@ because `x86-64` and PIE exercise different address/storage paths.
 - **GCC 4.2.1's CRT startup objects inject DWARF** regardless of `-gstabs`, because they ship
   prebuilt. Every 4.2.1 binary needs the `.debug_*` sections stripped post-link or it carries
   both formats. GCC 3.4.5's CRT objects do *not* do this — those come out STABS-only.
-- **The two a.out fixtures cannot be rebuilt on a modern kernel at all.** libc5's `sbrk` needs
-  `brk()` to return the exact unaligned address requested, which Linux has page-aligned for
-  years, so the compilers die with "virtual memory exhausted". They were built under
-  `qemu-system-i386` on a 2.4.18 kernel. `qemu-user` does not help.
-- **GCC 2.6.3 C++ is not supported by the parser** — pre-2.8.0 stabs grammar (bare integer
-  type ids, `Tt` on explicit typedefs, `##` method forms). Its C output parses cleanly, which
-  is why the a.out fixtures are C.
+- **The a.out fixtures need two different recipes.** The gcc 2.6.3 one runs the compiler natively
+  under `qemu-system-i386` on a 2.4.18 kernel, because libc5's `sbrk` needs `brk()` to return the
+  exact unaligned address requested and Linux has page-aligned it for years — the compiler dies
+  with "virtual memory exhausted" otherwise, and `qemu-user` does not help. The gcc 2.95.2 ones
+  need no VM: Debian potato's `cc1`/`cc1plus` still run on a modern host, and only the *assembler*
+  has to be period-correct.
+- **Use an a.out assembler no older than binutils 2.28 or so.** binutils 2.7's `as` ORs `0x02` into
+  `n_type` on forward-referencing `.stabn`, turning `N_RBRAC` (0xE0) into `N_BCOMM` (0xE2) and
+  `N_LBRAC` into `N_EXCL`; the records are then silently dropped. Build binutils **2.30**
+  `--target=i386-linuxaout --enable-obsolete` instead (2.31 removed a.out support, and 2.30 will
+  not configure it without the flag). Balanced `N_LBRAC`/`N_RBRAC` counts are the check.
+- **gcc 2.95 targets ELF, so its assembly needs two rewrites** before an a.out assembler accepts
+  it: `.section .gnu.linkonce.*` has no a.out equivalent and must be folded into `.text`/`.data`
+  (`-fno-weak` does not suppress it for COMDAT inline members), and `.align` means a *byte count*
+  on ELF but a *power of two* on a.out, so `.align 32` must become `.align 5` — otherwise gas dies
+  with an internal error in `size_seg`. The resulting object carries `(file,type)` type ids and
+  `N_BINCL`, since the ELF target defines `DBX_USE_BINCL` — a combination no historical a.out
+  toolchain produced.
+- **Pre-3.0 C++ is only partly recovered**, which is what `tinyxml_aout_gcc295.o` pins down.
+  Both 2.6.3 and 2.95 default to *minimal debug*, so a method reads `##<returntype>` and its
+  argument types live in the mangled name instead. The parser does not implement that form, and
+  since the method block sits at the end of the class body, the `!` inheritance spec parsed just
+  before it goes down with the record — hence structs and fields but no inheritance and no
+  vtables. There is no flag to turn it off: `flag_minimal_debug` is compile-time, keyed on whether
+  the target permits `$` and `.` in labels. 2.6.3 additionally emits bare integer type ids and
+  `Tt` on explicit typedefs, which is why its C++ yields almost nothing at all.
 
 ## Adding your own
 

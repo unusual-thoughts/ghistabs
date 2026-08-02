@@ -31,29 +31,29 @@ import java.io.File
  * `N_UNDF` header rebasing it per compilation unit. Ghidra's `UnixAoutLoader` discards the records but
  * exposes both tables as `.symtab`/`.strtab`, which is what [ghistabs.parse.Layout.SYMTAB] reads.
  *
- * Two committed fixtures, both expensive to reproduce — a 1990s toolchain is required, and the
- * compilers cannot run on a modern kernel at all: libc5's `sbrk` needs `brk()` to return the exact
- * unaligned address it asked for, which Linux has page-aligned for years. They are built under
- * `qemu-system-i386` running a 2.4.18 kernel (old enough for that `brk`, new enough for qemu's
- * `-kernel` boot protocol), with a Debian potato root and period compilers layered in.
+ * Three committed fixtures, all expensive to reproduce — a 1990s toolchain is required. gcc 2.6.3
+ * cannot run on a modern kernel at all (libc5's `sbrk` needs `brk()` to return the exact unaligned
+ * address it asked for, which Linux has page-aligned for years) and is run under `qemu-system-i386`
+ * on a 2.4.18 kernel; gcc 2.95.2 from Debian potato still runs natively, so only its *assembler*
+ * has to be period-correct — see the corpus README for both recipes.
  *
  *  - `hello_aout_gcc295.o` — one CU, C: typedef, enum, struct with a self-referential pointer and an
- *    array member, static vs global data and functions. Built via gcc 2.95 assembly through Debian
- *    bo's 1997 a.out assembler, so it retains that era's dialect.
+ *    array member, static vs global data and functions.
+ *  - `tinyxml_aout_gcc295.o` — one CU, C++: the TiXml class hierarchy, 464 functions, balanced
+ *    298/298 scope brackets. Covers a.out C++ as far as it goes — gcc 2.95 defaults to minimal
+ *    debug, so its method encodings are the `##` form the parser does not implement, and the class
+ *    bodies fail at the first one. Structs and fields materialize; inheritance and vtables do not,
+ *    which the `@ExpectedToFail` entries in the regression base record.
  *  - `zlib_aout_gcc263.o` — zlib 1.1.4's fourteen C translation units from Debian buzz's **gcc
  *    2.6.3** targeting `i486-linuxaout` directly, merged with `ld -r`. Covers the multi-CU case,
  *    which has no `N_UNDF` delimiters to lean on, plus unions, forward references and 294 register
  *    variables. Its scope brackets balance exactly (140 `N_LBRAC` / 140 `N_RBRAC`).
  *
- * gcc 2.6.3 **C++** is a step too far: its class stabs predate three changes that all landed by
- * gcc 3.0, and the parser implements only the later forms. C from the same compiler parses cleanly.
- *
- *  - bare integer type ids. `DBX_USE_BINCL` — and with it the `(file,type)` pair — did not exist
- *    before gcc 2.8.0; 2.6.3 emits `TYPE_SYMTAB_ADDRESS` unconditionally on every target.
- *  - `Tt` on *explicit* typedefs. The `DECL_ARTIFICIAL` guard that restricts the combined
- *    tag+typedef shortcut to C++'s implicit typedefs only arrived in 2.8.0.
- *  - `##` method forms. `flag_minimal_debug` defaulted on ("argument types are encoded in the
- *    method name") and was deleted outright in gcc 3.0.
+ * gcc 2.6.3 **C++** is a step further still, and has no fixture: on top of the `##` forms above it
+ * predates two changes that landed in 2.8.0 — `DBX_USE_BINCL`, and with it the `(file,type)` pair,
+ * did not exist, so type ids are bare on every target; and the `DECL_ARTIFICIAL` guard restricting
+ * the combined tag+typedef `Tt` to C++'s implicit typedefs had not arrived, so plain C typedefs
+ * take that form too. C from the same compiler parses cleanly.
  */
 @Tag("integration")
 class AoutStabsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
