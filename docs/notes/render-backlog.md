@@ -75,7 +75,7 @@ Structurally sound: `T_<digits>` dangling type refs = 0; no unparseable garbage.
   (`;`/`)`/`.`/`,`/`->`, braces excluded so `}` keeps its row) onto the preceding statement row.
   Verified: lone-`;`/`.`/`)` across all fixtures **74 → 0**, the `;` re-attaches to its statement
   (`…_M_start ;  // ⇐ stl_iterator.h L 584`), full integration suite green.
-- **Keep (not a defect) — stale N_SOL in decomp (~129):** the `// … stale N_SOL?` markers are
+- **Keep (not a defect) — stale N_SOL in decomp (~129):** *(§27 removed the locals/params half of this — the markers that remain are addressless types.)* the `// … stale N_SOL?` markers are
   *useful* diagnostics — they flag content (reg-locals/params, misattributed fragments) that needs
   excluding from decomp by some other mechanism, not by silencing the marker. Leave them; the real
   work is acting on what they point at, not trimming the annotation.
@@ -883,3 +883,43 @@ the storage unit, which is not necessarily how the stabs `offsetBits` is anchore
 against a fixture on both endiannesses (x86:LE:32 PE, x86-64 ELF are both in the corpus) rather
 than deriving it. Check whether any current fixture even contains a packed bitfield struct
 before building one.
+
+## 27. Function-scope symbols were attributed by N_SOL, which carries nothing — DONE
+
+The `stale N_SOL?` family (§9's "companion", §17's residual) had one root cause for *locals and
+params*, and it isn't recoverable N_SOL tracking: gcc's `dbxout_function_decl` emits the whole
+block tree (`dbxout_block`) **after** the function body, and N_SOL is only ever written from
+`dbxout_source_file`, driven by line notes. So by the time any local's stab is written, line-note
+emission for that function is over: `SymbolRecord.sourceFile` on a function-scope symbol is always
+"whichever file the function's *last* N_SLINE was in" and carries zero bits about the symbol. Same
+defect 9d812a3 fixed for globals; its closing note ("locals still use sourceFile — those
+legitimately migrate to a header when N_SOL says so") was the wrong half. The N_SLINE tagging
+itself was already correct (`Harvester.lineSource`) — there was nothing to fix there.
+
+Two lines up in the same gcc function is the signal: *"In dbx format, the syms of a block come
+before the N_LBRAC. If nothing is output, we don't need the N_LBRAC, either."* A block's symbols
+precede its own N_LBRAC. Measured across the corpus, the next bracket record after a run of locals
+is an N_LBRAC **12863/12863** times, never an N_RBRAC. `ScopePairs`' `recordIndex in openRec..recIdx`
+was therefore inverted: it could only ever collect a block's *children's* locals, never its own —
+which is what the 26k corpus-wide `empty-scope` count was measuring.
+
+**Fix** (`harvest/BlockScopes.kt`): build the real block tree (ownership = the run of records since
+the previous bracket), then resolve each block's source from the N_SLINEs its own address range
+covers, minus its children's — decl-line match first, else the range's single file, else the
+enclosing block, with the function's own source at the root. Bracket addresses now go through
+`resolver.stabAddress` like N_SLINEs do (they were assumed function-relative; on the a.out fixtures
+33/68 are absolute, so scope comments were landing at `entry + absolute`). `resolveBlocks()` runs
+once after harvest and repoints `SymbolRecord.sourceFile`, so importer *and* render read one
+answer. Corpus: `empty-scope` 26391 → 6, no other counter moved, full suite green. unpackfile's
+inlined locals leave `unpackfile.cpp` for the headers they were compiled from (`Exclusion *__p` →
+`stl_vector.h:123`, the allocator locals → `stl_alloc.h:248`).
+
+**Not done — the addressless half.** This only settles symbols that *have* a text address. File-scope
+typedefs and class bodies have none, so `Attribution.keyFor`/`multiSourceHeaderHints` still answer
+that question separately, and §15 records that unifying them regressed type resolution. Same
+principle, but it needs the findByName/collision robustness first. `TypeAst.declSourceFile` remains
+raw N_SOL and is right only by luck: block-scoped types are emitted by the same `dbxout_syms` call
+as locals (structurally stale), CU-top-level types sit in the opening declaration burst (stale, per
+9d812a3), and only types emitted during body output — the template-instantiation typedefs §17 leans
+on — genuinely carry their own file. The `body !is Struct && body !is Enum` guard in
+`TypeResolver.effectiveSource` is doing that discrimination by proxy.

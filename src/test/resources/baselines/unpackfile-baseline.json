@@ -92,10 +92,6 @@
             "min": 0,
             "max": 0
         },
-        "empty-scope": {
-            "min": 571,
-            "max": 571
-        },
         "file-start": {
             "min": 8,
             "max": 8
@@ -289,8 +285,8 @@
             "max": 7
         },
         "stab-value-func-relative": {
-            "min": 3714,
-            "max": 3714
+            "min": 5278,
+            "max": 5278
         },
         "static-member-applied": {
             "min": 105,
