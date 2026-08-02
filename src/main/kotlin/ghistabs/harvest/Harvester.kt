@@ -121,7 +121,9 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, resolver
                     warn("parse-error", "lsym @$i: ${e.message}")
                 }
 
-                StabType.N_LBRAC, StabType.N_RBRAC -> cursor.bracket(rec)
+                StabType.N_LBRAC -> cursor.openScope(rec)
+
+                StabType.N_RBRAC -> cursor.closeScope(rec)
 
                 // Known-irrelevant for type/symbol harvesting.
                 StabType.N_DSLINE, StabType.N_BSLINE, StabType.N_FLINE,
