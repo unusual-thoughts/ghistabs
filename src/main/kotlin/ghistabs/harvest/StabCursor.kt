@@ -39,10 +39,20 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
     var currentCu: SourceFile.CUSource? = null
         private set
 
-    var currentFunction: OpenFunction? = null
-        private set
+    /**
+     * A function being accumulated: its record-order params and its block tree, held beside it
+     * rather than on it. Not a map keyed by [OpenFunction] — that is a data class whose hashCode
+     * moves as its lineEntries and sizeBytes fill in.
+     */
+    private class OpenScope(val function: OpenFunction) {
+        val blocks = BlockTreeBuilder()
+        val params = mutableListOf<SymbolRecord>()
+    }
 
-    private val openFunctions = mutableListOf<OpenFunction>()
+    private val scopes = mutableListOf<OpenScope>()
+    private var currentScope: OpenScope? = null
+
+    val currentFunction get() = currentScope?.function
 
     /** [currentCu] where a record can't legally appear outside a CU. */
     val cu get() = checkNotNull(currentCu) { "record outside any N_SO" }
@@ -134,18 +144,28 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
     /** Named N_FUN: `name` is `mangled:descriptor`, `value` the entry address. */
     fun openFunction(rec: StabRecord, decl: SymbolDecl.Function<GlobalTypeId>) {
         finaliseGcc12FunctionSize()
-        currentFunction = OpenFunction(rec.name.substringBefore(':'), resolver.buildAddress(rec.value), decl, cu)
-            .also { openFunctions += it }
+        val function = OpenFunction(rec.name.substringBefore(':'), resolver.buildAddress(rec.value), decl, cu)
+        currentScope = OpenScope(function).also { scopes += it }
+    }
+
+    /** N_PSYM / register-param N_RSYM: the function's own, so no block resolution needed. */
+    fun param(record: SymbolRecord) {
+        currentScope?.params?.add(record)
+    }
+
+    /** N_LSYM / N_RSYM local: held by the block builder until a bracket claims it. */
+    fun local(record: SymbolRecord) {
+        currentScope?.blocks?.local(record)
     }
 
     /** Empty-name N_FUN end marker: `value` is the size relative to the function start. */
     fun closeFunction(rec: StabRecord) {
         currentFunction?.sizeBytes = rec.value.toULong()
-        currentFunction = null
+        currentScope = null
     }
 
-    fun bracket(rec: StabRecord, index: Int) {
-        currentFunction?.let { it.scopeBrackets += Bracket(rec.type, resolver.stabAddress(rec.value, it.addr), index) }
+    fun bracket(rec: StabRecord) {
+        currentScope?.let { it.blocks.bracket(rec.type, resolver.stabAddress(rec.value, it.function.addr)) }
     }
 
     /**
@@ -154,16 +174,25 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
      * function context.
      */
     private fun finaliseGcc12FunctionSize() {
-        val f = currentFunction ?: return
+        val scope = currentScope ?: return
+        val f = scope.function
         if (f.sizeBytes != null) return
-        val lastRbrac = f.scopeBrackets.filter { it.type == StabType.N_RBRAC }.maxOfOrNull { it.addr.offset } ?: return
-        f.sizeBytes = (lastRbrac - f.addr.offset).toULong()
+        val lastClose = scope.blocks.lastClose ?: return
+        f.sizeBytes = (lastClose.offset - f.addr.offset).toULong()
     }
 
     /** Functions with their block trees resolved, and line entries grouped by source and sorted. */
     fun toHarvest(): Pair<List<OpenFunction>, Map<String, List<LineEntry>>> {
-        openFunctions.forEach { it.resolveBlocks() }
-        return openFunctions to
+        for (scope in scopes) {
+            val f = scope.function
+            // The function's own file: its lowest-address line entry, matching TypeResolver.functionSource.
+            val source = f.lineEntries.minByOrNull { it.addr.offset }?.source ?: f.cu.filename
+            val (blocks, locals) = scope.blocks.finish(f.lineEntries, source)
+            f.blocks = blocks
+            f.locals = locals
+            f.params = scope.params.map { it.copy(sourceFile = source) }
+        }
+        return scopes.map { it.function } to
             lineEntriesByFile.mapValues { (_, v) -> v.sortedWith(compareBy({ it.line }, { it.addr.offset })) }
     }
 }

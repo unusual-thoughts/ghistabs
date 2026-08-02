@@ -23,68 +23,84 @@ data class BlockScope(
     val children: List<BlockScope> = emptyList(),
 )
 
-/** Bracket records (absolute address, stream index) → the function's block tree. */
-internal fun buildBlocks(brackets: List<Bracket>, locals: List<SymbolRecord>): List<BlockScope> {
-    class Frame(
-        val start: Address,
-        val locals: List<SymbolRecord>,
-        val children: MutableList<BlockScope> = mutableListOf(),
-    )
-
-    val ordered = locals.sortedBy { it.recordIndex }
-    var next = 0
-    fun claimBefore(recordIndex: Int) = buildList {
-        while (next < ordered.size && ordered[next].recordIndex < recordIndex) add(ordered[next++])
+/**
+ * Assembles a function's block tree from the record stream as it arrives: locals accumulate until a
+ * bracket claims them, N_LBRAC opens a scope, N_RBRAC closes one into its parent.
+ *
+ * Nothing is attributed here — a block's source file comes from the N_SLINEs covering its address
+ * range, and those aren't all known until the function ends (nearly always they precede the first
+ * bracket, but one function in 23283 across the corpus emits a later one). [finish] does that in a
+ * single top-down walk and hands back the completed function-scope records.
+ */
+internal class BlockTreeBuilder {
+    private class Frame(val start: Address, val locals: List<SymbolRecord>) {
+        val children = mutableListOf<BlockScope>()
     }
 
-    val stack = mutableListOf<Frame>()
-    val roots = mutableListOf<BlockScope>()
-    for ((type, addr, recordIndex) in brackets) {
-        val claimed = claimBefore(recordIndex)
-        when (type) {
-            // A run of syms with no N_LBRAC of its own can only belong to the block being closed.
-            StabType.N_RBRAC if stack.isNotEmpty() -> stack.removeAt(stack.size - 1).let { frame ->
-                val block = BlockScope(frame.start, addr, frame.locals + claimed, frame.children)
-                (stack.lastOrNull()?.children ?: roots).add(block)
-            }
+    private val frames = mutableListOf<Frame>()
+    private val roots = mutableListOf<BlockScope>()
+    private var pending = mutableListOf<SymbolRecord>()
 
-            StabType.N_LBRAC -> stack.add(Frame(addr, claimed))
+    /** Address of the last N_RBRAC seen — the function's end when gcc omits the N_FUN end marker. */
+    var lastClose: Address? = null
+        private set
+
+    fun local(record: SymbolRecord) {
+        pending += record
+    }
+
+    fun bracket(type: StabType, addr: Address) {
+        when (type) {
+            StabType.N_LBRAC -> frames += Frame(addr, claim())
+
+            StabType.N_RBRAC -> {
+                lastClose = addr
+                // An unbalanced close can't own anything; leave its run pending to end up an orphan.
+                val frame = frames.removeLastOrNull() ?: return
+                val block = BlockScope(frame.start, addr, frame.locals + claim(), frame.children)
+                (frames.lastOrNull()?.children ?: roots) += block
+            }
 
             else -> {}
         }
     }
-    return roots
-}
 
-/** Line entries this block's own code produced — inside its range, outside every child's. */
-private fun BlockScope.ownLines(lines: List<LineEntry>) = lines.filter {
-    it.addr in start..<end && children.none { c -> it.addr in c.start..<c.end }
-}
+    private fun claim() = pending.also { pending = mutableListOf() }
 
-/**
- * Source file per local `recordIndex`, resolved top-down: the file whose N_SLINEs in the block's
- * own code carry the local's decl line, else the block's own code if it is all one file, else the
- * enclosing block's answer (the outermost block inherits the function's own source).
- *
- * The block is the only signal there is. A local's N_SOL says nothing: gcc emits the whole block
- * tree from `dbxout_function_decl` *after* the body, so every local in a function carries whatever
- * file the last line note happened to be in.
- */
-internal fun List<BlockScope>.attributedSources(lines: List<LineEntry>, functionSource: String): Map<Int, String> {
-    val out = mutableMapOf<Int, String>()
-    fun walk(blocks: List<BlockScope>, inherited: String) {
-        for (block in blocks) {
-            val own = block.ownLines(lines)
-            val blockSource = own.mapTo(mutableSetOf()) { it.source }.singleOrNull() ?: inherited
-            block.locals.forEach { local ->
-                out[local.recordIndex] = own.filter { it.line == local.declLine }
-                    .mapTo(mutableSetOf()) { it.source }.singleOrNull() ?: blockSource
+    /**
+     * Resolve every block's source and return the finished tree plus the flat local list, the two
+     * built from one walk so they can't disagree.
+     *
+     * A block's file is the one whose N_SLINEs in its *own* code (its range minus its children's)
+     * carry the local's decl line, else the file of that own code when it is all one, else the
+     * enclosing block's answer. Records no block claimed — gcc's `dbxout_reg_parms` emits register
+     * parameters at depth 0 without setting `did_output`, so in a C++ function, whose depth-0 block
+     * never owns variables, they trail with no N_LBRAC — belong to the function, like params.
+     *
+     * The record's own N_SOL says nothing: gcc emits the whole block tree from `dbxout_function_decl`
+     * *after* the body, so every function-scope symbol carries whichever file the last line note in
+     * the function happened to be in.
+     */
+    fun finish(lines: List<LineEntry>, functionSource: String): Pair<List<BlockScope>, List<SymbolRecord>> {
+        val flat = mutableListOf<SymbolRecord>()
+
+        fun attribute(block: BlockScope, inherited: String): BlockScope {
+            val own = lines.filter { entry ->
+                entry.addr in block.start..<block.end &&
+                    block.children.none { entry.addr in it.start..<it.end }
             }
-            walk(block.children, blockSource)
+            val blockSource = own.mapTo(mutableSetOf()) { it.source }.singleOrNull() ?: inherited
+            val locals = block.locals.map { local ->
+                val byLine = own.filter { it.line == local.declLine }.mapTo(mutableSetOf()) { it.source }
+                local.copy(sourceFile = byLine.singleOrNull() ?: blockSource).also { flat += it }
+            }
+            return block.copy(locals = locals, children = block.children.map { attribute(it, blockSource) })
         }
+
+        val blocks = roots.map { attribute(it, functionSource) }
+        pending.mapTo(flat) { it.copy(sourceFile = functionSource) }
+        return blocks to flat
     }
-    walk(this, functionSource)
-    return out
 }
 
 /**
@@ -102,16 +118,4 @@ internal fun List<BlockScope>.firstUseOffsets(entry: Address): Map<Int, Int> = b
         }
     }
     walk(this@firstUseOffsets)
-}
-
-/**
- * Resolve the block tree and repoint every function-scope symbol at the source file it was really
- * compiled from. Params belong to the function; locals to their block (see [attributedSources]).
- */
-internal fun OpenFunction.resolveBlocks() {
-    val functionSource = lineEntries.minByOrNull { it.addr.offset }?.source ?: cu.filename
-    val sources = buildBlocks(scopeBrackets, locals).attributedSources(lineEntries, functionSource)
-    locals.replaceAll { local -> sources[local.recordIndex]?.let { local.copy(sourceFile = it) } ?: local }
-    params.replaceAll { it.copy(sourceFile = functionSource) }
-    blocks = buildBlocks(scopeBrackets, locals)
 }
