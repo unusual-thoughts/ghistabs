@@ -8,8 +8,11 @@ import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.SymbolUtilities
 import ghistabs.demangledName
 import ghistabs.parse.*
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.Transient
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
 import kotlin.io.path.Path
 import kotlin.io.path.nameWithoutExtension
 
@@ -71,20 +74,25 @@ data class SymbolRecord(
     ) : this(record.index, record.type, decl, record.value, record.desc, sourceFile, enclosingFunction)
 }
 
-@Serializable
-data class SerializableAddress(val space: String, val offset: Long) {
-    constructor(addr: Address) : this(addr.addressSpace.name, addr.offset) {
-        address = addr
+class AddressSerializer : KSerializer<Address> {
+    @Serializable
+    private data class AddressSurrogate(val space: String, val offset: Long) {
+        constructor(addr: Address) : this(addr.addressSpace.name, addr.offset)
     }
+    override val descriptor =
+        SerialDescriptor("ghidra.program.model.address.Address", AddressSurrogate.serializer().descriptor)
+    override fun serialize(encoder: Encoder, value: Address) =
+        encoder.encodeSerializableValue(AddressSurrogate.serializer(), AddressSurrogate(value))
 
-    @Transient
-    lateinit var address: Address
+    override fun deserialize(decoder: Decoder) =
+        throw UnsupportedOperationException("AddressSerializer is serialize-only")
 }
 
 @Serializable
 data class OpenFunction(
     val name: String,
-    val addr: SerializableAddress,
+    @Serializable(with = AddressSerializer::class)
+    val addr: Address,
     val decl: SymbolDecl.Function<GlobalTypeId>,
     val cu: SourceFile.CUSource,
     val locals: MutableList<SymbolRecord> = mutableListOf(),
@@ -108,8 +116,7 @@ data class OpenFunction(
      * imported stabs types, so the rendered signature reflects what the binary actually
      * does (not the demangler's textual guess).
      */
-    fun signature(program: Program) =
-        program.functionManager.getFunctionAt(addr.address)?.signature?.prototypeString ?: name
+    fun signature(program: Program) = program.functionManager.getFunctionAt(addr)?.signature?.prototypeString ?: name
 
     /**
      * [signature] with the `static` gcc emitted as `:f` (internal linkage) restored. Ghidra models
@@ -143,18 +150,21 @@ data class OpenFunction(
      * the last `#include`d header. They belong to the CU that owns the
      * static they initialize, not to that header.
      */
-    val isSyntheticInit
-        get() = name.startsWith("_GLOBAL__I_") ||
-            name.startsWith("_GLOBAL__D_") ||
-            name.startsWith("_GLOBAL__N_") ||
-            name.startsWith("_Z41__static_initialization_and_destruction_0") ||
-            name == "__static_initialization_and_destruction_0"
+    val isSyntheticInit get() = name.startsWith("_GLOBAL__I_") ||
+        name.startsWith("_GLOBAL__D_") ||
+        name.startsWith("_GLOBAL__N_") ||
+        name.startsWith("_Z41__static_initialization_and_destruction_0") ||
+        name == "__static_initialization_and_destruction_0"
 }
 
 /** N_SLINE record: line → text address, tagged with its active N_SOL source. Held both in
  *  [Harvest.lineEntries] (grouped by source) and on the owning [OpenFunction.lineEntries]. */
 @Serializable
-data class LineEntry(val line: Int, val addr: SerializableAddress, val source: String)
+data class LineEntry(
+    val line: Int,
+    @Serializable(with = AddressSerializer::class) val addr: Address,
+    val source: String,
+)
 
 @Serializable(with = ToStringSerializer::class)
 data class GhidraKey(val category: CategoryPath, val name: String) {
