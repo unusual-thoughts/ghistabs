@@ -265,12 +265,12 @@
             "max": 2
         },
         "reglocal-add-success": {
-            "min": 189,
-            "max": 189
+            "min": 157,
+            "max": 157
         },
         "reglocal-skipped-dup-local": {
-            "min": 205,
-            "max": 205
+            "min": 237,
+            "max": 237
         },
         "reglocal-skipped-dup-param": {
             "min": 244,

@@ -20,6 +20,7 @@ import ghistabs.harvest.BlockScope
 import ghistabs.harvest.Harvest
 import ghistabs.harvest.OpenFunction
 import ghistabs.harvest.SymbolRecord
+import ghistabs.harvest.firstUseOffsets
 import ghistabs.harvest.pathBasename
 import ghistabs.materialize.TypeRegistry
 import ghistabs.materialize.reasonFor
@@ -144,8 +145,9 @@ class SymbolApplier(
                 // once ClassBuilder has synthesised a typed one. A plain function whose own local
                 // is called `this` has no such N_PSYM, so it keeps the local.
                 val paramNames = open.params.mapTo(mutableSetOf()) { it.body.name }
+                val firstUse = open.blocks.firstUseOffsets(func.entryPoint)
                 for (loc in open.locals) {
-                    applyLocal(func, loc, paramNames)
+                    applyLocal(func, loc, paramNames, firstUse[loc.recordIndex] ?: 0)
                 }
 
                 // Apply scope plate comments.
@@ -299,7 +301,7 @@ class SymbolApplier(
             ?: pointerSize
     }
 
-    private fun applyLocal(func: Function, loc: SymbolRecord, paramNames: Set<String>) {
+    private fun applyLocal(func: Function, loc: SymbolRecord, paramNames: Set<String>, firstUse: Int) {
         val decl = loc.body
         val resolvedDt = when (decl) {
             is SymbolDecl.StackLocal -> typeRegistry.resolveRef(decl.type)
@@ -358,9 +360,11 @@ class SymbolApplier(
                         debug("reglocal-skipped-dup-local")
                         return
                     }
-                    val lv = LocalVariableImpl(decl.name, 0, dt, reg, ctx.program, source)
+                    // [firstUse] is the local's block, i.e. the range it is actually live over — a
+                    // register local declared from entry claims the register for the whole function.
+                    val lv = LocalVariableImpl(decl.name, firstUse, dt, reg, ctx.program, source)
                     func.addLocalVariable(lv, source)
-                    debug("reglocal-add-success")
+                    debug("reglocal-add-success", "firstUse=$firstUse")
                 }
             }
         } catch (e: Exception) {
