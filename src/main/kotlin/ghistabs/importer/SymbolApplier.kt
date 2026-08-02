@@ -301,6 +301,21 @@ class SymbolApplier(
             ?: pointerSize
     }
 
+    /**
+     * The name to give a local, or null when it is not a variable of its own. gcc names every inline
+     * expansion's locals identically (`this` six times over in one function) and Ghidra's variable
+     * namespace is flat, so distinct copies get `this`, `this_1`, … — but a same-named variable
+     * already sitting in [isSameSlot] is gcc re-describing one variable, and suffixing that would
+     * manufacture a twin.
+     */
+    private fun scopedName(func: Function, base: String, isSameSlot: (Variable) -> Boolean): String? {
+        val sameBase = Regex("${Regex.escape(base)}(_\\d+)?")
+        val existing = func.localVariables
+        if (existing.any { sameBase.matches(it.name) && isSameSlot(it) }) return null
+        val taken = existing.mapTo(mutableSetOf()) { it.name }
+        return if (base !in taken) base else generateSequence(1, Int::inc).map { "${base}_$it" }.first { it !in taken }
+    }
+
     private fun applyLocal(func: Function, loc: SymbolRecord, paramNames: Set<String>, firstUse: Int) {
         val decl = loc.body
         val resolvedDt = when (decl) {
@@ -326,6 +341,11 @@ class SymbolApplier(
                         debug("local-var-skipped-dup-param")
                         return
                     }
+                    // Stack locals keep the drop-on-collision rule. They can't carry a scope — Ghidra
+                    // rejects a non-zero firstUseOffset on stack storage ("Stack-based variable must
+                    // have firstUseOffset of 0") — and suffixing them by slot instead is destructive:
+                    // the extra copies land at offsets inside a real variable's footprint and Ghidra
+                    // silently evicts it (unpackfile `main` lost `FileSystemImage fs` outright).
                     if (decl.name in func.localVariables.map { it.name }) {
                         debug("local-var-skipped-dup-local")
                         return
@@ -356,15 +376,18 @@ class SymbolApplier(
                         debug("reglocal-skipped-dup-param")
                         return
                     }
-                    if (decl.name in func.localVariables.map { it.name }) {
+                    val name = scopedName(func, decl.name) {
+                        it.firstUseOffset == firstUse && it.register == reg
+                    } ?: run {
                         debug("reglocal-skipped-dup-local")
                         return
                     }
                     // [firstUse] is the local's block, i.e. the range it is actually live over — a
                     // register local declared from entry claims the register for the whole function.
-                    val lv = LocalVariableImpl(decl.name, firstUse, dt, reg, ctx.program, source)
+                    val lv = LocalVariableImpl(name, firstUse, dt, reg, ctx.program, source)
                     func.addLocalVariable(lv, source)
                     debug("reglocal-add-success", "firstUse=$firstUse")
+                    if (name != decl.name) debug("reglocal-renamed-scope", "${decl.name} → $name")
                 }
             }
         } catch (e: Exception) {
