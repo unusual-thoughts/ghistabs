@@ -40,7 +40,7 @@ class BaselineLoaderTest {
         // nondeterminism may be hand-widened (xref-base-tag-resolved is [41..49] for CONCURRENT
         // demangler-order jitter). So assert well-formed ranges, not point ranges.
         assertTrue(baseline.counters.isNotEmpty())
-        assertTrue(baseline.counters.containsKey("empty-scope"))
+        assertTrue(baseline.counters.containsKey("local-var-add-success"))
         assertTrue(baseline.counters.containsKey("harvest-records-read"))
         baseline.counters.forEach { (name, range) ->
             assertTrue(range.min <= range.max, "$name has an inverted range ${range.min}..${range.max}")

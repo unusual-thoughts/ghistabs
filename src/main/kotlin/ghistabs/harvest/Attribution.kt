@@ -20,6 +20,9 @@ private fun stripDriveLetter(path: String): String =
 /** Path segments, drive letter dropped and both separators honoured (stabs mixes `/` and `\`). */
 private fun pathSegments(path: String) = stripDriveLetter(path).split('/', '\\').filter { it.isNotEmpty() }
 
+/** Last path segment of a stabs path: `c:/mingw/include/c++/3.2.3/bits/stl_alloc.h` → `stl_alloc.h`. */
+fun String.pathBasename() = pathSegments(this).lastOrNull() ?: this
+
 private val CU_LOCAL_NAME = Regex("""\.?_anon_\d+""")
 
 /**
@@ -54,11 +57,10 @@ fun String.isStdMarkerPath(): Boolean = STD_MARKERS.containsMatchIn(this)
  */
 fun foldSourcePaths(filenames: Iterable<String>): Map<String, String> {
     fun isBare(s: String) = '/' !in s && '\\' !in s
-    fun basename(s: String) = pathSegments(s).last()
     fun parentDir(s: String) = pathSegments(s).dropLast(1).lastOrNull().orEmpty()
 
     val all = filenames.toSet()
-    val fullPathsByBasename = all.filterNot(::isBare).groupBy(::basename)
+    val fullPathsByBasename = all.filterNot(::isBare).groupBy(String::pathBasename)
     val fold = mutableMapOf<String, String>()
     for (name in all) {
         if (!isBare(name)) continue
