@@ -7,7 +7,6 @@ import ghistabs.materialize.itanium.*
 import ghistabs.parse.CATEGORY
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
-import ghistabs.parse.isXRefTarget
 import ghistabs.runTransaction
 import ghidra.program.model.data.Enum as GhidraEnum
 

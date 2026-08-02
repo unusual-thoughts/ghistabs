@@ -26,7 +26,7 @@ class Parser(src: String, sink: DiagnosticSink = DummySink) : DiagnosticSink by 
 
         // gcc's XCOFF builtin slot for bool, and the shape its `-gstabs+` spelling decodes to.
         const val BUILTIN_BOOL = -16
-        const val BITS_PER_BYTE = 8
+        const val BITS_PER_BYTE = 8L
         val BOOL_ENUM_MEMBERS = listOf("False" to 0L, "True" to 1L)
 
         // Symbol chars that may follow `operator` in a method name (arithmetic, logical,
@@ -581,7 +581,7 @@ class Parser(src: String, sink: DiagnosticSink = DummySink) : DiagnosticSink by 
         val max = readRangeBound()
         consume(';')
         if (max == 0L && min > 0L) {
-            return TypeDecl.Float(min.toInt())
+            return TypeDecl.Float(min)
         }
         return TypeDecl.Range(typeId, min, max)
     }
@@ -596,7 +596,7 @@ class Parser(src: String, sink: DiagnosticSink = DummySink) : DiagnosticSink by 
         consume('R')
         val rCode = readInt().toInt()
         consume(';')
-        val sizeBytes = readInt().toInt()
+        val sizeBytes = readInt()
         consume(';')
         consume('0')
         consume(';')
@@ -632,7 +632,7 @@ class Parser(src: String, sink: DiagnosticSink = DummySink) : DiagnosticSink by 
     private fun Cursor.parseSizeAttr(): TypeDecl.WithSizeAttr<LocalTypeId> {
         consume('@')
         consume('s')
-        val sizeBits = readInt().toInt()
+        val sizeBits = readInt()
         consume(';')
         val inner = parseType()
         return TypeDecl.WithSizeAttr(sizeBits, inner)

@@ -2,7 +2,6 @@ package ghistabs.materialize
 
 import ghidra.program.model.data.*
 import ghistabs.parse.TypeDecl
-import java.lang.Long.compareUnsigned
 
 /** Resolves gcc XCOFF builtin slots / primitive ranges / floats / complex to Ghidra [DataType]s. */
 fun TypeDecl<*>.resolveBuiltin(): DataType? = when (this) {
@@ -11,36 +10,27 @@ fun TypeDecl<*>.resolveBuiltin(): DataType? = when (this) {
     // gcc's void — a type explicitly defined as itself (`(x,y)=(x,y)`), recognised at parse.
     TypeDecl.Void -> VoidDataType()
 
-    // Legacy form: `t<n>=@s<bits>;-<slot>` lands here after globalize hoists the
-    // negative-id Ref. Bool is the recurring case.
-    is TypeDecl.WithSizeAttr if inner is TypeDecl.Builtin ->
-        resolveSlot(inner.slot) ?: resolveSizedRange(sizeBits, signed = false)
+    // `@s<n>` outranks the inner descriptor for *width*: gcc emits it exactly where the inner's
+    // own bounds can't carry the answer — `@s128;r(0,25);0;0377…;` truncates to -1L and would
+    // otherwise classify __int128 as an 8-byte ulonglong. Identity still comes from the inner:
+    // a slot names its primitive outright, and a char range stays char (`@s8;r(0,10);-128;127;`).
+    is TypeDecl.WithSizeAttr -> when (inner) {
+        // Legacy form `t<n>=@s<bits>;-<slot>`, reaching here after globalize hoists the
+        // negative-id Ref. Bool is the recurring case.
+        is TypeDecl.Builtin -> resolveSlot(inner.slot) ?: resolveSizedRange(sizeBits, signed = false)
 
-    is TypeDecl.WithSizeAttr -> {
-        inner.resolveBuiltin()?.let { return it }
-        if (inner is TypeDecl.Range) {
-            return resolveSizedRange(sizeBits, signed = inner.min < 0)
-        }
-        null
+        is TypeDecl.Range -> inner.asChar() ?: resolveSizedRange(sizeBits, signed = inner.min < 0)
+
+        else -> inner.resolveBuiltin()
     }
 
-    is TypeDecl.Range -> when (val width = widthBits(min, max)) {
-        0 -> VoidDataType()
-
-        // gcc encodes plain `char` as range 0..127 and `signed char` as -128..127; both
-        // are the source `char`, so map to CharDataType — otherwise `char*` renders as
-        // `byte*`. (`unsigned char` 0..255 stays a byte, see testClassifyUnsignedByte.)
-        8 if min == -128L && max == 127L -> CharDataType()
-
-        8 if min == 0L && max == 127L -> CharDataType()
-
-        else -> resolveSizedRange(width, min < 0)
-    }
+    is TypeDecl.Range ->
+        if (sizeBytes == 0L) VoidDataType() else asChar() ?: resolveSizedRange(sizeBits, min < 0)
 
     is TypeDecl.Float -> when (sizeBytes) {
-        4 -> FloatDataType()
-        8 -> DoubleDataType()
-        10, 12, 16 -> LongDoubleDataType()
+        4L -> FloatDataType()
+        8L -> DoubleDataType()
+        10L, 12L, 16L -> LongDoubleDataType()
         else -> null
     }
 
@@ -104,38 +94,32 @@ private fun resolveSlot(slot: Int): DataType? = when (slot) {
     else -> null
 }
 
-/** Pick signed/unsigned int by [sizeBits] when the inner can't be resolved directly. */
-private fun resolveSizedRange(sizeBits: Int, signed: Boolean): DataType? = when (sizeBits) {
-    8 if signed -> SignedByteDataType()
-    8 -> ByteDataType()
-    16 if signed -> ShortDataType()
-    16 -> UnsignedShortDataType()
-    32 if signed -> IntegerDataType()
-    32 -> UnsignedIntegerDataType()
-    64 if signed -> LongLongDataType()
-    64 -> UnsignedLongLongDataType()
+/**
+ * gcc encodes plain `char` as range 0..127 and `signed char` as -128..127; both are the source
+ * `char`, so map to CharDataType — otherwise `char*` renders as `byte*`. (`unsigned char`
+ * 0..255 stays a byte, see testClassifyUnsignedByte.)
+ */
+private fun TypeDecl.Range<*>.asChar() = CharDataType().takeIf { (min == 0L || min == -128L) && max == 127L }
+
+/**
+ * Pick signed/unsigned int by width when the inner can't be resolved directly. Keyed on bits,
+ * not bytes, so a sub-byte or otherwise odd `@s<n>` (`@s4`, `@s24`, `@s128`) falls through to
+ * null instead of rounding up into a plausible-looking byte width. Null width → null type.
+ */
+private fun resolveSizedRange(sizeBits: Long?, signed: Boolean): DataType? = when (sizeBits) {
+    8L if signed -> SignedByteDataType()
+    8L -> ByteDataType()
+    16L if signed -> ShortDataType()
+    16L -> UnsignedShortDataType()
+    32L if signed -> IntegerDataType()
+    32L -> UnsignedIntegerDataType()
+    64L if signed -> LongLongDataType()
+    64L -> UnsignedLongLongDataType()
+
+    // gcc 3.4.5 emits `__int128` in every CU. Its bounds truncate to 0..-1 — identical to what
+    // signed __int128 would truncate to — so signedness is unrecoverable and everything 128-bit
+    // lands unsigned. The width is right, which is what layout depends on.
+    128L -> UnsignedInteger16DataType()
+
     else -> null
-}
-
-private fun widthBits(min: Long, max: Long): Int = when {
-    // void
-    min == 0L && max == 0L -> 0
-
-    // Unsigned: max = 2^n - 1; use unsigned comparison so 0xFFFFFFFF isn't read as negative.
-    min == 0L -> when {
-        compareUnsigned(max, 0xFFL) <= 0 -> 8
-        compareUnsigned(max, 0xFFFFL) <= 0 -> 16
-        compareUnsigned(max, 0xFFFFFFFF) <= 0 -> 32
-        else -> 64
-    }
-
-    // Signed: min = -(2^(n-1)).
-    min < 0 -> when {
-        min >= -128L -> 8
-        min >= -32768L -> 16
-        min >= -2147483648L -> 32
-        else -> 64
-    }
-
-    else -> 32
 }
