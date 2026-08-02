@@ -1,7 +1,7 @@
 package ghistabs.harvest
 
-import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.DummySink
+import ghistabs.dummyHarvester
 import ghistabs.parse.SourceFile
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertSame
@@ -12,12 +12,6 @@ import org.junit.jupiter.api.Test
  * DummySink and constructed data only — no Program/DataTypeManager.
  */
 class HarvesterGapTest {
-    private fun createTestHarvester(): Harvester = Harvester(
-        monitor = TaskMonitor.DUMMY,
-        sink = DummySink,
-        resolver = GenericAddressResolver(),
-    )
-
     /**
      * A forward EXCL registers its placeholder in the shared registry, so a later BINCL for the
      * same (filename, checksum) reuses that instance instead of forking a divergent HeaderFile
@@ -42,7 +36,7 @@ class HarvesterGapTest {
     /** Collisions surface on [Harvest.rawCollisions] for post-hoc diagnostics; no production consumer reads it. */
     @Test
     fun `rawCollisions is accessible on an empty harvest`() {
-        val harvest = createTestHarvester().harvest(emptyList())
+        val harvest = dummyHarvester().harvest(emptyList())
         assertNotNull(harvest.rawCollisions)
     }
 }
