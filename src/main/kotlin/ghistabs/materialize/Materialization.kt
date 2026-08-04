@@ -494,33 +494,30 @@ fun DataTypeRegistry.materializeAll() {
  * ghidraName for one typedef per logical name.
  */
 private fun DataTypeRegistry.registerNamedPrimitiveTypedefs() {
-    harvest.types.values
-        .filter { it.name != null && !it.body.isXRefTarget }
-        .groupBy { it.ghidraName }
-        .forEach { (ghidraName, asts) ->
-            // Per-ast resolution: one CU emits `bool:t=_Bool` (1B), another
-            // `bool:t=int` (4B). Sharing one typedef across all ids would
-            // produce wrong field sizes and `bool.conflict` in the DTM.
-            for (ast in asts) {
-                cacheIfAbsent(ast.id, ast.body.resolveBuiltin() ?: resolveRef(ast.body))
-            }
-            // One shared typedef under /stabs (or root for primitives) for
-            // DemanglerReplacer to substitute into `/Demangler/*` stubs.
-            val firstBody = asts.first().body
-            val typedefTarget = firstBody.resolveBuiltin() ?: resolveRef(firstBody) ?: return@forEach
-            // §20: when the target already carries this exact name (a `typedef struct {…}
-            // Name;` whose anonymous aggregate we named after the typedef, then merged with
-            // the named copy), a same-named `/stabs` typedef is just a second DataType with
-            // the identical name. Ghidra resolves a struct/enum's display name across all
-            // same-named DataTypes, so the duplicate destabilises it — the named type suffices.
-            if (typedefTarget.name == ghidraName) return@forEach
-            val category = if (firstBody.resolveBuiltin() != null) {
-                CategoryPath.ROOT
-            } else {
-                CATEGORY
-            }
-            register(TypedefDataType(category, ghidraName, typedefTarget, dtm))
+    for ((ghidraName, asts) in index.namedPrimitiveTypedefs) {
+        // Per-ast resolution: one CU emits `bool:t=_Bool` (1B), another
+        // `bool:t=int` (4B). Sharing one typedef across all ids would
+        // produce wrong field sizes and `bool.conflict` in the DTM.
+        for ((_, id, _, body) in asts) {
+            cacheIfAbsent(id, body.resolveBuiltin() ?: resolveRef(body))
         }
+        // One shared typedef under /stabs (or root for primitives) for
+        // DemanglerReplacer to substitute into `/Demangler/*` stubs.
+        val firstBody = asts.first().body
+        val typedefTarget = firstBody.resolveBuiltin() ?: resolveRef(firstBody) ?: continue
+        // §20: when the target already carries this exact name (a `typedef struct {…}
+        // Name;` whose anonymous aggregate we named after the typedef, then merged with
+        // the named copy), a same-named `/stabs` typedef is just a second DataType with
+        // the identical name. Ghidra resolves a struct/enum's display name across all
+        // same-named DataTypes, so the duplicate destabilises it — the named type suffices.
+        if (typedefTarget.name == ghidraName) continue
+        val category = if (firstBody.resolveBuiltin() != null) {
+            CategoryPath.ROOT
+        } else {
+            CATEGORY
+        }
+        register(TypedefDataType(category, ghidraName, typedefTarget, dtm))
+    }
 }
 
 /** Materialize a non-registerable top-level ast (XRef alias, FunctionT, Method). */

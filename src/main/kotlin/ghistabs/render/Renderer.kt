@@ -56,23 +56,22 @@ class Renderer(val index: HarvestIndex, val program: Program, val mode: Mode, va
 private fun safeName(source: String) = source.replace(Regex("[^A-Za-z0-9_.-]"), "_").trim('_')
 
 private class RenderContext(val renderer: Renderer, val source: String) {
-    val harvest get() = renderer.index.harvest
     val program get() = renderer.program
     val resolver get() = renderer.resolver
 
     // [source] and every per-record source field come from the resolver's facade with §15 folds
     // already applied, so comparisons here are fold-to-fold with no per-site work.
-    private val tr = renderer.index
+    private val index = renderer.index
 
-    private val rawFuncs = tr.functions.filter { tr.functionSource[it] == source }
-    private val lines = tr.linesBySource[source].orEmpty()
-    private val typeDecls = harvest.types.values
-        .filter { tr.effectiveSourceFor(it) == source && it.name != null && it.declLine > 0 }
-    private val symbols = tr.symbolsBySource[source].orEmpty()
+    private val rawFuncs = index.functionsBySource[source].orEmpty()
+    private val lines = index.linesBySource[source].orEmpty()
+    private val typeDecls = index.typesBySource[source].orEmpty()
+        .filter { it.name != null && it.declLine > 0 }
+    private val symbols = index.symbolsBySource[source].orEmpty()
 
     // Collapse long template spellings (basic_string<char,…> → string) in AST-rendered types,
     // matching the DTM shortening pass that only the decompiler (DTM-backed) otherwise reflects.
-    private val shortener by lazy { harvestTemplateShortener(harvest) }
+    private val shortener by lazy { harvestTemplateShortener(index) }
 
     private val spans = FunctionSpans.of(rawFuncs, source)
 
@@ -123,15 +122,13 @@ private class RenderContext(val renderer: Renderer, val source: String) {
     // Anon_ id; decomp omits them entirely. Deduped by ghidraName (content-hashed, §20).
     private fun anonAggregateAppendix(): String {
         if (renderer.mode != Mode.SKELETON) return ""
-        val anon = harvest.types.values
-            .filter { it.name.isNullOrEmpty() && it.body.isXRefTarget && tr.effectiveSourceFor(it) == source }
-            .distinctBy { it.ghidraName }
-            .sortedBy { it.ghidraName }
-        if (anon.isEmpty()) return ""
+        val anon = renderer.index.anonAggregates[source]
+
+        if (anon.isNullOrEmpty()) return ""
         val blocks = anon.joinToString("\n\n") { ast ->
             when (val body = ast.body) {
                 is TypeDecl.Struct -> {
-                    val members = body.renderFull(harvest, program, shortener)
+                    val members = body.renderFull(index, program, shortener)
                         .joinToString("\n    ", prefix = "\n    ", postfix = "\n")
                     "${body.kind.cxxKeyword()} ${ast.ghidraName} {$members}; /* ${body.sizeBytes} bytes */"
                 }
@@ -170,7 +167,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
         val typedefs = typeDecls
             .filter { it.declLine in 1..maxLine && it.body !is TypeDecl.Struct && it.body !is TypeDecl.Enum }
             .mapNotNull { ast ->
-                ast.name?.let { Td(ast.declLine, it, ast.body.render(harvest, shortener = shortener)) }
+                ast.name?.let { Td(ast.declLine, it, ast.body.render(index, shortener = shortener)) }
             }
 
         // A genuine typedef has one definition site. The same alias+target recurring across a .cpp
@@ -216,14 +213,13 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             fun place(line: Int, name: String, type: TypeDecl<GlobalTypeId>, role: String) {
                 if (!dedup(line, name)) return
                 val stale = span == null || line !in span
-                canvas[line] +=
-                    Fragment(
-                        indentFor(line),
-                        "${type.render(harvest, shortener = shortener)} $name;",
-                        role,
-                        FragmentKind.DECL_LOCAL,
-                        stale,
-                    )
+                canvas[line] += Fragment(
+                    indentFor(line),
+                    "${type.render(index, shortener = shortener)} $name;",
+                    role,
+                    FragmentKind.DECL_LOCAL,
+                    stale,
+                )
             }
             for (p in f.params) {
                 if (p.sourceFile != source) continue
@@ -274,14 +270,14 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             else -> resolver.resolve(sym.name)
         }
         val indent = indentFor(rec.declLine)
-        val base = "${sym.type.render(harvest, shortener = shortener)} ${sym.name}"
+        val base = "${sym.type.render(index, shortener = shortener)} ${sym.name}"
         // A string-valued global (pointer-to-string whose slot Ghidra left an untyped
         // scalar, or a char[N] holding an RTTI/string literal) renders as one quoted
         // literal; initializerAt would otherwise miss it or spread a per-byte list.
         val literal = addr?.let {
             when {
-                sym.type.isPointer(harvest) -> program.pointerString(it)
-                sym.type.isCharArray(harvest) -> program.stringLiteralAt(it)
+                sym.type.isPointer(index) -> program.pointerString(it)
+                sym.type.isCharArray(index) -> program.stringLiteralAt(it)
                 else -> null
             }
         }
@@ -349,14 +345,14 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             // Struct fields/methods are self-terminated statements; enum members carry a
             // trailing comma so the space-join in layoutBraceBlock reads as a member list.
             val members = when (body) {
-                is TypeDecl.Struct -> body.renderFull(harvest, program, shortener)
+                is TypeDecl.Struct -> body.renderFull(index, program, shortener)
                 is TypeDecl.Enum -> body.members.map { (mn, mv) -> "$mn = $mv," }
             }
             val openText = when (body) {
                 is TypeDecl.Struct -> {
                     val bases = body.bases.takeIf { it.isNotEmpty() }
                         ?.joinToString(", ", prefix = " : ") {
-                            "${it.access.name.lowercase()} ${it.type.render(harvest, shortener = shortener)}"
+                            "${it.access.name.lowercase()} ${it.type.render(index, shortener = shortener)}"
                         }
                         .orEmpty()
                     "${body.kind.cxxKeyword()} $shortName$bases {"
@@ -508,20 +504,12 @@ private class RenderContext(val renderer: Renderer, val source: String) {
     // still declares its dependencies. Placed only within the available top room; overflow stacks on
     // the last free line rather than pushing content down.
     private fun emitIncludes() {
-        val resolver = renderer.index
         val referenced = mutableSetOf<Type>()
         fun collect(decl: TypeDecl<GlobalTypeId>) {
             val ast = when (decl) {
-                is TypeDecl.Ref -> harvest.types[decl.id]
-                is TypeDecl.XRef -> resolver.byXRef(decl, silent = true)
-                is TypeDecl.InlineDef -> return collect(decl.body)
-                is TypeDecl.Pointer -> return collect(decl.pointee)
-                is TypeDecl.Reference -> return collect(decl.referent)
-                is TypeDecl.Const -> return collect(decl.inner)
-                is TypeDecl.Volatile -> return collect(decl.inner)
-                is TypeDecl.WithSizeAttr -> return collect(decl.inner)
-                is TypeDecl.Array -> return collect(decl.element)
-                else -> null
+                is TypeDecl.Ref -> index.byId(decl.id)
+                is TypeDecl.XRef -> index.byXRef(decl, silent = true)
+                else -> return decl.children.flatten().forEach { collect(it) }
             }
             if (ast != null && referenced.add(ast)) {
                 (ast.body as? TypeDecl.Struct)?.bases?.forEach { collect(it.type) }
@@ -532,7 +520,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             for (s in f.params + f.locals) collect(s.body.type)
         }
 
-        val fromTypes = referenced.asSequence().map { resolver.effectiveSourceFor(it) }
+        val fromTypes = referenced.asSequence().map { index.effectiveSourceFor(it) }
         val fromInlined = rawFuncs.asSequence().flatMap { it.lineEntries.asSequence() }.map { it.source }
         val headers = (fromInlined + fromTypes)
             .filter { it != source && it.hasHeaderExtension() }

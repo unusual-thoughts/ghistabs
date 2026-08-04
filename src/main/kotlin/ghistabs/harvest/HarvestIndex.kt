@@ -6,7 +6,7 @@ import ghistabs.diagnose.DummySink
 import ghistabs.parse.*
 
 /**
- * Indexes the [Harvest]'s typeAsts: id/xref oracle for [contentHash], xref resolution with
+ * Indexes the [Harvest]'s typeAsts: id/xref oracle for [ContentIndex], xref resolution with
  * per-reason failure counters, [byLocation] grouping for TypeRegistry slot assignment,
  * and content-distinct collision filtering.
  */
@@ -20,6 +20,26 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
         typeAsts.values
             .filter { !it.name.isNullOrEmpty() && it.body.isXRefTarget }
             .groupBy { it.name!! }
+    }
+
+    /** Anonymous aggregates per effective source, deduped by ghidraName (which the §20 content merge
+     *  already collapsed) and sorted by it — every CU emits its own copy of each anonymous type. */
+    val anonAggregates by lazy {
+        typeAsts.values
+            .filter { it.name.isNullOrEmpty() && it.body.isXRefTarget }
+            .groupBy { effectiveSourceFor(it) }
+            .mapValues { (_, asts) -> asts.distinctBy { it.ghidraName }.sortedBy { it.ghidraName } }
+    }
+
+    /**
+     * Named primitive typedefs ("unsigned int", "char", …) — not XRefTargets so absent from
+     * byCanonicalKey, but stabs gives them names worth exposing as typedef aliases. Grouped by
+     * ghidraName for one typedef per logical name.
+     */
+    val namedPrimitiveTypedefs by lazy {
+        typeAsts.values
+            .filter { it.name != null && !it.body.isXRefTarget }
+            .groupBy { it.ghidraName }
     }
 
     /** Base-tag (template args + namespace stripped) → complete definitions only. */
@@ -171,9 +191,6 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
      * keeps DTM attribution independent of render-source folding.
      */
     private val multiSourceHeaderHints: Map<String, String> by lazy {
-        val astsByName = typeAsts.values.filter {
-            !it.name.isNullOrEmpty() && it.body.isXRefTarget
-        }.groupBy { it.name!! }
         val funcsByMangled = harvest.functions.filter { (it.sizeBytes ?: 0uL) > 0uL }.associateBy { it.name }
         val defSourcesByName = typeAsts.values
             .filter { it.name != null }
@@ -237,8 +254,11 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
             ?: id.source.filename,
     )
 
-    private val effectiveSourceByType: Map<Type, String> by lazy {
-        typeAsts.values.associateWith { it.effectiveSource() }
+    // Keyed by id, not by Type: Type is a data class holding the whole TypeDecl body, so a Type-keyed
+    // map deep-hashes an entire type tree on every lookup — and this is looked up once per type per
+    // rendered source. GlobalTypeId is (source, n).
+    private val effectiveSourceById: Map<GlobalTypeId, String> by lazy {
+        typeAsts.values.associate { it.id to it.effectiveSource() }
     }
 
     // ── Render facade: per-source views with every source spelling already folded (§15). ──
@@ -271,24 +291,33 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
         }
     }
 
-    /** Function → its source: lowest-address SLINE, else the class-decl source (gcc-implicit methods). */
-    val functionSource: Map<StabFunction, String> by lazy {
-        functions.mapNotNull { f ->
-            when {
-                f.isSyntheticInit -> foldSource(f.cu.filename)
+    /** A function's source: lowest-address SLINE, else the class-decl source (gcc-implicit methods). */
+    private fun StabFunction.source() = when {
+        isSyntheticInit -> foldSource(cu.filename)
 
-                else -> f.lineEntries.minByOrNull { it.addr.offset }?.source
-                    ?: f.outermostClass()?.let { classSourceByName[it] }?.let(::foldSource)
-            }?.let { f to it }
-        }.toMap()
+        else -> lineEntries.minByOrNull { it.addr.offset }?.source
+            ?: outermostClass()?.let { classSourceByName[it] }?.let(::foldSource)
     }
 
+    /** Functions per source — the inverted view render needs, matching [linesBySource]/[symbolsBySource]
+     *  rather than making every caller scan the whole function list once per rendered file. */
+    val functionsBySource: Map<String, List<StabFunction>> by lazy {
+        functions.mapNotNull { f -> f.source()?.let { it to f } }.groupBy({ it.first }, { it.second })
+    }
+
+    /** Functions by linkage name — the lookup `renderFull` needs to attach a real signature to a
+     *  method stab, built once rather than per rendered struct. */
+    val functionsByMangledName: Map<String, StabFunction> by lazy { functions.associateBy { it.name } }
+
+    /** Declared types per source, same inversion as [functionsBySource]. */
+    val typesBySource: Map<String, List<Type>> by lazy { typeAsts.values.groupBy(::effectiveSourceFor) }
+
     /** Type → its rendering source (§15) — render's sole type-attribution accessor. */
-    fun effectiveSourceFor(type: Type) = effectiveSourceByType[type] ?: type.effectiveSource()
+    fun effectiveSourceFor(type: Type) = effectiveSourceById[type.id] ?: type.effectiveSource()
 
     /** Every source file render emits, from line entries, function bodies, and type declarations. */
     val sources: Set<String> by lazy {
-        (linesBySource.keys + functionSource.values + typeAsts.values.map { effectiveSourceFor(it) })
+        (linesBySource.keys + functionsBySource.keys + typesBySource.keys)
             .filter { it.isNotEmpty() }.toSet()
     }
 
@@ -480,14 +509,9 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
         else -> null
     }
 
-    private tailrec fun walksToUnresolvedRef(t: TypeDecl<GlobalTypeId>): Boolean = when (t) {
+    private fun walksToUnresolvedRef(t: TypeDecl<GlobalTypeId>): Boolean = when (t) {
         is TypeDecl.Ref -> t.id !in typeAsts
-        is TypeDecl.InlineDef -> walksToUnresolvedRef(t.body)
-        is TypeDecl.Pointer -> walksToUnresolvedRef(t.pointee)
-        is TypeDecl.Reference -> walksToUnresolvedRef(t.referent)
-        is TypeDecl.Const -> walksToUnresolvedRef(t.inner)
-        is TypeDecl.Volatile -> walksToUnresolvedRef(t.inner)
-        else -> false
+        else -> t.children.any { fields -> fields.any { walksToUnresolvedRef(it) } }
     }
 
     companion object {
