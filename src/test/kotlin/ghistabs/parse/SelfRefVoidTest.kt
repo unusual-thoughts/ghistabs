@@ -13,7 +13,7 @@ class SelfRefVoidTest {
     fun explicitSelfDefIsVoid() {
         assertEquals(
             SymbolDecl.NamedType("void", TypeNameKind.TYPEDEF, LocalTypeId(0, 20), TypeDecl.Void),
-            Parser("void:t(0,20)=(0,20)").parseSymbol(),
+            Parser("void:t(0,20)=(0,20)").parseSymbol().expectOk(),
         )
     }
 
@@ -21,7 +21,7 @@ class SelfRefVoidTest {
     fun explicitSelfDefIsVoidForTaggedType() {
         assertEquals(
             SymbolDecl.NamedType("void", TypeNameKind.TAG, LocalTypeId(0, 20), TypeDecl.Void),
-            Parser("void:T(0,20)=(0,20)").parseSymbol(),
+            Parser("void:T(0,20)=(0,20)").parseSymbol().expectOk(),
         )
     }
 
@@ -29,7 +29,7 @@ class SelfRefVoidTest {
     fun bareTypedefIsForwardRefNotVoid() {
         assertEquals(
             SymbolDecl.NamedType("FILE", TypeNameKind.TYPEDEF, LocalTypeId(0, 116), TypeDecl.Ref(LocalTypeId(0, 116))),
-            Parser("FILE:t(0,116)").parseSymbol(),
+            Parser("FILE:t(0,116)").parseSymbol().expectOk(),
         )
     }
 
@@ -37,7 +37,7 @@ class SelfRefVoidTest {
     fun bareForwardDeclaredStructIsRefNotVoid() {
         assertEquals(
             SymbolDecl.NamedType("b2World", TypeNameKind.TYPEDEF, LocalTypeId(1, 27), TypeDecl.Ref(LocalTypeId(1, 27))),
-            Parser("b2World:t(1,27)").parseSymbol(),
+            Parser("b2World:t(1,27)").parseSymbol().expectOk(),
         )
     }
 
@@ -51,7 +51,7 @@ class SelfRefVoidTest {
                 LocalTypeId(0, 5),
                 TypeDecl.InlineDef(LocalTypeId(0, 6), TypeDecl.Void),
             ),
-            Parser("x:t(0,5)=(0,6)=(0,6)").parseSymbol(),
+            Parser("x:t(0,5)=(0,6)=(0,6)").parseSymbol().expectOk(),
         )
     }
 }

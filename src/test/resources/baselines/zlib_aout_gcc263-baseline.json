@@ -53,8 +53,8 @@
             "max": 0
         },
         "empty-scope": {
-            "min": 140,
-            "max": 140
+            "min": 24,
+            "max": 24
         },
         "file-start": {
             "min": 13,
@@ -103,10 +103,6 @@
         "harvest-globals": {
             "min": 6,
             "max": 6
-        },
-        "harvest-parse-errors": {
-            "min": 0,
-            "max": 0
         },
         "harvest-records-parsed": {
             "min": 3860,
@@ -197,10 +193,10 @@
             "max": 2
         },
         "reglocal-add-success": {
-            "min": 86,
-            "max": 86
+            "min": 105,
+            "max": 105
         },
-        "reglocal-skipped-dup-local": {
+        "reglocal-renamed-scope": {
             "min": 19,
             "max": 19
         },

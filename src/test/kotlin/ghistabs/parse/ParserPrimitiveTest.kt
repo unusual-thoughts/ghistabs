@@ -24,7 +24,7 @@ class ParserPrimitiveTest {
                 inner = TypeDecl.Builtin(-16),
             ),
         )
-        assertEquals(expected, Parser(input).parseSymbol())
+        assertEquals(expected, Parser(input).parseSymbol().expectOk())
     }
 
     @Test
@@ -40,7 +40,7 @@ class ParserPrimitiveTest {
                 max = 2147483647L,
             ),
         )
-        assertEquals(expected, Parser(input).parseSymbol())
+        assertEquals(expected, Parser(input).parseSymbol().expectOk())
     }
 
     @Test
@@ -59,7 +59,7 @@ class ParserPrimitiveTest {
                 ),
             ),
         )
-        assertEquals(expected, Parser(input).parseSymbol())
+        assertEquals(expected, Parser(input).parseSymbol().expectOk())
     }
 
     @Test
@@ -80,7 +80,7 @@ class ParserPrimitiveTest {
                 ),
             ),
         )
-        assertEquals(expected, Parser(input).parseSymbol())
+        assertEquals(expected, Parser(input).parseSymbol().expectOk())
     }
 
     @Test
@@ -93,7 +93,7 @@ class ParserPrimitiveTest {
             type = TypeDecl.Builtin(-1),
             value = 4294967295L,
         )
-        assertEquals(expected, Parser(input).parseSymbol())
+        assertEquals(expected, Parser(input).parseSymbol().expectOk())
     }
 
     @Test
@@ -105,7 +105,7 @@ class ParserPrimitiveTest {
             type = TypeDecl.Ref(LocalTypeId(0, 3)),
             value = 2L,
         )
-        assertEquals(expected, Parser(input).parseSymbol())
+        assertEquals(expected, Parser(input).parseSymbol().expectOk())
     }
 
     @Test
@@ -117,7 +117,7 @@ class ParserPrimitiveTest {
             id = LocalTypeId(0, 16),
             type = TypeDecl.Complex(rCode = 3, sizeBytes = 8),
         )
-        assertEquals(expected, Parser(input).parseSymbol())
+        assertEquals(expected, Parser(input).parseSymbol().expectOk())
     }
 
     @Test
@@ -129,7 +129,7 @@ class ParserPrimitiveTest {
             id = LocalTypeId(0, 17),
             type = TypeDecl.Complex(rCode = 4, sizeBytes = 16),
         )
-        assertEquals(expected, Parser(input).parseSymbol())
+        assertEquals(expected, Parser(input).parseSymbol().expectOk())
     }
 
     @Test
@@ -141,7 +141,7 @@ class ParserPrimitiveTest {
             id = LocalTypeId(0, 30),
             type = TypeDecl.Pointer(TypeDecl.Ref(LocalTypeId(0, 1))),
         )
-        assertEquals(expected, Parser(input).parseSymbol())
+        assertEquals(expected, Parser(input).parseSymbol().expectOk())
     }
 
     @Test
@@ -153,7 +153,7 @@ class ParserPrimitiveTest {
             id = LocalTypeId(0, 31),
             type = TypeDecl.Const(TypeDecl.Pointer(TypeDecl.Ref(LocalTypeId(0, 1)))),
         )
-        assertEquals(expected, Parser(input).parseSymbol())
+        assertEquals(expected, Parser(input).parseSymbol().expectOk())
     }
 
     @Test
@@ -176,7 +176,7 @@ class ParserPrimitiveTest {
                 ),
             ),
         )
-        assertEquals(expected, Parser(input).parseSymbol())
+        assertEquals(expected, Parser(input).parseSymbol().expectOk())
     }
 
     @Test
@@ -190,7 +190,7 @@ class ParserPrimitiveTest {
             id = LocalTypeId(0, 33),
             type = TypeDecl.Reference(TypeDecl.Ref(LocalTypeId(0, 1))),
         )
-        assertEquals(expected, Parser(input).parseSymbol())
+        assertEquals(expected, Parser(input).parseSymbol().expectOk())
     }
 
     @Test
@@ -204,7 +204,7 @@ class ParserPrimitiveTest {
             id = LocalTypeId(0, 34),
             type = TypeDecl.Volatile(TypeDecl.Ref(LocalTypeId(0, 1))),
         )
-        assertEquals(expected, Parser(input).parseSymbol())
+        assertEquals(expected, Parser(input).parseSymbol().expectOk())
     }
 
     @Test
@@ -218,6 +218,6 @@ class ParserPrimitiveTest {
             id = LocalTypeId(0, 35),
             type = TypeDecl.FunctionT(ret = TypeDecl.Ref(LocalTypeId(0, 1)), params = emptyList()),
         )
-        assertEquals(expected, Parser(input).parseSymbol())
+        assertEquals(expected, Parser(input).parseSymbol().expectOk())
     }
 }

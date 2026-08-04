@@ -69,8 +69,8 @@
             "max": 0
         },
         "empty-scope": {
-            "min": 298,
-            "max": 298
+            "min": 49,
+            "max": 49
         },
         "file-start": {
             "min": 1,
@@ -111,10 +111,6 @@
         "harvest-globals": {
             "min": 8,
             "max": 8
-        },
-        "harvest-parse-errors": {
-            "min": 33,
-            "max": 33
         },
         "harvest-records-parsed": {
             "min": 3628,

@@ -4,7 +4,10 @@ import ghidra.app.cmd.disassemble.DisassembleCommand
 import ghidra.app.cmd.function.CreateFunctionCmd
 import ghidra.app.cmd.label.SetLabelPrimaryCmd
 import ghidra.program.model.address.Address
-import ghidra.program.model.data.*
+import ghidra.program.model.data.CategoryPath
+import ghidra.program.model.data.DataTypeConflictHandler
+import ghidra.program.model.data.EnumDataType
+import ghidra.program.model.data.Undefined4DataType
 import ghidra.program.model.listing.*
 import ghidra.program.model.listing.Function
 import ghidra.program.model.symbol.SourceType
@@ -16,13 +19,8 @@ import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.Level
 import ghistabs.diagnose.degradation
 import ghistabs.forceCreateData
-import ghistabs.harvest.BlockScope
-import ghistabs.harvest.Harvest
-import ghistabs.harvest.OpenFunction
-import ghistabs.harvest.SymbolRecord
-import ghistabs.harvest.firstUseOffsets
-import ghistabs.harvest.pathBasename
-import ghistabs.materialize.TypeRegistry
+import ghistabs.harvest.*
+import ghistabs.materialize.DataTypeRegistry
 import ghistabs.materialize.reasonFor
 import ghistabs.materialize.resolveRef
 import ghistabs.namespaceChain
@@ -36,7 +34,7 @@ import ghistabs.parse.*
 class SymbolApplier(
     private val ctx: ImportContext<*>,
     private val harvest: Harvest,
-    private val typeRegistry: TypeRegistry,
+    private val registry: DataTypeRegistry,
 ) : DiagnosticSink by ctx {
     val source = SourceType.IMPORTED
     val symtab: SymbolTable get() = ctx.program.symbolTable
@@ -44,10 +42,10 @@ class SymbolApplier(
     val pointerSize = ctx.program.defaultPointerSize
 
     internal fun applyAllFunctions(): Int {
-        ctx.monitor.initialize(harvest.openFunctions.size.toLong(), "Stabs: applying functions")
+        ctx.monitor.initialize(harvest.functions.size.toLong(), "Stabs: applying functions")
         var functions = 0
 
-        for (open in harvest.openFunctions) {
+        for (open in harvest.functions) {
             ctx.monitor.increment()
             try {
                 val func = funMgr.run {
@@ -84,7 +82,7 @@ class SymbolApplier(
                 }
 
                 // Resolve return type from the parsed signature; applied with the params below.
-                val retDt = typeRegistry.resolveRef(open.decl.type)
+                val retDt = registry.resolveRef(open.decl.type)
 
                 // Build params from N_PSYM/N_RSYM. Filter out any N_PSYM literally named
                 // `this`: gcc 3.x emits it for members but often mistypes (seen `int`
@@ -93,15 +91,12 @@ class SymbolApplier(
                 // Keeping the N_PSYM one produces duplicate-`this` signatures Ghidra can't evict.
                 val params = open.params
                     .filterNot {
-                        val d = it.body
-                        (d is SymbolDecl.StackParam && d.name == "this") ||
-                            (d is SymbolDecl.RegParam && d.name == "this")
+                        (it.body as? SymbolDecl.Param)?.name == "this"
                     }
                     .mapIndexed { i, p ->
                         val pdecl = p.body
                         val (pname, pdt) = when (pdecl) {
-                            is SymbolDecl.StackParam -> pdecl.name to typeRegistry.resolveRef(pdecl.type)
-                            is SymbolDecl.RegParam -> pdecl.name to typeRegistry.resolveRef(pdecl.type)
+                            is SymbolDecl.Param -> pdecl.name to registry.resolveRef(pdecl.type)
                             else -> "arg$i" to null
                         }
                         if (pdt == null) {
@@ -110,7 +105,7 @@ class SymbolApplier(
                                 "${open.name}.$pname",
                             )
                         }
-                        typeRegistry.reasonFor(pdt)?.let { reason ->
+                        registry.reasonFor(pdt)?.let { reason ->
                             degradation(
                                 "param-typed-$reason",
                                 "${open.name}.$pname",
@@ -172,7 +167,7 @@ class SymbolApplier(
             for (sym in syms) {
                 ctx.monitor.increment()
                 try {
-                    if (applyGlobalOrStatic(sym)) globals++
+                    if (applyStatic(sym)) globals++
                 } catch (t: Throwable) {
                     err("apply-error", "symbol ${sym.body.name} in $cu: ${t.message}")
                 }
@@ -240,7 +235,7 @@ class SymbolApplier(
      * for ctors only called from data-driven init lists, or vtable-only references).
      * Returns null if the address is in data or disassembly fails.
      */
-    private fun tryCreateFunctionFromStab(open: OpenFunction): Function? {
+    private fun tryCreateFunctionFromStab(open: StabFunction): Function? {
         val addr = open.addr
         val block = ctx.program.memory.getBlock(addr)
         if (block == null || !block.isExecute) {
@@ -294,7 +289,7 @@ class SymbolApplier(
      * hardcoded constant. Any function fixes it program-wide; absent one, fall back to a pointer.
      */
     private val frameBias by lazy {
-        harvest.openFunctions
+        harvest.functions
             .asSequence()
             .mapNotNull { funMgr.getFunctionAt(it.addr) }
             .firstNotNullOfOrNull { VariableUtilities.getBaseStackParamOffset(it) }
@@ -316,17 +311,16 @@ class SymbolApplier(
         return if (base !in taken) base else generateSequence(1, Int::inc).map { "${base}_$it" }.first { it !in taken }
     }
 
-    private fun applyLocal(func: Function, loc: SymbolRecord, paramNames: Set<String>, firstUse: Int) {
+    private fun applyLocal(func: Function, loc: Symbol, paramNames: Set<String>, firstUse: Int) {
         val decl = loc.body
         val resolvedDt = when (decl) {
-            is SymbolDecl.StackLocal -> typeRegistry.resolveRef(decl.type)
-            is SymbolDecl.RegLocal -> typeRegistry.resolveRef(decl.type)
+            is SymbolDecl.Local -> registry.resolveRef(decl.type)
             else -> return
         }
         if (resolvedDt == null) {
             degradation("local-untyped", "${func.name}.${decl.name}]")
         }
-        typeRegistry.reasonFor(resolvedDt)?.let { reason ->
+        registry.reasonFor(resolvedDt)?.let { reason ->
             degradation(
                 "local-typed-$reason",
                 "${func.name}.${decl.name}",
@@ -335,8 +329,8 @@ class SymbolApplier(
         }
         val dt = resolvedDt ?: Undefined4DataType.dataType
         try {
-            when (decl) {
-                is SymbolDecl.StackLocal -> {
+            when (decl.location) {
+                VariableLocation.STACK -> {
                     if (decl.name in paramNames) {
                         debug("local-var-skipped-dup-param")
                         return
@@ -358,7 +352,7 @@ class SymbolApplier(
                     debug("local-var-add-success")
                 }
 
-                is SymbolDecl.RegLocal -> {
+                VariableLocation.REGISTER -> {
                     // The dbx register number is the stab's n_value, not part of the descriptor
                     // (`w:r(0,5)` ends at the type) — same field the stack offset above comes from.
                     val dbxNum = loc.rawValue.toInt()
@@ -395,7 +389,7 @@ class SymbolApplier(
         }
     }
 
-    private fun applyScopeComments(func: Function, open: OpenFunction) {
+    private fun applyScopeComments(func: Function, open: StabFunction) {
         fun comment(blocks: List<BlockScope>) {
             for (block in blocks) {
                 try {
@@ -420,19 +414,20 @@ class SymbolApplier(
      * variable — Ghidra's frame maps an offset to at most one — so for everything shadowed there,
      * this comment is the only surviving record of the name, type and slot.
      */
-    private fun scopeCommentText(locals: List<SymbolRecord>): String {
-        fun storage(loc: SymbolRecord) = when (loc.body) {
-            is SymbolDecl.StackLocal -> (loc.rawValue.toInt() - frameBias).let {
+    private fun scopeCommentText(locals: List<Symbol>): String {
+        fun storage(loc: Symbol) = when ((loc.body as? SymbolDecl.Local)?.location) {
+            VariableLocation.STACK -> (loc.rawValue.toInt() - frameBias).let {
                 if (it < 0) "Stack[-0x${(-it).toString(16)}]" else "Stack[0x${it.toString(16)}]"
             }
 
-            is SymbolDecl.RegLocal -> dbxRegisterName(pointerSize, loc.rawValue.toInt()) ?: "r${loc.rawValue}"
-            else -> ""
+            VariableLocation.REGISTER -> dbxRegisterName(pointerSize, loc.rawValue.toInt()) ?: "r${loc.rawValue}"
+
+            null -> ""
         }
 
-        val (stack, registers) = locals.partition { it.body is SymbolDecl.StackLocal }
+        val (stack, registers) = locals.partition { (it.body as? SymbolDecl.Local)?.location == VariableLocation.STACK }
         val rows = (stack.sortedBy { it.rawValue.toInt() } + registers.sortedBy { it.body.name }).map { loc ->
-            val type = typeRegistry.resolveRef(loc.body.type)?.displayName ?: "?"
+            val type = registry.resolveRef(loc.body.type)?.displayName ?: "?"
             val origin = loc.sourceFile?.pathBasename()?.let { "[$it:${loc.declLine}]" } ?: "[line ${loc.declLine}]"
             Triple("$type ${loc.body.name}", storage(loc), origin)
         }
@@ -443,25 +438,27 @@ class SymbolApplier(
         }
     }
 
-    private fun applyGlobalOrStatic(sym: SymbolRecord): Boolean {
-        val addr = when (val decl = sym.body) {
-            is SymbolDecl.StaticVar -> ctx.resolver.buildAddress(sym.rawValue)
-
-            is SymbolDecl.Global -> ctx.resolver.resolve(decl.name) ?: run {
-                warn("unresolved-symbol", "global ${decl.name}")
-                debug("global-skipped", "addr=${decl.name} reason=unresolved-symbol")
+    private fun applyStatic(sym: Symbol): Boolean {
+        val decl = sym.body as? SymbolDecl.Static ?: run {
+            warn("unexpected-symbol", "${sym.body}")
+            return false
+        }
+        val addr = when (decl.scope) {
+            StaticScope.GLOBAL -> ctx.resolver.resolve(decl.name) ?: run {
+                warn("unresolved-symbol", "static ${decl.name}")
+                debug("static-skipped", "addr=${decl.name} reason=unresolved-symbol")
                 return false
             }
 
-            else -> {
-                warn("unexpected-symbol", "$decl")
-                return false
-            }
+            else -> ctx.resolver.buildAddress(sym.rawValue)
         }
         ensureStabLabel(addr, sym.body.name)
 
-        val dt = typeRegistry.resolveRef(sym.body.type) ?: return false
-        typeRegistry.reasonFor(dt)?.let { reason ->
+        val dt = registry.resolveRef(decl.type) ?: run {
+            warn("static-skipped", "reason=unresolved-ref", addr)
+            return false
+        }
+        registry.reasonFor(dt)?.let { reason ->
             degradation(
                 "global-typed-$reason",
                 sym.body.name,
@@ -470,7 +467,7 @@ class SymbolApplier(
         }
 
         if (ctx.options.applyPlateComments &&
-            (sym.body as? SymbolDecl.StaticVar)?.isFunctionLocal == true &&
+            decl.scope == StaticScope.FUNCTION &&
             sym.enclosingFunction != null
         ) {
             ctx.program.listing.setComment(
@@ -484,7 +481,7 @@ class SymbolApplier(
         try {
             // Cygwin PE with no .rdata section puts const data in .text, where it gets disassembled.
             val placed = ctx.program
-                .forceCreateData(addr, dt) { debug("code-cleared-for-data", sym.body.name, address = addr) }
+                .forceCreateData(addr, dt) { debug("code-cleared-for-data", decl.name, address = addr) }
 
             // createData returns the data *covering* addr, which under CLEAR_ALL_CONFLICT_DATA can be
             // a larger item that already holds this type — isExistingNonDynamicType returns it as a
@@ -492,7 +489,7 @@ class SymbolApplier(
             if (placed.minAddress != addr) {
                 warn(
                     "global-offcut-in-larger-data",
-                    "${sym.body.name} at $addr: ${dt.name} lands inside " +
+                    "${decl.name} at $addr: ${dt.name} lands inside " +
                         "${placed.dataType.name}@${placed.minAddress}",
                     addr,
                 )
@@ -502,7 +499,7 @@ class SymbolApplier(
             }
             debug("global-applied", "dt=${dt.displayName}", address = addr)
         } catch (e: Exception) {
-            err("apply-error", "global ${sym.body.name} at $addr: ${e.message}", addr)
+            err("apply-error", "global ${decl.name} at $addr: ${e.message}", addr)
             return false
         }
         return true
@@ -510,14 +507,14 @@ class SymbolApplier(
 
     /**
      * Apply C++ static data members (`alnum:/2(5,44):_ZNSt10ctype_base5alnumE;`). They carry no
-     * `G`/`S` address stab, so [applyGlobalOrStatic] never sees them and this linkage name is their
+     * `G`/`S` address stab, so [applyStatic] never sees them and this linkage name is their
      * only link to the emitted symbol. Symbol-table-bound: a stripped binary resolves none.
      */
     internal fun applyAllStaticMembers(): Int {
         // One class is re-declared per including CU, so the same member arrives N times.
         val seen = mutableSetOf<String>()
         var applied = 0
-        for (ast in harvest.typeAsts.values) {
+        for (ast in harvest.types.values) {
             val body = ast.body as? TypeDecl.Struct<GlobalTypeId> ?: continue
             for (field in body.fields) {
                 val mangled = field.mangled ?: continue
@@ -526,7 +523,7 @@ class SymbolApplier(
                     debug("static-member-unresolved", mangled)
                     continue
                 }
-                val dt = typeRegistry.resolveRef(field.type) ?: run {
+                val dt = registry.resolveRef(field.type) ?: run {
                     degradation("static-member-untyped", mangled)
                     continue
                 }

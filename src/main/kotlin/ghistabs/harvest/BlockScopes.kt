@@ -18,7 +18,7 @@ data class BlockScope(
     val start: Address,
     @Serializable(with = AddressSerializer::class)
     val end: Address,
-    val locals: List<SymbolRecord>,
+    val locals: List<Symbol>,
     val children: List<BlockScope> = emptyList(),
 )
 
@@ -32,19 +32,19 @@ data class BlockScope(
  * single top-down walk and hands back the completed function-scope records.
  */
 internal class BlockTreeBuilder {
-    private class Frame(val start: Address, val locals: List<SymbolRecord>) {
+    private class Frame(val start: Address, val locals: List<Symbol>) {
         val children = mutableListOf<BlockScope>()
     }
 
     private val frames = mutableListOf<Frame>()
     private val roots = mutableListOf<BlockScope>()
-    private var pending = mutableListOf<SymbolRecord>()
+    private var pending = mutableListOf<Symbol>()
 
     /** Address of the last N_RBRAC seen — the function's end when gcc omits the N_FUN end marker. */
     var lastClose: Address? = null
         private set
 
-    fun local(record: SymbolRecord) {
+    fun local(record: Symbol) {
         pending += record
     }
 
@@ -78,26 +78,31 @@ internal class BlockTreeBuilder {
      * *after* the body, so every function-scope symbol carries whichever file the last line note in
      * the function happened to be in.
      */
-    fun finish(lines: List<LineEntry>, functionSource: String): Pair<List<BlockScope>, List<SymbolRecord>> {
-        val flat = mutableListOf<SymbolRecord>()
-
-        fun attribute(block: BlockScope, inherited: String): BlockScope {
-            val own = lines.filter { entry ->
-                entry.addr in block.start..<block.end &&
-                    block.children.none { entry.addr in it.start..<it.end }
+    fun finish(lines: List<LineEntry>, functionSource: String) = buildList {
+        fun BlockScope.attribute(inherited: String) {
+            val ownLines = lines.filter { entry ->
+                entry.addr in start..<end && children.none { entry.addr in it.start..<it.end }
             }
-            val blockSource = own.mapTo(mutableSetOf()) { it.source }.singleOrNull() ?: inherited
-            val locals = block.locals.map { local ->
-                val byLine = own.filter { it.line == local.declLine }.mapTo(mutableSetOf()) { it.source }
-                local.copy(sourceFile = byLine.singleOrNull() ?: blockSource).also { flat += it }
+            val blockSource = ownLines.map { it.source }.toSet().singleOrNull() ?: inherited
+            for (local in locals) {
+                val sourcesAtLine = ownLines.filter { it.line == local.declLine }.map { it.source }.toSet()
+                local.sourceFile = sourcesAtLine.singleOrNull() ?: blockSource
+                add(local)
             }
-            return block.copy(locals = locals, children = block.children.map { attribute(it, blockSource) })
+            for (child in children) {
+                child.attribute(blockSource)
+            }
         }
 
-        val blocks = roots.map { attribute(it, functionSource) }
-        pending.mapTo(flat) { it.copy(sourceFile = functionSource) }
-        return blocks to flat
-    }
+        for (root in roots) {
+            root.attribute(functionSource)
+        }
+
+        for (local in pending) {
+            local.sourceFile = functionSource
+            add(local)
+        }
+    } to roots
 }
 
 /**
@@ -108,10 +113,10 @@ internal class BlockTreeBuilder {
  */
 internal fun List<BlockScope>.firstUseOffsets(entry: Address): Map<Int, Int> = buildMap {
     fun walk(blocks: List<BlockScope>) {
-        blocks.forEach { block ->
-            val offset = (block.start.offset - entry.offset).toInt()
-            block.locals.forEach { put(it.recordIndex, offset) }
-            walk(block.children)
+        for ((start, _, locals, children) in blocks) {
+            val offset = (start.offset - entry.offset).toInt()
+            locals.forEach { put(it.recordIndex, offset) }
+            walk(children)
         }
     }
     walk(this@firstUseOffsets)

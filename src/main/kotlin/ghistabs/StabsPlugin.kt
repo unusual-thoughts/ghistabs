@@ -22,8 +22,8 @@ import ghistabs.StabsOptions.Companion.isStabsDone
 import ghistabs.StabsOptions.Companion.markStabsDone
 import ghistabs.diagnose.DummySink
 import ghistabs.diagnose.StabsDiagnostics
+import ghistabs.harvest.HarvestIndex
 import ghistabs.harvest.Harvester
-import ghistabs.harvest.TypeResolver
 import ghistabs.importer.ImportContext
 import ghistabs.parse.StabReader
 import ghistabs.render.Mode
@@ -101,7 +101,7 @@ class StabsPlugin(tool: PluginTool) : ProgramPlugin(tool) {
                     Harvester(ctx).harvest(records)
                 }
                 val written = Renderer(
-                    TypeResolver(harvest, options.foldSources, ctx),
+                    HarvestIndex(harvest, options.foldSources, ctx),
                     program,
                     Mode.ELIDE_SJLJ,
                     ctx.resolver,

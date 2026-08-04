@@ -31,6 +31,29 @@ enum class AggrKind {
     }
 }
 
+@Serializable
+enum class StaticScope {
+    GLOBAL,
+    FILE,
+    FUNCTION,
+    ;
+
+    fun comment() = when (this) {
+        GLOBAL -> "global"
+        FILE -> "file static"
+        FUNCTION -> "function static"
+    }
+}
+
+@Serializable
+enum class FunctionScope { GLOBAL, FILE }
+
+@Serializable
+enum class VariableLocation {
+    REGISTER,
+    STACK,
+}
+
 /** Type AST. Sealed; every grammar form has a constructor here. */
 @Serializable
 sealed interface TypeDecl<out Id : IdInterface> {
@@ -50,7 +73,9 @@ sealed interface TypeDecl<out Id : IdInterface> {
     val sizeBits: Long? get() = sizeBytes?.times(8)
 
     /** Directly nested TypeDecls, in declaration order */
-    val children: List<TypeDecl<Id>> get() = listOf()
+    val children: List<List<TypeDecl<Id>>> get() = listOf()
+
+    val layoutData: List<Any> get() = emptyList<Nothing>()
 
     /** Forward reference to a type defined elsewhere by id. */
     @Serializable
@@ -73,20 +98,28 @@ sealed interface TypeDecl<out Id : IdInterface> {
         // `unsigned long long`'s 01777777777777777777777 arrives as -1L. Compare unsigned.
         override val sizeBytes = when {
             min == 0L && max == 0L -> 0L
+
             min == 0L -> when {
                 compareUnsigned(max, 0xFFL) <= 0 -> 1L
                 compareUnsigned(max, 0xFFFFL) <= 0 -> 2L
                 compareUnsigned(max, 0xFFFFFFFFL) <= 0 -> 4L
                 else -> 8L
             }
+
             min < 0 -> when {
                 min >= -0x80L -> 1L
                 min >= -0x8000L -> 2L
                 min >= -0x80000000L -> 4L
                 else -> 8L
             }
+
             else -> 4L
         }
+
+        // Not `of`: every Range resolves to a builtin (sizeBytes is always 0/1/2/4/8, all of which
+        // BuiltinTable maps), so the structural path is unreachable — and `of` is a GlobalTypeId, whose
+        // `source` would make the same range diverge per CU if it ever were reached.
+        override val layoutData get() = listOf(min, max)
     }
 
     /**
@@ -94,36 +127,39 @@ sealed interface TypeDecl<out Id : IdInterface> {
      * `read_range_type`) — hashing by size only keeps cross-CU floats content-equivalent.
      */
     @Serializable
-    data class Float<Id : IdInterface>(override val sizeBytes: Long) : TypeDecl<Id>
+    data class Float<Id : IdInterface>(override val sizeBytes: Long) : TypeDecl<Id> {
+        override val layoutData get() = listOf(sizeBytes)
+    }
 
     // Both are address-sized, which the stab never states — leave sizeBytes null
     @Serializable
     data class Pointer<Id : IdInterface>(val pointee: TypeDecl<Id>) : TypeDecl<Id> {
-        override val children get() = listOf(pointee)
+        override val children get() = listOf(listOf(pointee))
     }
 
     /** C++ reference */
     @Serializable
     data class Reference<Id : IdInterface>(val referent: TypeDecl<Id>) : TypeDecl<Id> {
-        override val children get() = listOf(referent)
+        override val children get() = listOf(listOf(referent))
     }
 
     @Serializable
     data class Const<Id : IdInterface>(val inner: TypeDecl<Id>) : TypeDecl<Id> {
-        override val children get() = listOf(inner)
+        override val children get() = listOf(listOf(inner))
         override val sizeBytes get() = inner.sizeBytes
     }
 
     @Serializable
     data class Volatile<Id : IdInterface>(val inner: TypeDecl<Id>) : TypeDecl<Id> {
-        override val children get() = listOf(inner)
+        override val children get() = listOf(listOf(inner))
         override val sizeBytes get() = inner.sizeBytes
     }
 
     @Serializable
     data class Array<Id : IdInterface>(val element: TypeDecl<Id>, val length: Long?, val indexType: TypeDecl<Id>?) :
         TypeDecl<Id> {
-        override val children get() = listOf(element)
+        override val children get() = listOf(listOf(element), listOfNotNull(indexType))
+        override val layoutData get() = listOfNotNull(length)
         override val sizeBytes get() = element.sizeBytes?.let { elementSize -> length?.let { it * elementSize } }
     }
 
@@ -131,15 +167,16 @@ sealed interface TypeDecl<out Id : IdInterface> {
     data class Enum<Id : IdInterface>(val members: List<Pair<String, Long>>) : TypeDecl<Id> {
         // GCC default
         override val sizeBytes = 4L
+        override val layoutData get() = listOf(members)
     }
 
     @Serializable
     data class Struct<Id : IdInterface>(
         val rawKind: AggrKind,
         override val sizeBytes: Long,
-        val bases: List<BaseDecl<Id>>,
-        val fields: List<FieldDecl<Id>>,
-        val methods: List<MethodDecl<Id>>,
+        val bases: List<Base<Id>>,
+        val fields: List<Field<Id>>,
+        val methods: List<Method<Id>>,
         // Trailing `~%<type>;` section: the vptr-owning base (gdb's VPTR_BASETYPE), a full read_type —
         // usually a `Ref`, but an inline forward-xref (`(cu,n)=xsName:`) for RTTI/exception classes.
         // Non-null iff the class is polymorphic; supersedes the separate boolean marker gcc used to emit.
@@ -155,36 +192,98 @@ sealed interface TypeDecl<out Id : IdInterface> {
             else -> rawKind
         }
 
-        override val children get() = bases.map { it.type } +
-            fields.map { it.type } +
-            methods.map { it.signature } +
-            (vptrBasetype?.let { listOf(it) } ?: emptyList())
+        override val children get() = listOf(
+            bases.map { it.type },
+            fields.map { it.type },
+            methods.map { it.signature },
+            listOfNotNull(vptrBasetype),
+        )
+
+        override val layoutData get() = listOf(rawKind, sizeBytes)
+
+        @Serializable
+        data class Field<Id : IdInterface>(
+            val name: String,
+            val type: TypeDecl<Id>,
+            val offsetBits: Long,
+            val sizeBits: Long,
+            val isStatic: Boolean,
+            val access: Access,
+            /**
+             * Linkage name of a static data member (`alnum:/2(5,44):_ZNSt10ctype_base5alnumE;`). It is the
+             * only link stabs give between the member and its emitted symbol — none of these carry their own
+             * `G`/`S` address stab — so it is what lets a global be typed from its member declaration rather
+             * than left to the demangler. Null for ordinary members.
+             *
+             * No default: a `globalize`-shaped rebuild that forgets it would silently drop the link.
+             */
+            val mangled: String?,
+        )
+
+        @Serializable
+        data class Base<Id : IdInterface>(
+            val type: TypeDecl<Id>,
+            val isVirtual: Boolean,
+            val access: Access,
+            val offsetBits: Long,
+        )
+
+        @Serializable
+        data class Method<Id : IdInterface>(
+            val name: String,
+            val mangled: String?,
+            val signature: TypeDecl<Id>,
+            val access: Access,
+            val virt: VirtKind,
+            val isConst: Boolean,
+            val isVolatile: Boolean,
+            /** Vtable offset in bits when `virt == VIRTUAL`, else null. */
+            val vtableOffsetBits: Long?,
+        ) {
+            /** `virtual `/`static ` — Ghidra's prototypeString models neither, so the stab is the only source. */
+            val declPrefix get() = when (virt) {
+                VirtKind.VIRTUAL -> "virtual "
+                VirtKind.STATIC -> "static "
+                VirtKind.NORMAL -> ""
+            }
+
+            /** Trailing cv-qualifiers, which in C++ sit after the parameter list: `int at(size_t) const;`. */
+            val declSuffix get() = buildString {
+                if (isConst) append(" const")
+                if (isVolatile) append(" volatile")
+            }
+        }
     }
 
     @Serializable
     data class FunctionT<Id : IdInterface>(val ret: TypeDecl<Id>, val params: List<TypeDecl<Id>>) : TypeDecl<Id> {
-        override val children get() = listOf(ret) + params
+        override val children get() = listOf(listOf(ret) + params)
     }
 
     /** Pointer-to-member-function (the `#` descriptor body). */
     @Serializable
     data class Method<Id : IdInterface>(val cls: TypeDecl<Id>, val ret: TypeDecl<Id>, val params: List<TypeDecl<Id>>) :
         TypeDecl<Id> {
-        override val children get() = listOf(cls, ret) + params
+        override val children get() = listOf(listOf(cls, ret), params)
     }
 
     /** GCC complex/floating: `R<n>;<size>;0;`. n encodes 3=cfloat, 4=cdouble, 5=cldouble per gcc/dbxout. */
     @Serializable
-    data class Complex<Id : IdInterface>(val rCode: Int, override val sizeBytes: Long) : TypeDecl<Id>
+    data class Complex<Id : IdInterface>(val rCode: Int, override val sizeBytes: Long) : TypeDecl<Id> {
+        override val layoutData get() = listOf(rCode, sizeBytes)
+    }
 
     /** Cross-reference: `xs<name>:` / `xu<name>:` / `xc<name>:` — incomplete tag. */
     @Serializable
-    data class XRef<Id : IdInterface>(val kind: AggrKind, val tagName: String) : TypeDecl<Id>
+    data class XRef<Id : IdInterface>(val kind: AggrKind, val tagName: String) : TypeDecl<Id> {
+        override val layoutData get() = listOf(kind, tagName)
+    }
 
     /** Wrapper carrying an `@s<n>;` size attribute around an inner type. */
     @Serializable
     data class WithSizeAttr<Id : IdInterface>(override val sizeBits: Long, val inner: TypeDecl<Id>) : TypeDecl<Id> {
-        override val children get() = listOf(inner)
+        override val children get() = listOf(listOf(inner))
+        override val layoutData get() = listOf(sizeBits)
 
         override val sizeBytes get() = (sizeBits + 7) / 8
     }
@@ -194,12 +293,14 @@ sealed interface TypeDecl<out Id : IdInterface> {
      * in every CU (`-1`=int, `-2`=char, `-16`=bool, …). Hashed by [slot] alone.
      */
     @Serializable
-    data class Builtin<Id : IdInterface>(val slot: Int) : TypeDecl<Id>
+    data class Builtin<Id : IdInterface>(val slot: Int) : TypeDecl<Id> {
+        override val layoutData get() = listOf(slot)
+    }
 
     /** Inline type definition: `(cu,n)=<body>` where the binding `(cu,n)` is preserved for Phase 3. */
     @Serializable
     data class InlineDef<Id : IdInterface>(@Contextual val id: Id, val body: TypeDecl<Id>) : TypeDecl<Id> {
-        override val children get() = listOf(body)
+        override val children get() = listOf(listOf(body))
     }
 
     val isXRefTarget get() = this is Struct || this is Enum
@@ -221,59 +322,6 @@ sealed interface TypeDecl<out Id : IdInterface> {
     }
 }
 
-@Serializable
-data class FieldDecl<Id : IdInterface>(
-    val name: String,
-    val type: TypeDecl<Id>,
-    val offsetBits: Long,
-    val sizeBits: Long,
-    val isStatic: Boolean,
-    val access: Access,
-    /**
-     * Linkage name of a static data member (`alnum:/2(5,44):_ZNSt10ctype_base5alnumE;`). It is the
-     * only link stabs give between the member and its emitted symbol — none of these carry their own
-     * `G`/`S` address stab — so it is what lets a global be typed from its member declaration rather
-     * than left to the demangler. Null for ordinary members.
-     *
-     * No default: a `globalize`-shaped rebuild that forgets it would silently drop the link.
-     */
-    val mangled: String?,
-)
-
-@Serializable
-data class BaseDecl<Id : IdInterface>(
-    val type: TypeDecl<Id>,
-    val isVirtual: Boolean,
-    val access: Access,
-    val offsetBits: Long,
-)
-
-@Serializable
-data class MethodDecl<Id : IdInterface>(
-    val name: String,
-    val mangled: String?,
-    val signature: TypeDecl<Id>,
-    val access: Access,
-    val virt: VirtKind,
-    val isConst: Boolean,
-    val isVolatile: Boolean,
-    /** Vtable offset in bits when `virt == VIRTUAL`, else null. */
-    val vtableOffsetBits: Long?,
-) {
-    /** `virtual `/`static ` — Ghidra's prototypeString models neither, so the stab is the only source. */
-    val declPrefix get() = when (virt) {
-        VirtKind.VIRTUAL -> "virtual "
-        VirtKind.STATIC -> "static "
-        VirtKind.NORMAL -> ""
-    }
-
-    /** Trailing cv-qualifiers, which in C++ sit after the parameter list: `int at(size_t) const;`. */
-    val declSuffix get() = buildString {
-        if (isConst) append(" const")
-        if (isVolatile) append(" volatile")
-    }
-}
-
 /** Symbol AST: what one stab record's `name:descriptor` decodes to. */
 @Serializable
 @OptIn(ExperimentalSerializationApi::class)
@@ -286,33 +334,36 @@ sealed interface SymbolDecl<Id : IdInterface> {
     @Serializable
     data class Function<Id : IdInterface>(
         override val name: String,
-        val isFileStatic: Boolean,
+        val scope: FunctionScope,
         override val type: TypeDecl<Id>,
     ) : SymbolDecl<Id>
 
-    /** `:p` */
+    /**
+     *  `:p` stack param
+     *  `:P` (register param) or `:R` (alt)
+     *  */
     @Serializable
-    data class StackParam<Id : IdInterface>(override val name: String, override val type: TypeDecl<Id>) : SymbolDecl<Id>
+    data class Param<Id : IdInterface>(
+        override val name: String,
+        override val type: TypeDecl<Id>,
+        val location: VariableLocation,
+    ) : SymbolDecl<Id>
 
-    /** `:P` (register param) or `:R` (alt). */
+    /**
+     *  `:r` register variable.
+     *  stack variable `:` descriptor with no class letter (gdb's `l`/`s`, i.e. the type  number follows immediately).
+     */
     @Serializable
-    data class RegParam<Id : IdInterface>(override val name: String, override val type: TypeDecl<Id>) :
-        SymbolDecl<Id>
-
-    /** `:r` register variable. */
-    @Serializable
-    data class RegLocal<Id : IdInterface>(override val name: String, override val type: TypeDecl<Id>) :
-        SymbolDecl<Id>
-
-    /** Plain stack local — a `:` descriptor with no class letter (gdb's `l`/`s`, i.e. the type
-     *  number follows immediately). `:V` is a procedure-scope static and maps to [StaticVar]. */
-    @Serializable
-    data class StackLocal<Id : IdInterface>(override val name: String, override val type: TypeDecl<Id>) : SymbolDecl<Id>
+    data class Local<Id : IdInterface>(
+        override val name: String,
+        override val type: TypeDecl<Id>,
+        val location: VariableLocation,
+    ) : SymbolDecl<Id>
 
     /**
      * `:T` tag or `:t` typedef — a name bound to a type id. The two are one form: gcc emits `Tt`
      * for `typedef struct foo {} foo`, and everything downstream treats them alike (both register
-     * a [ghistabs.harvest.TypeAst] at [id]). [kind] keeps the source spelling for rendering.
+     * a [ghistabs.harvest.Type] at [id]). [kind] keeps the source spelling for rendering.
      */
     @Serializable
     data class NamedType<Id : IdInterface>(
@@ -322,16 +373,12 @@ sealed interface SymbolDecl<Id : IdInterface> {
         override val type: TypeDecl<Id>,
     ) : SymbolDecl<Id>
 
-    /** `:G` */
+    /** `:S` file-static / `:V` function-static / `:G` global */
     @Serializable
-    data class Global<Id : IdInterface>(override val name: String, override val type: TypeDecl<Id>) : SymbolDecl<Id>
-
-    /** `:S` file-static / `:V` static-local. */
-    @Serializable
-    data class StaticVar<Id : IdInterface>(
+    data class Static<Id : IdInterface>(
         override val name: String,
         override val type: TypeDecl<Id>,
-        val isFunctionLocal: Boolean,
+        val scope: StaticScope,
     ) : SymbolDecl<Id>
 
     /**

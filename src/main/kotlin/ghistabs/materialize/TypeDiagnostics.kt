@@ -7,16 +7,16 @@ import ghidra.program.model.data.DataTypeManager
 import ghidra.program.model.data.Undefined
 import ghistabs.diagnose.GapRecord
 import ghistabs.diagnose.degradation
-import ghistabs.harvest.TypeAst
+import ghistabs.harvest.Type
 import ghistabs.parse.TypeDecl
 
 /**
  * Compromised DataTypes — anonymous (no name in stab), empty-placeholder (body never
- * materialized), or all-Undefined (body ran but bound nothing). Backs [TypeRegistry.degradedBy];
- * classifies [TypeRegistry.byId] / [TypeRegistry.xrefStubs] entries against the harvest.
+ * materialized), or all-Undefined (body ran but bound nothing). Backs [DataTypeRegistry.degradedBy];
+ * classifies [DataTypeRegistry.byId] / [DataTypeRegistry.xrefStubs] entries against the harvest.
  */
-internal fun TypeRegistry.computeDegraded(): Map<DataType, String> = buildMap {
-    fun classify(ast: TypeAst, dt: DataType) {
+internal fun DataTypeRegistry.computeDegraded(): Map<DataType, String> = buildMap {
+    fun classify(ast: Type, dt: DataType) {
         if (containsKey(dt)) return
         // Unresolved XRef placeholders are flagged unconditionally — their dt is an
         // empty Composite we created for the stub, not aliased from elsewhere.
@@ -38,25 +38,27 @@ internal fun TypeRegistry.computeDegraded(): Map<DataType, String> = buildMap {
     // Canonical-group winners: the ast that actually built the dt. Non-winner
     // member ids alias to the same dt — don't let an anonymous member misclassify
     // a named winner's dt.
-    for (group in resolver.byCanonicalKey.values) {
-        dataTypeFor(group.ast.id)?.let { classify(group.ast, it) }
+    for (group in index.byLocation.values) {
+        dataTypeFor(group.type.id)?.let { classify(group.type, it) }
     }
     // Non-canonical top-level asts (XRef aliases, FunctionT, Method, …) that
     // materialized through resolve(); their own ast.id owns the dt directly.
-    val canonicalIds = resolver.byCanonicalKey.values.flatMap { it.members }.toSet()
-    for (ast in harvest.typeAsts.values) {
+    val canonicalIds = index.byLocation.values.flatMap { it.members }.toSet()
+    for (ast in harvest.types.values) {
         if (ast.id in canonicalIds) continue
         dataTypeFor(ast.id)?.let { classify(ast, it) }
     }
 }
 
 /** Reason the DataType is compromised (anonymous / empty / all-Undefined / xref-stub), or null. */
-fun TypeRegistry.reasonFor(dt: DataType?): String? = dt?.let { degradedBy[it] }
+fun DataTypeRegistry.reasonFor(dt: DataType?): String? = dt?.let { degradedBy[it] }
 
 /** Snapshot of compromised DataTypes by reason — for the registry dump. */
-fun TypeRegistry.compromisedTypes(): Map<String, List<DataType>> = degradedBy.entries.groupBy({ it.value }, { it.key })
+fun DataTypeRegistry.compromisedTypes(): Map<String, List<DataType>> = degradedBy.entries.groupBy({
+    it.value
+}, { it.key })
 
-internal fun TypeRegistry.recordXRefStubAt(useSite: String, at: String, dt: DataType) {
+internal fun DataTypeRegistry.recordXRefStubAt(useSite: String, at: String, dt: DataType) {
     if (dt in xrefStubs) {
         degradation("xref-stub-in-$useSite", at, "type=${dt.name}")
     }
@@ -66,9 +68,9 @@ internal fun TypeRegistry.recordXRefStubAt(useSite: String, at: String, dt: Data
  * Log every Struct/Union typeAst whose body never made it into the DTM as a non-empty aggregate.
  * These cause downstream `merge-failed` "Offset 0 beyond end of structure" cascades.
  */
-fun TypeRegistry.reportSurvivingPlaceholders() {
+fun DataTypeRegistry.reportSurvivingPlaceholders() {
     for ((id, placeholder) in placeholders) {
-        val ast = harvest.getType(id) ?: continue
+        val ast = index.byId(id) ?: continue
         if (ast.body !is TypeDecl.Struct) continue
         val composite = placeholder as? Composite ?: continue
         // Empty C++ trait/tag types: sizeBytes=1, no source members. Ghidra fills
@@ -101,7 +103,7 @@ internal fun DataTypeManager.conflictCount(): Long =
  * typeinfo was the offender) rather than a genuine ODR clash. Report how many the import added
  * over the construction-time baseline; a nonzero delta is a WARN.
  */
-fun TypeRegistry.reportConflictDelta() {
+fun DataTypeRegistry.reportConflictDelta() {
     val conflicts = dtm.allDataTypes.asSequence().filter { DataTypeUtilities.isConflictDataType(it) }.toList()
     debug("dtm-conflicts-pre", count = conflictsBefore)
     debug("dtm-conflicts-post", count = conflicts.size.toLong())

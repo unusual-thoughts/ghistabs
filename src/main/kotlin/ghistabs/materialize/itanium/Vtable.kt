@@ -7,10 +7,10 @@ import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
 import ghistabs.forceCreateData
-import ghistabs.harvest.TypeResolver
+import ghistabs.harvest.HarvestIndex
 import ghistabs.parse.GlobalTypeId
-import ghistabs.parse.MethodDecl
 import ghistabs.parse.TypeDecl
+import ghistabs.parse.TypeDecl.Struct.Method
 import ghistabs.parse.VirtKind
 
 /**
@@ -20,13 +20,13 @@ import ghistabs.parse.VirtKind
  * not the walk. Override matching is by name only — fine for the non-overloaded gcc 3.4.4 corpus.
  */
 class Virtuals(
-    private val typeResolver: TypeResolver,
-    private val table: MutableList<MethodDecl<GlobalTypeId>> = mutableListOf(),
+    private val index: HarvestIndex,
+    private val table: MutableList<Method<GlobalTypeId>> = mutableListOf(),
     private val visited: MutableSet<TypeDecl.Struct<GlobalTypeId>> = mutableSetOf(),
 ) {
     private fun walkBases(cls: TypeDecl.Struct<GlobalTypeId>) {
         for (base in cls.bases) {
-            typeResolver.resolveBaseAstStatic(base.type)?.takeIf { visited.add(it) }?.let { collectAll(it) }
+            index.resolveBaseAstStatic(base.type)?.takeIf { visited.add(it) }?.let { collectAll(it) }
         }
     }
 
@@ -38,7 +38,7 @@ class Virtuals(
         }
     }
 
-    fun process(cls: TypeDecl.Struct<GlobalTypeId>): List<MethodDecl<GlobalTypeId>> {
+    fun process(cls: TypeDecl.Struct<GlobalTypeId>): List<Method<GlobalTypeId>> {
         collectAll(cls)
         return table.sortedBy { it.vtableOffsetBits!! }
     }

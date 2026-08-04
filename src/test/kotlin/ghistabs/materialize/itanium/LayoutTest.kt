@@ -1,9 +1,11 @@
 package ghistabs.materialize.itanium
 
 import ghistabs.harvest.Harvest
-import ghistabs.harvest.TypeAst
-import ghistabs.harvest.TypeResolver
+import ghistabs.harvest.HarvestIndex
+import ghistabs.harvest.Type
 import ghistabs.parse.*
+import ghistabs.parse.TypeDecl.Struct.Base
+import ghistabs.parse.TypeDecl.Struct.Method
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -131,7 +133,7 @@ class PolymorphicBaseTest {
     private val cu = SourceFile.CUSource("test.cpp")
     private fun gid(n: Int) = GlobalTypeId(cu, n)
 
-    private fun polyStruct(hasVtableMarker: Boolean = false, methods: List<MethodDecl<GlobalTypeId>> = emptyList()) =
+    private fun polyStruct(hasVtableMarker: Boolean = false, methods: List<Method<GlobalTypeId>> = emptyList()) =
         TypeDecl.Struct(
             rawKind = AggrKind.CLASS,
             sizeBytes = 8L,
@@ -141,7 +143,7 @@ class PolymorphicBaseTest {
             vptrBasetype = if (hasVtableMarker) TypeDecl.Ref(gid(0)) else null,
         )
 
-    private fun virtualMethod(name: String) = MethodDecl<GlobalTypeId>(
+    private fun virtualMethod(name: String) = Method<GlobalTypeId>(
         name = name,
         mangled = null,
         signature = TypeDecl.FunctionT(TypeDecl.Complex(0, 4), emptyList()),
@@ -152,7 +154,7 @@ class PolymorphicBaseTest {
         vtableOffsetBits = 0L,
     )
 
-    private fun inlineBase(n: Int, body: TypeDecl.Struct<GlobalTypeId>) = BaseDecl(
+    private fun inlineBase(n: Int, body: TypeDecl.Struct<GlobalTypeId>) = Base(
         type = TypeDecl.InlineDef(gid(n), body),
         isVirtual = false,
         access = Access.PUBLIC,
@@ -170,7 +172,7 @@ class PolymorphicBaseTest {
             methods = emptyList(),
             vptrBasetype = null,
         )
-        assertTrue(TypeResolver.Empty.hasPolymorphicBaseSubobject(derived))
+        assertTrue(HarvestIndex.Empty.hasPolymorphicBaseSubobject(derived))
     }
 
     @Test
@@ -184,7 +186,7 @@ class PolymorphicBaseTest {
             methods = emptyList(),
             vptrBasetype = null,
         )
-        assertFalse(TypeResolver.Empty.hasPolymorphicBaseSubobject(derived))
+        assertFalse(HarvestIndex.Empty.hasPolymorphicBaseSubobject(derived))
     }
 
     @Test
@@ -206,13 +208,13 @@ class PolymorphicBaseTest {
             methods = emptyList(),
             vptrBasetype = null,
         )
-        assertTrue(TypeResolver.Empty.hasPolymorphicBaseSubobject(derived))
+        assertTrue(HarvestIndex.Empty.hasPolymorphicBaseSubobject(derived))
     }
 
     @Test
     fun `noBases - empty bases list returns false`() {
         val derived = polyStruct(hasVtableMarker = false)
-        assertFalse(TypeResolver.Empty.hasPolymorphicBaseSubobject(derived))
+        assertFalse(HarvestIndex.Empty.hasPolymorphicBaseSubobject(derived))
     }
 
     @Test
@@ -226,30 +228,25 @@ class PolymorphicBaseTest {
             methods = emptyList(),
             vptrBasetype = null,
         )
-        assertTrue(TypeResolver.Empty.hasPolymorphicBaseSubobject(derived))
+        assertTrue(HarvestIndex.Empty.hasPolymorphicBaseSubobject(derived))
     }
 
     @Test
     fun `TypeDecl_Ref base - resolved via TypeResolver map`() {
         val baseId = gid(99)
         val base = polyStruct(methods = listOf(virtualMethod("virtualMethod")))
-        val baseAst = TypeAst(cu, baseId, "Base", base)
+        val baseAst = Type(cu, baseId, "Base", base)
 
         val derived = TypeDecl.Struct(
             rawKind = AggrKind.CLASS,
             sizeBytes = 12L,
             bases = listOf(
-                BaseDecl(
-                    type = TypeDecl.Ref(baseId),
-                    isVirtual = false,
-                    access = Access.PUBLIC,
-                    offsetBits = 0L,
-                ),
+                Base(type = TypeDecl.Ref(baseId), isVirtual = false, access = Access.PUBLIC, offsetBits = 0L),
             ),
             fields = emptyList(),
             methods = emptyList(),
             vptrBasetype = null,
         )
-        assertTrue(TypeResolver(Harvest.of(mapOf(baseId to baseAst))).hasPolymorphicBaseSubobject(derived))
+        assertTrue(HarvestIndex(Harvest.of(mapOf(baseId to baseAst))).hasPolymorphicBaseSubobject(derived))
     }
 }

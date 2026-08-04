@@ -3,13 +3,14 @@ package ghistabs.harvest
 import ghidra.program.model.data.CategoryPath
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghistabs.parse.*
+import ghistabs.parse.TypeDecl.Struct.Method
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 
 /**
- * [TypeAst.enclosingScope] / [demangledClassPath] over Ghidra's GnuDemangler. Headless (not a pure unit)
+ * [Type.enclosingScope] / [demangledClassPath] over Ghidra's GnuDemangler. Headless (not a pure unit)
  * because the demangler needs an initialised Ghidra Application — it needs no Program or Address, but it
  * is not a plain library call. Real, complete Itanium manglings; the `Ss` abbreviation is what makes the
  * leaf diverge from the stabs spelling (`std::string`, not `std::basic_string<char,…>`).
@@ -18,7 +19,7 @@ import org.junit.jupiter.api.Test
 class EnclosingScopeTest : AbstractGhidraHeadlessIntegrationTest() {
     private val cu = SourceFile.CUSource("lexstream.cpp")
 
-    private fun method(mangled: String?) = MethodDecl<GlobalTypeId>(
+    private fun method(mangled: String?) = Method<GlobalTypeId>(
         name = "m",
         mangled = mangled,
         signature = TypeDecl.Builtin(0),
@@ -29,7 +30,7 @@ class EnclosingScopeTest : AbstractGhidraHeadlessIntegrationTest() {
         vtableOffsetBits = null,
     )
 
-    private fun struct(vararg methods: MethodDecl<GlobalTypeId>) = TypeDecl.Struct(
+    private fun struct(vararg methods: Method<GlobalTypeId>) = TypeDecl.Struct(
         rawKind = AggrKind.STRUCT,
         sizeBytes = 4L,
         bases = emptyList(),
@@ -39,7 +40,7 @@ class EnclosingScopeTest : AbstractGhidraHeadlessIntegrationTest() {
     )
 
     private fun ast(name: String?, body: TypeDecl<GlobalTypeId>) =
-        TypeAst(cu = cu, id = GlobalTypeId(cu, 1), name = name, body = body)
+        Type(cu = cu, id = GlobalTypeId(cu, 1), name = name, body = body)
 
     @Test fun namespacedClassDropsOwnLeaf() {
         // _ZNSs5clearEv → std::string::clear(); `Ss` expands to the short `string`, not basic_string<…>.

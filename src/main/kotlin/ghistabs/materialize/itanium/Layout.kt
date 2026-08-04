@@ -1,9 +1,9 @@
 package ghistabs.materialize.itanium
 
-import ghistabs.harvest.TypeResolver
-import ghistabs.parse.BaseDecl
+import ghistabs.harvest.HarvestIndex
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
+import ghistabs.parse.TypeDecl.Struct.Base
 import ghistabs.parse.VirtKind
 
 /** Component snapshot at a target offset, fed into vfptr placement decisions. */
@@ -63,7 +63,7 @@ object Layout {
     fun baseFieldName(isVirtual: Boolean, simpleName: String) =
         (if (isVirtual) Itanium.VBASE_PREFIX else Itanium.BASE_PREFIX) + simpleName
 
-    fun baseComment(base: BaseDecl<GlobalTypeId>) = buildString {
+    fun baseComment(base: Base<GlobalTypeId>) = buildString {
         append(base.access.name.lowercase())
         if (base.isVirtual) append(" virtual")
         append(" base")
@@ -71,11 +71,11 @@ object Layout {
 }
 
 /** Does [typeDecl] inherit a vfptr from a polymorphic base subobject (vs. introducing its own)? */
-fun TypeResolver.hasPolymorphicBaseSubobject(typeDecl: TypeDecl.Struct<GlobalTypeId>) =
+fun HarvestIndex.hasPolymorphicBaseSubobject(typeDecl: TypeDecl.Struct<GlobalTypeId>) =
     firstPolymorphicBase(typeDecl) != null
 
 /** Lowest-offset polymorphic base, or null. Determines whether to insert a vfptr or inherit. */
-fun TypeResolver.firstPolymorphicBase(typeDecl: TypeDecl.Struct<GlobalTypeId>): BaseDecl<GlobalTypeId>? = typeDecl.bases
+fun HarvestIndex.firstPolymorphicBase(typeDecl: TypeDecl.Struct<GlobalTypeId>): Base<GlobalTypeId>? = typeDecl.bases
     .sortedBy { it.offsetBits }
     .firstOrNull { base ->
         resolveBaseAstStatic(base.type)?.run {
@@ -85,7 +85,7 @@ fun TypeResolver.firstPolymorphicBase(typeDecl: TypeDecl.Struct<GlobalTypeId>): 
         } ?: false
     }
 
-fun TypeResolver.resolveBaseAstStatic(typeDecl: TypeDecl<GlobalTypeId>): TypeDecl.Struct<GlobalTypeId>? =
+fun HarvestIndex.resolveBaseAstStatic(typeDecl: TypeDecl<GlobalTypeId>): TypeDecl.Struct<GlobalTypeId>? =
     when (typeDecl) {
         is TypeDecl.Ref -> getStruct(typeDecl.id)
 

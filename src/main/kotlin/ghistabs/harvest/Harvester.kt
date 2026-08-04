@@ -12,15 +12,14 @@ import ghistabs.parse.*
  * accumulates type ASTs. [harvest] is the dispatch loop that feeds both and collects the
  * address-bearing symbols into [symbolsByCu].
  */
-class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, resolver: AddressResolver) :
+class Harvester(private val monitor: TaskMonitor, private val sink: DiagnosticSink, resolver: AddressResolver) :
     DiagnosticSink by sink {
     constructor(ctx: ImportContext<*>) : this(ctx.monitor, ctx, ctx.resolver)
 
-    private val store = AstStore(sink = sink)
+    private val store = TypeStore(sink = sink)
     private val cursor = StabCursor(resolver, sink)
-    private val symbolsByCu = mutableMapOf<String, MutableList<SymbolRecord>>()
+    private val symbolsByCu = mutableMapOf<String, MutableList<Symbol>>()
     private val constants = mutableListOf<SymbolDecl.Constant<GlobalTypeId>>()
-    private var parseErrors = 0
 
     internal fun harvest(records: List<StabRecord>): Harvest {
         monitor.initialize(records.size.toLong(), "Stabs: harvesting")
@@ -47,6 +46,7 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, resolver
             when (rec.type) {
                 StabType.N_SO -> cursor.sourceUnit(rec)
 
+                // Already handled in the preSeed pass
                 StabType.N_BINCL, StabType.N_EINCL, StabType.N_EXCL -> {}
 
                 StabType.N_SOL if rec.name.isNotEmpty() -> cursor.switchSource(rec.name)
@@ -54,47 +54,36 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, resolver
                 StabType.N_SLINE -> cursor.lineEntry(rec)
 
                 StabType.N_FUN if rec.name.isEmpty() -> cursor.closeFunction(rec)
-                StabType.N_FUN -> try {
-                    val sym = parseSymbol(rec)
+
+                StabType.N_FUN -> parseSymbol(rec)?.also { sym ->
                     when (sym.body) {
                         is SymbolDecl.Function -> cursor.openFunction(rec, sym.body)
-
-                        is SymbolDecl.StaticVar -> harvestSymbol(rec)
-
+                        is SymbolDecl.Static -> record(sym)
                         else -> warn("unexpected-nfun", "$sym")
                     }
-                } catch (e: StabsParseException) {
-                    parseErrors++
-                    warn("parse-error", "@$i '${rec.name.take(80)}': ${e.message}")
                 }
 
-                StabType.N_GSYM -> harvestSymbol(rec)
+                // N_STSYM=data, N_LCSYM=bss, N_ROSYM=rodata : n_value carries the address.
+                // N_GSYM=globals: only refers by name
+                StabType.N_GSYM, StabType.N_STSYM, StabType.N_LCSYM, StabType.N_ROSYM -> parseSymbol(rec)?.also {
+                    record(it)
+                }
 
-                // Address-bearing statics: N_STSYM=data, N_LCSYM=bss, N_ROSYM=rodata
-                // (stabs.texinfo §"Static Variables"). Section differs; n_value carries the address.
-                StabType.N_STSYM, StabType.N_LCSYM, StabType.N_ROSYM -> harvestSymbol(rec)
-
-                StabType.N_PSYM, StabType.N_RSYM -> {
-                    val open = cursor.currentFunction ?: continue
-                    try {
-                        val sym = parseSymbol(rec)
-                        when (sym.body) {
-                            is SymbolDecl.StackParam, is SymbolDecl.RegParam -> cursor.param(sym)
-                            is SymbolDecl.RegLocal -> cursor.local(sym)
-                            else -> warn("unexpected-psym-rsym", "$sym")
-                        }
-                    } catch (e: StabsParseException) {
-                        parseErrors++
-                        warn("parse-error", "param @$i: ${e.message}")
+                // Parameters and register locals
+                StabType.N_PSYM, StabType.N_RSYM -> parseSymbol(rec)?.also { sym ->
+                    when (sym.body) {
+                        is SymbolDecl.Param -> cursor.param(sym)
+                        is SymbolDecl.Local -> cursor.local(sym)
+                        else -> warn("unexpected-psym-rsym", "$sym")
                     }
                 }
 
-                StabType.N_LSYM -> try {
-                    val sym = parseSymbol(rec)
+                // Stack locals
+                StabType.N_LSYM -> parseSymbol(rec)?.also { sym ->
                     when (val decl = sym.body) {
                         // Bare `name:t(cu,n)` forward-declarations (body = self-Ref) are stored
                         // unfiltered; AstStore lets a real definition at the same id supersede them.
-                        is SymbolDecl.NamedType -> store += TypeAst(
+                        is SymbolDecl.NamedType -> store += Type(
                             cursor.cu,
                             decl.id,
                             decl.name,
@@ -103,27 +92,21 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, resolver
                             declSourceFile = sym.sourceFile,
                         )
 
-                        is SymbolDecl.StackLocal, is SymbolDecl.RegLocal ->
-                            cursor.local(sym)
+                        is SymbolDecl.Local -> cursor.local(sym)
 
                         // Function-scope statics get their address from rec.value.
-                        is SymbolDecl.StaticVar -> record(sym)
+                        is SymbolDecl.Static -> record(sym)
 
                         // Addressless compile-time constant — no address, so it's applied as an
                         // equate + synthetic enum catalog rather than data (see SymbolApplier).
                         is SymbolDecl.Constant -> constants += decl
 
-                        is SymbolDecl.Function, is SymbolDecl.Global, is SymbolDecl.RegParam, is SymbolDecl.StackParam,
+                        is SymbolDecl.Function, is SymbolDecl.Param,
                         -> warn("unexpected-lsym", "$sym")
                     }
-                } catch (e: StabsParseException) {
-                    parseErrors++
-                    warn("parse-error", "lsym @$i: ${e.message}")
                 }
 
-                StabType.N_LBRAC -> cursor.openScope(rec)
-
-                StabType.N_RBRAC -> cursor.closeScope(rec)
+                StabType.N_LBRAC, StabType.N_RBRAC -> cursor.bracket(rec)
 
                 // Known-irrelevant for type/symbol harvesting.
                 StabType.N_DSLINE, StabType.N_BSLINE, StabType.N_FLINE,
@@ -157,28 +140,22 @@ class Harvester(private val monitor: TaskMonitor, sink: DiagnosticSink, resolver
         val (typeAsts, rawCollisions) = store.toHarvest()
         debug("harvest-constants", count = constants.size.toLong())
 
-        return Harvest(typeAsts, parseErrors, rawCollisions, symbolsByCu, openFunctions, lineEntries, constants)
+        return Harvest(typeAsts, rawCollisions, symbolsByCu, openFunctions, lineEntries, constants)
     }
 
-    private fun record(sym: SymbolRecord) {
+    private fun record(sym: Symbol) {
         symbolsByCu.getOrPut(cursor.cu.filename) { mutableListOf() } += sym
     }
 
-    private fun harvestSymbol(rec: StabRecord) {
-        try {
-            record(parseSymbol(rec))
-        } catch (e: StabsParseException) {
-            parseErrors++
-            warn("parse-error", "@${rec.index} '${rec.name.take(80)}': ${e.message}")
+    private fun parseSymbol(rec: StabRecord) = when (val res = cursor.parseSymbol(rec)) {
+        is ParseResult.Error -> {
+            err("parse-error", "@${rec.index} '${rec.name.take(80)}': ${res.ex.message}")
+            null
         }
-    }
 
-    private fun parseSymbol(rec: StabRecord) = SymbolRecord(
-        rec,
-        Parser(rec.name, cursor).parseSymbol().globalize(cursor),
-        cursor.lineSource,
-        cursor.currentFunction?.name,
-    ).also {
-        store.hoistSymbolDefs(it, cursor.cu)
+        is ParseResult.Ok -> {
+            res.trailing?.let { warn("unparsed-trailing", it) }
+            res.inner.also { store.hoistSymbolDefs(it, cursor.cu) }
+        }
     }
 }

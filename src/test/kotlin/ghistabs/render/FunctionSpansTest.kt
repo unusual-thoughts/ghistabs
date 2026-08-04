@@ -2,7 +2,8 @@ package ghistabs.render
 
 import ghistabs.GenericAddressResolver
 import ghistabs.harvest.LineEntry
-import ghistabs.harvest.OpenFunction
+import ghistabs.harvest.StabFunction
+import ghistabs.parse.FunctionScope
 import ghistabs.parse.SourceFile
 import ghistabs.parse.SymbolDecl
 import ghistabs.parse.TypeDecl
@@ -14,15 +15,15 @@ import org.junit.jupiter.api.Test
  * Pure-unit coverage of [FunctionSpans.of]: the close-line choice (endLine+1, or
  * endLine when that collides with the next opener), the neighbour-clamp that rejects
  * a cross-attributed min-line, and the strict-containment drop. Fixtures are synthetic
- * [OpenFunction]s — no Ghidra program, no mocks.
+ * [StabFunction]s — no Ghidra program, no mocks.
  */
 class FunctionSpansTest {
     // Line entries are addressed at `base + <position>` so the first-listed line is the
     // lowest-address entry, i.e. the prologue; `lines` order therefore sets the prologue.
-    private fun fn(name: String, base: Long, source: String, lines: List<Int>) = OpenFunction(
+    private fun fn(name: String, base: Long, source: String, lines: List<Int>) = StabFunction(
         name = name,
         addr = GenericAddressResolver.buildAddress(base),
-        decl = SymbolDecl.Function(name, false, TypeDecl.Builtin(-1)),
+        decl = SymbolDecl.Function(name, FunctionScope.GLOBAL, TypeDecl.Builtin(-1)),
         cu = SourceFile.CUSource(source),
         lineEntries = lines.mapIndexed { i, l -> LineEntry(l, GenericAddressResolver.buildAddress(base + i), source) }
             .toMutableList(),

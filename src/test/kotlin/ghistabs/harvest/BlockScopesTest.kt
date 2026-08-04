@@ -4,6 +4,7 @@ import ghistabs.GenericAddressResolver
 import ghistabs.parse.StabType
 import ghistabs.parse.SymbolDecl
 import ghistabs.parse.TypeDecl
+import ghistabs.parse.VariableLocation
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
@@ -20,10 +21,10 @@ class BlockScopesTest {
     private fun line(line: Int, offset: Long, source: String) = LineEntry(line, addr(offset), source)
 
     private fun BlockTreeBuilder.local(name: String, declLine: Int) = local(
-        SymbolRecord(
+        Symbol(
             recordIndex = nextIndex++,
             recordType = StabType.N_LSYM,
-            body = SymbolDecl.StackLocal(name, TypeDecl.Complex(0, 1)),
+            body = SymbolDecl.Local(name, TypeDecl.Complex(0, 1), VariableLocation.STACK),
             rawValue = 0,
             declLine = declLine,
             // The trailing N_SOL gcc leaves in effect — always the CU, never the local's own file.
@@ -69,7 +70,7 @@ class BlockScopesTest {
 
     @Test
     fun `a block owns the symbols emitted before its LBRAC, not the ones between its brackets`() {
-        val (blocks, _) = mainBuilder().finish(lines, "unfile.cpp")
+        val (_, blocks) = mainBuilder().finish(lines, "unfile.cpp")
 
         val root = blocks.single()
         assertEquals(listOf("fs"), root.locals.map { it.body.name })
@@ -83,7 +84,7 @@ class BlockScopesTest {
 
     @Test
     fun `a local's source is its block's, not the N_SOL left over at the closing brace`() {
-        val (_, locals) = mainBuilder().finish(lines, "unfile.cpp")
+        val (locals, _) = mainBuilder().finish(lines, "unfile.cpp")
 
         assertEquals(
             listOf(
@@ -102,7 +103,7 @@ class BlockScopesTest {
         // 0x11f..0x122 now covers stl_alloc.h:664 and stl_construct.h:700, so the range alone can't
         // decide — the decl line still pins it. Only a local with no line match would inherit.
         val spanning = lines + line(700, 0x120, "stl_construct.h")
-        val (_, locals) = mainBuilder().finish(spanning, "unfile.cpp")
+        val (locals, _) = mainBuilder().finish(spanning, "unfile.cpp")
 
         assertEquals("stl_alloc.h", locals.first { it.declLine == 664 }.sourceFile)
         assertEquals("unfile.cpp", locals.first { it.body.name == "fs" }.sourceFile)
@@ -115,7 +116,7 @@ class BlockScopesTest {
      */
     @Test
     fun `a local no block claims belongs to the function`() {
-        val (blocks, locals) = mainBuilder().apply { local("orphan", 27) }.finish(lines, "unfile.cpp")
+        val (locals, blocks) = mainBuilder().apply { local("orphan", 27) }.finish(lines, "unfile.cpp")
 
         assertEquals("unfile.cpp", locals.single { it.body.name == "orphan" }.sourceFile)
         assertEquals(false, "orphan" in flatten(blocks))
