@@ -514,7 +514,7 @@ class SymbolApplier(
         // One class is re-declared per including CU, so the same member arrives N times.
         val seen = mutableSetOf<String>()
         var applied = 0
-        for (ast in harvest.types.values) {
+        for (ast in registry.index.allTypes) {
             val body = ast.body as? TypeDecl.Struct<GlobalTypeId> ?: continue
             for (field in body.fields) {
                 val mangled = field.mangled ?: continue

@@ -482,7 +482,7 @@ fun DataTypeRegistry.materializeAll() {
         registerNamedPrimitiveTypedefs()
 
         // Non-registerable top-level typeAsts (XRef body, FunctionT, Method, …)
-        for (ast in harvest.types.values) {
+        for (ast in index.allTypes) {
             materializeTopLevel(ast)
         }
     }

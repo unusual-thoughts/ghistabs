@@ -15,7 +15,6 @@ import ghistabs.StabsAnalyzer.Companion.import
 import ghistabs.baseline.BaselineLoader
 import ghistabs.baseline.BaselineWriter
 import ghistabs.diagnose.CapturingSink
-import ghistabs.diagnose.defaultContext
 import ghistabs.diagnose.dumpJson
 import ghistabs.diagnose.writeRegistryDump
 import ghistabs.harvest.ContentIndex

@@ -127,7 +127,7 @@ private fun ImportArtifacts.registryDump(): RegistryDump {
                 g.type.id,
                 g.type.ghidraName,
                 g.members.size,
-                g.members.count { harvest.types[it]?.name.isNullOrEmpty() },
+                g.members.count { index.byId(it)?.name.isNullOrEmpty() },
                 g.distinct,
             )
         }
@@ -167,7 +167,7 @@ private fun ImportArtifacts.registryDump(): RegistryDump {
         }
     val sourceFolds = foldSourcePaths(
         harvest.lineEntries.keys + harvest.symbolsByCu.keys +
-            harvest.types.values.flatMap { listOfNotNull(it.id.source.filename, it.declSourceFile) },
+            index.allTypes.flatMap { listOfNotNull(it.id.source.filename, it.declSourceFile) },
     ).filter { it.key != it.value }.toSortedMap()
     return RegistryDump(compromised, canonicalGroups, divergent, sourceFolds, hashCollisions, allTypes, duplicateNamed)
 }

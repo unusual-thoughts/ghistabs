@@ -4,7 +4,7 @@ import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.data.TypeDef
 import ghidra.program.model.data.UnsignedIntegerDataType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghistabs.diagnose.defaultContext
+import ghistabs.defaultContext
 import ghistabs.importer.StabsImporter
 import ghistabs.parse.StabReader
 import ghistabs.parse.StabRecord
