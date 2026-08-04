@@ -161,7 +161,7 @@ class StabReaderTest {
     }
 
     /**
-     * Unknown n_type byte is treated as StabType.UNKNOWN with rawType carrying the byte.
+     * Unknown n_type byte is treated as [StabType.UNKNOWN] with rawType carrying the byte.
      */
     @Test
     fun testUnknownType() {

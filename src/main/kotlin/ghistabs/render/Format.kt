@@ -12,7 +12,7 @@ private fun lineRef(line: Int) = "L" + line.toString().padStart(4)
  * The trailing comment for a fragment carrying [note] at [line]. The shape is chosen by
  * [kind]: an SLINE address annotation, a function brace delimiter, a displaced-decl
  * stray, or (default) a declaration provenance tag whose [note] is the role — empty for
- * a typedef/type-body, "(param)" etc for a decl — with the stale marker appended.
+ * a typedef/type-body, "(param)" etc. for a decl — with the stale marker appended.
  */
 fun commentFor(line: Int, kind: FragmentKind, note: String, stale: Boolean) = when (kind) {
     FragmentKind.SLINE -> "// ${lineRef(line)} @ $note"

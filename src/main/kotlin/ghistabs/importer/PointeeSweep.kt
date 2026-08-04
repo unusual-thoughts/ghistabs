@@ -10,7 +10,7 @@ import ghistabs.forceCreateData
 
 /**
  * Length (including the terminator) of the NUL-terminated run of characters Ghidra's string
- * charset ([AsciiCharSetRecognizer], the recogniser its StringSearcher wraps) accepts at [addr],
+ * charset ([AsciiCharSetRecognizer], the recognizer its StringSearcher wraps) accepts at [addr],
  * or null if [addr] doesn't begin one. A point query — we already hold the exact address, so
  * there's nothing to search for.
  */
@@ -50,8 +50,8 @@ private fun Program.desiredPointee(addr: Address, pointee: DataType?): Pair<Data
 
 /**
  * Whether the data already at a target is at least as precise as [desired], so the sweep
- * leaves it be. A bare Undefined/Default placeholder never counts — that's what auto-
- * analysis drops on unreferenced bytes, and we hold the better stab-derived type. A string
+ * leaves it be. A bare Undefined/Default placeholder never counts — that's what auto-analysis
+ * drops on unreferenced bytes, and we hold the better stab-derived type. A string
  * target is satisfied only by an actual string, not the `undefined4` Ghidra may have guessed.
  */
 private fun Data.satisfiedBy(desired: DataType): Boolean = when {

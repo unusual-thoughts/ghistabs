@@ -1,7 +1,7 @@
 package ghistabs.harvest
 
 import ghistabs.diagnose.DiagnosticSink
-import ghistabs.materialize.ghidraClassName
+import ghistabs.materialize.ghidraClass
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
 import ghistabs.parse.TypeDecl.Struct.Base
@@ -51,7 +51,7 @@ abstract class ContentIndex(val contentCache: MutableMap<GlobalTypeId, LayoutCon
         // `Builtin(-2)` spellings are one value and don't fork a `.conflict`. A shape that maps to no
         // primitive falls through to its structural content.
         is TypeDecl.Builtin, is TypeDecl.Range, is TypeDecl.WithSizeAttr ->
-            ghidraClassName()?.let { LayoutContent(it) } ?: layoutContent(visited)
+            ghidraClass()?.let { LayoutContent(it) } ?: layoutContent(visited)
 
         // The DTM struct has no static members or methods, and both are cycle sources (libstdc++
         // `basic_string ↔ _Rep` recurse through static `_S_empty_rep_storage` and method signatures) —

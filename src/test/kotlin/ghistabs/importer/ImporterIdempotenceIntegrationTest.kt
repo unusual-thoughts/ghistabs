@@ -70,7 +70,6 @@ class ImporterIdempotenceIntegrationTest : AbstractGhidraHeadlessIntegrationTest
         val ctx2 = program.defaultContext()
         val importer2 = StabsImporter(ctx2)
         val result2 = importer2.run()
-        val messages = ctx2.terminal.capturedOutput()
 
         // Get counts after second run
         val symbolCount2 = program.symbolTable.numSymbols

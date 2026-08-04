@@ -5,7 +5,8 @@ import ghistabs.diagnose.DummySink
 import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Struct.Field
 import ghistabs.parse.TypeDecl.Struct.Method
-import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Test
 
 open class TestContentIndex(val asts: Map<GlobalTypeId, Type>) :
@@ -16,7 +17,7 @@ open class TestContentIndex(val asts: Map<GlobalTypeId, Type>) :
 }
 
 /**
- * Pins the content-equivalence semantics of [contentHash]: per-CU
+ * Pins the content-equivalence semantics of [ContentIndex]: per-CU
  * template-instantiation clones must collapse into a single canonical
  * hash, while structurally-different types must remain distinct.
  *
@@ -76,11 +77,11 @@ class ContentIndexTest {
 
     /**
      * Per-CU `bool` slots are encoded as `WithSizeAttr(8, Builtin(-16))`
-     * after [Harvester.globalize] hoists the negative-id Ref. Two CUs
+     * after [globalize] hoists the negative-id Ref. Two CUs
      * therefore both encode `bool` as `WithSizeAttr(8, Builtin(-16))`
      * — same content, must hash equally. Before the Builtin hoist this
      * was `WithSizeAttr(8, Ref([CU_X, -16]))`, which fell through to
-     * [contentHash]'s `unresolved` fallback and baked the source CU
+     * [ContentIndex]'s `unresolved` fallback and baked the source CU
      * into the hash → per-CU divergence → 3 spurious "real" collisions
      * in bouniafbouniaf.
      */
@@ -115,7 +116,7 @@ class ContentIndexTest {
         val ref = TypeDecl.Ref(phantom)
         // Two evaluations of the same unresolved ref agree with each
         // other; the unresolved branch must be deterministic so
-        // collision detection isn't randomised.
+        // collision detection isn't randomized.
         assertEquals(oracle.content(ref), oracle.content(ref))
     }
 
@@ -410,7 +411,7 @@ class ContentIndexTest {
 
     /**
      * gcc spells `char` three ways across CUs — `Range(0,127)`, `WithSizeAttr(8, Range(0,127))`,
-     * and the hoisted `Builtin(-2)` slot — all of which [ghistabs.materialize.BuiltinTable]
+     * and the hoisted `Builtin(-2)` slot — all of which [ghistabs.materialize.resolveBuiltin]
      * materializes to `CharDataType`. They must share one content hash, else a struct carrying a
      * bare `char` (char_type/traits in `basic_ios<char>` &co.) forks a `.conflict` per spelling.
      * `signed char`'s `Range(-128,127)` is also `CharDataType` and collapses with them, exactly as
@@ -481,7 +482,7 @@ class ContentIndexTest {
     /**
      * gcc emits a virtual as VIRTUAL (vtoff set) in its defining CU and NORMAL (vtoff null) elsewhere,
      * and reorders methods per CU: layout-identical, but the method flags/order never enter the DTM
-     * struct. [ContentIndex.contentHash] drops a struct's own methods, so the two forms hash equal —
+     * struct. [ContentIndex] drops a struct's own methods, so the two forms hash equal —
      * a scope/canonical group isn't split over that per-CU method noise (TypeResolver §A/§B).
      */
     @Test

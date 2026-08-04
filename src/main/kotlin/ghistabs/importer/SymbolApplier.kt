@@ -191,21 +191,21 @@ class SymbolApplier(
         val enums = LinkedHashMap<Pair<List<String>, Int>, LinkedHashMap<String, Long>>()
         var applied = 0
 
-        for (c in harvest.constants) {
+        for ((name, type, value) in harvest.constants) {
             // demangledName() is the unqualified leaf; rebuild the qualified name from the
             // namespace chain so the equate reads `CryptoPP::INFINITE_TIME`, not `INFINITE_TIME`.
-            val ns = namespaceChain(c.name).orEmpty()
-            val leaf = demangle(c.name)?.name ?: c.name
+            val ns = namespaceChain(name).orEmpty()
+            val leaf = demangle(name)?.name ?: name
             val qualified = (ns + leaf).joinToString("::")
 
             when (val existing = equates.getEquate(qualified)) {
-                null -> runCatching { equates.createEquate(qualified, c.value) }.onSuccess { applied++ }
+                null -> runCatching { equates.createEquate(qualified, value) }.onSuccess { applied++ }
 
-                else -> if (existing.value != c.value) {
-                    warn("constant-equate-conflict", "$qualified = ${existing.value} vs ${c.value}")
+                else -> if (existing.value != value) {
+                    warn("constant-equate-conflict", "$qualified = ${existing.value} vs $value")
                 }
             }
-            enums.getOrPut(ns to byteSize(c.value)) { LinkedHashMap() }.putIfAbsent(leaf, c.value)
+            enums.getOrPut(ns to byteSize(value))) { LinkedHashMap() }.putIfAbsent(leaf, value)
         }
 
         val dtm = ctx.program.dataTypeManager
@@ -391,17 +391,17 @@ class SymbolApplier(
 
     private fun applyScopeComments(func: Function, open: StabFunction) {
         fun comment(blocks: List<BlockScope>) {
-            for (block in blocks) {
+            for ((start, _, locals, children) in blocks) {
                 try {
-                    if (block.locals.isEmpty()) {
-                        debug("empty-scope", "function=${func.name}", address = block.start)
+                    if (locals.isEmpty()) {
+                        debug("empty-scope", "function=${func.name}", address = start)
                     } else {
-                        ctx.program.listing.setComment(block.start, CommentType.PLATE, scopeCommentText(block.locals))
+                        ctx.program.listing.setComment(start, CommentType.PLATE, scopeCommentText(locals))
                     }
                 } catch (e: Exception) {
                     warn("scope-comment-error", "Failed to set scope comment: ${e.message}", func.entryPoint)
                 }
-                comment(block.children)
+                comment(children)
             }
         }
         comment(open.blocks)
@@ -542,7 +542,7 @@ class SymbolApplier(
     }
 
     /**
-     * Make [name] (demangled source-form) the primary label at [addr]. Otherwise
+     * Make [name] (demangled source-form) the primary label at [addr]. Otherwise,
      * globals/statics keep the PE loader's `_<name>` and the demangled form is never
      * in the symbol table. Idempotent.
      */

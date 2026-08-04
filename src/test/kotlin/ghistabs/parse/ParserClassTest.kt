@@ -257,7 +257,7 @@ class ParserClassTest {
 
     /**
      * Without `-gstabs+`, gcc emits a static data member as the bare `name:type,0,0` rather than
-     * the `:mangled` form — recognised by offset and size both being zero (gcc-4.2.1 libstdc++).
+     * the `:mangled` form — recognized by offset and size both being zero (gcc-4.2.1 libstdc++).
      */
     @Test
     fun testStaticFieldGstabsNoExtensions() {

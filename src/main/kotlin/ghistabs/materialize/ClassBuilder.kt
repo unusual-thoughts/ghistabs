@@ -335,7 +335,7 @@ class ClassBuilder(
         // Build the full param list ourselves (explicit `this` prefix + formals) and use
         // DYNAMIC_STORAGE_ALL_PARAMS. DYNAMIC_STORAGE_FORMAL_PARAMS + __thiscall varies by
         // Ghidra version on whether it auto-prepends `this`, and would rename our `arg0`
-        // to `this` when the storage analyser placed it in the canonical this-slot.
+        // to `this` when the storage analyzer placed it in the canonical this-slot.
         val classPtr = PointerDataType(structDt, dtm)
         val explicitThis = if (ghidraInjectsThis) {
             listOf(

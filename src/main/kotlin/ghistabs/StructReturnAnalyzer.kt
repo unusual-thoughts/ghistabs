@@ -150,7 +150,7 @@ class StructReturnAnalyzer :
  * The program's own [base] model, re-encoded and adjusted for [fix]. Derived rather than transcribed,
  * so a derived convention tracks whatever the installed cspec currently says — `<returnaddress>`,
  * `hasthis`, register sets, and any rule added to that prototype later all come along by construction.
- * [PrototypeModel.encode] emits exactly the grammar [SpecExtension] parses, rules included.
+ * [ghidra.program.model.lang.PrototypeModel.encode] emits exactly the grammar [SpecExtension] parses, rules included.
  *
  * Aggregate `<hidden_return/>` rules are dropped either way and re-added only for [Correction.TO_MEMORY]:
  * the model is assigned solely to functions whose purge already settled the question, so a size-filtered

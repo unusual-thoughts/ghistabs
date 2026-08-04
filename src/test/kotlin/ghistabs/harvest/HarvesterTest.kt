@@ -14,9 +14,6 @@ import org.junit.jupiter.api.Test
  * Verifies stabs-algo-audit.AC3.3: N_SO/N_FUN/N_GSYM/N_LSYM state machine,
  * N_SOL non-allocation, and BINCL/EXCL/EINCL in both passes.
  *
- * Tests are pure unit tests (Kind 1): no Program/DataTypeManager/Listing,
- * only TaskMonitor.DUMMY, DummySink, and constructed test data.
- *
  * Note: These tests focus on state machine behavior (CU tracking, function contexts,
  * include stack) rather than symbol parsing. Symbol parsing is tested separately
  * in HarvesterGlobalizeTest and HarvesterAppendAstsTest.
@@ -44,7 +41,7 @@ class HarvesterTest {
             ),
         )
 
-        val harvest = harvester.harvest(records)
+        harvester.harvest(records)
 
         // harvest() should process the N_SO record without errors.
         // We verify the record was processed by checking parse errors is 0.
@@ -346,7 +343,7 @@ class HarvesterTest {
      *           N_BINCL("types.h", checksum=0xABCD),
      *           N_LSYM("HeaderType:T(1,7)=i"),
      *           N_EINCL]
-     * Expected: The type stab produces a TypeAst with id.source being
+     * Expected: The type stab produces a TypeAst with `id.source` being
      *           HeaderSource(types.h, 0xABCD), not CUSource(main.c).
      *           The IncludeContext for main.c has types.h in fileNumToHeader.
      *

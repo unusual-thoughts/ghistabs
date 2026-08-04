@@ -12,7 +12,7 @@ import ghistabs.parse.*
  * an N_SLINE resolve its function-relative address and file itself under both the source file and
  * the open function; [ghistabs.parse.Cursor] is the same idea one level down, within a single stab.
  *
- * Also the [Globalizer] — a [LocalTypeId]'s file number only means something against the
+ * Also, the [Globalizer] — a [LocalTypeId]'s file number only means something against the
  * [IncludeContext] of the CU that emitted it. The [HeaderRegistry] is shared across those contexts
  * so two CUs that BINCL the same (filename, checksum) get identical GlobalTypeIds for
  * header-attributed types (stabs-canonicalization.md §3).

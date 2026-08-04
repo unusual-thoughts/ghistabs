@@ -46,7 +46,7 @@ Despite the shared name, the ELF `xmltest` is **TinyXML 2** while the `xmltest_*
 
 **`_fullstabs`** — linked against a `libstdc++.a` rebuilt from matching GCC source with
 `-gstabs+ -O0`, so the standard library's own internals (locale, iostream, string, EH) carry
-STABS. Without it you only get your own code plus whatever templates your code instantiates
+STABS. Without it, you only get your own code plus whatever templates your code instantiates
 from headers: the `libstdc++.a` shipped with the toolchain was released stripped and has *no* debug info
 of any kind. The locale-facet drivers exist specifically to exercise this — locale is
 non-template stdlib internals, unreachable any other way.
@@ -65,7 +65,7 @@ because `x86-64` and PIE exercise different address/storage paths.
 ## Gotchas worth knowing before you regenerate anything
 
 - **GCC 4.2.1's CRT startup objects inject DWARF** regardless of `-gstabs`, because they ship
-  prebuilt. Every 4.2.1 binary needs the `.debug_*` sections stripped post-link or it carries
+  prebuilt. Every 4.2.1 binary needs the `.debug_*` sections stripped post-link, or it carries
   both formats. GCC 3.4.5's CRT objects do *not* do this — those come out STABS-only.
 - **The a.out fixtures need two different recipes.** The gcc 2.6.3 one runs the compiler natively
   under `qemu-system-i386` on a 2.4.18 kernel, because libc5's `sbrk` needs `brk()` to return the
@@ -96,7 +96,7 @@ because `x86-64` and PIE exercise different address/storage paths.
 
 ## Adding your own
 
-Drop a binary in and it is under test on the next run — no registration step. It needs a
+Drop a binary in, and it is under test on the next run — no registration step. It needs a
 committed baseline before `countersWithinBaseline` means anything; generate the first one with
 `./gradlew integrationTest -PregenerateBaselines=true` and commit the resulting JSON, whose diff
 is then the record of exactly which counters move on later changes.

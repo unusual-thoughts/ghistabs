@@ -2,12 +2,6 @@ package ghistabs.diagnose
 
 import ghidra.program.model.address.Address
 
-/**
- * Shared test diagnostics / dump infrastructure — the non-test scaffolding that captures import
- * output and serialises snapshots for inspection under `build/test-output/`. Kept out of the test
- * classes so they hold assertions only.
- */
-
 /** Pure Kotlin test double that captures `log()` calls into a list. */
 class CapturingSink : DiagnosticSink {
     data class LogLine(val tag: String, val address: Address?, val msg: String?, val level: Level = Level.INFO) {

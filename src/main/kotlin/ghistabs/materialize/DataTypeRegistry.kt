@@ -23,9 +23,9 @@ import ghistabs.parse.TypeDecl
 /**
  * DataType cache and DTM facade: owns the id→DataType map, resolves types into the DTM under a
  * shared conflict handler, and hands back placeholders for cycle-breaking. The TypeDecl/TypeAst
- * interpreters live in [Materialization] ([resolveRef]/[materializeBody]/[materializeAll]),
- * placeholder construction in [Placeholders] ([makePlaceholder]), and degradation reporting in
- * [TypeDiagnostics].
+ * interpreters live in `Materialization.kt` ([resolveRef]/[materializeBody]/[materializeAll]),
+ * placeholder construction in `Placeholders.kt` ([makePlaceholder]), and degradation reporting in
+ * `TypeDiagnostics.kt`.
  */
 class DataTypeRegistry(
     internal val dtm: DataTypeManager,

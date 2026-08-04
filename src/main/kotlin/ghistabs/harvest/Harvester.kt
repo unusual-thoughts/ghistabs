@@ -25,7 +25,7 @@ class Harvester(private val monitor: TaskMonitor, private val sink: DiagnosticSi
         monitor.initialize(records.size.toLong(), "Stabs: harvesting")
 
         cursor.preSeedHeaders(records)
-        for ((i, rec) in records.withIndex()) {
+        for (rec in records) {
             monitor.increment()
             if (rec.desc != 0) {
                 when (rec.type) {
@@ -127,7 +127,7 @@ class Harvester(private val monitor: TaskMonitor, private val sink: DiagnosticSi
                 StabType.N_UNDF, StabType.N_SOL ->
                     debug("drop-record-${rec.type.name.removePrefix("N_").lowercase()}-empty")
 
-                // Hard signal: byte-decoder recognised but no harvesting rule. Log once per type.
+                // Hard signal: byte-decoder recognized but no harvesting rule. Log once per type.
                 StabType.UNKNOWN -> warn(
                     "stab-unknown",
                     "rawType=0x${"%02X".format(rec.rawType)} @${rec.index} '${rec.name.take(60)}'",

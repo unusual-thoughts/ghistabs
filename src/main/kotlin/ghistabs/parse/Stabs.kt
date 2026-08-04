@@ -389,11 +389,6 @@ class StabReader(
         fun hasStabs(program: Program): Boolean = sourceOf(program) != null
 
         /**
-         * Stabs from [program], wherever the format keeps them: dedicated `.stab`/`.stabstr` sections
-         * (ELF/PE), else the a.out linker symbol table, which Ghidra's loader exposes as
-         * `.symtab`/`.strtab`. Null when the program carries neither pair.
-         */
-        /**
          * [linkSymbols] for [program], on a reader of its own. Empty — and costing only the two block
          * lookups, with no reader built and no streams opened — unless the program is a.out.
          */

@@ -34,7 +34,7 @@ class Renderer(val index: HarvestIndex, val program: Program, val mode: Mode, va
      * Render every source into [dir], one file per source (named from the source path). Wraps the
      * render in a transaction — it defines terminated strings at undefined pointer targets it meets
      * while rendering constant values. Returns the number of files written; stops early if [monitor]
-     * is cancelled.
+     * is canceled.
      */
     fun renderAll(dir: File, monitor: TaskMonitor = TaskMonitor.DUMMY): Int {
         monitor.initialize(sources.size.toLong())
@@ -149,10 +149,10 @@ private class RenderContext(val renderer: Renderer, val source: String) {
         data class SliceKey(val line: Int, val codeUnit: String)
 
         val byKey = mutableMapOf<SliceKey, MutableSet<Address>>()
-        for (entry in lines) {
-            if (entry.line !in 1..maxLine) continue
-            val codeUnit = entry.addr.render(program) ?: ""
-            byKey.getOrPut(SliceKey(entry.line, codeUnit)) { sortedSetOf() } += entry.addr
+        for ((line, addr) in lines) {
+            if (line !in 1..maxLine) continue
+            val codeUnit = addr.render(program) ?: ""
+            byKey.getOrPut(SliceKey(line, codeUnit)) { sortedSetOf() } += addr
         }
         for ((key, addrs) in byKey) {
             val runs = formatAddrRuns(addrs.toList(), program)
@@ -184,15 +184,15 @@ private class RenderContext(val renderer: Renderer, val source: String) {
         // declLine the old dedup used — is what makes this fire when misattribution splays a
         // typedef across several bogus lines.
         val seen = mutableSetOf<Pair<String, String>>()
-        for (td in typedefs.sortedBy { it.line }) {
-            val key = td.name to td.rendered
+        for ((line, name, rendered) in typedefs.sortedBy { it.line }) {
+            val key = name to rendered
             if (!seen.add(key)) continue
-            canvas[td.line] += Fragment(
-                indentFor(td.line),
-                "typedef ${td.rendered} ${td.name};",
+            canvas[line] += Fragment(
+                indentFor(line),
+                "typedef $rendered $name;",
                 note = "",
                 kind = FragmentKind.TYPEDEF,
-                stale = isStale(td.line) || key in splayed,
+                stale = isStale(line) || key in splayed,
             )
         }
     }
@@ -387,14 +387,14 @@ private class RenderContext(val renderer: Renderer, val source: String) {
     private fun applyDecompilation(decomp: DecompInterface) {
         // Where a decl shares a line with real content, the misattributed one is noise.
         for (b in canvas.multiFragmentLines()) b.fragments.removeAll { it.stale }
-        for (r in spans.ranges) {
-            val closeLine = spans.closeLine(r.func) ?: r.startLine
-            if (closeLine < r.startLine) continue
+        for ((func, startLine) in spans.ranges) {
+            val closeLine = spans.closeLine(func) ?: startLine
+            if (closeLine < startLine) continue
             // Aliased out-of-line copies (ctor C1/C2, dtor D0/D1/D2) all collapse onto one
             // source line; decompiling each would stack duplicate bodies, so leave those as
             // the skeleton's side-by-side decls and only body a single-line function alone.
-            if (closeLine == r.startLine && spans.ranges.count { it.startLine == r.startLine } > 1) continue
-            val ghFunc = program.functionManager.getFunctionAt(r.func.addr) ?: continue
+            if (closeLine == startLine && spans.ranges.count { it.startLine == startLine } > 1) continue
+            val ghFunc = program.functionManager.getFunctionAt(func.addr) ?: continue
             val cLines = runCatching { decomp.decompileFunction(ghFunc, 30, TaskMonitor.DUMMY) }
                 .getOrNull()?.compressedDecompLines(renderer.mode == Mode.ELIDE_SJLJ) ?: continue
             val head = cLines.firstOrNull() ?: continue
@@ -402,7 +402,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             // Capture each surviving stray with its original line so the demoted comment keeps that
             // line's provenance tag rather than the close line's. A live global stays put as data.
             val strays = mutableListOf<String>()
-            for (line in r.startLine..closeLine) {
+            for (line in startLine..closeLine) {
                 canvas[line].fragments.removeAll { f ->
                     when {
                         f.kind == FragmentKind.DECL_GLOBAL && !f.stale -> false
@@ -417,7 +417,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
                 }
             }
 
-            val slines = r.func.lineEntries.sortedBy { it.addr.offset }
+            val slines = func.lineEntries.sortedBy { it.addr.offset }
             fun entryFor(addr: Address?) = addr?.let { a -> slines.lastOrNull { it.addr.offset <= a.offset } }
             fun refOf(e: LineEntry): String {
                 val file = if (e.source == source) "" else "${e.source.substringAfterLast('/')} "
@@ -446,7 +446,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
                 if (ownLine != null) currentLine = ownLine
             }
 
-            canvas[r.startLine] += Fragment(code = head.text, note = "L ${r.startLine}", kind = FragmentKind.DECOMP)
+            canvas[startLine] += Fragment(code = head.text, note = "L $startLine", kind = FragmentKind.DECOMP)
             // Spread the runs down to fill the height; each expands into the blank rows up to the next
             // run — braces on their own lines — or crams where it's too tight. The body stays inside the
             // span when it fits (nothing spills past the close); when it would otherwise cram, borrow the
@@ -456,12 +456,12 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             // every blank line to the end of the file.
             val gapEnd = ((closeLine + 1)..maxLine).takeWhile { canvas[it].isEmpty() }.lastOrNull() ?: closeLine
             val sizes = runs.map { it.lines.size }
-            val spanFree = (r.startLine + 1..closeLine).count { canvas[it].isEmpty() }
+            val spanFree = (startLine + 1..closeLine).count { canvas[it].isEmpty() }
             val end = if (sizes.sum() <= spanFree) closeLine else gapEnd
             // `spreadBlocks` reserves rows per run size, so a big run (a whole `while` loop coalesced
             // onto one source line) gets its share of the interior blanks instead of cramming onto one
             // row while a small sibling wastes the space around it.
-            val targets = spreadBlocks(r.startLine, end, sizes)
+            val targets = spreadBlocks(startLine, end, sizes)
             runs.forEachIndexed { i, run ->
                 val note = run.entry?.let(::refOf) ?: "L ${targets[i]}"
                 placeRun(targets[i], targets.getOrNull(i + 1) ?: (end + 1), run.lines, note)
@@ -474,7 +474,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
     // Ghidra's `{`-ends-the-line / `}`-on-its-own-line survives), the overflow crammed onto the last.
     // A statement row carries the run's source-line tag; a structural row (a bare brace, no
     // instructions → null address) has no stabs source line, so it carries no tag — a synthetic one
-    // would just restate its grid position and, on the synthesised close line, read as an off-by-one.
+    // would just restate its grid position and, on the synthesized close line, read as an off-by-one.
     // Indent is the line's own nesting level.
     private fun placeRun(start: Int, limit: Int, lines: List<DecompLine>, note: String) {
         val free = (start until limit).filter { canvas[it].isEmpty() }.ifEmpty { listOf(start) }
@@ -540,20 +540,20 @@ private class RenderContext(val renderer: Renderer, val source: String) {
     // suspect. Deduped; overload sets on the same demangled name are skipped.
     private fun reportAnomalies() {
         val anomalies = sortedSetOf<String>()
-        for (r in spans.ranges) {
-            val closeLine = spans.closeLine(r.func) ?: continue
-            val interior = (r.startLine + 1) until closeLine
-            val fname = r.func.demangledName
-            val where = "inside $fname [L${r.startLine}..L$closeLine]"
-            for (g in spans.ranges) {
-                if (g.func === r.func) continue
-                val gname = g.func.demangledName
-                if (gname == fname) continue
-                if (g.startLine in interior) {
-                    anomalies += "skeleton[$source]: function $gname opens at L${g.startLine} $where"
+        for ((func1, startLine) in spans.ranges) {
+            val closeLine = spans.closeLine(func1) ?: continue
+            val interior = (startLine + 1) until closeLine
+            val name1 = func1.demangledName
+            val where = "inside $name1 [L$startLine..L$closeLine]"
+            for ((func2, startLine2, endLine) in spans.ranges) {
+                if (func2 === func1) continue
+                val name2 = func2.demangledName
+                if (name2 == name1) continue
+                if (startLine2 in interior) {
+                    anomalies += "skeleton[$source]: function $name2 opens at L$startLine2 $where"
                 }
-                if (g.endLine in interior && g.startLine !in interior) {
-                    anomalies += "skeleton[$source]: function $gname closes at L${g.endLine} $where"
+                if (endLine in interior && startLine2 !in interior) {
+                    anomalies += "skeleton[$source]: function $name2 closes at L$endLine $where"
                 }
             }
             for (ast in typeDecls) {
