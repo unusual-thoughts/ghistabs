@@ -151,8 +151,7 @@ fun DecompileResults.compressedDecompLines(elideSjlj: Boolean = false): List<Dec
 /**
  * Group same-typed declaration lines into one statement each. The type is the line's
  * [ClangTypeToken] (Ghidra emits it as one token — the base type, without the `*`/`[N]`
- * declarator), the declarator the tokens after it up to the terminator; types keep first-
- * appearance order.
+ * declarator), the declarator the tokens after it up to the terminator; types keep first-appearance order.
  */
 private fun groupDecls(declLines: List<ClangLine>): List<String> = declLines
     .mapNotNull { line ->

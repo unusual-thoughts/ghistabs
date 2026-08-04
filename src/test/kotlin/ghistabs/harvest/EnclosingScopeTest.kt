@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test
 
 /**
  * [Type.enclosingScope] / [demangledClassPath] over Ghidra's GnuDemangler. Headless (not a pure unit)
- * because the demangler needs an initialised Ghidra Application — it needs no Program or Address, but it
+ * because the demangler needs an initialized Ghidra Application — it needs no Program or Address, but it
  * is not a plain library call. Real, complete Itanium manglings; the `Ss` abbreviation is what makes the
  * leaf diverge from the stabs spelling (`std::string`, not `std::basic_string<char,…>`).
  */

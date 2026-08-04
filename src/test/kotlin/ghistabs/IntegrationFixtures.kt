@@ -4,7 +4,7 @@ import java.io.File
 import java.util.stream.Stream
 
 /**
- * Fixture corpus for the parameterised probe suites, narrowed by `-Pfixture=<filename>[,…]`
+ * Fixture corpus for the parameterized probe suites, narrowed by `-Pfixture=<filename>[,…]`
  * (→ `-DfixtureFilter`). The regression suite does not use this: it has one generated class per
  * fixture × mode, selected by gradle's test filter (see `:generateFixtureTests`). Binaries are
  * hand-placed under `src/test/resources/binaries/` (gitignored, EULA-restricted); an absent one is

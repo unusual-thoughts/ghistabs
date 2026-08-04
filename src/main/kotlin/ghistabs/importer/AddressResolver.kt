@@ -43,10 +43,6 @@ class ProgramAddressResolver(private val program: Program, override val sink: Di
         program.addressFactory.defaultAddressSpace.getAddress(offset) + baseFixup
 
     /**
-     * Resolve [name]: symbol table → `_<name>` (MinGW/PE cdecl underscore prefix —
-     * `Foo`→`_Foo`, `_ZTI4Foo`→`__ZTI4Foo`).
-     */
-    /**
      * a.out link-time symbols straight from the file, which outrank Ghidra's for this format:
      * `UnixAoutProgramLoader` places them at `dataBlock.getStart().add(symbol.value)` although
      * `n_value` is already image-relative, so its symbols sit one text-segment too high (verified on
@@ -55,6 +51,10 @@ class ProgramAddressResolver(private val program: Program, override val sink: Di
      */
     private val linkSymbols: Map<String, Long> by lazy { StabReader.linkSymbolsOf(program) }
 
+    /**
+     * Resolve [name]: symbol table → `_<name>` (MinGW/PE cdecl underscore prefix —
+     * `Foo`→`_Foo`, `_ZTI4Foo`→`__ZTI4Foo`).
+     */
     override fun resolve(name: String): Address? {
         linkSymbols[name]?.let { return buildAddress(it) }
         program.symbolTable.getSymbols(name).firstOrNull()?.let { return it.address }

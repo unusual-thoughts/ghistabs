@@ -12,9 +12,6 @@ import org.junit.jupiter.api.Test
  *
  * Verifies stabs-algo-audit.AC3.1: recursive type ID globalization,
  * terminal pass-through, and InlineDef side effects.
- *
- * Tests are pure unit tests (Kind 1): no Program/DataTypeManager/Listing,
- * only TaskMonitor.DUMMY, DummySink, and constructed test data.
  */
 class StabCursorGlobalizeTest {
     private fun createTestCursor(records: List<StabRecord> = emptyList()) =
@@ -201,7 +198,7 @@ class StabCursorGlobalizeTest {
      *
      * When globalize() encounters an InlineDef, its body is globalized.
      * walkDefinitions() should return the emitted TypeAst.
-     * Source: stabs-canonicalization.md §5 — InlineDef side-effect.
+     * Source: stabs-canonicalization.md §5 — InlineDef side effect.
      */
     @Test
     fun testGlobalizeInlineDefWithHoistSymbolDefs() {

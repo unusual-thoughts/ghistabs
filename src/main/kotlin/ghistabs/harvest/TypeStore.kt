@@ -99,7 +99,7 @@ class TypeStore(
      *
      * Detect via `field.sizeBits > struct.sizeBytes * 8` (real fields can't exceed their
      * enclosing struct), then move the field into `bases[]` and — if the Ref id is
-     * dangling — synthesise an XRef-stub named after the field for cross-CU resolution.
+     * dangling — synthesize an XRef-stub named after the field for cross-CU resolution.
      */
     private fun synthesizeXRefStubsForDanglingInheritanceRefs() {
         val synthetic = mutableListOf<Type>()
@@ -122,13 +122,10 @@ class TypeStore(
                 // bound Refs directly).
                 if (ref.id in byId) continue
                 synthetic.add(
-                    Type(
-                        cu = ast.cu,
+                    ast.copy(
                         id = ref.id,
                         name = field.name,
                         body = TypeDecl.XRef(AggrKind.STRUCT, field.name),
-                        declLine = ast.declLine,
-                        declSourceFile = ast.declSourceFile,
                     ),
                 )
             }

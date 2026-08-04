@@ -5,11 +5,11 @@ import ghistabs.parse.SourceFile
 
 enum class Level { DEBUG, INFO, WARN, ERROR }
 
-/**
- * A diagnostic event. [count] lets one call stand in for a bulk tally (`log(cat, count = n)`
- * replaces the old `inc(cat, n)`); [message] null means a silent counter bump (no output).
- */
 interface DiagnosticSink {
+    /**
+     * A diagnostic event. [count] lets one call stand in for a bulk tally (`log(cat, count = n)`
+     * replaces the old `inc(cat, n)`); [message] null means a silent counter bump (no output).
+     */
     fun log(
         category: String,
         message: String? = null,
@@ -165,12 +165,12 @@ class StabsDiagnostics : DiagnosticSink {
         if (gapCensus.isNotEmpty()) {
             sink.debug("diagnostics", "gap census:")
             for ((qualifiedName, gaps) in gapCensus) {
-                for (gap in gaps) {
-                    val prevStr = gap.prevField ?: "(start)"
-                    val nextStr = gap.nextField ?: "(end)"
+                for ((offsetBits, lengthBits, prevField, nextField) in gaps) {
+                    val prevStr = prevField ?: "(start)"
+                    val nextStr = nextField ?: "(end)"
                     sink.debug(
                         "diagnostics",
-                        "  $qualifiedName: gap @+${gap.offsetBits} bits len=${gap.lengthBits} between $prevStr..$nextStr",
+                        "  $qualifiedName: gap @+$offsetBits bits len=$lengthBits between $prevStr..$nextStr",
                     )
                 }
             }

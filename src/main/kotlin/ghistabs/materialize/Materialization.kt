@@ -139,7 +139,7 @@ internal fun DataTypeRegistry.fillStructBases(
         }
 
         // Either unresolved or larger-than-gap (cross-CU size disagreement).
-        // Synthesise a gap-sized placeholder so own fields don't have to
+        // Synthesize a gap-sized placeholder so own fields don't have to
         // clear half of an oversized base.
         if (gap <= 0) {
             // Empty Base Optimization: subobject takes 0 bytes. Resolved-to-empty
@@ -169,7 +169,7 @@ internal fun DataTypeRegistry.fillStructBases(
         )
     }
 
-    // Skip synthesised placeholders (`unknown_<off>`): leave as Ghidra's
+    // Skip synthesized placeholders (`unknown_<off>`): leave as Ghidra's
     // default Undefined1 fill instead of pretending to be a real base.
     // The `base-synthesized` degradation already records the diagnostic.
     val ops = body.bases
@@ -185,21 +185,21 @@ internal fun DataTypeRegistry.fillStructBases(
                 baseSimpleName = info.simpleName,
             )
         }
-    for (op in ops) {
-        val baseDt = dataTypeByOffset[op.offsetBytes] ?: continue
+    for ((offsetBytes, fieldName, comment, baseSimpleName) in ops) {
+        val baseDt = dataTypeByOffset[offsetBytes] ?: continue
         try {
             placeholder.replaceAtOffset(
-                op.offsetBytes,
+                offsetBytes,
                 baseDt,
                 baseDt.length,
-                op.fieldName,
-                op.comment,
+                fieldName,
+                comment,
             )
             debug("inheritance-applied")
         } catch (e: IllegalArgumentException) {
             degradation(
                 "base-layout-failed",
-                "$qualifiedName::${op.baseSimpleName}",
+                "$qualifiedName::$baseSimpleName",
                 e.message,
             )
             debug("inheritance-failed")
@@ -231,37 +231,37 @@ internal fun DataTypeRegistry.fillComposite(
     val polyBase = index.firstPolymorphicBase(body)
 
     // Any vptr at a base-occupied offset is inherited — base owns it. Skip it.
-    // Catches the unresolved-base case (synthesised _base_unknown_*) where
+    // Catches the unresolved-base case (synthesized _base_unknown_*) where
     // firstPolymorphicBase returns null but gcc still emitted _vptr$Class at
     // the base's offset (CLexStream → ios_base cascade).
     val baseOffsets = body.bases.map { it.offsetBits }.toSet()
 
-    for (field in body.fields) {
-        if (field.isStatic) continue
+    for ((name, type, offsetBits, sizeBits, isStatic) in body.fields) {
+        if (isStatic) continue
 
-        if (Itanium.isVptrField(field.name) &&
-            ((polyBase != null && field.offsetBits == polyBase.offsetBits) || field.offsetBits in baseOffsets)
+        if (Itanium.isVptrField(name) &&
+            ((polyBase != null && offsetBits == polyBase.offsetBits) || offsetBits in baseOffsets)
         ) {
             debug("vptr-skipped-inherited")
             continue
         }
 
-        val ft = resolveRef(field.type)?.let { resolvedFt ->
+        val ft = resolveRef(type)?.let { resolvedFt ->
             if (resolvedFt.isUndefined) {
                 degradation(
                     "field-resolved-to-undefined",
-                    "$qualifiedName.${field.name}",
-                    "type=${resolvedFt.name} from ${field.type}",
+                    "$qualifiedName.$name",
+                    "type=${resolvedFt.name} from $type",
                 )
             }
-            recordXRefStubAt("field", "$qualifiedName.${field.name}", resolvedFt)
+            recordXRefStubAt("field", "$qualifiedName.$name", resolvedFt)
             resolvedFt
-        } ?: undef("field-type", "$qualifiedName.${field.name}", field.type)
+        } ?: undef("field-type", "$qualifiedName.$name", type)
 
         // Zero-length placeholders report length=1 (Ghidra's enforced minimum).
         // Use stab-declared bytes so the field occupies the right slot — otherwise
         // we'd leave sizeBits/8 - 1 bytes as auto-Undefined holes.
-        val stabBytes = (field.sizeBits / 8).toInt()
+        val stabBytes = (sizeBits / 8).toInt()
         val len = when {
             ft.length <= 0 -> stabBytes.takeIf { it > 0 } ?: 4
 
@@ -272,7 +272,7 @@ internal fun DataTypeRegistry.fillComposite(
                 if (ft !in placeholders.values) {
                     degradation(
                         "field-stub-padded",
-                        "$qualifiedName.${field.name}",
+                        "$qualifiedName.$name",
                         "type=${ft.name} (zero-length); padding to stab-declared $stabBytes bytes",
                     )
                 }
@@ -284,27 +284,27 @@ internal fun DataTypeRegistry.fillComposite(
         try {
             when (placeholder) {
                 is Structure -> placeholder.replaceAtOffset(
-                    (field.offsetBits / 8).toInt(),
+                    (offsetBits / 8).toInt(),
                     ft,
                     len,
-                    field.name,
+                    name,
                     null,
                 )
 
-                is Union -> placeholder.add(ft, field.name, null)
+                is Union -> placeholder.add(ft, name, null)
 
                 else -> {}
             }
         } catch (e: Exception) {
             degradation(
                 "field-dropped",
-                "$qualifiedName.${field.name}",
+                "$qualifiedName.$name",
                 e.message,
             )
         }
     }
 
-    // Report runs ≥ 4 bytes of unnamed Undefined1 (Ghidra auto-fills empty bytes
+    // Report runs ≥ 4 bytes of unnamed Undefined1 (Ghidra autofills empty bytes
     // with Undefined1 components so consecutive components are always contiguous —
     // a naive offset-gap detector never fires).
     if (placeholder is Structure) {
@@ -379,7 +379,7 @@ fun DataTypeRegistry.resolveRef(decl: TypeDecl<GlobalTypeId>): DataType? = when 
     // by id. Unified across struct/union/class/enum.
     is TypeDecl.XRef -> index.byXRef(decl)?.let { getOrMaterialize(it.id) }
 
-    // Aggregate bodies — meaningful only via owning TypeId; see kdoc.
+    // Aggregate bodies — meaningful only via owning TypeId; see KDoc.
     is TypeDecl.Struct, is TypeDecl.Enum, is TypeDecl.Method -> {
         debug("referenced-aggregate", "asked for ref to $decl")
         null
@@ -435,7 +435,7 @@ fun DataTypeRegistry.buildFunctionDefinition(
         params
     }
     // gcc `#` method form puts `this` AS THE FIRST PARAM (gdb stabsread.c::read_args:
-    // "We should read at least the THIS parameter here."). When [thisType] is set we
+    // "We should read at least the `this` parameter here."). When [thisType] is set we
     // just name the first param `this`.
     val argDefs = effectiveParams.mapIndexed { i, p ->
         val resolved = resolveRef(p) ?: undef("function-param", "$at[$i]", p)
@@ -444,7 +444,7 @@ fun DataTypeRegistry.buildFunctionDefinition(
         ParameterDefinitionImpl(argName, safe, null)
     }.toMutableList()
     // Broken-emitter guard: gdb's read_args has the same complaint for stabs that
-    // omit the THIS param. Without this, a __thiscall FD with arity 0 silently
+    // omit the `this` param. Without this, a __thiscall FD with arity 0 silently
     // produces a wrong-shaped signature.
     if (thisType != null && argDefs.isEmpty()) {
         val safe = if (thisType is VoidDataType) PointerDataType(VoidDataType(), dtm) else thisType
@@ -509,7 +509,7 @@ private fun DataTypeRegistry.registerNamedPrimitiveTypedefs() {
         // Name;` whose anonymous aggregate we named after the typedef, then merged with
         // the named copy), a same-named `/stabs` typedef is just a second DataType with
         // the identical name. Ghidra resolves a struct/enum's display name across all
-        // same-named DataTypes, so the duplicate destabilises it — the named type suffices.
+        // same-named DataTypes, so the duplicate destabilizes it — the named type suffices.
         if (typedefTarget.name == ghidraName) continue
         val category = if (firstBody.resolveBuiltin() != null) {
             CategoryPath.ROOT

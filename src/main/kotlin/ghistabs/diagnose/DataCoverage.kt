@@ -21,9 +21,9 @@ private const val ALIGN_PADDING = 16L
  * Runs last, after globals/statics/vtables/RTTI/demangled labels are applied (and after the filler
  * analyzer has collapsed alignment padding), so both defined data and padding count as covered.
  *
- * Non-code segments (.data/.rdata/.bss/…) are swept directly; initialised zero-fill runs are ignored
+ * Non-code segments (.data/.rdata/.bss/…) are swept directly; initialized zero-fill runs are ignored
  * and .bss keeps only runs ≥ one alignment window (the ≤15-byte CU-boundary padding is dropped).
- * Read-only data serialised into .text (a CU whose linker had no separate .rodata) is reported too:
+ * Read-only data serialized into .text (a CU whose linker had no separate .rodata) is reported too:
  * an undefined .text run inside a function body is a missed-code hole (`text-undisassembled-code`),
  * one outside every function is that CU's undescribed rodata (`text-data-no-coverage`, attributed to
  * the enclosing N_SO source file).

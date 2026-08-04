@@ -7,7 +7,7 @@ import ghistabs.parse.TypeDecl
 fun TypeDecl<*>.resolveBuiltin(): DataType? = when (this) {
     is TypeDecl.Builtin -> resolveSlot(slot)
 
-    // gcc's void — a type explicitly defined as itself (`(x,y)=(x,y)`), recognised at parse.
+    // gcc's void — a type explicitly defined as itself (`(x,y)=(x,y)`), recognized at parse.
     TypeDecl.Void -> VoidDataType()
 
     // `@s<n>` outranks the inner descriptor for *width*: gcc emits it exactly where the inner's
@@ -52,109 +52,109 @@ fun TypeDecl<*>.resolveBuiltin(): DataType? = when (this) {
  * Distinct primitives keep distinct keys: `unsigned char` (`Range(0,255)` → byte) stays apart
  * from `char`.
  */
-fun TypeDecl<*>.ghidraClassName(): Class<*>? = resolveBuiltin()?.javaClass
+fun TypeDecl<*>.ghidraClass(): Class<*>? = resolveBuiltin()?.javaClass
 
 /**
  * gcc XCOFF builtin slot → Ghidra type. Slot numbers per stabs spec / gcc `dbxout.c`.
  * Only slots seen on cygwin gcc 3.4.4 XAP2/CSR binaries are mapped; unknowns return null.
  */
 private fun resolveSlot(slot: Int): DataType? = when (slot) {
+    // int
     -1 -> IntegerDataType()
 
-    // int
+    // char
     -2 -> CharDataType()
 
-    // char
+    // short
     -3 -> ShortDataType()
 
-    // short
+    // long
     -4 -> LongDataType()
 
-    // long
+    // unsigned char
     -5 -> UnsignedCharDataType()
 
-    // unsigned char
+    // signed char
     -6 -> SignedCharDataType()
 
-    // signed char
+    // unsigned short
     -7 -> UnsignedShortDataType()
 
-    // unsigned short
+    // unsigned int
     -8 -> UnsignedIntegerDataType()
 
-    // unsigned int
+    // unsigned
     -9 -> UnsignedIntegerDataType()
 
-    // unsigned
+    // unsigned long
     -10 -> UnsignedLongDataType()
 
-    // unsigned long
+    // void
     -11 -> VoidDataType()
 
-    // void
+    // float
     -12 -> FloatDataType()
 
-    // float
+    // double
     -13 -> DoubleDataType()
 
-    // double
+    // long double
     -14 -> LongDoubleDataType()
 
-    // long double
+    // integer (alias int)
     -15 -> IntegerDataType()
 
-    // integer (alias int)
+    // bool / _Bool
     -16 -> BooleanDataType()
 
-    // bool / _Bool
+    // short real
     -17 -> FloatDataType()
 
-    // short real
+    // real
     -18 -> DoubleDataType()
 
-    // real
+    // stringptr
     -19 -> CharDataType()
 
-    // stringptr
+    // character
     -20 -> CharDataType()
 
-    // character
+    // logical*1
     -21 -> ByteDataType()
 
-    // logical*1
+    // logical*2
     -22 -> ShortDataType()
 
-    // logical*2
+    // logical*4
     -23 -> IntegerDataType()
 
-    // logical*4
+    // logical
     -24 -> IntegerDataType()
 
-    // logical
+    // integer*1
     -27 -> SignedByteDataType()
 
-    // integer*1
+    // integer*2
     -28 -> ShortDataType()
 
-    // integer*2
+    // integer*4
     -29 -> IntegerDataType()
 
-    // integer*4
+    // wchar_t
     -30 -> WideCharDataType()
 
-    // wchar_t
+    // long long
     -31 -> LongLongDataType()
 
-    // long long
+    // unsigned long long
     -32 -> UnsignedLongLongDataType()
 
-    // unsigned long long
+    // logical*8
     -33 -> UnsignedLongLongDataType()
 
-    // logical*8
+    // integer*8
     -34 -> LongLongDataType()
 
-    // integer*8
     else -> null
 }
 

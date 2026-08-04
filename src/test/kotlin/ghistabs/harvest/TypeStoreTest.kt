@@ -11,9 +11,6 @@ import org.junit.jupiter.api.Test
  *
  * Verifies stabs-algo-audit.AC3.2: XRef replacement, same-hash suppression,
  * hash-differing first-writer-wins, and same-type-twice behavior.
- *
- * Tests are pure unit tests (Kind 1): no Program/DataTypeManager/Listing,
- * only TaskMonitor.DUMMY, DummySink, and constructed test data.
  */
 class TypeStoreTest {
 
@@ -22,7 +19,7 @@ class TypeStoreTest {
      *
      * 1. First appendAsts() with XRef body (forward reference).
      * 2. Second appendAsts() with Struct body (concrete definition).
-     * 3. Assert typeAsts[id] contains Struct, not XRef.
+     * 3. Assert `typeAsts[id]` contains Struct, not XRef.
      * 4. Assert collidingAsts does NOT contain entry (XRef replacement is not a collision).
      *
      * Source: stabs-canonicalization.md §6 (XRef replacement).
@@ -136,9 +133,9 @@ class TypeStoreTest {
      * Test: Hash-differing first-writer-wins.
      *
      * 1. Construct two TypeAst with same GlobalTypeId but different struct field counts.
-     * 2. Call appendAsts([first]), then appendAsts([second]).
-     * 3. Assert typeAsts[id].body equals first body (first writer wins).
-     * 4. Assert collidingAsts[id] is non-empty (collision recorded).
+     * 2. Call `appendAsts(first)`, then `appendAsts(second)`.
+     * 3. Assert `typeAsts[id].body` equals first body (first writer wins).
+     * 4. Assert `collidingAsts[id]` is non-empty (collision recorded).
      *
      * Source: stabs-canonicalization.md §4 (hash-differing first-writer-wins).
      */

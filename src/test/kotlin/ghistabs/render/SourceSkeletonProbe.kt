@@ -22,7 +22,7 @@ import java.io.File
  * stabs N_SOL / N_SLINE / N_FUN records. The output is structured so
  * each source line number lands on the same line in the skeleton —
  * blank lines pad gaps so a side-by-side view against the original
- * source aligns perfectly. Per line we emit:
+ * source aligns perfectly. Per line, we emit:
  *
  *  - function declaration + `{` when the function starts on that line
  *    (from N_FUN's desc field);

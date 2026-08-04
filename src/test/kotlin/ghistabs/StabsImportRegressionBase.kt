@@ -34,7 +34,7 @@ import java.io.File
 /**
  * Execution-order mode for the regression harness.
  *
- * The behaviour of StabsAnalyzer can differ depending on whether it runs as
+ * The behavior of StabsAnalyzer can differ depending on whether it runs as
  * part of Ghidra's auto-analysis pass (alongside the demangler, decompiler,
  * etc.) or strictly after it. Both modes are observed in practice (e.g. when
  * a user re-imports stabs from the Tools menu after an analysis has settled).
@@ -136,8 +136,8 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
                     // sees its own logs in MessageLog.
                     val probe = ImportProbe.install(context)
 
-                    // BYTE_ANALYZER auto-fires on byte changes; on a freshly-
-                    // loaded program nothing has "changed" since the loader put
+                    // BYTE_ANALYZER auto-fires on byte changes; on a freshly-loaded
+                    // program nothing has "changed" since the loader put
                     // bytes down, so we explicitly schedule our analyzer for the
                     // next analysis pass — it then runs at its declared priority
                     // alongside the demangler.
@@ -195,9 +195,9 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             mgr.startAnalysis(monitor)
             mgr.waitForAnalysis(null, monitor)
         }
-        // Ghidra's own per-analyzer wall times. The gradle listener only reports whole-invocation
+        // Ghidra's own per-analyzer wall times. The Gradle listener only reports whole-invocation
         // time, which also carries fixture load, our import and the dumps; this attributes the
-        // analysis share to individual analyzers, so a perf change can be localised without a
+        // analysis share to individual analyzers, so a perf change can be localized without a
         // profiler. Written per fixture×mode alongside the other dumps.
         analysisTimesFile.apply { parentFile.mkdirs() }
             .writeText("total = ${mgr.totalTimeInMillis} ms\n\n${mgr.taskTimesString}")
@@ -480,7 +480,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     }
 
     /**
-     * A 1-byte bool global occupies 1 byte, and its neighbour is reachable.
+     * A 1-byte bool global occupies 1 byte, and its neighbor is reachable.
      *
      * Without `-gstabs+` gcc spells `bool` as an enum over False/True (`gcc/dbxout.c`), losing the
      * width; as a sizeof(int) enum it swallowed the three globals after it, so five of CryptoPP's
@@ -523,7 +523,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         // with no linkage name at all — `_ZNSs4nposE` appears 0 times in crypto_mi_test_gcc421 but
         // 37 times in its _fullstabs twin. There is then nothing to reconcile *from*, so this is a
         // property of the debug info, not of the importer: gate on the link actually being present.
-        val declared = artifacts.harvest.types.values.orEmpty()
+        val declared = artifacts.harvest.types.values
             .mapNotNull { it.body as? TypeDecl.Struct }
             .flatMap { it.fields }
             .any { it.name == "npos" && it.mangled != null }
@@ -589,7 +589,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     @Test
     fun cparserMaterialized() {
         assumeTrue(binaryName == "xapasmcsr.exe", "Skipping: CParser/Token_Type/EAsm specific to xapasmcsr.exe")
-        // CParser, Token_Type and EAsm all canonicalise to the same TypeId because
+        // CParser, Token_Type and EAsm all canonicalize to the same TypeId because
         // gcc reuses local ids inside BINCL blocks per CU. Each must still reach the DTM.
         for (name in listOf("CParser", "Token_Type", "EAsm")) {
             val dt = program.dataTypeManager.allDataTypes.asSequence().firstOrNull { it.name == name }
@@ -840,12 +840,12 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
      * `setApplySignature(false)`, so the other `demanglerStringReplaced`
      * test trivially passes — there's no stub to replace).
      *
-     * Uses [ImportContext.typeRegistry] — the populated registry the
+     * Uses [ImportArtifacts.registry] — the populated registry the
      * importer set at end-of-import. Constructing a fresh one would mean
      * either (a) re-running materializeAll (creates `.conflict`
      * duplicates that race other @Test methods under
      * @Execution(CONCURRENT)) or (b) leaving it empty (findByName always
-     * returns null and we can't test the substitution path at all).
+     * returns null, and we can't test the substitution path at all).
      */
     @Test
     fun demanglerStringReplacedAfterStubInjection() {
@@ -1041,7 +1041,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     @Test
     fun fewConflictRenames() {
         // Ghidra forks a `.conflict` type when two distinct types collide on one (category, name).
-        // Those renames should be the exception — a spike signals a canonicalisation/dedup regression
+        // Those renames should be the exception — a spike signals a canonicalization/dedup regression
         // like the cross-CU TypeId collision fixed in 4b21a6c. Reuses the production census
         // ([conflictCount], the `dtm-conflicts-created` source); corpus-wide it sits at 0.
         //
@@ -1254,12 +1254,13 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
 
         val classStructs = harvest.types.values
             .mapNotNull { it.asStruct() }
-            .filter { (ast, body) -> body.rawKind == AggrKind.CLASS }
+            .filter { (_, body) -> body.rawKind == AggrKind.CLASS }
             .toList()
+        println("${classStructs.size} class structs")
 
         val emptyStructs = harvest.types.values
             .mapNotNull { it.asStruct() }
-            .filter { (ast, body) -> body.fields.isEmpty() && body.methods.isEmpty() }
+            .filter { (_, body) -> body.fields.isEmpty() && body.methods.isEmpty() }
             .toList()
 
         val index = artifacts.index
@@ -1331,7 +1332,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     /**
      * `RegToBinary` is a free function (`_Z11RegToBinary12EnumRegToken`) with a
      * single `reg: EnumRegToken` stack param recorded in the stabs. The function
-     * lookup in [StabsImporter] is by address (not by name) so the param
+     * lookup in [ghistabs.importer.StabsImporter] is by address (not by name) so the param
      * application must succeed regardless of whether the symbol has been
      * demangled yet — i.e. it must work in both modes.
      */
@@ -1357,7 +1358,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
      * Ghidra's demangler runs once at priority ~897 over loader-added
      * symbols; the raw mangled names we set from the stabs (function
      * names in applyAllFunctions) appear later and would be missed.
-     * [StabsImporter.demangleMangledLabels]
+     * [ghistabs.importer.DemanglerReplacer.demangleMangledLabels]
      * sweeps every IMPORTED `_Z` / `__Z` symbol at the end of the import
      * with `DemanglerCmd`, with signature/calling-convention application
      * disabled so our stab-derived prototype and `__thiscall` choice
@@ -1386,7 +1387,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     /**
      * No empty `/Demangler/...` Structure stubs of *known* project types should
      * remain after the importer finishes. This catches the bug where the
-     * candidate-finding loop in [DemanglerReplacer] failed to identify the real
+     * candidate-finding loop in [ghistabs.importer.DemanglerReplacer] failed to identify the real
      * type because the stub itself polluted the name index.
      */
     @Test
@@ -1426,7 +1427,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         // box2d_tests has no detectable inheritance in our scan (no mangled
         // C++ symbols, no `_vptr`, no `~%`, no pseudo-field bitsize
         // anomalies — strings shows pure C). If a future build introduces
-        // C++ paths and we still get 0, this will surface in the run
+        // C++ paths, and we still get 0, this will surface in the run
         // output without flagging the test as failed.
         if (binaryName == "box2d_tests") {
             println("inheritanceWasApplied[$binaryName/$mode]: applied=$applied")
@@ -1466,14 +1467,6 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
                 "${offenders.size} offenders:\n  - " + offenders.joinToString("\n  - "),
         )
     }
-
-    /**
-     * On the mingw fixtures the importer should have promoted class methods
-     * to `__thiscall` (`reparentMethod` calls `func.setCallingConvention`).
-     * On x86-64 ELF the convention exists in the spec but is effectively a
-     * no-op — the assertion intentionally only checks the mingw side, since
-     * the Linux side already has reliable cdecl/sysv handling.
-     */
 
     /**
      * Any DataType we registered in the DTM with a name that's a serialized
@@ -1583,7 +1576,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         )
 
         // CSymLexStream's base at +0 must be CLexStream itself (resolved, not
-        // a synthesised placeholder). That's the cascade: CLexStream's
+        // a synthesized placeholder). That's the cascade: CLexStream's
         // truncate-to-192 made it fit exactly in CSymLexStream's 192-byte gap.
         val csymFields = csym.components.associateBy { it.fieldName ?: "" }
         val baseField = csymFields["_base_CLexStream"]
@@ -1638,7 +1631,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     }
 
     /**
-     * The function-relative address heuristic ([stabAddress]): every `N_SLINE`/`N_LBRAC`/`N_RBRAC`
+     * The function-relative address heuristic ([ghistabs.GenericAddressResolver.stabAddress]): every `N_SLINE`/`N_LBRAC`/`N_RBRAC`
      * record, resolved against its enclosing `N_FUN`, must land in executable memory. A value left
      * un-rebased resolves to a tiny address in no code block. Not asserted against the *enclosing*
      * function specifically — gcc clones ctors/dtors, so a stab function's line range legitimately

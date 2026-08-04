@@ -8,8 +8,8 @@ import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Test
 
 /**
- * Header-include edge cases in [Harvester]. Pure unit tests (Kind 1): TaskMonitor.DUMMY,
- * DummySink and constructed data only — no Program/DataTypeManager.
+ * Header-include edge cases in [Harvester]. Pure unit tests: [ghidra.util.task.TaskMonitor.DUMMY],
+ * [DummySink] and constructed data only — no Program/DataTypeManager.
  */
 class HarvesterGapTest {
     /**
