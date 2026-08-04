@@ -112,9 +112,9 @@ fun namespaceChain(mangled: String): List<String>? = demangle(mangled)?.namespac
 }
 
 /**
- * Apply Ghidra's demangler to the symbol at [addr] (rename + namespace). Signature / calling-
- * convention / disassembly application are off by default — the stab carries richer types than the
- * mangled name. Returns whether the command applied.
+ * Apply Ghidra's demangler to the symbol at [addr] (rename + namespace).
+ * Signature / calling-convention / disassembly application are off by default -
+ * the stab carries richer types than the mangled name. Returns whether the command applied.
  */
 fun Program.applyDemangling(
     addr: Address,

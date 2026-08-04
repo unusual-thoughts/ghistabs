@@ -17,7 +17,7 @@ private val STD_MARKERS = Regex("""/(usr|lib|include)(/[^/]+)?/(mingw|cygwin|c\+
 private fun stripDriveLetter(path: String): String =
     if (path.length >= 2 && path[1] == ':' && path[0].isLetter()) path.substring(2) else path
 
-/** Path segments, drive letter dropped and both separators honoured (stabs mixes `/` and `\`). */
+/** Path segments, drive letter dropped and both separators honored (stabs mixes `/` and `\`). */
 private fun pathSegments(path: String) = stripDriveLetter(path).split('/', '\\').filter { it.isNotEmpty() }
 
 /** Last path segment of a stabs path: `c:/mingw/include/c++/3.2.3/bits/stl_alloc.h` → `stl_alloc.h`. */

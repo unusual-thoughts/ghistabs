@@ -47,7 +47,7 @@ class Virtuals(
 /** Upper bound on vbase/vcall-offset words scanned before giving up on locating the rtti header. */
 private const val MAX_VTABLE_PREFIX_WORDS = 64
 
-/** Pointer-sized word at [a] from initialised memory (endianness-aware), or null if unmapped. */
+/** Pointer-sized word at [a] from initialized memory (endianness-aware), or null if unmapped. */
 private fun Program.readWord(a: Address): Long? = runCatching {
     if (defaultPointerSize == 8) memory.getLong(a) else memory.getInt(a).toLong() and 0xFFFFFFFFL
 }.getOrNull()
@@ -99,9 +99,7 @@ fun Program.layVtable(
 /**
  * Authoritative Itanium `__cxxabiv1` typeinfo struct layouts, adapted from Ghidra's
  * `RTTIGccClassRecoverer`. The implementation of last resort for the gcc-internal
- * `__*_type_info_pseudo` records that are absent from the stabs on bouniafbouniaf etc:
- * [pseudoTypeInfo] maps a stab pseudo-type name to the reference layout. Pointer size and
- * endianness come from the [dtm]'s data organization, so no `Program` is needed.
+ * `__*_type_info_pseudo` records that are absent from the stabs on bouniafbouniaf etc.:
  */
 class RttiStructs(private val dtm: DataTypeManager) {
     private val pointerSize = dtm.dataOrganization.pointerSize

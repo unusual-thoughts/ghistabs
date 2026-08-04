@@ -169,16 +169,16 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
     private val classSourceByName: Map<String, String> by lazy {
         buildMap {
             val bestRank = mutableMapOf<String, Int>()
-            for (ast in typeAsts.values) {
-                val n = ast.name ?: continue
-                val rank = when (ast.body) {
+            for ((_, id, name, body) in typeAsts.values) {
+                val n = name ?: continue
+                val rank = when (body) {
                     is TypeDecl.Struct, is TypeDecl.Enum -> 2
                     is TypeDecl.XRef -> 0
                     else -> 1
                 }
                 if (rank > (bestRank[n] ?: -1)) {
                     bestRank[n] = rank
-                    put(n, ast.id.source.filename)
+                    put(n, id.source.filename)
                 }
             }
         }
@@ -399,7 +399,7 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
         // Scope→header→hash ladder. A type whose enclosing C++ scope is derivable (any member's
         // mangled name yields one) files under that namespace category — matching where Ghidra's
         // this-param class-struct creator looks, so our filled type is the one it reuses instead of
-        // synthesising an empty stub. Header attribution is the fallback for method-less types (C
+        // synthesizing an empty stub. Header attribution is the fallback for method-less types (C
         // aggregates, gcc anonymous copies) AND the collision-breaker: a scope key holding genuinely
         // divergent content (same (scope,name), several bodies) demotes each body to its header key.
         val slots = typeAsts.values

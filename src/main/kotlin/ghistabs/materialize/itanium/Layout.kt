@@ -47,7 +47,7 @@ object Layout {
             return VfptrAction.Insert(targetOffset)
         }
 
-        // Catches the unresolved/synthesised-base case where polymorphism couldn't be proven
+        // Catches the unresolved/synthesized-base case where polymorphism couldn't be proven
         // but the stab layout still puts a base at the vptr offset — base owns the vfptr.
         if (componentAtTargetOffset.fieldName?.let(Itanium::isBaseField) == true) {
             return VfptrAction.SkipInheritedFromBase

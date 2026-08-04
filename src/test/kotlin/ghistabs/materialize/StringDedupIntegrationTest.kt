@@ -76,7 +76,7 @@ class StringDedupIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                 val options = program.getOptions(Program.ANALYSIS_PROPERTIES)
                 program.runTransaction("configure-analysis") {
                     options.setBoolean(ourName, true)
-                    // The analyzer reads its own options from the per-analyzer sub-group, not the top level.
+                    // The analyzer reads its own options from the per-analyzer subgroup, not the top level.
                     options.getOptions(ourName).setBoolean(StabsOptions.SHORTEN_TYPEDEFS, shorten)
                 }
                 mgr.initializeOptions()

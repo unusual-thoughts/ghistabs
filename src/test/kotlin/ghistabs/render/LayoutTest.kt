@@ -94,7 +94,7 @@ class LayoutTest {
     fun `wrapDecompLine splits a long condition at its top-level boolean boundaries`() {
         val text = "if ((a == 1) && (b == 2) && (c == 3)) {"
         val rows = wrapDecompLine(text, depth = 2, minLen = 10)
-        // Cuts at the two depth-1 ` && ` (between the parenthesised clauses), not inside them; head keeps
+        // Cuts at the two depth-1 ` && ` (between the parenthesized clauses), not inside them; head keeps
         // its indent, continuations step in by 2, operators end their rows, the trailing `{` stays put.
         assertEquals(3, rows.size)
         assertEquals(listOf(2, 4, 4), rows.map { it.first })

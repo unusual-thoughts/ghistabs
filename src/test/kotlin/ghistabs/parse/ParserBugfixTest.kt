@@ -283,7 +283,7 @@ class ParserBugfixTest {
     }
 
     /**
-     * Deeply nested InlineDef: InlineDef containing InlineDef containing Struct.
+     * Deeply nested InlineDef: InlineDef, containing InlineDef, containing Struct.
      * Tests that the parser correctly handles arbitrary nesting depth of inline
      * type definitions without recursion issues.
      *

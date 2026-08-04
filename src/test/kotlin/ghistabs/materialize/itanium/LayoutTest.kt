@@ -60,7 +60,7 @@ class VfptrDecisionTest {
 
     @Test
     fun `parserEmittedVptrAtOffset - replace action with old name`() {
-        val snapshot = FirstComponentSnapshot(fieldName = "_vptr\$Foo", offsetBytes = 0, isUndefined = false)
+        val snapshot = FirstComponentSnapshot(fieldName = $$"_vptr$Foo", offsetBytes = 0, isUndefined = false)
         val action = Layout.chooseVfptrAction(
             hasPolymorphicBaseSubobject = false,
             parserVptrOffsetBytes = 0,
@@ -70,7 +70,7 @@ class VfptrDecisionTest {
         assertTrue(action is VfptrAction.Replace)
         val replace = action as VfptrAction.Replace
         assertTrue(replace.offsetBytes == 0)
-        assertTrue(replace.wasFieldName == "_vptr\$Foo")
+        assertTrue(replace.wasFieldName == $$"_vptr$Foo")
     }
 
     @Test
@@ -91,7 +91,7 @@ class VfptrDecisionTest {
     @Test
     fun `baseSubobjectAtOffset - skip inherited (no collision)`() {
         // bouniaf → ios_base cascade: the unresolved base occupies offset 0 as
-        // a synthesised `_base_unknown_0` field. firstPolymorphicBase couldn't
+        // a synthesized `_base_unknown_0` field. firstPolymorphicBase couldn't
         // prove polymorphism (base type doesn't resolve), but the layout still
         // hands us a base subobject at the vfptr offset; we must not overwrite it.
         val snapshot = FirstComponentSnapshot(fieldName = "_base_unknown_0", offsetBytes = 0, isUndefined = false)

@@ -93,7 +93,7 @@ class Parser(src: String) {
 
     private fun Cursor.parseSymbol(): SymbolDecl<LocalTypeId> {
         // gcc emits anonymous aggregates/enums with a *blank* (whitespace) tag name, not an empty
-        // one. Normalise blank → "" here so "anonymous" is uniformly `name.isNullOrEmpty()` for every
+        // one. Normalize blank → "" here so "anonymous" is uniformly `name.isNullOrEmpty()` for every
         // downstream consumer (ghidraName, the §20 content merge, nameAnonymousTypedefTargets) — a
         // stray " " otherwise reads as a distinct named type and silently blocks unification.
         val name = readSymbolName().ifBlank { "" }
@@ -579,7 +579,7 @@ class Parser(src: String) {
      *
      * Returns `TypeDecl.Float` for the gcc float encoding `r<base>;<NBYTES>;0;`
      * (i.e. `min > 0 && max == 0`) where `<base>` is decorative per the stabs
-     * spec — see [TypeDecl.Float] kdoc. Otherwise returns [TypeDecl.Range].
+     * spec — see [TypeDecl.Float] KDoc. Otherwise, returns [TypeDecl.Range].
      *
      * Mirror of gdb/stabsread.c:read_range_type.
      */
