@@ -45,7 +45,7 @@ class TypeStore(
      * Accumulate asts with first-writer-wins on GlobalTypeId. XRef placeholders are replaced
      * by any concrete body. Collisions go into [collisions] for post-harvest classification —
      * no per-collision Ref-walking here (slow on template-heavy binaries);
-     * `Harvest.classifyCollisions` runs once at the end against a memoized hashCache.
+     * `Harvest.classifyCollisions` runs once at the end against a memoized contentCache.
      */
     private fun append(vararg asts: Type) {
         val (colliding, good) = asts.partition { ast ->

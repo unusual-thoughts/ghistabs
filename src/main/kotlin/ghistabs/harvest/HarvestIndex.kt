@@ -11,7 +11,7 @@ import ghistabs.parse.*
  * and content-distinct collision filtering.
  */
 class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true, sink: DiagnosticSink = DummySink) :
-    ContentHasher(),
+    ContentIndex(),
     DiagnosticSink by sink {
     private val typeAsts get() = harvest.types
 
@@ -34,7 +34,7 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
     // lazy` delegate field is only assigned when construction reaches its declaration — an init block
     // placed above them reads a still-null delegate (NPE, silently swallowed under CONCURRENT analysis).
     init {
-        for ((_, id, _, body) in typeAsts.values) hashCache[id] = content(body)
+        for ((_, id, _, body) in typeAsts.values) contentCache[id] = content(body)
     }
 
     override fun byId(id: GlobalTypeId): Type? = typeAsts[id]

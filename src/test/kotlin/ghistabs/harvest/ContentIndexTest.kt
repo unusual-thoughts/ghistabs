@@ -8,8 +8,8 @@ import ghistabs.parse.TypeDecl.Struct.Method
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 
-open class TestHasher(val asts: Map<GlobalTypeId, Type>) :
-    ContentHasher(),
+open class TestContentIndex(val asts: Map<GlobalTypeId, Type>) :
+    ContentIndex(),
     DiagnosticSink by DummySink {
     override fun byId(id: GlobalTypeId): Type? = asts[id]
     override fun byXRef(xref: TypeDecl.XRef<GlobalTypeId>, silent: Boolean): Type? = null
@@ -25,7 +25,7 @@ open class TestHasher(val asts: Map<GlobalTypeId, Type>) :
  * inner Refs point at CU-local primitive-type ids". After this hash
  * change those collide-into-same instead of collide-into-different.
  */
-class ContentHashTest {
+class ContentIndexTest {
     private val intInCU1 = Type(
         cu = SourceFile.CUSource("a.cpp"),
         id = GlobalTypeId(SourceFile.CUSource("a.cpp"), 1),
@@ -53,7 +53,7 @@ class ContentHashTest {
         charInCU1.id to charInCU1,
     )
 
-    private val oracle = TestHasher(asts)
+    private val oracle = TestContentIndex(asts)
 
     /**
      * `Ref(cu=a.cpp, n=1)` and `Ref(cu=b.cpp, n=1)` both point at "int"
@@ -99,7 +99,7 @@ class ContentHashTest {
             body = TypeDecl.WithSizeAttr(8, TypeDecl.Builtin(-16)),
         )
         val store = mapOf(boolInCU1.id to boolInCU1, boolInCU2.id to boolInCU2)
-        val o = TestHasher(store)
+        val o = TestContentIndex(store)
         assertEquals(o.content(boolInCU1.body), o.content(boolInCU2.body))
         // And the Refs into them — what the surrounding struct's field
         // type expression actually looks like — must agree too.
@@ -234,7 +234,7 @@ class ContentHashTest {
             body = TypeDecl.Pointer(TypeDecl.Ref(intInCU1.id)),
         )
         val asts2 = asts + (pointerToInt.id to pointerToInt)
-        val oracle2 = TestHasher(asts2)
+        val oracle2 = TestContentIndex(asts2)
         // Form A: a Ref pointing at the Pointer-to-int type.
         val asRef = TypeDecl.Ref(pointerToInt.id)
         // Form B: the Pointer inlined at a different id.
@@ -304,7 +304,7 @@ class ContentHashTest {
         val h = oracle.content(intInCU1.body)
         // Plain assertion that it returned; if it had infinite-looped
         // we'd never get here.
-        assertNotEquals(ContentHasher.LayoutContent(), h)
+        assertNotEquals(ContentIndex.LayoutContent(), h)
     }
 
     /**
@@ -395,12 +395,12 @@ class ContentHashTest {
         val intAst =
             Type(cu = keywordsCu, id = intId, name = "int", body = TypeDecl.Range(intId, -2147483648L, 2147483647L))
         val store = mapOf(pairId to pairCanonical, ptrAId to ptrA, ptrBId to ptrB, intId to intAst)
-        val storeOracle = TestHasher(store)
+        val storeOracle = TestContentIndex(store)
 
         // Pre-populate the cache the same way the dump test does:
         // hash every TypeAst.body top-level, then store under its id.
         for ((_, id, _, body) in store.values) {
-            storeOracle.hashCache[id] = storeOracle.content(body)
+            storeOracle.contentCache[id] = storeOracle.content(body)
         }
 
         val h0 = storeOracle.content(variant0)
@@ -464,7 +464,7 @@ class ContentHashTest {
             body = TypeDecl.Pointer(TypeDecl.Ref(pairId)),
         )
         val store = mapOf(ptrInA.id to ptrInA, ptrInB.id to ptrInB)
-        val storeOracle = TestHasher(store)
+        val storeOracle = TestContentIndex(store)
 
         // Form A: a Ref to ptrInA.
         val formA = TypeDecl.Ref(ptrInA.id)
@@ -481,7 +481,7 @@ class ContentHashTest {
     /**
      * gcc emits a virtual as VIRTUAL (vtoff set) in its defining CU and NORMAL (vtoff null) elsewhere,
      * and reorders methods per CU: layout-identical, but the method flags/order never enter the DTM
-     * struct. [ContentHasher.contentHash] drops a struct's own methods, so the two forms hash equal —
+     * struct. [ContentIndex.contentHash] drops a struct's own methods, so the two forms hash equal —
      * a scope/canonical group isn't split over that per-CU method noise (TypeResolver §A/§B).
      */
     @Test

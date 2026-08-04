@@ -13,7 +13,7 @@ import java.util.*
  * `XRef(STRUCT, "Foo")` resolves to the same struct content as a `Ref(id_of_Foo)`. Is a
  * [DiagnosticSink] so resolution failures are reported where they are detected.
  */
-abstract class ContentHasher(val hashCache: MutableMap<GlobalTypeId, LayoutContent> = mutableMapOf()) :
+abstract class ContentIndex(val contentCache: MutableMap<GlobalTypeId, LayoutContent> = mutableMapOf()) :
     DiagnosticSink {
     abstract fun byId(id: GlobalTypeId): Type?
     abstract fun byXRef(xref: TypeDecl.XRef<GlobalTypeId>, silent: Boolean = false): Type?
@@ -32,7 +32,7 @@ abstract class ContentHasher(val hashCache: MutableMap<GlobalTypeId, LayoutConte
      *  - Struct methods and static fields are dropped (see the Struct branch), so layout-identical
      *    classes compare equal across CUs regardless of per-CU method virt/order noise.
      *
-     * Cycles break via [visited]: a re-entry yields the empty back-edge marker. [hashCache] memoizes
+     * Cycles break via [visited]: a re-entry yields the empty back-edge marker. [contentCache] memoizes
      * successful (non-back-edge) results per id, which is also what makes the graph shared.
      */
     fun content(decl: TypeDecl<GlobalTypeId>, visited: Set<GlobalTypeId> = emptySet()) = decl.describe(visited)
@@ -84,7 +84,7 @@ abstract class ContentHasher(val hashCache: MutableMap<GlobalTypeId, LayoutConte
 
     /**
      * Resolve [id] and recurse into the referenced body, memoizing successful (non-back-edge) results in
-     * [hashCache] — which is also what makes the result a shared DAG rather than an expanded tree.
+     * [contentCache] — which is also what makes the result a shared DAG rather than an expanded tree.
      *
      * Mutually-recursive types: first computation wins, so where the back-edge falls depends on traversal
      * order. That is only safe because there is exactly one traversal and one cache. An earlier design
@@ -95,11 +95,11 @@ abstract class ContentHasher(val hashCache: MutableMap<GlobalTypeId, LayoutConte
      */
     private fun refKey(id: GlobalTypeId, visited: Set<GlobalTypeId>): LayoutContent {
         if (id in visited) return LayoutContent()
-        hashCache[id]?.let { return it }
+        contentCache[id]?.let { return it }
         // Source-independent fallback for any unresolved id that slipped past the globalize-time Builtin
         // hoist: keyed on `n` alone, since the full GlobalTypeId carries `source` and would let per-CU
         // slots for the same logical builtin diverge.
-        return byId(id)?.body?.describe(visited + id)?.also { hashCache[id] = it }
+        return byId(id)?.body?.describe(visited + id)?.also { contentCache[id] = it }
             ?: LayoutContent(GlobalTypeId::class.java, listOf(id.n))
     }
 

@@ -18,7 +18,7 @@ import ghistabs.diagnose.CapturingSink
 import ghistabs.diagnose.defaultContext
 import ghistabs.diagnose.dumpJson
 import ghistabs.diagnose.writeRegistryDump
-import ghistabs.harvest.Harvester
+import ghistabs.harvest.ContentIndex
 import ghistabs.importer.ImportArtifacts
 import ghistabs.importer.ImportContext
 import ghistabs.importer.ImportProbe
