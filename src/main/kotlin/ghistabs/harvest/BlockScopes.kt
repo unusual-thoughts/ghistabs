@@ -78,31 +78,28 @@ internal class BlockTreeBuilder {
      * *after* the body, so every function-scope symbol carries whichever file the last line note in
      * the function happened to be in.
      */
-    fun finish(lines: List<LineEntry>, functionSource: String) = buildList {
-        fun BlockScope.attribute(inherited: String) {
+    fun finish(lines: List<LineEntry>, functionSource: String): Pair<List<Symbol>, List<BlockScope>> {
+        val flat = mutableListOf<Symbol>()
+
+        // Rebuilds rather than repointing in place: the tree and the flat list hand out the *same*
+        // corrected copies, so they cannot disagree, and a Symbol stays immutable — it is reachable
+        // from BlockScope, from StabFunction.locals, and from maps keyed on either.
+        fun BlockScope.attribute(inherited: String): BlockScope {
             val ownLines = lines.filter { entry ->
                 entry.addr in start..<end && children.none { entry.addr in it.start..<it.end }
             }
             val blockSource = ownLines.map { it.source }.toSet().singleOrNull() ?: inherited
-            for (local in locals) {
+            val attributed = locals.map { local ->
                 val sourcesAtLine = ownLines.filter { it.line == local.declLine }.map { it.source }.toSet()
-                local.sourceFile = sourcesAtLine.singleOrNull() ?: blockSource
-                add(local)
+                local.copy(sourceFile = sourcesAtLine.singleOrNull() ?: blockSource).also { flat += it }
             }
-            for (child in children) {
-                child.attribute(blockSource)
-            }
+            return copy(locals = attributed, children = children.map { it.attribute(blockSource) })
         }
 
-        for (root in roots) {
-            root.attribute(functionSource)
-        }
-
-        for (local in pending) {
-            local.sourceFile = functionSource
-            add(local)
-        }
-    } to roots
+        val blocks = roots.map { it.attribute(functionSource) }
+        pending.mapTo(flat) { it.copy(sourceFile = functionSource) }
+        return flat to blocks
+    }
 }
 
 /**
