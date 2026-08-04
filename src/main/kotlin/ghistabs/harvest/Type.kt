@@ -61,9 +61,9 @@ data class Symbol(
     val body: SymbolDecl<GlobalTypeId>,
     val rawValue: Long,
     val declLine: Int = 0,
-    /** N_SOL in effect when the record was read — except for function-scope symbols, where the
-     *  N_SOL is meaningless and [resolveBlocks] repoints this at the block's real source. */
-    var sourceFile: String? = null,
+    /** N_SOL in effect when the record was read — except for function-scope symbols, where the N_SOL
+     *  is meaningless, so [BlockTreeBuilder.finish] rebuilds them with the block's real source. */
+    val sourceFile: String? = null,
     /** Enclosing function (mangled/linkage name) when harvested inside a function scope — set for
      *  procedure-scope (`V`) statics so the applier can annotate which function owns them. */
     val enclosingFunction: String? = null,
