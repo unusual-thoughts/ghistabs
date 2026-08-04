@@ -5,18 +5,14 @@ import ghidra.program.model.address.AddressSpace
 import ghidra.program.model.address.GenericAddressSpace
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
-import ghistabs.diagnose.CapturingSink
-import ghistabs.diagnose.DiagnosticSink
-import ghistabs.diagnose.DummySink
-import ghistabs.diagnose.Level
-import ghistabs.diagnose.StabsDiagnostics
+import ghistabs.diagnose.*
 import ghistabs.harvest.Harvest
+import ghistabs.harvest.HarvestIndex
 import ghistabs.harvest.Harvester
 import ghistabs.harvest.StabCursor
-import ghistabs.harvest.TypeResolver
 import ghistabs.importer.AddressResolver
 import ghistabs.importer.ImportContext
-import ghistabs.materialize.TypeRegistry
+import ghistabs.materialize.DataTypeRegistry
 
 /**
  * Program-less [AddressResolver] for harvest unit tests: builds addresses in a standalone generic space
@@ -35,11 +31,13 @@ object GenericAddressResolver : AddressResolver {
     override fun resolve(name: String): Address? = null
 }
 
-fun dummyHarvester() = Harvester(
-    monitor = TaskMonitor.DUMMY,
-    sink = DummySink,
-    resolver = GenericAddressResolver,
-)
+fun dummyHarvester() = CountingSink().let {
+    it to Harvester(
+        monitor = TaskMonitor.DUMMY,
+        sink = it,
+        resolver = GenericAddressResolver,
+    )
+}
 
 fun dummyCursor() = StabCursor(GenericAddressResolver, DummySink)
 
@@ -54,7 +52,7 @@ fun Program.defaultContext() = ImportContext(
     StabsDiagnostics(),
 )
 
-fun ImportContext<*>.defaultTypeRegistry(): TypeRegistry {
+fun ImportContext<*>.defaultTypeRegistry(): DataTypeRegistry {
     val harvest = Harvest.of(mapOf())
-    return TypeRegistry(dtm, this, diagnostics, harvest, TypeResolver.Empty)
+    return DataTypeRegistry(dtm, this, diagnostics, harvest, HarvestIndex.Empty)
 }

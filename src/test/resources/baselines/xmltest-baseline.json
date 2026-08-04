@@ -156,10 +156,6 @@
             "min": 5,
             "max": 5
         },
-        "harvest-parse-errors": {
-            "min": 0,
-            "max": 0
-        },
         "harvest-records-parsed": {
             "min": 10338,
             "max": 10338
@@ -271,6 +267,10 @@
         "static-local-plate": {
             "min": 91,
             "max": 91
+        },
+        "static-skipped": {
+            "min": 1,
+            "max": 1
         },
         "vfptr-normalized": {
             "min": 4,

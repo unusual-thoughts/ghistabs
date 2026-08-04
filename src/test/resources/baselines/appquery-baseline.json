@@ -148,10 +148,6 @@
             "min": 31,
             "max": 31
         },
-        "harvest-parse-errors": {
-            "min": 0,
-            "max": 0
-        },
         "harvest-records-parsed": {
             "min": 12245,
             "max": 12245
@@ -281,12 +277,16 @@
             "max": 37
         },
         "reglocal-add-success": {
-            "min": 190,
-            "max": 190
+            "min": 437,
+            "max": 437
+        },
+        "reglocal-renamed-scope": {
+            "min": 247,
+            "max": 247
         },
         "reglocal-skipped-dup-local": {
-            "min": 286,
-            "max": 286
+            "min": 39,
+            "max": 39
         },
         "reglocal-skipped-dup-param": {
             "min": 345,
@@ -347,10 +347,6 @@
         "vtable-failed-truly-missing": {
             "min": 2,
             "max": 2
-        },
-        "xref-base-tag-resolved": {
-            "min": 24,
-            "max": 24
         },
         "xref-undefined": {
             "min": 52,

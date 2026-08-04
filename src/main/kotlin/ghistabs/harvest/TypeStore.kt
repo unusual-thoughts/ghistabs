@@ -3,13 +3,15 @@ package ghistabs.harvest
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.DummySink
 import ghistabs.parse.*
+import ghistabs.parse.TypeDecl.Struct.Base
+import ghistabs.parse.TypeDecl.Struct.Field
 
 typealias CollisionBucket = MutableSet<TypeDecl<GlobalTypeId>>
 typealias NameBuckets = MutableMap<String, CollisionBucket>
 typealias Collisions = MutableMap<GlobalTypeId, NameBuckets>
 
-class AstStore(
-    private val byId: MutableMap<GlobalTypeId, TypeAst> = mutableMapOf(),
+class TypeStore(
+    private val byId: MutableMap<GlobalTypeId, Type> = mutableMapOf(),
     private val collisions: Collisions = mutableMapOf(),
     sink: DiagnosticSink = DummySink,
 ) : DiagnosticSink by sink {
@@ -18,13 +20,13 @@ class AstStore(
      * Gather TypeAsts for every InlineDef in [sym]. The nested asts inherit the
      * enclosing declaration's source location.
      */
-    fun hoistSymbolDefs(sym: SymbolRecord, cu: SourceFile.CUSource) {
-        fun TypeDecl<GlobalTypeId>.walk(): List<TypeAst> = when (this) {
+    fun hoistSymbolDefs(sym: Symbol, cu: SourceFile.CUSource) {
+        fun TypeDecl<GlobalTypeId>.walk(): List<Type> = when (this) {
             // Emit the InlineDef ast AND recurse — gcc nests them (e.g. Method whose
             // return is an inline-defined Pointer-to-X). Without recursion the inner
             // ids are referenced but never registered → dangling Refs + false collisions.
             is TypeDecl.InlineDef -> listOf(
-                TypeAst(
+                Type(
                     cu,
                     id,
                     null,
@@ -34,7 +36,7 @@ class AstStore(
                 ),
             ) + body.walk()
 
-            else -> children.flatMap { it.walk() }
+            else -> children.flatMap { field -> field.flatMap { it.walk() } }
         }
         append(*sym.body.type.walk().toTypedArray())
     }
@@ -45,7 +47,7 @@ class AstStore(
      * no per-collision Ref-walking here (slow on template-heavy binaries);
      * `Harvest.classifyCollisions` runs once at the end against a memoized hashCache.
      */
-    private fun append(vararg asts: TypeAst) {
+    private fun append(vararg asts: Type) {
         val (colliding, good) = asts.partition { ast ->
             byId[ast.id]?.let { it.body is TypeDecl.XRef } == false
         }
@@ -85,7 +87,7 @@ class AstStore(
         byId.putAll(good.map { it.id to it })
     }
 
-    operator fun plusAssign(ast: TypeAst) {
+    operator fun plusAssign(ast: Type) {
         append(ast)
     }
 
@@ -100,12 +102,12 @@ class AstStore(
      * dangling — synthesise an XRef-stub named after the field for cross-CU resolution.
      */
     private fun synthesizeXRefStubsForDanglingInheritanceRefs() {
-        val synthetic = mutableListOf<TypeAst>()
+        val synthetic = mutableListOf<Type>()
         // Outer struct id → its inheritance-pseudo-fields. Rewriting moves them to `bases`
         // so the materializer's BaseInsertionPlanner / firstPolymorphicBase / vtable wiring
         // sees the inheritance.
         val outerRewrites =
-            mutableMapOf<GlobalTypeId, MutableList<FieldDecl<GlobalTypeId>>>()
+            mutableMapOf<GlobalTypeId, MutableList<Field<GlobalTypeId>>>()
         for (ast in byId.values) {
             val struct = ast.body as? TypeDecl.Struct ?: continue
             val structBits = struct.sizeBytes * 8
@@ -120,7 +122,7 @@ class AstStore(
                 // bound Refs directly).
                 if (ref.id in byId) continue
                 synthetic.add(
-                    TypeAst(
+                    Type(
                         cu = ast.cu,
                         id = ref.id,
                         name = field.name,
@@ -143,12 +145,7 @@ class AstStore(
             val struct = outer.body as? TypeDecl.Struct ?: continue
             val pseudoSet = pseudoFields.toSet()
             val newBases = struct.bases + pseudoFields.map { f ->
-                BaseDecl(
-                    type = f.type,
-                    isVirtual = false,
-                    access = Access.PUBLIC,
-                    offsetBits = f.offsetBits,
-                )
+                Base(type = f.type, isVirtual = false, access = Access.PUBLIC, offsetBits = f.offsetBits)
             }
             val newFields = struct.fields.filter { it !in pseudoSet }
             byId[outerId] = outer.copy(
@@ -193,7 +190,7 @@ class AstStore(
     /**
      * `typedef struct {…} Name;` reaches us as an anonymous aggregate + a same-named typedef that
      * inline-defines it. C-semantically the aggregate's name *is* the typedef's, so adopt it, so the
-     * anonymous struct/enum carries the real name and [TypeResolver.byCanonicalKey] can merge it with
+     * anonymous struct/enum carries the real name and [HarvestIndex.byLocation] can merge it with
      * the named copy from another header spelling (render-backlog §20).
      */
     private fun nameAnonymousTypedefTargets() {
@@ -202,7 +199,7 @@ class AstStore(
         if (renames.isNotEmpty()) debug("typedef-named-anon-aggregate", count = renames.size.toLong())
     }
 
-    fun toHarvest(): Pair<Map<GlobalTypeId, TypeAst>, Map<GlobalTypeId, Map<String, Set<TypeDecl<GlobalTypeId>>>>> {
+    fun toHarvest(): Pair<Map<GlobalTypeId, Type>, Map<GlobalTypeId, Map<String, Set<TypeDecl<GlobalTypeId>>>>> {
         synthesizeXRefStubsForDanglingInheritanceRefs()
         nameAnonymousTypedefTargets()
         return byId to collisions
@@ -211,4 +208,4 @@ class AstStore(
 
 /** A bare forward-declaration `name:t(cu,n)` parses as a Ref to its own id (gcc's explicit void
  *  `(x,y)=(x,y)` is a distinct TypeDecl.Void, caught at parser stage). */
-private fun TypeAst.isSelfRef() = body.let { it is TypeDecl.Ref && it.id == id }
+private fun Type.isSelfRef() = body.let { it is TypeDecl.Ref && it.id == id }

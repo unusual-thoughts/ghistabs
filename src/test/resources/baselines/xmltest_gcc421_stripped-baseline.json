@@ -100,10 +100,6 @@
             "min": 6,
             "max": 6
         },
-        "global-skipped": {
-            "min": 4,
-            "max": 4
-        },
         "harvest-collisions-divergent": {
             "min": 0,
             "max": 0
@@ -135,10 +131,6 @@
         "harvest-globals": {
             "min": 4,
             "max": 4
-        },
-        "harvest-parse-errors": {
-            "min": 0,
-            "max": 0
         },
         "harvest-records-parsed": {
             "min": 6485,
@@ -251,6 +243,10 @@
         "static-local-plate": {
             "min": 2,
             "max": 2
+        },
+        "static-skipped": {
+            "min": 4,
+            "max": 4
         },
         "text-data-no-coverage": {
             "min": 452,

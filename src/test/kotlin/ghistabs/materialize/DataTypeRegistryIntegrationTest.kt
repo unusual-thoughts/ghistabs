@@ -29,7 +29,7 @@ import org.junit.jupiter.api.Test
  * via the full StabsImporter pipeline.
  */
 @Tag("integration")
-class TypeRegistryIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
+class DataTypeRegistryIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     private lateinit var builder: ProgramBuilder
 
     @BeforeEach

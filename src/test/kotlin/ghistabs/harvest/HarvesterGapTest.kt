@@ -36,7 +36,7 @@ class HarvesterGapTest {
     /** Collisions surface on [Harvest.rawCollisions] for post-hoc diagnostics; no production consumer reads it. */
     @Test
     fun `rawCollisions is accessible on an empty harvest`() {
-        val harvest = dummyHarvester().harvest(emptyList())
+        val harvest = dummyHarvester().second.harvest(emptyList())
         assertNotNull(harvest.rawCollisions)
     }
 }

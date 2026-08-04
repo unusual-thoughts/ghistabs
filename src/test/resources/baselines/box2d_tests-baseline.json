@@ -116,10 +116,6 @@
             "min": 3,
             "max": 3
         },
-        "harvest-parse-errors": {
-            "min": 0,
-            "max": 0
-        },
         "harvest-records-parsed": {
             "min": 66926,
             "max": 66926

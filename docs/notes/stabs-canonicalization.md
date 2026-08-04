@@ -156,7 +156,7 @@ A `GlobalTypeId(source, n)` globalizes a `LocalTypeId` by replacing the `file` c
 Two types are considered identical (and deduplicated) if:
 
 1. **Same GlobalTypeId:** `GlobalTypeId(source, n)` must match exactly. This includes both the `SourceFile` instance and the type index `n`.
-2. **Same content hash:** The `TypeAst` bodies must hash identically, ensuring that types with the same ID are also semantically identical.
+2. **Same content hash:** The `Type` bodies must hash identically, ensuring that types with the same ID are also semantically identical.
 
 If a later type with the same `GlobalTypeId` but a different hash is encountered, it is logged as a collision, and the first-writer-wins policy applies (the existing type is retained).
 
@@ -279,10 +279,10 @@ When `globalize()` encounters an `TypeDecl.InlineDef(localId, body)` node (a typ
 
 ### walkDefinitions() Traversal
 
-After globalization, `walkDefinitions()` performs a second pass through the tree, collecting all `TypeAst` nodes emitted by `InlineDef` side effects.
+After globalization, `walkDefinitions()` performs a second pass through the tree, collecting all `Type` nodes emitted by `InlineDef` side effects.
 
-- **Purpose:** Ensure that every type node, no matter how deeply nested, is added to the global `TypeAst` collection via `appendAsts()`.
-- **Behavior:** Visits all nodes in depth-first order; when an `InlineDef` is encountered, yields the emitted `TypeAst`.
+- **Purpose:** Ensure that every type node, no matter how deeply nested, is added to the global `Type` collection via `appendAsts()`.
+- **Behavior:** Visits all nodes in depth-first order; when an `InlineDef` is encountered, yields the emitted `Type`.
 
 ### Deep Nesting Example
 
@@ -399,7 +399,7 @@ The `Attribution.categoryFor()` method (**src/main/kotlin/ghistabs/builder/Attri
 
 **D2 fix (2026-06-10):** A new step 3 routes types whose entire defining-source set is `HeaderSource` (and shares a single filename basename) to `/headers/<basename>/`. The branch sits before the single-CU shortcut (so single `HeaderSource` defs land in `/headers/<basename>/` rather than `/<basename>/`) and converges multi-defining cases caused by D1 forward-EXCL placeholder divergence — distinct `HeaderFile` instances for the same physical header still resolve to the same category. Cross-header multi-defining cases (different basenames) intentionally fall through to step 5. The new route increments `attribution-routed-headers`; the existing stdlib route still increments `attribution-routed-std`; both go through the same `recordAttributionTrace(...counter)` helper.
 
-**Diagnostic companion:** `AttributionTraceDump` (**src/main/kotlin/ghistabs/diag/AttributionTraceDump.kt**) logs the routing decision for each type. Its downstream consumer in `TypeRegistry` or elsewhere was not audited by the four commits.
+**Diagnostic companion:** `AttributionTraceDump` (**src/main/kotlin/ghistabs/diag/AttributionTraceDump.kt**) logs the routing decision for each type. Its downstream consumer in `DataTypeRegistry` or elsewhere was not audited by the four commits.
 
 **Deviation rating:** D2 (fixed 2026-06-10) — `categoryFor()` now treats `HeaderSource` as a distinct case.
 
@@ -417,17 +417,17 @@ Pre-seeding ensures a stable `IncludeContext` per CU upfront, avoiding the need 
 
 ### 7.3 walkDefinitions() InlineDef Naming
 
-The `walkDefinitions()` method (**src/main/kotlin/ghistabs/parser/Harvest.kt** lines 375–400) traverses a `TypeDecl` tree and emits `TypeAst` nodes for any `InlineDef` bodies found. When `walkDefinitions()` encounters an `InlineDef(localId, body)`, it emits a `TypeAst` with name `"${decl.id}"` (the string representation of the `GlobalTypeId`, e.g., `[<HeaderSource>,42]` for an anonymous type).
+The `walkDefinitions()` method (**src/main/kotlin/ghistabs/parser/Harvest.kt** lines 375–400) traverses a `TypeDecl` tree and emits `Type` nodes for any `InlineDef` bodies found. When `walkDefinitions()` encounters an `InlineDef(localId, body)`, it emits a `Type` with name `"${decl.id}"` (the string representation of the `GlobalTypeId`, e.g., `[<HeaderSource>,42]` for an anonymous type).
 
 **Rationale:** Anonymous types in stabs have no textual name in the grammar; the name is synthesized from the type ID itself.
 
 **Note:** This naming convention is not derived from the stabs spec — the spec has no concept of a global name for anonymous types. The choice to use the ID as a name is an implementation convention, not spec-grounded.
 
-**Deviation rating:** D4 (correct / convention) — anonymous `TypeAst` naming from `walkDefinitions()` is a local convention not spec-grounded, but it is correct.
+**Deviation rating:** D4 (correct / convention) — anonymous `Type` naming from `walkDefinitions()` is a local convention not spec-grounded, but it is correct.
 
 ### 7.4 rawByIdSnapshot: Removed Field with Vestigial Documentation
 
-The `rawByIdSnapshot` field existed in the prior TypeRegistry implementation (before commit 7d2bc56, "rip out stupid canonicalization") as a snapshot map of `TypeId` → `TypeAst` used during type resolution. It was removed during the refactoring that introduced the `GlobalTypeId` and `SourceFile` model.
+The `rawByIdSnapshot` field existed in the prior TypeRegistry implementation (before commit 7d2bc56, "rip out stupid canonicalization") as a snapshot map of `TypeId` → `Type` used during type resolution. It was removed during the refactoring that introduced the `GlobalTypeId` and `SourceFile` model.
 
 **Current status (post-refactor):** The field no longer exists in the codebase. However, four comments still reference it as a conceptual part of the type-lookup cascade:
 
@@ -436,9 +436,9 @@ The `rawByIdSnapshot` field existed in the prior TypeRegistry implementation (be
 - **src/main/kotlin/ghistabs/builder/TypeRegistry.kt:462** — Comment: "Truly-missing classifier: rawByIdSnapshot already exhausted above"
 - **src/main/kotlin/ghistabs/builder/ResolverDecision.kt:40** — KDoc on `classifyRef()`: "@param knownTypeIds All TypeIds that were observed in the harvest (from rawByIdSnapshot)"
 
-**What it was:** The field was a snapshot of the Harvest's `typeAsts` map, created at the start of materialization to provide a fallback lookup when a type reference could not be resolved via `byId` or `placeholders`. It represented the complete set of types observed during the harvest phase.
+**What it was:** The field was a snapshot of the Harvest's `types` map, created at the start of materialization to provide a fallback lookup when a type reference could not be resolved via `byId` or `placeholders`. It represented the complete set of types observed during the harvest phase.
 
-**Why it was removed:** The new `GlobalTypeId`-based model and `TypeResolver` make the snapshot unnecessary. Types are now resolved via `typeResolver.getTypeFor(GlobalTypeId)`, which queries the `Harvest.typeAsts` map directly, eliminating the need for an intermediate snapshot.
+**Why it was removed:** The new `GlobalTypeId`-based model and `HarvestIndex` make the snapshot unnecessary. Types are now resolved via `typeResolver.getTypeFor(GlobalTypeId)`, which queries the `Harvest.typeAsts` map directly, eliminating the need for an intermediate snapshot.
 
 **Current resolution cascade:** `tryGetExisting(gId)` → `byId[gId]` (Ghidra already-materialized) → `placeholders[gId]` (forward-ref placeholder) → `typeResolver.getTypeFor(gId)` (query Harvest.typeAsts). The `rawByIdSnapshot` references are **vestigial documentation artifacts** that describe an old strategy no longer needed.
 
@@ -466,7 +466,7 @@ The refactor commits `3f2e566..3a40357` introduced a new type-ID and deduplicati
 - **HeaderRegistry** — Global cross-CU registry mapping `(filename, checksum)` → `HeaderFile` instance (singleton per key).
 - **IncludeContext** — Per-CU state machine managing the include-block stack and fileNum-to-header mappings.
 - **globalize()** — Recursive descent replacing `LocalTypeId` refs with `GlobalTypeId` refs during `passA()`.
-- **walkDefinitions()** — Traversal collecting all `TypeAst` nodes emitted by inline-type side effects.
+- **walkDefinitions()** — Traversal collecting all `Type` nodes emitted by inline-type side effects.
 - **appendAsts()** — Collision policy and cross-CU deduplication: same `GlobalTypeId` with identical hash = deduplicated; same ID with different hash = collision logged.
 
 ### 8.2 What Was Removed
@@ -474,7 +474,7 @@ The refactor commits `3f2e566..3a40357` introduced a new type-ID and deduplicati
 Commit 7d2bc56 ("rip out stupid canonicalization") removed a name-based deduplication strategy and related infrastructure:
 
 1. **ContentHash class:** A custom hash function that computed content-based hashes of `TypeDecl` trees for deduplication.
-2. **rawByIdSnapshot field:** A snapshot map of `TypeId` → `TypeAst` used for fallback type lookup when refs were unresolved.
+2. **rawByIdSnapshot field:** A snapshot map of `TypeId` → `Type` used for fallback type lookup when refs were unresolved.
 3. **Type-lookup maps by (TypeId, name):** Fields `byIdName`, `placeholdersByIdName`, and `byHash: Map<(String, ContentHash), DataType>` that keyed types by both identity AND name separately, allowing multiple types per ID.
 4. **FileResolver and IncludeContext initialization:** Simplified context setup; the old code maintained per-CU `includeContextsByFile` and `structAstsByName` snapshots.
 
@@ -514,13 +514,13 @@ This section evaluates the pipeline layering, data-flow boundaries, and context 
 
 **Parser (src/main/kotlin/ghistabs/parser/Parser.kt)** — Recursive-descent parser consuming type expression strings and symbol descriptors, producing `TypeDecl<LocalTypeId>` and `SymbolDecl<LocalTypeId>` ASTs. Entry points: `parseSymbol()` (parses `name:descriptor`), `parseTypeBody()` (parses type body for testing). Continuation-line joining is delegated to the caller. No Ghidra types; pure grammar implementation.
 
-**Harvester (src/main/kotlin/ghistabs/parser/Harvest.kt)** — Stateful stream processor consuming stab records; produces `Harvest` (data class containing `typeAsts: Map<GlobalTypeId, TypeAst>`, `symbolsByCu`, `openFunctions`, `collidingAsts`, `headerRegistry`). Two passes: `preSeedHeaders()` pre-allocates include contexts, then `passA()` processes all records, calling `Parser` on each type-carrying record. Responsibility: state management (`currentCu`, `currentFunction`, `includesByFile`), record dispatch (N_* type routing), symbol/type accumulation, `LocalTypeId` → `GlobalTypeId` globalization (lines 333–373), inline-type hoisting via side effects, collision logging.
+**Harvester (src/main/kotlin/ghistabs/parser/Harvest.kt)** — Stateful stream processor consuming stab records; produces `Harvest` (data class containing `typeAsts: Map<GlobalTypeId, TypeAst>`, `symbolsByCu`, `functions`, `collidingAsts`, `headerRegistry`). Two passes: `preSeedHeaders()` pre-allocates include contexts, then `passA()` processes all records, calling `Parser` on each type-carrying record. Responsibility: state management (`currentCu`, `currentFunction`, `includesByFile`), record dispatch (N_* type routing), symbol/type accumulation, `LocalTypeId` → `GlobalTypeId` globalization (lines 333–373), inline-type hoisting via side effects, collision logging.
 
-**TypeResolver (src/main/kotlin/ghistabs/builder/TypeRegistry.kt computed property `typeResolver`)** — Computed property on `Harvest` returning `TypeResolver(typeAsts)`. Lightweight helper providing three queries: `getTypeFor(GlobalTypeId)`, `getBodyFor<T>(GlobalTypeId)`, `getStructByName(name)`. Used by `TypeRegistry` and `ClassBuilder` to look up type definitions during materialization and class construction.
+**TypeResolver (src/main/kotlin/ghistabs/builder/TypeRegistry.kt computed property `index`)** — Computed property on `Harvest` returning `TypeResolver(typeAsts)`. Lightweight helper providing three queries: `getTypeFor(GlobalTypeId)`, `getBodyFor<T>(GlobalTypeId)`, `getStructByName(name)`. Used by `DataTypeRegistry` and `ClassBuilder` to look up type definitions during materialization and class construction.
 
-**TypeRegistry (src/main/kotlin/ghistabs/builder/TypeRegistry.kt)** — Stateful Ghidra DataTypeManager wrapper; transforms `Harvest` output (`TypeAst` map) into Ghidra `DataType` objects. Responsibility: placeholder allocation, byId/byHash dedup (keying on `GlobalTypeId` and content hash), cross-CU collision handling (merge via `StructuralDiff` or rename), attribute computation (`Attribution.categoryFor()` for namespace routing). Materializes types transactionally via `materializeAll()` and `resolve()` methods. Uses `TypeResolver` to resolve nested type references.
+**TypeRegistry (src/main/kotlin/ghistabs/builder/TypeRegistry.kt)** — Stateful Ghidra DataTypeManager wrapper; transforms `Harvest` output (`Type` map) into Ghidra `DataType` objects. Responsibility: placeholder allocation, byId/byHash dedup (keying on `GlobalTypeId` and content hash), cross-CU collision handling (merge via `StructuralDiff` or rename), attribute computation (`Attribution.categoryFor()` for namespace routing). Materializes types transactionally via `materializeAll()` and `resolve()` methods. Uses `HarvestIndex` to resolve nested type references.
 
-**ClassBuilder (src/main/kotlin/ghistabs/builder/ClassBuilder.kt)** — Stateful Ghidra program updater; constructs GhidraClass namespaces, applies methods, builds vtables. Responsibility: polymorphism detection (`ClassBuilderHelpers.firstPolymorphicBase()`), vfptr placement decision (`VfptrDecision`), inherited virtual method collection, vtable struct building, method reparenting with `__thiscall` calling convention. Uses `TypeResolver` to resolve base types during inheritance chain traversal.
+**ClassBuilder (src/main/kotlin/ghistabs/builder/ClassBuilder.kt)** — Stateful Ghidra program updater; constructs GhidraClass namespaces, applies methods, builds vtables. Responsibility: polymorphism detection (`ClassBuilderHelpers.firstPolymorphicBase()`), vfptr placement decision (`VfptrDecision`), inherited virtual method collection, vtable struct building, method reparenting with `__thiscall` calling convention. Uses `HarvestIndex` to resolve base types during inheritance chain traversal.
 
 **StabsImporter (src/main/kotlin/ghistabs/importer/StabsImporter.kt)** — Orchestrator coordinating three passes: Pass A (Harvester), Pass B (TypeRegistry.materializeAll), Pass C (applyAllSymbols). Responsibility: transaction management, diagnostic counter recording, symbol application (functions, globals, class vtables), demangler stub replacement, final Itanium-mangled label demangling. Uses `StabReader` to extract stab section, `AddressResolver` to map stab values to program addresses.
 
@@ -548,13 +548,13 @@ However:
 - `parseErrors: Int` — error count
 
 **TypeRegistry consumption:**
-- `materializeAll(typeAsts.values)` uses only the `TypeAst` list.
-- `typeResolver` computed property wraps only `typeAsts`.
+- `materializeAll(typeAsts.values)` uses only the `Type` list.
+- `index` computed property wraps only `types`.
 - `collidingAsts` is NOT consumed by TypeRegistry; the deviation table flags this as pending audit (D6).
 
 **Ghidra-specific types:** None in `Harvest`. It is pure data (serializable via `kotlinx.serialization`).
 
-**Subtle design choice — TypeAst.cu field:** Each `TypeAst` (**src/main/kotlin/ghistabs/parser/Harvest.kt** lines 15–23) carries a `cu: SourceFile.CUSource` field AND an `id: GlobalTypeId` field. The `id` contains `id.source` (a `SourceFile` — either `CUSource` or `HeaderSource`). The `cu` field is always a `CUSource` and represents the CU that originally emitted this type record (even if the type is in a header). This duplication allows callers to ask "which CU did this come from originally?" without having to parse the source type.
+**Subtle design choice — TypeAst.cu field:** Each `Type` (**src/main/kotlin/ghistabs/parser/Harvest.kt** lines 15–23) carries a `cu: SourceFile.CUSource` field AND an `id: GlobalTypeId` field. The `id` contains `id.source` (a `SourceFile` — either `CUSource` or `HeaderSource`). The `cu` field is always a `CUSource` and represents the CU that originally emitted this type record (even if the type is in a header). This duplication allows callers to ask "which CU did this come from originally?" without having to parse the source type.
 
 **Assessment:** The `cu` field is redundant for Harvest-layer consumers but useful for diagnostics and attribution (matching defining CUs to compute categories). It is harmless and intentional. No change suggested.
 
@@ -587,7 +587,7 @@ However:
 | TypeRegistry.byHash lines 17            | `byHash: Map<Pair<String, Int>, DataType>`          | Cross-CU dedup: same name + same hash                                       | Yes — efficient by-hash lookup keyed on (name, hash) for idempotent reruns            |
 | StabsImporter.applyAllSymbols lines 232 | `harvest.typeAsts.values.groupBy { it.ghidraName }` | Dedupe class ASTs by display name                                           | Yes — multiple ASTs from different CUs may have the same name; take the most detailed |
 
-**Specific case — same name, different IDs:** When two `TypeAst`s have the same `ghidraName` but different `GlobalTypeId`s (e.g., a struct defined in two different CUs with the same name but different bodies):
+**Specific case — same name, different IDs:** When two `Type`s have the same `ghidraName` but different `GlobalTypeId`s (e.g., a struct defined in two different CUs with the same name but different bodies):
 - In `materializeAll`: Both materialize into the DTM as separate `DataType` objects (keyed by `(name, hash)`); the byId map keeps first-writer-wins for ref resolution.
 - In `StabsImporter`: Classes are deduplicated by name; the most-detailed one (max methods, then fields) is chosen for vtable construction.
 - In `Attribution.categoryFor()`: Both types may get different category paths if the dedup rule disagrees (e.g., one is multi-CU, one is single-CU).

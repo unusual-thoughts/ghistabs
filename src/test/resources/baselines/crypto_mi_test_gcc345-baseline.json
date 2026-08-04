@@ -9,12 +9,12 @@
             "max": 26
         },
         "canonical-key-merged": {
-            "min": 1411,
-            "max": 1411
+            "min": 1413,
+            "max": 1413
         },
         "canonical-key-multi-hash": {
-            "min": 107,
-            "max": 107
+            "min": 105,
+            "max": 105
         },
         "canonical-scope-collision": {
             "min": 1,
@@ -23,10 +23,6 @@
         "class-not-struct": {
             "min": 4,
             "max": 4
-        },
-        "contenthash-collision": {
-            "min": 3,
-            "max": 3
         },
         "data-no-coverage": {
             "min": 1074,
@@ -148,10 +144,6 @@
             "min": 3140,
             "max": 3140
         },
-        "global-skipped": {
-            "min": 2,
-            "max": 2
-        },
         "harvest-collisions-divergent": {
             "min": 1,
             "max": 1
@@ -183,10 +175,6 @@
         "harvest-globals": {
             "min": 2948,
             "max": 2948
-        },
-        "harvest-parse-errors": {
-            "min": 0,
-            "max": 0
         },
         "harvest-records-parsed": {
             "min": 162645,
@@ -293,16 +281,16 @@
             "max": 1
         },
         "local-var-add-success": {
-            "min": 2982,
-            "max": 2982
+            "min": 2983,
+            "max": 2983
         },
         "local-var-error": {
             "min": 23,
             "max": 23
         },
         "local-var-skipped-dup-local": {
-            "min": 2018,
-            "max": 2018
+            "min": 2017,
+            "max": 2017
         },
         "local-var-skipped-dup-param": {
             "min": 1570,
@@ -325,12 +313,16 @@
             "max": 28
         },
         "reglocal-add-success": {
-            "min": 779,
-            "max": 779
+            "min": 2980,
+            "max": 2980
+        },
+        "reglocal-renamed-scope": {
+            "min": 2164,
+            "max": 2164
         },
         "reglocal-skipped-dup-local": {
-            "min": 2434,
-            "max": 2434
+            "min": 209,
+            "max": 209
         },
         "reglocal-skipped-dup-param": {
             "min": 1642,
@@ -363,6 +355,10 @@
         "static-member-unresolved": {
             "min": 379,
             "max": 379
+        },
+        "static-skipped": {
+            "min": 2,
+            "max": 2
         },
         "text-data-no-coverage": {
             "min": 316,
@@ -411,10 +407,6 @@
         "xref-base-tag-ambiguous": {
             "min": 36,
             "max": 36
-        },
-        "xref-base-tag-resolved": {
-            "min": 76,
-            "max": 76
         },
         "xref-undefined": {
             "min": 68,

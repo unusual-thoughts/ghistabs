@@ -3,17 +3,16 @@ package ghistabs.harvest
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.DummySink
 import ghistabs.parse.*
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertFalse
-import org.junit.jupiter.api.Assertions.assertNotEquals
-import org.junit.jupiter.api.Assertions.assertTrue
+import ghistabs.parse.TypeDecl.Struct.Field
+import ghistabs.parse.TypeDecl.Struct.Method
+import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 
-open class TestHasher(val asts: Map<GlobalTypeId, TypeAst>) :
+open class TestHasher(val asts: Map<GlobalTypeId, Type>) :
     ContentHasher(),
     DiagnosticSink by DummySink {
-    override fun byId(id: GlobalTypeId): TypeAst? = asts[id]
-    override fun byXRef(xref: TypeDecl.XRef<GlobalTypeId>, silent: Boolean): TypeAst? = null
+    override fun byId(id: GlobalTypeId): Type? = asts[id]
+    override fun byXRef(xref: TypeDecl.XRef<GlobalTypeId>, silent: Boolean): Type? = null
 }
 
 /**
@@ -27,21 +26,21 @@ open class TestHasher(val asts: Map<GlobalTypeId, TypeAst>) :
  * change those collide-into-same instead of collide-into-different.
  */
 class ContentHashTest {
-    private val intInCU1 = TypeAst(
+    private val intInCU1 = Type(
         cu = SourceFile.CUSource("a.cpp"),
         id = GlobalTypeId(SourceFile.CUSource("a.cpp"), 1),
         name = "int",
         body = TypeDecl.Range(GlobalTypeId(SourceFile.CUSource("a.cpp"), 1), -2147483648L, 2147483647L),
     )
 
-    private val intInCU2 = TypeAst(
+    private val intInCU2 = Type(
         cu = SourceFile.CUSource("b.cpp"),
         id = GlobalTypeId(SourceFile.CUSource("b.cpp"), 1),
         name = "int",
         body = TypeDecl.Range(GlobalTypeId(SourceFile.CUSource("b.cpp"), 1), -2147483648L, 2147483647L),
     )
 
-    private val charInCU1 = TypeAst(
+    private val charInCU1 = Type(
         cu = SourceFile.CUSource("a.cpp"),
         id = GlobalTypeId(SourceFile.CUSource("a.cpp"), 2),
         name = "char",
@@ -65,14 +64,14 @@ class ContentHashTest {
     fun refsToSameNamedTypeFromDifferentCUsHashIdentically() {
         val refToIntFromCU1 = TypeDecl.Ref(intInCU1.id)
         val refToIntFromCU2 = TypeDecl.Ref(intInCU2.id)
-        assertEquals(refToIntFromCU1.contentHash(oracle), refToIntFromCU2.contentHash(oracle))
+        assertEquals(oracle.content(refToIntFromCU1), oracle.content(refToIntFromCU2))
     }
 
     @Test
     fun refsToDifferentlyNamedTypesHashDifferently() {
         val refToInt = TypeDecl.Ref(intInCU1.id)
         val refToChar = TypeDecl.Ref(charInCU1.id)
-        assertNotEquals(refToInt.contentHash(oracle), refToChar.contentHash(oracle))
+        assertNotEquals(oracle.content(refToInt), oracle.content(refToChar))
     }
 
     /**
@@ -87,13 +86,13 @@ class ContentHashTest {
      */
     @Test
     fun perCuBoolSlotHashesEqual() {
-        val boolInCU1 = TypeAst(
+        val boolInCU1 = Type(
             cu = SourceFile.CUSource("a.cpp"),
             id = GlobalTypeId(SourceFile.CUSource("a.cpp"), 21),
             name = "bool",
             body = TypeDecl.WithSizeAttr(8, TypeDecl.Builtin(-16)),
         )
-        val boolInCU2 = TypeAst(
+        val boolInCU2 = Type(
             cu = SourceFile.CUSource("b.cpp"),
             id = GlobalTypeId(SourceFile.CUSource("b.cpp"), 21),
             name = "bool",
@@ -101,12 +100,12 @@ class ContentHashTest {
         )
         val store = mapOf(boolInCU1.id to boolInCU1, boolInCU2.id to boolInCU2)
         val o = TestHasher(store)
-        assertEquals(boolInCU1.body.contentHash(o), boolInCU2.body.contentHash(o))
+        assertEquals(o.content(boolInCU1.body), o.content(boolInCU2.body))
         // And the Refs into them — what the surrounding struct's field
         // type expression actually looks like — must agree too.
         assertEquals(
-            TypeDecl.Ref(boolInCU1.id).contentHash(o),
-            TypeDecl.Ref(boolInCU2.id).contentHash(o),
+            o.content(TypeDecl.Ref(boolInCU1.id)),
+            o.content(TypeDecl.Ref(boolInCU2.id)),
         )
     }
 
@@ -117,7 +116,7 @@ class ContentHashTest {
         // Two evaluations of the same unresolved ref agree with each
         // other; the unresolved branch must be deterministic so
         // collision detection isn't randomised.
-        assertEquals(ref.contentHash(oracle), ref.contentHash(oracle))
+        assertEquals(oracle.content(ref), oracle.content(ref))
     }
 
     /**
@@ -132,7 +131,7 @@ class ContentHashTest {
             sizeBytes = 8L,
             bases = emptyList(),
             fields = listOf(
-                FieldDecl(
+                Field(
                     name = "first",
                     type = TypeDecl.Ref(intInCU1.id),
                     offsetBits = 0L,
@@ -146,11 +145,9 @@ class ContentHashTest {
             vptrBasetype = null,
         )
         val clone2Body = clone1Body.copy(
-            fields = listOf(
-                clone1Body.fields[0].copy(type = TypeDecl.Ref(intInCU2.id)),
-            ),
+            fields = listOf(clone1Body.fields[0].copy(type = TypeDecl.Ref(intInCU2.id))),
         )
-        assertEquals(clone1Body.contentHash(oracle), clone2Body.contentHash(oracle))
+        assertEquals(oracle.content(clone1Body), oracle.content(clone2Body))
     }
 
     @Test
@@ -160,7 +157,7 @@ class ContentHashTest {
             sizeBytes = 4L,
             bases = emptyList(),
             fields = listOf(
-                FieldDecl(
+                Field(
                     name = "x",
                     type = TypeDecl.Ref(intInCU1.id),
                     offsetBits = 0L,
@@ -173,10 +170,8 @@ class ContentHashTest {
             methods = emptyList(),
             vptrBasetype = null,
         )
-        val s2 = s1.copy(
-            fields = listOf(s1.fields[0].copy(type = TypeDecl.Ref(charInCU1.id))),
-        )
-        assertNotEquals(s1.contentHash(oracle), s2.contentHash(oracle))
+        val s2 = s1.copy(fields = listOf(s1.fields[0].copy(type = TypeDecl.Ref(charInCU1.id))))
+        assertNotEquals(oracle.content(s1), oracle.content(s2))
     }
 
     /**
@@ -191,23 +186,21 @@ class ContentHashTest {
             sizeBytes = 4L,
             bases = emptyList(),
             fields = listOf(
-                FieldDecl("x", TypeDecl.Ref(intInCU1.id), 0L, 32L, isStatic = false, Access.PUBLIC, mangled = null),
+                Field("x", TypeDecl.Ref(intInCU1.id), 0L, 32L, isStatic = false, Access.PUBLIC, mangled = null),
             ),
             methods = emptyList(),
             vptrBasetype = null,
         )
         val withStaticInt = base.copy(
-            fields =
-            base.fields +
-                FieldDecl("s", TypeDecl.Ref(intInCU1.id), 0L, 0L, isStatic = true, Access.PUBLIC, mangled = null),
+            fields = base.fields +
+                Field("s", TypeDecl.Ref(intInCU1.id), 0L, 0L, isStatic = true, Access.PUBLIC, mangled = null),
         )
         val withStaticChar = base.copy(
-            fields =
-            base.fields +
-                FieldDecl("s", TypeDecl.Ref(charInCU1.id), 0L, 0L, isStatic = true, Access.PUBLIC, mangled = null),
+            fields = base.fields +
+                Field("s", TypeDecl.Ref(charInCU1.id), 0L, 0L, isStatic = true, Access.PUBLIC, mangled = null),
         )
-        assertEquals(base.contentHash(oracle), withStaticInt.contentHash(oracle))
-        assertEquals(withStaticInt.contentHash(oracle), withStaticChar.contentHash(oracle))
+        assertEquals(oracle.content(base), oracle.content(withStaticInt))
+        assertEquals(oracle.content(withStaticInt), oracle.content(withStaticChar))
     }
 
     /**
@@ -222,7 +215,7 @@ class ContentHashTest {
         val body = TypeDecl.Pointer(TypeDecl.Ref(charInCU1.id))
         val inline1 = TypeDecl.InlineDef(intInCU1.id, body)
         val inline2 = TypeDecl.InlineDef(intInCU2.id, body)
-        assertEquals(inline1.contentHash(oracle), inline2.contentHash(oracle))
+        assertEquals(oracle.content(inline1), oracle.content(inline2))
     }
 
     /**
@@ -234,7 +227,7 @@ class ContentHashTest {
     @Test
     fun refAndInlineDefHashIdenticallyWhenContentMatches() {
         // CU3 owns a Pointer-to-int type at id_3.
-        val pointerToInt = TypeAst(
+        val pointerToInt = Type(
             cu = SourceFile.CUSource("c.cpp"),
             id = GlobalTypeId(SourceFile.CUSource("c.cpp"), 7),
             name = "[c.cpp,7]",
@@ -249,7 +242,7 @@ class ContentHashTest {
             GlobalTypeId(SourceFile.CUSource("d.cpp"), 99),
             TypeDecl.Pointer(TypeDecl.Ref(intInCU1.id)),
         )
-        assertEquals(asRef.contentHash(oracle2), asInline.contentHash(oracle2))
+        assertEquals(oracle2.content(asRef), oracle2.content(asInline))
     }
 
     /**
@@ -269,29 +262,21 @@ class ContentHashTest {
         // id 98: the actual _IO_FILE struct definition
         val id98 = GlobalTypeId(cu, 98)
         val intId = GlobalTypeId(cu, 2)
-        val intAst = TypeAst(cu, intId, "int", TypeDecl.Range(intId, -2147483648L, 2147483647L))
+        val intAst = Type(cu, intId, "int", TypeDecl.Range(intId, -2147483648L, 2147483647L))
         val ioFileBody = TypeDecl.Struct(
             rawKind = AggrKind.STRUCT,
             sizeBytes = 216,
             bases = emptyList(),
             fields = listOf(
-                FieldDecl(
-                    "_flags",
-                    TypeDecl.Ref(intId),
-                    0L,
-                    32L,
-                    false,
-                    access = Access.PUBLIC,
-                    mangled = null,
-                ),
+                Field("_flags", TypeDecl.Ref(intId), 0L, 32L, false, access = Access.PUBLIC, mangled = null),
             ),
             methods = emptyList(),
             vptrBasetype = null,
         )
-        val ioFileAst = TypeAst(cu, id98, "_IO_FILE", ioFileBody)
+        val ioFileAst = Type(cu, id98, "_IO_FILE", ioFileBody)
         // id 97: InlineDef(id=98, body=XRef(STRUCT, _IO_FILE)) — the forward-ref alias
         val id97 = GlobalTypeId(cu, 97)
-        val forwardAlias = TypeAst(
+        val forwardAlias = Type(
             cu,
             id97,
             null,
@@ -299,16 +284,14 @@ class ContentHashTest {
         )
 
         val store = mapOf(id97 to forwardAlias, id98 to ioFileAst, intId to intAst)
-        val o = object : TestHasher(
-            store,
-        ) {
-            override fun byXRef(xref: TypeDecl.XRef<GlobalTypeId>, silent: Boolean): TypeAst? =
+        val o = object : TestContentIndex(store) {
+            override fun byXRef(xref: TypeDecl.XRef<GlobalTypeId>, silent: Boolean): Type? =
                 store.values.firstOrNull { it.name == xref.tagName }
         }
 
         // Ref(97) must hash to the same value as the actual struct body
-        val hashViaForwardRef = TypeDecl.Ref(id97).contentHash(o)
-        val hashViaDirectRef = ioFileBody.contentHash(o)
+        val hashViaForwardRef = o.content(TypeDecl.Ref(id97))
+        val hashViaDirectRef = o.content(ioFileBody)
         assertEquals(
             hashViaDirectRef,
             hashViaForwardRef,
@@ -318,10 +301,10 @@ class ContentHashTest {
 
     @Test
     fun selfReferentialTypeTerminates() {
-        val h = intInCU1.body.contentHash(oracle)
+        val h = oracle.content(intInCU1.body)
         // Plain assertion that it returned; if it had infinite-looped
         // we'd never get here.
-        assertNotEquals(0, h)
+        assertNotEquals(ContentHasher.LayoutContent(), h)
     }
 
     /**
@@ -365,18 +348,10 @@ class ContentHashTest {
             sizeBytes = 8L,
             bases = emptyList(),
             fields = listOf(
-                FieldDecl(
-                    "first",
-                    TypeDecl.Ref(intId),
-                    0L,
-                    32L,
-                    false,
-                    access = Access.PUBLIC,
-                    mangled = null,
-                ),
+                Field("first", TypeDecl.Ref(intId), 0L, 32L, false, access = Access.PUBLIC, mangled = null),
             ),
             methods = listOf(
-                MethodDecl(
+                Method(
                     name = "operator=",
                     mangled = null,
                     signature = TypeDecl.InlineDef(
@@ -404,34 +379,32 @@ class ContentHashTest {
 
         val keywordsCu = SourceFile.CUSource("Keywords.cpp")
         val assembleCu = SourceFile.CUSource("assemble.cpp")
-        val pairCanonical = TypeAst(cu = keywordsCu, id = pairId, name = "pair", body = variant0)
-        val ptrA =
-            TypeAst(
-                cu = keywordsCu,
-                id = ptrAId,
-                name = "[Keywords.cpp,180]",
-                body = TypeDecl.Pointer(TypeDecl.Ref(pairId)),
-            )
-        val ptrB =
-            TypeAst(
-                cu = assembleCu,
-                id = ptrBId,
-                name = "[assemble.cpp,229]",
-                body = TypeDecl.Pointer(TypeDecl.Ref(pairId)),
-            )
+        val pairCanonical = Type(cu = keywordsCu, id = pairId, name = "pair", body = variant0)
+        val ptrA = Type(
+            cu = keywordsCu,
+            id = ptrAId,
+            name = "[Keywords.cpp,180]",
+            body = TypeDecl.Pointer(TypeDecl.Ref(pairId)),
+        )
+        val ptrB = Type(
+            cu = assembleCu,
+            id = ptrBId,
+            name = "[assemble.cpp,229]",
+            body = TypeDecl.Pointer(TypeDecl.Ref(pairId)),
+        )
         val intAst =
-            TypeAst(cu = keywordsCu, id = intId, name = "int", body = TypeDecl.Range(intId, -2147483648L, 2147483647L))
+            Type(cu = keywordsCu, id = intId, name = "int", body = TypeDecl.Range(intId, -2147483648L, 2147483647L))
         val store = mapOf(pairId to pairCanonical, ptrAId to ptrA, ptrBId to ptrB, intId to intAst)
         val storeOracle = TestHasher(store)
 
         // Pre-populate the cache the same way the dump test does:
         // hash every TypeAst.body top-level, then store under its id.
-        for (ast in store.values) {
-            storeOracle.hashCache[ast.id] = ast.body.contentHash(storeOracle)
+        for ((_, id, _, body) in store.values) {
+            storeOracle.hashCache[id] = storeOracle.content(body)
         }
 
-        val h0 = variant0.contentHash(storeOracle)
-        val h1 = variant1.contentHash(storeOracle)
+        val h0 = storeOracle.content(variant0)
+        val h1 = storeOracle.content(variant1)
         assertEquals(h0, h1, "variant_0 (Ref param) and variant_1 (InlineDef param) must hash identically")
     }
 
@@ -449,9 +422,9 @@ class ContentHashTest {
         val sized = TypeDecl.WithSizeAttr(8, range)
         val slot = TypeDecl.Builtin<GlobalTypeId>(-2)
         val signedCharRange = TypeDecl.Range(GlobalTypeId(SourceFile.CUSource("a.cpp"), 14), -128L, 127L)
-        assertEquals(range.contentHash(oracle), sized.contentHash(oracle))
-        assertEquals(range.contentHash(oracle), slot.contentHash(oracle))
-        assertEquals(range.contentHash(oracle), signedCharRange.contentHash(oracle))
+        assertEquals(oracle.content(range), oracle.content(sized))
+        assertEquals(oracle.content(range), oracle.content(slot))
+        assertEquals(oracle.content(range), oracle.content(signedCharRange))
     }
 
     /**
@@ -464,9 +437,9 @@ class ContentHashTest {
         val char = TypeDecl.Range(GlobalTypeId(SourceFile.CUSource("a.cpp"), 2), 0L, 127L)
         val unsignedChar = TypeDecl.Range(GlobalTypeId(SourceFile.CUSource("a.cpp"), 11), 0L, 255L)
         val wcharRange = TypeDecl.Range(GlobalTypeId(SourceFile.CUSource("a.cpp"), 30), 0L, 65535L)
-        assertNotEquals(char.contentHash(oracle), unsignedChar.contentHash(oracle))
-        assertNotEquals(char.contentHash(oracle), wcharRange.contentHash(oracle))
-        assertNotEquals(unsignedChar.contentHash(oracle), wcharRange.contentHash(oracle))
+        assertNotEquals(oracle.content(char), oracle.content(unsignedChar))
+        assertNotEquals(oracle.content(char), oracle.content(wcharRange))
+        assertNotEquals(oracle.content(unsignedChar), oracle.content(wcharRange))
     }
 
     @Test
@@ -477,14 +450,14 @@ class ContentHashTest {
         )
         val pairId = GlobalTypeId(pairCu, 87)
         // CU1's separately-emitted Pointer-to-pair at id 180 in CU1.
-        val ptrInA = TypeAst(
+        val ptrInA = Type(
             cu = SourceFile.CUSource("a.cpp"),
             id = GlobalTypeId(SourceFile.CUSource("a.cpp"), 180),
             name = "[a.cpp,180]",
             body = TypeDecl.Pointer(TypeDecl.Ref(pairId)),
         )
         // CU2's inline form would emit a TypeAst from walkDefinitions too.
-        val ptrInB = TypeAst(
+        val ptrInB = Type(
             cu = SourceFile.CUSource("b.cpp"),
             id = GlobalTypeId(SourceFile.CUSource("b.cpp"), 229),
             name = "[b.cpp,229]",
@@ -502,7 +475,7 @@ class ContentHashTest {
             TypeDecl.Pointer(TypeDecl.Ref(pairId)),
         )
 
-        assertEquals(formA.contentHash(storeOracle), formB.contentHash(storeOracle))
+        assertEquals(storeOracle.content(formA), storeOracle.content(formB))
     }
 
     /**
@@ -513,7 +486,7 @@ class ContentHashTest {
      */
     @Test
     fun contentHashIgnoresPerCuMethodDivergence() {
-        fun method(virt: VirtKind, vtoff: Long?) = MethodDecl(
+        fun method(virt: VirtKind, vtoff: Long?) = Method(
             name = "f",
             mangled = "_ZN1C1fEv",
             signature = TypeDecl.Ref(intInCU1.id),
@@ -523,11 +496,11 @@ class ContentHashTest {
             isVolatile = false,
             vtableOffsetBits = vtoff,
         )
-        fun cls(method: MethodDecl<GlobalTypeId>) = TypeDecl.Struct(
+        fun cls(method: Method<GlobalTypeId>) = TypeDecl.Struct(
             rawKind = AggrKind.CLASS,
             sizeBytes = 4,
             bases = emptyList(),
-            fields = listOf(FieldDecl("x", TypeDecl.Ref(intInCU1.id), 0, 32, false, Access.PUBLIC, mangled = null)),
+            fields = listOf(Field("x", TypeDecl.Ref(intInCU1.id), 0, 32, false, Access.PUBLIC, mangled = null)),
             methods = listOf(method),
             vptrBasetype = null,
         )
@@ -535,29 +508,38 @@ class ContentHashTest {
         val referencingCu = cls(method(VirtKind.NORMAL, null))
 
         assertEquals(
-            oracle.contentHash(definingCu),
-            oracle.contentHash(referencingCu),
+            oracle.content(definingCu),
+            oracle.content(referencingCu),
             "contentHash ignores per-CU method virt/order noise",
         )
-        assertTrue(oracle.contentEq(definingCu, referencingCu), "contentEq: layout-equal despite method divergence")
+    }
+
+    /**
+     * A Ref reached as a *child* of a generic-layout node (Pointer/Const/Array/FunctionT/Method) must
+     * still resolve. Refs carry no layoutData of their own, so a generic walk that recursed structurally
+     * instead of dispatching would render every Ref alike and make `int*` and `char*` content-equal.
+     */
+    @Test
+    fun contentResolvesRefsBeneathGenericLayoutNodes() {
+        val toInt = TypeDecl.Pointer(TypeDecl.Ref(intInCU1.id))
+        val toChar = TypeDecl.Pointer(TypeDecl.Ref(charInCU1.id))
+        assertNotEquals(oracle.content(toInt), oracle.content(toChar), "content distinguishes int* from char*")
     }
 
     @Test
-    fun contentEqDistinguishesLayoutAndAgreesWithHashBucketing() {
+    fun contentDistinguishesFieldLayout() {
         fun cls(fieldType: TypeDecl<GlobalTypeId>) = TypeDecl.Struct(
             rawKind = AggrKind.CLASS,
             sizeBytes = 4,
             bases = emptyList(),
-            fields = listOf(FieldDecl("x", fieldType, 0, 32, false, Access.PUBLIC, mangled = null)),
+            fields = listOf(Field("x", fieldType, 0, 32, false, Access.PUBLIC, mangled = null)),
             methods = emptyList(),
             vptrBasetype = null,
         )
         val a = cls(TypeDecl.Ref(intInCU1.id))
         val b = cls(TypeDecl.Float(8))
-        assertFalse(oracle.contentEq(a, b), "different field type ⇒ not content-equal")
-        // Consistency the bucket-then-split relies on: content-equal ⇒ equal hash (a real class is never
-        // split across buckets); a hash *collision* still can't merge a and b because contentEq is the split.
-        assertEquals(oracle.contentHash(a), oracle.contentHash(cls(TypeDecl.Ref(intInCU1.id))))
-        assertTrue(oracle.contentEq(a, cls(TypeDecl.Ref(intInCU1.id))))
+        assertNotEquals(oracle.content(a), oracle.content(b), "different field type ⇒ not content-equal")
+        // Same layout built twice ⇒ one value, so grouping puts them in one class.
+        assertEquals(oracle.content(a), oracle.content(cls(TypeDecl.Ref(intInCU1.id))))
     }
 }

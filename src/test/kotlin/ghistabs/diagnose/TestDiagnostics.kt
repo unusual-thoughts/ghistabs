@@ -5,9 +5,9 @@ import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
 import ghistabs.StabsOptions
 import ghistabs.harvest.Harvest
-import ghistabs.harvest.TypeResolver
+import ghistabs.harvest.HarvestIndex
 import ghistabs.importer.ImportContext
-import ghistabs.materialize.TypeRegistry
+import ghistabs.materialize.DataTypeRegistry
 
 /**
  * Shared test diagnostics / dump infrastructure — the non-test scaffolding that captures import
@@ -68,6 +68,14 @@ class CapturingSink : DiagnosticSink {
     }
 }
 
+class CountingSink : DiagnosticSink {
+    val counts = mutableMapOf<String, Long>()
+    override fun log(category: String, message: String?, level: Level, address: Address?, count: Long) {
+        counts.compute(category) { _, x -> (x ?: 0) + count }
+    }
+    val parseErrors get() = counts["parse-errors"] ?: 0
+}
+
 // Tests capture at max verbosity — DEBUG and up — so log assertions see every message.
 fun Program.defaultContext() = ImportContext(
     this,
@@ -79,7 +87,7 @@ fun Program.defaultContext() = ImportContext(
     StabsDiagnostics(),
 )
 
-fun ImportContext<*>.defaultTypeRegistry(): TypeRegistry {
+fun ImportContext<*>.defaultTypeRegistry(): DataTypeRegistry {
     val harvest = Harvest.of(mapOf())
-    return TypeRegistry(dtm, this, diagnostics, harvest, TypeResolver.Empty)
+    return DataTypeRegistry(dtm, this, diagnostics, harvest, HarvestIndex.Empty)
 }

@@ -132,10 +132,6 @@
             "min": 65,
             "max": 65
         },
-        "global-skipped": {
-            "min": 146,
-            "max": 146
-        },
         "harvest-collisions-divergent": {
             "min": 0,
             "max": 0
@@ -168,10 +164,6 @@
             "min": 146,
             "max": 146
         },
-        "harvest-parse-errors": {
-            "min": 0,
-            "max": 0
-        },
         "harvest-records-parsed": {
             "min": 58624,
             "max": 58624
@@ -189,8 +181,8 @@
             "max": 211
         },
         "harvest-typeAsts": {
-            "min": 58846,
-            "max": 58846
+            "min": 58848,
+            "max": 58848
         },
         "harvest-typeAsts-Array": {
             "min": 612,
@@ -201,8 +193,8 @@
             "max": 180
         },
         "harvest-typeAsts-Const": {
-            "min": 3724,
-            "max": 3724
+            "min": 3726,
+            "max": 3726
         },
         "harvest-typeAsts-Enum": {
             "min": 1424,
@@ -265,8 +257,8 @@
             "max": 0
         },
         "harvest-typeAsts-unique-by-id": {
-            "min": 58846,
-            "max": 58846
+            "min": 58848,
+            "max": 58848
         },
         "inheritance-applied": {
             "min": 155,
@@ -293,8 +285,8 @@
             "max": 86
         },
         "placeholder-created": {
-            "min": 43362,
-            "max": 43362
+            "min": 43364,
+            "max": 43364
         },
         "pointee-typed": {
             "min": 99,
@@ -323,6 +315,10 @@
         "static-member-unresolved": {
             "min": 498,
             "max": 498
+        },
+        "static-skipped": {
+            "min": 146,
+            "max": 146
         },
         "text-data-no-coverage": {
             "min": 13,
@@ -367,10 +363,6 @@
         "xref-base-tag-ambiguous": {
             "min": 6,
             "max": 6
-        },
-        "xref-base-tag-resolved": {
-            "min": 332,
-            "max": 332
         },
         "xref-undefined": {
             "min": 12,

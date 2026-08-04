@@ -9,33 +9,29 @@ import kotlinx.serialization.Serializable
 
 /**
  * Passive parser output, keyed on raw source spellings. Source folding (§15), XRef resolution, and
- * content-hash queries are all derived views on [TypeResolver]. [rawCollisions] includes
- * content-equivalent dupes; content-distinct survivors live on [TypeResolver.divergentCollisions].
+ * content-hash queries are all derived views on [HarvestIndex]. [rawCollisions] includes
+ * content-equivalent dupes; content-distinct survivors live on [HarvestIndex.divergentCollisions].
  */
 @Serializable
 data class Harvest(
-    val typeAsts: Map<GlobalTypeId, TypeAst>,
-    val parseErrors: Int,
+    val types: Map<GlobalTypeId, Type>,
     val rawCollisions: Map<GlobalTypeId, Map<String, Set<TypeDecl<GlobalTypeId>>>>,
-    val symbolsByCu: Map<String, List<SymbolRecord>>,
-    val openFunctions: List<OpenFunction>,
+    val symbolsByCu: Map<String, List<Symbol>>,
+    val functions: List<StabFunction>,
     /** N_SLINE entries grouped by N_SOL-effective source filename; sorted by line on insertion. */
     val lineEntries: Map<String, List<LineEntry>>,
     /** Addressless `:c` compile-time constants — applied as equates + a synthetic enum catalog. */
     val constants: List<SymbolDecl.Constant<GlobalTypeId>>,
 ) {
     companion object {
-        /** A harvest of nothing but [typeAsts] — for resolvers/tests that need no symbol side. */
-        fun of(typeAsts: Map<GlobalTypeId, TypeAst>) = Harvest(
-            typeAsts = typeAsts,
-            parseErrors = 0,
+        /** A harvest of nothing but [types] — for resolvers/tests that need no symbol side. */
+        fun of(types: Map<GlobalTypeId, Type>) = Harvest(
+            types = types,
             rawCollisions = mapOf(),
             symbolsByCu = mapOf(),
-            openFunctions = listOf(),
+            functions = listOf(),
             lineEntries = mapOf(),
             constants = listOf(),
         )
     }
-
-    fun getType(id: GlobalTypeId) = typeAsts[id]
 }

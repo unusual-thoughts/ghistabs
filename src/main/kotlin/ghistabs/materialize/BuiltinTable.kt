@@ -52,45 +52,109 @@ fun TypeDecl<*>.resolveBuiltin(): DataType? = when (this) {
  * Distinct primitives keep distinct keys: `unsigned char` (`Range(0,255)` → byte) stays apart
  * from `char`.
  */
-fun TypeDecl<*>.ghidraClassName(): String? = resolveBuiltin()?.javaClass?.name
+fun TypeDecl<*>.ghidraClassName(): Class<*>? = resolveBuiltin()?.javaClass
 
 /**
  * gcc XCOFF builtin slot → Ghidra type. Slot numbers per stabs spec / gcc `dbxout.c`.
  * Only slots seen on cygwin gcc 3.4.4 XAP2/CSR binaries are mapped; unknowns return null.
  */
 private fun resolveSlot(slot: Int): DataType? = when (slot) {
-    -1 -> IntegerDataType() // int
-    -2 -> CharDataType() // char
-    -3 -> ShortDataType() // short
-    -4 -> LongDataType() // long
-    -5 -> UnsignedCharDataType() // unsigned char
-    -6 -> SignedCharDataType() // signed char
-    -7 -> UnsignedShortDataType() // unsigned short
-    -8 -> UnsignedIntegerDataType() // unsigned int
-    -9 -> UnsignedIntegerDataType() // unsigned
-    -10 -> UnsignedLongDataType() // unsigned long
-    -11 -> VoidDataType() // void
-    -12 -> FloatDataType() // float
-    -13 -> DoubleDataType() // double
-    -14 -> LongDoubleDataType() // long double
-    -15 -> IntegerDataType() // integer (alias int)
-    -16 -> BooleanDataType() // bool / _Bool
-    -17 -> FloatDataType() // short real
-    -18 -> DoubleDataType() // real
-    -19 -> CharDataType() // stringptr
-    -20 -> CharDataType() // character
-    -21 -> ByteDataType() // logical*1
-    -22 -> ShortDataType() // logical*2
-    -23 -> IntegerDataType() // logical*4
-    -24 -> IntegerDataType() // logical
-    -27 -> SignedByteDataType() // integer*1
-    -28 -> ShortDataType() // integer*2
-    -29 -> IntegerDataType() // integer*4
-    -30 -> WideCharDataType() // wchar_t
-    -31 -> LongLongDataType() // long long
-    -32 -> UnsignedLongLongDataType() // unsigned long long
-    -33 -> UnsignedLongLongDataType() // logical*8
-    -34 -> LongLongDataType() // integer*8
+    -1 -> IntegerDataType()
+
+    // int
+    -2 -> CharDataType()
+
+    // char
+    -3 -> ShortDataType()
+
+    // short
+    -4 -> LongDataType()
+
+    // long
+    -5 -> UnsignedCharDataType()
+
+    // unsigned char
+    -6 -> SignedCharDataType()
+
+    // signed char
+    -7 -> UnsignedShortDataType()
+
+    // unsigned short
+    -8 -> UnsignedIntegerDataType()
+
+    // unsigned int
+    -9 -> UnsignedIntegerDataType()
+
+    // unsigned
+    -10 -> UnsignedLongDataType()
+
+    // unsigned long
+    -11 -> VoidDataType()
+
+    // void
+    -12 -> FloatDataType()
+
+    // float
+    -13 -> DoubleDataType()
+
+    // double
+    -14 -> LongDoubleDataType()
+
+    // long double
+    -15 -> IntegerDataType()
+
+    // integer (alias int)
+    -16 -> BooleanDataType()
+
+    // bool / _Bool
+    -17 -> FloatDataType()
+
+    // short real
+    -18 -> DoubleDataType()
+
+    // real
+    -19 -> CharDataType()
+
+    // stringptr
+    -20 -> CharDataType()
+
+    // character
+    -21 -> ByteDataType()
+
+    // logical*1
+    -22 -> ShortDataType()
+
+    // logical*2
+    -23 -> IntegerDataType()
+
+    // logical*4
+    -24 -> IntegerDataType()
+
+    // logical
+    -27 -> SignedByteDataType()
+
+    // integer*1
+    -28 -> ShortDataType()
+
+    // integer*2
+    -29 -> IntegerDataType()
+
+    // integer*4
+    -30 -> WideCharDataType()
+
+    // wchar_t
+    -31 -> LongLongDataType()
+
+    // long long
+    -32 -> UnsignedLongLongDataType()
+
+    // unsigned long long
+    -33 -> UnsignedLongLongDataType()
+
+    // logical*8
+    -34 -> LongLongDataType()
+
+    // integer*8
     else -> null
 }
 
@@ -108,12 +172,19 @@ private fun TypeDecl.Range<*>.asChar() = CharDataType().takeIf { (min == 0L || m
  */
 private fun resolveSizedRange(sizeBits: Long?, signed: Boolean): DataType? = when (sizeBits) {
     8L if signed -> SignedByteDataType()
+
     8L -> ByteDataType()
+
     16L if signed -> ShortDataType()
+
     16L -> UnsignedShortDataType()
+
     32L if signed -> IntegerDataType()
+
     32L -> UnsignedIntegerDataType()
+
     64L if signed -> LongLongDataType()
+
     64L -> UnsignedLongLongDataType()
 
     // gcc 3.4.5 emits `__int128` in every CU. Its bounds truncate to 0..-1 — identical to what

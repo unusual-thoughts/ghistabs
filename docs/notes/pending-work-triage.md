@@ -16,7 +16,7 @@ gcc 4.2.1 stabs). Its `after.log` is the reference. `scratchpad/pre_S_fix/` and
 **Everything below in Parts 1–4 was triaged against a silently-degraded import.** Three foundational
 bugs meant the suite ran effectively CONCURRENT-only and hid crashes as green skips:
 
-1. **`TypeResolver` NPE (root cause).** The `init{}` pre-warm block was declared *above* the
+1. **`HarvestIndex` NPE (root cause).** The `init{}` pre-warm block was declared *above* the
    `astsByName`/`astsByBaseTag` `by lazy` delegates it reads (contentHash → byXRef → lookupByXRef).
    Kotlin assigns a `by lazy` delegate field only when construction reaches its declaration, so the
    init block read a **null Lazy delegate** → NPE on *every* import. Ghidra's analysis-task wrapper

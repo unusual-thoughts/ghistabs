@@ -32,7 +32,7 @@ class HarvesterTest {
      */
     @Test
     fun testNSOOpensCUContext() {
-        val harvester = dummyHarvester()
+        val (sink, harvester) = dummyHarvester()
         val records = listOf(
             StabRecord(
                 index = 0,
@@ -48,7 +48,7 @@ class HarvesterTest {
 
         // harvest() should process the N_SO record without errors.
         // We verify the record was processed by checking parse errors is 0.
-        assertEquals(0, harvest.parseErrors, "N_SO alone should not cause parse errors")
+        assertEquals(0, sink.parseErrors, "N_SO alone should not cause parse errors")
     }
 
     /**
@@ -62,7 +62,7 @@ class HarvesterTest {
      */
     @Test
     fun testNGSYMHarvestsGlobalSymbol() {
-        val harvester = dummyHarvester()
+        val (_, harvester) = dummyHarvester()
         val records = listOf(
             StabRecord(
                 index = 0,
@@ -104,7 +104,7 @@ class HarvesterTest {
      */
     @Test
     fun testNFUNWithLocals() {
-        val harvester = dummyHarvester()
+        val (sink, harvester) = dummyHarvester()
         val records = listOf(
             StabRecord(
                 index = 0,
@@ -142,9 +142,9 @@ class HarvesterTest {
 
         val harvest = harvester.harvest(records)
 
-        assertEquals(0, harvest.parseErrors)
-        assertEquals(1, harvest.openFunctions.size, "Exactly one function should be opened")
-        val func = harvest.openFunctions[0]
+        assertEquals(0, sink.parseErrors)
+        assertEquals(1, harvest.functions.size, "Exactly one function should be opened")
+        val func = harvest.functions[0]
         assertEquals("f", func.name, "Function name should be 'f'")
         assertEquals(1, func.locals.size, "Function should have exactly one local")
         val xLocal = func.locals[0]
@@ -165,7 +165,7 @@ class HarvesterTest {
      */
     @Test
     fun testNLSYMTaggedTypeGoesToTypeAsts() {
-        val harvester = dummyHarvester()
+        val (sink, harvester) = dummyHarvester()
         val records = listOf(
             StabRecord(
                 index = 0,
@@ -190,9 +190,9 @@ class HarvesterTest {
 
         val harvest = harvester.harvest(records)
 
-        assertEquals(0, harvest.parseErrors)
-        assertEquals(1, harvest.typeAsts.size, "Tagged type should populate typeAsts")
-        val typeAst = harvest.typeAsts.values.first()
+        assertEquals(0, sink.parseErrors)
+        assertEquals(1, harvest.types.size, "Tagged type should populate typeAsts")
+        val typeAst = harvest.types.values.first()
         assertEquals("MyStruct", typeAst.ghidraName, "Tagged type name should be 'MyStruct'")
         // Tagged types should NOT be in symbolsByCu
         assertEquals(0, harvest.symbolsByCu.values.flatten().size, "Tagged type should NOT be in harvested symbols")
@@ -210,7 +210,7 @@ class HarvesterTest {
      */
     @Test
     fun testNLSYMLocalRecord() {
-        val harvester = dummyHarvester()
+        val (sink, harvester) = dummyHarvester()
         val records = listOf(
             StabRecord(
                 index = 0,
@@ -248,9 +248,9 @@ class HarvesterTest {
 
         val harvest = harvester.harvest(records)
 
-        assertEquals(0, harvest.parseErrors)
-        assertEquals(1, harvest.openFunctions.size, "Exactly one function should be recorded")
-        val func = harvest.openFunctions[0]
+        assertEquals(0, sink.parseErrors)
+        assertEquals(1, harvest.functions.size, "Exactly one function should be recorded")
+        val func = harvest.functions[0]
         assertEquals(1, func.locals.size, "Function should have exactly one local record")
         val varLocal = func.locals[0]
         assertEquals("var", varLocal.body.name, "Local name should be 'var'")
@@ -271,7 +271,7 @@ class HarvesterTest {
      */
     @Test
     fun testNSOLDoesNotAllocateFileNum() {
-        val harvester = dummyHarvester()
+        val (sink, harvester) = dummyHarvester()
         val records = listOf(
             StabRecord(
                 index = 0,
@@ -320,11 +320,11 @@ class HarvesterTest {
 
         val harvest = harvester.harvest(records)
 
-        assertEquals(0, harvest.parseErrors)
+        assertEquals(0, sink.parseErrors)
         // Verify: the type reference (1,3) maps to hdr.h (fileNum 1 from BINCL), not other.h.
         // N_SOL does NOT allocate a new fileNum — it only changes line-tracking context.
-        assertEquals(1, harvest.typeAsts.size, "One type should be harvested")
-        val typeAst = harvest.typeAsts.values.first()
+        assertEquals(1, harvest.types.size, "One type should be harvested")
+        val typeAst = harvest.types.values.first()
         assertEquals("AfterSOL", typeAst.ghidraName, "Type name should be AfterSOL")
         val source = typeAst.source
         assertTrue(
@@ -354,7 +354,7 @@ class HarvesterTest {
      */
     @Test
     fun testBINCLEINCLProcessedInBothPasses() {
-        val harvester = dummyHarvester()
+        val (sink, harvester) = dummyHarvester()
         val records = listOf(
             StabRecord(
                 index = 0,
@@ -394,10 +394,10 @@ class HarvesterTest {
 
         val harvest = harvester.harvest(records)
 
-        assertEquals(0, harvest.parseErrors)
+        assertEquals(0, sink.parseErrors)
         // The type inside the BINCL should be attributed to the header, not the CU
-        assertEquals(1, harvest.typeAsts.size, "Type inside BINCL should be recorded in typeAsts")
-        val typeAst = harvest.typeAsts.values.first()
+        assertEquals(1, harvest.types.size, "Type inside BINCL should be recorded in typeAsts")
+        val typeAst = harvest.types.values.first()
         assertEquals("HeaderType", typeAst.ghidraName, "Type name should be HeaderType")
         val source = typeAst.source
         assertTrue(
@@ -435,7 +435,7 @@ class HarvesterTest {
      */
     @Test
     fun testEXCLRemountCrossVuDedup() {
-        val harvester = dummyHarvester()
+        val (sink, harvester) = dummyHarvester()
         // Construct all records for both CUs in one list
         val records = listOf(
             // CU1
@@ -502,13 +502,13 @@ class HarvesterTest {
 
         val harvest = harvester.harvest(records)
 
-        assertEquals(0, harvest.parseErrors)
+        assertEquals(0, sink.parseErrors)
         // Both type stabs should deduplicate to the same GlobalTypeId.
         // The dedup happens because both CUs reference the SAME HeaderFile instance
         // (via the shared HeaderRegistry), so (1,5) in both CUs produces the same
         // GlobalTypeId(HeaderSource(same HeaderFile), 5).
-        assertEquals(1, harvest.typeAsts.size, "Both types should deduplicate to one GlobalTypeId entry")
-        val typeAst = harvest.typeAsts.values.first()
+        assertEquals(1, harvest.types.size, "Both types should deduplicate to one GlobalTypeId entry")
+        val typeAst = harvest.types.values.first()
         assertEquals("SharedType", typeAst.ghidraName, "Type name should be SharedType")
         val source = typeAst.source
         assertTrue(
@@ -537,7 +537,7 @@ class HarvesterTest {
      */
     @Test
     fun testMultipleCUsTracked() {
-        val harvester = dummyHarvester()
+        val (sink, harvester) = dummyHarvester()
         val records = listOf(
             StabRecord(
                 index = 0,
@@ -585,7 +585,7 @@ class HarvesterTest {
 
         val harvest = harvester.harvest(records)
 
-        assertEquals(0, harvest.parseErrors)
+        assertEquals(0, sink.parseErrors)
         assertTrue(harvest.symbolsByCu.containsKey("cu1.c"), "CU1 should be registered in symbolsByCu")
         assertTrue(harvest.symbolsByCu.containsKey("cu2.c"), "CU2 should be registered in symbolsByCu")
         assertEquals(1, harvest.symbolsByCu["cu1.c"]!!.size, "cu1.c should have exactly one symbol")
@@ -603,7 +603,7 @@ class HarvesterTest {
      */
     @Test
     fun testPreSeedHeadersCreatesPerCUIncludeContexts() {
-        val harvester = dummyHarvester()
+        val (sink, harvester) = dummyHarvester()
         val records = listOf(
             StabRecord(
                 index = 0,
@@ -675,7 +675,7 @@ class HarvesterTest {
 
         val harvest = harvester.harvest(records)
 
-        assertEquals(0, harvest.parseErrors)
+        assertEquals(0, sink.parseErrors)
         assertTrue(harvest.symbolsByCu.containsKey("a.c"), "CU a.c should be registered in symbolsByCu")
         assertTrue(harvest.symbolsByCu.containsKey("b.c"), "CU b.c should be registered in symbolsByCu")
     }

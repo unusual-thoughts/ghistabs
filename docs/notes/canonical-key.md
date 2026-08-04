@@ -8,7 +8,7 @@ val byName: Map<String, List<TypeAst>>       // raw stabs name; cross-CU bucket
 val byCanonicalKey: Map<Pair<CategoryPath, String>, CanonicalGroup>
 ```
 
-`CanonicalGroup`:
+`LocatedType`:
 ```kotlin
 data class CanonicalGroup(
   val key: Pair<CategoryPath, String>,
@@ -61,7 +61,7 @@ template-args-stripped key, kind-filtered.
 
 ## TypeRegistry / "TypeResolver" relevance
 
-Once `byCanonicalKey` owns the registration decision:
+Once `byLocation` owns the registration decision:
 
 - `TypeRegistry.byPath` (hash-keyed first-writer-wins) goes away — dedup
   decided upstream with full provenance.
@@ -72,13 +72,13 @@ Once `byCanonicalKey` owns the registration decision:
 - `dataTypeFor` (decl → DataType) is the actual "resolver" surface;
   stays. `harvest.getByXRef` (name → AST) also stays, broadened.
 
-Net: `TypeRegistry` shrinks to placeholder allocation + body
+Net: `DataTypeRegistry` shrinks to placeholder allocation + body
 materialization + a thin `byId` cache for Ref resolution. The bookkeeping
 of "which AST won this (cat, name) slot" moves to harvest.
 
 ## Status (render-backlog §22)
 
-- **Content-merge folded in.** `byCanonicalKey` is one pipeline: bucket XRef-targets into
+- **Content-merge folded in.** `byLocation` is one pipeline: bucket XRef-targets into
   `(category, ghidraName)` slots (`classifyGroup` picks each winner), then unify slots whose winners
   are content-equivalent and share exactly one named `ghidraName`. The old standalone
   `mergeContentEquivalentGroups` second pass is gone (the fold is provably equivalent).

@@ -177,7 +177,7 @@ containing field/typedef when unambiguous.
   (decompiler shows `undefined4`) — and more broadly forges an empty `/std/X` for every `std::X::method`.
   Root cause: we filed types under *header* categories, so Ghidra's `isNamespaceCategoryMatch` never found
   ours and made its own empty shadow; and because it forms after our import, no post-hoc replacement
-  catches it. **Fix, two parts** (`TypeResolver.scopeKey`/`byCanonicalKey` + `TypeRegistry`): (1) file
+  catches it. **Fix, two parts** (`TypeResolver.scopeKey`/`byLocation` + `DataTypeRegistry`): (1) file
   **every** method-bearing type under its namespace category, named by the demangler's own leaf — the
   exact `(category, name)` Ghidra's this-param creator uses — so our filled slot *is* the slot it would
   forge; byCanonicalKey demotes to header only on a genuine content collision. (2) `register()` uses
@@ -242,7 +242,7 @@ containing field/typedef when unambiguous.
 - [x] **DemanglerReplacer FIXME → authoritative TypeRegistry lookup** —
   `c3eabde` + `1a1b51e`. The "candidates.size == 1 or skip" heuristic
   replaced with `TypeRegistry.findByName(simpleName, preferredCategory)`
-  consulting `byCanonicalKey` (Struct/Enum) and the new
+  consulting `byLocation` (Struct/Enum) and the new
   `extrasByName` map (typedefs, vftable/vtable composites). Preferred
   category derived from the stub's path with `/Demangler` stripped
   (`/Demangler/std/string` prefers `/std`). DTM-walk fallback dropped

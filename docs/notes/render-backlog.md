@@ -94,7 +94,7 @@ line-conflation bug.
 
 The real opportunity: the `undefined2 in_stack_0000000e;` entries are Ghidra's
 decompiler naming an *incoming stack parameter at +0xe* it never folded into a
-named param. The stab `StackParam`/`StackLocal` carries the matching frame offset
+named param. The stab `Param`/`StackLocal` carries the matching frame offset
 (`n_value`); matching stab offset → Ghidra decomp storage would let us rename
 `in_stack_*` to the real source name. Ties into #2 (token-level decomp cleanup).
 
@@ -276,7 +276,7 @@ Only register-var (`N_RSYM`) partial-liveness mapping remains a possible future 
 
 *Part B (the AppImage attribution divergence, below) — RESOLVED by §6's shared hint.* AppImage now
 **renders** in `…/imageutil/appimage.h` and its **DTM category** is the same `…/appimage.h/AppImage` —
-the two paths agree. They weren't unified by pointing `effectiveSource` at `byCanonicalKey` (as the
+the two paths agree. They weren't unified by pointing `effectiveSource` at `byLocation` (as the
 note proposed) but by both consulting the shared `multiSourceHeaderHints` map (`effectiveSource` =
 `hint ?: declSourceFile ?: id.source`; `Attribution.keyFor` = std → real-header → single → **hint** →
 `lex-min/multi`). Residual: the paths are still separate code and *could* diverge for a hint-less,
@@ -573,7 +573,7 @@ No fixture loses content.
 by `SourceCanonicalizationTest`) builds raw-spelling → canonical-spelling: a bare basename that
 matches **exactly one** full path folds that full path onto the bare name; two full paths sharing
 a basename leave the bare name ambiguous → nothing merges; everything else maps to itself.
-`TypeResolver` computes it once (`sourceCanonicalization`, seeded from `lineEntries.keys`,
+`HarvestIndex` computes it once (`sourceCanonicalization`, seeded from `lineEntries.keys`,
 `symbolsByCu.keys`, `functionSource.values`, and each type's `effectiveSource()` — none depend on
 canonicalization, so no cycle) and exposes `canonicalSource(raw)` plus canonical-keyed fan-in views
 `lineEntriesByCanonicalSource` / `symbolsByCanonicalSource` (re-sorted by (line, addr)). `Renderer`
@@ -692,7 +692,7 @@ deps. No filename heuristic — the type name resolves to its actual definition'
 gcc emits one physical header two ways (§15) with *different* N_BINCL checksums, so one logical
 type gets several `GlobalTypeId`s: a **named** struct/enum in one spelling
 (`.../include/dspinfo/dspinfo.h/dspinfo`), an **anonymous** copy in another (`Anon_dspinfo_4`, the
-InlineDef target of a `typedef`), plus `typedef …;` aliases. `byCanonicalKey` groups by
+InlineDef target of a `typedef`), plus `typedef …;` aliases. `byLocation` groups by
 `(category, ghidraName)`, so these land in *distinct* groups → the DTM materializes several
 DataTypes for one type. Ghidra's decompiler picks a struct/enum's **display** name by resolving
 across *all* same-named DataTypes plus the typedef graph, so the duplication is not inert: a
@@ -715,7 +715,7 @@ it only fixed the *some* spellings that folded by basename, leaving the rest dup
   `typedef struct {…} Name;` (InlineDef) and `typedef enum {…} Name;` (a separate anon enum + a
   `Ref` typedef) both name their anonymous aggregate after the typedef — handles the *sole*-anon
   case (no named counterpart for the merge to find) and lets same-name merging compose.
-- **`TypeRegistry` typedef-skip.** The typedef materialization phase no longer registers a `/stabs`
+- **`DataTypeRegistry` typedef-skip.** The typedef materialization phase no longer registers a `/stabs`
   `TypedefDataType` whose target already carries that exact name — that duplicate is precisely the
   same-named DataType that destabilises the decompiler's display resolution.
 
@@ -743,14 +743,14 @@ spanning >1 group, source folds, and duplicate-named DataTypes — rather than b
   group). Degradation-neutral across fixtures; `xref-base-tag-resolved` 41→49 (more XRefs resolve once
   types unify — baseline bumped).
 
-- **DONE: enum double-registration → `.conflict`.** `b2BodyType` was **one** `byCanonicalKey` group
+- **DONE: enum double-registration → `.conflict`.** `b2BodyType` was **one** `byLocation` group
   (18 members, `distinct=1`) yet materialized as **two** DataTypes at the identical `/src/body.h/b2BodyType`
   slot → Ghidra `.conflict` (`b2BodyType`/`b2ShapeType`, `EnumDSPRev`). Root cause: `materializeAll`
   registered **struct** placeholders into the DTM up front and filled them *in place*, but **enum**
   placeholders were left unregistered and `materializeEnum` built a *brand-new* `EnumDataType`. The empty
   placeholder leaked into the DTM via any struct-field/param `Ref` resolved (through `tryGetExisting`)
   before the winner materialized, colliding with the filled enum under `register`'s `KEEP_HANDLER`.
-  **Fix** (`TypeRegistry.kt`): register enum placeholders up front like structs (`raw is Enum`), keep the
+  **Fix** (`DataTypeRegistry.kt`): register enum placeholders up front like structs (`raw is Enum`), keep the
   placeholder an `EnumDataType` sized correctly at creation in `makePlaceholder` (also fixes the latent
   `-fshort-enums` case that fell to a `Structure` stub), and `materializeEnum` fills that one registered
   object in place. Verified: **zero `.conflict`** across all six fixtures' decomp; `duplicateNamedTypes`
@@ -772,7 +772,7 @@ threaded through 8 render sites.
   `canon()` (`it.source == source` just works, the fields are already canonical).
   `TypeResolver.{lineEntriesByCanonicalSource,symbolsByCanonicalSource,canonicalizePaths}` removed;
   `effectiveSource` memoised once as `effectiveSourceByType`.
-- **Phase 3 — §20 merge folded.** `mergeContentEquivalentGroups` inlined into a single `byCanonicalKey`
+- **Phase 3 — §20 merge folded.** `mergeContentEquivalentGroups` inlined into a single `byLocation`
   pipeline (same comparators/condition — provably equivalent).
 
 **Attribution stays raw — the crux.** `multiSourceHeaderHints` feeds `Attribution.keyFor` (DTM category)
@@ -846,7 +846,7 @@ Behavioural: shifts regression counters — regen baselines with `-PregenerateBa
 
 ## 25. `_ZTV` symbols with no stabs class are never annotated — open
 
-`buildAndApplyVtable` runs per `CanonicalGroup`, i.e. only for classes we harvested a `T`-stab
+`buildAndApplyVtable` runs per `LocatedType`, i.e. only for classes we harvested a `T`-stab
 body for. libsupc++ is linked without stabs, so its own polymorphic classes — `std::type_info`,
 `__cxxabiv1::__{class,si_class,vmi_class}_type_info` — have a `_ZTV…` symbol and a real vtable in
 `.data` but no group, and `resolveVtableAddress` is never called for them. On unpackfile,
@@ -867,7 +867,7 @@ outright on any fixture without it.
 
 ## 26. Bitfields are laid at their containing byte, not as bitfields — open
 
-`FieldDecl` (`parse/Ast.kt`) carries `offsetBits`/`sizeBits` faithfully, but every consumer
+`Field` (`parse/Ast.kt`) carries `offsetBits`/`sizeBits` faithfully, but every consumer
 divides by 8. `fillComposite` (`materialize/Materialization.kt`) ends in
 `placeholder.replaceAtOffset((field.offsetBits / 8).toInt(), ft, …)`, so `unsigned a:3;
 unsigned b:5;` both resolve to byte offset 0 and the second call overwrites the first: one
@@ -923,3 +923,23 @@ as locals (structurally stale), CU-top-level types sit in the opening declaratio
 9d812a3), and only types emitted during body output — the template-instantiation typedefs §17 leans
 on — genuinely carry their own file. The `body !is Struct && body !is Enum` guard in
 `TypeResolver.effectiveSource` is doing that discrimination by proxy.
+
+---
+
+## `4900866` is not behaviour-neutral on a.out fixtures
+
+Its message says *"Behaviour-neutral — unpackfile moves only the two reglocal counters"*. That was
+checked on one PE fixture. Bisected on `zlib_aout_gcc263` (regenerate at `49a3838` vs `4900866`):
+
+| | `49a3838` (parent) | `4900866` |
+| --- | --- | --- |
+| `empty-scope` | 140 | **24** |
+| `reglocal-renamed-scope` | 5 | **19** |
+
+Mechanism: it replaced address-sorted bracket processing (`buildBlocks` sorted brackets, claimed
+locals by `recordIndex`) with stream-order processing. In unlinked `.o` files many brackets carry the
+same unrelocated address, so the two orders build different trees — identical on PE, divergent on
+a.out. All three a.out fixtures moved (`tinyxml` 298→49, `zlib` 140→24, `hello` 2→0).
+
+**Open:** which tree is *correct* isn't established — fewer empty scopes may be the fix or may be
+scopes being dropped. Any future neutrality claim here needs an a.out fixture in the check.

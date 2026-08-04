@@ -17,12 +17,12 @@
             "max": 4
         },
         "canonical-key-merged": {
-            "min": 2092,
-            "max": 2092
+            "min": 2095,
+            "max": 2095
         },
         "canonical-key-multi-hash": {
-            "min": 253,
-            "max": 253
+            "min": 250,
+            "max": 250
         },
         "canonical-key-multi-kind": {
             "min": 28,
@@ -31,10 +31,6 @@
         "canonical-scope-collision": {
             "min": 22,
             "max": 22
-        },
-        "contenthash-collision": {
-            "min": 4,
-            "max": 4
         },
         "data-no-coverage": {
             "min": 1154,
@@ -196,10 +192,6 @@
             "min": 242,
             "max": 242
         },
-        "harvest-parse-errors": {
-            "min": 0,
-            "max": 0
-        },
         "harvest-records-parsed": {
             "min": 177877,
             "max": 177877
@@ -217,8 +209,8 @@
             "max": 366
         },
         "harvest-typeAsts": {
-            "min": 92230,
-            "max": 92230
+            "min": 92232,
+            "max": 92232
         },
         "harvest-typeAsts-Array": {
             "min": 1141,
@@ -229,8 +221,8 @@
             "max": 279
         },
         "harvest-typeAsts-Const": {
-            "min": 3522,
-            "max": 3522
+            "min": 3524,
+            "max": 3524
         },
         "harvest-typeAsts-Enum": {
             "min": 3376,
@@ -293,8 +285,8 @@
             "max": 0
         },
         "harvest-typeAsts-unique-by-id": {
-            "min": 92230,
-            "max": 92230
+            "min": 92232,
+            "max": 92232
         },
         "inheritance-applied": {
             "min": 1008,
@@ -325,8 +317,8 @@
             "max": 85
         },
         "placeholder-created": {
-            "min": 52371,
-            "max": 52371
+            "min": 52373,
+            "max": 52373
         },
         "pointee-typed": {
             "min": 127,
@@ -411,10 +403,6 @@
         "xref-base-tag-ambiguous": {
             "min": 51,
             "max": 51
-        },
-        "xref-base-tag-resolved": {
-            "min": 94,
-            "max": 94
         },
         "xref-undefined": {
             "min": 30,

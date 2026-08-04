@@ -6,15 +6,11 @@ import ghidra.app.util.importer.ProgramLoader
 import ghidra.program.model.listing.Program
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
-import ghistabs.StabsOptions
-import ghistabs.defaultContext
+import ghistabs.*
 import ghistabs.diagnose.Level
-import ghistabs.disableAnalyzersFromProperty
-import ghistabs.disableWindowsResourceAnalyzer
+import ghistabs.harvest.HarvestIndex
 import ghistabs.harvest.Harvester
-import ghistabs.harvest.TypeResolver
 import ghistabs.parse.StabReader
-import ghistabs.runTransaction
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.params.ParameterizedTest
@@ -94,7 +90,7 @@ class SourceSkeletonProbe : AbstractGhidraHeadlessIntegrationTest() {
                     Harvester(ctx).harvest(reader.records)
                 }
 
-                val typeResolver = TypeResolver(harvest)
+                val index = HarvestIndex(harvest)
                 val written = Mode.entries.sumOf { mode ->
                     val outDir = File("build/test-output/${mode.outDirName}/${fixture.nameWithoutExtension}")
                     if (outDir.exists()) {
@@ -102,7 +98,7 @@ class SourceSkeletonProbe : AbstractGhidraHeadlessIntegrationTest() {
                         oldDir.deleteRecursively()
                         outDir.renameTo(oldDir)
                     }
-                    Renderer(typeResolver, program, mode, ctx.resolver).use { renderer ->
+                    Renderer(index, program, mode, ctx.resolver).use { renderer ->
                         renderer.renderAll(outDir).also {
                             println(
                                 "Pipeline[$binaryName, ${mode.outDirName}]: " +

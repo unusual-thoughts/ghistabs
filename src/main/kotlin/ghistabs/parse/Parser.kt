@@ -1,7 +1,20 @@
 package ghistabs.parse
 
-import ghistabs.diagnose.DiagnosticSink
-import ghistabs.diagnose.DummySink
+import ghistabs.parse.TypeDecl.Struct.*
+
+/** Parse outcome. [Ok.trailing] carries the unconsumed-tail message; reporting is the caller's job. */
+sealed interface ParseResult<out T> {
+    data class Ok<T>(val inner: T, val trailing: String? = null) : ParseResult<T>
+
+    // ParseResult<Nothing>, not Error<T>: covariance then makes an Error usable as any ParseResult<U>,
+    // so [map] needs no unchecked cast to re-tag the failure branch.
+    data class Error(val ex: StabsParseException) : ParseResult<Nothing>
+
+    fun <U> map(transform: (T) -> U): ParseResult<U> = when (this) {
+        is Ok -> Ok(transform(inner), trailing)
+        is Error -> this
+    }
+}
 
 /**
  * Recursive-descent parser for stabs type and symbol descriptors.
@@ -18,7 +31,7 @@ import ghistabs.diagnose.DummySink
  * silently ignored. This is intentional — the caller is responsible for processing
  * multiple records or filtering trailing input as needed.
  */
-class Parser(src: String, sink: DiagnosticSink = DummySink) : DiagnosticSink by sink {
+class Parser(src: String) {
     private companion object {
         // gcc builtin negative type number for `int` (see BuiltinTable): the implicit type of
         // a value-only `:c=` constant.
@@ -42,9 +55,25 @@ class Parser(src: String, sink: DiagnosticSink = DummySink) : DiagnosticSink by 
     private val c = Cursor(src)
 
     /**
+     * A fully-parsed record ends at a terminator run; anything else is an unimplemented section
+     * silently dropped by the parser's leniency (the `~%` bug was one such tail, once struct-local).
+     */
+    private val trailingMessage get() =
+        if (remaining.any { it != ';' && !it.isWhitespace() }) {
+            "@'${c.src.take(80)}': +'${remaining.trim().take(40)}'"
+        } else {
+            null
+        }
+
+    /**
      * Parse a type descriptor body, exposed for testing.
      */
-    fun parseTypeBody(): TypeDecl<LocalTypeId> = c.parseType()
+    fun parseTypeBody(): ParseResult<TypeDecl<LocalTypeId>> = try {
+        // Argument order matters: parseType() must run before trailingMessage reads the cursor tail.
+        ParseResult.Ok(c.parseType(), trailingMessage)
+    } catch (e: StabsParseException) {
+        ParseResult.Error(e)
+    }
 
     /**
      * Parse a symbol declaration: `name:descriptor` where descriptor may be
@@ -53,12 +82,10 @@ class Parser(src: String, sink: DiagnosticSink = DummySink) : DiagnosticSink by 
      *
      * Mirror of gdb/stabsread.c:define_symbol.
      */
-    fun parseSymbol() = c.parseSymbol().apply {
-        // A fully-parsed record ends at a terminator run; anything else is an unimplemented section
-        // silently dropped by the parser's leniency (the `~%` bug was one such tail, once struct-local).
-        if (remaining.any { it != ';' && !it.isWhitespace() }) {
-            warn("unparsed-trailing", "@'${c.src.take(80)}': +'${remaining.trim().take(40)}'")
-        }
+    fun parseSymbol(): ParseResult<SymbolDecl<LocalTypeId>> = try {
+        ParseResult.Ok(c.parseSymbol(), trailingMessage)
+    } catch (e: StabsParseException) {
+        ParseResult.Error(e)
     }
 
     /** Unconsumed tail after [parseSymbol]/[parseTypeBody] — the caller checks for full consumption. */
@@ -74,42 +101,42 @@ class Parser(src: String, sink: DiagnosticSink = DummySink) : DiagnosticSink by 
         return when (val descriptor = peekOrNull()) {
             'F' -> {
                 advance()
-                SymbolDecl.Function(name, isFileStatic = false, type = parseType()).also { skipScopeSpecifier() }
+                SymbolDecl.Function(name, FunctionScope.GLOBAL, type = parseType()).also { skipScopeSpecifier() }
             }
 
             'f' -> {
                 advance()
-                SymbolDecl.Function(name, isFileStatic = true, type = parseType()).also { skipScopeSpecifier() }
+                SymbolDecl.Function(name, FunctionScope.FILE, type = parseType()).also { skipScopeSpecifier() }
             }
 
             'p' -> {
                 advance()
-                SymbolDecl.StackParam(name, parseType())
+                SymbolDecl.Param(name, parseType(), VariableLocation.STACK)
             }
 
-            'P' -> {
+            'P', 'R' -> {
                 advance()
-                SymbolDecl.RegParam(name, parseType())
+                SymbolDecl.Param(name, parseType(), VariableLocation.REGISTER)
             }
 
             'r' -> {
                 advance()
-                SymbolDecl.RegLocal(name, parseType())
+                SymbolDecl.Local(name, parseType(), VariableLocation.REGISTER)
             }
 
             'G' -> {
                 advance()
-                SymbolDecl.Global(name, parseType())
+                SymbolDecl.Static(name, parseType(), StaticScope.GLOBAL)
             }
 
             'S' -> {
                 advance()
-                SymbolDecl.StaticVar(name, parseType(), isFunctionLocal = false)
+                SymbolDecl.Static(name, parseType(), StaticScope.FILE)
             }
 
             'V' -> {
                 advance()
-                SymbolDecl.StaticVar(name, parseType(), isFunctionLocal = true)
+                SymbolDecl.Static(name, parseType(), StaticScope.FUNCTION)
             }
 
             'T' -> parseNamedType(name, TypeNameKind.TAG)
@@ -122,7 +149,7 @@ class Parser(src: String, sink: DiagnosticSink = DummySink) : DiagnosticSink by 
             // a type-number ref or inline def (`(cu,n)`, a bare number, or a negative builtin).
             // Any other letter is a symbol descriptor we don't implement — surface it, don't
             // silently misread it as a type (e.g. `a`/`s`/`x`/`R` would parse as array/struct/…).
-            else if (peekStartsTypeId()) -> SymbolDecl.StackLocal(name, parseType())
+            else if (peekStartsTypeId()) -> SymbolDecl.Local(name, parseType(), VariableLocation.STACK)
 
             else -> throw StabsParseException(pos, src, "unhandled symbol descriptor '$descriptor'")
         }
@@ -299,8 +326,8 @@ class Parser(src: String, sink: DiagnosticSink = DummySink) : DiagnosticSink by 
         // (so the struct ends with field-terminator + struct-terminator = ";;").
         // After consuming each field's ';', peek: if the next char is ';' that's the
         // struct terminator — exit without consuming it (consumed below).
-        val fields = mutableListOf<FieldDecl<LocalTypeId>>()
-        val methods = mutableListOf<MethodDecl<LocalTypeId>>()
+        val fields = mutableListOf<Field<LocalTypeId>>()
+        val methods = mutableListOf<Method<LocalTypeId>>()
 
         while (peekOrNull() != ';' && !eof) {
             val name = readMemberName()
@@ -334,12 +361,12 @@ class Parser(src: String, sink: DiagnosticSink = DummySink) : DiagnosticSink by 
                         consume(';')
                         // `,0,0` shape is static here too (see the plain `:` branch below).
                         val isStatic = offsetBits == 0L && sizeBits == 0L
-                        fields.add(FieldDecl(name, type, offsetBits, sizeBits, isStatic, access, mangled = null))
+                        fields.add(Field(name, type, offsetBits, sizeBits, isStatic, access, mangled = null))
                     } else {
                         consume(':')
                         val mangled = readUntilAny(charArrayOf(';'))
                         consume(';')
-                        fields.add(FieldDecl(name, type, 0, 0, isStatic = true, access, mangled))
+                        fields.add(Field(name, type, 0, 0, isStatic = true, access, mangled))
                     }
                 }
 
@@ -356,7 +383,7 @@ class Parser(src: String, sink: DiagnosticSink = DummySink) : DiagnosticSink by 
                     // instead of the `:mangled` form; offset-and-size both zero is a shape a
                     // real field can't take, so it marks the member static.
                     val isStatic = offsetBits == 0L && sizeBits == 0L
-                    fields.add(FieldDecl(name, type, offsetBits, sizeBits, isStatic, Access.PUBLIC, mangled = null))
+                    fields.add(Field(name, type, offsetBits, sizeBits, isStatic, Access.PUBLIC, mangled = null))
                 }
 
                 peekFollows("/") -> {
@@ -367,7 +394,7 @@ class Parser(src: String, sink: DiagnosticSink = DummySink) : DiagnosticSink by 
                     consume(':')
                     val mangled = readUntilAny(charArrayOf(';'))
                     consume(';')
-                    fields.add(FieldDecl(name, type, 0, 0, isStatic = true, access, mangled))
+                    fields.add(Field(name, type, 0, 0, isStatic = true, access, mangled))
                 }
 
                 else -> {
@@ -410,7 +437,7 @@ class Parser(src: String, sink: DiagnosticSink = DummySink) : DiagnosticSink by 
      *
      * Mirror of gdb/stabsread.c:read_cpp_abbrev.
      */
-    private fun Cursor.parseInheritanceList(): List<BaseDecl<LocalTypeId>> {
+    private fun Cursor.parseInheritanceList(): List<Base<LocalTypeId>> {
         val count = readInt().toInt()
         consume(',')
 
@@ -422,7 +449,7 @@ class Parser(src: String, sink: DiagnosticSink = DummySink) : DiagnosticSink by 
                 consume(',')
                 val baseType = parseType() // handles (cu,n) ref and (cu,n)=<inline-def> forms
                 consume(';')
-                add(BaseDecl(baseType, virt, access, offsetBits))
+                add(Base(baseType, virt, access, offsetBits))
             }
         }
     }
@@ -436,7 +463,7 @@ class Parser(src: String, sink: DiagnosticSink = DummySink) : DiagnosticSink by 
      *
      * Mirror of gdb/stabsread.c:read_member_functions.
      */
-    private fun Cursor.parseMethodBlock(name: String): MethodDecl<LocalTypeId> {
+    private fun Cursor.parseMethodBlock(name: String): Method<LocalTypeId> {
         val signature = parseType()
 
         val mangled = if (!eof && peekOrNull() == ':') {
@@ -483,7 +510,7 @@ class Parser(src: String, sink: DiagnosticSink = DummySink) : DiagnosticSink by 
 
         consumeIf(';')
 
-        return MethodDecl(
+        return Method(
             name = name,
             mangled = mangled,
             signature = signature,

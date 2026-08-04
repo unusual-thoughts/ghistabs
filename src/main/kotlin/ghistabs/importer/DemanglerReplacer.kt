@@ -10,7 +10,7 @@ import ghistabs.applyDemangling
 import ghistabs.demangle
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.degradation
-import ghistabs.materialize.TypeRegistry
+import ghistabs.materialize.DataTypeRegistry
 import ghistabs.materialize.itanium.RttiStructs
 import ghistabs.parse.CATEGORY
 import ghistabs.parse.isMangled
@@ -23,10 +23,10 @@ sealed class Skip(open val reason: String) {
 
 /**
  * Replaces empty `/Demangler/...` stubs with our registered types. Candidates come from
- * [TypeRegistry.allCreatedDataTypes] only — no DTM-wide heuristics. The stub's path (sans `/Demangler`)
+ * [DataTypeRegistry.allCreatedDataTypes] only — no DTM-wide heuristics. The stub's path (sans `/Demangler`)
  * acts as the preferred-category hint when multiple candidates share a simple name.
  */
-class DemanglerReplacer(private val ctx: ImportContext<*>, private val typeRegistry: TypeRegistry) :
+class DemanglerReplacer(private val ctx: ImportContext<*>, private val registry: DataTypeRegistry) :
     DiagnosticSink by ctx {
     companion object {
         val DEMANGLER_CATEGORY: CategoryPath = CategoryPath.ROOT.extend("Demangler")
@@ -168,7 +168,7 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val typeRegis
             )
             // Priority: exact DTM name → exact demangler-link (byDemangledClass) → RTTI layout.
             val candidate = findByExactName(stub.name, preferredCategory)?.also { debug("demangler-exact-match") }
-                ?: typeRegistry.byDemangledClass[stub.pathName]?.also { debug("demangler-reverse-demangle-match") }
+                ?: registry.byDemangledClass[stub.pathName]?.also { debug("demangler-reverse-demangle-match") }
                 ?: rtti.typeInfoLayout(stub.name)?.let { dtm.resolve(it, null) }
                     ?.also { debug("demangler-rtti-match") }
                 ?: continue
@@ -204,7 +204,7 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val typeRegis
     private val rtti by lazy { RttiStructs(ctx.dtm) }
 
     /** Every datatype the registry materialized, by name (checked first, so exact names never go through normalization) */
-    private val byExactName = typeRegistry.allCreatedDataTypes.groupBy { it.name }.mapValues { it.value.toSet() }
+    private val byExactName = registry.allCreatedDataTypes.groupBy { it.name }.mapValues { it.value.toSet() }
 
     /** Exact DTM-name match for a demangler stub — no spelling normalization. */
     fun findByExactName(simpleName: String, preferredCategory: CategoryPath? = null): DataType? =
