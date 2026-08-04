@@ -202,7 +202,7 @@ data class TypeLocation(val category: CategoryPath, val name: String) {
  *  [type] is the one chosen to materialize
  *  [members] and [distinct] are for diagnostics.
  *  [members] contains all the harvested [Type]s that located there, and
- *  [distinct] is the count of truly different types among them according to [ContentHasher]
+ *  [distinct] is the count of truly different types among them according to [ContentIndex]
  */
 @Serializable
 data class LocatedType(val location: TypeLocation, val type: Type, val members: List<GlobalTypeId>, val distinct: Int)
