@@ -189,7 +189,11 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val registry:
             }
         }
 
-        val pairs = ops.filter { (stub, _) -> dtm.contains(stub) }
+        // Both sides must be DTM-resident. A candidate can be a never-resolved XRef placeholder — still
+        // detached, see DataTypeRegistry.seedPlaceholder — and replaceDataType rejects that with
+        // "Unexpected ID for replacement datatype (-1)". Nothing is lost by skipping it: a detached stub
+        // is an empty struct, so it carries nothing the /Demangler stub doesn't already have.
+        val pairs = ops.filter { (stub, repl) -> dtm.contains(stub) && dtm.contains(repl) }
         // Batched: one whole-program reference sweep for all replacements (updateCategoryPath=false keeps
         // each at its real category), instead of Ghidra's per-`replaceDataType` sweep — O(stubs × program).
         try {

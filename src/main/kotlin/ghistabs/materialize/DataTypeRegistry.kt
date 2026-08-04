@@ -84,8 +84,14 @@ class DataTypeRegistry(
     internal fun cacheIfAbsent(id: GlobalTypeId, dt: DataType?): DataType? = dt?.let { byId.getOrPut(id) { it } }
 
     /**
-     *  Get-or-create the empty cycle-break stub for [this] under [CATEGORY]; [materializeAll] fills it.
-     * [reason] is  */
+     * Get-or-create the empty cycle-break stub for [this] under [CATEGORY]; [materializeAll] fills it.
+     *
+     * Deliberately *not* resolved into the DTM, unlike [LocatedType.seedPlaceholder]: a group winner is
+     * about to be filled, but this stub may stay empty forever (an XRef nothing ever defines). Resolving
+     * an empty struct whose name already exists filled takes the conflict handler's RENAME_AND_ADD path
+     * — measured at +714 `.conflict` types on crypto_mi_test_gcc421_fullstabs. Consumers that hand a
+     * DataType to Ghidra must therefore check DTM residency; see `DemanglerReplacer.replace`.
+     */
     internal fun Type.seedPlaceholder(reason: String? = null): DataType =
         placeholders.getOrPut(id) { makePlaceholder(this, CATEGORY, reason) }
 
