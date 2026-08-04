@@ -103,19 +103,37 @@ abstract class ContentIndex(val contentCache: MutableMap<GlobalTypeId, LayoutCon
             ?: LayoutContent(GlobalTypeId::class.java, listOf(id.n))
     }
 
-    data class LayoutContent(
+    /**
+     * Deliberately not a `data class`: the generated `toString` walks the whole graph, and one of these
+     * is reachable from every content diagnostic — printing them across a collection is what turned a
+     * debug `println` into a 20-minute hang. Identity `toString` is useless but harmless; equality, which
+     * is the entire point of the type, is spelled out below.
+     */
+    class LayoutContent(
         val klass: Class<*> = Nothing::class.java,
         val data: List<Any> = emptyList(),
         val children: List<List<LayoutContent>> = emptyList(),
     ) {
-        // Computed once, bottom-up: [refKey] hands the *same* instance to every referrer, so the graph
-        // is a DAG and the generated hashCode would re-walk a shared subgraph once per reference —
-        // exponential in sharing depth on libstdc++ templates. Each node folds its children's cached
-        // hashes instead, making the whole traversal O(edges). Safe to precompute: back-edges resolve
-        // to an empty LayoutContent, so the graph is acyclic and children exist before their parent.
+        // Both folded once, bottom-up. [refKey] hands the *same* instance to every referrer, so the graph
+        // is a DAG and a naive walk re-visits each shared subgraph once per reference: on
+        // crypto_mi_test_gcc421_fullstabs that is 16.0M visits against 154809 distinct nodes (~104x,
+        // worst single node 11458). Safe to precompute: back-edges resolve to an empty LayoutContent, so
+        // the graph is acyclic and children always exist before their parent.
         private val hash = Objects.hash(klass, data, children)
 
+        /** Nodes a structural walk visits, sharing counted once per reference — so above the distinct
+         *  node count. This is the cost of deep-walking (or stringifying) this node. */
+        val expandedNodes: Int = 1 + children.sumOf { group -> group.sumOf { it.expandedNodes } }
+
         override fun hashCode() = hash
+
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            // Reject on the cached hash before descending: every deep comparison happens inside a
+            // groupBy bucket, where unequal-but-same-bucket is exactly the case worth short-circuiting.
+            if (other !is LayoutContent || hash != other.hash) return false
+            return klass == other.klass && data == other.data && children == other.children
+        }
     }
 
     private fun TypeDecl<GlobalTypeId>.layoutContent(visited: Set<GlobalTypeId>) = LayoutContent(

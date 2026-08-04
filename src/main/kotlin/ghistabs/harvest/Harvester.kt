@@ -101,8 +101,7 @@ class Harvester(private val monitor: TaskMonitor, private val sink: DiagnosticSi
                         // equate + synthetic enum catalog rather than data (see SymbolApplier).
                         is SymbolDecl.Constant -> constants += decl
 
-                        is SymbolDecl.Function, is SymbolDecl.Param,
-                        -> warn("unexpected-lsym", "$sym")
+                        is SymbolDecl.Function, is SymbolDecl.Param -> warn("unexpected-lsym", "$sym")
                     }
                 }
 
