@@ -1278,9 +1278,9 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         for ((k, asts) in different) {
             val (content, names) = k
             if (asts.size > 1 && names.contains(null)) {
-                println("- ${content.hashCode()}")
-                for (ast in asts) {
-                    println("       =>  ${index.content(ast.body).hashCode()} ${ast.id} ${ast.ghidraName}")
+                println("- [${content.expandedNodes}]")
+                for (ast in asts.sortedBy { it.id.toString() }) {
+                    println("       =>  ${ast.id} ${ast.ghidraName} [${index.content(ast.body).expandedNodes}]")
                 }
             }
         }
