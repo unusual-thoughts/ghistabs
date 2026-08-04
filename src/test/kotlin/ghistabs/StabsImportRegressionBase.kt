@@ -88,7 +88,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
 
     private lateinit var loadResults: LoadResults<Program>
     private lateinit var context: ImportContext<CapturingSink>
-    private var artifacts: ImportArtifacts? = null
+    private lateinit var artifacts: ImportArtifacts
     private val program get() = context.program
 
     @BeforeAll
@@ -151,7 +151,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
                     }
                     mgr.scheduleOneTimeAnalysis(discovered, program.memory)
                     runAutoAnalysis(mgr, monitor)
-                    artifacts = probe.artifacts
+                    artifacts = checkNotNull(probe.artifacts) { "artifacts not populated by CONCURRENT" }
                 }
 
                 Mode.AFTER -> {
@@ -165,7 +165,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
                     mgr.initializeOptions()
                     runAutoAnalysis(mgr, monitor)
                     program.runTransaction("stabs-analyze") {
-                        artifacts = context.import()
+                        artifacts = checkNotNull(context.import()) { "artifacts not populated by AFTER" }
                     }
                 }
             }
@@ -175,7 +175,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             // truncates at ~500 lines.
             logFile.writeText(context.terminal.dedupedOutput() + "\n--- MessageLog ---\n" + log.toString())
             // Stripped/no-stabs fixtures produce no artifacts; nothing to dump.
-            artifacts?.writeRegistryDump(registryDumpFile)
+            artifacts.writeRegistryDump(registryDumpFile)
             writeDegradationDump()
         } catch (e: org.opentest4j.TestAbortedException) {
             throw e // the load-failure skip above — propagate as a skip, not a failure
@@ -524,7 +524,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         // with no linkage name at all — `_ZNSs4nposE` appears 0 times in crypto_mi_test_gcc421 but
         // 37 times in its _fullstabs twin. There is then nothing to reconcile *from*, so this is a
         // property of the debug info, not of the importer: gate on the link actually being present.
-        val declared = artifacts?.harvest?.types?.values.orEmpty()
+        val declared = artifacts.harvest.types.values.orEmpty()
             .mapNotNull { it.body as? TypeDecl.Struct }
             .flatMap { it.fields }
             .any { it.name == "npos" && it.mangled != null }
@@ -851,8 +851,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     @Test
     fun demanglerStringReplacedAfterStubInjection() {
         assumeTrue(binaryName == "xapasmcsr.exe" || binaryName == "appquery.exe")
-        val typeRegistry = artifacts?.registry
-        assumeTrue(typeRegistry != null, "import didn't populate artifacts")
+        val typeRegistry = artifacts.registry
         val demanglerCat = CategoryPath("/Demangler/std")
         program.runTransaction("inject-demangler-stub") {
             program.dataTypeManager.createCategory(demanglerCat)
@@ -872,7 +871,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         )
 
         program.runTransaction("rerun-demangler-replacer") {
-            ghistabs.importer.DemanglerReplacer(context, typeRegistry!!).replace()
+            ghistabs.importer.DemanglerReplacer(context, typeRegistry).replace()
         }
 
         Assertions.assertNull(
@@ -905,9 +904,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     @Test
     fun voidSelfRefNotMaterialized() {
         // Reuse setUp's harvest; re-harvest only when the import produced none (no stabs).
-        val harvest = artifacts?.harvest ?: program.runTransaction("void-self-ref-harvest") {
-            Harvester(context).harvest(StabReader.fromProgram(program)!!.readAll().records)
-        }
+        val harvest = artifacts.harvest
         val voidAsts = harvest.types.values.filter { it.body is TypeDecl.Void }
         assumeTrue(voidAsts.isNotEmpty(), "no gcc-void asts in this fixture's harvest")
 
@@ -1250,10 +1247,10 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     fun harvestTest() {
         // Reuse setUp's import artifacts; re-read / re-harvest only when it produced none (no stabs).
         // Harvest is a pure producer (no Program mutation), so the fallback needs no transaction.
-        val records = artifacts?.records ?: StabReader.fromProgram(program)!!.readAll().records
+        val records = artifacts.records
         dumpJson.encodeToStream(records, recordsFile.outputStream())
 
-        val harvest = artifacts?.harvest ?: Harvester(context).harvest(records)
+        val harvest = artifacts.harvest
         dumpJson.encodeToStream(harvest, harvestFile.outputStream())
 
         val classStructs = harvest.types.values
@@ -1266,21 +1263,24 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             .filter { (ast, body) -> body.fields.isEmpty() && body.methods.isEmpty() }
             .toList()
 
-        val resolver = ghistabs.harvest.HarvestIndex(harvest)
+        val index = artifacts.index
         val baseTypes =
             harvest.types.values.filter { it.id.source is SourceFile.CUSource && !it.body.isXRefTarget }.toList()
         val different = baseTypes
-            .groupBy { resolver.content(it.body) }
+            .groupBy { index.content(it.body) }
             .mapKeys { (k, v) -> k to v.map { it.name }.toSet() }
 
-        println("base types: ${different.mapValues { (_, v) -> v.size }}")
+        // Never print a LayoutContent: the worst expands to ~11k nodes, and the old `println(different)`
+        // stringified one per map key across every content class. hashCode is memoized and O(1);
+        // identity is all this diagnostic needs.
+        println(layoutStats(index))
+        println("base types: ${baseTypes.size} types in ${different.size} content classes")
         for ((k, asts) in different) {
-            val (hash, names) = k
+            val (content, names) = k
             if (asts.size > 1 && names.contains(null)) {
-                println("- $hash")
+                println("- ${content.hashCode()}")
                 for (ast in asts) {
-                    val h = resolver.content(ast.body)
-                    println("       =>  $h ${ast.id} $ast")
+                    println("       =>  ${index.content(ast.body).hashCode()} ${ast.id} ${ast.ghidraName}")
                 }
             }
         }
@@ -1295,6 +1295,36 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
                     "(${emptyStructs.take(5).map { (a, _) -> a.ghidraName }})",
             )
         }
+    }
+
+    /**
+     * Size of the cached [ContentIndex.LayoutContent] graph, measured by identity so shared subgraphs
+     * are counted once. `expanded` is what a structural walk (e.g. the generated toString) would visit —
+     * memoized per node, so the *count* is O(nodes) even when the count itself is astronomical.
+     */
+    private fun layoutStats(index: ghistabs.harvest.HarvestIndex): String {
+        val roots = index.contentCache.values
+        val seen = java.util.Collections.newSetFromMap(
+            java.util.IdentityHashMap<ContentIndex.LayoutContent, Boolean>(),
+        )
+        val order = ArrayList<ContentIndex.LayoutContent>()
+        val stack = ArrayDeque(roots.toList())
+        var dataCells = 0L
+        var listObjs = 0L
+        while (stack.isNotEmpty()) {
+            val n = stack.removeLast()
+            if (!seen.add(n)) continue
+            order += n
+            dataCells += n.data.size
+            listObjs += 1 + n.children.size
+            n.children.forEach { stack.addAll(it) }
+        }
+        val worst = order.maxOfOrNull { it.expandedNodes } ?: 0
+        val totalExpanded = roots.sumOf { it.expandedNodes.toLong() }
+        // ~32B object + ArrayList(data) + ArrayList(children) + one inner ArrayList each, + boxed longs.
+        val bytes = seen.size * 32L + listObjs * 40L + dataCells * 20L
+        return "layout: distinctNodes=${seen.size} roots=${roots.size} dataCells=$dataCells " +
+            "~${bytes / 1024 / 1024}MB | expanded(total)=$totalExpanded worstSingleNode=$worst"
     }
 
     // ---- Mangling / execution-order assertions, shared between modes. ----
