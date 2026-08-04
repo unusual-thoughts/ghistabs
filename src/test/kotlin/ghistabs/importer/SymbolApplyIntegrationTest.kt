@@ -4,7 +4,7 @@ import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.*
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghistabs.diagnose.defaultContext
+import ghistabs.defaultContext
 import ghistabs.parse.StabReader
 import ghistabs.parse.StabRecord
 import ghistabs.parse.StabType

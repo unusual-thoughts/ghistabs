@@ -12,7 +12,6 @@ import ghistabs.StabsAnalyzer.Companion.import
 import ghistabs.diagnose.CapturingSink
 import ghistabs.diagnose.Level
 import ghistabs.diagnose.StabsDiagnostics
-import ghistabs.diagnose.defaultContext
 import ghistabs.importer.ImportContext
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.*

@@ -15,6 +15,11 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
     DiagnosticSink by sink {
     private val typeAsts get() = harvest.types
 
+    /** Every harvested type. Consumers that need the whole set — the materialize passes, diagnostics,
+     *  the dumps — take it from here rather than reaching through [harvest], so the model has one
+     *  handle. Per-id lookup is [byId]; per-source is [typesBySource]. */
+    val allTypes: Collection<Type> get() = typeAsts.values
+
     /** All named aggregate / enum ASTs, indexed by raw stabs name. */
     private val astsByName: Map<String, List<Type>> by lazy {
         typeAsts.values

@@ -6,8 +6,8 @@ import ghidra.program.model.data.DataTypeConflictHandler
 import ghidra.program.model.data.StructureDataType
 import ghidra.program.model.data.TypedefDataType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghistabs.diagnose.defaultContext
-import ghistabs.diagnose.defaultTypeRegistry
+import ghistabs.defaultContext
+import ghistabs.defaultTypeRegistry
 import ghistabs.runTransaction
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertTrue

@@ -9,7 +9,10 @@ import ghidra.util.task.TaskMonitor
 import ghistabs.demangle
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.StabsDiagnostics
-import ghistabs.harvest.*
+import ghistabs.harvest.HarvestIndex
+import ghistabs.harvest.LocatedType
+import ghistabs.harvest.StabFunction
+import ghistabs.harvest.Type
 import ghistabs.importer.DemanglerReplacer.Companion.DEMANGLER_CATEGORY
 import ghistabs.materialize.itanium.RttiStructs
 import ghistabs.parse.CATEGORY
@@ -28,7 +31,6 @@ class DataTypeRegistry(
     internal val dtm: DataTypeManager,
     sink: DiagnosticSink,
     internal val diagnostics: StabsDiagnostics,
-    internal val harvest: Harvest,
     internal val index: HarvestIndex,
     internal val monitor: TaskMonitor = TaskMonitor.DUMMY,
 ) : DiagnosticSink by sink {
@@ -181,7 +183,11 @@ class DataTypeRegistry(
      */
     val byDemangledClass: Map<String, DataType> by lazy {
         buildMap {
-            for (fn in harvest.functions) {
+            // Raw harvest functions, not index.functions: the index copy exists only to fold source
+            // spellings (§15), which is a render concern and nothing read here — thisParamTypeId walks
+            // the param's SymbolDecl, and folding rewrites only Symbol.sourceFile. Forcing that lazy
+            // would copy every function and its three lists on an import that never renders.
+            for (fn in index.harvest.functions) {
                 val dt = fn.thisParamTypeId()?.let { dataTypeFor(it) } ?: continue
                 demangle(fn.name)?.namespace?.let { putIfAbsent(it.categoryPath.path, dt) }
             }
@@ -190,9 +196,9 @@ class DataTypeRegistry(
             // pure-constants class has. `std::ctype_base` and `std::__ios_flags` declare no member
             // functions at all, so the loop above can never reach them and their stub had no
             // candidate. Here the owning AST supplies the type directly — no `this` param needed.
-            for ((id, ast) in harvest.types) {
+            for (ast in index.allTypes) {
                 val body = ast.body as? TypeDecl.Struct<GlobalTypeId> ?: continue
-                val dt = dataTypeFor(id) ?: continue
+                val dt = dataTypeFor(ast.id) ?: continue
                 for (field in body.fields) {
                     val mangled = field.mangled?.takeIf { field.isStatic } ?: continue
                     demangle(mangled)?.namespace?.let { putIfAbsent(it.categoryPath.path, dt) }

@@ -6,7 +6,6 @@ import ghidra.program.model.address.GenericAddressSpace
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.*
-import ghistabs.harvest.Harvest
 import ghistabs.harvest.HarvestIndex
 import ghistabs.harvest.Harvester
 import ghistabs.harvest.StabCursor
@@ -52,7 +51,4 @@ fun Program.defaultContext() = ImportContext(
     StabsDiagnostics(),
 )
 
-fun ImportContext<*>.defaultTypeRegistry(): DataTypeRegistry {
-    val harvest = Harvest.of(mapOf())
-    return DataTypeRegistry(dtm, this, diagnostics, harvest, HarvestIndex.Empty)
-}
+fun ImportContext<*>.defaultTypeRegistry() = DataTypeRegistry(dtm, this, diagnostics, HarvestIndex.Empty)

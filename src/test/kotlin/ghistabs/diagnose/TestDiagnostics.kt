@@ -1,13 +1,6 @@
 package ghistabs.diagnose
 
 import ghidra.program.model.address.Address
-import ghidra.program.model.listing.Program
-import ghidra.util.task.TaskMonitor
-import ghistabs.StabsOptions
-import ghistabs.harvest.Harvest
-import ghistabs.harvest.HarvestIndex
-import ghistabs.importer.ImportContext
-import ghistabs.materialize.DataTypeRegistry
 
 /**
  * Shared test diagnostics / dump infrastructure — the non-test scaffolding that captures import
@@ -74,20 +67,4 @@ class CountingSink : DiagnosticSink {
         counts.compute(category) { _, x -> (x ?: 0) + count }
     }
     val parseErrors get() = counts["parse-errors"] ?: 0
-}
-
-// Tests capture at max verbosity — DEBUG and up — so log assertions see every message.
-fun Program.defaultContext() = ImportContext(
-    this,
-    TaskMonitor.DUMMY,
-    // overlaySection off: the decoded-struct .stab overlay is a diagnostic view, not needed to produce
-    // types, and it's ~8% of the run. StabSectionOverlayIntegrationTest exercises it directly.
-    StabsOptions(minLogLevel = Level.DEBUG, overlaySection = false),
-    CapturingSink(),
-    StabsDiagnostics(),
-)
-
-fun ImportContext<*>.defaultTypeRegistry(): DataTypeRegistry {
-    val harvest = Harvest.of(mapOf())
-    return DataTypeRegistry(dtm, this, diagnostics, harvest, HarvestIndex.Empty)
 }
