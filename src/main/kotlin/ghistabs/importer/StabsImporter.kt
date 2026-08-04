@@ -19,7 +19,7 @@ import ghistabs.runTransaction
  */
 class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx {
     /** The materialized state, set once [runOnRecords] completes; null after a no-stabs [run]. */
-    internal var artifacts: ImportArtifacts? = null
+    internal lateinit var artifacts: ImportArtifacts
         private set
 
     fun run(): PassResult {
