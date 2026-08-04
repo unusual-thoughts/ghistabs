@@ -101,7 +101,7 @@ fun harvestTemplateShortener(index: HarvestIndex): TemplateNameShortener {
         is TypeDecl.InlineDef -> targetName(decl.body)
         else -> null
     }
-    val aliases = index.harvest.types.values.mapNotNull { ast ->
+    val aliases = index.allTypes.mapNotNull { ast ->
         val name = ast.name ?: return@mapNotNull null
         targetName(ast.body)?.takeIf { '<' in it && it.length > name.length }?.let { name to it }
     }.toMap()

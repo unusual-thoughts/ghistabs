@@ -7,7 +7,7 @@ import ghidra.program.model.data.Composite
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghistabs.IntegrationFixtures
-import ghistabs.diagnose.defaultContext
+import ghistabs.defaultContext
 import ghistabs.disableWindowsResourceAnalyzer
 import ghistabs.runTransaction
 import org.junit.jupiter.api.Assertions.assertEquals

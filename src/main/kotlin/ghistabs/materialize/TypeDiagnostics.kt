@@ -44,7 +44,7 @@ internal fun DataTypeRegistry.computeDegraded(): Map<DataType, String> = buildMa
     // Non-canonical top-level asts (XRef aliases, FunctionT, Method, …) that
     // materialized through resolve(); their own ast.id owns the dt directly.
     val canonicalIds = index.byLocation.values.flatMap { it.members }.toSet()
-    for (ast in harvest.types.values) {
+    for (ast in index.allTypes) {
         if (ast.id in canonicalIds) continue
         dataTypeFor(ast.id)?.let { classify(ast, it) }
     }

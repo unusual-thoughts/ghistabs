@@ -3,7 +3,7 @@ package ghistabs.importer
 import ghidra.program.database.ProgramBuilder
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghistabs.StabsOptions.Companion.markStabsDone
-import ghistabs.diagnose.defaultContext
+import ghistabs.defaultContext
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue

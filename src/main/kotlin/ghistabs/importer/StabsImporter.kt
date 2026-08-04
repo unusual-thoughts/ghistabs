@@ -42,7 +42,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
         recordHarvestCounters(harvest, index, stabs)
 
         // Pass B — materialize types
-        val registry = DataTypeRegistry(ctx.dtm, ctx, ctx.diagnostics, harvest, index, ctx.monitor)
+        val registry = DataTypeRegistry(ctx.dtm, ctx, ctx.diagnostics, index, ctx.monitor)
         ctx.program.runTransaction("Stabs: materialize types") {
             registry.materializeAll()
             if (ctx.options.shortenTypedefs) TypedefShortener(ctx.dtm, ctx).apply()
