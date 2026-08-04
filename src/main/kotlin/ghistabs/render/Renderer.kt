@@ -4,10 +4,7 @@ import ghidra.app.decompiler.DecompInterface
 import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
-import ghistabs.harvest.LineEntry
-import ghistabs.harvest.TypeAst
-import ghistabs.harvest.TypeResolver
-import ghistabs.harvest.hasHeaderExtension
+import ghistabs.harvest.*
 import ghistabs.importer.AddressResolver
 import ghistabs.parse.*
 import ghistabs.runTransaction
@@ -23,13 +20,13 @@ enum class Mode {
     ELIDE_SJLJ,
 }
 
-class Renderer(val typeResolver: TypeResolver, val program: Program, val mode: Mode, val resolver: AddressResolver) :
+class Renderer(val index: HarvestIndex, val program: Program, val mode: Mode, val resolver: AddressResolver) :
     Closeable {
     // `also`, not `apply`: inside `apply` the receiver's own (null) `program` property would shadow
     // the constructor param, so openProgram(program) would be handed null.
     val decomp = if (mode != Mode.SKELETON) DecompInterface().also { it.openProgram(program) } else null
 
-    val sources get() = typeResolver.sources
+    val sources get() = index.sources
 
     fun renderSkeleton(source: String) = RenderContext(this, source).render()
 
@@ -59,17 +56,17 @@ class Renderer(val typeResolver: TypeResolver, val program: Program, val mode: M
 private fun safeName(source: String) = source.replace(Regex("[^A-Za-z0-9_.-]"), "_").trim('_')
 
 private class RenderContext(val renderer: Renderer, val source: String) {
-    val harvest get() = renderer.typeResolver.harvest
+    val harvest get() = renderer.index.harvest
     val program get() = renderer.program
     val resolver get() = renderer.resolver
 
     // [source] and every per-record source field come from the resolver's facade with §15 folds
     // already applied, so comparisons here are fold-to-fold with no per-site work.
-    private val tr = renderer.typeResolver
+    private val tr = renderer.index
 
     private val rawFuncs = tr.functions.filter { tr.functionSource[it] == source }
     private val lines = tr.linesBySource[source].orEmpty()
-    private val typeDecls = harvest.typeAsts.values
+    private val typeDecls = harvest.types.values
         .filter { tr.effectiveSourceFor(it) == source && it.name != null && it.declLine > 0 }
     private val symbols = tr.symbolsBySource[source].orEmpty()
 
@@ -126,7 +123,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
     // Anon_ id; decomp omits them entirely. Deduped by ghidraName (content-hashed, §20).
     private fun anonAggregateAppendix(): String {
         if (renderer.mode != Mode.SKELETON) return ""
-        val anon = harvest.typeAsts.values
+        val anon = harvest.types.values
             .filter { it.name.isNullOrEmpty() && it.body.isXRefTarget && tr.effectiveSourceFor(it) == source }
             .distinctBy { it.ghidraName }
             .sortedBy { it.ghidraName }
@@ -230,19 +227,29 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             }
             for (p in f.params) {
                 if (p.sourceFile != source) continue
-                when (val d = p.body) {
-                    is SymbolDecl.StackParam -> place(p.declLine, d.name, d.type, "(param)")
-                    is SymbolDecl.RegParam -> place(p.declLine, d.name, d.type, "(reg param)")
-                    else -> {}
-                }
+                if (p.body !is SymbolDecl.Param) continue
+                place(
+                    p.declLine,
+                    p.body.name,
+                    p.body.type,
+                    when (p.body.location) {
+                        VariableLocation.STACK -> "(param)"
+                        VariableLocation.REGISTER -> "(reg param)"
+                    },
+                )
             }
             for (l in f.locals) {
                 if (l.sourceFile != source) continue
-                when (val d = l.body) {
-                    is SymbolDecl.RegLocal -> place(l.declLine, d.name, d.type, "(reg local)")
-                    is SymbolDecl.StackLocal -> place(l.declLine, d.name, d.type, "(stack local)")
-                    else -> {}
-                }
+                if (l.body !is SymbolDecl.Local) continue
+                place(
+                    l.declLine,
+                    l.body.name,
+                    l.body.type,
+                    when (l.body.location) {
+                        VariableLocation.STACK -> "(stack local)"
+                        VariableLocation.REGISTER -> "(reg local)"
+                    },
+                )
             }
         }
     }
@@ -250,28 +257,43 @@ private class RenderContext(val renderer: Renderer, val source: String) {
     // A global/static: the linker's data at [addr] renders as its initializer — a scalar
     // inline, a multi-element aggregate spread over the blank lines below (the same
     // brace-block layout as a struct body).
-    private fun emitGlobal(line: Int, name: String, type: TypeDecl<GlobalTypeId>, role: String, addr: Address?) {
-        if (!dedup(line, name)) return
-        val indent = indentFor(line)
-        val base = "${type.render(harvest, shortener = shortener)} $name"
+    private fun emitGlobal(sym: SymbolDecl.Static<GlobalTypeId>, rec: Symbol) {
+        val scope = sym.scope.comment()
+        val role = when (rec.recordType) {
+            StabType.N_GSYM if sym.scope == StaticScope.GLOBAL -> "(global)"
+            StabType.N_GSYM -> "(weird global $scope)"
+            StabType.N_LCSYM -> "(.bss $scope)"
+            StabType.N_STSYM -> "(.data $scope)"
+            StabType.N_ROSYM -> "(.rodata $scope)"
+            else -> "($scope)"
+        }
+        if (!dedup(rec.declLine, sym.name)) return
+        // N_GSYM has rawValue=0 (linker resolves it from the mangled name) — look it up.
+        val addr = when {
+            rec.rawValue != 0L -> resolver.buildAddress(rec.rawValue)
+            else -> resolver.resolve(sym.name)
+        }
+        val indent = indentFor(rec.declLine)
+        val base = "${sym.type.render(harvest, shortener = shortener)} ${sym.name}"
         // A string-valued global (pointer-to-string whose slot Ghidra left an untyped
         // scalar, or a char[N] holding an RTTI/string literal) renders as one quoted
         // literal; initializerAt would otherwise miss it or spread a per-byte list.
         val literal = addr?.let {
             when {
-                type.isPointer(harvest) -> program.pointerString(it)
-                type.isCharArray(harvest) -> program.stringLiteralAt(it)
+                sym.type.isPointer(harvest) -> program.pointerString(it)
+                sym.type.isCharArray(harvest) -> program.stringLiteralAt(it)
                 else -> null
             }
         }
         val parts = literal?.let { listOf(it) } ?: addr?.let { program.initializerAt(it) }
         when {
-            parts == null -> canvas[line] += Fragment(indent, "$base;", role, FragmentKind.DECL_GLOBAL)
+            parts == null -> canvas[rec.declLine] += Fragment(indent, "$base;", role, FragmentKind.DECL_GLOBAL)
 
-            parts.size == 1 -> canvas[line] += Fragment(indent, "$base = ${parts[0]};", role, FragmentKind.DECL_GLOBAL)
+            parts.size == 1 -> canvas[rec.declLine] +=
+                Fragment(indent, "$base = ${parts[0]};", role, FragmentKind.DECL_GLOBAL)
 
             else -> canvas.layoutBraceBlock(
-                line,
+                rec.declLine,
                 Fragment(indent, "$base = {", role, FragmentKind.DECL_GLOBAL),
                 parts.map { "$it," },
                 "};",
@@ -283,23 +305,8 @@ private class RenderContext(val renderer: Renderer, val source: String) {
     // before N_GSYM, so `sourceFile` points at the last header visited.
     private fun emitGlobals() {
         for (s in symbols) {
-            val role = when (s.recordType) {
-                StabType.N_GSYM -> "(global)"
-                StabType.N_LCSYM -> "(.bss static)"
-                StabType.N_STSYM -> "(.data static)"
-                StabType.N_ROSYM -> "(.rodata static)"
-                else -> "(symbol)"
-            }
-            // N_GSYM has rawValue=0 (linker resolves it from the mangled name) — look it up.
-            val name = (s.body as? SymbolDecl.Global)?.name ?: (s.body as? SymbolDecl.StaticVar)?.name
-            val addr = when {
-                s.rawValue != 0L -> resolver.buildAddress(s.rawValue)
-                name != null -> resolver.resolve(name)
-                else -> null
-            }
             when (val d = s.body) {
-                is SymbolDecl.Global -> emitGlobal(s.declLine, d.name, d.type, role, addr)
-                is SymbolDecl.StaticVar -> emitGlobal(s.declLine, d.name, d.type, role, addr)
+                is SymbolDecl.Static -> emitGlobal(d, s)
                 else -> {}
             }
         }
@@ -501,11 +508,11 @@ private class RenderContext(val renderer: Renderer, val source: String) {
     // still declares its dependencies. Placed only within the available top room; overflow stacks on
     // the last free line rather than pushing content down.
     private fun emitIncludes() {
-        val resolver = renderer.typeResolver
-        val referenced = mutableSetOf<TypeAst>()
+        val resolver = renderer.index
+        val referenced = mutableSetOf<Type>()
         fun collect(decl: TypeDecl<GlobalTypeId>) {
             val ast = when (decl) {
-                is TypeDecl.Ref -> harvest.typeAsts[decl.id]
+                is TypeDecl.Ref -> harvest.types[decl.id]
                 is TypeDecl.XRef -> resolver.byXRef(decl, silent = true)
                 is TypeDecl.InlineDef -> return collect(decl.body)
                 is TypeDecl.Pointer -> return collect(decl.pointee)
@@ -567,7 +574,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             }
             for (s in symbols) {
                 if (s.declLine !in interior) continue
-                val nm = (s.body as? SymbolDecl.Global)?.name ?: (s.body as? SymbolDecl.StaticVar)?.name ?: continue
+                val nm = (s.body as? SymbolDecl.Static)?.name ?: continue
                 anomalies += "skeleton[$source]: global/static $nm at L${s.declLine} $where"
             }
         }

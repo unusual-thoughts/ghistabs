@@ -71,7 +71,7 @@ fun foldSourcePaths(filenames: Iterable<String>): Map<String, String> {
 }
 
 /** gcc emits anonymous types with CU-local sequential names; same name in different CUs is unrelated. */
-fun TypeAst.isCuLocalName() = name != null && (name.isEmpty() || CU_LOCAL_NAME.matches(name))
+fun Type.isCuLocalName() = name != null && (name.isEmpty() || CU_LOCAL_NAME.matches(name))
 
 /**
  * The type's own demangled path, root-first (`std::string::_M_replace` → `["std", "string"]`), or null
@@ -81,7 +81,7 @@ fun TypeAst.isCuLocalName() = name != null && (name.isEmpty() || CU_LOCAL_NAME.m
  * the stabs spelling for abbreviation/typedef'd STL types (`Ss` demangles to `std::string`, not
  * `std::basic_string<char,…>`) — so it's what our type must be named to be reused rather than shadowed.
  */
-fun TypeAst.demangledClassPath(): List<String>? {
+fun Type.demangledClassPath(): List<String>? {
     val methods = (body as? TypeDecl.Struct<GlobalTypeId>)?.methods ?: return null
     return methods.firstNotNullOfOrNull { it.mangled?.let(::namespaceChain) }
 }
@@ -89,7 +89,7 @@ fun TypeAst.demangledClassPath(): List<String>? {
 /** The type's enclosing C++ scope, root-first — the category a namespace-organised DTM files it under
  *  (`std::string` → `["std"]` → `/std`; a global class → `[]` → ROOT). Null falls back to header
  *  attribution. See [demangledClassPath]. */
-fun TypeAst.enclosingScope(): List<String>? = demangledClassPath()?.dropLast(1)
+fun Type.enclosingScope(): List<String>? = demangledClassPath()?.dropLast(1)
 
 /** A root-first scope path (from [enclosingScope]) as a DTM category; the empty scope is ROOT. */
 fun scopeCategory(scope: List<String>): CategoryPath =
@@ -130,17 +130,17 @@ class Attribution(
     private val commonProjectPrefix: String = "",
     private val multiSourceHeaderHints: Map<String, String> = emptyMap(),
 ) {
-    fun keyForAst(ast: TypeAst, sources: Set<SourceFile>, diagnostics: StabsDiagnostics? = null): GhidraKey {
+    fun keyForAst(ast: Type, sources: Set<SourceFile>, diagnostics: StabsDiagnostics? = null): TypeLocation {
         val name = ast.ghidraName
 
         if (ast.isCuLocalName()) {
-            return GhidraKey(strip(norm(ast.cu.filename)) + "/anon", name)
+            return TypeLocation(strip(norm(ast.cu.filename)) + "/anon", name)
         }
 
         return keyFor(name, sources, diagnostics)
     }
 
-    fun keyFor(typeName: String, defSources: Set<SourceFile>, diagnostics: StabsDiagnostics? = null): GhidraKey {
+    fun keyFor(typeName: String, defSources: Set<SourceFile>, diagnostics: StabsDiagnostics? = null): TypeLocation {
         defSources.sorted().firstNotNullOfOrNull { stdRelativePath(it.filename) }?.let { rel ->
             diagnostics?.recordAttributionTrace(
                 typeName = typeName,
@@ -149,29 +149,29 @@ class Attribution(
                 routedTo = "/std/$rel",
                 counter = "attribution-routed-std",
             )
-            return GhidraKey("/std/$rel", typeName)
+            return TypeLocation("/std/$rel", typeName)
         }
 
         val realHeaders = defSources.filter { it.isRealHeader() }
         if (realHeaders.isNotEmpty()) {
             val owner = realHeaders.minBy { it.filename }
-            return GhidraKey(strip(norm(owner.filename)), typeName)
+            return TypeLocation(strip(norm(owner.filename)), typeName)
         }
 
         // Single canonical source — forward-EXCL collapses cross-CU HeaderSource instances
         // for the same physical file into one path here.
         val uniquePaths = defSources.map { it.filename }.toSet()
         if (uniquePaths.size == 1) {
-            return GhidraKey(strip(norm(uniquePaths.single())), typeName)
+            return TypeLocation(strip(norm(uniquePaths.single())), typeName)
         }
 
         // gcc didn't BINCL the owning header, so defSources is .cpp-only. The hint map
         // (built from member-function SLINE majority) names the real header.
         multiSourceHeaderHints[typeName]?.let { hint ->
-            return GhidraKey(strip(norm(hint)), typeName)
+            return TypeLocation(strip(norm(hint)), typeName)
         }
 
-        return GhidraKey(strip(norm(uniquePaths.min())) + "/multi", typeName)
+        return TypeLocation(strip(norm(uniquePaths.min())) + "/multi", typeName)
     }
 
     /** Normalize a filesystem path: strip Windows drive letter, collapse `..`, drop empty segments. */

@@ -3,12 +3,14 @@ package ghistabs.harvest
 import ghidra.program.model.data.CategoryPath
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghistabs.parse.*
+import ghistabs.parse.TypeDecl.Struct.Field
+import ghistabs.parse.TypeDecl.Struct.Method
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 
 /**
- * [TypeResolver.byCanonicalKey] scope-recovery for **method-less** nested member types (`_Alloc_hider`,
+ * [HarvestIndex.byLocation] scope-recovery for **method-less** nested member types (`_Alloc_hider`,
  * `_Rep`, `sentry`). They carry no mangled method, so [demangledClassPath] can't scope them and the bare
  * leaf name collides char-vs-wchar under one header key. The resolver recovers the enclosing template two
  * ways — from the type's own `Outer::Inner` stab name, or from the struct that holds it by value — and
@@ -22,7 +24,7 @@ class NestedScopeKeyTest : AbstractGhidraHeadlessIntegrationTest() {
     private var nextId = 1
     private fun id() = GlobalTypeId(cu, nextId++)
 
-    private fun method(mangled: String) = MethodDecl<GlobalTypeId>(
+    private fun method(mangled: String) = Method<GlobalTypeId>(
         name = "m",
         mangled = mangled,
         signature = TypeDecl.Builtin(0),
@@ -34,11 +36,11 @@ class NestedScopeKeyTest : AbstractGhidraHeadlessIntegrationTest() {
     )
 
     private fun field(name: String, type: TypeDecl<GlobalTypeId>) =
-        FieldDecl(name, type, 0, 32, isStatic = false, access = Access.PUBLIC, mangled = null)
+        Field(name, type, 0, 32, isStatic = false, access = Access.PUBLIC, mangled = null)
 
     private fun struct(
-        methods: List<MethodDecl<GlobalTypeId>> = emptyList(),
-        fields: List<FieldDecl<GlobalTypeId>> = emptyList(),
+        methods: List<Method<GlobalTypeId>> = emptyList(),
+        fields: List<Field<GlobalTypeId>> = emptyList(),
     ) = TypeDecl.Struct(
         rawKind = AggrKind.STRUCT,
         sizeBytes = 4L,
@@ -49,10 +51,10 @@ class NestedScopeKeyTest : AbstractGhidraHeadlessIntegrationTest() {
     )
 
     private fun ast(id: GlobalTypeId, name: String?, body: TypeDecl<GlobalTypeId>) =
-        TypeAst(cu = cu, id = id, name = name, body = body)
+        Type(cu = cu, id = id, name = name, body = body)
 
-    private fun resolverOf(vararg asts: TypeAst) =
-        TypeResolver(Harvest.of(asts.associateBy { it.id }), foldSources = false)
+    private fun resolverOf(vararg asts: Type) =
+        HarvestIndex(Harvest.of(asts.associateBy { it.id }), foldSources = false)
 
     private val charString = "basic_string<char,std::char_traits<char>,std::allocator<char> >"
     private val wcharString = "basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t> >"
@@ -65,8 +67,8 @@ class NestedScopeKeyTest : AbstractGhidraHeadlessIntegrationTest() {
         val hider = ast(hiderId, "_Alloc_hider", struct(fields = listOf(field("_M_p", TypeDecl.Builtin(0)))))
         val reduced = ast(id(), charString, struct(fields = listOf(field("_M_dataplus", TypeDecl.Ref(hiderId)))))
 
-        val groups = resolverOf(full, hider, reduced).byCanonicalKey
-        val key = GhidraKey(CategoryPath("/std/string"), "_Alloc_hider")
+        val groups = resolverOf(full, hider, reduced).byLocation
+        val key = TypeLocation(CategoryPath("/std/string"), "_Alloc_hider")
         assertTrue(key in groups, "expected $key in ${groups.keys}")
         assertTrue(hiderId in groups.getValue(key).members)
     }
@@ -79,20 +81,20 @@ class NestedScopeKeyTest : AbstractGhidraHeadlessIntegrationTest() {
         val sentryId = id()
         val sentry = ast(sentryId, "$ostream::sentry", struct(fields = listOf(field("_M_ok", TypeDecl.Builtin(0)))))
 
-        val groups = resolverOf(full, sentry).byCanonicalKey
-        val key = GhidraKey(CategoryPath("/std/ostream"), "sentry")
+        val groups = resolverOf(full, sentry).byLocation
+        val key = TypeLocation(CategoryPath("/std/ostream"), "sentry")
         assertTrue(key in groups, "expected $key in ${groups.keys}")
         assertTrue(sentryId in groups.getValue(key).members)
     }
 
     @Test fun charAndWcharVariantsGetDistinctKeys() {
-        fun hiderKeyFor(strName: String, clearMangled: String, pointee: TypeDecl<GlobalTypeId>): GhidraKey {
+        fun hiderKeyFor(strName: String, clearMangled: String, pointee: TypeDecl<GlobalTypeId>): TypeLocation {
             nextId = 1
             val full = ast(id(), strName, struct(methods = listOf(method(clearMangled))))
             val hiderId = id()
             val hider = ast(hiderId, "_Alloc_hider", struct(fields = listOf(field("_M_p", TypeDecl.Pointer(pointee)))))
             val reduced = ast(id(), strName, struct(fields = listOf(field("_M_dataplus", TypeDecl.Ref(hiderId)))))
-            return resolverOf(full, hider, reduced).byCanonicalKey.entries.first { hiderId in it.value.members }.key
+            return resolverOf(full, hider, reduced).byLocation.entries.first { hiderId in it.value.members }.key
         }
 
         val charKey = hiderKeyFor(charString, "_ZNSs5clearEv", TypeDecl.Builtin(2))

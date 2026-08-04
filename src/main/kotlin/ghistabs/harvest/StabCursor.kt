@@ -1,5 +1,6 @@
 package ghistabs.harvest
 
+import ghidra.program.model.address.Address
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.importer.AddressResolver
 import ghistabs.parse.*
@@ -36,32 +37,48 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
      */
     private var currentSourceForLines: String? = null
 
-    var currentCu: SourceFile.CUSource? = null
-        private set
+    private var currentCu: SourceFile.CUSource? = null
 
     /**
-     * A function being accumulated: its record-order params and its block tree, held beside it
-     * rather than on it. Not a map keyed by [OpenFunction] — that is a data class whose hashCode
-     * moves as its lineEntries and sizeBytes fill in.
+     * A function being accumulated: its record-order params and its block tree
      */
-    private class OpenScope(val function: OpenFunction) {
+    private class FunctionScope(
+        val name: String,
+        val addr: Address,
+        val decl: SymbolDecl.Function<GlobalTypeId>,
+        val cu: SourceFile.CUSource,
+    ) {
         val blocks = BlockTreeBuilder()
-        val params = mutableListOf<SymbolRecord>()
+        val params = mutableListOf<Symbol>()
+        val lineEntries = mutableListOf<LineEntry>()
+        var sizeBytes: ULong? = null
+
+        fun toHarvested(): StabFunction {
+            // The function's own file: its lowest-address line entry, matching TypeResolver.functionSource.
+            val source = lineEntries.minByOrNull { it.addr.offset }?.source ?: cu.filename
+            val (locals, blocks) = blocks.finish(lineEntries, source)
+            for (param in params) {
+                param.sourceFile = source
+            }
+            return StabFunction(name, addr, decl, cu, locals, params, blocks, lineEntries, sizeBytes)
+        }
     }
 
-    private val scopes = mutableListOf<OpenScope>()
-    private var currentScope: OpenScope? = null
-
-    val currentFunction get() = currentScope?.function
+    private val scopes = mutableListOf<FunctionScope>()
+    private var currentScope: FunctionScope? = null
 
     /** [currentCu] where a record can't legally appear outside a CU. */
     val cu get() = checkNotNull(currentCu) { "record outside any N_SO" }
 
-    val lineSource get() = currentSourceForLines ?: currentCu?.filename
+    private val lineSource get() = currentSourceForLines ?: currentCu?.filename
+
+    private val currentFunctionName get() = currentScope?.name
 
     private val currentInclude get() = includesByFile[currentCu?.filename]
 
     override fun globalIdFor(id: LocalTypeId) = GlobalTypeId(currentInclude?.sourceFor(id) ?: cu, id.n)
+
+    fun parseSymbol(rec: StabRecord) = Symbol.parse(rec, this, lineSource, currentFunctionName)
 
     /**
      * Build every CU's [IncludeContext] up front, so an N_BINCL file number is resolvable from the
@@ -84,8 +101,11 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
                 }
 
                 StabType.N_BINCL -> currentInclude?.beginInclude(rec.name, rec.value)
+
                 StabType.N_EINCL -> currentInclude?.endInclude()
+
                 StabType.N_EXCL -> currentInclude?.remount(rec.name, rec.value)
+
                 else -> {}
             }
         }
@@ -97,7 +117,7 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
             rec.name.endsWith('/') -> pendingDirectory = rec.name
 
             rec.name.isNotEmpty() -> {
-                finaliseGcc12FunctionSize()
+                currentScope?.finaliseGcc12FunctionSize()
                 currentCu = SourceFile.CUSource(rec.name, pendingDirectory)
                 pendingDirectory = null
                 if (rec.value != 0L) {
@@ -117,7 +137,7 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
                         address = resolver.buildAddress(rec.value),
                     )
                 }
-                finaliseGcc12FunctionSize()
+                currentScope?.finaliseGcc12FunctionSize()
                 currentCu = null
                 pendingDirectory = null
                 currentSourceForLines = null
@@ -136,42 +156,48 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
      */
     fun lineEntry(rec: StabRecord) {
         val source = lineSource ?: return
-        val entry = LineEntry(rec.desc, resolver.stabAddress(rec.value, currentFunction?.addr), source)
+        val entry = LineEntry(rec.desc, resolver.stabAddress(rec.value, currentScope?.addr), source)
         lineEntriesByFile.getOrPut(source) { mutableListOf() } += entry
-        currentFunction?.lineEntries?.add(entry)
+        currentScope?.lineEntries?.add(entry)
     }
 
     /** Named N_FUN: `name` is `mangled:descriptor`, `value` the entry address. */
     fun openFunction(rec: StabRecord, decl: SymbolDecl.Function<GlobalTypeId>) {
-        finaliseGcc12FunctionSize()
-        val function = OpenFunction(rec.name.substringBefore(':'), resolver.buildAddress(rec.value), decl, cu)
-        currentScope = OpenScope(function).also { scopes += it }
+        currentScope?.finaliseGcc12FunctionSize()
+        val name = rec.name.substringBefore(':')
+        val addr = resolver.buildAddress(rec.value)
+        currentScope = FunctionScope(name, addr, decl, cu).also { scopes += it }
     }
 
     /** N_PSYM / register-param N_RSYM: the function's own, so no block resolution needed. */
-    fun param(record: SymbolRecord) {
+    fun param(record: Symbol) {
         currentScope?.params?.add(record)
     }
 
     /** N_LSYM / N_RSYM local: held by the block builder until a bracket claims it. */
-    fun local(record: SymbolRecord) {
+    fun local(record: Symbol) {
         currentScope?.blocks?.local(record)
     }
 
     /** Empty-name N_FUN end marker: `value` is the size relative to the function start. */
     fun closeFunction(rec: StabRecord) {
-        currentFunction?.sizeBytes = rec.value.toULong()
+        currentScope?.sizeBytes = rec.value.toULong()
         currentScope = null
     }
 
-    /** N_LBRAC: open a lexical scope, which owns the locals emitted just before it. */
-    fun openScope(rec: StabRecord) {
-        currentScope?.let { it.blocks.open(resolver.stabAddress(rec.value, it.function.addr)) }
-    }
+    fun bracket(rec: StabRecord) {
+        currentScope?.apply {
+            val addr = resolver.stabAddress(rec.value, addr)
+            when (rec.type) {
+                // open a lexical scope, which owns the locals emitted just before it.
+                StabType.N_LBRAC -> blocks.open(addr)
 
-    /** N_RBRAC: close the innermost lexical scope. */
-    fun closeScope(rec: StabRecord) {
-        currentScope?.let { it.blocks.close(resolver.stabAddress(rec.value, it.function.addr)) }
+                // close the innermost lexical scope.
+                StabType.N_RBRAC -> blocks.close(addr)
+
+                else -> {}
+            }
+        }
     }
 
     /**
@@ -179,26 +205,13 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
      * with the outermost N_RBRAC instead. Compute size from brackets before swapping
      * function context.
      */
-    private fun finaliseGcc12FunctionSize() {
-        val scope = currentScope ?: return
-        val f = scope.function
-        if (f.sizeBytes != null) return
-        val lastClose = scope.blocks.lastClose ?: return
-        f.sizeBytes = (lastClose.offset - f.addr.offset).toULong()
+    private fun FunctionScope.finaliseGcc12FunctionSize() {
+        if (sizeBytes != null) return
+        val lastClose = blocks.lastClose ?: return
+        sizeBytes = (lastClose.offset - addr.offset).toULong()
     }
 
     /** Functions with their block trees resolved, and line entries grouped by source and sorted. */
-    fun toHarvest(): Pair<List<OpenFunction>, Map<String, List<LineEntry>>> {
-        for (scope in scopes) {
-            val f = scope.function
-            // The function's own file: its lowest-address line entry, matching TypeResolver.functionSource.
-            val source = f.lineEntries.minByOrNull { it.addr.offset }?.source ?: f.cu.filename
-            val (blocks, locals) = scope.blocks.finish(f.lineEntries, source)
-            f.blocks = blocks
-            f.locals = locals
-            f.params = scope.params.map { it.copy(sourceFile = source) }
-        }
-        return scopes.map { it.function } to
-            lineEntriesByFile.mapValues { (_, v) -> v.sortedWith(compareBy({ it.line }, { it.addr.offset })) }
-    }
+    fun toHarvest(): Pair<List<StabFunction>, Map<String, List<LineEntry>>> = scopes.map { it.toHarvested() } to
+        lineEntriesByFile.mapValues { (_, v) -> v.sortedWith(compareBy({ it.line }, { it.addr.offset })) }
 }

@@ -1,6 +1,7 @@
 package ghistabs.harvest
 
 import ghistabs.parse.*
+import ghistabs.parse.TypeDecl.Struct.Field
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -14,7 +15,7 @@ import org.junit.jupiter.api.Test
  * Tests are pure unit tests (Kind 1): no Program/DataTypeManager/Listing,
  * only TaskMonitor.DUMMY, DummySink, and constructed test data.
  */
-class AstStoreTest {
+class TypeStoreTest {
 
     /**
      * Test: XRef body replaced by concrete definition.
@@ -28,11 +29,11 @@ class AstStoreTest {
      */
     @Test
     fun testXRefReplacedByConcreteDefinition() {
-        val store = AstStore()
+        val store = TypeStore()
         val cuName = "cu.c"
 
         val globalId = GlobalTypeId(SourceFile.CUSource(cuName), 10)
-        val xrefAst = TypeAst(
+        val xrefAst = Type(
             cu = SourceFile.CUSource(cuName),
             id = globalId,
             name = "Foo",
@@ -43,7 +44,7 @@ class AstStoreTest {
             sizeBytes = 16L,
             bases = emptyList(),
             fields = listOf(
-                FieldDecl(
+                Field(
                     name = "x",
                     type = TypeDecl.Ref(GlobalTypeId(SourceFile.CUSource(cuName), 1)),
                     offsetBits = 0L,
@@ -56,7 +57,7 @@ class AstStoreTest {
             methods = emptyList(),
             vptrBasetype = null,
         )
-        val concreteAst = TypeAst(
+        val concreteAst = Type(
             cu = SourceFile.CUSource(cuName),
             id = globalId,
             name = "Foo",
@@ -91,7 +92,7 @@ class AstStoreTest {
      */
     @Test
     fun testSameHashSuppression() {
-        val store = AstStore()
+        val store = TypeStore()
         val cuName = "cu.c"
 
         val globalId = GlobalTypeId(SourceFile.CUSource(cuName), 20)
@@ -104,13 +105,13 @@ class AstStoreTest {
             vptrBasetype = null,
         )
 
-        val ast1 = TypeAst(
+        val ast1 = Type(
             cu = SourceFile.CUSource(cuName),
             id = globalId,
             name = "Bar",
             body = body,
         )
-        val ast2 = TypeAst(
+        val ast2 = Type(
             cu = SourceFile.CUSource(cuName),
             id = globalId,
             name = "Bar",
@@ -143,7 +144,7 @@ class AstStoreTest {
      */
     @Test
     fun testHashDifferingFirstWriterWins() {
-        val store = AstStore()
+        val store = TypeStore()
         val cuName = "cu.c"
 
         val globalId = GlobalTypeId(SourceFile.CUSource(cuName), 30)
@@ -153,7 +154,7 @@ class AstStoreTest {
             sizeBytes = 8L,
             bases = emptyList(),
             fields = listOf(
-                FieldDecl(
+                Field(
                     name = "x",
                     type = TypeDecl.Ref(GlobalTypeId(SourceFile.CUSource(cuName), 1)),
                     offsetBits = 0L,
@@ -172,7 +173,7 @@ class AstStoreTest {
             sizeBytes = 16L,
             bases = emptyList(),
             fields = listOf(
-                FieldDecl(
+                Field(
                     name = "x",
                     type = TypeDecl.Ref(GlobalTypeId(SourceFile.CUSource(cuName), 1)),
                     offsetBits = 0L,
@@ -181,7 +182,7 @@ class AstStoreTest {
                     access = Access.PUBLIC,
                     mangled = null,
                 ),
-                FieldDecl(
+                Field(
                     name = "y",
                     type = TypeDecl.Ref(GlobalTypeId(SourceFile.CUSource(cuName), 2)),
                     offsetBits = 32L,
@@ -195,13 +196,13 @@ class AstStoreTest {
             vptrBasetype = null,
         )
 
-        val firstAst = TypeAst(
+        val firstAst = Type(
             cu = SourceFile.CUSource(cuName),
             id = globalId,
             name = "Baz",
             body = firstBody,
         )
-        val secondAst = TypeAst(
+        val secondAst = Type(
             cu = SourceFile.CUSource(cuName),
             id = globalId,
             name = "Baz",
@@ -232,10 +233,10 @@ class AstStoreTest {
      */
     @Test
     fun testLoneSelfRefTypedefSurvives() {
-        val store = AstStore()
+        val store = TypeStore()
         val cuName = "cu.c"
         val id = GlobalTypeId(SourceFile.CUSource(cuName), 20)
-        store += TypeAst(cu = SourceFile.CUSource(cuName), id = id, name = "void", body = TypeDecl.Ref(id))
+        store += Type(cu = SourceFile.CUSource(cuName), id = id, name = "void", body = TypeDecl.Ref(id))
 
         val (typeAsts, _) = store.toHarvest()
         val body = typeAsts[id]?.body
@@ -250,13 +251,13 @@ class AstStoreTest {
     fun testConcreteBodySupersedesSelfRef() {
         val cuName = "cu.c"
         val id = GlobalTypeId(SourceFile.CUSource(cuName), 20)
-        val selfRef = TypeAst(cu = SourceFile.CUSource(cuName), id = id, name = "Foo", body = TypeDecl.Ref(id))
+        val selfRef = Type(cu = SourceFile.CUSource(cuName), id = id, name = "Foo", body = TypeDecl.Ref(id))
         val struct = TypeDecl.Struct(
             rawKind = AggrKind.STRUCT,
             sizeBytes = 8L,
             bases = emptyList(),
             fields = listOf(
-                FieldDecl(
+                Field(
                     "x",
                     TypeDecl.Ref(GlobalTypeId(SourceFile.CUSource(cuName), 1)),
                     0L,
@@ -269,15 +270,15 @@ class AstStoreTest {
             methods = emptyList(),
             vptrBasetype = null,
         )
-        val concrete = TypeAst(cu = SourceFile.CUSource(cuName), id = id, name = "Foo", body = struct)
+        val concrete = Type(cu = SourceFile.CUSource(cuName), id = id, name = "Foo", body = struct)
 
-        val selfRefFirst = AstStore().apply {
+        val selfRefFirst = TypeStore().apply {
             this += selfRef
             this += concrete
         }
         assertEquals(struct, selfRefFirst.toHarvest().first[id]!!.body, "real body supersedes self-ref")
 
-        val concreteFirst = AstStore().apply {
+        val concreteFirst = TypeStore().apply {
             this += concrete
             this += selfRef
         }
@@ -300,12 +301,12 @@ class AstStoreTest {
      */
     @Test
     fun testSameTypeTwiceFromSameCU() {
-        val store = AstStore()
+        val store = TypeStore()
         val cuName = "cu.c"
 
         val globalId = GlobalTypeId(SourceFile.CUSource(cuName), 40)
         val body = TypeDecl.Enum<GlobalTypeId>(members = listOf("A" to 0L, "B" to 1L))
-        val ast = TypeAst(
+        val ast = Type(
             cu = SourceFile.CUSource(cuName),
             id = globalId,
             name = "EnumType",

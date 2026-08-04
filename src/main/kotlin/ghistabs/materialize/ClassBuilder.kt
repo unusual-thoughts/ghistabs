@@ -14,19 +14,19 @@ import ghistabs.applyDemangling
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.Level
 import ghistabs.diagnose.degradation
-import ghistabs.harvest.CanonicalGroup
-import ghistabs.harvest.Harvest
-import ghistabs.harvest.TypeResolver
+import ghistabs.harvest.HarvestIndex
+import ghistabs.harvest.LocatedType
 import ghistabs.harvest.demangledClassPath
 import ghistabs.importer.ImportContext
 import ghistabs.materialize.itanium.*
+import ghistabs.materialize.itanium.Layout
 import ghistabs.namespaceChain
 import ghistabs.parse.*
+import ghistabs.parse.TypeDecl.Struct.Method
 
 class ClassBuilder(
-    private val typeRegistry: TypeRegistry,
-    private val harvest: Harvest,
-    private val typeResolver: TypeResolver,
+    private val registry: DataTypeRegistry,
+    private val index: HarvestIndex,
     private val ctx: ImportContext<*>,
 ) : DiagnosticSink by ctx {
     private val program = ctx.program
@@ -41,30 +41,30 @@ class ClassBuilder(
         // harvesting N_PSYM names: Ghidra's __thiscall `this` and StructReturnAnalyzer's
         // by-value return pointer.
         private val HIDDEN_PARAM_NAMES = setOf("this", "__return_storage_ptr__")
-        fun CanonicalGroup.isClass() = ast.body is TypeDecl.Struct &&
+        fun LocatedType.isClass() = type.body is TypeDecl.Struct &&
             (
-                ast.body.methods.isNotEmpty() ||
-                    ast.body.hasVTablePointerMarker ||
+                type.body.methods.isNotEmpty() ||
+                    type.body.hasVTablePointerMarker ||
                     // gcc 12 emits the vfptr as a regular `_vptr.XX` field instead of the
                     // `~%<id>;` marker hasVTablePointerMarker watches for — without this check
                     // every polymorphic class in xmltest would be skipped.
-                    ast.body.fields.any { Itanium.isVptrField(it.name) }
+                    type.body.fields.any { Itanium.isVptrField(it.name) }
                 )
 
-        private val CanonicalGroup.classBody get() = ast.body as TypeDecl.Struct<GlobalTypeId>
-        private val CanonicalGroup.className get() = key.name
+        private val LocatedType.classBody get() = type.body as TypeDecl.Struct<GlobalTypeId>
+        private val LocatedType.className get() = location.name
 
         // <Class>_vftable under /ClassDataTypes/<Class>/ — the function-pointer array {vfptr}
         // points at, laid at the vtable's address point (_ZTV + 2*ptrSize). Each slot is
         // Pointer→FunctionDefinition(<sig>) so the decompiler resolves virtual calls and
         // RecoveredClassHelper / shift-S round-trip. The offset_to_top + rtti header words sit
         // before the address point as plain Data (no enclosing struct — see buildAndApplyVtable).
-        private val CanonicalGroup.vftableCategory get() = CategoryPath(Itanium.classDataTypesRoot, className)
-        private val CanonicalGroup.vftableName get() = "${className}_vftable"
+        private val LocatedType.vftableCategory get() = CategoryPath(Itanium.classDataTypesRoot, className)
+        private val LocatedType.vftableName get() = "${className}_vftable"
     }
 
-    private val CanonicalGroup.vftable
-        get() = typeRegistry.getOrRegister<Structure>(vftableCategory, vftableName) {
+    private val LocatedType.vftable
+        get() = registry.getOrRegister<Structure>(vftableCategory, vftableName) {
             StructureDataType(vftableCategory, vftableName, 0, dtm)
         }
 
@@ -72,8 +72,8 @@ class ClassBuilder(
     // symbol's namespace chain. `className` (key.name) is only the leaf now that byCanonicalKey
     // files the scope into the category, so it can't match the demangler's full chain. Recover the
     // chain from a method-bearing member's mangled name — the exact form GnuDemangler emits.
-    private val CanonicalGroup.qualifiedClassName: String
-        get() = (sequenceOf(ast) + members.mapNotNull { harvest.typeAsts[it] })
+    private val LocatedType.qualifiedClassName: String
+        get() = (sequenceOf(type) + members.mapNotNull { index.byId(it) })
             .firstNotNullOfOrNull { it.demangledClassPath() }?.joinToString("::") ?: className
 
     /**
@@ -82,7 +82,7 @@ class ClassBuilder(
      * under `/ClassDataTypes/<Class>/` so `RecoveredClassHelper` / shift-S round-trip
      * can find it.
      */
-    private fun CanonicalGroup.ensureVtableTypeAndPointer(): Pointer = PointerDataType.getPointer(vftable, dtm)
+    private fun LocatedType.ensureVtableTypeAndPointer(): Pointer = PointerDataType.getPointer(vftable, dtm)
 
     /**
      * Build every class/vtable group once. Each class header included by N CUs produces N TypeAsts
@@ -91,7 +91,7 @@ class ClassBuilder(
      * once, off the most-detailed body. Returns the number of classes built.
      */
     fun buildAll(): Int {
-        val classes = typeResolver.byCanonicalKey.values.filter { it.isClass() }
+        val classes = index.byLocation.values.filter { it.isClass() }
         ctx.monitor.initialize(classes.size.toLong(), "Stabs: building classes")
         var built = 0
         for (group in classes) {
@@ -100,16 +100,16 @@ class ClassBuilder(
                 build(group)
                 built++
             } catch (t: Throwable) {
-                err("class-apply-error", "${group.key}: ${t.message}")
+                err("class-apply-error", "${group.location}: ${t.message}")
             }
         }
         return built
     }
 
     /** Materialize class struct + namespace + (optional) vtable struct, apply at _ZTV. */
-    fun build(group: CanonicalGroup): Unit = group.run {
-        val category = key.category
-        val structDt = typeRegistry.dataTypeFor(ast.id)
+    fun build(group: LocatedType): Unit = group.run {
+        val category = location.category
+        val structDt = registry.dataTypeFor(type.id)
         if (structDt !is Structure) {
             warn(
                 "class-not-struct",
@@ -125,7 +125,7 @@ class ClassBuilder(
         val isPoly = classBody.hasVTablePointerMarker ||
             classBody.methods.any { it.virt == VirtKind.VIRTUAL } ||
             classBody.fields.any { Itanium.isVptrField(it.name) } ||
-            typeResolver.hasPolymorphicBaseSubobject(classBody)
+            index.hasPolymorphicBaseSubobject(classBody)
         if (isPoly) ensureVfptrFirstField(structDt)
 
         val ns = ensureClassNamespace()
@@ -139,7 +139,7 @@ class ClassBuilder(
      * member's linkage name serves as well as a method's, and is all a pure-constants class like
      * `std::ctype_base` has — without it those land at the root instead of under `std`.
      */
-    private fun CanonicalGroup.ensureClassNamespace(): GhidraClass {
+    private fun LocatedType.ensureClassNamespace(): GhidraClass {
         val parts = (
             classBody.methods.firstNotNullOfOrNull { it.mangled }
                 ?: classBody.fields.firstNotNullOfOrNull { it.mangled }
@@ -167,7 +167,7 @@ class ClassBuilder(
         return parent as GhidraClass
     }
 
-    private fun CanonicalGroup.ensureVfptrFirstField(structDt: Structure) {
+    private fun LocatedType.ensureVfptrFirstField(structDt: Structure) {
         val vfptrName = ClassUtils.VFPTR
         val parserVptrOffset = classBody.fields
             .firstOrNull { Itanium.isVptrField(it.name) }
@@ -184,7 +184,7 @@ class ClassBuilder(
         }
 
         val action = Layout.chooseVfptrAction(
-            hasPolymorphicBaseSubobject = typeResolver.hasPolymorphicBaseSubobject(classBody),
+            hasPolymorphicBaseSubobject = index.hasPolymorphicBaseSubobject(classBody),
             parserVptrOffsetBytes = parserVptrOffset,
             componentAtTargetOffset = snapshot,
             canonicalVfptrFieldName = vfptrName,
@@ -226,7 +226,7 @@ class ClassBuilder(
         }
     }
 
-    private fun CanonicalGroup.reparentMethod(m: MethodDecl<GlobalTypeId>, ns: GhidraClass, structDt: Structure) {
+    private fun LocatedType.reparentMethod(m: Method<GlobalTypeId>, ns: GhidraClass, structDt: Structure) {
         val mangled = m.mangled ?: run {
             log("method-no-mangled", "$className::${m.name}: stab has no mangled symbol")
             return
@@ -278,7 +278,7 @@ class ClassBuilder(
             else -> return
         }
 
-        typeRegistry.resolveRef(retDecl)?.let { ret ->
+        registry.resolveRef(retDecl)?.let { ret ->
             func.setReturnType(ret, source)
         } ?: degradation(
             "method-ret-unresolved",
@@ -314,7 +314,7 @@ class ClassBuilder(
         // unresolved types. Early-returning left Ghidra's auto-guessed signature in
         // place; combined with newly-applied __thiscall (which prepends its own `this`)
         // that produced double-`this` like `void Foo::Dump(Foo *this, ushort this, ...)`.
-        val resolvedParams = paramDecls.map { typeRegistry.resolveRef(it) }
+        val resolvedParams = paramDecls.map { registry.resolveRef(it) }
         for ((decl, dt) in paramDecls.zip(resolvedParams)) {
             if (dt == null) {
                 degradation(
@@ -386,7 +386,7 @@ class ClassBuilder(
         return null
     }
 
-    private fun CanonicalGroup.buildAndApplyVtable(ns: GhidraClass) {
+    private fun LocatedType.buildAndApplyVtable(ns: GhidraClass) {
         // Itanium 32-bit: derived vtable = base entries first (in declaration order), with
         // overridden slots replaced. Override matching uses method name only — sufficient
         // for non-overloaded virtuals in the Cygwin gcc 3.4.4 corpus.
@@ -439,7 +439,7 @@ class ClassBuilder(
         while (cur != null) {
             cur = when (cur) {
                 is TypeDecl.Method, is TypeDecl.FunctionT -> return cur
-                is TypeDecl.Ref -> harvest.getType(cur.id)?.body
+                is TypeDecl.Ref -> index.byId(cur.id)?.body
                 is TypeDecl.InlineDef -> cur.body
                 else -> return null
             }
@@ -453,7 +453,7 @@ class ClassBuilder(
      * `atLeastOneVtableStructApplied` regression invariant. `this` resolves to the
      * declaring class's pointer or void*; __thiscall is dropped on platforms that lack it.
      */
-    private fun CanonicalGroup.buildVirtualSlotType(m: MethodDecl<GlobalTypeId>): PointerDataType {
+    private fun LocatedType.buildVirtualSlotType(m: Method<GlobalTypeId>): PointerDataType {
         val unwrapped = unwrapSignature(m.signature)
         val method = unwrapped as? TypeDecl.Method<GlobalTypeId> ?: run {
             degradation(
@@ -468,16 +468,16 @@ class ClassBuilder(
             )
             return PointerDataType(Undefined4DataType.dataType, dtm)
         }
-        val funcDef = typeRegistry.buildFunctionDefinition(
+        val funcDef = registry.buildFunctionDefinition(
             category = vftableCategory,
             name = m.name,
             ret = method.ret,
             params = method.params,
-            thisType = typeRegistry.resolveRef(method.cls) ?: PointerDataType(VoidDataType(), dtm),
+            thisType = registry.resolveRef(method.cls) ?: PointerDataType(VoidDataType(), dtm),
             callingConvention = "__thiscall",
             at = "$className::${m.name}",
         )
-        val resolved = typeRegistry.register(funcDef) as FunctionDefinition
+        val resolved = registry.register(funcDef) as FunctionDefinition
         return PointerDataType(resolved, dtm)
     }
 
@@ -493,7 +493,7 @@ class ClassBuilder(
     }
 
     /** Resolve _ZTV<class> address: try AddressResolver candidates, then the demangled-vtable index. */
-    private fun CanonicalGroup.resolveVtableAddress(): Address? {
+    private fun LocatedType.resolveVtableAddress(): Address? {
         val candidates = Itanium.ztvCandidates(className)
         candidates.firstNotNullOfOrNull { resolver.resolve(it) }?.let { return it }
 
@@ -515,5 +515,5 @@ class ClassBuilder(
         return null
     }
 
-    private fun CanonicalGroup.collectAllVirtuals() = Virtuals(typeResolver).process(classBody)
+    private fun LocatedType.collectAllVirtuals() = Virtuals(index).process(classBody)
 }

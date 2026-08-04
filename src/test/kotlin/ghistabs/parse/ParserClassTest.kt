@@ -1,7 +1,9 @@
 package ghistabs.parse
 
+import ghistabs.parse.TypeDecl.Struct.Base
+import ghistabs.parse.TypeDecl.Struct.Field
+import ghistabs.parse.TypeDecl.Struct.Method
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 
 /**
@@ -22,7 +24,7 @@ class ParserClassTest {
                 sizeBytes = 8,
                 bases = emptyList(),
                 fields = listOf(
-                    FieldDecl(
+                    Field(
                         "x",
                         TypeDecl.Ref(LocalTypeId(0, 1)),
                         offsetBits = 0,
@@ -31,7 +33,7 @@ class ParserClassTest {
                         access = Access.PUBLIC,
                         mangled = null,
                     ),
-                    FieldDecl(
+                    Field(
                         "y",
                         TypeDecl.Ref(LocalTypeId(0, 1)),
                         offsetBits = 32,
@@ -45,7 +47,7 @@ class ParserClassTest {
                 vptrBasetype = null,
             ),
         )
-        assertEquals(expected, Parser(input).parseSymbol())
+        assertEquals(expected, Parser(input).parseSymbol().expectOk())
     }
 
     @Test
@@ -60,7 +62,7 @@ class ParserClassTest {
                 sizeBytes = 4,
                 bases =
                 listOf(
-                    BaseDecl(
+                    Base(
                         type = TypeDecl.Ref(LocalTypeId(0, 5)),
                         isVirtual = false,
                         access = Access.PUBLIC,
@@ -72,7 +74,7 @@ class ParserClassTest {
                 vptrBasetype = null,
             ),
         )
-        assertEquals(expected, Parser(input).parseSymbol())
+        assertEquals(expected, Parser(input).parseSymbol().expectOk())
     }
 
     @Test
@@ -92,7 +94,7 @@ class ParserClassTest {
                 vptrBasetype = TypeDecl.Ref(LocalTypeId(0, 8)),
             ),
         )
-        assertEquals(expected, Parser(input).parseSymbol())
+        assertEquals(expected, Parser(input).parseSymbol().expectOk())
     }
 
     @Test
@@ -100,7 +102,7 @@ class ParserClassTest {
         // gcc emits special-member pseudo-names with a space before `::` (`__comp_dtor ::`).
         // The space must not survive into the name, or the vtable field and its FD type diverge.
         val input = "Q:T(0,9)=s4__comp_dtor ::(0,10):_ZN1QD1Ev;2A*0;(0,9);;;"
-        val method = (Parser(input).parseSymbol() as SymbolDecl.NamedType).type
+        val method = (Parser(input).parseSymbol().expectOk() as SymbolDecl.NamedType).type
             .let { it as TypeDecl.Struct }.methods.single()
         assertEquals("__comp_dtor", method.name)
     }
@@ -118,7 +120,7 @@ class ParserClassTest {
                 bases = emptyList(),
                 fields = emptyList(),
                 methods = listOf(
-                    MethodDecl(
+                    Method(
                         name = "doIt",
                         mangled = "_ZN3Qux4doItEi",
                         signature = TypeDecl.InlineDef(
@@ -139,7 +141,7 @@ class ParserClassTest {
                 vptrBasetype = null,
             ),
         )
-        assertEquals(expected, Parser(input).parseSymbol())
+        assertEquals(expected, Parser(input).parseSymbol().expectOk())
     }
 
     @Test
@@ -157,7 +159,7 @@ class ParserClassTest {
                 sizeBytes = 1,
                 bases = emptyList(),
                 fields = listOf(
-                    FieldDecl(
+                    Field(
                         "AllocatorBase<CryptoPP::word16>",
                         TypeDecl.Ref(LocalTypeId(55, 3)),
                         offsetBits = 0,
@@ -171,7 +173,7 @@ class ParserClassTest {
                 vptrBasetype = null,
             ),
         )
-        assertEquals(expected, Parser(input).parseSymbol())
+        assertEquals(expected, Parser(input).parseSymbol().expectOk())
     }
 
     @Test
@@ -179,7 +181,7 @@ class ParserClassTest {
         // `operator<<` keeps its angle brackets as operator tokens; they must not open
         // template depth (which would swallow the `::` method marker).
         val input = "Str:T(0,9)=s1operator<<::(0,10)=#(0,9),(0,1),(0,2);:_ZN3StrlsEi;2A.;;"
-        val parsed = Parser(input).parseSymbol() as SymbolDecl.NamedType
+        val parsed = Parser(input).parseSymbol().expectOk() as SymbolDecl.NamedType
         val struct = parsed.type as TypeDecl.Struct
         assertEquals(1, struct.methods.size)
         assertEquals("operator<<", struct.methods.single().name)
@@ -198,7 +200,7 @@ class ParserClassTest {
                 bases = emptyList(),
                 fields = emptyList(),
                 methods = listOf(
-                    MethodDecl(
+                    Method(
                         name = "doIt",
                         mangled = "_ZN3Qux4doItEi",
                         signature = TypeDecl.InlineDef(
@@ -219,7 +221,7 @@ class ParserClassTest {
                 vptrBasetype = null,
             ),
         )
-        assertEquals(expected, Parser(input).parseSymbol())
+        assertEquals(expected, Parser(input).parseSymbol().expectOk())
     }
 
     @Test
@@ -234,7 +236,7 @@ class ParserClassTest {
                 sizeBytes = 4,
                 bases = emptyList(),
                 fields = listOf(
-                    FieldDecl(
+                    Field(
                         name = "count",
                         type = TypeDecl.Ref(LocalTypeId(0, 1)),
                         offsetBits = 0,
@@ -250,7 +252,7 @@ class ParserClassTest {
                 vptrBasetype = null,
             ),
         )
-        assertEquals(expected, Parser(input).parseSymbol())
+        assertEquals(expected, Parser(input).parseSymbol().expectOk())
     }
 
     /**
@@ -269,7 +271,7 @@ class ParserClassTest {
                 sizeBytes = 4,
                 bases = emptyList(),
                 fields = listOf(
-                    FieldDecl(
+                    Field(
                         name = "id",
                         type = TypeDecl.Ref(LocalTypeId(0, 1)),
                         offsetBits = 0,
@@ -283,7 +285,7 @@ class ParserClassTest {
                 vptrBasetype = null,
             ),
         )
-        assertEquals(expected, Parser(input).parseSymbol())
+        assertEquals(expected, Parser(input).parseSymbol().expectOk())
     }
 
     @Test
@@ -302,7 +304,7 @@ class ParserClassTest {
                 bases = emptyList(),
                 fields = emptyList(),
                 methods = listOf(
-                    MethodDecl(
+                    Method(
                         name = "method",
                         mangled = "_ZN4Base6methodEv",
                         signature = TypeDecl.InlineDef(
@@ -323,7 +325,7 @@ class ParserClassTest {
                 vptrBasetype = null,
             ),
         )
-        assertEquals(expected, Parser(input).parseSymbol())
+        assertEquals(expected, Parser(input).parseSymbol().expectOk())
     }
 
     @Test
@@ -346,7 +348,7 @@ class ParserClassTest {
                 bases = emptyList(),
                 fields = emptyList(),
                 methods = listOf(
-                    MethodDecl(
+                    Method(
                         name = "vmethod",
                         mangled = "_ZN7Derived7vmethodEi",
                         signature = TypeDecl.InlineDef(
@@ -367,7 +369,7 @@ class ParserClassTest {
                 vptrBasetype = null,
             ),
         )
-        assertEquals(expected, Parser(input).parseSymbol())
+        assertEquals(expected, Parser(input).parseSymbol().expectOk())
     }
 
     @Test
@@ -375,7 +377,7 @@ class ParserClassTest {
         // `~%` is the LAST section — after member functions, not after size. Corpus shape:
         // `<method>;;~%<owner>;`. Regression for the years-long misparse that read it after size.
         val input = "P:T(0,5)=s8vmethod::(0,31)=#(0,5),(0,1),(0,2);:_ZN1P7vmethodEi;2A*0;(0,5);;;~%(0,9);"
-        val struct = (Parser(input).parseSymbol() as SymbolDecl.NamedType).type as TypeDecl.Struct
+        val struct = (Parser(input).parseSymbol().expectOk() as SymbolDecl.NamedType).type as TypeDecl.Struct
         assertEquals(TypeDecl.Ref(LocalTypeId(0, 9)), struct.vptrBasetype)
         assertEquals(1, struct.methods.size)
     }
@@ -385,7 +387,7 @@ class ParserClassTest {
         // The `~%` target is a full read_type, not just an id: RTTI/exception classes emit an inline
         // forward-xref `(cu,n)=xsName:`. Regression for the guard dropping the whole class on `=`.
         val input = "underflow_error:T(0,5)=s8;~%(0,6)=xstype_info:;"
-        val struct = (Parser(input).parseSymbol() as SymbolDecl.NamedType).type as TypeDecl.Struct
+        val struct = (Parser(input).parseSymbol().expectOk() as SymbolDecl.NamedType).type as TypeDecl.Struct
         assertEquals(
             TypeDecl.InlineDef(LocalTypeId(0, 6), TypeDecl.XRef(AggrKind.STRUCT, "type_info")),
             struct.vptrBasetype,
@@ -401,7 +403,7 @@ class ParserClassTest {
     fun testStaticMemberFunction() {
         val input = "FileSystemImage:T(0,5)=s40" +
             "isValidMagic::(0,21)=f(0,9):_ZN15FileSystemImage12isValidMagicEm;0A?;;;"
-        val struct = (Parser(input).parseSymbol() as SymbolDecl.NamedType).type as TypeDecl.Struct
+        val struct = (Parser(input).parseSymbol().expectOk() as SymbolDecl.NamedType).type as TypeDecl.Struct
         val m = struct.methods.single()
         assertEquals(VirtKind.STATIC, m.virt)
         assertEquals(Access.PRIVATE, m.access)
@@ -416,9 +418,15 @@ class ParserClassTest {
     /** cv-qualifier letter: `A` none, `B` const, `C` volatile, `D` const volatile. */
     @Test
     fun testMethodCvQualifierLetters() {
-        fun virtOf(letter: Char): MethodDecl<LocalTypeId> {
+        fun virtOf(letter: Char): Method<LocalTypeId> {
             val input = "S:T(0,5)=s4f::(0,10)=#(0,5),(0,1);:_ZNK1S1fEv;2$letter.;;;"
-            return ((Parser(input).parseSymbol() as SymbolDecl.NamedType).type as TypeDecl.Struct).methods.single()
+            return (
+                (
+                    Parser(
+                        input,
+                    ).parseSymbol().expectOk() as SymbolDecl.NamedType
+                    ).type as TypeDecl.Struct
+                ).methods.single()
         }
         assertEquals(false to false, virtOf('A').let { it.isConst to it.isVolatile })
         assertEquals(true to false, virtOf('B').let { it.isConst to it.isVolatile })
@@ -434,7 +442,7 @@ class ParserClassTest {
      */
     @Test
     fun testBoolSpelledAsEnumDecodesToTheBuiltin() {
-        val enumForm = (Parser("bool:t(0,4)=eFalse:0,True:1,;").parseSymbol() as SymbolDecl.NamedType).type
+        val enumForm = (Parser("bool:t(0,4)=eFalse:0,True:1,;").parseSymbol().expectOk() as SymbolDecl.NamedType).type
         val extensionForm = TypeDecl.WithSizeAttr<LocalTypeId>(8, TypeDecl.Builtin(-16))
         assertEquals(extensionForm, enumForm)
     }
@@ -448,10 +456,10 @@ class ParserClassTest {
     @Test
     fun testTheSameSpellingDecodesWhereverItAppears() {
         val decoded = TypeDecl.WithSizeAttr<LocalTypeId>(8, TypeDecl.Builtin(-16))
-        val named = (Parser("bool:t(0,4)=eFalse:0,True:1,;").parseSymbol() as SymbolDecl.NamedType).type
+        val named = (Parser("bool:t(0,4)=eFalse:0,True:1,;").parseSymbol().expectOk() as SymbolDecl.NamedType).type
         assertEquals(decoded, named)
         // An inline `(cu,n)=<body>` keeps its id binding; the body is what must match.
-        val inlineUnnamed = (Parser("f:F(0,8)=eFalse:0,True:1,;").parseSymbol() as SymbolDecl.Function).type
+        val inlineUnnamed = (Parser("f:F(0,8)=eFalse:0,True:1,;").parseSymbol().expectOk() as SymbolDecl.Function).type
         assertEquals(TypeDecl.InlineDef(LocalTypeId(0, 8), decoded), inlineUnnamed)
     }
 
@@ -459,6 +467,6 @@ class ParserClassTest {
     fun testUnconsumedStructSectionRejected() {
         // A struct section we don't handle must fail loudly, not get silently dropped as
         // trailing input (the leniency that hid `~%`).
-        assertThrows(StabsParseException::class.java) { Parser("X:T(0,5)=s4;Zjunk").parseSymbol() }
+        Parser("X:T(0,5)=s4;Zjunk").parseSymbol().expectError()
     }
 }

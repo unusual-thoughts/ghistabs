@@ -524,7 +524,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         // with no linkage name at all — `_ZNSs4nposE` appears 0 times in crypto_mi_test_gcc421 but
         // 37 times in its _fullstabs twin. There is then nothing to reconcile *from*, so this is a
         // property of the debug info, not of the importer: gate on the link actually being present.
-        val declared = artifacts?.harvest?.typeAsts?.values.orEmpty()
+        val declared = artifacts?.harvest?.types?.values.orEmpty()
             .mapNotNull { it.body as? TypeDecl.Struct }
             .flatMap { it.fields }
             .any { it.name == "npos" && it.mangled != null }
@@ -851,7 +851,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     @Test
     fun demanglerStringReplacedAfterStubInjection() {
         assumeTrue(binaryName == "bouniafbouniaf.exe" || binaryName == "bouniaf.exe")
-        val typeRegistry = artifacts?.typeRegistry
+        val typeRegistry = artifacts?.registry
         assumeTrue(typeRegistry != null, "import didn't populate artifacts")
         val demanglerCat = CategoryPath("/Demangler/std")
         program.runTransaction("inject-demangler-stub") {
@@ -908,7 +908,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         val harvest = artifacts?.harvest ?: program.runTransaction("void-self-ref-harvest") {
             Harvester(context).harvest(StabReader.fromProgram(program)!!.readAll().records)
         }
-        val voidAsts = harvest.typeAsts.values.filter { it.body is TypeDecl.Void }
+        val voidAsts = harvest.types.values.filter { it.body is TypeDecl.Void }
         assumeTrue(voidAsts.isNotEmpty(), "no gcc-void asts in this fixture's harvest")
 
         val leaked = voidAsts.mapNotNull { ast ->
@@ -1256,21 +1256,21 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         val harvest = artifacts?.harvest ?: Harvester(context).harvest(records)
         dumpJson.encodeToStream(harvest, harvestFile.outputStream())
 
-        val classStructs = harvest.typeAsts.values
+        val classStructs = harvest.types.values
             .mapNotNull { it.asStruct() }
             .filter { (ast, body) -> body.rawKind == AggrKind.CLASS }
             .toList()
 
-        val emptyStructs = harvest.typeAsts.values
+        val emptyStructs = harvest.types.values
             .mapNotNull { it.asStruct() }
             .filter { (ast, body) -> body.fields.isEmpty() && body.methods.isEmpty() }
             .toList()
 
-        val resolver = ghistabs.harvest.TypeResolver(harvest)
+        val resolver = ghistabs.harvest.HarvestIndex(harvest)
         val baseTypes =
-            harvest.typeAsts.values.filter { it.id.source is SourceFile.CUSource && !it.body.isXRefTarget }.toList()
+            harvest.types.values.filter { it.id.source is SourceFile.CUSource && !it.body.isXRefTarget }.toList()
         val different = baseTypes
-            .groupBy { resolver.contentHash(it.body) }
+            .groupBy { resolver.content(it.body) }
             .mapKeys { (k, v) -> k to v.map { it.name }.toSet() }
 
         println("base types: ${different.mapValues { (_, v) -> v.size }}")
@@ -1279,7 +1279,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             if (asts.size > 1 && names.contains(null)) {
                 println("- $hash")
                 for (ast in asts) {
-                    val h = resolver.contentHash(ast.body)
+                    val h = resolver.content(ast.body)
                     println("       =>  $h ${ast.id} $ast")
                 }
             }

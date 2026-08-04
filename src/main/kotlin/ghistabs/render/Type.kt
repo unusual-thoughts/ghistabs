@@ -16,7 +16,7 @@ import ghistabs.parse.TypeDecl
  * Best-effort C-style rendering of a [TypeDecl]. Primitives go
  * through [resolveBuiltin] so they come out as `int` / `uchar` /
  * `double` etc; named composite types are looked up by id in
- * [Harvest.typeAsts]. Cycles (gcc's recursive
+ * [Harvest.types]. Cycles (gcc's recursive
  * `std::basic_string<…>::operator=` taking `std::string&`) are broken
  * with a visited-set of the type ids on the current path — NOT a depth
  * cap, which the transparent Ref/InlineDef indirections would exhaust
@@ -34,7 +34,7 @@ fun TypeDecl<GlobalTypeId>.render(
         // Named TypeAst → use the name. Anonymous → recurse into its body so the
         // user sees `int *` rather than a raw GlobalTypeId, unless this id is
         // already on the path (cycle). Unresolved (cross-CU dangling) → id string.
-        val ast = harvest.typeAsts[id]
+        val ast = harvest.types[id]
         val name = ast?.name
         when {
             name != null -> shortener?.shortenedOrNull(name) ?: name
@@ -96,12 +96,12 @@ fun TypeDecl<GlobalTypeId>.render(
  */
 fun harvestTemplateShortener(harvest: Harvest): TemplateNameShortener {
     fun targetName(decl: TypeDecl<GlobalTypeId>): String? = when (decl) {
-        is TypeDecl.Ref -> harvest.typeAsts[decl.id]?.name
+        is TypeDecl.Ref -> harvest.types[decl.id]?.name
         is TypeDecl.XRef -> decl.tagName
         is TypeDecl.InlineDef -> targetName(decl.body)
         else -> null
     }
-    val aliases = harvest.typeAsts.values.mapNotNull { ast ->
+    val aliases = harvest.types.values.mapNotNull { ast ->
         val name = ast.name ?: return@mapNotNull null
         targetName(ast.body)?.takeIf { '<' in it && it.length > name.length }?.let { name to it }
     }.toMap()
@@ -114,7 +114,7 @@ fun TypeDecl<GlobalTypeId>.isPointer(harvest: Harvest): Boolean = when (this) {
     is TypeDecl.Const -> inner.isPointer(harvest)
     is TypeDecl.Volatile -> inner.isPointer(harvest)
     is TypeDecl.InlineDef -> body.isPointer(harvest)
-    is TypeDecl.Ref -> harvest.typeAsts[id]?.body?.isPointer(harvest) ?: false
+    is TypeDecl.Ref -> harvest.types[id]?.body?.isPointer(harvest) ?: false
     else -> false
 }
 
@@ -124,15 +124,19 @@ fun TypeDecl<GlobalTypeId>.isCharArray(harvest: Harvest): Boolean = when (this) 
     is TypeDecl.Const -> inner.isCharArray(harvest)
     is TypeDecl.Volatile -> inner.isCharArray(harvest)
     is TypeDecl.InlineDef -> body.isCharArray(harvest)
-    is TypeDecl.Ref -> harvest.typeAsts[id]?.body?.isCharArray(harvest) ?: false
+    is TypeDecl.Ref -> harvest.types[id]?.body?.isCharArray(harvest) ?: false
     else -> false
 }
 
 private fun TypeDecl<GlobalTypeId>.isCharType(harvest: Harvest): Boolean = when (this) {
     is TypeDecl.Const -> inner.isCharType(harvest)
+
     is TypeDecl.Volatile -> inner.isCharType(harvest)
+
     is TypeDecl.InlineDef -> body.isCharType(harvest)
-    is TypeDecl.Ref -> harvest.typeAsts[id]?.body?.isCharType(harvest) ?: false
+
+    is TypeDecl.Ref -> harvest.types[id]?.body?.isCharType(harvest) ?: false
+
     // Any 1-byte integer element: cygwin's named `char` resolves through its Range body to
     // Byte, not Char. The printable-run guard in stringLiteralAt keeps binary byte[] as hex.
     else -> when (resolveBuiltin()) {
@@ -147,7 +151,7 @@ fun TypeDecl.Struct<GlobalTypeId>.renderFull(
     program: Program,
     shortener: TemplateNameShortener? = null,
 ): List<String> {
-    val funcByMangled = harvest.openFunctions.associateBy { it.name }
+    val funcByMangled = harvest.functions.associateBy { it.name }
     val members: List<Pair<Access, String>> =
         fields.filter { !it.isStatic }.sortedBy { it.offsetBits }.map { f ->
             f.access to "${f.type.render(harvest, shortener = shortener)} ${f.name};  /* +${f.offsetBits / 8}B */"

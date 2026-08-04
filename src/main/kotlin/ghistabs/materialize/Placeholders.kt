@@ -1,8 +1,9 @@
 package ghistabs.materialize
 
 import ghidra.program.model.data.*
+import ghistabs.diagnose.Level
 import ghistabs.diagnose.degradation
-import ghistabs.harvest.TypeAst
+import ghistabs.harvest.Type
 import ghistabs.parse.AggrKind
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
@@ -10,12 +11,12 @@ import ghistabs.parse.TypeDecl
 /**
  * Empty, mutable stub for [ast]: an EnumDataType (correctly sized), or an empty Structure/Union that
  * [materializeAll] fills in place. Authoritative substitutions (primitives, RTTI pseudo-types) are
- * *not* placeholders — see [TypeRegistry.substitute]; callers resolve those first.
+ * *not* placeholders — see [DataTypeRegistry.substitute]; callers resolve those first.
  */
-internal fun TypeRegistry.makePlaceholder(
-    ast: TypeAst,
+internal fun DataTypeRegistry.makePlaceholder(
+    ast: Type,
     category: CategoryPath,
-    reason: String = "fwd-decl",
+    reason: String? = null,
     // The canonical slot name — defaults to the stabs identity, but a scope-attributed group passes
     // its key name (the demangler's leaf) so the type materializes at the demangler's spelling
     // (`/std/string`, not `/std/basic_string<…>`), the slot Ghidra's this-param creator then reuses.
@@ -47,7 +48,11 @@ internal fun TypeRegistry.makePlaceholder(
 
         else -> StructureDataType(category, name, 0, dtm)
     }
-    debug("placeholder-created", "name=${ast.ghidraName} category=$category reason=$reason")
+    log(
+        "placeholder-created",
+        "name=$name category=$category reason=${reason ?: "fwd-decl"}",
+        if (reason == null) Level.DEBUG else Level.WARN,
+    )
     return dt
 }
 
@@ -67,7 +72,7 @@ private fun TypeDecl.Struct<GlobalTypeId>.usefulStructSize(): Long {
     return if (sizeBytes - fieldEnd > maxFieldSize) fieldEnd else sizeBytes
 }
 
-private fun TypeRegistry.recordTruncation(ast: TypeAst, originalBytes: Long, truncatedBytes: Long) {
+private fun DataTypeRegistry.recordTruncation(ast: Type, originalBytes: Long, truncatedBytes: Long) {
     if (originalBytes <= truncatedBytes) return
     degradation(
         "struct-truncated",

@@ -4,8 +4,8 @@ import ghidra.program.model.listing.Program
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.StabsDiagnostics
 import ghistabs.harvest.Harvest
-import ghistabs.harvest.TypeResolver
-import ghistabs.materialize.TypeRegistry
+import ghistabs.harvest.HarvestIndex
+import ghistabs.materialize.DataTypeRegistry
 import ghistabs.parse.StabRecord
 import org.jetbrains.annotations.TestOnly
 import java.util.*
@@ -16,8 +16,8 @@ import java.util.*
  * `byCanonicalKey` indices. Produced by [StabsImporter]; absent when the program carried no stabs.
  */
 data class ImportArtifacts(
-    val typeRegistry: TypeRegistry,
-    val typeResolver: TypeResolver,
+    val registry: DataTypeRegistry,
+    val index: HarvestIndex,
     val harvest: Harvest,
     val records: List<StabRecord>,
 )

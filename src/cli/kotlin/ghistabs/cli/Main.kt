@@ -4,11 +4,7 @@ import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.NoOpCliktCommand
 import com.github.ajalt.clikt.core.subcommands
 import com.github.ajalt.clikt.parameters.arguments.argument
-import com.github.ajalt.clikt.parameters.options.default
-import com.github.ajalt.clikt.parameters.options.flag
-import com.github.ajalt.clikt.parameters.options.multiple
-import com.github.ajalt.clikt.parameters.options.option
-import com.github.ajalt.clikt.parameters.options.required
+import com.github.ajalt.clikt.parameters.options.*
 import com.github.ajalt.clikt.parameters.types.enum
 import com.github.ajalt.clikt.parameters.types.file
 import ghidra.GhidraApplicationLayout
@@ -207,7 +203,7 @@ private abstract class RenderCommand(name: String, help: String) : CliktCommand(
 
     private fun ImportContext<*>.render(artifacts: ImportArtifacts?) {
         artifacts ?: return
-        Renderer(artifacts.typeResolver, program, mode, resolver).use { renderer ->
+        Renderer(artifacts.index, program, mode, resolver).use { renderer ->
             val written = renderer.renderAll(outDir)
             echo("rendered ${renderer.sources.size} sources -> $written files in $outDir")
         }

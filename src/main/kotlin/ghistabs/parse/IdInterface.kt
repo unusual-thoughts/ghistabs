@@ -2,6 +2,9 @@
 
 package ghistabs.parse
 
+import ghistabs.parse.TypeDecl.Struct.Base
+import ghistabs.parse.TypeDecl.Struct.Field
+import ghistabs.parse.TypeDecl.Struct.Method
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.descriptors.PrimitiveKind
@@ -99,12 +102,12 @@ fun TypeDecl<LocalTypeId>.globalize(g: Globalizer): TypeDecl<GlobalTypeId> = whe
     is TypeDecl.Struct -> TypeDecl.Struct(
         rawKind,
         sizeBytes,
-        bases.map { BaseDecl(it.type.globalize(g), it.isVirtual, it.access, it.offsetBits) },
+        bases.map { Base(it.type.globalize(g), it.isVirtual, it.access, it.offsetBits) },
         fields.map {
-            FieldDecl(it.name, it.type.globalize(g), it.offsetBits, it.sizeBits, it.isStatic, it.access, it.mangled)
+            Field(it.name, it.type.globalize(g), it.offsetBits, it.sizeBits, it.isStatic, it.access, it.mangled)
         },
         methods.map {
-            MethodDecl(
+            Method(
                 it.name,
                 it.mangled,
                 it.signature.globalize(g),
@@ -122,13 +125,10 @@ fun TypeDecl<LocalTypeId>.globalize(g: Globalizer): TypeDecl<GlobalTypeId> = whe
 }
 
 fun SymbolDecl<LocalTypeId>.globalize(g: Globalizer) = when (this) {
-    is SymbolDecl.Function -> SymbolDecl.Function(name, isFileStatic, type.globalize(g))
-    is SymbolDecl.Global -> SymbolDecl.Global(name, type.globalize(g))
-    is SymbolDecl.RegLocal -> SymbolDecl.RegLocal(name, type.globalize(g))
-    is SymbolDecl.RegParam -> SymbolDecl.RegLocal(name, type.globalize(g))
-    is SymbolDecl.StackLocal -> SymbolDecl.StackLocal(name, type.globalize(g))
-    is SymbolDecl.StackParam -> SymbolDecl.StackParam(name, type.globalize(g))
-    is SymbolDecl.StaticVar -> SymbolDecl.StaticVar(name, type.globalize(g), isFunctionLocal)
+    is SymbolDecl.Function -> SymbolDecl.Function(name, scope, type.globalize(g))
+    is SymbolDecl.Local -> SymbolDecl.Local(name, type.globalize(g), location)
+    is SymbolDecl.Param -> SymbolDecl.Param(name, type.globalize(g), location)
+    is SymbolDecl.Static -> SymbolDecl.Static(name, type.globalize(g), scope)
     is SymbolDecl.NamedType -> SymbolDecl.NamedType(name, kind, g.globalIdFor(id), type.globalize(g))
     is SymbolDecl.Constant -> SymbolDecl.Constant(name, type.globalize(g), value)
 }

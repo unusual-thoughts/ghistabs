@@ -1,12 +1,12 @@
 package ghistabs.render
 
-import ghistabs.harvest.OpenFunction
+import ghistabs.harvest.StabFunction
 
 // gcc emits N_SLINEs out of address order (SjLj landing pads map back near the decl),
 // so min/max source line over the same-source entries — not first/last by address —
 // bounds the body. `prologueLine` (lowest-address entry) is the fallback opener.
 private data class RawSpan(
-    val func: OpenFunction,
+    val func: StabFunction,
     val prologueAddr: Long,
     val prologueLine: Int,
     val minLine: Int,
@@ -14,7 +14,7 @@ private data class RawSpan(
     val sameSource: Boolean,
 )
 
-data class FuncRange(val func: OpenFunction, val startLine: Int, val endLine: Int) {
+data class FuncRange(val func: StabFunction, val startLine: Int, val endLine: Int) {
     // Single-line range = a self-closing decl (header-inline out-of-line copies,
     // synthetic init wrappers): no body to bracket.
     val isSingleLine get() = startLine == endLine
@@ -24,7 +24,7 @@ data class FuncRange(val func: OpenFunction, val startLine: Int, val endLine: In
 class FunctionSpans(val ranges: List<FuncRange>) {
     val startLines = ranges.map { it.startLine }.toSet()
 
-    val closeLineByFunc: Map<OpenFunction, Int> = ranges.mapNotNull { r ->
+    val closeLineByFunc: Map<StabFunction, Int> = ranges.mapNotNull { r ->
         when {
             r.isSingleLine -> null
             (r.endLine + 1) in startLines -> r.func to r.endLine
@@ -34,7 +34,7 @@ class FunctionSpans(val ranges: List<FuncRange>) {
 
     private val spans = ranges.map { it.startLine..(closeLineByFunc[it.func] ?: it.startLine) }
 
-    fun closeLine(func: OpenFunction) = closeLineByFunc[func]
+    fun closeLine(func: StabFunction) = closeLineByFunc[func]
     fun inFunction(line: Int) = spans.any { line in it }
 
     val maxLine = sequenceOf(
@@ -49,7 +49,7 @@ class FunctionSpans(val ranges: List<FuncRange>) {
          * clear of every earlier function — a min-line below a prior function's end is
          * gcc cross-attribution, so there fall back to the prologue line.
          */
-        fun of(rawFuncs: List<OpenFunction>, source: String): FunctionSpans {
+        fun of(rawFuncs: List<StabFunction>, source: String): FunctionSpans {
             var prevEnd = Int.MIN_VALUE
             val rawRanges = rawFuncs
                 .mapNotNull { it.rawSpan(source) }
@@ -76,7 +76,7 @@ class FunctionSpans(val ranges: List<FuncRange>) {
 
         // Prefer entries tagged with `source`; with none — and not a synthetic init
         // wrapper — fall back to all entries (out-of-line copies of header methods).
-        private fun OpenFunction.rawSpan(source: String): RawSpan? {
+        private fun StabFunction.rawSpan(source: String): RawSpan? {
             val sameSource = lineEntries.filter { it.source == source }
             val inside = sameSource.ifEmpty { if (isSyntheticInit) emptyList() else lineEntries }
             if (inside.isEmpty()) return null

@@ -19,8 +19,8 @@ class AnonymousTypedefTargetNamesTest {
         vptrBasetype = null,
     )
     private fun ast(n: Int, name: String?, body: TypeDecl<GlobalTypeId>) =
-        TypeAst(cu = cu, id = id(n), name = name, body = body)
-    private fun map(vararg asts: TypeAst) = AstStore(asts.associateBy { it.id }.toMutableMap())
+        Type(cu = cu, id = id(n), name = name, body = body)
+    private fun map(vararg asts: Type) = TypeStore(asts.associateBy { it.id }.toMutableMap())
 
     @Test fun namesAnonymousInlineStruct() {
         val typedef = ast(3, "sometype", TypeDecl.InlineDef(id(4), struct(36)))

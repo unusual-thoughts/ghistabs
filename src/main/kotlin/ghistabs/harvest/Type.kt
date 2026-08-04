@@ -17,7 +17,7 @@ import kotlin.io.path.Path
 import kotlin.io.path.nameWithoutExtension
 
 @Serializable
-data class TypeAst(
+data class Type(
     val cu: SourceFile.CUSource,
     val id: GlobalTypeId,
     val name: String?,
@@ -55,7 +55,7 @@ data class TypeAst(
  * from the stab's `desc` field (0 when emitter omits it); `sourceFile` is the N_SOL-effective name.
  */
 @Serializable
-data class SymbolRecord(
+data class Symbol(
     val recordIndex: Int,
     val recordType: StabType,
     val body: SymbolDecl<GlobalTypeId>,
@@ -63,7 +63,7 @@ data class SymbolRecord(
     val declLine: Int = 0,
     /** N_SOL in effect when the record was read — except for function-scope symbols, where the
      *  N_SOL is meaningless and [resolveBlocks] repoints this at the block's real source. */
-    val sourceFile: String? = null,
+    var sourceFile: String? = null,
     /** Enclosing function (mangled/linkage name) when harvested inside a function scope — set for
      *  procedure-scope (`V`) statics so the applier can annotate which function owns them. */
     val enclosingFunction: String? = null,
@@ -74,6 +74,21 @@ data class SymbolRecord(
         sourceFile: String? = null,
         enclosingFunction: String? = null,
     ) : this(record.index, record.type, decl, record.value, record.desc, sourceFile, enclosingFunction)
+    companion object {
+        fun parse(
+            rec: StabRecord,
+            globalizer: Globalizer,
+            sourceFile: String? = null,
+            enclosingFunction: String? = null,
+        ) = Parser(rec.name).parseSymbol().map {
+            Symbol(
+                rec,
+                it.globalize(globalizer),
+                sourceFile,
+                enclosingFunction,
+            )
+        }
+    }
 }
 
 class AddressSerializer : KSerializer<Address> {
@@ -91,7 +106,7 @@ class AddressSerializer : KSerializer<Address> {
 }
 
 @Serializable
-data class OpenFunction(
+data class StabFunction(
     val name: String,
     @Serializable(with = AddressSerializer::class)
     val addr: Address,
@@ -100,18 +115,18 @@ data class OpenFunction(
     // Both assigned once, by BlockTreeBuilder.finish, when the function's last record has been seen:
     // a function-scope symbol's source isn't knowable until then, so there is no window in which
     // these hold records that are about to be corrected.
-    var locals: List<SymbolRecord> = emptyList(),
-    var params: List<SymbolRecord> = emptyList(),
-    var blocks: List<BlockScope> = emptyList(),
+    val locals: List<Symbol> = emptyList(),
+    val params: List<Symbol> = emptyList(),
+    val blocks: List<BlockScope> = emptyList(),
     // N_SLINEs emitted between this function's N_FUN and the next, in stab-stream order.
     // This is the authoritative membership: it includes exception-handler / landing-pad
     // lines that gcc attributes to the function but Ghidra's CFG-based body omits (nothing
     // flows to them), and it needs no address/size arithmetic — the entry point isn't even
     // guaranteed to be the function's lowest address.
-    val lineEntries: MutableList<LineEntry> = mutableListOf(),
+    val lineEntries: List<LineEntry> = emptyList(),
     // null = size not derivable from stabs (no N_LBRAC/N_RBRAC scope, no end-marker N_FUN).
     // Distinct from a genuine 0. Used by TypeResolver for header-hint address ranges.
-    var sizeBytes: ULong? = null,
+    val sizeBytes: ULong? = null,
 ) {
     val demangledName by lazy { demangledName(decl.name) }
 
@@ -128,8 +143,12 @@ data class OpenFunction(
      * no linkage, so its prototypeString can't carry it and a file-static renders like any other
      * free function — the stab is the only place that distinction survives.
      */
-    fun sourceSignature(program: Program) =
-        if (decl.isFileStatic) "static ${signature(program)}" else signature(program)
+    fun sourceSignature(program: Program) = signature(program).let {
+        when (decl.scope) {
+            FunctionScope.FILE -> "static $it"
+            FunctionScope.GLOBAL -> it
+        }
+    }
 
     /**
      * Pull the outermost class / namespace name out of an Itanium-ABI
@@ -163,7 +182,7 @@ data class OpenFunction(
 }
 
 /** N_SLINE record: line → text address, tagged with its active N_SOL source. Held both in
- *  [Harvest.lineEntries] (grouped by source) and on the owning [OpenFunction.lineEntries]. */
+ *  [Harvest.lineEntries] (grouped by source) and on the owning [StabFunction.lineEntries]. */
 @Serializable
 data class LineEntry(
     val line: Int,
@@ -172,12 +191,18 @@ data class LineEntry(
 )
 
 @Serializable(with = ToStringSerializer::class)
-data class GhidraKey(val category: CategoryPath, val name: String) {
+data class TypeLocation(val category: CategoryPath, val name: String) {
     constructor(path: String, name: String) : this(CategoryPath(path), name)
 
     override fun toString() = "$category/$name"
 }
 
-/** TypeAsts collapsed onto one DTM slot. `ast` materializes; `members` is for diagnostics. */
+/**
+ *  Types with the same [location] collapsed onto one DTM slot.
+ *  [type] is the one chosen to materialize
+ *  [members] and [distinct] are for diagnostics.
+ *  [members] contains all the harvested [Type]s that located there, and
+ *  [distinct] is the count of truly different types among them according to [ContentHasher]
+ */
 @Serializable
-data class CanonicalGroup(val key: GhidraKey, val ast: TypeAst, val members: List<GlobalTypeId>, val distinct: Int)
+data class LocatedType(val location: TypeLocation, val type: Type, val members: List<GlobalTypeId>, val distinct: Int)

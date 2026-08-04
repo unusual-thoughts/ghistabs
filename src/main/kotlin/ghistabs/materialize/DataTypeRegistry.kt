@@ -24,12 +24,12 @@ import ghistabs.parse.TypeDecl
  * placeholder construction in [Placeholders] ([makePlaceholder]), and degradation reporting in
  * [TypeDiagnostics].
  */
-class TypeRegistry(
+class DataTypeRegistry(
     internal val dtm: DataTypeManager,
     sink: DiagnosticSink,
     internal val diagnostics: StabsDiagnostics,
     internal val harvest: Harvest,
-    internal val resolver: TypeResolver,
+    internal val index: HarvestIndex,
     internal val monitor: TaskMonitor = TaskMonitor.DUMMY,
 ) : DiagnosticSink by sink {
     private val byId = mutableMapOf<GlobalTypeId, DataType>()
@@ -83,24 +83,26 @@ class TypeRegistry(
     internal fun cacheIfAbsent(id: GlobalTypeId, build: () -> DataType): DataType = byId.getOrPut(id, build)
     internal fun cacheIfAbsent(id: GlobalTypeId, dt: DataType?): DataType? = dt?.let { byId.getOrPut(id) { it } }
 
-    /** Get-or-create the empty cycle-break stub for [this] under [category]; [materializeAll] fills it. */
-    internal fun TypeAst.seedPlaceholder(category: CategoryPath = CATEGORY, reason: String = "fwd-decl"): DataType =
-        placeholders.getOrPut(id) { makePlaceholder(this, category, reason) }
+    /**
+     *  Get-or-create the empty cycle-break stub for [this] under [CATEGORY]; [materializeAll] fills it.
+     * [reason] is  */
+    internal fun Type.seedPlaceholder(reason: String? = null): DataType =
+        placeholders.getOrPut(id) { makePlaceholder(this, CATEGORY, reason) }
 
     /** Canonical-group fan-out where every member id  shares its winner's in-flight stub.
      * Winners are always XRef-targets (Struct/Union/Enum), so the stub always goes into the
      * DTM up front — in-place fill then lands on the DTM-resident object — and is shared across
      * the group's member ids so a Ref resolved before the winner materializes pulls in that one.
      */
-    internal fun CanonicalGroup.seedPlaceholder() {
-        val placeholder = makePlaceholder(ast, key.category, name = key.name).resolveIntoDtm()
+    internal fun LocatedType.seedPlaceholder() {
+        val placeholder = makePlaceholder(type, location.category, name = location.name).resolveIntoDtm()
         for (m in members) placeholders.putIfAbsent(m, placeholder)
     }
 
-    internal fun CanonicalGroup.materialize() {
-        val placeholder = placeholders[ast.id]!!
-        val materialized = materializeBody(ast, key.category, placeholder)
-        if (materialized === placeholder) cache(ast.id, placeholder) else register(materialized, ast.id)
+    internal fun LocatedType.materialize() {
+        val placeholder = placeholders[type.id]!!
+        val materialized = materializeBody(type, location.category, placeholder)
+        if (materialized === placeholder) cache(type.id, placeholder) else register(materialized, type.id)
         for (memberId in members) cacheIfAbsent(memberId, materialized)
     }
 
@@ -137,10 +139,10 @@ class TypeRegistry(
      *  - a Struct/Union gets an empty placeholder so self-recursive Refs cycle-break — [materializeAll]
      *    fills it in place;
      *  - anything else (Pointer/Array/Const/…) is materialized now, so a field-fill path stores e.g.
-     *    `char *`, not an empty placeholder (`_Alloc_hider._M_p` regression).
+     *    `char *`, not an empty placeholder
      */
     internal fun getOrMaterialize(id: GlobalTypeId): DataType? =
-        byId[id] ?: placeholders[id] ?: harvest.getType(id)?.let { ast ->
+        byId[id] ?: placeholders[id] ?: index.byId(id)?.let { ast ->
             ast.substitute()?.let { cache(id, it) }
                 ?: if (ast.body is TypeDecl.Struct) {
                     ast.seedPlaceholder()
@@ -154,7 +156,7 @@ class TypeRegistry(
      * [resolveBuiltin], or a `__*_type_info_pseudo` RTTI record via [RttiStructs]. These are final types,
      * not cycle-break stubs — callers cache them in [byId] and must never file them under [xrefStubs].
      */
-    internal fun TypeAst.substitute(): DataType? = body.resolveBuiltin()
+    internal fun Type.substitute(): DataType? = body.resolveBuiltin()
         ?: rttiStructs.typeInfoLayout(ghidraName)?.also {
             debug("rtti-pseudo-substituted", "name=$ghidraName")
         }
@@ -173,7 +175,7 @@ class TypeRegistry(
      */
     val byDemangledClass: Map<String, DataType> by lazy {
         buildMap {
-            for (fn in harvest.openFunctions) {
+            for (fn in harvest.functions) {
                 val dt = fn.thisParamTypeId()?.let { dataTypeFor(it) } ?: continue
                 demangle(fn.name)?.namespace?.let { putIfAbsent(it.categoryPath.path, dt) }
             }
@@ -182,7 +184,7 @@ class TypeRegistry(
             // pure-constants class has. `std::ctype_base` and `std::__ios_flags` declare no member
             // functions at all, so the loop above can never reach them and their stub had no
             // candidate. Here the owning AST supplies the type directly — no `this` param needed.
-            for ((id, ast) in harvest.typeAsts) {
+            for ((id, ast) in harvest.types) {
                 val body = ast.body as? TypeDecl.Struct<GlobalTypeId> ?: continue
                 val dt = dataTypeFor(id) ?: continue
                 for (field in body.fields) {
@@ -199,8 +201,8 @@ private val Demangled.categoryPath get(): CategoryPath =
     (namespace?.categoryPath ?: DEMANGLER_CATEGORY).extend(name)
 
 /** Pointee type-id of a member function's leading `this` param (`InlineDef?→Pointer→Ref`), else null. */
-private fun OpenFunction.thisParamTypeId(): GlobalTypeId? {
-    val p = params.firstOrNull()?.body as? SymbolDecl.StackParam ?: return null
+private fun StabFunction.thisParamTypeId(): GlobalTypeId? {
+    val p = params.firstOrNull()?.body as? SymbolDecl.Param ?: return null
     if (p.name != "this") return null
     val inner = (p.type as? TypeDecl.InlineDef)?.body ?: p.type
     return ((inner as? TypeDecl.Pointer)?.pointee as? TypeDecl.Ref)?.id

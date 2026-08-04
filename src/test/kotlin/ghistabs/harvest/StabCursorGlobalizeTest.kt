@@ -2,6 +2,7 @@ package ghistabs.harvest
 
 import ghistabs.dummyCursor
 import ghistabs.parse.*
+import ghistabs.parse.TypeDecl.Struct.Field
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -140,7 +141,7 @@ class StabCursorGlobalizeTest {
             sizeBytes = 8L,
             bases = emptyList(),
             fields = listOf(
-                FieldDecl(
+                Field(
                     name = "x",
                     type = TypeDecl.Ref(LocalTypeId(0, 1)),
                     offsetBits = 0L,
@@ -149,7 +150,7 @@ class StabCursorGlobalizeTest {
                     access = Access.PUBLIC,
                     mangled = null,
                 ),
-                FieldDecl(
+                Field(
                     name = "y",
                     type = TypeDecl.Ref(LocalTypeId(0, 2)),
                     offsetBits = 32L,
@@ -170,7 +171,7 @@ class StabCursorGlobalizeTest {
             sizeBytes = 8L,
             bases = emptyList(),
             fields = listOf(
-                FieldDecl(
+                Field(
                     name = "x",
                     type = TypeDecl.Ref(GlobalTypeId(globalCuSource, 1)),
                     offsetBits = 0L,
@@ -179,7 +180,7 @@ class StabCursorGlobalizeTest {
                     access = Access.PUBLIC,
                     mangled = null,
                 ),
-                FieldDecl(
+                Field(
                     name = "y",
                     type = TypeDecl.Ref(GlobalTypeId(globalCuSource, 2)),
                     offsetBits = 32L,
@@ -206,12 +207,12 @@ class StabCursorGlobalizeTest {
     fun testGlobalizeInlineDefWithHoistSymbolDefs() {
         val cuName = "cu.c"
         val cu = SourceFile.CUSource(cuName)
-        val store = AstStore()
+        val store = TypeStore()
 
-        val input = SymbolRecord(
+        val input = Symbol(
             1,
             StabType.N_LSYM,
-            SymbolDecl.StackLocal(
+            SymbolDecl.Local(
                 "local",
                 TypeDecl.InlineDef(
                     id = GlobalTypeId(cu, 7),
@@ -220,7 +221,7 @@ class StabCursorGlobalizeTest {
                         sizeBytes = 4L,
                         bases = emptyList(),
                         fields = listOf(
-                            FieldDecl(
+                            Field(
                                 name = "field",
                                 type = TypeDecl.Ref(GlobalTypeId(cu, 1)),
                                 offsetBits = 0L,
@@ -234,6 +235,7 @@ class StabCursorGlobalizeTest {
                         vptrBasetype = null,
                     ),
                 ),
+                VariableLocation.STACK,
             ),
             0,
         )

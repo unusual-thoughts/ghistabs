@@ -1,6 +1,7 @@
 package ghistabs.materialize
 
 import ghistabs.parse.*
+import ghistabs.parse.TypeDecl.Struct.Method
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 
@@ -73,7 +74,7 @@ class ClassBuilderTest {
     @Test
     fun testClassStructWithMethods() {
         val methodSig = TypeDecl.FunctionT<GlobalTypeId>(TypeDecl.Complex(0, 4), emptyList())
-        val method = MethodDecl(
+        val method = Method(
             name = "bar",
             mangled = "_ZN3Foo3barEv",
             signature = methodSig,
@@ -101,7 +102,7 @@ class ClassBuilderTest {
 
     @Test
     fun testVirtualMethodTracking() {
-        val virtualMethod = MethodDecl<GlobalTypeId>(
+        val virtualMethod = Method<GlobalTypeId>(
             name = "draw",
             mangled = "_ZN3Foo4drawEv",
             signature = TypeDecl.FunctionT(TypeDecl.Complex(0, 4), emptyList()),
@@ -117,7 +118,7 @@ class ClassBuilderTest {
 
         val inherited = listOf(virtualMethod)
         val own = listOf(
-            MethodDecl<GlobalTypeId>(
+            Method<GlobalTypeId>(
                 name = "draw",
                 mangled = "_ZN7Derived4drawEv",
                 signature = TypeDecl.FunctionT(TypeDecl.Complex(0, 4), emptyList()),

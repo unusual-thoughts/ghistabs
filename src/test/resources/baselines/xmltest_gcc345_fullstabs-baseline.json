@@ -9,12 +9,12 @@
             "max": 22
         },
         "canonical-key-merged": {
-            "min": 1128,
-            "max": 1128
+            "min": 1130,
+            "max": 1130
         },
         "canonical-key-multi-hash": {
-            "min": 8,
-            "max": 8
+            "min": 6,
+            "max": 6
         },
         "canonical-scope-collision": {
             "min": 1,
@@ -23,10 +23,6 @@
         "class-not-struct": {
             "min": 4,
             "max": 4
-        },
-        "contenthash-collision": {
-            "min": 3,
-            "max": 3
         },
         "data-no-coverage": {
             "min": 97,
@@ -124,10 +120,6 @@
             "min": 505,
             "max": 505
         },
-        "global-skipped": {
-            "min": 2,
-            "max": 2
-        },
         "harvest-collisions-divergent": {
             "min": 1,
             "max": 1
@@ -159,10 +151,6 @@
         "harvest-globals": {
             "min": 467,
             "max": 467
-        },
-        "harvest-parse-errors": {
-            "min": 0,
-            "max": 0
         },
         "harvest-records-parsed": {
             "min": 43818,
@@ -301,12 +289,12 @@
             "max": 17
         },
         "reglocal-add-success": {
-            "min": 84,
-            "max": 84
+            "min": 150,
+            "max": 150
         },
-        "reglocal-skipped-dup-local": {
-            "min": 71,
-            "max": 71
+        "reglocal-renamed-scope": {
+            "min": 70,
+            "max": 70
         },
         "reglocal-skipped-dup-param": {
             "min": 33,
@@ -339,6 +327,10 @@
         "static-member-unresolved": {
             "min": 379,
             "max": 379
+        },
+        "static-skipped": {
+            "min": 2,
+            "max": 2
         },
         "text-data-no-coverage": {
             "min": 73,
@@ -387,10 +379,6 @@
         "xref-base-tag-ambiguous": {
             "min": 2,
             "max": 2
-        },
-        "xref-base-tag-resolved": {
-            "min": 66,
-            "max": 66
         },
         "xref-undefined": {
             "min": 40,

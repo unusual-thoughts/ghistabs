@@ -2,7 +2,7 @@ package ghistabs.materialize
 
 import ghidra.program.model.data.*
 import ghistabs.diagnose.degradation
-import ghistabs.harvest.TypeAst
+import ghistabs.harvest.Type
 import ghistabs.materialize.itanium.*
 import ghistabs.parse.CATEGORY
 import ghistabs.parse.GlobalTypeId
@@ -10,7 +10,7 @@ import ghistabs.parse.TypeDecl
 import ghistabs.runTransaction
 import ghidra.program.model.data.Enum as GhidraEnum
 
-internal fun TypeRegistry.materializeBody(ast: TypeAst, category: CategoryPath, placeholder: DataType): DataType =
+internal fun DataTypeRegistry.materializeBody(ast: Type, category: CategoryPath, placeholder: DataType): DataType =
     when (val body = ast.body) {
         is TypeDecl.Pointer -> pointerTo(body.pointee, "body-pointer-pointee", ast.ghidraName)
 
@@ -83,7 +83,7 @@ internal fun TypeRegistry.materializeBody(ast: TypeAst, category: CategoryPath, 
         // emit `InlineDef(id, XRef(STRUCT,"Foo"))` and we'd materialize an
         // empty `XRef_[...]` Structure at the typeinfo location.
         // Resolver buckets its own degradations for failed lookups.
-        is TypeDecl.XRef -> resolver.byXRef(body)
+        is TypeDecl.XRef -> index.byXRef(body)
             ?.let { canonical -> getOrMaterialize(canonical.id)?.let { cache(ast.id, it) } }
             ?: placeholder.markXRefStub()
 
@@ -105,7 +105,7 @@ internal fun TypeRegistry.materializeBody(ast: TypeAst, category: CategoryPath, 
             }
     }
 
-internal fun TypeRegistry.fillStructBases(
+internal fun DataTypeRegistry.fillStructBases(
     body: TypeDecl.Struct<GlobalTypeId>,
     placeholder: Structure,
     qualifiedName: String,
@@ -218,7 +218,7 @@ internal fun TypeRegistry.fillStructBases(
     }
 }
 
-internal fun TypeRegistry.fillComposite(
+internal fun DataTypeRegistry.fillComposite(
     body: TypeDecl.Struct<GlobalTypeId>,
     placeholder: Composite,
     qualifiedName: String,
@@ -228,7 +228,7 @@ internal fun TypeRegistry.fillComposite(
         fillStructBases(body, placeholder, qualifiedName)
     }
 
-    val polyBase = resolver.firstPolymorphicBase(body)
+    val polyBase = index.firstPolymorphicBase(body)
 
     // Any vptr at a base-occupied offset is inherited — base owns it. Skip it.
     // Catches the unresolved-base case (synthesised _base_unknown_*) where
@@ -327,7 +327,7 @@ internal fun TypeRegistry.fillComposite(
     return placeholder
 }
 
-private fun TypeRegistry.undef(category: String, at: String, decl: TypeDecl<GlobalTypeId>): DataType {
+private fun DataTypeRegistry.undef(category: String, at: String, decl: TypeDecl<GlobalTypeId>): DataType {
     degradation(category, at, decl.toString())
     return Undefined4DataType.dataType
 }
@@ -337,14 +337,14 @@ private fun TypeRegistry.undef(category: String, at: String, decl: TypeDecl<Glob
  * (definition sites): wrap the resolved [pointee] in a target-sized [PointerDataType], degrading to
  * [undef] under the caller's [label]/[at] when the pointee doesn't resolve.
  */
-private fun TypeRegistry.pointerTo(pointee: TypeDecl<GlobalTypeId>, label: String, at: String): PointerDataType =
+private fun DataTypeRegistry.pointerTo(pointee: TypeDecl<GlobalTypeId>, label: String, at: String): PointerDataType =
     PointerDataType(resolveRef(pointee) ?: undef(label, at, pointee), dtm.dataOrganization.pointerSize, dtm)
 
 /**
  * Resolve a TypeDecl reference site to a DataType. Struct/Enum/Method/XRef return null (they
- * only have identity through their owning TypeAst id; use [TypeRegistry.getOrMaterialize] for those).
+ * only have identity through their owning TypeAst id; use [DataTypeRegistry.getOrMaterialize] for those).
  */
-fun TypeRegistry.resolveRef(decl: TypeDecl<GlobalTypeId>): DataType? = when (decl) {
+fun DataTypeRegistry.resolveRef(decl: TypeDecl<GlobalTypeId>): DataType? = when (decl) {
     is TypeDecl.Void -> VoidDataType()
 
     is TypeDecl.Ref -> getOrMaterialize(decl.id)
@@ -377,7 +377,7 @@ fun TypeRegistry.resolveRef(decl: TypeDecl<GlobalTypeId>): DataType? = when (dec
 
     // XRef → canonical TypeAst by (kind, tagName), then materialized DataType
     // by id. Unified across struct/union/class/enum.
-    is TypeDecl.XRef -> resolver.byXRef(decl)?.let { getOrMaterialize(it.id) }
+    is TypeDecl.XRef -> index.byXRef(decl)?.let { getOrMaterialize(it.id) }
 
     // Aggregate bodies — meaningful only via owning TypeId; see kdoc.
     is TypeDecl.Struct, is TypeDecl.Enum, is TypeDecl.Method -> {
@@ -412,7 +412,7 @@ fun TypeDecl.Array<*>.buildArray(elem: DataType): ArrayDataType {
  * [ret]/[params] via [resolveRef], handles gcc's void-sentinel arg-list terminator,
  * and applies [callingConvention] if the program's CompilerSpec accepts it.
  */
-fun TypeRegistry.buildFunctionDefinition(
+fun DataTypeRegistry.buildFunctionDefinition(
     category: CategoryPath,
     name: String,
     ret: TypeDecl<GlobalTypeId>,
@@ -459,7 +459,7 @@ fun TypeRegistry.buildFunctionDefinition(
     return fd
 }
 
-fun TypeRegistry.materializeAll() {
+fun DataTypeRegistry.materializeAll() {
     // Two phases: (1) materialize each CanonicalGroup winner into its (cat,name)
     // slot and alias members to it; (2) non-registerable top-level asts
     // (FunctionT, Method, XRef aliases) via materializeTopLevel() — byId only, no DTM slot.
@@ -469,12 +469,12 @@ fun TypeRegistry.materializeAll() {
         // up-front so later in-place mutations land on the DTM-resident object — and a
         // Ref resolved before the winner materializes pulls in that one object, not an
         // empty second copy that would collide with the filled type (`.conflict`).
-        for (group in resolver.byCanonicalKey.values) {
+        for (group in index.byLocation.values) {
             group.seedPlaceholder()
         }
 
-        monitor.initialize(resolver.byCanonicalKey.size.toLong(), "Stabs: materializing types")
-        for (group in resolver.byCanonicalKey.values) {
+        monitor.initialize(index.byLocation.size.toLong(), "Stabs: materializing types")
+        for (group in index.byLocation.values) {
             monitor.increment()
             group.materialize()
         }
@@ -482,7 +482,7 @@ fun TypeRegistry.materializeAll() {
         registerNamedPrimitiveTypedefs()
 
         // Non-registerable top-level typeAsts (XRef body, FunctionT, Method, …)
-        for (ast in harvest.typeAsts.values) {
+        for (ast in harvest.types.values) {
             materializeTopLevel(ast)
         }
     }
@@ -493,8 +493,8 @@ fun TypeRegistry.materializeAll() {
  * byCanonicalKey, but stabs gives them names worth exposing as typedef aliases. Grouped by
  * ghidraName for one typedef per logical name.
  */
-private fun TypeRegistry.registerNamedPrimitiveTypedefs() {
-    harvest.typeAsts.values
+private fun DataTypeRegistry.registerNamedPrimitiveTypedefs() {
+    harvest.types.values
         .filter { it.name != null && !it.body.isXRefTarget }
         .groupBy { it.ghidraName }
         .forEach { (ghidraName, asts) ->
@@ -524,11 +524,11 @@ private fun TypeRegistry.registerNamedPrimitiveTypedefs() {
 }
 
 /** Materialize a non-registerable top-level ast (XRef alias, FunctionT, Method). */
-internal fun TypeRegistry.materializeTopLevel(ast: TypeAst): DataType = cacheIfAbsent(ast.id) {
+internal fun DataTypeRegistry.materializeTopLevel(ast: Type): DataType = cacheIfAbsent(ast.id) {
     // RTTI pseudo-types and primitives resolve to their authoritative layout — a final type, so it
     // must not fall through to the XRef-stub path below (which would file it under xrefStubs and
     // flag every _ZTI global as a `degraded-*-typed-xref-stub` false alarm).
-    ast.substitute() ?: resolver.byXRef(ast)?.let { canonical ->
-        materializeTopLevel(canonical)
-    } ?: materializeBody(ast, CATEGORY, ast.seedPlaceholder(reason = "ref-stub"))
+    ast.substitute()
+        ?: index.byXRef(ast)?.let { materializeTopLevel(it) }
+        ?: materializeBody(ast, CATEGORY, ast.seedPlaceholder(reason = "ref-stub"))
 }

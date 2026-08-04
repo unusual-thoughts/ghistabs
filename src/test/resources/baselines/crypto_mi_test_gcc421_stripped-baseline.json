@@ -13,20 +13,16 @@
             "max": 50
         },
         "canonical-key-merged": {
-            "min": 1888,
-            "max": 1888
+            "min": 1891,
+            "max": 1891
         },
         "canonical-key-multi-hash": {
-            "min": 218,
-            "max": 218
+            "min": 215,
+            "max": 215
         },
         "canonical-key-multi-kind": {
             "min": 20,
             "max": 20
-        },
-        "contenthash-collision": {
-            "min": 4,
-            "max": 4
         },
         "data-no-coverage": {
             "min": 1809,
@@ -144,10 +140,6 @@
             "min": 60,
             "max": 60
         },
-        "global-skipped": {
-            "min": 98,
-            "max": 98
-        },
         "harvest-collisions-divergent": {
             "min": 0,
             "max": 0
@@ -179,10 +171,6 @@
         "harvest-globals": {
             "min": 98,
             "max": 98
-        },
-        "harvest-parse-errors": {
-            "min": 0,
-            "max": 0
         },
         "harvest-records-parsed": {
             "min": 121557,
@@ -304,6 +292,10 @@
             "min": 38,
             "max": 38
         },
+        "static-skipped": {
+            "min": 98,
+            "max": 98
+        },
         "text-data-no-coverage": {
             "min": 531,
             "max": 531
@@ -335,10 +327,6 @@
         "xref-base-tag-ambiguous": {
             "min": 47,
             "max": 47
-        },
-        "xref-base-tag-resolved": {
-            "min": 42,
-            "max": 42
         },
         "xref-undefined": {
             "min": 345,
