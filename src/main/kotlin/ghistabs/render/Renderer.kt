@@ -213,7 +213,15 @@ private class RenderContext(val renderer: Renderer, val source: String) {
         else -> "$name;"
     }
 
-    /** One `// L n @ 0xADDR[: code-unit]` annotation per (line, code-unit) group. */
+    /**
+     * Skeleton: one `// L n @ 0xADDR[: code-unit]` annotation per (line, code-unit) group — an
+     * address map, which is what that mode is for.
+     *
+     * Decomp: the same fact said as provenance instead. A header line whose code we did not render
+     * here was compiled into somebody else's function, and naming that function is the useful half;
+     * the addresses are not. 204 rows carried a raw dump and 176 of them held no code at all, so what
+     * a reader met on those rows was an address list where the name of that function was the point.
+     */
     private fun emitSlineAnnotations() {
         // Aggregates the addresses of N_SLINEs sharing a (line, codeUnit) into one annotation.
         data class SliceKey(val line: Int, val codeUnit: String)
@@ -224,12 +232,22 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             val codeUnit = addr.render(program) ?: ""
             byKey.getOrPut(SliceKey(line, codeUnit)) { sortedSetOf() } += addr
         }
-        for ((key, addrs) in byKey) {
-            // The body restates these, and a line inlined twenty times listed twenty addresses.
-            if (canvas[key.line].fragments.any { it.kind == FragmentKind.DECOMP }) continue
-            val runs = formatAddrRuns(addrs.toList(), program)
-            val note = if (key.codeUnit.isEmpty()) runs else "$runs: ${key.codeUnit}"
-            canvas[key.line] += Fragment(indentFor(key.line), note = note, kind = FragmentKind.SLINE)
+        if (renderer.decomp == null) {
+            for ((key, addrs) in byKey) {
+                val runs = formatAddrRuns(addrs.toList(), program)
+                val note = if (key.codeUnit.isEmpty()) runs else "$runs: ${key.codeUnit}"
+                canvas[key.line] += Fragment(indentFor(key.line), note = note, kind = FragmentKind.SLINE)
+            }
+            return
+        }
+        // One marker per line naming every function this line's code ended up inside. Rows the
+        // decompilation already occupies say it better than any annotation could.
+        for ((line, keys) in byKey.keys.groupBy { it.line }) {
+            if (canvas[line].fragments.any { it.kind == FragmentKind.DECOMP }) continue
+            val fns = keys.mapNotNull { it.codeUnit.substringAfterLast(": ").takeIf { f -> f.isNotBlank() } }
+                .distinct()
+                .ifEmpty { continue }
+            canvas[line] += Fragment(indentFor(line), "/* inlined into ${fns.joinToString(", ")} */")
         }
     }
 
