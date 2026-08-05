@@ -28,6 +28,20 @@ class Renderer(val index: HarvestIndex, val program: Program, val mode: Mode, va
 
     val sources get() = index.sources
 
+    // A function is decompiled once for the whole run, not once per file that renders part of it: with
+    // inlined code now placed in the header it came from, one std::string method is wanted by every
+    // file that inlines it, and decompilation is ~all of the runtime.
+    private val decompiled = mutableMapOf<Address, List<DecompLine>>()
+
+    fun decompile(func: Func): List<DecompLine> = decompiled.getOrPut(func.addr) {
+        val ghFunc = program.functionManager.getFunctionAt(func.addr) ?: return@getOrPut emptyList()
+        // Folded onto the function's *own* source, not the file asking: that only governs which locals
+        // drop out of the head fold, and the head is used only where the function is defined.
+        val own = with(index) { func.source() } ?: return@getOrPut emptyList()
+        runCatching { decomp?.decompileFunction(ghFunc, 30, TaskMonitor.DUMMY) }
+            .getOrNull()?.compressedDecompLines(own, func, mode == Mode.ELIDE_SJLJ).orEmpty()
+    }
+
     fun renderSkeleton(source: String) = RenderContext(this, source).render()
 
     /**
@@ -394,9 +408,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             // source line; decompiling each would stack duplicate bodies, so leave those as
             // the skeleton's side-by-side decls and only body a single-line function alone.
             if (closeLine == startLine && spans.ranges.count { it.startLine == startLine } > 1) continue
-            val ghFunc = program.functionManager.getFunctionAt(func.addr) ?: continue
-            val cLines = runCatching { decomp.decompileFunction(ghFunc, 30, TaskMonitor.DUMMY) }
-                .getOrNull()?.compressedDecompLines(renderer.mode == Mode.ELIDE_SJLJ) ?: continue
+            val cLines = renderer.decompile(func).ifEmpty { continue }
             val head = cLines.firstOrNull() ?: continue
 
             // Capture each surviving stray with its original line so the demoted comment keeps that
@@ -406,6 +418,13 @@ private class RenderContext(val renderer: Renderer, val source: String) {
                 canvas[line].fragments.removeAll { f ->
                     when {
                         f.kind == FragmentKind.DECL_GLOBAL && !f.stale -> false
+
+                        // Another range's already-placed body, or something it already demoted.
+                        // Overlapping spans are the norm in a template header, where every
+                        // instantiation shares one declLine: re-sweeping them turns real
+                        // decompilation into a comment, and since a stray is itself sweepable it
+                        // compounds across instantiations — algparam.h L113 reached 308K chars.
+                        f.kind == FragmentKind.DECOMP || f.kind == FragmentKind.STRAY -> false
 
                         f.kind.subsumedByDecomp || f.stale -> true
 
@@ -417,56 +436,175 @@ private class RenderContext(val renderer: Renderer, val source: String) {
                 }
             }
 
-            val slines = func.lineEntries.sortedBy { it.addr.offset }
-            fun entryFor(addr: Address?) = addr?.let { a -> slines.lastOrNull { it.addr.offset <= a.offset } }
-            fun refOf(e: LineEntry): String {
-                val file = if (e.source == source) "" else "${e.source.substringAfterLast('/')} "
-                return "${file}L ${e.line}"
-            }
-
-            // A run of decomp statements on one source line ([entry]), keeping Ghidra's per-line brace
-            // formatting so the span's blank room can be filled a line at a time (braces on their own line).
-            class DecompRun(val lines: MutableList<DecompLine>, val entry: LineEntry?)
-
-            // Keep the decompiler's statement order (it may invert conditions / leave gotos, so its
-            // structure isn't the source's), but gather into one run each contiguous group of
-            // statements belonging to one this-file source line: repeats of the line plus inlined-
-            // header code (a foreign N_SOL folds into its call site's line). A run keeps Ghidra's
-            // per-line brace formatting, so it lays one line each where the span has room.
-            val runs = mutableListOf<DecompRun>()
-            var currentLine: Int? = null
-            for (dl in cLines.drop(1)) {
-                val entry = entryFor(dl.address)
-                val ownLine = entry?.takeIf { it.source == source }?.line
-                if (runs.isNotEmpty() && (ownLine == null || ownLine == currentLine)) {
-                    runs.last().lines += dl
-                } else {
-                    runs += DecompRun(mutableListOf(dl), entry)
-                }
-                if (ownLine != null) currentLine = ownLine
-            }
+            val regions = regionsOf(func, cLines)
 
             canvas[startLine] += Fragment(code = head.text, note = "L $startLine", kind = FragmentKind.DECOMP)
-            // Spread the runs down to fill the height; each expands into the blank rows up to the next
-            // run — braces on their own lines — or crams where it's too tight. The body stays inside the
-            // span when it fits (nothing spills past the close); when it would otherwise cram, borrow the
-            // blank rows after the function up to the next one, so it can breathe instead of piling on.
-            // When the body would cram, borrow only the *contiguous* blank rows immediately after the
-            // span — the next global or function ends the run — so a dense body never smears across
-            // every blank line to the end of the file.
+            // Lay each row on the source line it came from. The body stays inside the span when it fits
+            // (nothing spills past the close); when it would otherwise cram, borrow the *contiguous*
+            // blank rows immediately after the span — the next global or function ends the run — so it
+            // can breathe instead of piling on, and a dense body never smears across every blank line to
+            // the end of the file.
             val gapEnd = ((closeLine + 1)..maxLine).takeWhile { canvas[it].isEmpty() }.lastOrNull() ?: closeLine
-            val sizes = runs.map { it.lines.size }
             val spanFree = (startLine + 1..closeLine).count { canvas[it].isEmpty() }
-            val end = if (sizes.sum() <= spanFree) closeLine else gapEnd
-            // `spreadBlocks` reserves rows per run size, so a big run (a whole `while` loop coalesced
-            // onto one source line) gets its share of the interior blanks instead of cramming onto one
-            // row while a small sibling wastes the space around it.
-            val targets = spreadBlocks(startLine, end, sizes)
-            runs.forEachIndexed { i, run ->
-                val note = run.entry?.let(::refOf) ?: "L ${targets[i]}"
-                placeRun(targets[i], targets.getOrNull(i + 1) ?: (end + 1), run.lines, note)
-            }
+            val body = regions.dropInlined()
+            val sizes = body.map { it.lines.size }
+            place(body, startLine, if (sizes.sum() <= spanFree) closeLine else gapEnd)
             for (text in strays) canvas[closeLine] += Fragment(note = text, kind = FragmentKind.STRAY)
+        }
+
+        // Second pass: the code this file contributed to *other* files' functions. gcc inlined it from
+        // here, so its N_SLINEs name this file and its lines belong on this file's canvas — until now
+        // they rendered only in the .cpp that inlined them, leaving `atomicity.h` L38 with an address
+        // annotation and no code at all. Same region split as above, read from the other side.
+        //
+        // A header line is compiled into every call site, so the copies are gathered across all the
+        // inlining functions at once and identical ones collapse to a single row tagged `×N`. Placed
+        // per-function instead, twenty copies of `_M_destroy` stacked onto atomicity.h L38 — 2,510
+        // chars of the same statement.
+        val inlined = index.functions
+            .filter { f -> f !in rawFuncs && f.lineEntries.any { it.source == source } }
+            .flatMap { regionsOf(it, renderer.decompile(it)) }
+            .filter { !it.foreign && it.anchor != null }
+            .groupBy { r -> r.anchor to r.lines.map { it.text } }
+            .map { (_, copies) -> copies.first().also { it.copies = copies.size } }
+            .sortedBy { it.anchor }
+            .onEach { it.balance() }
+        if (inlined.isNotEmpty()) place(inlined, (inlined.first().anchor ?: 1) - 1, maxLine)
+    }
+
+    /**
+     * One inlined region, or the statements of one this-file source line. [file] is the file an inlined
+     * region was compiled from, null for code belonging to *this* render's source — which is what makes
+     * the split symmetric: the same call answers "what of this function is mine" whether the function is
+     * defined here or merely inlines code from here.
+     */
+    private inner class Region(val file: String?) {
+        val lines = mutableListOf<DecompLine>()
+        val entries = mutableListOf<LineEntry>()
+
+        /** How many identical copies of this region the binary holds — one per site it was inlined at. */
+        var copies = 1
+        val foreign get() = file != null
+
+        /** The this-file line the region belongs on. Inlined code has none; it rides its call site. */
+        val anchor get() = if (foreign) null else entries.filter { it.source == source }.minOfOrNull { it.line }
+
+        // `header.h L a-b` for an inlined region, `L n` for a this-file line — null when gcc gave the
+        // region's addresses no N_SLINE in the file it belongs to, so there is no line to name. A
+        // block-bounded region may cover entries from several files; only those from the file it is
+        // labelled with bound the range.
+        fun labelOrNull(): String? {
+            val own = entries.filter { it.source == (file ?: source) }.ifEmpty { return null }
+            val lo = own.minOf { it.line }
+            val hi = own.maxOf { it.line }
+            return file?.substringAfterLast('/')?.plus(" ").orEmpty() + "L $lo" + if (hi > lo) "-$hi" else ""
+        }
+
+        fun label(fallback: Int) = (labelOrNull() ?: "L $fallback") + if (copies > 1) " ×$copies" else ""
+
+        /**
+         * Close the region's own braces. A region placed in the file it was *inlined from* is a slice
+         * of someone else's body, so the block it opens is closed — or the one it closes opened — over
+         * in the caller. Standing alone here it has to carry both ends itself.
+         */
+        fun balance() {
+            val delta = lines.sumOf { l -> l.text.count { it == '{' } - l.text.count { it == '}' } }
+            val depth = lines.firstOrNull()?.depth ?: 0
+            when {
+                delta > 0 -> lines += DecompLine("}".repeat(delta), null, depth)
+                delta < 0 -> lines.add(0, DecompLine("{".repeat(-delta), null, depth))
+            }
+        }
+    }
+
+    /**
+     * [cLines] split into regions by which file each statement came from. Keeps the decompiler's
+     * statement order (it inverts conditions and leaves gotos, so its structure isn't the source's).
+     *
+     * Membership is the N_SLINE's file — the per-address answer, and the complete one; the lexical block
+     * only *bounds* a foreign region, which is what N_SLINE can't do: two adjacent inlined calls into
+     * the same header are one undivided stretch of entries but two blocks, so keying on the block splits
+     * them instead of merging them into one blob. Where gcc bracketed no block, the stretch of same-file
+     * entries is the fallback extent.
+     *
+     * Each foreign region's marker is appended to the row before it rather than taking a row of its own:
+     * the code itself now renders in the file it was written in, so all this file needs is the note that
+     * something was inlined here.
+     */
+    private fun regionsOf(func: Func, cLines: List<DecompLine>): List<Region> {
+        val slines = func.lineEntries.sortedBy { it.addr.offset }
+        fun entryFor(addr: Address?) = addr?.let { a -> slines.lastOrNull { it.addr.offset <= a.offset } }
+
+        val regions = mutableListOf<Region>()
+        var currentKey: Any? = null
+        for (dl in cLines.drop(1)) {
+            val entry = entryFor(dl.address)
+            val block = dl.block?.takeIf { it.source != source }
+            // An addressless row (a bare brace) belongs to whatever it follows.
+            val key = when {
+                entry == null -> currentKey
+                entry.source != source -> block ?: entry.source
+                else -> entry.line
+            }
+            if (regions.isEmpty() || key != currentKey) {
+                regions += Region((block?.source ?: entry?.source)?.takeIf { it != source })
+            }
+            regions.last().lines += dl
+            entry?.let { regions.last().entries += it }
+            currentKey = key
+        }
+        return regions
+    }
+
+    /**
+     * Inlined statements dropped — they render in the file they were written in — but their braces and
+     * their names kept.
+     *
+     * A decompiled function is one brace-nested body with the inlined statements interleaved into the
+     * caller's own, so dropping a region wholesale takes with it the `}` that closed a block this
+     * file's code opened: unpackfile.cpp went from 61/61 braces to 15/13 and stopped parsing. Keeping
+     * the region's brace-*only* rows doesn't fix it either — those are all closers, an opener riding
+     * its statement (`if (x) {`) — which swung it the other way, to 15/59.
+     *
+     * So each dropped region leaves behind its net brace delta. Nesting depth is a property of the
+     * body, not of any one file — gcc gives a brace row no N_SLINE, and the block it closes may have
+     * been opened by code from any file the function inlined — so every view can carry it, and every
+     * view balances, because the body they were split out of did.
+     */
+    private fun List<Region>.dropInlined(): List<Region> = map { r ->
+        if (!r.foreign) {
+            r
+        } else {
+            // Statements gone, structure and name kept. It stays a region of its own rather than
+            // folding into the row above: the statements it used to hold were what occupied the rows
+            // its source lines span, and merging the leftovers upward left those rows blank.
+            //
+            // The name goes *in* the text as a block comment, not in the Fragment's note. TargetLine
+            // renders every fragment's code before any fragment's note — right when a `//` would
+            // otherwise swallow the next fragment's code, wrong here: several of these sharing a row
+            // came out as a run of bare braces trailed by a run of detached `// ⇐ inlines …` tags.
+            r.also {
+                val depth = it.lines.sumOf { l -> l.text.count { c -> c == '{' } - l.text.count { c -> c == '}' } }
+                val head = it.lines.first()
+                val braces = if (depth > 0) "{".repeat(depth) else "}".repeat(-depth)
+                val mark = it.labelOrNull()?.let { l -> "/* ⇐ inlines $l */" }.orEmpty()
+                it.lines.clear()
+                it.lines +=
+                    DecompLine(listOf(braces, mark).filter(String::isNotEmpty).joinToString(" "), null, head.depth)
+            }
+        }
+    }
+
+    /** Anchor [regions] to their source lines within `(start, end]` and lay each one down. */
+    private fun place(regions: List<Region>, start: Int, end: Int) {
+        val targets = anchoredBlocks(start, end, regions.map { Anchored(it.anchor, it.lines.size) })
+        regions.forEachIndexed { i, r ->
+            // The nearest row any other block claims above this one — not simply the next block's,
+            // since blocks no longer arrive in row order and a run of markers all target the row the
+            // cursor stopped at, which left an empty range and stacked them onto that single row.
+            val limit = targets.filter { it > targets[i] }.minOrNull() ?: (end + 1)
+            // An inlined region names itself inline, so it takes no trailing tag.
+            placeRun(targets[i], limit, r.lines, r.label(targets[i]).takeIf { !r.foreign })
         }
     }
 
@@ -475,24 +613,43 @@ private class RenderContext(val renderer: Renderer, val source: String) {
     // A statement row carries the run's source-line tag; a structural row (a bare brace, no
     // instructions → null address) has no stabs source line, so it carries no tag — a synthetic one
     // would just restate its grid position and, on the synthesized close line, read as an off-by-one.
+    // A null [note] tags nothing at all: the row already carries its provenance inline.
     // Indent is the line's own nesting level.
-    private fun placeRun(start: Int, limit: Int, lines: List<DecompLine>, note: String) {
+    private fun placeRun(start: Int, limit: Int, lines: List<DecompLine>, note: String?, wrap: Boolean = true) {
         val free = (start until limit).filter { canvas[it].isEmpty() }.ifEmpty { listOf(start) }
         // With spare rows, break over-long statements at their top-level `&&`/`||` boundaries so a
         // crammed condition fills the blank space instead of one 300-char line; dense runs (no spare
         // rows) place one line per row as-is. A wrapped piece keeps its statement's address; a brace
         // keeps its null one.
-        val rows = if (free.size > lines.size) {
-            lines.flatMap { dl -> wrapDecompLine(dl.text, dl.depth).map { (d, t) -> Triple(d, t, dl.address) } }
-        } else {
-            lines.map { Triple(it.depth, it.text, it.address) }
+        val rows = when {
+            wrap && free.size > lines.size ->
+                lines.flatMap { dl -> wrapDecompLine(dl.text, dl.depth).map { (d, t) -> Triple(d, t, dl.address) } }
+
+            // Inlined regions (wrap = false) pack rather than take a row each: this file's own code is
+            // what the reader came for, and unpackfile.cpp was 48 foreign-only rows against 19 of its
+            // own. They share a row until it reaches [PACKED_WIDTH], so several short headers read side
+            // by side without rebuilding the 3,700-char pile-up that one-row-for-everything gave.
+            !wrap -> lines.packed(free.size).map { Triple(it.depth, it.text, it.address) }
+
+            else -> lines.map { Triple(it.depth, it.text, it.address) }
         }
         var prev = -1
+        var prevDepth = 0
         rows.forEachIndexed { i, (depth, text, address) ->
             val line = free[minOf(i, free.lastIndex)]
+            // Everything crammed onto one row keeps the indent of the statement that opens it.
+            // TargetLine takes the *shallowest* fragment, which is right when a function opener shares
+            // a row with an indented global — but inside one crammed run it let a trailing `}` at depth
+            // 0 drag the whole row out to the margin, which was 35 of the 49 longest rows on unpackfile.
+            val rowDepth = if (line == prev) prevDepth else depth
+            // Whatever the decomp restates goes: a header line inlined twenty times listed twenty
+            // N_SLINE addresses, 2,454 chars of annotation around one short statement. The span sweep
+            // only reaches this file's own functions, and a header has none.
+            if (line != prev) canvas[line].fragments.removeAll { it.kind.subsumedByDecomp }
             val rowNote = note.takeIf { address != null && line != prev }
-            canvas[line] += Fragment(depth, text, rowNote, FragmentKind.DECOMP)
+            canvas[line] += Fragment(rowDepth, text, rowNote, FragmentKind.DECOMP)
             prev = line
+            prevDepth = rowDepth
         }
     }
 
