@@ -970,6 +970,13 @@ exactly the `_List_node`/`allocator<char>`/`basic_ios`/`__c1`/`__str` internals.
 
 ---
 
+## 32. Layout rewrite — DRAFTED, not started
+
+The `Fragment`/`TargetLine` model and the emit-then-reconcile pass structure are being replaced:
+front-positioned `/* L n */` provenance, claim-and-resolve allocation, and no `// stray:` bucket.
+Design in [`docs/design-plans/layout-rewrite.md`](../design-plans/layout-rewrite.md). §29's five fixes
+were all symptoms of the two decisions that draft removes.
+
 ## 29. Decomp placement: the stray sweep ate its own output; rows now anchor to their source line — DONE
 
 Measured on `crypto_mi_test_gcc421.exe` / `xmltest_gcc421.exe` against `corpus/cryptopp` and
