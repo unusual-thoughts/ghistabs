@@ -100,10 +100,15 @@ fun allocate(claims: List<Claim>, maxLine: Int, blocked: Set<Int> = emptySet()):
         .map { (_, same) -> same.first() to same.size }
 
     // Misattributed claims sort last, so one can never take a row a well-attested claim wanted.
+    // Among elastic peers on one line the fullest reserves — it has the most to show and the others
+    // fold losslessly onto the row it took — tie-broken by text so the choice cannot drift with an
+    // unrelated change. Rigid claims are left tied, keeping their arrival order.
     val order = compareBy<Pair<Claim, Int>>(
         { it.first.stale },
         { it.first.owner.ordinal },
         { it.first.line ?: Int.MAX_VALUE },
+        { if (it.first.fit == Fit.ELASTIC) -it.first.rows.size else 0 },
+        { if (it.first.fit == Fit.ELASTIC) it.first.rows.firstOrNull()?.text.orEmpty() else "" },
     )
 
     // Who holds each row. A peer — same owner, same attribution — shares it rather than contending;

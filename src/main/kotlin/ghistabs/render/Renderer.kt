@@ -378,13 +378,27 @@ private class RenderContext(val renderer: Renderer, val source: String) {
     // Struct/enum bodies spread over the blank lines below the decl; opaque types fall
     // back to a one-line forward decl.
     private fun emitTypeBodies() {
-        val seen = mutableSetOf<Pair<Int, String>>()
-        for (ast in typeDecls.filter { it.declLine in 1..maxLine }.sortedBy { it.declLine }) {
-            val line = ast.declLine
+        val claims = mutableListOf<Claim>()
+        // Every instantiation of one template carries the *template's* declLine, so N of them arrive
+        // for a line the source declares once. They are not peers competing for space; they are one
+        // declaration seen N times. Render the fullest body and say how many there were — the same
+        // answer the allocator already gives inlined copies — rather than letting one instantiation's
+        // members render under another's opener, which is a class that does not exist.
+        val byDecl = typeDecls
+            .filter { it.declLine in 1..maxLine && it.name != null }
+            .filter { it.body is TypeDecl.Struct || it.body is TypeDecl.Enum }
+            .distinctBy { it.declLine to it.name }
+            .groupBy { it.declLine to it.name!!.substringBefore('<') }
+
+        for ((key, group) in byDecl.entries.sortedBy { it.key.first }) {
+            val (line, _) = key
+            // Deterministic pick: the most members, then by name, so the choice can't drift with
+            // unrelated type-resolution changes.
+            val ast = group.maxWith(compareBy({ it.body.memberCount() }, { it.name })) ?: continue
             val name = ast.name ?: continue
             val body = ast.body
             if (body !is TypeDecl.Struct && body !is TypeDecl.Enum) continue
-            if (!seen.add(line to name)) continue
+            val instantiations = group.size
             val shortName = shortener.shortenedOrNull(name) ?: name
 
             // Struct fields/methods are self-terminated statements; enum members carry a
@@ -405,22 +419,34 @@ private class RenderContext(val renderer: Renderer, val source: String) {
 
                 is TypeDecl.Enum -> "enum $shortName {"
             }
-            val sizeNote = when (body) {
-                is TypeDecl.Struct -> "/* ${body.sizeBytes} bytes */"
-                is TypeDecl.Enum -> "/* ${body.members.size} members */"
+            val extent = when (body) {
+                is TypeDecl.Struct -> "${body.sizeBytes} bytes"
+                is TypeDecl.Enum -> "${body.members.size} members"
             }
+            val sizeNote = "/* $extent" + (if (instantiations > 1) ", $instantiations instantiations" else "") + " */"
             val stale = isStale(line)
-            // NOT yet ported to claims: the allocator changes which of two same-line type bodies
-            // wins and how far each spreads, and that diff is not yet accounted for. See backlog §32.
-            if (members.isNotEmpty()) {
-                val open = Fragment(indentFor(line), openText, "", FragmentKind.TYPE_BODY, stale)
-                canvas.layoutBraceBlock(line, open, members, "}; $sizeNote")
+            claims += if (members.isNotEmpty()) {
+                Claim(
+                    Owner.TYPE_BODY,
+                    line,
+                    braceRows(openText, members, "}; $sizeNote", indentFor(line), ""),
+                    Fit.ELASTIC,
+                    stale,
+                )
             } else {
                 val keyword = if (body is TypeDecl.Struct) body.kind.cxxKeyword() else "enum"
-                canvas[line] +=
-                    Fragment(indentFor(line), "$keyword $shortName; $sizeNote", "", FragmentKind.TYPE_BODY, stale)
+                val row = Row("$keyword $shortName; $sizeNote", indentFor(line), "")
+                Claim(Owner.TYPE_BODY, line, listOf(row), stale = stale)
             }
         }
+        place(allocate(claims, maxLine, canvas.blockedRows()), FragmentKind.TYPE_BODY)
+    }
+
+    /** How many members a body declares — the tiebreak when instantiations of one template differ. */
+    private fun TypeDecl<GlobalTypeId>.memberCount() = when (this) {
+        is TypeDecl.Struct -> fields.size
+        is TypeDecl.Enum -> members.size
+        else -> 0
     }
 
     /**
