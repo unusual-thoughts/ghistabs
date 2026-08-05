@@ -177,10 +177,17 @@ and it should be a test, not a one-off.
    the rest.
 
 5. Two renderers over the same claims: decomp (front provenance) and skeleton (trailing roles).
+   **DONE.** `TargetLine.render` front-positions the provenance of every `DECOMP` fragment that has
+   code, collapsing repeats so a row carries one marker per distinct line; everything else keeps the
+   trailing form, which is what skeleton mode uses and why skeleton output is untouched. All 1,029
+   trailing `// ⇐` tags became 894 front markers — fewer because repeats collapse — with code tokens
+   identical at 15,222 and braces balanced in all 55 files.
 6. Delete `FragmentKind.STRAY`, `commentFor`'s stray/decomp cases, and the sweep.
 
-Steps 1–3 are behaviour-preserving and independently verifiable against the current renders; the
-output should not move until step 5.
+Steps 1–3 are mechanical ports, so *there* an unchanged render is evidence the refactor is faithful —
+not the goal. The goal is step 5's output. The gate throughout is **no content lost, no fabrication,
+every change explainable**, which is not the same as no change; conflating the two cost two
+unnecessary backouts of the step-4 port (see above).
 
 ## Settled
 

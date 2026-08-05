@@ -183,8 +183,20 @@ class TargetLine(val line: Int) {
 
     fun render(): String {
         if (fragments.isEmpty()) return ""
-        val code = fragments.mapNotNull { it.code }.joinToString("   ")
-        val comments = fragments.mapNotNull { it.commentAt(line) }.joinToString(" ")
+        // Decompiled code carries its provenance *in front of* the statement it belongs to, as a block
+        // comment. A trailing `//` forced this class to emit every fragment's code before any
+        // fragment's note, so a row holding several statements ended in a run of detached tags that
+        // said nothing about which was which; and only the last one could carry a `//` at all without
+        // commenting out its neighbours. In front, each statement names its own line, several can
+        // share a row, and the row stays valid C. Repeats collapse: one marker per distinct line.
+        var lastMark: String? = null
+        val decomp = fragments.filter { it.kind == FragmentKind.DECOMP && it.code != null }.map { f ->
+            val mark = f.note?.takeIf { it != lastMark }?.also { lastMark = it }
+            mark?.let { "/* ⇐ $it */ " }.orEmpty() + f.code
+        }
+        val rest = fragments.filterNot { it.kind == FragmentKind.DECOMP && it.code != null }
+        val code = (decomp + rest.mapNotNull { it.code }).joinToString("   ")
+        val comments = rest.mapNotNull { it.commentAt(line) }.joinToString(" ")
         val body = when {
             code.isEmpty() -> comments
             comments.isEmpty() -> code
