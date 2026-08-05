@@ -318,13 +318,7 @@ class SymbolApplier(
      * where the convention starts stack params — [VariableUtilities.getBaseStackParamOffset] — not a
      * hardcoded constant. Any function fixes it program-wide; absent one, fall back to a pointer.
      */
-    private val frameBias by lazy {
-        harvest.functions
-            .asSequence()
-            .mapNotNull { funMgr.getFunctionAt(it.addr) }
-            .firstNotNullOfOrNull { VariableUtilities.getBaseStackParamOffset(it) }
-            ?: pointerSize
-    }
+    private val frameBias by lazy { ctx.program.stabsFrameBias(harvest.functions) }
 
     /**
      * The name to give a local, or null when it is not a variable of its own. gcc names every inline
@@ -445,15 +439,9 @@ class SymbolApplier(
      * this comment is the only surviving record of the name, type and slot.
      */
     private fun scopeCommentText(locals: List<Symbol>): String {
-        fun storage(loc: Symbol) = when ((loc.body as? SymbolDecl.Local)?.location) {
-            VariableLocation.STACK -> (loc.rawValue.toInt() - frameBias).let {
-                if (it < 0) "Stack[-0x${(-it).toString(16)}]" else "Stack[0x${it.toString(16)}]"
-            }
-
-            VariableLocation.REGISTER -> dbxRegisterName(pointerSize, loc.rawValue.toInt()) ?: "r${loc.rawValue}"
-
-            null -> ""
-        }
+        fun storage(loc: Symbol) = (loc.body as? SymbolDecl.Local)?.location
+            ?.let { dbxStorageName(pointerSize, loc.rawValue.toInt(), it == VariableLocation.REGISTER, frameBias) }
+            .orEmpty()
 
         val (stack, registers) = locals.partition { (it.body as? SymbolDecl.Local)?.location == VariableLocation.STACK }
         val rows = (stack.sortedBy { it.rawValue.toInt() } + registers.sortedBy { it.body.name }).map { loc ->
@@ -599,3 +587,16 @@ class SymbolApplier(
         }
     }
 }
+
+/**
+ * gcc's frame origin is the saved frame pointer, one pointer below the return address; Ghidra's
+ * origin is the return address, and the convention places the first stack parameter exactly one
+ * pointer above it. Those two "one pointer" gaps are the same slot, so the bias is precisely where
+ * the convention starts stack params — [VariableUtilities.getBaseStackParamOffset] — not a hardcoded
+ * constant. Any function fixes it program-wide; absent one, fall back to a pointer.
+ */
+fun Program.stabsFrameBias(functions: Iterable<Func>): Int = functions
+    .asSequence()
+    .mapNotNull { functionManager.getFunctionAt(it.addr) }
+    .firstNotNullOfOrNull { VariableUtilities.getBaseStackParamOffset(it) }
+    ?: defaultPointerSize
