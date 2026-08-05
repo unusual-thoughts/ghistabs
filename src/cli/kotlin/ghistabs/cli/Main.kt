@@ -81,11 +81,6 @@ private abstract class RenderCommand(name: String, help: String) : CliktCommand(
         "--shorten-typedefs",
         help = "rename long templated types onto their shorter typedef aliases (basic_string<char,…> → string)",
     ).flag("--no-shorten-typedefs", default = false)
-    private val shortenRender by option(
-        "--shorten-render",
-        help = "collapse long templated types throughout the render, declarations and decompiled code alike; " +
-            "a no-op wherever --shorten-typedefs already renamed the datatypes",
-    ).flag("--no-shorten-render", default = true)
     private val varStorage by option(
         "--var-storage",
         help = "annotate each local with the storage gcc gave it, (stack) or (reg)",
@@ -217,7 +212,6 @@ private abstract class RenderCommand(name: String, help: String) : CliktCommand(
             program,
             mode,
             resolver,
-            shortenTypes = shortenRender,
             showStorage = varStorage,
         ).use { renderer ->
             val written = renderer.renderAll(outDir)
