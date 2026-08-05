@@ -4,6 +4,7 @@ import ghidra.app.decompiler.*
 import ghidra.app.decompiler.component.DecompilerUtils
 import ghidra.program.model.address.Address
 import ghistabs.Correction
+import ghistabs.harvest.Func
 
 /**
  * A rendered decompiler line, the lowest instruction address its tokens map to (null for the folded

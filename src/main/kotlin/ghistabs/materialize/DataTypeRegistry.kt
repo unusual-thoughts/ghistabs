@@ -9,9 +9,9 @@ import ghidra.util.task.TaskMonitor
 import ghistabs.demangle
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.StabsDiagnostics
+import ghistabs.harvest.Func
 import ghistabs.harvest.HarvestIndex
 import ghistabs.harvest.LocatedType
-import ghistabs.harvest.StabFunction
 import ghistabs.harvest.Type
 import ghistabs.importer.DemanglerReplacer.Companion.DEMANGLER_CATEGORY
 import ghistabs.materialize.itanium.RttiStructs
@@ -213,7 +213,7 @@ private val Demangled.categoryPath get(): CategoryPath =
     (namespace?.categoryPath ?: DEMANGLER_CATEGORY).extend(name)
 
 /** Pointee type-id of a member function's leading `this` param (`InlineDef?→Pointer→Ref`), else null. */
-private fun StabFunction.thisParamTypeId(): GlobalTypeId? {
+private fun Func.thisParamTypeId(): GlobalTypeId? {
     val p = params.firstOrNull()?.body as? SymbolDecl.Param ?: return null
     if (p.name != "this") return null
     val inner = (p.type as? TypeDecl.InlineDef)?.body ?: p.type

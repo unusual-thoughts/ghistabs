@@ -106,7 +106,7 @@ class AddressSerializer : KSerializer<Address> {
 }
 
 @Serializable
-data class StabFunction(
+data class Func(
     val name: String,
     @Serializable(with = AddressSerializer::class)
     val addr: Address,
@@ -182,7 +182,7 @@ data class StabFunction(
 }
 
 /** N_SLINE record: line → text address, tagged with its active N_SOL source. Held both in
- *  [Harvest.lineEntries] (grouped by source) and on the owning [StabFunction.lineEntries]. */
+ *  [Harvest.lineEntries] (grouped by source) and on the owning [Func.lineEntries]. */
 @Serializable
 data class LineEntry(
     val line: Int,

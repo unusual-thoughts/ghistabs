@@ -286,7 +286,7 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
     }
 
     /** Open functions with their line entries / params / locals folded onto output spellings. */
-    val functions: List<StabFunction> by lazy {
+    val functions: List<Func> by lazy {
         harvest.functions.map { f ->
             f.copy(
                 lineEntries = f.lineEntries.map { it.folded() }.toMutableList(),
@@ -297,7 +297,7 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
     }
 
     /** A function's source: lowest-address SLINE, else the class-decl source (gcc-implicit methods). */
-    private fun StabFunction.source() = when {
+    private fun Func.source() = when {
         isSyntheticInit -> foldSource(cu.filename)
 
         else -> lineEntries.minByOrNull { it.addr.offset }?.source
@@ -306,13 +306,13 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
 
     /** Functions per source — the inverted view render needs, matching [linesBySource]/[symbolsBySource]
      *  rather than making every caller scan the whole function list once per rendered file. */
-    val functionsBySource: Map<String, List<StabFunction>> by lazy {
+    val functionsBySource: Map<String, List<Func>> by lazy {
         functions.mapNotNull { f -> f.source()?.let { it to f } }.groupBy({ it.first }, { it.second })
     }
 
     /** Functions by linkage name — the lookup `renderFull` needs to attach a real signature to a
      *  method stab, built once rather than per rendered struct. */
-    val functionsByMangledName: Map<String, StabFunction> by lazy { functions.associateBy { it.name } }
+    val functionsByMangledName: Map<String, Func> by lazy { functions.associateBy { it.name } }
 
     /** Declared types per source, same inversion as [functionsBySource]. */
     val typesBySource: Map<String, List<Type>> by lazy { typeAsts.values.groupBy(::effectiveSourceFor) }

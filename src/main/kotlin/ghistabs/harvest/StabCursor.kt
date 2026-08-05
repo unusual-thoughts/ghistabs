@@ -53,12 +53,12 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
         val lineEntries = mutableListOf<LineEntry>()
         var sizeBytes: ULong? = null
 
-        fun toHarvested(): StabFunction {
+        fun toHarvested(): Func {
             // The function's own file: its lowest-address line entry, matching TypeResolver.functionSource.
             val source = lineEntries.minByOrNull { it.addr.offset }?.source ?: cu.filename
             val (locals, attributedBlocks) = blocks.finish(lineEntries, source)
             val attributedParams = params.map { it.copy(sourceFile = source) }
-            return StabFunction(
+            return Func(
                 name, addr, decl, cu, locals, attributedParams, attributedBlocks, lineEntries, sizeBytes,
             )
         }
@@ -212,6 +212,6 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
     }
 
     /** Functions with their block trees resolved, and line entries grouped by source and sorted. */
-    fun toHarvest(): Pair<List<StabFunction>, Map<String, List<LineEntry>>> = scopes.map { it.toHarvested() } to
+    fun toHarvest(): Pair<List<Func>, Map<String, List<LineEntry>>> = scopes.map { it.toHarvested() } to
         lineEntriesByFile.mapValues { (_, v) -> v.sortedWith(compareBy({ it.line }, { it.addr.offset })) }
 }
