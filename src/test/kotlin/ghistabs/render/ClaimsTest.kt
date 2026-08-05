@@ -110,4 +110,27 @@ class ClaimsTest {
         // FUNCTION_BODY reserved. Neither is clamped onto a neighbour; both are dropped with a reason.
         assertEquals(listOf(Owner.GLOBAL, Owner.TYPE_BODY), out.dropped.map { it.claim.owner }.sorted())
     }
+
+    @Test
+    fun `fitRows spreads while there is room and crams the remainder onto the last slot`() {
+        val rows = listOf(Row("struct S {"), Row("int a;"), Row("int b;"), Row("};"))
+        // Room for all four.
+        assertEquals(listOf(10, 11, 12, 13), fitRows(rows, 10..13).map { it.first })
+        // Three slots: two spread, the rest joined onto the last — layoutBraceBlock's middle case.
+        val tight = fitRows(rows, 10..12)
+        assertEquals(listOf(10, 11, 12), tight.map { it.first })
+        assertEquals("int b; };", tight.last().second.text)
+        // One slot: everything on it.
+        assertEquals("struct S { int a; int b; };", fitRows(rows, 10..10).single().second.text)
+    }
+
+    @Test
+    fun `a misattributed claim never takes a row a well-attested one wanted`() {
+        val real = claim(Owner.TYPEDEF, 10)
+        val bogus = Claim(Owner.GLOBAL, 10, listOf(Row("int splayed;")), stale = true)
+        val out = allocate(listOf(bogus, real), maxLine = 40)
+        // GLOBAL outranks TYPEDEF, but stale sorts behind both.
+        assertEquals(Owner.TYPEDEF, out.at(10).claim.owner)
+        assertEquals(listOf(bogus), out.dropped.map { it.claim })
+    }
 }
