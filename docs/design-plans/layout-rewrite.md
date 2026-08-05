@@ -147,6 +147,19 @@ and it should be a test, not a one-off.
      merge working. The count is no longer silent — a merged claim renders `×N`
      (`/* L 18 — ~Image ×3 */`), so the information survives the deduplication.
 
+8. Cruft cleared, includes wired. **DONE** — `emitIncludes` was the last content pass still writing
+   to the canvas, so `Anchoring.BAND` and `Owner.INCLUDE` existed, were documented and were *tested*
+   while nothing constructed them. It now returns claims; both renders are byte-identical, so the
+   band lands includes exactly where writing directly did, and the BAND tests cover a live path.
+   `allocate`'s `blocked` parameter and `Claim.tag` are gone — the first was how a pass asked what
+   earlier passes had written, which one allocation makes meaningless; the second was scaffolding
+   for the abandoned per-pass decomp port.
+
+   **Two annotation passes still write directly, deliberately.** `emitSlineAnnotations` carries no
+   code and shares a row with whatever holds it, so it is not in contest and must not be a claim.
+   `write` consults `canvas[it].isEmpty()` to pick rows inside a range it was already given, which is
+   needed because peers share rows.
+
 ## Still open
 
 - §33's blank-space question: 87% of decomp rows are blank, 92% of that in runs of 20+.

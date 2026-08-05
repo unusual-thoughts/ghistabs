@@ -104,14 +104,7 @@ data class Claim(
     val anchoring: Anchoring = if (line == null) Anchoring.BAND else Anchoring.EXACT,
     /** Furthest row an [Anchoring.AFTER] claim may slide to — a function body stays in its span. */
     val limit: Int? = null,
-) {
-    /**
-     * Whatever the pass needs handed back with its placement. Deliberately outside the constructor:
-     * two claims are the same claim when their content matches, and what the caller happens to have
-     * attached must not change that. Survives merging — the first of a merged set keeps its tag.
-     */
-    var tag: Any? = null
-}
+)
 
 /** [claim] got [range]; [copies] > 1 when identical claims merged. */
 data class Placement(val claim: Claim, val range: IntRange, val copies: Int = 1)
@@ -149,7 +142,7 @@ const val OFF_CANVAS = "line outside the file"
  *   them fight drops one of a legal pair. Exclusivity exists to stop a misattributed type body from
  *   evicting a function body, which is a contest *between* owners; within an owner they are peers.
  */
-fun allocate(claims: List<Claim>, maxLine: Int, blocked: Set<Int> = emptySet()): Allocation {
+fun allocate(claims: List<Claim>, maxLine: Int): Allocation {
     // Identical *declarations* at one line are the same declaration seen twice — that is where the
     // `×N` instantiation and inlined-copy counts come from. Identical *statements* are not: two
     // regions with the same text are two executions of it, and collapsing them loses code. So only
@@ -205,9 +198,7 @@ fun allocate(claims: List<Claim>, maxLine: Int, blocked: Set<Int> = emptySet()):
             Anchoring.AFTER -> {
                 val from = asked ?: cursor
                 val ceiling = claim.limit?.coerceAtMost(maxLine) ?: maxLine
-                (from..ceiling).firstOrNull { it !in held && it !in blocked }
-                    ?: (from..ceiling).lastOrNull { it !in blocked }
-                    ?: (1..ceiling).lastOrNull { it !in blocked }
+                (from..ceiling).firstOrNull { it !in held } ?: ceiling.takeIf { it >= 1 }
             }
 
             else -> asked
@@ -230,17 +221,7 @@ fun allocate(claims: List<Claim>, maxLine: Int, blocked: Set<Int> = emptySet()):
     for ((claim, copies, line) in reserved) {
         val ceiling = claim.limit?.coerceAtMost(maxLine) ?: maxLine
         val wanted = if (claim.fit == Fit.RIGID) claim.rows.size else ceiling - line + 1
-        // [blocked] bounds expansion only, never reservation: rows already carrying content a claim
-        // may legitimately share, which is how the canvas behaves while passes are still being ported.
-        // The anchor counts — a claim whose own row already has content cannot expand at all, it folds
-        // onto that row. Checking only the rows below let an initializer spread across a function's
-        // closing brace.
-        val end = when (line) {
-            in blocked -> line
-            else -> (line + 1 until line + wanted)
-                .takeWhile { it <= ceiling && it !in held && it !in blocked }
-                .lastOrNull() ?: line
-        }
+        val end = (line + 1 until line + wanted).takeWhile { it <= ceiling && it !in held }.lastOrNull() ?: line
         (line..end).forEach { held[it] = claim.owner.group }
         placed += Placement(claim, line..end, copies)
     }
