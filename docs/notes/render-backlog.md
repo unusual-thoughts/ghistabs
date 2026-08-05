@@ -1081,7 +1081,7 @@ the `sig !is Method && sig !is FunctionT` guard is the prime suspect — needs i
 
 ---
 
-## 31. Non-returning functions went undetected, and the render was paying for it — DONE
+## 31. Non-returning functions went undetected — REVERTED, needs redoing
 
 Much of what §29 was laying out was unreachable code. unpackfile's `error()` calls `exit` and never
 returns, but nothing marked it, so every caller decompiled with the dead tail still attached — the
@@ -1103,9 +1103,34 @@ one behind as dead code: `error` has 13 instructions and one of them is a `ret` 
 call, which is what made the first, simpler rule fire on nothing at all. Tail calls are excluded (a
 jump out of the body returns through the callee).
 
-On unpackfile.cpp: `goto`/`LAB_` references **11 → 2**, braces 44/44 → **24/24**, p95 row 701 → 538,
-longest row 1240 → 980. Blank rows rise 28 → 41, which is the honest consequence — there is simply
-less code once the unreachable tails are gone. No counter drift beyond the two already failing.
+On unpackfile.cpp it did what was wanted — `goto`/`LAB_` **11 → 2**, braces 44/44 → 24/24, p95 row
+701 → 538 — **and it was wrong**. Reverted in the commit after.
+
+Of the 41 functions it marked, roughly 31 were false positives: `strtold`, `do_put`,
+`_M_convert_int<long>`, `_M_widen_float`, `_S_pad` and twenty more libstdc++ locale/iostream
+functions that plainly return. They are switch-table-heavy; the instruction walk dead-ended on an
+unresolved computed jump and read that as "no `ret` reachable". Ghidra then cleared the code after
+their call sites as unreachable, which is what the `text-undisassembled-code` 2 → 39 and
+`text-data-no-coverage` 227 → 316 baseline drift was reporting. The drift was the bug, not noise.
+
+**What a correct version needs**, beyond the conservative rule that a path may end *only* at a known
+non-returning call (unresolved flow ⇒ assume it returns):
+
+- Honour `added(program, set, …)`. It scanned every function in the program on every invocation and
+  ignored the address set entirely, which is both wasteful and wrong for incremental analysis: scope
+  to the set, then fixed-point outward to callers of whatever gets newly marked.
+- Use a CFG block model rather than a hand-rolled instruction walk. `SimpleBlockModel` is what
+  `targetOnlyCallsNoReturn` uses; the one edge it needs help with is the fall-through past a
+  non-returning call, which Ghidra's `setNoFallThru` repair has already removed by the time *its*
+  walk runs and has not by the time ours does. Skip that edge explicitly instead of avoiding the
+  model.
+- `FUNCTION_ANALYZER` is right (not `INSTRUCTION_ANALYZER` as `FindNoReturnFunctionsAnalyzer` uses):
+  the trigger we want is a new function being defined, by stabs or anything else.
+- The fixed point terminates on "nothing newly marked", so re-running must be cheap and idempotent.
+
+Ship gate: on unpackfile, `error()` marked and *nothing* in libstdc++ marked. Both directions matter
+— the first version got `error` and 31 wrong; the conservative-only fix got zero wrong but also lost
+`error`, which is the whole point.
 
 ---
 
