@@ -36,6 +36,21 @@ enum class Owner {
 }
 
 /**
+ * What a claim wants done when the row it asked for is already held. These are not variations on one
+ * rule — they are three kinds of content:
+ *
+ * - [EXACT] — a declaration is at its line or it is nowhere. Sharing with a peer is fine; losing to
+ *   another owner is a contest, because a declaration two rows from where gcc put it is a lie.
+ * - [AFTER] — a decompiled statement takes the next free row instead. Ghidra revisits a source line
+ *   (47 of 186 anchors in `file.cpp` are claimed twice) and the second visit is real code that has
+ *   to go somewhere; sharing would cram it onto the first. With no line at all it simply follows what
+ *   came before — an inlined-region marker riding its call site.
+ * - [BAND] — an `#include` belongs to the file rather than a line, and lands in the room above the
+ *   content.
+ */
+enum class Anchoring { EXACT, AFTER, BAND }
+
+/**
  * One rendered row: its text, the column it starts at, and any *role* annotation — `(param)`,
  * `(.bss static)`, the address run behind an N_SLINE. Line provenance is not here: the renderer adds
  * that from the row the allocator gave, which is the point of front-positioning it.
@@ -56,6 +71,7 @@ data class Claim(
     val rows: List<Row>,
     val fit: Fit = Fit.RIGID,
     val stale: Boolean = false,
+    val anchoring: Anchoring = if (line == null) Anchoring.BAND else Anchoring.EXACT,
 )
 
 /** [claim] got [range]; [copies] > 1 when identical claims merged. */
@@ -120,11 +136,19 @@ fun allocate(claims: List<Claim>, maxLine: Int, blocked: Set<Int> = emptySet()):
 
     // Anchored first — floating claims fill what is left of the band above them, so they need to know
     // where the content starts.
-    val (anchored, floating) = merged.sortedWith(order).partition { it.first.line != null }
+    val (anchored, floating) = merged.sortedWith(order).partition { it.first.anchoring != Anchoring.BAND }
 
     val shared = mutableListOf<Pair<Claim, Int>>()
+    var cursor = 1
     val reserved = anchored.mapNotNull { (claim, copies) ->
-        val line = claim.line ?: return@mapNotNull null
+        val asked = claim.line
+        // AFTER slides to the first free row at or past what it asked for, and keeps a cursor so a
+        // claim with no line of its own follows whatever came before it.
+        val line = when (claim.anchoring) {
+            Anchoring.AFTER -> (maxOf(asked ?: cursor, cursor)..maxLine).firstOrNull { it !in held }
+            else -> asked
+        } ?: return@mapNotNull dropped.add(Dropped(claim, NO_ROOM)).let { null }
+        if (claim.anchoring == Anchoring.AFTER) cursor = line + 1
         when {
             line !in 1..maxLine -> dropped.add(Dropped(claim, OFF_CANVAS)).let { null }
             // A peer of the holder rides the row it already took; only the first expands. Peerage is
