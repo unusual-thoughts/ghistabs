@@ -118,9 +118,14 @@ const val OFF_CANVAS = "line outside the file"
  *   evicting a function body, which is a contest *between* owners; within an owner they are peers.
  */
 fun allocate(claims: List<Claim>, maxLine: Int, blocked: Set<Int> = emptySet()): Allocation {
-    val merged = claims
+    // Identical *declarations* at one line are the same declaration seen twice — that is where the
+    // `×N` instantiation and inlined-copy counts come from. Identical *statements* are not: two
+    // regions with the same text are two executions of it, and collapsing them loses code. So only
+    // [Anchoring.EXACT] claims merge.
+    val (mergeable, distinct) = claims.partition { it.anchoring == Anchoring.EXACT }
+    val merged = mergeable
         .groupBy { Triple(it.owner, it.line, it.rows) }
-        .map { (_, same) -> same.first() to same.size }
+        .map { (_, same) -> same.first() to same.size } + distinct.map { it to 1 }
 
     // Misattributed claims sort last, so one can never take a row a well-attested claim wanted.
     // Among elastic peers on one line the fullest reserves — it has the most to show and the others
@@ -145,7 +150,9 @@ fun allocate(claims: List<Claim>, maxLine: Int, blocked: Set<Int> = emptySet()):
     // where the content starts.
     val (anchored, floating) = merged.sortedWith(order).partition { it.first.anchoring != Anchoring.BAND }
 
-    val shared = mutableListOf<Pair<Claim, Int>>()
+    // (claim, copies, row) — the row it *resolved to*, which for an AFTER claim is not the one it
+    // asked for. Re-reading `claim.line` here put every crammed statement back on its own anchor.
+    val shared = mutableListOf<Triple<Claim, Int, Int>>()
     var cursor = 1
     val reserved = anchored.mapNotNull { (claim, copies) ->
         val asked = claim.line
@@ -156,8 +163,17 @@ fun allocate(claims: List<Claim>, maxLine: Int, blocked: Set<Int> = emptySet()):
             // it — Ghidra emits branches out of source order, and holding a cursor floor sent
             // everything after the first out-of-order block to the bottom of the span. Only a claim
             // with no line of its own follows the cursor.
-            Anchoring.AFTER ->
-                ((asked ?: cursor)..maxLine).firstOrNull { it !in held && it !in blocked }
+            // Never fails. Decompiled code exists and has to go somewhere: when every row in the
+            // window is taken it crams onto the last usable one, which is how a body that outgrows
+            // its span has always been handled. Dropping is right for a declaration — one placed two
+            // rows from its line is a lie — and wrong here, where it silently loses statements.
+            Anchoring.AFTER -> {
+                val from = asked ?: cursor
+                (from..maxLine).firstOrNull { it !in held && it !in blocked }
+                    ?: (from..maxLine).lastOrNull { it !in blocked }
+                    ?: (1..maxLine).lastOrNull { it !in blocked }
+            }
+
             else -> asked
         } ?: return@mapNotNull dropped.add(Dropped(claim, NO_ROOM)).let { null }
         if (claim.anchoring == Anchoring.AFTER) cursor = line + 1
@@ -166,7 +182,7 @@ fun allocate(claims: List<Claim>, maxLine: Int, blocked: Set<Int> = emptySet()):
             // A peer of the holder rides the row it already took; only the first expands. Peerage is
             // by owner alone — a misattributed local shares its line with a real one, as it always
             // has; `stale` decides who reserves *first*, which is what stops it taking the row.
-            held[line] == claim.owner -> shared.add(claim to copies).let { null }
+            held[line] == claim.owner -> shared.add(Triple(claim, copies, line)).let { null }
             line in held -> dropped.add(Dropped(claim, ROW_TAKEN)).let { null }
             else -> {
                 held[line] = claim.owner
@@ -192,7 +208,7 @@ fun allocate(claims: List<Claim>, maxLine: Int, blocked: Set<Int> = emptySet()):
         placed += Placement(claim, line..end, copies)
     }
     // Peers take exactly the row they share, never the extent its holder expanded to.
-    shared.mapTo(placed) { (claim, copies) -> Placement(claim, claim.line!!..claim.line, copies) }
+    shared.mapTo(placed) { (claim, copies, row) -> Placement(claim, row..row, copies) }
 
     // The band above the first anchored row, one floating claim per row, in priority order.
     var next = 1
