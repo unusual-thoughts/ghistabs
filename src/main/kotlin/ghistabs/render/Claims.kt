@@ -29,19 +29,34 @@ enum class Fit {
 enum class Owner {
     FUNCTION_BODY,
     GLOBAL,
+    LOCAL,
     TYPE_BODY,
     TYPEDEF,
     INCLUDE,
 }
 
-/** One rendered row: its text and the column it starts at. Provenance is the renderer's to add. */
-data class Row(val text: String, val indent: Int = 0)
+/**
+ * One rendered row: its text, the column it starts at, and any *role* annotation — `(param)`,
+ * `(.bss static)`, the address run behind an N_SLINE. Line provenance is not here: the renderer adds
+ * that from the row the allocator gave, which is the point of front-positioning it.
+ */
+data class Row(val text: String, val indent: Int = 0, val note: String? = null)
 
 /**
  * A pass's request for space. [line] is the source line the content belongs to, null to float in the
  * band above the first anchored row (an `#include`, which belongs to the file rather than a line).
+ *
+ * [stale] marks a claim gcc misattributed — a declLine past the file's activity extent, a typedef
+ * splayed across bogus lines by N_SOL. It loses every contested row, so a misattributed declaration
+ * can no longer evict a real one; alone on its line it still renders, flagged.
  */
-data class Claim(val owner: Owner, val line: Int?, val rows: List<Row>, val fit: Fit = Fit.RIGID)
+data class Claim(
+    val owner: Owner,
+    val line: Int?,
+    val rows: List<Row>,
+    val fit: Fit = Fit.RIGID,
+    val stale: Boolean = false,
+)
 
 /** [claim] got [range]; [copies] > 1 when identical claims merged. */
 data class Placement(val claim: Claim, val range: IntRange, val copies: Int = 1)
@@ -52,8 +67,9 @@ data class Dropped(val claim: Claim, val reason: String)
 /** Every claim accounted for: `placed.size + dropped.size` covers the input, after merging. */
 data class Allocation(val placed: List<Placement>, val dropped: List<Dropped>)
 
-private const val ROW_TAKEN = "line already taken"
-private const val NO_ROOM = "no free row in the band"
+const val ROW_TAKEN = "line already taken"
+const val NO_ROOM = "no free row in the band"
+const val OFF_CANVAS = "line outside the file"
 
 /**
  * Assign rows in `1..maxLine` to [claims].
@@ -77,7 +93,12 @@ fun allocate(claims: List<Claim>, maxLine: Int): Allocation {
         .groupBy { Triple(it.owner, it.line, it.rows) }
         .map { (_, same) -> same.first() to same.size }
 
-    val order = compareBy<Pair<Claim, Int>>({ it.first.owner.ordinal }, { it.first.line ?: Int.MAX_VALUE })
+    // Misattributed claims sort last, so one can never take a row a well-attested claim wanted.
+    val order = compareBy<Pair<Claim, Int>>(
+        { it.first.stale },
+        { it.first.owner.ordinal },
+        { it.first.line ?: Int.MAX_VALUE },
+    )
 
     val held = mutableSetOf<Int>()
     val placed = mutableListOf<Placement>()
@@ -89,11 +110,10 @@ fun allocate(claims: List<Claim>, maxLine: Int): Allocation {
 
     val reserved = anchored.mapNotNull { (claim, copies) ->
         val line = claim.line ?: return@mapNotNull null
-        if (line !in 1..maxLine || !held.add(line)) {
-            dropped += Dropped(claim, ROW_TAKEN)
-            null
-        } else {
-            Triple(claim, copies, line)
+        when {
+            line !in 1..maxLine -> dropped.add(Dropped(claim, OFF_CANVAS)).let { null }
+            !held.add(line) -> dropped.add(Dropped(claim, ROW_TAKEN)).let { null }
+            else -> Triple(claim, copies, line)
         }
     }
 
@@ -120,4 +140,20 @@ fun allocate(claims: List<Claim>, maxLine: Int): Allocation {
     }
 
     return Allocation(placed, dropped)
+}
+
+/**
+ * [rows] laid into [range], one per row while it lasts and the remainder joined onto the last —
+ * `Canvas.layoutBraceBlock`'s three cases (spread, partial spread with a crammed tail, everything on
+ * one line) as a single fold, now that the range is decided before any of it is written.
+ *
+ * Returns row index to text, so a caller that also wants the indent can zip against [rows].
+ */
+fun fitRows(rows: List<Row>, range: IntRange): List<Pair<Int, Row>> {
+    val room = range.count()
+    if (rows.size <= room) return rows.mapIndexed { i, r -> range.first + i to r }
+    // The last slot takes everything that didn't fit, joined; each earlier slot takes one row.
+    val head = rows.take(room - 1).mapIndexed { i, r -> range.first + i to r }
+    val tail = rows.drop(room - 1)
+    return head + (range.last to tail.first().copy(text = tail.joinToString(" ") { it.text.trim() }))
 }
