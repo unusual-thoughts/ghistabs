@@ -126,13 +126,23 @@ and it should be a test, not a one-off.
    and globals DONE** — verified byte-identical (typedefs, globals) or reorder-only (locals: a
    misattributed decl now renders *after* the real one on its line, since stale claims reserve last).
 
-   **`emitTypeBodies` is NOT ported.** It is the one pass where the allocator changes the answer and
-   the diff is not yet accounted for: ten files move, no tokens are lost, but new ones appear and in
-   `unpackfile.cpp` L573 a *different* member survives (`unsigned char const * _M_current` becomes
-   `unsigned char * _M_current`). Two `__normal_iterator` instantiations share a declLine, both are
-   elastic, and which of them expands has changed. Before porting it, settle what two elastic peers
-   on one line should mean — today the first expands and the second folds onto the shared row, which
-   is order-dependent and therefore fragile either way.
+   **`emitTypeBodies` DONE**, once the case it exposed was understood. Two type bodies at one
+   declLine are usually not two declarations at all: every instantiation of a template carries the
+   *template's* line, so N of them arrive for a line the source declares once. Letting them contend
+   produced a class that does not exist — `unpackfile.cpp` L571 had the `const` instantiation's
+   opener above the non-`const` one's member. They are now merged: the fullest body renders, tagged
+   `/* 4 bytes, 2 instantiations */`, chosen by member count then name so the pick cannot drift.
+
+   Genuinely distinct elastic claims on one line keep the tiebreak we agreed — **the fullest
+   expands**, the rest fold losslessly onto the row it took — with text as a stable secondary key.
+   Applied to elastic claims only, so rigid ordering is untouched.
+
+   *Content change, deliberate:* the merged instantiations' bodies no longer appear. They were
+   present before, folded onto the shared row as an unreadable tail — `image.h` L571 was 573 chars
+   holding both, now 241 holding one. Skeleton p95 row 351 → 308. **Follow-up: give them an
+   appendix**, keyed by instantiation, the way `anonAggregateAppendix` handles anonymous types. Until
+   then the count is the only trace.
+
 3. Port `applyDecompilation` — its span sweep, `spreadBlocks`/`anchoredBlocks` split, and `placeRun`
    all collapse into claim construction plus the shared allocator.
 4. Two renderers over the same claims: decomp (front provenance) and skeleton (trailing roles).
