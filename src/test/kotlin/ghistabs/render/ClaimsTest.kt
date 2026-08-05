@@ -135,4 +135,33 @@ class ClaimsTest {
         assertEquals(Owner.TYPEDEF, out.at(10).claim.owner)
         assertEquals(listOf(bogus), out.dropped.map { it.claim })
     }
+
+    @Test
+    fun `AFTER slides to the next free row instead of sharing or dropping`() {
+        // Ghidra revisits a source line; the second visit is real code that has to go somewhere.
+        val a = Claim(Owner.FUNCTION_BODY, 10, listOf(Row("first")), anchoring = Anchoring.AFTER)
+        val b = Claim(Owner.FUNCTION_BODY, 10, listOf(Row("second")), anchoring = Anchoring.AFTER)
+        val out = allocate(listOf(a, b), maxLine = 40)
+        assertEquals(listOf(10..10, 11..11), out.placed.map { it.range }.sortedBy { it.first })
+        assertEquals(emptyList<Dropped>(), out.dropped)
+    }
+
+    @Test
+    fun `an AFTER claim with no line follows whatever came before it`() {
+        // An inlined-region marker rides its call site rather than floating to the header band.
+        val stmt = Claim(Owner.FUNCTION_BODY, 20, listOf(Row("code")), anchoring = Anchoring.AFTER)
+        val marker = Claim(Owner.FUNCTION_BODY, null, listOf(Row("/* inlines x.h */")), anchoring = Anchoring.AFTER)
+        val out = allocate(listOf(stmt, marker), maxLine = 40)
+        assertEquals(20..20, out.placed.first { it.claim === stmt }.range)
+        assertEquals(21..21, out.placed.first { it.claim === marker }.range)
+    }
+
+    @Test
+    fun `EXACT is unchanged by the policy — a taken row is still shared or lost`() {
+        val body = claim(Owner.FUNCTION_BODY, 10)
+        val typedef = claim(Owner.TYPEDEF, 10)
+        val out = allocate(listOf(typedef, body), maxLine = 40)
+        assertEquals(Owner.FUNCTION_BODY, out.at(10).claim.owner)
+        assertEquals(listOf(typedef), out.dropped.map { it.claim })
+    }
 }

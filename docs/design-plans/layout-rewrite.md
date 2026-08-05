@@ -145,12 +145,20 @@ and it should be a test, not a one-off.
    first cut dropped. Against the pre-rewrite render no code is lost now; the only residue is
    duplicate `// L nnn` tags collapsing to one, which is the merge working.
 
-3. Port `applyDecompilation` — its span sweep, `spreadBlocks`/`anchoredBlocks` split, and `placeRun`
-   all collapse into claim construction plus the shared allocator.
-4. Two renderers over the same claims: decomp (front provenance) and skeleton (trailing roles).
-5. Delete `FragmentKind.STRAY`, `commentFor`'s stray/decomp cases, and the sweep.
+3. **Allocator needs a placement policy first — DONE.** Porting the decomp path revealed the
+   allocator was missing a dimension. A declaration wants its line *or nothing*; a decompiled
+   statement wants *the next free row* when its line is taken, because Ghidra revisits a source line
+   — 47 of 186 anchors in `xvimage.cpp` are claimed twice — and the second visit is real code.
+   Treating those as peers would cram 47 pairs onto single rows. `Anchoring { EXACT, AFTER, BAND }`
+   makes it explicit; `AFTER` also covers a claim with no line of its own, which follows the cursor
+   rather than floating to the header band (an inlined-region marker riding its call site).
 
-Steps 1–2 are behaviour-preserving and independently verifiable against the current renders; the
+4. Port `applyDecompilation` — its span sweep, `spreadBlocks`/`anchoredBlocks` split, and `placeRun`
+   all collapse into claim construction plus the shared allocator.
+5. Two renderers over the same claims: decomp (front provenance) and skeleton (trailing roles).
+6. Delete `FragmentKind.STRAY`, `commentFor`'s stray/decomp cases, and the sweep.
+
+Steps 1–3 are behaviour-preserving and independently verifiable against the current renders; the
 output should not move until step 4.
 
 ## Settled
