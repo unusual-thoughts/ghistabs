@@ -85,8 +85,14 @@ const val OFF_CANVAS = "line outside the file"
  * until it meets the next reservation. A typedef therefore keeps its line under an expanding
  * initializer without having to outrank it, because it reserved that row in phase one.
  *
- * Identical claims merge before either phase: two claims for the same line with the same rows *are*
- * the same claim, which is where the `×N` inlined-copy count comes from.
+ * Two merges happen before either phase, and they are different things:
+ *
+ * - **Identical** claims collapse to one carrying a multiplicity — same line, same owner, same rows
+ *   *are* the same claim, which is where the `×N` inlined-copy count comes from.
+ * - **Peer** claims — same line, same owner, different rows — share the row rather than contending.
+ *   Two typedefs really can sit on one source line (`typedef A x;` and `typedef B y;`), and making
+ *   them fight drops one of a legal pair. Exclusivity exists to stop a misattributed type body from
+ *   evicting a function body, which is a contest *between* owners; within an owner they are peers.
  */
 fun allocate(claims: List<Claim>, maxLine: Int): Allocation {
     val merged = claims
@@ -100,7 +106,10 @@ fun allocate(claims: List<Claim>, maxLine: Int): Allocation {
         { it.first.line ?: Int.MAX_VALUE },
     )
 
-    val held = mutableSetOf<Int>()
+    // Who holds each row. A peer — same owner, same attribution — shares it rather than contending;
+    // anyone else is turned away. `typedef A x;` and `typedef B y;` really can sit on one source line,
+    // and making them fight drops one of a legal pair. Exclusivity is for contests *between* owners.
+    val held = mutableMapOf<Int, Pair<Owner, Boolean>>()
     val placed = mutableListOf<Placement>()
     val dropped = mutableListOf<Dropped>()
 
@@ -108,21 +117,31 @@ fun allocate(claims: List<Claim>, maxLine: Int): Allocation {
     // where the content starts.
     val (anchored, floating) = merged.sortedWith(order).partition { it.first.line != null }
 
+    val shared = mutableListOf<Pair<Claim, Int>>()
     val reserved = anchored.mapNotNull { (claim, copies) ->
         val line = claim.line ?: return@mapNotNull null
+        val key = claim.owner to claim.stale
         when {
             line !in 1..maxLine -> dropped.add(Dropped(claim, OFF_CANVAS)).let { null }
-            !held.add(line) -> dropped.add(Dropped(claim, ROW_TAKEN)).let { null }
-            else -> Triple(claim, copies, line)
+            // A peer of the holder rides the row it already took; only the first expands.
+            held[line] == key -> shared.add(claim to copies).let { null }
+            line in held -> dropped.add(Dropped(claim, ROW_TAKEN)).let { null }
+            else -> {
+                held[line] = key
+                Triple(claim, copies, line)
+            }
         }
     }
 
     for ((claim, copies, line) in reserved) {
         val wanted = if (claim.fit == Fit.RIGID) claim.rows.size else maxLine - line + 1
+        val key = claim.owner to claim.stale
         val end = (line + 1 until line + wanted).takeWhile { it <= maxLine && it !in held }.lastOrNull() ?: line
-        held += line..end
+        (line..end).forEach { held[it] = key }
         placed += Placement(claim, line..end, copies)
     }
+    // Peers take exactly the row they share, never the extent its holder expanded to.
+    shared.mapTo(placed) { (claim, copies) -> Placement(claim, claim.line!!..claim.line, copies) }
 
     // The band above the first anchored row, one floating claim per row, in priority order.
     var next = 1
@@ -134,7 +153,7 @@ fun allocate(claims: List<Claim>, maxLine: Int): Allocation {
             continue
         }
         val end = (row until row + claim.rows.size).takeWhile { it < firstAnchored && it !in held }.last()
-        held += row..end
+        (row..end).forEach { held[it] = claim.owner to claim.stale }
         placed += Placement(claim, row..end, copies)
         next = end + 1
     }

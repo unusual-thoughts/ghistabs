@@ -198,16 +198,35 @@ private class RenderContext(val renderer: Renderer, val source: String) {
         // declLine the old dedup used — is what makes this fire when misattribution splays a
         // typedef across several bogus lines.
         val seen = mutableSetOf<Pair<String, String>>()
-        for ((line, name, rendered) in typedefs.sortedBy { it.line }) {
+        val claims = typedefs.sortedBy { it.line }.mapNotNull { (line, name, rendered) ->
             val key = name to rendered
-            if (!seen.add(key)) continue
-            canvas[line] += Fragment(
-                indentFor(line),
-                "typedef $rendered $name;",
-                note = "",
-                kind = FragmentKind.TYPEDEF,
-                stale = isStale(line) || key in splayed,
-            )
+            if (!seen.add(key)) {
+                null
+            } else {
+                Claim(
+                    Owner.TYPEDEF,
+                    line,
+                    listOf(Row("typedef $rendered $name;", indentFor(line), note = "")),
+                    stale = isStale(line) || key in splayed,
+                )
+            }
+        }
+        place(allocate(claims, maxLine), FragmentKind.TYPEDEF)
+    }
+
+    /**
+     * Write an [Allocation] onto the canvas. The bridge while the rewrite is mid-flight: passes that
+     * have been ported hand their claims to the allocator and their placements here, passes that
+     * haven't still write fragments directly. See `docs/design-plans/layout-rewrite.md`.
+     */
+    private fun place(allocation: Allocation, kind: FragmentKind) {
+        for ((claim, range, _) in allocation.placed) {
+            for ((row, content) in fitRows(claim.rows, range)) {
+                canvas[row] += Fragment(content.indent, content.text, content.note, kind, claim.stale)
+            }
+        }
+        for ((claim, reason) in allocation.dropped) {
+            println("skeleton[$source]: dropped ${claim.owner} at L${claim.line} — $reason: ${claim.rows.first().text}")
         }
     }
 
