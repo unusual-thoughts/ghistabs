@@ -127,13 +127,19 @@ class ClaimsTest {
     }
 
     @Test
-    fun `a misattributed claim never takes a row a well-attested one wanted`() {
-        val real = claim(Owner.TYPEDEF, 10)
+    fun `a misattributed claim never takes a row a body wanted`() {
+        val body = claim(Owner.FUNCTION_BODY, 10)
         val bogus = Claim(Owner.GLOBAL, 10, listOf(Row("int splayed;")), stale = true)
-        val out = allocate(listOf(bogus, real), maxLine = 40)
-        // GLOBAL outranks TYPEDEF, but stale sorts behind both.
-        assertEquals(Owner.TYPEDEF, out.at(10).claim.owner)
+        val out = allocate(listOf(bogus, body), maxLine = 40)
+        assertEquals(Owner.FUNCTION_BODY, out.at(10).claim.owner)
         assertEquals(listOf(bogus), out.dropped.map { it.claim })
+        // Between declarations there is no contest: a misattributed one shares the row, as it always
+        // has. Exclusivity is body-versus-declaration, which is the contest that used to end in
+        // demoting the loser to a `// stray:` comment.
+        val real = claim(Owner.TYPEDEF, 20)
+        val alsoBogus = Claim(Owner.GLOBAL, 20, listOf(Row("int splayed;")), stale = true)
+        val shared = allocate(listOf(alsoBogus, real), maxLine = 40)
+        assertEquals(emptyList<Dropped>(), shared.dropped)
     }
 
     @Test

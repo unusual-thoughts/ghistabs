@@ -266,7 +266,10 @@ class Canvas(val maxLine: Int) {
     // The last line worth rendering: trailing blank lines and lines carrying only
     // misattributed (stale N_SOL) fragments are noise past the file's real content.
     private fun lastMeaningfulLine() = (maxLine downTo 1).firstOrNull { line ->
-        lines[line].fragments.any { !it.stale }
+        // Anything carrying code counts, misattributed or not. Trimming on `!stale` alone deleted
+        // `class XVImage` and its whole body from xvimage.h the moment nothing happened to sit below
+        // it — a real declaration lost to a heuristic about where gcc said it was.
+        lines[line].fragments.any { !it.stale || it.code != null }
     } ?: 0
 
     /**
