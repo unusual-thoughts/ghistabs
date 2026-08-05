@@ -153,28 +153,29 @@ and it should be a test, not a one-off.
    makes it explicit; `AFTER` also covers a claim with no line of its own, which follows the cursor
    rather than floating to the header band (an inlined-region marker riding its call site).
 
-4. Port `applyDecompilation` — **attempted twice, backed out twice.** The port itself is ~30 lines
-   and reverts cleanly; what it keeps exposing is that the decomp path needs semantics the
-   declaration passes don't. Three were found and are now in the allocator:
+4. Port `applyDecompilation` — **attempted four times, backed out four times. Do not attempt a fifth
+   by diffing renders.**
 
-   - **`Anchoring.AFTER` never fails.** When the window is full it crams onto the last usable row
-     rather than returning `NO_ROOM`. Dropping is right for a declaration — one placed two rows from
-     its line is a lie — and wrong for code, which exists and has to go somewhere.
-   - **Only `EXACT` claims merge.** Identical declarations at one line are the same declaration seen
-     twice, which is where the `×N` counts come from. Identical *statements* are two executions of
-     the same code, and collapsing them loses it.
-   - **A shared placement must record the row it resolved to**, not re-read `claim.line`. Crammed
-     `AFTER` claims were landing back on the anchor they had already slid away from.
+   The port is ~30 lines and reverts cleanly. Three real bugs came out of the attempts and are fixed
+   in the allocator (`AFTER` never fails and crams; only `EXACT` claims merge; a shared placement
+   records the row it resolved to). What remains is **~370 code tokens**, and it is not diffuse:
 
-   With all three, the port still loses **2,984 tokens corpus-wide against 57 gained** — verified as
-   real loss, not redistribution between files, by totalling token multisets across all 55 outputs.
-   The residue is concentrated in `L`/address tags and in `std`/`Exclusion`/`allocator` identifiers,
-   i.e. whole inlined-region rows from the second pass.
+   - **`xvimage.h` alone accounts for 313 of them.** It goes from 67 non-blank rows to 13. Its
+     `class XVImage : public struct Image { string header; … }` body disappears entirely.
+   - Adding canvas occupancy to `blocked` — the fix the declaration passes needed — made it *worse*
+     (377 → 455), so the cause is not "the allocator hands out ranges over occupied rows".
+   - `xvimage.h` is fed by the **second pass** (code inlined from other files' functions), which calls
+     `place(inlined, firstAnchor - 1, maxLine)`. That is the path to instrument.
 
-   **Do not retry by eyeball.** The next attempt wants a differential harness: render both paths in
-   one process and assert row-for-row that every `DecompLine` handed to `place` appears in the
-   output. Three rounds of diffing whole files has each time found *a* real bug and each time missed
-   the rest.
+   Each attempt produced a confident diagnosis from reading a diff, and each was wrong. The
+   measurement to build first: instrument `place` to record every `Region` it is handed and the row
+   it ends on, run both paths in one process, and assert row-for-row that every `DecompLine` reaches
+   the output. That turns "370 tokens missing somewhere" into "this region, this row". Whole-file
+   diffing has now failed four times at exactly this.
+
+   Also worth knowing: the earlier claim of "2,984 tokens lost" was **79% wrong** — it counted SLINE
+   address annotations, which `placeRun` is *supposed* to sweep. Measure code only: strip every
+   comment before tokenising. Two of the four backouts were driven by that bad number.
 
 5. Two renderers over the same claims: decomp (front provenance) and skeleton (trailing roles).
    **DONE.** `TargetLine.render` front-positions the provenance of every `DECOMP` fragment that has
