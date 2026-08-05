@@ -237,7 +237,7 @@ class SymbolApplier(
      * for ctors only called from data-driven init lists, or vtable-only references).
      * Returns null if the address is in data or disassembly fails.
      */
-    private fun tryCreateFunctionFromStab(open: StabFunction): Function? {
+    private fun tryCreateFunctionFromStab(open: Func): Function? {
         val addr = open.addr
         val block = ctx.program.memory.getBlock(addr)
         if (block == null || !block.isExecute) {
@@ -391,7 +391,7 @@ class SymbolApplier(
         }
     }
 
-    private fun applyScopeComments(func: Function, open: StabFunction) {
+    private fun applyScopeComments(func: Function, open: Func) {
         fun comment(blocks: List<BlockScope>) {
             for ((start, _, locals, children) in blocks) {
                 try {
