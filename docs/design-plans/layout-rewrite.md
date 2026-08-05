@@ -139,9 +139,11 @@ and it should be a test, not a one-off.
 
    *Content change, deliberate:* the merged instantiations' bodies no longer appear. They were
    present before, folded onto the shared row as an unreadable tail — `image.h` L571 was 573 chars
-   holding both, now 241 holding one. Skeleton p95 row 351 → 308. **Follow-up: give them an
-   appendix**, keyed by instantiation, the way `anonAggregateAppendix` handles anonymous types. Until
-   then the count is the only trace.
+   holding both, now 241 holding one. Skeleton p95 row 351 → 308. **DONE:** they get an
+   appendix, one line each with their declLine, the way `anonAggregateAppendix` handles anonymous
+   types — including base clauses, which is where instantiations differ most visibly and which the
+   first cut dropped. Against the pre-rewrite render no code is lost now; the only residue is
+   duplicate `// L nnn` tags collapsing to one, which is the merge working.
 
 3. Port `applyDecompilation` — its span sweep, `spreadBlocks`/`anchoredBlocks` split, and `placeRun`
    all collapse into claim construction plus the shared allocator.
