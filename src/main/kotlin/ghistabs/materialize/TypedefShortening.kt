@@ -47,16 +47,23 @@ class TemplateNameShortener(aliases: Map<String, String>) {
     val isEmpty get() = aliasByTarget.isEmpty()
 
     /** Canonicalise [name] then substitute to a fixpoint; equals the canonical input when nothing shrank. */
-    fun shorten(name: String): String = cache.getOrPut(name) {
-        var s = canonTemplateName(name)
-        if (combined != null && (!allTargetsTemplated || '<' in s)) {
-            var prev: String
-            do {
-                prev = s
-                s = combined.replace(s) { aliasByTarget.getValue(it.groupValues[1]) }
-            } while (s != prev)
-        }
-        s
+    fun shorten(name: String): String = cache.getOrPut(name) { substitute(canonTemplateName(name)) }
+
+    /**
+     * Substitute aliases through [text] without canonicalising it — for a line of rendered code, where
+     * [canonTemplateName]'s whitespace rule would also close up every `f(a, b)` and `a > b` it met.
+     * Decompiler output already spells template names canonically (they come from the datatypes this
+     * extension created), so the targets still match.
+     */
+    fun substitute(text: String): String {
+        if (combined == null || (allTargetsTemplated && '<' !in text)) return text
+        var s = text
+        var prev: String
+        do {
+            prev = s
+            s = combined.replace(s) { aliasByTarget.getValue(it.groupValues[1]) }
+        } while (s != prev)
+        return s
     }
 
     /** [shorten] but null unless the text actually shrank (below the canonical spelling of [name]). */
