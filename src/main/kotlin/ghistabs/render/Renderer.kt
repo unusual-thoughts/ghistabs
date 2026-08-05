@@ -720,28 +720,44 @@ private class RenderContext(val renderer: Renderer, val source: String) {
      * been opened by code from any file the function inlined — so every view can carry it, and every
      * view balances, because the body they were split out of did.
      */
-    private fun List<Region>.dropInlined(): List<Region> = map { r ->
-        if (!r.foreign) {
-            r
-        } else {
-            // Statements gone, structure and name kept. It stays a region of its own rather than
-            // folding into the row above: the statements it used to hold were what occupied the rows
-            // its source lines span, and merging the leftovers upward left those rows blank.
-            //
-            // The name goes *in* the text as a block comment, not in the Fragment's note. TargetLine
-            // renders every fragment's code before any fragment's note — right when a `//` would
-            // otherwise swallow the next fragment's code, wrong here: several of these sharing a row
-            // came out as a run of bare braces trailed by a run of detached `// ⇐ inlines …` tags.
-            r.also {
-                val depth = it.lines.sumOf { l -> l.text.count { c -> c == '{' } - l.text.count { c -> c == '}' } }
-                val head = it.lines.first()
-                val braces = if (depth > 0) "{".repeat(depth) else "}".repeat(-depth)
-                val mark = it.labelOrNull()?.let { l -> "/* ⇐ inlines $l */" }.orEmpty()
-                it.lines.clear()
-                it.lines +=
-                    DecompLine(listOf(braces, mark).filter(String::isNotEmpty).joinToString(" "), null, head.depth)
-            }
+    private fun List<Region>.dropInlined(): List<Region> {
+        val kept = mutableListOf<Region>()
+        var marks = ""
+        var depth = 0
+
+        // Fold what an inlined stretch left behind onto the last row of the statement it followed.
+        fun flushOnto(r: Region) {
+            if (marks.isEmpty() && depth == 0) return
+            val braces = if (depth > 0) "{".repeat(depth) else "}".repeat(-depth)
+            val last = r.lines.lastOrNull() ?: return
+            val head = listOf(last.text, braces).filter(String::isNotEmpty).joinToString(" ")
+            r.lines[r.lines.lastIndex] = last.copy(text = head + marks)
+            marks = ""
+            depth = 0
         }
+
+        for (r in this) {
+            if (r.foreign) {
+                // Statements gone — they render in the file they were written in. What is left is the
+                // net brace delta, which belongs to no file, and the name, which rides the statement
+                // it followed rather than taking a row of its own. As its own claim the marker
+                // contended for rows and, outranking declarations, evicted them: a
+                // `class iterator_traits<…>` lost its line to an `inlines atomicity.h L 51`. Left
+                // anchorless instead it sorted to the end of the file, 200 rows of bare markers.
+                depth += r.lines.sumOf { l -> l.text.count { it == '{' } - l.text.count { it == '}' } }
+                r.labelOrNull()?.let { marks += " /* ⇐ inlines $it */" }
+                continue
+            }
+            kept += r
+            flushOnto(r)
+        }
+        // A one-line accessor whose body is *all* inlined — Image::size — keeps nothing of its own to
+        // fold onto, and its brace delta would be discarded, leaving its head's `{` hanging open.
+        if (kept.isEmpty() && (marks.isNotEmpty() || depth != 0)) {
+            kept += Region(null).also { it.lines += DecompLine("", null, 0) }
+        }
+        kept.lastOrNull()?.let { flushOnto(it) }
+        return kept
     }
 
     // The headers this file pulls in, as #include lines in the blank space above the first line of
