@@ -412,48 +412,40 @@ private class RenderContext(val renderer: Renderer, val source: String) {
         line in 1..maxLine && name != "this" && seenDecls.add(DeclKey(line, name))
 
     // A declLine outside the host function's bracket is a stale-N_SOL signature — flag it.
+    /** One stabs variable of a function, declared in this file: where gcc put it and how it renders. */
+    private data class Var(val line: Int, val name: String, val text: String, val role: String)
+
+    private fun varsOf(f: Func): List<Var> {
+        fun of(line: Int, name: String, type: TypeDecl<GlobalTypeId>, loc: VariableLocation, kind: String) = Var(
+            line,
+            name,
+            "${type.render(index, shortener = shortener)} $name;",
+            if (loc == VariableLocation.STACK) "($kind)" else "(reg $kind)",
+        )
+        return f.params.filter { it.sourceFile == source }.mapNotNull { s ->
+            (s.body as? SymbolDecl.Param)?.let { of(s.declLine, it.name, it.type, it.location, "param") }
+        } +
+            f.locals.filter { it.sourceFile == source }.mapNotNull { s ->
+                (s.body as? SymbolDecl.Local)?.let { of(s.declLine, it.name, it.type, it.location, "local") }
+            }
+    }
+
     private fun localClaims(): List<Claim> {
         val rangeByFunc = spans.ranges.associateBy { it.func }
-        val claims = mutableListOf<Claim>()
-        for (f in rawFuncs) {
+        // A bodied function declares its variables in the body's folded head, where [decompClaims]
+        // merges them. Claiming a row here too duplicated every one Ghidra had also recovered, and the
+        // rest lost the contested row to the body and left the file entirely.
+        return rawFuncs.filterNot { it in bodied }.flatMap { f ->
             val span = rangeByFunc[f]?.let { it.startLine..(spans.closeLine(f) ?: it.endLine) }
-            fun place(line: Int, name: String, type: TypeDecl<GlobalTypeId>, role: String) {
-                if (!dedup(line, name)) return
-                claims += Claim(
+            varsOf(f).filter { dedup(it.line, it.name) }.map {
+                Claim(
                     Owner.LOCAL,
-                    line,
-                    listOf(Row("${type.render(index, shortener = shortener)} $name;", indentFor(line), role)),
-                    stale = span == null || line !in span,
-                )
-            }
-            for (p in f.params) {
-                if (p.sourceFile != source) continue
-                if (p.body !is SymbolDecl.Param) continue
-                place(
-                    p.declLine,
-                    p.body.name,
-                    p.body.type,
-                    when (p.body.location) {
-                        VariableLocation.STACK -> "(param)"
-                        VariableLocation.REGISTER -> "(reg param)"
-                    },
-                )
-            }
-            for (l in f.locals) {
-                if (l.sourceFile != source) continue
-                if (l.body !is SymbolDecl.Local) continue
-                place(
-                    l.declLine,
-                    l.body.name,
-                    l.body.type,
-                    when (l.body.location) {
-                        VariableLocation.STACK -> "(stack local)"
-                        VariableLocation.REGISTER -> "(reg local)"
-                    },
+                    it.line,
+                    listOf(Row(it.text, indentFor(it.line), it.role)),
+                    stale = span == null || it.line !in span,
                 )
             }
         }
-        return claims
     }
 
     // A global/static: the linker's data at [addr] renders as its initializer — a scalar
@@ -654,10 +646,17 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             // AFTER, not EXACT: aliased copies (ctor C1/C2, dtor D0/D1/D2) share a start line and
             // decompile to identical heads, so under EXACT the two heads merged into one `{` while
             // their two bodies each kept a `}`. Each copy keeps its own opener and slides if it must.
+            // The two declaration sets are one set seen twice. Ghidra recovers what it can from the
+            // frame and names it from the applied symbols; stabs has the rest, with gcc's own types.
+            // Merged by name into the head — the head already *is* the declaration block, so a stabs
+            // local has somewhere to go that isn't a row the body wants. Kept out of `dedup` so a
+            // later pass can still place a same-named file-scope declaration.
+            val extra = varsOf(func).filterNot { it.name in head.declares }.distinctBy { it.name }
+            val text = head.text + extra.joinToString("") { " ${it.text}" }
             this += Claim(
                 Owner.FUNCTION_BODY,
                 startLine,
-                listOf(Row(head.text, note = "L $startLine")),
+                listOf(Row(text, note = "L $startLine")),
                 anchoring = Anchoring.AFTER,
                 limit = gapEnd,
             )
