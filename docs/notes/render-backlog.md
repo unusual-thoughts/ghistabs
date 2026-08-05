@@ -926,6 +926,182 @@ on — genuinely carry their own file. The `body !is Struct && body !is Enum` gu
 
 ---
 
+## 28. Collapse inlined regions onto one row, bounded by the block tree — DONE
+
+The decomp body of a .cpp was mostly libstdc++: on unpackfile, **2989 of 6133 body statements (49%)**
+carry an N_SLINE naming a header. §5 already folded those into whichever this-file run preceded them,
+so they took rows from the code that owns the file *and* borrowed the call site's line tag — the
+render showed six consecutive `// ⇐ L 41` rows that were really `basic_string.h`/`stl_list.h` bodies.
+
+**Measured first: the block tree is the wrong instrument for *detecting* foreignness.** Attributing a
+line by `func.blockAt(addr).source` finds only **888** of those 2989 (14% of body lines). The two
+disagree on 2133 lines and the block answer is a near-strict subset — all but ~32 disagreements are
+"N_SLINE says header, block says own file". gcc's block tree is coarse: `main` has 137 SLINE-foreign
+statements and *zero* lines landing inside its one foreign block; `FileSystemImage::FileSystemImage`
+has 14 foreign blocks covering no decomp line at all. Swapping the SLINE test for the block test —
+the obvious reading of "use blockscope" — would have lost 70% of the detection that already worked.
+
+**What the block tree is uniquely good for is *extent*.** N_SLINE says which file each address came
+from but draws no boundary: two adjacent inlined calls into the same header are one undivided stretch
+of foreign entries. The block bounds them, so they stay two rows instead of merging into one blob.
+
+So: foreignness stays N_SLINE; the region key is the foreign `BlockScope` when gcc bracketed one,
+else the contiguous stretch of same-file entries. Then **consecutive inlined regions share one row
+however many headers they span** — the reader came for the .cpp, not a row per header. Each region
+keeps its own `⇐ header.h L a-b` marker so the row stays traceable, and those go **inline as `/* … */`**:
+a trailing `//` would swallow the code of every region after the first. A row reserves one slot in
+`spreadBlocks` however many statements it holds — which is what frees the vertical room for this
+file's own statements to take a row each. `placeRun` takes a nullable note (an inlined row tags
+nothing at the end) and `wrap=false` for those rows, so the condition-wrapper can't re-expand them.
+On unpackfile, 482 markers across 4 .cpps, 87 rows carrying two or more.
+
+`BlockScope` gained a `source` constructor property (resolved in `finish`, alongside the per-local
+attribution §27 already did) and `blockAt(addr)`; `DecompLine` carries the innermost block covering
+*every* address it touches — null when they disagree, so a line straddling a boundary falls back to
+the SLINE extent.
+
+**Locals.** Head-fold decls naming a local gcc attributed to a header now drop out — they are declared
+in that header's own render (`emitParamsAndLocals` has skipped foreign locals since §27; this is the
+decompiler's parallel list finally agreeing). Matched on the base name with Ghidra's `_<n>` dedup
+suffix stripped, and only when *every* stabs local of that name is foreign. Corpus-wide **1190 of 1818
+stabs locals (65%) are foreign-block-owned**; 878 of 2320 decl lines name a stabs local at all, the
+rest being Ghidra temporaries that carry no attribution. unpack's head: 1209 → 939 chars, losing
+exactly the `_List_node`/`allocator<char>`/`basic_ios`/`__c1`/`__str` internals.
+
+---
+
+## 29. Decomp placement: the stray sweep ate its own output; rows now anchor to their source line — DONE
+
+Measured on `crypto_mi_test_gcc421.exe` / `xmltest_gcc421.exe` against `corpus/cryptopp` and
+`corpus/tinyxml`, which are the fixtures with real source to diff against.
+
+**(a) The stray sweep was demoting decompilation to comments, quadratically.** `FragmentKind.DECOMP`
+and `STRAY` both fell through `applyDecompilation`'s sweep to the `else` branch, so every range
+re-collected the *previous* range's placed body — and a stray being itself sweepable, it compounded.
+Overlapping spans are the norm in a template header, where every instantiation shares one declLine:
+`algparam.h` L113 reached **308,384 chars carrying 721 `⇐` tags, 99.9% of it `// stray:`**. Across
+cryptopp, **57.6% of all rendered output was stray text**. Both kinds now survive the sweep. Genuine
+strays (a type gcc misfiled into a function span, §"vm*_trapset_names") are unaffected — unpackfile
+still emits them.
+
+**(b) `spreadBlocks` allocated by size, so drift compounded down a function.** Replaced with
+`anchoredBlocks`: a row takes the source line its N_SLINE names, and advances the cursor by **one**
+row rather than its height. Its successors are anchored too, so how far it may expand is already
+bounded by where the next one lands — that bound is what makes the layout compact where the source
+is dense and airy where it is sparse, without a size heuristic. Reserving full height instead (tried
+first) only got exact placement to 21.6%: a fat block still pushed everything after it down.
+
+| `.cpp` bodies | exact | within ±1 | >5 off | placed *above* their own line | p95 row |
+| --- | --- | --- | --- | --- | --- |
+| cryptopp before | 20.9% | 47.7% | 13.7% | 31.8% | 705 |
+| cryptopp after | **69.6%** | **85.6%** | 4.9% | **0%** | 1447 |
+| tinyxml before | 16.1% | 37.0% | 10.3% | 44.9% | 198 |
+| tinyxml after | **65.8%** | **78.9%** | 7.7% | **0%** | 297 |
+
+A statement can no longer be placed above the line it came from — a third to a half of rows were.
+Total output fell 28% (8.59M → 6.20M chars) and the worst row 308K → 68K, despite the p95 row growing:
+dense source lines now cram onto their own line instead of borrowing their neighbours' rows.
+
+**(c) A merged inlined row must still use the rows below it.** First cut reserved *one* row for a whole
+stretch of consecutive inlined regions and set `wrap=false`, so `unpackfile.cpp` L42 held 21 regions in
+3,720 chars while L43–51 sat empty. The regions now stay separate `DecompLine`s and `placeRun` lays them
+one per row up to the next anchor, joining several onto a row only where there genuinely aren't enough —
+which is what "collapse consecutive foreign files onto one line" was for. That stretch is now ten rows
+of 100–280 chars with no gaps.
+
+**(d) A crammed row keeps its opening statement's indent.** `TargetLine` takes the shallowest fragment,
+right when a function opener shares a row with an indented global, wrong inside one crammed run: a
+trailing `}` at depth 0 dragged the row to the margin. 35 of unpackfile's 49 longest rows were at column
+0; now 27, the rest genuinely opening at depth 0.
+
+*Not* the driver, contra first impression: blank/brace density. cryptopp is 27.0% "free" rows,
+tinyxml 34.2%, and tinyxml aligned *worse*; `tinyxmlparser.cpp` has the most free rows of any file and
+was second-worst. Decompiler expansion correlates weakly (<1.5 rows per tagged line → 25.9% exact,
+≥1.5 → 18.9%); accumulated drift was the real cause.
+
+**(e) Inlined code now renders in the file it was written in, and only there.** It used to render
+*only* in the .cpp that inlined it — `atomicity.h` L38 had an N_SLINE address annotation and no code at
+all — while dominating the .cpp: unpackfile.cpp was 48 inlined rows against 19 of its own. A second
+pass walks the functions whose N_SLINEs name this file and places their regions here; the same
+`regionsOf` split answers "what of this function is mine" from either side. A header line is compiled
+into every call site, so copies are gathered across all inlining functions at once and identical ones
+collapse to one row tagged `×N` — placed per-function, twenty `_M_destroy` copies stacked onto
+atomicity.h L38 for 2,510 chars. `Renderer` caches decompilation per function address, so a std::string
+method is decompiled once for the whole run rather than once per file that inlines it (runtime
+unchanged at ~70s for unpackfile). `placeRun` also drops `subsumedByDecomp` fragments from any row it
+writes: the span sweep only reaches this file's own functions, and a header has none, so a line inlined
+twenty times had listed twenty N_SLINE addresses.
+
+**(f) Braces balance in every view.** Splitting a body by file breaks it: a decompiled function is one
+brace-nested tree with the inlined statements interleaved into the caller's own, so dropping a region
+takes with it the `}` closing a block this file opened — unpackfile.cpp went 61/61 → 15/13 and stopped
+parsing. Keeping the region's brace-*only* rows overcorrects to 15/59, those being all closers (an
+opener rides its statement, `if (x) {`). What works is leaving each dropped region's **net brace
+delta** behind: nesting depth is a property of the body, not of any one file, so every view can carry
+it. Three cases needed handling — a stretch before the file's first statement (delta goes in front), a
+function whose body is *entirely* inlined (`Image::size`, a one-line accessor: no region survives to
+hold the closing brace, so one of pure structure is synthesised), and a region placed in the file it
+was inlined *from*, which is a slice of someone else's body and closes its own ends. Result: **0 of 55
+unbalanced on unpackfile** (52/107 → 11/107 on cryptopp, where the rest are template headers whose
+spans genuinely overlap).
+
+**Residual, structural: the function-tail cram.** `unpack` decompiles to ~90 rows and its source span
+is 25 lines (L32–56) with two blank rows after it, so whatever the anchors don't absorb piles onto the
+last free row — `unpackfile.cpp` L58 is 4,716 chars. No layout rule fixes N rows into M < N slots; the
+choices are cram (current), spill past the span and break alignment for everything below, or drop
+content. Worth deciding deliberately rather than by accident.
+
+## 30. Unnamed parameters are missing from stabs, and the short list corrupted storage — PARTLY DONE
+
+gcc emits no N_PSYM for an *unnamed* parameter. `HMAC_Base::UncheckedSetKey(const byte*, unsigned int,
+const NameValuePairs &)` — third parameter unnamed in cryptopp's source — yields only
+`userKey:p(0,449)`, `keylen:p(0,9)`, while the mangled name
+`_ZN8CryptoPP9HMAC_Base15UncheckedSetKeyEPKhjRKNS_14NameValuePairsE` still spells all three. Applying
+the short list under `DYNAMIC_STORAGE_FORMAL_PARAMS` re-laid every slot and the body decompiled to
+`in_stack_0000000c` reads.
+
+`SymbolApplier.padToMangledArity` now extends the N_PSYM list to the demangled arity, typing the
+padding from `DemangledDataType.getDataType`. **729 functions** padded on cryptopp;
+`in_stack_` artifacts 668 → 598 file-wide, and 8 → 0 in `hmac.cpp`.
+
+**Still open: the missing `this`.** 248 of 542 method signatures still render without one, and
+`UncheckedSetKey`'s body still treats `userKey` as the object
+(`(**(code **)(*(int *)userKey + 0x40))(userKey)`), so its arguments remain shifted by one — padding
+fixed the count, not the origin. `ClassBuilder.reparentMethod` parents it into `CryptoPP::HMAC_Base`
+(the namespace is right) but never reaches `setCallingConvention("__thiscall")`, while siblings
+`Update`/`KeyInnerHash`/`TruncatedFinal` in the same class do get their `this`. The early return at
+the `sig !is Method && sig !is FunctionT` guard is the prime suspect — needs its own pass.
+
+---
+
+## 31. Non-returning functions went undetected, and the render was paying for it — DONE
+
+Much of what §29 was laying out was unreachable code. unpackfile's `error()` calls `exit` and never
+returns, but nothing marked it, so every caller decompiled with the dead tail still attached — the
+`goto LAB_…` soup and out-of-source-order branches the layout then had to place. The whole
+unpackfile render carried exactly **one** "Subroutine does not return" comment, on the `exit(1)`
+inside `error` itself; `error`'s own call sites had none.
+
+Two reasons Ghidra missed it. Its `FindNoReturnFunctionsAnalyzer` ("Non-Returning Functions -
+Discovered") is a call-site **damage** heuristic — it infers non-return from garbage decoded after a
+call — and nothing after these call sites decoded badly. And it runs at
+`AnalysisPriority.DISASSEMBLY.after().after()`, long before `StabsAnalyzer` at `LOW_PRIORITY` creates
+the functions it would need to examine.
+
+`SymbolApplier.applyNoReturn`, run after the apply pass, decides it structurally instead: walk the CFG
+from the entry, stop each path at a call to a function already known non-returning, and if no `ret`
+is still reachable then this one cannot return either. Iterated to a fixed point so a chain resolves
+however deep. **Reachability is the necessary part** — "has no `ret`" is not enough, since gcc leaves
+one behind as dead code: `error` has 13 instructions and one of them is a `ret` after the `exit`
+call, which is what made the first, simpler rule fire on nothing at all. Tail calls are excluded (a
+jump out of the body returns through the callee).
+
+On unpackfile.cpp: `goto`/`LAB_` references **11 → 2**, braces 44/44 → **24/24**, p95 row 701 → 538,
+longest row 1240 → 980. Blank rows rise 28 → 41, which is the honest consequence — there is simply
+less code once the unreachable tails are gone. No counter drift beyond the two already failing.
+
+---
+
 ## `4900866` is not behaviour-neutral on a.out fixtures
 
 Its message says *"Behaviour-neutral — unpackfile moves only the two reglocal counters"*. That was
