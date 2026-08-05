@@ -131,12 +131,44 @@ and it should be a test, not a one-off.
 Steps 1–2 are behaviour-preserving and independently verifiable against the current renders; the
 output should not move until step 4.
 
-## Open questions
+## Settled
 
-1. Skeleton role annotations — trailing, as proposed above? Or is there a front-position form that
-   reads acceptably?
-2. When a claim is dropped, does it leave any trace in the file (a single `/* N declarations
-   misattributed here */` at the span), or only a diagnostic counter?
-3. Does the `×N` inlined-copy dedup (§29e) belong in claim construction or in the allocator? It is
-   currently a `groupBy` in the second decomp pass and would be cleaner as "identical claims at the
-   same anchor merge".
+1. **Skeleton role annotations stay trailing.** Front-position is for line provenance only.
+2. **A dropped claim leaves a trace in the file** — a single line at the point of loss naming what and
+   why (`/* 3 declarations not shown: misattributed */`) — behind an option to suppress it. The
+   diagnostic counter is kept either way.
+3. **Identical claims merge in the allocator, carrying multiplicity.** The `×N` inlined-copy dedup is
+   a special case of a general rule: two claims for the same line with the same rows *are* the same
+   claim. Stating it once in the allocator subsumes both the `groupBy` in the second decomp pass and
+   `RenderContext.seenDecls`/`dedup(line, name)`, which hand-rolls the same idea keyed on
+   `(line, name)` instead of on content.
+
+   Note the behaviour change that falls out: `dedup(line, name)` currently keeps the *first*
+   declaration of a name on a line and silently drops the rest, including ones whose content differs.
+   Under content-merge those are no longer duplicates — they are two claims contending for a row,
+   resolved by priority, and the loser is dropped *with a reason* and traced. More honest, and it
+   surfaces collisions that are currently invisible.
+
+## Allocator model
+
+Separation of concerns the session kept violating: **the allocator assigns space, the renderer fits
+content into it.** Cramming, wrapping and spreading are the renderer's business — the allocator only
+answers "which rows does this claim get".
+
+```kotlin
+enum class Fit { RIGID, ELASTIC }        // exactly its rows, or its rows then whatever is free below
+enum class Owner { FUNCTION_BODY, GLOBAL, TYPE_BODY, TYPEDEF, INCLUDE }   // declaration order = priority
+
+data class Row(val text: String, val indent: Int = 0)
+data class Claim(val owner: Owner, val line: Int?, val rows: List<Row>, val fit: Fit = Fit.RIGID)
+
+data class Placement(val claim: Claim, val range: IntRange, val copies: Int = 1)
+data class Dropped(val claim: Claim, val reason: String)
+data class Allocation(val placed: List<Placement>, val dropped: List<Dropped>)
+```
+
+Resolution order, per the two axes above: identical claims merge first; then **rigidity** (`RIGID`
+before `ELASTIC`, so a one-row typedef takes its line before an array initializer expands over it);
+then **priority** (`Owner` ordinal, so a function body wins a genuinely contested row); then line.
+
+A claim with `line == null` floats in the band before the first anchored row — that is `INCLUDE`.
