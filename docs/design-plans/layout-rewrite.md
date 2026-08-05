@@ -153,21 +153,28 @@ and it should be a test, not a one-off.
    makes it explicit; `AFTER` also covers a claim with no line of its own, which follows the cursor
    rather than floating to the header band (an inlined-region marker riding its call site).
 
-4. Port `applyDecompilation` — **attempted and backed out.** With `Anchoring.AFTER` in place the port
-   is mechanical, and it loses **5,429 tokens across 22 files**. The cause is a fourth policy the
-   allocator does not have: what to do when the window is *full*. `anchoredBlocks` + `placeRun` coerce
-   into the span and **cram** the overflow onto the last row; `allocate` returns `NO_ROOM` and
-   **drops** it. For a declaration dropping is right — a declaration two rows from its line is a lie.
-   For decompiled code it is not: the statements exist, and cramming them onto the closing row is how
-   a body that outgrows its span has always been handled (§29's residual "function-tail cram").
+4. Port `applyDecompilation` — **attempted twice, backed out twice.** The port itself is ~30 lines
+   and reverts cleanly; what it keeps exposing is that the decomp path needs semantics the
+   declaration passes don't. Three were found and are now in the allocator:
 
-   So `Claim` needs an overflow policy — `DROP` vs `CRAM` — or the equivalent expressed as
-   "AFTER never fails; it falls back to the last row of its window". Decide that before retrying;
-   the port itself is ~30 lines and reverts cleanly.
+   - **`Anchoring.AFTER` never fails.** When the window is full it crams onto the last usable row
+     rather than returning `NO_ROOM`. Dropping is right for a declaration — one placed two rows from
+     its line is a lie — and wrong for code, which exists and has to go somewhere.
+   - **Only `EXACT` claims merge.** Identical declarations at one line are the same declaration seen
+     twice, which is where the `×N` counts come from. Identical *statements* are two executions of
+     the same code, and collapsing them loses it.
+   - **A shared placement must record the row it resolved to**, not re-read `claim.line`. Crammed
+     `AFTER` claims were landing back on the anchor they had already slid away from.
 
-   The escape hatch it needs is already in: `Claim.tag`, a non-constructor property so two claims stay
-   equal when their content matches regardless of what the caller attached, letting `place` get its
-   `Region` back from a `Placement`.
+   With all three, the port still loses **2,984 tokens corpus-wide against 57 gained** — verified as
+   real loss, not redistribution between files, by totalling token multisets across all 55 outputs.
+   The residue is concentrated in `L`/address tags and in `std`/`Exclusion`/`allocator` identifiers,
+   i.e. whole inlined-region rows from the second pass.
+
+   **Do not retry by eyeball.** The next attempt wants a differential harness: render both paths in
+   one process and assert row-for-row that every `DecompLine` handed to `place` appears in the
+   output. Three rounds of diffing whole files has each time found *a* real bug and each time missed
+   the rest.
 
 5. Two renderers over the same claims: decomp (front provenance) and skeleton (trailing roles).
 6. Delete `FragmentKind.STRAY`, `commentFor`'s stray/decomp cases, and the sweep.
