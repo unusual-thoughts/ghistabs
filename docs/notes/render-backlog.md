@@ -1178,3 +1178,33 @@ a.out. All three a.out fixtures moved (`tinyxml` 298→49, `zlib` 140→24, `hel
 
 **Open:** which tree is *correct* isn't established — fewer empty scopes may be the fix or may be
 scopes being dropped. Any future neutrality claim here needs an a.out fixture in the check.
+
+---
+
+## Misattributed declarations and duplicate locals — DONE
+
+**Stale N_SOL now goes to an appendix, not to its line.** Surveyed first across three programs:
+every misattributed row is foreign. Win32 typedefs from `windows.h` misfiled into `crt1.c` (579),
+libgcc internals (`USItype`, `DWunion`) misfiled into `cygwin.asm` — a `.asm` file holding 1060 rows
+of C locals — and libstdc++ into `unpackfile.cpp` (46). tinyxml's and cryptopp's own sources have
+**none**; it concentrates in whichever TU gcc used as the dumping ground. Project types appear only
+as arguments to std templates (`_List_iterator<FileSystemEntry,…>`), which belong to the header.
+
+A claim's line is the one thing about it known to be wrong, so rendering it there spent the file's
+real estate on a lie: `unpackfile.cpp` is ~180 lines of source and rendered 977 rows because gcc
+filed libstdc++ down to L898 in it. It now ends at 101. `crt1.c` 4486 → 1665 rows.
+
+**Stabs locals merge into the decompiled head instead of contending for rows.** They are one set seen
+twice — Ghidra recovers what it can from the frame and names it from the applied symbols, stabs has
+the rest with gcc's own types. `DecompLine.declares` carries the head's names (read from
+`ClangVariableToken`, not the rendered text); `decompClaims` appends what stabs has and Ghidra
+doesn't, and `localClaims` skips bodied functions entirely.
+
+Displaced-by-contention entries: unpackfile 267 → 48, tinyxml 2566 → 403, cryptopp 2073 → 600. The
+few genuine additions are locals Ghidra lost, e.g. `TiXmlAttribute::SetDoubleValue` gains
+`TiXmlAttribute * this;` — its decompiled signature dropped the `this` parameter.
+
+**Open:** `activityExtent` uses `spans.ranges.isEmpty()` as a proxy for "is a header", and it leaks —
+`filesystemimage.h` has spans (inline methods) so it takes the `.cpp` path. Right answer there by
+luck. The real signal is probably distance: `class XVImage` sits 4 lines past attested code,
+`bit_vector` sits 540 past.
