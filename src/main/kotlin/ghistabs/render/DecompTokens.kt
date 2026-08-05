@@ -18,7 +18,17 @@ import ghistabs.parse.SymbolDecl
  * disagree or none is bracketed. It is the only thing that knows where an inlined body ends: the
  * N_SLINE table says which file each address came from but draws no boundary around the region.
  */
-data class DecompLine(val text: String, val address: Address?, val depth: Int = 0, val block: BlockScope? = null) {
+data class DecompLine(
+    val text: String,
+    val address: Address?,
+    val depth: Int = 0,
+    val block: BlockScope? = null,
+    // Every name the folded head brings into scope — its prototype's parameters and its declaration
+    // block's locals. Empty on any other line. Read from the token stream, so it stays right however
+    // the declarations are grouped or rendered; it is what lets the stabs locals merge into the head
+    // instead of contending for rows the body already holds.
+    val declares: Set<String> = emptySet(),
+) {
     /**
      * Nothing but block structure — braces and their separators. Such a row belongs to no file in
      * particular: gcc emits no N_SLINE for it, and the block it closes may have been opened by code
@@ -181,7 +191,12 @@ fun DecompileResults.compressedDecompLines(source: String, func: Func, elideSjlj
     // a boundary and has no block of its own.
     fun List<ClangLine>.block() = flatMap { it.addresses() }.map { func.blockAt(it) }.distinct().singleOrNull()
 
-    return listOf(DecompLine(head, null)) + body.map { g ->
+    val declared = (prefix + declLines)
+        .flatMap { it.significant() }
+        .filterIsInstance<ClangVariableToken>()
+        .map { it.text }
+        .toSet()
+    return listOf(DecompLine(head, null, declares = declared)) + body.map { g ->
         DecompLine(g.joinToString(" ") { it.rendered().trim() }, g.first().address(), g.first().indent, g.block())
     }
 }
