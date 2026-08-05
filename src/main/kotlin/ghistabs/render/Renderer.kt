@@ -163,7 +163,16 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             addAll(typeBodyClaims())
             if (renderer.decomp != null) addAll(includeClaims())
         }
-        write(allocate(claims, maxLine))
+        // A misattributed claim is not laid out at all. Its line is the one thing about it known to be
+        // wrong, so rendering it there — flagged, but in place — spent the file's real estate on a lie:
+        // unpackfile.cpp is ~180 lines and was 977 rows because gcc filed libstdc++ down to L898 in it.
+        // Surveyed across three programs before removing them: every misattributed row is a Win32
+        // typedef in crt1.c, a libgcc internal in cygwin.asm (a *.asm* file, 1060 rows of C locals), or
+        // libstdc++ in unpackfile.cpp. tinyxml's and cryptopp's own sources have none at all. Project
+        // types appear only as arguments to std templates, which belong to the header, not the .cpp.
+        val (misattributed, placeable) = claims.partition { it.stale }
+        displaced += misattributed.map { Dropped(it, MISATTRIBUTED) }
+        write(allocate(placeable, maxLine))
         // Annotations, not content: they carry no code and share a row with whatever holds it, so
         // they are never claims. In decomp mode the body restates them, so they go where it landed.
         emitSlineAnnotations()
@@ -188,10 +197,9 @@ private class RenderContext(val renderer: Renderer, val source: String) {
         val rows = displaced
             .sortedWith(compareBy({ it.claim.line ?: Int.MAX_VALUE }, { it.claim.rows.first().text }))
             .joinToString("\n") { (claim, reason) ->
-                val stale = if (claim.stale) ", misattributed" else ""
-                "${claim.rows.joinToString(" ") { it.text }}  // L ${claim.line} ($reason$stale)"
+                "${claim.rows.joinToString(" ") { it.text }}  // L ${claim.line} ($reason)"
             }
-        return "\n\n/* ── displaced declarations (line unavailable) ── */\n\n$rows\n"
+        return "\n\n/* ── displaced declarations (line unusable) ── */\n\n$rows\n"
     }
 
     // Anonymous aggregates carry no source line (declLine == null), so they can't be placed inline
