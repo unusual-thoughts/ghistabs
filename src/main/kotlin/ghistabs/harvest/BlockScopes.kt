@@ -20,7 +20,13 @@ data class BlockScope(
     val end: Address,
     val locals: List<Symbol>,
     val children: List<BlockScope> = emptyList(),
-)
+    // Resolved by BlockTreeBuilder.finish; empty until then. See [finish] for how it is derived.
+    val source: String = "",
+) {
+    /** Innermost block covering [addr], or null when [addr] lies outside this one. */
+    fun blockAt(addr: Address): BlockScope? =
+        if (addr in start..<end) children.firstNotNullOfOrNull { it.blockAt(addr) } ?: this else null
+}
 
 /**
  * Assembles a function's block tree from the record stream as it arrives: locals accumulate until a
@@ -93,7 +99,11 @@ internal class BlockTreeBuilder {
                 val sourcesAtLine = ownLines.filter { it.line == local.declLine }.map { it.source }.toSet()
                 local.copy(sourceFile = sourcesAtLine.singleOrNull() ?: blockSource).also { flat += it }
             }
-            return copy(locals = attributed, children = children.map { it.attribute(blockSource) })
+            return copy(
+                locals = attributed,
+                children = children.map { it.attribute(blockSource) },
+                source = blockSource,
+            )
         }
 
         val blocks = roots.map { it.attribute(functionSource) }
@@ -102,13 +112,16 @@ internal class BlockTreeBuilder {
     }
 }
 
+/** Innermost lexical block covering [addr], or null when no block does (code outside every N_LBRAC). */
+fun Func.blockAt(addr: Address) = blocks.firstNotNullOfOrNull { it.blockAt(addr) }
+
 /**
  * Local `recordIndex` → the offset from [entry] at which its block opens. gcc's lexical scope *is*
  * the live range, which is what Ghidra's `firstUseOffset` wants: a register local declared from
  * entry claims the register for the whole function, so N inlined copies of the same name collapse
  * onto one variable and all but the first are dropped.
  */
-internal fun List<BlockScope>.firstUseOffsets(entry: Address): Map<Int, Int> = buildMap {
+fun Func.firstUseOffsets(entry: Address): Map<Int, Int> = buildMap {
     fun walk(blocks: List<BlockScope>) {
         for ((start, _, locals, children) in blocks) {
             val offset = (start.offset - entry.offset).toInt()
@@ -116,5 +129,5 @@ internal fun List<BlockScope>.firstUseOffsets(entry: Address): Map<Int, Int> = b
             walk(children)
         }
     }
-    walk(this@firstUseOffsets)
+    walk(blocks)
 }

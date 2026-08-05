@@ -91,6 +91,48 @@ class LayoutTest {
     }
 
     @Test
+    fun `anchoredBlocks lands each block on its own line and bounds the drift a fat one causes`() {
+        // Each block takes its own source line when nothing has claimed it.
+        assertEquals(
+            listOf(12, 15, 19),
+            anchoredBlocks(10, 40, listOf(Anchored(12, 1), Anchored(15, 1), Anchored(19, 1))),
+        )
+        // A fat block (L12 decompiles to 6 statements) does NOT push its successors off their lines —
+        // it may expand only as far as the next anchor and crams the rest. spreadBlocks moved these to
+        // 12/18/19, carrying the +3 onward through the whole function.
+        assertEquals(
+            listOf(12, 15, 19),
+            anchoredBlocks(10, 40, listOf(Anchored(12, 6), Anchored(15, 1), Anchored(19, 1))),
+        )
+        // Anchorless blocks (inlined-region markers) claim no row: they all start where the cursor
+        // already is, and the caller lays each on the first row still free from there. Reserving room
+        // for them would push the anchored blocks off their own lines.
+        assertEquals(
+            listOf(11, 11, 14),
+            anchoredBlocks(10, 40, listOf(Anchored(null, 1), Anchored(null, 2), Anchored(14, 1))),
+        )
+        // A marker between two anchors sits at the cursor the anchored ones left, and the anchor after
+        // it is untouched.
+        assertEquals(
+            listOf(12, 13, 14, 20),
+            anchoredBlocks(10, 40, listOf(Anchored(12, 1), Anchored(13, 1), Anchored(null, 1), Anchored(20, 1))),
+        )
+        // Ghidra emits branches out of source order; a block arriving after one that ran past it
+        // still takes its own line, because the canvas is indexed by source line.
+        assertEquals(
+            listOf(20, 13, 25),
+            anchoredBlocks(10, 40, listOf(Anchored(20, 1), Anchored(13, 1), Anchored(25, 1))),
+        )
+        // Never above start+1 (a misattributed line behind the span) nor past end.
+        assertEquals(listOf(11, 11), anchoredBlocks(10, 40, listOf(Anchored(3, 0), Anchored(4, 1))))
+        assertEquals(listOf(19, 20), anchoredBlocks(10, 20, listOf(Anchored(19, 8), Anchored(35, 1))))
+        // A single-line function has no room below its head: everything lands on the close itself,
+        // never one past it — that row need not exist on the canvas.
+        assertEquals(listOf(10, 10), anchoredBlocks(10, 10, listOf(Anchored(12, 1), Anchored(13, 1))))
+        assertEquals(emptyList<Int>(), anchoredBlocks(0, 10, emptyList()))
+    }
+
+    @Test
     fun `wrapDecompLine splits a long condition at its top-level boolean boundaries`() {
         val text = "if ((a == 1) && (b == 2) && (c == 3)) {"
         val rows = wrapDecompLine(text, depth = 2, minLen = 10)
