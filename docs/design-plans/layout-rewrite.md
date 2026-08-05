@@ -119,76 +119,28 @@ typedefs at .cpp line numbers, §27's stale N_SOL), which is a diagnostic counte
 buckets. The check is mechanical — count claims in, placed + dropped out, assert no third category —
 and it should be a test, not a one-off.
 
-## Rough shape of the work
+## Status — done
 
-1. `Row`/`Claim`/`Owner` + the allocator, pure, unit-testable in `LayoutTest` (Kind 1). **DONE**
-2. Port the emit passes to return claims instead of writing to a canvas. **typedefs, params/locals
-   and globals DONE** — verified byte-identical (typedefs, globals) or reorder-only (locals: a
-   misattributed decl now renders *after* the real one on its line, since stale claims reserve last).
+1. `Row`/`Claim`/`Owner` + the allocator, pure, unit-tested. **DONE**
+2. Every emit pass returns claims instead of writing to a canvas. **DONE**
+3. `Anchoring { EXACT, AFTER, BAND }` — a declaration wants its line or nothing, a statement wants the
+   next free row, an `#include` wants the band. **DONE**
+4. Front-positioned `/* ⇐ L n */` for decompiled code, one marker per distinct line on a row; role
+   annotations stay trailing, which is what skeleton mode uses. **DONE**
+5. **One allocation for the whole file. DONE** — the point of the exercise. Four earlier attempts
+   added a fifth per-pass `allocate` call to four existing ones, which left the architecture
+   emit-then-reconcile and made nothing deletable.
+6. Delete the old machinery. **DONE**, 307 lines: `FragmentKind.STRAY` and its comment shape,
+   `subsumedByDecomp`, `spreadBlocks`, `anchoredBlocks`, `Anchored`, `packed`, `PACKED_WIDTH`,
+   `layoutBraceBlock`, `blankRunFrom`, `blockedRows`, `isExpandable`, and `Renderer.place`/`placeRun`.
+   Both renders byte-identical across the deletion.
 
-   **`emitTypeBodies` DONE**, once the case it exposed was understood. Two type bodies at one
-   declLine are usually not two declarations at all: every instantiation of a template carries the
-   *template's* line, so N of them arrive for a line the source declares once. Letting them contend
-   produced a class that does not exist — `unpackfile.cpp` L571 had the `const` instantiation's
-   opener above the non-`const` one's member. They are now merged: the fullest body renders, tagged
-   `/* 4 bytes, 2 instantiations */`, chosen by member count then name so the pick cannot drift.
+## Still open
 
-   Genuinely distinct elastic claims on one line keep the tiebreak we agreed — **the fullest
-   expands**, the rest fold losslessly onto the row it took — with text as a stable secondary key.
-   Applied to elastic claims only, so rigid ordering is untouched.
-
-   *Content change, deliberate:* the merged instantiations' bodies no longer appear. They were
-   present before, folded onto the shared row as an unreadable tail — `image.h` L571 was 573 chars
-   holding both, now 241 holding one. Skeleton p95 row 351 → 308. **DONE:** they get an
-   appendix, one line each with their declLine, the way `anonAggregateAppendix` handles anonymous
-   types — including base clauses, which is where instantiations differ most visibly and which the
-   first cut dropped. Against the pre-rewrite render no code is lost now; the only residue is
-   duplicate `// L nnn` tags collapsing to one, which is the merge working.
-
-3. **Allocator needs a placement policy first — DONE.** Porting the decomp path revealed the
-   allocator was missing a dimension. A declaration wants its line *or nothing*; a decompiled
-   statement wants *the next free row* when its line is taken, because Ghidra revisits a source line
-   — 47 of 186 anchors in `xvimage.cpp` are claimed twice — and the second visit is real code.
-   Treating those as peers would cram 47 pairs onto single rows. `Anchoring { EXACT, AFTER, BAND }`
-   makes it explicit; `AFTER` also covers a claim with no line of its own, which follows the cursor
-   rather than floating to the header band (an inlined-region marker riding its call site).
-
-4. Port `applyDecompilation` — **attempted four times, backed out four times. Do not attempt a fifth
-   by diffing renders.**
-
-   The port is ~30 lines and reverts cleanly. Three real bugs came out of the attempts and are fixed
-   in the allocator (`AFTER` never fails and crams; only `EXACT` claims merge; a shared placement
-   records the row it resolved to). What remains is **~370 code tokens**, and it is not diffuse:
-
-   - **`xvimage.h` alone accounts for 313 of them.** It goes from 67 non-blank rows to 13. Its
-     `class XVImage : public struct Image { string header; … }` body disappears entirely.
-   - Adding canvas occupancy to `blocked` — the fix the declaration passes needed — made it *worse*
-     (377 → 455), so the cause is not "the allocator hands out ranges over occupied rows".
-   - `xvimage.h` is fed by the **second pass** (code inlined from other files' functions), which calls
-     `place(inlined, firstAnchor - 1, maxLine)`. That is the path to instrument.
-
-   Each attempt produced a confident diagnosis from reading a diff, and each was wrong. The
-   measurement to build first: instrument `place` to record every `Region` it is handed and the row
-   it ends on, run both paths in one process, and assert row-for-row that every `DecompLine` reaches
-   the output. That turns "370 tokens missing somewhere" into "this region, this row". Whole-file
-   diffing has now failed four times at exactly this.
-
-   Also worth knowing: the earlier claim of "2,984 tokens lost" was **79% wrong** — it counted SLINE
-   address annotations, which `placeRun` is *supposed* to sweep. Measure code only: strip every
-   comment before tokenising. Two of the four backouts were driven by that bad number.
-
-5. Two renderers over the same claims: decomp (front provenance) and skeleton (trailing roles).
-   **DONE.** `TargetLine.render` front-positions the provenance of every `DECOMP` fragment that has
-   code, collapsing repeats so a row carries one marker per distinct line; everything else keeps the
-   trailing form, which is what skeleton mode uses and why skeleton output is untouched. All 1,029
-   trailing `// ⇐` tags became 894 front markers — fewer because repeats collapse — with code tokens
-   identical at 15,222 and braces balanced in all 55 files.
-6. Delete `FragmentKind.STRAY`, `commentFor`'s stray/decomp cases, and the sweep.
-
-Steps 1–3 are mechanical ports, so *there* an unchanged render is evidence the refactor is faithful —
-not the goal. The goal is step 5's output. The gate throughout is **no content lost, no fabrication,
-every change explainable**, which is not the same as no change; conflating the two cost two
-unnecessary backouts of the step-4 port (see above).
+- Skeleton is **91 code tokens** down against the pre-rewrite render, scattered.
+- `xvimage.cpp` and `filesystemimage.cpp` **no longer balance braces** (2 of 55, was 0). The brace
+  delta `dropInlined` leaves behind assumed the old per-function windowing.
+- §33's blank-space question: 87% of decomp rows are blank, 92% of that in runs of 20+.
 
 ## Settled
 
