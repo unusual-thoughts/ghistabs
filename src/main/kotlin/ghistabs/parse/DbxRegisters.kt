@@ -30,3 +30,16 @@ fun dbxRegisterName(pointerSize: Int, dbxNum: Int): String? = when (pointerSize)
     8 -> X86_64_DBX_TO_REGISTER
     else -> null
 }?.getOrNull(dbxNum)
+
+/**
+ * Where gcc put a variable, as the scope plate comments spell it: `EBX` for a register,
+ * `Stack[-0x38]` for a frame slot. [rawValue] is the stab's value field — a dbx register number or a
+ * gcc frame offset — and [frameBias] converts the latter to Ghidra's origin.
+ *
+ * Shared so the render and the plate comments cannot drift into two spellings of one fact.
+ */
+fun dbxStorageName(pointerSize: Int, rawValue: Int, register: Boolean, frameBias: Int): String = if (register) {
+    dbxRegisterName(pointerSize, rawValue) ?: "r$rawValue"
+} else {
+    (rawValue - frameBias).let { if (it < 0) "Stack[-0x${(-it).toString(16)}]" else "Stack[0x${it.toString(16)}]" }
+}

@@ -7,6 +7,7 @@ import ghidra.util.task.TaskMonitor
 import ghistabs.StabsOptions.Companion.stabsTypedefsShortened
 import ghistabs.harvest.*
 import ghistabs.importer.AddressResolver
+import ghistabs.importer.stabsFrameBias
 import ghistabs.materialize.TemplateNameShortener
 import ghistabs.parse.*
 import ghistabs.runTransaction
@@ -121,6 +122,9 @@ private class RenderContext(val renderer: Renderer, val source: String) {
     private val symbols = index.symbolsBySource[source].orEmpty()
 
     private val shortener get() = renderer.shortener
+
+    private val pointerSize = program.defaultPointerSize
+    private val frameBias by lazy { program.stabsFrameBias(index.functions) }
 
     private val spans = FunctionSpans.of(rawFuncs, source)
 
@@ -433,30 +437,25 @@ private class RenderContext(val renderer: Renderer, val source: String) {
     /** One stabs variable of a function, declared in this file: where gcc put it and how it renders. */
     private data class Var(val line: Int, val name: String, val text: String, val role: String)
 
-    // A role inside the head, where a `//` would comment out the rest of the row. Empty unless
-    // --var-storage. In decomp mode this only reaches the few locals Ghidra did not recover: the rest
-    // are Ghidra's own declarations, whose naming already says which is which (`local_80` is a stack
-    // slot, `uVar7` a register). Skeleton mode, where the names are gcc's, is where the flag earns its
-    // keep — 137 annotations on unbouniaf against 4 here.
-    private fun String.storageComment() = if (isEmpty()) "" else " /* ${trim('(', ')')} */"
-
     private fun varsOf(f: Func): List<Var> {
         // Only a local carries a role, and only when asked for. A parameter's was noise: it labelled
-        // `(param)` a declaration whose own function signature, two columns away, already shows it to
-        // be one. Storage is real, but a fact about the compiled code rather than the source being
-        // reconstructed, so it is opt-in.
-        fun of(line: Int, name: String, type: TypeDecl<GlobalTypeId>, loc: VariableLocation?) = Var(
-            line,
+        // `(param)` a declaration whose own function signature, two columns away, already showed it to
+        // be one. A local's storage is real but is a fact about the compiled code rather than the
+        // source being reconstructed, so it is opt-in — and spelled by the same [dbxStorageName] the
+        // scope plate comments use, so `EBX` and `Stack[-0x38]` mean there exactly what they mean here.
+        fun of(s: Symbol, name: String, type: TypeDecl<GlobalTypeId>, loc: VariableLocation?) = Var(
+            s.declLine,
             name,
             "${type.render(index, shortener = shortener)} $name;",
-            loc?.takeIf { renderer.showStorage }?.let { if (it == VariableLocation.STACK) "(stack)" else "(reg)" }
+            loc?.takeIf { renderer.showStorage }
+                ?.let { dbxStorageName(pointerSize, s.rawValue.toInt(), it == VariableLocation.REGISTER, frameBias) }
                 .orEmpty(),
         )
         return f.params.filter { it.sourceFile == source }.mapNotNull { s ->
-            (s.body as? SymbolDecl.Param)?.let { of(s.declLine, it.name, it.type, null) }
+            (s.body as? SymbolDecl.Param)?.let { of(s, it.name, it.type, null) }
         } +
             f.locals.filter { it.sourceFile == source }.mapNotNull { s ->
-                (s.body as? SymbolDecl.Local)?.let { of(s.declLine, it.name, it.type, it.location) }
+                (s.body as? SymbolDecl.Local)?.let { of(s, it.name, it.type, it.location) }
             }
     }
 
@@ -681,8 +680,18 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             // Merged by name into the head — the head already *is* the declaration block, so a stabs
             // local has somewhere to go that isn't a row the body wants. Kept out of `dedup` so a
             // later pass can still place a same-named file-scope declaration.
-            val extra = varsOf(func).filterNot { it.name in head.declares }.distinctBy { it.name }
-            val text = head.text + extra.joinToString("") { " ${it.text}" + it.role.storageComment() }
+            val vars = varsOf(func).distinctBy { it.name }
+            val extra = vars.filterNot { it.name in head.declares }
+            // Storage goes in one trailing block comment rather than beside each declarator: the head
+            // groups same-typed locals into `int a,b,c;`, so there is no per-name position to annotate
+            // without breaking the grouping. Looked up by name, so it covers Ghidra's own declarations
+            // too — annotating only the merged extras reached 2 of unbouniaf's locals instead of all
+            // of them. A `//` here would comment out the rest of the row.
+            val storage = vars.filter { it.role.isNotEmpty() }
+                .sortedWith(compareBy({ !it.role.startsWith("Stack") }, { it.role }, { it.name }))
+                .joinToString { "${it.name}=${it.role}" }
+            val text = head.text + extra.joinToString("") { " ${it.text}" } +
+                storage.takeIf { it.isNotEmpty() }?.let { " /* storage: $it */" }.orEmpty()
             this += Claim(
                 Owner.FUNCTION_BODY,
                 startLine,
