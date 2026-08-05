@@ -1,5 +1,6 @@
 package ghistabs.importer
 
+import ghistabs.StabsOptions.Companion.markStabsTypedefsShortened
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.analyzeDataCoverage
 import ghistabs.harvest.Harvest
@@ -46,6 +47,9 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
         ctx.program.runTransaction("Stabs: materialize types") {
             registry.materializeAll()
             if (ctx.options.shortenTypedefs) TypedefShortener(ctx.dtm, ctx).apply()
+            // The render spells types to match the decompiler, and it may run much later from the GUI
+            // against analyzer options that have since been toggled — so record what actually happened.
+            ctx.program.markStabsTypedefsShortened(ctx.options.shortenTypedefs)
         }
 
         // Pass C — apply symbols, then build classes/vtables, demangle, and replace demangler stubs
