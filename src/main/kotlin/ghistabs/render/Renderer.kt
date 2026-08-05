@@ -4,6 +4,7 @@ import ghidra.app.decompiler.DecompInterface
 import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
+import ghistabs.StabsOptions.Companion.stabsTypedefsShortened
 import ghistabs.harvest.*
 import ghistabs.importer.AddressResolver
 import ghistabs.materialize.TemplateNameShortener
@@ -29,17 +30,23 @@ class Renderer(
     // Off for a render meant to be compiled or diffed against real source, where a trailing block of
     // declarations that have no line is noise.
     val showDisplaced: Boolean = true,
-    // Collapse long template spellings (basic_string<char,…> → string). Applied to *everything* the
-    // render emits, declarations and decompiled code alike — shortening only the half built from the
-    // AST is what left `ofstream os;` next to `basic_ofstream<char,std::char_traits<char>> os;`. When
-    // the importer's own OPT_SHORTEN_TYPEDEFS pass already renamed the datatypes, the decompiler
-    // hands us short names and the substitution is a no-op, so the two settings cannot disagree.
-    val shortenTypes: Boolean = true,
     // Annotate each local with the storage gcc gave it. Off by default: it is a property of the
     // compiled code, not of the source being reconstructed.
     val showStorage: Boolean = false,
 ) : Closeable {
-    val shortener by lazy { if (shortenTypes) harvestTemplateShortener(index) else TemplateNameShortener(emptyMap()) }
+    /**
+     * Collapses long template spellings (`basic_string<char,…>` → `string`) across *everything* the
+     * render emits, declarations and decompiled code alike. Shortening only the AST half is what left
+     * `ofstream os;` next to `basic_ofstream<char,std::char_traits<char>> os;` in one merged head.
+     *
+     * Not a render setting: it follows the import's, because the two halves come from different places
+     * and only agree when they agree with each other. Shortened at import means the datatypes were
+     * renamed, so the decompiler already hands us short names and substituting is a no-op the AST side
+     * needs; not shortened means long names in the decompiler, which the AST side must then match.
+     */
+    val shortener by lazy {
+        if (program.stabsTypedefsShortened) harvestTemplateShortener(index) else TemplateNameShortener(emptyMap())
+    }
 
     // `also`, not `apply`: inside `apply` the receiver's own (null) `program` property would shadow
     // the constructor param, so openProgram(program) would be handed null.

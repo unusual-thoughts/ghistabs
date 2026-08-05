@@ -107,6 +107,7 @@ data class StabsOptions(
     companion object {
         const val STABS_DONE: String = "Stabs Imported"
         const val OVERLAY_DONE: String = "Stabs Overlaid"
+        const val SHORTENED_DONE: String = "Stabs Typedefs Shortened"
         const val PLATE_COMMENTS: String = "Apply scope plate comments"
         const val CLASSES: String = "Reconstruct C++ classes"
         const val SHORTEN_TYPEDEFS: String = "Shorten templated names via typedefs"
@@ -122,6 +123,18 @@ data class StabsOptions(
             }
         }
 
+        /**
+         * Whether the import that produced this program shortened its templated datatypes. Recorded
+         * rather than re-read from the analyzer options, which say what is *set* now — a render run
+         * later from the GUI would otherwise pick up a toggle made after the import and spell types
+         * one way in the declarations it builds from the AST and the other in decompiled code.
+         */
+        val Program.stabsTypedefsShortened get() = getOptions(Program.PROGRAM_INFO).getBoolean(SHORTENED_DONE, false)
+
+        fun Program.markStabsTypedefsShortened(value: Boolean) {
+            getOptions(Program.PROGRAM_INFO).setBoolean(SHORTENED_DONE, value)
+        }
+
         val Program.isOverlayDone get() = getOptions(Program.PROGRAM_INFO).getBoolean(OVERLAY_DONE, false)
 
         fun Program.markOverlayDone() {
@@ -129,6 +142,15 @@ data class StabsOptions(
                 getOptions(Program.PROGRAM_INFO).setBoolean(OVERLAY_DONE, true)
             }
         }
+
+//        fun Options.stabs() = StabsOptions(
+//            applyPlateComments = getBoolean(PLATE_COMMENTS, true),
+//            buildClasses = getBoolean(CLASSES, true),
+//            shortenTypedefs = getBoolean(SHORTEN_TYPEDEFS, false),
+//            foldSources = getBoolean(FOLD_SOURCES, true),
+//            minLogLevel = getEnum(LOG_LEVEL, Level.INFO),
+//            overlaySection = getBoolean(OVERLAY_SECTION, true),
+//        )
 
         fun Options.registerStabs() {
             registerOption(
@@ -172,15 +194,6 @@ data class StabsOptions(
                 "Overlay a decoded StabRecord struct on every .stab entry (refs into .stabstr and back to code/data).",
             )
         }
-
-//        fun Options.stabs() = StabsOptions(
-//            applyPlateComments = getBoolean(PLATE_COMMENTS, true),
-//            buildClasses = getBoolean(CLASSES, true),
-//            shortenTypedefs = getBoolean(SHORTEN_TYPEDEFS, false),
-//            foldSources = getBoolean(FOLD_SOURCES, true),
-//            minLogLevel = getEnum(LOG_LEVEL, Level.INFO),
-//            overlaySection = getBoolean(OVERLAY_SECTION, true),
-//        )
     }
 
     constructor(opts: Options) : this(
