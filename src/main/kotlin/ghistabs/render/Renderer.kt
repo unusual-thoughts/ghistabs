@@ -240,11 +240,18 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             }
             return
         }
-        // One marker per line naming every function this line's code ended up inside. Rows the
-        // decompilation already occupies say it better than any annotation could.
-        for ((line, keys) in byKey.keys.groupBy { it.line }) {
+        // One marker per line naming every function this line's code ended up inside — but only where
+        // that function belongs to *another* file. A line of main.cpp compiled into main was not
+        // inlined anywhere; Ghidra simply folded it into a neighbouring statement, and saying
+        // "inlined into main" inside main is nonsense. Rows the decompilation already occupies say it
+        // better than any annotation could.
+        val own = rawFuncs.mapTo(mutableSetOf()) { it.addr }
+        for ((line, addrs) in lines.filter { it.line in 1..maxLine }.groupBy({ it.line }, { it.addr })) {
             if (canvas[line].fragments.any { it.kind == FragmentKind.DECOMP }) continue
-            val fns = keys.mapNotNull { it.codeUnit.substringAfterLast(": ").takeIf { f -> f.isNotBlank() } }
+            val fns = addrs
+                .mapNotNull { program.functionManager.getFunctionContaining(it) }
+                .filterNot { it.entryPoint in own }
+                .map { it.getName(true) }
                 .distinct()
                 .ifEmpty { continue }
             canvas[line] += Fragment(indentFor(line), "/* inlined into ${fns.joinToString(", ")} */")
