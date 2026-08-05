@@ -128,7 +128,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
         }
         // Trailing blank/stale lines are trimmed only in decomp mode; skeleton output
         // stays fully source-aligned.
-        return canvas.render(trim = renderer.decomp != null) + anonAggregateAppendix()
+        return canvas.render(trim = renderer.decomp != null) + anonAggregateAppendix() + instantiationAppendix()
     }
 
     // Anonymous aggregates carry no source line (declLine == null), so they can't be placed inline
@@ -155,6 +155,42 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             }
         }
         return "\n\n/* ── anonymous aggregates (no source line) ── */\n\n$blocks\n"
+    }
+
+    /**
+     * Instantiations that shared a declLine with the one rendered inline. Every instantiation of a
+     * template carries the *template's* line, so only one can hold that row; the rest would otherwise
+     * vanish behind the `N instantiations` count. They differ in exactly the way that matters — the
+     * substituted types — so they go here in full rather than being summarised away.
+     */
+    private val mergedInstantiations = mutableListOf<Type>()
+
+    private fun instantiationAppendix(): String {
+        if (mergedInstantiations.isEmpty()) return ""
+        val blocks = mergedInstantiations
+            .sortedWith(compareBy({ it.declLine }, { it.name }))
+            .joinToString("\n") { "/* L${it.declLine} */ ${it.oneLineBody()}" }
+        return "\n\n/* ── further template instantiations (sharing a declared line above) ── */\n\n$blocks\n"
+    }
+
+    /** A type body on one line — the appendix form, where alignment to a source line is meaningless. */
+    private fun Type.oneLineBody(): String = when (val b = body) {
+        is TypeDecl.Struct -> {
+            // Bases too — they are where the instantiations differ most visibly, and dropping them
+            // was the one thing the appendix still lost against the pre-rewrite render.
+            val bases = b.bases.takeIf { it.isNotEmpty() }
+                ?.joinToString(", ", prefix = " : ") {
+                    "${it.access.name.lowercase()} ${it.type.render(index, shortener = shortener)}"
+                }
+                .orEmpty()
+            "${b.kind.cxxKeyword()} ${shortener.shortenedOrNull(name ?: "") ?: name}$bases { " +
+                b.renderFull(index, program, shortener).joinToString(" ") + " }; /* ${b.sizeBytes} bytes */"
+        }
+
+        is TypeDecl.Enum ->
+            "enum $name { ${b.members.joinToString(", ") { (n, v) -> "$n = $v" }} }; /* ${b.members.size} members */"
+
+        else -> "$name;"
     }
 
     /** One `// L n @ 0xADDR[: code-unit]` annotation per (line, code-unit) group. */
@@ -395,6 +431,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             // Deterministic pick: the most members, then by name, so the choice can't drift with
             // unrelated type-resolution changes.
             val ast = group.maxWith(compareBy({ it.body.memberCount() }, { it.name })) ?: continue
+            mergedInstantiations += group.filterNot { it === ast }
             val name = ast.name ?: continue
             val body = ast.body
             if (body !is TypeDecl.Struct && body !is TypeDecl.Enum) continue
