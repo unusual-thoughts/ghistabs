@@ -521,7 +521,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
 
     /**
      * Replace each function's span with its decompilation. A real file-scope global/static owns its
-     * line and survives as data; every fragment the decomp already shows ([FragmentKind.subsumedByDecomp])
+     * line and survives as data; everything the decompilation already shows
      * or that's misattributed is dropped; any other stray (a type decl gcc mis-filed here) is demoted
      * to a `// stray:` comment on the close line — never code, so it can't force a cram. The head
      * (signature + folded decls) sits at the start line; the body groups spread K&R-indented down the
@@ -702,64 +702,6 @@ private class RenderContext(val renderer: Renderer, val source: String) {
                 it.lines +=
                     DecompLine(listOf(braces, mark).filter(String::isNotEmpty).joinToString(" "), null, head.depth)
             }
-        }
-    }
-
-    /** Anchor [regions] to their source lines within `(start, end]` and lay each one down. */
-    private fun place(regions: List<Region>, start: Int, end: Int) {
-        val targets = anchoredBlocks(start, end, regions.map { Anchored(it.anchor, it.lines.size) })
-        regions.forEachIndexed { i, r ->
-            // The nearest row any other block claims above this one — not simply the next block's,
-            // since blocks no longer arrive in row order and a run of markers all target the row the
-            // cursor stopped at, which left an empty range and stacked them onto that single row.
-            val limit = targets.filter { it > targets[i] }.minOrNull() ?: (end + 1)
-            // An inlined region names itself inline, so it takes no trailing tag.
-            placeRun(targets[i], limit, r.lines, r.label(targets[i]).takeIf { !r.foreign })
-        }
-    }
-
-    // Lay a run's lines onto the free rows in [start, limit): one per row while there is room (so
-    // Ghidra's `{`-ends-the-line / `}`-on-its-own-line survives), the overflow crammed onto the last.
-    // A statement row carries the run's source-line tag; a structural row (a bare brace, no
-    // instructions → null address) has no stabs source line, so it carries no tag — a synthetic one
-    // would just restate its grid position and, on the synthesized close line, read as an off-by-one.
-    // A null [note] tags nothing at all: the row already carries its provenance inline.
-    // Indent is the line's own nesting level.
-    private fun placeRun(start: Int, limit: Int, lines: List<DecompLine>, note: String?, wrap: Boolean = true) {
-        val free = (start until limit).filter { canvas[it].isEmpty() }.ifEmpty { listOf(start) }
-        // With spare rows, break over-long statements at their top-level `&&`/`||` boundaries so a
-        // crammed condition fills the blank space instead of one 300-char line; dense runs (no spare
-        // rows) place one line per row as-is. A wrapped piece keeps its statement's address; a brace
-        // keeps its null one.
-        val rows = when {
-            wrap && free.size > lines.size ->
-                lines.flatMap { dl -> wrapDecompLine(dl.text, dl.depth).map { (d, t) -> Triple(d, t, dl.address) } }
-
-            // Inlined regions (wrap = false) pack rather than take a row each: this file's own code is
-            // what the reader came for, and unfile.cpp was 48 foreign-only rows against 19 of its
-            // own. They share a row until it reaches [PACKED_WIDTH], so several short headers read side
-            // by side without rebuilding the 3,700-char pile-up that one-row-for-everything gave.
-            !wrap -> lines.packed(free.size).map { Triple(it.depth, it.text, it.address) }
-
-            else -> lines.map { Triple(it.depth, it.text, it.address) }
-        }
-        var prev = -1
-        var prevDepth = 0
-        rows.forEachIndexed { i, (depth, text, address) ->
-            val line = free[minOf(i, free.lastIndex)]
-            // Everything crammed onto one row keeps the indent of the statement that opens it.
-            // TargetLine takes the *shallowest* fragment, which is right when a function opener shares
-            // a row with an indented global — but inside one crammed run it let a trailing `}` at depth
-            // 0 drag the whole row out to the margin, which was 35 of the 49 longest rows on unbouniaf.
-            val rowDepth = if (line == prev) prevDepth else depth
-            // Whatever the decomp restates goes: a header line inlined twenty times listed twenty
-            // N_SLINE addresses, 2,454 chars of annotation around one short statement. The span sweep
-            // only reaches this file's own functions, and a header has none.
-            if (line != prev) canvas[line].fragments.removeAll { it.kind.subsumedByDecomp }
-            val rowNote = note.takeIf { address != null && line != prev }
-            canvas[line] += Fragment(rowDepth, text, rowNote, FragmentKind.DECOMP)
-            prev = line
-            prevDepth = rowDepth
         }
     }
 
