@@ -155,12 +155,17 @@ class LayoutTest {
     }
 
     @Test
-    fun `trims trailing blank and stale-only lines`() {
+    fun `trims trailing blank lines but keeps misattributed content that carries code`() {
         val canvas = Canvas(6).apply {
             this[2] += Fragment(0, code = "int real;", note = "(global)", kind = FragmentKind.DECL_GLOBAL)
             this[5] += Fragment(0, code = "int stale;", note = "", kind = FragmentKind.TYPEDEF, stale = true)
         }
-        // Line 5 is stale-only and 3,4,6 blank → trimmed output ends at line 2.
-        assertEquals(listOf("", "int real;  // L   2 (global)"), canvas.render(trim = true).trimEnd('\n').split('\n'))
+        // Line 5 is misattributed but carries code, so it survives; only the blank tail past it goes.
+        // Trimming on staleness alone deleted `class bouniaf` and its whole body from header.h the
+        // moment nothing happened to sit below it.
+        assertEquals(
+            listOf("", "int real;  // L   2 (global)", "", "", "int stale;  // L   5 stale N_SOL?"),
+            canvas.render(trim = true).trimEnd('\n').split('\n'),
+        )
     }
 }

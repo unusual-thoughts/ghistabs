@@ -27,12 +27,42 @@ enum class Fit {
  * what a reader came for, which is not the same axis as [Fit] — see the allocator's ordering.
  */
 enum class Owner {
+    /** Decompiled statements. Outranks everything: in decomp mode it is what the reader came for. */
     FUNCTION_BODY,
+
+    /**
+     * The `sig {` / `}` a skeleton draws round a function. Ranked just under the body so that where
+     * decompilation exists it takes the row and these drop — which is the retroactive
+     * `subsumedByDecomp` sweep expressed as priority instead. Where it doesn't, they render.
+     */
+    FUNC_DELIM,
     GLOBAL,
     LOCAL,
     TYPE_BODY,
     TYPEDEF,
+
+    /**
+     * Code this file was inlined *into* somewhere else — the second decomp pass. Ranked below the
+     * file's own declarations, unlike [FUNCTION_BODY]: in a header the declarations *are* the
+     * content and the inlined fragments are incidental. Ranking them together evicted
+     * `class bouniaf` from header.h in favour of statements from another file's function.
+     */
+    INLINED_BODY,
     INCLUDE,
+    ;
+
+    /**
+     * Who counts as a peer. Exclusivity is between a *body* and a *declaration* — that contest is
+     * the point, and losing it is what used to demote a declaration into a `// stray:` comment.
+     * Declarations among themselves are not in contest at all: a typedef and a global really can sit
+     * on one source line, they stacked there before one allocator resolved the whole file, and making
+     * them fight cost 807 code tokens of skeleton output.
+     */
+    val group get() = when (this) {
+        FUNCTION_BODY, INLINED_BODY -> "body"
+        INCLUDE -> "include"
+        else -> "declaration"
+    }
 }
 
 /**
@@ -72,6 +102,8 @@ data class Claim(
     val fit: Fit = Fit.RIGID,
     val stale: Boolean = false,
     val anchoring: Anchoring = if (line == null) Anchoring.BAND else Anchoring.EXACT,
+    /** Furthest row an [Anchoring.AFTER] claim may slide to — a function body stays in its span. */
+    val limit: Int? = null,
 ) {
     /**
      * Whatever the pass needs handed back with its placement. Deliberately outside the constructor:
@@ -135,6 +167,9 @@ fun allocate(claims: List<Claim>, maxLine: Int, blocked: Set<Int> = emptySet()):
         { it.first.stale },
         { it.first.owner.ordinal },
         { it.first.line ?: Int.MAX_VALUE },
+        // Rigid before elastic among peers: a function's signature is one row and must open the row
+        // its body shares, and a one-row typedef keeps its line under an expanding initializer.
+        { if (it.first.fit == Fit.ELASTIC) 1 else 0 },
         { if (it.first.fit == Fit.ELASTIC) -it.first.rows.size else 0 },
         { if (it.first.fit == Fit.ELASTIC) it.first.rows.firstOrNull()?.text.orEmpty() else "" },
     )
@@ -142,7 +177,7 @@ fun allocate(claims: List<Claim>, maxLine: Int, blocked: Set<Int> = emptySet()):
     // Who holds each row. A peer — same owner, same attribution — shares it rather than contending;
     // anyone else is turned away. `typedef A x;` and `typedef B y;` really can sit on one source line,
     // and making them fight drops one of a legal pair. Exclusivity is for contests *between* owners.
-    val held = mutableMapOf<Int, Owner>()
+    val held = mutableMapOf<Int, String>()
     val placed = mutableListOf<Placement>()
     val dropped = mutableListOf<Dropped>()
 
@@ -169,9 +204,10 @@ fun allocate(claims: List<Claim>, maxLine: Int, blocked: Set<Int> = emptySet()):
             // rows from its line is a lie — and wrong here, where it silently loses statements.
             Anchoring.AFTER -> {
                 val from = asked ?: cursor
-                (from..maxLine).firstOrNull { it !in held && it !in blocked }
-                    ?: (from..maxLine).lastOrNull { it !in blocked }
-                    ?: (1..maxLine).lastOrNull { it !in blocked }
+                val ceiling = claim.limit?.coerceAtMost(maxLine) ?: maxLine
+                (from..ceiling).firstOrNull { it !in held && it !in blocked }
+                    ?: (from..ceiling).lastOrNull { it !in blocked }
+                    ?: (1..ceiling).lastOrNull { it !in blocked }
             }
 
             else -> asked
@@ -182,17 +218,18 @@ fun allocate(claims: List<Claim>, maxLine: Int, blocked: Set<Int> = emptySet()):
             // A peer of the holder rides the row it already took; only the first expands. Peerage is
             // by owner alone — a misattributed local shares its line with a real one, as it always
             // has; `stale` decides who reserves *first*, which is what stops it taking the row.
-            held[line] == claim.owner -> shared.add(Triple(claim, copies, line)).let { null }
+            held[line] == claim.owner.group -> shared.add(Triple(claim, copies, line)).let { null }
             line in held -> dropped.add(Dropped(claim, ROW_TAKEN)).let { null }
             else -> {
-                held[line] = claim.owner
+                held[line] = claim.owner.group
                 Triple(claim, copies, line)
             }
         }
     }
 
     for ((claim, copies, line) in reserved) {
-        val wanted = if (claim.fit == Fit.RIGID) claim.rows.size else maxLine - line + 1
+        val ceiling = claim.limit?.coerceAtMost(maxLine) ?: maxLine
+        val wanted = if (claim.fit == Fit.RIGID) claim.rows.size else ceiling - line + 1
         // [blocked] bounds expansion only, never reservation: rows already carrying content a claim
         // may legitimately share, which is how the canvas behaves while passes are still being ported.
         // The anchor counts — a claim whose own row already has content cannot expand at all, it folds
@@ -201,10 +238,10 @@ fun allocate(claims: List<Claim>, maxLine: Int, blocked: Set<Int> = emptySet()):
         val end = when (line) {
             in blocked -> line
             else -> (line + 1 until line + wanted)
-                .takeWhile { it <= maxLine && it !in held && it !in blocked }
+                .takeWhile { it <= ceiling && it !in held && it !in blocked }
                 .lastOrNull() ?: line
         }
-        (line..end).forEach { held[it] = claim.owner }
+        (line..end).forEach { held[it] = claim.owner.group }
         placed += Placement(claim, line..end, copies)
     }
     // Peers take exactly the row they share, never the extent its holder expanded to.
@@ -220,7 +257,7 @@ fun allocate(claims: List<Claim>, maxLine: Int, blocked: Set<Int> = emptySet()):
             continue
         }
         val end = (row until row + claim.rows.size).takeWhile { it < firstAnchored && it !in held }.last()
-        (row..end).forEach { held[it] = claim.owner }
+        (row..end).forEach { held[it] = claim.owner.group }
         placed += Placement(claim, row..end, copies)
         next = end + 1
     }

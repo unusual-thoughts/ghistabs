@@ -67,6 +67,16 @@ class Renderer(val index: HarvestIndex, val program: Program, val mode: Mode, va
     }
 }
 
+private fun Owner.kind() = when (this) {
+    Owner.FUNCTION_BODY, Owner.INLINED_BODY -> FragmentKind.DECOMP
+    Owner.FUNC_DELIM -> FragmentKind.FUNC_DELIM
+    Owner.GLOBAL -> FragmentKind.DECL_GLOBAL
+    Owner.LOCAL -> FragmentKind.DECL_LOCAL
+    Owner.TYPE_BODY -> FragmentKind.TYPE_BODY
+    Owner.TYPEDEF -> FragmentKind.TYPEDEF
+    Owner.INCLUDE -> FragmentKind.OTHER
+}
+
 private fun safeName(source: String) = source.replace(Regex("[^A-Za-z0-9_.-]"), "_").trim('_')
 
 private class RenderContext(val renderer: Renderer, val source: String) {
@@ -115,17 +125,25 @@ private class RenderContext(val renderer: Renderer, val source: String) {
         if (rawFuncs.isEmpty() && lines.isEmpty() && typeDecls.isEmpty()) return ""
         if (maxLine == 0) return ""
 
-        emitSlineAnnotations()
-        emitTypedefs()
-        emitParamsAndLocals()
-        emitGlobals()
-        emitFunctionBraces()
-        emitTypeBodies()
-        reportAnomalies()
-        renderer.decomp?.let {
-            applyDecompilation(it)
-            emitIncludes()
+        // One allocation for the whole file. Every pass declares what it wants and writes nothing;
+        // the allocator resolves all of it at once, with the full picture. That is what removes the
+        // retroactive sweep — contention between a decompiled body and a declaration gcc misfiled
+        // into its span is settled by [Owner] priority up front, so there is no losing fragment left
+        // over to demote into a `// stray:` comment.
+        val claims = buildList {
+            addAll(typedefClaims())
+            addAll(localClaims())
+            addAll(globalClaims())
+            addAll(functionBraceClaims())
+            addAll(typeBodyClaims())
+            if (renderer.decomp != null) addAll(decompClaims())
         }
+        write(allocate(claims, maxLine))
+        // Annotations, not content: they carry no code and share a row with whatever holds it, so
+        // they are never claims. In decomp mode the body restates them, so they go where it landed.
+        emitSlineAnnotations()
+        reportAnomalies()
+        renderer.decomp?.let { emitIncludes() }
         // Trailing blank/stale lines are trimmed only in decomp mode; skeleton output
         // stays fully source-aligned.
         return canvas.render(trim = renderer.decomp != null) + anonAggregateAppendix() + instantiationAppendix()
@@ -205,13 +223,15 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             byKey.getOrPut(SliceKey(line, codeUnit)) { sortedSetOf() } += addr
         }
         for ((key, addrs) in byKey) {
+            // The body restates these, and a line inlined twenty times listed twenty addresses.
+            if (canvas[key.line].fragments.any { it.kind == FragmentKind.DECOMP }) continue
             val runs = formatAddrRuns(addrs.toList(), program)
             val note = if (key.codeUnit.isEmpty()) runs else "$runs: ${key.codeUnit}"
             canvas[key.line] += Fragment(indentFor(key.line), note = note, kind = FragmentKind.SLINE)
         }
     }
 
-    private fun emitTypedefs() {
+    private fun typedefClaims(): List<Claim> {
         data class Td(val line: Int, val name: String, val rendered: String)
 
         val typedefs = typeDecls
@@ -247,7 +267,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
                 )
             }
         }
-        place(allocate(claims, maxLine), FragmentKind.TYPEDEF)
+        return claims
     }
 
     /**
@@ -255,16 +275,35 @@ private class RenderContext(val renderer: Renderer, val source: String) {
      * have been ported hand their claims to the allocator and their placements here, passes that
      * haven't still write fragments directly. See `docs/design-plans/layout-rewrite.md`.
      */
-    private fun place(allocation: Allocation, kind: FragmentKind) {
+    private fun write(allocation: Allocation) {
         for ((claim, range, _) in allocation.placed) {
-            for ((row, content) in fitRows(claim.rows, range)) {
+            val free = range.filter { canvas[it].isEmpty() }.ifEmpty { listOf(range.first) }
+            val rows = when {
+                // Spare rows: break an over-long condition at its top-level `&&`/`||` so it fills the
+                // space instead of running to 300 chars.
+                claim.owner == Owner.FUNCTION_BODY && free.size > claim.rows.size ->
+                    claim.rows.flatMap { r -> wrapDecompLine(r.text, r.indent).map { (d, t) -> Row(t, d, r.note) } }
+
+                else -> claim.rows
+            }
+            var prev = -1
+            var prevIndent = 0
+            for ((row, content) in fitRows(rows, free.first()..free.last())) {
                 // An expanding block evicts misattributed fragments from the rows it takes, so a lone
                 // stale decl can't force it to fold. Carried over from Canvas.layoutBraceBlock.
                 if (claim.fit == Fit.ELASTIC) canvas[row].fragments.removeAll { it.stale }
-                canvas[row] += Fragment(content.indent, content.text, content.note, kind, claim.stale)
+                // Everything crammed onto one row keeps the indent of the statement that opens it —
+                // TargetLine takes the shallowest, which let a trailing `}` drag the row to column 0.
+                val indent = if (row == prev) prevIndent else content.indent
+                canvas[row] += Fragment(indent, content.text, content.note, claim.owner.kind(), claim.stale)
+                prev = row
+                prevIndent = indent
             }
         }
+        // A claim that lost its row is recorded, never demoted onto a neighbour. FUNC_DELIM losing to
+        // a body is the normal case in decomp mode and not worth reporting.
         for ((claim, reason) in allocation.dropped) {
+            if (claim.owner == Owner.FUNC_DELIM) continue
             println("skeleton[$source]: dropped ${claim.owner} at L${claim.line} — $reason: ${claim.rows.first().text}")
         }
     }
@@ -278,7 +317,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
         line in 1..maxLine && name != "this" && seenDecls.add(DeclKey(line, name))
 
     // A declLine outside the host function's bracket is a stale-N_SOL signature — flag it.
-    private fun emitParamsAndLocals() {
+    private fun localClaims(): List<Claim> {
         val rangeByFunc = spans.ranges.associateBy { it.func }
         val claims = mutableListOf<Claim>()
         for (f in rawFuncs) {
@@ -319,7 +358,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
                 )
             }
         }
-        place(allocate(claims, maxLine), FragmentKind.DECL_LOCAL)
+        return claims
     }
 
     // A global/static: the linker's data at [addr] renders as its initializer — a scalar
@@ -384,36 +423,30 @@ private class RenderContext(val renderer: Renderer, val source: String) {
 
     // Attributed by CU (`symbolsByCu`), not `s.sourceFile` — gcc emits no `N_SOL(cu)`
     // before N_GSYM, so `sourceFile` points at the last header visited.
-    private fun emitGlobals() {
-        val claims = symbols.mapNotNull { s -> (s.body as? SymbolDecl.Static)?.let { emitGlobal(it, s) } }
-        place(allocate(claims, maxLine, canvas.blockedRows()), FragmentKind.DECL_GLOBAL)
-    }
+    private fun globalClaims() = symbols.mapNotNull { s -> (s.body as? SymbolDecl.Static)?.let { emitGlobal(it, s) } }
 
     // Openers at startLine (self-closing decl when single-line), closers at the close line.
-    private fun emitFunctionBraces() {
+    private fun functionBraceClaims(): List<Claim> = buildList {
         for (r in spans.ranges) {
+            // A decompiled body brings its own signature and its own braces. Emitting these as well
+            // lets the opener and closer be resolved independently — one keeps its row, the other
+            // loses it — and the file stops balancing. The old code drew them and swept both away
+            // together; not drawing them is the same thing said once.
+            if (renderer.decomp != null && renderer.decompile(r.func).isNotEmpty()) continue
             val sig = r.func.sourceSignature(program)
             val name = r.func.demangledName
             val openText = if (r.isSingleLine) "$sig;" else "$sig {"
             val openNote = if (r.isSingleLine) name else "opens $name"
-            canvas[r.startLine].fragments.add(
-                0,
-                Fragment(code = openText, note = openNote, kind = FragmentKind.FUNC_DELIM),
-            )
-
+            this += Claim(Owner.FUNC_DELIM, r.startLine, listOf(Row(openText, note = openNote)))
             val closeLine = spans.closeLine(r.func) ?: continue
             if (closeLine !in 1..maxLine) continue
-            canvas[closeLine] += Fragment(
-                code = "}",
-                note = "closes ${r.func.demangledName}",
-                kind = FragmentKind.FUNC_DELIM,
-            )
+            this += Claim(Owner.FUNC_DELIM, closeLine, listOf(Row("}", note = "closes $name")))
         }
     }
 
     // Struct/enum bodies spread over the blank lines below the decl; opaque types fall
     // back to a one-line forward decl.
-    private fun emitTypeBodies() {
+    private fun typeBodyClaims(): List<Claim> {
         val claims = mutableListOf<Claim>()
         // Every instantiation of one template carries the *template's* declLine, so N of them arrive
         // for a line the source declares once. They are not peers competing for space; they are one
@@ -476,7 +509,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
                 Claim(Owner.TYPE_BODY, line, listOf(row), stale = stale)
             }
         }
-        place(allocate(claims, maxLine, canvas.blockedRows()), FragmentKind.TYPE_BODY)
+        return claims
     }
 
     /** How many members a body declares — the tiebreak when instantiations of one template differ. */
@@ -494,79 +527,60 @@ private class RenderContext(val renderer: Renderer, val source: String) {
      * (signature + folded decls) sits at the start line; the body groups spread K&R-indented down the
      * span, each tagged with its source line. A single-line function has no span, so it isn't bodied.
      */
-    private fun applyDecompilation(decomp: DecompInterface) {
-        // Where a decl shares a line with real content, the misattributed one is noise.
-        for (b in canvas.multiFragmentLines()) b.fragments.removeAll { it.stale }
+    /**
+     * Claims for every decompiled statement this file should show — its own functions' bodies, and
+     * the code it contributed to other files' functions by being inlined into them.
+     *
+     * No canvas, no sweep. A body's rows claim their own source lines and lose or win contested ones
+     * on [Owner] priority, which is what the retroactive "demote whoever wrote first to `// stray:`"
+     * pass was doing by hand.
+     */
+    private fun decompClaims(): List<Claim> = buildList {
         for ((func, startLine) in spans.ranges) {
             val closeLine = spans.closeLine(func) ?: startLine
             if (closeLine < startLine) continue
-            // Aliased out-of-line copies (ctor C1/C2, dtor D0/D1/D2) all collapse onto one
-            // source line; decompiling each would stack duplicate bodies, so leave those as
-            // the skeleton's side-by-side decls and only body a single-line function alone.
+            // Aliased out-of-line copies (ctor C1/C2, dtor D0/D1/D2) all collapse onto one source
+            // line; decompiling each would stack duplicate bodies, so only body a single-line
+            // function when it is the sole range on its line.
             if (closeLine == startLine && spans.ranges.count { it.startLine == startLine } > 1) continue
             val cLines = renderer.decompile(func).ifEmpty { continue }
             val head = cLines.firstOrNull() ?: continue
 
-            // Capture each surviving stray with its original line so the demoted comment keeps that
-            // line's provenance tag rather than the close line's. A live global stays put as data.
-            val strays = mutableListOf<String>()
-            for (line in startLine..closeLine) {
-                canvas[line].fragments.removeAll { f ->
-                    when {
-                        f.kind == FragmentKind.DECL_GLOBAL && !f.stale -> false
-
-                        // Another range's already-placed body, or something it already demoted.
-                        // Overlapping spans are the norm in a template header, where every
-                        // instantiation shares one declLine: re-sweeping them turns real
-                        // decompilation into a comment, and since a stray is itself sweepable it
-                        // compounds across instantiations — algparam.h L113 reached 308K chars.
-                        f.kind == FragmentKind.DECOMP || f.kind == FragmentKind.STRAY -> false
-
-                        f.kind.subsumedByDecomp || f.stale -> true
-
-                        else -> {
-                            strays += listOfNotNull(f.code, f.commentAt(line)).joinToString("  ")
-                            true
-                        }
-                    }
-                }
-            }
-
-            val regions = regionsOf(func, cLines)
-
-            canvas[startLine] += Fragment(code = head.text, note = "L $startLine", kind = FragmentKind.DECOMP)
-            // Lay each row on the source line it came from. The body stays inside the span when it fits
-            // (nothing spills past the close); when it would otherwise cram, borrow the *contiguous*
-            // blank rows immediately after the span — the next global or function ends the run — so it
-            // can breathe instead of piling on, and a dense body never smears across every blank line to
-            // the end of the file.
-            val gapEnd = ((closeLine + 1)..maxLine).takeWhile { canvas[it].isEmpty() }.lastOrNull() ?: closeLine
-            val spanFree = (startLine + 1..closeLine).count { canvas[it].isEmpty() }
-            val body = regions.dropInlined()
-            val sizes = body.map { it.lines.size }
-            place(body, startLine, if (sizes.sum() <= spanFree) closeLine else gapEnd)
-            for (text in strays) canvas[closeLine] += Fragment(note = text, kind = FragmentKind.STRAY)
+            // The body may borrow the contiguous blank rows after its span when it outgrows it — the
+            // next function or global ends the run — so a dense body breathes instead of piling on.
+            val gapEnd = ((closeLine + 1)..maxLine).takeWhile { canvasFree(it) }.lastOrNull() ?: closeLine
+            this += Claim(Owner.FUNCTION_BODY, startLine, listOf(Row(head.text, note = "L $startLine")))
+            addAll(claimsFor(regionsOf(func, cLines).dropInlined(), gapEnd))
         }
 
-        // Second pass: the code this file contributed to *other* files' functions. gcc inlined it from
-        // here, so its N_SLINEs name this file and its lines belong on this file's canvas — until now
-        // they rendered only in the .cpp that inlined them, leaving `atomicity.h` L38 with an address
-        // annotation and no code at all. Same region split as above, read from the other side.
-        //
-        // A header line is compiled into every call site, so the copies are gathered across all the
-        // inlining functions at once and identical ones collapse to a single row tagged `×N`. Placed
-        // per-function instead, twenty copies of `_M_destroy` stacked onto atomicity.h L38 — 2,510
-        // chars of the same statement.
+        // The code this file contributed to *other* files' functions. gcc inlined it from here, so its
+        // N_SLINEs name this file and its lines belong on this canvas. A header line is compiled into
+        // every call site, so identical copies collapse to one tagged `×N`.
         val inlined = index.functions
             .filter { f -> f !in rawFuncs && f.lineEntries.any { it.source == source } }
-            .flatMap { regionsOf(it, renderer.decompile(it)) }
-            .filter { !it.foreign && it.anchor != null }
+            .flatMap { regionsOf(it, renderer.decompile(it)).dropInlined() }
+            .filter { it.anchor != null }
             .groupBy { r -> r.anchor to r.lines.map { it.text } }
             .map { (_, copies) -> copies.first().also { it.copies = copies.size } }
             .sortedBy { it.anchor }
             .onEach { it.balance() }
-        if (inlined.isNotEmpty()) place(inlined, (inlined.first().anchor ?: 1) - 1, maxLine)
+        addAll(claimsFor(inlined, maxLine, Owner.INLINED_BODY))
     }
+
+    /** [regions] as claims, none allowed to slide past [limit]. */
+    private fun claimsFor(regions: List<Region>, limit: Int, owner: Owner = Owner.FUNCTION_BODY) = regions.map { r ->
+        Claim(
+            owner,
+            r.anchor,
+            r.lines.map { Row(it.text, it.depth, r.label(r.anchor ?: 0).takeIf { _ -> !r.foreign }) },
+            Fit.ELASTIC,
+            anchoring = Anchoring.AFTER,
+            limit = limit,
+        )
+    }
+
+    /** A row nothing has claimed yet — only meaningful before allocation writes anything. */
+    private fun canvasFree(line: Int) = line in 1..maxLine
 
     /**
      * One inlined region, or the statements of one this-file source line. [file] is the file an inlined
