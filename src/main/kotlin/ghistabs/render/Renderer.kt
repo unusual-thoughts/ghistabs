@@ -116,7 +116,12 @@ private class RenderContext(val renderer: Renderer, val source: String) {
         lines.maxOfOrNull { it.line } ?: 0,
         symbols.maxOfOrNull { it.declLine } ?: 0,
         spans.ranges.maxOfOrNull { it.endLine } ?: 0,
-    ).max().takeIf { it > 0 } ?: (typeDecls.maxOfOrNull { it.declLine } ?: 0)
+        // Type declarations count always, not only when nothing else does. A header contributes
+        // N_SLINEs where its code was inlined and nowhere else, so its extent was being read off
+        // whatever happened to be inlined — header.h's stopped at 32 and flagged its own
+        // `class bouniaf` at 36 as misattributed.
+        typeDecls.maxOfOrNull { it.declLine } ?: 0,
+    ).max()
 
     // A decl at this line is misattributed (stale N_SOL) if it sits past the file's activity.
     private fun isStale(line: Int) = line > activityExtent
@@ -186,10 +191,20 @@ private class RenderContext(val renderer: Renderer, val source: String) {
     private val mergedInstantiations = mutableListOf<Type>()
 
     private fun instantiationAppendix(): String {
-        if (mergedInstantiations.isEmpty()) return ""
-        val blocks = mergedInstantiations
+        val (bodied, opaque) = mergedInstantiations
             .sortedWith(compareBy({ it.declLine }, { it.name }))
-            .joinToString("\n") { "/* L${it.declLine} */ ${it.oneLineBody()}" }
+            .partition { it.body.memberCount() > 0 }
+        // An instantiation with no members says nothing as `class X<…> {  }; /* 1 bytes */`, and 55 of
+        // 68 appendix rows were exactly that. Its *name* is still the point — which specialisations
+        // exist, which the `×N` count on the declaring line cannot say — so they list one line per
+        // source line instead of one block each.
+        val blocks = (
+            bodied.map { "/* L${it.declLine} */ ${it.oneLineBody()}" } +
+                opaque.groupBy { it.declLine }.map { (line, group) ->
+                    "/* L$line */ " + group.mapNotNull { it.name }
+                        .joinToString(", ") { shortener.shortenedOrNull(it) ?: it } + ";"
+                }
+            ).sorted().joinToString("\n").ifEmpty { return "" }
         return "\n\n/* ── further template instantiations (sharing a declared line above) ── */\n\n$blocks\n"
     }
 
