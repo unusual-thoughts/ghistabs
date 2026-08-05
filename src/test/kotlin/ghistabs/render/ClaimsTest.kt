@@ -172,13 +172,12 @@ class ClaimsTest {
     }
 
     @Test
-    fun `AFTER crams onto the last usable row rather than dropping when the window is full`() {
+    fun `AFTER crams onto its limit rather than dropping when the window is full`() {
         // Decompiled statements exist and have to go somewhere; dropping them loses code silently.
-        val outside = (1..40).filterTo(mutableSetOf()) { it !in 10..12 }
         val claims = (1..5).map {
-            Claim(Owner.FUNCTION_BODY, 10, listOf(Row("stmt$it")), anchoring = Anchoring.AFTER)
+            Claim(Owner.FUNCTION_BODY, 10, listOf(Row("stmt$it")), anchoring = Anchoring.AFTER, limit = 12)
         }
-        val out = allocate(claims, maxLine = 40, blocked = outside)
+        val out = allocate(claims, maxLine = 40)
         assertEquals(emptyList<Dropped>(), out.dropped)
         // Three rows for five claims: 10, 11, 12, then the rest pile onto 12.
         assertEquals(listOf(10, 11, 12, 12, 12), out.placed.map { it.range.first }.sorted())

@@ -139,13 +139,13 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             addAll(globalClaims())
             addAll(functionBraceClaims())
             addAll(typeBodyClaims())
+            if (renderer.decomp != null) addAll(includeClaims())
         }
         write(allocate(claims, maxLine))
         // Annotations, not content: they carry no code and share a row with whatever holds it, so
         // they are never claims. In decomp mode the body restates them, so they go where it landed.
         emitSlineAnnotations()
         reportAnomalies()
-        renderer.decomp?.let { emitIncludes() }
         // Trailing blank/stale lines are trimmed only in decomp mode; skeleton output
         // stays fully source-aligned.
         return canvas.render(trim = renderer.decomp != null) + anonAggregateAppendix() + instantiationAppendix()
@@ -751,7 +751,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
     // type's base classes — so a .cpp that only calls out-of-line (nothing inlined, e.g. appimage.cpp)
     // still declares its dependencies. Placed only within the available top room; overflow stacks on
     // the last free line rather than pushing content down.
-    private fun emitIncludes() {
+    private fun includeClaims(): List<Claim> {
         val referenced = mutableSetOf<Type>()
         fun collect(decl: TypeDecl<GlobalTypeId>) {
             val ast = when (decl) {
@@ -776,12 +776,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             .sorted()
             .map { "#include \"${it.substringAfterLast('/')}\"" }
             .toList()
-        if (headers.isEmpty()) return
-        val room = ((1..maxLine).firstOrNull { canvas[it].fragments.isNotEmpty() } ?: (maxLine + 1)) - 1
-        if (room <= 0) return
-        headers.forEachIndexed { i, include ->
-            canvas[(i + 1).coerceAtMost(room)] += Fragment(code = include, kind = FragmentKind.OTHER)
-        }
+        return headers.map { Claim(Owner.INCLUDE, null, listOf(Row(it)), anchoring = Anchoring.BAND) }
     }
 
     // Diagnostic: a function/type/global landing inside another function's interior is
