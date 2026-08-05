@@ -72,7 +72,14 @@ data class Claim(
     val fit: Fit = Fit.RIGID,
     val stale: Boolean = false,
     val anchoring: Anchoring = if (line == null) Anchoring.BAND else Anchoring.EXACT,
-)
+) {
+    /**
+     * Whatever the pass needs handed back with its placement. Deliberately outside the constructor:
+     * two claims are the same claim when their content matches, and what the caller happens to have
+     * attached must not change that. Survives merging — the first of a merged set keeps its tag.
+     */
+    var tag: Any? = null
+}
 
 /** [claim] got [range]; [copies] > 1 when identical claims merged. */
 data class Placement(val claim: Claim, val range: IntRange, val copies: Int = 1)
@@ -145,7 +152,12 @@ fun allocate(claims: List<Claim>, maxLine: Int, blocked: Set<Int> = emptySet()):
         // AFTER slides to the first free row at or past what it asked for, and keeps a cursor so a
         // claim with no line of its own follows whatever came before it.
         val line = when (claim.anchoring) {
-            Anchoring.AFTER -> (maxOf(asked ?: cursor, cursor)..maxLine).firstOrNull { it !in held }
+            // Its own line when that is still free, even if a later-ordered claim already ran past
+            // it — Ghidra emits branches out of source order, and holding a cursor floor sent
+            // everything after the first out-of-order block to the bottom of the span. Only a claim
+            // with no line of its own follows the cursor.
+            Anchoring.AFTER ->
+                ((asked ?: cursor)..maxLine).firstOrNull { it !in held && it !in blocked }
             else -> asked
         } ?: return@mapNotNull dropped.add(Dropped(claim, NO_ROOM)).let { null }
         if (claim.anchoring == Anchoring.AFTER) cursor = line + 1
