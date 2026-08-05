@@ -131,12 +131,14 @@ private class RenderContext(val renderer: Renderer, val source: String) {
         // into its span is settled by [Owner] priority up front, so there is no losing fragment left
         // over to demote into a `// stray:` comment.
         val claims = buildList {
+            // Decomp first: it decides which functions get a body, which is what tells the brace pass
+            // whose delimiters are already covered.
+            if (renderer.decomp != null) addAll(decompClaims())
             addAll(typedefClaims())
             addAll(localClaims())
             addAll(globalClaims())
             addAll(functionBraceClaims())
             addAll(typeBodyClaims())
-            if (renderer.decomp != null) addAll(decompClaims())
         }
         write(allocate(claims, maxLine))
         // Annotations, not content: they carry no code and share a row with whatever holds it, so
@@ -276,7 +278,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
      * haven't still write fragments directly. See `docs/design-plans/layout-rewrite.md`.
      */
     private fun write(allocation: Allocation) {
-        for ((claim, range, _) in allocation.placed) {
+        for ((claim, range, copies) in allocation.placed) {
             val free = range.filter { canvas[it].isEmpty() }.ifEmpty { listOf(range.first) }
             val rows = when {
                 // Spare rows: break an over-long condition at its top-level `&&`/`||` so it fills the
@@ -295,7 +297,10 @@ private class RenderContext(val renderer: Renderer, val source: String) {
                 // Everything crammed onto one row keeps the indent of the statement that opens it —
                 // TargetLine takes the shallowest, which let a trailing `}` drag the row to column 0.
                 val indent = if (row == prev) prevIndent else content.indent
-                canvas[row] += Fragment(indent, content.text, content.note, claim.owner.kind(), claim.stale)
+                // Identical claims merged; say how many there were rather than silently showing one.
+                // Aliased copies (ctor C1/C2, dtor D0/D1/D2) are one declaration emitted N times.
+                val note = content.note?.let { if (copies > 1) "$it ×$copies" else it }
+                canvas[row] += Fragment(indent, content.text, note, claim.owner.kind(), claim.stale)
                 prev = row
                 prevIndent = indent
             }
@@ -428,11 +433,13 @@ private class RenderContext(val renderer: Renderer, val source: String) {
     // Openers at startLine (self-closing decl when single-line), closers at the close line.
     private fun functionBraceClaims(): List<Claim> = buildList {
         for (r in spans.ranges) {
-            // A decompiled body brings its own signature and its own braces. Emitting these as well
-            // lets the opener and closer be resolved independently — one keeps its row, the other
-            // loses it — and the file stops balancing. The old code drew them and swept both away
-            // together; not drawing them is the same thing said once.
-            if (renderer.decomp != null && renderer.decompile(r.func).isNotEmpty()) continue
+            // A rendered body brings its own signature and its own braces. Emitting these as well
+            // lets opener and closer be resolved independently — one keeps its row, the other loses
+            // it — and the file stops balancing. Keyed on what [decompClaims] actually bodied, not on
+            // what merely decompiles: an aliased copy decompiles fine and is deliberately left to the
+            // skeleton's side-by-side decls, and skipping its braces on that basis left its `}`
+            // behind with no `{` (xvimage.cpp reached depth -3).
+            if (r.func in bodied) continue
             val sig = r.func.sourceSignature(program)
             val name = r.func.demangledName
             val openText = if (r.isSingleLine) "$sig;" else "$sig {"
@@ -535,6 +542,10 @@ private class RenderContext(val renderer: Renderer, val source: String) {
      * on [Owner] priority, which is what the retroactive "demote whoever wrote first to `// stray:`"
      * pass was doing by hand.
      */
+    /** Functions [decompClaims] actually rendered a body for — which is not every function that
+     *  decompiles, since aliased copies are deliberately left to the skeleton's side-by-side decls. */
+    private val bodied = mutableSetOf<Func>()
+
     private fun decompClaims(): List<Claim> = buildList {
         for ((func, startLine) in spans.ranges) {
             val closeLine = spans.closeLine(func) ?: startLine
@@ -545,11 +556,21 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             if (closeLine == startLine && spans.ranges.count { it.startLine == startLine } > 1) continue
             val cLines = renderer.decompile(func).ifEmpty { continue }
             val head = cLines.firstOrNull() ?: continue
+            bodied += func
 
             // The body may borrow the contiguous blank rows after its span when it outgrows it — the
             // next function or global ends the run — so a dense body breathes instead of piling on.
             val gapEnd = ((closeLine + 1)..maxLine).takeWhile { canvasFree(it) }.lastOrNull() ?: closeLine
-            this += Claim(Owner.FUNCTION_BODY, startLine, listOf(Row(head.text, note = "L $startLine")))
+            // AFTER, not EXACT: aliased copies (ctor C1/C2, dtor D0/D1/D2) share a start line and
+            // decompile to identical heads, so under EXACT the two heads merged into one `{` while
+            // their two bodies each kept a `}`. Each copy keeps its own opener and slides if it must.
+            this += Claim(
+                Owner.FUNCTION_BODY,
+                startLine,
+                listOf(Row(head.text, note = "L $startLine")),
+                anchoring = Anchoring.AFTER,
+                limit = gapEnd,
+            )
             addAll(claimsFor(regionsOf(func, cLines).dropInlined(), gapEnd))
         }
 

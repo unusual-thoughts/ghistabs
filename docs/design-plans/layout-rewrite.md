@@ -135,12 +135,22 @@ and it should be a test, not a one-off.
    `layoutBraceBlock`, `blankRunFrom`, `blockedRows`, `isExpandable`, and `Renderer.place`/`placeRun`.
    Both renders byte-identical across the deletion.
 
+7. Both regressions from step 5 fixed. **DONE**
+
+   - **Braces balance again, 0 of 55.** Two causes. `functionBraceClaims` skipped any function that
+     *decompiles*, but `decompClaims` also skips aliased copies, so those got neither braces nor
+     body and left a `}` with no `{`; it now keys on what was actually bodied. And aliased copies
+     share a start line with identical heads, so under `EXACT` their two heads merged into one `{`
+     while their two bodies each kept a `}` — heads are `AFTER`, so each copy keeps its own.
+   - **The skeleton "loss" was aliased duplicates collapsing**, not content going missing:
+     `void Image(Image * this);   void Image(Image * this);` rendered twice, now once. That is the
+     merge working. The count is no longer silent — a merged claim renders `×N`
+     (`/* L 18 — ~Image ×3 */`), so the information survives the deduplication.
+
 ## Still open
 
-- Skeleton is **91 code tokens** down against the pre-rewrite render, scattered.
-- `xvimage.cpp` and `filesystemimage.cpp` **no longer balance braces** (2 of 55, was 0). The brace
-  delta `dropInlined` leaves behind assumed the old per-function windowing.
 - §33's blank-space question: 87% of decomp rows are blank, 92% of that in runs of 20+.
+- §31: `NoReturnAnalyzer` needs redoing against "`error()` marked, nothing in libstdc++ marked".
 
 ## Settled
 
