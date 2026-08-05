@@ -112,4 +112,19 @@ class TypedefShorteningTest {
         )
         assertTrue(renames.isEmpty(), "no alias is strictly shorter than its target: $renames")
     }
+
+    @Test
+    fun `substitute rewrites a line of code without canonicalising its spacing`() {
+        val s = TemplateNameShortener(mapOf("string" to "basic_string<char,std::char_traits<char>>"))
+        assertEquals(
+            "f(string *a, int b) { return a > b; }",
+            s.substitute("f(basic_string<char,std::char_traits<char>> *a, int b) { return a > b; }"),
+        )
+        // shorten() canonicalises first, which on a code line closes up `a, int`, `a > b`, and — worst
+        // — the space after the closing `>`, welding the declarator onto its type as `string*a`.
+        assertEquals(
+            "f(string*a,int b) { return a>b; }",
+            s.shorten("f(basic_string<char,std::char_traits<char>> *a, int b) { return a > b; }"),
+        )
+    }
 }

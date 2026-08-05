@@ -6,6 +6,7 @@ import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
 import ghistabs.harvest.*
 import ghistabs.importer.AddressResolver
+import ghistabs.materialize.TemplateNameShortener
 import ghistabs.parse.*
 import ghistabs.runTransaction
 import java.io.Closeable
@@ -28,7 +29,18 @@ class Renderer(
     // Off for a render meant to be compiled or diffed against real source, where a trailing block of
     // declarations that have no line is noise.
     val showDisplaced: Boolean = true,
+    // Collapse long template spellings (basic_string<char,…> → string). Applied to *everything* the
+    // render emits, declarations and decompiled code alike — shortening only the half built from the
+    // AST is what left `ofstream os;` next to `basic_ofstream<char,std::char_traits<char>> os;`. When
+    // the importer's own OPT_SHORTEN_TYPEDEFS pass already renamed the datatypes, the decompiler
+    // hands us short names and the substitution is a no-op, so the two settings cannot disagree.
+    val shortenTypes: Boolean = true,
+    // Annotate each local with the storage gcc gave it. Off by default: it is a property of the
+    // compiled code, not of the source being reconstructed.
+    val showStorage: Boolean = false,
 ) : Closeable {
+    val shortener by lazy { if (shortenTypes) harvestTemplateShortener(index) else TemplateNameShortener(emptyMap()) }
+
     // `also`, not `apply`: inside `apply` the receiver's own (null) `program` property would shadow
     // the constructor param, so openProgram(program) would be handed null.
     val decomp = if (mode != Mode.SKELETON) DecompInterface().also { it.openProgram(program) } else null
@@ -47,6 +59,7 @@ class Renderer(
         val own = with(index) { func.source() } ?: return@getOrPut emptyList()
         runCatching { decomp?.decompileFunction(ghFunc, 30, TaskMonitor.DUMMY) }
             .getOrNull()?.compressedDecompLines(own, func, mode == Mode.ELIDE_SJLJ).orEmpty()
+            .map { it.copy(text = shortener.substitute(it.text)) }
     }
 
     fun renderSkeleton(source: String) = RenderContext(this, source).render()
@@ -100,9 +113,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
         .filter { it.name != null && it.declLine > 0 }
     private val symbols = index.symbolsBySource[source].orEmpty()
 
-    // Collapse long template spellings (basic_string<char,…> → string) in AST-rendered types,
-    // matching the DTM shortening pass that only the decompiler (DTM-backed) otherwise reflects.
-    private val shortener by lazy { harvestTemplateShortener(index) }
+    private val shortener get() = renderer.shortener
 
     private val spans = FunctionSpans.of(rawFuncs, source)
 
@@ -415,18 +426,30 @@ private class RenderContext(val renderer: Renderer, val source: String) {
     /** One stabs variable of a function, declared in this file: where gcc put it and how it renders. */
     private data class Var(val line: Int, val name: String, val text: String, val role: String)
 
+    // A role inside the head, where a `//` would comment out the rest of the row. Empty unless
+    // --var-storage. In decomp mode this only reaches the few locals Ghidra did not recover: the rest
+    // are Ghidra's own declarations, whose naming already says which is which (`local_80` is a stack
+    // slot, `uVar7` a register). Skeleton mode, where the names are gcc's, is where the flag earns its
+    // keep — 137 annotations on unpackfile against 4 here.
+    private fun String.storageComment() = if (isEmpty()) "" else " /* ${trim('(', ')')} */"
+
     private fun varsOf(f: Func): List<Var> {
-        fun of(line: Int, name: String, type: TypeDecl<GlobalTypeId>, loc: VariableLocation, kind: String) = Var(
+        // Only a local carries a role, and only when asked for. A parameter's was noise: it labelled
+        // `(param)` a declaration whose own function signature, two columns away, already shows it to
+        // be one. Storage is real, but a fact about the compiled code rather than the source being
+        // reconstructed, so it is opt-in.
+        fun of(line: Int, name: String, type: TypeDecl<GlobalTypeId>, loc: VariableLocation?) = Var(
             line,
             name,
             "${type.render(index, shortener = shortener)} $name;",
-            if (loc == VariableLocation.STACK) "($kind)" else "(reg $kind)",
+            loc?.takeIf { renderer.showStorage }?.let { if (it == VariableLocation.STACK) "(stack)" else "(reg)" }
+                .orEmpty(),
         )
         return f.params.filter { it.sourceFile == source }.mapNotNull { s ->
-            (s.body as? SymbolDecl.Param)?.let { of(s.declLine, it.name, it.type, it.location, "param") }
+            (s.body as? SymbolDecl.Param)?.let { of(s.declLine, it.name, it.type, null) }
         } +
             f.locals.filter { it.sourceFile == source }.mapNotNull { s ->
-                (s.body as? SymbolDecl.Local)?.let { of(s.declLine, it.name, it.type, it.location, "local") }
+                (s.body as? SymbolDecl.Local)?.let { of(s.declLine, it.name, it.type, it.location) }
             }
     }
 
@@ -652,7 +675,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             // local has somewhere to go that isn't a row the body wants. Kept out of `dedup` so a
             // later pass can still place a same-named file-scope declaration.
             val extra = varsOf(func).filterNot { it.name in head.declares }.distinctBy { it.name }
-            val text = head.text + extra.joinToString("") { " ${it.text}" }
+            val text = head.text + extra.joinToString("") { " ${it.text}" + it.role.storageComment() }
             this += Claim(
                 Owner.FUNCTION_BODY,
                 startLine,
