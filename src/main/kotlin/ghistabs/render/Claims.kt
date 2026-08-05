@@ -118,6 +118,7 @@ data class Allocation(val placed: List<Placement>, val dropped: List<Dropped>)
 const val ROW_TAKEN = "line already taken"
 const val NO_ROOM = "no free row in the band"
 const val OFF_CANVAS = "line outside the file"
+const val MISATTRIBUTED = "stale N_SOL"
 
 /**
  * Assign rows in `1..maxLine` to [claims].
