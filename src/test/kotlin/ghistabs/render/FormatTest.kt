@@ -9,10 +9,9 @@ import org.junit.jupiter.api.Test
  */
 class FormatTest {
     @Test
-    fun `sline, delim and stray have their own shapes`() {
+    fun `sline and delim have their own shapes`() {
         assertEquals("// L  17 @ 0x1000: mov", commentFor(17, FragmentKind.SLINE, "0x1000: mov", false))
         assertEquals("/* L  17 — opens Foo */", commentFor(17, FragmentKind.FUNC_DELIM, "opens Foo", false))
-        assertEquals("// stray: typedef X;", commentFor(17, FragmentKind.STRAY, "typedef X;", false))
     }
 
     @Test

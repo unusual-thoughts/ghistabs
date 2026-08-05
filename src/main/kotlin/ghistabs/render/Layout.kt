@@ -1,86 +1,6 @@
 package ghistabs.render
 
 /**
- * Start row for each ordered block sized [sizes] in `start+1..end`. When the blocks all fit they get
- * their full size with the leftover height spread as even gaps between them (so a big trailing block —
- * a run of closing braces — isn't stranded and the body fills the span); when they don't, each gets a
- * share of the room proportional to its size (at least one row) so no block is starved to a single
- * crammed line while others expand. A block that still overruns [end] butts against it.
- */
-fun spreadBlocks(start: Int, end: Int, sizes: List<Int>): List<Int> {
-    if (sizes.isEmpty()) return emptyList()
-    val room = end - start
-    val total = sizes.sum()
-    val alloc = if (total <= room) sizes else sizes.map { (it.toLong() * room / total).toInt().coerceAtLeast(1) }
-    val slack = (room - alloc.sum()).coerceAtLeast(0)
-    var row = start
-    return alloc.mapIndexed { i, a ->
-        row += slack * (i + 1) / alloc.size - slack * i / alloc.size
-        (row + 1).coerceAtMost(end).also { row += a }
-    }
-}
-
-/**
- * Start row for each ordered block, anchored to the source line it came from: a block takes its own
- * [Anchored.line] unless the blocks before it already claimed that row, in which case it follows them.
- * A block with no line of its own (inlined code, a bare brace) just follows.
- *
- * This is what keeps drift from compounding. [spreadBlocks] allocates by *size*, so one source line
- * that decompiles to twenty statements pushes every later block down by twenty and the whole tail of
- * the function sits below where it belongs — measured at 26 rows adrift mid-function in
- * `tinyxmlparser.cpp`, snapping back only where a wide gap absorbed the slack.
- *
- * An anchored block therefore advances the cursor by **one** row, not by its size: its successors are
- * anchored too, so how far it may expand is already bounded by where the next one lands, and reserving
- * its full height would just push them off their own lines. That bound is what makes the layout compact
- * where the source is dense (consecutive lines → one row each, overflow crams) and airy where it is
- * sparse (a distant next anchor → room to spread).
- *
- * A block takes its line even when a *later* block has already run past it. Ghidra emits a function's
- * branches in its own order, not the source's — `main`'s `--version` handling comes last — so holding
- * the cursor monotonic sent every block after it to the bottom: unfile.cpp L87–100 sat blank while
- * their statements crammed onto three rows below. The canvas is indexed by source line, so a block
- * arriving late still belongs at its own; only blocks with no line of their own follow the cursor.
- *
- * A block with no line claims **no** row either — it starts where the cursor is and leaves it there,
- * so it can never displace one that does have a line. Its caller lays it on the first row still free
- * from that point, which spreads a run of them through the gaps. Give them room instead and they take
- * it from the code: inlined-region markers pushed `unpack`'s own `error()` calls out of its span.
- *
- * Every block lands inside `start+1..end`; one that overruns [end] butts against it, as before.
- */
-fun anchoredBlocks(start: Int, end: Int, blocks: List<Anchored>): List<Int> {
-    val first = start + 1
-    var cursor = first
-    return blocks.map { (line, _) ->
-        // Never past [end] — a single-line function has no room below its head at all.
-        val at = if (end < first) end else (line ?: cursor).coerceIn(first, end)
-        at.also { if (line != null) cursor = maxOf(cursor, it + 1) }
-    }
-}
-
-/** A block to place: the source [line] it belongs on (null = no line of its own) and its height. */
-data class Anchored(val line: Int?, val size: Int)
-
-/** How wide a packed row of inlined regions may grow before the next one starts its own. */
-const val PACKED_WIDTH = 200
-
-/**
- * [lines] merged onto as few rows as [PACKED_WIDTH] allows, and onto no more than [rows] of them —
- * past that everything joins the last, which is the cram. Each row keeps the address and indent of
- * the line that opened it.
- */
-fun List<DecompLine>.packed(rows: Int): List<DecompLine> = fold(mutableListOf<DecompLine>()) { acc, dl ->
-    val last = acc.lastOrNull()
-    if (last != null && (last.text.length + dl.text.length < PACKED_WIDTH || acc.size >= rows)) {
-        acc[acc.lastIndex] = last.copy(text = "${last.text} ${dl.text}")
-    } else {
-        acc += dl
-    }
-    acc
-}
-
-/**
  * Break a long decompiler statement across rows at its top-level `&&`/`||` boundaries, so a crammed
  * `if` condition (Ghidra wraps then §9 rejoins onto one 300-char row) spreads into blank rows instead.
  * Paren/bracket depth is tracked so a boolean operator inside a call's args never splits; the operator
@@ -133,9 +53,8 @@ private fun topLevelBooleanCuts(text: String): List<Int> {
 
 // Pure layout model: Canvas ⊃ TargetLine ⊃ Fragment.
 
-// What a fragment represents, so the decompilation overlay can decide its fate from the
-// tag and the render step can pick its comment shape. subsumedByDecomp covers everything
-// the decomp already shows — brace delimiters, SLINE annotations, param/local decls.
+// What a fragment represents, so the render step can pick its comment shape. Contention between
+// kinds is settled by Owner before anything is written, so this no longer decides any fate.
 enum class FragmentKind {
     SLINE,
     FUNC_DELIM,
@@ -144,11 +63,7 @@ enum class FragmentKind {
     TYPEDEF,
     TYPE_BODY,
     DECOMP,
-    STRAY,
     OTHER,
-    ;
-
-    val subsumedByDecomp get() = this == SLINE || this == FUNC_DELIM || this == DECL_LOCAL
 }
 
 // One piece of a line, fully semantic: [code] is the C text (null for a bare comment),
@@ -172,10 +87,6 @@ class TargetLine(val line: Int) {
     val fragments = mutableListOf<Fragment>()
 
     fun isEmpty() = fragments.isEmpty()
-
-    // Free for a brace block to expand into: empty, or holding only misattributed (stale
-    // N_SOL) fragments, which legitimate content may evict rather than fold around.
-    fun isExpandable() = fragments.all { it.stale }
 
     operator fun plusAssign(fragment: Fragment) {
         fragments += fragment
@@ -218,50 +129,6 @@ class Canvas(val maxLine: Int) {
     operator fun get(line: Int) = lines[line]
 
     fun multiFragmentLines() = lines.filter { it.fragments.size > 1 }
-
-    private fun blankRunFrom(line: Int) = lines.drop(line).takeWhile { it.isExpandable() }.count()
-
-    /**
-     * Rows a brace block may not expand through — everything [blankRunFrom] would stop at. Rows
-     * holding only misattributed fragments are *not* here: a block expands over those and evicts
-     * them, as it always has.
-     */
-    fun blockedRows() = (1..maxLine).filterTo(mutableSetOf()) { !lines[it].isExpandable() }
-
-    /**
-     * Spread a brace block into the expandable lines at and below [line]: [open] on [line], one
-     * [items] entry per line, then [close] — the item/close fragments inheriting [open]'s
-     * indent (+4), kind and staleness. A short run crams leftover items + [close] onto the
-     * last line; no room folds the lot onto [line] (tag kept on [open] so no code is lost).
-     * Items arrive already punctuated; cramming just space-joins them. Writing a line evicts
-     * any misattributed (stale) fragment so a lone stale decl can't force the fold.
-     */
-    fun layoutBraceBlock(line: Int, open: Fragment, items: List<String>, close: String) {
-        val available = blankRunFrom(line)
-        fun code(indent: Int, text: String) = Fragment(indent, text, kind = open.kind, stale = open.stale)
-        fun place(target: Int, fragment: Fragment) {
-            this[target].fragments.removeAll { it.stale }
-            this[target] += fragment
-        }
-        val inner = open.indent + 4
-        when {
-            available >= items.size + 2 -> {
-                place(line, open)
-                items.forEachIndexed { i, s -> place(line + 1 + i, code(inner, s)) }
-                place(line + 1 + items.size, code(open.indent, close))
-            }
-
-            available > 1 -> {
-                place(line, open)
-                val belowSlots = available - 1
-                val onePerLine = belowSlots - 1
-                for (i in 0 until onePerLine) place(line + 1 + i, code(inner, items[i]))
-                place(line + belowSlots, code(inner, "${items.drop(onePerLine).joinToString(" ")} $close"))
-            }
-
-            else -> place(line, open.copy(code = "${open.code} ${items.joinToString(" ")} $close"))
-        }
-    }
 
     // The last line worth rendering: trailing blank lines and lines carrying only
     // misattributed (stale N_SOL) fragments are noise past the file's real content.

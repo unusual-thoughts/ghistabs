@@ -10,14 +10,12 @@ private fun lineRef(line: Int) = "L" + line.toString().padStart(4)
 
 /**
  * The trailing comment for a fragment carrying [note] at [line]. The shape is chosen by
- * [kind]: an SLINE address annotation, a function brace delimiter, a displaced-decl
- * stray, or (default) a declaration provenance tag whose [note] is the role — empty for
+ * [kind]: an SLINE address annotation, a function brace delimiter, or (default) a declaration provenance tag whose [note] is the role — empty for
  * a typedef/type-body, "(param)" etc. for a decl — with the stale marker appended.
  */
 fun commentFor(line: Int, kind: FragmentKind, note: String, stale: Boolean) = when (kind) {
     FragmentKind.SLINE -> "// ${lineRef(line)} @ $note"
     FragmentKind.FUNC_DELIM -> "/* ${lineRef(line)} — $note */"
-    FragmentKind.STRAY -> "// stray: $note"
     // Decomp keeps the decompiler's own statement order; the tag says which source line the
     // statement's instructions actually came from ([note]), since the grid position doesn't.
     FragmentKind.DECOMP -> "// ⇐ $note"
