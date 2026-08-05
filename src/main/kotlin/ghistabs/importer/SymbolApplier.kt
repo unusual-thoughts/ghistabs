@@ -205,7 +205,9 @@ class SymbolApplier(
                     warn("constant-equate-conflict", "$qualified = ${existing.value} vs $value")
                 }
             }
-            enums.getOrPut(ns to byteSize(value))) { LinkedHashMap() }.putIfAbsent(leaf, value)
+            enums.getOrPut(ns to (type.sizeBytes?.toInt() ?: byteSize(value))) {
+                LinkedHashMap()
+            }.putIfAbsent(leaf, value)
         }
 
         val dtm = ctx.program.dataTypeManager
