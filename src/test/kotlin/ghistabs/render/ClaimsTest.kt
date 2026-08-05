@@ -69,14 +69,16 @@ class ClaimsTest {
     }
 
     @Test
-    fun `claims differing only in content contend rather than merging`() {
-        // dedup(line, name) used to keep the first and silently drop the rest even when they differed.
+    fun `peers of one owner on one line share the row instead of contending`() {
+        // `typedef A x;` and `typedef B y;` on one source line is legal and both must render.
+        // Exclusivity is for contests *between* owners, not within one.
         val a = Claim(Owner.TYPEDEF, 7, listOf(Row("typedef int A;")))
-        val b = Claim(Owner.TYPEDEF, 7, listOf(Row("typedef long A;")))
+        val b = Claim(Owner.TYPEDEF, 7, listOf(Row("typedef long B;")))
         val out = allocate(listOf(a, b), maxLine = 40)
-        assertEquals(1, out.placed.size)
-        assertEquals(1, out.dropped.size)
-        assertEquals(1, out.at(7).copies)
+        assertEquals(emptyList<Dropped>(), out.dropped)
+        // Both placed, both on row 7, each keeping its own rows — the renderer joins them.
+        val onSeven = out.placed.filter { it.range == 7..7 }
+        assertEquals(listOf("typedef int A;", "typedef long B;"), onSeven.flatMap { it.claim.rows }.map { it.text })
     }
 
     @Test
