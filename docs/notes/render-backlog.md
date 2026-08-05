@@ -1134,6 +1134,33 @@ Ship gate: on unpackfile, `error()` marked and *nothing* in libstdc++ marked. Bo
 
 ---
 
+## 33. Blank space dominates the render — 87% of rows, and it is concentrated
+
+Measured on `unpackfile.exe` decomp output: **16,659 of 19,184 rows are blank (87%)**, and
+**92% of that is in 156 contiguous runs of 20 rows or more** (15,327 rows). Split by where it sits:
+
+| where | rows |
+| --- | --- |
+| above the first content in a file | 4,636 |
+| inside a function span | 6,259 |
+| in a header with no functions at all | 5,764 |
+
+The in-span blanks are mostly *not* reclaimable: a region spreads one statement per row and stops, so
+2 statements in a 5-row window leave 3 blank, and the rows below a statement belong to source lines
+whose code Ghidra folded into a neighbour. Filling them means either placing a statement above the
+line it came from (eliminated in §29 — it was a third to a half of all rows) or padding, which spaces
+apart things that belong together. Leave those.
+
+The other 10,400 are worth attacking, and they are a different problem: a header whose first known
+content is at line 500 renders 499 blank rows to get there, and one with 1,000 source lines and 20
+rows of content is 98% empty. Alignment is why they exist, but nobody reads 973 blank rows — the
+longest single run measured. Options, none free: collapse a long run to one `/* … 340 lines … */`
+marker (compact, and the count keeps alignment *recoverable* but not literal); or render an
+alignment-preserving file only on request and default to a compact one. Wants deciding before
+implementing.
+
+---
+
 ## `4900866` is not behaviour-neutral on a.out fixtures
 
 Its message says *"Behaviour-neutral — unpackfile moves only the two reglocal counters"*. That was
