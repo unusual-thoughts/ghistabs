@@ -60,6 +60,10 @@
             "min": 26,
             "max": 26
         },
+        "degraded-param-unnamed-padded": {
+            "min": 855,
+            "max": 855
+        },
         "degraded-placeholder-undefined-fields": {
             "min": 11,
             "max": 11

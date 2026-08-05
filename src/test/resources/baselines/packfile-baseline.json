@@ -44,6 +44,10 @@
             "min": 12,
             "max": 12
         },
+        "degraded-param-unnamed-padded": {
+            "min": 34,
+            "max": 34
+        },
         "degraded-vtable-failed": {
             "min": 2,
             "max": 2
