@@ -153,13 +153,27 @@ and it should be a test, not a one-off.
    makes it explicit; `AFTER` also covers a claim with no line of its own, which follows the cursor
    rather than floating to the header band (an inlined-region marker riding its call site).
 
-4. Port `applyDecompilation` — its span sweep, `spreadBlocks`/`anchoredBlocks` split, and `placeRun`
-   all collapse into claim construction plus the shared allocator.
+4. Port `applyDecompilation` — **attempted and backed out.** With `Anchoring.AFTER` in place the port
+   is mechanical, and it loses **5,429 tokens across 22 files**. The cause is a fourth policy the
+   allocator does not have: what to do when the window is *full*. `anchoredBlocks` + `placeRun` coerce
+   into the span and **cram** the overflow onto the last row; `allocate` returns `NO_ROOM` and
+   **drops** it. For a declaration dropping is right — a declaration two rows from its line is a lie.
+   For decompiled code it is not: the statements exist, and cramming them onto the closing row is how
+   a body that outgrows its span has always been handled (§29's residual "function-tail cram").
+
+   So `Claim` needs an overflow policy — `DROP` vs `CRAM` — or the equivalent expressed as
+   "AFTER never fails; it falls back to the last row of its window". Decide that before retrying;
+   the port itself is ~30 lines and reverts cleanly.
+
+   The escape hatch it needs is already in: `Claim.tag`, a non-constructor property so two claims stay
+   equal when their content matches regardless of what the caller attached, letting `place` get its
+   `Region` back from a `Placement`.
+
 5. Two renderers over the same claims: decomp (front provenance) and skeleton (trailing roles).
 6. Delete `FragmentKind.STRAY`, `commentFor`'s stray/decomp cases, and the sweep.
 
 Steps 1–3 are behaviour-preserving and independently verifiable against the current renders; the
-output should not move until step 4.
+output should not move until step 5.
 
 ## Settled
 
