@@ -297,7 +297,7 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
     }
 
     /** A function's source: lowest-address SLINE, else the class-decl source (gcc-implicit methods). */
-    private fun Func.source() = when {
+    fun Func.source() = when {
         isSyntheticInit -> foldSource(cu.filename)
 
         else -> lineEntries.minByOrNull { it.addr.offset }?.source

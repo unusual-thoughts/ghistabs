@@ -21,6 +21,66 @@ fun spreadBlocks(start: Int, end: Int, sizes: List<Int>): List<Int> {
 }
 
 /**
+ * Start row for each ordered block, anchored to the source line it came from: a block takes its own
+ * [Anchored.line] unless the blocks before it already claimed that row, in which case it follows them.
+ * A block with no line of its own (inlined code, a bare brace) just follows.
+ *
+ * This is what keeps drift from compounding. [spreadBlocks] allocates by *size*, so one source line
+ * that decompiles to twenty statements pushes every later block down by twenty and the whole tail of
+ * the function sits below where it belongs — measured at 26 rows adrift mid-function in
+ * `tinyxmlparser.cpp`, snapping back only where a wide gap absorbed the slack.
+ *
+ * An anchored block therefore advances the cursor by **one** row, not by its size: its successors are
+ * anchored too, so how far it may expand is already bounded by where the next one lands, and reserving
+ * its full height would just push them off their own lines. That bound is what makes the layout compact
+ * where the source is dense (consecutive lines → one row each, overflow crams) and airy where it is
+ * sparse (a distant next anchor → room to spread).
+ *
+ * A block takes its line even when a *later* block has already run past it. Ghidra emits a function's
+ * branches in its own order, not the source's — `main`'s `--version` handling comes last — so holding
+ * the cursor monotonic sent every block after it to the bottom: unfile.cpp L87–100 sat blank while
+ * their statements crammed onto three rows below. The canvas is indexed by source line, so a block
+ * arriving late still belongs at its own; only blocks with no line of their own follow the cursor.
+ *
+ * A block with no line claims **no** row either — it starts where the cursor is and leaves it there,
+ * so it can never displace one that does have a line. Its caller lays it on the first row still free
+ * from that point, which spreads a run of them through the gaps. Give them room instead and they take
+ * it from the code: inlined-region markers pushed `unpack`'s own `error()` calls out of its span.
+ *
+ * Every block lands inside `start+1..end`; one that overruns [end] butts against it, as before.
+ */
+fun anchoredBlocks(start: Int, end: Int, blocks: List<Anchored>): List<Int> {
+    val first = start + 1
+    var cursor = first
+    return blocks.map { (line, _) ->
+        // Never past [end] — a single-line function has no room below its head at all.
+        val at = if (end < first) end else (line ?: cursor).coerceIn(first, end)
+        at.also { if (line != null) cursor = maxOf(cursor, it + 1) }
+    }
+}
+
+/** A block to place: the source [line] it belongs on (null = no line of its own) and its height. */
+data class Anchored(val line: Int?, val size: Int)
+
+/** How wide a packed row of inlined regions may grow before the next one starts its own. */
+const val PACKED_WIDTH = 200
+
+/**
+ * [lines] merged onto as few rows as [PACKED_WIDTH] allows, and onto no more than [rows] of them —
+ * past that everything joins the last, which is the cram. Each row keeps the address and indent of
+ * the line that opened it.
+ */
+fun List<DecompLine>.packed(rows: Int): List<DecompLine> = fold(mutableListOf<DecompLine>()) { acc, dl ->
+    val last = acc.lastOrNull()
+    if (last != null && (last.text.length + dl.text.length < PACKED_WIDTH || acc.size >= rows)) {
+        acc[acc.lastIndex] = last.copy(text = "${last.text} ${dl.text}")
+    } else {
+        acc += dl
+    }
+    acc
+}
+
+/**
  * Break a long decompiler statement across rows at its top-level `&&`/`||` boundaries, so a crammed
  * `if` condition (Ghidra wraps then §9 rejoins onto one 300-char row) spreads into blank rows instead.
  * Paren/bracket depth is tracked so a boolean operator inside a call's args never splits; the operator
