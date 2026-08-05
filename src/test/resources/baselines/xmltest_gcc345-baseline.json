@@ -44,6 +44,10 @@
             "min": 41,
             "max": 41
         },
+        "degraded-param-unnamed-padded": {
+            "min": 89,
+            "max": 89
+        },
         "degraded-reglocal-unmapped-regnum": {
             "min": 4,
             "max": 4

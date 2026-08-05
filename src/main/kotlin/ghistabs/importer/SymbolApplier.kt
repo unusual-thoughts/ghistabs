@@ -3,6 +3,7 @@ package ghistabs.importer
 import ghidra.app.cmd.disassemble.DisassembleCommand
 import ghidra.app.cmd.function.CreateFunctionCmd
 import ghidra.app.cmd.label.SetLabelPrimaryCmd
+import ghidra.app.util.demangler.DemangledFunction
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.CategoryPath
 import ghidra.program.model.data.DataTypeConflictHandler
@@ -40,6 +41,32 @@ class SymbolApplier(
     val symtab: SymbolTable get() = ctx.program.symbolTable
     val funMgr: FunctionManager get() = ctx.program.functionManager
     val pointerSize = ctx.program.defaultPointerSize
+
+    /**
+     * The N_PSYM list extended to the arity the mangled name declares. gcc emits no N_PSYM for an
+     * *unnamed* parameter, so `void f(const NameValuePairs &)` leaves a stab list one short — and
+     * applying a short list under DYNAMIC_STORAGE re-lays every slot: cryptopp's
+     * `HMAC_Base::UncheckedSetKey(const byte*, unsigned int, const NameValuePairs&)` lost its third
+     * argument, slid `userKey` into the `this` register, and decompiled to a body full of
+     * `in_stack_` reads. The mangled name is the only place the true arity survives.
+     *
+     * Padding goes on the tail, where C++ puts unnamed parameters in practice; an unnamed one in the
+     * middle would shift the names after it, but the storage — the part that breaks decompilation —
+     * comes out right either way. `this` is not among the demangled parameters; ClassBuilder owns it.
+     */
+    private fun List<ParameterImpl>.padToMangledArity(mangled: String): List<ParameterImpl> {
+        val declared = (demangle(mangled) as? DemangledFunction)?.parameters
+            ?.map { it.type }
+            ?.filterNot { it.isVoid && it.pointerLevels == 0 && !it.isReference && !it.isArray }
+            ?: return this
+        if (declared.size <= size) return this
+        degradation("param-unnamed-padded", mangled, "stabs=$size mangled=${declared.size}")
+        return this +
+            declared.drop(size).mapIndexed { i, t ->
+                val dt = runCatching { t.getDataType(ctx.program.dataTypeManager) }.getOrNull()
+                ParameterImpl("param_${size + i + 1}", dt ?: Undefined4DataType.dataType, ctx.program, source)
+            }
+    }
 
     internal fun applyAllFunctions(): Int {
         ctx.monitor.initialize(harvest.functions.size.toLong(), "Stabs: applying functions")
@@ -119,6 +146,7 @@ class SymbolApplier(
                             source,
                         )
                     }
+                    .padToMangledArity(open.name)
                 // Set return + params in one dynamic-storage update so Ghidra recomputes storage from
                 // the calling convention. Critical for by-value struct returns >8 bytes (hidden return
                 // pointer): setReturnType alone keeps the 4-byte EAX register slot and throws "Storage
@@ -140,7 +168,7 @@ class SymbolApplier(
                 // once ClassBuilder has synthesised a typed one. A plain function whose own local
                 // is called `this` has no such N_PSYM, so it keeps the local.
                 val paramNames = open.params.mapTo(mutableSetOf()) { it.body.name }
-                val firstUse = open.blocks.firstUseOffsets(func.entryPoint)
+                val firstUse = open.firstUseOffsets(func.entryPoint)
                 for (loc in open.locals) {
                     applyLocal(func, loc, paramNames, firstUse[loc.recordIndex] ?: 0)
                 }
