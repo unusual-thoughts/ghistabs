@@ -210,6 +210,13 @@ class Canvas(val maxLine: Int) {
     private fun blankRunFrom(line: Int) = lines.drop(line).takeWhile { it.isExpandable() }.count()
 
     /**
+     * Rows a brace block may not expand through — everything [blankRunFrom] would stop at. Rows
+     * holding only misattributed fragments are *not* here: a block expands over those and evicts
+     * them, as it always has.
+     */
+    fun blockedRows() = (1..maxLine).filterTo(mutableSetOf()) { !lines[it].isExpandable() }
+
+    /**
      * Spread a brace block into the expandable lines at and below [line]: [open] on [line], one
      * [items] entry per line, then [close] — the item/close fragments inheriting [open]'s
      * indent (+4), kind and staleness. A short run crams leftover items + [close] onto the

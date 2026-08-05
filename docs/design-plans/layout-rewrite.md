@@ -121,8 +121,18 @@ and it should be a test, not a one-off.
 
 ## Rough shape of the work
 
-1. `Row`/`Claim`/`Owner` + the allocator, pure, unit-testable in `LayoutTest` (Kind 1).
-2. Port the emit passes to return claims instead of writing to a canvas.
+1. `Row`/`Claim`/`Owner` + the allocator, pure, unit-testable in `LayoutTest` (Kind 1). **DONE**
+2. Port the emit passes to return claims instead of writing to a canvas. **typedefs, params/locals
+   and globals DONE** — verified byte-identical (typedefs, globals) or reorder-only (locals: a
+   misattributed decl now renders *after* the real one on its line, since stale claims reserve last).
+
+   **`emitTypeBodies` is NOT ported.** It is the one pass where the allocator changes the answer and
+   the diff is not yet accounted for: ten files move, no tokens are lost, but new ones appear and in
+   `unpackfile.cpp` L573 a *different* member survives (`unsigned char const * _M_current` becomes
+   `unsigned char * _M_current`). Two `__normal_iterator` instantiations share a declLine, both are
+   elastic, and which of them expands has changed. Before porting it, settle what two elastic peers
+   on one line should mean — today the first expands and the second folds onto the shared row, which
+   is order-dependent and therefore fragile either way.
 3. Port `applyDecompilation` — its span sweep, `spreadBlocks`/`anchoredBlocks` split, and `placeRun`
    all collapse into claim construction plus the shared allocator.
 4. Two renderers over the same claims: decomp (front provenance) and skeleton (trailing roles).

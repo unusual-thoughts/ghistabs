@@ -94,7 +94,7 @@ const val OFF_CANVAS = "line outside the file"
  *   them fight drops one of a legal pair. Exclusivity exists to stop a misattributed type body from
  *   evicting a function body, which is a contest *between* owners; within an owner they are peers.
  */
-fun allocate(claims: List<Claim>, maxLine: Int): Allocation {
+fun allocate(claims: List<Claim>, maxLine: Int, blocked: Set<Int> = emptySet()): Allocation {
     val merged = claims
         .groupBy { Triple(it.owner, it.line, it.rows) }
         .map { (_, same) -> same.first() to same.size }
@@ -109,7 +109,7 @@ fun allocate(claims: List<Claim>, maxLine: Int): Allocation {
     // Who holds each row. A peer — same owner, same attribution — shares it rather than contending;
     // anyone else is turned away. `typedef A x;` and `typedef B y;` really can sit on one source line,
     // and making them fight drops one of a legal pair. Exclusivity is for contests *between* owners.
-    val held = mutableMapOf<Int, Pair<Owner, Boolean>>()
+    val held = mutableMapOf<Int, Owner>()
     val placed = mutableListOf<Placement>()
     val dropped = mutableListOf<Dropped>()
 
@@ -120,14 +120,15 @@ fun allocate(claims: List<Claim>, maxLine: Int): Allocation {
     val shared = mutableListOf<Pair<Claim, Int>>()
     val reserved = anchored.mapNotNull { (claim, copies) ->
         val line = claim.line ?: return@mapNotNull null
-        val key = claim.owner to claim.stale
         when {
             line !in 1..maxLine -> dropped.add(Dropped(claim, OFF_CANVAS)).let { null }
-            // A peer of the holder rides the row it already took; only the first expands.
-            held[line] == key -> shared.add(claim to copies).let { null }
+            // A peer of the holder rides the row it already took; only the first expands. Peerage is
+            // by owner alone — a misattributed local shares its line with a real one, as it always
+            // has; `stale` decides who reserves *first*, which is what stops it taking the row.
+            held[line] == claim.owner -> shared.add(claim to copies).let { null }
             line in held -> dropped.add(Dropped(claim, ROW_TAKEN)).let { null }
             else -> {
-                held[line] = key
+                held[line] = claim.owner
                 Triple(claim, copies, line)
             }
         }
@@ -135,9 +136,18 @@ fun allocate(claims: List<Claim>, maxLine: Int): Allocation {
 
     for ((claim, copies, line) in reserved) {
         val wanted = if (claim.fit == Fit.RIGID) claim.rows.size else maxLine - line + 1
-        val key = claim.owner to claim.stale
-        val end = (line + 1 until line + wanted).takeWhile { it <= maxLine && it !in held }.lastOrNull() ?: line
-        (line..end).forEach { held[it] = key }
+        // [blocked] bounds expansion only, never reservation: rows already carrying content a claim
+        // may legitimately share, which is how the canvas behaves while passes are still being ported.
+        // The anchor counts — a claim whose own row already has content cannot expand at all, it folds
+        // onto that row. Checking only the rows below let an initializer spread across a function's
+        // closing brace.
+        val end = when (line) {
+            in blocked -> line
+            else -> (line + 1 until line + wanted)
+                .takeWhile { it <= maxLine && it !in held && it !in blocked }
+                .lastOrNull() ?: line
+        }
+        (line..end).forEach { held[it] = claim.owner }
         placed += Placement(claim, line..end, copies)
     }
     // Peers take exactly the row they share, never the extent its holder expanded to.
@@ -153,7 +163,7 @@ fun allocate(claims: List<Claim>, maxLine: Int): Allocation {
             continue
         }
         val end = (row until row + claim.rows.size).takeWhile { it < firstAnchored && it !in held }.last()
-        (row..end).forEach { held[it] = claim.owner to claim.stale }
+        (row..end).forEach { held[it] = claim.owner }
         placed += Placement(claim, row..end, copies)
         next = end + 1
     }
