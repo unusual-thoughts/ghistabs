@@ -40,6 +40,10 @@
             "min": 56,
             "max": 56
         },
+        "degraded-param-unnamed-padded": {
+            "min": 20,
+            "max": 20
+        },
         "degraded-param-untyped": {
             "min": 101,
             "max": 101

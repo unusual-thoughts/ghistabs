@@ -48,6 +48,10 @@
             "min": 40,
             "max": 40
         },
+        "degraded-param-unnamed-padded": {
+            "min": 149,
+            "max": 149
+        },
         "degraded-struct-mostly-undefined": {
             "min": 36,
             "max": 36
