@@ -20,8 +20,15 @@ enum class Mode {
     ELIDE_SJLJ,
 }
 
-class Renderer(val index: HarvestIndex, val program: Program, val mode: Mode, val resolver: AddressResolver) :
-    Closeable {
+class Renderer(
+    val index: HarvestIndex,
+    val program: Program,
+    val mode: Mode,
+    val resolver: AddressResolver,
+    // Off for a render meant to be compiled or diffed against real source, where a trailing block of
+    // declarations that have no line is noise.
+    val showDisplaced: Boolean = true,
+) : Closeable {
     // `also`, not `apply`: inside `apply` the receiver's own (null) `program` property would shadow
     // the constructor param, so openProgram(program) would be handed null.
     val decomp = if (mode != Mode.SKELETON) DecompInterface().also { it.openProgram(program) } else null
@@ -112,15 +119,25 @@ private class RenderContext(val renderer: Renderer, val source: String) {
 
     // A declLine past the file's activity extent flags a stale N_SOL. Body extent for CUs;
     // type-decl extent for pure-header files.
+    /**
+     * How far into this file gcc showed evidence of real activity. Past it, a declaration's line is
+     * not to be trusted.
+     *
+     * What counts depends on whether the file *defines* functions, and conflating the two breaks the
+     * signal in opposite directions. A .cpp is measured by its code: its own type declarations must
+     * not extend it, because misattributed libstdc++ declarations landing at line 898 of a 180-line
+     * file are exactly what this is meant to catch — count them and the extent is defined by the very
+     * thing it is judging, and `typedef struct bit_vector bit_vector;` at L720 stops being flagged.
+     * A header defines no functions and contributes N_SLINEs only where its code was inlined
+     * elsewhere, so measuring it that way read header.h's extent off whatever happened to be inlined
+     * — it stopped at 32 and called the file's own `class bouniaf` at 36 misattributed. There, type
+     * declarations are the evidence.
+     */
     private val activityExtent = sequenceOf(
         lines.maxOfOrNull { it.line } ?: 0,
         symbols.maxOfOrNull { it.declLine } ?: 0,
         spans.ranges.maxOfOrNull { it.endLine } ?: 0,
-        // Type declarations count always, not only when nothing else does. A header contributes
-        // N_SLINEs where its code was inlined and nowhere else, so its extent was being read off
-        // whatever happened to be inlined — header.h's stopped at 32 and flagged its own
-        // `class bouniaf` at 36 as misattributed.
-        typeDecls.maxOfOrNull { it.declLine } ?: 0,
+        if (spans.ranges.isEmpty()) typeDecls.maxOfOrNull { it.declLine } ?: 0 else 0,
     ).max()
 
     // A decl at this line is misattributed (stale N_SOL) if it sits past the file's activity.
@@ -153,7 +170,28 @@ private class RenderContext(val renderer: Renderer, val source: String) {
         reportAnomalies()
         // Trailing blank/stale lines are trimmed only in decomp mode; skeleton output
         // stays fully source-aligned.
-        return canvas.render(trim = renderer.decomp != null) + anonAggregateAppendix() + instantiationAppendix()
+        return canvas.render(trim = renderer.decomp != null) + anonAggregateAppendix() +
+            instantiationAppendix() + displacedAppendix()
+    }
+
+    private val displaced = mutableListOf<Dropped>()
+
+    /**
+     * Declarations that lost their source line. Losing the row is the right call — a declaration
+     * rendered two rows off its line is a lie about where gcc put it — but until now losing it also
+     * meant leaving the file, so `class vector<unsigned char…>` at filesystemimage.h L167 simply
+     * stopped existing the moment the enclosing body claimed that row. The declaration is real; only
+     * its position is unavailable, so it goes here with the line it wanted and why it didn't get it.
+     */
+    private fun displacedAppendix(): String {
+        if (displaced.isEmpty() || !renderer.showDisplaced) return ""
+        val rows = displaced
+            .sortedWith(compareBy({ it.claim.line ?: Int.MAX_VALUE }, { it.claim.rows.first().text }))
+            .joinToString("\n") { (claim, reason) ->
+                val stale = if (claim.stale) ", misattributed" else ""
+                "${claim.rows.joinToString(" ") { it.text }}  // L ${claim.line} ($reason$stale)"
+            }
+        return "\n\n/* ── displaced declarations (line unavailable) ── */\n\n$rows\n"
     }
 
     // Anonymous aggregates carry no source line (declLine == null), so they can't be placed inline
@@ -347,9 +385,13 @@ private class RenderContext(val renderer: Renderer, val source: String) {
         }
         // A claim that lost its row is recorded, never demoted onto a neighbour. FUNC_DELIM losing to
         // a body is the normal case in decomp mode and not worth reporting.
-        for ((claim, reason) in allocation.dropped) {
-            if (claim.owner == Owner.FUNC_DELIM) continue
-            println("skeleton[$source]: dropped ${claim.owner} at L${claim.line} — $reason: ${claim.rows.first().text}")
+        for (drop in allocation.dropped) {
+            if (drop.claim.owner == Owner.FUNC_DELIM) continue
+            displaced += drop
+            println(
+                "skeleton[$source]: dropped ${drop.claim.owner} at L${drop.claim.line} — " +
+                    "${drop.reason}: ${drop.claim.rows.first().text}",
+            )
         }
     }
 
