@@ -222,6 +222,9 @@ private class RenderContext(val renderer: Renderer, val source: String) {
     private fun place(allocation: Allocation, kind: FragmentKind) {
         for ((claim, range, _) in allocation.placed) {
             for ((row, content) in fitRows(claim.rows, range)) {
+                // An expanding block evicts misattributed fragments from the rows it takes, so a lone
+                // stale decl can't force it to fold. Carried over from Canvas.layoutBraceBlock.
+                if (claim.fit == Fit.ELASTIC) canvas[row].fragments.removeAll { it.stale }
                 canvas[row] += Fragment(content.indent, content.text, content.note, kind, claim.stale)
             }
         }
@@ -241,17 +244,16 @@ private class RenderContext(val renderer: Renderer, val source: String) {
     // A declLine outside the host function's bracket is a stale-N_SOL signature — flag it.
     private fun emitParamsAndLocals() {
         val rangeByFunc = spans.ranges.associateBy { it.func }
+        val claims = mutableListOf<Claim>()
         for (f in rawFuncs) {
             val span = rangeByFunc[f]?.let { it.startLine..(spans.closeLine(f) ?: it.endLine) }
             fun place(line: Int, name: String, type: TypeDecl<GlobalTypeId>, role: String) {
                 if (!dedup(line, name)) return
-                val stale = span == null || line !in span
-                canvas[line] += Fragment(
-                    indentFor(line),
-                    "${type.render(index, shortener = shortener)} $name;",
-                    role,
-                    FragmentKind.DECL_LOCAL,
-                    stale,
+                claims += Claim(
+                    Owner.LOCAL,
+                    line,
+                    listOf(Row("${type.render(index, shortener = shortener)} $name;", indentFor(line), role)),
+                    stale = span == null || line !in span,
                 )
             }
             for (p in f.params) {
@@ -281,12 +283,13 @@ private class RenderContext(val renderer: Renderer, val source: String) {
                 )
             }
         }
+        place(allocate(claims, maxLine), FragmentKind.DECL_LOCAL)
     }
 
     // A global/static: the linker's data at [addr] renders as its initializer — a scalar
     // inline, a multi-element aggregate spread over the blank lines below (the same
     // brace-block layout as a struct body).
-    private fun emitGlobal(sym: SymbolDecl.Static<GlobalTypeId>, rec: Symbol) {
+    private fun emitGlobal(sym: SymbolDecl.Static<GlobalTypeId>, rec: Symbol): Claim? {
         val scope = sym.scope.comment()
         val role = when (rec.recordType) {
             StabType.N_GSYM if sym.scope == StaticScope.GLOBAL -> "(global)"
@@ -296,7 +299,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             StabType.N_ROSYM -> "(.rodata $scope)"
             else -> "($scope)"
         }
-        if (!dedup(rec.declLine, sym.name)) return
+        if (!dedup(rec.declLine, sym.name)) return null
         // N_GSYM has rawValue=0 (linker resolves it from the mangled name) — look it up.
         val addr = when {
             rec.rawValue != 0L -> resolver.buildAddress(rec.rawValue)
@@ -315,30 +318,39 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             }
         }
         val parts = literal?.let { listOf(it) } ?: addr?.let { program.initializerAt(it) }
-        when {
-            parts == null -> canvas[rec.declLine] += Fragment(indent, "$base;", role, FragmentKind.DECL_GLOBAL)
+        return when {
+            parts == null -> Claim(Owner.GLOBAL, rec.declLine, listOf(Row("$base;", indent, role)))
 
-            parts.size == 1 -> canvas[rec.declLine] +=
-                Fragment(indent, "$base = ${parts[0]};", role, FragmentKind.DECL_GLOBAL)
+            parts.size == 1 ->
+                Claim(Owner.GLOBAL, rec.declLine, listOf(Row("$base = ${parts[0]};", indent, role)))
 
-            else -> canvas.layoutBraceBlock(
+            // A multi-element aggregate knows where it starts and not where it ends.
+            else -> Claim(
+                Owner.GLOBAL,
                 rec.declLine,
-                Fragment(indent, "$base = {", role, FragmentKind.DECL_GLOBAL),
-                parts.map { "$it," },
-                "};",
+                braceRows(
+                    "$base = {",
+                    parts.map {
+                        "$it,"
+                    },
+                    "};",
+                    indent,
+                    role,
+                ),
+                Fit.ELASTIC,
             )
         }
     }
 
+    /** `open` / one indented row per item / `close`, the shape both aggregate initializers and type bodies take. */
+    private fun braceRows(open: String, items: List<String>, close: String, indent: Int, role: String? = null) =
+        listOf(Row(open, indent, role)) + items.map { Row(it, indent + 4) } + Row(close, indent)
+
     // Attributed by CU (`symbolsByCu`), not `s.sourceFile` — gcc emits no `N_SOL(cu)`
     // before N_GSYM, so `sourceFile` points at the last header visited.
     private fun emitGlobals() {
-        for (s in symbols) {
-            when (val d = s.body) {
-                is SymbolDecl.Static -> emitGlobal(d, s)
-                else -> {}
-            }
-        }
+        val claims = symbols.mapNotNull { s -> (s.body as? SymbolDecl.Static)?.let { emitGlobal(it, s) } }
+        place(allocate(claims, maxLine, canvas.blockedRows()), FragmentKind.DECL_GLOBAL)
     }
 
     // Openers at startLine (self-closing decl when single-line), closers at the close line.
@@ -398,6 +410,8 @@ private class RenderContext(val renderer: Renderer, val source: String) {
                 is TypeDecl.Enum -> "/* ${body.members.size} members */"
             }
             val stale = isStale(line)
+            // NOT yet ported to claims: the allocator changes which of two same-line type bodies
+            // wins and how far each spreads, and that diff is not yet accounted for. See backlog §32.
             if (members.isNotEmpty()) {
                 val open = Fragment(indentFor(line), openText, "", FragmentKind.TYPE_BODY, stale)
                 canvas.layoutBraceBlock(line, open, members, "}; $sizeNote")
