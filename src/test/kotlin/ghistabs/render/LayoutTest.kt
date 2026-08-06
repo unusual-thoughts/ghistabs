@@ -63,4 +63,20 @@ class LayoutTest {
             canvas.render(trim = true).trimEnd('\n').split('\n'),
         )
     }
+
+    @Test
+    fun `repeated line tags on one row collapse, distinct ones do not`() {
+        val line = TargetLine(139).apply {
+            this += Fragment(code = "typedef unsigned char _Value_type;", note = "", kind = FragmentKind.TYPEDEF)
+            this += Fragment(code = "typedef Exclusion _Value_type;", note = "", kind = FragmentKind.TYPEDEF)
+            this += Fragment(code = "int p;", note = "(param)", kind = FragmentKind.DECL_LOCAL)
+        }
+        // Every fragment restates the row's own line, so the two bare tags are one fact stated twice;
+        // the `(param)` one says something else and survives.
+        assertEquals(
+            "typedef unsigned char _Value_type;   typedef Exclusion _Value_type;   int p;  " +
+                "// L 139 // L 139 (param)",
+            line.render(),
+        )
+    }
 }
