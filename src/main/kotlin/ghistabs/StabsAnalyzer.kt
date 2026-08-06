@@ -143,15 +143,6 @@ data class StabsOptions(
             }
         }
 
-//        fun Options.stabs() = StabsOptions(
-//            applyPlateComments = getBoolean(PLATE_COMMENTS, true),
-//            buildClasses = getBoolean(CLASSES, true),
-//            shortenTypedefs = getBoolean(SHORTEN_TYPEDEFS, false),
-//            foldSources = getBoolean(FOLD_SOURCES, true),
-//            minLogLevel = getEnum(LOG_LEVEL, Level.INFO),
-//            overlaySection = getBoolean(OVERLAY_SECTION, true),
-//        )
-
         fun Options.registerStabs() {
             registerOption(
                 PLATE_COMMENTS,
