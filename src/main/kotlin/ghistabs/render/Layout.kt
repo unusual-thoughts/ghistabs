@@ -107,7 +107,11 @@ class TargetLine(val line: Int) {
         }
         val rest = fragments.filterNot { it.kind == FragmentKind.DECOMP && it.code != null }
         val code = (decomp + rest.mapNotNull { it.code }).joinToString("   ")
-        val comments = rest.mapNotNull { it.commentAt(line) }.joinToString(" ")
+        // Deduped: every fragment on a row restates that row's line, so two typedefs sharing source
+        // line 139 produced `typedef unsigned char _Value_type;   typedef Exclusion _Value_type;
+        // // L 139 // L 139`. Only exact repeats collapse — `// L 139` and `// L 139 (param)` say
+        // different things and both stay.
+        val comments = rest.mapNotNull { it.commentAt(line) }.distinct().joinToString(" ")
         val body = when {
             code.isEmpty() -> comments
             comments.isEmpty() -> code
