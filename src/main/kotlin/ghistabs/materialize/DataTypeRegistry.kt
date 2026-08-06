@@ -216,6 +216,6 @@ private val Demangled.categoryPath get(): CategoryPath =
 private fun Func.thisParamTypeId(): GlobalTypeId? {
     val p = params.firstOrNull()?.body as? SymbolDecl.Param ?: return null
     if (p.name != "this") return null
-    val inner = (p.type as? TypeDecl.InlineDef)?.body ?: p.type
-    return ((inner as? TypeDecl.Pointer)?.pointee as? TypeDecl.Ref)?.id
+    val inner = (p.type as? TypeDecl.InlineDef)?.inner ?: p.type
+    return ((inner as? TypeDecl.Pointer)?.inner as? TypeDecl.Ref)?.id
 }

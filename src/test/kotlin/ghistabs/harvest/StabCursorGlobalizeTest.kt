@@ -66,12 +66,12 @@ class StabCursorGlobalizeTest {
         val cursor = createTestCursor(records = records)
 
         val input = TypeDecl.Pointer(
-            pointee = TypeDecl.Ref(LocalTypeId(0, 5)),
+            inner = TypeDecl.Ref(LocalTypeId(0, 5)),
         )
         val result = input.globalize(cursor)
 
         val expected = TypeDecl.Pointer(
-            pointee = TypeDecl.Ref(GlobalTypeId(SourceFile.CUSource(cuName), 5)),
+            inner = TypeDecl.Ref(GlobalTypeId(SourceFile.CUSource(cuName), 5)),
         )
         assertEquals(expected, result)
     }
@@ -213,7 +213,7 @@ class StabCursorGlobalizeTest {
                 "local",
                 TypeDecl.InlineDef(
                     id = GlobalTypeId(cu, 7),
-                    body = TypeDecl.Struct(
+                    inner = TypeDecl.Struct(
                         rawKind = AggrKind.STRUCT,
                         sizeBytes = 4L,
                         bases = emptyList(),
