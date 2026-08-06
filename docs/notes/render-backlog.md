@@ -1378,11 +1378,18 @@ several CUs — the guard was meant to catch stdlib-only types and does not.
 Contrast `XVImage`, which has 2 line entries in xvimage.h (something *was* inlined from it) and is
 attributed correctly. So the defect is specific to a class with no inlined code.
 
-**Proposed fix, not yet made.** A method resolves to a `Func`, and `Func.cu` names the CU that defines
-it; C++ convention puts the class in that CU's sibling header. So when `userVote` is empty and every
-method of a type resolves to one CU, prefer that CU's sibling header (`image.cpp` → `image.h`) over
-the stdlib majority. Note this map also feeds `Attribution.keyFor` and therefore DTM attribution, not
-just the render, so it needs the regression baselines checked, not only the grammar counts.
+**Fixed.** A method resolves to a `Func`, and `Func.cu` names the CU that defines it; C++ convention
+puts the class in that CU's sibling header. When `userVote` is empty and every method of a type
+resolves to one CU, that CU's sibling header now wins over the stdlib majority. `Image` → `image.h`,
+and every project class across the three programs is correctly placed (the only class left inside a
+libstdc++ header is `std::ios_base::Init`, which belongs there).
+
+The sibling must already be a source the stabs name — nothing is synthesised, and a stem matching two
+genuinely different files is dropped rather than guessed between. Building that candidate set from
+`lineEntries` + `declSourceFile` was not enough: `image.h` is in neither, and exists only as some
+type's `id.source`. **That is a coupling worth remembering** — `image.h` is a known source largely
+*because* the misattributed instantiations were filed there, so fixing the second defect below could
+make this lookup go dark.
 
 **Second, separable defect.** The instantiations landing *in* image.h come from `effectiveSource`
 trusting `declSourceFile` for typedefs. And `activityExtent` cannot flag them: for a file with no

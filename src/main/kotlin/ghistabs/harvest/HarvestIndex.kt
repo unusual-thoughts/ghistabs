@@ -195,6 +195,25 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
      * Voted over **raw** sources (before the §15 fold), so the hint — which feeds `Attribution.keyFor` —
      * keeps DTM attribution independent of render-source folding.
      */
+    // Every known header by its stem, so a CU can find the header it is conventionally paired with
+    // (`image.cpp` → `image.h`). Ambiguous stems are dropped rather than guessed between.
+    private val headersByStem: Map<String, String> by lazy {
+        // Every source the stabs mention, however it is mentioned. `image.h` appears in none of the
+        // line entries — nothing was inlined from it — and in no declSourceFile either; it is known
+        // only as some type's `id.source`, which is exactly the case this lookup exists to serve.
+        // Spellings of one file collapse (§15 folds them later anyway); genuinely distinct files
+        // sharing a stem are dropped rather than guessed between.
+        (
+            harvest.lineEntries.keys + typeAsts.values.flatMap {
+                listOfNotNull(it.declSourceFile, it.id.source.filename)
+            }
+            )
+            .filter { it.hasHeaderExtension() && !it.isStdMarkerPath() }
+            .groupBy { it.pathBasename().substringBeforeLast('.') }
+            .filterValues { v -> v.map(String::pathBasename).distinct().size == 1 }
+            .mapValues { (_, v) -> v.minBy { it.length } }
+    }
+
     private val multiSourceHeaderHints: Map<String, String> by lazy {
         val funcsByMangled = harvest.functions.filter { (it.sizeBytes ?: 0uL) > 0uL }.associateBy { it.name }
         val defSourcesByName = typeAsts.values
@@ -232,7 +251,20 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
                         if (src !in defSources) (if (isStd) stdVote else userVote).merge(src, 1, Int::plus)
                     }
                 }
+                // With no user header in the vote, the CU that defines the methods names one by
+                // convention. A class whose methods are all out-of-line contributes no N_SLINE of its
+                // own — nothing was ever inlined from its header — so it can never appear in the vote,
+                // and the stdlib fallback claimed it: `class Image` was declared in stl_vector.h,
+                // while image.h rendered 903 rows of nothing but vector<unsigned short>. The guard
+                // below is `defSources.size > 1`, true of any class defined across several CUs, so it
+                // never caught this. XVImage escaped only because 2 lines happened to inline from
+                // xvimage.h.
+                val siblingHeader = methods.asSequence()
+                    .mapNotNull { m -> funcsByMangled[m.mangled]?.cu?.filename }
+                    .distinct().singleOrNull()
+                    ?.let { cu -> headersByStem[cu.pathBasename().substringBeforeLast('.')] }
                 val winner = userVote.maxByOrNull { it.value }?.key
+                    ?: siblingHeader
                     ?: stdVote.takeIf { defSources.size > 1 }?.maxByOrNull { it.value }?.key
                 winner?.let { put(name, it) }
             }
