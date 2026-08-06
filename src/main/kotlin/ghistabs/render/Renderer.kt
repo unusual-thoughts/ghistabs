@@ -66,7 +66,7 @@ class Renderer(
         val own = with(index) { func.source() } ?: return@getOrPut emptyList()
         runCatching { decomp?.decompileFunction(ghFunc, 30, TaskMonitor.DUMMY) }
             .getOrNull()?.compressedDecompLines(own, func, mode == Mode.ELIDE_SJLJ).orEmpty()
-            .map { it.copy(text = shortener.substitute(it.text)) }
+            .map { it.copy(text = shortener.substitute(it.text).spellDestructorLabels()) }
     }
 
     fun renderSkeleton(source: String) = RenderContext(this, source).render()
@@ -93,6 +93,16 @@ class Renderer(
         decomp?.dispose()
     }
 }
+
+/**
+ * Ghidra names a vtable pointer after the destructor it holds — `PTR_~runtime_error_0043ecfc` — and
+ * `~` is not an identifier character, so the row it lands on stops parsing as C++ (12 of unpackfile's
+ * 39 remaining structural errors). Rewritten to `dtor_` only where the `~` sits *inside* an
+ * identifier, which a real destructor call (`p->~string()`) and a bitwise not (`x = ~y`) never do.
+ */
+private fun String.spellDestructorLabels() = TILDE_IN_IDENTIFIER.replace(this) { "${it.groupValues[1]}dtor_" }
+
+private val TILDE_IN_IDENTIFIER = Regex("""([A-Za-z0-9_])~(?=[A-Za-z_])""")
 
 private fun Owner.kind() = when (this) {
     Owner.FUNCTION_BODY, Owner.INLINED_BODY -> FragmentKind.DECOMP
@@ -823,9 +833,24 @@ private class RenderContext(val renderer: Renderer, val source: String) {
         var marks = ""
         var depth = 0
 
-        // Fold what an inlined stretch left behind onto the last row of the statement it followed.
-        fun flushOnto(r: Region) {
+        /**
+         * Fold what an inlined stretch left behind onto the last row of the statement it *followed* —
+         * the position it occupied in the body.
+         *
+         * Onto the region already kept, therefore, not the one about to be: appending to the next
+         * region's last row carried the braces over that region's statements, so a `}` closing a block
+         * the inlined code had opened landed after code that was still inside it. Brace counts stayed
+         * balanced — the same braces, in the wrong order — while the nesting did not, which is how
+         * xvimage.cpp's first constructor closed two rows early and left `(this->_base_Image).vfptr =
+         * …` parsing at file scope. A leading inlined stretch has no preceding statement, so it gets
+         * the same empty carrier as an all-inlined body.
+         */
+        fun flush() {
             if (marks.isEmpty() && depth == 0) return
+            // A one-line accessor whose body is *all* inlined — Image::size — keeps nothing of its own
+            // to fold onto, and its brace delta would be discarded, leaving its head's `{` hanging.
+            if (kept.isEmpty()) kept += Region(null).also { it.lines += DecompLine("", null, 0) }
+            val r = kept.last()
             val braces = if (depth > 0) "{".repeat(depth) else "}".repeat(-depth)
             val last = r.lines.lastOrNull() ?: return
             val head = listOf(last.text, braces).filter(String::isNotEmpty).joinToString(" ")
@@ -846,15 +871,10 @@ private class RenderContext(val renderer: Renderer, val source: String) {
                 r.labelOrNull()?.let { marks += " /* ⇐ inlines $it */" }
                 continue
             }
+            flush()
             kept += r
-            flushOnto(r)
         }
-        // A one-line accessor whose body is *all* inlined — Image::size — keeps nothing of its own to
-        // fold onto, and its brace delta would be discarded, leaving its head's `{` hanging open.
-        if (kept.isEmpty() && (marks.isNotEmpty() || depth != 0)) {
-            kept += Region(null).also { it.lines += DecompLine("", null, 0) }
-        }
-        kept.lastOrNull()?.let { flushOnto(it) }
+        flush()
         return kept
     }
 

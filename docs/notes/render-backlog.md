@@ -1211,40 +1211,57 @@ luck. The real signal is probably distance: `class XVImage` sits 4 lines past at
 
 ---
 
-## Render output is not parseable C++ — one root cause
+## Render output is not parseable C++
 
-`tools/check-grammar.sh <dir>` runs clang over a render and counts only the diagnostics that mean
-the text cannot be parsed at all — braces, parens, unterminated comments/strings, unterminated
-statements. Semantic errors are ignored on purpose: the render names types it never defines, so
-"undeclared identifier" is expected and says nothing about structure. `#include` lines are stripped;
-the include graph is not under test.
+`tools/check-grammar.sh <dir>` parses a render with clang. **Everything clang reports counts**,
+except one named family: errors that follow from the render not emitting a definition for something
+it names (`use of undeclared identifier`, `unknown type name`, `explicit specialization of
+undeclared template`, …). Those are inherent to a per-file view of one translation unit, and no
+clang flag turns them off, so they are subtracted by name. Ghidra's pseudo-types (`undefined4`,
+`code`, `byte`, …) are a fixed vocabulary and get declared in a prelude rather than filtered.
 
-| render | files with structural errors | errors |
+The first version of this script did the opposite — whitelisted brace/paren messages — and scored 39
+errors on unpackfile while hiding ~1500. Several hidden ones were real, cheap render defects. Do not
+reintroduce a whitelist.
+
+| render | files with errors | errors |
 | --- | --- | --- |
-| unpackfile | 13/54 | 50 |
-| tinyxml | 17/110 | 150 |
-| cryptopp | 57/250 | 333 |
+| unpackfile | 32/54 | 626 |
+| tinyxml | 69/110 | 1443 |
+| cryptopp | 151/250 | 2752 |
 
-Three messages — `expected ')'` (19), `expected ';' after top level declarator` (18), `extraneous
-closing brace` (13) on unpackfile — but **one cause**: braces balance by count while nesting
-wrongly, so a function closes early and its remaining statements are parsed at file scope, where
-`(this->x).f = ...` is not a declaration. Every sampled instance across three files is that.
+Three groups, by cost to fix:
 
-xvimage.cpp's first constructor shows it whole:
+**1. Mechanical spelling — cheap, self-contained (unpackfile counts).** Each is one rendering rule.
 
-```
-/* ⇐ L 29 */ void XVImage::XVImage(XVImage *this) {
-  /* ⇐ L 30 */ this->alignment = 0; … return; }   /* ⇐ inlines atomicity.h L 51 */
-  /* ⇐ L 30 */ Image::Image(&this->_base_Image);
-  /* ⇐ L 30 */ (this->_base_Image).vfptr = …;
-```
+- `invalid parameter name: 'this' is a keyword` (77) — signatures render Ghidra's this-parameter
+  literally as `this`.
+- `constructor cannot have a return type` (14), `destructor cannot have a return type` (8),
+  `destructor cannot have any parameters` (8) — `void XVImage::XVImage(XVImage *this)`. Ghidra gives
+  every function a return type; ctors and dtors must not print one.
+- `brackets are not allowed here` (22) — `char const[18] _ZTS7XVImage = …` needs the extent after
+  the name, `char const _ZTS7XVImage[18]`.
+- `invalid digit 8 in octal constant` (7) — addresses print as `0040fbc0`, which C reads as octal.
+  Needs `0x`.
 
-The inlined `Image::Image` body is placed *before* the call that inlines it and brings its `}` with
-it, closing the constructor two rows early; the constructor's own `}` from FUNC_DELIM then loses its
-row to the body, which is normally right — a body carries its own braces — but is wrong once the
-body's braces are unbalanced. So the fix is in the `dropInlined()` / `Region.balance()` interaction,
-not in the brace pass. **Counting `{` vs `}` per file, which every check so far has used, cannot see
-this** and reported all three renders balanced throughout.
+**2. Statements at file scope in header views (`expected unqualified-id` 175, `a type specifier is
+required` 112, and most `expected …`).** A header renders the code inlined *from* it, but nothing
+emits an enclosing function for that code, so the statements sit at file scope where no C++ construct
+admits them. Design gap, not a bug: these views would need to wrap each region in the member function
+it came from.
 
-**Open.** Note the checker is a shell script over clang, not a test; wiring it into
-`integrationTest` needs clang on the build box.
+**3. Nesting order in .cpp views — 7 rows across unpackfile where nesting goes negative.** Two fixed
+already (see below); what remains is an orphaned `} else {` at xvimage.cpp L297 whose `if (…) {` is
+placed elsewhere, and a surplus `}` at L473. Braces balance by *count* while nesting wrongly, so
+per-file `{` vs `}` counting — which every check before this one used — reports these renders clean.
+
+**Fixed so far.** Body claims are no longer reordered by the allocator: `claimsFor` builds ELASTIC
+claims, and the elastic tie-breaks (row count, then first-row text) were alphabetising the statements
+inside a function, which is how xvimage.cpp's first constructor got its closing brace two rows before
+its last two statements. Bodies now compare equal on those keys and `sortedWith` stability keeps the
+decompiler's order. Separately, `dropInlined` folded an inlined stretch's brace delta onto the
+*following* region's last row, carrying braces over that region's statements; it now folds onto the
+preceding region, as its own comment always said. Together: unpackfile 50 → 39 on the old whitelist.
+
+**Open.** Group 1 is the obvious next step. Note the checker is a shell script over clang, not a
+test; wiring it into `integrationTest` needs clang on the build box.
