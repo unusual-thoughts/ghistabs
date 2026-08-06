@@ -146,6 +146,20 @@ private val DESTRUCTOR_NAME = Regex("""(^|\s)~(?=[A-Za-z_]\w*\s*\()""")
 
 private fun String.spellDestructorName() = DESTRUCTOR_NAME.replace(this) { "${it.groupValues[1]}dtor_" }
 
+/**
+ * `template<> ` in front of a declaration whose subject [name] carries template arguments, because
+ * that is what such a declaration is: `class fpos<int> { … };` is not legal C++, `template<> class
+ * fpos<int> { … };` is. gcc's stabs describe instantiations and never the primary template, so every
+ * templated name the render declares is a specialisation.
+ *
+ * This does not make the render compile — the primary template is still nowhere, so clang moves from
+ * "expected unqualified-id" to "explicit specialization of undeclared template class", which is the
+ * missing-declaration family a per-file view cannot escape. It is the correct spelling of what the
+ * stabs actually say, not a way to quiet the checker.
+ */
+private fun String.asSpecialization(name: String?) =
+    if (name != null && '<' in name && !name.startsWith("operator")) "template<> $this" else this
+
 // `this` as a whole word. A C++ keyword, so it can never be anything else in decompiled text.
 private val THIS_WORD = Regex("""\bthis\b""")
 
@@ -300,6 +314,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
                     val members = body.renderFull(index, program, shortener, ast.ghidraName.simpleTypeName())
                         .joinToString("\n    ", prefix = "\n    ", postfix = "\n")
                     "${body.kind.cxxKeyword()} ${ast.ghidraName} {$members}; /* ${body.sizeBytes} bytes */"
+                        .asSpecialization(ast.ghidraName)
                 }
 
                 is TypeDecl.Enum ->
@@ -348,7 +363,8 @@ private class RenderContext(val renderer: Renderer, val source: String) {
                     "${it.access.name.lowercase()} ${it.type.render(index, shortener = shortener)}"
                 }
                 .orEmpty()
-            "${b.kind.cxxKeyword()} ${shortener.shortenedOrNull(name ?: "") ?: name}$bases { " +
+            ("${b.kind.cxxKeyword()} ${shortener.shortenedOrNull(name ?: "") ?: name}$bases { ")
+                .asSpecialization(shortener.shortenedOrNull(name ?: "") ?: name) +
                 b.renderFull(index, program, shortener, name?.simpleTypeName()).joinToString(" ") +
                 " }; /* ${b.sizeBytes} bytes */"
         }
@@ -643,7 +659,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
                             "${it.access.name.lowercase()} ${it.type.render(index, shortener = shortener)}"
                         }
                         .orEmpty()
-                    "${body.kind.cxxKeyword()} $shortName$bases {"
+                    "${body.kind.cxxKeyword()} $shortName$bases {".asSpecialization(shortName)
                 }
 
                 is TypeDecl.Enum -> "enum $shortName {"
@@ -771,43 +787,43 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             .filter { (_, r) -> r.anchor != null }
             .groupBy { (f, r) -> Triple(f, r.anchor, r.lines.map { it.text }) }
             .map { (_, copies) -> copies.first().also { (_, r) -> r.copies = copies.size } }
-            .groupBy({ it.first }, { it.second })
-        for ((func, regions) in inlined) {
-            val ordered = regions.sortedBy { it.anchor }
-            wrapAsDefinition(func, ordered)
-            addAll(claimsFor(ordered, maxLine, Owner.INLINED_BODY))
-        }
+            .sortedBy { (_, r) -> r.anchor }
+            // Adjacent stretches of one function share a wrapper. They cannot interleave with another
+            // function's by definition, so nesting is safe, and one `vector<Exclusion,…>::operator=`
+            // signature stands over its five consecutive stretches instead of being repeated above
+            // each — 644 wrapper heads on unbouniaf down to what the functions actually need.
+            .fold(mutableListOf<Pair<Func, MutableList<Region>>>()) { acc, (f, r) ->
+                acc.lastOrNull()?.takeIf { it.first == f }?.second?.add(r) ?: acc.add(f to mutableListOf(r))
+                acc
+            }
+            .flatMap { (f, group) -> wrapAsDefinition(f, group) }
+        addAll(claimsFor(inlined, maxLine, Owner.INLINED_BODY))
     }
 
     /**
-     * Enclose [regions] — the stretches of [func] that gcc compiled from *this* file — in [func]'s own
-     * definition, so they read as the body they are rather than as loose statements at file scope.
+     * Enclose [group] — consecutive stretches of [func] that gcc compiled from *this* file — in a definition of
+     * [func], so it reads as the body it is rather than as loose statements at file scope.
      *
-     * The head opens the first stretch and the closers land on the last, rather than taking rows of
-     * their own: the rows between them belong to this file's other content, and a claim for a bare
-     * brace would evict it. Brace count is taken over the whole group, the head's `{` included, which
-     * is what makes the group balance where each stretch previously had to balance alone.
+     * Consecutive stretches only, never all of a function's. Two functions inlined from one header
+     * interleave by line, so a wrapper spanning everything one function contributed nests as
+     * `A{ B{ A} B}` — that took unbouniaf from 7 rows of negative nesting to 14. Adjacent stretches
+     * cannot interleave, so a wrapper over a run of them is safe and self-contained, as each stretch
+     * was under the `balance()` this replaces; the head is what that lacked.
+     *
+     * The wrapper is a *free* function, deliberately. The class is usually not declared in this view,
+     * so `Class::method` would not resolve and an implicit `this` would have nothing to bind to; the
+     * explicit parameter stays, renamed along with its uses in the body because `this` is a keyword.
      */
-    private fun wrapAsDefinition(func: Func, regions: List<Region>) {
-        val first = regions.firstOrNull() ?: return
-        // The wrapper is a free function, not a member definition: the class it belongs to is usually
-        // not declared in this view, so `Class::method` would not resolve and an implicit `this` would
-        // have nothing to bind to. So the explicit `this` parameter stays — renamed, along with every
-        // use of it in the body, because `this` is a keyword. Renaming rather than dropping is what
-        // the whole-render experiment got wrong: it is right here, where there is no member function
-        // to be implicit about, and wrong for a qualified definition, which has one.
-        val head = (func.signature(program) + " {").spellDestructorName()
-        first.lines.add(0, DecompLine(head, null, 0))
-        for (r in regions) {
-            r.lines.replaceAll { it.copy(text = it.text.renameThis()) }
-        }
-        val delta = regions.sumOf { r ->
-            r.lines.sumOf { l -> l.text.count { it == '{' } - l.text.count { it == '}' } }
-        }
+    private fun wrapAsDefinition(func: Func, group: List<Region>): List<Region> {
+        val first = group.first()
+        for (r in group) r.lines.replaceAll { it.copy(text = it.text.renameThis()) }
+        first.lines.add(0, DecompLine((func.signature(program) + " {").renameThis().spellDestructorName(), null, 0))
+        val delta = group.sumOf { r -> r.lines.sumOf { l -> l.text.count { it == '{' } - l.text.count { it == '}' } } }
         when {
-            delta > 0 -> regions.last().lines += DecompLine("}".repeat(delta), null, 0)
+            delta > 0 -> group.last().lines += DecompLine("}".repeat(delta), null, 0)
             delta < 0 -> first.lines.add(1, DecompLine("{".repeat(-delta), null, 0))
         }
+        return group
     }
 
     /** [regions] as claims, none allowed to slide past [limit]. */
