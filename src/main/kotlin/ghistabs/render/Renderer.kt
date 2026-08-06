@@ -139,6 +139,18 @@ internal fun String.asMemberDefinition(owner: String? = null): String {
     return "$prefix($params" + substring(close)
 }
 
+// A destructor's leading `~` where the wrapper makes it a free function's name, which cannot carry
+// one. `void ~bouniaf(bouniaf *self)` is not a destructor here — there is no class to destroy — so it
+// is named for what it is.
+private val DESTRUCTOR_NAME = Regex("""(^|\s)~(?=[A-Za-z_]\w*\s*\()""")
+
+private fun String.spellDestructorName() = DESTRUCTOR_NAME.replace(this) { "${it.groupValues[1]}dtor_" }
+
+// `this` as a whole word. A C++ keyword, so it can never be anything else in decompiled text.
+private val THIS_WORD = Regex("""\bthis\b""")
+
+private fun String.renameThis() = THIS_WORD.replace(this, "self")
+
 // A leading `Type *this` parameter and the comma that follows it, if any.
 private val THIS_PARAM = Regex("""^[A-Za-z_][\w:<>,\s]*\*\s*this\s*,?\s*""")
 
@@ -746,15 +758,56 @@ private class RenderContext(val renderer: Renderer, val source: String) {
         // The code this file contributed to *other* files' functions. gcc inlined it from here, so its
         // N_SLINEs name this file and its lines belong on this canvas. A header line is compiled into
         // every call site, so identical copies collapse to one tagged `×N`.
+        //
+        // Each function's stretches are wrapped in that function's own definition. Standing bare they
+        // were statements at file scope, which no C++ construct admits — the single largest source of
+        // parse errors in the render, and the reason a header view could not be compiled or even
+        // reliably brace-matched. Balancing each stretch on its own (the old `balance()`) made every
+        // one self-contained but left them all outside any function; the wrapper subsumes it, since a
+        // definition balances the group as a whole.
         val inlined = index.functions
             .filter { f -> f !in rawFuncs && f.lineEntries.any { it.source == source } }
-            .flatMap { regionsOf(it, renderer.decompile(it)).dropInlined() }
-            .filter { it.anchor != null }
-            .groupBy { r -> r.anchor to r.lines.map { it.text } }
-            .map { (_, copies) -> copies.first().also { it.copies = copies.size } }
-            .sortedBy { it.anchor }
-            .onEach { it.balance() }
-        addAll(claimsFor(inlined, maxLine, Owner.INLINED_BODY))
+            .flatMap { f -> regionsOf(f, renderer.decompile(f)).dropInlined().map { f to it } }
+            .filter { (_, r) -> r.anchor != null }
+            .groupBy { (f, r) -> Triple(f, r.anchor, r.lines.map { it.text }) }
+            .map { (_, copies) -> copies.first().also { (_, r) -> r.copies = copies.size } }
+            .groupBy({ it.first }, { it.second })
+        for ((func, regions) in inlined) {
+            val ordered = regions.sortedBy { it.anchor }
+            wrapAsDefinition(func, ordered)
+            addAll(claimsFor(ordered, maxLine, Owner.INLINED_BODY))
+        }
+    }
+
+    /**
+     * Enclose [regions] — the stretches of [func] that gcc compiled from *this* file — in [func]'s own
+     * definition, so they read as the body they are rather than as loose statements at file scope.
+     *
+     * The head opens the first stretch and the closers land on the last, rather than taking rows of
+     * their own: the rows between them belong to this file's other content, and a claim for a bare
+     * brace would evict it. Brace count is taken over the whole group, the head's `{` included, which
+     * is what makes the group balance where each stretch previously had to balance alone.
+     */
+    private fun wrapAsDefinition(func: Func, regions: List<Region>) {
+        val first = regions.firstOrNull() ?: return
+        // The wrapper is a free function, not a member definition: the class it belongs to is usually
+        // not declared in this view, so `Class::method` would not resolve and an implicit `this` would
+        // have nothing to bind to. So the explicit `this` parameter stays — renamed, along with every
+        // use of it in the body, because `this` is a keyword. Renaming rather than dropping is what
+        // the whole-render experiment got wrong: it is right here, where there is no member function
+        // to be implicit about, and wrong for a qualified definition, which has one.
+        val head = (func.signature(program) + " {").spellDestructorName()
+        first.lines.add(0, DecompLine(head, null, 0))
+        for (r in regions) {
+            r.lines.replaceAll { it.copy(text = it.text.renameThis()) }
+        }
+        val delta = regions.sumOf { r ->
+            r.lines.sumOf { l -> l.text.count { it == '{' } - l.text.count { it == '}' } }
+        }
+        when {
+            delta > 0 -> regions.last().lines += DecompLine("}".repeat(delta), null, 0)
+            delta < 0 -> first.lines.add(1, DecompLine("{".repeat(-delta), null, 0))
+        }
     }
 
     /** [regions] as claims, none allowed to slide past [limit]. */

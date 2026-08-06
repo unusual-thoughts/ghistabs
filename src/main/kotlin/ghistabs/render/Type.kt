@@ -168,7 +168,10 @@ fun TypeDecl.Struct<GlobalTypeId>.renderFull(
             // `this` is a keyword.
             m.access to "${m.declPrefix}${it.signature(program).asMemberDefinition(owner)}${m.declSuffix};"
         }
-    }
+        // gcc emits a stab per aliased copy (ctor C1/C2, dtor D0/D1/D2); once the return type and
+        // `this` are gone they render identically, and a class body cannot declare the same member
+        // twice.
+    }.distinct()
 
     // C++ access sections: emit an `access:` label only when a member deviates from the running
     // access, starting at the type's default (private for a class, public for a struct/union), so a
