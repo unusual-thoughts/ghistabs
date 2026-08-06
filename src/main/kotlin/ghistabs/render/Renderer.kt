@@ -104,6 +104,48 @@ private fun String.spellDestructorLabels() = TILDE_IN_IDENTIFIER.replace(this) {
 
 private val TILDE_IN_IDENTIFIER = Regex("""([A-Za-z0-9_])~(?=[A-Za-z_])""")
 
+/**
+ * Ghidra prints a member function the way its own model stores one: with a return type on every
+ * function, and the `this` pointer as an explicit first parameter. Neither is legal C++ where the
+ * definition is qualified — `void bouniaf::bouniaf(bouniaf *this)` draws "constructor cannot have a
+ * return type" and "invalid parameter name: 'this' is a keyword" — so a qualified definition drops
+ * the explicit parameter, leaving the body's uses of `this` to the implicit one, and a constructor
+ * or destructor drops the return type as well.
+ *
+ * Only when qualified: dropping the parameter from a free function would leave its body referring to
+ * a `this` that no longer exists.
+ */
+internal fun String.asMemberDefinition(owner: String? = null): String {
+    val open = indexOf('(').takeIf { it >= 0 } ?: return this
+    var depth = 0
+    val close = indices.drop(open).firstOrNull {
+        when (this[it]) {
+            '(' -> depth++
+            ')' -> depth--
+            else -> {}
+        }
+        depth == 0 && this[it] == ')'
+    } ?: return this
+
+    val qualified = substring(0, open).trim().substringAfterLast(' ')
+    // Qualified at file scope (`bouniaf::bouniaf`); inside a class body the declaration is bare, so
+    // the owner has to be told to us.
+    val cls = owner ?: qualified.substringBeforeLast("::", "").substringAfterLast(':').substringBefore('<')
+    if (cls.isEmpty()) return this
+    val method = qualified.substringAfterLast("::")
+
+    val params = substring(open + 1, close).replaceFirst(THIS_PARAM, "")
+    val prefix = if (method == cls || method == "~$cls") qualified else substring(0, open).trim()
+    return "$prefix($params" + substring(close)
+}
+
+// A leading `Type *this` parameter and the comma that follows it, if any.
+private val THIS_PARAM = Regex("""^[A-Za-z_][\w:<>,\s]*\*\s*this\s*,?\s*""")
+
+// The unqualified spelling of a type name, which is what its constructor and destructor are called:
+// `std::vector<int>::vector`, not `std::vector<int>::std::vector<int>`.
+private fun String.simpleTypeName() = substringBefore('<').substringAfterLast("::")
+
 private fun Owner.kind() = when (this) {
     Owner.FUNCTION_BODY, Owner.INLINED_BODY -> FragmentKind.DECOMP
     Owner.FUNC_DELIM -> FragmentKind.FUNC_DELIM
@@ -243,7 +285,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
         val blocks = anon.joinToString("\n\n") { ast ->
             when (val body = ast.body) {
                 is TypeDecl.Struct -> {
-                    val members = body.renderFull(index, program, shortener)
+                    val members = body.renderFull(index, program, shortener, ast.ghidraName.simpleTypeName())
                         .joinToString("\n    ", prefix = "\n    ", postfix = "\n")
                     "${body.kind.cxxKeyword()} ${ast.ghidraName} {$members}; /* ${body.sizeBytes} bytes */"
                 }
@@ -295,7 +337,8 @@ private class RenderContext(val renderer: Renderer, val source: String) {
                 }
                 .orEmpty()
             "${b.kind.cxxKeyword()} ${shortener.shortenedOrNull(name ?: "") ?: name}$bases { " +
-                b.renderFull(index, program, shortener).joinToString(" ") + " }; /* ${b.sizeBytes} bytes */"
+                b.renderFull(index, program, shortener, name?.simpleTypeName()).joinToString(" ") +
+                " }; /* ${b.sizeBytes} bytes */"
         }
 
         is TypeDecl.Enum ->
@@ -483,7 +526,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             else -> resolver.resolve(sym.name)
         }
         val indent = indentFor(rec.declLine)
-        val base = "${sym.type.render(index, shortener = shortener)} ${sym.name}"
+        val base = sym.type.renderDecl(sym.name, index, shortener)
         // A string-valued global (pointer-to-string whose slot Ghidra left an untyped
         // scalar, or a char[N] holding an RTTI/string literal) renders as one quoted
         // literal; initializerAt would otherwise miss it or spread a per-byte list.
@@ -578,7 +621,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             // Struct fields/methods are self-terminated statements; enum members carry a
             // trailing comma so the space-join in layoutBraceBlock reads as a member list.
             val members = when (body) {
-                is TypeDecl.Struct -> body.renderFull(index, program, shortener)
+                is TypeDecl.Struct -> body.renderFull(index, program, shortener, name.simpleTypeName())
                 is TypeDecl.Enum -> body.members.map { (mn, mv) -> "$mn = $mv," }
             }
             val openText = when (body) {
@@ -688,7 +731,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             val storage = vars.filter { it.role != null }
                 .sortedWith(compareBy({ it.role?.startsWith("Stack") != true }, { it.role }, { it.name }))
                 .joinToString { "${it.name}=${it.role}" }
-            val text = head.text + extra.joinToString("") { " ${it.text}" } +
+            val text = head.text.asMemberDefinition() + extra.joinToString("") { " ${it.text}" } +
                 storage.takeIf { it.isNotEmpty() }?.let { " /* storage: $it */" }.orEmpty()
             this += Claim(
                 Owner.FUNCTION_BODY,

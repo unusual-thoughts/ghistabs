@@ -152,17 +152,21 @@ fun TypeDecl.Struct<GlobalTypeId>.renderFull(
     index: HarvestIndex,
     program: Program,
     shortener: TemplateNameShortener? = null,
+    owner: String? = null,
 ): List<String> {
     val members = fields.filter { !it.isStatic }.sortedBy { it.offsetBits }.map { f ->
-        f.access to "${f.type.render(index, shortener = shortener)} ${f.name};  /* +${f.offsetBits / 8}B */"
+        f.access to "${f.type.renderDecl(f.name, index, shortener)};  /* +${f.offsetBits / 8}B */"
     } + fields.filter { it.isStatic }.map { f ->
         // Static members occupy no storage, so they have no offset to sort by and were dropped
         // outright. Their linkage name is the only stabs link to the emitted symbol, so show it.
         val link = f.mangled?.let { "  /* $it */" }.orEmpty()
-        f.access to "static ${f.type.render(index, shortener = shortener)} ${f.name};$link"
+        f.access to "static ${f.type.renderDecl(f.name, index, shortener)};$link"
     } + methods.mapNotNull { m ->
         m.mangled?.let { index.functionsByMangledName[it] }?.let {
-            m.access to "${m.declPrefix}${it.signature(program)}${m.declSuffix};"
+            // Ghidra's prototypeString carries a return type on every function and `this` as a real
+            // parameter; neither is legal in a class body, where a constructor has no return type and
+            // `this` is a keyword.
+            m.access to "${m.declPrefix}${it.signature(program).asMemberDefinition(owner)}${m.declSuffix};"
         }
     }
 
@@ -198,7 +202,24 @@ fun Symbol.renderVar(index: HarvestIndex, program: Program, shortener: TemplateN
         Var(
             declLine,
             name,
-            "${body.type.render(index, shortener = shortener)} ${body.name};",
+            "${body.type.renderDecl(body.name, index, shortener)};",
             role,
         )
     }
+
+/**
+ * A C declaration of [name] with this type. C is declarator-based: an array's extent goes *after* the
+ * name, so `char const[18] _ZTS7MyKlass` — which is what type-then-name produces, and what clang
+ * rejects with "brackets are not allowed here" — has to be `char const _ZTS7MyKlass[18]`.
+ */
+fun TypeDecl<GlobalTypeId>.renderDecl(
+    name: String,
+    index: HarvestIndex,
+    shortener: TemplateNameShortener? = null,
+): String = declarator(render(index, shortener = shortener), name)
+
+private val ARRAY_SUFFIX = Regex("""((?:\[[^\]]*\])+)$""")
+
+internal fun declarator(type: String, name: String) = ARRAY_SUFFIX.find(type)
+    ?.let { "${type.removeSuffix(it.value).trimEnd()} $name${it.value}" }
+    ?: "$type $name"
