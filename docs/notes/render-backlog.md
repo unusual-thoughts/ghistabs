@@ -1283,7 +1283,37 @@ class is not declared in that view — so this is group 2 resurfacing, not a new
 parameter and renaming it to `self` instead was measured and is worse everywhere: 570/1653/2751
 against 503/1649/2565.
 
-**Open.** Group 2 dominates what is left and subsumes the tinyxml regression: a header view renders
-the code inlined *from* it with nothing declaring the enclosing class or emitting the enclosing
-function. Group 3 is 7 rows in unpackfile. Note the checker is a shell script over clang, not a test;
-wiring it into `integrationTest` needs clang on the build box.
+**Group 2 done — the wrapper.** A header's inlined code is now enclosed in the function it was
+compiled from, so it reads as a body rather than as loose statements at file scope. `wrapAsDefinition`
+opens the first stretch with the function's signature and closes the last, counting braces over the
+whole group; that subsumes the old per-stretch `balance()`, which made each stretch self-contained but
+left them all outside any function.
+
+The wrapper is a *free* function, deliberately. The class is usually not declared in the view, so
+`Class::method` would not resolve and an implicit `this` would have nothing to bind to — the explicit
+parameter stays and is renamed, along with every use in the body, because `this` is a keyword. This is
+the same rename that was worse when applied to the whole render: right here, where there is no member
+function to be implicit about, wrong for a qualified definition, which has one. A destructor's `~` is
+also rewritten, a free function's name being unable to carry one, and duplicate class-body
+declarations from gcc's aliased ctor/dtor copies are deduped (they render identically once the return
+type and `this` are gone, and a class body cannot declare a member twice).
+
+| render | before group 1 | after group 1 | after group 2 |
+| --- | --- | --- | --- |
+| unpackfile | 626 | 503 | **396** |
+| tinyxml | 1443 | 1649 | **1456** |
+| cryptopp | 2752 | 2565 | **2224** |
+
+Brace-specific diagnostics: unpackfile 10, tinyxml 20, cryptopp 126. Not zero — group 3 is untouched.
+
+**Open.**
+
+- **Group 3, brace nesting.** Unchanged: an orphaned `} else {` at xvimage.cpp L297 whose `if (…) {`
+  is placed elsewhere, and surplus closers. Braces balance by count while nesting wrongly, so per-file
+  `{` vs `}` counting cannot see it.
+- **Template instantiations as declarations** (`expected unqualified-id`, 94 on unpackfile — now the
+  largest class). `class __normal_iterator<char*,std::string> : public iterator<…>` is not legal C++:
+  a name carrying template arguments needs `template<>`. Same for instantiated function names,
+  `__copy<unsigned_short*,…>(…)`.
+- Note the checker is a shell script over clang, not a test; wiring it into `integrationTest` needs
+  clang on the build box.
