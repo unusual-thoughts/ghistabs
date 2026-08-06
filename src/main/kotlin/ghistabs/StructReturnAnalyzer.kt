@@ -182,8 +182,7 @@ private fun derivedConventionXml(program: Program, base: String, fix: Correction
     }.toString()
 }
 
-private fun Element.children(tag: String) =
-    childNodes.let { kids -> (0 until kids.length).map(kids::item) }.filterIsInstance<Element>().filter {
-        it.tagName ==
-            tag
+private fun Element.children(tag: String) = childNodes.let { kids -> (0 until kids.length).map(kids::item) }
+    .filterIsInstance<Element>().filter {
+        it.tagName == tag
     }
