@@ -79,7 +79,7 @@ abstract class ContentIndex(val contentCache: MutableMap<GlobalTypeId, LayoutCon
         //   InlineDef(id=B, body=XRef(STRUCT, Foo))   resolving to id=B's own Struct
         // would pre-mark B and make refKey(B) return the empty back-edge marker instead of struct content.
         // For non-XRef bodies the guard IS required (a Ref(id) in a Struct body must not recurse).
-        is TypeDecl.InlineDef -> body.describe(if (body is TypeDecl.XRef) visited else visited + id)
+        is TypeDecl.InlineDef -> inner.describe(if (inner is TypeDecl.XRef) visited else visited + id)
     }
 
     /**

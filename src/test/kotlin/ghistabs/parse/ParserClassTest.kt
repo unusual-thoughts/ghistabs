@@ -125,7 +125,7 @@ class ParserClassTest {
                         mangled = "_ZN3Qux4doItEi",
                         signature = TypeDecl.InlineDef(
                             id = LocalTypeId(0, 10),
-                            body = TypeDecl.Method(
+                            inner = TypeDecl.Method(
                                 cls = TypeDecl.Ref(LocalTypeId(0, 9)),
                                 ret = TypeDecl.Ref(LocalTypeId(0, 1)),
                                 params = listOf(TypeDecl.Ref(LocalTypeId(0, 2))),
@@ -205,7 +205,7 @@ class ParserClassTest {
                         mangled = "_ZN3Qux4doItEi",
                         signature = TypeDecl.InlineDef(
                             id = LocalTypeId(0, 10),
-                            body = TypeDecl.Method(
+                            inner = TypeDecl.Method(
                                 cls = TypeDecl.Ref(LocalTypeId(0, 9)),
                                 ret = TypeDecl.Ref(LocalTypeId(0, 1)),
                                 params = listOf(TypeDecl.Ref(LocalTypeId(0, 2))),
@@ -309,7 +309,7 @@ class ParserClassTest {
                         mangled = "_ZN4Base6methodEv",
                         signature = TypeDecl.InlineDef(
                             id = LocalTypeId(0, 21),
-                            body = TypeDecl.Method(
+                            inner = TypeDecl.Method(
                                 cls = TypeDecl.Ref(LocalTypeId(0, 20)),
                                 ret = TypeDecl.Ref(LocalTypeId(0, 1)),
                                 params = emptyList(), // No explicit parameters; implicit this is in cls
@@ -353,7 +353,7 @@ class ParserClassTest {
                         mangled = "_ZN7Derived7vmethodEi",
                         signature = TypeDecl.InlineDef(
                             id = LocalTypeId(0, 31),
-                            body = TypeDecl.Method(
+                            inner = TypeDecl.Method(
                                 cls = TypeDecl.Ref(LocalTypeId(0, 30)), // Implicit this: the containing class
                                 ret = TypeDecl.Ref(LocalTypeId(0, 1)),
                                 params = listOf(TypeDecl.Ref(LocalTypeId(0, 2))), // Explicit parameter

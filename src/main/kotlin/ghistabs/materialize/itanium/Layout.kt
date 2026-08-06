@@ -95,8 +95,8 @@ fun HarvestIndex.resolveBaseAstStatic(typeDecl: TypeDecl<GlobalTypeId>): TypeDec
         // often a forward XRef. Without the fallback, polymorphism detection misses
         // inherited vfptrs (e.g. DCInst → InlineDef(ExprInst id, XRef body)).
         is TypeDecl.InlineDef -> getStruct(typeDecl.id)
-            ?: (typeDecl.body as? TypeDecl.Struct)
-            ?: resolveBaseAstStatic(typeDecl.body)
+            ?: (typeDecl.inner as? TypeDecl.Struct)
+            ?: resolveBaseAstStatic(typeDecl.inner)
 
         else -> null
     }

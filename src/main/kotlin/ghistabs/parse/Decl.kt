@@ -72,8 +72,10 @@ sealed interface TypeDecl<out Id : IdInterface> {
      */
     val sizeBits: Long? get() = sizeBytes?.times(8)
 
+    val wrapped: TypeDecl<Id>? get() = null
+
     /** Directly nested TypeDecls, in declaration order */
-    val children: List<List<TypeDecl<Id>>> get() = listOf()
+    val children: List<List<TypeDecl<Id>>> get() = wrapped?. let { listOf(listOf(it)) } ?: emptyList()
 
     val layoutData: List<Any> get() = emptyList<Nothing>()
 
@@ -133,25 +135,25 @@ sealed interface TypeDecl<out Id : IdInterface> {
 
     // Both are address-sized, which the stab never states — leave sizeBytes null
     @Serializable
-    data class Pointer<Id : IdInterface>(val pointee: TypeDecl<Id>) : TypeDecl<Id> {
-        override val children get() = listOf(listOf(pointee))
+    data class Pointer<Id : IdInterface>(val inner: TypeDecl<Id>) : TypeDecl<Id> {
+        override val wrapped get() = inner
     }
 
     /** C++ reference */
     @Serializable
-    data class Reference<Id : IdInterface>(val referent: TypeDecl<Id>) : TypeDecl<Id> {
-        override val children get() = listOf(listOf(referent))
+    data class Reference<Id : IdInterface>(val inner: TypeDecl<Id>) : TypeDecl<Id> {
+        override val wrapped get() = inner
     }
 
     @Serializable
     data class Const<Id : IdInterface>(val inner: TypeDecl<Id>) : TypeDecl<Id> {
-        override val children get() = listOf(listOf(inner))
+        override val wrapped get() = inner
         override val sizeBytes get() = inner.sizeBytes
     }
 
     @Serializable
     data class Volatile<Id : IdInterface>(val inner: TypeDecl<Id>) : TypeDecl<Id> {
-        override val children get() = listOf(listOf(inner))
+        override val wrapped get() = inner
         override val sizeBytes get() = inner.sizeBytes
     }
 
@@ -282,7 +284,7 @@ sealed interface TypeDecl<out Id : IdInterface> {
     /** Wrapper carrying an `@s<n>;` size attribute around an inner type. */
     @Serializable
     data class WithSizeAttr<Id : IdInterface>(override val sizeBits: Long, val inner: TypeDecl<Id>) : TypeDecl<Id> {
-        override val children get() = listOf(listOf(inner))
+        override val wrapped get() = inner
         override val layoutData get() = listOf(sizeBits)
 
         override val sizeBytes get() = (sizeBits + 7) / 8
@@ -299,8 +301,8 @@ sealed interface TypeDecl<out Id : IdInterface> {
 
     /** Inline type definition: `(cu,n)=<body>` where the binding `(cu,n)` is preserved for Phase 3. */
     @Serializable
-    data class InlineDef<Id : IdInterface>(@Contextual val id: Id, val body: TypeDecl<Id>) : TypeDecl<Id> {
-        override val children get() = listOf(listOf(body))
+    data class InlineDef<Id : IdInterface>(@Contextual val id: Id, val inner: TypeDecl<Id>) : TypeDecl<Id> {
+        override val wrapped get() = inner
     }
 
     val isXRefTarget get() = this is Struct || this is Enum

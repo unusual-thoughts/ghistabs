@@ -508,7 +508,7 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
      *  pointer/array), or null — the containment edge that scopes a method-less nested member type. */
     private tailrec fun byValueStructId(t: TypeDecl<GlobalTypeId>): GlobalTypeId? = when (t) {
         is TypeDecl.Ref -> t.id.takeIf { typeAsts[it]?.body is TypeDecl.Struct }
-        is TypeDecl.InlineDef -> if (t.body is TypeDecl.Struct) t.id else byValueStructId(t.body)
+        is TypeDecl.InlineDef -> if (t.inner is TypeDecl.Struct) t.id else byValueStructId(t.inner)
         is TypeDecl.Const -> byValueStructId(t.inner)
         is TypeDecl.Volatile -> byValueStructId(t.inner)
         else -> null

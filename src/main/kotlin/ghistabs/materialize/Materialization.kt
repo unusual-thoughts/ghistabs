@@ -12,9 +12,9 @@ import ghidra.program.model.data.Enum as GhidraEnum
 
 internal fun DataTypeRegistry.materializeBody(ast: Type, category: CategoryPath, placeholder: DataType): DataType =
     when (val body = ast.body) {
-        is TypeDecl.Pointer -> pointerTo(body.pointee, "body-pointer-pointee", ast.ghidraName)
+        is TypeDecl.Pointer -> pointerTo(body.inner, "body-pointer-pointee", ast.ghidraName)
 
-        is TypeDecl.Reference -> pointerTo(body.referent, "body-reference-referent", ast.ghidraName)
+        is TypeDecl.Reference -> pointerTo(body.inner, "body-reference-referent", ast.ghidraName)
 
         // Transparent wrappers/primitives resolve through resolveRef (which unwraps const/volatile
         // and routes the builtin-family via BuiltinTable), falling back to the placeholder.
@@ -349,14 +349,14 @@ fun DataTypeRegistry.resolveRef(decl: TypeDecl<GlobalTypeId>): DataType? = when 
 
     is TypeDecl.Ref -> getOrMaterialize(decl.id)
 
-    is TypeDecl.InlineDef -> getOrMaterialize(decl.id) ?: resolveRef(decl.body)?.let { cache(decl.id, it) }
+    is TypeDecl.InlineDef -> getOrMaterialize(decl.id) ?: resolveRef(decl.inner)?.let { cache(decl.id, it) }
 
     is TypeDecl.Range, is TypeDecl.Complex, is TypeDecl.Float, is TypeDecl.WithSizeAttr, is TypeDecl.Builtin ->
         decl.resolveBuiltin()
 
-    is TypeDecl.Pointer -> pointerTo(decl.pointee, "pointer-pointee", "(anon)")
+    is TypeDecl.Pointer -> pointerTo(decl.inner, "pointer-pointee", "(anon)")
 
-    is TypeDecl.Reference -> pointerTo(decl.referent, "reference-referent", "(anon)")
+    is TypeDecl.Reference -> pointerTo(decl.inner, "reference-referent", "(anon)")
 
     is TypeDecl.Const -> resolveRef(decl.inner)
 
