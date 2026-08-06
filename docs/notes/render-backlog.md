@@ -3,6 +3,55 @@
 Open rendering issues in `render/`, captured from output review. Fixtures
 regenerate under `build/test-output/{skeletons,decomps}/<binary>/`.
 
+## Priorities
+
+Ranked by what a reader of the output gets per unit of work, as of the grammar pass. Sections are
+numbered in the order they were *found*, not worked; this is the order to work them.
+
+**First — one upstream fix that shrinks several downstream problems.**
+
+1. **§31, non-returning functions.** `error()` calls `exit` and never returns, nothing marks it, so
+   every call site decompiles with its dead tail attached. That dead code is the `goto LAB_…` soup
+   and the out-of-source-order branches the layout then has to place — so this is upstream of §29's
+   placement work, of the crammed rows, and of some of the brace nesting below. It is the only open
+   item that makes the *input* smaller rather than compensating for it. Was reverted for marking 31
+   of 41 functions wrongly; needs redoing against a real CFG (`FindNoReturnFunctionsAnalyzer` walks
+   one), gated on "`error()` marked AND nothing in libstdc++ marked".
+
+**Then — three that a reader hits immediately.**
+
+2. **image.h is 903 rows of libstdc++.** The class-attribution half is fixed; the other half is not.
+   `effectiveSource` trusts `declSourceFile` for typedefs, and `activityExtent` cannot flag the
+   result because for a file with no function spans it falls back to counting type declarations —
+   the same circularity fixed for `.cpp` files. Note the coupling recorded below: `image.h` is a
+   known source largely *because* these are filed there, so this and the sibling-header lookup have
+   to move together.
+3. **§33, blank space.** 87% of rows, 92% of that in runs of 20+. Options were written up and never
+   chosen; it needs a decision more than it needs work.
+4. **`redefinition of X`** (16 on unpackfile). Duplicate declarations that survived the class-body
+   dedup. Cheap and self-contained.
+
+**Then — structural correctness that the counters do not fully see.**
+
+5. **Brace nesting.** 3 / 20 / 82 clang diagnostics; 6 / 16 / 62 rows of negative nesting. The known
+   case is an orphaned `} else {` at xvimage.cpp L297 whose `if (…) {` is placed elsewhere. Worth
+   pairing with an invariant that *does* see it: assert each function's rendered close against
+   `spans.closeLine`. `image.cpp`'s swallowed functions passed every existing counter.
+6. **8 markers still outside their block**, where the block and the marker reach the row as separate
+   fragments. Needs placing at fragment assembly in `TargetLine.render()` rather than in
+   `dropInlined`.
+7. **`activityExtent`'s header proxy.** `spans.ranges.isEmpty()` stands in for "is a header" and
+   leaks: `filesystemimage.h` has spans from inline methods. Right answer there by luck.
+
+**Lower — measurement, then long-standing limitations.**
+
+8. **Forward-declare referenced templates.** Would make the error total mean something again (an
+   undeclared template manufactures syntax errors), but arity varies per instantiation because of
+   default arguments, so the declaration is not straightforwardly derivable.
+9. §23 multi-vtable ABI, §24 RTTI wiring, §25 unannotated `_ZTV`, §26 bitfields, §30 unnamed
+   parameters, §21 leftovers, and the `4900866` a.out neutrality question. All pre-date this pass and
+   none block a reader of the render.
+
 ## 1. Single-line functions get no decompiled body — DONE
 
 An inline accessor whose machine code all maps to one source line (e.g.
