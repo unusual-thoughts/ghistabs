@@ -157,6 +157,13 @@ fun allocate(claims: List<Claim>, maxLine: Int): Allocation {
     // Among elastic peers on one line the fullest reserves — it has the most to show and the others
     // fold losslessly onto the row it took — tie-broken by text so the choice cannot drift with an
     // unrelated change. Rigid claims are left tied, keeping their arrival order.
+    //
+    // Neither tie-break applies to a *body*, whose claims are consecutive stretches of one decompiled
+    // function and must stay in the order the decompiler emitted them. Sorting them by size and text
+    // alphabetised the statements inside a function: file.cpp's first constructor got its closing
+    // brace two rows before its last two statements, which then parsed at file scope. `sortedWith` is
+    // stable, so comparing equal here is what preserves arrival order.
+    fun Claim.tie(v: Int) = if (fit == Fit.ELASTIC && owner.group != "body") v else 0
     val order = compareBy<Pair<Claim, Int>>(
         { it.first.stale },
         { it.first.owner.ordinal },
@@ -164,8 +171,8 @@ fun allocate(claims: List<Claim>, maxLine: Int): Allocation {
         // Rigid before elastic among peers: a function's signature is one row and must open the row
         // its body shares, and a one-row typedef keeps its line under an expanding initializer.
         { if (it.first.fit == Fit.ELASTIC) 1 else 0 },
-        { if (it.first.fit == Fit.ELASTIC) -it.first.rows.size else 0 },
-        { if (it.first.fit == Fit.ELASTIC) it.first.rows.firstOrNull()?.text.orEmpty() else "" },
+        { it.first.tie(-it.first.rows.size) },
+        { if (it.first.fit == Fit.ELASTIC && it.first.owner.group != "body") it.first.rows.first().text else "" },
     )
 
     // Who holds each row. A peer — same owner, same attribution — shares it rather than contending;
