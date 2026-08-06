@@ -1345,3 +1345,46 @@ prelude was tried and changes nothing; the templates, not the namespace, are wha
   not straightforwardly derivable.
 - Note the checker is a shell script over clang, not a test; wiring it into `integrationTest` needs
   clang on the build box.
+
+---
+
+## Class attribution: `class Image` lands in stl_vector.h, image.h gets 903 rows of libstdc++
+
+A straight swap, both directions, from the same unreliable signal. `image.h` is ~50 lines of source
+and renders 903 rows containing no project code at all — only `vector<unsigned short>`,
+`__normal_iterator`, `_Alloc_traits` and friends — while `class Image` is declared in
+`c__mingw_include_c___3.2.3_bits_stl_vector.h`.
+
+**Evidence.** `Image` has four type records, one per CU, and every one names a *different* libstdc++
+header as its `declSourceFile`:
+
+| CU emitting the `:T` body | declSourceFile |
+| --- | --- |
+| unpackfile.cpp | `bits/stl_list.h` |
+| filesystemimage.cpp | `bits/stl_list.h` |
+| xvimage.cpp | `bits/basic_string.h` |
+| image.cpp | `bits/stl_algobase.h` |
+
+That is N_SOL at the moment gcc emitted the body — wherever the type first happened to be needed —
+and it carries no information about where the class is written.
+
+**Why the header vote cannot rescue it.** `multiSourceHeaderHints` votes over header N_SLINE entries
+inside each method's address range. `image.h` has **zero** line entries: `Image`'s methods are all
+out-of-line in image.cpp, so nothing was ever inlined from its header and it can never appear in any
+vote. `userVote` is therefore empty and the `stdVote` fallback wins with stl_vector.h (70 entries).
+The fallback is guarded only by `defSources.size > 1`, which is true of any class defined across
+several CUs — the guard was meant to catch stdlib-only types and does not.
+
+Contrast `XVImage`, which has 2 line entries in xvimage.h (something *was* inlined from it) and is
+attributed correctly. So the defect is specific to a class with no inlined code.
+
+**Proposed fix, not yet made.** A method resolves to a `Func`, and `Func.cu` names the CU that defines
+it; C++ convention puts the class in that CU's sibling header. So when `userVote` is empty and every
+method of a type resolves to one CU, prefer that CU's sibling header (`image.cpp` → `image.h`) over
+the stdlib majority. Note this map also feeds `Attribution.keyFor` and therefore DTM attribution, not
+just the render, so it needs the regression baselines checked, not only the grammar counts.
+
+**Second, separable defect.** The instantiations landing *in* image.h come from `effectiveSource`
+trusting `declSourceFile` for typedefs. And `activityExtent` cannot flag them: for a file with no
+function spans it falls back to counting type declarations, which is the same circularity fixed for
+`.cpp` files — the misattributed declarations define the extent that is supposed to judge them.
