@@ -1208,3 +1208,43 @@ few genuine additions are locals Ghidra lost, e.g. `TiXmlAttribute::SetDoubleVal
 `filesystemimage.h` has spans (inline methods) so it takes the `.cpp` path. Right answer there by
 luck. The real signal is probably distance: `class XVImage` sits 4 lines past attested code,
 `bit_vector` sits 540 past.
+
+---
+
+## Render output is not parseable C++ — one root cause
+
+`tools/check-grammar.sh <dir>` runs clang over a render and counts only the diagnostics that mean
+the text cannot be parsed at all — braces, parens, unterminated comments/strings, unterminated
+statements. Semantic errors are ignored on purpose: the render names types it never defines, so
+"undeclared identifier" is expected and says nothing about structure. `#include` lines are stripped;
+the include graph is not under test.
+
+| render | files with structural errors | errors |
+| --- | --- | --- |
+| unpackfile | 13/54 | 50 |
+| tinyxml | 17/110 | 150 |
+| cryptopp | 57/250 | 333 |
+
+Three messages — `expected ')'` (19), `expected ';' after top level declarator` (18), `extraneous
+closing brace` (13) on unpackfile — but **one cause**: braces balance by count while nesting
+wrongly, so a function closes early and its remaining statements are parsed at file scope, where
+`(this->x).f = ...` is not a declaration. Every sampled instance across three files is that.
+
+xvimage.cpp's first constructor shows it whole:
+
+```
+/* ⇐ L 29 */ void XVImage::XVImage(XVImage *this) {
+  /* ⇐ L 30 */ this->alignment = 0; … return; }   /* ⇐ inlines atomicity.h L 51 */
+  /* ⇐ L 30 */ Image::Image(&this->_base_Image);
+  /* ⇐ L 30 */ (this->_base_Image).vfptr = …;
+```
+
+The inlined `Image::Image` body is placed *before* the call that inlines it and brings its `}` with
+it, closing the constructor two rows early; the constructor's own `}` from FUNC_DELIM then loses its
+row to the body, which is normally right — a body carries its own braces — but is wrong once the
+body's braces are unbalanced. So the fix is in the `dropInlined()` / `Region.balance()` interaction,
+not in the brace pass. **Counting `{` vs `}` per file, which every check so far has used, cannot see
+this** and reported all three renders balanced throughout.
+
+**Open.** Note the checker is a shell script over clang, not a test; wiring it into
+`integrationTest` needs clang on the build box.

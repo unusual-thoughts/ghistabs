@@ -634,16 +634,28 @@ private class RenderContext(val renderer: Renderer, val source: String) {
     private val bodied = mutableSetOf<Func>()
 
     private fun decompClaims(): List<Claim> = buildList {
+        // Aliased out-of-line copies — ctor C1/C2, dtor D0/D1/D2 — are one function gcc emitted
+        // several times, at *different* addresses, all mapped to one source line. Decompiling each
+        // stacked the duplicates: every constructor in xvimage.cpp appeared twice, opening brace and
+        // all. The skeleton merges them already, into `opens XVImage ×2`.
+        //
+        // Keyed on the head — the full signature — at a shared start line, which is the signal the
+        // old single-line guard was already built on. Not on the whole body: the copies are decompiled
+        // separately, so Ghidra numbers their locals independently and two of xvimage.cpp's three
+        // constructors differed past the head while being the same function. Two genuinely distinct
+        // functions cannot collide here, since the key carries their signatures.
+        val seenHeads = mutableSetOf<Pair<Int, String>>()
         for ((func, startLine) in spans.ranges) {
             val closeLine = spans.closeLine(func) ?: startLine
             if (closeLine < startLine) continue
-            // Aliased out-of-line copies (ctor C1/C2, dtor D0/D1/D2) all collapse onto one source
-            // line; decompiling each would stack duplicate bodies, so only body a single-line
-            // function when it is the sole range on its line.
-            if (closeLine == startLine && spans.ranges.count { it.startLine == startLine } > 1) continue
             val cLines = renderer.decompile(func).ifEmpty { continue }
             val head = cLines.firstOrNull() ?: continue
+            // Bodied before the duplicate check, not after: [bodied] is what tells the brace pass
+            // whose delimiters a body already carries, and a copy dropped as a duplicate is covered
+            // by the copy that stayed. Marking only the survivor left the dropped one's `}` to be
+            // emitted on its own, which clang reports as an extraneous closing brace.
             bodied += func
+            if (!seenHeads.add(startLine to head.text)) continue
 
             // The body may borrow the contiguous blank rows after its span when it outgrows it — the
             // next function or global ends the run — so a dense body breathes instead of piling on.
