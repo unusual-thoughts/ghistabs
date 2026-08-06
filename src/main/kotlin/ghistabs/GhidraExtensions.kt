@@ -165,3 +165,16 @@ val MemoryBlock.byteProvider get() = InputStreamByteProvider(data, size)
 fun Memory.getBlockContaining(addr: Address) = blocks.find { it.addressRange.contains(addr) }
 
 fun String.nullIfEmpty() = ifEmpty { null }
+
+/**
+ * Where the program's default calling convention starts its stack parameters — the bias between a
+ * gcc frame offset and a Ghidra one.
+ *
+ * The *default* convention, not [VariableUtilities.getBaseStackParamOffset]'s per-function answer:
+ * x86gcc gives `processEntry` `stackshift="0"` against `__cdecl`'s 4, so asking whichever function a
+ * caller had first could shift every stack slot in the program by a pointer. Fallback as Ghidra's,
+ * for a convention with no stack ParamEntry to derive an offset from.
+ */
+val Program.baseStackParamOffset get() = compilerSpec.defaultCallingConvention.run {
+    stackParameterOffset?.toInt() ?: stackshift
+}
