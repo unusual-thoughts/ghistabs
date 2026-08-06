@@ -761,14 +761,47 @@ private class RenderContext(val renderer: Renderer, val source: String) {
                 .joinToString { "${it.name}=${it.role}" }
             val text = head.text.asMemberDefinition() + extra.joinToString("") { " ${it.text}" } +
                 storage.takeIf { it.isNotEmpty() }?.let { " /* storage: $it */" }.orEmpty()
+
+            // Close what the head opened, when the body no longer does. An accessor whose body is
+            // entirely inlined — `Image::size`, `Image::operator[]` — keeps no statement of its own
+            // after [dropInlined], so its `{` stood open and swallowed every function declared below
+            // it: image.cpp's `operator[]` ran from L41 to L128, with `set`, `size` and `bytesize`
+            // nested inside it. The brace pass cannot cover this, because a bodied function is
+            // exactly the case it steps aside for. Counting head and body together is the same rule
+            // [wrapAsDefinition] applies to inlined stretches.
+            // An anchorless region has no line of its own to render at, so as a claim it floats away
+            // from the function it belongs to — and for a body that is entirely inlined it is the only
+            // region there is, carrying the function's closing brace with it. `Image::size` was one
+            // region reading `} /* ⇐ inlines stl_iterator.h … */`; its `}` drifted off and its head's
+            // `{` swallowed every function below, so `operator[]` ran from L41 to L128 with `set`,
+            // `size` and `bytesize` nested inside it. Fold those onto the last row that does have a
+            // place: the last anchored region, or the head.
+            val (anchored, floating) = regionsOf(func, cLines).dropInlined().partition { it.anchor != null }
+            val tail = floating.flatMap { r -> r.lines.map { it.text } }.filter { it.isNotBlank() }
+            if (anchored.isNotEmpty()) anchored.last().lines.addAll(tail.map { DecompLine(it, null, 0) })
+
+            // Close what the head opened, when the body no longer does. Counting head and body
+            // together is the same rule [wrapAsDefinition] applies to inlined stretches; the brace
+            // pass cannot cover it, a bodied function being exactly the case it steps aside for.
+            val body = anchored.flatMap { r -> r.lines.map { it.text } } + if (anchored.isEmpty()) tail else listOf()
+            val delta = (listOf(text) + body).sumOf { l -> l.count { it == '{' } - l.count { it == '}' } }
+            val closers = "}".repeat(delta.coerceAtLeast(0))
             this += Claim(
                 Owner.FUNCTION_BODY,
                 startLine,
-                listOf(Row(text, note = "L $startLine")),
+                listOf(
+                    Row(
+                        if (anchored.isEmpty()) (listOf(text) + tail).joinToString(" ") + closers else text,
+                        note = "L $startLine",
+                    ),
+                ),
                 anchoring = Anchoring.AFTER,
                 limit = gapEnd,
             )
-            addAll(claimsFor(regionsOf(func, cLines).dropInlined(), gapEnd))
+            if (anchored.isNotEmpty() && closers.isNotEmpty()) {
+                anchored.last().lines += DecompLine(closers, null, 0)
+            }
+            addAll(claimsFor(anchored, gapEnd))
         }
 
         // The code this file contributed to *other* files' functions. gcc inlined it from here, so its
