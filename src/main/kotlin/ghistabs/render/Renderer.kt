@@ -139,6 +139,9 @@ internal fun String.asMemberDefinition(owner: String? = null): String {
     return "$prefix($params" + substring(close)
 }
 
+// An already-closed empty block at the end of a decompiled line — Ghidra spells it `{ }` or `{}`.
+private val TRAILING_EMPTY_BLOCK = Regex("""\{\s*\}$""")
+
 // A destructor's leading `~` where the wrapper makes it a free function's name, which cannot carry
 // one. `void ~XVImage(XVImage *self)` is not a destructor here — there is no class to destroy — so it
 // is named for what it is.
@@ -998,8 +1001,20 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             val r = kept.last()
             val braces = if (depth > 0) "{".repeat(depth) else "}".repeat(-depth)
             val last = r.lines.lastOrNull() ?: return
-            val head = listOf(last.text, braces).filter(String::isNotEmpty).joinToString(" ")
-            r.lines[r.lines.lastIndex] = last.copy(text = head + marks)
+            // Marker before the braces, not after. A block whose whole content was inlined away closes
+            // immediately, and with the marker outside it read as `if (index < uVar1) { } /* ⇐ inlines
+            // stl_iterator.h L 584 */` — an empty block with a footnote. Inside, the same tokens say
+            // what is actually true: `if (index < uVar1) { /* ⇐ inlines stl_iterator.h L 584 */ }`,
+            // the body is over there. 80 rows on unpackfile read as empty blocks.
+            // Ghidra emits an already-closed block as `{}`; the marker goes between its braces for the
+            // same reason, so an inlined-away loop body reads `for (…) { /* ⇐ inlines … */ }`. A `{}`
+            // with no marker is Ghidra's own empty loop and stays as it is.
+            val marked = TRAILING_EMPTY_BLOCK.find(last.text)
+                ?.takeIf { marks.isNotEmpty() }
+                ?.let { last.text.dropLast(it.value.length) + "{" + marks + " }" }
+                ?: (last.text + marks)
+            val text = listOf(marked, braces).filter(String::isNotEmpty).joinToString(" ")
+            r.lines[r.lines.lastIndex] = last.copy(text = text)
             marks = ""
             depth = 0
         }
