@@ -5,11 +5,13 @@ import ghidra.program.model.data.CharDataType
 import ghidra.program.model.data.SignedByteDataType
 import ghidra.program.model.listing.Program
 import ghistabs.harvest.HarvestIndex
+import ghistabs.harvest.Symbol
 import ghistabs.materialize.TemplateNameShortener
 import ghistabs.materialize.resolveBuiltin
 import ghistabs.parse.Access
 import ghistabs.parse.AggrKind
 import ghistabs.parse.GlobalTypeId
+import ghistabs.parse.SymbolDecl
 import ghistabs.parse.TypeDecl
 
 /**
@@ -178,3 +180,25 @@ fun TypeDecl.Struct<GlobalTypeId>.renderFull(
         }
     }
 }
+
+/** One stabs variable of a function, declared in this file: where gcc put it and how it renders. */
+data class Var(val line: Int, val name: String, val text: String, val role: String?)
+
+// Only a local carries a role, and only when asked for. A parameter's was noise: it labelled
+// `(param)` a declaration whose own function signature, two columns away, already showed it to
+// be one. A local's storage is real but is a fact about the compiled code rather than the
+// source being reconstructed, so it is opt-in — and spelled by the same [dbxStorageName] the
+// scope plate comments use, so `EBX` and `Stack[-0x38]` mean there exactly what they mean here.
+fun Symbol.renderVar(index: HarvestIndex, program: Program, shortener: TemplateNameShortener, showStorage: Boolean) =
+    when (body) {
+        is SymbolDecl.Local -> body.name to if (showStorage) storage(program) else null
+        is SymbolDecl.Param -> body.name to null
+        else -> null
+    }?.let { (name, role) ->
+        Var(
+            declLine,
+            name,
+            "${body.type.render(index, shortener = shortener)} ${body.name};",
+            role,
+        )
+    }

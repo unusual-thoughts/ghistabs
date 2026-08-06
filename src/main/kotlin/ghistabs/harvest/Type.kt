@@ -6,6 +6,7 @@ import ghidra.program.model.address.Address
 import ghidra.program.model.data.CategoryPath
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.SymbolUtilities
+import ghistabs.baseStackParamOffset
 import ghistabs.demangledName
 import ghistabs.parse.*
 import kotlinx.serialization.KSerializer
@@ -74,6 +75,22 @@ data class Symbol(
         sourceFile: String? = null,
         enclosingFunction: String? = null,
     ) : this(record.index, record.type, decl, record.value, record.desc, sourceFile, enclosingFunction)
+
+    fun storage(program: Program) = (
+        when (body) {
+            is SymbolDecl.Local -> body.location
+            is SymbolDecl.Param -> body.location
+            else -> null
+        }
+        )?.let {
+        dbxStorageName(
+            program.defaultPointerSize,
+            rawValue.toInt(),
+            it == VariableLocation.REGISTER,
+            program.baseStackParamOffset,
+        )
+    }
+
     companion object {
         fun parse(
             rec: StabRecord,
