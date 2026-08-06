@@ -46,9 +46,9 @@ fun TypeDecl<GlobalTypeId>.render(
         }
     }
 
-    is TypeDecl.Pointer -> "${pointee.render(index, seen, shortener)} *"
+    is TypeDecl.Pointer -> "${inner.render(index, seen, shortener)} *"
 
-    is TypeDecl.Reference -> "${referent.render(index, seen, shortener)} &"
+    is TypeDecl.Reference -> "${inner.render(index, seen, shortener)} &"
 
     is TypeDecl.Const -> "${inner.render(index, seen, shortener)} const"
 
@@ -87,7 +87,7 @@ fun TypeDecl<GlobalTypeId>.render(
         "$ret($cls::*)($params)"
     }
 
-    is TypeDecl.InlineDef -> body.render(index, seen + id, shortener)
+    is TypeDecl.InlineDef -> inner.render(index, seen + id, shortener)
 }
 
 /**
@@ -100,7 +100,7 @@ fun harvestTemplateShortener(index: HarvestIndex): TemplateNameShortener {
     fun targetName(decl: TypeDecl<GlobalTypeId>): String? = when (decl) {
         is TypeDecl.Ref -> index.byId(decl.id)?.name
         is TypeDecl.XRef -> decl.tagName
-        is TypeDecl.InlineDef -> targetName(decl.body)
+        is TypeDecl.InlineDef -> targetName(decl.inner)
         else -> null
     }
     val aliases = index.allTypes.mapNotNull { ast ->
@@ -115,7 +115,7 @@ fun TypeDecl<GlobalTypeId>.isPointer(index: HarvestIndex): Boolean = when (this)
     is TypeDecl.Pointer -> true
     is TypeDecl.Const -> inner.isPointer(index)
     is TypeDecl.Volatile -> inner.isPointer(index)
-    is TypeDecl.InlineDef -> body.isPointer(index)
+    is TypeDecl.InlineDef -> inner.isPointer(index)
     is TypeDecl.Ref -> index.byId(id)?.body?.isPointer(index) ?: false
     else -> false
 }
@@ -125,7 +125,7 @@ fun TypeDecl<GlobalTypeId>.isCharArray(index: HarvestIndex): Boolean = when (thi
     is TypeDecl.Array -> element.isCharType(index)
     is TypeDecl.Const -> inner.isCharArray(index)
     is TypeDecl.Volatile -> inner.isCharArray(index)
-    is TypeDecl.InlineDef -> body.isCharArray(index)
+    is TypeDecl.InlineDef -> inner.isCharArray(index)
     is TypeDecl.Ref -> index.byId(id)?.body?.isCharArray(index) ?: false
     else -> false
 }
@@ -135,7 +135,7 @@ private fun TypeDecl<GlobalTypeId>.isCharType(index: HarvestIndex): Boolean = wh
 
     is TypeDecl.Volatile -> inner.isCharType(index)
 
-    is TypeDecl.InlineDef -> body.isCharType(index)
+    is TypeDecl.InlineDef -> inner.isCharType(index)
 
     is TypeDecl.Ref -> index.byId(id)?.body?.isCharType(index) ?: false
 

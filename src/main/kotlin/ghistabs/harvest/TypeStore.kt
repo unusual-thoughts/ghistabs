@@ -30,11 +30,11 @@ class TypeStore(
                     cu,
                     id,
                     null,
-                    body,
+                    inner,
                     declLine = sym.declLine,
                     declSourceFile = sym.sourceFile,
                 ),
-            ) + body.walk()
+            ) + inner.walk()
 
             else -> children.flatMap { field -> field.flatMap { it.walk() } }
         }

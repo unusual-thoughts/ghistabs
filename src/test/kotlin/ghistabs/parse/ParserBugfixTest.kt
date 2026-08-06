@@ -92,8 +92,8 @@ class ParserBugfixTest {
                 val ptr = symbol.type
                 if (ptr is TypeDecl.Pointer) {
                     // The pointer should reference (0,30), which is the type being defined
-                    if (ptr.pointee is TypeDecl.Ref) {
-                        val ref = ptr.pointee
+                    if (ptr.inner is TypeDecl.Ref) {
+                        val ref = ptr.inner
                         assertEquals(LocalTypeId(0, 30), ref.id, "Ref should be to (0,30) (the type itself)")
                     }
                 }
@@ -132,10 +132,10 @@ class ParserBugfixTest {
                     if (nextField.type is TypeDecl.InlineDef) {
                         val inlineDef = nextField.type
                         assertEquals(LocalTypeId(0, 2), inlineDef.id, "Inline def id should be (0,2)")
-                        if (inlineDef.body is TypeDecl.Pointer) {
-                            val ptr = inlineDef.body
-                            if (ptr.pointee is TypeDecl.Ref) {
-                                val ref = ptr.pointee
+                        if (inlineDef.inner is TypeDecl.Pointer) {
+                            val ptr = inlineDef.inner
+                            if (ptr.inner is TypeDecl.Ref) {
+                                val ref = ptr.inner
                                 assertEquals(
                                     LocalTypeId(0, 1),
                                     ref.id,
@@ -151,8 +151,8 @@ class ParserBugfixTest {
                     if (valField.type is TypeDecl.InlineDef) {
                         val inlineDef = valField.type
                         assertEquals(LocalTypeId(0, 3), inlineDef.id, "Inline def id should be (0,3)")
-                        if (inlineDef.body is TypeDecl.Ref) {
-                            val ref = inlineDef.body
+                        if (inlineDef.inner is TypeDecl.Ref) {
+                            val ref = inlineDef.inner
                             assertEquals(LocalTypeId(0, 1), ref.id, "Body should be Ref to (0,1)")
                         }
                     }
@@ -308,7 +308,7 @@ class ParserBugfixTest {
             id = LocalTypeId(0, 60),
             type = TypeDecl.InlineDef(
                 id = LocalTypeId(0, 61),
-                body = TypeDecl.Struct(
+                inner = TypeDecl.Struct(
                     rawKind = AggrKind.STRUCT,
                     sizeBytes = 8,
                     bases = emptyList(),
@@ -317,9 +317,9 @@ class ParserBugfixTest {
                             name = "inner",
                             type = TypeDecl.InlineDef(
                                 id = LocalTypeId(0, 62),
-                                body = TypeDecl.InlineDef(
+                                inner = TypeDecl.InlineDef(
                                     id = LocalTypeId(0, 63),
-                                    body = TypeDecl.Struct(
+                                    inner = TypeDecl.Struct(
                                         rawKind = AggrKind.STRUCT,
                                         sizeBytes = 4,
                                         bases = emptyList(),
@@ -328,7 +328,7 @@ class ParserBugfixTest {
                                                 name = "value",
                                                 type = TypeDecl.InlineDef(
                                                     id = LocalTypeId(0, 64),
-                                                    body = TypeDecl.Range(LocalTypeId(0, 1), 0, 32),
+                                                    inner = TypeDecl.Range(LocalTypeId(0, 1), 0, 32),
                                                 ),
                                                 offsetBits = 0,
                                                 sizeBits = 32,

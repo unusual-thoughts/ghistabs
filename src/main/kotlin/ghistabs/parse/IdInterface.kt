@@ -85,9 +85,9 @@ fun TypeDecl<LocalTypeId>.globalize(g: Globalizer): TypeDecl<GlobalTypeId> = whe
 
     is TypeDecl.WithSizeAttr -> TypeDecl.WithSizeAttr(sizeBits, inner.globalize(g))
 
-    is TypeDecl.Pointer -> TypeDecl.Pointer(pointee.globalize(g))
+    is TypeDecl.Pointer -> TypeDecl.Pointer(inner.globalize(g))
 
-    is TypeDecl.Reference -> TypeDecl.Reference(referent.globalize(g))
+    is TypeDecl.Reference -> TypeDecl.Reference(inner.globalize(g))
 
     is TypeDecl.Array -> TypeDecl.Array(element.globalize(g), length, indexType?.globalize(g))
 
@@ -121,7 +121,7 @@ fun TypeDecl<LocalTypeId>.globalize(g: Globalizer): TypeDecl<GlobalTypeId> = whe
         vptrBasetype?.globalize(g),
     )
 
-    is TypeDecl.InlineDef -> TypeDecl.InlineDef(g.globalIdFor(id), body.globalize(g))
+    is TypeDecl.InlineDef -> TypeDecl.InlineDef(g.globalIdFor(id), inner.globalize(g))
 }
 
 fun SymbolDecl<LocalTypeId>.globalize(g: Globalizer) = when (this) {

@@ -440,7 +440,7 @@ class ClassBuilder(
             cur = when (cur) {
                 is TypeDecl.Method, is TypeDecl.FunctionT -> return cur
                 is TypeDecl.Ref -> index.byId(cur.id)?.body
-                is TypeDecl.InlineDef -> cur.body
+                is TypeDecl.InlineDef -> cur.inner
                 else -> return null
             }
         }
