@@ -7,7 +7,6 @@ import ghidra.util.task.TaskMonitor
 import ghistabs.StabsOptions.Companion.stabsTypedefsShortened
 import ghistabs.harvest.*
 import ghistabs.importer.AddressResolver
-import ghistabs.importer.stabsFrameBias
 import ghistabs.materialize.TemplateNameShortener
 import ghistabs.parse.*
 import ghistabs.runTransaction
@@ -124,7 +123,6 @@ private class RenderContext(val renderer: Renderer, val source: String) {
     private val shortener get() = renderer.shortener
 
     private val pointerSize = program.defaultPointerSize
-    private val frameBias by lazy { program.stabsFrameBias(index.functions) }
 
     private val spans = FunctionSpans.of(rawFuncs, source)
 
@@ -433,30 +431,8 @@ private class RenderContext(val renderer: Renderer, val source: String) {
     private fun dedup(line: Int, name: String) =
         line in 1..maxLine && name != "this" && seenDecls.add(DeclKey(line, name))
 
-    // A declLine outside the host function's bracket is a stale-N_SOL signature — flag it.
-    /** One stabs variable of a function, declared in this file: where gcc put it and how it renders. */
-    private data class Var(val line: Int, val name: String, val text: String, val role: String)
-
-    private fun varsOf(f: Func): List<Var> {
-        // Only a local carries a role, and only when asked for. A parameter's was noise: it labelled
-        // `(param)` a declaration whose own function signature, two columns away, already showed it to
-        // be one. A local's storage is real but is a fact about the compiled code rather than the
-        // source being reconstructed, so it is opt-in — and spelled by the same [dbxStorageName] the
-        // scope plate comments use, so `EBX` and `Stack[-0x38]` mean there exactly what they mean here.
-        fun of(s: Symbol, name: String, type: TypeDecl<GlobalTypeId>, loc: VariableLocation?) = Var(
-            s.declLine,
-            name,
-            "${type.render(index, shortener = shortener)} $name;",
-            loc?.takeIf { renderer.showStorage }
-                ?.let { dbxStorageName(pointerSize, s.rawValue.toInt(), it == VariableLocation.REGISTER, frameBias) }
-                .orEmpty(),
-        )
-        return f.params.filter { it.sourceFile == source }.mapNotNull { s ->
-            (s.body as? SymbolDecl.Param)?.let { of(s, it.name, it.type, null) }
-        } +
-            f.locals.filter { it.sourceFile == source }.mapNotNull { s ->
-                (s.body as? SymbolDecl.Local)?.let { of(s, it.name, it.type, it.location) }
-            }
+    private fun varsOf(f: Func): List<Var> = (f.params + f.locals).filter { it.sourceFile == source }.mapNotNull {
+        it.renderVar(index, program, shortener, renderer.showStorage)
     }
 
     private fun localClaims(): List<Claim> {
@@ -581,7 +557,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             val (line, _) = key
             // Deterministic pick: the most members, then by name, so the choice can't drift with
             // unrelated type-resolution changes.
-            val ast = group.maxWith(compareBy({ it.body.memberCount() }, { it.name })) ?: continue
+            val ast = group.maxWithOrNull(compareBy({ it.body.memberCount() }, { it.name })) ?: continue
             mergedInstantiations += group.filterNot { it === ast }
             val name = ast.name ?: continue
             val body = ast.body
@@ -687,8 +663,8 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             // without breaking the grouping. Looked up by name, so it covers Ghidra's own declarations
             // too — annotating only the merged extras reached 2 of unbouniaf's locals instead of all
             // of them. A `//` here would comment out the rest of the row.
-            val storage = vars.filter { it.role.isNotEmpty() }
-                .sortedWith(compareBy({ !it.role.startsWith("Stack") }, { it.role }, { it.name }))
+            val storage = vars.filter { it.role != null }
+                .sortedWith(compareBy({ it.role?.startsWith("Stack") != true }, { it.role }, { it.name }))
                 .joinToString { "${it.name}=${it.role}" }
             val text = head.text + extra.joinToString("") { " ${it.text}" } +
                 storage.takeIf { it.isNotEmpty() }?.let { " /* storage: $it */" }.orEmpty()

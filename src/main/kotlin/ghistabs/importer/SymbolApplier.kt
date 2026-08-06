@@ -13,6 +13,7 @@ import ghidra.program.model.listing.*
 import ghidra.program.model.listing.Function
 import ghidra.program.model.symbol.SourceType
 import ghidra.program.model.symbol.SymbolTable
+import ghistabs.baseStackParamOffset
 import ghistabs.demangle
 import ghistabs.demangledName
 import ghistabs.diagnose.ApplyErrorBucket
@@ -311,16 +312,6 @@ class SymbolApplier(
     }
 
     /**
-     * Bias from gcc's frame-pointer-relative stab offsets to Ghidra's stackpointer-at-entry offsets.
-     * gcc's frame origin is the saved frame pointer, one pointer below the return address; Ghidra's
-     * origin is the return address, and the convention places the first stack parameter exactly one
-     * pointer above it. Those two "one pointer" gaps are the same slot, so the bias is precisely
-     * where the convention starts stack params — [VariableUtilities.getBaseStackParamOffset] — not a
-     * hardcoded constant. Any function fixes it program-wide; absent one, fall back to a pointer.
-     */
-    private val frameBias by lazy { ctx.program.stabsFrameBias(harvest.functions) }
-
-    /**
      * The name to give a local, or null when it is not a variable of its own. gcc names every inline
      * expansion's locals identically (`this` six times over in one function) and Ghidra's variable
      * namespace is flat, so distinct copies get `this`, `this_1`, … — but a same-named variable
@@ -370,7 +361,7 @@ class SymbolApplier(
                     }
                     // gcc's frame-pointer-relative offset → Ghidra's SP-at-entry offset via the
                     // convention-derived [frameBias] (NSA/ghidra#223, #5485).
-                    val stackOffset = loc.rawValue.toInt() - frameBias
+                    val stackOffset = loc.rawValue.toInt() - ctx.program.baseStackParamOffset
                     val lv = LocalVariableImpl(decl.name, dt, stackOffset, ctx.program, source)
                     func.addLocalVariable(lv, source)
                     debug("local-var-add-success")
@@ -439,15 +430,11 @@ class SymbolApplier(
      * this comment is the only surviving record of the name, type and slot.
      */
     private fun scopeCommentText(locals: List<Symbol>): String {
-        fun storage(loc: Symbol) = (loc.body as? SymbolDecl.Local)?.location
-            ?.let { dbxStorageName(pointerSize, loc.rawValue.toInt(), it == VariableLocation.REGISTER, frameBias) }
-            .orEmpty()
-
         val (stack, registers) = locals.partition { (it.body as? SymbolDecl.Local)?.location == VariableLocation.STACK }
         val rows = (stack.sortedBy { it.rawValue.toInt() } + registers.sortedBy { it.body.name }).map { loc ->
             val type = registry.resolveRef(loc.body.type)?.displayName ?: "?"
             val origin = loc.sourceFile?.pathBasename()?.let { "[$it:${loc.declLine}]" } ?: "[line ${loc.declLine}]"
-            Triple("$type ${loc.body.name}", storage(loc), origin)
+            Triple("$type ${loc.body.name}", loc.storage(ctx.program).orEmpty(), origin)
         }
         val declWidth = rows.maxOf { it.first.length }
         val storageWidth = rows.maxOf { it.second.length }
@@ -587,16 +574,3 @@ class SymbolApplier(
         }
     }
 }
-
-/**
- * gcc's frame origin is the saved frame pointer, one pointer below the return address; Ghidra's
- * origin is the return address, and the convention places the first stack parameter exactly one
- * pointer above it. Those two "one pointer" gaps are the same slot, so the bias is precisely where
- * the convention starts stack params — [VariableUtilities.getBaseStackParamOffset] — not a hardcoded
- * constant. Any function fixes it program-wide; absent one, fall back to a pointer.
- */
-fun Program.stabsFrameBias(functions: Iterable<Func>): Int = functions
-    .asSequence()
-    .mapNotNull { functionManager.getFunctionAt(it.addr) }
-    .firstNotNullOfOrNull { VariableUtilities.getBaseStackParamOffset(it) }
-    ?: defaultPointerSize
