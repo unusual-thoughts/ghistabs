@@ -1263,5 +1263,27 @@ decompiler's order. Separately, `dropInlined` folded an inlined stretch's brace 
 *following* region's last row, carrying braces over that region's statements; it now folds onto the
 preceding region, as its own comment always said. Together: unpackfile 50 → 39 on the old whitelist.
 
-**Open.** Group 1 is the obvious next step. Note the checker is a shell script over clang, not a
-test; wiring it into `integrationTest` needs clang on the build box.
+**Group 1 done.** Each was one rendering rule:
+
+- Pointers whose target Ghidra left undefined printed as the bare address, `0040fbc0`, which C reads
+  as octal and rejects once a digit is 8 or 9. Spelled from the `Address` now, not by pattern-matching
+  the rendered text, which cannot tell an address from a decimal.
+- `renderDecl` puts an array's extent after the declarator, as C requires: `char const _ZTS7XVImage[9]`.
+  Used by globals, fields, static members and locals.
+- `asMemberDefinition` drops the return type Ghidra puts on every function when the function is a
+  constructor or destructor, and drops its explicit `this` parameter. Applied to qualified definitions
+  (deriving the class from `X::y`) and to class-body declarations (told the owner, having no qualifier
+  to read).
+
+unpackfile 626 → 503, cryptopp 2752 → 2565. **tinyxml went 1443 → 1649** and that is worth
+understanding rather than averaging away: the group-1 errors are gone from it too, but removing the
+explicit `this` turned 50 `invalid parameter name` plus 68 ctor/dtor errors into 167 `invalid use of
+'this' outside of a non-static member function`. Both spellings are wrong for the same reason — the
+class is not declared in that view — so this is group 2 resurfacing, not a new defect. Keeping the
+parameter and renaming it to `self` instead was measured and is worse everywhere: 570/1653/2751
+against 503/1649/2565.
+
+**Open.** Group 2 dominates what is left and subsumes the tinyxml regression: a header view renders
+the code inlined *from* it with nothing declaring the enclosing class or emitting the enclosing
+function. Group 3 is 7 rows in unpackfile. Note the checker is a shell script over clang, not a test;
+wiring it into `integrationTest` needs clang on the build box.

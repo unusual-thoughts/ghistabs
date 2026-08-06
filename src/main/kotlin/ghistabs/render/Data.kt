@@ -6,6 +6,8 @@ import ghidra.program.model.listing.Program
 import ghidra.program.model.scalar.Scalar
 import ghistabs.importer.resolvePointee
 
+fun Address.hexLiteral() = "0x" + offset.toString(16).padStart(8, '0')
+
 private fun Data.repr() = runCatching { defaultValueRepresentation }.getOrNull()
     ?.takeIf { it.isNotEmpty() && it != "??" && !it.contains("Empty-Structure") }
     ?.let(::cStyleNumber)
@@ -34,11 +36,14 @@ fun Data.render(program: Program, depth: Int = 0): String? {
     // char array / string type — Ghidra renders the quoted literal directly.
     if (value is String) return repr()
     // pointer — chase the target, defining a string there if it's an undefined run.
+    // Ghidra's own representation of a pointer is the bare address — `0040fbc0` — which C reads as an
+    // octal constant, and rejects outright once a digit is 8 or 9. Spell it as hex from the Address
+    // rather than pattern-matching the rendered text, which cannot tell an address from a decimal.
     (value as? Address)?.let { ptr ->
         program.resolvePointee(ptr)?.takeIf { it.isDefined }?.let {
-            return it.render(program, depth + 1) ?: repr()
+            return it.render(program, depth + 1) ?: ptr.hexLiteral()
         }
-        return repr()
+        return ptr.hexLiteral()
     }
     // array / struct — recurse each component into a brace-list.
     if (numComponents > 0) {
