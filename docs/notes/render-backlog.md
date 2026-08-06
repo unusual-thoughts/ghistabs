@@ -1306,14 +1306,42 @@ type and `this` are gone, and a class body cannot declare a member twice).
 
 Brace-specific diagnostics: unpackfile 10, tinyxml 20, cryptopp 126. Not zero — group 3 is untouched.
 
+**After group 2, two corrections and a limit.**
+
+*The wrapper must not span a function's whole contribution.* Two functions inlined from one header
+interleave by line, so a wrapper over everything one function contributed nests as `A{ B{ A} B}`;
+that took unpackfile from 7 rows of negative nesting to 14, worse than before group 2. It now wraps
+**consecutive** stretches only, which cannot interleave. Clang's brace diagnostics on unpackfile:
+10 group-spanning → **3**. Adjacent stretches share one head, so a
+`vector<Exclusion,…>::operator=` signature stands over its five consecutive stretches instead of
+being repeated above each — 644 heads down to 572, and 594 total errors down to 432.
+
+*Template instantiations are specialisations.* `class fpos<int> { … };` is not legal C++;
+`template<> class fpos<int> { … };` is, and gcc's stabs describe instantiations, never the primary
+template. Correct spelling, but **zero measured effect** — those lines already carried other errors.
+
+**The checker's total is inflated and is not a to-do list.** An undeclared template makes `<`
+ambiguous, so clang cannot tell a template argument list from a less-than and reports a *syntax*
+error for what is really a missing declaration. Minimal repro: the same specialisation draws 4 errors
+with its templates undeclared and 1 with them declared. Since the render names far more templates
+than it defines, an unknown but large share of `expected unqualified-id` / `expected expression` /
+`expected ')'` is this artifact, and it scales with how many signatures are printed — which is why
+per-stretch wrapping improves the braces while raising the total. Declaring `namespace std` in the
+prelude was tried and changes nothing; the templates, not the namespace, are what clang needs.
+**Judge render changes on the brace diagnostics and on negative-nesting rows, not on the total.**
+
+| render | total | brace diagnostics |
+| --- | --- | --- |
+| unpackfile | 432 | 3 |
+| tinyxml | 1485 | 20 |
+| cryptopp | 2910 | 94 |
+
 **Open.**
 
-- **Group 3, brace nesting.** Unchanged: an orphaned `} else {` at xvimage.cpp L297 whose `if (…) {`
-  is placed elsewhere, and surplus closers. Braces balance by count while nesting wrongly, so per-file
-  `{` vs `}` counting cannot see it.
-- **Template instantiations as declarations** (`expected unqualified-id`, 94 on unpackfile — now the
-  largest class). `class __normal_iterator<char*,std::string> : public iterator<…>` is not legal C++:
-  a name carrying template arguments needs `template<>`. Same for instantiated function names,
-  `__copy<unsigned_short*,…>(…)`.
+- **Group 3, brace nesting.** Still not zero. unpackfile's remaining rows include an orphaned
+  `} else {` at xvimage.cpp L297 whose `if (…) {` is placed elsewhere.
+- **Forward declarations for referenced templates** would make the total mean something again, but
+  arity varies per instantiation (default arguments), so a per-file `template<class,…> class X;` is
+  not straightforwardly derivable.
 - Note the checker is a shell script over clang, not a test; wiring it into `integrationTest` needs
   clang on the build box.
