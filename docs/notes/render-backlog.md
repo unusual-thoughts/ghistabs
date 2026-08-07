@@ -1318,10 +1318,22 @@ Every rendered file now ends at depth 0 and never dips below it. Clang totals mo
 (349→352, 2611→2989, 2939→3240) for the reason recorded above: an undeclared template makes `<`
 ambiguous, so more correctly-emitted scopes manufacture more `expected …`. Judge on the brace column.
 
-**Weaker orders were tried and are not enough.** Holding a region below its *enclosing* opener, and a
-closing region below what its block holds, covers defects 2 and 3 and still lets a sibling block
-invert: an `if (y) {` anchored earlier than the `if (x) { … }` before it sorts above the lot and ends
-up wrapping it — balanced, never negative, clauses inverted. Only a total order rules that out.
+**Weaker orders were tried, built out, and measured — they are not enough.** Holding a region below
+its *enclosing* opener, and a closing region below what its block holds, covers defects 2 and 3 and
+still lets a sibling block invert: an `if (y) {` anchored earlier than the `if (x) { … }` before it
+sorts above the lot and ends up wrapping it — balanced, never negative, clauses inverted.
+
+That rule is implemented on the **`nesting-load-bearing`** branch. It matches this one on every
+counter readable from the output — negative-nesting rows 0/0/0, clang brace diagnostics 1/3/21 — and
+beats it on alignment: mean displacement 5.7/3.2/16.1 against 7.6/13.0/18.9, rows off their line
+56/47/54% against 62/58/61%. On the counters, it wins.
+
+It loses on the one measurement the counters cannot make, which is the point of this whole section.
+`outOfOrder` (on that branch) counts body regions placed below the running maximum of their
+predecessors — 0 here by construction. There: **6,706 across 246 file-renders, 2,646 of them carrying
+a brace**, worst file 173 of 387. Each of those 2,646 moves a block opener or closer above something
+that preceded it — a block landing around code that was never inside it, balanced and depth-clean the
+whole way. The alignment is not worth that.
 
 **What the total order costs, and why it is the floor.** Alignment, charged to the loops: a loop's
 condition carries the `for` line, above the body it follows, so a body's tail no longer returns to it.
