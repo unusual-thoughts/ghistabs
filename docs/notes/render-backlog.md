@@ -8,47 +8,37 @@ regenerate under `build/test-output/{skeletons,decomps}/<binary>/`.
 Ranked by what a reader of the output gets per unit of work, as of the grammar pass. Sections are
 numbered in the order they were *found*, not worked; this is the order to work them.
 
-**First — one upstream fix that shrinks several downstream problems.**
+**Three that a reader hits immediately.**
 
-1. **§31, non-returning functions.** `error()` calls `exit` and never returns, nothing marks it, so
-   every call site decompiles with its dead tail attached. That dead code is the `goto LAB_…` soup
-   and the out-of-source-order branches the layout then has to place — so this is upstream of §29's
-   placement work, of the crammed rows, and of some of the brace nesting below. It is the only open
-   item that makes the *input* smaller rather than compensating for it. Was reverted for marking 31
-   of 41 functions wrongly; needs redoing against a real CFG (`FindNoReturnFunctionsAnalyzer` walks
-   one), gated on "`error()` marked AND nothing in libstdc++ marked".
-
-**Then — three that a reader hits immediately.**
-
-2. **image.h is 903 rows of libstdc++.** The class-attribution half is fixed; the other half is not.
+1. **image.h is 903 rows of libstdc++.** The class-attribution half is fixed; the other half is not.
    `effectiveSource` trusts `declSourceFile` for typedefs, and `activityExtent` cannot flag the
    result because for a file with no function spans it falls back to counting type declarations —
    the same circularity fixed for `.cpp` files. Note the coupling recorded below: `image.h` is a
    known source largely *because* these are filed there, so this and the sibling-header lookup have
    to move together.
-3. **§33, blank space.** 87% of rows, 92% of that in runs of 20+. Options were written up and never
+2. **§33, blank space.** 87% of rows, 92% of that in runs of 20+. Options were written up and never
    chosen; it needs a decision more than it needs work.
-4. **`redefinition of X`** (16 on unpackfile). Duplicate declarations that survived the class-body
+3. **`redefinition of X`** (16 on unpackfile). Duplicate declarations that survived the class-body
    dedup. Cheap and self-contained.
 
 **Then — structural correctness that the counters do not fully see.**
 
-5. **Brace nesting.** 3 / 20 / 82 clang diagnostics; 6 / 16 / 62 rows of negative nesting. The known
+4. **Brace nesting.** 3 / 20 / 82 clang diagnostics; 6 / 16 / 62 rows of negative nesting. The known
    case is an orphaned `} else {` at xvimage.cpp L297 whose `if (…) {` is placed elsewhere. Worth
    pairing with an invariant that *does* see it: assert each function's rendered close against
    `spans.closeLine`. `image.cpp`'s swallowed functions passed every existing counter.
-6. **8 markers still outside their block**, where the block and the marker reach the row as separate
+5. **8 markers still outside their block**, where the block and the marker reach the row as separate
    fragments. Needs placing at fragment assembly in `TargetLine.render()` rather than in
    `dropInlined`.
-7. **`activityExtent`'s header proxy.** `spans.ranges.isEmpty()` stands in for "is a header" and
+6. **`activityExtent`'s header proxy.** `spans.ranges.isEmpty()` stands in for "is a header" and
    leaks: `filesystemimage.h` has spans from inline methods. Right answer there by luck.
 
 **Lower — measurement, then long-standing limitations.**
 
-8. **Forward-declare referenced templates.** Would make the error total mean something again (an
+7. **Forward-declare referenced templates.** Would make the error total mean something again (an
    undeclared template manufactures syntax errors), but arity varies per instantiation because of
    default arguments, so the declaration is not straightforwardly derivable.
-9. §23 multi-vtable ABI, §24 RTTI wiring, §25 unannotated `_ZTV`, §26 bitfields, §30 unnamed
+8. §23 multi-vtable ABI, §24 RTTI wiring, §25 unannotated `_ZTV`, §26 bitfields, §30 unnamed
    parameters, §21 leftovers, and the `4900866` a.out neutrality question. All pre-date this pass and
    none block a reader of the render.
 
@@ -1130,59 +1120,151 @@ the `sig !is Method && sig !is FunctionT` guard is the prime suspect — needs i
 
 ---
 
-## 31. Non-returning functions went undetected — REVERTED, needs redoing
+## 31. Non-returning functions went undetected — DONE
 
-Much of what §29 was laying out was unreachable code. unpackfile's `error()` calls `exit` and never
-returns, but nothing marked it, so every caller decompiled with the dead tail still attached — the
-`goto LAB_…` soup and out-of-source-order branches the layout then had to place. The whole
-unpackfile render carried exactly **one** "Subroutine does not return" comment, on the `exit(1)`
-inside `error` itself; `error`'s own call sites had none.
+`error()` calls `exit` and never returns, but nothing marked it, so every caller decompiled with the
+dead tail still attached. Ghidra's `FindNoReturnFunctionsAnalyzer` ("Non-Returning Functions -
+Discovered") misses it twice over: it is a call-site **damage** heuristic and nothing after these call
+sites decoded badly, and it runs at `DISASSEMBLY.after().after()`, long before `StabsAnalyzer` at
+`LOW_PRIORITY` creates the functions it would examine.
 
-Two reasons Ghidra missed it. Its `FindNoReturnFunctionsAnalyzer` ("Non-Returning Functions -
-Discovered") is a call-site **damage** heuristic — it infers non-return from garbage decoded after a
-call — and nothing after these call sites decoded badly. And it runs at
-`AnalysisPriority.DISASSEMBLY.after().after()`, long before `StabsAnalyzer` at `LOW_PRIORITY` creates
-the functions it would need to examine.
+`NoReturnAnalyzer` (`FUNCTION_ANALYZER`, `LOW_PRIORITY.after()`) is Ghidra's own
+`targetOnlyCallsNoReturn` walk, ungated: from the entry, over `SimpleBlockModel`, a path may end only
+at a call to an already-non-returning function. Iterated to a fixed point via `getCallingFunctions`
+so a chain resolves however deep.
 
-`SymbolApplier.applyNoReturn`, run after the apply pass, decides it structurally instead: walk the CFG
-from the entry, stop each path at a call to a function already known non-returning, and if no `ret`
-is still reachable then this one cannot return either. Iterated to a fixed point so a chain resolves
-however deep. **Reachability is the necessary part** — "has no `ret`" is not enough, since gcc leaves
-one behind as dead code: `error` has 13 instructions and one of them is a `ret` after the `exit`
-call, which is what made the first, simpler rule fire on nothing at all. Tail calls are excluded (a
-jump out of the body returns through the callee).
+**The first attempt was reverted for marking 31 of 41 wrongly, and the cause was not what the revert
+note guessed.** It blamed the hand-rolled instruction walk dead-ending on libstdc++'s switch tables.
+Moving to the block model does fix that class — an unresolved computed jump becomes a block with no
+destinations, which reads as "assume it returns" — but two *specific* clauses turned out to be what
+the false positives actually needed:
 
-On unpackfile.cpp it did what was wanted — `goto`/`LAB_` **11 → 2**, braces 44/44 → 24/24, p95 row
-701 → 538 — **and it was wrong**. Reverted in the commit after.
+- **The fall-through past a non-returning call must be dropped.** Ghidra's `setNoFallThru` repair has
+  already removed that edge by the time *its* walk runs and has not by the time ours does, so the
+  model still offers it — and it points at whatever the linker placed next, which is no part of this
+  function. `error` ends at `call exit` with inline string data at 0x401300 behind it, so following
+  the edge gets a null block and the walk concludes "returns"; elsewhere the same edge lands in an
+  unrelated function and finds its `ret`.
 
-Of the 41 functions it marked, roughly 31 were false positives: `strtold`, `do_put`,
-`_M_convert_int<long>`, `_M_widen_float`, `_S_pad` and twenty more libstdc++ locale/iostream
-functions that plainly return. They are switch-table-heavy; the instruction walk dead-ended on an
-unresolved computed jump and read that as "no `ret` reachable". Ghidra then cleared the code after
-their call sites as unreachable, which is what the `text-undisassembled-code` 2 → 39 and
-`text-data-no-coverage` 227 → 316 baseline drift was reporting. The drift was the bug, not noise.
+  **The revert note's account of this is wrong and was repeated here for a while.** It said "`error`
+  has 13 instructions with a `ret` among them after the `exit` call", making the point that a naive
+  "has no `ret`" rule would fire on nothing. `error` is 48 bytes, twelve instructions, and ends *at*
+  the `call exit` — gcc emitted no epilogue, correctly, because `exit` is declared `noreturn`. There
+  is no dead `ret`. Verified by disassembly; do not reintroduce the claim.
+- **A terminal block that tail-calls a returning function returns through it** — Ghidra's
+  `if (flowType.isTerminal() && (destFlowType.isCall() || func != null)) return false`, which the
+  first port dropped. `std::string::assign` and `std::string::replace` end `jmp <other overload>`
+  with their only other exit a `__throw_out_of_range` call, so without it they read as never
+  returning. `__gxx_exception_cleanup` (tail-jumps to `__cxa_free_exception`) was the same bug.
 
-**What a correct version needs**, beyond the conservative rule that a path may end *only* at a known
-non-returning call (unresolved flow ⇒ assume it returns):
+Measured on unpackfile: **5 → 32** functions marked. The 27 added are `error`, the `std::__throw_*`
+family, `terminate`/`unexpected`, `__cxa_throw`/`rethrow`/`pure_virtual`, `__eprintf` and the CRT
+startup entries — all correct.
 
-- Honour `added(program, set, …)`. It scanned every function in the program on every invocation and
-  ignored the address set entirely, which is both wasteful and wrong for incremental analysis: scope
-  to the set, then fixed-point outward to callers of whatever gets newly marked.
-- Use a CFG block model rather than a hand-rolled instruction walk. `SimpleBlockModel` is what
-  `targetOnlyCallsNoReturn` uses; the one edge it needs help with is the fall-through past a
-  non-returning call, which Ghidra's `setNoFallThru` repair has already removed by the time *its*
-  walk runs and has not by the time ours does. Skip that edge explicitly instead of avoiding the
-  model.
-- `FUNCTION_ANALYZER` is right (not `INSTRUCTION_ANALYZER` as `FindNoReturnFunctionsAnalyzer` uses):
-  the trigger we want is a new function being defined, by stabs or anything else.
-- The fixed point terminates on "nothing newly marked", so re-running must be cheap and idempotent.
+**Checked across the whole corpus, not one toolchain.** The first sweep covered only 32-bit MinGW PEs
+— the case least likely to break — and checked them by grepping for the known bad names, which cannot
+catch a false positive spelled anything else. The rosters were then *read* on all 22 fixtures.
 
-Ship gate: on unpackfile, `error()` marked and *nothing* in libstdc++ marked. Both directions matter
-— the first version got `error` and 31 wrong; the conservative-only fix got zero wrong but also lost
-`error`, which is the whole point.
+Counts are `before → after` (Ghidra alone → with this analyzer), from the two rosters:
+
+| family | fixtures | before → after | what gets added |
+| --- | --- | --- | --- |
+| MinGW PE, cryptopp | crypto_mi ×4 (3.4.5/4.2.1, ±stripped) | 7…17 → 100…105 | the whole `CryptoPP::` not-implemented base-stub family |
+| MinGW PE, the rest | unpackfile, packfile, appquery, xapasmcsr, locale_test ×2, xmltest ×4 | 5…14 → 27…33 | libstdc++ throw/terminate, plus `error` and packfile's `usage` |
+| ELF x86-64 | box2d_tests 2 → 2, xmltest 6 → 6 | **+0** | nothing: libstdc++ is dynamically linked, so the `__throw_*` helpers are not in the image — only PLT entries, which are external |
+| unlinked a.out `.o` | hello, tinyxml, zlib | 0 → 0 | nothing: no libc linked, so nothing anchors a walk |
+
+The two `+0` rows are worth reading as a **coverage gap, not a pass**: on ELF this analyzer has been
+shown not to produce false positives, but it has never been shown to do anything there either. A
+statically-linked ELF fixture would be the way to exercise it.
+
+**The split is linkage, not platform and not gcc version** — worth stating because the table invites
+the opposite conclusion. MinGW has no shared libstdc++, so it links it statically: `unpackfile.exe`
+carries 704 `__ZSt`/`__ZNSt` symbols, and `std::__throw_*` / `terminate` / `__cxa_throw` are real
+in-image functions this analyzer can walk. Both ELF fixtures declare `NEEDED libstdc++.so.6`
+(`box2d_tests` does not link it at all), so those helpers are `UND` and live in the `.so`; what is
+in-image is PLT stubs, which Ghidra models as externals and `markNoReturn` skips. ELF gcc is not
+avoiding anything — there were no candidates in those two images.
+
+Nor is the dead code at `error()`'s *call sites* a PE artifact: `error()` simply is not declared
+`__attribute__((noreturn))` in the source, so gcc emits ordinary fall-through at every call site, as
+it would on any target. Recovering exactly that is the point of this analyzer.
+
+The only project-level marks are unpackfile's `error` and packfile's `usage` (prints help, ends
+`call _exit`); both were verified in the disassembly and are pinned in `MUST_BE_MARKED`.
+`crypto_mi_test_gcc421_fullstabs_stripped` marks 105 — the largest haul — and every `CryptoPP::` entry
+is a base-class stub that throws `NotImplemented` (`Clonable::Clone`, `CryptoMaterial::Save`,
+`InputRejecting<T>::Put2`, `AllowNonrecoverablePart`, …), plus `SigIllHandler*` which `longjmp`. The
+two that read as ordinary accessors are real and really do not return: in `crypto_mi_test_gcc345.exe`
+`PowerUpSelfTestInProgressOnThisThread` and `AlgorithmParametersBase::operator=` are each a single
+`call __assert` with the next function ~20 bytes later, and the binary's own symbol table gives those
+names (an earlier note here guessed the stripped fixture had misattributed them — it had not).
+
+The `DL_SignatureSchemeBase<…>::AllowNonrecoverablePart` forwarders are the interesting case, because
+"a virtual call reaching a derived override that returns" is the obvious way this rule could go wrong.
+It does not happen here: gcc emitted a *direct* call to `PK_SignatureMessageEncodingMethod::
+AllowNonrecoverablePart`, which throws. And the conservative rule covers the other branch by
+construction — an unresolved `call eax` yields a block with no destinations, which reads as "assume it
+returns".
+
+Zero marks is a legitimate result, so the test's liveness assertion is on function count, not on the
+roster being non-empty.
+
+**The gate is narrow by construction and blind outside libstdc++** — it asserts the known regression,
+not correctness in general; nothing in it would catch a wrong mark in `CryptoPP::`. The roster written
+to `build/test-output/noreturn/` is the artifact for that, and reading it is part of landing a change
+here.
+
+**The render win is real but much smaller than the reverted commit claimed.** That commit reported
+unpackfile.cpp `goto`/`LAB_` 11 → 2; most of that was the false positives deleting *live* libstdc++
+code. Correctly marked, the corpus-wide figure is 45 → 42, and unpackfile.cpp itself does not move.
+What does change is local and right: `error()`'s call sites now carry "Subroutine does not return",
+their dead inlined-destructor tails are gone, and `unpack` sheds four locals.
+
+**The baseline drift is the same drift, and it is now verified benign.** `text-undisassembled-code`
+2 → 30 and `text-data-no-coverage` 227 → 299 (the revert saw 39 / 316). All 30 undisassembled regions
+were traced: 24 sit immediately after a call to one of the 32 non-returning functions, and the other
+6 are reachable only from those — including two whose sole referrers sit *inside* an already-cleared
+region. This is dead code ceasing to be covered, which is the intended effect.
+
+**Only `Mode.AFTER` moves; `CONCURRENT` does not**, and that is measurement order, not the analyzer:
+`analyzeDataCoverage` runs inside the stabs import, which in CONCURRENT is at `LOW_PRIORITY` — before
+this analyzer's `LOW_PRIORITY.after()` slot has cleared anything.
+
+Corpus-wide, **18 of 24 fixtures drift, and they are exactly the 18 where the analyzer marks
+something** — the ELF and a.out fixtures add nothing and do not move. Only `text-data-no-coverage` and
+`text-undisassembled-code` shift (`unresolved-symbol-inlined-std` moves on unpackfile alone), always
+upward, by 1 to 122. Those two counters now carry an intentional `min` = CONCURRENT, `max` = AFTER
+range on each of the 18.
+
+**`-PregenerateBaselines` cannot produce those ranges, and quietly looks like it did.** Both generated
+classes for a fixture write the same baseline file, so the two modes race a read-modify-write and a
+mode-varying counter is pinned to whichever wrote last — on a full-corpus regen that was CONCURRENT
+almost everywhere, reproducing the pre-change values and leaving a *clean git diff* that suggests
+nothing drifted. It also drops a counter entirely when the winning mode observes 0, since zero-valued
+counters are absent from the map (that is how unpackfile lost `unresolved-symbol-inlined-std`).
+`BaselineWriter.write` preserves an existing `min < max` range when the observed value falls inside
+it, so the ranges above survive future regens — but the first widening has to be done by hand, from a
+plain `-Pmode=AFTER` run's drift report.
+
+`NoReturnFixtureIntegrationTest` runs **one fixture × one setting per invocation** — each is a full
+load + autoanalysis — and each writes `build/test-output/noreturn/<fixture>.<on|off>.txt`. **`diff`ing
+the two files is the with/without comparison**, so no run pays for both:
+
+- `./gradlew noReturnTest -Pfixture=<file> -PdisableAnalyzers=reachability` — the *before* roster.
+  Ghidra's own marks alone; this analyzer never runs, by the pipeline or by hand.
+- the same without the flag — the *after* roster, which additionally asserts the analyzer is picked up
+  automatically (nothing schedules it, so a broken priority or `canAnalyze` would otherwise leave the
+  rest of the assertions passing over Ghidra's marks) and that running it again separately finds
+  nothing more.
+
+On unpackfile that diff is 5 → 32, and `error` is one of the 27 added lines.
+
+The libstdc++ gate admits the throw/terminate machinery by name (`__throw`, `terminate`, `unexpected`,
+`__cxa`, `_Unwind`) because that machinery genuinely never returns; all 31 of the original false
+positives sit outside it.
 
 ---
-
 ## 33. Blank space dominates the render — 87% of rows, and it is concentrated
 
 Measured on `unpackfile.exe` decomp output: **16,659 of 19,184 rows are blank (87%)**, and

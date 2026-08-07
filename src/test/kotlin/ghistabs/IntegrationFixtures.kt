@@ -1,5 +1,6 @@
 package ghistabs
 
+import org.junit.jupiter.api.Assumptions
 import java.io.File
 import java.util.stream.Stream
 
@@ -24,6 +25,12 @@ object IntegrationFixtures {
 
     /** Whether [name] passes `-Pfixture` — for suites that skip per name rather than at the source. */
     fun accepts(name: String) = wanted.let { it.isEmpty() || name in it }
+
+    val acceptedFiles get() = ALL.filter(::accepts).map { File(dir, it) }
+
+    /** The one fixture `-Pfixture` selected; skips the calling test unless it selected exactly one. */
+    val singleFile: File get() = acceptedFiles.singleOrNull()
+        ?: Assumptions.abort("set -Pfixture=<exact filename> to exactly one binary")
 
     /** [ALL] narrowed by `-Pfixture`; errors on a filter that matches nothing, so a typo fails loudly. */
     @JvmStatic

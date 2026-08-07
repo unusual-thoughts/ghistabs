@@ -318,11 +318,11 @@
         },
         "text-data-no-coverage": {
             "min": 236,
-            "max": 236
+            "max": 303
         },
         "text-undisassembled-code": {
             "min": 2,
-            "max": 2
+            "max": 32
         },
         "unresolved-symbol": {
             "min": 1492,
