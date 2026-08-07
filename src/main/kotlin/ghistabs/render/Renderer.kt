@@ -281,8 +281,9 @@ private class RenderContext(val renderer: Renderer, val source: String) {
         reportAnomalies()
         // Trailing blank/stale lines are trimmed only in decomp mode; skeleton output
         // stays fully source-aligned.
-        return canvas.render(trim = renderer.decomp != null) + anonAggregateAppendix() +
-            instantiationAppendix() + displacedAppendix()
+        val rendered = canvas.render(trim = renderer.decomp != null)
+        spans.closeAnomalies(rendered.lines()).forEach { println("skeleton[$source]: $it") }
+        return rendered + anonAggregateAppendix() + instantiationAppendix() + displacedAppendix()
     }
 
     private val displaced = mutableListOf<Dropped>()
@@ -757,13 +758,6 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             val text = head.text.asMemberDefinition() + extra.joinToString("") { " ${it.text}" } +
                 storage.takeIf { it.isNotEmpty() }?.let { " /* storage: $it */" }.orEmpty()
 
-            // Close what the head opened, when the body no longer does. An accessor whose body is
-            // entirely inlined — `Image::size`, `Image::operator[]` — keeps no statement of its own
-            // after [dropInlined], so its `{` stood open and swallowed every function declared below
-            // it: image.cpp's `operator[]` ran from L41 to L128, with `set`, `size` and `bytesize`
-            // nested inside it. The brace pass cannot cover this, because a bodied function is
-            // exactly the case it steps aside for. Counting head and body together is the same rule
-            // [wrapAsDefinition] applies to inlined stretches.
             // An anchorless region has no line of its own to render at, so as a claim it floats away
             // from the function it belongs to — and for a body that is entirely inlined it is the only
             // region there is, carrying the function's closing brace with it. `Image::size` was one
@@ -775,18 +769,24 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             val tail = floating.flatMap { r -> r.lines.map { it.text } }.filter { it.isNotBlank() }
             if (anchored.isNotEmpty()) anchored.last().lines.addAll(tail.map { DecompLine(it, null, 0) })
 
-            // Close what the head opened, when the body no longer does. Counting head and body
-            // together is the same rule [wrapAsDefinition] applies to inlined stretches; the brace
-            // pass cannot cover it, a bodied function being exactly the case it steps aside for.
+            // Head and body nested together, the same rule [wrapAsDefinition] applies to inlined
+            // stretches. The brace pass cannot cover this, a bodied function being exactly the case
+            // it steps aside for: an accessor whose body is entirely inlined — `Image::size` — keeps
+            // no statement of its own after [dropInlined], so its `{` stood open and swallowed every
+            // function below, `operator[]` running from image.cpp L41 to L128 with `set`, `size` and
+            // `bytesize` inside it.
             val body = anchored.flatMap { r -> r.lines.map { it.text } } + if (anchored.isEmpty()) tail else listOf()
-            val delta = (listOf(text) + body).sumOf { l -> l.count { it == '{' } - l.count { it == '}' } }
-            val closers = "}".repeat(delta.coerceAtLeast(0))
+            val (openers, closers) = braceFix(sequenceOf(text) + body).let { (o, c) -> "{".repeat(o) to "}".repeat(c) }
             this += Claim(
                 Owner.FUNCTION_BODY,
                 r.start,
                 listOf(
                     Row(
-                        if (anchored.isEmpty()) (listOf(text) + tail).joinToString(" ") + closers else text,
+                        if (anchored.isEmpty()) {
+                            (listOf(text + openers) + tail).joinToString(" ") + closers
+                        } else {
+                            text + openers
+                        },
                         note = "L ${r.start}",
                     ),
                 ),
@@ -799,7 +799,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
                 }
             }
 
-            addAll(claimsFor(anchored, gapEnd))
+            addAll(claimsFor(anchored, gapEnd, floor = r.start))
         }
 
         // The code this file contributed to *other* files' functions. gcc inlined it from here, so its
@@ -829,7 +829,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
                 acc
             }
             .flatMap { (f, group) -> wrapAsDefinition(f, group) }
-        addAll(claimsFor(inlined, maxLine, Owner.INLINED_BODY))
+        addAll(claimsFor(inlined, maxLine, owner = Owner.INLINED_BODY))
     }
 
     /**
@@ -839,8 +839,9 @@ private class RenderContext(val renderer: Renderer, val source: String) {
      * Consecutive stretches only, never all of a function's. Two functions inlined from one header
      * interleave by line, so a wrapper spanning everything one function contributed nests as
      * `A{ B{ A} B}` — that took unbouniaf from 7 rows of negative nesting to 14. Adjacent stretches
-     * cannot interleave, so a wrapper over a run of them is safe and self-contained, as each stretch
-     * was under the `balance()` this replaces; the head is what that lacked.
+     * cannot interleave, so a wrapper over a run of them is safe and self-contained; [braceFix] gives
+     * it both ends, so a group that starts mid-block (`} else {`) opens one rather than closing one
+     * it never opened.
      *
      * The wrapper is a *free* function, deliberately. The class is usually not declared in this view,
      * so `Class::method` would not resolve and an implicit `this` would have nothing to bind to; the
@@ -850,25 +851,28 @@ private class RenderContext(val renderer: Renderer, val source: String) {
         val first = group.first()
         for (r in group) r.lines.replaceAll { it.copy(text = it.text.renameThis()) }
         first.lines.add(0, DecompLine((func.signature(program) + " {").renameThis().spellDestructorName(), null, 0))
-        val delta = group.sumOf { r -> r.lines.sumOf { l -> l.text.count { it == '{' } - l.text.count { it == '}' } } }
-        when {
-            delta > 0 -> group.last().lines += DecompLine("}".repeat(delta), null, 0)
-            delta < 0 -> first.lines.add(1, DecompLine("{".repeat(-delta), null, 0))
-        }
+        val (openers, closers) = braceFix(group.asSequence().flatMap { r -> r.lines.map { it.text } })
+        if (openers > 0) first.lines.add(1, DecompLine("{".repeat(openers), null, 0))
+        if (closers > 0) group.last().lines += DecompLine("}".repeat(closers), null, 0)
         return group
     }
 
-    /** [regions] as claims, none allowed to slide past [limit]. */
-    private fun claimsFor(regions: List<Region>, limit: Int, owner: Owner = Owner.FUNCTION_BODY) = regions.map { r ->
-        Claim(
-            owner,
-            r.anchor,
-            r.lines.map { Row(it.text, it.depth, r.label(r.anchor ?: 0).takeIf { _ -> !r.foreign }) },
-            Fit.ELASTIC,
-            anchoring = Anchoring.AFTER,
-            limit = limit,
-        )
-    }
+    /**
+     * [regions] as claims: none allowed to slide past [limit], none to rise above [floor] — the row
+     * its function opened on — or above the region before it. See [nestingRows] for why the order has
+     * to be total. The label still names the line gcc gave, so provenance survives the clamp.
+     */
+    private fun claimsFor(regions: List<Region>, limit: Int, floor: Int = 1, owner: Owner = Owner.FUNCTION_BODY) =
+        nestingRows(regions.map { it.anchor }, floor).zip(regions) { row, r ->
+            Claim(
+                owner,
+                row.takeIf { r.anchor != null },
+                r.lines.map { Row(it.text, it.depth, r.label(r.anchor ?: 0).takeIf { _ -> !r.foreign }) },
+                Fit.ELASTIC,
+                anchoring = Anchoring.AFTER,
+                limit = limit,
+            )
+        }
 
     /** A row nothing has claimed yet — only meaningful before allocation writes anything. */
     private fun canvasFree(line: Int) = line in 1..maxLine
@@ -902,20 +906,6 @@ private class RenderContext(val renderer: Renderer, val source: String) {
         }
 
         fun label(fallback: Int) = (labelOrNull() ?: "L $fallback") + if (copies > 1) " ×$copies" else ""
-
-        /**
-         * Close the region's own braces. A region placed in the file it was *inlined from* is a slice
-         * of someone else's body, so the block it opens is closed — or the one it closes opened — over
-         * in the caller. Standing alone here it has to carry both ends itself.
-         */
-        fun balance() {
-            val delta = lines.sumOf { l -> l.text.count { it == '{' } - l.text.count { it == '}' } }
-            val depth = lines.firstOrNull()?.depth ?: 0
-            when {
-                delta > 0 -> lines += DecompLine("}".repeat(delta), null, depth)
-                delta < 0 -> lines.add(0, DecompLine("{".repeat(-delta), null, depth))
-            }
-        }
     }
 
     /**
