@@ -164,8 +164,6 @@ val MemoryBlock.byteProvider get() = InputStreamByteProvider(data, size)
 
 fun Memory.getBlockContaining(addr: Address) = blocks.find { it.addressRange.contains(addr) }
 
-fun String.nullIfEmpty() = ifEmpty { null }
-
 /**
  * Where the program's default calling convention starts its stack parameters — the bias between a
  * gcc frame offset and a Ghidra one.
@@ -177,4 +175,10 @@ fun String.nullIfEmpty() = ifEmpty { null }
  */
 val Program.baseStackParamOffset get() = compilerSpec.defaultCallingConvention.run {
     stackParameterOffset?.toInt() ?: stackshift
+}
+
+fun String.nullIfEmpty() = ifEmpty { null }
+fun String.removePrefixOrNull(prefix: String): String? = when {
+    startsWith(prefix) -> substring(prefix.length)
+    else -> null
 }
