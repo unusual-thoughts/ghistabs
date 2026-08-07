@@ -23,10 +23,7 @@ numbered in the order they were *found*, not worked; this is the order to work t
 
 **Then — structural correctness that the counters do not fully see.**
 
-4. **Brace nesting.** 3 / 20 / 82 clang diagnostics; 6 / 16 / 62 rows of negative nesting. The known
-   case is an orphaned `} else {` at xvimage.cpp L297 whose `if (…) {` is placed elsewhere. Worth
-   pairing with an invariant that *does* see it: assert each function's rendered close against
-   `spans.closeLine`. `image.cpp`'s swallowed functions passed every existing counter.
+4. ~~**Brace nesting.**~~ — DONE, see §34.
 5. **8 markers still outside their block**, where the block and the marker reach the row as separate
    fragments. Needs placing at fragment assembly in `TargetLine.render()` rather than in
    `dropInlined`.
@@ -1265,6 +1262,95 @@ The libstdc++ gate admits the throw/terminate machinery by name (`__throw`, `ter
 positives sit outside it.
 
 ---
+## 34. Brace nesting: balanced but wrongly ordered — DONE
+
+Every earlier check counted `{` against `}`. All three defects here balance by count and nest wrongly,
+which is why they survived: **the braces are all present, in the wrong order.**
+
+**1. Balance is not nesting (`braceFix`, `render/Nesting.kt`).** Two sites closed a run by its net
+delta — `wrapAsDefinition` for a header's inlined stretches, and the head/body pass for a bodied
+function. A stretch beginning `} else {` nets zero and got neither brace, so its `if (…) {` stayed
+over in the caller's view; a stretch that closes two blocks and reopens two nets zero the same way and
+rendered a function ending before its last statements (xvimage.cpp L473-4, `}}` then `{{`). What
+decides both ends is the running depth's **low-water mark**: that many openers are missing in front,
+and whatever the run then ends on has to be closed. `Region.balance()` was already dead and is gone.
+
+**2. A region rendered above its own head.** gcc attributes a statement to the line its *expression*
+was written on, not the line it executes at, so `__do_find_public_src`'s mask test anchored at the
+mask's declaration 170 rows above the function — and `claimsFor` placed it there, `}` and all, before
+the `{` that opened it. Body regions are now floored at their function's start.
+
+**3. An opener sorted below its own body — the general case of 2.** Same backwards anchor, but inside
+the span, so the floor does not see it. `Integer::IsConvertableToLong` anchored `if (sign ==
+POSITIVE) {` at integer.cpp L2805 and both of its branches at L2803; sorting by anchor put the opener
+under its branches, so L2802-3 ran inside a block nothing had opened and the `} else {` at L2804 was
+orphaned. Backwards anchors are not rare — every loop has one, its condition carrying the `for` line
+above the body it follows.
+
+**The decompiler's order is the nesting**, so a body's anchors are clamped to be monotonic in it
+(`nestingRows`). The label still names the line gcc gave, so provenance survives the clamp. Since
+`allocate` gives an `AFTER` claim the first free row at or after what it asks and works in ascending
+ask order, the rows it hands back are strictly increasing — so the rendered order *is* the
+decompiler's, and Ghidra's own text is well-nested by construction. That is the guarantee; zero
+negative rows is the evidence for it, not the definition of it.
+
+| fixture | negative-nesting rows | clang brace diagnostics |
+| --- | --- | --- |
+| unpackfile | 2 → **0** | 4 → **1** |
+| xmltest_gcc345 | 56 → **0** | 73 → **3** |
+| crypto_mi_test_gcc345 | 52 → **0** | 83 → **21** |
+
+Every rendered file now ends at depth 0 and never dips below it. Clang totals move the other way
+(349→352, 2611→2989, 2939→3240) for the reason recorded above: an undeclared template makes `<`
+ambiguous, so more correctly-emitted scopes manufacture more `expected …`. Judge on the brace column.
+
+**Weaker orders were tried and are not enough.** Holding a region below its *enclosing* opener, and a
+closing region below what its block holds, covers defects 2 and 3 and still lets a sibling block
+invert: an `if (y) {` anchored earlier than the `if (x) { … }` before it sorts above the lot and ends
+up wrapping it — balanced, never negative, clauses inverted. Only a total order rules that out.
+
+**What the total order costs, and why it is the floor.** Alignment, charged to the loops: a loop's
+condition carries the `for` line, above the body it follows, so a body's tail no longer returns to it.
+Mean displacement 2.0→8.7 (unpackfile), 15.4→19.1 (cryptopp); rows off their line 54%→64%. The
+visible shape is a run piling below one forward-jumped anchor with that region's own rows left blank
+above it — 46/196/199 merged rows have free rows above them, worst 191.
+
+That is not slack left on the table. Two rules bind: a region may not render above the one before it
+(this item) and may not render above the line gcc gave it (§29 removed exactly that, a third to a
+half of all rows). Together they force `row ≥ max(anchor₁…anchorᵢ)`, which is what `nestingRows`
+computes — the pointwise-smallest legal assignment. The blank rows above a pile-up belong to source
+lines earlier than the anchor of anything that could fill them, so reclaiming them means breaking one
+of the two rules. It is §33's problem (collapse the run), not a placement bug.
+
+**The invariant, per the ask.** `FunctionSpans.closeAnomalies` reports a function whose rendered
+nesting has not returned to the level it opened at by the row where the *next* function opens — the
+swallowing case, image.cpp's `operator[]` running L41→L128 with three accessors inside it. Printed
+per source like `reportAnomalies`; unit-tested in `NestingTest` alongside `braceFix`.
+
+Two things it deliberately does not do, both measured before being cut. It is not asserted against
+`spans.closeLine` literally, as the item proposed: a body may borrow the blank rows below its span
+and a crammed one closes on its own opener, so ±1 is slack the layout grants, and the literal
+assertion reported 67 rows on unpackfile that were almost all that slack. And it does not state the
+mirror case — a function closing early over rows of its own still rendered below, which is what
+`IsConvertableToLong` looked like. That needs to know which rows are the function's, and rendered
+text cannot say: in a header the rows between two openers belong to neither, so reading them as body
+reported every crammed one-row function in the corpus (930 of them). Stating it soundly means
+carrying the allocator's placements out of `write()`, which is worth doing when something needs it —
+fix 3 makes the class it caught structurally impossible rather than merely detectable.
+
+**What is left, and it is not ordering.** cryptopp's 21 are 16 in `algparam.h` plus 2 in `misc.h`,
+where the file runs out of rows: `algparam.h` has 72 wrapper groups and 389 lines, so the whole nest
+crams onto one 183k-character row. Correctly ordered, correctly balanced, unreadable — that is §33/§5
+capacity, not this. The last one on unpackfile is a `do { }` whose `while` was inlined away, which is
+a dropped statement rather than a brace.
+
+Two holes the total order does not close, neither of them new. It is per function, so two functions
+whose spans overlap still interleave — that is what `closeAnomalies` reports rather than prevents.
+And a body that outgrows its span crams onto its ceiling row; if that row is held by a declaration
+the claim is *dropped*, taking its braces with it. `FUNCTION_BODY` outranks declarations so a `.cpp`
+is safe, but `INLINED_BODY` ranks below them, so a header view can still lose a region that way.
+
+---
 ## 33. Blank space dominates the render — 87% of rows, and it is concentrated
 
 Measured on `unpackfile.exe` decomp output: **16,659 of 19,184 rows are blank (87%)**, and
@@ -1469,8 +1555,8 @@ prelude was tried and changes nothing; the templates, not the namespace, are wha
 
 **Open.**
 
-- **Group 3, brace nesting.** Still not zero. unpackfile's remaining rows include an orphaned
-  `} else {` at xvimage.cpp L297 whose `if (…) {` is placed elsewhere.
+- ~~**Group 3, brace nesting.**~~ Done in §34: balance is not nesting, and the fix is the running
+  depth's low-water mark plus monotonic body anchors.
 - **Forward declarations for referenced templates** would make the total mean something again, but
   arity varies per instantiation (default arguments), so a per-file `template<class,…> class X;` is
   not straightforwardly derivable.
