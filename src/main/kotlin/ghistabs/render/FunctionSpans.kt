@@ -1,6 +1,7 @@
 package ghistabs.render
 
 import ghistabs.harvest.Func
+import org.jetbrains.annotations.TestOnly
 
 // gcc emits N_SLINEs out of address order (SjLj landing pads map back near the decl),
 // so min/max source line over the same-source entries — not first/last by address —
@@ -12,36 +13,47 @@ private data class RawSpan(
     val minLine: Int,
     val end: Int,
     val sameSource: Boolean,
-)
+) {
+    fun toRange(prevEnd: Int) = FuncRange(func, if (sameSource && minLine > prevEnd) minLine else prologueLine, end)
+}
 
-data class FuncRange(val func: Func, val startLine: Int, val endLine: Int) {
+fun <T : Comparable<T>> ClosedRange<T>.includes(other: ClosedRange<T>) =
+    contains(other.start) && contains(other.endInclusive)
+fun <T : Comparable<T>> ClosedRange<T>.includesStrict(other: ClosedRange<T>) =
+    includes(other) && (start != other.start || endInclusive != other.endInclusive)
+
+data class FuncRange(val func: Func, @get:TestOnly val lines: IntRange) : ClosedRange<Int> by lines {
+    constructor(func: Func, start: Int, end: Int) : this(func, minOf(start, end)..maxOf(start, end))
+
     // Single-line range = a self-closing decl (header-inline out-of-line copies,
     // synthetic init wrappers): no body to bracket.
-    val isSingleLine get() = startLine == endLine
+    val isSingleLine get() = lines.first == lines.last
+    val nextLine get() = lines.last + 1
 }
 
 /** Function brackets for one source file, derived purely from N_SLINE entries. */
 class FunctionSpans(val ranges: List<FuncRange>) {
-    val startLines = ranges.map { it.startLine }.toSet()
+    private val startLines = ranges.map { it.start }.toSet()
 
-    val closeLineByFunc: Map<Func, Int> = ranges.mapNotNull { r ->
-        when {
-            r.isSingleLine -> null
-            (r.endLine + 1) in startLines -> r.func to r.endLine
-            else -> r.func to r.endLine + 1
-        }
-    }.toMap()
+    val FuncRange.closeLine get() = when {
+        isSingleLine -> null
+        nextLine in startLines -> endInclusive
+        else -> nextLine
+    }
 
-    private val spans = ranges.map { it.startLine..(closeLineByFunc[it.func] ?: it.startLine) }
+    val FuncRange.span get() = start..(closeLine ?: start)
 
-    fun closeLine(func: Func) = closeLineByFunc[func]
+    val FuncRange.interior get() = when {
+        isSingleLine -> null
+        nextLine in startLines -> start + 1..<endInclusive
+        else -> start + 1..endInclusive
+    }
+
+    private val spans = ranges.map { it.span }
+
     fun inFunction(line: Int) = spans.any { line in it }
 
-    val maxLine = sequenceOf(
-        closeLineByFunc.values.maxOrNull() ?: 0,
-        ranges.maxOfOrNull { it.startLine } ?: 0,
-        ranges.maxOfOrNull { it.endLine } ?: 0,
-    ).max()
+    val maxLine = ranges.maxOfOrNull { it.span.last } ?: 0
 
     companion object {
         /**
@@ -50,26 +62,18 @@ class FunctionSpans(val ranges: List<FuncRange>) {
          * gcc cross-attribution, so there fall back to the prologue line.
          */
         fun of(rawFuncs: List<Func>, source: String): FunctionSpans {
-            var prevEnd = Int.MIN_VALUE
-            val rawRanges = rawFuncs
-                .mapNotNull { it.rawSpan(source) }
-                .sortedBy { it.prologueAddr }
-                .map { s ->
-                    val start = if (s.sameSource && s.minLine > prevEnd) s.minLine else s.prologueLine
+            val rawRanges = buildList {
+                var prevEnd = Int.MIN_VALUE
+                for (s in rawFuncs.mapNotNull { it.rawSpan(source) }.sortedBy { it.prologueAddr }) {
+                    add(s.toRange(prevEnd))
                     prevEnd = maxOf(prevEnd, s.end)
-                    FuncRange(s.func, start, s.end)
                 }
-                .sortedBy { it.startLine }
+            }.sortedBy { it.start }
 
             // Drop ranges strictly contained inside another's — header method-decl
             // fragments overlapping a real method's range.
             val ranges = rawRanges.filter { r ->
-                rawRanges.none { other ->
-                    other !== r &&
-                        other.startLine <= r.startLine &&
-                        r.endLine <= other.endLine &&
-                        (other.startLine < r.startLine || r.endLine < other.endLine)
-                }
+                rawRanges.none { other -> other !== r && other.includesStrict(r) }
             }
             return FunctionSpans(ranges)
         }
