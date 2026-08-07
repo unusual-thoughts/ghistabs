@@ -81,16 +81,16 @@
             "max": 0
         },
         "demangler-exact-match": {
-            "min": 274,
-            "max": 274
+            "min": 306,
+            "max": 306
         },
         "demangler-reverse-demangle-match": {
             "min": 21,
             "max": 21
         },
         "demangler-skip-no-replacement": {
-            "min": 1,
-            "max": 1
+            "min": 45,
+            "max": 45
         },
         "desc-dropped-so": {
             "min": 33,
@@ -285,8 +285,8 @@
             "max": 3
         },
         "replaced-demangler": {
-            "min": 295,
-            "max": 295
+            "min": 327,
+            "max": 327
         },
         "stab-value-func-relative": {
             "min": 38988,

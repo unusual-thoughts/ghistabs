@@ -76,6 +76,10 @@
             "min": 0,
             "max": 0
         },
+        "demangler-skip-no-replacement": {
+            "min": 2,
+            "max": 2
+        },
         "desc-dropped-so": {
             "min": 122,
             "max": 122
