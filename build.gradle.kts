@@ -354,6 +354,18 @@ tasks.register<Test>("probeDump") {
     headlessGhidraConfig("probeDump")
 }
 
+// One fixture × one analyzer setting per invocation — a full load+autoanalysis each — writing a roster
+// per setting; `diff`ing the two is the with/without comparison. Its own task because `integrationTest`
+// narrows generated classes and Gradle ANDs that with `--tests`, which would select nothing at all and
+// still report SUCCESS.
+tasks.register<Test>("noReturnTest") {
+    description =
+        "Non-returning roster for one fixture (-Pfixture=<file>; add -PdisableAnalyzers=reachability for before)"
+    useJUnitPlatform { includeTags("integration") }
+    headlessGhidraConfig("noReturnTest")
+    filter { includeTestsMatching("ghistabs.NoReturnFixtureIntegrationTest") }
+}
+
 // List every test class grouped by its tag (unit / integration / probe) with its package + file, so
 // tests are discoverable even though integration/probe tests are co-located in their SUT's package
 // rather than a dedicated folder. Source scan — no compile/boot needed.
