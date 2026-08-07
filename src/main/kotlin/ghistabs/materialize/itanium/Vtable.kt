@@ -12,6 +12,7 @@ import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
 import ghistabs.parse.TypeDecl.Struct.Method
 import ghistabs.parse.VirtKind
+import ghistabs.removePrefixOrNull
 
 /**
  * Collects a class's full vtable slot list from its inheritance chain and orders it by the
@@ -115,18 +116,13 @@ class RttiStructs(private val dtm: DataTypeManager) {
      * stabs, via `DemanglerReplacer`). The abstract `__vmi_class_type_info` uses its declared
      * `__base_info[1]` shape — the class's own sizeof — vs the per-object pseudo's N. Null otherwise.
      */
-    fun typeInfoLayout(name: String): DataType? = when {
-        name == Itanium.TYPE_INFO || name == Itanium.CLASS_TYPE_INFO || name == Itanium.CLASS_TYPE_INFO_PSEUDO ->
-            classTypeInfoStructure
-
-        name == Itanium.SI_CLASS_TYPE_INFO || name == Itanium.SI_CLASS_TYPE_INFO_PSEUDO -> siClassTypeInfoStructure
-
-        name == Itanium.VMI_CLASS_TYPE_INFO -> vmiClassTypeInfoStructure(1)
-
-        name.startsWith(Itanium.VMI_CLASS_TYPE_INFO_PSEUDO) ->
-            name.removePrefix(Itanium.VMI_CLASS_TYPE_INFO_PSEUDO).toIntOrNull()?.let(::vmiClassTypeInfoStructure)
-
-        else -> null
+    fun typeInfoLayout(name: String): DataType? = with(Itanium) {
+        when (name) {
+            TYPE_INFO, CLASS_TYPE_INFO, CLASS_TYPE_INFO_PSEUDO -> classTypeInfoStructure
+            SI_CLASS_TYPE_INFO, SI_CLASS_TYPE_INFO_PSEUDO -> siClassTypeInfoStructure
+            VMI_CLASS_TYPE_INFO -> vmiClassTypeInfoStructure(1)
+            else -> name.removePrefixOrNull(VMI_CLASS_TYPE_INFO_PSEUDO)?.toIntOrNull()?.let(::vmiClassTypeInfoStructure)
+        }
     }
 
     // Resolve each layout into the DTM once and hand out the resolved, DTM-resident type. gcc 3.4.5
