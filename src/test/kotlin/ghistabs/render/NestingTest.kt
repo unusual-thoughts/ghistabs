@@ -1,0 +1,97 @@
+package ghistabs.render
+
+import ghistabs.GenericAddressResolver
+import ghistabs.harvest.Func
+import ghistabs.harvest.LineEntry
+import ghistabs.parse.FunctionScope
+import ghistabs.parse.SourceFile
+import ghistabs.parse.SymbolDecl
+import ghistabs.parse.TypeDecl
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Test
+
+/**
+ * Pure-unit coverage of the two things a `{` vs `}` count per file cannot see: a run that balances
+ * while nesting wrongly, and a function whose rendered close is not on the line its span puts it on.
+ */
+class NestingTest {
+    private fun fix(vararg texts: String) = braceFix(texts.asSequence())
+
+    @Test
+    fun `a balanced run still needs braces when its nesting dips`() {
+        assertEquals(1 to 1, fix("} else {"))
+        assertEquals(2 to 2, fix("}}", "x = 1;", "{{"))
+        assertEquals(0 to 0, fix("if (x) {", "y();", "}"))
+    }
+
+    @Test
+    fun `an unbalanced run is closed or opened at the end that is short`() {
+        assertEquals(0 to 2, fix("f() {", "if (x) {"))
+        assertEquals(2 to 0, fix("y();", "}", "}"))
+    }
+
+    // `Integer::IsConvertableToLong`: `if (sign == POSITIVE) {` anchored at L2805, both of its
+    // branches at L2803. Placed at their anchors the branches render outside the block.
+    @Test
+    fun `a block's contents are held below its opener`() {
+        assertEquals(
+            listOf(2799, 2805, 2805, 2805),
+            nestingRows(listOf(2799, 2805, 2803, 2803), floor = 2798),
+        )
+    }
+
+    // A sibling block anchored earlier than the one before it would sort above the lot and wrap it —
+    // balanced, never negative, clauses inverted. Only a total order rules that out.
+    @Test
+    fun `a sibling block cannot rise above the block before it`() {
+        assertEquals(
+            listOf(100, 101, 102, 102),
+            nestingRows(listOf(100, 101, 102, 50), floor = 99),
+        )
+    }
+
+    // An anchorless region rides whatever came before it rather than resetting the floor.
+    @Test
+    fun `a null anchor neither moves the floor nor is placed`() {
+        assertEquals(listOf(100, 100, 100), nestingRows(listOf(100, null, 40), floor = 99))
+    }
+
+    private fun fn(name: String, base: Long, lines: List<Int>) = Func(
+        name = name,
+        addr = GenericAddressResolver.buildAddress(base),
+        decl = SymbolDecl.Function(name, FunctionScope.GLOBAL, TypeDecl.Builtin(-1)),
+        cu = SourceFile.CUSource("s.cpp"),
+        lineEntries = lines.mapIndexed { i, l -> LineEntry(l, GenericAddressResolver.buildAddress(base + i), "s.cpp") }
+            .toMutableList(),
+    )
+
+    private fun spansOf() = FunctionSpans.of(
+        listOf(fn("a", 0x1000, listOf(2, 3)), fn("b", 0x2000, listOf(6, 7))),
+        "s.cpp",
+    )
+
+    // `a` spans L2..L3 and closes on L4; `b` opens on L6. Rendering a's close past L6 puts b inside
+    // it — the shape image.cpp's swallowed accessors had, with every brace count balancing.
+    @Test
+    fun `a function still open where the next one opens is reported`() {
+        val rows = listOf("", "void a() {", "  x();", "  y();", "", "void b() {", "  z();", "}", "}")
+
+        assertEquals(
+            listOf(
+                "function a opens at L2 and is still open where the next one opens at L6 (span says it closes at L4)",
+            ),
+            spansOf().closeAnomalies(rows),
+        )
+    }
+
+    // A body that borrows a row below its span, and one crammed onto its opener, are both within
+    // the slack the layout grants — neither reaches the next opener.
+    @Test
+    fun `closes short of the next opener report nothing`() {
+        val late = listOf("", "void a() {", "  x();", "  y();", "}", "void b() {", "  z();", "}")
+        val crammed = listOf("", "void a() { x(); }", "", "", "", "void b() {", "  z();", "}")
+
+        assertEquals(emptyList<String>(), spansOf().closeAnomalies(late))
+        assertEquals(emptyList<String>(), spansOf().closeAnomalies(crammed))
+    }
+}
