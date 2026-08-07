@@ -30,12 +30,20 @@ numbered in the order they were *found*, not worked; this is the order to work t
 6. **`activityExtent`'s header proxy.** `spans.ranges.isEmpty()` stands in for "is a header" and
    leaks: `filesystemimage.h` has spans from inline methods. Right answer there by luck.
 
+**Structural debt, worth taking before more of the above.**
+
+7. **§35, stop reconstructing what the token tree knows.** `toLines` flattens the tree away, so every
+   structural pass counts braces in rendered characters. Three defects came out of that in one
+   sitting (§34's fixes and the condition work), and the API that replaces them — `getTokens` by
+   address set, `getNextBrace`, `ClangTokenGroup` nesting, paren pair ids — already exists. Not a
+   render improvement in itself; it is what stops the next one from being guesswork.
+
 **Lower — measurement, then long-standing limitations.**
 
-7. **Forward-declare referenced templates.** Would make the error total mean something again (an
+8. **Forward-declare referenced templates.** Would make the error total mean something again (an
    undeclared template manufactures syntax errors), but arity varies per instantiation because of
    default arguments, so the declaration is not straightforwardly derivable.
-8. §23 multi-vtable ABI, §24 RTTI wiring, §25 unannotated `_ZTV`, §26 bitfields, §30 unnamed
+9. §23 multi-vtable ABI, §24 RTTI wiring, §25 unannotated `_ZTV`, §26 bitfields, §30 unnamed
    parameters, §21 leftovers, and the `4900866` a.out neutrality question. All pre-date this pass and
    none block a reader of the render.
 
@@ -90,6 +98,12 @@ never a fold target. Order and structure stay the decompiler's; each output line
 to wrap long lines, and coalescing re-joins the wrapped continuation lines by address (they
 share the statement's source line), so wrapping is transparent. Verified: zero orphan `;`
 lines after removal.
+
+**Only half done, and the half that is missing is the structural half — see §35.** Every line's
+*role* is read from tokens, but the lines themselves come from `DecompilerUtils.toLines`, whose first
+act is `group.flatten(alltoks)`: the tree is discarded and a flat token list re-cut at Ghidra's own
+`ClangBreak`s. So block structure — which `printc.cc` emits as real `beginBlock`/`endBlock` groups —
+never reaches us, and every pass that needs it counts `{` and `}` in rendered characters instead.
 
 ## 5. Sweep findings (all fixtures, `--exclude-dir='*.old'`)
 
@@ -1349,6 +1363,60 @@ whose spans overlap still interleave — that is what `closeAnomalies` reports r
 And a body that outgrows its span crams onto its ceiling row; if that row is held by a declaration
 the claim is *dropped*, taking its braces with it. `FUNCTION_BODY` outranks declarations so a `.cpp`
 is safe, but `INLINED_BODY` ranks below them, so a header view can still lose a region that way.
+
+---
+## 35. Stop reconstructing what the token tree already knows — open
+
+§2 moved *roles* onto tokens and stopped there. The lines still come from
+`DecompilerUtils.toLines`, which opens with `group.flatten(alltoks)` and re-cuts the flat list at
+`ClangBreak`s, so the structure is thrown away before we see it. Everything structural since has been
+rebuilt from rendered characters, and the rebuilds keep failing in the same way.
+
+**What the tree has that the text does not.** `printc.cc`'s `emitBlockIf` wraps each branch in its
+own `beginBlock`/`endBlock` — `getBlock(1)` (then) and `getBlock(2)` (else) are separate
+`ClangTokenGroup`s. Branch extents are *in the tree*. `if` is emitted `tagOp(KEYWORD_IF, …, op)`, so
+the keyword token carries its p-code op. Parens carry real pair ids (`ClangSyntaxToken.getOpen()` /
+`getClose()`), so a condition's extent is exact. Braces do **not** — `openBraceIndent` just
+`print(brace)`s and its `id` is an indent id, which is why Ghidra's own `getMatchingBrace` walks
+tokens; walking *tokens* is still better than counting characters, since a `{` in a string literal is
+not a `ClangSyntaxToken`.
+
+**The evidence that text is the wrong substrate.** All three are from §34 and the condition work:
+
+- `uninvertConditions` matched `} else {` because that spelling looked obvious. Ghidra emits `}` and
+  `else {` as separate lines (`emitBlockIf` calls `tagLine()` before `KEYWORD_ELSE` unconditionally,
+  then `openBraceIndent` with `option_brace_ifelse`, default `Same`). The pass fired 4 times across
+  three fixtures and every metric came back byte-identical — inert, not working.
+- Its `if \((.*)\) \{` was greedy, and rows carry several statements here (the folded head, rejoined
+  continuations). On `… { if (a != false) { if (b == c) {` it spanned from the first `if` to the last
+  brace and spliced the negation around two conditions: `if (!(a != false) { if (b`, a paren short.
+  Five unit tests passed because they all had one `if` per line.
+- `braceFix` and `braceDepths` count `{`/`}` in row text, so a brace inside a string literal
+  miscounts. Not yet observed, but not excluded either.
+
+**The API to use, all in `DecompilerUtils` unless noted.** Most of it replaces something we hand-roll:
+
+| ours | theirs |
+| --- | --- |
+| `regionsOf` remapping each line's address through the SLINE table | `getTokens(root, AddressSetView)` — collect the tokens for an address set, built per file from N_SLINE |
+| `braceFix` / `braceDepths` counting characters | `getNextBrace(token, forward)` — the *enclosing* brace of a token, so a run's missing openers/closers are asked for, not inferred; `getMatchingBrace`, `isBrace` |
+| `Conditions.branchesOf` walking brace depth | `ClangTokenGroup` nesting — the branches are the groups |
+| `ifConditionAt` scanning parens back from `{` | paren pair ids on `ClangSyntaxToken` |
+| `THIS_PARAM` / `renameThis()` regexes | `isThisParameter(HighVariable, Function)` |
+| — | `isGoToStatement(token)`, `getGoToTargetToken(root, label)` — gotos structurally, for §28-style work and for knowing when a "loop" is one |
+| — | `getFunction(program, ClangFuncNameToken)` — call targets, so `includeClaims` can follow the call graph and not only stabs types |
+| — | `getDataType(token)`, `getDataTypeTraceForward/Backward(varnode)` — Ghidra's type for a token, to cross-check against the stabs one |
+| `sjljScaffolding`'s "stack slot written on ≥3 lines" heuristic | `getVarnodeRef(token)` resolves through the high variable |
+
+**Sizing.** The blocker is that `DecompLine.text` is the currency of every downstream pass —
+`regionsOf`, `dropInlined`, `braceFix`, `wrapAsDefinition`, `Region`, `claimsFor`, `TargetLine`. A
+tree-shaped `DecompLine` (keeping `text` for rendering, adding the node it came from) lets them move
+one at a time rather than in one cut.
+
+**Cheap thing to do first, regardless.** `DecompInterface` leaves `options = null` and we never call
+`grabFromToolAndProgram`, so the brace spelling is pinned to the decompiler's compiled-in default
+rather than to any user setting — but it *is* an unstated dependency on that default. One
+`DecompileOptions().apply { setIfElseBraceFormat(Same) }` handed to `setOptions` states it.
 
 ---
 ## 33. Blank space dominates the render — 87% of rows, and it is concentrated
