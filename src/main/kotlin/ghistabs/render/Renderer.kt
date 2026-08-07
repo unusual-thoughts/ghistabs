@@ -64,8 +64,14 @@ class Renderer(
             // Folded onto the function's *own* source, not the file asking: that only governs which locals
             // drop out of the head fold, and the head is used only where the function is defined.
             with(index) { func.source() }?.let { own ->
+                // Same address→line lookup [Region] membership uses, narrowed to the function's own
+                // source: two branches are only in source order against one file's line numbering.
+                val slines = func.lineEntries.filter { it.source == own }.sortedBy { it.addr }
                 runCatching { decomp?.decompileFunction(ghFunc, 30, TaskMonitor.DUMMY) }.getOrNull()
                     ?.compressedDecompLines(own, func, mode == Mode.ELIDE_SJLJ)
+                    // Before the render splits it into regions: swapping branches moves their anchors,
+                    // and the anchors are what every later pass places by.
+                    ?.uninvertConditions { line -> line.address?.let { a -> slines.lastOrNull { it.addr <= a }?.line } }
                     ?.map { it.copy(text = shortener.substitute(it.text).spellDestructorLabels()) }
             }
         }.orEmpty()
