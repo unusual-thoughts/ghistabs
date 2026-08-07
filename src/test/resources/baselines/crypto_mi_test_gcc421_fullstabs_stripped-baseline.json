@@ -97,12 +97,16 @@
             "max": 0
         },
         "demangler-exact-match": {
-            "min": 274,
-            "max": 274
+            "min": 305,
+            "max": 305
         },
         "demangler-reverse-demangle-match": {
             "min": 21,
             "max": 21
+        },
+        "demangler-skip-no-replacement": {
+            "min": 45,
+            "max": 45
         },
         "desc-dropped-so": {
             "min": 155,
@@ -333,8 +337,8 @@
             "max": 4
         },
         "replaced-demangler": {
-            "min": 295,
-            "max": 295
+            "min": 326,
+            "max": 326
         },
         "rtti-pseudo-substituted": {
             "min": 37,
