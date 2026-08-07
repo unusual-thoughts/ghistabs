@@ -29,15 +29,18 @@ class FunctionSpansTest {
             .toMutableList(),
     )
 
+    private fun FunctionSpans.closeOf(func: Func) = with(this) { ranges.single { it.func === func }.closeLine }
+    private fun FunctionSpans.interiorOf(func: Func) = with(this) { ranges.single { it.func === func }.interior }
+
     @Test
     fun `non-adjacent functions close on endLine+1`() {
         val a = fn("a", 0x1000, "s.cpp", listOf(10, 11, 12))
         val b = fn("b", 0x2000, "s.cpp", listOf(20, 21, 22))
         val spans = FunctionSpans.of(listOf(a, b), "s.cpp")
 
-        assertEquals(listOf(10 to 12, 20 to 22), spans.ranges.map { it.startLine to it.endLine })
-        assertEquals(13, spans.closeLine(a))
-        assertEquals(23, spans.closeLine(b))
+        assertEquals(listOf(10..12, 20..22), spans.ranges.map { it.lines })
+        assertEquals(13, spans.closeOf(a))
+        assertEquals(23, spans.closeOf(b))
     }
 
     @Test
@@ -46,8 +49,8 @@ class FunctionSpansTest {
         val b = fn("b", 0x2000, "s.cpp", listOf(13, 14)) // opens exactly where a would close
         val spans = FunctionSpans.of(listOf(a, b), "s.cpp")
 
-        assertEquals(12, spans.closeLine(a)) // not 13 — would collide with b's opener
-        assertEquals(15, spans.closeLine(b))
+        assertEquals(12, spans.closeOf(a)) // not 13 — would collide with b's opener
+        assertEquals(15, spans.closeOf(b))
     }
 
     @Test
@@ -59,7 +62,7 @@ class FunctionSpansTest {
         val spans = FunctionSpans.of(listOf(a, b), "s.cpp")
 
         val bRange = spans.ranges.single { it.func === b }
-        assertEquals(40, bRange.startLine) // clamped to prologue, not 5
+        assertEquals(40, bRange.start) // clamped to prologue, not 5
     }
 
     @Test
@@ -77,7 +80,30 @@ class FunctionSpansTest {
         val spans = FunctionSpans.of(listOf(f), "s.cpp")
 
         assertEquals(1, spans.ranges.size)
-        assertNull(spans.closeLine(f))
+        assertNull(spans.closeOf(f))
         assertEquals(true, spans.inFunction(10))
+    }
+
+    // The interior is what `reportAnomalies` scans for a function/type/global filed inside
+    // another function's brackets; an empty one silences the whole diagnostic.
+    @Test
+    fun `interior is the lines strictly between the brackets, in both close-line cases`() {
+        val a = fn("a", 0x1000, "s.cpp", listOf(10, 11, 12)) // closes on 13
+        val b = fn("b", 0x2000, "s.cpp", listOf(20, 21, 22))
+        assertEquals(11..12, FunctionSpans.of(listOf(a, b), "s.cpp").interiorOf(a))
+
+        val c = fn("c", 0x2000, "s.cpp", listOf(13, 14)) // opens where a would close, pulling it to 12
+        assertEquals(11..11, FunctionSpans.of(listOf(a, c), "s.cpp").interiorOf(a))
+    }
+
+    @Test
+    fun `a prologue line above the last-address line is normalised, not left inverted`() {
+        // Nothing names s.cpp, so rawSpan falls back to every entry in *address* order — and gcc
+        // emits N_SLINEs out of it, so the prologue (L50) can outrank the last entry (L10).
+        val f = fn("f", 0x1000, "hdr.h", listOf(50, 10))
+        val spans = FunctionSpans.of(listOf(f), "s.cpp")
+
+        assertEquals(10..50, spans.ranges.single().lines)
+        assertEquals(51, spans.closeOf(f))
     }
 }

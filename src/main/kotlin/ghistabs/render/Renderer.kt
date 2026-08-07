@@ -59,14 +59,16 @@ class Renderer(
     // file that inlines it, and decompilation is ~all of the runtime.
     private val decompiled = mutableMapOf<Address, List<DecompLine>>()
 
-    fun decompile(func: Func): List<DecompLine> = decompiled.getOrPut(func.addr) {
-        val ghFunc = program.functionManager.getFunctionAt(func.addr) ?: return@getOrPut emptyList()
-        // Folded onto the function's *own* source, not the file asking: that only governs which locals
-        // drop out of the head fold, and the head is used only where the function is defined.
-        val own = with(index) { func.source() } ?: return@getOrPut emptyList()
-        runCatching { decomp?.decompileFunction(ghFunc, 30, TaskMonitor.DUMMY) }
-            .getOrNull()?.compressedDecompLines(own, func, mode == Mode.ELIDE_SJLJ).orEmpty()
-            .map { it.copy(text = shortener.substitute(it.text).spellDestructorLabels()) }
+    fun decompile(func: Func) = decompiled.getOrPut(func.addr) {
+        program.functionManager.getFunctionAt(func.addr)?.let { ghFunc ->
+            // Folded onto the function's *own* source, not the file asking: that only governs which locals
+            // drop out of the head fold, and the head is used only where the function is defined.
+            with(index) { func.source() }?.let { own ->
+                runCatching { decomp?.decompileFunction(ghFunc, 30, TaskMonitor.DUMMY) }.getOrNull()
+                    ?.compressedDecompLines(own, func, mode == Mode.ELIDE_SJLJ)
+                    ?.map { it.copy(text = shortener.substitute(it.text).spellDestructorLabels()) }
+            }
+        }.orEmpty()
     }
 
     fun renderSkeleton(source: String) = RenderContext(this, source).render()
@@ -203,8 +205,6 @@ private class RenderContext(val renderer: Renderer, val source: String) {
 
     private val shortener get() = renderer.shortener
 
-    private val pointerSize = program.defaultPointerSize
-
     private val spans = FunctionSpans.of(rawFuncs, source)
 
     private val maxLine = sequenceOf(
@@ -220,6 +220,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
 
     // A declLine past the file's activity extent flags a stale N_SOL. Body extent for CUs;
     // type-decl extent for pure-header files.
+
     /**
      * How far into this file gcc showed evidence of real activity. Past it, a declaration's line is
      * not to be trusted.
@@ -237,7 +238,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
     private val activityExtent = sequenceOf(
         lines.maxOfOrNull { it.line } ?: 0,
         symbols.maxOfOrNull { it.declLine } ?: 0,
-        spans.ranges.maxOfOrNull { it.endLine } ?: 0,
+        spans.ranges.maxOfOrNull { it.endInclusive } ?: 0,
         if (spans.ranges.isEmpty()) typeDecls.maxOfOrNull { it.declLine } ?: 0 else 0,
     ).max()
 
@@ -525,7 +526,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
         // merges them. Claiming a row here too duplicated every one Ghidra had also recovered, and the
         // rest lost the contested row to the body and left the file entirely.
         return rawFuncs.filterNot { it in bodied }.flatMap { f ->
-            val span = rangeByFunc[f]?.let { it.startLine..(spans.closeLine(f) ?: it.endLine) }
+            val span = with(spans) { rangeByFunc[f]?.span }
             varsOf(f).filter { dedup(it.line, it.name) }.map {
                 Claim(
                     Owner.LOCAL,
@@ -615,8 +616,8 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             val name = r.func.demangledName
             val openText = if (r.isSingleLine) "$sig;" else "$sig {"
             val openNote = if (r.isSingleLine) name else "opens $name"
-            this += Claim(Owner.FUNC_DELIM, r.startLine, listOf(Row(openText, note = openNote)))
-            val closeLine = spans.closeLine(r.func) ?: continue
+            this += Claim(Owner.FUNC_DELIM, r.start, listOf(Row(openText, note = openNote)))
+            val closeLine = with(spans) { r.closeLine } ?: continue
             if (closeLine !in 1..maxLine) continue
             this += Claim(Owner.FUNC_DELIM, closeLine, listOf(Row("}", note = "closes $name")))
         }
@@ -697,14 +698,10 @@ private class RenderContext(val renderer: Renderer, val source: String) {
         else -> 0
     }
 
-    /**
-     * Replace each function's span with its decompilation. A real file-scope global/static owns its
-     * line and survives as data; everything the decompilation already shows
-     * or that's misattributed is dropped; any other stray (a type decl gcc mis-filed here) is demoted
-     * to a `// stray:` comment on the close line — never code, so it can't force a cram. The head
-     * (signature + folded decls) sits at the start line; the body groups spread K&R-indented down the
-     * span, each tagged with its source line. A single-line function has no span, so it isn't bodied.
-     */
+    /** Functions [decompClaims] actually rendered a body for — which is not every function that
+     *  decompiles, since aliased copies are deliberately left to the skeleton's side-by-side decls. */
+    private val bodied = mutableSetOf<Func>()
+
     /**
      * Claims for every decompiled statement this file should show — its own functions' bodies, and
      * the code it contributed to other files' functions by being inlined into them.
@@ -713,10 +710,6 @@ private class RenderContext(val renderer: Renderer, val source: String) {
      * on [Owner] priority, which is what the retroactive "demote whoever wrote first to `// stray:`"
      * pass was doing by hand.
      */
-    /** Functions [decompClaims] actually rendered a body for — which is not every function that
-     *  decompiles, since aliased copies are deliberately left to the skeleton's side-by-side decls. */
-    private val bodied = mutableSetOf<Func>()
-
     private fun decompClaims(): List<Claim> = buildList {
         // Aliased out-of-line copies — ctor C1/C2, dtor D0/D1/D2 — are one function gcc emitted
         // several times, at *different* addresses, all mapped to one source line. Decompiling each
@@ -729,17 +722,16 @@ private class RenderContext(val renderer: Renderer, val source: String) {
         // constructors differed past the head while being the same function. Two genuinely distinct
         // functions cannot collide here, since the key carries their signatures.
         val seenHeads = mutableSetOf<Pair<Int, String>>()
-        for ((func, startLine) in spans.ranges) {
-            val closeLine = spans.closeLine(func) ?: startLine
-            if (closeLine < startLine) continue
-            val cLines = renderer.decompile(func).ifEmpty { continue }
+        for (r in spans.ranges) {
+            val closeLine = with(spans) { r.span.last }
+            val cLines = renderer.decompile(r.func)
             val head = cLines.firstOrNull() ?: continue
             // Bodied before the duplicate check, not after: [bodied] is what tells the brace pass
             // whose delimiters a body already carries, and a copy dropped as a duplicate is covered
             // by the copy that stayed. Marking only the survivor left the dropped one's `}` to be
             // emitted on its own, which clang reports as an extraneous closing brace.
-            bodied += func
-            if (!seenHeads.add(startLine to head.text)) continue
+            bodied += r.func
+            if (!seenHeads.add(r.start to head.text)) continue
 
             // The body may borrow the contiguous blank rows after its span when it outgrows it — the
             // next function or global ends the run — so a dense body breathes instead of piling on.
@@ -752,7 +744,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             // Merged by name into the head — the head already *is* the declaration block, so a stabs
             // local has somewhere to go that isn't a row the body wants. Kept out of `dedup` so a
             // later pass can still place a same-named file-scope declaration.
-            val vars = varsOf(func).distinctBy { it.name }
+            val vars = varsOf(r.func).distinctBy { it.name }
             val extra = vars.filterNot { it.name in head.declares }
             // Storage goes in one trailing block comment rather than beside each declarator: the head
             // groups same-typed locals into `int a,b,c;`, so there is no per-name position to annotate
@@ -779,7 +771,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             // `{` swallowed every function below, so `operator[]` ran from L41 to L128 with `set`,
             // `size` and `bytesize` nested inside it. Fold those onto the last row that does have a
             // place: the last anchored region, or the head.
-            val (anchored, floating) = regionsOf(func, cLines).dropInlined().partition { it.anchor != null }
+            val (anchored, floating) = r.func.regionsOf(cLines).dropInlined().partition { it.anchor != null }
             val tail = floating.flatMap { r -> r.lines.map { it.text } }.filter { it.isNotBlank() }
             if (anchored.isNotEmpty()) anchored.last().lines.addAll(tail.map { DecompLine(it, null, 0) })
 
@@ -791,19 +783,22 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             val closers = "}".repeat(delta.coerceAtLeast(0))
             this += Claim(
                 Owner.FUNCTION_BODY,
-                startLine,
+                r.start,
                 listOf(
                     Row(
                         if (anchored.isEmpty()) (listOf(text) + tail).joinToString(" ") + closers else text,
-                        note = "L $startLine",
+                        note = "L ${r.start}",
                     ),
                 ),
                 anchoring = Anchoring.AFTER,
                 limit = gapEnd,
             )
-            if (anchored.isNotEmpty() && closers.isNotEmpty()) {
-                anchored.last().lines += DecompLine(closers, null, 0)
+            if (closers.isNotEmpty()) {
+                anchored.lastOrNull()?.let {
+                    it.lines += DecompLine(closers, null, 0)
+                }
             }
+
             addAll(claimsFor(anchored, gapEnd))
         }
 
@@ -818,8 +813,9 @@ private class RenderContext(val renderer: Renderer, val source: String) {
         // one self-contained but left them all outside any function; the wrapper subsumes it, since a
         // definition balances the group as a whole.
         val inlined = index.functions
+            .asSequence()
             .filter { f -> f !in rawFuncs && f.lineEntries.any { it.source == source } }
-            .flatMap { f -> regionsOf(f, renderer.decompile(f)).dropInlined().map { f to it } }
+            .flatMap { f -> f.regionsOf(renderer.decompile(f)).dropInlined().map { f to it } }
             .filter { (_, r) -> r.anchor != null }
             .groupBy { (f, r) -> Triple(f, r.anchor, r.lines.map { it.text }) }
             .map { (_, copies) -> copies.first().also { (_, r) -> r.copies = copies.size } }
@@ -936,14 +932,11 @@ private class RenderContext(val renderer: Renderer, val source: String) {
      * the code itself now renders in the file it was written in, so all this file needs is the note that
      * something was inlined here.
      */
-    private fun regionsOf(func: Func, cLines: List<DecompLine>): List<Region> {
-        val slines = func.lineEntries.sortedBy { it.addr.offset }
-        fun entryFor(addr: Address?) = addr?.let { a -> slines.lastOrNull { it.addr.offset <= a.offset } }
-
-        val regions = mutableListOf<Region>()
+    private fun Func.regionsOf(cLines: List<DecompLine>): List<Region> = buildList {
+        val slines = lineEntries.sortedBy { it.addr }
         var currentKey: Any? = null
         for (dl in cLines.drop(1)) {
-            val entry = entryFor(dl.address)
+            val entry = dl.address?.let { a -> slines.lastOrNull { it.addr <= a } }
             val block = dl.block?.takeIf { it.source != source }
             // An addressless row (a bare brace) belongs to whatever it follows.
             val key = when {
@@ -951,14 +944,13 @@ private class RenderContext(val renderer: Renderer, val source: String) {
                 entry.source != source -> block ?: entry.source
                 else -> entry.line
             }
-            if (regions.isEmpty() || key != currentKey) {
-                regions += Region((block?.source ?: entry?.source)?.takeIf { it != source })
+            if (isEmpty() || key != currentKey) {
+                add(Region((block?.source ?: entry?.source)?.takeIf { it != source }))
             }
-            regions.last().lines += dl
-            entry?.let { regions.last().entries += it }
+            last().lines += dl
+            entry?.let { last().entries += it }
             currentKey = key
         }
-        return regions
     }
 
     /**
@@ -1077,20 +1069,19 @@ private class RenderContext(val renderer: Renderer, val source: String) {
     // suspect. Deduped; overload sets on the same demangled name are skipped.
     private fun reportAnomalies() {
         val anomalies = sortedSetOf<String>()
-        for ((func1, startLine) in spans.ranges) {
-            val closeLine = spans.closeLine(func1) ?: continue
-            val interior = (startLine + 1) until closeLine
-            val name1 = func1.demangledName
-            val where = "inside $name1 [L$startLine..L$closeLine]"
-            for ((func2, startLine2, endLine) in spans.ranges) {
-                if (func2 === func1) continue
-                val name2 = func2.demangledName
+        for (r1 in spans.ranges) {
+            val interior = with(spans) { r1.interior } ?: continue
+            val name1 = r1.func.demangledName
+            val where = "inside $name1 [L$interior]"
+            for (r2 in spans.ranges) {
+                if (r2.func === r1.func) continue
+                val name2 = r2.func.demangledName
                 if (name2 == name1) continue
-                if (startLine2 in interior) {
-                    anomalies += "skeleton[$source]: function $name2 opens at L$startLine2 $where"
+                if (r2.start in interior) {
+                    anomalies += "skeleton[$source]: function $name2 opens at L${r2.start} $where"
                 }
-                if (endLine in interior && startLine2 !in interior) {
-                    anomalies += "skeleton[$source]: function $name2 closes at L$endLine $where"
+                if (r2.endInclusive in interior && r2.start !in interior) {
+                    anomalies += "skeleton[$source]: function $name2 closes at L${r2.endInclusive} $where"
                 }
             }
             for (ast in typeDecls) {
