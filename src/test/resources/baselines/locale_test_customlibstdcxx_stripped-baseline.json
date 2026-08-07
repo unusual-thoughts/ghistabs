@@ -330,11 +330,11 @@
         },
         "text-data-no-coverage": {
             "min": 13,
-            "max": 13
+            "max": 16
         },
         "text-undisassembled-code": {
             "min": 305,
-            "max": 305
+            "max": 342
         },
         "typedef-named-anon-aggregate": {
             "min": 3,

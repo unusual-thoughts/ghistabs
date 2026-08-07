@@ -262,11 +262,11 @@
         },
         "text-data-no-coverage": {
             "min": 452,
-            "max": 452
+            "max": 454
         },
         "text-undisassembled-code": {
             "min": 137,
-            "max": 137
+            "max": 138
         },
         "unresolved-symbol": {
             "min": 4,

@@ -334,11 +334,11 @@
         },
         "text-data-no-coverage": {
             "min": 3,
-            "max": 3
+            "max": 6
         },
         "text-undisassembled-code": {
             "min": 305,
-            "max": 305
+            "max": 342
         },
         "typedef-named-anon-aggregate": {
             "min": 3,

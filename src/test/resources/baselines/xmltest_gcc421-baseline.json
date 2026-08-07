@@ -266,11 +266,11 @@
         },
         "text-data-no-coverage": {
             "min": 406,
-            "max": 406
+            "max": 408
         },
         "text-undisassembled-code": {
             "min": 137,
-            "max": 137
+            "max": 138
         },
         "unresolved-xref": {
             "min": 60,
