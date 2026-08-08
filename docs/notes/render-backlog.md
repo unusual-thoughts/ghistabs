@@ -622,7 +622,7 @@ a basename leave the bare name ambiguous → nothing merges; everything else map
 `symbolsByCu.keys`, `functionSource.values`, and each type's `effectiveSource()` — none depend on
 canonicalization, so no cycle) and exposes `canonicalSource(raw)` plus canonical-keyed fan-in views
 `lineEntriesByCanonicalSource` / `symbolsByCanonicalSource` (re-sorted by (line, addr)). `Renderer`
-canonicalises `sources`, and every `RenderContext` source comparison routes through `canon(...)`:
+canonicalises `sources`, and every `FileRenderer` source comparison routes through `canon(...)`:
 `rawFuncs` (`functionSource`), `lines`/`symbols` (fan-in views), `typeDecls` (`effectiveSourceFor`),
 param/local `sourceFile`, `refOf`/`ownLine` decomp tags, `emitIncludes`, `reportAnomalies`, and
 `FunctionSpans.of` (canonicalizer param, applied in `rawSpan`). Verified: `packfile` renders one
