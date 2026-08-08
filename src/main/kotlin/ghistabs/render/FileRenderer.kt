@@ -1,0 +1,617 @@
+package ghistabs.render
+
+import ghidra.program.model.address.Address
+import ghistabs.harvest.Func
+import ghistabs.harvest.Type
+import ghistabs.harvest.hasHeaderExtension
+import ghistabs.parse.GlobalTypeId
+import ghistabs.parse.SymbolDecl
+import ghistabs.parse.TypeDecl
+
+class FileRenderer(val renderer: Renderer, override val source: String) : RenderContext {
+    override val program = renderer.program
+    override val shortener = renderer.shortener
+    override val resolver = renderer.resolver
+
+    // [source] and every per-record source field come from the resolver's facade with §15 folds
+    // already applied, so comparisons here are fold-to-fold with no per-site work.
+    override val index = renderer.index
+
+    private val rawFuncs = index.functionsBySource[source].orEmpty()
+    private val lines = index.linesBySource[source].orEmpty()
+    private val typeDecls = index.typesBySource[source].orEmpty().filter { it.name != null && it.declLine > 0 }
+    private val symbols = index.symbolsBySource[source].orEmpty()
+
+    private val spans = FunctionSpans.of(rawFuncs, source)
+
+    private val maxLine = sequenceOf(
+        spans.maxLine,
+        lines.maxOfOrNull { it.line } ?: 0,
+        typeDecls.maxOfOrNull { it.declLine } ?: 0,
+        symbols.maxOfOrNull { it.declLine } ?: 0,
+    ).max()
+
+    private val canvas = Canvas(maxLine)
+
+    override fun indentFor(line: Int) = if (spans.inFunction(line)) 4 else 0
+
+    // A declLine past the file's activity extent flags a stale N_SOL. Body extent for CUs;
+    // type-decl extent for pure-header files.
+
+    /**
+     * How far into this file gcc showed evidence of real activity. Past it, a declaration's line is
+     * not to be trusted.
+     *
+     * What counts depends on whether the file *defines* functions, and conflating the two breaks the
+     * signal in opposite directions. A .cpp is measured by its code: its own type declarations must
+     * not extend it, because misattributed libstdc++ declarations landing at line 898 of a 180-line
+     * file are exactly what this is meant to catch — count them and the extent is defined by the very
+     * thing it is judging, and `typedef struct bit_vector bit_vector;` at L720 stops being flagged.
+     * A header defines no functions and contributes N_SLINEs only where its code was inlined
+     * elsewhere, so measuring it that way read header.h's extent off whatever happened to be inlined
+     * — it stopped at 32 and called the file's own `class bouniaf` at 36 misattributed. There, type
+     * declarations are the evidence.
+     */
+    private val activityExtent = sequenceOf(
+        lines.maxOfOrNull { it.line } ?: 0,
+        symbols.maxOfOrNull { it.declLine } ?: 0,
+        spans.ranges.maxOfOrNull { it.endInclusive } ?: 0,
+        if (spans.ranges.isEmpty()) typeDecls.maxOfOrNull { it.declLine } ?: 0 else 0,
+    ).max()
+
+    // A decl at this line is misattributed (stale N_SOL) if it sits past the file's activity.
+    override fun isStale(line: Int) = line > activityExtent
+
+    fun render(): String {
+        if (rawFuncs.isEmpty() && lines.isEmpty() && typeDecls.isEmpty()) return ""
+        if (maxLine == 0) return ""
+
+        // One allocation for the whole file. Every pass declares what it wants and writes nothing;
+        // the allocator resolves all of it at once, with the full picture. That is what removes the
+        // retroactive sweep — contention between a decompiled body and a declaration gcc misfiled
+        // into its span is settled by [Owner] priority up front, so there is no losing fragment left
+        // over to demote into a `// stray:` comment.
+        val claims = buildList {
+            // Decomp first: it decides which functions get a body, which is what tells the brace pass
+            // whose delimiters are already covered.
+            if (renderer.decomp != null) addAll(decompClaims())
+            addAll(typedefClaims())
+            addAll(localClaims())
+            addAll(globalClaims())
+            addAll(functionBraceClaims())
+            addAll(typeBodyClaims())
+            if (renderer.decomp != null) addAll(includeClaims())
+        }
+        // A misattributed claim is not laid out at all. Its line is the one thing about it known to be
+        // wrong, so rendering it there — flagged, but in place — spent the file's real estate on a lie:
+        // unfile.cpp is ~180 lines and was 977 rows because gcc filed libstdc++ down to L898 in it.
+        // Surveyed across three programs before removing them: every misattributed row is a Win32
+        // typedef in crt1.c, a libgcc internal in cygwin.asm (a *.asm* file, 1060 rows of C locals), or
+        // libstdc++ in unfile.cpp. tinyxml's and cryptopp's own sources have none at all. Project
+        // types appear only as arguments to std templates, which belong to the header, not the .cpp.
+        val (misattributed, placeable) = claims.partition { it.stale }
+        displaced += misattributed.map { Dropped(it, MISATTRIBUTED) }
+        write(allocate(placeable, maxLine))
+        // Annotations, not content: they carry no code and share a row with whatever holds it, so
+        // they are never claims. In decomp mode the body restates them, so they go where it landed.
+        emitSlineAnnotations()
+        reportAnomalies()
+        // Trailing blank/stale lines are trimmed only in decomp mode; skeleton output
+        // stays fully source-aligned.
+        val rendered = canvas.render(trim = renderer.decomp != null)
+        spans.closeAnomalies(rendered.lines()).forEach { println("skeleton[$source]: $it") }
+        return rendered + anonAggregateAppendix() + instantiationAppendix() + displacedAppendix()
+    }
+
+    private val displaced = mutableListOf<Dropped>()
+
+    /**
+     * Declarations that lost their source line. Losing the row is the right call — a declaration
+     * rendered two rows off its line is a lie about where gcc put it — but until now losing it also
+     * meant leaving the file, so `class vector<unsigned char…>` at filesystemimage.h L167 simply
+     * stopped existing the moment the enclosing body claimed that row. The declaration is real; only
+     * its position is unavailable, so it goes here with the line it wanted and why it didn't get it.
+     */
+    private fun displacedAppendix(): String {
+        if (displaced.isEmpty() || !renderer.showDisplaced) return ""
+        val rows = displaced
+            .sortedWith(compareBy({ it.claim.line ?: Int.MAX_VALUE }, { it.claim.rows.first().text }))
+            .joinToString("\n") { (claim, reason) ->
+                "${claim.rows.joinToString(" ") { it.text }}  // L ${claim.line} ($reason)"
+            }
+        return "\n\n/* ── displaced declarations (line unusable) ── */\n\n$rows\n"
+    }
+
+    // Anonymous aggregates carry no source line (declLine == null), so they can't be placed inline
+    // on the line-based canvas. Append them as a skeleton-only diagnostic block under their synthetic
+    // Anon_ id; decomp omits them entirely. Deduped by ghidraName (content-hashed, §20).
+    private fun anonAggregateAppendix(): String {
+        if (renderer.mode != Mode.SKELETON) return ""
+        val anon = renderer.index.anonAggregates[source]
+
+        if (anon.isNullOrEmpty()) return ""
+        val blocks = anon.joinToString("\n\n") { ast ->
+            when (val body = ast.body) {
+                is TypeDecl.Struct -> {
+                    val members = body.renderFull(ast.ghidraName.simpleTypeName())
+                        .joinToString("\n    ", prefix = "\n    ", postfix = "\n")
+                    "${body.kind.cxxKeyword()} ${ast.ghidraName} {$members}; /* ${body.sizeBytes} bytes */"
+                        .asSpecialization(ast.ghidraName)
+                }
+
+                is TypeDecl.Enum ->
+                    "enum ${ast.ghidraName} { ${body.members.joinToString(", ") { (n, v) -> "$n = $v" }} };" +
+                        " /* ${body.members.size} members */"
+
+                else -> ""
+            }
+        }
+        return "\n\n/* ── anonymous aggregates (no source line) ── */\n\n$blocks\n"
+    }
+
+    /**
+     * Instantiations that shared a declLine with the one rendered inline. Every instantiation of a
+     * template carries the *template's* line, so only one can hold that row; the rest would otherwise
+     * vanish behind the `N instantiations` count. They differ in exactly the way that matters — the
+     * substituted types — so they go here in full rather than being summarised away.
+     */
+    private val mergedInstantiations = mutableListOf<Type>()
+
+    private fun instantiationAppendix(): String {
+        val (bodied, opaque) = mergedInstantiations
+            .sortedWith(compareBy({ it.declLine }, { it.name }))
+            .partition { it.body.memberCount() > 0 }
+        // An instantiation with no members says nothing as `class X<…> {  }; /* 1 bytes */`, and 55 of
+        // 68 appendix rows were exactly that. Its *name* is still the point — which specialisations
+        // exist, which the `×N` count on the declaring line cannot say — so they list one line per
+        // source line instead of one block each.
+        val blocks = (
+            bodied.map { "/* L${it.declLine} */ ${it.oneLineBody()}" } +
+                opaque.groupBy { it.declLine }.map { (line, group) ->
+                    "/* L$line */ " + group.mapNotNull { it.name }
+                        .joinToString(", ") { shortener.shortenedOrNull(it) ?: it } + ";"
+                }
+            ).sorted().joinToString("\n").ifEmpty { return "" }
+        return "\n\n/* ── further template instantiations (sharing a declared line above) ── */\n\n$blocks\n"
+    }
+
+    /**
+     * Skeleton: one `// L n @ 0xADDR[: code-unit]` annotation per (line, code-unit) group — an
+     * address map, which is what that mode is for.
+     *
+     * Decomp: the same fact said as provenance instead. A header line whose code we did not render
+     * here was compiled into somebody else's function, and naming that function is the useful half;
+     * the addresses are not. 204 rows carried a raw dump and 176 of them held no code at all, so what
+     * a reader met on those rows was an address list where the name of that function was the point.
+     */
+    private fun emitSlineAnnotations() {
+        // Aggregates the addresses of N_SLINEs sharing a (line, codeUnit) into one annotation.
+        data class SliceKey(val line: Int, val codeUnit: String)
+
+        val byKey = mutableMapOf<SliceKey, MutableSet<Address>>()
+        for ((line, addr) in lines) {
+            if (line !in 1..maxLine) continue
+            val codeUnit = addr.render(program) ?: ""
+            byKey.getOrPut(SliceKey(line, codeUnit)) { sortedSetOf() } += addr
+        }
+        if (renderer.decomp == null) {
+            for ((key, addrs) in byKey) {
+                val runs = formatAddrRuns(addrs.toList(), program)
+                val note = if (key.codeUnit.isEmpty()) runs else "$runs: ${key.codeUnit}"
+                canvas[key.line] += Fragment(indentFor(key.line), note = note, kind = FragmentKind.SLINE)
+            }
+            return
+        }
+        // One marker per line naming every function this line's code ended up inside — but only where
+        // that function belongs to *another* file. A line of main.cpp compiled into main was not
+        // inlined anywhere; Ghidra simply folded it into a neighbouring statement, and saying
+        // "inlined into main" inside main is nonsense. Rows the decompilation already occupies say it
+        // better than any annotation could.
+        val own = rawFuncs.mapTo(mutableSetOf()) { it.addr }
+        for ((line, addrs) in lines.filter { it.line in 1..maxLine }.groupBy({ it.line }, { it.addr })) {
+            if (canvas[line].fragments.any { it.kind == FragmentKind.DECOMP }) continue
+            val fns = addrs
+                .mapNotNull { program.functionManager.getFunctionContaining(it) }
+                .filterNot { it.entryPoint in own }
+                .map { it.getName(true) }
+                .distinct()
+                .ifEmpty { continue }
+            canvas[line] += Fragment(indentFor(line), "/* inlined into ${fns.joinToString(", ")} */")
+        }
+    }
+
+    private fun typedefClaims(): List<Claim> {
+        data class Td(val line: Int, val name: String, val rendered: String)
+
+        val typedefs = typeDecls
+            .filter { it.declLine in 1..maxLine && it.body !is TypeDecl.Struct && it.body !is TypeDecl.Enum }
+            .mapNotNull { ast ->
+                ast.name?.let { Td(ast.declLine, it, ast.body.render()) }
+            }
+
+        // A genuine typedef has one definition site. The same alias+target recurring across a .cpp
+        // is stab N_SOL splaying one libstdc++ instantiation typedef (`iterator_traits<X>::_ValueType`,
+        // emitted per instantiation) whose N_SOL named the CU — flag every copy misattributed.
+        // Headers are the canonical home and keep theirs.
+        val splayed = if (source.hasHeaderExtension()) {
+            emptySet()
+        } else {
+            typedefs.groupBy { it.name to it.rendered }.filterValues { it.size > 1 }.keys
+        }
+
+        // Collapse duplicate (name, target) copies to one line. Keying on the pair — not the
+        // declLine the old dedup used — is what makes this fire when misattribution splays a
+        // typedef across several bogus lines.
+        val seen = mutableSetOf<Pair<String, String>>()
+        val claims = typedefs.sortedBy { it.line }.mapNotNull { (line, name, rendered) ->
+            val key = name to rendered
+            if (!seen.add(key)) {
+                null
+            } else {
+                Claim(
+                    Owner.TYPEDEF,
+                    line,
+                    listOf(Row("typedef $rendered $name;", indentFor(line), note = "")),
+                    stale = isStale(line) || key in splayed,
+                )
+            }
+        }
+        return claims
+    }
+
+    /**
+     * Write an [Allocation] onto the canvas. The bridge while the rewrite is mid-flight: passes that
+     * have been ported hand their claims to the allocator and their placements here, passes that
+     * haven't still write fragments directly. See `docs/design-plans/layout-rewrite.md`.
+     */
+    private fun write(allocation: Allocation) {
+        for ((claim, range, copies) in allocation.placed) {
+            val free = range.filter { canvas[it].isEmpty() }.ifEmpty { listOf(range.first) }
+            val rows = when {
+                // Spare rows: break an over-long condition at its top-level `&&`/`||` so it fills the
+                // space instead of running to 300 chars.
+                claim.owner == Owner.FUNCTION_BODY && free.size > claim.rows.size ->
+                    claim.rows.flatMap { r ->
+                        wrapDecompLine(r.text, r.indent, r.cuts).map { (d, t) -> Row(t, d, r.note) }
+                    }
+
+                else -> claim.rows
+            }
+            var prev = -1
+            var prevIndent = 0
+            for ((row, content) in fitRows(rows, free.first()..free.last())) {
+                // An expanding block evicts misattributed fragments from the rows it takes, so a lone
+                // stale decl can't force it to fold. Carried over from Canvas.layoutBraceBlock.
+                if (claim.fit == Fit.ELASTIC) canvas[row].fragments.removeAll { it.stale }
+                // Everything crammed onto one row keeps the indent of the statement that opens it —
+                // TargetLine takes the shallowest, which let a trailing `}` drag the row to column 0.
+                val indent = if (row == prev) prevIndent else content.indent
+                // Identical claims merged; say how many there were rather than silently showing one.
+                // Aliased copies (ctor C1/C2, dtor D0/D1/D2) are one declaration emitted N times.
+                val note = content.note?.let { if (copies > 1) "$it ×$copies" else it }
+                canvas[row] += Fragment(indent, content.text, note, claim.owner.kind(), claim.stale)
+                prev = row
+                prevIndent = indent
+            }
+        }
+        // A claim that lost its row is recorded, never demoted onto a neighbour. FUNC_DELIM losing to
+        // a body is the normal case in decomp mode and not worth reporting.
+        for (drop in allocation.dropped) {
+            if (drop.claim.owner == Owner.FUNC_DELIM) continue
+            displaced += drop
+            println(
+                "skeleton[$source]: dropped ${drop.claim.owner} at L${drop.claim.line} — " +
+                    "${drop.reason}: ${drop.claim.rows.first().text}",
+            )
+        }
+    }
+
+    private data class DeclKey(val line: Int, val name: String)
+
+    private val seenDecls = mutableSetOf<DeclKey>()
+
+    // One declaration per (line, name); `this` never renders. Guards every decl pass.
+    private fun dedup(line: Int, name: String) =
+        line in 1..maxLine && name != "this" && seenDecls.add(DeclKey(line, name))
+
+    private fun varsOf(f: Func): List<Var> = (f.params + f.locals).filter { it.sourceFile == source }.mapNotNull {
+        it.renderVar(renderer.showStorage)
+    }
+
+    private fun localClaims(): List<Claim> {
+        val rangeByFunc = spans.ranges.associateBy { it.func }
+        // A bodied function declares its variables in the body's folded head, where [decompClaims]
+        // merges them. Claiming a row here too duplicated every one Ghidra had also recovered, and the
+        // rest lost the contested row to the body and left the file entirely.
+        return rawFuncs.filterNot { it in bodied }.flatMap { f ->
+            val span = with(spans) { rangeByFunc[f]?.span }
+            varsOf(f).filter { dedup(it.line, it.name) }.map {
+                Claim(
+                    Owner.LOCAL,
+                    it.line,
+                    listOf(Row(it.text, indentFor(it.line), it.role)),
+                    stale = span == null || it.line !in span,
+                )
+            }
+        }
+    }
+
+    // Attributed by CU (`symbolsByCu`), not `s.sourceFile` — gcc emits no `N_SOL(cu)`
+    // before N_GSYM, so `sourceFile` points at the last header visited.
+    private fun globalClaims() = symbols.mapNotNull { s ->
+        (s.body as? SymbolDecl.Static)?.takeIf { dedup(s.declLine, it.name) }?.let {
+            emitGlobal(it, s)
+        }
+    }
+
+    // Openers at startLine (self-closing decl when single-line), closers at the close line.
+    private fun functionBraceClaims(): List<Claim> = buildList {
+        for (r in spans.ranges) {
+            // A rendered body brings its own signature and its own braces. Emitting these as well
+            // lets opener and closer be resolved independently — one keeps its row, the other loses
+            // it — and the file stops balancing. Keyed on what [decompClaims] actually bodied, not on
+            // what merely decompiles: an aliased copy decompiles fine and is deliberately left to the
+            // skeleton's side-by-side decls, and skipping its braces on that basis left its `}`
+            // behind with no `{` (file.cpp reached depth -3).
+            if (r.func in bodied) continue
+            val sig = r.func.sourceSignature(program)
+            val name = r.func.demangledName
+            val openText = if (r.isSingleLine) "$sig;" else "$sig {"
+            val openNote = if (r.isSingleLine) name else "opens $name"
+            this += Claim(Owner.FUNC_DELIM, r.start, listOf(Row(openText, note = openNote)))
+            val closeLine = with(spans) { r.closeLine } ?: continue
+            if (closeLine !in 1..maxLine) continue
+            this += Claim(Owner.FUNC_DELIM, closeLine, listOf(Row("}", note = "closes $name")))
+        }
+    }
+
+    // Struct/enum bodies spread over the blank lines below the decl; opaque types fall
+    // back to a one-line forward decl.
+    private fun typeBodyClaims(): List<Claim> {
+        val claims = mutableListOf<Claim>()
+        // Every instantiation of one template carries the *template's* declLine, so N of them arrive
+        // for a line the source declares once. They are not peers competing for space; they are one
+        // declaration seen N times. Render the fullest body and say how many there were — the same
+        // answer the allocator already gives inlined copies — rather than letting one instantiation's
+        // members render under another's opener, which is a class that does not exist.
+        val byDecl = typeDecls
+            .filter { it.declLine in 1..maxLine && it.name != null }
+            .filter { it.body is TypeDecl.Struct || it.body is TypeDecl.Enum }
+            .distinctBy { it.declLine to it.name }
+            .groupBy { it.declLine to it.name!!.substringBefore('<') }
+
+        for ((key, group) in byDecl.entries.sortedBy { it.key.first }) {
+            val (line, _) = key
+            // Deterministic pick: the most members, then by name, so the choice can't drift with
+            // unrelated type-resolution changes.
+            val ast = group.maxWithOrNull(compareBy({ it.body.memberCount() }, { it.name })) ?: continue
+            mergedInstantiations += group.filterNot { it === ast }
+
+            ast.emitTypeBody(line, group.size)?.also { claims += it }
+        }
+        return claims
+    }
+
+    /** How many members a body declares — the tiebreak when instantiations of one template differ. */
+    private fun TypeDecl<GlobalTypeId>.memberCount() = when (this) {
+        is TypeDecl.Struct -> fields.size
+        is TypeDecl.Enum -> members.size
+        else -> 0
+    }
+
+    /** Functions [decompClaims] actually rendered a body for — which is not every function that
+     *  decompiles, since aliased copies are deliberately left to the skeleton's side-by-side decls. */
+    private val bodied = mutableSetOf<Func>()
+
+    fun Func.ownRegions() = dropInlined(regionsOf(this, renderer.decompile(this).lines), this)
+
+    /**
+     * Claims for every decompiled statement this file should show — its own functions' bodies, and
+     * the code it contributed to other files' functions by being inlined into them.
+     *
+     * No canvas, no sweep. A body's rows claim their own source lines and lose or win contested ones
+     * on [Owner] priority, which is what the retroactive "demote whoever wrote first to `// stray:`"
+     * pass was doing by hand.
+     */
+    private fun decompClaims(): List<Claim> = buildList {
+        // Aliased out-of-line copies — ctor C1/C2, dtor D0/D1/D2 — are one function gcc emitted
+        // several times, at *different* addresses, all mapped to one source line. Decompiling each
+        // stacked the duplicates: every constructor in file.cpp appeared twice, opening brace and
+        // all. The skeleton merges them already, into `opens bouniaf ×2`.
+        //
+        // Keyed on the head — the full signature — at a shared start line, which is the signal the
+        // old single-line guard was already built on. Not on the whole body: the copies are decompiled
+        // separately, so Ghidra numbers their locals independently and two of file.cpp's three
+        // constructors differed past the head while being the same function. Two genuinely distinct
+        // functions cannot collide here, since the key carries their signatures.
+        val seenHeads = mutableSetOf<Pair<Int, String>>()
+        for (r in spans.ranges) {
+            val closeLine = with(spans) { r.span.last }
+            val cLines = renderer.decompile(r.func).lines
+            val head = cLines.firstOrNull() ?: continue
+            // Bodied before the duplicate check, not after: [bodied] is what tells the brace pass
+            // whose delimiters a body already carries, and a copy dropped as a duplicate is covered
+            // by the copy that stayed. Marking only the survivor left the dropped one's `}` to be
+            // emitted on its own, which clang reports as an extraneous closing brace.
+            bodied += r.func
+            if (!seenHeads.add(r.start to head.text)) continue
+
+            // The body may borrow the contiguous blank rows after its span when it outgrows it — the
+            // next function or global ends the run — so a dense body breathes instead of piling on.
+            val gapEnd = ((closeLine + 1)..maxLine).takeWhile { canvasFree(it) }.lastOrNull() ?: closeLine
+            // AFTER, not EXACT: aliased copies (ctor C1/C2, dtor D0/D1/D2) share a start line and
+            // decompile to identical heads, so under EXACT the two heads merged into one `{` while
+            // their two bodies each kept a `}`. Each copy keeps its own opener and slides if it must.
+            // The two declaration sets are one set seen twice. Ghidra recovers what it can from the
+            // frame and names it from the applied symbols; stabs has the rest, with gcc's own types.
+            // Merged by name into the head — the head already *is* the declaration block, so a stabs
+            // local has somewhere to go that isn't a row the body wants. Kept out of `dedup` so a
+            // later pass can still place a same-named file-scope declaration.
+            val vars = varsOf(r.func).distinctBy { it.name }
+            val extra = vars.filterNot { it.name in head.declares }
+            // Storage goes in one trailing block comment rather than beside each declarator: the head
+            // groups same-typed locals into `int a,b,c;`, so there is no per-name position to annotate
+            // without breaking the grouping. Looked up by name, so it covers Ghidra's own declarations
+            // too — annotating only the merged extras reached 2 of unbouniaf's locals instead of all
+            // of them. A `//` here would comment out the rest of the row.
+            val storage = vars.filter { it.role != null }
+                .sortedWith(compareBy({ it.role?.startsWith("Stack") != true }, { it.role }, { it.name }))
+                .joinToString { "${it.name}=${it.role}" }
+            val member = head.asMemberDefinition()
+            val text = member.text + extra.joinToString("") { " ${it.text}" } +
+                storage.takeIf { it.isNotEmpty() }?.let { " /* storage: $it */" }.orEmpty()
+
+            // An anchorless region has no line of its own to render at, so as a claim it floats away
+            // from the function it belongs to — and for a body that is entirely inlined it is the only
+            // region there is, carrying the function's closing brace with it. `Image::size` was one
+            // region reading `} /* ⇐ inlines stl_iterator.h … */`; its `}` drifted off and its head's
+            // `{` swallowed every function below, so `operator[]` ran from L41 to L128 with `set`,
+            // `size` and `bytesize` nested inside it. Fold those onto the last row that does have a
+            // place: the last anchored region, or the head.
+            val (anchored, floating) = r.func.ownRegions().partition { it.anchor != null }
+            val tail = floating.flatMap { r -> r.lines }.filter { it.text.isNotBlank() }
+            if (anchored.isNotEmpty()) anchored.last().lines.addAll(tail.map { it.copy(address = null, depth = 0) })
+
+            // Head and body nested together, the same rule [wrapAsDefinition] applies to inlined
+            // stretches. The brace pass cannot cover this, a bodied function being exactly the case
+            // it steps aside for: an accessor whose body is entirely inlined — `Image::size` — keeps
+            // no statement of its own after [dropInlined], so its `{` stood open and swallowed every
+            // function below, `operator[]` running from image.cpp L41 to L128 with `set`, `size` and
+            // `bytesize` inside it.
+            val body = anchored.flatMap { r -> r.lines } + if (anchored.isEmpty()) tail else listOf()
+            val (openers, closers) = braceFix(
+                (member.braces.asSequence() + body.asSequence().flatMap { it.braces }).map { it.char },
+            )
+                .let { (o, c) -> "{".repeat(o) to "}".repeat(c) }
+            this += Claim(
+                Owner.FUNCTION_BODY,
+                r.start,
+                listOf(
+                    Row(
+                        if (anchored.isEmpty()) {
+                            (listOf(text + openers) + tail.map { it.text }).joinToString(" ") + closers
+                        } else {
+                            text + openers
+                        },
+                        note = "L ${r.start}",
+                        cuts = member.booleanCuts,
+                    ),
+                ),
+                anchoring = Anchoring.AFTER,
+                limit = gapEnd,
+            )
+            if (closers.isNotEmpty()) {
+                anchored.lastOrNull()?.let {
+                    it.lines += DecompLine.synthetic(closers)
+                }
+            }
+
+            addAll(anchored.claimsFor(gapEnd, floor = r.start))
+        }
+
+        // The code this file contributed to *other* files' functions. gcc inlined it from here, so its
+        // N_SLINEs name this file and its lines belong on this canvas. A header line is compiled into
+        // every call site, so identical copies collapse to one tagged `×N`.
+        //
+        // Each function's stretches are wrapped in that function's own definition. Standing bare they
+        // were statements at file scope, which no C++ construct admits — the single largest source of
+        // parse errors in the render, and the reason a header view could not be compiled or even
+        // reliably brace-matched. Balancing each stretch on its own (the old `balance()`) made every
+        // one self-contained but left them all outside any function; the wrapper subsumes it, since a
+        // definition balances the group as a whole.
+        val inlined = index.functions
+            .asSequence()
+            .filter { f -> f !in rawFuncs && f.lineEntries.any { it.source == source } }
+            .flatMap { f -> f.ownRegions().map { f to it } }
+            .filter { (_, r) -> r.anchor != null }
+            .groupBy { (f, r) -> Triple(f, r.anchor, r.lines.map { it.text }) }
+            .map { (_, copies) -> copies.first().also { (_, r) -> r.copies = copies.size } }
+            .sortedBy { (_, r) -> r.anchor }
+            // Adjacent stretches of one function share a wrapper. They cannot interleave with another
+            // function's by definition, so nesting is safe, and one `vector<Exclusion,…>::operator=`
+            // signature stands over its five consecutive stretches instead of being repeated above
+            // each — 644 wrapper heads on unbouniaf down to what the functions actually need.
+            .fold(mutableListOf<Pair<Func, MutableList<Region>>>()) { acc, (f, r) ->
+                acc.lastOrNull()?.takeIf { it.first == f }?.second?.add(r) ?: acc.add(f to mutableListOf(r))
+                acc
+            }
+            .flatMap { (f, group) -> group.wrapAsDefinition(f) }
+        addAll(inlined.claimsFor(maxLine, owner = Owner.INLINED_BODY))
+    }
+
+    /** A row nothing has claimed yet — only meaningful before allocation writes anything. */
+    private fun canvasFree(line: Int) = line in 1..maxLine
+
+    // The headers this file pulls in, as #include lines in the blank space above the first line of
+    // content: the headers whose code got inlined here (non-.cpp N_SLINE sources) plus the headers
+    // that *define the types* its functions use — the type each signature/local names, resolved to
+    // its definition (an `XRef` forward-decl via its tag, a `Ref`/`InlineDef` via its id) and that
+    // type's base classes — so a .cpp that only calls out-of-line (nothing inlined, e.g. appimage.cpp)
+    // still declares its dependencies. Placed only within the available top room; overflow stacks on
+    // the last free line rather than pushing content down.
+    private fun includeClaims(): List<Claim> {
+        val referenced = mutableSetOf<Type>()
+        fun collect(decl: TypeDecl<GlobalTypeId>) {
+            val ast = when (decl) {
+                is TypeDecl.Ref -> index.byId(decl.id)
+                is TypeDecl.XRef -> index.byXRef(decl, silent = true)
+                else -> return decl.children.flatten().forEach { collect(it) }
+            }
+            if (ast != null && referenced.add(ast)) {
+                (ast.body as? TypeDecl.Struct)?.bases?.forEach { collect(it.type) }
+            }
+        }
+        for (f in rawFuncs) {
+            collect(f.decl.type)
+            for (s in f.params + f.locals) collect(s.body.type)
+        }
+
+        val fromTypes = referenced.asSequence().map { index.effectiveSourceFor(it) }
+        val fromInlined = rawFuncs.asSequence().flatMap { it.lineEntries.asSequence() }.map { it.source }
+        val headers = (fromInlined + fromTypes)
+            .filter { it != source && it.hasHeaderExtension() }
+            .distinct()
+            .sorted()
+            .map { "#include \"${it.substringAfterLast('/')}\"" }
+            .toList()
+        return headers.map { Claim(Owner.INCLUDE, null, listOf(Row(it)), anchoring = Anchoring.BAND) }
+    }
+
+    // Diagnostic: a function/type/global landing inside another function's interior is
+    // suspect. Deduped; overload sets on the same demangled name are skipped.
+    private fun reportAnomalies() {
+        val anomalies = sortedSetOf<String>()
+        for (r1 in spans.ranges) {
+            val interior = with(spans) { r1.interior } ?: continue
+            val name1 = r1.func.demangledName
+            val where = "inside $name1 [L$interior]"
+            for (r2 in spans.ranges) {
+                if (r2.func === r1.func) continue
+                val name2 = r2.func.demangledName
+                if (name2 == name1) continue
+                if (r2.start in interior) {
+                    anomalies += "skeleton[$source]: function $name2 opens at L${r2.start} $where"
+                }
+                if (r2.endInclusive in interior && r2.start !in interior) {
+                    anomalies += "skeleton[$source]: function $name2 closes at L${r2.endInclusive} $where"
+                }
+            }
+            for (ast in typeDecls) {
+                if (ast.declLine !in interior) continue
+                anomalies += "skeleton[$source]: type ${ast.name} declared at L${ast.declLine} $where"
+            }
+            for (s in symbols) {
+                if (s.declLine !in interior) continue
+                val nm = (s.body as? SymbolDecl.Static)?.name ?: continue
+                anomalies += "skeleton[$source]: global/static $nm at L${s.declLine} $where"
+            }
+        }
+        anomalies.forEach(::println)
+    }
+
+    companion object {
+        /** `open` / one indented row per item / `close`, the shape both aggregate initializers and type bodies take. */
+        fun braceRows(open: String, items: List<String>, close: String, indent: Int, role: String? = null) =
+            listOf(Row(open, indent, role)) + items.map { Row(it, indent + 4) } + Row(close, indent)
+    }
+}
