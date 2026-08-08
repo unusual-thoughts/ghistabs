@@ -92,12 +92,10 @@ data class DecompLine(
      * so the row's structure keeps describing its text rather than the text it used to have.
      */
     fun negate(condition: IntRange): DecompLine {
-        fun shift(at: Int) = at + if (at > condition.last) {
-            3
-        } else if (at >= condition.first) {
-            2
-        } else {
-            0
+        fun shift(at: Int) = at + when {
+            at > condition.last -> 3
+            at >= condition.first -> 2
+            else -> 0
         }
         return copy(
             text = text.replaceRange(condition, "!(${text.substring(condition)})"),
@@ -114,8 +112,11 @@ data class DecompLine(
          * Nothing decompiled it, so its own text is the only thing that knows its braces; it holds
          * no string literals and no `if`, being ours.
          */
-        fun synthetic(text: String) =
-            DecompLine(text, null, braces = text.mapIndexedNotNull { i, c -> Brace(c, i).takeIf { c in "{}" } })
+        fun synthetic(text: String) = DecompLine(
+            text,
+            null,
+            braces = text.mapIndexedNotNull { i, c -> Brace(c, i).takeIf { c in "{}" } },
+        )
     }
 }
 
@@ -160,20 +161,17 @@ private fun ClangLine.content(): List<ClangToken> = buildList {
     for (t in allTokens) {
         when {
             t is ClangBreak -> {}
-
             t.text in CALLING_CONVENTIONS -> dropTrailingBlank = true
-
-            dropTrailingBlank && t.text.isBlank() -> dropTrailingBlank = false
-
-            else -> {
-                add(t)
-                dropTrailingBlank = false
-            }
+            dropTrailingBlank && !t.isSignificant -> dropTrailingBlank = false
+            else -> add(t).also { dropTrailingBlank = false }
         }
     }
 }
 
-private fun ClangLine.significant() = content().filter { it.text.isNotBlank() }
+private val ClangToken.isSignificant get() = text.isNotBlank()
+private fun ClangLine.significant() = content().filter { it.isSignificant }
+private fun ClangNode.significantLeaves() = leaves().filter { it.isSignificant }
+private fun List<Placed>.significant() = filter { it.token.isSignificant }
 
 /**
  * Each of this line's content tokens with the offset its spelling takes in the line's *trimmed*
@@ -196,7 +194,7 @@ private fun ClangLine.rendered(spell: Spelling) = (indentString + content().join
  * back as `name (…)`; with it applied to every paren, `a ||(b)` and `f(x,(y))` lose theirs.
  */
 private fun ClangLine.rejoin(previous: ClangLine) = if (previous.significant().lastOrNull() is ClangFuncNameToken &&
-    significant().firstOrNull().let { it is ClangSyntaxToken && it.getOpen() >= 0 }
+    significant().firstOrNull().let { it is ClangSyntaxToken && it.open >= 0 }
 ) {
     ""
 } else {
@@ -222,8 +220,6 @@ private fun ClangToken.isBrace() = this is ClangSyntaxToken && DecompilerUtils.i
 
 private fun List<Placed>.braces() = filter { it.token.isBrace() }.map { Brace(it.token.text.first(), it.at) }
 
-private fun List<Placed>.significant() = filter { it.token.text.isNotBlank() }
-
 /**
  * Range within the row's text of the condition of an `if (…) {` that opens a block at its end.
  *
@@ -239,10 +235,10 @@ private fun List<Placed>.ifCondition(): IntRange? {
     val keyword = toks.indexOfLast { it.token is ClangOpToken && it.token.text == KEYWORD_IF }
         .takeIf { it >= 0 } ?: return null
     val open = toks[keyword + 1].token as? ClangSyntaxToken ?: return null
-    val id = open.getOpen().takeIf { it >= 0 } ?: return null
+    val id = open.open.takeIf { it >= 0 } ?: return null
     // The closer must be the row's second-to-last token: anything between it and the `{` (a `goto`,
     // another statement) means this brace is not the one this `if` opens.
-    val close = toks[toks.size - 2].takeIf { (it.token as? ClangSyntaxToken)?.getClose() == id } ?: return null
+    val close = toks[toks.size - 2].takeIf { (it.token as? ClangSyntaxToken)?.close == id } ?: return null
     return (toks[keyword + 1].at + 1)..<close.at
 }
 
@@ -282,7 +278,7 @@ private fun List<Placed>.booleanCuts(): List<Cut> {
  */
 private fun branchesAt(brace: ClangToken, rowOf: Map<ClangLine, Int>): Branches? {
     val siblings = (brace.Parent() ?: return null).children()
-        .filter { it !is ClangBreak && (it !is ClangToken || it.text.isNotBlank()) }
+        .filter { it !is ClangBreak && (it !is ClangToken || it.isSignificant) }
     val i = siblings.indexOfFirst { it === brace }.takeIf { it >= 0 } ?: return null
     val then = siblings.getOrNull(i + 1)?.asBlock() ?: return null
     if (!siblings.getOrNull(i + 2).spells("}") || !siblings.getOrNull(i + 3).spells(KEYWORD_ELSE)) return null
@@ -297,13 +293,13 @@ private fun branchesAt(brace: ClangToken, rowOf: Map<ClangLine, Int>): Branches?
 
 // A group holding its own delimiters: the pending brace was printed inside it, and the nested
 // `emitBlockIf` that owns that brace closes it inside too.
-private fun ClangNode.wrapsItsOwnBraces() = leaves().filter { it.text.isNotBlank() }
+private fun ClangNode.wrapsItsOwnBraces() = significantLeaves()
     .let { it.firstOrNull().spells("{") && it.lastOrNull().spells("}") }
 
 // The rows the group's tokens landed on — minus its own delimiters where it carries them, those
 // sitting on the separator and closing rows, which belong to neither branch.
 private fun ClangNode.rows(rowOf: Map<ClangLine, Int>, unwrap: Boolean = false): IntRange? {
-    val inner = leaves().filter { it.text.isNotBlank() }.let { if (unwrap) it.drop(1).dropLast(1) else it }
+    val inner = significantLeaves().let { if (unwrap) it.drop(1).dropLast(1) else it }
     return inner.mapNotNull { rowOf[it.lineParent] }.ifEmpty { null }?.let { it.min()..it.max() }
 }
 
@@ -439,7 +435,7 @@ fun DecompileResults.compressedDecompLines(
     val bodyStart = lines.indexOfFirst { it.isCode() }
     if (bodyStart <= 0) {
         return lines.map { l ->
-            l.placed(spell).let { DecompLine(l.rendered(spell), l.address(), braces = it.braces()) }
+            DecompLine(l.rendered(spell), l.address(), braces = l.placed(spell).braces())
         }
     }
     val (declLines, prefix) = lines.subList(0, bodyStart).partition { it.isDeclaration() }
@@ -534,17 +530,17 @@ private fun <T : ClangNode> List<Placed>.groupOf(cls: Class<T>, of: (Placed) -> 
  */
 private fun List<Placed>.extent(group: ClangNode, separator: String?): IntRange {
     val own = indices.filter { this[it].token.isUnder(group) }
-    val next = (own.last() + 1..<size).firstOrNull { this[it].token.text.isNotBlank() }
+    val next = (own.last() + 1..<size).firstOrNull { this[it].token.isSignificant }
     // The separator goes with the group: the one after it, or — where the group ends its list, as
     // `this` does for a member whose other parameters precede it — the one before instead.
     val takesNext = separator != null && next != null && this[next].token.text == separator
     val start = when {
         separator == null || takesNext -> own.first()
-        else -> (own.first() - 1 downTo 0).firstOrNull { this[it].token.text.isNotBlank() }
+        else -> (own.first() - 1 downTo 0).firstOrNull { this[it].token.isSignificant }
             ?.takeIf { this[it].token.text == separator } ?: own.first()
     }
-    var end = if (takesNext) next!! + 1 else own.last() + 1
-    while (end < size && this[end].token.text.isBlank()) end++
+    var end = if (takesNext) next + 1 else own.last() + 1
+    while (end < size && !this[end].token.isSignificant) end++
     val last = this[own.last()]
     return this[start].at..<(getOrNull(end)?.at ?: (last.at + last.token.text.length))
 }
