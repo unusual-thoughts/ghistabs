@@ -176,9 +176,3 @@ fun Memory.getBlockContaining(addr: Address) = blocks.find { it.addressRange.con
 val Program.baseStackParamOffset get() = compilerSpec.defaultCallingConvention.run {
     stackParameterOffset?.toInt() ?: stackshift
 }
-
-fun String.nullIfEmpty() = ifEmpty { null }
-fun String.removePrefixOrNull(prefix: String): String? = when {
-    startsWith(prefix) -> substring(prefix.length)
-    else -> null
-}

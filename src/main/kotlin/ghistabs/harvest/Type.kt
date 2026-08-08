@@ -76,19 +76,35 @@ data class Symbol(
         enclosingFunction: String? = null,
     ) : this(record.index, record.type, decl, record.value, record.desc, sourceFile, enclosingFunction)
 
-    fun storage(program: Program) = (
-        when (body) {
-            is SymbolDecl.Local -> body.location
-            is SymbolDecl.Param -> body.location
-            else -> null
-        }
-        )?.let {
+    val location get() = when (body) {
+        is SymbolDecl.Local -> body.location
+        is SymbolDecl.Param -> body.location
+        else -> null
+    }
+
+    fun storage(program: Program) = location?.let {
         dbxStorageName(
             program.defaultPointerSize,
             rawValue.toInt(),
             it == VariableLocation.REGISTER,
             program.baseStackParamOffset,
         )
+    }
+
+    /**
+     * Where gcc put this local, as an address the decompiler indexes storage by: the register itself, or
+     * the frame slot at Ghidra's origin rather than gcc's frame-pointer-relative one. Null for anything
+     * that is neither — and for the dbx register numbers [dbxRegisterName] declines to map (the x87
+     * stack), which is the same set the importer skips.
+     */
+    fun storageAddress(program: Program) = when (location) {
+        VariableLocation.REGISTER -> dbxRegisterName(program.defaultPointerSize, rawValue.toInt())
+            ?.let { program.getRegister(it)?.address }
+
+        VariableLocation.STACK ->
+            program.addressFactory.stackSpace.getAddress(rawValue - program.baseStackParamOffset)
+
+        null -> null
     }
 
     companion object {

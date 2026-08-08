@@ -63,6 +63,16 @@ enum class Owner {
         INCLUDE -> "include"
         else -> "declaration"
     }
+
+    fun kind() = when (this) {
+        FUNCTION_BODY, INLINED_BODY -> FragmentKind.DECOMP
+        FUNC_DELIM -> FragmentKind.FUNC_DELIM
+        GLOBAL -> FragmentKind.DECL_GLOBAL
+        LOCAL -> FragmentKind.DECL_LOCAL
+        TYPE_BODY -> FragmentKind.TYPE_BODY
+        TYPEDEF -> FragmentKind.TYPEDEF
+        INCLUDE -> FragmentKind.OTHER
+    }
 }
 
 /**

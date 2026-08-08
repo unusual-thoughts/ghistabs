@@ -242,6 +242,11 @@ private fun List<Placed>.ifCondition(): IntRange? {
     return (toks[keyword + 1].at + 1)..<close.at
 }
 
+private val EMPTY_BLOCK = listOf('{', '}')
+
+/* An already-closed empty block at the end of a decompiled line — Ghidra spells it `{ }` or `{}` */
+fun List<Brace>.isEmptyBlock() = map(Brace::char) == EMPTY_BLOCK
+
 /**
  * Offsets just past each shallowest-depth `&&`/`||` — the top-level boolean joins, the readable
  * points to break an over-long row at. Empty where the row has none at any depth.
