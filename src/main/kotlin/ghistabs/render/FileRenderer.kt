@@ -335,10 +335,20 @@ class FileRenderer(val renderer: Renderer, override val source: String) : Render
 
     // Attributed by CU (`symbolsByCu`), not `s.sourceFile` — gcc emits no `N_SOL(cu)`
     // before N_GSYM, so `sourceFile` points at the last header visited.
-    private fun globalClaims() = symbols.mapNotNull { s ->
-        (s.body as? SymbolDecl.Static)?.takeIf { dedup(s.declLine, it.name) }?.let {
-            emitGlobal(it, s)
-        }
+    //
+    // A file-scope global whose line falls between a function's braces cannot be rendered there:
+    // `_ZTI5Image` sat between xdvimage.cpp's constructor head and its body. gcc dates its generated
+    // data — RTTI objects, string tables — by whatever it was emitting at the time, so what is wrong
+    // is the line, and the declaration goes to the appendix like any other that lost its row. One gcc
+    // really did declare inside a function carries `enclosingFunction` and belongs where it is.
+    private fun globalClaims(): List<Claim> {
+        val (inside, outside) = symbols
+            .mapNotNull { s ->
+                (s.body as? SymbolDecl.Static)?.takeIf { dedup(s.declLine, it.name) }?.let { emitGlobal(it, s) to s }
+            }
+            .partition { (_, s) -> s.enclosingFunction == null && spans.insideBody(s.declLine) }
+        displaced += inside.map { (claim, _) -> Dropped(claim, INSIDE_BODY) }
+        return outside.map { it.first }
     }
 
     // Openers at startLine (self-closing decl when single-line), closers at the close line.
@@ -433,9 +443,10 @@ class FileRenderer(val renderer: Renderer, override val source: String) : Render
             bodied += r.func
             if (!seenHeads.add(r.start to (head.prototype ?: head.text))) continue
 
-            // The body may borrow the contiguous blank rows after its span when it outgrows it — the
-            // next function or global ends the run — so a dense body breathes instead of piling on.
-            val gapEnd = ((closeLine + 1)..maxLine).takeWhile { canvasFree(it) }.lastOrNull() ?: closeLine
+            // The body may borrow the blank rows after its span when it outgrows it — up to the next
+            // function's opener, past which the rows are that function's — so a dense body breathes
+            // instead of piling on.
+            val gapEnd = spans.barrier(r.start)
             // AFTER, not EXACT: several functions can share a start line, and under EXACT their heads
             // merged into one `{` while each body kept its `}`. Each keeps its own opener and slides
             // if it must.
@@ -503,7 +514,7 @@ class FileRenderer(val renderer: Renderer, override val source: String) : Render
                 }
             }
 
-            addAll(anchored.claimsFor(gapEnd, floor = r.start))
+            addAll(anchored.claimsFor(spans::barrier, floor = r.start))
         }
 
         // The code this file contributed to *other* files' functions. gcc inlined it from here, so its
@@ -536,12 +547,10 @@ class FileRenderer(val renderer: Renderer, override val source: String) : Render
                 acc
             }
             .flatMap { (f, group) -> group.wrapAsDefinition(f) }
-        addAll(inlined.claimsFor(maxLine, owner = Owner.INLINED_BODY))
+        addAll(inlined.claimsFor(spans::barrier, owner = Owner.INLINED_BODY))
     }
 
     /** A row nothing has claimed yet — only meaningful before allocation writes anything. */
-    private fun canvasFree(line: Int) = line in 1..maxLine
-
     // The headers this file pulls in, as #include lines in the blank space above the first line of
     // content: the headers whose code got inlined here (non-.cpp N_SLINE sources) plus the headers
     // that *define the types* its functions use — the type each signature/local names, resolved to

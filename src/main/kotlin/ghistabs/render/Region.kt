@@ -295,11 +295,13 @@ fun List<Region>.wrapAsDefinition(func: Func): List<Region> =
     }
 
 /**
- * [regions] as claims: none allowed to slide past [limit], none to rise above [floor] — the row
- * its function opened on — or above the region before it. See [nestingRows] for why the order has
- * to be total. The label still names the line gcc gave, so provenance survives the clamp.
+ * [regions] as claims: none allowed to slide past the [limit] its own row admits — the next
+ * function's opener, so a stretch cannot come to rest inside a function it is no part of — none to
+ * rise above [floor] — the row its function opened on — or above the region before it. See
+ * [nestingRows] for why the order has to be total. The label still names the line gcc gave, so
+ * provenance survives the clamp.
  */
-fun List<Region>.claimsFor(limit: Int, floor: Int = 1, owner: Owner = Owner.FUNCTION_BODY) =
+fun List<Region>.claimsFor(limit: (row: Int) -> Int?, floor: Int = 1, owner: Owner = Owner.FUNCTION_BODY) =
     nestingRows(map { it.anchor }, floor).zip(this) { row, r ->
         Claim(
             owner,
@@ -309,6 +311,6 @@ fun List<Region>.claimsFor(limit: Int, floor: Int = 1, owner: Owner = Owner.FUNC
             },
             Fit.ELASTIC,
             anchoring = Anchoring.AFTER,
-            limit = limit,
+            limit = limit(row),
         )
     }
