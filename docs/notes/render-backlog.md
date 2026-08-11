@@ -60,13 +60,21 @@ numbered in the order they were *found*, not worked; this is the order to work t
      rows because instantiations arriving at a header that already renders one merge into it and are
      listed in the instantiation appendix; render time is unchanged.
 
-     **What is left, and it needs different evidence.** `_Vector_alloc_base<unsigned short>` (image.h
-     L79) and `__normal_iterator<unsigned short*>` (L571) stay: *no* instantiation of either template
-     anywhere in appquery has an out-of-line method, so neither the vote nor the propagation has a
-     seed. The tie that would place them is structural — `_Vector_base<unsigned short>`, which did
-     move to stl_vector.h, has `_Vector_alloc_base<unsigned short>` as its base class. Attribution by
-     reference from an already-placed type is the next mechanism, and it is the last 10 rows here.
-     The canvas is still 908 lines because those two declLines are what stretch it.
+     **Base classes follow their derived class — done.** `_Vector_alloc_base<unsigned short>` has no
+     methods and no instantiation of that template anywhere has an out-of-line one, so neither the
+     vote nor the sibling pass could reach it; what *is* known is that `_Vector_base<unsigned short>`,
+     which derives from it, went to stl_vector.h. Three rounds, templates only, so a project class
+     cannot be dragged along by a base it shares with the standard library. image.h 41 → 35 rows,
+     xvimage.h 66 → 60, vminfo.h 57 → 52 — every row that moved was a `_Vector_alloc_base<…>`, and
+     `class Image`, `class XVImage`, `class VmInfo` all stayed. Extending it to *field* types as well
+     moved nothing on the corpus, so it stays bases-only.
+
+     **What is left: two declarations and 850 blank lines.** `__normal_iterator<unsigned short*>`
+     (image.h L571) and `allocator<unsigned short>` (L649) are referenced by `vector<unsigned short>`
+     as neither base nor field — through a method signature or a typedef — so nothing structural
+     reaches them either. They are 5 of image.h's 35 rows but they are also what holds its canvas at
+     908 lines for 25 rows of real content, so they are worth more than they look: the §33 blank-space
+     numbers cannot be re-measured honestly until they are gone.
 
    **§38 is the third instance of the extent circularity and the worst**: `main.cpp` rendered 1456
    rows for a 166-line file. That half is DONE; the exact RTTI attribution (§38 grade 1) is too.
