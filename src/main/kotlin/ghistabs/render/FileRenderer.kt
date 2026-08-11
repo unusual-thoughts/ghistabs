@@ -416,11 +416,11 @@ class FileRenderer(val renderer: Renderer, override val source: String) : Render
         // stacked the duplicates: every constructor in file.cpp appeared twice, opening brace and
         // all. The skeleton merges them already, into `opens bouniaf ×2`.
         //
-        // Keyed on the head — the full signature — at a shared start line, which is the signal the
-        // old single-line guard was already built on. Not on the whole body: the copies are decompiled
-        // separately, so Ghidra numbers their locals independently and two of file.cpp's three
-        // constructors differed past the head while being the same function. Two genuinely distinct
-        // functions cannot collide here, since the key carries their signatures.
+        // Keyed on the signature at a shared start line, which is the signal the old single-line guard
+        // was already built on. Two genuinely distinct functions cannot collide, since the key carries
+        // their signatures; nothing past the signature can be in it, since the copies are decompiled
+        // separately and so Ghidra names their locals per copy — `xdvimage.cpp`'s two copies of one
+        // constructor declared `__ret_4`/`__n_3` against `local_78` and both rendered.
         val seenHeads = mutableSetOf<Pair<Int, String>>()
         for (r in spans.ranges) {
             val closeLine = with(spans) { r.span.last }
@@ -431,14 +431,14 @@ class FileRenderer(val renderer: Renderer, override val source: String) : Render
             // by the copy that stayed. Marking only the survivor left the dropped one's `}` to be
             // emitted on its own, which clang reports as an extraneous closing brace.
             bodied += r.func
-            if (!seenHeads.add(r.start to head.text)) continue
+            if (!seenHeads.add(r.start to (head.prototype ?: head.text))) continue
 
             // The body may borrow the contiguous blank rows after its span when it outgrows it — the
             // next function or global ends the run — so a dense body breathes instead of piling on.
             val gapEnd = ((closeLine + 1)..maxLine).takeWhile { canvasFree(it) }.lastOrNull() ?: closeLine
-            // AFTER, not EXACT: aliased copies (ctor C1/C2, dtor D0/D1/D2) share a start line and
-            // decompile to identical heads, so under EXACT the two heads merged into one `{` while
-            // their two bodies each kept a `}`. Each copy keeps its own opener and slides if it must.
+            // AFTER, not EXACT: several functions can share a start line, and under EXACT their heads
+            // merged into one `{` while each body kept its `}`. Each keeps its own opener and slides
+            // if it must.
             // The two declaration sets are one set seen twice. Ghidra recovers what it can from the
             // frame and names it from the applied symbols; stabs has the rest, with gcc's own types.
             // Merged by name into the head — the head already *is* the declaration block, so a stabs
@@ -521,7 +521,10 @@ class FileRenderer(val renderer: Renderer, override val source: String) : Render
             .filter { f -> f !in rawFuncs && f.lineEntries.any { it.source == source } }
             .flatMap { f -> f.ownRegions().map { f to it } }
             .filter { (_, r) -> r.anchor != null }
-            .groupBy { (f, r) -> Triple(f, r.anchor, r.lines.map { it.text }) }
+            // By the inliner's *name*, not the Func: gcc's dtor aliases D0/D1/D2 are one source
+            // function emitted several times, each inlining the same stretch, so xdvimage.cpp showed
+            // `__inline_xdvimage_cpp_30` twice — identical but for which alias the head names.
+            .groupBy { (f, r) -> Triple(f.demangledName, r.anchor, r.lines.map { it.text }) }
             .map { (_, copies) -> copies.first().also { (_, r) -> r.copies = copies.size } }
             .sortedBy { (_, r) -> r.anchor }
             // Adjacent stretches of one function share a wrapper. They cannot interleave with another
