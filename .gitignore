@@ -8,7 +8,6 @@ dist/
 
 # Vendored runtime jars (downloaded by buildExtension.gradle)
 lib/
-gradle/wrapper/
 
 # BFG repo cleaner artifacts
 ..bfg-report/
