@@ -29,6 +29,47 @@ private fun isExplicitlyRelative(path: String) = path.startsWith("./") ||
     path.startsWith(""".\""") ||
     path.startsWith("""..\""")
 
+/** Directories a toolchain keeps its headers under; an `include` below one of these is a system
+ *  include root, so what sits under it was reached with `<…>`. */
+private val TOOLCHAIN_ROOTS = setOf("mingw", "cygwin", "usr", "lib", "gcc-lib", "local")
+
+/** libstdc++'s own subdirectories, which are part of the spelling (`<bits/stl_alloc.h>`) rather than
+ *  search roots like the version and target-config directories around them. */
+private val STD_SUBDIRS = setOf("bits", "ext", "tr1", "tr2", "debug", "profile", "parallel", "backward")
+
+/**
+ * How a source is written as an `#include` directive, punctuation and all.
+ *
+ * A bare or relative spelling can only have come from a quoted include: cpp searches the *including*
+ * file's own directory for `"…"` and never for `<…>` (`search_path_head`, gcc/cppfiles.c), and the
+ * recorded name is the search directory joined to the spelling as written, so an empty directory
+ * means the quote chain. That much is certain.
+ *
+ * A full path was found through some search directory, and the stabs do not say whether it was a
+ * `-I` or a system one — gcc tracks that per directory (`cpp_dir.sysp`) and never writes it out. So
+ * the rest is layout: an `include` directory under a toolchain root is a system root, and what sits
+ * below it is spelled `<…>` relative to it, with the version and target-config directories dropped
+ * (`c++/3.2.3/mingw32/bits/atomicity.h` is included as `<bits/atomicity.h>`). Anything else stays
+ * quoted, keeping whatever directory it sits in below `include` — a project header reached by `-I`
+ * really is written `"imageutil/appimage.h"`.
+ */
+fun includeSpelling(path: String): String {
+    val segments = pathSegments(path)
+    if (segments.size == 1 || isExplicitlyRelative(path)) return "\"${segments.last()}\""
+    val includeAt = segments.lastIndexOf("include")
+    val below = if (includeAt >= 0) segments.drop(includeAt + 1) else listOf(segments.last())
+    if (includeAt <= 0 || segments.take(includeAt).none { it in TOOLCHAIN_ROOTS }) {
+        return "\"${below.joinToString("/")}\""
+    }
+    val underCxxRoot = below.firstOrNull() == "c++" || below.firstOrNull() == "g++"
+    val versionless = below.dropWhile { it == "c++" || it == "g++" || it.all { c -> c.isDigit() || c == '.' } }
+    val spelled = when {
+        underCxxRoot && versionless.size > 1 && versionless.first() !in STD_SUBDIRS -> versionless.drop(1)
+        else -> versionless
+    }
+    return "<${spelled.joinToString("/")}>"
+}
+
 /**
  * A source spelling written relative to its compilation directory, resolved against it —
  * `../../../interface/host/bits/bits64.h` compiled in
