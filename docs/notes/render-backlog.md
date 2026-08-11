@@ -133,8 +133,10 @@ numbered in the order they were *found*, not worked; this is the order to work t
    the same token knowledge `renameThis` already uses — the grammar section's `'this' is a keyword`
    family fixed only the definition side.
 8. ~~**8 markers still outside their block.**~~ — DONE, see §42.
-9. **`activityExtent`'s header proxy.** `spans.ranges.isEmpty()` stands in for "is a header" and
-   leaks: `filesystemimage.h` has spans from inline methods. Right answer there by luck.
+9. ~~**`activityExtent`'s header proxy.**~~ — DONE, see §43. The regime is gcc's `N_SO` now. What the
+   luck was catching is only half-replaced: a header's extent is still measured by its own
+   declarations, so one uncorroborated declaration vouches for itself. §43 records what an outlier
+   rule has to do and why the two blunter versions were measured and rejected.
 
 **Structural debt, worth taking before more of the above.**
 
@@ -1795,6 +1797,57 @@ than to placement.
 `(**(code **)(*(int *)this + 8))(this,uVar2,…)`. The vcall is the interesting one: it is a vtable
 slot, and the render **declares the vtable type in the same file** (`XDVImage_vftable`), so the
 offset can be resolved to the method it calls rather than printed as arithmetic.
+
+---
+
+## 43. `activityExtent`'s header proxy — DONE, and the half it was standing in for is not
+
+`activityExtent` runs two regimes — a CU measured by its code alone, an included file by its
+declarations — and picked between them on `spans.ranges.isEmpty()`. That is not the question: a
+header of inline methods has spans (`filesystemimage.h`) and a CU whose functions were all inlined
+away has none. **gcc says which it is**: an `N_SO` is a translation unit, everything else was
+included, and `SourceFile.CUSource` has carried that since the parser. `HarvestIndex.compilationUnits`
+exposes it (folded, like every other source key) and the `when` asks that instead.
+
+**On its own that trades three right answers for five.** The five headers with inline methods were
+taking the CU path, so their own late declarations were being called stale — `class _STL_auto_lock`
+at stl_threads.h L233, `class rebind<char>` at basic_string.tcc L662, `list<FileSystemEntry>` at
+filesystemimage.h L291 all render in place now, correctly. But the same accident was displacing four
+instantiation typedefs in stl_uninitialized.h (`_Trivial` L426, `__Normal` L448, `_Tag` L733,
+`_Integral` L750, in a file gcc 3.x ships at ~300 lines) and one in stl_list.h, and those really are
+misfiled.
+
+**So the conflict rule was extended to reach them.** `_Trivial` carries L426 in *both* basic_string.h
+and stl_uninitialized.h, `_Tag` L733 in both stl_list.h and stl_uninitialized.h — the same fact
+`conflictedTemplateDecls` already records for `_Alloc_traits<…>` at L898, in a different shape. There
+is now a `conflictedTypedefDecls` alongside it and `misfiled` consults whichever fits the declaration.
+Tags and typedefs are counted **separately** because one namespace makes `class fpos<int>` conflict
+with a `fpos` typedef and `class string` with the `string` one, which cost stringfwd.h its `class
+string` and `<limits>` its `numeric_limits` specialisations when it was tried.
+
+Net against the pre-change render: unpackfile 6 files, three declarations recovered and none lost;
+appquery 6 files, three recovered against stl_uninitialized.h's four typedefs, which this fixture
+does *not* catch — see below. Everything else that moved is the reason string on an
+already-displaced row (`stale N_SOL` → `this line is claimed by several files`).
+
+**What is left, stated precisely.** For an included file every bound available is circular: it is
+measured by the declarations it is judging. Two blunter rules were written and measured before
+settling:
+
+- *Any template instantiation past the file's reach is misfiled* — gcc does file those by accident.
+  It also empties the headers whose whole content is templates: `type_traits.h` lost all twenty
+  `__type_traits<…>`, `stringfwd.h` its `class string`, `<limits>` its specialisations.
+- *Excluding disputed declarations from the file's own reach* — necessary (a declaration must not
+  vouch for itself) but not sufficient, and it is what the first rule collapses through.
+
+The residue is exactly that insufficiency: in appquery, `_Integral` L750 happens to be claimed by no
+other file, so it vouches for stl_uninitialized.h reaching L750 and its three conflicted siblings sit
+inside that. The signal the note originally guessed at — distance — is the right one, and the shape
+it needs is a **gap**, not a threshold on lines: `class XVImage` sits 4 lines past attested code
+among evidence spaced 2–10 apart, while stl_uninitialized.h's evidence stops at ~300 and resumes at
+426. Cut the file at the first outsized gap and all four go; `type_traits.h`, evenly spaced
+throughout, keeps everything. That wants its own pass, with the gap statistic measured across the
+corpus rather than picked.
 
 ---
 

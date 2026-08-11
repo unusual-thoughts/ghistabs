@@ -371,6 +371,20 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
     }
 
     /**
+     * The sources gcc compiled as a translation unit — an `N_SO` of its own — as against the files it
+     * only ever included. Every stab record carries which of the two it came from ([SourceFile]); the
+     * render had been asking "does this file define functions", which is a different question and
+     * answers wrong for a header full of inline methods.
+     */
+    val compilationUnits: Set<String> by lazy {
+        (harvest.functions.map { it.cu } + typeAsts.values.map { it.id.source })
+            .filterIsInstance<SourceFile.CUSource>()
+            .map { it.filename }
+            .plus(harvest.symbolsByCu.keys)
+            .mapTo(mutableSetOf(), ::foldSource)
+    }
+
+    /**
      * A compilation unit's directory, by the filename everything keys it under. gcc records it in the
      * leading trailing-slash `N_SO`, and `SourceFile.CUSource` has carried it all along; nothing used
      * it, so `main.cpp` had no path even though the stabs say
@@ -465,24 +479,40 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
     fun effectiveSourceFor(type: Type) = effectiveSourceById[type.id] ?: type.effectiveSource()
 
     /**
-     * `(template, declLine)` pairs that end up filed under more than one source — so at most one of
-     * them is where the template is declared, and nothing here says which.
+     * `(name, declLine)` pairs that end up filed under more than one source — so at most one of them
+     * is where the declaration sits, and nothing here says which.
      *
-     * A template is declared once. `_Alloc_traits<…>` arrives as eight instantiations all carrying
+     * A declaration has one site. `_Alloc_traits<…>` arrives as eight instantiations all carrying
      * declLine 898, spread across image.h, vminfo.h, xvimage.h and three CUs: they cannot all be
      * right, none of them is (its home is stl_alloc.h, which holds no instantiation of it at all,
      * so no vote or sibling can reach it — §38's grade-3 wall), and rendering it in each of those
      * files at line 898 both states a falsehood and stretches image.h's canvas to 903 rows for 25
      * rows of content. Knowing they are all wrong is enough to stop placing them, which is what the
      * displaced appendix is for.
+     *
+     * Tags and typedefs are counted separately, and not because it is tidier: `fpos` is a class in
+     * fpos.h and a typedef elsewhere, `string` likewise, so one namespace makes them conflict with
+     * each other and `class string` loses its place in stringfwd.h to a typedef of the same name.
      */
     val conflictedTemplateDecls: Set<Pair<String, Int>> by lazy {
-        typeAsts.values
-            .filter { it.name?.contains('<') == true && it.declLine > 0 }
-            .groupBy({ it.name!!.substringBefore('<') to it.declLine }, ::effectiveSourceFor)
-            .filterValues { it.distinct().size > 1 }
-            .keys
+        conflictsAmong(typeAsts.values.filter { it.name?.contains('<') == true })
     }
+
+    /**
+     * The same, for typedefs, where the splaying is gcc's per-instantiation emission: `_Trivial` at
+     * L426 in both basic_string.h and stl_uninitialized.h, `_Tag` at L733 in both stl_list.h and
+     * stl_uninitialized.h. Only one of each pair is the declaration; the file that reaches the line
+     * keeps it.
+     */
+    val conflictedTypedefDecls: Set<Pair<String, Int>> by lazy {
+        conflictsAmong(typeAsts.values.filter { it.body !is TypeDecl.Struct && it.body !is TypeDecl.Enum })
+    }
+
+    private fun conflictsAmong(asts: Collection<Type>) = asts
+        .filter { it.name != null && it.declLine > 0 }
+        .groupBy({ it.name!!.substringBefore('<') to it.declLine }, ::effectiveSourceFor)
+        .filterValues { it.distinct().size > 1 }
+        .keys
 
     /** Every source file render emits, from line entries, function bodies, and type declarations. */
     val sources: Set<String> by lazy {
