@@ -25,13 +25,30 @@ numbered in the order they were *found*, not worked; this is the order to work t
      *unfolded* spelling. §39 folds onto the full path, whose bucket reaches **39**, so its own class
      is inside. Same for appimage.h (35, class at 19), vminfo.h (83), filesystemimage.h (117). A code
      extent now works for that half; only the no-code headers need something else.
-   - **The evidence for the no-code half is the instantiations' own methods.** `vector<short unsigned
-     int>`'s methods were inlined and their N_SLINEs point at stl_vector.h — that is a real signal
-     tying the class to a stdlib header, and `multiSourceHeaderHints` already votes exactly that way
-     off header line-entries and method address ranges. It is not firing for these; find out why
-     before writing anything new. Note stl_vector.h's own render declares *no* classes, so there is
-     no "where do its siblings live" vote to fall back on — the method-address evidence is all there
-     is.
+   - **The evidence exists and `multiSourceHeaderHints` is the right mechanism — two guards stop it.**
+     `vector<unsigned short>` does have one out-of-line method, `_M_fill_insert` (easy to miss: the
+     stabs spell the type `vector<short unsigned int,…>` and the render `vector<unsigned_short,…>`),
+     and the header line-entries inside its address range are stl_vector.h, stl_algobase.h,
+     stl_uninitialized.h, stl_alloc.h and stl_iterator.h — all stdlib, which is the answer wanted.
+     What blocks it:
+     1. `if (defSources.all { it.hasHeaderExtension() }) continue` — the type is declared only in
+        image.h, which *is* a header, so the vote never runs. Being in *a* header is not being in the
+        *right* one.
+     2. `stdVote.takeIf { defSources.size > 1 }` — with one defSource the stdlib branch is off too,
+        so relaxing (1) alone changes nothing.
+     Guard (2) protects a real case, recorded in its own comment: `class Image` is stabs-declared in
+     stl_vector.h and must stay in image.h. But that case is already held by the ranking —
+     `userVote ?: siblingHeader ?: stdVote` — because Image's methods live in user files and vote
+     user, while `vector<…>`'s live in stdlib ones and vote std. Check that before deleting it.
+
+     **Remaining unknown, and the only one:** whether the vote lands on stl_vector.h or on
+     stl_algobase.h, since `_M_fill_insert`'s range covers inlined stretches of both. If it picks the
+     wrong sibling the answer is still a stdlib header rather than a project one, which is most of the
+     win; count the entries before deciding whether it needs a tie-break.
+
+     **Watch:** relaxing (1) runs the vote for every header-declared type — the loop is
+     methods × header-entries with a binary search, so measure it. And stl_vector.h's own render
+     declares *no* classes, so there is no "where do its siblings live" fallback if the vote fails.
 
    **§38 is the third instance of the extent circularity and the worst**: `main.cpp` rendered 1456
    rows for a 166-line file. That half is DONE; the exact RTTI attribution (§38 grade 1) is too.
