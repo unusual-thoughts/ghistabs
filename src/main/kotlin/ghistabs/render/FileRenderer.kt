@@ -53,6 +53,21 @@ class FileRenderer(val renderer: Renderer, override val source: String) : Render
         else -> maxOf(lines.maxOfOrNull { it.line } ?: 0, spans.ranges.maxOf { it.endInclusive })
     }
 
+    /**
+     * How far this file's *own* content reaches — code, globals, and the type declarations that are
+     * not themselves in dispute. Unlike [activityExtent] it is not a judgement about staleness; it is
+     * the yardstick for whether a line claimed by several files could be this one's.
+     */
+    private val ownExtent by lazy {
+        sequenceOf(
+            lines.maxOfOrNull { it.line } ?: 0,
+            spans.ranges.maxOfOrNull { it.endInclusive } ?: 0,
+            symbols.maxOfOrNull { it.declLine } ?: 0,
+            typeDecls.filterNot { it.name!!.substringBefore('<') to it.declLine in index.conflictedTemplateDecls }
+                .maxOfOrNull { it.declLine } ?: 0,
+        ).max()
+    }
+
     // A decl at this line is misattributed (stale N_SOL) if it sits past the file's activity.
     override fun isStale(line: Int) = line > activityExtent
 
@@ -458,7 +473,16 @@ class FileRenderer(val renderer: Renderer, override val source: String) : Render
             .groupBy { it.declLine to it.name!!.substringBefore('<') }
 
         for ((key, group) in byDecl.entries.sortedBy { it.key.first }) {
-            val (line, _) = key
+            val (line, template) = key
+            // Filed under several sources at one line: at most one is right, so it renders only where
+            // the line is one this file plausibly reaches. stl_vector.h's own content runs past L900
+            // and keeps its copy; image.h's stops at L53 and cannot be declaring anything at L898.
+            // See [HarvestIndex.conflictedTemplateDecls].
+            if (template to line in index.conflictedTemplateDecls && line > ownExtent) {
+                group.first().emitTypeBody(line, group.size)?.let { displaced += Dropped(it, CONFLICTED_DECL) }
+                mergedInstantiations += group.drop(1)
+                continue
+            }
             // Deterministic pick: the most members, then by name, so the choice can't drift with
             // unrelated type-resolution changes.
             val ast = group.maxWithOrNull(compareBy({ it.body.memberCount() }, { it.name })) ?: continue
