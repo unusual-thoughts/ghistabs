@@ -69,12 +69,31 @@ numbered in the order they were *found*, not worked; this is the order to work t
      `class Image`, `class XVImage`, `class VmInfo` all stayed. Extending it to *field* types as well
      moved nothing on the corpus, so it stays bases-only.
 
-     **What is left: two declarations and 850 blank lines.** `__normal_iterator<unsigned short*>`
-     (image.h L571) and `allocator<unsigned short>` (L649) are referenced by `vector<unsigned short>`
-     as neither base nor field — through a method signature or a typedef — so nothing structural
-     reaches them either. They are 5 of image.h's 35 rows but they are also what holds its canvas at
-     908 lines for 25 rows of real content, so they are worth more than they look: the §33 blank-space
-     numbers cannot be re-measured honestly until they are gone.
+     **Sibling seeding, done — the pass was only half-seeded.** `homeByTemplate` was built from
+     *voted* homes alone, so it could not see the instantiations nothing was ever wrong with:
+     `allocator<char>`, `<void>` and `<wchar_t>` sit in stl_alloc.h because gcc put them there, and
+     they are exactly what says where `allocator<unsigned short>` belongs. Seeding it from `id.source`
+     as well — stdlib homes only, and `id.source` rather than the effective source, since this map is
+     what the effective source consults — moves both stragglers out of image.h.
+
+     Corpus-wide it reaches far past image.h: eleven project files shed 46 rows of libstdc++ and seven
+     stdlib headers gained 25 (the difference is instantiations merging into a declaration already
+     rendered at the destination). image.h **56 → 28 rows** across the whole item, xvimage.h 75 → 53,
+     vminfo.h 74 → 49, main.cpp 182 → 176. All six project classes stay in their own headers.
+
+     One honest imprecision: `__normal_iterator<unsigned short*>` lands in **basic_string.tcc**, not
+     stl_iterator.h, because basic_string.tcc is the only stdlib file holding a sibling of that
+     template in this binary. A stdlib header rather than a project one is most of the win, but it is
+     the wrong stdlib header, and nothing in the debug info prefers the right one.
+
+     **What is left is one type, and the debug info genuinely does not say.** `_Alloc_traits<unsigned
+     short>` (image.h L898) has no methods, no base relationship, and *no instantiation in any stdlib
+     header* — all eight of them are scattered across project files, so there is no seed of any kind.
+     Its real home is stl_alloc.h. The one striking fact is that every one of those eight carries
+     declLine **898**: a single template, declared once, in a file none of them are filed under. That
+     is enough to know they are all wrong and not enough to name the right one — the same wall as
+     §38's grade 3. It is also what still holds image.h's canvas at 903 lines for 25 rows of content,
+     so §33 cannot be re-measured until it moves.
 
    **§38 is the third instance of the extent circularity and the worst**: `main.cpp` rendered 1456
    rows for a 166-line file. That half is DONE; the exact RTTI attribution (§38 grade 1) is too.
