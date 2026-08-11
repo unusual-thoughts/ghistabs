@@ -25,12 +25,7 @@ numbered in the order they were *found*, not worked; this is the order to work t
 **Then — structural correctness that the counters do not fully see.**
 
 5. ~~**Brace nesting.**~~ — DONE, see §34.
-6. **§37(b)+(c), claims cross function boundaries.** A stretch anchored at L30 lands inside
-   `has_slt`'s body; a file-scope global lands between a constructor's head and its body. §29 barred
-   a row from rising above its own line, but nothing bounds what it passes through on the way down.
-   One missing constraint seen from both the body and the declaration side, and `FunctionSpans`
-   already knows the extents. These are what stop a `.cpp` view parsing, so they rank with the
-   nesting work rather than below it.
+6. ~~**§37(b)+(c), claims cross function boundaries.**~~ — DONE, see §37(b)/(c).
 7. **§37(d), member calls still pass `this`.** `find_slt(this,…)` ×5 while the definition it calls has
    had the parameter stripped, so the two halves of the render contradict each other. Mechanical, and
    the same token knowledge `renameThis` already uses — the grammar section's `'this' is a keyword`
@@ -1628,7 +1623,7 @@ the D0 copy, and with it gone `has_slt` no longer has a foreign definition insid
 barely moved (585/516/454 → 585/516/424 characters), so the cram is not the aliases' doing and wants
 deciding on its own.
 
-### (b) A stretch is placed inside an unrelated function — nesting broken across a boundary
+### (b) A stretch is placed inside an unrelated function — DONE
 
 Row 47 carries `/* ⇐ L 30 */ void __inline_xdvimage_cpp_30() { … }` — destructor material — and lands
 between `has_slt`'s opening row 45 and the continuation of its body at row 84. A whole foreign
@@ -1639,12 +1634,36 @@ same failure downward: a claim anchored at L30 slid 17 rows and crossed a functi
 way. The anchor rule bounds where a row starts, not what it passes through. Claims want barring from
 crossing an enclosing function's span, which `FunctionSpans` already knows.
 
-### (c) A file-scope global is emitted inside a function body
+**Fixed as a ceiling, not a rule about crossing.** `FunctionSpans.barrier(line)` is the row before the
+next opener below `line`, and every body and inlined-stretch claim now carries it as its
+`Claim.limit`; a claim that finds no free row within it crams onto the last one, which is the
+allocator's existing answer for a body that outgrows its span. `canvasFree` — `line in 1..maxLine`,
+which made the body's borrowed gap the whole rest of the file — is gone, so this is the constraint it
+was a placeholder for. `closeAnomalies`, the check for a function still open where the next one
+opens, went from 19 across the two fixtures to **0**.
+
+### (c) A file-scope global is emitted inside a function body — DONE
 
 Row 29, `struct __class_type_info_pseudo const _ZTI5Image = …`, sits between the constructor's head
 (row 27) and its body (row 30). It is a global whose declLine happens to fall inside the
 constructor's span. Nothing checks that a `GLOBAL` claim is not landing inside a `FUNCTION_BODY`'s
 braces — the same missing constraint as (b), seen from the declaration side, and probably one fix.
+
+**Not one fix in the end, and not a ceiling.** A declaration is at its line or nowhere, so there is
+nothing to clamp: a file-scope global (`enclosingFunction == null`) whose line falls in a function's
+interior goes to the displaced appendix under a new reason, `line inside a function body`. A static
+gcc really did declare inside a function keeps its place. 34 entries move across the two fixtures,
+all but three compiler-generated (`_ZTI*`, `_ZTS*`, `__ioinit`); of the rest, `Bits64 FHA_DEFAULT_TS`
+was already displaced as `line already taken` and only the reason changed, and `main.cpp`'s
+`vm3_trapset_names` was genuinely being rendered inside `main`'s body at L152 — gcc dates a static
+table at the point of use, so the line is the wrong thing about it.
+
+**Cost, and it lands on (e).** Bodies that used to spread into rows below the next function now cram:
+appquery 4167 → 4056 rows, unpackfile 2722 → 2675, with the same content (`;` and `{` counts
+unchanged per file, and every file covers the same set of `⇐ L` lines). Clang error totals do not
+move — 735 and 551 — because a definition nested in a function body is not what the subtracted
+families were hiding. So the render is structurally right and tighter, and (e) is now the thing in
+the way.
 
 ### (d) Member calls still pass `this`, so definitions and call sites disagree
 
