@@ -105,8 +105,8 @@ numbered in the order they were *found*, not worked; this is the order to work t
 
    **§38 is the third instance of the extent circularity and the worst**: `main.cpp` rendered 1456
    rows for a 166-line file. That half is DONE; the exact RTTI attribution (§38 grade 1) is too.
-3. **§33, blank space.** 87% of rows, 92% of that in runs of 20+. Options were written up and never
-   chosen; it needs a decision more than it needs work.
+3. ~~**§33, blank space.**~~ — DONE. Compact by default (18,194 rows → 3,128 on unpackfile),
+   `--line-aligned` for the old output.
 4. **`redefinition of X`** — partly done, and it is three different things, not one.
    - **~15 `numeric_limits` in `<limits>`** — one template instantiated per arithmetic type, every
      copy rendered under the shortened name. The instantiation merge that handles this elsewhere is
@@ -2009,7 +2009,7 @@ blank space removed here was never between content, it was the run below the las
 ---
 
 ---
-## 33. Blank space dominates the render — 87% of rows, and it is concentrated
+## 33. Blank space dominates the render — DONE, compact by default
 
 **Re-measured 2026-08-11**, after the attribution work collapsed image.h from 903 lines to 59 and its
 siblings with it: unpackfile **15,614 of 18,194 rows blank (85%)**, 13,900 of that in 170 runs of 20+,
@@ -2030,6 +2030,17 @@ Four files are a third of all the blank space. `istream.tcc` renders 1,187 rows 
 something is declared near line 1,187 and the canvas is line-aligned. That is the decision this
 section is about, and it is not a misattribution bug: libstdc++'s locale_facets.h really is 1,600
 lines and we really do know one thing near the end of it.
+
+**Decided: compact by default, `--line-aligned` on request.** A run of blank rows collapses to one;
+every row keeps the `L n` its content was placed at, so which line a row came from survives even
+though its *position* no longer encodes it. unpackfile goes **18,194 rows to 3,128** (85% blank to
+17%), `istream.tcc` from 1,187 rows to 6. The non-blank content is byte-identical between the two
+modes and clang reports the same 521 errors on each, so nothing about the render changed except how
+much nothing is in it. `--line-aligned` restores the old output for diffing against real source.
+
+Not chosen: collapsing a run to a `/* … 340 lines … */` marker (keeps the count, but every reader
+pays for a fact almost nobody needs), and capping the canvas at the last content (fixes only trailing
+runs — `istream.tcc`'s 1,183 — and leaves interior gaps).
 
 The original measurement, for comparison: 16,659 of 19,184 rows (87%), 15,327 in 156 runs of 20+.
 Split by where it sits:

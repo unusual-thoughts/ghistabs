@@ -37,6 +37,9 @@ class Renderer(
     // Annotate each local with the storage gcc gave it. Off by default: it is a property of the
     // compiled code, not of the source being reconstructed.
     val showStorage: Boolean = false,
+    // Render source line n at output line n, blank rows and all. Off by default — see [Canvas.render]
+    // — but it is what a diff against the real source needs, so it stays one flag away.
+    val lineAligned: Boolean = false,
 ) : Closeable {
     /**
      * Collapses long template spellings (`basic_string<char,…>` → `string`) across *everything* the
