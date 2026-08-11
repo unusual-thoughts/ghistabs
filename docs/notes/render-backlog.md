@@ -627,7 +627,7 @@ a basename leave the bare name ambiguous → nothing merges; everything else map
 `symbolsByCu.keys`, `functionSource.values`, and each type's `effectiveSource()` — none depend on
 canonicalization, so no cycle) and exposes `canonicalSource(raw)` plus canonical-keyed fan-in views
 `lineEntriesByCanonicalSource` / `symbolsByCanonicalSource` (re-sorted by (line, addr)). `Renderer`
-canonicalises `sources`, and every `RenderContext` source comparison routes through `canon(...)`:
+canonicalises `sources`, and every `FileRenderer` source comparison routes through `canon(...)`:
 `rawFuncs` (`functionSource`), `lines`/`symbols` (fan-in views), `typeDecls` (`effectiveSourceFor`),
 param/local `sourceFile`, `refOf`/`ownLine` decomp tags, `emitIncludes`, `reportAnomalies`, and
 `FunctionSpans.of` (canonicalizer param, applied in `rawSpan`). Verified: `packfile` renders one
@@ -1003,7 +1003,8 @@ a trailing `//` would swallow the code of every region after the first. A row re
 `spreadBlocks` however many statements it holds — which is what frees the vertical room for this
 file's own statements to take a row each. `placeRun` takes a nullable note (an inlined row tags
 nothing at the end) and `wrap=false` for those rows, so the condition-wrapper can't re-expand them.
-On unpackfile, 482 markers across 4 .cpps, 87 rows carrying two or more.
+On unpackfile, 482 markers across 4 .cpps, 87 rows carrying two or more. (The marker is no longer a
+comment: §36 turned it into a call to a named pseudo-function, on the calling side.)
 
 `BlockScope` gained a `source` constructor property (resolved in `finish`, alongside the per-local
 attribution §27 already did) and `blockAt(addr)`; `DecompLine` carries the innermost block covering
@@ -1430,6 +1431,72 @@ one at a time rather than in one cut.
 rather than to any user setting — but it *is* an unstated dependency on that default. One
 `DecompileOptions().apply { setIfElseBraceFormat(Same) }` handed to `setOptions` states it.
 
+## 36. Inlined stretches render as calls to a named pseudo-function — DONE; the two sides do not yet agree
+
+§28 left an inlined stretch as `/* ⇐ inlines stl_iterator.h L 633 */`: provenance, but nothing a
+reader can follow. It now renders as the call gcc turned into it —
+`__inline_basic_string_h_641(local_a8, __pos, __n2);` in the .cpp, against
+`void __inline_basic_string_h_641(string * const self, size_t __pos, size_t __n2) { /* inlined into
+unpack */` in the header. `self` is the caller's variable, found through storage; `__pos`/`__n2` kept
+their stabs names because those locals did not stick in Ghidra.
+
+**The parameter list is gcc's, not a guess.** The first cut derived arguments from p-code dataflow
+(`VarFlow`: a variable read inside the stretch whose def is outside is an argument; one written
+inside and read after is the result). That works, but the real answer was already in the block tree —
+the stretch's lexical block owns the *callee's* variables, under the callee's names, with the storage
+they were given in the caller's frame. `stl_construct.h` comes out `__first` in dbx register 0 and
+`__last` in 2, which is `_Construct(__first, __last)`. Every foreign block in the corpus owns some:
+appquery 563 of 563, sized `{1: 411, 2: 112, 3: 30, 4: 10}`, all `SymbolDecl.Local` — gcc demotes an
+inlined function's parameters to `N_LSYM`/`N_RSYM`, so no `Param` record survives inlining, and the
+leading locals are the parameters with any tail being the callee's own. Storage is what bridges to
+the decompiler: `HighFunction.localSymbolMap` keyed on `HighSymbol.getStorage()` and
+`getPCAddress()`, with the stabs name standing in where Ghidra kept nothing there. Dataflow remains
+the fallback for stretches gcc bracketed no block for.
+
+**Two filters the dataflow half needed, both found by reading output rather than by reasoning.**
+
+- **`INDIRECT` names every varnode a call might have touched.** Unfiltered, every stretch containing
+  a call read the whole frame: `unpack`'s inlined `basic_string` calls came out with the same 30
+  arguments each time. Filtered along with `MULTIEQUAL` (the decompiler's phi) and `CAST`.
+- **A `HighVariable` need not have a rendered spelling.** The x87 stack came out as `ar1`/`ar3`/`ar4`,
+  names that appear in no view of the program. First fix was to keep only names the stretch's own
+  statements print; the right fix is `high as? HighLocal` (`HighParam` is one), which drops
+  `HighOther` along with `HighGlobal` — a global is in scope wherever the code landed and needs no
+  passing — and `HighConstant`. Filtering by type beat filtering by symptom: **42 calls on appquery
+  got back arguments the text filter had wrongly stripped**, with no tail either way (max 6).
+
+**`DecompLine.block` is the wrong lookup, for the reason §28 already recorded.** It is the block
+covering *every* address its line touches, null wherever they disagree, which §28 measured at 70% of
+inlined lines; parameter lists came out empty. Looking the block up by the stretch's first N_SLINE
+address instead cut zero-argument calls from ~150 to **21** on both fixtures.
+
+**Open: call and definition are derived from different splits, so they disagree.**
+
+| fixture | names called | defined | both | arity agrees |
+| --- | --- | --- | --- | --- |
+| unpackfile | 198 | 131 | 92 | 34 |
+| appquery | 213 | 138 | 92 | 30 |
+
+`regionsOf` keys the caller side on the foreign `BlockScope` and the header side on the line number —
+§28 chose that deliberately, N_SLINE being what detects foreignness and the block only what bounds
+it. The consequence is that one stretch has *different extents* seen from the two sides, so
+`entries.minOf { addr }` lands in different blocks and the parameter lists diverge; hence also 121
+names called but never defined, and names called with two different arities. Making them agree means
+both sides deriving the stretch's identity from one key, which is a change to `regionsOf` — the
+function §28 and §29 both rest on — and wants measuring the same way. `wrapAsDefinition`'s
+`chunkedBy { pseudoName() }` already assumes it.
+
+Not a collision, contra first impression: two callers inlining one header line are the *same* inline
+function and should share one definition, and genuine overloads at one line differ in the block's
+parameter *types*, so no name-suffixing mechanism is needed.
+
+`wrapAsDefinition` now names its wrapper for the inlined stretch rather than for the inlining
+function, which rides along as a comment. Caller-side only: in the header's own view the dropped
+regions are the caller's code *around* the stretch, not something that file inlined, so there the
+`⇐ inlines` note stays.
+
+
+---
 ---
 ## 33. Blank space dominates the render — 87% of rows, and it is concentrated
 
