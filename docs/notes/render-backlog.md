@@ -132,9 +132,7 @@ numbered in the order they were *found*, not worked; this is the order to work t
    had the parameter stripped, so the two halves of the render contradict each other. Mechanical, and
    the same token knowledge `renameThis` already uses — the grammar section's `'this' is a keyword`
    family fixed only the definition side.
-8. **8 markers still outside their block**, where the block and the marker reach the row as separate
-   fragments. Needs placing at fragment assembly in `TargetLine.render()` rather than in
-   `dropInlined`.
+8. ~~**8 markers still outside their block.**~~ — DONE, see §42.
 9. **`activityExtent`'s header proxy.** `spans.ranges.isEmpty()` stands in for "is a header" and
    leaks: `filesystemimage.h` has spans from inline methods. Right answer there by luck.
 
@@ -1797,6 +1795,29 @@ than to placement.
 `(**(code **)(*(int *)this + 8))(this,uVar2,…)`. The vcall is the interesting one: it is a vtable
 slot, and the render **declares the vtable type in the same file** (`XDVImage_vftable`), so the
 offset can be resolved to the method it calls rather than printed as arithmetic.
+
+---
+
+## 42. The last inline markers sat outside the block they emptied — DONE
+
+§28's marker goes *inside* the block whose content was inlined away, so `for (…) { /* ⇐ inlines
+stl_vector.h L 123 */ }` says the body is over there rather than showing an empty block with a
+footnote. `dropInlined.flush` does that splice on the row it is folding onto, and can only do it when
+that row already carries both braces — which is where the leftovers came from: a `{` and its `}` that
+reach the row from *different* fragments (separate claims, or separate `DecompLine`s crammed together
+by `fitRows`) are still two strings when `dropInlined` runs, and the marker lands after the closer.
+
+Fixed one level down, at the only point where a row is whole: `TargetLine.render` splices an empty
+block's trailing markers between its braces after joining the fragments' code. Text-level by
+necessity — a `Fragment` carries code as a string, the tokens are three passes upstream — but bounded
+to the two spellings a marker has, the `/* ⇐ inlines … */` note and the `__inline_…()` pseudo-call, so
+Ghidra's own empty loop with an unrelated statement after it is untouched.
+
+A/B on unpackfile with the splice off and on: **5 rows, in two files, and nothing else in the render
+moves** (`stl_construct.h`, `stl_iterator.h` — the header views, where a stretch's braces come from
+`wrapAsDefinition`/`braceFix` rather than from a statement). The closer moves to the end of the marker
+run, so brace counts are unchanged. Pinned by `LayoutTest`, which covers both spellings and the
+untouched `{ }`.
 
 ---
 
