@@ -115,13 +115,18 @@ class Renderer(
         monitor.initialize(sources.size.toLong())
         dir.mkdirs()
         return program.runTransaction("stabs-render-all") {
-            sources.asSequence().map { source ->
-                renderSkeleton(source).apply {
-                    if (isNotBlank()) {
-                        File(dir, outputPath(index.locate(source))).apply { parentFile?.mkdirs() }.writeText(this)
-                    }
+            sources.asSequence()
+                .map { it to renderSkeleton(it) }
+                .takeWhile { runCatching { monitor.incrementProgress() }.isSuccess }
+                // A source with nothing to show writes no file. Said out loud rather than skipped in
+                // silence: an empty render is either a file gcc mentioned and never described, or a
+                // bug in attribution, and the difference is only visible if the name is named.
+                .onEach { (source, text) -> if (text.isBlank()) println("render[$source]: empty, no file written") }
+                .filter { (_, text) -> text.isNotBlank() }
+                .onEach { (source, text) ->
+                    File(dir, outputPath(index.locate(source))).apply { parentFile?.mkdirs() }.writeText(text)
                 }
-            }.takeWhile { runCatching { monitor.incrementProgress() }.isSuccess }.count()
+                .count()
         }
     }
 
