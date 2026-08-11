@@ -1800,6 +1800,22 @@ blank space removed here was never between content, it was the run below the las
   empty". That excludes nothing: an empty block means a header contributed no *types*, which is not
   the same as contributing this data, and it says nothing whatever about the CU, which emits types and
   could still be the home. It is a weak prior for the guess below, not part of the argument.
+
+  **DONE, as exactly that rule.** `FileRenderer.foreignRun` groups a file's file-scope statics by
+  address into maximal runs whose declLines form an ascending arithmetic progression, keeps those of
+  three or more, and condemns any run with a member inside an attested function span; the members go
+  to the appendix reading `run crosses this file's code`. On appquery it fires once, on the twenty
+  tables, and reaches the eighteen no per-symbol rule could — including `vm1` at L12, which sits above
+  all of main.cpp's code and is otherwise indistinguishable from a real table of its own. The stride
+  requirement is what keeps it from over-reaching: globals are emitted in declaration order, so plain
+  "ascending" describes every file's global list, and one wrong span would then condemn all of it.
+  unpackfile and xmltest are untouched, clang totals unchanged.
+
+  Incidentally fixed: main.cpp's `#include` band. Includes are `BAND` claims filling the rows above
+  the first anchored one, and the first was `vm1` at L12 — 11 rows for 17 includes, so six were
+  dropped as `no free row in the band` and landed in the *displaced-declarations* appendix, which an
+  include has no business in (it never had a line to lose). With the run condemned the band starts at
+  L18 and all seventeen fit. The mislabelling is still there for any other file that crowds its top.
 - **Only by inference: which of the 32.** Project-path headers over system ones cuts it to three
   here, and stem-matching `vm3_trapset_names` against `vmtrapsetnames.h` picks it out — but that is a
   guess and has to be rendered as one (`probably vmtrapsetnames.h L152`), never as attribution. The
