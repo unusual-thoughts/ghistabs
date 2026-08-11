@@ -100,11 +100,11 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
                     pendingDirectory = null
                 }
 
-                StabType.N_BINCL -> currentInclude?.beginInclude(rec.name, rec.value)
+                StabType.N_BINCL -> currentInclude?.beginInclude(resolved(rec.name), rec.value)
 
                 StabType.N_EINCL -> currentInclude?.endInclude()
 
-                StabType.N_EXCL -> currentInclude?.remount(rec.name, rec.value)
+                StabType.N_EXCL -> currentInclude?.remount(resolved(rec.name), rec.value)
 
                 else -> {}
             }
@@ -147,8 +147,11 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
 
     /** N_SOL: switch the file N_SLINEs are attributed to, without leaving the CU. */
     fun switchSource(name: String) {
-        currentSourceForLines = name
+        currentSourceForLines = resolved(name)
     }
+
+    /** A `../`-relative spelling anchored to this CU's compilation directory. */
+    private fun resolved(name: String) = resolveAgainstDirectory(name, currentCu?.directory)
 
     /**
      * N_SLINE: `desc` is the line, `value` is function-relative (gcc/COFF on PE) or already

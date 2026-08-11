@@ -5,20 +5,33 @@ import org.junit.jupiter.api.Test
 
 class SourceFoldingTest {
     @Test
-    fun bareFoldsUniqueFullPath() {
-        // The bare `header.h` and its single full-path spelling collapse onto the bare (shorter) name.
+    fun bareFoldsOntoItsFullPath() {
+        // The bare `header.h` and its single full-path spelling collapse onto the full one — the
+        // render writes a tree, so the directory the stabs know is worth keeping.
         val map = foldSourcePaths(listOf("header.h", "/work/include/project/header.h"))
-        assertEquals("header.h", map.getValue("header.h"))
-        assertEquals("header.h", map.getValue("/work/include/project/header.h"))
+        assertEquals("/work/include/project/header.h", map.getValue("header.h"))
+        assertEquals("/work/include/project/header.h", map.getValue("/work/include/project/header.h"))
     }
 
     @Test
     fun sameHeaderUnderDifferentBuildRootsFolds() {
         // One physical header (`bouniaf/image.h`) compiled in two build trees keeps its parent dir,
-        // so both full spellings fold onto the bare name.
-        val inputs = listOf("image.h", "/jenkins/project/image.h", "/work/project/image.h")
+        // so every spelling folds onto one of them — the shallowest, being the least specific to a
+        // single build root.
+        val inputs = listOf("image.h", "/jenkins/build/project/image.h", "/work/project/image.h")
         val map = foldSourcePaths(inputs)
-        for (i in inputs) assertEquals("image.h", map.getValue(i))
+        for (i in inputs) assertEquals("/work/project/image.h", map.getValue(i))
+    }
+
+    @Test
+    fun equalDepthRootsPickTheSameOneEveryTime() {
+        // Two roots at the same depth are equally true; the tie-break is lexicographic so the choice
+        // cannot drift with the order the spellings were harvested in.
+        val inputs = listOf("/work/project/image.h", "/jenkins/project/image.h")
+        val map = foldSourcePaths(inputs)
+        val reversed = foldSourcePaths(inputs.reversed())
+        for (i in inputs) assertEquals("/jenkins/project/image.h", map.getValue(i))
+        assertEquals(map, reversed)
     }
 
     @Test
@@ -30,23 +43,23 @@ class SourceFoldingTest {
     }
 
     @Test
-    fun fullPathWithoutBareSpellingStays() {
-        // No bare spelling present → nothing to fold into; the full path renders under itself.
-        val map = foldSourcePaths(listOf("/work/include/project/header.h", "file.cpp"))
-        assertEquals("/work/include/project/header.h", map.getValue("/work/include/project/header.h"))
+    fun aBareNameWithNoFullSpellingStaysBare() {
+        // Nothing better is known about it. `file.cpp` is a CU and never has one.
+        val map = foldSourcePaths(listOf("filesystemimage.h", "file.cpp"))
+        assertEquals("filesystemimage.h", map.getValue("filesystemimage.h"))
         assertEquals("file.cpp", map.getValue("file.cpp"))
     }
 
     @Test
     fun backslashPathsFoldToo() {
-        // Windows-style separators count as full paths and fold onto the bare basename.
+        // Windows-style separators count as full paths (stabs mixes both).
         val map = foldSourcePaths(listOf("foo.h", """C:\work\include\foo.h"""))
-        assertEquals("foo.h", map.getValue("""C:\work\include\foo.h"""))
+        assertEquals("""C:\work\include\foo.h""", map.getValue("foo.h"))
     }
 
     @Test
     fun differentExtensionsAreDistinctFiles() {
-        // A bare `.c` never folds a `.h` (different physical files sharing a stem).
+        // A bare `.c` never folds onto a `.h` (different physical files sharing a stem).
         val map = foldSourcePaths(listOf("file.c", "/work/include/project/header.h"))
         assertEquals("file.c", map.getValue("file.c"))
         assertEquals("/work/include/project/header.h", map.getValue("/work/include/project/header.h"))

@@ -5,6 +5,7 @@ import ghistabs.harvest.Func
 import ghistabs.harvest.Symbol
 import ghistabs.harvest.Type
 import ghistabs.harvest.hasHeaderExtension
+import ghistabs.harvest.pathBasename
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.SymbolDecl
 import ghistabs.parse.TypeDecl
@@ -641,9 +642,10 @@ class FileRenderer(val renderer: Renderer, override val source: String) : Render
         val fromInlined = rawFuncs.asSequence().flatMap { it.lineEntries.asSequence() }.map { it.source }
         val headers = (fromInlined + fromTypes)
             .filter { it != source && it.hasHeaderExtension() }
+            .map { it.pathBasename() }
             .distinct()
             .sorted()
-            .map { "#include \"${it.substringAfterLast('/')}\"" }
+            .map { "#include \"$it\"" }
             .toList()
         return headers.map { Claim(Owner.INCLUDE, null, listOf(Row(it)), anchoring = Anchoring.BAND) }
     }
