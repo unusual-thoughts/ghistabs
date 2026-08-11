@@ -54,15 +54,21 @@ class FileRenderer(val renderer: Renderer, override val source: String) : Render
     // A decl at this line is misattributed (stale N_SOL) if it sits past the file's activity.
     override fun isStale(line: Int) = line > activityExtent
 
-    // Stale declarations still count towards the canvas height even though they are never laid out on
-    // it: the claim builders gate on [maxLine], so a declaration off the end of a shortened canvas is
-    // not displaced to the appendix, it is never built. Trailing blank rows are the decomp render's
-    // to trim.
+    /**
+     * How tall the canvas is: the file's attested activity, plus every declaration that is not
+     * [isStale]. A misattributed one is never laid out, so letting it set the height rendered
+     * `main.cpp` as 1456 rows for a file whose code stops at L166 (§38).
+     *
+     * The claim passes must therefore *not* gate on this. They build every declaration and let the
+     * allocator turn one past the end away as [OFF_CANVAS] — [write] carries a dropped claim to the
+     * displaced appendix, which is where a declaration whose line is unusable belongs. Filtering at
+     * the source instead loses it silently: unpackfile.cpp's appendix went from 78 entries to 21.
+     */
     private val maxLine = sequenceOf(
         spans.maxLine,
         lines.maxOfOrNull { it.line } ?: 0,
-        typeDecls.maxOfOrNull { it.declLine } ?: 0,
-        symbols.maxOfOrNull { it.declLine } ?: 0,
+        typeDecls.filterNot { isStale(it.declLine) }.maxOfOrNull { it.declLine } ?: 0,
+        symbols.filterNot { isStale(it.declLine) }.maxOfOrNull { it.declLine } ?: 0,
     ).max()
 
     private val canvas = Canvas(maxLine)
@@ -229,7 +235,7 @@ class FileRenderer(val renderer: Renderer, override val source: String) : Render
         data class Td(val line: Int, val name: String, val rendered: String)
 
         val typedefs = typeDecls
-            .filter { it.declLine in 1..maxLine && it.body !is TypeDecl.Struct && it.body !is TypeDecl.Enum }
+            .filter { it.body !is TypeDecl.Struct && it.body !is TypeDecl.Enum }
             .mapNotNull { ast ->
                 ast.name?.let { Td(ast.declLine, it, ast.body.render()) }
             }
@@ -312,9 +318,9 @@ class FileRenderer(val renderer: Renderer, override val source: String) : Render
 
     private val seenDecls = mutableSetOf<DeclKey>()
 
-    // One declaration per (line, name); `this` never renders. Guards every decl pass.
-    private fun dedup(line: Int, name: String) =
-        line in 1..maxLine && name != "this" && seenDecls.add(DeclKey(line, name))
+    // One declaration per (line, name); `this` never renders. Guards every decl pass. Not bounded by
+    // the canvas — a declaration past it is the allocator's to turn away, and the appendix's to show.
+    private fun dedup(line: Int, name: String) = line > 0 && name != "this" && seenDecls.add(DeclKey(line, name))
 
     private fun varsOf(f: Func): List<Var> = (f.params + f.locals).filter { it.sourceFile == source }.mapNotNull {
         it.renderVar(renderer.showStorage)
@@ -387,7 +393,7 @@ class FileRenderer(val renderer: Renderer, override val source: String) : Render
         // answer the allocator already gives inlined copies — rather than letting one instantiation's
         // members render under another's opener, which is a class that does not exist.
         val byDecl = typeDecls
-            .filter { it.declLine in 1..maxLine && it.name != null }
+            .filter { it.name != null }
             .filter { it.body is TypeDecl.Struct || it.body is TypeDecl.Enum }
             .distinctBy { it.declLine to it.name }
             .groupBy { it.declLine to it.name!!.substringBefore('<') }

@@ -1732,14 +1732,28 @@ they sat).
 
 Two things the fix deliberately did *not* do:
 
-- **The canvas is still `maxLine` tall.** Computing it from non-stale declarations instead looked
-  obvious and is wrong: the claim builders gate on `maxLine`, so a declaration off the end of a
-  shortened canvas is never *built*, and unpackfile.cpp's appendix silently lost 57 of its 78
-  entries. Decomp trims trailing blanks so it does not care; the skeleton renders main.cpp as ~1400
-  blank rows and an appendix, which is §33's decision to make. Doing it properly means dropping the
-  `declLine in 1..maxLine` guards from the builders and letting the allocator's `OFF_CANVAS` path
-  carry them to the appendix, where the dropped-claim plumbing already goes.
 - **Nothing tries to name the file.** See the grades below.
+
+**The canvas follows, and it is where the skeleton gets its win.** `maxLine` now counts only
+declarations that are not stale. Shrinking it *while the claim passes still gated on it* was the
+trap: a declaration off the end of a shortened canvas is then never **built**, so it never reaches
+the stale partition either, and unpackfile.cpp's appendix silently lost 57 of its 78 entries. The
+passes therefore no longer mention `maxLine` at all — they build every declaration, the allocator
+turns a too-late one away as `OFF_CANVAS`, and `write` carries it to the appendix on the same path as
+every other dropped claim. Appendix totals hold exactly (appquery 200, unpackfile 162, main.cpp's own
+44) while the canvases collapse:
+
+| skeleton            | before | after |
+| ------------------- | ------ | ----- |
+| main.cpp            | 1467   | 223   |
+| filesystemimage.cpp | 928    | 203   |
+| stl_uninitialized.h | 760    | 223   |
+| vminfo.cpp          | 739    | 95    |
+| image.cpp           | 513    | 146   |
+
+Decomp was already trimming its trailing blanks, so it moves only where a shorter canvas crams a
+body's tail (`;` counts unchanged per file, clang totals still 735/551). Note this is *not* §33: the
+blank space removed here was never between content, it was the run below the last real row.
 
 **What is recoverable, in three grades.**
 
