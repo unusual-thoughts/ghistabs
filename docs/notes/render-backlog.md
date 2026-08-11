@@ -11,14 +11,30 @@ numbered in the order they were *found*, not worked; this is the order to work t
 **Four that a reader hits immediately.**
 
 1. ~~**§37(a), aliased copies render two and three times.**~~ — DONE, see §37(a).
-2. **image.h is 903 rows of libstdc++.** The class-attribution half is fixed; the other half is not.
-   `effectiveSource` trusts `declSourceFile` for typedefs, and `activityExtent` cannot flag the
-   result because for a file with no function spans it falls back to counting type declarations —
-   the same circularity fixed for `.cpp` files. Note the coupling recorded below: `image.h` is a
-   known source largely *because* these are filed there, so this and the sibling-header lookup have
-   to move together. **§38 is the third instance and the worst**: `main.cpp` renders 1456 rows for a
-   166-line file because twenty misfiled tables reach L1342, and the extent term that should catch
-   them is computed from them. Take §38's exact half (the RTTI family) with this one.
+2. **image.h: 25 rows of its own, 31 of libstdc++, spread over 908 lines.** Measured after the §38
+   and §39 work, and the diagnosis in the old note was wrong twice, so read this before starting.
+   - **It is not `declSourceFile`.** `effectiveSource` consults that only for non-Struct/Enum
+     bodies; every one of these is a `class`, so they arrive via `id.source.filename` — the BINCL
+     block gcc happened to instantiate the template in. `vector<short unsigned int>` really was
+     emitted inside image.h's block, so the stab is not lying, it is just not what a reader wants.
+   - **It is not the extent circularity either**, and a code-extent rule cannot fix it: image.h has
+     **no N_SLINE entries at all** (nor do xdvimage.h or bits64image.h). There is no code evidence
+     to measure it by.
+   - **The stated blocker for the headers that *do* have code is now stale.** The note said measuring
+     xvimage.h by code "stopped at 32 and called `class XVImage` at 36 misattributed" — that was the
+     *unfolded* spelling. §39 folds onto the full path, whose bucket reaches **39**, so its own class
+     is inside. Same for appimage.h (35, class at 19), vminfo.h (83), filesystemimage.h (117). A code
+     extent now works for that half; only the no-code headers need something else.
+   - **The evidence for the no-code half is the instantiations' own methods.** `vector<short unsigned
+     int>`'s methods were inlined and their N_SLINEs point at stl_vector.h — that is a real signal
+     tying the class to a stdlib header, and `multiSourceHeaderHints` already votes exactly that way
+     off header line-entries and method address ranges. It is not firing for these; find out why
+     before writing anything new. Note stl_vector.h's own render declares *no* classes, so there is
+     no "where do its siblings live" vote to fall back on — the method-address evidence is all there
+     is.
+
+   **§38 is the third instance of the extent circularity and the worst**: `main.cpp` rendered 1456
+   rows for a 166-line file. That half is DONE; the exact RTTI attribution (§38 grade 1) is too.
 3. **§33, blank space.** 87% of rows, 92% of that in runs of 20+. Options were written up and never
    chosen; it needs a decision more than it needs work.
 4. **`redefinition of X`** (16 on unpackfile). Duplicate declarations that survived the class-body
