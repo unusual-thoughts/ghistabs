@@ -1780,11 +1780,26 @@ blank space removed here was never between content, it was the run below the las
 
   Net: `_ZTI5Image` went from five copies in five CUs to one, appendix totals 200 → 198 (appquery) and
   162 → 158 (unpackfile), no identifier lost from either render, clang totals unchanged.
-- **Narrowed, soundly: data-only statics.** The home must be a header the CU included whose `BINCL`
-  block is empty, since a header that emitted types would have bracketed them. 32 of main.cpp's ~120
-  includes qualify — `<iostream>` (which really is `__ioinit`'s home) and vmtrapsetnames.h among them.
-  A maximal ascending run in the batch is one file's worth (the tables are one run; the RTTI entries
-  break it), so the grouping is sound even where the name is not.
+- **Ruling the CU out at all: only a conflict does it, and only 2 of the 20 have one.** `vm2` at L82
+  and `vm3` at L152 fall strictly inside `main`'s attested span (L49–167), and a file-scope definition
+  cannot sit between a function's braces — while the N_SLINE attribution that puts `main`'s code on
+  those lines is per-address and derived independently of the symbol stabs. That is the whole of the
+  hard evidence. `vm1` at L12 sits above all code and is, on its own, indistinguishable from a genuine
+  main.cpp table; the other 17 are merely past the code extent, which proves nothing, since a `.cpp`
+  may declare globals after its last function.
+
+  What carries the other 18 is **uniformity**: the lines are an exact arithmetic progression (stride
+  70, no exceptions), the ordinals `vm1…vm20` ascend with them, and the addresses ascend through
+  `.rodata`. One generated block cannot have three members in main.cpp and seventeen in a header with
+  the progression unbroken across the boundary. So the rule worth implementing is *a hard conflict on
+  any member of a uniform run condemns the run* — and outside such a run, a data-only static whose
+  line collides with nothing cannot be shown to be foreign at all, and the CU stays its best available
+  owner.
+
+  An earlier draft of this section claimed the candidate home "must be a header whose `BINCL` block is
+  empty". That excludes nothing: an empty block means a header contributed no *types*, which is not
+  the same as contributing this data, and it says nothing whatever about the CU, which emits types and
+  could still be the home. It is a weak prior for the guess below, not part of the argument.
 - **Only by inference: which of the 32.** Project-path headers over system ones cuts it to three
   here, and stem-matching `vm3_trapset_names` against `vmtrapsetnames.h` picks it out — but that is a
   guess and has to be rendered as one (`probably vmtrapsetnames.h L152`), never as attribution. The
