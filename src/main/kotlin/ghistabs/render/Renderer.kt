@@ -1,11 +1,11 @@
 package ghistabs.render
 
+import ghidra.app.decompiler.ClangToken
 import ghidra.app.decompiler.DecompInterface
 import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
 import ghistabs.StabsOptions.Companion.stabsTypedefsShortened
-import ghistabs.baseStackParamOffset
 import ghistabs.baseStackParamOffset
 import ghistabs.harvest.*
 import ghistabs.importer.AddressResolver
@@ -14,6 +14,7 @@ import ghistabs.parse.*
 import ghistabs.runTransaction
 import java.io.Closeable
 import java.io.File
+import java.util.IdentityHashMap
 
 enum class Mode {
     SKELETON,
@@ -74,14 +75,32 @@ class Renderer(
             // Same address→line lookup [Region] membership uses, narrowed to the function's own
             // source: two branches are only in source order against one file's line numbering.
             val slines = func.lineEntries.filter { it.source == own }.sortedBy { it.addr }
-            results?.compressedDecompLines(own, func, mode == Mode.ELIDE_SJLJ)
+            results?.compressedDecompLines(own, func, ::spell, mode == Mode.ELIDE_SJLJ)
                 // Before the render splits it into regions: swapping branches moves their anchors,
                 // and the anchors are what every later pass places by.
                 ?.uninvertConditions { line -> line.address?.let { a -> slines.lastOrNull { it.addr <= a }?.line } }
-                ?.map { it.copy(text = shortener.substitute(it.text).spellDestructorLabels()) }
         }
         Decompiled(lines.orEmpty(), results?.varFlow() ?: VarFlow(emptyMap(), emptyMap()))
     }
+
+    /**
+     * How a decompiler token is spelled in the render: its type name shortened to whatever typedef
+     * the import installed, and the `~` Ghidra puts inside a vtable-pointer's name — `PTR_~runtime
+     * _error_0043ecfc` — respelled, `~` not being an identifier character (12 of unpackfile's 39
+     * remaining structural errors).
+     *
+     * Per token rather than over the assembled row. A row's offsets then index its final text, and
+     * the `~` rule sees one name at a time: a destructor call (`p->~string()`) puts its `~` at the
+     * start of its own token and a bitwise not is an operator token, so neither can be caught by a
+     * rule about what precedes the `~` in the row.
+     */
+    fun spell(token: ClangToken): String = spelled.getOrPut(token) {
+        shortener.substitute(token.text).let { if ('~' in it) it.respellTilde() else it }
+    }
+
+    // Each row asks for its tokens' spellings several times over (once to size the row, once per
+    // offset, once for the text) and the substitution is a regex sweep.
+    private val spelled = IdentityHashMap<ClangToken, String>()
 
     fun renderSkeleton(source: String) = RenderContext(this, source).render()
 
@@ -109,14 +128,21 @@ class Renderer(
 }
 
 /**
- * Ghidra names a vtable pointer after the destructor it holds — `PTR_~runtime_error_0043ecfc` — and
- * `~` is not an identifier character, so the row it lands on stops parsing as C++ (12 of unpackfile's
- * 39 remaining structural errors). Rewritten to `dtor_` only where the `~` sits *inside* an
- * identifier, which a real destructor call (`p->~string()`) and a bitwise not (`x = ~y`) never do.
+ * A name's every `~` that sits *inside* it, respelled `dtor_`. A name opening with one is a real
+ * destructor (`~string`) and keeps it; one in the middle is Ghidra having named a vtable pointer
+ * after the destructor it holds, and `~` is not an identifier character there.
  */
-private fun String.spellDestructorLabels() = TILDE_IN_IDENTIFIER.replace(this) { "${it.groupValues[1]}dtor_" }
+private fun String.respellTilde() = buildString {
+    this@respellTilde.forEachIndexed { i, c ->
+        val inside = c == '~' &&
+            i > 0 &&
+            this@respellTilde[i - 1].isIdentifierChar() &&
+            this@respellTilde.getOrNull(i + 1)?.let { it.isLetter() || it == '_' } == true
+        if (inside) append("dtor_") else append(c)
+    }
+}
 
-private val TILDE_IN_IDENTIFIER = Regex("""([A-Za-z0-9_])~(?=[A-Za-z_])""")
+private fun Char.isIdentifierChar() = isLetterOrDigit() || this == '_'
 
 private val NON_IDENTIFIER = Regex("[^A-Za-z0-9]+")
 
@@ -143,50 +169,8 @@ private fun Symbol.storageAddress(program: Program): Address? = when ((body as? 
     else -> null
 }
 
-/**
- * Ghidra prints a member function the way its own model stores one: with a return type on every
- * function, and the `this` pointer as an explicit first parameter. Neither is legal C++ where the
- * definition is qualified — `void XVImage::XVImage(XVImage *this)` draws "constructor cannot have a
- * return type" and "invalid parameter name: 'this' is a keyword" — so a qualified definition drops
- * the explicit parameter, leaving the body's uses of `this` to the implicit one, and a constructor
- * or destructor drops the return type as well.
- *
- * Only when qualified: dropping the parameter from a free function would leave its body referring to
- * a `this` that no longer exists.
- */
-internal fun String.asMemberDefinition(owner: String? = null): String {
-    val open = indexOf('(').takeIf { it >= 0 } ?: return this
-    var depth = 0
-    val close = indices.drop(open).firstOrNull {
-        when (this[it]) {
-            '(' -> depth++
-            ')' -> depth--
-            else -> {}
-        }
-        depth == 0 && this[it] == ')'
-    } ?: return this
-
-    val qualified = substring(0, open).trim().substringAfterLast(' ')
-    // Qualified at file scope (`XVImage::XVImage`); inside a class body the declaration is bare, so
-    // the owner has to be told to us.
-    val cls = owner ?: qualified.substringBeforeLast("::", "").substringAfterLast(':').substringBefore('<')
-    if (cls.isEmpty()) return this
-    val method = qualified.substringAfterLast("::")
-
-    val params = substring(open + 1, close).replaceFirst(THIS_PARAM, "")
-    val prefix = if (method == cls || method == "~$cls") qualified else substring(0, open).trim()
-    return "$prefix($params" + substring(close)
-}
-
 // An already-closed empty block at the end of a decompiled line — Ghidra spells it `{ }` or `{}`.
-private val TRAILING_EMPTY_BLOCK = Regex("""\{\s*\}$""")
-
-// A destructor's leading `~` where the wrapper makes it a free function's name, which cannot carry
-// one. `void ~XVImage(XVImage *self)` is not a destructor here — there is no class to destroy — so it
-// is named for what it is.
-private val DESTRUCTOR_NAME = Regex("""(^|\s)~(?=[A-Za-z_]\w*\s*\()""")
-
-private fun String.spellDestructorName() = DESTRUCTOR_NAME.replace(this) { "${it.groupValues[1]}dtor_" }
+private val EMPTY_BLOCK = listOf('{', '}')
 
 /**
  * `template<> ` in front of a declaration whose subject [name] carries template arguments, because
@@ -201,14 +185,6 @@ private fun String.spellDestructorName() = DESTRUCTOR_NAME.replace(this) { "${it
  */
 private fun String.asSpecialization(name: String?) =
     if (name != null && '<' in name && !name.startsWith("operator")) "template<> $this" else this
-
-// `this` as a whole word. A C++ keyword, so it can never be anything else in decompiled text.
-private val THIS_WORD = Regex("""\bthis\b""")
-
-private fun String.renameThis() = THIS_WORD.replace(this, "self")
-
-// A leading `Type *this` parameter and the comma that follows it, if any.
-private val THIS_PARAM = Regex("""^[A-Za-z_][\w:<>,\s]*\*\s*this\s*,?\s*""")
 
 // The unqualified spelling of a type name, which is what its constructor and destructor are called:
 // `std::vector<int>::vector`, not `std::vector<int>::std::vector<int>`.
@@ -513,7 +489,9 @@ private class RenderContext(val renderer: Renderer, val source: String) {
                 // Spare rows: break an over-long condition at its top-level `&&`/`||` so it fills the
                 // space instead of running to 300 chars.
                 claim.owner == Owner.FUNCTION_BODY && free.size > claim.rows.size ->
-                    claim.rows.flatMap { r -> wrapDecompLine(r.text, r.indent).map { (d, t) -> Row(t, d, r.note) } }
+                    claim.rows.flatMap { r ->
+                        wrapDecompLine(r.text, r.indent, r.cuts).map { (d, t) -> Row(t, d, r.note) }
+                    }
 
                 else -> claim.rows
             }
@@ -792,7 +770,8 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             val storage = vars.filter { it.role != null }
                 .sortedWith(compareBy({ it.role?.startsWith("Stack") != true }, { it.role }, { it.name }))
                 .joinToString { "${it.name}=${it.role}" }
-            val text = head.text.asMemberDefinition() + extra.joinToString("") { " ${it.text}" } +
+            val member = head.asMemberDefinition()
+            val text = member.text + extra.joinToString("") { " ${it.text}" } +
                 storage.takeIf { it.isNotEmpty() }?.let { " /* storage: $it */" }.orEmpty()
 
             // An anchorless region has no line of its own to render at, so as a claim it floats away
@@ -803,8 +782,8 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             // `size` and `bytesize` nested inside it. Fold those onto the last row that does have a
             // place: the last anchored region, or the head.
             val (anchored, floating) = r.func.regionsOf(cLines).dropInlined(r.func).partition { it.anchor != null }
-            val tail = floating.flatMap { r -> r.lines.map { it.text } }.filter { it.isNotBlank() }
-            if (anchored.isNotEmpty()) anchored.last().lines.addAll(tail.map { DecompLine(it, null, 0) })
+            val tail = floating.flatMap { r -> r.lines }.filter { it.text.isNotBlank() }
+            if (anchored.isNotEmpty()) anchored.last().lines.addAll(tail.map { it.copy(address = null, depth = 0) })
 
             // Head and body nested together, the same rule [wrapAsDefinition] applies to inlined
             // stretches. The brace pass cannot cover this, a bodied function being exactly the case
@@ -812,19 +791,23 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             // no statement of its own after [dropInlined], so its `{` stood open and swallowed every
             // function below, `operator[]` running from image.cpp L41 to L128 with `set`, `size` and
             // `bytesize` inside it.
-            val body = anchored.flatMap { r -> r.lines.map { it.text } } + if (anchored.isEmpty()) tail else listOf()
-            val (openers, closers) = braceFix(sequenceOf(text) + body).let { (o, c) -> "{".repeat(o) to "}".repeat(c) }
+            val body = anchored.flatMap { r -> r.lines } + if (anchored.isEmpty()) tail else listOf()
+            val (openers, closers) = braceFix(
+                (member.braces.asSequence() + body.asSequence().flatMap { it.braces }).map { it.char },
+            )
+                .let { (o, c) -> "{".repeat(o) to "}".repeat(c) }
             this += Claim(
                 Owner.FUNCTION_BODY,
                 r.start,
                 listOf(
                     Row(
                         if (anchored.isEmpty()) {
-                            (listOf(text + openers) + tail).joinToString(" ") + closers
+                            (listOf(text + openers) + tail.map { it.text }).joinToString(" ") + closers
                         } else {
                             text + openers
                         },
                         note = "L ${r.start}",
+                        cuts = member.booleanCuts,
                     ),
                 ),
                 anchoring = Anchoring.AFTER,
@@ -832,7 +815,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             )
             if (closers.isNotEmpty()) {
                 anchored.lastOrNull()?.let {
-                    it.lines += DecompLine(closers, null, 0)
+                    it.lines += DecompLine.synthetic(closers)
                 }
             }
 
@@ -894,11 +877,15 @@ private class RenderContext(val renderer: Renderer, val source: String) {
         // of the *same* one still share a wrapper, which is what the run-grouping was for.
         group.chunkedBy { it.pseudoName() }.flatMap { run ->
             val first = run.first()
-            for (r in run) r.lines.replaceAll { it.copy(text = it.text.renameThis()) }
-            first.lines.add(0, DecompLine(first.definitionHead(func).renameThis().spellDestructorName(), null, 0))
-            val (openers, closers) = braceFix(run.asSequence().flatMap { r -> r.lines.map { it.text } })
-            if (openers > 0) first.lines.add(1, DecompLine("{".repeat(openers), null, 0))
-            if (closers > 0) run.last().lines += DecompLine("}".repeat(closers), null, 0)
+            for (r in run) r.lines.replaceAll { it.copy(text = it.renameThis(SELF)) }
+            first.lines.add(0, DecompLine.synthetic(first.definitionHead(func)))
+            val (openers, closers) = braceFix(
+                run.asSequence().flatMap { r ->
+                    r.lines.asSequence().flatMap { it.braces }.map { it.char }
+                },
+            )
+            if (openers > 0) first.lines.add(1, DecompLine.synthetic("{".repeat(openers)))
+            if (closers > 0) run.last().lines += DecompLine.synthetic("}".repeat(closers))
             run
         }
 
@@ -912,7 +899,9 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             Claim(
                 owner,
                 row.takeIf { r.anchor != null },
-                r.lines.map { Row(it.text, it.depth, r.label(r.anchor ?: 0).takeIf { _ -> !r.foreign }) },
+                r.lines.map {
+                    Row(it.text, it.depth, r.label(r.anchor ?: 0).takeIf { _ -> !r.foreign }, it.booleanCuts)
+                },
                 Fit.ELASTIC,
                 anchoring = Anchoring.AFTER,
                 limit = limit,
@@ -976,7 +965,6 @@ private class RenderContext(val renderer: Renderer, val source: String) {
         }
 
         fun label(fallback: Int) = (labelOrNull() ?: "L $fallback") + if (copies > 1) " ×$copies" else ""
-    }
 
         /**
          * `__inline_stl_iterator_h_633` — the header line this stretch was compiled from, as an
@@ -1130,7 +1118,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             if (marks.isEmpty() && depth == 0) return
             // A one-line accessor whose body is *all* inlined — Image::size — keeps nothing of its own
             // to fold onto, and its brace delta would be discarded, leaving its head's `{` hanging.
-            if (kept.isEmpty()) kept += Region(null).also { it.lines += DecompLine("", null, 0) }
+            if (kept.isEmpty()) kept += Region(null).also { it.lines += DecompLine.synthetic("") }
             val r = kept.last()
             val braces = if (depth > 0) "{".repeat(depth) else "}".repeat(-depth)
             val last = r.lines.lastOrNull() ?: return
@@ -1142,12 +1130,21 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             // Ghidra emits an already-closed block as `{}`; the marker goes between its braces for the
             // same reason, so an inlined-away loop body reads `for (…) { /* ⇐ inlines … */ }`. A `{}`
             // with no marker is Ghidra's own empty loop and stays as it is.
-            val marked = TRAILING_EMPTY_BLOCK.find(last.text)
-                ?.takeIf { marks.isNotEmpty() }
-                ?.let { last.text.dropLast(it.value.length) + "{" + marks + " }" }
-                ?: (last.text + marks)
+            val opener = last.braces.takeLast(2)
+                .takeIf {
+                    marks.isNotEmpty() &&
+                        it.map(Brace::char) == EMPTY_BLOCK &&
+                        it.last().at == last.text.lastIndex
+                }
+                ?.first()
+            val marked = opener?.let { last.text.substring(0, it.at + 1) + marks + " }" } ?: (last.text + marks)
+            // The splice moved the closer the marks went inside; everything else kept its place.
+            val moved = if (opener == null) last.braces else last.braces.dropLast(1) + Brace('}', marked.lastIndex)
             val text = listOf(marked, braces).filter(String::isNotEmpty).joinToString(" ")
-            r.lines[r.lines.lastIndex] = last.copy(text = text)
+            r.lines[r.lines.lastIndex] = last.copy(
+                text = text,
+                braces = moved + braces.mapIndexed { i, c -> Brace(c, text.length - braces.length + i) },
+            )
             marks = ""
             depth = 0
         }
@@ -1160,7 +1157,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
                 // contended for rows and, outranking declarations, evicted them: a
                 // `class iterator_traits<…>` lost its line to an `inlines atomicity.h L 51`. Left
                 // anchorless instead it sorted to the end of the file, 200 rows of bare markers.
-                depth += r.lines.sumOf { l -> l.text.count { it == '{' } - l.text.count { it == '}' } }
+                depth += r.lines.sumOf { l -> l.braces.sumOf { if (it.char == '{') 1 else -1 } }
                 val call = if (calls) r.pseudoCall(func, renderer.decompile(func).flow, ::entryAddrOf) else null
                 (call ?: r.labelOrNull()?.let { "/* ⇐ inlines $it */" })?.let { marks += " $it" }
                 continue

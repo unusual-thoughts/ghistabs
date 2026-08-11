@@ -1,16 +1,17 @@
 package ghistabs.render
 
 /**
- * Braces to prepend and to append so a run of rendered rows comes out *well-nested*, not merely
- * balanced.
+ * Braces to prepend and to append so a run of rows comes out *well-nested*, not merely balanced.
  *
  * A net count cannot see order. A stretch beginning `} else {` nets zero and reads as balanced while
  * the `if (…) {` it closes sits in another file's view; a stretch that closes two blocks and reopens
  * two nets zero the same way, and renders as a function ending before its last statements. What
  * decides both ends is the running depth's low-water mark: that many openers are missing in front,
  * and whatever the run then ends on has to be closed.
+ *
+ * Fed each row's brace *tokens*, not its characters — a `{` in a string literal is not a block.
  */
-fun braceFix(texts: Sequence<String>): Pair<Int, Int> = texts.flatMap { it.asSequence() }
+fun braceFix(braces: Sequence<Char>): Pair<Int, Int> = braces
     .fold(0 to 0) { (depth, low), c ->
         when (c) {
             '{' -> depth + 1 to low

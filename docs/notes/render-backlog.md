@@ -32,11 +32,8 @@ numbered in the order they were *found*, not worked; this is the order to work t
 
 **Structural debt, worth taking before more of the above.**
 
-7. **§35, stop reconstructing what the token tree knows.** `toLines` flattens the tree away, so every
-   structural pass counts braces in rendered characters. Three defects came out of that in one
-   sitting (§34's fixes and the condition work), and the API that replaces them — `getTokens` by
-   address set, `getNextBrace`, `ClangTokenGroup` nesting, paren pair ids — already exists. Not a
-   render improvement in itself; it is what stops the next one from being guesswork.
+7. ~~**§35, stop reconstructing what the token tree knows.**~~ — DONE. What is left there is one
+   diagnostic and a note that the item's premise about `toLines` was wrong.
 
 **Lower — measurement, then long-standing limitations.**
 
@@ -99,11 +96,9 @@ to wrap long lines, and coalescing re-joins the wrapped continuation lines by ad
 share the statement's source line), so wrapping is transparent. Verified: zero orphan `;`
 lines after removal.
 
-**Only half done, and the half that is missing is the structural half — see §35.** Every line's
-*role* is read from tokens, but the lines themselves come from `DecompilerUtils.toLines`, whose first
-act is `group.flatten(alltoks)`: the tree is discarded and a flat token list re-cut at Ghidra's own
-`ClangBreak`s. So block structure — which `printc.cc` emits as real `beginBlock`/`endBlock` groups —
-never reaches us, and every pass that needs it counts `{` and `}` in rendered characters instead.
+**The structural half followed in §35:** the row now carries its braces, its `if`'s condition and
+branch extents, its `this`, and where it may be broken — all read from the tokens, which reach us
+through `toLines` with their tree parents intact.
 
 ## 5. Sweep findings (all fixtures, `--exclude-dir='*.old'`)
 
@@ -627,7 +622,7 @@ a basename leave the bare name ambiguous → nothing merges; everything else map
 `symbolsByCu.keys`, `functionSource.values`, and each type's `effectiveSource()` — none depend on
 canonicalization, so no cycle) and exposes `canonicalSource(raw)` plus canonical-keyed fan-in views
 `lineEntriesByCanonicalSource` / `symbolsByCanonicalSource` (re-sorted by (line, addr)). `Renderer`
-canonicalises `sources`, and every `FileRenderer` source comparison routes through `canon(...)`:
+canonicalises `sources`, and every `RenderContext` source comparison routes through `canon(...)`:
 `rawFuncs` (`functionSource`), `lines`/`symbols` (fan-in views), `typeDecls` (`effectiveSourceFor`),
 param/local `sourceFile`, `refOf`/`ownLine` decomp tags, `emitIncludes`, `reportAnomalies`, and
 `FunctionSpans.of` (canonicalizer param, applied in `rawSpan`). Verified: `packfile` renders one
@@ -1378,12 +1373,18 @@ the claim is *dropped*, taking its braces with it. `FUNCTION_BODY` outranks decl
 is safe, but `INLINED_BODY` ranks below them, so a header view can still lose a region that way.
 
 ---
-## 35. Stop reconstructing what the token tree already knows — open
+## 35. Stop reconstructing what the token tree already knows — DONE
 
-§2 moved *roles* onto tokens and stopped there. The lines still come from
-`DecompilerUtils.toLines`, which opens with `group.flatten(alltoks)` and re-cuts the flat list at
-`ClangBreak`s, so the structure is thrown away before we see it. Everything structural since has been
-rebuilt from rendered characters, and the rebuilds keep failing in the same way.
+§2 moved *roles* onto tokens and stopped there. Everything structural since had been rebuilt from
+rendered characters, and the rebuilds kept failing in the same way.
+
+**Correction to this item's own premise.** It said `DecompilerUtils.toLines` "throws the tree away
+before we see it" because it opens with `group.flatten(alltoks)`. That is wrong, and it mis-sized the
+work. `ClangTokenGroup.flatten` copies references into a list; it detaches nothing. `ClangLine.addToken`
+then sets a *line* parent in addition to the tree parent, and `ClangToken.Parent()` is untouched — so
+every token in a `ClangLine` still points into the original tree, and only the line *cutting* is flat.
+Replacing `toLines` was never the prerequisite; it buys the cut points, not the tree. Everything below
+reads the tree through the lines `toLines` returns.
 
 **What the tree has that the text does not.** `printc.cc`'s `emitBlockIf` wraps each branch in its
 own `beginBlock`/`endBlock` — `getBlock(1)` (then) and `getBlock(2)` (else) are separate
@@ -1426,10 +1427,83 @@ not a `ClangSyntaxToken`.
 tree-shaped `DecompLine` (keeping `text` for rendering, adding the node it came from) lets them move
 one at a time rather than in one cut.
 
-**Cheap thing to do first, regardless.** `DecompInterface` leaves `options = null` and we never call
-`grabFromToolAndProgram`, so the brace spelling is pinned to the decompiler's compiled-in default
-rather than to any user setting — but it *is* an unstated dependency on that default. One
-`DecompileOptions().apply { setIfElseBraceFormat(Same) }` handed to `setOptions` states it.
+### Done: the row carries its own structure
+
+`DecompLine` keeps `text` for rendering and carries, alongside it, everything the tokens said about
+the row as offsets into that text: `braces` (each `{`/`}` with its position), `ifCondition`,
+`branches` (the two branches' row ranges), `thisAt`, `booleanCuts` (each `&&`/`||` with its paren
+depth), and `memberCuts`. Read once in `compressedDecompLines`, where the tokens are in hand; the
+tokens themselves are not kept, so a row stays a plain value, stays unit-testable, and a program's
+decompiler markup is not held live behind the render.
+
+Offsets index the *final* text because the spelling substitutions moved to the token — `Renderer.spell`
+applies the typedef shortener and the `~`-inside-a-name repair per token, before the row is assembled,
+instead of sweeping the finished row.
+
+What each pass reads now:
+
+| was | is |
+| --- | --- |
+| `braceFix`/`dropInlined` counting `{`/`}` in row text | the row's brace tokens |
+| `branchesOf` walking brace depth, `} else {` / `else {` matched as text | the `ClangTokenGroup`s `emitBlockIf` wraps each branch in |
+| `ifConditionAt` scanning parens back from `{` | the last `if` `ClangOpToken` and its paren pair id |
+| `TRAILING_EMPTY_BLOCK` regex splice | the row's last two brace offsets |
+| `THIS_WORD`/`THIS_PARAM` regexes | a `ClangVariableToken` spelled `this`; the parameter's `ClangVariableDecl` extent |
+| `asMemberDefinition` re-parsing `prototypeString` | `ClangReturnType`/`ClangVariableDecl` extents cut out of the head; `Function.prototype` assembling the class-body declaration from the model |
+| `DESTRUCTOR_NAME` regex | `Function.getName()` starting with `~` |
+| `topLevelBooleanCuts` scanning for ` && `/` || ` at paren depth | `&&`/`||` operator tokens with the depth from the paren tokens |
+
+**Two shapes the item did not predict**, both found by auditing the group-derived branch pair against
+the old brace walk in the same run (9 disagreements on unpackfile, driven to 3):
+
+- The `else`'s brace is not always a sibling of its group. Where `printc.cc` queued a *pending* brace
+  to merge an `else if` and then found no `if` to merge with, the brace is printed by the callback
+  *inside* the branch group, and the nested `emitBlockIf` closes it inside too — so that group holds
+  its own delimiters and its extent has to be unwrapped. A plain `else` is therefore recognised by
+  the brace being *somewhere*, and a real chain by its group opening with the `if`.
+- The folded head is a row like any other. gcc gives a leading `if` no `ClangStatement`, so it is not
+  code by the body test and folds into the head — `b2Free`'s `if` is on row 0. The head had to be
+  given the same structure as a body row or its branches were never uninverted.
+
+The 3 residual disagreements are `if`s with empty branches, where neither version does anything.
+
+**Two defects the old text substrate had been hiding**, both fixed by construction:
+
+- `THIS_PARAM` (`^[A-Za-z_][\w:<>,\s]*\*\s*this\s*,?\s*`) matched only a *leading* parameter
+  whose type held no `*`. Every `vector<Exclusion*,…> *this` stayed, and so did every `this` sitting
+  after a `__return_storage_ptr__`. Cutting the `ClangVariableDecl`'s extent takes it wherever it is.
+- A template's constructor is named for the template, not the instantiation, so
+  `DynArray<char,10ul>::DynArray` kept a `void` return type.
+
+**Measured against the pre-change render, all six fixtures** (`unpackfile`, `appquery`, `packfile`,
+`xapasmcsr`, `xmltest`, `box2d_tests`): statement counts identical, every file's net brace balance
+identical, and 573 → 587 `if`/`else` uninversions — the group pairing finds branch pairs the brace
+walk missed. Spot-checked against real source: `b2DynamicTree_GetRootBounds` and `b2AllocId` come out
+in the order box2d wrote them, where before they were inverted. Every remaining changed line is one
+of: a `this` parameter now dropped, a template ctor's return type now dropped, a signature Ghidra
+wrapped after the name no longer rejoined as `name (…)`, or a branch pair now uninverted.
+
+### Still open
+
+- `braceDepths`/`closeAnomalies` count `{`/`}` in text. That text is the *final canvas* — skeleton
+  rows and decomp rows interleaved, comments spliced in — so the characters genuinely are the
+  substrate there, and a `{` in a string literal on a decomp row would still miscount it. Closing it
+  means carrying brace counts through `Row` → `Fragment` → `TargetLine`, including the composed head
+  row and the pieces `wrapDecompLine` splits a row into. It is a diagnostic, not a render decision.
+- `regionsOf` still remaps each line's address through the SLINE table rather than asking
+  `getTokens(root, AddressSetView)`. The two answer different questions; the swap is not mechanical.
+- Unused from the table: `getNextBrace`/`getMatchingBrace` (the brace list makes them unnecessary
+  here), `isGoToStatement`/`getGoToTargetToken`, `getFunction(program, ClangFuncNameToken)`,
+  `getDataType`, `getVarnodeRef` for `sjljScaffolding`'s stack-slot heuristic.
+- `DecompilerUtils.isThisParameter` is deliberately *not* used: it asks whether Ghidra's model marks
+  the parameter an auto-`this`, which is false for any function whose storage we overrode
+  (`FileSystemEntry::children`). A `ClangVariableToken` spelled `this` is both exact — `this` is a
+  keyword, no other variable can be called it — and complete.
+- Remaining regexes in `render/` are all over *names*, never over a rendered row: the `_<n>` Ghidra
+  appends to a deduplicated identifier, an array extent in a type spelling, a hex scalar, and the
+  path→identifier and path→filename manglings.
+
+---
 
 ## 36. Inlined stretches render as calls to a named pseudo-function — DONE; the two sides do not yet agree
 
@@ -1495,8 +1569,6 @@ function, which rides along as a comment. Caller-side only: in the header's own 
 regions are the caller's code *around* the stretch, not something that file inlined, so there the
 `⇐ inlines` note stays.
 
-
----
 ---
 ## 33. Blank space dominates the render — 87% of rows, and it is concentrated
 
