@@ -27,10 +27,24 @@ class LayoutTest {
         assertEquals("    return 0;", line.render())
     }
 
+    // The cuts a row's tokens would have given: just past each ` && `/` || `, at its paren depth.
+    private fun cutsOf(text: String) = buildList {
+        var depth = 0
+        text.forEachIndexed { i, c ->
+            when (c) {
+                '(', '[' -> depth++
+                ')', ']' -> depth--
+                ' ' -> if (text.regionMatches(i + 1, "&& ", 0, 3) || text.regionMatches(i + 1, "|| ", 0, 3)) {
+                    add(Cut(i + 4, depth))
+                }
+            }
+        }
+    }
+
     @Test
-    fun `wrapDecompLine splits a long condition at its top-level boolean boundaries`() {
+    fun `wrapDecompLine splits a long condition at its shallowest boolean boundaries`() {
         val text = "if ((a == 1) && (b == 2) && (c == 3)) {"
-        val rows = wrapDecompLine(text, depth = 2, minLen = 10)
+        val rows = wrapDecompLine(text, depth = 2, cuts = cutsOf(text), minLen = 10)
         // Cuts at the two depth-1 ` && ` (between the parenthesized clauses), not inside them; head keeps
         // its indent, continuations step in by 2, operators end their rows, the trailing `{` stays put.
         assertEquals(3, rows.size)
@@ -41,12 +55,23 @@ class LayoutTest {
         assertEquals(text.filterNot { it == ' ' }, rows.joinToString("") { it.second }.filterNot { it == ' ' })
     }
 
+    // A nested boundary splits the piece it lands in, once that piece is still too long on its own.
     @Test
-    fun `wrapDecompLine leaves a short line, or a long one without boolean operators, intact`() {
-        assertEquals(listOf(2 to "x = f(a, b);"), wrapDecompLine("x = f(a, b);", depth = 2, minLen = 40))
+    fun `a deeper boundary splits the piece it falls in, not the whole row`() {
+        val text = "if ((a == 1 && b == 2) || (c == 3 && d == 4)) {"
+        val rows = wrapDecompLine(text, depth = 0, cuts = cutsOf(text), minLen = 20)
+        assertEquals(4, rows.size)
+        assertEquals(listOf(0, 2, 2, 2), rows.map { it.first })
+        assertEquals(text.filterNot { it == ' ' }, rows.joinToString("") { it.second }.filterNot { it == ' ' })
+    }
+
+    @Test
+    fun `wrapDecompLine leaves a short line, or a long one with no boundary, intact`() {
+        val short = "x = f(a, b);"
+        assertEquals(listOf(2 to short), wrapDecompLine(short, depth = 2, cuts = cutsOf(short), minLen = 40))
         // Long, but only commas (inside a call) — never split, so arg lists stay whole.
         val call = "r = call(alpha, beta, gamma, delta, epsilon, zeta, eta, theta, iota, kappa);"
-        assertEquals(listOf(2 to call), wrapDecompLine(call, depth = 2, minLen = 20))
+        assertEquals(listOf(2 to call), wrapDecompLine(call, depth = 2, cuts = cutsOf(call), minLen = 20))
     }
 
     @Test

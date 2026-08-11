@@ -15,19 +15,20 @@ import org.junit.jupiter.api.Test
  * while nesting wrongly, and a function whose rendered close is not on the line its span puts it on.
  */
 class NestingTest {
-    private fun fix(vararg texts: String) = braceFix(texts.asSequence())
+    // Rows as their brace tokens, which is what the run is fed: `""` is a row with no braces.
+    private fun fix(vararg rows: String) = braceFix(rows.asSequence().flatMap { it.asSequence() })
 
     @Test
     fun `a balanced run still needs braces when its nesting dips`() {
-        assertEquals(1 to 1, fix("} else {"))
-        assertEquals(2 to 2, fix("}}", "x = 1;", "{{"))
-        assertEquals(0 to 0, fix("if (x) {", "y();", "}"))
+        assertEquals(1 to 1, fix("}{"))
+        assertEquals(2 to 2, fix("}}", "", "{{"))
+        assertEquals(0 to 0, fix("{", "", "}"))
     }
 
     @Test
     fun `an unbalanced run is closed or opened at the end that is short`() {
-        assertEquals(0 to 2, fix("f() {", "if (x) {"))
-        assertEquals(2 to 0, fix("y();", "}", "}"))
+        assertEquals(0 to 2, fix("{", "{"))
+        assertEquals(2 to 0, fix("", "}", "}"))
     }
 
     // `Integer::IsConvertableToLong`: `if (sign == POSITIVE) {` anchored at L2805, both of its

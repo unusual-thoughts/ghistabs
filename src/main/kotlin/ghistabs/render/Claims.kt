@@ -85,7 +85,14 @@ enum class Anchoring { EXACT, AFTER, BAND }
  * `(.bss static)`, the address run behind an N_SLINE. Line provenance is not here: the renderer adds
  * that from the row the allocator gave, which is the point of front-positioning it.
  */
-data class Row(val text: String, val indent: Int = 0, val note: String? = null)
+data class Row(
+    val text: String,
+    val indent: Int = 0,
+    val note: String? = null,
+    // Where an over-long row may be broken, read from its tokens rather than found again in its
+    // characters. Empty for a row nothing decompiled, which is never long enough to want breaking.
+    val cuts: List<Cut> = emptyList(),
+)
 
 /**
  * A pass's request for space. [line] is the source line the content belongs to, null to float in the

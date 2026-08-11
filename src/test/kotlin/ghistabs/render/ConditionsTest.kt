@@ -6,92 +6,34 @@ import org.junit.jupiter.api.Test
 /**
  * Pure-unit coverage of [uninvertConditions]: which way round gcc's line table says the source had an
  * `if`/`else`, and the cases where it must not answer.
+ *
+ * Rows are built carrying the structure the token tree gave them — the condition's extent and which
+ * rows each branch took — rather than text for the pass to scan back out. Reading that structure
+ * *off* the tokens is exercised against real decompiler output; what is pinned here is what the pass
+ * then does with it.
  */
 class ConditionsTest {
-    // Source lines stand in for the anchors; a structural row (a brace) carries none.
-    private fun lines(vararg rows: Pair<String, Int?>) = rows.map { (text, _) -> DecompLine(text, null) }
+    private fun stmt(text: String) = DecompLine(text, null)
 
-    private fun uninvert(vararg rows: Pair<String, Int?>): List<String> {
-        val at = rows.map { it.second }
-        val body = lines(*rows)
-        return body.uninvertConditions { line -> at[body.indexOfFirst { it === line }] }.map { it.text }
-    }
+    private fun row(text: String) =
+        DecompLine(text, null, braces = text.mapIndexedNotNull { i, c -> Brace(c, i).takeIf { c in "{}" } })
 
-    // A row carrying an earlier statement and an earlier `if` — the folded head's shape. Only the
-    // `if` that opens the block at the end of the row is the one being negated; a greedy match
-    // spanned both and produced `if (!(a != false) { if (b`, one paren short.
-    @Test
-    fun `only the if that opens the row's last block is negated`() {
-        assertEquals(
-            listOf(
-                "void f() { if (a != false) { if (!(b == c)) {",
-                "  y();",
-                "}",
-                "else {",
-                "  x();",
-                "}",
-            ),
-            uninvert(
-                "void f() { if (a != false) { if (b == c) {" to 60,
-                "  x();" to 63,
-                "}" to null,
-                "else {" to null,
-                "  y();" to 61,
-                "}" to null,
-            ),
-        )
-    }
+    /** A row ending in `if (<condition>) {`, whose branches took [then] and [otherwise]. */
+    private fun ifOpen(text: String, condition: String, then: IntRange, otherwise: IntRange) = row(text).copy(
+        ifCondition = text.indexOf(condition).let { it..<it + condition.length },
+        branches = Branches(then, otherwise),
+    )
 
-    // A condition carrying its own parens: the scan steps over them rather than stopping at the
-    // first `(` it meets.
-    @Test
-    fun `a nested paren in the condition does not end the scan`() {
-        assertEquals(
-            listOf("if (!(f(a) == g(b))) {", "  y();", "}", "else {", "  x();", "}"),
-            uninvert(
-                "if (f(a) == g(b)) {" to 10,
-                "  x();" to 13,
-                "}" to null,
-                "else {" to null,
-                "  y();" to 11,
-                "}" to null,
-            ),
-        )
-    }
+    /** An `if` with no plain `else` — no `else` at all, or an `else if` chain, which has no brace. */
+    private fun ifAlone(text: String, condition: String) =
+        row(text).copy(ifCondition = text.indexOf(condition).let { it..<it + condition.length })
 
-    // The shape Ghidra actually emits: `}` and `else {` are separate lines at equal indent, so
-    // `compressedDecompLines` never joins them. `IsConvertableToLong` in this spelling.
-    @Test
-    fun `the two-line else Ghidra emits is recognised and swapped`() {
-        assertEquals(
-            listOf("if (!(uVar1 < 5)) {", "  local_c = false;", "}", "else {", "  work();", "}"),
-            uninvert(
-                "if (uVar1 < 5) {" to 2799,
-                "  work();" to 2802,
-                "}" to null,
-                "else {" to null,
-                "  local_c = false;" to 2800,
-                "}" to null,
-            ),
-        )
-    }
-
-    // `} else if (…)` in the two-line spelling is `}` then `else if (…) {` — still a chain, still
-    // left alone.
-    @Test
-    fun `a two-line else-if chain is left alone`() {
-        assertEquals(
-            listOf("if (a) {", "  x();", "}", "else if (b) {", "  y();", "}"),
-            uninvert(
-                "if (a) {" to 20,
-                "  x();" to 21,
-                "}" to null,
-                "else if (b) {" to null,
-                "  y();" to 19,
-                "}" to null,
-            ),
-        )
-    }
+    // `depth` stands in for the address a row is anchored by: the pass copies the row it negates, so
+    // there is no identity left to key the lookup on, and nothing else here reads the indent.
+    private fun uninvert(vararg rows: Pair<DecompLine, Int?>): List<String> =
+        rows.mapIndexed { i, (line, _) -> line.copy(depth = i) }
+            .uninvertConditions { rows[it.depth].second }
+            .map { it.text }
 
     // `IsConvertableToLong`: the else-branch anchors above the then-branch, so the source wrote it
     // first and its condition was this one's negation.
@@ -100,11 +42,44 @@ class ConditionsTest {
         assertEquals(
             listOf("if (!(uVar1 < 5)) {", "  local_c = false;", "} else {", "  work();", "}"),
             uninvert(
-                "if (uVar1 < 5) {" to 2799,
-                "  work();" to 2802,
-                "} else {" to null,
-                "  local_c = false;" to 2800,
-                "}" to null,
+                ifOpen("if (uVar1 < 5) {", "uVar1 < 5", 1..1, 3..3) to 2799,
+                stmt("  work();") to 2802,
+                row("} else {") to null,
+                stmt("  local_c = false;") to 2800,
+                row("}") to null,
+            ),
+        )
+    }
+
+    // Ghidra emits `}` and `else {` as separate rows at equal indent; the branch groups say the same
+    // thing either way, so the extra separator row just rides along between them.
+    @Test
+    fun `the two-row else Ghidra emits keeps its separator between the branches`() {
+        assertEquals(
+            listOf("if (!(uVar1 < 5)) {", "  local_c = false;", "}", "else {", "  work();", "}"),
+            uninvert(
+                ifOpen("if (uVar1 < 5) {", "uVar1 < 5", 1..1, 4..4) to 2799,
+                stmt("  work();") to 2802,
+                row("}") to null,
+                row("else {") to null,
+                stmt("  local_c = false;") to 2800,
+                row("}") to null,
+            ),
+        )
+    }
+
+    // Only the `if` that opens the block at the end of the row is negated — the row also carries an
+    // earlier statement and an earlier `if`, which is the folded head's shape.
+    @Test
+    fun `only the condition the row's own branches belong to is negated`() {
+        assertEquals(
+            listOf("void f() { if (a != false) { if (!(b == c)) {", "  y();", "} else {", "  x();", "}"),
+            uninvert(
+                ifOpen("void f() { if (a != false) { if (b == c) {", "b == c", 1..1, 3..3) to 60,
+                stmt("  x();") to 63,
+                row("} else {") to null,
+                stmt("  y();") to 61,
+                row("}") to null,
             ),
         )
     }
@@ -114,54 +89,67 @@ class ConditionsTest {
         assertEquals(
             listOf("if (uVar1 < 5) {", "  work();", "} else {", "  local_c = false;", "}"),
             uninvert(
-                "if (uVar1 < 5) {" to 2799,
-                "  work();" to 2800,
-                "} else {" to null,
-                "  local_c = false;" to 2802,
-                "}" to null,
+                ifOpen("if (uVar1 < 5) {", "uVar1 < 5", 1..1, 3..3) to 2799,
+                stmt("  work();") to 2800,
+                row("} else {") to null,
+                stmt("  local_c = false;") to 2802,
+                row("}") to null,
             ),
         )
     }
 
-    // The `} else {` belongs to the inner `if`, not the outer one — depth, not the first match.
+    // An `if` with no branch pair — no `else`, or an `else if` chain — is never touched, so a chain's
+    // second condition cannot be stranded under a negated first.
     @Test
-    fun `a nested if-else is not mistaken for the outer one's separator`() {
-        assertEquals(
-            listOf("if (a) {", "  if (b) {", "    x();", "  } else {", "    y();", "  }", "}"),
-            uninvert(
-                "if (a) {" to 10,
-                "  if (b) {" to 11,
-                "    x();" to 12,
-                "  } else {" to null,
-                "    y();" to 13,
-                "  }" to null,
-                "}" to null,
-            ),
-        )
-    }
-
-    // No else, and a branch with no anchored line at all: nothing to compare, nothing to say.
-    @Test
-    fun `an if without an else or without anchors is left alone`() {
-        assertEquals(listOf("if (a) {", "  x();", "}"), uninvert("if (a) {" to 10, "  x();" to 11, "}" to null))
-        assertEquals(
-            listOf("if (a) {", "  x();", "} else {", "  y();", "}"),
-            uninvert("if (a) {" to 10, "  x();" to null, "} else {" to null, "  y();" to 9, "}" to null),
-        )
-    }
-
-    // `} else if (…) {` is not the separator this pass accepts, so a chain keeps its second condition
-    // with its own branch rather than being stranded under a negated first.
-    @Test
-    fun `an else-if chain is left alone`() {
+    fun `an if with no branch pair, or with an unanchored branch, is left alone`() {
         assertEquals(
             listOf("if (a) {", "  x();", "} else if (b) {", "  y();", "}"),
             uninvert(
-                "if (a) {" to 20,
-                "  x();" to 21,
-                "} else if (b) {" to null,
-                "  y();" to 19,
-                "}" to null,
+                ifAlone("if (a) {", "a") to 20,
+                stmt("  x();") to 21,
+                row("} else if (b) {") to null,
+                stmt("  y();") to 19,
+                row("}") to null,
+            ),
+        )
+        assertEquals(
+            listOf("if (a) {", "  x();", "} else {", "  y();", "}"),
+            uninvert(
+                ifOpen("if (a) {", "a", 1..1, 3..3) to 10,
+                stmt("  x();") to null,
+                row("} else {") to null,
+                stmt("  y();") to 9,
+                row("}") to null,
+            ),
+        )
+    }
+
+    // Nested swaps: the inner `if` goes first, because the outer one's swap moves whole branch blocks
+    // and would carry the inner one's rows out from under its recorded extents.
+    @Test
+    fun `a nested if-else is swapped inside the outer one that also swaps`() {
+        assertEquals(
+            listOf(
+                "if (!(a)) {",
+                "  outer-else;",
+                "} else {",
+                "  if (!(b)) {",
+                "    inner-else;",
+                "  } else {",
+                "    inner-then;",
+                "  }",
+                "}",
+            ),
+            uninvert(
+                ifOpen("if (a) {", "a", 1..5, 7..7) to 100,
+                ifOpen("  if (b) {", "b", 2..2, 4..4) to 102,
+                stmt("    inner-then;") to 103,
+                row("  } else {") to null,
+                stmt("    inner-else;") to 101,
+                row("  }") to null,
+                row("} else {") to null,
+                stmt("  outer-else;") to 99,
+                row("}") to null,
             ),
         )
     }

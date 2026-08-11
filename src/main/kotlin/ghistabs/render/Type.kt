@@ -162,12 +162,16 @@ fun TypeDecl.Struct<GlobalTypeId>.renderFull(
         val link = f.mangled?.let { "  /* $it */" }.orEmpty()
         f.access to "static ${f.type.renderDecl(f.name, index, shortener)};$link"
     } + methods.mapNotNull { m ->
-        m.mangled?.let { index.functionsByMangledName[it] }?.let {
-            // Ghidra's prototypeString carries a return type on every function and `this` as a real
-            // parameter; neither is legal in a class body, where a constructor has no return type and
-            // `this` is a keyword.
-            m.access to "${m.declPrefix}${it.signature(program).asMemberDefinition(owner)}${m.declSuffix};"
-        }
+        m.mangled?.let { index.functionsByMangledName[it] }
+            ?.let { program.functionManager.getFunctionAt(it.addr) }
+            ?.let {
+                // Ghidra's model carries a return type on every function and `this` as a real
+                // parameter; neither is legal in a class body, where a constructor has no return type
+                // and `this` is a keyword. A member is named for its class exactly when it is one of
+                // the two — [owner] naming the class the bare declaration cannot.
+                val ctor = owner != null && (it.name == owner || it.name == "~$owner")
+                m.access to "${m.declPrefix}${it.prototype(dropThis = true, dropReturnType = ctor)}${m.declSuffix};"
+            }
         // gcc emits a stab per aliased copy (ctor C1/C2, dtor D0/D1/D2); once the return type and
         // `this` are gone they render identically, and a class body cannot declare the same member
         // twice.
