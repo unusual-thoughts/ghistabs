@@ -146,6 +146,7 @@ data class Allocation(val placed: List<Placement>, val dropped: List<Dropped>)
 const val ROW_TAKEN = "line already taken"
 const val NO_ROOM = "no free row in the band"
 const val INSIDE_BODY = "line inside a function body"
+const val CONFLICTED_DECL = "this line is claimed by several files"
 const val FOREIGN_RUN = "run crosses this file's code"
 const val OFF_CANVAS = "line outside the file"
 const val MISATTRIBUTED = "stale N_SOL"
