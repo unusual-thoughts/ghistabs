@@ -38,7 +38,20 @@ fun String.asSpecialization(name: String?) =
 // `std::vector<int>::vector`, not `std::vector<int>::std::vector<int>`.
 fun String.simpleTypeName() = substringBefore('<').substringAfterLast("::")
 
-fun safeName(source: String) = source.replace(Regex("[^A-Za-z0-9_.-]"), "_").trim('_')
+/**
+ * A source path as a path *under* the output directory, keeping its shape:
+ * `E:/work/cc/devtools/…/appimage.h` → `E/work/cc/devtools/…/appimage.h`. The drive letter becomes
+ * the top directory, both separators are honored (stabs mixes `/` and `\`), and `..` is dropped so
+ * nothing can be written outside the output directory. Segments are otherwise left alone —
+ * flattening the whole path into one name spelled that header
+ * `E__work_cc_devtools_devtools-bouniaf-7-0_result_include_imageutil_appimage.h`.
+ */
+fun outputPath(source: String): String {
+    val drive = source.takeIf { it.length >= 2 && it[1] == ':' && it[0].isLetter() }?.take(1)
+    val rest = if (drive != null) source.substring(2) else source
+    val segments = rest.split('/', '\\').filter { it.isNotEmpty() && it != "." && it != ".." }
+    return (listOfNotNull(drive) + segments).joinToString("/").ifEmpty { "unnamed" }
+}
 
 /**
  * C is declarator-based: an array's extent goes *after* the  * name, so `char const[18] ABC`
