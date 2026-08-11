@@ -28,31 +28,20 @@ private fun splitCondition(text: String, span: IntRange, cuts: List<Cut>, minLen
 
 // Pure layout model: Canvas ⊃ TargetLine ⊃ Fragment.
 
-// What a fragment represents, so the render step can pick its comment shape. Contention between
-// kinds is settled by Owner before anything is written, so this no longer decides any fate.
-enum class FragmentKind {
-    SLINE,
-    FUNC_DELIM,
-    DECL_LOCAL,
-    DECL_GLOBAL,
-    TYPEDEF,
-    TYPE_BODY,
-    DECOMP,
-    OTHER,
-}
-
-// One piece of a line, fully semantic: [code] is the C text (null for a bare comment),
-// [note] the comment payload (a role, an address run, a delimiter phrase — null for a
-// pure-code line). The line number the tag restates is the fragment's grid position, so
-// the comment is derived at render time via [commentAt], not stored.
+// One piece of a line, fully semantic: [code] is the C text (null for a bare comment), [note] the
+// comment payload (a role, an address run, a delimiter phrase — null for a pure-code line) and
+// [shape] how that payload is spelled. The line number the tag restates is the fragment's grid
+// position, so the comment is derived at render time via [commentAt], not stored.
+//
+// Carries no `stale` flag: a misattributed claim is partitioned into `displaced` before anything is
+// written, so no fragment on the canvas was ever stale and both tests that read it were dead.
 data class Fragment(
     val indent: Int = 0,
     val code: String? = null,
     val note: String? = null,
-    val kind: FragmentKind = FragmentKind.OTHER,
-    val stale: Boolean = false,
+    val shape: NoteShape = NoteShape.DECLARATION,
 ) {
-    fun commentAt(line: Int) = note?.let { commentFor(line, kind, it, stale) }
+    fun commentAt(line: Int) = note?.let { commentFor(line, shape, it) }
 }
 
 // The fragments sharing source [line]. Renders all code first, all comments last, so a
@@ -76,11 +65,11 @@ class TargetLine(val line: Int) {
         // commenting out its neighbours. In front, each statement names its own line, several can
         // share a row, and the row stays valid C. Repeats collapse: one marker per distinct line.
         var lastMark: String? = null
-        val decomp = fragments.filter { it.kind == FragmentKind.DECOMP && it.code != null }.map { f ->
+        val decomp = fragments.filter { it.shape == NoteShape.PROVENANCE && it.code != null }.map { f ->
             val mark = f.note?.takeIf { it != lastMark }?.also { lastMark = it }
             mark?.let { "/* ⇐ $it */ " }.orEmpty() + f.code
         }
-        val rest = fragments.filterNot { it.kind == FragmentKind.DECOMP && it.code != null }
+        val rest = fragments.filterNot { it.shape == NoteShape.PROVENANCE && it.code != null }
         val code = (decomp + rest.mapNotNull { it.code }).joinToString("   ")
         // Deduped: every fragment on a row restates that row's line, so two typedefs sharing source
         // line 139 produced `typedef unsigned char _Value_type;   typedef Exclusion _Value_type;
@@ -112,10 +101,10 @@ class Canvas(val maxLine: Int) {
     // The last line worth rendering: trailing blank lines and lines carrying only
     // misattributed (stale N_SOL) fragments are noise past the file's real content.
     private fun lastMeaningfulLine() = (maxLine downTo 1).firstOrNull { line ->
-        // Anything carrying code counts, misattributed or not. Trimming on `!stale` alone deleted
-        // `class XVImage` and its whole body from xvimage.h the moment nothing happened to sit below
-        // it — a real declaration lost to a heuristic about where gcc said it was.
-        lines[line].fragments.any { !it.stale || it.code != null }
+        // Anything on the line counts. Trimming on a staleness flag once deleted `class XVImage` and
+        // its whole body from xvimage.h the moment nothing happened to sit below it — a real
+        // declaration lost to a heuristic about where gcc said it was.
+        lines[line].fragments.isNotEmpty()
     } ?: 0
 
     /**

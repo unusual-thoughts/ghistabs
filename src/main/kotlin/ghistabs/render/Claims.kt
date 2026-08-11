@@ -64,14 +64,15 @@ enum class Owner {
         else -> "declaration"
     }
 
-    fun kind() = when (this) {
-        FUNCTION_BODY, INLINED_BODY -> FragmentKind.DECOMP
-        FUNC_DELIM -> FragmentKind.FUNC_DELIM
-        GLOBAL -> FragmentKind.DECL_GLOBAL
-        LOCAL -> FragmentKind.DECL_LOCAL
-        TYPE_BODY -> FragmentKind.TYPE_BODY
-        TYPEDEF -> FragmentKind.TYPEDEF
-        INCLUDE -> FragmentKind.OTHER
+    /**
+     * How this owner's rows spell their note. Three cases rather than one per owner: every
+     * declaration-ish owner renders the same tag, and saying so here is what stops the mapping
+     * drifting out of step with the shapes.
+     */
+    val noteShape get() = when (this) {
+        FUNCTION_BODY, INLINED_BODY -> NoteShape.PROVENANCE
+        FUNC_DELIM -> NoteShape.DELIMITER
+        else -> NoteShape.DECLARATION
     }
 }
 

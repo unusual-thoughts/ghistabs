@@ -198,7 +198,7 @@ class FileRenderer(val renderer: Renderer, override val source: String) : Render
             for ((key, addrs) in byKey) {
                 val runs = formatAddrRuns(addrs.toList(), program)
                 val note = if (key.codeUnit.isEmpty()) runs else "$runs: ${key.codeUnit}"
-                canvas[key.line] += Fragment(indentFor(key.line), note = note, kind = FragmentKind.SLINE)
+                canvas[key.line] += Fragment(indentFor(key.line), note = note, shape = NoteShape.SLINE)
             }
             return
         }
@@ -209,7 +209,7 @@ class FileRenderer(val renderer: Renderer, override val source: String) : Render
         // better than any annotation could.
         val own = rawFuncs.mapTo(mutableSetOf()) { it.addr }
         for ((line, addrs) in lines.filter { it.line in 1..maxLine }.groupBy({ it.line }, { it.addr })) {
-            if (canvas[line].fragments.any { it.kind == FragmentKind.DECOMP }) continue
+            if (canvas[line].fragments.any { it.shape == NoteShape.PROVENANCE }) continue
             val fns = addrs
                 .mapNotNull { program.functionManager.getFunctionContaining(it) }
                 .filterNot { it.entryPoint in own }
@@ -280,16 +280,13 @@ class FileRenderer(val renderer: Renderer, override val source: String) : Render
             var prev = -1
             var prevIndent = 0
             for ((row, content) in fitRows(rows, free.first()..free.last())) {
-                // An expanding block evicts misattributed fragments from the rows it takes, so a lone
-                // stale decl can't force it to fold. Carried over from Canvas.layoutBraceBlock.
-                if (claim.fit == Fit.ELASTIC) canvas[row].fragments.removeAll { it.stale }
                 // Everything crammed onto one row keeps the indent of the statement that opens it —
                 // TargetLine takes the shallowest, which let a trailing `}` drag the row to column 0.
                 val indent = if (row == prev) prevIndent else content.indent
                 // Identical claims merged; say how many there were rather than silently showing one.
                 // Aliased copies (ctor C1/C2, dtor D0/D1/D2) are one declaration emitted N times.
                 val note = content.note?.let { if (copies > 1) "$it ×$copies" else it }
-                canvas[row] += Fragment(indent, content.text, note, claim.owner.kind(), claim.stale)
+                canvas[row] += Fragment(indent, content.text, note, claim.owner.noteShape)
                 prev = row
                 prevIndent = indent
             }
