@@ -20,6 +20,42 @@ private fun stripDriveLetter(path: String): String =
 /** Path segments, drive letter dropped and both separators honored (stabs mixes `/` and `\`). */
 private fun pathSegments(path: String) = stripDriveLetter(path).split('/', '\\').filter { it.isNotEmpty() }
 
+/** [path] without its last segment, empty when it has none. Both separators, as [pathSegments]. */
+private fun dropLastSegment(path: String) =
+    maxOf(path.lastIndexOf('/'), path.lastIndexOf('\\')).takeIf { it > 0 }?.let { path.take(it) }.orEmpty()
+
+private fun isExplicitlyRelative(path: String) = path.startsWith("./") ||
+    path.startsWith("../") ||
+    path.startsWith(""".\""") ||
+    path.startsWith("""..\""")
+
+/**
+ * A source spelling written relative to its compilation directory, resolved against it —
+ * `../../../interface/host/bits/bits64.h` compiled in
+ * `E:/work/cc/devtools/devtools-bluelab-7-0/vm/appquery/` is
+ * `E:/work/cc/devtools/interface/host/bits/bits64.h`. Unresolvable (more `..` than the directory has
+ * segments) or [directory]-less spellings are returned unchanged.
+ *
+ * Only a spelling that *says* it is relative — opens with `./` or `../` — is resolved. gcc writes a
+ * bare filename relative to the CU too, but resolving those would break [foldSourcePaths]: one
+ * physical header staged into two places is spelled bare by the CU that owns it and by full path
+ * everywhere else, and resolving the bare one gives the two spellings different parent directories.
+ * `image.h` would split into `devHost/util/image/image.h` and `result/include/xvimage/image.h`.
+ */
+fun resolveAgainstDirectory(path: String, directory: String?): String {
+    if (directory == null || !isExplicitlyRelative(path)) return path
+    var base = directory.trimEnd('/', '\\')
+    val rest = mutableListOf<String>()
+    for (segment in pathSegments(path)) {
+        when (segment) {
+            "." -> {}
+            ".." -> base = dropLastSegment(base).ifEmpty { return path }
+            else -> rest += segment
+        }
+    }
+    return (listOf(base) + rest).joinToString("/")
+}
+
 /** Last path segment of a stabs path: `c:/mingw/include/c++/3.2.3/bits/stl_alloc.h` → `stl_alloc.h`. */
 fun String.pathBasename() = pathSegments(this).lastOrNull() ?: this
 
@@ -44,14 +80,20 @@ fun String.isStdMarkerPath(): Boolean = STD_MARKERS.containsMatchIn(this)
  * gcc spells the same header two ways across CUs: the full include path where it compiles the
  * definitions, and the bare `#include "x.h"` spelling where another TU only forward-references it.
  * Each CU's N_BINCL carries a different checksum (its own expansion), so they can't be merged by
- * checksum — basename identity is the signal. A **bare** name (no path separator) that is the
- * basename of full paths also present folds those full paths onto the bare spelling: the shorter
- * name wins and is what displays. One physical header compiled under several build roots keeps its
- * immediate parent directory (`.../xvimage/image.h` from a Jenkins tree and a devtools tree), so
- * full paths fold when they **all agree on that parent** — including the single-path case. Guard:
- * genuinely distinct headers sharing a basename (`moduleA/config.h`, `moduleB/config.h`) disagree
- * on the parent, so nothing folds. Same-parent different-root false positives merge only render
- * output; DTM attribution votes over raw spellings and is unaffected.
+ * checksum — basename identity is the signal. Every spelling of one basename folds onto the
+ * **fullest** of them, so long as the full ones **all agree on their immediate parent directory**:
+ * one physical header compiled under several build roots (`.../xvimage/image.h` from a Jenkins tree
+ * and a devtools tree) keeps that parent, while genuinely distinct headers (`moduleA/config.h`,
+ * `moduleB/config.h`) disagree on it and nothing folds.
+ *
+ * A path wins over the bare name because the render writes a source *tree*: a folded-to-bare
+ * `image.h` landed at the top level next to `main.cpp` while the stabs knew it lived in
+ * `result/include/xvimage/`. Among several equally-parented paths the **shallowest** wins,
+ * lexicographic on a tie: two build roots are equally true, and the least deeply nested spelling is
+ * the least specific to one of them, which keeps a library's headers together — `image.h` under the
+ * Jenkins root while its siblings sat under the devtools root split one include tree in two.
+ * Same-parent different-root false positives merge only render output; DTM attribution votes over
+ * raw spellings and is unaffected.
  *
  * Returns raw spelling → folded spelling; every input maps to itself unless it folds.
  */
@@ -60,13 +102,12 @@ fun foldSourcePaths(filenames: Iterable<String>): Map<String, String> {
     fun parentDir(s: String) = pathSegments(s).dropLast(1).lastOrNull().orEmpty()
 
     val all = filenames.toSet()
-    val fullPathsByBasename = all.filterNot(::isBare).groupBy(String::pathBasename)
-    val fold = mutableMapOf<String, String>()
-    for (name in all) {
-        if (!isBare(name)) continue
-        val fulls = fullPathsByBasename[name] ?: continue
-        if (fulls.mapTo(mutableSetOf(), ::parentDir).size == 1) fulls.forEach { fold[it] = name }
-    }
+    val fold = all.groupBy(String::pathBasename).mapNotNull { (_, spellings) ->
+        spellings.filterNot(::isBare)
+            .takeIf { it.isNotEmpty() && it.mapTo(mutableSetOf(), ::parentDir).size == 1 }
+            ?.minWithOrNull(compareBy({ pathSegments(it).size }, { it }))
+            ?.let { fullest -> spellings.map { it to fullest } }
+    }.flatten().toMap()
     return all.associateWith { fold[it] ?: it }
 }
 

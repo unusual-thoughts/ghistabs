@@ -41,15 +41,21 @@ fun String.simpleTypeName() = substringBefore('<').substringAfterLast("::")
 /**
  * A source path as a path *under* the output directory, keeping its shape:
  * `E:/work/cc/devtools/…/appimage.h` → `E/work/cc/devtools/…/appimage.h`. The drive letter becomes
- * the top directory, both separators are honored (stabs mixes `/` and `\`), and `..` is dropped so
- * nothing can be written outside the output directory. Segments are otherwise left alone —
- * flattening the whole path into one name spelled that header
+ * the top directory, both separators are honored (stabs mixes `/` and `\`), and `..` pops the
+ * segment before it — dropping it instead would have spelled `a/b/../c.h` as `a/b/c.h`, a directory
+ * that does not exist. A `..` with nothing left to pop is discarded rather than escaping the output
+ * directory; a spelling that starts that way should have been anchored to its compilation directory
+ * before it got here (`resolveAgainstDirectory`). Segments are otherwise left alone — flattening the
+ * whole path into one name spelled that header
  * `E__work_cc_devtools_devtools-bluelab-7-0_result_include_imageutil_appimage.h`.
  */
 fun outputPath(source: String): String {
     val drive = source.takeIf { it.length >= 2 && it[1] == ':' && it[0].isLetter() }?.take(1)
     val rest = if (drive != null) source.substring(2) else source
-    val segments = rest.split('/', '\\').filter { it.isNotEmpty() && it != "." && it != ".." }
+    val segments = rest.split('/', '\\').filter { it.isNotEmpty() && it != "." }
+        .fold(mutableListOf<String>()) { path, segment ->
+            path.apply { if (segment == "..") removeLastOrNull() else add(segment) }
+        }
     return (listOfNotNull(drive) + segments).joinToString("/").ifEmpty { "unnamed" }
 }
 

@@ -51,17 +51,18 @@ scan() {
 total=0
 bad=0
 badfiles=0
-for f in "$dir"/*; do
-    [ -f "$f" ] || continue
+# Recursive: the render mirrors the source tree (`E/work/.../appimage.h`), so a flat glob saw 9 of
+# appquery's 66 files and reported a total that meant nothing.
+while IFS= read -r f; do
     total=$((total + 1))
     out=$(scan "$f")
     n=$(printf '%s' "$out" | grep -c "error: ")
     if [ "$n" -gt 0 ]; then
         bad=$((bad + n))
         badfiles=$((badfiles + 1))
-        [ -n "$verbose" ] && printf '%s\n' "$out" | sed "s|$work/u.cpp|$(basename "$f")|"
+        [ -n "$verbose" ] && printf '%s\n' "$out" | sed "s|$work/u.cpp|${f#"$dir"/}|"
     fi
-done
+done < <(find "$dir" -type f | sort)
 
 echo "$dir: $badfiles/$total files with errors ($bad total)"
 [ "$badfiles" -eq 0 ]

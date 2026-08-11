@@ -1700,6 +1700,48 @@ offset can be resolved to the method it calls rather than printed as arithmetic.
 
 ---
 
+## 39. The render is a source tree — DONE
+
+Output files were named by replacing every non-identifier character of the source path with `_`, so a
+header arrived as `E__work_cc_devtools_devtools-bluelab-7-0_result_include_imageutil_appimage.h`.
+`renderAll` now writes `E/work/cc/.../imageutil/appimage.h`: drive letter as the top directory, both
+separators honored, `..` popping the segment before it.
+
+Three things fell out of it, in the order they were found.
+
+**§15's fold was written for flat names and threw away the tree.** It folded every spelling onto the
+*bare* one — `image.h` at the top level next to `main.cpp` — while the stabs knew the header lived in
+`result/include/xvimage/`. It now folds onto a path, the shallowest when several agree on the parent
+directory, since the least deeply nested spelling is the least specific to one build root: `image.h`
+under the Jenkins root while its siblings sat under the devtools root split one include tree in two.
+
+**`BlockScope.source` was never folded**, and `inlineParams` compares it against the file being
+rendered. It matched only while the fold picked the bare spelling that `N_SOL` usually uses; folding
+onto the full path exposed it and every pseudo-call in xvimage.cpp lost its parameter names to the
+dataflow fallback (`__inline_xvimage_h_27(startAddr)` for `(aStart, aStart)`). Folding blocks with
+everything else fixed it — and recovered two inline-stretch definitions in unpackfile's
+filesystemimage.h that had never rendered, which is where that fixture's 551 → 553 clang errors come
+from (both in the "statements at file scope in a header view" family, above).
+
+**Relative spellings are resolved against their CU's compilation directory.** gcc gave
+`bits64.h` as `../../../interface/host/bits/bits64.h`, which landed under an invented `interface/`
+root; anchored to the CU's `N_SO` directory it is
+`C/Jenkins/.../bc/bluesuite_2_6/interface/host/bits/bits64.h`. Only spellings that *say* they are
+relative are resolved — gcc writes bare filenames relative to the CU too, but resolving those gives a
+staged header two different parent directories and stops the fold merging them, splitting `image.h`
+into `devHost/util/image/image.h` and `result/include/xvimage/image.h`.
+
+Two things the tree exposed that had been invisible: `safeName` kept `.`, so a `../`-relative path
+became a *dotfile* (`.._.._.._interface_host_bits_bits64.h`) that `ls` and `tools/check-grammar.sh`
+both skipped — the script globbed `$dir/*` and was silently scoring 9 of appquery's 66 files after
+the move. It walks the tree now.
+
+A header renders where the binary's CUs happen to name it: appquery has no full spelling of
+`filesystemimage.h` at all (19 bare `N_SOL`s, no `-I` path), so it stays at the top level there while
+unpackfile files it under `result/include/imageutil/`.
+
+---
+
 ## 38. gcc drops the file of every deferred file-scope static — partly done
 
 `main.cpp` renders **1456 rows for a file whose code ends at L166**. The other 1290 are twenty

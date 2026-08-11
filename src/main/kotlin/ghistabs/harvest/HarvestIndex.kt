@@ -164,6 +164,14 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
     private fun LineEntry.folded() = copy(source = foldSource(source))
     private fun Symbol.folded() = copy(sourceFile = sourceFile?.let(::foldSource))
 
+    // Blocks carry a source too, and it was the one field left raw — so `inlineParams`, which asks
+    // whether a block belongs to the file being rendered, compared a raw N_SOL spelling against a
+    // folded one. It matched only while the fold happened to pick the bare spelling N_SOL usually
+    // uses; folding onto the full path exposed it, and every pseudo-call in xvimage.cpp lost its
+    // parameter names to the dataflow fallback.
+    private fun BlockScope.folded(): BlockScope =
+        copy(source = foldSource(source), locals = locals.map { it.folded() }, children = children.map { it.folded() })
+
     // name → its defining source. Prefer concrete Struct/Enum over forward-decl XRef stubs: gcc emits
     // those for classes merely mentioned by pointer in unrelated headers (e.g. reachable via <iostream>),
     // and picking one would route the class's methods to that header instead of its real home.
@@ -354,6 +362,7 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
                 lineEntries = f.lineEntries.map { it.folded() }.toMutableList(),
                 params = f.params.map { it.folded() }.toMutableList(),
                 locals = f.locals.map { it.folded() }.toMutableList(),
+                blocks = f.blocks.map { it.folded() },
             )
         }
     }
