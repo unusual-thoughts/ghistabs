@@ -1700,6 +1700,23 @@ offset can be resolved to the method it calls rather than printed as arithmetic.
 
 ---
 
+## 40. The render is not reproducible under load — open
+
+`Renderer.decompile` gives Ghidra 30 seconds per function
+(`decompileFunction(ghFunc, 30, …)`). `xmltest.cpp`'s `main` — hundreds of locals — sits on that
+boundary: it decompiled in three runs this session and timed out in three others, on the same commit,
+differing only in what else the machine was doing. When it times out the body claim never exists, so
+the file silently falls back to the skeleton's `int main(…) {  /* L 303 — opens main */` and every
+row of that function's code is absent.
+
+It cost an hour of bisecting an attribution change that turned out to be innocent (§38's marker
+widening), and it means **any** two render outputs can differ for reasons unrelated to the change
+under test. Options: raise the limit, make the timeout a rendered fact (`/* decompilation timed out
+*/`) rather than a silent skeleton fallback, or both. The second matters more than the first — a
+reader cannot currently tell an empty function from one Ghidra gave up on.
+
+---
+
 ## 39. The render is a source tree — DONE
 
 Output files were named by replacing every non-identifier character of the source path with `_`, so a

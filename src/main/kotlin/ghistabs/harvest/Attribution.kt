@@ -11,13 +11,17 @@ import ghistabs.parse.TypeDecl
  * Stdlib path marker. Requires `/usr|lib|include/` (plus one optional segment) before a stdlib
  * directory — guards against false positives like `/proj/src/c++_helpers/`.
  *
- * Narrower than "found on a system search path" ([TOOLCHAIN_ROOTS]): it matches none of mingw's
- * plain-C headers, whose paths run `mingw/include/string.h` rather than `include/mingw/…`. Whether
- * that under-matching is right for *attribution* is a separate question — `c:/mingw/include/string.h`
- * is as much "not the home of a user type" as `<vector>` is — but widening it moves types between
- * DTM categories, so it wants measuring rather than assuming.
+ * Two shapes, because toolchains nest the two the other way round: a stdlib directory *below* an
+ * include root (`/usr/include/c++/3.4.4/bits/`), and an include root below a *toolchain* root
+ * (`c:/mingw/include/`, `c:/mingw/lib/gcc-lib/mingw32/3.2.3/include/`). Only the first was matched,
+ * so mingw's eighteen plain-C headers — `string.h`, `stdio.h`, `errno.h`, `sys/types.h`, gcc's own
+ * `stddef.h` — were treated as possible homes for a user type and got an attribution vote. `lib`
+ * stays out of the second shape's roots: a project's own `lib/include/` is far too ordinary.
  */
-private val STD_MARKERS = Regex("""/(usr|lib|include)(/[^/]+)?/(mingw|cygwin|c\+\+|bits)/""")
+private val STD_MARKERS = Regex(
+    """/(usr|lib|include)(/[^/]+)?/(mingw|cygwin|c\+\+|bits)/""" +
+        """|/(mingw|cygwin|usr|gcc-lib)(/[^/]+)*?/include/""",
+)
 
 /** Strip a Windows drive-letter prefix (`c:`, `E:`, …) from a stabs path. */
 private fun stripDriveLetter(path: String): String =
@@ -35,20 +39,6 @@ private fun isExplicitlyRelative(path: String) = path.startsWith("./") ||
     path.startsWith(""".\""") ||
     path.startsWith("""..\""")
 
-/**
- * Directories a toolchain keeps its headers under; an `include` below one of these is a system
- * include root, so what sits under it was reached with `<…>`.
- *
- * Not [STD_MARKERS], which asks the neighbouring question — "is this the standard library, so a user
- * type must not be attributed here" — and requires a `mingw|cygwin|c++|bits` directory *after* the
- * include root to stay narrow, since a false positive there misroutes a real type. On mingw the
- * segments run `mingw/include/string.h`, the other way round, so that pattern matches none of the 18
- * plain-C system headers in the corpus (`string.h`, `stdio.h`, `errno.h`, `sys/types.h`, gcc's own
- * `stddef.h`…) and reusing it here would spell every one of them `"string.h"`. Two questions, two
- * costs: a wrong answer there misfiles a type, a wrong answer here prints the wrong bracket.
- */
-private val TOOLCHAIN_ROOTS = setOf("mingw", "cygwin", "usr", "lib", "gcc-lib", "local")
-
 /** libstdc++'s own subdirectories, which are part of the spelling (`<bits/stl_alloc.h>`) rather than
  *  search roots like the version and target-config directories around them. */
 private val STD_SUBDIRS = setOf("bits", "ext", "tr1", "tr2", "debug", "profile", "parallel", "backward")
@@ -63,20 +53,19 @@ private val STD_SUBDIRS = setOf("bits", "ext", "tr1", "tr2", "debug", "profile",
  *
  * A full path was found through some search directory, and the stabs do not say whether it was a
  * `-I` or a system one — gcc tracks that per directory (`cpp_dir.sysp`) and never writes it out. So
- * the rest is layout: an `include` directory under a toolchain root is a system root, and what sits
- * below it is spelled `<…>` relative to it, with the version and target-config directories dropped
- * (`c++/3.2.3/mingw32/bits/atomicity.h` is included as `<bits/atomicity.h>`). Anything else stays
- * quoted, keeping whatever directory it sits in below `include` — a project header reached by `-I`
- * really is written `"imageutil/appimage.h"`.
+ * the rest is layout, and it is the same layout question [STD_MARKERS] already answers: what sits
+ * under a system include root is spelled `<…>` relative to it, with the version and target-config
+ * directories dropped (`c++/3.2.3/mingw32/bits/atomicity.h` is included as `<bits/atomicity.h>`).
+ * Anything else stays quoted, keeping whatever directory it sits in below `include` — a project
+ * header reached by `-I` really is written `"imageutil/appimage.h"`.
  */
 fun includeSpelling(path: String): String {
     val segments = pathSegments(path)
-    if (segments.size == 1 || isExplicitlyRelative(path)) return "\"${segments.last()}\""
+    fun quoted(spelling: String) = "\"" + spelling + "\""
+    if (segments.size == 1 || isExplicitlyRelative(path)) return quoted(segments.last())
     val includeAt = segments.lastIndexOf("include")
     val below = if (includeAt >= 0) segments.drop(includeAt + 1) else listOf(segments.last())
-    if (includeAt <= 0 || segments.take(includeAt).none { it in TOOLCHAIN_ROOTS }) {
-        return "\"${below.joinToString("/")}\""
-    }
+    if (!path.isStdMarkerPath()) return quoted(below.joinToString("/"))
     val underCxxRoot = below.firstOrNull() == "c++" || below.firstOrNull() == "g++"
     val versionless = below.dropWhile { it == "c++" || it == "g++" || it.all { c -> c.isDigit() || c == '.' } }
     val spelled = when {
@@ -318,7 +307,10 @@ private fun stdRelativePath(path: String): String? {
     val startIdx = match.range.last + 1
     if (startIdx >= path.length) return null
     var current = path.substring(startIdx)
-    val skipNames = setOf("bits", "ext", "tr1", "tr2", "debug", "profile", "parallel")
+    // `c++`/`g++` join the intermediates now that the marker can match at the toolchain root: for
+    // `c:/mingw/include/c++/3.2.3/bits/stl_tree.h` the match ends after `/include/`, so the remainder
+    // starts at `c++` and stopping there routed every libstdc++ type to one `/std/c++` bucket.
+    val skipNames = setOf("bits", "ext", "tr1", "tr2", "debug", "profile", "parallel", "c++", "g++")
     while (current.isNotEmpty()) {
         val slash = current.indexOf('/')
         if (slash == -1) break
