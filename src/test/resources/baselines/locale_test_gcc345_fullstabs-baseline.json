@@ -137,12 +137,12 @@
             "max": 2
         },
         "harvest-collisions-raw": {
-            "min": 46,
-            "max": 46
+            "min": 50,
+            "max": 50
         },
         "harvest-collisions-raw-total": {
-            "min": 139,
-            "max": 139
+            "min": 147,
+            "max": 147
         },
         "harvest-constants": {
             "min": 0,
@@ -177,8 +177,8 @@
             "max": 471
         },
         "harvest-typeAsts": {
-            "min": 32349,
-            "max": 32349
+            "min": 32340,
+            "max": 32340
         },
         "harvest-typeAsts-Array": {
             "min": 616,
@@ -189,8 +189,8 @@
             "max": 162
         },
         "harvest-typeAsts-Const": {
-            "min": 1021,
-            "max": 1021
+            "min": 1020,
+            "max": 1020
         },
         "harvest-typeAsts-Enum": {
             "min": 302,
@@ -209,28 +209,28 @@
             "max": 4211
         },
         "harvest-typeAsts-Method": {
-            "min": 2739,
-            "max": 2739
+            "min": 2736,
+            "max": 2736
         },
         "harvest-typeAsts-Pointer": {
-            "min": 7234,
-            "max": 7234
+            "min": 7233,
+            "max": 7233
         },
         "harvest-typeAsts-Range": {
             "min": 270,
             "max": 270
         },
         "harvest-typeAsts-Ref": {
-            "min": 6731,
-            "max": 6731
+            "min": 6730,
+            "max": 6730
         },
         "harvest-typeAsts-Reference": {
-            "min": 1085,
-            "max": 1085
+            "min": 1083,
+            "max": 1083
         },
         "harvest-typeAsts-Struct": {
-            "min": 4322,
-            "max": 4322
+            "min": 4321,
+            "max": 4321
         },
         "harvest-typeAsts-Void": {
             "min": 59,
@@ -253,8 +253,8 @@
             "max": 0
         },
         "harvest-typeAsts-unique-by-id": {
-            "min": 32349,
-            "max": 32349
+            "min": 32340,
+            "max": 32340
         },
         "inheritance-applied": {
             "min": 93,
@@ -285,8 +285,8 @@
             "max": 67
         },
         "placeholder-created": {
-            "min": 17808,
-            "max": 17808
+            "min": 17801,
+            "max": 17801
         },
         "pointee-typed": {
             "min": 16,
