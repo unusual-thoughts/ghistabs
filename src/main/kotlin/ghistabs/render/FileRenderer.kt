@@ -571,6 +571,12 @@ class FileRenderer(val renderer: Renderer, override val source: String) : Render
             // `size` and `bytesize` nested inside it. Fold those onto the last row that does have a
             // place: the last anchored region, or the head.
             val (anchored, floating) = r.func.ownRegions().partition { it.anchor != null }
+            // Inside the member it belongs to, a call writes `find_slt(a)`, not `find_slt(this,a)` —
+            // the definition it calls has had the parameter cut, so the two halves must agree. Only
+            // here: an inlined stretch is wrapped as a free function and keeps `this` as an argument.
+            if (program.functionManager.getFunctionAt(r.func.addr)?.parentNamespace?.isGlobal == false) {
+                anchored.forEach { region -> region.lines.replaceAll { it.withoutThisArguments() } }
+            }
             val tail = floating.flatMap { r -> r.lines }.filter { it.text.isNotBlank() }
             if (anchored.isNotEmpty()) anchored.last().lines.addAll(tail.map { it.copy(address = null, depth = 0) })
 

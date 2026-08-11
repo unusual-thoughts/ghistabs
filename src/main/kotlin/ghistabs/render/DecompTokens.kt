@@ -72,7 +72,20 @@ data class DecompLine(
      * not, gcc's aliased copies being decompiled separately and so named per copy.
      */
     val prototype: String? = null,
+    /** Where a call passes Ghidra's explicit this-argument. See [thisArguments]. */
+    val thisArgs: List<IntRange> = emptyList(),
 ) {
+    /**
+     * This row with `f(this,x)` written `f(x)`, for a body rendering inside the member it belongs to.
+     *
+     * [memberCutsOf] already drops the explicit parameter from the *definition*, so leaving the call
+     * sites alone made the two halves of one render contradict each other — `find_slt(this,uVar1)`
+     * calling a `find_slt(which_slt)` — and neither compiles. Not applied to an inlined stretch: that
+     * is wrapped as a *free* function where `this` is a real parameter (renamed by [renameThis]), and
+     * dropping the argument there would call a member function with nothing to call it on.
+     */
+    fun withoutThisArguments() = thisArgs.sortedByDescending { it.first }.fold(this) { row, cut -> row.without(cut) }
+
     /** This row as a member definition: [memberCuts] taken out, every offset moved with them. */
     fun asMemberDefinition() = memberCuts.sortedByDescending { it.first }.fold(this) { row, cut -> row.without(cut) }
 
@@ -86,6 +99,7 @@ data class DecompLine(
             thisAt = thisAt.filterNot { it.first in cut }.map { shift(it.first)..<shift(it.last + 1) },
             booleanCuts = booleanCuts.filterNot { it.at in cut }.map { it.copy(at = shift(it.at)) },
             memberCuts = emptyList(),
+            thisArgs = thisArgs.filterNot { it.first in cut }.map { shift(it.first)..<shift(it.last + 1) },
         )
     }
 
@@ -440,6 +454,7 @@ fun DecompileResults.compressedDecompLines(
             branches = branches,
             thisAt = placed.thisAt(),
             booleanCuts = cuts,
+            thisArgs = placed.thisArguments(),
         )
     }
 
@@ -498,6 +513,34 @@ fun DecompileResults.compressedDecompLines(
 }
 
 private fun List<Placed>.thisAt() = filter { it.token.isThis() }.map { it.at..<it.at + it.token.text.length }
+
+/**
+ * The extent of a `this` passed as a call's first argument, comma and all — the offsets that turn
+ * `find_slt(this,uVar1)` into `find_slt(uVar1)`.
+ *
+ * Read off the token stream rather than the characters: a `(this,` can only be found reliably where
+ * the `(` is known to open a call's argument list and the `this` is known to be the variable token
+ * Ghidra prints for the implicit object parameter, not part of a longer expression like
+ * `(this->next)`. A lone `f(this)` loses just the argument.
+ */
+private fun List<Placed>.thisArguments(): List<IntRange> {
+    val significant = significant()
+    return significant.indices.mapNotNull { i ->
+        val open =
+            significant[i].takeIf { it.token.text == "(" && it.token is ClangSyntaxToken } ?: return@mapNotNull null
+        if (significant.getOrNull(i - 1)?.token !is ClangFuncNameToken) return@mapNotNull null
+        val arg = significant.getOrNull(i + 1)?.takeIf { it.token.isThis() } ?: return@mapNotNull null
+        val after = significant.getOrNull(i + 2)?.token?.text
+        val end = when (after) {
+            "," -> significant[i + 2].at + 1
+            ")" -> arg.at + arg.token.text.length
+            else -> return@mapNotNull null
+        }
+        // Take the blank after the comma with it, so the argument list does not render `f( x)`.
+        val padded = if (after == "," && significant.getOrNull(i + 3)?.at == end + 1) end + 1 else end
+        arg.at..<padded.coerceAtLeast(open.at + 1)
+    }
+}
 
 /**
  * What a legal C++ member definition of this head must leave out, empty where the function is not a
