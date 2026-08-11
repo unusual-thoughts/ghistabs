@@ -238,8 +238,17 @@ class AttributionTest {
 
     @Test
     fun windowsDriveLetterStrippedFromHeaderPath() {
+        val cat = attr.keyFor("Foo", srcs("c:/proj/lib/inc/widget.h"))
+        assertEquals(CategoryPath("/proj/lib/inc/widget.h"), cat.category)
+    }
+
+    @Test
+    fun aToolchainCHeaderRoutesToStd() {
+        // `c:/mingw/include/stdint.h` nests the include root under the toolchain rather than the
+        // other way round (`/usr/include/c++/…`), and used to miss the marker entirely — so mingw's
+        // libc counted as a possible home for a user type. It is no more one than <vector> is.
         val cat = attr.keyFor("Foo", srcs("c:/mingw/include/stdint.h"))
-        assertEquals(CategoryPath("/mingw/include/stdint.h"), cat.category)
+        assertEquals(CategoryPath("/std/stdint"), cat.category)
     }
 
     @Test
