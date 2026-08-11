@@ -110,10 +110,26 @@ class Canvas(val maxLine: Int) {
     /**
      * Strict alignment: source line n → output line n. [trim] cuts trailing blank and
      * stale-only lines (decomp mode); skeleton mode keeps the full source-aligned height.
+     *
+     * [compact] gives up literal alignment instead, collapsing every run of blank rows to one. It is
+     * the default because alignment is mostly empty: 85% of the render is blank rows and
+     * `bits/istream.tcc` spends 1,187 of them to show four lines of content (§33). Every row keeps
+     * the `L n` its content was placed at, so the line a row came from survives the collapse even
+     * though its position no longer encodes it.
      */
-    fun render(trim: Boolean) = buildString {
+    fun render(trim: Boolean, compact: Boolean = false) = buildString {
         val last = if (trim) lastMeaningfulLine() else maxLine
-        for (line in 1..last) append(this@Canvas[line].render()).append('\n')
+        var blank = false
+        for (line in 1..last) {
+            val text = this@Canvas[line].render()
+            if (compact && text.isBlank()) {
+                if (!blank) append('\n')
+                blank = true
+            } else {
+                append(text).append('\n')
+                blank = text.isBlank()
+            }
+        }
     }
 
     override fun toString() = render(trim = false)
