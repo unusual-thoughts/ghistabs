@@ -18,20 +18,37 @@ class SourceFoldingTest {
         // One physical header (`bouniaf/image.h`) compiled in two build trees keeps its parent dir,
         // so every spelling folds onto one of them — the shallowest, being the least specific to a
         // single build root.
-        val inputs = listOf("image.h", "/jenkins/build/project/image.h", "/work/project/image.h")
+        val inputs = listOf(
+            "image.h",
+            "/jenkins/bluesuite/result/include/project/image.h",
+            "/work/devtools/result/include/project/image.h",
+        )
         val map = foldSourcePaths(inputs)
-        for (i in inputs) assertEquals("/work/project/image.h", map.getValue(i))
+        // Equal depth here, so the lexicographic tie-break decides.
+        for (i in inputs) assertEquals("/jenkins/bluesuite/result/include/project/image.h", map.getValue(i))
     }
 
     @Test
     fun equalDepthRootsPickTheSameOneEveryTime() {
         // Two roots at the same depth are equally true; the tie-break is lexicographic so the choice
         // cannot drift with the order the spellings were harvested in.
-        val inputs = listOf("/work/project/image.h", "/jenkins/project/image.h")
+        val inputs = listOf("/work/include/project/image.h", "/jenkins/include/project/image.h")
         val map = foldSourcePaths(inputs)
         val reversed = foldSourcePaths(inputs.reversed())
-        for (i in inputs) assertEquals("/jenkins/project/image.h", map.getValue(i))
+        for (i in inputs) assertEquals("/jenkins/include/project/image.h", map.getValue(i))
         assertEquals(map, reversed)
+    }
+
+    @Test
+    fun headersSharingOnlyACommonParentNameDoNotMerge() {
+        // mingw's `stdarg.h` and gcc's own both sit in an `include/`, which is why one directory of
+        // agreement is not enough to call two paths the same file.
+        val inputs = listOf(
+            "c:/mingw/include/stdarg.h",
+            "c:/mingw/lib/gcc-lib/mingw32/3.2.3/include/stdarg.h",
+        )
+        val map = foldSourcePaths(inputs)
+        for (i in inputs) assertEquals(i, map.getValue(i))
     }
 
     @Test
