@@ -2011,8 +2011,28 @@ blank space removed here was never between content, it was the run below the las
 ---
 ## 33. Blank space dominates the render — 87% of rows, and it is concentrated
 
-Measured on `unpackfile.exe` decomp output: **16,659 of 19,184 rows are blank (87%)**, and
-**92% of that is in 156 contiguous runs of 20 rows or more** (15,327 rows). Split by where it sits:
+**Re-measured 2026-08-11**, after the attribution work collapsed image.h from 903 lines to 59 and its
+siblings with it: unpackfile **15,614 of 18,194 rows blank (85%)**, 13,900 of that in 170 runs of 20+,
+longest run still 973. appquery 19,470 of 22,581 (86%). So the project-header fix was worth ~1,000
+rows and *the ratio did not move* — the expectation that misattribution was propping this number up
+was wrong.
+
+What it is instead is a handful of **stdlib headers we know almost nothing about**:
+
+| file                | rows  | blank | content |
+| ------------------- | ----- | ----- | ------- |
+| `bits/locale_facets.h` | 1,601 | 1,581 | 20      |
+| `limits`               | 1,846 | 1,424 | 422     |
+| `bits/istream.tcc`     | 1,187 | 1,183 | **4**   |
+| `bits/stl_vector.h`    | 1,091 |   929 | 162     |
+
+Four files are a third of all the blank space. `istream.tcc` renders 1,187 rows to show four, because
+something is declared near line 1,187 and the canvas is line-aligned. That is the decision this
+section is about, and it is not a misattribution bug: libstdc++'s locale_facets.h really is 1,600
+lines and we really do know one thing near the end of it.
+
+The original measurement, for comparison: 16,659 of 19,184 rows (87%), 15,327 in 156 runs of 20+.
+Split by where it sits:
 
 | where                                | rows  |
 | ------------------------------------ | ----- |
