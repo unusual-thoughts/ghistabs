@@ -5,6 +5,8 @@ import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
 import ghistabs.StabsOptions.Companion.stabsTypedefsShortened
+import ghistabs.baseStackParamOffset
+import ghistabs.baseStackParamOffset
 import ghistabs.harvest.*
 import ghistabs.importer.AddressResolver
 import ghistabs.materialize.TemplateNameShortener
@@ -57,24 +59,28 @@ class Renderer(
     // A function is decompiled once for the whole run, not once per file that renders part of it: with
     // inlined code now placed in the header it came from, one std::string method is wanted by every
     // file that inlines it, and decompilation is ~all of the runtime.
-    private val decompiled = mutableMapOf<Address, List<DecompLine>>()
+    private val decompiled = mutableMapOf<Address, Decompiled>()
+
+    /** One function's decompilation: the rows the render places, and the dataflow behind them. */
+    class Decompiled(val lines: List<DecompLine>, val flow: VarFlow)
 
     fun decompile(func: Func) = decompiled.getOrPut(func.addr) {
-        program.functionManager.getFunctionAt(func.addr)?.let { ghFunc ->
-            // Folded onto the function's *own* source, not the file asking: that only governs which locals
-            // drop out of the head fold, and the head is used only where the function is defined.
-            with(index) { func.source() }?.let { own ->
-                // Same address→line lookup [Region] membership uses, narrowed to the function's own
-                // source: two branches are only in source order against one file's line numbering.
-                val slines = func.lineEntries.filter { it.source == own }.sortedBy { it.addr }
-                runCatching { decomp?.decompileFunction(ghFunc, 30, TaskMonitor.DUMMY) }.getOrNull()
-                    ?.compressedDecompLines(own, func, mode == Mode.ELIDE_SJLJ)
-                    // Before the render splits it into regions: swapping branches moves their anchors,
-                    // and the anchors are what every later pass places by.
-                    ?.uninvertConditions { line -> line.address?.let { a -> slines.lastOrNull { it.addr <= a }?.line } }
-                    ?.map { it.copy(text = shortener.substitute(it.text).spellDestructorLabels()) }
-            }
-        }.orEmpty()
+        val results = program.functionManager.getFunctionAt(func.addr)?.let { ghFunc ->
+            runCatching { decomp?.decompileFunction(ghFunc, 30, TaskMonitor.DUMMY) }.getOrNull()
+        }
+        // Folded onto the function's *own* source, not the file asking: that only governs which locals
+        // drop out of the head fold, and the head is used only where the function is defined.
+        val lines = with(index) { func.source() }?.let { own ->
+            // Same address→line lookup [Region] membership uses, narrowed to the function's own
+            // source: two branches are only in source order against one file's line numbering.
+            val slines = func.lineEntries.filter { it.source == own }.sortedBy { it.addr }
+            results?.compressedDecompLines(own, func, mode == Mode.ELIDE_SJLJ)
+                // Before the render splits it into regions: swapping branches moves their anchors,
+                // and the anchors are what every later pass places by.
+                ?.uninvertConditions { line -> line.address?.let { a -> slines.lastOrNull { it.addr <= a }?.line } }
+                ?.map { it.copy(text = shortener.substitute(it.text).spellDestructorLabels()) }
+        }
+        Decompiled(lines.orEmpty(), results?.varFlow() ?: VarFlow(emptyMap(), emptyMap()))
     }
 
     fun renderSkeleton(source: String) = RenderContext(this, source).render()
@@ -111,6 +117,31 @@ class Renderer(
 private fun String.spellDestructorLabels() = TILDE_IN_IDENTIFIER.replace(this) { "${it.groupValues[1]}dtor_" }
 
 private val TILDE_IN_IDENTIFIER = Regex("""([A-Za-z0-9_])~(?=[A-Za-z_])""")
+
+private val NON_IDENTIFIER = Regex("[^A-Za-z0-9]+")
+
+/** Consecutive runs sharing a [key] — `groupBy` would merge runs that aren't adjacent. */
+private fun <T, K> List<T>.chunkedBy(key: (T) -> K): List<List<T>> =
+    fold(mutableListOf<MutableList<T>>()) { acc, item ->
+        acc.lastOrNull()?.takeIf { key(it.first()) == key(item) }?.add(item) ?: acc.add(mutableListOf(item))
+        acc
+    }
+
+/**
+ * Where gcc put this local, as an address the decompiler indexes storage by: the register itself, or
+ * the frame slot at Ghidra's origin rather than gcc's frame-pointer-relative one. Null for anything
+ * that is neither — and for the dbx register numbers [dbxRegisterName] declines to map (the x87
+ * stack), which is the same set the importer skips.
+ */
+private fun Symbol.storageAddress(program: Program): Address? = when ((body as? SymbolDecl.Local)?.location) {
+    VariableLocation.REGISTER ->
+        dbxRegisterName(program.defaultPointerSize, rawValue.toInt())?.let { program.getRegister(it)?.address }
+
+    VariableLocation.STACK ->
+        program.addressFactory.stackSpace.getAddress(rawValue - program.baseStackParamOffset)
+
+    else -> null
+}
 
 /**
  * Ghidra prints a member function the way its own model stores one: with a return type on every
@@ -731,7 +762,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
         val seenHeads = mutableSetOf<Pair<Int, String>>()
         for (r in spans.ranges) {
             val closeLine = with(spans) { r.span.last }
-            val cLines = renderer.decompile(r.func)
+            val cLines = renderer.decompile(r.func).lines
             val head = cLines.firstOrNull() ?: continue
             // Bodied before the duplicate check, not after: [bodied] is what tells the brace pass
             // whose delimiters a body already carries, and a copy dropped as a duplicate is covered
@@ -771,7 +802,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
             // `{` swallowed every function below, so `operator[]` ran from L41 to L128 with `set`,
             // `size` and `bytesize` nested inside it. Fold those onto the last row that does have a
             // place: the last anchored region, or the head.
-            val (anchored, floating) = r.func.regionsOf(cLines).dropInlined().partition { it.anchor != null }
+            val (anchored, floating) = r.func.regionsOf(cLines).dropInlined(r.func).partition { it.anchor != null }
             val tail = floating.flatMap { r -> r.lines.map { it.text } }.filter { it.isNotBlank() }
             if (anchored.isNotEmpty()) anchored.last().lines.addAll(tail.map { DecompLine(it, null, 0) })
 
@@ -821,7 +852,7 @@ private class RenderContext(val renderer: Renderer, val source: String) {
         val inlined = index.functions
             .asSequence()
             .filter { f -> f !in rawFuncs && f.lineEntries.any { it.source == source } }
-            .flatMap { f -> f.regionsOf(renderer.decompile(f)).dropInlined().map { f to it } }
+            .flatMap { f -> f.regionsOf(renderer.decompile(f).lines).dropInlined(f).map { f to it } }
             .filter { (_, r) -> r.anchor != null }
             .groupBy { (f, r) -> Triple(f, r.anchor, r.lines.map { it.text }) }
             .map { (_, copies) -> copies.first().also { (_, r) -> r.copies = copies.size } }
@@ -852,16 +883,24 @@ private class RenderContext(val renderer: Renderer, val source: String) {
      * The wrapper is a *free* function, deliberately. The class is usually not declared in this view,
      * so `Class::method` would not resolve and an implicit `this` would have nothing to bind to; the
      * explicit parameter stays, renamed along with its uses in the body because `this` is a keyword.
+     *
+     * It is named for the *inlined* stretch rather than for [func], so it is the definition of the
+     * `__inline_…` the .cpp calls; which function did the inlining rides along as a comment, that
+     * being a fact about the call site rather than about this body.
      */
-    private fun wrapAsDefinition(func: Func, group: List<Region>): List<Region> {
-        val first = group.first()
-        for (r in group) r.lines.replaceAll { it.copy(text = it.text.renameThis()) }
-        first.lines.add(0, DecompLine((func.signature(program) + " {").renameThis().spellDestructorName(), null, 0))
-        val (openers, closers) = braceFix(group.asSequence().flatMap { r -> r.lines.map { it.text } })
-        if (openers > 0) first.lines.add(1, DecompLine("{".repeat(openers), null, 0))
-        if (closers > 0) group.last().lines += DecompLine("}".repeat(closers), null, 0)
-        return group
-    }
+    private fun wrapAsDefinition(func: Func, group: List<Region>): List<Region> =
+        // One wrapper per pseudo-function, not per run: the stretches gcc bracketed together are the
+        // body of one inline function, and the call site in the .cpp names it. Consecutive stretches
+        // of the *same* one still share a wrapper, which is what the run-grouping was for.
+        group.chunkedBy { it.pseudoName() }.flatMap { run ->
+            val first = run.first()
+            for (r in run) r.lines.replaceAll { it.copy(text = it.text.renameThis()) }
+            first.lines.add(0, DecompLine(first.definitionHead(func).renameThis().spellDestructorName(), null, 0))
+            val (openers, closers) = braceFix(run.asSequence().flatMap { r -> r.lines.map { it.text } })
+            if (openers > 0) first.lines.add(1, DecompLine("{".repeat(openers), null, 0))
+            if (closers > 0) run.last().lines += DecompLine("}".repeat(closers), null, 0)
+            run
+        }
 
     /**
      * [regions] as claims: none allowed to slide past [limit], none to rise above [floor] — the row
@@ -893,6 +932,31 @@ private class RenderContext(val renderer: Renderer, val source: String) {
         val lines = mutableListOf<DecompLine>()
         val entries = mutableListOf<LineEntry>()
 
+        /**
+         * The inlined function's own parameters, in the order gcc declared them.
+         *
+         * gcc keeps no trace of the call it inlined away *except* this: the stretch's lexical block
+         * owns the callee's variables, under the callee's names, with the storage they were given in
+         * the caller's frame — `stl_construct.h` comes out `__first` in dbx register 0 and `__last`
+         * in 2, which is `_Construct(__first, __last)`. Every foreign block in the corpus owns
+         * between one and four, so the leading ones are the parameters and any tail is the callee's
+         * own locals; we cannot tell which is which, and printing all of them is the honest reading.
+         *
+         * Record order is declaration order — the stream position gcc emitted them at.
+         *
+         * Found by address, not by the block [DecompLine] carries: that one is the block covering
+         * *every* address its line touches and is null wherever they disagree, which §28 measured at
+         * 70% of inlined lines — the parameter lists came out empty. The stretch's first N_SLINE
+         * address has exactly one innermost block, and it is the one gcc bracketed for the inlined
+         * body, so its source is the file the stretch came from; anything else is the caller's own
+         * block and owns the caller's own locals.
+         */
+        fun inlineParams(inliner: Func) = entries.minOfOrNull { it.addr }
+            ?.let { inliner.blockAt(it) }
+            ?.takeIf { it.source == (file ?: source) }
+            ?.locals.orEmpty()
+            .sortedBy { it.recordIndex }
+
         /** How many identical copies of this region the binary holds — one per site it was inlined at. */
         var copies = 1
         val foreign get() = file != null
@@ -912,6 +976,79 @@ private class RenderContext(val renderer: Renderer, val source: String) {
         }
 
         fun label(fallback: Int) = (labelOrNull() ?: "L $fallback") + if (copies > 1) " ×$copies" else ""
+    }
+
+        /**
+         * `__inline_stl_iterator_h_633` — the header line this stretch was compiled from, as an
+         * identifier.
+         *
+         * The same string from either side, which is what lets the call in the .cpp and the
+         * definition in the header name each other: [file] identifies the stretch when we are the
+         * caller and [source] when we are the header it was written in, and both label the same
+         * entries, so both read the same lines off them.
+         */
+        fun pseudoName(): String? {
+            val own = entries.filter { it.source == (file ?: source) }.ifEmpty { return null }
+            val lo = own.minOf { it.line }
+            val hi = own.maxOf { it.line }
+            val stem = (file ?: source).substringAfterLast('/') + "_$lo" + if (hi > lo) "_$hi" else ""
+            return "__inline_" + stem.replace(NON_IDENTIFIER, "_")
+        }
+
+        /**
+         * The head of this stretch's definition, as the file it was written in should show it —
+         * `void __inline_stl_construct_h_101(Exclusion * __first, Exclusion * __last)` — matching the
+         * call the inlining .cpp renders, with which function did the inlining noted alongside.
+         *
+         * Falls back to [inliner]'s own signature where the stretch has no name, gcc having given its
+         * addresses no N_SLINE here so there is no line to call it after. That is what every wrapper
+         * used to be.
+         */
+        fun definitionHead(inliner: Func): String {
+            val id = pseudoName()
+                ?: return (
+                    program.functionManager.getFunctionAt(inliner.addr)?.prototype(rename = ::asFree)
+                        ?: inliner.name
+                    ) +
+                    " {"
+            val params = inlineParams(inliner).mapNotNull { p ->
+                (p.body as? SymbolDecl.Local)?.let { it.type.renderDecl(asFree(it.name), index, renderer.shortener) }
+            }
+            return "void $id(${params.joinToString()}) { " + "/* inlined into ${inliner.name} */"
+        }
+
+        /**
+         * The inlined stretch written as the call gcc turned into it —
+         * `uVar1 = __inline_stl_iterator_h_633(__first, this);` — a statement rather than the
+         * `⇐ inlines …` note it replaces, because a note is not something the reader can follow. The
+         * name says which header line the code came from just as the note did, and the parentheses
+         * say which of the values in scope went into it.
+         *
+         * Arguments come from [inlineParams] where gcc bracketed the stretch: each is a register or
+         * frame slot, so what the caller passed is whatever the decompiler calls that storage here
+         * ([VarFlow.nameAt]). Where it calls it nothing — the local we handed Ghidra did not stick —
+         * the callee's own name for it stands in, which is at least what gcc put there. Unbracketed
+         * stretches have no parameter list to go on and fall back to dataflow ([VarFlow.crossing]).
+         *
+         * The extent is the set of N_SLINE addresses the stretch's statements were attributed to —
+         * the same per-address answer that put those statements in this region, applied to p-code
+         * instead of lines, so the two agree by construction.
+         */
+        fun pseudoCall(inliner: Func, flow: VarFlow, entryAddrOf: (Address) -> Address?): String? {
+            val id = pseudoName() ?: return null
+            val extent = entries.mapTo(mutableSetOf()) { it.addr }
+            val (crossingIn, crossingOut) = flow.crossing { entryAddrOf(it) in extent }
+            val assign = crossingOut.firstOrNull()?.let { "$it = " }.orEmpty()
+            val start = entries.minOfOrNull { it.addr }
+                ?: return "$assign$id(${crossingIn.joinToString()});"
+            val args = inlineParams(inliner)
+                .ifEmpty { return "$assign$id(${crossingIn.joinToString()});" }
+                .map { p ->
+                    p.storageAddress(program)?.let { flow.nameAt(it, start) }
+                        ?: (p.body as? SymbolDecl.Local)?.name.orEmpty()
+                }
+            return "$assign$id(${args.joinToString()});"
+        }
     }
 
     /**
@@ -964,10 +1101,18 @@ private class RenderContext(val renderer: Renderer, val source: String) {
      * been opened by code from any file the function inlined — so every view can carry it, and every
      * view balances, because the body they were split out of did.
      */
-    private fun List<Region>.dropInlined(): List<Region> {
+    private fun List<Region>.dropInlined(func: Func): List<Region> {
         val kept = mutableListOf<Region>()
         var marks = ""
         var depth = 0
+
+        // A pseudo-call only reads as one from the calling side. In the header's own view the dropped
+        // regions are the *caller's* code around the stretch this file contributed — not something
+        // this file inlined — so there it stays a note.
+        val calls = with(index) { func.source() } == source
+        val slines = func.lineEntries.sortedBy { it.addr }
+        val owner = mutableMapOf<Address, Address?>()
+        fun entryAddrOf(a: Address) = owner.getOrPut(a) { slines.lastOrNull { it.addr <= a }?.addr }
 
         /**
          * Fold what an inlined stretch left behind onto the last row of the statement it *followed* —
@@ -1016,7 +1161,8 @@ private class RenderContext(val renderer: Renderer, val source: String) {
                 // `class iterator_traits<…>` lost its line to an `inlines atomicity.h L 51`. Left
                 // anchorless instead it sorted to the end of the file, 200 rows of bare markers.
                 depth += r.lines.sumOf { l -> l.text.count { it == '{' } - l.text.count { it == '}' } }
-                r.labelOrNull()?.let { marks += " /* ⇐ inlines $it */" }
+                val call = if (calls) r.pseudoCall(func, renderer.decompile(func).flow, ::entryAddrOf) else null
+                (call ?: r.labelOrNull()?.let { "/* ⇐ inlines $it */" })?.let { marks += " $it" }
                 continue
             }
             flush()
