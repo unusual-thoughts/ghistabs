@@ -116,7 +116,9 @@ class Renderer(
         dir.mkdirs()
         return program.runTransaction("stabs-render-all") {
             sources.asSequence().map { source ->
-                renderSkeleton(source).apply { if (isNotBlank()) File(dir, safeName(source)).writeText(this) }
+                renderSkeleton(source).apply {
+                    if (isNotBlank()) File(dir, outputPath(source)).apply { parentFile?.mkdirs() }.writeText(this)
+                }
             }.takeWhile { runCatching { monitor.incrementProgress() }.isSuccess }.count()
         }
     }
