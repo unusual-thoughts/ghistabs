@@ -1757,11 +1757,29 @@ blank space removed here was never between content, it was the run below the las
 
 **What is recoverable, in three grades.**
 
-- **Exactly: the RTTI family.** `_ZTI5Image` desc 29, and `class Image` is at image.h **L29**;
-  `_ZTI7XVImage` 36 = xvimage.h L36; `_ZTI8AppImage` 19 = appimage.h L19. The line is the *class's*
-  declaration line, so demangling `_ZTI…`/`_ZTS…`/`_ZTV…` to its class and taking that type's own
-  declaring file — which the harvest already knows — fixes the whole family with no guessing. Cheap,
-  and it is most of the 34 entries §37(c) displaced.
+- **Exactly: the typeinfo objects — DONE.** `_ZTI5Image` desc 29, and `class Image` is at image.h
+  **L29**; `_ZTI7XVImage` 36 = xvimage.h L36; `_ZTI8AppImage` 19 = appimage.h L19; `_ZTI8XDVImage` 18;
+  `_ZTI15FileSystemImage` 28. The line is the *class's* declaration line, and the proof is that it is
+  the same in every CU that emits the symbol — where the sibling `_ZTS` string gives one class five
+  different lines across five CUs, so only `_ZTI` is re-filed. `symbolsBySource` now demangles it back
+  to its class (`Itanium.typeinfoClassOf`, the `AddressTableHandler` path the vtable lookup already
+  used) and files it where that class *renders*. Five of appquery's seven land in the header that
+  declares the class; the two `std::` ones fall back to the CU because their class is itself misfiled
+  there, so they were already where the lookup would have sent them.
+
+  Two things this needed that were not obvious. **`classSourceByName` is the wrong map** — it answers
+  "which file does the type id belong to" and says main.cpp for `Image`, the first CU that defined it,
+  while the render draws `class Image` in image.h; `effectiveSourceFor` is the render's own
+  attribution and is what a symbol has to agree with. **And a typeinfo must not outrank its class**:
+  filed at L29 it is a peer of the class body claiming the same row, and it crushed `class Image`'s
+  twenty members onto one line. Hence `Owner.GENERATED`, ranked under every real declaration and in a
+  group of its own so it cannot share either — compiler-generated data has no source line of its own,
+  and the whole `_ZTI`/`_ZTS`/`_ZTV` family is now ranked that way. The typeinfo lands in its class's
+  file, in the appendix, reading `L 29 (line already taken)` — right file, right line, and not on top
+  of the declaration it was generated from.
+
+  Net: `_ZTI5Image` went from five copies in five CUs to one, appendix totals 200 → 198 (appquery) and
+  162 → 158 (unpackfile), no identifier lost from either render, clang totals unchanged.
 - **Narrowed, soundly: data-only statics.** The home must be a header the CU included whose `BINCL`
   block is empty, since a header that emitted types would have bracketed them. 32 of main.cpp's ~120
   includes qualify — `<iostream>` (which really is `__ioinit`'s home) and vmtrapsetnames.h among them.

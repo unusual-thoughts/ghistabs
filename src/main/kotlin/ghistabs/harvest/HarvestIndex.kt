@@ -3,6 +3,7 @@ package ghistabs.harvest
 import ghidra.program.model.data.CategoryPath
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.DummySink
+import ghistabs.materialize.itanium.Itanium
 import ghistabs.parse.*
 
 /**
@@ -310,11 +311,40 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
             }
     }
 
-    /** File-scope symbols per source. */
+    /** File-scope symbols per source — by CU, except where the symbol itself names a better one. */
     val symbolsBySource: Map<String, List<Symbol>> by lazy {
         harvest.symbolsByCu.entries
-            .groupBy({ foldSource(it.key) }, { it.value })
-            .mapValues { (_, lists) -> lists.flatten().map { it.folded() } }
+            .flatMap { (cu, syms) -> syms.map { (typeinfoSource(it) ?: foldSource(cu)) to it.folded() } }
+            .groupBy({ it.first }, { it.second })
+    }
+
+    /**
+     * Where a `_ZTI<class>` typeinfo object belongs: with its class, not with the CU that happened to
+     * emit it.
+     *
+     * gcc drops the file of every deferred file-scope static — `dbxout_prepare_symbol` emits the
+     * symbol's own `N_SOL` only under `WINNING_GDB` — so these arrive filed under whatever CU was
+     * last in effect. The *line* survives, and for a typeinfo object it is the class's own declaration
+     * line: `_ZTI5Image` is L29 in every CU that emits it, and `class Image` is image.h L29. (Its
+     * sibling `_ZTS` string is not the same case — appquery gives one class five different lines
+     * across five CUs — so nothing about those is worth trusting but the address.)
+     */
+    private fun typeinfoSource(sym: Symbol) = (sym.body as? SymbolDecl.Static)?.name
+        ?.let(Itanium::typeinfoClassOf)
+        ?.let { classRenderSourceByName[it] }
+
+    /**
+     * Class name → the file its declaration *renders* in, which is where anything gcc dated by that
+     * declaration belongs. Not [classSourceByName], which answers the neighbouring question — the file
+     * the type id itself belongs to — and puts `Image` in main.cpp, the first CU that defined it,
+     * while the render draws `class Image` in image.h. Concrete bodies only: an `XRef` forward-decl
+     * stub names whichever unrelated header mentioned the class by pointer.
+     */
+    private val classRenderSourceByName: Map<String, String> by lazy {
+        typeAsts.values
+            .filter { it.body is TypeDecl.Struct || it.body is TypeDecl.Enum }
+            .mapNotNull { t -> t.name?.let { it to effectiveSourceFor(t) } }
+            .toMap()
     }
 
     /** Open functions with their line entries / params / locals folded onto output spellings. */
