@@ -312,10 +312,6 @@
             "min": 1200,
             "max": 1200
         },
-        "unresolved-symbol-inlined-std": {
-            "min": 0,
-            "max": 1
-        },
         "unresolved-xref": {
             "min": 38,
             "max": 38
