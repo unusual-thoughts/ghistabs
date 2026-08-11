@@ -89,6 +89,28 @@ class LayoutTest {
     }
 
     @Test
+    fun `an inline marker moves inside the block it emptied, however the row was assembled`() {
+        // The `{` and its `}` reach the row as two fragments, so dropInlined never saw them as a pair.
+        val split = TargetLine(584).apply {
+            this += Fragment(code = "for (p = start; p != end; p = p + 1) {")
+            this += Fragment(code = "} /* ⇐ inlines stl_vector.h L 123 */ /* ⇐ inlines stl_algobase.h L 371 */")
+        }
+        assertEquals(
+            "for (p = start; p != end; p = p + 1) { /* ⇐ inlines stl_vector.h L 123 */ " +
+                "/* ⇐ inlines stl_algobase.h L 371 */ }",
+            split.render(),
+        )
+        // The .cpp side, where the marker is the call standing in for the inlined body.
+        val called = TargetLine(42).apply {
+            this += Fragment(code = "while (i < n) { }   uVar1 = __inline_stl_vector_h_123(this, i);")
+        }
+        assertEquals("while (i < n) { uVar1 = __inline_stl_vector_h_123(this, i); }", called.render())
+        // Ghidra's own empty block, with no marker after it, stays as it is.
+        val bare = TargetLine(9).apply { this += Fragment(code = "while (f(x)) { }   g(y);") }
+        assertEquals("while (f(x)) { }   g(y);", bare.render())
+    }
+
+    @Test
     fun `repeated line tags on one row collapse, distinct ones do not`() {
         val line = TargetLine(139).apply {
             this += Fragment(code = "typedef unsigned char _Value_type;", note = "")

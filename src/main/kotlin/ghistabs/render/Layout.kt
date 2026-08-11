@@ -44,6 +44,21 @@ data class Fragment(
     fun commentAt(line: Int) = note?.let { commentFor(line, shape, it) }
 }
 
+// An empty block and the markers naming what was inlined out of it: `for (…) { }` followed by
+// `/* ⇐ inlines stl_vector.h L 123 */`, or by the `__inline_…()` call that stands in for it.
+private val EMPTY_BLOCK_MARKERS =
+    Regex("""\{ *\}((?: *(?:/\* ⇐ inlines[^*]*\*/|(?:\w+ = )?__inline_\w+\([^()]*\);))+)""")
+
+/**
+ * Markers moved inside the block whose content they replace.
+ *
+ * [dropInlined] already does this where it can see both braces on one of its rows; what it cannot see
+ * is a `{` and its `}` arriving at the row from different fragments — separate claims, or separate
+ * rows crammed together by [fitRows] — and only here is the row whole. Outside, the pair reads as an
+ * empty block with a footnote; inside, the same tokens say what is true: the body is over there.
+ */
+private fun spliceInlineMarkers(code: String) = EMPTY_BLOCK_MARKERS.replace(code) { "{ ${it.groupValues[1].trim()} }" }
+
 // The fragments sharing source [line]. Renders all code first, all comments last, so a
 // `//` never swallows a following fragment's code — the line stays valid C however many
 // fragments collide. Each fragment's tag is derived from [line], its grid position.
@@ -70,7 +85,7 @@ class TargetLine(val line: Int) {
             mark?.let { "/* ⇐ $it */ " }.orEmpty() + f.code
         }
         val rest = fragments.filterNot { it.shape == NoteShape.PROVENANCE && it.code != null }
-        val code = (decomp + rest.mapNotNull { it.code }).joinToString("   ")
+        val code = spliceInlineMarkers((decomp + rest.mapNotNull { it.code }).joinToString("   "))
         // Deduped: every fragment on a row restates that row's line, so two typedefs sharing source
         // line 139 produced `typedef unsigned char _Value_type;   typedef Exclusion _Value_type;
         // // L 139 // L 139`. Only exact repeats collapse — `// L 139` and `// L 139 (param)` say
