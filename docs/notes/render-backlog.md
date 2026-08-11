@@ -10,11 +10,7 @@ numbered in the order they were *found*, not worked; this is the order to work t
 
 **Four that a reader hits immediately.**
 
-1. **§37(a), aliased copies render two and three times.** `XDVImage::XDVImage` 3×, one source line
-   holding 8 rows of the same statements twice. §29's `(start, head)` dedup cannot see them because
-   each copy is decompiled separately and Ghidra numbers its locals per copy. Cheapest item on this
-   list against what it removes, and it relieves the cram (§37(e), §29's residual) for free — so
-   measure that again afterwards rather than before.
+1. ~~**§37(a), aliased copies render two and three times.**~~ — DONE, see §37(a).
 2. **image.h is 903 rows of libstdc++.** The class-attribution half is fixed; the other half is not.
    `effectiveSource` trusts `declSourceFile` for typedefs, and `activityExtent` cannot flag the
    result because for a file with no function spans it falls back to counting type declarations —
@@ -1604,7 +1600,7 @@ counters call this file clean: braces balance, nothing is misplaced above its ow
 grammar script's subtracted families hide most of what is wrong with it. Everything below is visible
 only by reading the output.
 
-### (a) Aliased copies render two and three times — the largest single source of noise
+### (a) Aliased copies render two and three times — DONE
 
 `XDVImage::XDVImage(` appears **3×**, `__inline_xdvimage_cpp_30(` **2×**, and source line 36 holds
 **8 rows**: 37–40 and 41–44 are the same statements twice over, differing only in Ghidra's local
@@ -1617,8 +1613,20 @@ are decompiled **independently**, so Ghidra numbers their locals per copy and th
 diverge, defeating a key that includes the head verbatim. Keying on something normalised — the head
 with local names stripped, or the statement bodies rather than the head — collapses all of it.
 
-**Worth doing first.** It is contained, it removes ~12 of 130 non-blank rows, and it relieves (e)
-without any layout work, the duplicate bodies being what the span is oversubscribed with.
+**Fixed on both sides.** The head now carries its `prototype` — the signature before the declaration
+block was folded in — and the body dedup keys on `(start, prototype)`, which is the identity the decl
+block does not carry. Two genuinely distinct functions still cannot collide, the key being their
+signatures. The inlined-stretch grouping had the same defect from the other direction: it keyed on the
+inlining `Func`, so D0 and D1 each brought a copy of the identical stretch; keyed on the inliner's
+*name* they collapse to one tagged `×2`.
+
+appquery, like-for-like: `xdvimage.cpp` 130 → 124 non-blank rows, `vminfo.cpp` 112 → 81,
+`image.cpp` 113 → 110, whole render 4241 → 4167, clang errors 803 → 735. Nothing was lost — every
+file covers the same set of `⇐ L` source lines before and after, so what went was only the second
+copy. (b) is relieved as a side effect on this fixture: the displaced `__inline_xdvimage_cpp_30` was
+the D0 copy, and with it gone `has_slt` no longer has a foreign definition inside its braces. (e) is
+barely moved (585/516/454 → 585/516/424 characters), so the cram is not the aliases' doing and wants
+deciding on its own.
 
 ### (b) A stretch is placed inside an unrelated function — nesting broken across a boundary
 

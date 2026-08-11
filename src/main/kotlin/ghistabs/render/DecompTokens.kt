@@ -66,6 +66,12 @@ data class DecompLine(
     val booleanCuts: List<Cut> = emptyList(),
     /** The folded head only: what a legal C++ member definition must leave out. See [memberCutsOf]. */
     val memberCuts: List<IntRange> = emptyList(),
+    /**
+     * The folded head only: the signature, without the declaration block folded into it. What
+     * identifies the function among those starting on one source line — the declaration block does
+     * not, gcc's aliased copies being decompiled separately and so named per copy.
+     */
+    val prototype: String? = null,
 ) {
     /** This row as a member definition: [memberCuts] taken out, every offset moved with them. */
     fun asMemberDefinition() = memberCuts.sortedByDescending { it.first }.fold(this) { row, cut -> row.without(cut) }
@@ -444,8 +450,9 @@ fun DecompileResults.compressedDecompLines(
         }
     }
     val (declLines, prefix) = lines.subList(0, bodyStart).partition { it.isDeclaration() }
+    val signature = prefix.rendered(spell)
     val head = (
-        listOf(prefix.rendered(spell)) +
+        listOf(signature) +
             groupDecls(declLines.filterNot { it.declaresForeign(func, source) }, spell)
         )
         .filter { it.isNotEmpty() }
@@ -485,6 +492,7 @@ fun DecompileResults.compressedDecompLines(
         thisAt = headTokens.thisAt(),
         booleanCuts = headCuts,
         memberCuts = memberCutsOf(headTokens, ghFunction),
+        prototype = signature,
     )
     return listOf(headRow) + body.map { row(it, rowOf) }
 }
