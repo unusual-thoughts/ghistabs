@@ -228,9 +228,16 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
         // declares three pointers and no methods — inherits what its siblings' methods established.
         // One template lives in one header, so `_Vector_alloc_base<Exclusion>` answers for it.
         val voted = votedHeaderHints
-        val homeByTemplate = voted.entries
-            .filter { '<' in it.key }
-            .groupBy({ it.key.substringBefore('<') }, { it.value })
+        // Seeded from where instantiations *already* sit as well as from the vote: `allocator<char>`,
+        // `<void>` and `<wchar_t>` were never voted on because nothing was wrong with them — gcc put
+        // them in stl_alloc.h — and they are exactly what says where `allocator<unsigned short>`
+        // belongs. Only stdlib homes seed, and `id.source` rather than the effective source, since
+        // this map is what the effective source consults.
+        val settled = typeAsts.values
+            .mapNotNull { ast -> ast.name?.takeIf { '<' in it }?.let { it to ast.id.source.filename } }
+            .filter { (_, home) -> home.isStdMarkerPath() }
+        val homeByTemplate = (voted.entries.filter { '<' in it.key }.map { it.key to it.value } + settled)
+            .groupBy({ it.first.substringBefore('<') }, { it.second })
             .mapValues { (_, homes) -> homes.groupingBy { it }.eachCount().maxByOrNull { it.value }!!.key }
         val bySibling = voted + astsByName.keys
             .filter { '<' in it && it !in voted }
