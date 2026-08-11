@@ -9,19 +9,37 @@ package ghistabs.render
 private fun lineRef(line: Int) = "L" + line.toString().padStart(4)
 
 /**
- * The trailing comment for a fragment carrying [note] at [line]. The shape is chosen by
- * [kind]: an SLINE address annotation, a function brace delimiter, or (default) a declaration provenance tag whose [note] is the role — empty for
- * a typedef/type-body, "(param)" etc. for a decl — with the stale marker appended.
+ * How a row's [note] is spelled once it reaches the page.
+ *
+ * Four cases, because four is how many the rendered text actually distinguishes. The `FragmentKind`
+ * this replaces had eight, five of which ([DECLARATION]'s) produced the same comment — a distinction
+ * that existed only to be mapped back from [Owner], and had to be kept in step with it for no gain.
  */
-fun commentFor(line: Int, kind: FragmentKind, note: String, stale: Boolean) = when (kind) {
-    FragmentKind.SLINE -> "// ${lineRef(line)} @ $note"
-    FragmentKind.FUNC_DELIM -> "/* ${lineRef(line)} — $note */"
-    // Decomp keeps the decompiler's own statement order; the tag says which source line the
-    // statement's instructions actually came from ([note]), since the grid position doesn't.
-    FragmentKind.DECOMP -> "// ⇐ $note"
-    else -> {
-        val role = if (note.isEmpty()) "" else " $note"
-        val staleMark = if (stale) "${if (note.isEmpty()) "" else ";"} stale N_SOL?" else ""
-        "// ${lineRef(line)}$role$staleMark"
-    }
+enum class NoteShape {
+    /** An N_SLINE address annotation: which instructions the line compiled to. */
+    SLINE,
+
+    /** A function's opening or closing brace, naming what it delimits. */
+    DELIMITER,
+
+    /**
+     * Which source line a decompiled statement's instructions came from. Reaches [commentFor] only
+     * for a row with no code of its own; where there is code the marker goes in *front* of it, which
+     * [TargetLine.render] does because collapsing repeats needs the whole row.
+     */
+    PROVENANCE,
+
+    /** A declaration's provenance tag, carrying its role — the shape everything else takes. */
+    DECLARATION,
+}
+
+/**
+ * The trailing comment for a fragment carrying [note] at [line], shaped by [shape]. A [DECLARATION]
+ * tag's [note] is the role: empty for a typedef or type body, "(param)" and the like for a decl.
+ */
+fun commentFor(line: Int, shape: NoteShape, note: String) = when (shape) {
+    NoteShape.SLINE -> "// ${lineRef(line)} @ $note"
+    NoteShape.DELIMITER -> "/* ${lineRef(line)} — $note */"
+    NoteShape.PROVENANCE -> "// ⇐ $note"
+    NoteShape.DECLARATION -> "// ${lineRef(line)}" + if (note.isEmpty()) "" else " $note"
 }

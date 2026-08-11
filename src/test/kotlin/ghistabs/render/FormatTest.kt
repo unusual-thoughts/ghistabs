@@ -3,26 +3,31 @@ package ghistabs.render
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
-/**
- * Pins [commentFor]: each kind's comment shape, and the non-obvious stale-marker
- * separator — "; " after a role, a bare " " after the line ref alone.
- */
+/** Pins [commentFor]: the comment each [NoteShape] spells, and the padding of the line reference. */
 class FormatTest {
     @Test
-    fun `sline and delim have their own shapes`() {
-        assertEquals("// L  17 @ 0x1000: mov", commentFor(17, FragmentKind.SLINE, "0x1000: mov", false))
-        assertEquals("/* L  17 — opens Foo */", commentFor(17, FragmentKind.FUNC_DELIM, "opens Foo", false))
+    fun `each shape has its own comment`() {
+        assertEquals("// L  17 @ 0x1000: mov", commentFor(17, NoteShape.SLINE, "0x1000: mov"))
+        assertEquals("/* L  17 — opens Foo */", commentFor(17, NoteShape.DELIMITER, "opens Foo"))
+        assertEquals("// ⇐ L 42", commentFor(17, NoteShape.PROVENANCE, "L 42"))
     }
 
     @Test
-    fun `a decl tag carries the role and pads the line ref`() {
-        assertEquals("// L   1", commentFor(1, FragmentKind.TYPEDEF, "", false))
-        assertEquals("// L  17 (param)", commentFor(17, FragmentKind.DECL_LOCAL, "(param)", false))
+    fun `a declaration tag carries the role and pads the line ref`() {
+        assertEquals("// L   1", commentFor(1, NoteShape.DECLARATION, ""))
+        assertEquals("// L  17 (param)", commentFor(17, NoteShape.DECLARATION, "(param)"))
     }
 
     @Test
-    fun `the stale marker separates with a semicolon after a role, a space without`() {
-        assertEquals("// L  17 stale N_SOL?", commentFor(17, FragmentKind.TYPEDEF, "", true))
-        assertEquals("// L  17 (param); stale N_SOL?", commentFor(17, FragmentKind.DECL_LOCAL, "(param)", true))
+    fun `every owner maps to a shape, and the declaration-ish ones share it`() {
+        assertEquals(NoteShape.PROVENANCE, Owner.FUNCTION_BODY.noteShape)
+        assertEquals(NoteShape.PROVENANCE, Owner.INLINED_BODY.noteShape)
+        assertEquals(NoteShape.DELIMITER, Owner.FUNC_DELIM.noteShape)
+        assertEquals(
+            listOf(Owner.GLOBAL, Owner.LOCAL, Owner.TYPEDEF, Owner.TYPE_BODY, Owner.INCLUDE).map {
+                NoteShape.DECLARATION
+            },
+            listOf(Owner.GLOBAL, Owner.LOCAL, Owner.TYPEDEF, Owner.TYPE_BODY, Owner.INCLUDE).map { it.noteShape },
+        )
     }
 }

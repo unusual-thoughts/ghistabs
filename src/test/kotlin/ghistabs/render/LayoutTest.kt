@@ -12,8 +12,8 @@ class LayoutTest {
     @Test
     fun `renders all code before any comment regardless of fragment order`() {
         val line = TargetLine(17).apply {
-            this += Fragment(note = "0x1000", kind = FragmentKind.SLINE) // comment-only
-            this += Fragment(code = "int x;", note = "(param)", kind = FragmentKind.DECL_LOCAL)
+            this += Fragment(note = "0x1000", shape = NoteShape.SLINE) // comment-only
+            this += Fragment(code = "int x;", note = "(param)")
             this += Fragment(code = "int y;") // pure code
         }
         // Both code fragments precede both comments — no `//` swallows `int y;`.
@@ -75,16 +75,15 @@ class LayoutTest {
     }
 
     @Test
-    fun `trims trailing blank lines but keeps misattributed content that carries code`() {
+    fun `trims the blank tail past the last line that carries anything`() {
         val canvas = Canvas(6).apply {
-            this[2] += Fragment(0, code = "int real;", note = "(global)", kind = FragmentKind.DECL_GLOBAL)
-            this[5] += Fragment(0, code = "int stale;", note = "", kind = FragmentKind.TYPEDEF, stale = true)
+            this[2] += Fragment(0, code = "int real;", note = "(global)")
+            this[5] += Fragment(0, code = "int last;", note = "")
         }
-        // Line 5 is misattributed but carries code, so it survives; only the blank tail past it goes.
-        // Trimming on staleness alone deleted `class bouniaf` and its whole body from header.h the
-        // moment nothing happened to sit below it.
+        // Only the blank tail past line 5 goes. Trimming on a staleness flag once deleted
+        // `class bouniaf` and its whole body from header.h the moment nothing sat below it.
         assertEquals(
-            listOf("", "int real;  // L   2 (global)", "", "", "int stale;  // L   5 stale N_SOL?"),
+            listOf("", "int real;  // L   2 (global)", "", "", "int last;  // L   5"),
             canvas.render(trim = true).trimEnd('\n').split('\n'),
         )
     }
@@ -92,9 +91,9 @@ class LayoutTest {
     @Test
     fun `repeated line tags on one row collapse, distinct ones do not`() {
         val line = TargetLine(139).apply {
-            this += Fragment(code = "typedef unsigned char _Value_type;", note = "", kind = FragmentKind.TYPEDEF)
-            this += Fragment(code = "typedef Exclusion _Value_type;", note = "", kind = FragmentKind.TYPEDEF)
-            this += Fragment(code = "int p;", note = "(param)", kind = FragmentKind.DECL_LOCAL)
+            this += Fragment(code = "typedef unsigned char _Value_type;", note = "")
+            this += Fragment(code = "typedef Exclusion _Value_type;", note = "")
+            this += Fragment(code = "int p;", note = "(param)")
         }
         // Every fragment restates the row's own line, so the two bare tags are one fact stated twice;
         // the `(param)` one says something else and survives.
