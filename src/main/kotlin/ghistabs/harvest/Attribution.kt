@@ -10,6 +10,12 @@ import ghistabs.parse.TypeDecl
 /**
  * Stdlib path marker. Requires `/usr|lib|include/` (plus one optional segment) before a stdlib
  * directory — guards against false positives like `/proj/src/c++_helpers/`.
+ *
+ * Narrower than "found on a system search path" ([TOOLCHAIN_ROOTS]): it matches none of mingw's
+ * plain-C headers, whose paths run `mingw/include/string.h` rather than `include/mingw/…`. Whether
+ * that under-matching is right for *attribution* is a separate question — `c:/mingw/include/string.h`
+ * is as much "not the home of a user type" as `<vector>` is — but widening it moves types between
+ * DTM categories, so it wants measuring rather than assuming.
  */
 private val STD_MARKERS = Regex("""/(usr|lib|include)(/[^/]+)?/(mingw|cygwin|c\+\+|bits)/""")
 
@@ -29,8 +35,18 @@ private fun isExplicitlyRelative(path: String) = path.startsWith("./") ||
     path.startsWith(""".\""") ||
     path.startsWith("""..\""")
 
-/** Directories a toolchain keeps its headers under; an `include` below one of these is a system
- *  include root, so what sits under it was reached with `<…>`. */
+/**
+ * Directories a toolchain keeps its headers under; an `include` below one of these is a system
+ * include root, so what sits under it was reached with `<…>`.
+ *
+ * Not [STD_MARKERS], which asks the neighbouring question — "is this the standard library, so a user
+ * type must not be attributed here" — and requires a `mingw|cygwin|c++|bits` directory *after* the
+ * include root to stay narrow, since a false positive there misroutes a real type. On mingw the
+ * segments run `mingw/include/string.h`, the other way round, so that pattern matches none of the 18
+ * plain-C system headers in the corpus (`string.h`, `stdio.h`, `errno.h`, `sys/types.h`, gcc's own
+ * `stddef.h`…) and reusing it here would spell every one of them `"string.h"`. Two questions, two
+ * costs: a wrong answer there misfiles a type, a wrong answer here prints the wrong bracket.
+ */
 private val TOOLCHAIN_ROOTS = setOf("mingw", "cygwin", "usr", "lib", "gcc-lib", "local")
 
 /** libstdc++'s own subdirectories, which are part of the spelling (`<bits/stl_alloc.h>`) rather than
