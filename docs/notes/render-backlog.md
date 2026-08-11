@@ -107,8 +107,22 @@ numbered in the order they were *found*, not worked; this is the order to work t
    rows for a 166-line file. That half is DONE; the exact RTTI attribution (§38 grade 1) is too.
 3. **§33, blank space.** 87% of rows, 92% of that in runs of 20+. Options were written up and never
    chosen; it needs a decision more than it needs work.
-4. **`redefinition of X`** (16 on unpackfile). Duplicate declarations that survived the class-body
-   dedup. Cheap and self-contained.
+4. **`redefinition of X`** — partly done, and it is three different things, not one.
+   - **~15 `numeric_limits` in `<limits>`** — one template instantiated per arithmetic type, every
+     copy rendered under the shortened name. The instantiation merge that handles this elsewhere is
+     not reaching them.
+   - **~40 `__inline_…` pseudo-functions.** A header line inlined into several callers is wrapped as
+     a definition per caller. Two fixes apply: identical text at one anchor is now merged whatever
+     inlined it (the `×N` the design already intended — keying on the inliner defeated it, worth 11
+     rows and 10 clang errors), and where the *text* differs the definitions are usually legal
+     overloads, because a template inlined at different element types takes different parameters.
+     What is left is the case in between: same anchor, same signature, bodies differing only in the
+     local names Ghidra assigns per call site. Merging those means keeping the fullest and tagging
+     `×N` — the answer `typeBodyClaims` already gives for N instantiations at one declaration site —
+     and it does discard a body, so it wants a look at how different they really are first.
+   - **~12 locals in stl_tree.h** (`__x`, `__y`, `__root` redeclared, sometimes at a different type).
+     Statements at file scope in a header view, i.e. the design gap in group 2 of the grammar
+     section, not a dedup bug.
 
 **Then — structural correctness that the counters do not fully see.**
 
