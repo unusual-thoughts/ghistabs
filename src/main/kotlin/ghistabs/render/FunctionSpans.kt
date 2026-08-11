@@ -53,6 +53,20 @@ class FunctionSpans(val ranges: List<FuncRange>) {
 
     fun inFunction(line: Int) = spans.any { line in it }
 
+    private val interiors = ranges.mapNotNull { it.interior }
+
+    /** Is [line] between some function's braces — where no file-scope declaration can go? */
+    fun insideBody(line: Int) = interiors.any { line in it }
+
+    /**
+     * The last row content anchored at [line] may take. A claim slides downward when the row it asked
+     * for is held, and what it slides *through* was bounded by nothing: an inlined stretch anchored at
+     * xdvimage.cpp L30 landed at row 47, inside `has_slt`. Every row below an opener belongs to that
+     * function, so the row before the next one is as far as anything may reach. Null where no
+     * function follows — the canvas end is then the only bound, which is [Claim.limit]'s own default.
+     */
+    fun barrier(line: Int) = ranges.filter { it.start > line }.minOfOrNull { it.start - 1 }
+
     val maxLine = ranges.maxOfOrNull { it.span.last } ?: 0
 
     companion object {
