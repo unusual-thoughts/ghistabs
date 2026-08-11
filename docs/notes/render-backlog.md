@@ -11,7 +11,7 @@ numbered in the order they were *found*, not worked; this is the order to work t
 **Four that a reader hits immediately.**
 
 1. ~~**§37(a), aliased copies render two and three times.**~~ — DONE, see §37(a).
-2. **image.h: 25 rows of its own, 31 of libstdc++, spread over 908 lines.** Measured after the §38
+2. **image.h: 25 rows of its own, 31 of libstdc++, spread over 908 lines.** — MOSTLY DONE, see below. Measured after the §38
    and §39 work, and the diagnosis in the old note was wrong twice, so read this before starting.
    - **It is not `declSourceFile`.** `effectiveSource` consults that only for non-Struct/Enum
      bodies; every one of these is a `class`, so they arrive via `id.source.filename` — the BINCL
@@ -46,9 +46,27 @@ numbered in the order they were *found*, not worked; this is the order to work t
      wrong sibling the answer is still a stdlib header rather than a project one, which is most of the
      win; count the entries before deciding whether it needs a tie-break.
 
-     **Watch:** relaxing (1) runs the vote for every header-declared type — the loop is
-     methods × header-entries with a binary search, so measure it. And stl_vector.h's own render
-     declares *no* classes, so there is no "where do its siblings live" fallback if the vote fails.
+     **Done, both guards.** A *template instantiation* now skips guard (1) — gcc files those by
+     accident, everything else declared only in headers is left alone, which also bounds the loop —
+     and for one, `stdVote` outranks `siblingHeader`: an instantiation follows its code, while its
+     sibling header is just the CU that happened to need it. A plain class keeps the old ranking, so
+     `class Image` stays in image.h. A second pass propagates a template's home to instantiations with
+     no method evidence of their own (`_Vector_alloc_base<unsigned short>` declares three pointers and
+     no methods, so `_Vector_alloc_base<Exclusion>` answers for it).
+
+     appquery: image.h 56 → 41 rows, xvimage.h 75 → 66, vminfo.h 74 → 57, filesystemimage.h 60 → 46,
+     with stl_vector.h +8, stl_tree.h +12, stl_alloc.h +6, stl_iterator.h +6, stl_list.h +4.
+     unpackfile the same shape. All four project classes stay in their own headers. Totals fall 19
+     rows because instantiations arriving at a header that already renders one merge into it and are
+     listed in the instantiation appendix; render time is unchanged.
+
+     **What is left, and it needs different evidence.** `_Vector_alloc_base<unsigned short>` (image.h
+     L79) and `__normal_iterator<unsigned short*>` (L571) stay: *no* instantiation of either template
+     anywhere in appquery has an out-of-line method, so neither the vote nor the propagation has a
+     seed. The tie that would place them is structural — `_Vector_base<unsigned short>`, which did
+     move to stl_vector.h, has `_Vector_alloc_base<unsigned short>` as its base class. Attribution by
+     reference from an already-placed type is the next mechanism, and it is the last 10 rows here.
+     The canvas is still 908 lines because those two declLines are what stretch it.
 
    **§38 is the third instance of the extent circularity and the worst**: `main.cpp` rendered 1456
    rows for a 166-line file. That half is DONE; the exact RTTI attribution (§38 grade 1) is too.
