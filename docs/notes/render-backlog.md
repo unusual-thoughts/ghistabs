@@ -1044,12 +1044,12 @@ bounded by where the next one lands — that bound is what makes the layout comp
 is dense and airy where it is sparse, without a size heuristic. Reserving full height instead (tried
 first) only got exact placement to 21.6%: a fat block still pushed everything after it down.
 
-| `.cpp` bodies | exact | within ±1 | >5 off | placed *above* their own line | p95 row |
-| --- | --- | --- | --- | --- | --- |
-| cryptopp before | 20.9% | 47.7% | 13.7% | 31.8% | 705 |
-| cryptopp after | **69.6%** | **85.6%** | 4.9% | **0%** | 1447 |
-| tinyxml before | 16.1% | 37.0% | 10.3% | 44.9% | 198 |
-| tinyxml after | **65.8%** | **78.9%** | 7.7% | **0%** | 297 |
+| `.cpp` bodies   | exact     | within ±1 | >5 off | placed *above* their own line | p95 row |
+| --------------- | --------- | --------- | ------ | ----------------------------- | ------- |
+| cryptopp before | 20.9%     | 47.7%     | 13.7%  | 31.8%                         | 705     |
+| cryptopp after  | **69.6%** | **85.6%** | 4.9%   | **0%**                        | 1447    |
+| tinyxml before  | 16.1%     | 37.0%     | 10.3%  | 44.9%                         | 198     |
+| tinyxml after   | **65.8%** | **78.9%** | 7.7%   | **0%**                        | 297     |
 
 A statement can no longer be placed above the line it came from — a third to a half of rows were.
 Total output fell 28% (8.59M → 6.20M chars) and the worst row 308K → 68K, despite the p95 row growing:
@@ -1174,12 +1174,12 @@ catch a false positive spelled anything else. The rosters were then *read* on al
 
 Counts are `before → after` (Ghidra alone → with this analyzer), from the two rosters:
 
-| family | fixtures | before → after | what gets added |
-| --- | --- | --- | --- |
-| MinGW PE, cryptopp | crypto_mi ×4 (3.4.5/4.2.1, ±stripped) | 7…17 → 100…105 | the whole `CryptoPP::` not-implemented base-stub family |
-| MinGW PE, the rest | unpackfile, packfile, appquery, xapasmcsr, locale_test ×2, xmltest ×4 | 5…14 → 27…33 | libstdc++ throw/terminate, plus `error` and packfile's `usage` |
-| ELF x86-64 | box2d_tests 2 → 2, xmltest 6 → 6 | **+0** | nothing: libstdc++ is dynamically linked, so the `__throw_*` helpers are not in the image — only PLT entries, which are external |
-| unlinked a.out `.o` | hello, tinyxml, zlib | 0 → 0 | nothing: no libc linked, so nothing anchors a walk |
+| family              | fixtures                                                              | before → after | what gets added                                                                                                                  |
+| ------------------- | --------------------------------------------------------------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| MinGW PE, cryptopp  | crypto_mi ×4 (3.4.5/4.2.1, ±stripped)                                 | 7…17 → 100…105 | the whole `CryptoPP::` not-implemented base-stub family                                                                          |
+| MinGW PE, the rest  | unpackfile, packfile, appquery, xapasmcsr, locale_test ×2, xmltest ×4 | 5…14 → 27…33   | libstdc++ throw/terminate, plus `error` and packfile's `usage`                                                                   |
+| ELF x86-64          | box2d_tests 2 → 2, xmltest 6 → 6                                      | **+0**         | nothing: libstdc++ is dynamically linked, so the `__throw_*` helpers are not in the image — only PLT entries, which are external |
+| unlinked a.out `.o` | hello, tinyxml, zlib                                                  | 0 → 0          | nothing: no libc linked, so nothing anchors a walk                                                                               |
 
 The two `+0` rows are worth reading as a **coverage gap, not a pass**: on ELF this analyzer has been
 shown not to produce false positives, but it has never been shown to do anything there either. A
@@ -1304,11 +1304,11 @@ ask order, the rows it hands back are strictly increasing — so the rendered or
 decompiler's, and Ghidra's own text is well-nested by construction. That is the guarantee; zero
 negative rows is the evidence for it, not the definition of it.
 
-| fixture | negative-nesting rows | clang brace diagnostics |
-| --- | --- | --- |
-| unpackfile | 2 → **0** | 4 → **1** |
-| xmltest_gcc345 | 56 → **0** | 73 → **3** |
-| crypto_mi_test_gcc345 | 52 → **0** | 83 → **21** |
+| fixture               | negative-nesting rows | clang brace diagnostics |
+| --------------------- | --------------------- | ----------------------- |
+| unpackfile            | 2 → **0**             | 4 → **1**               |
+| xmltest_gcc345        | 56 → **0**            | 73 → **3**              |
+| crypto_mi_test_gcc345 | 52 → **0**            | 83 → **21**             |
 
 Every rendered file now ends at depth 0 and never dips below it. Clang totals move the other way
 (349→352, 2611→2989, 2939→3240) for the reason recorded above: an undeclared template makes `<`
@@ -1410,17 +1410,17 @@ not a `ClangSyntaxToken`.
 
 **The API to use, all in `DecompilerUtils` unless noted.** Most of it replaces something we hand-roll:
 
-| ours | theirs |
-| --- | --- |
-| `regionsOf` remapping each line's address through the SLINE table | `getTokens(root, AddressSetView)` — collect the tokens for an address set, built per file from N_SLINE |
-| `braceFix` / `braceDepths` counting characters | `getNextBrace(token, forward)` — the *enclosing* brace of a token, so a run's missing openers/closers are asked for, not inferred; `getMatchingBrace`, `isBrace` |
-| `Conditions.branchesOf` walking brace depth | `ClangTokenGroup` nesting — the branches are the groups |
-| `ifConditionAt` scanning parens back from `{` | paren pair ids on `ClangSyntaxToken` |
-| `THIS_PARAM` / `renameThis()` regexes | `isThisParameter(HighVariable, Function)` |
-| — | `isGoToStatement(token)`, `getGoToTargetToken(root, label)` — gotos structurally, for §28-style work and for knowing when a "loop" is one |
-| — | `getFunction(program, ClangFuncNameToken)` — call targets, so `includeClaims` can follow the call graph and not only stabs types |
-| — | `getDataType(token)`, `getDataTypeTraceForward/Backward(varnode)` — Ghidra's type for a token, to cross-check against the stabs one |
-| `sjljScaffolding`'s "stack slot written on ≥3 lines" heuristic | `getVarnodeRef(token)` resolves through the high variable |
+| ours                                                              | theirs                                                                                                                                                           |
+| ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `regionsOf` remapping each line's address through the SLINE table | `getTokens(root, AddressSetView)` — collect the tokens for an address set, built per file from N_SLINE                                                           |
+| `braceFix` / `braceDepths` counting characters                    | `getNextBrace(token, forward)` — the *enclosing* brace of a token, so a run's missing openers/closers are asked for, not inferred; `getMatchingBrace`, `isBrace` |
+| `Conditions.branchesOf` walking brace depth                       | `ClangTokenGroup` nesting — the branches are the groups                                                                                                          |
+| `ifConditionAt` scanning parens back from `{`                     | paren pair ids on `ClangSyntaxToken`                                                                                                                             |
+| `THIS_PARAM` / `renameThis()` regexes                             | `isThisParameter(HighVariable, Function)`                                                                                                                        |
+| —                                                                 | `isGoToStatement(token)`, `getGoToTargetToken(root, label)` — gotos structurally, for §28-style work and for knowing when a "loop" is one                        |
+| —                                                                 | `getFunction(program, ClangFuncNameToken)` — call targets, so `includeClaims` can follow the call graph and not only stabs types                                 |
+| —                                                                 | `getDataType(token)`, `getDataTypeTraceForward/Backward(varnode)` — Ghidra's type for a token, to cross-check against the stabs one                              |
+| `sjljScaffolding`'s "stack slot written on ≥3 lines" heuristic    | `getVarnodeRef(token)` resolves through the high variable                                                                                                        |
 
 **Sizing.** The blocker is that `DecompLine.text` is the currency of every downstream pass —
 `regionsOf`, `dropInlined`, `braceFix`, `wrapAsDefinition`, `Region`, `claimsFor`, `TargetLine`. A
@@ -1442,16 +1442,16 @@ instead of sweeping the finished row.
 
 What each pass reads now:
 
-| was | is |
-| --- | --- |
-| `braceFix`/`dropInlined` counting `{`/`}` in row text | the row's brace tokens |
-| `branchesOf` walking brace depth, `} else {` / `else {` matched as text | the `ClangTokenGroup`s `emitBlockIf` wraps each branch in |
-| `ifConditionAt` scanning parens back from `{` | the last `if` `ClangOpToken` and its paren pair id |
-| `TRAILING_EMPTY_BLOCK` regex splice | the row's last two brace offsets |
-| `THIS_WORD`/`THIS_PARAM` regexes | a `ClangVariableToken` spelled `this`; the parameter's `ClangVariableDecl` extent |
-| `asMemberDefinition` re-parsing `prototypeString` | `ClangReturnType`/`ClangVariableDecl` extents cut out of the head; `Function.prototype` assembling the class-body declaration from the model |
-| `DESTRUCTOR_NAME` regex | `Function.getName()` starting with `~` |
-| `topLevelBooleanCuts` scanning for ` && `/` || ` at paren depth | `&&`/`||` operator tokens with the depth from the paren tokens |
+| was                                                                     | is                                                                                                                                           |
+| ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `braceFix`/`dropInlined` counting `{`/`}` in row text                   | the row's brace tokens                                                                                                                       |
+| `branchesOf` walking brace depth, `} else {` / `else {` matched as text | the `ClangTokenGroup`s `emitBlockIf` wraps each branch in                                                                                    |
+| `ifConditionAt` scanning parens back from `{`                           | the last `if` `ClangOpToken` and its paren pair id                                                                                           |
+| `TRAILING_EMPTY_BLOCK` regex splice                                     | the row's last two brace offsets                                                                                                             |
+| `THIS_WORD`/`THIS_PARAM` regexes                                        | a `ClangVariableToken` spelled `this`; the parameter's `ClangVariableDecl` extent                                                            |
+| `asMemberDefinition` re-parsing `prototypeString`                       | `ClangReturnType`/`ClangVariableDecl` extents cut out of the head; `Function.prototype` assembling the class-body declaration from the model |
+| `DESTRUCTOR_NAME` regex                                                 | `Function.getName()` starting with `~`                                                                                                       |
+| `topLevelBooleanCuts` scanning for ` && `/`                             |                                                                                                                                              | ` at paren depth | `&&`/` |  | ` operator tokens with the depth from the paren tokens |
 
 **Two shapes the item did not predict**, both found by auditing the group-derived branch pair against
 the old brace walk in the same run (9 disagreements on unpackfile, driven to 3):
@@ -1546,10 +1546,10 @@ address instead cut zero-argument calls from ~150 to **21** on both fixtures.
 
 **Open: call and definition are derived from different splits, so they disagree.**
 
-| fixture | names called | defined | both | arity agrees |
-| --- | --- | --- | --- | --- |
-| unpackfile | 198 | 131 | 92 | 34 |
-| appquery | 213 | 138 | 92 | 30 |
+| fixture    | names called | defined | both | arity agrees |
+| ---------- | ------------ | ------- | ---- | ------------ |
+| unpackfile | 198          | 131     | 92   | 34           |
+| appquery   | 213          | 138     | 92   | 30           |
 
 `regionsOf` keys the caller side on the foreign `BlockScope` and the header side on the line number —
 §28 chose that deliberately, N_SLINE being what detects foreignness and the block only what bounds
@@ -1575,10 +1575,10 @@ regions are the caller's code *around* the stretch, not something that file inli
 Measured on `unpackfile.exe` decomp output: **16,659 of 19,184 rows are blank (87%)**, and
 **92% of that is in 156 contiguous runs of 20 rows or more** (15,327 rows). Split by where it sits:
 
-| where | rows |
-| --- | --- |
-| above the first content in a file | 4,636 |
-| inside a function span | 6,259 |
+| where                                | rows  |
+| ------------------------------------ | ----- |
+| above the first content in a file    | 4,636 |
+| inside a function span               | 6,259 |
 | in a header with no functions at all | 5,764 |
 
 The in-span blanks are mostly *not* reclaimable: a region spreads one statement per row and stops, so
@@ -1602,10 +1602,10 @@ implementing.
 Its message says *"Behaviour-neutral — unpackfile moves only the two reglocal counters"*. That was
 checked on one PE fixture. Bisected on `zlib_aout_gcc263` (regenerate at `49a3838` vs `4900866`):
 
-| | `49a3838` (parent) | `4900866` |
-| --- | --- | --- |
-| `empty-scope` | 140 | **24** |
-| `reglocal-renamed-scope` | 5 | **19** |
+|                          | `49a3838` (parent) | `4900866` |
+| ------------------------ | ------------------ | --------- |
+| `empty-scope`            | 140                | **24**    |
+| `reglocal-renamed-scope` | 5                  | **19**    |
 
 Mechanism: it replaced address-sorted bracket processing (`buildBlocks` sorted brackets, claimed
 locals by `recordIndex`) with stream-order processing. In unlinked `.o` files many brackets carry the
@@ -1660,11 +1660,11 @@ The first version of this script did the opposite — whitelisted brace/paren me
 errors on unpackfile while hiding ~1500. Several hidden ones were real, cheap render defects. Do not
 reintroduce a whitelist.
 
-| render | files with errors | errors |
-| --- | --- | --- |
-| unpackfile | 32/54 | 626 |
-| tinyxml | 69/110 | 1443 |
-| cryptopp | 151/250 | 2752 |
+| render     | files with errors | errors |
+| ---------- | ----------------- | ------ |
+| unpackfile | 32/54             | 626    |
+| tinyxml    | 69/110            | 1443   |
+| cryptopp   | 151/250           | 2752   |
 
 Three groups, by cost to fix:
 
@@ -1734,11 +1734,11 @@ also rewritten, a free function's name being unable to carry one, and duplicate 
 declarations from gcc's aliased ctor/dtor copies are deduped (they render identically once the return
 type and `this` are gone, and a class body cannot declare a member twice).
 
-| render | before group 1 | after group 1 | after group 2 |
-| --- | --- | --- | --- |
-| unpackfile | 626 | 503 | **396** |
-| tinyxml | 1443 | 1649 | **1456** |
-| cryptopp | 2752 | 2565 | **2224** |
+| render     | before group 1 | after group 1 | after group 2 |
+| ---------- | -------------- | ------------- | ------------- |
+| unpackfile | 626            | 503           | **396**       |
+| tinyxml    | 1443           | 1649          | **1456**      |
+| cryptopp   | 2752           | 2565          | **2224**      |
 
 Brace-specific diagnostics: unpackfile 10, tinyxml 20, cryptopp 126. Not zero — group 3 is untouched.
 
@@ -1766,11 +1766,11 @@ per-stretch wrapping improves the braces while raising the total. Declaring `nam
 prelude was tried and changes nothing; the templates, not the namespace, are what clang needs.
 **Judge render changes on the brace diagnostics and on negative-nesting rows, not on the total.**
 
-| render | total | brace diagnostics |
-| --- | --- | --- |
-| unpackfile | 432 | 3 |
-| tinyxml | 1485 | 20 |
-| cryptopp | 2910 | 94 |
+| render     | total | brace diagnostics |
+| ---------- | ----- | ----------------- |
+| unpackfile | 432   | 3                 |
+| tinyxml    | 1485  | 20                |
+| cryptopp   | 2910  | 94                |
 
 **Open.**
 
@@ -1794,12 +1794,12 @@ and renders 903 rows containing no project code at all — only `vector<unsigned
 **Evidence.** `Image` has four type records, one per CU, and every one names a *different* libstdc++
 header as its `declSourceFile`:
 
-| CU emitting the `:T` body | declSourceFile |
-| --- | --- |
-| unpackfile.cpp | `bits/stl_list.h` |
-| filesystemimage.cpp | `bits/stl_list.h` |
-| xvimage.cpp | `bits/basic_string.h` |
-| image.cpp | `bits/stl_algobase.h` |
+| CU emitting the `:T` body | declSourceFile        |
+| ------------------------- | --------------------- |
+| unpackfile.cpp            | `bits/stl_list.h`     |
+| filesystemimage.cpp       | `bits/stl_list.h`     |
+| xvimage.cpp               | `bits/basic_string.h` |
+| image.cpp                 | `bits/stl_algobase.h` |
 
 That is N_SOL at the moment gcc emitted the body — wherever the type first happened to be needed —
 and it carries no information about where the class is written.
