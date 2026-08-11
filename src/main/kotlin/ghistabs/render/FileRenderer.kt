@@ -76,8 +76,12 @@ class FileRenderer(val renderer: Renderer, override val source: String) : Render
     private val canvas = Canvas(maxLine)
 
     fun render(): String {
-        if (rawFuncs.isEmpty() && lines.isEmpty() && typeDecls.isEmpty()) return ""
-        if (maxLine == 0) return ""
+        // Nothing this file knows sits on a line — but it can still hold anonymous aggregates, which
+        // have no line to be placed at and are exactly what the skeleton's appendix is for.
+        // `streambuf` is thirteen of them and was rendering as nothing at all. The old guard also
+        // asked only about functions, lines and types, so a file whose sole content was globals
+        // would have gone the same way; [maxLine] counts those, so this asks about all of it.
+        if (maxLine == 0) return anonAggregateAppendix()
 
         // One allocation for the whole file. Every pass declares what it wants and writes nothing;
         // the allocator resolves all of it at once, with the full picture. That is what removes the
