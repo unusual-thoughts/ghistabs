@@ -8,41 +8,64 @@ regenerate under `build/test-output/{skeletons,decomps}/<binary>/`.
 Ranked by what a reader of the output gets per unit of work, as of the grammar pass. Sections are
 numbered in the order they were *found*, not worked; this is the order to work them.
 
-**Three that a reader hits immediately.**
+**Four that a reader hits immediately.**
 
-1. **image.h is 903 rows of libstdc++.** The class-attribution half is fixed; the other half is not.
+1. **§37(a), aliased copies render two and three times.** `XDVImage::XDVImage` 3×, one source line
+   holding 8 rows of the same statements twice. §29's `(start, head)` dedup cannot see them because
+   each copy is decompiled separately and Ghidra numbers its locals per copy. Cheapest item on this
+   list against what it removes, and it relieves the cram (§37(e), §29's residual) for free — so
+   measure that again afterwards rather than before.
+2. **image.h is 903 rows of libstdc++.** The class-attribution half is fixed; the other half is not.
    `effectiveSource` trusts `declSourceFile` for typedefs, and `activityExtent` cannot flag the
    result because for a file with no function spans it falls back to counting type declarations —
    the same circularity fixed for `.cpp` files. Note the coupling recorded below: `image.h` is a
    known source largely *because* these are filed there, so this and the sibling-header lookup have
    to move together.
-2. **§33, blank space.** 87% of rows, 92% of that in runs of 20+. Options were written up and never
+3. **§33, blank space.** 87% of rows, 92% of that in runs of 20+. Options were written up and never
    chosen; it needs a decision more than it needs work.
-3. **`redefinition of X`** (16 on unpackfile). Duplicate declarations that survived the class-body
+4. **`redefinition of X`** (16 on unpackfile). Duplicate declarations that survived the class-body
    dedup. Cheap and self-contained.
 
 **Then — structural correctness that the counters do not fully see.**
 
-4. ~~**Brace nesting.**~~ — DONE, see §34.
-5. **8 markers still outside their block**, where the block and the marker reach the row as separate
+5. ~~**Brace nesting.**~~ — DONE, see §34.
+6. **§37(b)+(c), claims cross function boundaries.** A stretch anchored at L30 lands inside
+   `has_slt`'s body; a file-scope global lands between a constructor's head and its body. §29 barred
+   a row from rising above its own line, but nothing bounds what it passes through on the way down.
+   One missing constraint seen from both the body and the declaration side, and `FunctionSpans`
+   already knows the extents. These are what stop a `.cpp` view parsing, so they rank with the
+   nesting work rather than below it.
+7. **§37(d), member calls still pass `this`.** `find_slt(this,…)` ×5 while the definition it calls has
+   had the parameter stripped, so the two halves of the render contradict each other. Mechanical, and
+   the same token knowledge `renameThis` already uses — the grammar section's `'this' is a keyword`
+   family fixed only the definition side.
+8. **8 markers still outside their block**, where the block and the marker reach the row as separate
    fragments. Needs placing at fragment assembly in `TargetLine.render()` rather than in
    `dropInlined`.
-6. **`activityExtent`'s header proxy.** `spans.ranges.isEmpty()` stands in for "is a header" and
+9. **`activityExtent`'s header proxy.** `spans.ranges.isEmpty()` stands in for "is a header" and
    leaks: `filesystemimage.h` has spans from inline methods. Right answer there by luck.
 
 **Structural debt, worth taking before more of the above.**
 
-7. ~~**§35, stop reconstructing what the token tree knows.**~~ — DONE. What is left there is one
-   diagnostic and a note that the item's premise about `toLines` was wrong.
+10. ~~**§35, stop reconstructing what the token tree knows.**~~ — DONE. What is left there is one
+    diagnostic and a note that the item's premise about `toLines` was wrong.
 
 **Lower — measurement, then long-standing limitations.**
 
-8. **Forward-declare referenced templates.** Would make the error total mean something again (an
-   undeclared template manufactures syntax errors), but arity varies per instantiation because of
-   default arguments, so the declaration is not straightforwardly derivable.
-9. §23 multi-vtable ABI, §24 RTTI wiring, §25 unannotated `_ZTV`, §26 bitfields, §30 unnamed
-   parameters, §21 leftovers, and the `4900866` a.out neutrality question. All pre-date this pass and
-   none block a reader of the render.
+11. **Forward-declare referenced templates.** Would make the error total mean something again (an
+    undeclared template manufactures syntax errors), but arity varies per instantiation because of
+    default arguments, so the declaration is not straightforwardly derivable.
+12. **§37(g), resolve the vtable-slot call.** `(**(code **)(*(int *)this + 8))(…)` is an offset into a
+    vtable whose type the render declares in the same file, so it can be spelled as the method it
+    calls. Small, and it reads as a real call rather than arithmetic.
+13. **§37(f), the displaced/stale tail.** 19 rows on a ~150-line file, four claiming lines 302–348.
+    The `stale N_SOL` ones are the activity extent already saying they do not belong; this is the
+    "Misattributed declarations" work applied to the trailing block rather than to placement.
+14. §23 multi-vtable ABI, §24 RTTI wiring, §25 unannotated `_ZTV`, §26 bitfields, §30 unnamed
+    parameters, §21 leftovers, and the `4900866` a.out neutrality question. All pre-date this pass and
+    none block a reader of the render.
+
+---
 
 ## 1. Single-line functions get no decompiled body — DONE
 
@@ -54,7 +77,8 @@ missing close line to the start line, so the whole body crams onto the one decl
 line via the existing overflow path. Aliased out-of-line copies (ctor `C1`/`C2`,
 dtor `D0`/`D1`/`D2`) collapse onto one line; decompiling each would stack
 duplicate bodies, so a single-line function is only bodied when it is the sole
-range on its line — aliases keep the skeleton's side-by-side decls.
+range on its line. Multi-line functions have no such guard and do stack them —
+§37(a) — aliases keep the skeleton's side-by-side decls.
 
 ## 2. Render decompilation from clang tokens, not flat C text
 
@@ -1102,7 +1126,9 @@ spans genuinely overlap).
 is 25 lines (L32–56) with two blank rows after it, so whatever the anchors don't absorb piles onto the
 last free row — `unpackfile.cpp` L58 is 4,716 chars. No layout rule fixes N rows into M < N slots; the
 choices are cram (current), spill past the span and break alignment for everything below, or drop
-content. Worth deciding deliberately rather than by accident.
+content. Worth deciding deliberately rather than by accident. Seen again on `xdvimage.cpp` (§37(e)),
+where the span is oversubscribed largely because §37(a)'s duplicate bodies compete for it — so fix
+that first and measure this again, rather than deciding against a number that is partly noise.
 
 ## 30. Unnamed parameters are missing from stabs, and the short list corrupted storage — PARTLY DONE
 
@@ -1570,6 +1596,82 @@ regions are the caller's code *around* the stretch, not something that file inli
 `⇐ inlines` note stays.
 
 ---
+
+## 37. `xdvimage.cpp` read end to end: seven defects, ranked by what the reader loses — open
+
+One 180-row decomp view (`appquery`, 130 non-blank rows) read line by line rather than counted. The
+counters call this file clean: braces balance, nothing is misplaced above its own line, and the
+grammar script's subtracted families hide most of what is wrong with it. Everything below is visible
+only by reading the output.
+
+### (a) Aliased copies render two and three times — the largest single source of noise
+
+`XDVImage::XDVImage(` appears **3×**, `__inline_xdvimage_cpp_30(` **2×**, and source line 36 holds
+**8 rows**: 37–40 and 41–44 are the same statements twice over, differing only in Ghidra's local
+names (`__ret_4`/`__n_3` against `local_78`). These are gcc's ctor `C1`/`C2` and dtor `D0`/`D1`/`D2`
+aliases — one source function, several emitted symbols at the same address range.
+
+§29 already dedups body claims, on `(r.start, head.text)`, and §1 relies on the same idea for
+single-line functions. It fails here for the reason §29's own comment half-anticipated: the copies
+are decompiled **independently**, so Ghidra numbers their locals per copy and the folded heads
+diverge, defeating a key that includes the head verbatim. Keying on something normalised — the head
+with local names stripped, or the statement bodies rather than the head — collapses all of it.
+
+**Worth doing first.** It is contained, it removes ~12 of 130 non-blank rows, and it relieves (e)
+without any layout work, the duplicate bodies being what the span is oversubscribed with.
+
+### (b) A stretch is placed inside an unrelated function — nesting broken across a boundary
+
+Row 47 carries `/* ⇐ L 30 */ void __inline_xdvimage_cpp_30() { … }` — destructor material — and lands
+between `has_slt`'s opening row 45 and the continuation of its body at row 84. A whole foreign
+definition sits inside another function's braces.
+
+§29 established that a statement can no longer be placed *above* the line it came from. This is the
+same failure downward: a claim anchored at L30 slid 17 rows and crossed a function boundary on the
+way. The anchor rule bounds where a row starts, not what it passes through. Claims want barring from
+crossing an enclosing function's span, which `FunctionSpans` already knows.
+
+### (c) A file-scope global is emitted inside a function body
+
+Row 29, `struct __class_type_info_pseudo const _ZTI5Image = …`, sits between the constructor's head
+(row 27) and its body (row 30). It is a global whose declLine happens to fall inside the
+constructor's span. Nothing checks that a `GLOBAL` claim is not landing inside a `FUNCTION_BODY`'s
+braces — the same missing constraint as (b), seen from the declaration side, and probably one fix.
+
+### (d) Member calls still pass `this`, so definitions and call sites disagree
+
+`find_slt(this,uVar1)` ×5, `get_index_in_slt(this,slt_id)` ×3, `has_slt(this,any)` ×1.
+`asMemberDefinition` strips Ghidra's explicit this-parameter from *definitions* (the
+`invalid parameter name: 'this' is a keyword` family in the grammar section), so the two halves of
+the render now contradict each other and neither compiles. The call-site rewrite is the mirror of the
+definition one and can read the same `this` token `DecompTokens` already identifies for
+`renameThis`.
+
+### (e) The cram, seen on a second fixture
+
+Rows 39, 33 and 34 are **585, 516 and 454 characters**. This is §29's "residual, structural:
+function-tail cram" on a file other than `unpackfile`, and the same three choices apply. Note the
+coupling to (a): here the span is oversubscribed largely *because* the aliased bodies are competing
+for it, so measure this again after (a) before deciding anything.
+
+### (f) 19 rows of displaced/stale tail on a ~150-line file
+
+Four entries claim lines 302–348 in a file that ends near 150 — `__Normal`, `_Trivial`,
+`_Is_normal_iterator<…>`, all libstdc++ internals gcc misfiled here — and the rest are
+`(line already taken)`. The `stale N_SOL` ones are the file's own activity extent already saying they
+do not belong, which is the "Misattributed declarations" work applied to the trailing block rather
+than to placement.
+
+### (g) Decompiler artefacts that carry recoverable information
+
+16 `LAB_…`/`goto` rows, and 2 unresolved virtual calls spelled
+`(**(code **)(*(int *)this + 8))(this,uVar2,…)`. The vcall is the interesting one: it is a vtable
+slot, and the render **declares the vtable type in the same file** (`XDVImage_vftable`), so the
+offset can be resolved to the method it calls rather than printed as arithmetic.
+
+---
+
+---
 ## 33. Blank space dominates the render — 87% of rows, and it is concentrated
 
 Measured on `unpackfile.exe` decomp output: **16,659 of 19,184 rows are blank (87%)**, and
@@ -1671,7 +1773,8 @@ Three groups, by cost to fix:
 **1. Mechanical spelling — cheap, self-contained (unpackfile counts).** Each is one rendering rule.
 
 - `invalid parameter name: 'this' is a keyword` (77) — signatures render Ghidra's this-parameter
-  literally as `this`.
+  literally as `this`. Fixing the signature is only half: the *call sites* still pass it
+  (`find_slt(this,…)`), so the two halves disagree. See §37(d).
 - `constructor cannot have a return type` (14), `destructor cannot have a return type` (8),
   `destructor cannot have any parameters` (8) — `void XVImage::XVImage(XVImage *this)`. Ghidra gives
   every function a return type; ctors and dtors must not print one.
