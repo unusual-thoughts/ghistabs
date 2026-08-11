@@ -24,6 +24,40 @@ class FileRenderer(val renderer: Renderer, override val source: String) : Render
 
     private val spans = FunctionSpans.of(rawFuncs, source)
 
+    override fun indentFor(line: Int) = if (spans.inFunction(line)) 4 else 0
+
+    /**
+     * How far into this file gcc showed evidence of real activity. Past it, a declaration's line is
+     * not to be trusted.
+     *
+     * What counts depends on whether the file *defines* functions, and conflating the two breaks the
+     * signal in opposite directions. A .cpp is measured by its code, and by nothing a declaration
+     * says: misattributed libstdc++ declarations landing at line 898 of a 180-line file are exactly
+     * what this is meant to catch, so counting them defines the extent by the very thing it is
+     * judging. That held for types already; it did not for symbols, and `main.cpp` rendered 1456 rows
+     * for a file whose code stops at L166 because twenty `vmN_trapset_names` tables gcc misfiled into
+     * it reach L1342 and set their own extent (§38). A header defines no functions and contributes
+     * N_SLINEs only where its code was inlined elsewhere, so measuring it that way read xvimage.h's
+     * extent off whatever happened to be inlined — it stopped at 32 and called the file's own
+     * `class XVImage` at 36 misattributed. There, declarations are the only evidence there is.
+     */
+    private val activityExtent = when {
+        spans.ranges.isEmpty() -> sequenceOf(
+            lines.maxOfOrNull { it.line } ?: 0,
+            symbols.maxOfOrNull { it.declLine } ?: 0,
+            typeDecls.maxOfOrNull { it.declLine } ?: 0,
+        ).max()
+
+        else -> maxOf(lines.maxOfOrNull { it.line } ?: 0, spans.ranges.maxOf { it.endInclusive })
+    }
+
+    // A decl at this line is misattributed (stale N_SOL) if it sits past the file's activity.
+    override fun isStale(line: Int) = line > activityExtent
+
+    // Stale declarations still count towards the canvas height even though they are never laid out on
+    // it: the claim builders gate on [maxLine], so a declaration off the end of a shortened canvas is
+    // not displaced to the appendix, it is never built. Trailing blank rows are the decomp render's
+    // to trim.
     private val maxLine = sequenceOf(
         spans.maxLine,
         lines.maxOfOrNull { it.line } ?: 0,
@@ -32,35 +66,6 @@ class FileRenderer(val renderer: Renderer, override val source: String) : Render
     ).max()
 
     private val canvas = Canvas(maxLine)
-
-    override fun indentFor(line: Int) = if (spans.inFunction(line)) 4 else 0
-
-    // A declLine past the file's activity extent flags a stale N_SOL. Body extent for CUs;
-    // type-decl extent for pure-header files.
-
-    /**
-     * How far into this file gcc showed evidence of real activity. Past it, a declaration's line is
-     * not to be trusted.
-     *
-     * What counts depends on whether the file *defines* functions, and conflating the two breaks the
-     * signal in opposite directions. A .cpp is measured by its code: its own type declarations must
-     * not extend it, because misattributed libstdc++ declarations landing at line 898 of a 180-line
-     * file are exactly what this is meant to catch — count them and the extent is defined by the very
-     * thing it is judging, and `typedef struct bit_vector bit_vector;` at L720 stops being flagged.
-     * A header defines no functions and contributes N_SLINEs only where its code was inlined
-     * elsewhere, so measuring it that way read xvimage.h's extent off whatever happened to be inlined
-     * — it stopped at 32 and called the file's own `class XVImage` at 36 misattributed. There, type
-     * declarations are the evidence.
-     */
-    private val activityExtent = sequenceOf(
-        lines.maxOfOrNull { it.line } ?: 0,
-        symbols.maxOfOrNull { it.declLine } ?: 0,
-        spans.ranges.maxOfOrNull { it.endInclusive } ?: 0,
-        if (spans.ranges.isEmpty()) typeDecls.maxOfOrNull { it.declLine } ?: 0 else 0,
-    ).max()
-
-    // A decl at this line is misattributed (stale N_SOL) if it sits past the file's activity.
-    override fun isStale(line: Int) = line > activityExtent
 
     fun render(): String {
         if (rawFuncs.isEmpty() && lines.isEmpty() && typeDecls.isEmpty()) return ""

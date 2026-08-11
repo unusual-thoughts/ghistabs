@@ -1700,7 +1700,7 @@ offset can be resolved to the method it calls rather than printed as arithmetic.
 
 ---
 
-## 38. gcc drops the file of every deferred file-scope static — open
+## 38. gcc drops the file of every deferred file-scope static — partly done
 
 `main.cpp` renders **1456 rows for a file whose code ends at L166**. The other 1290 are twenty
 `vmN_trapset_names` tables claiming L12, 82, 152, … 1342 — a 70-line stride, 65 names plus decl,
@@ -1718,12 +1718,28 @@ address within it (`__ioinit` (.bss) before the tables (.rodata)), while `<iostr
 `BINCL` block is *empty* (checksum 0, an `EINCL` on the next record): the header declares no types, so
 there is nothing bracketed to anchor it either.
 
-**`activityExtent` cannot flag them, for the second time and by a different term.** It takes
-`max(lines, symbols.declLine, spans.end)`, and `symbols.declLine` is read from the very symbols it is
-meant to judge — extent 1342, so nothing is stale. That is the circularity priority-2 records for
-typedefs in headers, reappearing on a `.cpp` through the symbol term. Fixing it takes main.cpp from
-1456 rows to about 170, and it is what has to happen first: six `#include`s currently spill out of the
-band to the bottom as `no free row in the band` because the canvas is eight times too tall.
+**`activityExtent` could not flag them, for two reasons — DONE.** It took
+`max(lines, symbols.declLine, spans.end)`, and `symbols.declLine` was read from the very symbols it
+was meant to judge — extent 1342, so nothing was stale. That is the circularity priority-2 records
+for typedefs in headers, reappearing on a `.cpp` through the symbol term; a file that defines
+functions is now measured by its code alone (`lines`, `spans`), and one that defines none still has
+only its declarations to go on. The second reason was quieter: **`emitGlobal` never set `stale` at
+all**, so no global was ever judged, and fixing the extent by itself changed nothing. Both together
+take main.cpp from **1456 rows to 251** and touch no other file in either fixture; seventeen tables
+go to the appendix, and the three at L12/82/152 stay because they fall inside the code extent — which
+is what the run-grouping above is for. Clang totals do not move (the tables were valid C++ wherever
+they sat).
+
+Two things the fix deliberately did *not* do:
+
+- **The canvas is still `maxLine` tall.** Computing it from non-stale declarations instead looked
+  obvious and is wrong: the claim builders gate on `maxLine`, so a declaration off the end of a
+  shortened canvas is never *built*, and unpackfile.cpp's appendix silently lost 57 of its 78
+  entries. Decomp trims trailing blanks so it does not care; the skeleton renders main.cpp as ~1400
+  blank rows and an appendix, which is §33's decision to make. Doing it properly means dropping the
+  `declLine in 1..maxLine` guards from the builders and letting the allocator's `OFF_CANVAS` path
+  carry them to the appendix, where the dropped-claim plumbing already goes.
+- **Nothing tries to name the file.** See the grades below.
 
 **What is recoverable, in three grades.**
 
