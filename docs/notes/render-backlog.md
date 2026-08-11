@@ -1786,6 +1786,32 @@ offset can be resolved to the method it calls rather than printed as arithmetic.
 
 ---
 
+## 41. `demanglerHasNoEmptyStubs` has never passed on the newest fixture — open
+
+`crypto_mi_test_gcc421_fullstabs_stripped.exe` yields **42 empty `/Demangler/CryptoPP/*` stubs**
+(`AbstractGroup`, `AlgorithmImpl`, `BlockCipherFinal`, …) and `DemanglerWhitelist.ALLOWED` contains
+**no CryptoPP entry at all**. The dates settle it: the whitelist was last written 2026-07-30
+(`b56bd2e`), the fixture was committed 2026-08-07 (`61a5aa0`, 49 commits later). It entered the
+corpus with 42 untriaged stubs and the test has been red ever since — no code change caused it.
+
+Which of the two things it is has not been decided:
+
+- **Inherent**, like the rest of the whitelist — a stub the demangler names from a mangled symbol
+  that this binary only forward-declares, with no full class stab to bind to. Then whitelist them.
+- **A real materialization gap.** The fixture is *fullstabs*-stripped: full stabs, stripped symbol
+  table. If the CryptoPP classes do have complete stabs, 42 of them failing to bind to their
+  demangler stubs is the gap the test exists to catch, and whitelisting would bury it.
+
+Read a few of the 42 against the stabs before choosing.
+
+**Method note, because it cost a bisect.** Fixture binaries are tracked but were all added in one
+`commit binary fixtures`, so copying one into an older worktree to bisect *manufactures* the failure
+at commits where that fixture was never part of the corpus. The three "it fails here too" results
+that pointed away from this session's changes were right about the conclusion and worthless as
+evidence. Check when a fixture entered the corpus before bisecting a fixture-specific failure.
+
+---
+
 ## 40. The render is not reproducible under load — open
 
 `Renderer.decompile` gives Ghidra 30 seconds per function
