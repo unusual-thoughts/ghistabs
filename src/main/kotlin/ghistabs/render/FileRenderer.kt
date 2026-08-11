@@ -32,25 +32,31 @@ class FileRenderer(val renderer: Renderer, override val source: String) : Render
      * How far into this file gcc showed evidence of real activity. Past it, a declaration's line is
      * not to be trusted.
      *
-     * What counts depends on whether the file *defines* functions, and conflating the two breaks the
-     * signal in opposite directions. A .cpp is measured by its code, and by nothing a declaration
-     * says: misattributed libstdc++ declarations landing at line 898 of a 180-line file are exactly
-     * what this is meant to catch, so counting them defines the extent by the very thing it is
-     * judging. That held for types already; it did not for symbols, and `main.cpp` rendered 1456 rows
-     * for a file whose code stops at L166 because twenty `vmN_trapset_names` tables gcc misfiled into
-     * it reach L1342 and set their own extent (§38). A header defines no functions and contributes
-     * N_SLINEs only where its code was inlined elsewhere, so measuring it that way read header.h's
-     * extent off whatever happened to be inlined — it stopped at 32 and called the file's own
-     * `class bouniaf` at 36 misattributed. There, declarations are the only evidence there is.
+     * What counts depends on whether gcc compiled the file as a translation unit or only included it,
+     * and conflating the two breaks the signal in opposite directions. A CU is measured by its code,
+     * and by nothing a declaration says: misattributed libstdc++ declarations landing at line 898 of a
+     * 180-line file are exactly what this is meant to catch, so counting them defines the extent by
+     * the very thing it is judging. That held for types already; it did not for symbols, and
+     * `main.cpp` rendered 1456 rows for a file whose code stops at L166 because twenty
+     * `vmN_trapset_names` tables gcc misfiled into it reach L1342 and set their own extent (§38). An
+     * included file contributes N_SLINEs only where its code was inlined elsewhere, so measuring it
+     * that way read header.h's extent off whatever happened to be inlined — it stopped at 32 and
+     * called the file's own `class bouniaf` at 36 misattributed. There, declarations are the only
+     * evidence there is.
+     *
+     * Which regime a file is in is what gcc's `N_SO` says. It used to be `spans.ranges.isEmpty()`
+     * standing in for "is a header", and that leaks both ways: a header of inline methods has spans
+     * (`filesystemimage.h`, right answer by luck), and a CU whose every function was inlined away has
+     * none.
      */
-    private val activityExtent = when {
-        spans.ranges.isEmpty() -> sequenceOf(
+    private val activityExtent = when (source in index.compilationUnits) {
+        true -> maxOf(lines.maxOfOrNull { it.line } ?: 0, spans.ranges.maxOfOrNull { it.endInclusive } ?: 0)
+
+        false -> sequenceOf(
             lines.maxOfOrNull { it.line } ?: 0,
             symbols.maxOfOrNull { it.declLine } ?: 0,
             typeDecls.maxOfOrNull { it.declLine } ?: 0,
         ).max()
-
-        else -> maxOf(lines.maxOfOrNull { it.line } ?: 0, spans.ranges.maxOf { it.endInclusive })
     }
 
     /**
@@ -63,13 +69,28 @@ class FileRenderer(val renderer: Renderer, override val source: String) : Render
             lines.maxOfOrNull { it.line } ?: 0,
             spans.ranges.maxOfOrNull { it.endInclusive } ?: 0,
             symbols.maxOfOrNull { it.declLine } ?: 0,
-            typeDecls.filterNot { it.name!!.substringBefore('<') to it.declLine in index.conflictedTemplateDecls }
-                .maxOfOrNull { it.declLine } ?: 0,
+            typeDecls.filterNot { disputed(it) }.maxOfOrNull { it.declLine } ?: 0,
         ).max()
     }
 
     // A decl at this line is misattributed (stale N_SOL) if it sits past the file's activity.
     override fun isStale(line: Int) = line > activityExtent
+
+    /** A declaration several files claim at one line — at most one of them rightly. */
+    private fun disputed(type: Type) = type.name!!.substringBefore('<') to type.declLine in
+        if (type.body is TypeDecl.Struct || type.body is TypeDecl.Enum) {
+            index.conflictedTemplateDecls
+        } else {
+            index.conflictedTypedefDecls
+        }
+
+    /**
+     * [disputed], on a line this file cannot reach.
+     *
+     * An uncontested declaration past the reach stays: that is `class bouniaf` at header.h L36, four
+     * lines past the last of the header that happened to be inlined, and it is the file's own content.
+     */
+    private fun misfiled(type: Type) = disputed(type) && type.declLine > ownExtent
 
     /**
      * How tall the canvas is: the file's attested activity, plus every declaration that is not
@@ -253,18 +274,21 @@ class FileRenderer(val renderer: Renderer, override val source: String) : Render
     }
 
     private fun typedefClaims(): List<Claim> {
-        data class Td(val line: Int, val name: String, val rendered: String)
+        data class Td(val ast: Type, val name: String, val rendered: String) {
+            val line get() = ast.declLine
+        }
 
         val typedefs = typeDecls
             .filter { it.body !is TypeDecl.Struct && it.body !is TypeDecl.Enum }
             .mapNotNull { ast ->
-                ast.name?.let { Td(ast.declLine, it, ast.body.render()) }
+                ast.name?.let { Td(ast, it, ast.body.render()) }
             }
 
         // A genuine typedef has one definition site. The same alias+target recurring across a .cpp
         // is stab N_SOL splaying one libstdc++ instantiation typedef (`iterator_traits<X>::_ValueType`,
         // emitted per instantiation) whose N_SOL named the CU — flag every copy misattributed.
-        // Headers are the canonical home and keep theirs.
+        // Headers are the canonical home and keep theirs; where two of them claim one typedef at one
+        // line, [misfiled] settles it by reach instead.
         val splayed = if (source.hasHeaderExtension()) {
             emptySet()
         } else {
@@ -275,7 +299,8 @@ class FileRenderer(val renderer: Renderer, override val source: String) : Render
         // declLine the old dedup used — is what makes this fire when misattribution splays a
         // typedef across several bogus lines.
         val seen = mutableSetOf<Pair<String, String>>()
-        val claims = typedefs.sortedBy { it.line }.mapNotNull { (line, name, rendered) ->
+        val claims = typedefs.sortedBy { it.line }.mapNotNull { (ast, name, rendered) ->
+            val line = ast.declLine
             val key = name to rendered
             if (!seen.add(key)) {
                 null
@@ -284,7 +309,7 @@ class FileRenderer(val renderer: Renderer, override val source: String) : Render
                     Owner.TYPEDEF,
                     line,
                     listOf(Row("typedef $rendered $name;", indentFor(line), note = "")),
-                    stale = isStale(line) || key in splayed,
+                    stale = isStale(line) || key in splayed || misfiled(ast),
                 )
             }
         }
@@ -473,12 +498,11 @@ class FileRenderer(val renderer: Renderer, override val source: String) : Render
             .groupBy { it.declLine to it.name!!.substringBefore('<') }
 
         for ((key, group) in byDecl.entries.sortedBy { it.key.first }) {
-            val (line, template) = key
-            // Filed under several sources at one line: at most one is right, so it renders only where
-            // the line is one this file plausibly reaches. stl_vector.h's own content runs past L900
-            // and keeps its copy; image.h's stops at L53 and cannot be declaring anything at L898.
-            // See [HarvestIndex.conflictedTemplateDecls].
-            if (template to line in index.conflictedTemplateDecls && line > ownExtent) {
+            val (line, _) = key
+            // Renders only where the line is one this file plausibly reaches: stl_vector.h's own
+            // content runs past L900 and keeps its copy, image.h's stops at L53 and cannot be
+            // declaring anything at L898. See [misfiled].
+            if (misfiled(group.first())) {
                 group.first().emitTypeBody(line, group.size)?.let { displaced += Dropped(it, CONFLICTED_DECL) }
                 mergedInstantiations += group.drop(1)
                 continue
