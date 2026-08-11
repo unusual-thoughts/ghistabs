@@ -81,10 +81,10 @@ fun String.isStdMarkerPath(): Boolean = STD_MARKERS.containsMatchIn(this)
  * definitions, and the bare `#include "x.h"` spelling where another TU only forward-references it.
  * Each CU's N_BINCL carries a different checksum (its own expansion), so they can't be merged by
  * checksum — basename identity is the signal. Every spelling of one basename folds onto the
- * **fullest** of them, so long as the full ones **all agree on their immediate parent directory**:
+ * **fullest** of them, so long as the full ones **all agree on their last two directories**:
  * one physical header compiled under several build roots (`.../xvimage/image.h` from a Jenkins tree
- * and a devtools tree) keeps that parent, while genuinely distinct headers (`moduleA/config.h`,
- * `moduleB/config.h`) disagree on it and nothing folds.
+ * and a devtools tree) keeps them, while genuinely distinct headers (`moduleA/config.h`,
+ * `moduleB/config.h`, or mingw's `include/stdarg.h` against gcc's own) disagree and nothing folds.
  *
  * A path wins over the bare name because the render writes a source *tree*: a folded-to-bare
  * `image.h` landed at the top level next to `main.cpp` while the stabs knew it lived in
@@ -99,12 +99,17 @@ fun String.isStdMarkerPath(): Boolean = STD_MARKERS.containsMatchIn(this)
  */
 fun foldSourcePaths(filenames: Iterable<String>): Map<String, String> {
     fun isBare(s: String) = '/' !in s && '\\' !in s
-    fun parentDir(s: String) = pathSegments(s).dropLast(1).lastOrNull().orEmpty()
+
+    // Two directory segments, not one: `include` alone is far too common a parent to identify a file
+    // by. `c:/mingw/include/stdarg.h` and `c:/mingw/lib/gcc-lib/mingw32/3.2.3/include/stdarg.h` are
+    // different headers that agree on it, and only the accident that one of them never reaches this
+    // set kept them from merging. `mingw/include` against `3.2.3/include` separates them.
+    fun parentDirs(s: String) = pathSegments(s).dropLast(1).takeLast(2)
 
     val all = filenames.toSet()
     val fold = all.groupBy(String::pathBasename).mapNotNull { (_, spellings) ->
         spellings.filterNot(::isBare)
-            .takeIf { it.isNotEmpty() && it.mapTo(mutableSetOf(), ::parentDir).size == 1 }
+            .takeIf { it.isNotEmpty() && it.mapTo(mutableSetOf(), ::parentDirs).size == 1 }
             ?.minWithOrNull(compareBy({ pathSegments(it).size }, { it }))
             ?.let { fullest -> spellings.map { it to fullest } }
     }.flatten().toMap()
