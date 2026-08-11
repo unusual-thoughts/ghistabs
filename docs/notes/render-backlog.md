@@ -86,14 +86,22 @@ numbered in the order they were *found*, not worked; this is the order to work t
      template in this binary. A stdlib header rather than a project one is most of the win, but it is
      the wrong stdlib header, and nothing in the debug info prefers the right one.
 
-     **What is left is one type, and the debug info genuinely does not say.** `_Alloc_traits<unsigned
-     short>` (image.h L898) has no methods, no base relationship, and *no instantiation in any stdlib
-     header* — all eight of them are scattered across project files, so there is no seed of any kind.
-     Its real home is stl_alloc.h. The one striking fact is that every one of those eight carries
-     declLine **898**: a single template, declared once, in a file none of them are filed under. That
-     is enough to know they are all wrong and not enough to name the right one — the same wall as
-     §38's grade 3. It is also what still holds image.h's canvas at 903 lines for 25 rows of content,
-     so §33 cannot be re-measured until it moves.
+     **The last type could not be named, so it is no longer placed — DONE.** `_Alloc_traits<unsigned
+     short>` (image.h L898) has no methods, no base relationship and no instantiation in any stdlib
+     header, so nothing can name its home (stl_alloc.h) — §38's grade-3 wall. But every one of its
+     eight instantiations carries declLine **898** across image.h, vminfo.h, xvimage.h and three CUs,
+     and a template is declared once: they cannot all be right. Knowing they are all wrong is enough
+     to stop placing them, which is what the displaced appendix is for.
+
+     `conflictedTemplateDecls` collects `(template, declLine)` pairs filed under more than one source;
+     such a declaration renders only where the line is one the file plausibly reaches (`ownExtent` —
+     code, globals, and the type declarations not themselves in dispute). stl_vector.h's content runs
+     past L900 so it keeps its copy; image.h stops at L53 and cannot be declaring anything at L898.
+
+     **This is where the blank space went.** image.h **903 → 59 lines**, xvimage.h 903 → 79,
+     vminfo.h 904 → 196; appquery's whole render 24,957 → 22,581 lines with row count unchanged
+     (3121 → 3122, the appendix entries). Nothing else in the render moves. §33's numbers can now be
+     re-measured honestly — and a good part of what they were counting was this.
 
    **§38 is the third instance of the extent circularity and the worst**: `main.cpp` rendered 1456
    rows for a 166-line file. That half is DONE; the exact RTTI attribution (§38 grade 1) is too.
