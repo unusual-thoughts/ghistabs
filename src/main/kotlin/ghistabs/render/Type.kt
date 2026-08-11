@@ -296,11 +296,21 @@ interface RenderContext {
             }
         }
         val parts = literal?.let { listOf(it) } ?: addr?.let { program.initializerAt(it) }
+        // Judged for misattribution like any other declaration. gcc drops the file of every deferred
+        // file-scope static (`dbxout_prepare_symbol` emits the symbol's own N_SOL only under
+        // WINNING_GDB), so these are the *most* likely records to be filed under the wrong source —
+        // twenty `vmN_trapset_names` tables from a header gcc filed into main.cpp, reaching L1342 in a
+        // file whose code stops at L166. See §38.
+        val stale = isStale(rec.declLine)
         return when {
-            parts == null -> Claim(Owner.GLOBAL, rec.declLine, listOf(Row("$base;", indent, role)))
+            parts == null -> Claim(Owner.GLOBAL, rec.declLine, listOf(Row("$base;", indent, role)), stale = stale)
 
-            parts.size == 1 ->
-                Claim(Owner.GLOBAL, rec.declLine, listOf(Row("$base = ${parts[0]};", indent, role)))
+            parts.size == 1 -> Claim(
+                Owner.GLOBAL,
+                rec.declLine,
+                listOf(Row("$base = ${parts[0]};", indent, role)),
+                stale = stale,
+            )
 
             // A multi-element aggregate knows where it starts and not where it ends.
             else -> Claim(
@@ -308,6 +318,7 @@ interface RenderContext {
                 rec.declLine,
                 FileRenderer.braceRows("$base = {", parts.map { "$it," }, "};", indent, role),
                 Fit.ELASTIC,
+                stale,
             )
         }
     }
