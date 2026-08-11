@@ -431,7 +431,10 @@ class FileRenderer(val renderer: Renderer, override val source: String) : Render
             val sig = r.func.sourceSignature(program)
             val name = r.func.demangledName
             val openText = if (r.isSingleLine) "$sig;" else "$sig {"
-            val openNote = if (r.isSingleLine) name else "opens $name"
+            // Say when the body is missing because Ghidra ran out of time, rather than leaving a
+            // bodiless `sig {` that reads like a function with nothing in it (§40).
+            val timedOut = if (r.func.addr in renderer.undecompiled) ", decompilation did not finish" else ""
+            val openNote = if (r.isSingleLine) name else "opens $name$timedOut"
             this += Claim(Owner.FUNC_DELIM, r.start, listOf(Row(openText, note = openNote)))
             val closeLine = with(spans) { r.closeLine } ?: continue
             if (closeLine !in 1..maxLine) continue
