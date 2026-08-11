@@ -232,9 +232,26 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
             .filter { '<' in it.key }
             .groupBy({ it.key.substringBefore('<') }, { it.value })
             .mapValues { (_, homes) -> homes.groupingBy { it }.eachCount().maxByOrNull { it.value }!!.key }
-        voted + astsByName.keys
+        val bySibling = voted + astsByName.keys
             .filter { '<' in it && it !in voted }
             .mapNotNull { name -> homeByTemplate[name.substringBefore('<')]?.let { name to it } }
+        // Last resort, and it is structural rather than evidential: a base class inherits where its
+        // derived class went. Bases only — extending it to field types moved nothing on the corpus. `_Vector_alloc_base<unsigned short>` declares three pointers, has no
+        // methods, and no instantiation of *that* template anywhere in the corpus has an out-of-line
+        // method — so neither the vote nor the sibling pass can reach it. What is known is that
+        // `_Vector_base<unsigned short>`, which derives from it, lives in stl_vector.h. Chains run
+        // `vector` → `_Vector_base` → `_Vector_alloc_base`, hence the rounds; templates only, so a
+        // project class can never be dragged along by a base it shares with the standard library.
+        (1..3).fold(bySibling) { homes, _ ->
+            homes + typeAsts.values
+                .flatMap { ast ->
+                    val home = ast.name?.let { homes[it] } ?: return@flatMap emptyList()
+                    (ast.body as? TypeDecl.Struct)?.bases.orEmpty().mapNotNull { base ->
+                        (base.type as? TypeDecl.Ref)?.id?.let { byId(it) }?.name
+                            ?.takeIf { '<' in it && it !in homes }?.let { it to home }
+                    }
+                }
+        }
     }
 
     private val votedHeaderHints: Map<String, String> by lazy {
