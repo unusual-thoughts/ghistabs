@@ -224,6 +224,20 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
     }
 
     private val multiSourceHeaderHints: Map<String, String> by lazy {
+        // An instantiation with no method evidence of its own — `_Vector_alloc_base<unsigned short>`
+        // declares three pointers and no methods — inherits what its siblings' methods established.
+        // One template lives in one header, so `_Vector_alloc_base<Exclusion>` answers for it.
+        val voted = votedHeaderHints
+        val homeByTemplate = voted.entries
+            .filter { '<' in it.key }
+            .groupBy({ it.key.substringBefore('<') }, { it.value })
+            .mapValues { (_, homes) -> homes.groupingBy { it }.eachCount().maxByOrNull { it.value }!!.key }
+        voted + astsByName.keys
+            .filter { '<' in it && it !in voted }
+            .mapNotNull { name -> homeByTemplate[name.substringBefore('<')]?.let { name to it } }
+    }
+
+    private val votedHeaderHints: Map<String, String> by lazy {
         val funcsByMangled = harvest.functions.filter { (it.sizeBytes ?: 0uL) > 0uL }.associateBy { it.name }
         val defSourcesByName = typeAsts.values
             .filter { it.name != null }
@@ -244,7 +258,12 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
         buildMap {
             for ((name, asts) in astsByName) {
                 val defSources = defSourcesByName[name] ?: continue
-                if (defSources.all { it.hasHeaderExtension() }) continue
+                // A template instantiation is the one thing gcc files by accident: it emits
+                // `vector<unsigned short>` inside whichever header first needed it, so image.h — a
+                // header, hence already past this guard — collected 31 rows of libstdc++. Everything
+                // else declared only in headers is left alone, which also bounds what this loop costs.
+                val templated = '<' in name
+                if (!templated && defSources.all { it.hasHeaderExtension() }) continue
                 val methods = asts.flatMap { (it.body as? TypeDecl.Struct<*>)?.methods.orEmpty() }
                 if (methods.isEmpty()) continue
                 // A type's own def sources win by body size, so exclude them from the vote.
@@ -272,9 +291,17 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
                     .mapNotNull { m -> funcsByMangled[m.mangled]?.cu?.filename }
                     .distinct().singleOrNull()
                     ?.let { cu -> headersByStem[cu.pathBasename().substringBeforeLast('.')] }
-                val winner = userVote.maxByOrNull { it.value }?.key
-                    ?: siblingHeader
-                    ?: stdVote.takeIf { defSources.size > 1 }?.maxByOrNull { it.value }?.key
+                val user = userVote.maxByOrNull { it.value }?.key
+                val std = stdVote.maxByOrNull { it.value }?.key
+                // An instantiation follows its code: with no user header voting, the stdlib headers
+                // its methods' bodies live in are what say where it came from, and its sibling header
+                // is just the CU that happened to need it. A plain class is the other way round —
+                // `class Image` is stabs-declared in stl_vector.h and belongs to image.h, which is
+                // what `siblingHeader` recovers and what the stdlib vote would get wrong.
+                val winner = when {
+                    templated -> user ?: std ?: siblingHeader
+                    else -> user ?: siblingHeader ?: std?.takeIf { defSources.size > 1 }
+                }
                 winner?.let { put(name, it) }
             }
         }
