@@ -16,7 +16,9 @@ numbered in the order they were *found*, not worked; this is the order to work t
    result because for a file with no function spans it falls back to counting type declarations —
    the same circularity fixed for `.cpp` files. Note the coupling recorded below: `image.h` is a
    known source largely *because* these are filed there, so this and the sibling-header lookup have
-   to move together.
+   to move together. **§38 is the third instance and the worst**: `main.cpp` renders 1456 rows for a
+   166-line file because twenty misfiled tables reach L1342, and the extent term that should catch
+   them is computed from them. Take §38's exact half (the RTTI family) with this one.
 3. **§33, blank space.** 87% of rows, 92% of that in runs of 20+. Options were written up and never
    chosen; it needs a decision more than it needs work.
 4. **`redefinition of X`** (16 on unpackfile). Duplicate declarations that survived the class-body
@@ -1695,6 +1697,50 @@ than to placement.
 `(**(code **)(*(int *)this + 8))(this,uVar2,…)`. The vcall is the interesting one: it is a vtable
 slot, and the render **declares the vtable type in the same file** (`XDVImage_vftable`), so the
 offset can be resolved to the method it calls rather than printed as arithmetic.
+
+---
+
+## 38. gcc drops the file of every deferred file-scope static — open
+
+`main.cpp` renders **1456 rows for a file whose code ends at L166**. The other 1290 are twenty
+`vmN_trapset_names` tables claiming L12, 82, 152, … 1342 — a 70-line stride, 65 names plus decl,
+`};` and a blank each. They are not main.cpp's: `main` occupies L31–166, which the tables at 82 and
+152 would have to interleave with. Their real home is
+`imageutil/vmtrapsetnames.h`, and the render has no way to know it.
+
+**Mechanism, confirmed in gcc's source.** `dbxout_prepare_symbol` emits an `N_SOL` for a symbol's own
+`DECL_SOURCE_FILE` only under `#ifdef WINNING_GDB`, which no shipped build defines. So a file-scope
+static's stab carries its declaration *line* in the desc and inherits whatever `N_SOL` was last in
+effect for its *file* — and these are emitted in one batch after the last function, when the last
+`N_SOL` is the CU. Nor is there an ordering to exploit: the batch is grouped by section and sorted by
+address within it (`__ioinit` (.bss) before the tables (.rodata)), while `<iostream>`'s `BINCL` is
+#480 against vmtrapsetnames.h's #316 — batch order is not include order. And vmtrapsetnames.h's
+`BINCL` block is *empty* (checksum 0, an `EINCL` on the next record): the header declares no types, so
+there is nothing bracketed to anchor it either.
+
+**`activityExtent` cannot flag them, for the second time and by a different term.** It takes
+`max(lines, symbols.declLine, spans.end)`, and `symbols.declLine` is read from the very symbols it is
+meant to judge — extent 1342, so nothing is stale. That is the circularity priority-2 records for
+typedefs in headers, reappearing on a `.cpp` through the symbol term. Fixing it takes main.cpp from
+1456 rows to about 170, and it is what has to happen first: six `#include`s currently spill out of the
+band to the bottom as `no free row in the band` because the canvas is eight times too tall.
+
+**What is recoverable, in three grades.**
+
+- **Exactly: the RTTI family.** `_ZTI5Image` desc 29, and `class Image` is at image.h **L29**;
+  `_ZTI7XVImage` 36 = xvimage.h L36; `_ZTI8AppImage` 19 = appimage.h L19. The line is the *class's*
+  declaration line, so demangling `_ZTI…`/`_ZTS…`/`_ZTV…` to its class and taking that type's own
+  declaring file — which the harvest already knows — fixes the whole family with no guessing. Cheap,
+  and it is most of the 34 entries §37(c) displaced.
+- **Narrowed, soundly: data-only statics.** The home must be a header the CU included whose `BINCL`
+  block is empty, since a header that emitted types would have bracketed them. 32 of main.cpp's ~120
+  includes qualify — `<iostream>` (which really is `__ioinit`'s home) and vmtrapsetnames.h among them.
+  A maximal ascending run in the batch is one file's worth (the tables are one run; the RTTI entries
+  break it), so the grouping is sound even where the name is not.
+- **Only by inference: which of the 32.** Project-path headers over system ones cuts it to three
+  here, and stem-matching `vm3_trapset_names` against `vmtrapsetnames.h` picks it out — but that is a
+  guess and has to be rendered as one (`probably vmtrapsetnames.h L152`), never as attribution. The
+  alternative is ground truth from outside the binary: the headers, or a supplied map.
 
 ---
 
