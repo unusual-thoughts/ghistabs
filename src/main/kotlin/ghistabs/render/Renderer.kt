@@ -58,6 +58,10 @@ class Renderer(
 
     val sources get() = index.sources
 
+    // Ghidra's own default is 30s; a function that needs longer is rare enough to be worth naming
+    // rather than waiting for.
+    private val DECOMPILE_SECONDS = 30
+
     // A function is decompiled once for the whole run, not once per file that renders part of it: with
     // inlined code now placed in the header it came from, one std::string method is wanted by every
     // file that inlines it, and decompilation is ~all of the runtime.
@@ -66,9 +70,21 @@ class Renderer(
     /** One function's decompilation: the rows the render places, and the dataflow behind them. */
     class Decompiled(val lines: List<DecompLine>, val flow: VarFlow)
 
+    /**
+     * Functions Ghidra was given [DECOMPILE_SECONDS] for and did not finish. Without this the render
+     * simply has no body for them and falls back to the skeleton's `sig {` — indistinguishable from a
+     * function with nothing in it, and it moves with machine load, so two renders of one commit can
+     * differ. `xmltest.cpp`'s `main` sits on the boundary and flips run to run (§40).
+     */
+    val undecompiled = mutableSetOf<Address>()
+
     fun decompile(func: Func) = decompiled.getOrPut(func.addr) {
         val results = program.functionManager.getFunctionAt(func.addr)?.let { ghFunc ->
-            runCatching { decomp?.decompileFunction(ghFunc, 30, TaskMonitor.DUMMY) }.getOrNull()
+            runCatching { decomp?.decompileFunction(ghFunc, DECOMPILE_SECONDS, TaskMonitor.DUMMY) }.getOrNull()
+        }
+        if (decomp != null && results?.decompileCompleted() != true) {
+            undecompiled += func.addr
+            println("render[${func.demangledName}]: ${results?.errorMessage ?: "no decompilation"}")
         }
         // Folded onto the function's *own* source, not the file asking: that only governs which locals
         // drop out of the head fold, and the head is used only where the function is defined.
