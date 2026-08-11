@@ -632,10 +632,14 @@ class FileRenderer(val renderer: Renderer, override val source: String) : Render
             .filter { f -> f !in rawFuncs && f.lineEntries.any { it.source == source } }
             .flatMap { f -> f.ownRegions().map { f to it } }
             .filter { (_, r) -> r.anchor != null }
-            // By the inliner's *name*, not the Func: gcc's dtor aliases D0/D1/D2 are one source
-            // function emitted several times, each inlining the same stretch, so xdvimage.cpp showed
-            // `__inline_xdvimage_cpp_30` twice — identical but for which alias the head names.
-            .groupBy { (f, r) -> Triple(f.demangledName, r.anchor, r.lines.map { it.text }) }
+            // Not by the inliner at all: a header line compiled into every call site is what the `×N`
+            // exists for, and keying on who inlined it defeated that — gcc's dtor aliases D0/D1/D2
+            // showed `__inline_xdvimage_cpp_30` twice, and two unrelated functions inlining one line
+            // of stl_alloc.h defined `__inline_stl_alloc_h_236` twice in the same file, which is a
+            // C++ redefinition. Identical text at one anchor is one stretch however many callers
+            // share it; where the text differs — a template instantiated per element type — the
+            // definitions differ in their parameters too and stand as legal overloads.
+            .groupBy { (_, r) -> r.anchor to r.lines.map { it.text } }
             .map { (_, copies) -> copies.first().also { (_, r) -> r.copies = copies.size } }
             .sortedBy { (_, r) -> r.anchor }
             // Adjacent stretches of one function share a wrapper. They cannot interleave with another
