@@ -2,6 +2,7 @@ package ghistabs.render
 
 import ghidra.program.model.address.Address
 import ghistabs.harvest.Func
+import ghistabs.harvest.Symbol
 import ghistabs.harvest.Type
 import ghistabs.harvest.hasHeaderExtension
 import ghistabs.parse.GlobalTypeId
@@ -353,14 +354,64 @@ class FileRenderer(val renderer: Renderer, override val source: String) : Render
     // is the line, and the declaration goes to the appendix like any other that lost its row. One gcc
     // really did declare inside a function carries `enclosingFunction` and belongs where it is.
     private fun globalClaims(): List<Claim> {
-        val (inside, outside) = symbols
-            .mapNotNull { s ->
-                (s.body as? SymbolDecl.Static)?.takeIf { dedup(s.declLine, it.name) }?.let { emitGlobal(it, s) to s }
+        val claims = symbols.mapNotNull { s ->
+            (s.body as? SymbolDecl.Static)?.takeIf { dedup(s.declLine, it.name) }?.let { emitGlobal(it, s) to s }
+        }
+        val reasons = claims.mapNotNull { (claim, s) ->
+            when {
+                s.enclosingFunction != null -> null
+                spans.insideBody(s.declLine) -> Dropped(claim, INSIDE_BODY)
+                s in foreignRun -> Dropped(claim, FOREIGN_RUN)
+                else -> null
             }
-            .partition { (_, s) -> s.enclosingFunction == null && spans.insideBody(s.declLine) }
-        displaced += inside.map { (claim, _) -> Dropped(claim, INSIDE_BODY) }
-        return outside.map { it.first }
+        }
+        displaced += reasons
+        val lost = reasons.mapTo(mutableSetOf()) { it.claim }
+        return claims.map { it.first }.filterNot { it in lost }
     }
+
+    /**
+     * Statics this file did not declare, caught as a group rather than one at a time.
+     *
+     * One symbol at a time, the only proof is a collision: a file-scope definition cannot sit between
+     * a function's braces, so a declLine inside an attested span is foreign and everything else — past
+     * the code, above it, in a gap — is merely suspicious. That reaches 2 of main.cpp's twenty
+     * `vmN_trapset_names` tables. The other eighteen are carried by *uniformity*: an arithmetic
+     * progression of declLines whose members ascend with their addresses is one generated block (here
+     * a stride of exactly 70, `vm1…vm20` in order, ascending through `.rodata`), and a block cannot
+     * have three members in this file and seventeen in another with the progression unbroken across
+     * the boundary. So one collision condemns the run.
+     *
+     * Deliberately narrow. Globals are emitted in declaration order, so plain "ascending" describes
+     * every file's global list and one bad span would condemn all of it; a constant stride over three
+     * or more is the generated-table signature that makes the run a single region. See §38.
+     */
+    private val foreignRun: Set<Symbol> by lazy {
+        symbols
+            .filter { it.body is SymbolDecl.Static && it.enclosingFunction == null && it.rawValue != 0L }
+            .sortedBy { it.rawValue }
+            .uniformRuns()
+            .filter { run -> run.any { spans.insideBody(it.declLine) } }
+            .flatten()
+            .toSet()
+    }
+
+    /** Maximal runs of three or more whose [Symbol.declLine]s form an ascending arithmetic progression. */
+    private fun List<Symbol>.uniformRuns(): List<List<Symbol>> =
+        fold(mutableListOf<MutableList<Symbol>>()) { runs, sym ->
+            val run = runs.lastOrNull()
+            val step = run?.let { sym.declLine - it.last().declLine }
+            val stride = run?.takeIf { it.size > 1 }?.let { it.last().declLine - it[it.size - 2].declLine }
+            if (step != null &&
+                step > 0 &&
+                (stride == null || stride == step)
+            ) {
+                run += sym
+            } else {
+                runs += mutableListOf(sym)
+            }
+            runs
+        }.filter { it.size >= 3 }
 
     // Openers at startLine (self-closing decl when single-line), closers at the close line.
     private fun functionBraceClaims(): List<Claim> = buildList {
