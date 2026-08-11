@@ -319,6 +319,28 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
             }
     }
 
+    /**
+     * A compilation unit's directory, by the filename everything keys it under. gcc records it in the
+     * leading trailing-slash `N_SO`, and `SourceFile.CUSource` has carried it all along; nothing used
+     * it, so `main.cpp` had no path even though the stabs say
+     * `E:/work/cc/devtools/devtools-bluelab-7-0/vm/appquery/`.
+     */
+    private val cuDirectories: Map<String, String> by lazy {
+        (harvest.functions.map { it.cu } + typeAsts.values.map { it.id.source })
+            .filterIsInstance<SourceFile.CUSource>()
+            .mapNotNull { cu -> cu.directory?.let { cu.filename to it } }
+            .toMap()
+    }
+
+    /**
+     * Where a source file lives, for the render's file *tree* only — the CU keys stay bare, since
+     * `cu.filename` also names the DTM category a CU-local type materializes into and those read
+     * better short (`/main.cpp/…`, not `/E:/work/…/main.cpp/…`). A header keeps whatever spelling the
+     * fold settled on: gcc gives it no directory of its own, and inferring one from the CU that
+     * included it is the inference [resolveAgainstDirectory] refuses for good reason.
+     */
+    fun locate(source: String) = cuDirectories[source]?.plus(source) ?: source
+
     /** File-scope symbols per source — by CU, except where the symbol itself names a better one. */
     val symbolsBySource: Map<String, List<Symbol>> by lazy {
         harvest.symbolsByCu.entries
