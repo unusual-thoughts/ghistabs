@@ -9,6 +9,7 @@ import ghistabs.harvest.Symbol
 import ghistabs.harvest.Type
 import ghistabs.importer.AddressResolver
 import ghistabs.materialize.TemplateNameShortener
+import ghistabs.materialize.itanium.Itanium
 import ghistabs.materialize.resolveBuiltin
 import ghistabs.parse.*
 
@@ -302,11 +303,12 @@ interface RenderContext {
         // twenty `vmN_trapset_names` tables from a header gcc filed into main.cpp, reaching L1342 in a
         // file whose code stops at L166. See §38.
         val stale = isStale(rec.declLine)
+        val owner = if (Itanium.isGeneratedData(sym.name)) Owner.GENERATED else Owner.GLOBAL
         return when {
-            parts == null -> Claim(Owner.GLOBAL, rec.declLine, listOf(Row("$base;", indent, role)), stale = stale)
+            parts == null -> Claim(owner, rec.declLine, listOf(Row("$base;", indent, role)), stale = stale)
 
             parts.size == 1 -> Claim(
-                Owner.GLOBAL,
+                owner,
                 rec.declLine,
                 listOf(Row("$base = ${parts[0]};", indent, role)),
                 stale = stale,
@@ -314,7 +316,7 @@ interface RenderContext {
 
             // A multi-element aggregate knows where it starts and not where it ends.
             else -> Claim(
-                Owner.GLOBAL,
+                owner,
                 rec.declLine,
                 FileRenderer.braceRows("$base = {", parts.map { "$it," }, "};", indent, role),
                 Fit.ELASTIC,

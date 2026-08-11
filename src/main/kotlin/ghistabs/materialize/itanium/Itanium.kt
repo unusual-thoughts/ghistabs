@@ -20,8 +20,10 @@ object Itanium {
     const val TYPEINFO_PREFIX = "_ZTI"
     const val TYPEINFO_NAME_PREFIX = "_ZTS"
 
-    // Demangled name of a `_ZTV…` symbol (GnuDemangler emits "vtable", no f).
+    // Demangled name of a `_ZTV…` symbol (GnuDemangler emits "vtable", no f) and of a `_ZTI…` one.
+    // Both take GnuDemanglerParser's AddressTableHandler, whose name is the prefix before " for ".
     const val DEMANGLED_VTABLE = "vtable"
+    const val DEMANGLED_TYPEINFO = "typeinfo"
 
     // gcc __cxxabiv1 typeinfo classes — owners of the RTTI structs (see RttiStructs).
     const val ABI_NAMESPACE = "__cxxabiv1"
@@ -92,6 +94,20 @@ object Itanium {
         return demangle(symbolName)?.let(::demangledVtableClass)
     }
 
+    /** The qualified class a `_ZTI<class>` typeinfo object belongs to, or null if [symbolName] isn't
+     *  one. Unlike its sibling `_ZTS` string, a typeinfo object carries the *class's* own declaration
+     *  line, so knowing the class is enough to file it where the class is declared — see §38. */
+    fun typeinfoClassOf(symbolName: String): String? {
+        if (!symbolName.trimStart('_').startsWith(TYPEINFO_PREFIX.trimStart('_'))) return null
+        return demangle(symbolName)?.let { addressTableClass(it, DEMANGLED_TYPEINFO) }
+    }
+
+    /** Data gcc generated for a class rather than anything the source declares — typeinfo objects,
+     *  their name strings, vtables. None of it has a source line of its own. */
+    fun isGeneratedData(name: String) = name.trimStart('_').let { n ->
+        listOf(VTABLE_PREFIX, TYPEINFO_PREFIX, TYPEINFO_NAME_PREFIX).any { n.startsWith(it.trimStart('_')) }
+    }
+
     /** String-level pre-filter so we don't pay the demangler cost on every label. */
     internal fun looksLikeZtv(symbolName: String) = symbolName.trimStart('_').startsWith("ZTV")
 
@@ -100,8 +116,12 @@ object Itanium {
 
     /** Qualified class name of a demangled vtable object (`::`-joined namespace chain), or null if [obj]
      *  isn't a vtable address-table. */
-    internal fun demangledVtableClass(obj: DemangledObject): String? {
-        if (obj !is DemangledAddressTable || obj.name != DEMANGLED_VTABLE) return null
+    internal fun demangledVtableClass(obj: DemangledObject) = addressTableClass(obj, DEMANGLED_VTABLE)
+
+    /** The class an `<kind> for <class>` address table belongs to, `::`-joined, or null if [obj] is
+     *  not one of [kind]. */
+    private fun addressTableClass(obj: DemangledObject, kind: String): String? {
+        if (obj !is DemangledAddressTable || obj.name != kind) return null
         return generateSequence(obj.namespace) { it.namespace }
             .map { it.name }
             .toList()

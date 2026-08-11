@@ -42,6 +42,15 @@ enum class Owner {
     TYPEDEF,
 
     /**
+     * Compiler-generated data — `_ZTI` typeinfo objects, `_ZTS` typeinfo-name strings. Ranked under
+     * every real declaration because none of it has a source line of its own: a typeinfo carries its
+     * *class's* line (§38), so filing it where the class is declared — which is right — puts it on the
+     * row the class body is rendering, and as a peer it crushed `class Image`'s twenty members onto
+     * one line. It is its own [group] for the same reason: sharing is what did the damage.
+     */
+    GENERATED,
+
+    /**
      * Code this file was inlined *into* somewhere else — the second decomp pass. Ranked below the
      * file's own declarations, unlike [FUNCTION_BODY]: in a header the declarations *are* the
      * content and the inlined fragments are incidental. Ranking them together evicted
@@ -61,6 +70,7 @@ enum class Owner {
     val group get() = when (this) {
         FUNCTION_BODY, INLINED_BODY -> "body"
         INCLUDE -> "include"
+        GENERATED -> "generated"
         else -> "declaration"
     }
 
