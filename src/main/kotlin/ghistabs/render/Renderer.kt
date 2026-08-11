@@ -58,10 +58,6 @@ class Renderer(
 
     val sources get() = index.sources
 
-    // Ghidra's own default is 30s; a function that needs longer is rare enough to be worth naming
-    // rather than waiting for.
-    private val DECOMPILE_SECONDS = 30
-
     // A function is decompiled once for the whole run, not once per file that renders part of it: with
     // inlined code now placed in the header it came from, one std::string method is wanted by every
     // file that inlines it, and decompilation is ~all of the runtime.
@@ -173,4 +169,7 @@ class Renderer(
     override fun close() {
         decomp?.dispose()
     }
-}
+} // Ghidra's own default is 30s; a function that needs longer is rare enough to be worth naming
+
+// rather than waiting for (§40).
+private const val DECOMPILE_SECONDS = 30
