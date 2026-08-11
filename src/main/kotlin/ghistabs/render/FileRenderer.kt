@@ -130,7 +130,7 @@ class FileRenderer(val renderer: Renderer, override val source: String) : Render
         reportAnomalies()
         // Trailing blank/stale lines are trimmed only in decomp mode; skeleton output
         // stays fully source-aligned.
-        val rendered = canvas.render(trim = renderer.decomp != null)
+        val rendered = canvas.render(trim = renderer.decomp != null, compact = !renderer.lineAligned)
         spans.closeAnomalies(rendered.lines()).forEach { println("skeleton[$source]: $it") }
         return rendered + anonAggregateAppendix() + instantiationAppendix() + displacedAppendix()
     }

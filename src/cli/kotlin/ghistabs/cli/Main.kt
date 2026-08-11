@@ -85,6 +85,10 @@ private abstract class RenderCommand(name: String, help: String) : CliktCommand(
         "--var-storage",
         help = "annotate each local with the storage gcc gave it, (stack) or (reg)",
     ).flag("--no-var-storage", default = false)
+    private val lineAligned by option(
+        "--line-aligned",
+        help = "render source line n at output line n, blank rows and all, instead of collapsing blank runs",
+    ).flag("--no-line-aligned", default = false)
     private val foldSources by option(
         "--fold-sources",
         help = "fold gcc's two spellings of one header (full include path vs bare name) onto one output file",
@@ -213,6 +217,7 @@ private abstract class RenderCommand(name: String, help: String) : CliktCommand(
             mode,
             resolver,
             showStorage = varStorage,
+            lineAligned = lineAligned,
         ).use { renderer ->
             val written = renderer.renderAll(outDir)
             echo("rendered ${renderer.sources.size} sources -> $written files in $outDir")
