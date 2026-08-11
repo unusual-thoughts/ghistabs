@@ -9,8 +9,8 @@
             "max": 26
         },
         "canonical-key-merged": {
-            "min": 1414,
-            "max": 1414
+            "min": 1413,
+            "max": 1413
         },
         "canonical-key-multi-hash": {
             "min": 105,
@@ -153,12 +153,12 @@
             "max": 2
         },
         "harvest-collisions-raw": {
-            "min": 51,
-            "max": 51
+            "min": 55,
+            "max": 55
         },
         "harvest-collisions-raw-total": {
-            "min": 154,
-            "max": 154
+            "min": 162,
+            "max": 162
         },
         "harvest-constants": {
             "min": 0,
@@ -193,8 +193,8 @@
             "max": 3157
         },
         "harvest-typeAsts": {
-            "min": 48213,
-            "max": 48213
+            "min": 48204,
+            "max": 48204
         },
         "harvest-typeAsts-Array": {
             "min": 2053,
@@ -205,8 +205,8 @@
             "max": 261
         },
         "harvest-typeAsts-Const": {
-            "min": 896,
-            "max": 896
+            "min": 895,
+            "max": 895
         },
         "harvest-typeAsts-Enum": {
             "min": 456,
@@ -225,28 +225,28 @@
             "max": 5796
         },
         "harvest-typeAsts-Method": {
-            "min": 2205,
-            "max": 2205
+            "min": 2202,
+            "max": 2202
         },
         "harvest-typeAsts-Pointer": {
-            "min": 12903,
-            "max": 12903
+            "min": 12902,
+            "max": 12902
         },
         "harvest-typeAsts-Range": {
             "min": 732,
             "max": 732
         },
         "harvest-typeAsts-Ref": {
-            "min": 9934,
-            "max": 9934
+            "min": 9933,
+            "max": 9933
         },
         "harvest-typeAsts-Reference": {
-            "min": 868,
-            "max": 868
+            "min": 866,
+            "max": 866
         },
         "harvest-typeAsts-Struct": {
-            "min": 7604,
-            "max": 7604
+            "min": 7603,
+            "max": 7603
         },
         "harvest-typeAsts-Void": {
             "min": 91,
@@ -269,8 +269,8 @@
             "max": 0
         },
         "harvest-typeAsts-unique-by-id": {
-            "min": 48213,
-            "max": 48213
+            "min": 48204,
+            "max": 48204
         },
         "inheritance-applied": {
             "min": 601,
@@ -305,8 +305,8 @@
             "max": 66
         },
         "placeholder-created": {
-            "min": 25912,
-            "max": 25912
+            "min": 25905,
+            "max": 25905
         },
         "pointee-typed": {
             "min": 16,
