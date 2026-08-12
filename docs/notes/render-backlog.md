@@ -1800,6 +1800,59 @@ offset can be resolved to the method it calls rather than printed as arithmetic.
 
 ---
 
+## 45. Inlined stretches carry the name of the function they came from — DONE
+
+§44's cheapest readability win, taken. With `--source-root`, `__inline_stl_vector_h_123` renders
+`_M_deallocate__stl_vector_h_123`: the declarator index (§ phase 4) is asked what definition encloses
+the stretch's first line in the real file the source root resolved, and the answer becomes the first
+half of the identifier. The line stays in it — two stretches of one function inlined from different
+lines are different code, and `_M_deallocate` alone would name both — and the *call* in the .cpp and
+the *definition* in the header compute the identifier from the same `(file, lo, hi)`, so §36's
+navigability property holds by construction rather than by care.
+
+**unpackfile against `~/git/gcc` at 3.2.3: 163 of 227 distinct stretches named.** Of the 195 that name
+a libstdc++ file, 163 (84%) are named, and **every stretch in a file the root actually mapped is
+named — the miss rate of the index itself is zero.** The 64 left are exactly the files phase 3
+cannot map, and they divide as:
+
+| left `__inline_` | why |
+| --- | --- |
+| 31 | `filesystemimage.h`, `xvimage.h` — proprietary, no source in any root |
+| 19 | `<fstream>`, `<ostream>`, `<istream>`, `<iostream>`, `<iomanip>`, `<new>` — a *source* checkout ships these as `include/std/std_fstream.h` and the install renames them, so no path or filename rule bridges it |
+| 13 | `atomicity.h`, `gthr-default.h` — the `mingw32/bits/` directory phase 3 reports ambiguous across 16 `config/cpu/<arch>/bits` |
+| 1 | `ctype.h` — MinGW's C header, not in a gcc tree |
+
+So the 90% acceptance figure is a statement about *phase 3's mapping*, not about naming, and the two
+gaps above are what would move it. Both are known and neither is fuzzy-matchable: the first wants the
+`std_<name>.h` → `<name>` install rename, the second wants evidence of which architecture's
+`atomicity.h` was compiled in.
+
+**Heads gained parameter lists too**: 99 stretch definitions rendered `void f() {` before, 50 after —
+49 heads now carry the source's own list (`_Construct(_T1* __p, const _T2& __value)`) where gcc's
+lexical block held no locals to derive one from. Where the block *does* hold them they win: those are
+the instantiated types (`Exclusion *`, not `_ForwardIterator`) under the same names gcc took from the
+source anyway, and they are what the pseudo-call passes arguments for — substituting the source list
+wholesale would let head and call disagree on arity, which is the property that makes the two views
+read as one function.
+
+**Ten names checked by hand against the 3.2.3 sources**, all right, including the shapes §44's Python
+could not do: `allocator__stl_alloc_h_664` (`allocator() throw() {}`, a one-line body),
+`dtor_vector__stl_vector_h_375` (`~vector()`), `operator___stl_iterator_h_726` (an `operator-` whose
+head spans three lines), `_Alloc_hider__basic_string_h_208`, `_List_iterator__stl_list_h_126`.
+
+**Nothing else moved.** Without a root the output is byte-identical to the previous commit's across
+four renders (unpackfile and appquery × skeleton and decomp). With one, every one of the 54 files
+becomes identical to the no-root render once the names are renamed back and the gained parameter
+lists are erased — the root changes the identifiers and those lists, and nothing else.
+
+One thing did have to change for the off path to stay inert: the empty-block splice in `Layout`
+matched `__inline_\w+\(`, which a named stretch no longer is. It now matches the shape both
+spellings share — a `__` join and the source line the name ends with — because `FUN_00401234()` ends
+in digits and `__cxa_end_catch()` has the join, and either one alone would splice a real call into a
+block it does not belong in.
+
+---
+
 ## 44. What the render attributes, graded against libstdc++ 3.2.3 itself — measurement
 
 unpackfile links MinGW's libstdc++ **3.2.3**, and gcc's tree is a clone at `~/git/gcc`, so
@@ -1828,7 +1881,8 @@ The remaining 24 land on one-line bodies (`allocator() throw() {}`, `operator ne
 right line, no name. So §28's region split and §36's `__inline_<file>_<line>` naming are confirmed
 against the source, and **an optional source root would let those pseudo-functions carry their real
 names** (`__inline_stl_vector_h_123` → `vector<T>::_M_deallocate`), which is the single cheapest
-readability win visible from here.
+readability win visible from here. **Done in §45** — and the 24 one-line bodies are named there too,
+which is where the 94% became 100% of what the root maps.
 
 **Declarations: two thirds right, and half of the rest are recoverable.** 332 tagged declarations,
 185 with libstdc++ ground truth:

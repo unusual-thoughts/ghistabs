@@ -77,6 +77,8 @@ class FileRenderer(val renderer: Renderer, override val source: GhidraSourceFile
     // A decl at this line is misattributed (stale N_SOL) if it sits past the file's activity.
     override fun isStale(line: Int) = line > activityExtent
 
+    override fun enclosing(source: GhidraSourceFile, line: Int) = renderer.enclosing(source, line)
+
     /** A declaration several files claim at one line — at most one of them rightly. */
     private fun disputed(type: Type) = type.name!!.substringBefore('<') to type.declLine in
         if (type.body is TypeDecl.Struct || type.body is TypeDecl.Enum) {
