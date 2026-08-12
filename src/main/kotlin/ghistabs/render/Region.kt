@@ -64,21 +64,33 @@ class Region(private val ctx: RenderContext, val file: GhidraSourceFile?) {
     fun label(fallback: Int) = (labelOrNull() ?: "L $fallback") + if (copies > 1) " ×$copies" else ""
 
     /**
-     * `__inline_stl_iterator_h_633` — the header line this stretch was compiled from, as an
+     * `_M_deallocate__stl_vector_h_123`, or `__inline_stl_iterator_h_633` where the function that
+     * was inlined has no name to give — the header line this stretch was compiled from, as an
      * identifier.
      *
      * The same string from either side, which is what lets the call in the .cpp and the
      * definition in the header name each other: [file] identifies the stretch when we are the
      * caller and [ctx.source] when we are the header it was written in, and both label the same
-     * entries, so both read the same lines off them.
+     * entries, so both read the same lines off them — and both ask the same file's real source for
+     * the name, so the source root cannot make the two disagree either.
+     *
+     * The line stays in the identifier even when the name is known. Two stretches of one function
+     * inlined from different lines are different code, and `_M_deallocate` alone would name both.
      */
     fun pseudoName(): String? {
-        val own = entries.filter { it.source == (file ?: ctx.source) }.ifEmpty { return null }
+        val own = entries.filter { it.source == origin }.ifEmpty { return null }
         val lo = own.minOf { it.line }
         val hi = own.maxOf { it.line }
-        val stem = (file ?: ctx.source).filename + "_$lo" + if (hi > lo) "_$hi" else ""
-        return "__inline_" + stem.sanitizeIdentifier()
+        val stem = (origin.filename + "_$lo" + if (hi > lo) "_$hi" else "").sanitizeIdentifier()
+        return definition()?.name?.asIdentifier()?.plus("__$stem") ?: "__inline_$stem"
     }
+
+    /** The file this stretch was compiled from — [file] when we are the caller, ours when we wrote it. */
+    private val origin get() = file ?: ctx.source
+
+    /** What the real source says this stretch is part of, where `--source-root` resolved the file. */
+    private fun definition() = entries.filter { it.source == origin }.minOfOrNull { it.line }
+        ?.let { ctx.enclosing(origin, it) }
 
     /**
      * The head of this stretch's definition, as the file it was written in should show it —
@@ -88,6 +100,12 @@ class Region(private val ctx: RenderContext, val file: GhidraSourceFile?) {
      * Falls back to [inliner]'s own signature where the stretch has no name, gcc having given its
      * addresses no N_SLINE here so there is no line to call it after. That is what every wrapper
      * used to be.
+     *
+     * The real source's parameter list stands in only where gcc's block scope gave none — where it
+     * gave one it is the better of the two, being the *instantiated* types (`Exclusion *`, not
+     * `_ForwardIterator`) under the same names gcc took from the source anyway, and it is what
+     * [pseudoCall] passes arguments for. Substituting it wholesale would let head and call disagree
+     * on their arity, which is the one property that makes the two views read as one function.
      */
     fun definitionHead(inliner: Func): String {
         val id = pseudoName() ?: return (
@@ -97,7 +115,8 @@ class Region(private val ctx: RenderContext, val file: GhidraSourceFile?) {
         val params = inlineParams(inliner).mapNotNull { p ->
             (p.body as? SymbolDecl.Local)?.let { with(ctx) { it.type.renderDecl(asFree(it.name)) } }
         }
-        return "void $id(${params.joinToString()}) { " + "/* inlined into ${inliner.name} */"
+        val list = params.joinToString().ifEmpty { definition()?.params.orEmpty() }
+        return "void $id($list) { " + "/* inlined into ${inliner.name} */"
     }
 
     /**

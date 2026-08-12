@@ -13,6 +13,7 @@ import ghistabs.materialize.TemplateNameShortener
 import ghistabs.materialize.itanium.Itanium
 import ghistabs.materialize.resolveBuiltin
 import ghistabs.parse.*
+import ghistabs.source.Definition
 
 /** One stabs variable of a function, declared in this file: where gcc put it and how it renders. */
 data class Var(val line: Int, val name: String, val text: String, val role: String?)
@@ -26,6 +27,9 @@ interface RenderContext {
 
     fun indentFor(line: Int): Int
     fun isStale(line: Int): Boolean
+
+    /** The definition a line sits in, read off the real source `--source-root` mapped. */
+    fun enclosing(source: GhidraSourceFile, line: Int): Definition?
 
     /**
      * Best-effort C-style rendering of a [TypeDecl]. Primitives go

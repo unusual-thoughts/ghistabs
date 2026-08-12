@@ -105,9 +105,19 @@ class LayoutTest {
             this += Fragment(code = "while (i < n) { }   uVar1 = __inline_stl_vector_h_123(this, i);")
         }
         assertEquals("while (i < n) { uVar1 = __inline_stl_vector_h_123(this, i); }", called.render())
-        // Ghidra's own empty block, with no marker after it, stays as it is.
+        // The same call once a source root has named the stretch.
+        val named = TargetLine(42).apply {
+            this += Fragment(code = "while (i < n) { }   _M_deallocate__stl_vector_h_123(this, i);")
+        }
+        assertEquals("while (i < n) { _M_deallocate__stl_vector_h_123(this, i); }", named.render())
+        // Ghidra's own empty block, with no marker after it, stays as it is — including when what
+        // follows is a real call that has the shape of half a pseudo-name.
         val bare = TargetLine(9).apply { this += Fragment(code = "while (f(x)) { }   g(y);") }
         assertEquals("while (f(x)) { }   g(y);", bare.render())
+        val realCalls = TargetLine(9).apply {
+            this += Fragment(code = "while (f(x)) { }   FUN_00401234(); __cxa_end_catch();")
+        }
+        assertEquals("while (f(x)) { }   FUN_00401234(); __cxa_end_catch();", realCalls.render())
     }
 
     @Test

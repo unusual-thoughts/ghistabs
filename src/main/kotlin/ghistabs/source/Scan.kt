@@ -1,7 +1,10 @@
 package ghistabs.source
 
-/** A definition found in source text: the name it declares and the lines its head and body span. */
-data class Definition(val name: String, val startLine: Int, val endLine: Int)
+/**
+ * A definition found in source text: the name it declares, its parameter list as the file spells it,
+ * and the lines its head and body span.
+ */
+data class Definition(val name: String, val params: String, val startLine: Int, val endLine: Int)
 
 /**
  * Which definition encloses a line, and where a file declares a name.
@@ -29,7 +32,7 @@ class DeclaratorIndex(text: String, compiledOut: Set<Int> = emptySet()) {
         bodies.mapNotNull { (open, close) ->
             val start = headStart(open)
             declarator(String(chars, start, open - start))
-                ?.let { Definition(it.name, lineAt(start + it.at), lineAt(close)) }
+                ?.let { Definition(it.name, it.params, lineAt(start + it.at), lineAt(close)) }
         }
     }
 
@@ -115,8 +118,8 @@ class DeclaratorIndex(text: String, compiledOut: Set<Int> = emptySet()) {
         val CONTROL = setOf("if", "else", "for", "while", "switch", "do", "try", "catch", "return", "sizeof", "throw")
     }
 
-    /** A declarator's name and where in the head it starts. */
-    private data class Declarator(val name: String, val at: Int)
+    /** A declarator's name, its parameter list, and where in the head the name starts. */
+    private data class Declarator(val name: String, val params: String, val at: Int)
 
     /**
      * The name a head declares, or null when the head is not a definition's.
@@ -138,7 +141,9 @@ class DeclaratorIndex(text: String, compiledOut: Set<Int> = emptySet()) {
         val tail = prefix.tail()
         val match = DECLARATOR.find(tail) ?: return null
         val name = match.groupValues[1].replace(WHITESPACE, " ").trim()
-        return Declarator(name, prefix.length - tail.length + match.range.first).takeIf { name !in CONTROL }
+        val params = decl.substring(open + 1, decl.lastIndex).replace(WHITESPACE, " ").trim()
+        return Declarator(name, params, prefix.length - tail.length + match.range.first)
+            .takeIf { name !in CONTROL }
     }
 
     /** The head without the qualifiers that may follow a parameter list. */

@@ -50,6 +50,8 @@ class ScanTest {
             }
         """
         assertEquals("vector<_Tp, _Alloc>::_M_insert_aux", enclosing(src, 5))
+        // The parameter list comes along, whitespace collapsed, for the heads gcc left without one.
+        assertEquals("iterator __position, const _Tp& __x", index(src).definitions.single().params)
     }
 
     @Test
@@ -126,7 +128,7 @@ class ScanTest {
             void f() {
               int a = 1;
         """
-        assertEquals(Definition("f", 1, 2), index(src).definitions.single())
+        assertEquals(Definition("f", "", 1, 2), index(src).definitions.single())
     }
 
     @Test

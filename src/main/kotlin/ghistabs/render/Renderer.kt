@@ -16,6 +16,7 @@ import ghistabs.materialize.TemplateNameShortener
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
 import ghistabs.runTransaction
+import ghistabs.source.SourceIndexes
 import java.io.Closeable
 import java.io.File
 import java.util.*
@@ -110,6 +111,14 @@ class Renderer(
                 .map { (name, line) -> LocalSources.Claim(name, line) }
         }
     }
+
+    private val sourceIndexes = SourceIndexes()
+
+    /**
+     * The definition [line] of [source] sits in, read off the real file — null without a root, and
+     * null for a file the root did not map or the agreement guard dropped.
+     */
+    fun enclosing(source: GhidraSourceFile, line: Int) = localSources[source]?.let { sourceIndexes[it].enclosing(line) }
 
     // A function is decompiled once for the whole run, not once per file that renders part of it: with
     // inlined code now placed in the header it came from, one std::string method is wanted by every
