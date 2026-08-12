@@ -131,6 +131,8 @@ class ScanTest {
         assertEquals(Definition("f", "", 1, 2), index(src).definitions.single())
     }
 
+    /** `class _Rope;` is not one: a forward declaration would let `stringfwd.h` outrank the header
+     *  the class is actually in. */
     @Test
     fun `declarations are the lines a name is declared on`() {
         val src = """
@@ -143,7 +145,7 @@ class ScanTest {
         """
         assertEquals(
             mapOf(
-                "_Rope" to listOf(1, 5),
+                "_Rope" to listOf(5),
                 "_Size" to listOf(2),
                 "_Pair" to listOf(3),
                 "_Cmp" to listOf(4),
