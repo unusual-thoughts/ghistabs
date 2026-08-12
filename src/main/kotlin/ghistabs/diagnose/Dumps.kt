@@ -5,8 +5,6 @@ package ghistabs.diagnose
 import ghidra.program.model.data.CategoryPath
 import ghidra.program.model.data.DataType
 import ghistabs.harvest.TypeLocation
-import ghistabs.harvest.foldSourcePaths
-import ghistabs.harvest.sourceFileOf
 import ghistabs.importer.ImportArtifacts
 import ghistabs.materialize.compromisedTypes
 import ghistabs.parse.GlobalTypeId
@@ -155,9 +153,8 @@ private fun ImportArtifacts.registryDump(): RegistryDump {
     // pre-conflict object plus its DTM-live replacement); the duplicates are surfaced in
     // `duplicateNamed` above, so keep the first deterministically here rather than `single()` (which
     // threw on duplicate-heavy fixtures and aborted the whole AFTER-mode dump).
-    val allTypes =
-        registry.allCreatedDataTypes.groupBy { TypeLocation(it.categoryPath, it.name) }
-            .mapValues { RegistryDump.Type(it.value.first()) }
+    val allTypes = registry.allCreatedDataTypes.groupBy { TypeLocation(it.categoryPath, it.name) }
+        .mapValues { RegistryDump.Type(it.value.first()) }
     val divergent = index.divergentCollisions.entries
         .sortedBy { it.key.toString() }
         .map { (id, byName) ->
@@ -166,9 +163,6 @@ private fun ImportArtifacts.registryDump(): RegistryDump {
                 byName.mapValues { (_, bodies) -> bodies.size },
             )
         }
-    val sourceFolds = foldSourcePaths(
-        harvest.lineEntries.keys + harvest.symbolsByCu.keys +
-            index.allTypes.flatMap { listOfNotNull(it.declSourceFile, sourceFileOf(it.id.source.filename)) },
-    ).filterNot { it.key == it.value }.toSortedMap().map { (k, v) -> k.path to v.path }.toMap()
+    val sourceFolds = index.sourceFolds.toSortedMap().map { (k, v) -> k.path to v.path }.toMap()
     return RegistryDump(compromised, canonicalGroups, divergent, sourceFolds, hashCollisions, allTypes, duplicateNamed)
 }

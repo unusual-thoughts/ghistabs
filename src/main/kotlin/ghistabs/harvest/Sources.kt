@@ -1,6 +1,8 @@
 package ghistabs.harvest
 
 import ghidra.util.SourceFileUtils
+import ghistabs.parse.SourceFile
+import java.util.concurrent.ConcurrentHashMap
 
 /** Ghidra's source-file identity, aliased because [ghistabs.parse.SourceFile] — the CU-vs-header
  *  distinction Ghidra has no field for — is in scope alongside it nearly everywhere. */
@@ -20,10 +22,28 @@ private const val STABS_ROOT = "stabs"
  * spelling is anchored under `/stabs`. So no shape of ours throws, and nothing is skipped —
  * `DWARFImporter` catches the throw and drops the file, which would silently lose a source here.
  */
-fun sourceFileOf(spelling: String) = GhidraSourceFile(SourceFileUtils.normalizeDwarfPath(spelling, STABS_ROOT))
+fun sourceFileOf(spelling: String): GhidraSourceFile = identities.computeIfAbsent(spelling) {
+    GhidraSourceFile(SourceFileUtils.normalizeDwarfPath(it, STABS_ROOT))
+}
+
+/** Normalisation parses a URI, and the harvest asks for one type's source once per pass over the
+ *  types — so the same few hundred spellings are normalised tens of thousands of times a run. Pure
+ *  function of the spelling, so a process-wide memo is sound; it holds one entry per spelling any
+ *  binary in the session mentioned. */
+private val identities = ConcurrentHashMap<String, GhidraSourceFile>()
 
 /** [sourceFileOf] for a spelling gcc may have left empty (no `N_SOL` in effect). */
 fun sourceFileOrNull(spelling: String?) = spelling?.takeIf { it.isNotBlank() }?.let(::sourceFileOf)
+
+/**
+ * The file a stab-stream source names.
+ *
+ * [SourceFile] identifies a *scope in the stab stream* — a CU, or one CU's BINCL block keyed by gcc's
+ * per-expansion checksum — which is what type ids resolve against, so it stays keyed by the raw
+ * spelling. This is the one conversion from that to the physical file it names, rather than each
+ * consumer reaching through `.filename` itself.
+ */
+val SourceFile.identity get() = sourceFileOf(filename)
 
 /** Path segments: `/c:/mingw/include/x.h` → `[c:, mingw, include, x.h]`. Normalisation has already
  *  settled separators, drive letters and `..`, so this is a split and nothing more. */

@@ -186,8 +186,7 @@ fun scopeCategory(scope: List<String>): CategoryPath =
  * boilerplate from DTM categories. HeaderSource excluded — headers may live outside project root.
  */
 fun commonProjectPrefix(sources: Collection<SourceFile>): String {
-    val cuPaths = sources.mapNotNull { (it as? SourceFile.CUSource)?.filename }
-        .map { sourceFileOf(it).categorySegments }
+    val cuPaths = sources.filterIsInstance<SourceFile.CUSource>().map { it.identity.categorySegments }
     if (cuPaths.isEmpty()) return ""
     val shortest = cuPaths.minBy { it.size }
     val prefix = mutableListOf<String>()

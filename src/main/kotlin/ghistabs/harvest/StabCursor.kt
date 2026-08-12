@@ -55,7 +55,7 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
 
         fun toHarvested(): Func {
             // The function's own file: its lowest-address line entry, matching TypeResolver.functionSource.
-            val source = lineEntries.minByOrNull { it.addr.offset }?.source ?: sourceFileOf(cu.filename)
+            val source = lineEntries.minByOrNull { it.addr.offset }?.source ?: cu.identity
             val (locals, attributedBlocks) = blocks.finish(lineEntries, source)
             val attributedParams = params.map { it.copy(sourceFile = source) }
             return Func(

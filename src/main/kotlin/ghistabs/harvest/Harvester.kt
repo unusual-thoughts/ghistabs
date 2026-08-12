@@ -143,7 +143,7 @@ class Harvester(private val monitor: TaskMonitor, private val sink: DiagnosticSi
     }
 
     private fun record(sym: Symbol) {
-        symbolsByCu.getOrPut(sourceFileOf(cursor.cu.filename)) { mutableListOf() } += sym
+        symbolsByCu.getOrPut(cursor.cu.identity) { mutableListOf() } += sym
     }
 
     private fun parseSymbol(rec: StabRecord) = when (val res = cursor.parseSymbol(rec)) {
