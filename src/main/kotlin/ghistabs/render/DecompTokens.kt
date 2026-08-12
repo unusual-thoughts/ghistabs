@@ -7,6 +7,7 @@ import ghidra.program.model.listing.Function
 import ghistabs.Correction
 import ghistabs.harvest.BlockScope
 import ghistabs.harvest.Func
+import ghistabs.harvest.GhidraSourceFile
 import ghistabs.harvest.blockAt
 import ghistabs.parse.SymbolDecl
 
@@ -389,7 +390,7 @@ private fun ClangLine.isTrailingPunctuation() =
 // a shape read out of a rendered row.
 private val DEDUP_SUFFIX = Regex("_\\d+$")
 
-private fun ClangLine.declaresForeign(func: Func, source: String): Boolean {
+private fun ClangLine.declaresForeign(func: Func, source: GhidraSourceFile): Boolean {
     val name = significant().lastOrNull { it is ClangVariableToken }?.text?.replace(DEDUP_SUFFIX, "") ?: return false
     val matching = func.locals.filter { (it.body as? SymbolDecl.Local)?.name == name }
     return matching.isNotEmpty() && matching.all { it.sourceFile != source }
@@ -419,7 +420,7 @@ private fun ClangToken.isThis() = this is ClangVariableToken && text == THIS
  * into its final text.
  */
 fun DecompileResults.compressedDecompLines(
-    source: String,
+    source: GhidraSourceFile,
     func: Func,
     spell: Spelling = { it.text },
     elideSjlj: Boolean = false,

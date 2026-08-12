@@ -16,10 +16,18 @@ import kotlinx.serialization.Serializable
 data class Harvest(
     val types: Map<GlobalTypeId, Type>,
     val rawCollisions: Map<GlobalTypeId, Map<String, Set<TypeDecl<GlobalTypeId>>>>,
-    val symbolsByCu: Map<String, List<Symbol>>,
+    val symbolsByCu: Map<
+        @Serializable(with = SourceFileSerializer::class)
+        GhidraSourceFile,
+        List<Symbol>,
+        >,
     val functions: List<Func>,
-    /** N_SLINE entries grouped by N_SOL-effective source filename; sorted by line on insertion. */
-    val lineEntries: Map<String, List<LineEntry>>,
+    /** N_SLINE entries grouped by N_SOL-effective source; sorted by line on insertion. */
+    val lineEntries: Map<
+        @Serializable(with = SourceFileSerializer::class)
+        GhidraSourceFile,
+        List<LineEntry>,
+        >,
     /** Addressless `:c` compile-time constants — applied as equates + a synthetic enum catalog. */
     val constants: List<SymbolDecl.Constant<GlobalTypeId>>,
 ) {

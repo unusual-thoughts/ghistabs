@@ -20,8 +20,8 @@ data class BlockScope(
     val end: Address,
     val locals: List<Symbol>,
     val children: List<BlockScope> = emptyList(),
-    // Resolved by BlockTreeBuilder.finish; empty until then. See [finish] for how it is derived.
-    val source: String = "",
+    // Resolved by BlockTreeBuilder.finish; null until then. See [finish] for how it is derived.
+    @Serializable(with = SourceFileSerializer::class) val source: GhidraSourceFile? = null,
 ) {
     /** Innermost block covering [addr], or null when [addr] lies outside this one. */
     fun blockAt(addr: Address): BlockScope? =
@@ -84,13 +84,13 @@ internal class BlockTreeBuilder {
      * *after* the body, so every function-scope symbol carries whichever file the last line note in
      * the function happened to be in.
      */
-    fun finish(lines: List<LineEntry>, functionSource: String): Pair<List<Symbol>, List<BlockScope>> {
+    fun finish(lines: List<LineEntry>, functionSource: GhidraSourceFile): Pair<List<Symbol>, List<BlockScope>> {
         val flat = mutableListOf<Symbol>()
 
         // Rebuilds rather than repointing in place: the tree and the flat list hand out the *same*
         // corrected copies, so they cannot disagree, and a Symbol stays immutable — it is reachable
         // from BlockScope, from StabFunction.locals, and from maps keyed on either.
-        fun BlockScope.attribute(inherited: String): BlockScope {
+        fun BlockScope.attribute(inherited: GhidraSourceFile): BlockScope {
             val ownLines = lines.filter { entry ->
                 entry.addr in start..<end && children.none { entry.addr in it.start..<it.end }
             }

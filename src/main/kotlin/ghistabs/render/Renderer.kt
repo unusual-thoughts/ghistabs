@@ -7,6 +7,7 @@ import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
 import ghistabs.StabsOptions.Companion.stabsTypedefsShortened
 import ghistabs.harvest.Func
+import ghistabs.harvest.GhidraSourceFile
 import ghistabs.harvest.HarvestIndex
 import ghistabs.importer.AddressResolver
 import ghistabs.materialize.TemplateNameShortener
@@ -118,7 +119,7 @@ class Renderer(
     // offset, once for the text) and the substitution is a regex sweep.
     private val spelled = IdentityHashMap<ClangToken, String>()
 
-    fun renderSkeleton(source: String) = FileRenderer(this, source).render()
+    fun renderSkeleton(source: GhidraSourceFile) = FileRenderer(this, source).render()
 
     /**
      * Render every source into [dir], one file per source (named from the source path). Wraps the
@@ -139,7 +140,7 @@ class Renderer(
                 .onEach { (source, text) -> if (text.isBlank()) println("render[$source]: empty, no file written") }
                 .filter { (_, text) -> text.isNotBlank() }
                 .onEach { (source, text) ->
-                    File(dir, outputPath(index.locate(source))).apply { parentFile?.mkdirs() }.writeText(text)
+                    dir.resolve(source.outputPath.toFile()).apply { parentFile?.mkdirs() }.writeText(text)
                 }
                 .count()
         }
