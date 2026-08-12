@@ -1800,6 +1800,66 @@ offset can be resolved to the method it calls rather than printed as arithmetic.
 
 ---
 
+## 44. What the render attributes, graded against libstdc++ 3.2.3 itself — measurement
+
+unpackfile links MinGW's libstdc++ **3.2.3**, and gcc's tree is a clone at `~/git/gcc`, so
+`git archive releases/gcc-3.2.3 libstdc++-v3/{include,src,libsupc++,config}` gives the actual headers
+the compiler read. Every attribution the render makes can therefore be checked rather than argued
+about. (Two mapping traps: the installed `<iostream>` is `include/std/std_iostream.h`, `atomicity.h`
+is `config/cpu/i486/bits/`, `basic_file.h` is `config/io/basic_file_stdio.h`; and `include/c_shadow/`
+holds shims named `stdlib.h`/`stdio.h` that are *not* MinGW's C headers — mistake those for ground
+truth and seven declarations look impossible when nothing is known about them at all.)
+
+**Inlined stretches: sound, and nameable.** 766 marker occurrences, 217 distinct `(file, line-range)`.
+374 name project sources, which gcc's tree says nothing about. Of the 392 that name a libstdc++ file,
+**every one lands on real code — zero past EOF, zero on a blank or a comment** — and 368 (94%) land
+inside a function definition whose name can be read straight off the source:
+
+| | | |
+| --- | --- | --- |
+| `stl_vector.h L123` ×23 | → | `_M_deallocate` |
+| `stl_iterator.h L584` ×18 | → | `inserter` |
+| `basic_string.h L229` ×17 | → | `_M_data` |
+| `stl_uninitialized.h L109` ×16 | → | `uninitialized_copy` |
+| `atomicity.h L38` ×7 | → | `__exchange_and_add` |
+
+The remaining 24 land on one-line bodies (`allocator() throw() {}`, `operator new`,
+`bool operator()(…) const`) that a "find the declarator head above" scan doesn't count as a head —
+right line, no name. So §28's region split and §36's `__inline_<file>_<line>` naming are confirmed
+against the source, and **an optional source root would let those pseudo-functions carry their real
+names** (`__inline_stl_vector_h_123` → `vector<T>::_M_deallocate`), which is the single cheapest
+readability win visible from here.
+
+**Declarations: two thirds right, and half of the rest are recoverable.** 332 tagged declarations,
+185 with libstdc++ ground truth:
+
+| verdict | count | |
+| --- | --- | --- |
+| right line (±3) | 117 | 63% |
+| right file, wrong line | 10 | 5% |
+| name absent from the claimed file | 54 | 29% |
+| past EOF | 4 | 2% |
+
+The 4 past-EOF are stl_uninitialized.h's `_Trivial`/`__Normal`/`_Tag`/`_Integral` at L426–750 in a
+291-line file — the ones §43's conflict rule already holds out, now confirmed impossible rather than
+merely suspected.
+
+**The important half: of the 48 distinct misfiled declarations, 24 name a file that declares them at
+the very same line number.** `_Is_POD` claimed at basic_string.h:111 is stl_uninitialized.h:**111**;
+`__Normal` at basic_string.h:322 is stl_algobase.h:**322**; `_Vector_alloc_base` at stl_algobase.h:79
+is stl_vector.h:**79**; `rebind` at basic_string.tcc:662 is stl_alloc.h:**661**. **gcc kept the line
+and lost only the file** — exactly what §38 found in `dbxout_prepare_symbol`, now visible as a
+statistical regularity rather than an inference from one case. It also says what a re-attribution
+pass would need: not a better line, a better *file*, and the line is the key to search on.
+
+The 24 that stay unattributable are of two kinds: stab-level names with no textual counterpart in the
+source (`_Trivial`, `_Value_type`, `_Has_trivial_destructor`, `_Distance` — the compiler's own names
+for member typedefs it instantiated), and `<limits>`'s `_iec559_consts`/`_rep`, which appear nowhere
+in the 3.2.3 tree because MinGW ships a patched `<limits>`. The second kind is a reminder that
+"absent from the pristine release" is not the same as "misattributed".
+
+---
+
 ## 43. `activityExtent`'s header proxy — DONE, and the half it was standing in for is not
 
 `activityExtent` runs two regimes — a CU measured by its code alone, an included file by its
