@@ -1800,6 +1800,73 @@ offset can be resolved to the method it calls rather than printed as arithmetic.
 
 ---
 
+## 46. A misfiled declaration renders in the file that declares it — DONE
+
+§44 found that gcc keeps the line and loses the file: of 48 distinct misfiled declarations, 24 name a
+file that declares them at the very same line number. With a source root the file is knowable, so
+`HarvestIndex.effectiveSourceFor` gains one input — the local file whose text declares that name at
+that line, accepted only when exactly one does. No new path through the render: attribution has had a
+single accessor since §15/§27, and this is one more thing it consults.
+
+**unpackfile against `~/git/gcc` at 3.2.3: 81 distinct `(name, line)` declarations re-filed**, 250
+instance moves, 75 places where the root confirms the file gcc recorded, 13 where it overrules a
+hint. Rows 3,188 → 2,965 (−7%), same 54 files, displaced 32 → 28. What moved is exactly the shape
+§44 predicted — the project's own headers shedding libstdc++ declarations, the stdlib headers taking
+them back:
+
+| file | rows |
+| --- | --- |
+| `image.h` | 32 → **7** |
+| `filesystemimage.h` | 154 → 89 |
+| `xvimage.h` | 59 → 21 |
+| `basic_string.tcc` | 95 → 79 |
+| `stl_alloc.h` | 126 → **135** |
+
+`image.h` at 7 rows is the priority-1 item at the top of this file ("25 rows of its own, 31 of
+libstdc++, spread over 908 lines") — its libstdc++ rows are gone because they were never its.
+
+**All four of §44's named cases move**, and each lands on the line the 3.2.3 source has it on:
+`_Is_POD` basic_string.h:111 → stl_uninitialized.h, `__Normal` → stl_algobase.h, `_Vector_alloc_base`
+stl_algobase.h:79 → stl_vector.h (L79 is `class _Vector_alloc_base {`), `rebind` basic_string.tcc:662
+→ stl_alloc.h. **And §43's four impossible typedefs are answered rather than held out**: `_Trivial`
+L426 and `__Normal` L448 are stl_algobase.h's, `_Tag` L733 and `_Integral` L750 are basic_string.h's.
+
+Three things the plan did not have, all from measuring:
+
+- **The root goes *before* the hint, not after.** The plan put the hint first, its vote being code
+  rather than inference. They disagree three times on unpackfile, all `_Vector_alloc_base<…>` L79,
+  and the hint is wrong every time: it names stl_iterator.h and stl_algobase.h, whose only claim is
+  that the instantiation's methods compiled there, while stl_vector.h L79 *is* the class. On xmltest
+  the same reversal moves 487 locale facets out of `locale_facets.tcc` into `locale_facets.h`, where
+  `class time_put` is at L3399. A definition at the line beats a vote about where the code went.
+- **A forward declaration is not a declaration site.** With `class X;` counted, `stringfwd.h` L49's
+  `class allocator;` outranked `stl_alloc.h`, where the class is — the one case where the hint was
+  right and the root wrong. Excluding them removes it, and is what makes the reversal above safe.
+- **±1 on the line, and it is not slack.** gcc dates a declaration at its body's opening brace and
+  the index records the name's line, so libstdc++'s brace-on-the-next-line style puts them one apart
+  — `struct _Alloc_traits` is L897 and gcc says 898. Exact-line matching found 55 declarations;
+  ±1 finds 81, and the 26 it adds include the whole `_Alloc_traits<…>` L898 family, which §43 called
+  a grade-3 wall ("its home is stl_alloc.h, which holds no instantiation of it at all, so no vote or
+  sibling can reach it"), plus `__simple_alloc` L231, `allocator<T>` L649, `list<FileSystemEntry>`
+  L291 and `vector<short unsigned int>` L167 — every one checked against the 3.2.3 source and right.
+
+**appquery**: 288 instance moves, rows 3,650 → 3,509, and the same shape (`image.h` 33 → 7,
+`xvimage.h` 56 → 20, `vminfo.h` 69 → 37; `stl_algobase.h` 55 → 69, `stl_function.h` 2 → 15).
+**xmltest** against a 4.2.1 worktree: 2,357 moves, 26,046 → 25,599 rows, and the guard rejects 118
+files — a build tree is not the release tree, and being told so is the guard working.
+
+**No declaration can move into a file that does not declare it**, because the query *is* the
+condition: `declarers(name, line)` returns the file whose text has it. Nothing was lost either —
+comparing the set of declaration texts across the whole render, unpackfile drops four, and all four
+are forward-declaration stubs now listed in the instantiation appendix of the file they belong to
+(`type_traits.h`, `stl_algobase.h`, `stl_iterator_base_types.h`) instead of standing in `image.cpp`.
+
+Without a root the render is byte-identical to before. The full §44 re-grade is not recomputed here:
+it would re-derive by the same rule that made the moves and so cannot disagree with them — grading
+what the root did *not* reach is the scorecard's job, and the scorecard is its own phase.
+
+---
+
 ## 45. Inlined stretches carry the name of the function they came from — DONE
 
 §44's cheapest readability win, taken. With `--source-root`, `__inline_stl_vector_h_123` renders
@@ -1904,7 +1971,9 @@ the very same line number.** `_Is_POD` claimed at basic_string.h:111 is stl_unin
 is stl_vector.h:**79**; `rebind` at basic_string.tcc:662 is stl_alloc.h:**661**. **gcc kept the line
 and lost only the file** — exactly what §38 found in `dbxout_prepare_symbol`, now visible as a
 statistical regularity rather than an inference from one case. It also says what a re-attribution
-pass would need: not a better line, a better *file*, and the line is the key to search on.
+pass would need: not a better line, a better *file*, and the line is the key to search on. **Done in
+§46**, which moves 81 distinct declarations rather than 24 — the line needs ±1, because gcc dates a
+declaration at its opening brace.
 
 The 24 that stay unattributable are of two kinds: stab-level names with no textual counterpart in the
 source (`_Trivial`, `_Value_type`, `_Has_trivial_destructor`, `_Distance` — the compiler's own names
@@ -2004,6 +2073,19 @@ among evidence spaced 2–10 apart, while stl_uninitialized.h's evidence stops a
 426. Cut the file at the first outsized gap and all four go; `type_traits.h`, evenly spaced
 throughout, keeps everything. That wants its own pass, with the gap statistic measured across the
 corpus rather than picked.
+
+**With a source root, three quarters of that is no longer the question** (§46). The four impossible
+typedefs are not "past this file's reach" — they are *in another file*, and the root says which:
+`_Trivial` L426 and `__Normal` L448 are stl_algobase.h L426 and L448, `_Tag` L733 and `_Integral`
+L750 are basic_string.h L733 and L750, each confirmed by the line in the 3.2.3 source. They are
+placed rather than held out, and the conflict rule stops seeing them at all, because once every
+claimant of a `(name, line)` is moved to the one file that declares it, the pair is no longer
+disputed.
+
+What stays open is the same thing it always was, now scoped: **the no-root path**, where the gap
+statistic is still the only available signal, and files no root maps (proprietary headers, the
+`<fstream>` group, the ambiguous `mingw32/bits/`) — which is where the circularity still bites and
+where a gap pass would still earn its keep.
 
 ---
 

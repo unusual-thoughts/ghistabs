@@ -356,18 +356,70 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
     // Named types vote via the hint (member-SLINE header); typedefs trust their N_SOL declSourceFile (a
     // template-instantiation typedef splayed into a CU still names its real header); structs/enums fall
     // back to id.source (their `:T` body is legitimately CU-emitted, §6).
-    private fun Type.effectiveSource() = fold(
-        name?.let { multiSourceHeaderHints[it] }
-            ?: declSourceFile?.takeIf { body !is TypeDecl.Struct && body !is TypeDecl.Enum }
-            ?: id.source.identity,
-    )
+    private fun Type.hinted() = name?.let { multiSourceHeaderHints[it] }
+
+    private fun Type.recorded() =
+        declSourceFile?.takeIf { body !is TypeDecl.Struct && body !is TypeDecl.Enum } ?: id.source.identity
+
+    /** Attribution before a source root has a say. */
+    private fun Type.baseSource() = fold(hinted() ?: recorded())
+
+    /**
+     * The real source first, then the hint, then what gcc recorded.
+     *
+     * The plan had the hint first, on the reasoning that its vote follows method bodies and is
+     * therefore code rather than inference. Measured on unpackfile against 3.2.3, the two disagree
+     * **three times**, all of them `_Vector_alloc_base<…>` at L79, and stl_vector.h L79 reads
+     * `class _Vector_alloc_base {` while the hint says stl_iterator.h and stl_algobase.h — headers
+     * whose only claim is that the instantiation's methods were compiled there. A definition at the
+     * line beats a vote about where the code went.
+     *
+     * That holds only because a *forward* declaration is not a declaration site here: with
+     * `class allocator;` counted, `stringfwd.h` L49 outranked `stl_alloc.h`, where the class is, and
+     * the hint was the one that was right (see `Scan.TAG`).
+     */
+    private fun Type.effectiveSource(): GhidraSourceFile {
+        val hint = hinted()?.let(::fold)
+        val declared = declarerOf(this)
+        val chosen = declared ?: hint ?: fold(recorded())
+        // Said per decision, because "the root moved n declarations" is the whole measurement of a
+        // phase that changes attribution — and because the root overruling a hint is the one case
+        // where two mechanisms with evidence disagree, which is worth being able to count.
+        when {
+            declared == null -> Unit
+            hint != null && hint != declared ->
+                debug("source-root-over-hint", "$name L$declLine: $declared over $hint")
+            chosen != fold(
+                recorded(),
+            ) -> debug("source-root-refiled", "$name L$declLine: ${fold(recorded())} → $chosen")
+            else -> debug("source-root-confirms", "$name L$declLine: $chosen")
+        }
+        return chosen
+    }
+
+    /**
+     * Which file the local sources say declares `(name, line)` — installed by the render once a
+     * source root has resolved files (§46), and answering null everywhere without one, which is what
+     * leaves attribution exactly as it was.
+     *
+     * It must be in place before anything reads attribution, because the per-source views memoise;
+     * assigning after that is a silently-ignored root, so it is refused instead.
+     */
+    var declarers: ((name: String, line: Int) -> GhidraSourceFile?)? = null
+        set(value) {
+            check(!effectiveSources.isInitialized()) { "a source root must be installed before attribution is read" }
+            field = value
+        }
+
+    private fun declarerOf(type: Type) = type.name?.substringBefore('<')
+        ?.takeIf { type.declLine > 0 }
+        ?.let { declarers?.invoke(it, type.declLine) }
 
     // Keyed by id, not by Type: Type is a data class holding the whole TypeDecl body, so a Type-keyed
     // map deep-hashes an entire type tree on every lookup — and this is looked up once per type per
     // rendered source. GlobalTypeId is (source, n).
-    private val effectiveSourceById: Map<GlobalTypeId, GhidraSourceFile> by lazy {
-        typeAsts.values.associate { it.id to it.effectiveSource() }
-    }
+    private val effectiveSources = lazy { typeAsts.values.associate { it.id to it.effectiveSource() } }
+    private val effectiveSourceById: Map<GlobalTypeId, GhidraSourceFile> by effectiveSources
 
     // ── Render facade: per-source views with every source spelling already folded (§15). ──
 
@@ -481,6 +533,13 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
     /** Declared types per source, same inversion as [functionsBySource]. */
     val typesBySource: Map<GhidraSourceFile, List<Type>> by lazy { typeAsts.values.groupBy(::effectiveSourceFor) }
 
+    /**
+     * The same before the source root is consulted — what decides whether a local file is the one
+     * this binary was built from ([ghistabs.importer.LocalSources]), and the reason that check
+     * cannot recurse into the attribution it goes on to feed.
+     */
+    val baseTypesBySource: Map<GhidraSourceFile, List<Type>> by lazy { typeAsts.values.groupBy { it.baseSource() } }
+
     /** Type → its rendering source (§15) — render's sole type-attribution accessor. */
     fun effectiveSourceFor(type: Type) = effectiveSourceById[type.id] ?: type.effectiveSource()
 
@@ -501,7 +560,7 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
      * each other and `class string` loses its place in stringfwd.h to a typedef of the same name.
      */
     val conflictedTemplateDecls: Set<Pair<String, Int>> by lazy {
-        conflictsAmong(typeAsts.values.filter { it.name?.contains('<') == true })
+        conflictsAmong(templateDecls, ::effectiveSourceFor)
     }
 
     /**
@@ -511,12 +570,27 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
      * keeps it.
      */
     val conflictedTypedefDecls: Set<Pair<String, Int>> by lazy {
-        conflictsAmong(typeAsts.values.filter { it.body !is TypeDecl.Struct && it.body !is TypeDecl.Enum })
+        conflictsAmong(typedefDecls, ::effectiveSourceFor)
     }
 
-    private fun conflictsAmong(asts: Collection<Type>) = asts
+    /**
+     * Both sets as they stand before the source root — the declarations the root's own agreement
+     * guard must not be judged on, since at most one of their claimants is right and holding a
+     * correct local file to them scored it 0 of 17 (§ phase 3). One set, not two: the guard only ever
+     * removes evidence with it, and the reason the two are counted apart is a placement rule the
+     * guard has no part in.
+     */
+    val baseConflictedDecls: Set<Pair<String, Int>> by lazy {
+        conflictsAmong(templateDecls) { it.baseSource() } + conflictsAmong(typedefDecls) { it.baseSource() }
+    }
+
+    private val templateDecls get() = typeAsts.values.filter { it.name?.contains('<') == true }
+
+    private val typedefDecls get() = typeAsts.values.filter { it.body !is TypeDecl.Struct && it.body !is TypeDecl.Enum }
+
+    private fun conflictsAmong(asts: Collection<Type>, sourceOf: (Type) -> GhidraSourceFile) = asts
         .filter { it.name != null && it.declLine > 0 }
-        .groupBy({ it.name!!.substringBefore('<') to it.declLine }, ::effectiveSourceFor)
+        .groupBy({ it.name!!.substringBefore('<') to it.declLine }, sourceOf)
         .filterValues { it.distinct().size > 1 }
         .keys
 
