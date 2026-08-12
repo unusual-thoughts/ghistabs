@@ -95,6 +95,12 @@ private abstract class RenderCommand(name: String, help: String) : CliktCommand(
     ).flag("--no-fold-sources", default = true)
     private val logLevel by option("-v", "--log-level", help = "minimum level streamed to the log").enum<Level>()
         .default(Level.INFO)
+    private val sourceRoots by option(
+        "--source-root",
+        help = "local checkout of the sources this binary was built from (repeatable). Recorded source " +
+            "directories found under it are registered as Ghidra directory transforms, so paths resolve " +
+            "to real files.",
+    ).file(mustExist = true, canBeFile = false).multiple()
     private val disableAnalyzers by option(
         "--disable-analyzer",
         help = "turn off every analyzer whose name contains this, case-insensitively (repeatable). " +
@@ -111,7 +117,15 @@ private abstract class RenderCommand(name: String, help: String) : CliktCommand(
 
     private val options
         get() =
-            StabsOptions(false, buildClasses, shortenTypedefs, foldSources, logLevel, false)
+            StabsOptions(
+                false,
+                buildClasses,
+                shortenTypedefs,
+                foldSources,
+                logLevel,
+                false,
+                sourceRoots = sourceRoots.map { it.path },
+            )
 
     override fun run() {
         if (!Application.isInitialized()) {

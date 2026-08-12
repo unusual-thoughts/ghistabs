@@ -102,6 +102,8 @@ data class StabsOptions(
     val foldSources: Boolean = true,
     val minLogLevel: Level = Level.INFO,
     val overlaySection: Boolean = true,
+    /** Local checkouts the recorded source paths are mapped onto (phase 3); empty = no transforms. */
+    val sourceRoots: List<String> = emptyList(),
 ) {
 
     companion object {
@@ -114,6 +116,7 @@ data class StabsOptions(
         const val FOLD_SOURCES: String = "Fold source-file spellings"
         const val LOG_LEVEL: String = "Minimum log level"
         const val OVERLAY_SECTION: String = "Overlay .stab section structs"
+        const val SOURCE_ROOTS: String = "Source roots"
 
         val Program.isStabsDone get() = getOptions(Program.PROGRAM_INFO).getBoolean(STABS_DONE, false)
 
@@ -184,6 +187,15 @@ data class StabsOptions(
                 null,
                 "Overlay a decoded StabRecord struct on every .stab entry (refs into .stabstr and back to code/data).",
             )
+            registerOption(
+                SOURCE_ROOTS,
+                "",
+                null,
+                "Local checkouts of the sources this binary was built from, ';'-separated. Each recorded " +
+                    "source directory found under a root is registered as a directory transform (Source Files " +
+                    "and Transforms), so paths resolve to real files. Read at import time only: adding a root " +
+                    "later needs a re-import, though a transform added in the dialog is picked up immediately.",
+            )
         }
     }
 
@@ -194,6 +206,7 @@ data class StabsOptions(
         foldSources = opts.getBoolean(FOLD_SOURCES, true),
         minLogLevel = opts.getEnum(LOG_LEVEL, Level.INFO),
         overlaySection = opts.getBoolean(OVERLAY_SECTION, true),
+        sourceRoots = opts.getString(SOURCE_ROOTS, "").split(';').map { it.trim() }.filter { it.isNotEmpty() },
     )
 
     constructor(program: Program) : this(
