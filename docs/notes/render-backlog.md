@@ -133,10 +133,11 @@ numbered in the order they were *found*, not worked; this is the order to work t
    the same token knowledge `renameThis` already uses — the grammar section's `'this' is a keyword`
    family fixed only the definition side.
 8. ~~**8 markers still outside their block.**~~ — DONE, see §42.
-9. ~~**`activityExtent`'s header proxy.**~~ — DONE, see §43. The regime is gcc's `N_SO` now. What the
-   luck was catching is only half-replaced: a header's extent is still measured by its own
-   declarations, so one uncorroborated declaration vouches for itself. §43 records what an outlier
-   rule has to do and why the two blunter versions were measured and rejected.
+9. ~~**`activityExtent`'s header proxy.**~~ — DONE, see §43 and §47. The regime is gcc's `N_SO` now,
+   and where a source root maps the file its extent is the file's own length rather than an estimate
+   built from the declarations it judges. What is left is the no-root path and the files no root
+   maps: there a header is still measured by its own declarations, so one uncorroborated declaration
+   vouches for itself, and §43 records what an outlier rule has to do.
 
 **Structural debt, worth taking before more of the above.**
 
@@ -1800,6 +1801,45 @@ offset can be resolved to the method it calls rather than printed as arithmetic.
 
 ---
 
+## 47. An included file's extent is the file's length — DONE, and inert on today's corpus
+
+§43's extent for an included file is measured by the declarations it is judging, which is circular.
+Where `--source-root` maps the file and phase 2's agreement guard keeps it, the file's length is a
+fact instead: `FileRenderer.activityExtent` and `ownExtent` take `DeclaratorIndex.lineCount` ahead of
+the estimate. A **CU** keeps the code-derived extent — a `.cpp`'s real length is no evidence about
+which of *its* declarations gcc misfiled, and that is the whole of §38.
+
+**Measured, and it changes nothing anywhere.** unpackfile (24 of 55 sources mapped), appquery (26 of
+66) and xmltest against 4.2.1 (30 of 126) render byte-identically with and without the change, root
+or no root. The reason is worth stating rather than filing as a null result: on every mapped file the
+real length is *longer* than the estimate — `stl_uninitialized.h` 290 vs 215, `stl_algobase.h` 820 vs
+540, `char_traits.h` 252 vs 147 — so the extent only ever loosens, and nothing lands in the range it
+gains. **§46 emptied the residue first.** The declarations that used to sit past a file's reach are
+the ones the root re-filed a phase earlier, so by the time the length is available there is nothing
+left for it to displace: `stl_uninitialized.h`'s four typedefs at L426–750 are stale by arithmetic
+against 290 lines, but they are no longer in that file to be judged.
+
+What the phase buys, then, is not rows but the retirement of a heuristic: where the root knows the
+file, a declaration can no longer vouch for its own file's extent, and §43's gap statistic is not the
+plan there.
+
+**The wrong-length hazard is real and the guard caught it.** A short wrong length would displace real
+declarations, so the length is refused where *code* contradicts it — an N_SLINE or a function body
+past EOF is address-backed, and a declaration past EOF deliberately counts for nothing, being the
+thing under judgement. One file in the corpus trips it: xmltest's MinGW `stdio.h` maps to a 4-line
+`stdio.h` in the gcc tree while its N_SLINEs reach L553, reported as `source-length-conflict` and
+refused. Exactly one file, exactly the predicted shape.
+
+**Two of the phase's own acceptance criteria are answered by the agreement guard, not by length.**
+`stl_threads.h` (`class _STL_auto_lock` at L233, file is 236) and `basic_string.tcc` get no length at
+all: the guard scores them 1-of-3 and 0-of-17 and drops them. Both are the *right* files — what they
+are judged on is the base attribution, and their claims are precisely the libstdc++ declarations gcc
+misfiled, which §46 moves and the guard cannot see. That is the cost of the anti-circularity rule in
+§46 (the guard must not consult the root it validates), and it is where a second look would pay:
+the files whose attribution was worst are the files denied the fact that would fix them.
+
+---
+
 ## 46. A misfiled declaration renders in the file that declares it — DONE
 
 §44 found that gcc keeps the line and loses the file: of 48 distinct misfiled declarations, 24 name a
@@ -2073,6 +2113,12 @@ among evidence spaced 2–10 apart, while stl_uninitialized.h's evidence stops a
 426. Cut the file at the first outsized gap and all four go; `type_traits.h`, evenly spaced
 throughout, keeps everything. That wants its own pass, with the gap statistic measured across the
 corpus rather than picked.
+
+**The gap statistic is not the plan where a root exists — §47 replaced the estimate with the file's
+length.** An included file the root maps and the guard keeps is not measured by its declarations at
+all: `stl_uninitialized.h` is 290 lines, so a typedef at L426 is stale by arithmetic. The two blunt
+rules above stay recorded as measured and rejected, and the gap statistic stays the only signal for
+the no-root path and for the files no root maps.
 
 **With a source root, three quarters of that is no longer the question** (§46). The four impossible
 typedefs are not "past this file's reach" — they are *in another file*, and the root says which:

@@ -154,4 +154,11 @@ class ScanTest {
             index(src).declarations,
         )
     }
+
+    /** The extent an included file is given (§43) — a trailing newline does not add a line to it. */
+    @Test
+    fun `the line count is the file's last line`() {
+        assertEquals(2, DeclaratorIndex("void f() { }\nvoid g() { }\n").lineCount)
+        assertEquals(2, DeclaratorIndex("void f() { }\nvoid g() { }").lineCount)
+    }
 }
