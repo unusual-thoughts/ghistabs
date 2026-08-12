@@ -131,6 +131,9 @@ class Renderer(
      */
     fun enclosing(source: GhidraSourceFile, line: Int) = localSources[source]?.let { sourceIndexes[it].enclosing(line) }
 
+    /** How long [source] really is, on the same terms as [enclosing] — null without a usable local file. */
+    fun lengthOf(source: GhidraSourceFile) = localSources[source]?.let { sourceIndexes[it].lineCount }
+
     /** The local files a declaration can be re-attributed to, with the source each one stands for. */
     private val mapped by lazy { sources.mapNotNull { s -> localSources[s]?.let { s to it } } }
 
