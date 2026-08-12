@@ -54,11 +54,17 @@ and strings, match braces, record `(name, startLine, endLine)`. Pure, ~150 lines
 it never has to *understand* C++, only find heads and matching braces.
 
 Its input, though, should be the platform's: `ghidra.app.util.cparser.CPP.PreProcessor` has no grammar
-to choke on, resolves `#include`s the way the compiler did (`addIncludePaths`, `CPP.jj:883-935`), and
-emits `#line <n>: "<file>"` at every file switch (`CPP.jj:1635-1684`) — so its output carries
-provenance **and contains only the branches that compiled**. The catch: `bits/c++config.h` is generated
-at build time and absent from a source tarball, so preprocessing is an *input strategy* with raw
-reading as the fallback, not a dependency.
+to choke on and resolves `#include`s the way the compiler did (`addIncludePaths`, `CPP.jj:883-935`), so
+it knows **which branches compiled**. The catch: `bits/c++config.h` is generated at build time and
+absent from a source tarball, so preprocessing is an *input strategy* with raw reading as the fallback,
+not a dependency.
+
+**Corrected in phase 4, by reading the output rather than the grammar.** Its `#line <n>: "<file>"`
+markers (`CPP.jj:1635-1684`) do not carry usable provenance: block comments are removed rather than
+blanked and emitted code is macro-expanded, so the numbers are its own output's and the text cannot be
+aligned back. What it contributes instead is a **mask** — dropped lines come back verbatim and in
+order as `///- <text>`, so they can be matched onto the file and blanked there, leaving every line
+number the file's own. The declarator index reads raw text, masked.
 
 ## Port strategy
 
