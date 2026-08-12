@@ -148,9 +148,16 @@ before the per-file agreement guard does its finer-grained work.
   and skips, which we must not silently copy.
 - **DB growth.** unpackfile has thousands of line entries; xmltest far more. Publishing is a write per
   entry. Measure before enabling by default; it is an option if it is costly.
-- **The port must not change the render.** Layers 1 and 2 are behaviour-preserving by construction:
-  the same data, addressed by a handle instead of a string. Every phase diffs the render against the
-  previous commit and expects zero change.
+- **What "unchanged" means for the port.** Content, not bytes-on-paths. Normalising spellings through
+  `SourceFile` moves output files (separators, a synthetic root where a drive letter will not form a
+  URI), so the phases compare by file *identity* with the rename mapping printed, and require zero
+  content difference. Demanding byte-identical paths would force our old spelling policy to be
+  reimplemented on top of Ghidra's identity — keeping alive exactly what the port deletes. The feature
+  phases (5–9) do change output by design; there the byte-identical gate applies to the *no root
+  configured* path, which must stay inert.
+- **`LineEntry` is implemented, not deleted.** `SourceMapEntry` is an interface with our record's exact
+  shape, so the parse-time record implements it and the DB becomes a second producer of one type. That
+  keeps the harvest dumps and the Program-less unit tests working, which a DB-only model would not.
 - **Not "trust the source over the stabs".** The root corrects files, never lines.
 - **Not fuzzy matching.** A file declares that name at that line or it does not; ambiguity is reported.
 - **Not on by default** for the root. No root, no behaviour change, and every backlog measurement stays
