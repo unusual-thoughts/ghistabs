@@ -20,6 +20,8 @@ data class PassResult(
     val classesApplied: Int,
     val constantsApplied: Int,
     val staticMembersApplied: Int,
+    /** Zero-length [ghidra.program.model.sourcemap.SourceMapEntry]s the program now holds. */
+    val sourceMapEntries: Int,
 ) {
     companion object {
         /** Nothing ran — the no-stabs path. Spelled out so a new field must be considered here too. */
@@ -33,6 +35,7 @@ data class PassResult(
             classesApplied = 0,
             constantsApplied = 0,
             staticMembersApplied = 0,
+            sourceMapEntries = 0,
         )
     }
 }

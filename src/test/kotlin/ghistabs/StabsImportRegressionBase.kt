@@ -357,6 +357,41 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         )
     }
 
+    /**
+     * The program's line map is the harvest's, entry for entry: [ghistabs.importer.SourceMapApplier]
+     * counts what it should hold from the parsed entries (distinct after the §15 fold, minus the ones
+     * it reported dropping), and the database is read back to see that it does. An entry lost to a
+     * silently-swallowed rejection shows up here as a shortfall.
+     *
+     * Also the fold's own contract: a spelling folded away keeps its `SourceFile`, with no entries.
+     */
+    @Test
+    fun programLineMapMatchesHarvest() {
+        val folds = artifacts.index.renderIdentityBySource
+        assumeTrue(folds.isNotEmpty(), "Skipping: no N_SLINE entries in this binary")
+        val manager = program.sourceFileManager
+        val expected = context.diagnostics.snapshotCounters()["sourcemap-entries"]
+
+        Assertions.assertEquals(
+            expected,
+            manager.allSourceFiles.sumOf { manager.getSourceMapEntries(it).size }.toLong(),
+            "source map entries in the program",
+        )
+        Assertions.assertTrue(
+            manager.allSourceFiles.containsAll(folds.keys + folds.values),
+            "every spelling and every fold target must be listed: missing " +
+                ((folds.keys + folds.values) - manager.allSourceFiles.toSet()).map { it.path },
+        )
+        for ((raw, target) in folds) {
+            if (raw == target) continue
+            Assertions.assertEquals(
+                0,
+                manager.getSourceMapEntries(raw).size,
+                "${raw.path} folded onto ${target.path} must keep no entries",
+            )
+        }
+    }
+
     @Test
     fun bouniafNotUnderStdInclude() {
         val bouniaf = program.dataTypeManager.allDataTypes
