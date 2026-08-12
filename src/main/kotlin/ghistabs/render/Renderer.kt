@@ -11,6 +11,7 @@ import ghistabs.harvest.Func
 import ghistabs.harvest.GhidraSourceFile
 import ghistabs.harvest.HarvestIndex
 import ghistabs.importer.AddressResolver
+import ghistabs.importer.LocalSources
 import ghistabs.materialize.TemplateNameShortener
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
@@ -88,6 +89,28 @@ class Renderer(
         linesBySource.keys + index.functionsBySource.keys + index.typesBySource.keys
     }
 
+    /**
+     * The real source files, where `--source-root` mapped them — what phases 4–8 read.
+     *
+     * The claims that decide whether a mapped file is the right one are the render's *own*
+     * attribution: what this render would draw in that file at that line. Raw `declSourceFile` would
+     * be the wrong question — gcc drops the file of a deferred declaration often enough (§38) that a
+     * correct root scores 7% against it and 63% against the effective attribution (§44).
+     */
+    val localSources by lazy {
+        LocalSources(program, index) { source ->
+            index.typesBySource[source].orEmpty()
+                .filter { it.declLine > 0 && it.name != null }
+                .map { it.name!!.substringBefore('<') to it.declLine }
+                // Declarations several files claim at one line are excluded: at most one of those
+                // files is right and nothing here says which (§43), so holding a local file to them
+                // judges it on our own known-bad attribution. basic_string.h scored 0 of 17 against
+                // its *correct* source that way — all seventeen belong to stl_uninitialized.h.
+                .filterNot { it in index.conflictedTemplateDecls || it in index.conflictedTypedefDecls }
+                .map { (name, line) -> LocalSources.Claim(name, line) }
+        }
+    }
+
     // A function is decompiled once for the whole run, not once per file that renders part of it: with
     // inlined code now placed in the header it came from, one std::string method is wanted by every
     // file that inlines it, and decompilation is ~all of the runtime.
@@ -156,6 +179,10 @@ class Renderer(
     fun renderAll(dir: File, monitor: TaskMonitor = TaskMonitor.DUMMY): Int {
         monitor.initialize(sources.size.toLong())
         dir.mkdirs()
+        // Said once, up front: with a source root given, how much of it the render can actually read.
+        // Free without one — no transform means no file to check.
+        sources.count { localSources[it] != null }
+            .let { if (it > 0) println("render: $it of ${sources.size} sources resolved to a local file") }
         return program.runTransaction("stabs-render-all") {
             sources.asSequence()
                 .map { it to renderSkeleton(it) }

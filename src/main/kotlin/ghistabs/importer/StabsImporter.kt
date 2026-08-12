@@ -12,6 +12,7 @@ import ghistabs.parse.StabReader
 import ghistabs.parse.StaticScope
 import ghistabs.parse.SymbolDecl
 import ghistabs.runTransaction
+import java.nio.file.Path
 
 /**
  * Orchestrates the stabs import pipeline: harvest records → materialize types → apply symbols.
@@ -69,10 +70,11 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
             functions to globals
         }
 
-        // Pass D — publish the line map
+        // Pass D — publish the line map, then point it at local sources if any root was given
         val sourceMapEntries = ctx.program.runTransaction("Stabs: publish source map") {
             SourceMapApplier(ctx, index).apply()
         }
+        ctx.program.applySourceRoots(ctx.options.sourceRoots.map(Path::of), ctx)
 
         ctx.analyzeDataCoverage()
         registry.reportSurvivingPlaceholders()
