@@ -3,8 +3,10 @@
 package ghistabs.harvest
 
 import ghidra.program.model.address.Address
+import ghidra.program.model.address.AddressRange
 import ghidra.program.model.data.CategoryPath
 import ghidra.program.model.listing.Program
+import ghidra.program.model.sourcemap.SourceMapEntry
 import ghidra.program.model.symbol.SymbolUtilities
 import ghistabs.baseStackParamOffset
 import ghistabs.demangledName
@@ -225,14 +227,42 @@ data class Func(
         name == "__static_initialization_and_destruction_0"
 }
 
-/** N_SLINE record: line → text address, tagged with its active N_SOL source. Held both in
- *  [Harvest.lineEntries] (grouped by source) and on the owning [Func.lineEntries]. */
+/**
+ * N_SLINE record: line → text address, tagged with its active N_SOL source. Held both in
+ * [Harvest.lineEntries] (grouped by source) and on the owning [Func.lineEntries].
+ *
+ * A [SourceMapEntry] of length 0, which is what an N_SLINE is — a point, not a range. So one type
+ * flows parse → render → program, and the program's own DB-backed entries are an alternative
+ * *producer* of it rather than a second model. Zero length means [getRange] is null, per the
+ * interface's own contract, and means an entry never conflicts with any other.
+ *
+ * [compareTo] is Ghidra's order — (file, line, address, length), not address-first — so anything
+ * wanting address order sorts by [addr] explicitly.
+ */
 @Serializable
 data class LineEntry(
     val line: Int,
     @Serializable(with = AddressSerializer::class) val addr: Address,
     @Serializable(with = SourceFileSerializer::class) val source: GhidraSourceFile,
-)
+) : SourceMapEntry {
+    override fun getLineNumber() = line
+
+    override fun getSourceFile() = source
+
+    override fun getBaseAddress() = addr
+
+    override fun getLength() = 0L
+
+    override fun getRange(): AddressRange? = null
+
+    override fun compareTo(other: SourceMapEntry) = COMPARATOR.compare(this, other)
+
+    private companion object {
+        // Lengths are non-negative by the interface's contract, so an unsigned compare adds nothing.
+        val COMPARATOR =
+            compareBy<SourceMapEntry>({ it.sourceFile }, { it.lineNumber }, { it.baseAddress }, { it.length })
+    }
+}
 
 @Serializable(with = ToStringSerializer::class)
 data class TypeLocation(val category: CategoryPath, val name: String) {
