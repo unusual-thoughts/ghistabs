@@ -716,7 +716,7 @@ class FileRenderer(val renderer: Renderer, override val source: GhidraSourceFile
         val fromInlined = rawFuncs.asSequence().flatMap { it.lineEntries.asSequence() }.map { it.source }
         val headers = (fromInlined + fromTypes)
             .filter { it != source && it.filename.hasHeaderExtension() }
-            .map { includeSpelling(it.path) }
+            .map(::includeSpelling)
             .distinct()
             // System headers first, each group alphabetical — the order a source file writes them in.
             .sortedWith(compareBy({ it.startsWith("\"") }, { it }))

@@ -31,3 +31,14 @@ val GhidraSourceFile.segments get() = path.split('/').filter { it.isNotEmpty() }
 val GhidraSourceFile.rootSegment get() = segments.firstOrNull()
 val String.isDriveLetter get() = length == 2 && this[0].isLetter() && this[1] == ':'
 val GhidraSourceFile.inWindowsDrive get() = rootSegment?.isDriveLetter ?: false
+
+/** The segments that name the file rather than the volume it sits on. */
+val GhidraSourceFile.namedSegments get() = segments.drop(if (inWindowsDrive) 1 else 0)
+
+/** The path is rooted only because normalisation rooted it: gcc wrote the spelling relative (`./x.h`,
+ *  `../../x.h`) or bare, and [STABS_ROOT] stands in for the directory it was relative to. Where the
+ *  spelling *says* it is relative and no compilation directory anchored it, that is all we know about
+ *  where the file sits — so nothing above the file's own name can be read off the path. */
+val GhidraSourceFile.hasArtificialRoot get() = ARTIFICIAL_ROOT.matches(rootSegment.orEmpty())
+
+private val ARTIFICIAL_ROOT = Regex("${STABS_ROOT}(_\\d+)?")
