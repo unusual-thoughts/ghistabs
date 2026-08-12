@@ -152,10 +152,10 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
 
     // ── §15 source folds (private mechanism): two gcc spellings of one physical header → one output
     // file. Render never sees these — only the folded per-source views in the facade below. ──
-    private val sourceFolds: Map<GhidraSourceFile, GhidraSourceFile> by lazy {
+    val sourceFolds: Map<GhidraSourceFile, GhidraSourceFile> by lazy {
         foldSourcePaths(
             harvest.lineEntries.keys + harvest.symbolsByCu.keys +
-                typeAsts.values.flatMap { listOfNotNull(it.declSourceFile, sourceFileOf(it.id.source.filename)) },
+                typeAsts.values.flatMap { listOfNotNull(it.declSourceFile, it.id.source.identity) },
         )
     }
 
@@ -169,7 +169,6 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
     private fun fold(source: GhidraSourceFile) =
         (if (foldSources) sourceFolds[source] ?: source else source).let { cuDirectories[it] ?: it }
 
-    private fun foldSource(spelling: String) = fold(sourceFileOf(spelling))
     private fun LineEntry.folded() = copy(source = fold(source))
     private fun Symbol.folded() = copy(sourceFile = sourceFile?.let(::fold))
 
@@ -199,7 +198,7 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
                 }
                 if (rank > (bestRank[n] ?: -1)) {
                     bestRank[n] = rank
-                    put(n, sourceFileOf(id.source.filename))
+                    put(n, id.source.identity)
                 }
             }
         }
@@ -226,7 +225,7 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
         // sharing a stem are dropped rather than guessed between.
         (
             harvest.lineEntries.keys + typeAsts.values.flatMap {
-                listOfNotNull(it.declSourceFile, sourceFileOf(it.id.source.filename))
+                listOfNotNull(it.declSourceFile, it.id.source.identity)
             }
             )
             .filter { it.filename.hasHeaderExtension() && !it.path.isStdMarkerPath() }
@@ -246,7 +245,7 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
         // belongs. Only stdlib homes seed, and `id.source` rather than the effective source, since
         // this map is what the effective source consults.
         val settled = typeAsts.values
-            .mapNotNull { ast -> ast.name?.takeIf { '<' in it }?.let { it to sourceFileOf(ast.id.source.filename) } }
+            .mapNotNull { ast -> ast.name?.takeIf { '<' in it }?.let { it to ast.id.source.identity } }
             .filter { (_, home) -> home.path.isStdMarkerPath() }
         val homeByTemplate = (voted.entries.filter { '<' in it.key }.map { it.key to it.value } + settled)
             .groupBy({ it.first.substringBefore('<') }, { it.second })
@@ -277,7 +276,7 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
         val funcsByMangled = harvest.functions.filter { (it.sizeBytes ?: 0uL) > 0uL }.associateBy { it.name }
         val defSourcesByName = typeAsts.values
             .filter { it.name != null }
-            .groupBy({ it.name!! }, { sourceFileOf(it.id.source.filename) })
+            .groupBy({ it.name!! }, { it.id.source.identity })
             .mapValues { it.value.toSet() }
         // Header line-entries sorted by address once, so each method's [lo,hi) range is a binary-searched
         // slice instead of a full scan of every source's entries per method (was O(types × methods ×
@@ -324,9 +323,9 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
                 // never caught this. bouniaf escaped only because 2 lines happened to inline from
                 // header.h.
                 val siblingHeader = methods.asSequence()
-                    .mapNotNull { m -> funcsByMangled[m.mangled]?.cu?.filename }
+                    .mapNotNull { m -> funcsByMangled[m.mangled]?.cu }
                     .distinct().singleOrNull()
-                    ?.let { cu -> headersByStem[sourceFileOf(cu).filename.substringBeforeLast('.')] }
+                    ?.let { cu -> headersByStem[cu.identity.filename.substringBeforeLast('.')] }
                 val user = userVote.maxByOrNull { it.value }?.key
                 val std = stdVote.maxByOrNull { it.value }?.key
                 // An instantiation follows its code: with no user header voting, the stdlib headers
@@ -360,7 +359,7 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
     private fun Type.effectiveSource() = fold(
         name?.let { multiSourceHeaderHints[it] }
             ?: declSourceFile?.takeIf { body !is TypeDecl.Struct && body !is TypeDecl.Enum }
-            ?: sourceFileOf(id.source.filename),
+            ?: id.source.identity,
     )
 
     // Keyed by id, not by Type: Type is a data class holding the whole TypeDecl body, so a Type-keyed
@@ -391,7 +390,7 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
     val compilationUnits: Set<GhidraSourceFile> by lazy {
         (harvest.functions.map { it.cu } + typeAsts.values.map { it.id.source })
             .filterIsInstance<SourceFile.CUSource>()
-            .map { sourceFileOf(it.filename) }
+            .map { it.identity }
             .plus(harvest.symbolsByCu.keys)
             .mapTo(mutableSetOf(), ::fold)
     }
@@ -410,7 +409,7 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
     private val cuDirectories: Map<GhidraSourceFile, GhidraSourceFile> by lazy {
         (harvest.functions.map { it.cu } + typeAsts.values.map { it.id.source })
             .filterIsInstance<SourceFile.CUSource>()
-            .mapNotNull { cu -> cu.directory?.let { sourceFileOf(cu.filename) to sourceFileOf(it + cu.filename) } }
+            .mapNotNull { cu -> cu.directory?.let { cu.identity to sourceFileOf(it + cu.filename) } }
             .toMap()
     }
 
@@ -464,8 +463,7 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
 
     /** A function's source: lowest-address SLINE, else the class-decl source (gcc-implicit methods). */
     fun Func.source() = when {
-        isSyntheticInit -> foldSource(cu.filename)
-
+        isSyntheticInit -> fold(cu.identity)
         else -> lineEntries.minByOrNull { it.addr.offset }?.source
             ?: outermostClass()?.let { classSourceByName[it] }?.let(::fold)
     }
