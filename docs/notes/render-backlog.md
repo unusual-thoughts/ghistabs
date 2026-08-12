@@ -1848,6 +1848,30 @@ again, 0 typedefs and 0 types lost, appendix 1,420 → 8,725 entries, which is w
 declarations honestly is. No effect on unpackfile or appquery (neither has a file that reaches the
 guard).
 
+**Graded against the real headers on unpackfile.** gcc's own tree is a clone at `~/git/gcc`, and the
+fixture's libstdc++ is **3.2.3** exactly, so `git show releases/gcc-3.2.3:…` settles each of the three
+declarations this item moves rather than leaving them to judgement:
+
+| declaration | claimed at | ground truth | verdict |
+| --- | --- | --- | --- |
+| `class _STL_auto_lock` | stl_threads.h L233 | file is 236 lines; that class's body ends at L232 | **right** — was displaced, now in place |
+| `class rebind<char>` | basic_string.tcc L662 | that line is inside `basic_string::copy`; `struct rebind` is **stl_alloc.h L661** | **wrong** — was displaced, now in place |
+| `class list<FileSystemEntry>` | filesystemimage.h L291 | proprietary header, no source; its own content stops at L147 | suspicious |
+
+So on unpackfile the item is a wash: one right, one wrong, one doubtful, four impossible typedefs held
+out by the conflict rule, and everything else a reason string. Skeleton 2,856 → 2,853 rows, decomp
+3,128 → 3,188 (filesystemimage.h's canvas grows with the L291 claim, which un-crams its inlined
+bodies — a readability gain resting on a line that is probably a lie). Nothing gained, nothing lost.
+The value of the item is entirely in the CU direction xmltest shows.
+
+**And it tells the gap rule what it must do**, since the same three cases now have known answers.
+Content lines per file, in order: stl_threads.h 67, 164…211, **233** (gap 22 against an existing gap
+of 97 — not an outlier, stays, correct); filesystemimage.h 135…147, **291** (gap 144 against gaps of
+2 — outlier, goes, correct); basic_string.tcc 536…622, **662** (gap 40 against gaps up to 43 — *not*
+an outlier, stays, wrong). Two of three, and the one it misses is the one where gcc's line belongs to
+a different file of similar length. That is the honest ceiling for a gap statistic, and worth knowing
+before building it.
+
 **What is left, stated precisely.** For an included file every bound available is circular: it is
 measured by the declarations it is judging. Two blunter rules were written and measured before
 settling:
