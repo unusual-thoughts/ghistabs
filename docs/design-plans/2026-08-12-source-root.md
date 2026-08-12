@@ -62,16 +62,20 @@ reading as the fallback, not a dependency.
 
 Three layers, each shippable, each leaving the render working.
 
-**1. Publish (write-side).** At import, every N_SLINE becomes a `SourceMapEntry` against a `SourceFile`,
-mirroring `DWARFImporter`. §15's folds become `transferSourceMapEntries`. Nothing reads it yet; the
-Source Files table and the listing field light up immediately, and stabs becomes a peer of DWARF/PDB.
+**1. Adopt the identity, delete ours (model-side).** Raw source strings become `SourceFile` handles
+everywhere identity is meant, and our spelling machinery goes with them: `canonicalizeSourcePaths`,
+the ad-hoc basename/drive-letter handling, the `String`-keyed maps. Our `parse.SourceFile` survives
+only as the CU-vs-header *distinction* (§43 depends on it), keyed by the Ghidra handle. What does
+**not** move is declaration attribution — `effectiveSourceFor`, the hints, the conflict sets — which
+answers a different question and stays ours.
 
-**2. Adopt the identity (model-side).** Replace raw source strings with `SourceFile` handles where they
-are *file identity* — `LineEntry.source`, `symbolsBySource`/`linesBySource` keys, `FileRenderer.source`,
-the render's output-path derivation. Our own `parse.SourceFile` sealed class stays, but as what it
-actually is: the CU-vs-header *distinction* (§43 depends on it), keyed by the Ghidra handle rather than
-duplicating path identity. Name collision is real and is resolved by importing Ghidra's as
-`GhidraSourceFile` at the few sites both appear.
+**2. Give the program the line map (write-side), derive the render's index from it.** Every N_SLINE
+becomes a `SourceMapEntry`, mirroring `DWARFImporter`; §15's folds become `transferSourceMapEntries`.
+The render's `linesBySource` stops being a second authority and becomes a cache read back from the
+program. **Published with length 0**, because the API's rule — entries with non-zero lengths must be
+disjoint or identical — only binds ranged entries, and stabs records points: several line numbers at
+one address are legal, and inventing gap-derived ranges would be an interpretation that interleaved
+inlined code makes wrong half the time.
 
 **3. Consume (read-side).** `getSourceLineBounds` feeds the extent; the path transformer resolves a
 spelling to a local file; the declarator index answers the C++ question. This is where the four uses
@@ -154,11 +158,13 @@ before the per-file agreement guard does its finer-grained work.
 
 - Does `normalizeDwarfPath` accept `c:/mingw/include/c++/3.2.3/bits/stl_vector.h`, or does the drive
   letter need handling of our own? Phase 1, task 1.
-- Entry `length`: DWARF uses the gap to the next entry. Ours interleave files within a function (inlined
-  code), so the gap is not always the same file's — use the next entry *by address* regardless of file,
-  which is what the address actually covers.
+- Whether a *ranged* view should also be published for the listing field's benefit, given entries are
+  points. Look at the listing with points first.
+- Whether address-range membership reproduces `Func.lineEntries`' stab-order membership, which is
+  documented as authoritative and includes landing pads Ghidra's CFG body omits. Proven per fixture
+  before the old path is deleted, not assumed.
 - Do we record an identifier? `SourceFileIdType.MD5` describes the file the compiler read, which stabs
   does not tell us. gcc's `N_BINCL` checksum is a per-CU sum over the header's stabs, not a file hash —
   worth investigating later as a same-header check, not as a file identity.
-- Whether the render should eventually *read* its line data from `SourceFileManager` rather than the
-  harvest. It would be one source of truth, at the cost of a DB round-trip per query in the hot path.
+- Hot-path cost: the render's per-row `lastOrNull { addr <= a }` becomes a backward
+  `getSourceMapEntryIterator`. Read once into a cache per render rather than per query, and measure.
