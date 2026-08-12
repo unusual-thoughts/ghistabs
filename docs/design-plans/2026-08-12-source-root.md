@@ -1,9 +1,11 @@
 # Source files: port onto `ghidra.program.model.sourcemap`, then use a source root as ground truth
 
-Draft, 2026-08-12. Two things at once, in that order: **publish what stabs already knows about source
-files through Ghidra's source-map API** instead of only through our own structures, and then take an
-optional **source root** as ground truth for the four uses §44 measured. The first is what makes the
-second small — nearly every piece the second needs turns out to exist already.
+Draft, 2026-08-12. Two things at once, in that order: **replace our hand-rolled source-file identity
+and line-map management with `ghidra.program.model.sourcemap`**, and then take an optional **source
+root** as ground truth for the four uses §44 measured. The port is not a mirror — the goal is that
+Ghidra owns what a source file is and where each address came from, and that our spelling
+canonicalisation, basename folding and `String`-keyed indices are deleted rather than kept in step.
+It is also what makes the second half small: nearly every piece it needs turns out to exist already.
 
 ## Why
 
@@ -29,7 +31,7 @@ program-level machinery — the Source Files table, the listing's source-map fie
 
 | we have | Ghidra has | notes |
 | --- | --- | --- |
-| `LineEntry(source, line, addr)` in `Harvest.lineEntries` | `SourceMapEntry` + `SourceFileManager.addSourceMapEntry(file, line, addr, length)` | DWARF derives `length` from the next entry's address; we can do the same per function |
+| `LineEntry(source, line, addr)` in `Harvest.lineEntries` | `SourceMapEntry` + `SourceFileManager.addSourceMapEntry(file, line, addr, length)` | published with **length 0**: stabs records points, and the disjoint-or-identical rule binds only ranged entries |
 | source spellings as raw `String` everywhere | `ghidra.program.database.sourcemap.SourceFile` — URI-normalised path, `SourceFileIdType`, identifier | value class, no Program needed, so it is usable in pure tests |
 | §15 basename folding of two spellings onto one file | `SourceFileManager.transferSourceMapEntries(from, to)` | the platform's own answer to the same problem |
 | `linesBySource` line→address lookups | `getSourceMapEntries(file, minLine, maxLine)` | indexed by the DB |
