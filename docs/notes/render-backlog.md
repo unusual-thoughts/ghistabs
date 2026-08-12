@@ -1830,6 +1830,24 @@ appquery 6 files, three recovered against stl_uninitialized.h's four typedefs, w
 does *not* catch — see below. Everything else that moved is the reason string on an
 already-displaced row (`stale N_SOL` → `this line is claimed by several files`).
 
+**Measured again on xmltest (gcc 4.2.1 mingw, full stabs), where it matters far more.** The two PE
+fixtures understated this: xmltest has 44 files change, not six, and they are almost all libstdc++
+**translation units** — the other leak direction. A `.cc` whose functions were all inlined or never
+linked has no spans, so the old proxy called it a header and let its declarations set their own
+extent: `ext-inst.cc` rendered **821 rows** for a unit with no code at all, every row a libc typedef
+or class gcc's N_SOL had dumped into it at header line numbers. Whole render **37,256 → 24,183 rows
+(−35%)**, and tinyxml's own five files are byte-identical.
+
+**It also exposed a defect in the change, since fixed.** With the CU rule, such a unit's extent is 0,
+every declaration is stale, `maxLine` is 0 — and `render()` returned at its "nothing sits on a line"
+guard *before the claim passes ran*, so those declarations never reached the displaced appendix
+either. 19 files vanished and **71 types and 80 typedefs** (`_Rope_*`, `_Setw`, `crope`,
+`_Refcount_Base`) disappeared from the render without a word — the same silent-loss trap §38 records
+for `maxLine` gating. The guard now runs the three declaration passes and displaces them: 123 files
+again, 0 typedefs and 0 types lost, appendix 1,420 → 8,725 entries, which is what a CU of unplaceable
+declarations honestly is. No effect on unpackfile or appquery (neither has a file that reaches the
+guard).
+
 **What is left, stated precisely.** For an included file every bound available is circular: it is
 measured by the declarations it is judging. Two blunter rules were written and measured before
 settling:
