@@ -372,16 +372,6 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
 
     // ── Render facade: per-source views with every source spelling already folded (§15). ──
 
-    /** N_SLINE entries per source, re-sorted: folded spellings each arrive (line, addr)-sorted, but
-     *  their concatenation isn't, and render's SLINE annotations need the merged bucket sorted. */
-    val linesBySource: Map<GhidraSourceFile, List<LineEntry>> by lazy {
-        harvest.lineEntries.entries
-            .groupBy({ fold(it.key) }, { it.value })
-            .mapValues { (_, lists) ->
-                lists.flatten().map { it.folded() }.sortedWith(compareBy({ it.line }, { it.addr.offset }))
-            }
-    }
-
     /**
      * Every spelling a line entry was filed under → the identity it renders as. The program's line map
      * is published under the raw spellings and then folded with `transferSourceMapEntries`, so the
@@ -531,11 +521,6 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
         .groupBy({ it.name!!.substringBefore('<') to it.declLine }, ::effectiveSourceFor)
         .filterValues { it.distinct().size > 1 }
         .keys
-
-    /** Every source file render emits, from line entries, function bodies, and type declarations. */
-    val sources: Set<GhidraSourceFile> by lazy {
-        linesBySource.keys + functionsBySource.keys + typesBySource.keys
-    }
 
     /**
      * Canonical (category, ghidraName) → group; drives TypeRegistry slot assignment. XRef-targets are

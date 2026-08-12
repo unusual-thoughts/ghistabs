@@ -21,7 +21,7 @@ class FileRenderer(val renderer: Renderer, override val source: GhidraSourceFile
     override val index = renderer.index
 
     private val rawFuncs = index.functionsBySource[source].orEmpty()
-    private val lines = index.linesBySource[source].orEmpty()
+    private val lines = renderer.linesBySource[source].orEmpty()
     private val typeDecls = index.typesBySource[source].orEmpty().filter { it.name != null && it.declLine > 0 }
     private val symbols = index.symbolsBySource[source].orEmpty()
 
@@ -51,10 +51,10 @@ class FileRenderer(val renderer: Renderer, override val source: GhidraSourceFile
      * none.
      */
     private val activityExtent = when (source in index.compilationUnits) {
-        true -> maxOf(lines.maxOfOrNull { it.line } ?: 0, spans.ranges.maxOfOrNull { it.endInclusive } ?: 0)
+        true -> maxOf(lines.maxOfOrNull { it.lineNumber } ?: 0, spans.ranges.maxOfOrNull { it.endInclusive } ?: 0)
 
         false -> sequenceOf(
-            lines.maxOfOrNull { it.line } ?: 0,
+            lines.maxOfOrNull { it.lineNumber } ?: 0,
             symbols.maxOfOrNull { it.declLine } ?: 0,
             typeDecls.maxOfOrNull { it.declLine } ?: 0,
         ).max()
@@ -67,7 +67,7 @@ class FileRenderer(val renderer: Renderer, override val source: GhidraSourceFile
      */
     private val ownExtent by lazy {
         sequenceOf(
-            lines.maxOfOrNull { it.line } ?: 0,
+            lines.maxOfOrNull { it.lineNumber } ?: 0,
             spans.ranges.maxOfOrNull { it.endInclusive } ?: 0,
             symbols.maxOfOrNull { it.declLine } ?: 0,
             typeDecls.filterNot { disputed(it) }.maxOfOrNull { it.declLine } ?: 0,
@@ -105,7 +105,7 @@ class FileRenderer(val renderer: Renderer, override val source: GhidraSourceFile
      */
     private val maxLine = sequenceOf(
         spans.maxLine,
-        lines.maxOfOrNull { it.line } ?: 0,
+        lines.maxOfOrNull { it.lineNumber } ?: 0,
         typeDecls.filterNot { isStale(it.declLine) }.maxOfOrNull { it.declLine } ?: 0,
         symbols.filterNot { isStale(it.declLine) }.maxOfOrNull { it.declLine } ?: 0,
     ).max()
@@ -251,10 +251,10 @@ class FileRenderer(val renderer: Renderer, override val source: GhidraSourceFile
         data class SliceKey(val line: Int, val codeUnit: String)
 
         val byKey = mutableMapOf<SliceKey, MutableSet<Address>>()
-        for ((line, addr) in lines) {
-            if (line !in 1..maxLine) continue
-            val codeUnit = addr.render(program) ?: ""
-            byKey.getOrPut(SliceKey(line, codeUnit)) { sortedSetOf() } += addr
+        for (entry in lines) {
+            if (entry.lineNumber !in 1..maxLine) continue
+            val addr = entry.baseAddress
+            byKey.getOrPut(SliceKey(entry.lineNumber, addr.render(program) ?: "")) { sortedSetOf() } += addr
         }
         if (renderer.decomp == null) {
             for ((key, addrs) in byKey) {
@@ -270,7 +270,9 @@ class FileRenderer(val renderer: Renderer, override val source: GhidraSourceFile
         // "inlined into main" inside main is nonsense. Rows the decompilation already occupies say it
         // better than any annotation could.
         val own = rawFuncs.mapTo(mutableSetOf()) { it.addr }
-        for ((line, addrs) in lines.filter { it.line in 1..maxLine }.groupBy({ it.line }, { it.addr })) {
+        for ((line, addrs) in lines.filter {
+            it.lineNumber in 1..maxLine
+        }.groupBy({ it.lineNumber }, { it.baseAddress })) {
             if (canvas[line].fragments.any { it.shape == NoteShape.PROVENANCE }) continue
             val fns = addrs
                 .mapNotNull { program.functionManager.getFunctionContaining(it) }
