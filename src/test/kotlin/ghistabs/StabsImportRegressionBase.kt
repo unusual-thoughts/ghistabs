@@ -21,6 +21,8 @@ import ghistabs.harvest.ContentIndex
 import ghistabs.importer.ImportArtifacts
 import ghistabs.importer.ImportContext
 import ghistabs.importer.ImportProbe
+import ghistabs.importer.LocalSources
+import ghistabs.importer.applySourceRoots
 import ghistabs.materialize.conflictCount
 import ghistabs.materialize.itanium.Itanium
 import ghistabs.parse.*
@@ -29,7 +31,11 @@ import kotlinx.serialization.json.encodeToStream
 import org.junit.jupiter.api.*
 import org.junit.jupiter.api.Assumptions.abort
 import org.junit.jupiter.api.Assumptions.assumeTrue
+import org.junit.jupiter.api.io.TempDir
 import java.io.File
+import java.nio.file.Path
+import kotlin.io.path.createDirectories
+import kotlin.io.path.writeText
 
 /**
  * Execution-order mode for the regression harness.
@@ -430,6 +436,45 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             statement,
             manager.getSourceMapEntryIterator(inside, false).firstOrNull()?.baseAddress,
             "walking back from $inside, mid-statement",
+        )
+    }
+
+    /**
+     * A root becomes directory transforms on the program, and [LocalSources] reads back through them —
+     * with the guard that a file whose content disagrees with what the harvest filed there is not the
+     * file this binary was built from, however well its path resolved.
+     *
+     * The tree is built to match one of the program's own recorded directories, so this exercises the
+     * fixture's real spellings (drive letters, `c++` segments) rather than invented ones.
+     */
+    @Test
+    fun sourceRootRegistersTransformsAndGuardsAgainstTheWrongTree(@TempDir root: Path) {
+        val source = program.sourceFileManager.allSourceFiles
+            .firstOrNull { it.path.count { c -> c == '/' } > 1 }
+            ?: abort("Skipping: no recorded source with a directory")
+        val recordedDir = source.path.removeSuffix(source.filename)
+        val local = root.resolve(recordedDir.split('/').last { it.isNotEmpty() })
+            .resolve(source.filename)
+        local.parent.createDirectories()
+        local.writeText("// 1\n// 2\nclass Widget {};\nclass Gadget {};\nclass Sprocket {};\n")
+
+        program.applySourceRoots(listOf(root), context)
+
+        // Three claims at least, or the file is not judged at all — one misfiled declaration must not
+        // be able to discard a correctly mapped file.
+        val claims = listOf(
+            LocalSources.Claim("Widget", 3),
+            LocalSources.Claim("Gadget", 4),
+            LocalSources.Claim("Sprocket", 5),
+        )
+        val agreeing = LocalSources(program, context) { claims }
+        Assertions.assertEquals(local.toFile(), agreeing[source], "transform should resolve to the local file")
+
+        val disagreeing = LocalSources(program, context) { claims.map { it.copy(line = it.line + 30) } }
+        Assertions.assertNull(disagreeing[source], "a file that does not carry the claim must be dropped")
+        Assertions.assertTrue(
+            context.diagnostics.snapshotCounters().getOrDefault("source-root-mismatch", 0L) > 0,
+            "the drop must be reported",
         )
     }
 
