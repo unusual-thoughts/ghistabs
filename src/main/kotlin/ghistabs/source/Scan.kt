@@ -107,7 +107,11 @@ class DeclaratorIndex(text: String, compiledOut: Set<Int> = emptySet()) {
             """operator(?:\s*(?:\(\s*\)|\[\s*]|[^\w\s(\[]+)|\s+(?:(?:new|delete)\s*(?:\[\s*])?|$CONVERSION))"""
         val DECLARATOR = Regex("""((?:$ID\s*$TARGS\s*::\s*)*(?:$OPERATOR|~\s*$ID|$ID))\s*$""")
         val TRAILING = Regex("""\s*(?:\bconst\b|\bvolatile\b|\bthrow\s*\([^()]*\)|=\s*0)$""")
-        val TAG = Regex("""\b(?:class|struct|union|enum)\s+($ID)""")
+
+        // `class X;` is excluded: a forward declaration is a weaker fact than the definition, and
+        // saying it declares the name lets `stringfwd.h`'s `class allocator;` outrank `stl_alloc.h`,
+        // where the class actually is.
+        val TAG = Regex("""\b(?:class|struct|union|enum)\s+($ID)\b(?!\s*;)""")
         val TYPEDEF =
             Regex("""\btypedef\b(?:[^;{}]|\{[^{}]*})*?(?:\(\s*\*\s*($ID)\s*\)\s*\(|($ID)\s*(?:\[[^\]]*])*\s*;)""")
         val WHITESPACE = Regex("""\s+""")

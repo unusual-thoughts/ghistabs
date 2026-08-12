@@ -85,9 +85,16 @@ class Renderer(
             }
     }
 
-    /** Every file the render emits: those with line entries, function bodies, or type declarations. */
+    /**
+     * Every file the render emits: those with line entries, function bodies, or type declarations.
+     *
+     * Types come from the *base* attribution, which is the same set: a source-root re-attribution
+     * can only move a declaration to a file the root resolved, and a file it resolved is one the
+     * program already lists. Asking for the final attribution here would instead make this the first
+     * read of it, before the root that decides it has been installed.
+     */
     val sources: Set<GhidraSourceFile> by lazy {
-        linesBySource.keys + index.functionsBySource.keys + index.typesBySource.keys
+        linesBySource.keys + index.functionsBySource.keys + index.baseTypesBySource.keys
     }
 
     /**
@@ -97,17 +104,21 @@ class Renderer(
      * attribution: what this render would draw in that file at that line. Raw `declSourceFile` would
      * be the wrong question — gcc drops the file of a deferred declaration often enough (§38) that a
      * correct root scores 7% against it and 63% against the effective attribution (§44).
+     *
+     * The *base* attribution, though: what the render would draw before this same root has moved
+     * anything. Judging a local file by an attribution the file itself decided is circular, and in
+     * Kotlin terms it is a lazy that forces itself.
      */
     val localSources by lazy {
         LocalSources(program, index) { source ->
-            index.typesBySource[source].orEmpty()
+            index.baseTypesBySource[source].orEmpty()
                 .filter { it.declLine > 0 && it.name != null }
                 .map { it.name!!.substringBefore('<') to it.declLine }
                 // Declarations several files claim at one line are excluded: at most one of those
                 // files is right and nothing here says which (§43), so holding a local file to them
                 // judges it on our own known-bad attribution. basic_string.h scored 0 of 17 against
                 // its *correct* source that way — all seventeen belong to stl_uninitialized.h.
-                .filterNot { it in index.conflictedTemplateDecls || it in index.conflictedTypedefDecls }
+                .filterNot { it in index.baseConflictedDecls }
                 .map { (name, line) -> LocalSources.Claim(name, line) }
         }
     }
@@ -119,6 +130,35 @@ class Renderer(
      * null for a file the root did not map or the agreement guard dropped.
      */
     fun enclosing(source: GhidraSourceFile, line: Int) = localSources[source]?.let { sourceIndexes[it].enclosing(line) }
+
+    /** The local files a declaration can be re-attributed to, with the source each one stands for. */
+    private val mapped by lazy { sources.mapNotNull { s -> localSources[s]?.let { s to it } } }
+
+    private val declarers = mutableMapOf<Pair<String, Int>, GhidraSourceFile?>()
+
+    /**
+     * The one file whose real text declares [name] at [line], or null where none does or several do.
+     *
+     * Unique answers only: the root is here to add facts, and "one of these files declares it" is
+     * not one. Where it cannot tell, the existing hints keep the declaration they had.
+     */
+    private fun declarerOf(name: String, line: Int) = declarers.getOrPut(name to line) {
+        val window = line - DECL_SLACK..line + DECL_SLACK
+        mapped.singleOrNull { (_, file) ->
+            sourceIndexes[file].declarations[name].orEmpty().any { it in window }
+        }?.first
+    }
+
+    init {
+        // Installed before anything reads attribution, because the per-source views memoise. It
+        // cannot recurse into itself: every input it has — the transforms, the agreement guard's
+        // claims, the candidate files — is drawn from the base attribution.
+        //
+        // Only once per index: a probe renders one harvest in all three modes, and the second
+        // Renderer would be assigning after the first had already read attribution. The answers
+        // would be the same — same program, same root — so the first installation stands.
+        if (index.declarers == null) index.declarers = ::declarerOf
+    }
 
     // A function is decompiled once for the whole run, not once per file that renders part of it: with
     // inlined code now placed in the header it came from, one std::string method is wanted by every
@@ -235,7 +275,11 @@ class Renderer(
     override fun close() {
         decomp?.dispose()
     }
-} // Ghidra's own default is 30s; a function that needs longer is rare enough to be worth naming
+}
 
+// Ghidra's own default is 30s; a function that needs longer is rare enough to be worth naming
 // rather than waiting for (§40).
 private const val DECOMPILE_SECONDS = 30
+
+/** How far off gcc's declaration line the source's own may be — see [Renderer.declarerOf]. */
+private const val DECL_SLACK = 1
