@@ -45,9 +45,13 @@ data class Fragment(
 }
 
 // An empty block and the markers naming what was inlined out of it: `for (…) { }` followed by
-// `/* ⇐ inlines stl_vector.h L 123 */`, or by the `__inline_…()` call that stands in for it.
+// `/* ⇐ inlines stl_vector.h L 123 */`, or by the pseudo-call that stands in for it. That call is
+// recognised by the shape both spellings share — a `__` join and the source line it ends with, as in
+// `__inline_stl_vector_h_123` and `_M_deallocate__stl_vector_h_123` — since with a source root the
+// `__inline_` prefix is only what an unnamed stretch falls back to. Both halves are needed:
+// `FUN_00401234()` ends in digits and `__cxa_end_catch()` has the join.
 private val EMPTY_BLOCK_MARKERS =
-    Regex("""\{ *\}((?: *(?:/\* ⇐ inlines[^*]*\*/|(?:\w+ = )?__inline_\w+\([^()]*\);))+)""")
+    Regex("""\{ *\}((?: *(?:/\* ⇐ inlines[^*]*\*/|(?:\w+ = )?\w*__\w+_\d+\([^()]*\);))+)""")
 
 /**
  * Markers moved inside the block whose content they replace.

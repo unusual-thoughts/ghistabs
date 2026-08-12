@@ -26,6 +26,16 @@ fun Char.isIdentifierChar() = isLetterOrDigit() || this == '_'
 private val NON_IDENTIFIER = Regex("[^A-Za-z0-9]+")
 fun String.sanitizeIdentifier() = replace(NON_IDENTIFIER, "_")
 
+private val NON_IDENTIFIER_CHAR = Regex("[^A-Za-z0-9_]+")
+
+/**
+ * A C++ name as an identifier, underscores intact — for a name read off real source, where they
+ * carry meaning: [sanitizeIdentifier] collapses runs, and every reserved libstdc++ name opens with
+ * `__`, so `__destroy_aux` would come out `_destroy_aux` and not be findable in the header it names.
+ * A leading `~` becomes `dtor_`, the spelling [respellTilde] already uses.
+ */
+fun String.asIdentifier() = (if (startsWith("~")) "dtor_" + drop(1) else this).replace(NON_IDENTIFIER_CHAR, "_")
+
 /**
  * `template<> ` in front of a declaration whose subject [name] carries template arguments, because
  * that is what such a declaration is: `class fpos<int> { … };` is not legal C++, `template<> class
