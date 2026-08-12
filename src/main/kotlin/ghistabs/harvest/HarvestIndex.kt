@@ -383,6 +383,16 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
     }
 
     /**
+     * Every spelling a line entry was filed under → the identity it renders as. The program's line map
+     * is published under the raw spellings and then folded with `transferSourceMapEntries`, so the
+     * folded-away spelling stays listed with zero entries: honest about what gcc emitted, while the
+     * entries sit on the identity the render reads them back by.
+     */
+    val renderIdentityBySource: Map<GhidraSourceFile, GhidraSourceFile> by lazy {
+        harvest.lineEntries.keys.associateWith(::fold)
+    }
+
+    /**
      * The sources gcc compiled as a translation unit — an `N_SO` of its own — as against the files it
      * only ever included. Every stab record carries which of the two it came from ([SourceFile]); the
      * render had been asking "does this file define functions", which is a different question and

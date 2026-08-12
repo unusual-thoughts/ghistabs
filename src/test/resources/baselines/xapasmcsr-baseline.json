@@ -296,6 +296,30 @@
             "min": 8,
             "max": 8
         },
+        "sourcemap-duplicate-entries": {
+            "min": 3696,
+            "max": 3696
+        },
+        "sourcemap-entries": {
+            "min": 20281,
+            "max": 20281
+        },
+        "sourcemap-entry-rejected": {
+            "min": 4,
+            "max": 4
+        },
+        "sourcemap-entry-unmapped": {
+            "min": 36,
+            "max": 36
+        },
+        "sourcemap-files": {
+            "min": 63,
+            "max": 63
+        },
+        "sourcemap-folded-files": {
+            "min": 10,
+            "max": 10
+        },
         "stab-value-absolute": {
             "min": 36,
             "max": 36

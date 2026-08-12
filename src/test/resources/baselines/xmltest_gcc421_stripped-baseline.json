@@ -248,6 +248,22 @@
             "min": 1,
             "max": 1
         },
+        "sourcemap-duplicate-entries": {
+            "min": 114,
+            "max": 114
+        },
+        "sourcemap-entries": {
+            "min": 2259,
+            "max": 2259
+        },
+        "sourcemap-files": {
+            "min": 10,
+            "max": 10
+        },
+        "sourcemap-folded-files": {
+            "min": 0,
+            "max": 0
+        },
         "stab-value-func-relative": {
             "min": 2691,
             "max": 2691
