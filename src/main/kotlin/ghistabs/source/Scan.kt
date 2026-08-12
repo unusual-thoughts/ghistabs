@@ -23,6 +23,9 @@ class DeclaratorIndex(text: String, compiledOut: Set<Int> = emptySet()) {
     private val chars = scannable(text)
     private val lineStarts = listOf(0) + chars.indices.filter { chars[it] == '\n' }.map { it + 1 }
 
+    /** How many lines the file has — the one non-circular extent an included file can be given (§43). */
+    val lineCount = lineStarts.size - if (chars.lastOrNull() == '\n') 1 else 0
+
     init {
         compiledOut.forEach { line -> lineStarts.getOrNull(line - 1)?.let { blankLine(it) } }
     }

@@ -29,6 +29,18 @@ class FileRenderer(val renderer: Renderer, override val source: GhidraSourceFile
 
     override fun indentFor(line: Int) = if (spans.inFunction(line)) 4 else 0
 
+    private val lineExtent = lines.maxOfOrNull { it.lineNumber } ?: 0
+    private val bodyExtent = spans.ranges.maxOfOrNull { it.endInclusive } ?: 0
+
+    /**
+     * The file's real length, where `--source-root` resolved it and phase 2's agreement guard kept
+     * it. This is the one input to the extents below that is not derived from the declarations they
+     * judge, so where it exists §43's circularity is simply gone.
+     */
+    private val sourceLength = believedLength(renderer.lengthOf(source), maxOf(lineExtent, bodyExtent)) { length ->
+        index.warn("source-length-conflict", "$source: code reaches L${maxOf(lineExtent, bodyExtent)} of $length lines")
+    }
+
     /**
      * How far into this file gcc showed evidence of real activity. Past it, a declaration's line is
      * not to be trusted.
@@ -49,12 +61,17 @@ class FileRenderer(val renderer: Renderer, override val source: GhidraSourceFile
      * standing in for "is a header", and that leaks both ways: a header of inline methods has spans
      * (`filesystemimage.h`, right answer by luck), and a CU whose every function was inlined away has
      * none.
+     *
+     * An included file the source root knows is not estimated at all — [sourceLength] is what it
+     * reaches, and a declaration past it is stale by arithmetic. A CU keeps the code-derived extent
+     * even with the root: a .cpp's real length is not evidence about which of *its* declarations gcc
+     * misfiled, which is the whole of §38.
      */
     private val activityExtent = when (source in index.compilationUnits) {
-        true -> maxOf(lines.maxOfOrNull { it.lineNumber } ?: 0, spans.ranges.maxOfOrNull { it.endInclusive } ?: 0)
+        true -> maxOf(lineExtent, bodyExtent)
 
-        false -> sequenceOf(
-            lines.maxOfOrNull { it.lineNumber } ?: 0,
+        false -> sourceLength ?: sequenceOf(
+            lineExtent,
             symbols.maxOfOrNull { it.declLine } ?: 0,
             typeDecls.maxOfOrNull { it.declLine } ?: 0,
         ).max()
@@ -64,11 +81,15 @@ class FileRenderer(val renderer: Renderer, override val source: GhidraSourceFile
      * How far this file's *own* content reaches — code, globals, and the type declarations that are
      * not themselves in dispute. Unlike [activityExtent] it is not a judgement about staleness; it is
      * the yardstick for whether a line claimed by several files could be this one's.
+     *
+     * [sourceLength] answers it outright, for a CU as much as for a header: how long the file is *is*
+     * how far its own content can reach, where the estimate below only ever approximates that from
+     * the declarations in dispute.
      */
     private val ownExtent by lazy {
-        sequenceOf(
-            lines.maxOfOrNull { it.lineNumber } ?: 0,
-            spans.ranges.maxOfOrNull { it.endInclusive } ?: 0,
+        sourceLength ?: sequenceOf(
+            lineExtent,
+            bodyExtent,
             symbols.maxOfOrNull { it.declLine } ?: 0,
             typeDecls.filterNot { disputed(it) }.maxOfOrNull { it.declLine } ?: 0,
         ).max()
@@ -107,7 +128,7 @@ class FileRenderer(val renderer: Renderer, override val source: GhidraSourceFile
      */
     private val maxLine = sequenceOf(
         spans.maxLine,
-        lines.maxOfOrNull { it.lineNumber } ?: 0,
+        lineExtent,
         typeDecls.filterNot { isStale(it.declLine) }.maxOfOrNull { it.declLine } ?: 0,
         symbols.filterNot { isStale(it.declLine) }.maxOfOrNull { it.declLine } ?: 0,
     ).max()
@@ -766,4 +787,19 @@ class FileRenderer(val renderer: Renderer, override val source: GhidraSourceFile
         fun braceRows(open: String, items: List<String>, close: String, indent: Int, role: String? = null) =
             listOf(Row(open, indent, role)) + items.map { Row(it, indent + 4) } + Row(close, indent)
     }
+}
+
+/**
+ * A file's length as an extent, or null where it must not be trusted — [onConflict] is told which.
+ *
+ * A root for the wrong version resolves happily and gives a wrong length, and a *short* wrong length
+ * would displace real declarations rather than misfiled ones. [code] is the check: an N_SLINE or a
+ * function body past the end of the file is address-backed evidence that this is not that file, so
+ * the length is refused and reported. A *declaration* past the end deliberately counts for nothing
+ * here — it is the very thing the length is here to catch.
+ */
+internal fun believedLength(length: Int?, code: Int, onConflict: (Int) -> Unit): Int? = when {
+    length == null -> null
+    code <= length -> length
+    else -> null.also { onConflict(length) }
 }
