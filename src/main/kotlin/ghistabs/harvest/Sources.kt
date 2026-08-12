@@ -42,3 +42,16 @@ val GhidraSourceFile.namedSegments get() = segments.drop(if (inWindowsDrive) 1 e
 val GhidraSourceFile.hasArtificialRoot get() = ARTIFICIAL_ROOT.matches(rootSegment.orEmpty())
 
 private val ARTIFICIAL_ROOT = Regex("${STABS_ROOT}(_\\d+)?")
+
+/**
+ * The spelling [path] normalises to, as a DTM category prefix: rooted, separators and `..` settled,
+ * with neither the volume nor the artificial root — a category says which file a declaration belongs
+ * to, and `/stabs` is not a place any declaration lives.
+ *
+ * The one normalisation the whole harvest shares, rather than each consumer collapsing `..` and
+ * stripping `c:` its own way.
+ */
+fun categoryPathOf(spelling: String) = sourceFileOf(spelling).categorySegments.joinToString("/", prefix = "/")
+
+/** [namedSegments] without the root normalisation invented for a relative spelling. */
+val GhidraSourceFile.categorySegments get() = namedSegments.drop(if (hasArtificialRoot) 1 else 0)

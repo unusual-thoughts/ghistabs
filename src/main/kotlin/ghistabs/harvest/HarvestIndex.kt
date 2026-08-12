@@ -326,7 +326,7 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
                 val siblingHeader = methods.asSequence()
                     .mapNotNull { m -> funcsByMangled[m.mangled]?.cu?.filename }
                     .distinct().singleOrNull()
-                    ?.let { cu -> headersByStem[cu.pathBasename().substringBeforeLast('.')] }
+                    ?.let { cu -> headersByStem[sourceFileOf(cu).filename.substringBeforeLast('.')] }
                 val user = userVote.maxByOrNull { it.value }?.key
                 val std = stdVote.maxByOrNull { it.value }?.key
                 // An instantiation follows its code: with no user header voting, the stdlib headers
