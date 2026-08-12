@@ -69,6 +69,11 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
             functions to globals
         }
 
+        // Pass D — publish the line map
+        val sourceMapEntries = ctx.program.runTransaction("Stabs: publish source map") {
+            SourceMapApplier(ctx, index).apply()
+        }
+
         ctx.analyzeDataCoverage()
         registry.reportSurvivingPlaceholders()
         registry.reportConflictDelta()
@@ -86,6 +91,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
             classesApplied = classes,
             constantsApplied = constants,
             staticMembersApplied = staticMembers,
+            sourceMapEntries = sourceMapEntries,
         )
     }
 
