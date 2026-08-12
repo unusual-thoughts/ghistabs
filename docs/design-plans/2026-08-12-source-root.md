@@ -90,6 +90,49 @@ land.
    graded automatically instead of by hand. Item 9 shipped a silent content loss precisely because this
    did not exist.
 
+## `DefineTable`: the macros stabs never had
+
+`PreProcessor.getDefinitions()` returns a `DefineTable` that survives the run, and it is worth more
+than the "macros → equates" footnote it had in the first draft. Stabs records **no macros at all** — a
+reconstructed header today cannot show a single `#define` — so this is not a better version of
+something we have, it is a category of content we are missing entirely.
+
+What it exposes:
+
+| | |
+| --- | --- |
+| `getDefineNames()`, `getValue(name)`, `expandDefine(name)` | the name and its *expanded* text, macros-within-macros resolved |
+| `isNumeric`, `getCValue`, and `ExpressionEvaluator` inside `populateDefineEquates` | so `(1 << 3) | 4` evaluates, not just literals |
+| `isArg(name)`, `getArgs(name)`, `toString(name)` | function-like macros, with their parameter list |
+| `getDefinitionPath(name)` | **which file defined it** |
+| `get(name)` → `PPToken extends Token` | carries `beginLine` **and** `path` — so a macro has a line, not just a file |
+| `populateDefineEquates(openDTMgrs, dtMgr)` | one-member `EnumDataType` named `define_<NAME>`, filed under `<file>/defines`, resolved against open archives |
+
+Three uses follow, in value order:
+
+1. **Named constants in the decompiler.** A magic number in a decompiled body that matches a macro
+   value can be applied as that macro — the one-member-enum idiom `populateDefineEquate` already
+   builds, which is how Ghidra models "this scalar is really this named constant". This is the
+   RE-facing win and it is one call.
+2. **`#define`s in the reconstructed header**, at their true line, because `PPToken` keeps
+   `beginLine`. A header view that currently shows types, functions and globals would show its macros
+   too — content no stabs-only render can produce.
+3. **Ground truth for conditional compilation**, which is what makes phase 4's preprocessed text
+   authoritative rather than one plausible reading of the `#ifdef`s.
+
+**The constraint that decides the shape:** one `EnumDataType` per macro, and libstdc++ plus MinGW's C
+headers define thousands. Applying all of them would bloat the program's type manager for no reading
+benefit. So it is opt-in and filtered — a macro is worth materialising when its value occurs as a
+scalar operand in the program, or when it was defined in a file the render emits. Measure the count
+before choosing the filter.
+
+**Not a version guard.** `__GNUC__` is a compiler built-in and `_GLIBCPP_VERSION` lives in the
+*generated* `c++config.h`, so neither is in a source tarball. The version evidence is elsewhere and
+simpler: the recorded include path **names it** — `c:/mingw/include/c++/3.2.3/bits/stl_vector.h`.
+Checked on the fixtures: they carry no `.comment` section and no `GCC: (GNU) …` producer string at all,
+so the path is the only version fact available, and it is enough to reject a mismatched root up front,
+before the per-file agreement guard does its finer-grained work.
+
 ## Risks, and what is deliberately not done
 
 - **`SourceFile` validates paths.** Non-blank, URI-normalisable, no trailing `/`, absolute after
