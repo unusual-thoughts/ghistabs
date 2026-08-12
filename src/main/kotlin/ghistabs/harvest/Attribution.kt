@@ -66,13 +66,13 @@ private val STD_SUBDIRS = setOf("bits", "ext", "tr1", "tr2", "debug", "profile",
  * Anything else stays quoted, keeping whatever directory it sits in below `include` — a project
  * header reached by `-I` really is written `"imageutil/appimage.h"`.
  */
-fun includeSpelling(path: String): String {
-    val segments = pathSegments(path)
+fun includeSpelling(source: GhidraSourceFile): String {
+    val segments = source.namedSegments
     fun quoted(spelling: String) = "\"" + spelling + "\""
-    if (segments.size == 1 || isExplicitlyRelative(path)) return quoted(segments.last())
+    if (segments.size == 1 || source.hasArtificialRoot) return quoted(source.filename)
     val includeAt = segments.lastIndexOf("include")
     val below = if (includeAt >= 0) segments.drop(includeAt + 1) else listOf(segments.last())
-    if (!path.isStdMarkerPath()) return quoted(below.joinToString("/"))
+    if (!source.path.isStdMarkerPath()) return quoted(below.joinToString("/"))
     val underCxxRoot = below.firstOrNull() == "c++" || below.firstOrNull() == "g++"
     val versionless = below.dropWhile { it == "c++" || it == "g++" || it.all { c -> c.isDigit() || c == '.' } }
     val spelled = when {
