@@ -4,6 +4,7 @@ import ghidra.app.decompiler.ClangToken
 import ghidra.app.decompiler.DecompInterface
 import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Program
+import ghidra.program.model.sourcemap.SourceMapEntry
 import ghidra.util.task.TaskMonitor
 import ghistabs.StabsOptions.Companion.stabsTypedefsShortened
 import ghistabs.harvest.Func
@@ -60,7 +61,32 @@ class Renderer(
     // the constructor param, so openProgram(program) would be handed null.
     val decomp = if (mode != Mode.SKELETON) DecompInterface().also { it.openProgram(program) } else null
 
-    val sources get() = index.sources
+    /**
+     * The N_SLINE map per file, read back from the program — the one place that owns address↔line data
+     * ([ghistabs.importer.SourceMapApplier] published it there) rather than a second index built from
+     * the stab stream alongside it. Entries come back in (line, address) order within a file, which is
+     * the order the SLINE annotations want, and only files with entries are listed, so a spelling the
+     * §15 fold emptied stays out of [sources] exactly as it did before.
+     *
+     * Read once per render: a per-query walk of the DB would run once per rendered row.
+     */
+    val linesBySource: Map<GhidraSourceFile, List<SourceMapEntry>> by lazy {
+        program.sourceFileManager.let { m -> m.mappedSourceFiles.associateWith { m.getSourceMapEntries(it) } }
+            // Reading the program means an import that never published leaves the render with no line
+            // map at all, and every SLINE annotation would just quietly be missing.
+            .also {
+                if (it.isEmpty() && index.harvest.lineEntries.isNotEmpty()) {
+                    println(
+                        "render: ${index.harvest.lineEntries.size} sources have N_SLINEs but the program's line map is empty",
+                    )
+                }
+            }
+    }
+
+    /** Every file the render emits: those with line entries, function bodies, or type declarations. */
+    val sources: Set<GhidraSourceFile> by lazy {
+        linesBySource.keys + index.functionsBySource.keys + index.typesBySource.keys
+    }
 
     // A function is decompiled once for the whole run, not once per file that renders part of it: with
     // inlined code now placed in the header it came from, one std::string method is wanted by every
