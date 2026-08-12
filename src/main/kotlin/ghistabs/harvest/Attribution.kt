@@ -23,21 +23,7 @@ private val STD_MARKERS = Regex(
         """|/(mingw|cygwin|usr|gcc-lib)(/[^/]+)*?/include/""",
 )
 
-/** Strip a Windows drive-letter prefix from a stabs path, rooted (`/c:/…`, as normalisation leaves
- *  it) or as gcc wrote it (`c:/…`). */
-private fun stripDriveLetter(path: String): String {
-    val start = if (path.startsWith("/")) 1 else 0
-    return if (path.length > start + 1 && path[start].isLetter() && path[start + 1] == ':') {
-        path.substring(start + 2)
-    } else {
-        path
-    }
-}
-
-/** Path segments, drive letter dropped and both separators honored (stabs mixes `/` and `\`). */
-private fun pathSegments(path: String) = stripDriveLetter(path).split('/', '\\').filter { it.isNotEmpty() }
-
-/** [path] without its last segment, empty when it has none. Both separators, as [pathSegments]. */
+/** [path] without its last segment, empty when it has none. Both separators, as stabs mixes them. */
 private fun dropLastSegment(path: String) =
     maxOf(path.lastIndexOf('/'), path.lastIndexOf('\\')).takeIf { it > 0 }?.let { path.take(it) }.orEmpty()
 
@@ -99,7 +85,9 @@ fun resolveAgainstDirectory(path: String, directory: String?): String {
     if (directory == null || !isExplicitlyRelative(path)) return path
     var base = directory.trimEnd('/', '\\')
     val rest = mutableListOf<String>()
-    for (segment in pathSegments(path)) {
+    // A split and nothing more: this runs before any identity exists, on a spelling that says it is
+    // relative — so there is no drive letter to strip and no `..` yet resolved.
+    for (segment in path.split('/', '\\').filter { it.isNotEmpty() }) {
         when (segment) {
             "." -> {}
             ".." -> base = dropLastSegment(base).ifEmpty { return path }
@@ -108,9 +96,6 @@ fun resolveAgainstDirectory(path: String, directory: String?): String {
     }
     return (listOf(base) + rest).joinToString("/")
 }
-
-/** Last path segment of a stabs path: `c:/mingw/include/c++/3.2.3/bits/stl_alloc.h` → `stl_alloc.h`. */
-fun String.pathBasename() = pathSegments(this).lastOrNull() ?: this
 
 private val CU_LOCAL_NAME = Regex("""\.?_anon_\d+""")
 
@@ -202,7 +187,7 @@ fun scopeCategory(scope: List<String>): CategoryPath =
  */
 fun commonProjectPrefix(sources: Collection<SourceFile>): String {
     val cuPaths = sources.mapNotNull { (it as? SourceFile.CUSource)?.filename }
-        .map { p -> stripDriveLetter(p).split('/').filter { it.isNotEmpty() } }
+        .map { sourceFileOf(it).categorySegments }
     if (cuPaths.isEmpty()) return ""
     val shortest = cuPaths.minBy { it.size }
     val prefix = mutableListOf<String>()
@@ -235,7 +220,7 @@ class Attribution(
         val name = ast.ghidraName
 
         if (ast.isCuLocalName()) {
-            return TypeLocation(strip(norm(ast.cu.filename)) + "/anon", name)
+            return TypeLocation(strip(categoryPathOf(ast.cu.filename)) + "/anon", name)
         }
 
         return keyFor(name, sources, diagnostics)
@@ -256,37 +241,23 @@ class Attribution(
         val realHeaders = defSources.filter { it.isRealHeader() }
         if (realHeaders.isNotEmpty()) {
             val owner = realHeaders.minBy { it.filename }
-            return TypeLocation(strip(norm(owner.filename)), typeName)
+            return TypeLocation(strip(categoryPathOf(owner.filename)), typeName)
         }
 
         // Single canonical source — forward-EXCL collapses cross-CU HeaderSource instances
         // for the same physical file into one path here.
         val uniquePaths = defSources.map { it.filename }.toSet()
         if (uniquePaths.size == 1) {
-            return TypeLocation(strip(norm(uniquePaths.single())), typeName)
+            return TypeLocation(strip(categoryPathOf(uniquePaths.single())), typeName)
         }
 
         // gcc didn't BINCL the owning header, so defSources is .cpp-only. The hint map
         // (built from member-function SLINE majority) names the real header.
         multiSourceHeaderHints[typeName]?.let { hint ->
-            return TypeLocation(strip(norm(hint.path)), typeName)
+            return TypeLocation(strip(categoryPathOf(hint.path)), typeName)
         }
 
-        return TypeLocation(strip(norm(uniquePaths.min())) + "/multi", typeName)
-    }
-
-    /** Normalize a filesystem path: strip Windows drive letter, collapse `..`, drop empty segments. */
-    private fun norm(path: String): String {
-        val parts = stripDriveLetter(path).split('/').filter { it.isNotEmpty() && it != "." }
-        val stack = ArrayDeque<String>()
-        for (p in parts) {
-            if (p == "..") {
-                if (stack.isNotEmpty()) stack.removeLast() else stack.addLast(p)
-            } else {
-                stack.addLast(p)
-            }
-        }
-        return stack.joinToString("/", prefix = "/")
+        return TypeLocation(strip(categoryPathOf(uniquePaths.min())) + "/multi", typeName)
     }
 
     /** Strip [commonProjectPrefix] from the start of a normalized path. */
