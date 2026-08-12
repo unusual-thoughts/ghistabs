@@ -2,6 +2,7 @@ package ghistabs.render
 
 import ghidra.program.model.address.Address
 import ghistabs.harvest.Func
+import ghistabs.harvest.GhidraSourceFile
 import ghistabs.harvest.Symbol
 import ghistabs.harvest.Type
 import ghistabs.harvest.hasHeaderExtension
@@ -10,7 +11,7 @@ import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.SymbolDecl
 import ghistabs.parse.TypeDecl
 
-class FileRenderer(val renderer: Renderer, override val source: String) : RenderContext {
+class FileRenderer(val renderer: Renderer, override val source: GhidraSourceFile) : RenderContext {
     override val program = renderer.program
     override val shortener = renderer.shortener
     override val resolver = renderer.resolver
@@ -297,7 +298,7 @@ class FileRenderer(val renderer: Renderer, override val source: String) : Render
         // emitted per instantiation) whose N_SOL named the CU — flag every copy misattributed.
         // Headers are the canonical home and keep theirs; where two of them claim one typedef at one
         // line, [misfiled] settles it by reach instead.
-        val splayed = if (source.hasHeaderExtension()) {
+        val splayed = if (source.filename.hasHeaderExtension()) {
             emptySet()
         } else {
             typedefs.groupBy { it.name to it.rendered }.filterValues { it.size > 1 }.keys
@@ -714,8 +715,8 @@ class FileRenderer(val renderer: Renderer, override val source: String) : Render
         val fromTypes = referenced.asSequence().map { index.effectiveSourceFor(it) }
         val fromInlined = rawFuncs.asSequence().flatMap { it.lineEntries.asSequence() }.map { it.source }
         val headers = (fromInlined + fromTypes)
-            .filter { it != source && it.hasHeaderExtension() }
-            .map { includeSpelling(it) }
+            .filter { it != source && it.filename.hasHeaderExtension() }
+            .map { includeSpelling(it.path) }
             .distinct()
             // System headers first, each group alphabetical — the order a source file writes them in.
             .sortedWith(compareBy({ it.startsWith("\"") }, { it }))

@@ -1,5 +1,11 @@
 package ghistabs.render
 
+import ghistabs.harvest.GhidraSourceFile
+import ghistabs.harvest.isDriveLetter
+import ghistabs.harvest.rootSegment
+import ghistabs.harvest.segments
+import kotlin.io.path.Path
+
 /**
  * A name's every `~` that sits *inside* it, respelled `dtor_`. A name opening with one is a real
  * destructor (`~string`) and keeps it; one in the middle is Ghidra having named a vtable pointer
@@ -38,26 +44,23 @@ fun String.asSpecialization(name: String?) =
 // `std::vector<int>::vector`, not `std::vector<int>::std::vector<int>`.
 fun String.simpleTypeName() = substringBefore('<').substringAfterLast("::")
 
+private val GhidraSourceFile.sanitizedRoot get() =
+    rootSegment?.let { if (it.isDriveLetter) it.removeSuffix(":") else it }
+private val GhidraSourceFile.sanitizedSegments get() =
+    sanitizedRoot?.let { listOf(it) + segments.drop(1) } ?: emptyList()
+
 /**
- * A source path as a path *under* the output directory, keeping its shape:
- * `E:/work/cc/devtools/…/appimage.h` → `E/work/cc/devtools/…/appimage.h`. The drive letter becomes
- * the top directory, both separators are honored (stabs mixes `/` and `\`), and `..` pops the
- * segment before it — dropping it instead would have spelled `a/b/../c.h` as `a/b/c.h`, a directory
- * that does not exist. A `..` with nothing left to pop is discarded rather than escaping the output
- * directory; a spelling that starts that way should have been anchored to its compilation directory
- * before it got here (`resolveAgainstDirectory`). Segments are otherwise left alone — flattening the
- * whole path into one name spelled that header
- * `E__work_cc_devtools_devtools-bluelab-7-0_result_include_imageutil_appimage.h`.
+ * A source file as a path *under* the output directory, keeping its shape:
+ * `/E:/work/cc/devtools/…/appimage.h` → `E/work/cc/devtools/…/appimage.h`. Separators, `..` and
+ * relative spellings are already settled by the identity ([ghistabs.harvest.sourceFileOf]); all that
+ * is left is the drive letter's colon, which is a path character on no filesystem we write to and becomes the top
+ * directory without it. Segments are otherwise left alone — flattening the whole path into one name
+ * spelled that header `E__work_cc_devtools_devtools-bluelab-7-0_result_include_imageutil_appimage.h`.
+ *
+ * Display, not identity: two sources that differ only in their drive letter's punctuation cannot
+ * arise, so nothing collides here that Ghidra held apart.
  */
-fun outputPath(source: String): String {
-    val drive = source.takeIf { it.length >= 2 && it[1] == ':' && it[0].isLetter() }?.take(1)
-    val rest = if (drive != null) source.substring(2) else source
-    val segments = rest.split('/', '\\').filter { it.isNotEmpty() && it != "." }
-        .fold(mutableListOf<String>()) { path, segment ->
-            path.apply { if (segment == "..") removeLastOrNull() else add(segment) }
-        }
-    return (listOfNotNull(drive) + segments).joinToString("/").ifEmpty { "unnamed" }
-}
+val GhidraSourceFile.outputPath get() = Path("", *sanitizedSegments.toTypedArray())
 
 /**
  * C is declarator-based: an array's extent goes *after* the  * name, so `char const[18] ABC`

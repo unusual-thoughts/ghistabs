@@ -152,30 +152,42 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
 
     // ── §15 source folds (private mechanism): two gcc spellings of one physical header → one output
     // file. Render never sees these — only the folded per-source views in the facade below. ──
-    private val sourceFolds: Map<String, String> by lazy {
+    private val sourceFolds: Map<GhidraSourceFile, GhidraSourceFile> by lazy {
         foldSourcePaths(
             harvest.lineEntries.keys + harvest.symbolsByCu.keys +
-                typeAsts.values.flatMap { listOfNotNull(it.id.source.filename, it.declSourceFile) },
+                typeAsts.values.flatMap { listOfNotNull(it.declSourceFile, sourceFileOf(it.id.source.filename)) },
         )
     }
 
-    // [foldSources] off → bypass, so `sourceFolds` is never computed.
-    private fun foldSource(raw: String) = if (foldSources) sourceFolds[raw] ?: raw else raw
-    private fun LineEntry.folded() = copy(source = foldSource(source))
-    private fun Symbol.folded() = copy(sourceFile = sourceFile?.let(::foldSource))
+    /**
+     * A raw spelling's render identity: its basename fold (§15), then its compilation directory where
+     * gcc gave it one. [foldSources] off → bypass, so `sourceFolds` is never computed.
+     *
+     * The directory half was `locate()`, applied at the moment a file was written; a source that
+     * *is* an identity carries where it lives instead, so nothing downstream has to reconstruct it.
+     */
+    private fun fold(source: GhidraSourceFile) =
+        (if (foldSources) sourceFolds[source] ?: source else source).let { cuDirectories[it] ?: it }
+
+    private fun foldSource(spelling: String) = fold(sourceFileOf(spelling))
+    private fun LineEntry.folded() = copy(source = fold(source))
+    private fun Symbol.folded() = copy(sourceFile = sourceFile?.let(::fold))
 
     // Blocks carry a source too, and it was the one field left raw — so `inlineParams`, which asks
     // whether a block belongs to the file being rendered, compared a raw N_SOL spelling against a
     // folded one. It matched only while the fold happened to pick the bare spelling N_SOL usually
     // uses; folding onto the full path exposed it, and every pseudo-call in xvimage.cpp lost its
     // parameter names to the dataflow fallback.
-    private fun BlockScope.folded(): BlockScope =
-        copy(source = foldSource(source), locals = locals.map { it.folded() }, children = children.map { it.folded() })
+    private fun BlockScope.folded(): BlockScope = copy(
+        source = source?.let(::fold),
+        locals = locals.map { it.folded() },
+        children = children.map { it.folded() },
+    )
 
     // name → its defining source. Prefer concrete Struct/Enum over forward-decl XRef stubs: gcc emits
     // those for classes merely mentioned by pointer in unrelated headers (e.g. reachable via <iostream>),
     // and picking one would route the class's methods to that header instead of its real home.
-    private val classSourceByName: Map<String, String> by lazy {
+    private val classSourceByName: Map<String, GhidraSourceFile> by lazy {
         buildMap {
             val bestRank = mutableMapOf<String, Int>()
             for ((_, id, name, body) in typeAsts.values) {
@@ -187,7 +199,7 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
                 }
                 if (rank > (bestRank[n] ?: -1)) {
                     bestRank[n] = rank
-                    put(n, id.source.filename)
+                    put(n, sourceFileOf(id.source.filename))
                 }
             }
         }
@@ -206,7 +218,7 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
      */
     // Every known header by its stem, so a CU can find the header it is conventionally paired with
     // (`image.cpp` → `image.h`). Ambiguous stems are dropped rather than guessed between.
-    private val headersByStem: Map<String, String> by lazy {
+    private val headersByStem: Map<String, GhidraSourceFile> by lazy {
         // Every source the stabs mention, however it is mentioned. `image.h` appears in none of the
         // line entries — nothing was inlined from it — and in no declSourceFile either; it is known
         // only as some type's `id.source`, which is exactly the case this lookup exists to serve.
@@ -214,16 +226,16 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
         // sharing a stem are dropped rather than guessed between.
         (
             harvest.lineEntries.keys + typeAsts.values.flatMap {
-                listOfNotNull(it.declSourceFile, it.id.source.filename)
+                listOfNotNull(it.declSourceFile, sourceFileOf(it.id.source.filename))
             }
             )
-            .filter { it.hasHeaderExtension() && !it.isStdMarkerPath() }
-            .groupBy { it.pathBasename().substringBeforeLast('.') }
-            .filterValues { v -> v.map(String::pathBasename).distinct().size == 1 }
-            .mapValues { (_, v) -> v.minBy { it.length } }
+            .filter { it.filename.hasHeaderExtension() && !it.path.isStdMarkerPath() }
+            .groupBy { it.filename.substringBeforeLast('.') }
+            .filterValues { v -> v.distinctBy { it.filename }.size == 1 }
+            .mapValues { (_, v) -> v.minBy { it.path.length } }
     }
 
-    private val multiSourceHeaderHints: Map<String, String> by lazy {
+    private val multiSourceHeaderHints: Map<String, GhidraSourceFile> by lazy {
         // An instantiation with no method evidence of its own — `_Vector_alloc_base<unsigned short>`
         // declares three pointers and no methods — inherits what its siblings' methods established.
         // One template lives in one header, so `_Vector_alloc_base<Exclusion>` answers for it.
@@ -234,8 +246,8 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
         // belongs. Only stdlib homes seed, and `id.source` rather than the effective source, since
         // this map is what the effective source consults.
         val settled = typeAsts.values
-            .mapNotNull { ast -> ast.name?.takeIf { '<' in it }?.let { it to ast.id.source.filename } }
-            .filter { (_, home) -> home.isStdMarkerPath() }
+            .mapNotNull { ast -> ast.name?.takeIf { '<' in it }?.let { it to sourceFileOf(ast.id.source.filename) } }
+            .filter { (_, home) -> home.path.isStdMarkerPath() }
         val homeByTemplate = (voted.entries.filter { '<' in it.key }.map { it.key to it.value } + settled)
             .groupBy({ it.first.substringBefore('<') }, { it.second })
             .mapValues { (_, homes) -> homes.groupingBy { it }.eachCount().maxByOrNull { it.value }!!.key }
@@ -261,19 +273,19 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
         }
     }
 
-    private val votedHeaderHints: Map<String, String> by lazy {
+    private val votedHeaderHints: Map<String, GhidraSourceFile> by lazy {
         val funcsByMangled = harvest.functions.filter { (it.sizeBytes ?: 0uL) > 0uL }.associateBy { it.name }
         val defSourcesByName = typeAsts.values
             .filter { it.name != null }
-            .groupBy({ it.name!! }, { it.id.source.filename })
+            .groupBy({ it.name!! }, { sourceFileOf(it.id.source.filename) })
             .mapValues { it.value.toSet() }
         // Header line-entries sorted by address once, so each method's [lo,hi) range is a binary-searched
         // slice instead of a full scan of every source's entries per method (was O(types × methods ×
         // entries)). Non-header sources never vote, so they're dropped up front.
         val hdrEntries = harvest.lineEntries.entries
-            .filter { it.key.hasHeaderExtension() }
+            .filter { it.key.filename.hasHeaderExtension() }
             .flatMap { (src, entries) ->
-                val std = src.isStdMarkerPath()
+                val std = src.path.isStdMarkerPath()
                 entries.map { Triple(it.addr.offset, src, std) }
             }
             .sortedBy { it.first }
@@ -287,12 +299,12 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
                 // header, hence already past this guard — collected 31 rows of libstdc++. Everything
                 // else declared only in headers is left alone, which also bounds what this loop costs.
                 val templated = '<' in name
-                if (!templated && defSources.all { it.hasHeaderExtension() }) continue
+                if (!templated && defSources.all { it.filename.hasHeaderExtension() }) continue
                 val methods = asts.flatMap { (it.body as? TypeDecl.Struct<*>)?.methods.orEmpty() }
                 if (methods.isEmpty()) continue
                 // A type's own def sources win by body size, so exclude them from the vote.
-                val userVote = mutableMapOf<String, Int>()
-                val stdVote = mutableMapOf<String, Int>()
+                val userVote = mutableMapOf<GhidraSourceFile, Int>()
+                val stdVote = mutableMapOf<GhidraSourceFile, Int>()
                 for (m in methods) {
                     val func = funcsByMangled[m.mangled ?: continue] ?: continue
                     val lo = func.addr.offset
@@ -345,16 +357,16 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
     // Named types vote via the hint (member-SLINE header); typedefs trust their N_SOL declSourceFile (a
     // template-instantiation typedef splayed into a CU still names its real header); structs/enums fall
     // back to id.source (their `:T` body is legitimately CU-emitted, §6).
-    private fun Type.effectiveSource() = foldSource(
+    private fun Type.effectiveSource() = fold(
         name?.let { multiSourceHeaderHints[it] }
-            ?: declSourceFile?.takeIf { it.isNotEmpty() && body !is TypeDecl.Struct && body !is TypeDecl.Enum }
-            ?: id.source.filename,
+            ?: declSourceFile?.takeIf { body !is TypeDecl.Struct && body !is TypeDecl.Enum }
+            ?: sourceFileOf(id.source.filename),
     )
 
     // Keyed by id, not by Type: Type is a data class holding the whole TypeDecl body, so a Type-keyed
     // map deep-hashes an entire type tree on every lookup — and this is looked up once per type per
     // rendered source. GlobalTypeId is (source, n).
-    private val effectiveSourceById: Map<GlobalTypeId, String> by lazy {
+    private val effectiveSourceById: Map<GlobalTypeId, GhidraSourceFile> by lazy {
         typeAsts.values.associate { it.id to it.effectiveSource() }
     }
 
@@ -362,9 +374,9 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
 
     /** N_SLINE entries per source, re-sorted: folded spellings each arrive (line, addr)-sorted, but
      *  their concatenation isn't, and render's SLINE annotations need the merged bucket sorted. */
-    val linesBySource: Map<String, List<LineEntry>> by lazy {
+    val linesBySource: Map<GhidraSourceFile, List<LineEntry>> by lazy {
         harvest.lineEntries.entries
-            .groupBy({ foldSource(it.key) }, { it.value })
+            .groupBy({ fold(it.key) }, { it.value })
             .mapValues { (_, lists) ->
                 lists.flatten().map { it.folded() }.sortedWith(compareBy({ it.line }, { it.addr.offset }))
             }
@@ -376,40 +388,36 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
      * render had been asking "does this file define functions", which is a different question and
      * answers wrong for a header full of inline methods.
      */
-    val compilationUnits: Set<String> by lazy {
+    val compilationUnits: Set<GhidraSourceFile> by lazy {
         (harvest.functions.map { it.cu } + typeAsts.values.map { it.id.source })
             .filterIsInstance<SourceFile.CUSource>()
-            .map { it.filename }
+            .map { sourceFileOf(it.filename) }
             .plus(harvest.symbolsByCu.keys)
-            .mapTo(mutableSetOf(), ::foldSource)
+            .mapTo(mutableSetOf(), ::fold)
     }
 
     /**
-     * A compilation unit's directory, by the filename everything keys it under. gcc records it in the
-     * leading trailing-slash `N_SO`, and `SourceFile.CUSource` has carried it all along; nothing used
-     * it, so `main.cpp` had no path even though the stabs say
-     * `E:/work/cc/devtools/devtools-bluelab-7-0/vm/appquery/`.
+     * Where a compilation unit lives, keyed by the bare spelling everything else names it by. gcc
+     * records it in the leading trailing-slash `N_SO`, and `SourceFile.CUSource` has carried it all
+     * along, so `main.cpp` is really `E:/work/cc/devtools/devtools-bluelab-7-0/vm/appquery/main.cpp`
+     * and [fold] gives it that identity. A header gets no such treatment: gcc gives it no directory
+     * of its own, and inferring one from the CU that included it is the inference
+     * [resolveAgainstDirectory] refuses for good reason.
+     *
+     * DTM categories are unaffected — those key off `cu.filename` through [Attribution], not through
+     * the render identity, and read better short (`/main.cpp/…`, not `/E:/work/…/main.cpp/…`).
      */
-    private val cuDirectories: Map<String, String> by lazy {
+    private val cuDirectories: Map<GhidraSourceFile, GhidraSourceFile> by lazy {
         (harvest.functions.map { it.cu } + typeAsts.values.map { it.id.source })
             .filterIsInstance<SourceFile.CUSource>()
-            .mapNotNull { cu -> cu.directory?.let { cu.filename to it } }
+            .mapNotNull { cu -> cu.directory?.let { sourceFileOf(cu.filename) to sourceFileOf(it + cu.filename) } }
             .toMap()
     }
 
-    /**
-     * Where a source file lives, for the render's file *tree* only — the CU keys stay bare, since
-     * `cu.filename` also names the DTM category a CU-local type materializes into and those read
-     * better short (`/main.cpp/…`, not `/E:/work/…/main.cpp/…`). A header keeps whatever spelling the
-     * fold settled on: gcc gives it no directory of its own, and inferring one from the CU that
-     * included it is the inference [resolveAgainstDirectory] refuses for good reason.
-     */
-    fun locate(source: String) = cuDirectories[source]?.plus(source) ?: source
-
     /** File-scope symbols per source — by CU, except where the symbol itself names a better one. */
-    val symbolsBySource: Map<String, List<Symbol>> by lazy {
+    val symbolsBySource: Map<GhidraSourceFile, List<Symbol>> by lazy {
         harvest.symbolsByCu.entries
-            .flatMap { (cu, syms) -> syms.map { (typeinfoSource(it) ?: foldSource(cu)) to it.folded() } }
+            .flatMap { (cu, syms) -> syms.map { (typeinfoSource(it) ?: fold(cu)) to it.folded() } }
             .groupBy({ it.first }, { it.second })
     }
 
@@ -435,7 +443,7 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
      * while the render draws `class Image` in image.h. Concrete bodies only: an `XRef` forward-decl
      * stub names whichever unrelated header mentioned the class by pointer.
      */
-    private val classRenderSourceByName: Map<String, String> by lazy {
+    private val classRenderSourceByName: Map<String, GhidraSourceFile> by lazy {
         typeAsts.values
             .filter { it.body is TypeDecl.Struct || it.body is TypeDecl.Enum }
             .mapNotNull { t -> t.name?.let { it to effectiveSourceFor(t) } }
@@ -459,12 +467,12 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
         isSyntheticInit -> foldSource(cu.filename)
 
         else -> lineEntries.minByOrNull { it.addr.offset }?.source
-            ?: outermostClass()?.let { classSourceByName[it] }?.let(::foldSource)
+            ?: outermostClass()?.let { classSourceByName[it] }?.let(::fold)
     }
 
     /** Functions per source — the inverted view render needs, matching [linesBySource]/[symbolsBySource]
      *  rather than making every caller scan the whole function list once per rendered file. */
-    val functionsBySource: Map<String, List<Func>> by lazy {
+    val functionsBySource: Map<GhidraSourceFile, List<Func>> by lazy {
         functions.mapNotNull { f -> f.source()?.let { it to f } }.groupBy({ it.first }, { it.second })
     }
 
@@ -473,7 +481,7 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
     val functionsByMangledName: Map<String, Func> by lazy { functions.associateBy { it.name } }
 
     /** Declared types per source, same inversion as [functionsBySource]. */
-    val typesBySource: Map<String, List<Type>> by lazy { typeAsts.values.groupBy(::effectiveSourceFor) }
+    val typesBySource: Map<GhidraSourceFile, List<Type>> by lazy { typeAsts.values.groupBy(::effectiveSourceFor) }
 
     /** Type → its rendering source (§15) — render's sole type-attribution accessor. */
     fun effectiveSourceFor(type: Type) = effectiveSourceById[type.id] ?: type.effectiveSource()
@@ -515,9 +523,8 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
         .keys
 
     /** Every source file render emits, from line entries, function bodies, and type declarations. */
-    val sources: Set<String> by lazy {
-        (linesBySource.keys + functionsBySource.keys + typesBySource.keys)
-            .filter { it.isNotEmpty() }.toSet()
+    val sources: Set<GhidraSourceFile> by lazy {
+        linesBySource.keys + functionsBySource.keys + typesBySource.keys
     }
 
     /**

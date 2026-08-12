@@ -433,7 +433,7 @@ class SymbolApplier(
         val (stack, registers) = locals.partition { (it.body as? SymbolDecl.Local)?.location == VariableLocation.STACK }
         val rows = (stack.sortedBy { it.rawValue.toInt() } + registers.sortedBy { it.body.name }).map { loc ->
             val type = registry.resolveRef(loc.body.type)?.displayName ?: "?"
-            val origin = loc.sourceFile?.pathBasename()?.let { "[$it:${loc.declLine}]" } ?: "[line ${loc.declLine}]"
+            val origin = loc.sourceFile?.let { "[${it.filename}:${loc.declLine}]" } ?: "[line ${loc.declLine}]"
             Triple("$type ${loc.body.name}", loc.storage(ctx.program).orEmpty(), origin)
         }
         val declWidth = rows.maxOf { it.first.length }

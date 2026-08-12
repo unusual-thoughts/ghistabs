@@ -165,8 +165,14 @@ before the per-file agreement guard does its finer-grained work.
 
 ## Open questions
 
-- Does `normalizeDwarfPath` accept `c:/mingw/include/c++/3.2.3/bits/stl_vector.h`, or does the drive
-  letter need handling of our own? Phase 1, task 1.
+- ~~Does `normalizeDwarfPath` accept `c:/mingw/include/c++/3.2.3/bits/stl_vector.h`, or does the drive
+  letter need handling of our own?~~ **Answered (phase 1, task 1): it accepts every shape we have, and
+  no drive-letter handling of our own is needed.** `normalizeDwarfPath(path, "stabs")` gives
+  `c:/mingw/…` → `/c:/mingw/…` (the colon survives — a URI is happy with one once the path is rooted),
+  `C:\work\include\foo.h` → `/C:/work/include/foo.h`, `dspinfo.h` → `/dspinfo.h`, `./local.h` →
+  `/stabs/local.h`, `../../interface/…` → `/stabs_2/interface/…`. Nothing throws, so nothing is
+  skipped. Raw `new SourceFile(path)` throws on all but an already-absolute forward-slash path
+  ("Relative path in absolute URI"), so every construction routes through `normalizeDwarfPath`.
 - Whether a *ranged* view should also be published for the listing field's benefit, given entries are
   points. Look at the listing with points first.
 - Whether address-range membership reproduces `Func.lineEntries`' stab-order membership, which is

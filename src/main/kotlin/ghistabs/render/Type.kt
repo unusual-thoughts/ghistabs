@@ -4,6 +4,7 @@ import ghidra.program.model.data.ByteDataType
 import ghidra.program.model.data.CharDataType
 import ghidra.program.model.data.SignedByteDataType
 import ghidra.program.model.listing.Program
+import ghistabs.harvest.GhidraSourceFile
 import ghistabs.harvest.HarvestIndex
 import ghistabs.harvest.Symbol
 import ghistabs.harvest.Type
@@ -17,7 +18,7 @@ import ghistabs.parse.*
 data class Var(val line: Int, val name: String, val text: String, val role: String?)
 
 interface RenderContext {
-    val source: String
+    val source: GhidraSourceFile
     val program: Program
     val resolver: AddressResolver
     val index: HarvestIndex
