@@ -1,160 +1,121 @@
-# Source root: ground truth from the sources the binary was built from
+# Source files: port onto `ghidra.program.model.sourcemap`, then use a source root as ground truth
 
-Draft, 2026-08-12. Adds an optional `--source-root` (and analyzer option) pointing at the sources a
-binary was compiled from, and uses it as ground truth in four places. Written after §44 of
-`render-backlog.md`, which measured what the render currently gets right by checking unpackfile
-against libstdc++ 3.2.3 itself.
+Draft, 2026-08-12. Two things at once, in that order: **publish what stabs already knows about source
+files through Ghidra's source-map API** instead of only through our own structures, and then take an
+optional **source root** as ground truth for the four uses §44 measured. The first is what makes the
+second small — nearly every piece the second needs turns out to exist already.
 
 ## Why
 
-Everything the render says about *where* something came from is gcc's word, and §38 established that
-gcc drops the file of any deferred declaration. The render has been compensating with heuristics —
-`multiSourceHeaderHints`' vote, `conflictedTemplateDecls`, `activityExtent`, §43's proposed gap rule —
-each of which is an inference from the debug info about the debug info. When the sources are on disk,
-most of those questions stop being inferences.
-
-§44's numbers, on unpackfile against `releases/gcc-3.2.3`:
+§44 graded unpackfile against libstdc++ 3.2.3 itself. Two facts drive everything:
 
 | | |
 | --- | --- |
 | inlined stretches naming a libstdc++ file | 392 occurrences, **100% land on real code**, 94% inside a function whose name the source gives |
-| declarations with libstdc++ ground truth | 185: **63% right line**, 5% right file/wrong line, 29% filed under the wrong file, 2% past EOF |
+| declarations with ground truth | 185: **63% right line**, 5% right file/wrong line, 29% wrong file, 2% past EOF |
 | misfiled declarations | 48 distinct, **24 declared at the very same line in another file** |
 
-Two facts follow, and they are the whole design. **The line is usually right and the file is usually
-wrong** — so a source root does not need to correct positions, it needs to *identify files*. And
-**a file's real length is knowable**, which is the one input §43's circular extent problem lacks.
+**The line is usually right and the file is usually wrong.** So a source root identifies files; it must
+never "correct" a line. And **a file's real length is knowable**, which is the input §43's circular
+extent problem lacks.
 
-## What it is used for
+The second why is platform alignment. Ghidra 12.1 models source files first-class, and **DWARF and PDB
+both publish into it** (`DWARFImporter.processSourceMaps`, PDB's `ApplyLineNumbers`). Stabs is the odd
+provider out: we parse N_SLINE into `Harvest.lineEntries` and keep it to ourselves, so none of the
+program-level machinery — the Source Files table, the listing's source-map field, transforms,
+`ProgramDiff`/`ProgramMerge` — sees anything.
 
-Four uses, in dependency order. Each reuses one index; none of them changes behaviour when no root is
-given.
+## The platform already models this
 
-1. **Name the inlined stretches.** `__inline_stl_vector_h_123` → `_M_deallocate`, and
-   `Region.definitionHead` can carry the source's real signature and parameter names instead of the
-   callee's frame-slot guesses. Cheapest reader-visible win: 94% of stretches resolve.
-2. **Re-attribute misfiled declarations.** Search the root for a file declaring `(name, line)`;
-   `_Is_POD` claimed at basic_string.h:111 is stl_uninitialized.h:**111**. Attacks the §38/§43 family
-   at the root instead of one symptom at a time.
-3. **A real file length.** For an included file, `activityExtent`/`ownExtent` become `wc -l`. §43's
-   residue — a header measured by the declarations it is judging, so one uncorroborated declaration
-   vouches for itself — disappears, with no gap statistic to tune.
-4. **An attribution scorecard.** §44 as counters, so attribution regressions are caught the way row
-   counts catch layout ones. Today an attribution change can only be graded by hand, which is how item
-   9 shipped with a silent content loss that only a second fixture exposed.
+| we have | Ghidra has | notes |
+| --- | --- | --- |
+| `LineEntry(source, line, addr)` in `Harvest.lineEntries` | `SourceMapEntry` + `SourceFileManager.addSourceMapEntry(file, line, addr, length)` | DWARF derives `length` from the next entry's address; we can do the same per function |
+| source spellings as raw `String` everywhere | `ghidra.program.database.sourcemap.SourceFile` — URI-normalised path, `SourceFileIdType`, identifier | value class, no Program needed, so it is usable in pure tests |
+| §15 basename folding of two spellings onto one file | `SourceFileManager.transferSourceMapEntries(from, to)` | the platform's own answer to the same problem |
+| `linesBySource` line→address lookups | `getSourceMapEntries(file, minLine, maxLine)` | indexed by the DB |
+| `activityExtent`'s "how far does this file reach" | `SourceFileUtils.getSourceLineBounds(program, file)` | min/max mapped line, straight from the program |
+| a `--source-root` mapping recorded paths to local ones | `SourcePathTransformer.addDirectoryTransform(recordedDir, localDir)` + `UserDataPathTransformer` | persisted in user data, **already has a GUI** (Source Files and Transforms) |
+| path spellings with `\`, drive letters, bare names | `SourceFileUtils.normalizeDwarfPath(path, baseDir)` | documents MinGW backslashes explicitly; relative paths get an artificial root |
+| nothing | `SourceFilesTablePlugin`, `SourceMapFieldFactory` | free the moment we publish |
 
-## What Ghidra already provides, and what it does not
+## What still has to be ours, and why
 
-Both cparser packages were read before choosing, because the obvious move — "Ghidra has a C parser,
-point it at the headers" — does not survive contact.
+**Ghidra has no C++ front end.** `ghidra.app.util.cparser.C`'s complete keyword token list is `auto
+break case char continue default do double else enum extern float for goto if int long register return
+short sizeof static switch typedef union unsigned void while` plus `__attribute/__declspec/…` — no
+`class`, `template`, `namespace`, `operator`, `::`. It tracks provenance internally
+(`headerFileName`/`headerFileLine`, `C.jj:123-125`) but only to format parse messages, and no result
+carries a line. So "which function encloses `stl_vector.h:123`" cannot be answered by it.
 
-**`ghidra.app.util.cparser.C` — cannot do this job.** The complete keyword token list in `C.jj` is
-`auto break case char continue default do double else enum extern float for goto if int long register
-return short sizeof static struct switch typedef union unsigned void while` plus
-`__attribute/__declspec/__far/__near/__packed/__unaligned`. No `class`, `template`, `namespace`,
-`operator`, `::` — a C grammar with MSVC/GCC extensions and some ObjC. `<bits/stl_vector.h>` is out of
-reach entirely. It *does* track provenance internally (`headerFileName`/`headerFileLine`/
-`headerFileLineOffset`, `C.jj:123-125`, fed by `LineDef()` at `C.jj:1525`), but only to format parse
-messages; the only provenance that reaches a result is the *file*, as the DataType's category. It
-parses function definitions (`C.jj:1547`) and exposes them by name (`C.jj:878`) — with no line. So it
-can never answer "what is at stl_vector.h:123".
+That leaves exactly one hand-rolled component: a **declarator index** over source text — strip comments
+and strings, match braces, record `(name, startLine, endLine)`. Pure, ~150 lines, Kind-1 testable, and
+it never has to *understand* C++, only find heads and matching braces.
 
-**`ghidra.app.util.cparser.CPP.PreProcessor` — genuinely useful, and it changes the design.** It has
-no grammar to choke on, so C++ passes through untouched, and it gives three things:
+Its input, though, should be the platform's: `ghidra.app.util.cparser.CPP.PreProcessor` has no grammar
+to choke on, resolves `#include`s the way the compiler did (`addIncludePaths`, `CPP.jj:883-935`), and
+emits `#line <n>: "<file>"` at every file switch (`CPP.jj:1635-1684`) — so its output carries
+provenance **and contains only the branches that compiled**. The catch: `bits/c++config.h` is generated
+at build time and absent from a source tarball, so preprocessing is an *input strategy* with raw
+reading as the fallback, not a dependency.
 
-- **Compiler-faithful include resolution.** `addIncludePaths(String[])`, then `includeFile`
-  (`CPP.jj:883-935`) walks the `-I` list and falls back to the including file's own directory,
-  warning `No path to #include X … Use -I option`. This is §44's mapping problem — `<iostream>` is
-  `include/std/std_iostream.h`, `atomicity.h` is `config/cpu/i486/bits/atomicity.h`, `basic_file.h` is
-  `config/io/basic_file_stdio.h` — answered by resolution rather than by guessing at path suffixes.
-- **A `#line`-tagged stream.** It emits `#line <n>: "<file>"` at every file switch (`CPP.jj:1635-1684`),
-  so preprocessed text carries (file, line) throughout — **and contains only the branches that were
-  actually compiled**. libstdc++ is dense with `#ifdef _GLIBCPP_…` and per-OS branches; scanning raw
-  text indexes code the compiler never saw. This is the strongest argument for it.
-- **Macros with provenance.** `DefineTable.getDefineNames/getValue/isNumeric/getDefinitionPath`
-  (`DefineTable.java:230-265`) and `populateDefineEquates` — numeric `#define`s straight into Ghidra's
-  equate table, filed per file. Not in this plan's scope; noted because it is nearly free later and
-  sits next to the existing stabs `:c=`-constants-as-equates work.
+## Port strategy
 
-**The catch that decides the architecture:** preprocessing libstdc++ needs the whole include
-environment, and `bits/c++config.h` is *generated at build time* — it is not in a source tarball. Point
-a root at pristine gcc and includes will not resolve. So the preprocessor is an **input strategy**,
-not a dependency:
+Three layers, each shippable, each leaving the render working.
 
-```
-                     ┌─ PreProcessor (roots as -I) ──→ #line-tagged text ─┐
-render spelling ──→  │                                                     ├─→ scanner ─→ index
-                     └─ raw file (suffix-resolved) ───────────────────────┘
-```
+**1. Publish (write-side).** At import, every N_SLINE becomes a `SourceMapEntry` against a `SourceFile`,
+mirroring `DWARFImporter`. §15's folds become `transferSourceMapEntries`. Nothing reads it yet; the
+Source Files table and the listing field light up immediately, and stabs becomes a peer of DWARF/PDB.
 
-Same scanner either way; only the text differs, and the fallback is what §44 measured at 94%.
+**2. Adopt the identity (model-side).** Replace raw source strings with `SourceFile` handles where they
+are *file identity* — `LineEntry.source`, `symbolsBySource`/`linesBySource` keys, `FileRenderer.source`,
+the render's output-path derivation. Our own `parse.SourceFile` sealed class stays, but as what it
+actually is: the CU-vs-header *distinction* (§43 depends on it), keyed by the Ghidra handle rather than
+duplicating path identity. Name collision is real and is resolved by importing Ghidra's as
+`GhidraSourceFile` at the few sites both appear.
 
-## Architecture
+**3. Consume (read-side).** `getSourceLineBounds` feeds the extent; the path transformer resolves a
+spelling to a local file; the declarator index answers the C++ question. This is where the four uses
+land.
 
-New package `ghistabs/source/`, with no dependency on `render/` or `harvest/` — it answers questions
-about text, and callers decide what to do with the answers.
+## The four uses, expressed against the platform
 
-```kotlin
-/** A definition the source carries, with the brace extent gcc compiled from it. */
-data class Definition(val name: String, val start: Int, val end: Int)
+1. **Name the inlined stretches** — `enclosing(transformedPath, line)` from the declarator index;
+   `__inline_stl_vector_h_123` → `_M_deallocate__stl_vector_h_123`. 94% resolvable per §44.
+2. **Re-attribute misfiled declarations** — a reverse `(name, line) → files` map over the root; accept
+   only unique answers. Moves 24 of unpackfile's 48 misfiled declarations to files that actually
+   declare them.
+3. **A real extent** — the local file's line count where the root has it, `getSourceLineBounds` where it
+   does not. §43's gap heuristic is then unnecessary wherever a root exists.
+4. **An attribution scorecard** — §44 as counters plus an itemised dump, so an attribution change is
+   graded automatically instead of by hand. Item 9 shipped a silent content loss precisely because this
+   did not exist.
 
-/** Pure: every function-like definition in one file's text, by brace matching. */
-fun definitionsIn(text: CharSequence): List<Definition>
+## Risks, and what is deliberately not done
 
-/** Pure: declared name → the lines that declare it (class/struct/union/enum/typedef). */
-fun declarationsIn(text: CharSequence): Map<String, List<Int>>
-
-class SourceIndex(roots: List<File>, sink: DiagnosticSink) {
-    fun enclosing(spelling: String, line: Int): Definition?   // use 1
-    fun declarers(name: String, line: Int): List<String>      // use 2
-    fun lineCount(spelling: String): Int?                     // use 3
-    fun agreement(spelling: String): Double?                  // the mismatch guard
-}
-```
-
-The scanner strips comments and string literals first (a small state machine that preserves line
-breaks), then matches braces, because a brace inside `"}"` or a comment otherwise ends a body early.
-It records every `{` whose head contains a `(` at template depth 0, so methods inside class bodies are
-found as well as free functions — that is where most of libstdc++ lives.
-
-**Resolution** takes the render's *full* spelling (`c:/mingw/include/c++/3.2.3/bits/stl_vector.h`),
-not the basename the marker displays, and tries, in order: the preprocessor's resolved map; longest
-matching path suffix; unique basename. Ambiguity is never broken by guessing — it logs
-`source-file-ambiguous` and yields nothing, because a wrong file produces confidently wrong names,
-which is worse than the `__inline_…` fallback it replaces.
-
-**Version guard.** A root for the wrong version is the failure mode that produces plausible lies. Per
-file, `agreement` = the fraction of that file's attributed declaration names that appear within ±2 of
-their claimed line. Below a floor (start at 0.5, measured before fixing), the file is dropped with
-`source-root-mismatch` naming it, and everything falls back to today's behaviour. Corpus evidence for
-the floor: unpackfile's *correctly* attributed libstdc++ files score 63% with the pristine tree, so
-the floor has to sit below that and the guard is per file, not per root.
-
-**Wiring.** `StabsOptions.sourceRoots: List<File>` (empty = off), from a repeatable `--source-root` on
-both CLI commands and a path-list analyzer option. The index is built once and hung on `HarvestIndex`,
-because uses 2 and 3 are attribution questions the *importer* asks and uses 1 and 4 are render
-questions — one owner, one cache, and the analyzer path gets re-attribution for free.
-
-## Decisions, and what was rejected
-
-- **Not CParser for naming.** C-only; cannot see a line. Its slot is a later, opt-in pass over a *C*
-  project's headers for the `/* 0 bytes */` opaque types, never libstdc++.
-- **Not "trust the source over the stabs".** The source root corrects *files*, never lines: §44 shows
-  the line is right 63% of the time and, where it is wrong, the source cannot say what gcc meant.
-- **Not a fuzzy match.** No nearest-name, no edit distance. Either a file declares that name at that
-  line or it does not; ambiguity is reported, not resolved.
-- **Not on by default.** No root, no behaviour change — every measurement in the backlog stays
-  comparable, and the fixtures keep working without a gcc checkout.
+- **`SourceFile` validates paths.** Non-blank, URI-normalisable, no trailing `/`, absolute after
+  normalisation. Our spellings include `E:/work/…`, `c:/mingw/…` and bare `dspinfo.h`.
+  `normalizeDwarfPath(path, baseDir)` is built for exactly this, but the drive-letter case must be
+  verified in phase 1, not assumed — a throw per file is the failure mode, and DWARF's importer catches
+  and skips, which we must not silently copy.
+- **DB growth.** unpackfile has thousands of line entries; xmltest far more. Publishing is a write per
+  entry. Measure before enabling by default; it is an option if it is costly.
+- **The port must not change the render.** Layers 1 and 2 are behaviour-preserving by construction:
+  the same data, addressed by a handle instead of a string. Every phase diffs the render against the
+  previous commit and expects zero change.
+- **Not "trust the source over the stabs".** The root corrects files, never lines.
+- **Not fuzzy matching.** A file declares that name at that line or it does not; ambiguity is reported.
+- **Not on by default** for the root. No root, no behaviour change, and every backlog measurement stays
+  comparable.
 
 ## Open questions
 
-- **Cost.** Preprocessing libstdc++ per run is not free. Expect to cache the scan per (file, mtime) in
-  memory for the run; if it is worse than ~2s on unpackfile, make the preprocessor strategy opt-in
-  (`--source-root-preprocess`) and default to raw scanning.
-- **Which name to render.** `_M_deallocate__stl_vector_h_123` keeps §36's property that the .cpp's call
-  and the header's definition compute the same string, and stays unique when one file inlines two
-  stretches of one function. The shorter `_M_deallocate` reads better but collides. Phase 4 renders the
-  long form and the decision gets made against real output.
-- **Templates.** A definition's name in the source is `vector<_Tp, _Alloc>::_M_insert_aux`; the render
-  knows the *instantiated* type. Phase 4 uses the source's spelling as-is rather than trying to
-  substitute — matching gcc's own template argument names is a separate problem.
+- Does `normalizeDwarfPath` accept `c:/mingw/include/c++/3.2.3/bits/stl_vector.h`, or does the drive
+  letter need handling of our own? Phase 1, task 1.
+- Entry `length`: DWARF uses the gap to the next entry. Ours interleave files within a function (inlined
+  code), so the gap is not always the same file's — use the next entry *by address* regardless of file,
+  which is what the address actually covers.
+- Do we record an identifier? `SourceFileIdType.MD5` describes the file the compiler read, which stabs
+  does not tell us. gcc's `N_BINCL` checksum is a per-CU sum over the header's stabs, not a file hash —
+  worth investigating later as a same-header check, not as a file identity.
+- Whether the render should eventually *read* its line data from `SourceFileManager` rather than the
+  harvest. It would be one source of truth, at the cost of a DB round-trip per query in the hot path.
