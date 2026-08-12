@@ -11,6 +11,8 @@ import ghistabs.demangledName
 import ghistabs.parse.*
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.descriptors.PrimitiveKind.STRING
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
@@ -25,8 +27,8 @@ data class Type(
     val body: TypeDecl<GlobalTypeId>,
     /** Source line from N_LSYM `desc`. gcc 3.x sets it; gcc 12 leaves 0. */
     val declLine: Int = 0,
-    /** N_SOL-effective filename at definition time (header for stdlib, CU for app-local). */
-    val declSourceFile: String? = null,
+    /** N_SOL-effective source at definition time (header for stdlib, CU for app-local). */
+    @Serializable(with = SourceFileSerializer::class) val declSourceFile: GhidraSourceFile? = null,
 ) {
     val source get() = id.source
 
@@ -64,7 +66,7 @@ data class Symbol(
     val declLine: Int = 0,
     /** N_SOL in effect when the record was read — except for function-scope symbols, where the N_SOL
      *  is meaningless, so [BlockTreeBuilder.finish] rebuilds them with the block's real source. */
-    val sourceFile: String? = null,
+    @Serializable(with = SourceFileSerializer::class) val sourceFile: GhidraSourceFile? = null,
     /** Enclosing function (mangled/linkage name) when harvested inside a function scope — set for
      *  procedure-scope (`V`) statics so the applier can annotate which function owns them. */
     val enclosingFunction: String? = null,
@@ -72,7 +74,7 @@ data class Symbol(
     constructor(
         record: StabRecord,
         decl: SymbolDecl<GlobalTypeId>,
-        sourceFile: String? = null,
+        sourceFile: GhidraSourceFile? = null,
         enclosingFunction: String? = null,
     ) : this(record.index, record.type, decl, record.value, record.desc, sourceFile, enclosingFunction)
 
@@ -111,7 +113,7 @@ data class Symbol(
         fun parse(
             rec: StabRecord,
             globalizer: Globalizer,
-            sourceFile: String? = null,
+            sourceFile: GhidraSourceFile? = null,
             enclosingFunction: String? = null,
         ) = Parser(rec.name).parseSymbol().map {
             Symbol(
@@ -122,6 +124,15 @@ data class Symbol(
             )
         }
     }
+}
+
+/** A source identity in a dump is its normalised path — the whole of what it is, minus an id type
+ *  stabs never gives us. */
+class SourceFileSerializer : KSerializer<GhidraSourceFile> {
+    override val descriptor = PrimitiveSerialDescriptor("ghidra.program.database.sourcemap.SourceFile", STRING)
+    override fun serialize(encoder: Encoder, value: GhidraSourceFile) = encoder.encodeString(value.path)
+    override fun deserialize(decoder: Decoder) =
+        throw UnsupportedOperationException("SourceFileSerializer is serialize-only")
 }
 
 class AddressSerializer : KSerializer<Address> {
@@ -220,7 +231,7 @@ data class Func(
 data class LineEntry(
     val line: Int,
     @Serializable(with = AddressSerializer::class) val addr: Address,
-    val source: String,
+    @Serializable(with = SourceFileSerializer::class) val source: GhidraSourceFile,
 )
 
 @Serializable(with = ToStringSerializer::class)

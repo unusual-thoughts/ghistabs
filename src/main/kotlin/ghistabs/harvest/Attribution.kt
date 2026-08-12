@@ -23,9 +23,16 @@ private val STD_MARKERS = Regex(
         """|/(mingw|cygwin|usr|gcc-lib)(/[^/]+)*?/include/""",
 )
 
-/** Strip a Windows drive-letter prefix (`c:`, `E:`, …) from a stabs path. */
-private fun stripDriveLetter(path: String): String =
-    if (path.length >= 2 && path[1] == ':' && path[0].isLetter()) path.substring(2) else path
+/** Strip a Windows drive-letter prefix from a stabs path, rooted (`/c:/…`, as normalisation leaves
+ *  it) or as gcc wrote it (`c:/…`). */
+private fun stripDriveLetter(path: String): String {
+    val start = if (path.startsWith("/")) 1 else 0
+    return if (path.length > start + 1 && path[start].isLetter() && path[start + 1] == ':') {
+        path.substring(start + 2)
+    } else {
+        path
+    }
+}
 
 /** Path segments, drive letter dropped and both separators honored (stabs mixes `/` and `\`). */
 private fun pathSegments(path: String) = stripDriveLetter(path).split('/', '\\').filter { it.isNotEmpty() }
@@ -141,22 +148,24 @@ fun String.isStdMarkerPath(): Boolean = STD_MARKERS.containsMatchIn(this)
  * Same-parent different-root false positives merge only render output; DTM attribution votes over
  * raw spellings and is unaffected.
  *
- * Returns raw spelling → folded spelling; every input maps to itself unless it folds.
+ * Which spelling wins is ours — it encodes gcc's two-spellings behaviour, which no platform API
+ * models — but what it wins is a [GhidraSourceFile]: one identity per physical file, from here on.
+ * Every input maps to itself unless it folds.
  */
-fun foldSourcePaths(filenames: Iterable<String>): Map<String, String> {
-    fun isBare(s: String) = '/' !in s && '\\' !in s
+fun foldSourcePaths(sources: Iterable<GhidraSourceFile>): Map<GhidraSourceFile, GhidraSourceFile> {
+    fun isBare(s: GhidraSourceFile) = s.segments.size == 1
 
     // Two directory segments, not one: `include` alone is far too common a parent to identify a file
     // by. `c:/mingw/include/stdarg.h` and `c:/mingw/lib/gcc-lib/mingw32/3.2.3/include/stdarg.h` are
     // different headers that agree on it, and only the accident that one of them never reaches this
     // set kept them from merging. `mingw/include` against `3.2.3/include` separates them.
-    fun parentDirs(s: String) = pathSegments(s).dropLast(1).takeLast(2)
+    fun parentDirs(s: GhidraSourceFile) = s.segments.dropLast(1).takeLast(2)
 
-    val all = filenames.toSet()
-    val fold = all.groupBy(String::pathBasename).mapNotNull { (_, spellings) ->
+    val all = sources.toSet()
+    val fold = all.groupBy(GhidraSourceFile::getFilename).mapNotNull { (_, spellings) ->
         spellings.filterNot(::isBare)
             .takeIf { it.isNotEmpty() && it.mapTo(mutableSetOf(), ::parentDirs).size == 1 }
-            ?.minWithOrNull(compareBy({ pathSegments(it).size }, { it }))
+            ?.minWithOrNull(compareBy({ it.segments.size }, { it.path }))
             ?.let { fullest -> spellings.map { it to fullest } }
     }.flatten().toMap()
     return all.associateWith { fold[it] ?: it }
@@ -220,7 +229,7 @@ fun commonProjectPrefix(sources: Collection<SourceFile>): String {
  */
 class Attribution(
     private val commonProjectPrefix: String = "",
-    private val multiSourceHeaderHints: Map<String, String> = emptyMap(),
+    private val multiSourceHeaderHints: Map<String, GhidraSourceFile> = emptyMap(),
 ) {
     fun keyForAst(ast: Type, sources: Set<SourceFile>, diagnostics: StabsDiagnostics? = null): TypeLocation {
         val name = ast.ghidraName
@@ -260,7 +269,7 @@ class Attribution(
         // gcc didn't BINCL the owning header, so defSources is .cpp-only. The hint map
         // (built from member-function SLINE majority) names the real header.
         multiSourceHeaderHints[typeName]?.let { hint ->
-            return TypeLocation(strip(norm(hint)), typeName)
+            return TypeLocation(strip(norm(hint.path)), typeName)
         }
 
         return TypeLocation(strip(norm(uniquePaths.min())) + "/multi", typeName)

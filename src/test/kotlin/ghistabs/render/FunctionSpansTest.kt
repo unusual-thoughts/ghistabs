@@ -3,6 +3,7 @@ package ghistabs.render
 import ghistabs.GenericAddressResolver
 import ghistabs.harvest.Func
 import ghistabs.harvest.LineEntry
+import ghistabs.harvest.sourceFileOf
 import ghistabs.parse.FunctionScope
 import ghistabs.parse.SourceFile
 import ghistabs.parse.SymbolDecl
@@ -25,7 +26,9 @@ class FunctionSpansTest {
         addr = GenericAddressResolver.buildAddress(base),
         decl = SymbolDecl.Function(name, FunctionScope.GLOBAL, TypeDecl.Builtin(-1)),
         cu = SourceFile.CUSource(source),
-        lineEntries = lines.mapIndexed { i, l -> LineEntry(l, GenericAddressResolver.buildAddress(base + i), source) }
+        lineEntries = lines.mapIndexed { i, l ->
+            LineEntry(l, GenericAddressResolver.buildAddress(base + i), sourceFileOf(source))
+        }
             .toMutableList(),
     )
 
@@ -36,7 +39,7 @@ class FunctionSpansTest {
     fun `non-adjacent functions close on endLine+1`() {
         val a = fn("a", 0x1000, "s.cpp", listOf(10, 11, 12))
         val b = fn("b", 0x2000, "s.cpp", listOf(20, 21, 22))
-        val spans = FunctionSpans.of(listOf(a, b), "s.cpp")
+        val spans = FunctionSpans.of(listOf(a, b), sourceFileOf("s.cpp"))
 
         assertEquals(listOf(10..12, 20..22), spans.ranges.map { it.lines })
         assertEquals(13, spans.closeOf(a))
@@ -47,7 +50,7 @@ class FunctionSpansTest {
     fun `an opener on endLine+1 pulls the previous close up to endLine`() {
         val a = fn("a", 0x1000, "s.cpp", listOf(10, 11, 12))
         val b = fn("b", 0x2000, "s.cpp", listOf(13, 14)) // opens exactly where a would close
-        val spans = FunctionSpans.of(listOf(a, b), "s.cpp")
+        val spans = FunctionSpans.of(listOf(a, b), sourceFileOf("s.cpp"))
 
         assertEquals(12, spans.closeOf(a)) // not 13 — would collide with b's opener
         assertEquals(15, spans.closeOf(b))
@@ -59,7 +62,7 @@ class FunctionSpansTest {
         // b's lowest-address entry is L40 (the real prologue) but it also carries a stray
         // L5 — below a's end. Trusting the min would drag b's opener up into a's body.
         val b = fn("b", 0x2000, "s.cpp", listOf(40, 5, 41))
-        val spans = FunctionSpans.of(listOf(a, b), "s.cpp")
+        val spans = FunctionSpans.of(listOf(a, b), sourceFileOf("s.cpp"))
 
         val bRange = spans.ranges.single { it.func === b }
         assertEquals(40, bRange.start) // clamped to prologue, not 5
@@ -69,7 +72,7 @@ class FunctionSpansTest {
     fun `a range strictly contained in another is dropped`() {
         val outer = fn("outer", 0x1000, "s.cpp", listOf(10, 50))
         val inner = fn("inner", 0x2000, "s.cpp", listOf(20, 30)) // 20..30 ⊂ 10..50
-        val spans = FunctionSpans.of(listOf(outer, inner), "s.cpp")
+        val spans = FunctionSpans.of(listOf(outer, inner), sourceFileOf("s.cpp"))
 
         assertEquals(listOf(outer), spans.ranges.map { it.func })
     }
@@ -77,7 +80,7 @@ class FunctionSpansTest {
     @Test
     fun `a single-line range has no close line but still occupies its line`() {
         val f = fn("f", 0x1000, "s.cpp", listOf(10))
-        val spans = FunctionSpans.of(listOf(f), "s.cpp")
+        val spans = FunctionSpans.of(listOf(f), sourceFileOf("s.cpp"))
 
         assertEquals(1, spans.ranges.size)
         assertNull(spans.closeOf(f))
@@ -90,10 +93,10 @@ class FunctionSpansTest {
     fun `interior is the lines strictly between the brackets, in both close-line cases`() {
         val a = fn("a", 0x1000, "s.cpp", listOf(10, 11, 12)) // closes on 13
         val b = fn("b", 0x2000, "s.cpp", listOf(20, 21, 22))
-        assertEquals(11..12, FunctionSpans.of(listOf(a, b), "s.cpp").interiorOf(a))
+        assertEquals(11..12, FunctionSpans.of(listOf(a, b), sourceFileOf("s.cpp")).interiorOf(a))
 
         val c = fn("c", 0x2000, "s.cpp", listOf(13, 14)) // opens where a would close, pulling it to 12
-        assertEquals(11..11, FunctionSpans.of(listOf(a, c), "s.cpp").interiorOf(a))
+        assertEquals(11..11, FunctionSpans.of(listOf(a, c), sourceFileOf("s.cpp")).interiorOf(a))
     }
 
     @Test
@@ -101,7 +104,7 @@ class FunctionSpansTest {
         // Nothing names s.cpp, so rawSpan falls back to every entry in *address* order — and gcc
         // emits N_SLINEs out of it, so the prologue (L50) can outrank the last entry (L10).
         val f = fn("f", 0x1000, "hdr.h", listOf(50, 10))
-        val spans = FunctionSpans.of(listOf(f), "s.cpp")
+        val spans = FunctionSpans.of(listOf(f), sourceFileOf("s.cpp"))
 
         assertEquals(10..50, spans.ranges.single().lines)
         assertEquals(51, spans.closeOf(f))

@@ -3,6 +3,7 @@ package ghistabs.render
 import ghistabs.GenericAddressResolver
 import ghistabs.harvest.Func
 import ghistabs.harvest.LineEntry
+import ghistabs.harvest.sourceFileOf
 import ghistabs.parse.FunctionScope
 import ghistabs.parse.SourceFile
 import ghistabs.parse.SymbolDecl
@@ -62,13 +63,15 @@ class NestingTest {
         addr = GenericAddressResolver.buildAddress(base),
         decl = SymbolDecl.Function(name, FunctionScope.GLOBAL, TypeDecl.Builtin(-1)),
         cu = SourceFile.CUSource("s.cpp"),
-        lineEntries = lines.mapIndexed { i, l -> LineEntry(l, GenericAddressResolver.buildAddress(base + i), "s.cpp") }
+        lineEntries = lines.mapIndexed { i, l ->
+            LineEntry(l, GenericAddressResolver.buildAddress(base + i), sourceFileOf("s.cpp"))
+        }
             .toMutableList(),
     )
 
     private fun spansOf() = FunctionSpans.of(
         listOf(fn("a", 0x1000, listOf(2, 3)), fn("b", 0x2000, listOf(6, 7))),
-        "s.cpp",
+        sourceFileOf("s.cpp"),
     )
 
     // `a` spans L2..L3 and closes on L4; `b` opens on L6. Rendering a's close past L6 puts b inside

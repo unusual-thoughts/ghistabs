@@ -3,6 +3,7 @@ package ghistabs.render
 import ghidra.program.model.address.Address
 import ghistabs.chunkedBy
 import ghistabs.harvest.Func
+import ghistabs.harvest.GhidraSourceFile
 import ghistabs.harvest.LineEntry
 import ghistabs.harvest.blockAt
 import ghistabs.parse.SymbolDecl
@@ -13,7 +14,7 @@ import ghistabs.parse.SymbolDecl
  * the split symmetric: the same call answers "what of this function is mine" whether the function is
  * defined here or merely inlines code from here.
  */
-class Region(private val ctx: RenderContext, val file: String?) {
+class Region(private val ctx: RenderContext, val file: GhidraSourceFile?) {
     val lines = mutableListOf<DecompLine>()
     val entries = mutableListOf<LineEntry>()
 
@@ -57,7 +58,7 @@ class Region(private val ctx: RenderContext, val file: String?) {
         val own = entries.filter { it.source == (file ?: ctx.source) }.ifEmpty { return null }
         val lo = own.minOf { it.line }
         val hi = own.maxOf { it.line }
-        return file?.substringAfterLast('/')?.plus(" ").orEmpty() + "L $lo" + if (hi > lo) "-$hi" else ""
+        return file?.filename?.plus(" ").orEmpty() + "L $lo" + if (hi > lo) "-$hi" else ""
     }
 
     fun label(fallback: Int) = (labelOrNull() ?: "L $fallback") + if (copies > 1) " ×$copies" else ""
@@ -75,7 +76,7 @@ class Region(private val ctx: RenderContext, val file: String?) {
         val own = entries.filter { it.source == (file ?: ctx.source) }.ifEmpty { return null }
         val lo = own.minOf { it.line }
         val hi = own.maxOf { it.line }
-        val stem = (file ?: ctx.source).substringAfterLast('/') + "_$lo" + if (hi > lo) "_$hi" else ""
+        val stem = (file ?: ctx.source).filename + "_$lo" + if (hi > lo) "_$hi" else ""
         return "__inline_" + stem.sanitizeIdentifier()
     }
 

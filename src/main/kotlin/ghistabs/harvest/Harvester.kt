@@ -18,7 +18,7 @@ class Harvester(private val monitor: TaskMonitor, private val sink: DiagnosticSi
 
     private val store = TypeStore(sink = sink)
     private val cursor = StabCursor(resolver, sink)
-    private val symbolsByCu = mutableMapOf<String, MutableList<Symbol>>()
+    private val symbolsByCu = mutableMapOf<GhidraSourceFile, MutableList<Symbol>>()
     private val constants = mutableListOf<SymbolDecl.Constant<GlobalTypeId>>()
 
     internal fun harvest(records: List<StabRecord>): Harvest {
@@ -143,7 +143,7 @@ class Harvester(private val monitor: TaskMonitor, private val sink: DiagnosticSi
     }
 
     private fun record(sym: Symbol) {
-        symbolsByCu.getOrPut(cursor.cu.filename) { mutableListOf() } += sym
+        symbolsByCu.getOrPut(sourceFileOf(cursor.cu.filename)) { mutableListOf() } += sym
     }
 
     private fun parseSymbol(rec: StabRecord) = when (val res = cursor.parseSymbol(rec)) {

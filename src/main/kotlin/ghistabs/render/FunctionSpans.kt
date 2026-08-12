@@ -1,6 +1,7 @@
 package ghistabs.render
 
 import ghistabs.harvest.Func
+import ghistabs.harvest.GhidraSourceFile
 import org.jetbrains.annotations.TestOnly
 
 // gcc emits N_SLINEs out of address order (SjLj landing pads map back near the decl),
@@ -75,7 +76,7 @@ class FunctionSpans(val ranges: List<FuncRange>) {
          * clear of every earlier function — a min-line below a prior function's end is
          * gcc cross-attribution, so there fall back to the prologue line.
          */
-        fun of(rawFuncs: List<Func>, source: String): FunctionSpans {
+        fun of(rawFuncs: List<Func>, source: GhidraSourceFile): FunctionSpans {
             val rawRanges = buildList {
                 var prevEnd = Int.MIN_VALUE
                 for (s in rawFuncs.mapNotNull { it.rawSpan(source) }.sortedBy { it.prologueAddr }) {
@@ -94,7 +95,7 @@ class FunctionSpans(val ranges: List<FuncRange>) {
 
         // Prefer entries tagged with `source`; with none — and not a synthetic init
         // wrapper — fall back to all entries (out-of-line copies of header methods).
-        private fun Func.rawSpan(source: String): RawSpan? {
+        private fun Func.rawSpan(source: GhidraSourceFile): RawSpan? {
             val sameSource = lineEntries.filter { it.source == source }
             val inside = sameSource.ifEmpty { if (isSyntheticInit) emptyList() else lineEntries }
             if (inside.isEmpty()) return null

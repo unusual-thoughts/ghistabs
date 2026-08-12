@@ -6,6 +6,7 @@ import ghidra.program.model.data.CategoryPath
 import ghidra.program.model.data.DataType
 import ghistabs.harvest.TypeLocation
 import ghistabs.harvest.foldSourcePaths
+import ghistabs.harvest.sourceFileOf
 import ghistabs.importer.ImportArtifacts
 import ghistabs.materialize.compromisedTypes
 import ghistabs.parse.GlobalTypeId
@@ -167,7 +168,7 @@ private fun ImportArtifacts.registryDump(): RegistryDump {
         }
     val sourceFolds = foldSourcePaths(
         harvest.lineEntries.keys + harvest.symbolsByCu.keys +
-            index.allTypes.flatMap { listOfNotNull(it.id.source.filename, it.declSourceFile) },
-    ).filter { it.key != it.value }.toSortedMap()
+            index.allTypes.flatMap { listOfNotNull(it.declSourceFile, sourceFileOf(it.id.source.filename)) },
+    ).filterNot { it.key == it.value }.toSortedMap().map { (k, v) -> k.path to v.path }.toMap()
     return RegistryDump(compromised, canonicalGroups, divergent, sourceFolds, hashCollisions, allTypes, duplicateNamed)
 }
