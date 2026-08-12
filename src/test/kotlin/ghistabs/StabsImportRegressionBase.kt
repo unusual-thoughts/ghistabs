@@ -392,6 +392,47 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         }
     }
 
+    /**
+     * The query a listing field makes — "what line is this address in" — against a map of points.
+     * Both halves have to hold: an entry sits at exactly the address the harvest gave it, and an
+     * address mid-statement walks back to the statement it is inside
+     * (`getSourceMapEntryIterator(addr, false)`, since a zero-length entry answers `getSourceMapEntries`
+     * only at its own address).
+     *
+     * Addresses outside a defined block are excluded — those are the entries the applier reports
+     * dropping, so including them would assert that a reported failure did not happen.
+     */
+    @Test
+    fun addressesResolveToTheirEntries() {
+        val manager = program.sourceFileManager
+        // Folded: that is the identity the entries were transferred onto.
+        val entries = artifacts.index.functions.flatMap { it.lineEntries }
+            .filter { program.memory.getBlock(it.addr) != null }
+        assumeTrue(entries.isNotEmpty(), "Skipping: no N_SLINE entries in this binary")
+
+        val missing = entries.filterNot { e ->
+            manager.getSourceMapEntries(e.addr).any { it.sourceFile == e.source && it.lineNumber == e.line }
+        }
+        Assertions.assertEquals(
+            emptyList<String>(),
+            missing.take(5).map { "${it.source.filename}:${it.line} @ ${it.addr}" },
+            "${missing.size} of ${entries.size} line entries are absent from the program at their own address",
+        )
+
+        // Every published address, so the predecessor of the gap really is a predecessor.
+        val addresses = artifacts.harvest.lineEntries.values.flatten()
+            .map { it.addr }.filter { program.memory.getBlock(it) != null }.distinct().sorted()
+        val (statement, inside) = addresses.zipWithNext()
+            .firstNotNullOfOrNull { (a, b) ->
+                (b.offset - a.offset).takeIf { it > 1 && a.hasSameAddressSpace(b) }?.let { a to a.add(it / 2) }
+            } ?: return
+        Assertions.assertEquals(
+            statement,
+            manager.getSourceMapEntryIterator(inside, false).firstOrNull()?.baseAddress,
+            "walking back from $inside, mid-statement",
+        )
+    }
+
     @Test
     fun xapArgInstNotUnderStdInclude() {
         val xapArgInst = program.dataTypeManager.allDataTypes

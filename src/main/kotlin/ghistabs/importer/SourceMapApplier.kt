@@ -35,7 +35,15 @@ class SourceMapApplier(private val ctx: ImportContext<*>, private val index: Har
 
         val entries = index.harvest.lineEntries.values.flatten()
         fun identity(entry: LineEntry) = Triple(folds[entry.source], entry.line, entry.addr)
-        val dropped = entries.filterNot(::publish).mapTo(mutableSetOf(), ::identity)
+        // Grouped by outcome, `""` being published. One warning per reason carrying a per-file
+        // breakdown, rather than one per entry: an emitter whose addresses we resolve wrong has every
+        // entry rejected, and that would be thousands of bookmarks.
+        val dropped = entries.groupBy(::publish)
+            .filterKeys { it.isNotEmpty() }
+            .onEach { (reason, bad) ->
+                warn(reason, "dropped ${bad.groupingBy { it.source.filename }.eachCount()}", count = bad.size.toLong())
+            }
+            .values.flatten().mapTo(mutableSetOf(), ::identity)
         // A duplicate that disappears is a content change, so it is counted rather than absorbed: the
         // manager silently returns the existing entry for a repeated (file, line, address, length),
         // and the fold makes more of them by merging two spellings onto one identity.
@@ -56,16 +64,15 @@ class SourceMapApplier(private val ctx: ImportContext<*>, private val index: Har
         return published.size
     }
 
-    private fun publish(entry: LineEntry) = try {
+    /** The counter [entry] failed under, or `""` when it was published. */
+    private fun publish(entry: LineEntry): String = try {
         manager.addSourceMapEntry(entry.source, entry.line, entry.addr, 0)
-        true
+        ""
     } catch (e: AddressOutOfBoundsException) {
         // gcc's N_SLINE value is function-relative on PE/COFF; a function whose start we resolved
         // wrong, or one in a section the loader left out, lands outside every block.
-        warn("sourcemap-entry-unmapped", "${entry.source.filename}:${entry.line} :: ${e.message}", entry.addr)
-        false
+        "sourcemap-entry-unmapped"
     } catch (e: IllegalArgumentException) {
-        warn("sourcemap-entry-rejected", "${entry.source.filename}:${entry.line} :: ${e.message}", entry.addr)
-        false
+        "sourcemap-entry-rejected"
     }
 }
