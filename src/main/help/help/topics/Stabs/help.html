@@ -28,13 +28,15 @@
 
     <P>Everything is driven by the <A href="#Stabs_Importer_Analyzer">Stabs Importer</A>
     analyzer. Three <A href="#Stabs_Supporting_Analyzers">supporting analyzers</A> clean up
-    code and ABI details around it, and the <A href="#Stabs_Tools_Menu">Tools &rarr; Stabs</A>
-    menu re-runs the import or exports a reconstructed decompilation.</P>
+    code and ABI details around it, <A href="#Stabs_Tools_Menu">Tools &rarr; Stabs</A> re-runs
+    the import, and the <A href="#Stabs_Export_Decompilation">Stabs Decompilation</A> exporter
+    writes out the reconstructed sources.</P>
 
     <BLOCKQUOTE>
       <P><B>Note:</B> The extension does nothing on a program that carries no stabs &mdash;
       neither a <CODE>.stab</CODE>/<CODE>.stabstr</CODE> pair nor an a.out symbol table. The
-      analyzer does not appear as applicable and the menu actions stay disabled.</P>
+      analyzer does not appear as applicable, the menu action stays disabled and the exporter
+      is not offered.</P>
     </BLOCKQUOTE>
 
     <H2><A name="Stabs_Importer_Analyzer"></A>Stabs Importer Analyzer</H2>
@@ -142,9 +144,6 @@
 
     <H2><A name="Stabs_Tools_Menu"></A>Tools &rarr; Stabs</H2>
 
-    <P>Both actions require the current program to carry stabs, in either location; they are
-    disabled otherwise.</P>
-
     <H3><A name="Stabs_Reimport"></A>Re-import</H3>
 
     <P>Clears the <CODE>Stabs Imported</CODE> flag and re-runs auto-analysis, so the importer
@@ -153,9 +152,10 @@
     but the pass is not free &mdash; on a large C++ binary it takes as long as the first
     import did.</P>
 
-    <H3><A name="Stabs_Export_Decompilation"></A>Export decompilation&hellip;</H3>
+    <H2><A name="Stabs_Export_Decompilation"></A>File &rarr; Export Program&hellip; &rarr; Stabs
+    Decompilation</H2>
 
-    <P>Prompts for a target folder and writes a reconstructed <B>decompilation</B> into it:
+    <P>Writes a reconstructed <B>decompilation</B>:
     one file per source file the debug info names, laid out at the original source lines, with
     Ghidra's decompiled statements placed across each function's line span and each tagged with
     the source line its instructions came from. gcc's SjLj exception scaffolding is elided (a
@@ -169,17 +169,25 @@
     carrying its original line's provenance. Real file-scope globals keep their line.
     <CODE>#include</CODE> lines are reconstructed and trailing blank lines trimmed.</P>
 
-    <P>The headless driver also offers a <B>skeleton</B> mode, which does none of that: it
-    keeps every declaration at its original line, misattributions included and flagged, plus a
-    trailing block for anonymous aggregates that have no line to sit on. Use the skeleton to
-    see what the debug info claimed, and the decompilation to read the code.</P>
+    <P>The exporter's <B>options</B> switch that off one flag at a time: <I>Skeleton only</I>
+    renders no code at all &mdash; every declaration stays at its original line,
+    misattributions included and flagged, plus a trailing block for anonymous aggregates that
+    have no line to sit on (use the skeleton to see what the debug info claimed, and the
+    decompilation to read the code); <I>Elide gcc SjLj exception scaffolding</I> is on by
+    default; <I>Annotate locals with their storage</I> adds the <CODE>(stack)</CODE>/
+    <CODE>(reg)</CODE> gcc gave each one; <I>Render source line n at output line n</I> keeps
+    blank runs intact, which is what a diff against the real source wants.</P>
+
+    <P>The export dialog only takes a file path, but the render is one file per source, so the
+    path chosen <I>is</I> the output directory &mdash; hence the <CODE>.src</CODE> extension
+    the dialog appends to it.</P>
 
     <P>The importer must have run first &mdash; the render reads the types and signatures it
-    applied. If it hasn't, the action says so and does nothing.</P>
+    applied. If it hasn't, the export writes nothing and says so in its results log.</P>
 
     <BLOCKQUOTE>
       <P><B>Note:</B> A headless command-line driver ships alongside the extension and renders
-      both modes, with the render options exposed as flags. See the project README.</P>
+      both modes, with the same render options exposed as flags. See the project README.</P>
     </BLOCKQUOTE>
 
     <H2><A name="Stabs_Supporting_Analyzers"></A>Supporting Analyzers</H2>
