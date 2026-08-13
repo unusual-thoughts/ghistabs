@@ -13,7 +13,7 @@ import ghistabs.materialize.TemplateNameShortener
 import ghistabs.materialize.itanium.Itanium
 import ghistabs.materialize.resolveBuiltin
 import ghistabs.parse.*
-import ghistabs.source.Definition
+import ghistabs.scan.Definition
 
 /** One stabs variable of a function, declared in this file: where gcc put it and how it renders. */
 data class Var(val line: Int, val name: String, val text: String, val role: String?)

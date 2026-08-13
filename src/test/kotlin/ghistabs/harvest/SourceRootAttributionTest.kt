@@ -4,15 +4,13 @@ import ghistabs.parse.AggrKind
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.SourceFile
 import ghistabs.parse.TypeDecl
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertThrows
-import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 
 /**
  * What a source root does to attribution: it moves a declaration to the file that declares it, and
  * only ever on a unique answer. The declarers hook stands in for the real files here — reading them
- * is [ghistabs.source.DeclaratorIndex]'s job and is tested there.
+ * is [ghistabs.scan.DeclaratorIndex]'s job and is tested there.
  */
 class SourceRootAttributionTest {
     private val cu = SourceFile.CUSource("unfile.cpp")

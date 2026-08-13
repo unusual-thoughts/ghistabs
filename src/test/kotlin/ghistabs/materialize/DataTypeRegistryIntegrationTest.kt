@@ -92,7 +92,7 @@ class DataTypeRegistryIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
 
         // Verify types were materialized (dedup happens internally)
         assertTrue(
-            result.typesMaterialized > 0,
+            result.types.harvested > 0,
             "Importer should have materialized types (with internal dedup)",
         )
     }
@@ -139,7 +139,7 @@ class DataTypeRegistryIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
         val result = importer.runOnRecords(StabReader.Result(records))
 
         // Importer should complete successfully, handling conflicts internally
-        assertTrue(result.typesMaterialized > 0, "Conflict handling should preserve both struct definitions")
+        assertTrue(result.types.harvested > 0, "Conflict handling should preserve both struct definitions")
     }
 
     /**
@@ -172,7 +172,7 @@ class DataTypeRegistryIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
         val result = importer.runOnRecords(StabReader.Result(records))
 
         // Verify types were materialized with attribution
-        assertTrue(result.typesMaterialized > 0, "Types should be materialized with category attribution")
+        assertTrue(result.types.harvested > 0, "Types should be materialized with category attribution")
     }
 
     /**
@@ -208,7 +208,7 @@ class DataTypeRegistryIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
 
         // Importer should complete successfully without infinite loop
         assertTrue(
-            result.typesMaterialized > 0,
+            result.types.harvested > 0,
             "Self-referential types should be handled correctly",
         )
     }
@@ -255,7 +255,7 @@ class DataTypeRegistryIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
 
         // Both structures should be materialized without infinite loop
         assertTrue(
-            result.typesMaterialized >= 2,
+            result.types.harvested >= 2,
             "Mutually referential types should be handled correctly",
         )
     }

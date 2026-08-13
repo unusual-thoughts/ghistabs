@@ -9,9 +9,9 @@ import ghidra.program.model.data.Structure
 import ghidra.program.model.data.TypeDef
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
+import ghistabs.ImportOptions
 import ghistabs.StabsAnalyzer
 import ghistabs.StabsAnalyzer.Companion.import
-import ghistabs.StabsOptions
 import ghistabs.diagnose.CapturingSink
 import ghistabs.diagnose.Level
 import ghistabs.diagnose.StabsDiagnostics
@@ -66,7 +66,7 @@ class StringTypeProbe : AbstractGhidraHeadlessIntegrationTest() {
                 val ctx = ImportContext(
                     program,
                     TaskMonitor.DUMMY,
-                    StabsOptions(shortenTypedefs = true, minLogLevel = Level.DEBUG),
+                    ImportOptions(shortenTypedefs = true, minLogLevel = Level.DEBUG),
                     CapturingSink(),
                     StabsDiagnostics(),
                 )
