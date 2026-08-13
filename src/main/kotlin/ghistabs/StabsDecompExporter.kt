@@ -24,11 +24,15 @@ import java.io.File
  * `File > Export Program… > Stabs Decompilation`: reconstructs the per-source-file render — the same
  * output the headless driver and the integration harness write.
  *
- * The export dialog only offers a file path, but the render is one file per source; the chosen path
- * *is* the output directory, hence the `.src` extension the dialog appends to it.
+ * The render is one file per source, but the export dialog only takes a file path and its browse
+ * button is hardwired to `FILES_ONLY` ([ghidra.app.plugin.core.exporter.ExporterDialog] builds that
+ * chooser privately, so no exporter can reach it). Hence [OUTPUT_DIR], an option that *is* a
+ * directory chooser; left empty, the chosen path is used as the output directory instead — which is
+ * what the `.src` extension the dialog appends is for.
  */
 class StabsDecompExporter :
     Exporter("Stabs Decompilation", "src", HelpLocation("Stabs", "Stabs_Export_Decompilation")) {
+    private var outputDir = ""
     private var skeleton = false
     private var elideSjlj = true
     private var showStorage = false
@@ -40,6 +44,7 @@ class StabsDecompExporter :
         domainObject is Program && StabReader.hasStabs(domainObject)
 
     override fun getOptions(domainObjectService: DomainObjectService) = listOf(
+        OutputDirectoryOption(OUTPUT_DIR, outputDir),
         Option(SKELETON, skeleton),
         Option(ELIDE_SJLJ, elideSjlj),
         Option(SHOW_STORAGE, showStorage),
@@ -47,16 +52,18 @@ class StabsDecompExporter :
     )
 
     override fun setOptions(options: List<Option>) = options.forEach { option ->
-        val on = option.value as? Boolean
-            ?: throw OptionException("Invalid type for option: ${option.name}")
         when (option.name) {
-            SKELETON -> skeleton = on
-            ELIDE_SJLJ -> elideSjlj = on
-            SHOW_STORAGE -> showStorage = on
-            LINE_ALIGNED -> lineAligned = on
+            OUTPUT_DIR -> outputDir = (option.value as? String).orEmpty().trim()
+            SKELETON -> skeleton = option.on
+            ELIDE_SJLJ -> elideSjlj = option.on
+            SHOW_STORAGE -> showStorage = option.on
+            LINE_ALIGNED -> lineAligned = option.on
             else -> throw OptionException("Unknown option: ${option.name}")
         }
     }
+
+    private val Option.on
+        get() = value as? Boolean ?: throw OptionException("Invalid type for option: $name")
 
     override fun export(file: File, domainObj: DomainObject, addrSet: AddressSetView?, monitor: TaskMonitor): Boolean {
         val program = domainObj as? Program
@@ -73,6 +80,7 @@ class StabsDecompExporter :
         val harvest = program.runTransaction("stabs-export-harvest") {
             Harvester(ctx).harvest(records)
         }
+        val dir = outputDir.takeIf { it.isNotEmpty() }?.let(::File) ?: file
         val written = Renderer(
             HarvestIndex(harvest, options.foldSources, ctx),
             program,
@@ -84,8 +92,8 @@ class StabsDecompExporter :
             ctx.resolver,
             showStorage = showStorage,
             lineAligned = lineAligned,
-        ).use { it.renderAll(file, monitor) }
-        log.appendMsg("Wrote $written files to $file")
+        ).use { it.renderAll(dir, monitor) }
+        log.appendMsg("Wrote $written files to $dir")
         return true
     }
 
@@ -95,6 +103,7 @@ class StabsDecompExporter :
     }
 
     private companion object {
+        const val OUTPUT_DIR = "Output directory (else the path above, as a directory)"
         const val SKELETON = "Skeleton only (declarations, no decompiled code)"
         const val ELIDE_SJLJ = "Elide gcc SjLj exception scaffolding"
         const val SHOW_STORAGE = "Annotate locals with their storage"
