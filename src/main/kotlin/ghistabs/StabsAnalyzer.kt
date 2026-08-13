@@ -4,6 +4,7 @@ import ghidra.app.services.AbstractAnalyzer
 import ghidra.app.services.AnalysisPriority
 import ghidra.app.services.AnalyzerType
 import ghidra.app.util.importer.MessageLog
+import ghidra.framework.options.OptionType
 import ghidra.framework.options.Options
 import ghidra.program.model.address.AddressSetView
 import ghidra.program.model.listing.Program
@@ -189,12 +190,14 @@ data class StabsOptions(
             )
             registerOption(
                 SOURCE_ROOTS,
+                OptionType.STRING_TYPE,
                 "",
                 null,
                 "Local checkouts of the sources this binary was built from, ';'-separated. Each recorded " +
                     "source directory found under a root is registered as a directory transform (Source Files " +
                     "and Transforms), so paths resolve to real files. Read at import time only: adding a root " +
                     "later needs a re-import, though a transform added in the dialog is picked up immediately.",
+                { SourceRootsEditor() },
             )
         }
     }
