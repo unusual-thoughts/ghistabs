@@ -3,8 +3,6 @@ package ghistabs
 import docking.ActionContext
 import docking.action.DockingAction
 import docking.action.MenuData
-import docking.widgets.filechooser.GhidraFileChooser
-import docking.widgets.filechooser.GhidraFileChooserMode
 import ghidra.app.CorePluginPackage
 import ghidra.app.plugin.PluginCategoryNames
 import ghidra.app.plugin.ProgramPlugin
@@ -12,107 +10,42 @@ import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.framework.plugintool.PluginInfo
 import ghidra.framework.plugintool.PluginTool
 import ghidra.framework.plugintool.util.PluginStatus
-import ghidra.program.model.listing.Program
 import ghidra.util.HelpLocation
 import ghidra.util.Msg
-import ghidra.util.task.Task
-import ghidra.util.task.TaskLauncher
-import ghidra.util.task.TaskMonitor
-import ghistabs.StabsOptions.Companion.isStabsDone
 import ghistabs.StabsOptions.Companion.markStabsDone
-import ghistabs.diagnose.DummySink
-import ghistabs.diagnose.StabsDiagnostics
-import ghistabs.harvest.HarvestIndex
-import ghistabs.harvest.Harvester
-import ghistabs.importer.ImportContext
 import ghistabs.parse.StabReader
-import ghistabs.render.Mode
-import ghistabs.render.Renderer
 
 /**
- * `Tools > Stabs` actions: **Re-import** clears the persistent done-flag and re-runs the
- * StabsAnalyzer; **Export decompilation…** reconstructs the per-source-file decompilation
- * (SjLj-elided) into a chosen folder — the same output the integration harness writes.
+ * `Tools > Stabs > Re-import`: clears the persistent done-flag and re-runs the StabsAnalyzer.
+ * The render is exported through [StabsDecompExporter] (`File > Export Program…`), not from here.
  */
 @PluginInfo(
     status = PluginStatus.STABLE,
     packageName = CorePluginPackage.NAME,
     category = PluginCategoryNames.ANALYSIS,
-    shortDescription = "Re-run the STABS importer / export its decompilation on the current program.",
-    description = "Adds 'Tools > Stabs > Re-import' (re-run the StabsAnalyzer) and " +
-        "'Tools > Stabs > Export decompilation…' (write the reconstructed decompilation to a folder).",
+    shortDescription = "Re-run the STABS importer on the current program.",
+    description = "Adds 'Tools > Stabs > Re-import', which clears the 'Stabs Imported' flag and " +
+        "re-runs auto-analysis so the StabsAnalyzer executes again.",
 )
 class StabsPlugin(tool: PluginTool) : ProgramPlugin(tool) {
     init {
-        tool.addAction(action("Re-import", "&Re-import", "Stabs_Reimport") { reimport(it) })
         tool.addAction(
-            action("Export decompilation", "&Export decompilation…", "Stabs_Export_Decompilation") {
-                exportDecompilation(it)
+            object : DockingAction("Stabs Re-import", getName()) {
+                override fun actionPerformed(context: ActionContext?) {
+                    val program = currentProgram
+                        ?: return Msg.showInfo(javaClass, null, "Stabs", "No program is open.")
+                    program.markStabsDone(false)
+                    AutoAnalysisManager.getAnalysisManager(program).reAnalyzeAll(null)
+                }
+
+                override fun isEnabledForContext(context: ActionContext?) =
+                    currentProgram?.let(StabReader::hasStabs) == true
+            }.apply {
+                menuBarData = MenuData(arrayOf("&Tools", "Stabs", "&Re-import"), null, "Stabs")
+                // `src/main/help/help/topics/Stabs/` — the topic dir name is the topic id.
+                helpLocation = HelpLocation("Stabs", "Stabs_Reimport")
+                isEnabled = true
             },
         )
-    }
-
-    private fun action(id: String, menu: String, helpAnchor: String, perform: (Program) -> Unit) =
-        object : DockingAction("Stabs $id", getName()) {
-            override fun actionPerformed(context: ActionContext?) {
-                val program = currentProgram
-                    ?: return Msg.showInfo(javaClass, null, "Stabs", "No program is open.")
-                perform(program)
-            }
-
-            override fun isEnabledForContext(context: ActionContext?) = hasStabs()
-        }.apply {
-            menuBarData = MenuData(arrayOf("&Tools", "Stabs", menu), null, "Stabs")
-            helpLocation = HelpLocation(HELP_TOPIC, helpAnchor)
-            isEnabled = true
-        }
-
-    private fun hasStabs() = currentProgram?.let(StabReader::hasStabs) == true
-
-    private fun reimport(program: Program) {
-        program.markStabsDone(false)
-        AutoAnalysisManager.getAnalysisManager(program).reAnalyzeAll(null)
-    }
-
-    private fun exportDecompilation(program: Program) {
-        // The reconstruction re-harvests the stabs cheaply, but the decompilation it renders is only
-        // meaningful once the importer has applied types/locals to the program — require that first.
-        if (!program.isStabsDone) {
-            return Msg.showInfo(
-                javaClass,
-                null,
-                "Stabs",
-                "Run the Stabs importer first (auto-analysis, or Tools > Stabs > Re-import).",
-            )
-        }
-        val chooser = GhidraFileChooser(tool.activeWindow).apply {
-            setFileSelectionMode(GhidraFileChooserMode.DIRECTORIES_ONLY)
-            title = "Export decompilation to folder"
-        }
-        val dir = chooser.selectedFile
-        chooser.dispose()
-        if (dir == null) return
-        TaskLauncher.launch(object : Task("Stabs: export decompilation", true, false, true) {
-            override fun run(monitor: TaskMonitor) {
-                val options = StabsOptions(program)
-                val records = StabReader.fromProgram(program)?.readAll()?.records ?: return
-                val ctx = ImportContext(program, monitor, options, DummySink, StabsDiagnostics())
-                val harvest = program.runTransaction("stabs-export-harvest") {
-                    Harvester(ctx).harvest(records)
-                }
-                val written = Renderer(
-                    HarvestIndex(harvest, options.foldSources, ctx),
-                    program,
-                    Mode.ELIDE_SJLJ,
-                    ctx.resolver,
-                ).use { it.renderAll(dir, monitor) }
-                Msg.showInfo(javaClass, null, "Stabs", "Wrote $written decompilation files to $dir")
-            }
-        })
-    }
-
-    private companion object {
-        /** `src/main/help/help/topics/Stabs/` — the topic dir name is the topic id. */
-        const val HELP_TOPIC = "Stabs"
     }
 }
