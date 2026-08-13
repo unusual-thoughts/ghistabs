@@ -2,8 +2,9 @@ package ghistabs
 
 import ghidra.program.database.ProgramBuilder
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghistabs.StabsOptions.Companion.isStabsDone
-import ghistabs.StabsOptions.Companion.markStabsDone
+import ghistabs.ImportOptions.Companion.STABS_DONE
+import ghistabs.ImportOptions.Companion.isStabsDone
+import ghistabs.ImportOptions.Companion.markStabsDone
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -64,7 +65,7 @@ class StabsAnalyzerLifecycleIntegrationTest : AbstractGhidraHeadlessIntegrationT
         // Verify program state persists (done by checking the internal option)
         val options = program.getOptions(ghidra.program.model.listing.Program.PROGRAM_INFO)
         assertTrue(
-            options.getBoolean(StabsOptions.STABS_DONE, false),
+            options[STABS_DONE],
             "Done-flag should persist in program options",
         )
     }
@@ -96,7 +97,7 @@ class StabsAnalyzerLifecycleIntegrationTest : AbstractGhidraHeadlessIntegrationT
         // Verify program state persists
         val options = program.getOptions(ghidra.program.model.listing.Program.PROGRAM_INFO)
         assertFalse(
-            options.getBoolean(StabsOptions.STABS_DONE, true),
+            options[STABS_DONE],
             "Done-flag should persist as false in program options after clearing",
         )
     }

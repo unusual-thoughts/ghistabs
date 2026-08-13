@@ -6,7 +6,7 @@ import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Program
 import ghidra.program.model.sourcemap.SourceMapEntry
 import ghidra.util.task.TaskMonitor
-import ghistabs.StabsOptions.Companion.stabsTypedefsShortened
+import ghistabs.ImportOptions.Companion.stabsTypedefsShortened
 import ghistabs.harvest.Func
 import ghistabs.harvest.GhidraSourceFile
 import ghistabs.harvest.HarvestIndex
@@ -16,7 +16,7 @@ import ghistabs.materialize.TemplateNameShortener
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
 import ghistabs.runTransaction
-import ghistabs.source.SourceIndexes
+import ghistabs.scan.SourceIndexes
 import java.io.Closeable
 import java.io.File
 import java.util.*

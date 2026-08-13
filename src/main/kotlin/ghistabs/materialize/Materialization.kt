@@ -459,7 +459,7 @@ fun DataTypeRegistry.buildFunctionDefinition(
     return fd
 }
 
-fun DataTypeRegistry.materializeAll() {
+fun DataTypeRegistry.materializeAll(): Int {
     // Two phases: (1) materialize each CanonicalGroup winner into its (cat,name)
     // slot and alias members to it; (2) non-registerable top-level asts
     // (FunctionT, Method, XRef aliases) via materializeTopLevel() — byId only, no DTM slot.
@@ -486,6 +486,7 @@ fun DataTypeRegistry.materializeAll() {
             materializeTopLevel(ast)
         }
     }
+    return allCreatedDataTypes.size
 }
 
 /**

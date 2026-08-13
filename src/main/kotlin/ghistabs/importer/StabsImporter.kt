@@ -1,6 +1,6 @@
 package ghistabs.importer
 
-import ghistabs.StabsOptions.Companion.markStabsTypedefsShortened
+import ghistabs.ImportOptions.Companion.markStabsTypedefsShortened
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.analyzeDataCoverage
 import ghistabs.harvest.Harvest
@@ -20,22 +20,18 @@ import java.nio.file.Path
  * [SymbolApplier] (apply); this class only sequences them and tallies the result.
  */
 class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx {
-    /** The materialized state, set once [runOnRecords] completes; null after a no-stabs [run]. */
-    internal lateinit var artifacts: ImportArtifacts
-        private set
-
-    fun run(): PassResult {
+    fun run(): ImportResult {
         val reader = StabReader.fromProgram(ctx.program)
         if (reader == null) {
             log("no-stabs", "No .stab/.stabstr block found; skipping import.")
             ctx.diagnostics.writeSummary(ctx.terminal)
-            return PassResult.NOTHING
+            return ImportResult()
         }
 
         return runOnRecords(reader.readAll())
     }
 
-    internal fun runOnRecords(stabs: StabReader.Result): PassResult {
+    internal fun runOnRecords(stabs: StabReader.Result): ImportResult {
         // Pass A — parse + harvest
         val harvest = Harvester(ctx).harvest(stabs.records)
         // Resolver: by-name/by-base-tag indices, source folding, divergent-collision
@@ -45,29 +41,31 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
 
         // Pass B — materialize types
         val registry = DataTypeRegistry(ctx.dtm, ctx, ctx.diagnostics, index, ctx.monitor)
-        ctx.program.runTransaction("Stabs: materialize types") {
-            registry.materializeAll()
-            if (ctx.options.shortenTypedefs) TypedefShortener(ctx.dtm, ctx).apply()
-            // The render spells types to match the decompiler, and it may run much later from the GUI
-            // against analyzer options that have since been toggled — so record what actually happened.
-            ctx.program.markStabsTypedefsShortened(ctx.options.shortenTypedefs)
+        val materialized = ctx.program.runTransaction("Stabs: materialize types") {
+            registry.materializeAll().also {
+                if (ctx.options.shortenTypedefs) TypedefShortener(ctx.dtm, ctx).apply()
+                // The render spells types to match the decompiler, and it may run much later from the GUI
+                // against analyzer options that have since been toggled — so record what actually happened.
+                ctx.program.markStabsTypedefsShortened(ctx.options.shortenTypedefs)
+            }
         }
 
         // Pass C — apply symbols, then build classes/vtables, demangle, and replace demangler stubs
-        var classes = 0
-        var constants = 0
-        var staticMembers = 0
-        val (functions, globals) = ctx.program.runTransaction("Stabs: apply symbols") {
-            val applier = SymbolApplier(ctx, harvest, registry)
-            val functions = applier.applyAllFunctions()
-            val globals = applier.applyAllGlobals()
-            constants = applier.applyAllConstants()
-            staticMembers = applier.applyAllStaticMembers()
-            if (ctx.options.buildClasses) {
-                classes = ClassBuilder(registry, index, ctx).buildAll()
+        val applied = ctx.program.runTransaction("Stabs: apply symbols") {
+            SymbolApplier(ctx, harvest, registry).run {
+                ImportResult.ApplyResults(
+                    functions = applyAllFunctions(),
+                    globals = applyAllGlobals(),
+                    constants = applyAllConstants(),
+                    staticMembers = applyAllStaticMembers(),
+                    classes = when {
+                        ctx.options.buildClasses -> ClassBuilder(registry, index, ctx).buildAll()
+                        else -> 0
+                    },
+                )
+            }.also {
+                DemanglerReplacer(ctx, registry).replace()
             }
-            DemanglerReplacer(ctx, registry).replace()
-            functions to globals
         }
 
         // Pass D — publish the line map, then point it at local sources if any root was given
@@ -80,20 +78,14 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
         registry.reportSurvivingPlaceholders()
         registry.reportConflictDelta()
         ctx.diagnostics.writeSummary(ctx.terminal)
-        artifacts = ImportArtifacts(registry, index, harvest, stabs.records)
         val parseErrors = ctx.diagnostics["parse-error"].toInt()
 
-        return PassResult(
-            recordsRead = stabs.totalRecordCount,
-            recordsParsed = stabs.records.size - parseErrors,
-            parseErrors = parseErrors,
-            typesMaterialized = harvest.types.size,
-            functionsApplied = functions,
-            globalsApplied = globals,
-            classesApplied = classes,
-            constantsApplied = constants,
-            staticMembersApplied = staticMembers,
+        return ImportResult(
+            parsed = ImportResult.ParseResults(stabs, parseErrors),
+            types = ImportResult.TypeResults(harvested = harvest.types.size, materialized = materialized),
+            applied = applied,
             sourceMapEntries = sourceMapEntries,
+            artifacts = ImportArtifacts(registry, index, harvest, stabs.records),
         )
     }
 

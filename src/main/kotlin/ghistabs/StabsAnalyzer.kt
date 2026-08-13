@@ -4,17 +4,19 @@ import ghidra.app.services.AbstractAnalyzer
 import ghidra.app.services.AnalysisPriority
 import ghidra.app.services.AnalyzerType
 import ghidra.app.util.importer.MessageLog
-import ghidra.framework.options.OptionType
 import ghidra.framework.options.Options
 import ghidra.program.model.address.AddressSetView
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
-import ghistabs.StabsOptions.Companion.isOverlayDone
-import ghistabs.StabsOptions.Companion.isStabsDone
-import ghistabs.StabsOptions.Companion.markOverlayDone
-import ghistabs.StabsOptions.Companion.markStabsDone
-import ghistabs.StabsOptions.Companion.registerStabs
-import ghistabs.diagnose.*
+import ghistabs.ImportOptions.Companion.isOverlayDone
+import ghistabs.ImportOptions.Companion.isStabsDone
+import ghistabs.ImportOptions.Companion.markOverlayDone
+import ghistabs.ImportOptions.Companion.markStabsDone
+import ghistabs.ImportOptions.Companion.registerStabs
+import ghistabs.diagnose.BookmarkSink
+import ghistabs.diagnose.MessageLogSink
+import ghistabs.diagnose.StabsDiagnostics
+import ghistabs.diagnose.TeeSink
 import ghistabs.importer.*
 import ghistabs.parse.StabReader
 
@@ -24,7 +26,7 @@ import ghistabs.parse.StabReader
  * Unix and Cygwin targets, across ELF, PE/COFF and a.out (where the records live in the linker
  * symbol table rather than in debug sections).
  *
- * Auto-runs once per program (gated by [StabsOptions.STABS_DONE]); re-runnable via the
+ * Auto-runs once per program (gated by [ImportOptions.STABS_DONE]); re-runnable via the
  * `Tools > Stabs > Re-import` menu action.
  */
 class StabsAnalyzer :
@@ -55,7 +57,7 @@ class StabsAnalyzer :
         program ?: return false
         msg ?: return false
         monitor ?: return false
-        val options = StabsOptions(program)
+        val options = ImportOptions(program)
         val probe = ImportProbe.get(program)
 
         val ctx = ImportContext(
@@ -71,7 +73,7 @@ class StabsAnalyzer :
         // A test installed `probe` to read what the analyzer built (registry dump, DemanglerReplacer);
         // hand back the materialized artifacts. Null on a re-fired pass (import short-circuits on
         // isStabsDone) — don't clobber. No-op in production (probe == null).
-        ctx.import()?.let { probe?.artifacts = it }
+        ctx.import().artifacts?.let { probe?.artifacts = it }
 
         return true
     }
@@ -80,139 +82,18 @@ class StabsAnalyzer :
         const val NAME = "Stabs Importer"
 
         @JvmStatic
-        fun ImportContext<*>.import(): ImportArtifacts? {
-            if (program.isStabsDone) return null
+        fun ImportContext<*>.import(): ImportResult {
+            if (program.isStabsDone) return ImportResult()
 
             if (options.overlaySection && !program.isOverlayDone) {
                 debug("stab-section-overlaid", count = StabSectionOverlay(this).apply().toLong())
                 program.markOverlayDone()
             }
 
-            val importer = StabsImporter(this)
-            log("done", "import complete: ${importer.run()}")
+            val results = StabsImporter(this).run()
+            log("done", "import complete: $results")
             program.markStabsDone(true)
-            return importer.artifacts
+            return results
         }
     }
-}
-
-data class StabsOptions(
-    val applyPlateComments: Boolean = true,
-    val buildClasses: Boolean = true,
-    val shortenTypedefs: Boolean = false,
-    val foldSources: Boolean = true,
-    val minLogLevel: Level = Level.INFO,
-    val overlaySection: Boolean = true,
-    /** Local checkouts the recorded source paths are mapped onto (phase 3); empty = no transforms. */
-    val sourceRoots: List<String> = emptyList(),
-) {
-
-    companion object {
-        const val STABS_DONE: String = "Stabs Imported"
-        const val OVERLAY_DONE: String = "Stabs Overlaid"
-        const val SHORTENED_DONE: String = "Stabs Typedefs Shortened"
-        const val PLATE_COMMENTS: String = "Apply scope plate comments"
-        const val CLASSES: String = "Reconstruct C++ classes"
-        const val SHORTEN_TYPEDEFS: String = "Shorten templated names via typedefs"
-        const val FOLD_SOURCES: String = "Fold source-file spellings"
-        const val LOG_LEVEL: String = "Minimum log level"
-        const val OVERLAY_SECTION: String = "Overlay .stab section structs"
-        const val SOURCE_ROOTS: String = "Source roots"
-
-        val Program.isStabsDone get() = getOptions(Program.PROGRAM_INFO).getBoolean(STABS_DONE, false)
-
-        fun Program.markStabsDone(value: Boolean) {
-            runTransaction("Stabs: set done flag") {
-                getOptions(Program.PROGRAM_INFO).setBoolean(STABS_DONE, value)
-            }
-        }
-
-        /**
-         * Whether the import that produced this program shortened its templated datatypes. Recorded
-         * rather than re-read from the analyzer options, which say what is *set* now — a render run
-         * later from the GUI would otherwise pick up a toggle made after the import and spell types
-         * one way in the declarations it builds from the AST and the other in decompiled code.
-         */
-        val Program.stabsTypedefsShortened get() = getOptions(Program.PROGRAM_INFO).getBoolean(SHORTENED_DONE, false)
-
-        fun Program.markStabsTypedefsShortened(value: Boolean) {
-            getOptions(Program.PROGRAM_INFO).setBoolean(SHORTENED_DONE, value)
-        }
-
-        val Program.isOverlayDone get() = getOptions(Program.PROGRAM_INFO).getBoolean(OVERLAY_DONE, false)
-
-        fun Program.markOverlayDone() {
-            runTransaction("Stabs: set overlay done flag") {
-                getOptions(Program.PROGRAM_INFO).setBoolean(OVERLAY_DONE, true)
-            }
-        }
-
-        fun Options.registerStabs() {
-            registerOption(
-                PLATE_COMMENTS,
-                true,
-                null,
-                "Apply plate comments at lexical scopes when LBRAC/RBRAC info is present.",
-            )
-            registerOption(
-                CLASSES,
-                true,
-                null,
-                "Reconstruct C++ classes: class namespaces, member methods (this-typed via __thiscall), " +
-                    "and <Class>_vftable structs applied at _ZTV for virtual dispatch. Off leaves plain " +
-                    "structs — member calls lose their this/args and virtual calls stay unresolved.",
-            )
-            registerOption(
-                SHORTEN_TYPEDEFS,
-                false,
-                null,
-                "Rename long templated datatypes onto their shorter typedef aliases " +
-                    "(basic_string<char, …> → string), recursively inside other templates.",
-            )
-            registerOption(
-                FOLD_SOURCES,
-                true,
-                null,
-                "Fold two gcc spellings of one physical header (full include path vs bare " +
-                    "#include \"x.h\") onto one rendered output file, by unique basename.",
-            )
-            registerOption(
-                LOG_LEVEL,
-                Level.INFO,
-                null,
-                "Minimum level for MessageLog diagnostic output (bookmarks and counters are unaffected).",
-            )
-            registerOption(
-                OVERLAY_SECTION,
-                true,
-                null,
-                "Overlay a decoded StabRecord struct on every .stab entry (refs into .stabstr and back to code/data).",
-            )
-            registerOption(
-                SOURCE_ROOTS,
-                OptionType.STRING_TYPE,
-                "",
-                null,
-                "Local checkouts of the sources this binary was built from, ';'-separated. Each recorded " +
-                    "source directory found under a root is registered as a directory transform (Source Files " +
-                    "and Transforms), so paths resolve to real files. Read at import time only: adding a root " +
-                    "later needs a re-import, though a transform added in the dialog is picked up immediately.",
-                { SourceRootsEditor() },
-            )
-        }
-    }
-
-    constructor(opts: Options) : this(
-        applyPlateComments = opts.getBoolean(PLATE_COMMENTS, true),
-        buildClasses = opts.getBoolean(CLASSES, true),
-        shortenTypedefs = opts.getBoolean(SHORTEN_TYPEDEFS, false),
-        foldSources = opts.getBoolean(FOLD_SOURCES, true),
-        minLogLevel = opts.getEnum(LOG_LEVEL, Level.INFO),
-        overlaySection = opts.getBoolean(OVERLAY_SECTION, true),
-        sourceRoots = opts.getString(SOURCE_ROOTS, "").split(';').map { it.trim() }.filter { it.isNotEmpty() },
-    )
-
-    constructor(program: Program) : this(
-        program.getOptions(Program.ANALYSIS_PROPERTIES).getOptions(StabsAnalyzer.NAME),
-    )
 }

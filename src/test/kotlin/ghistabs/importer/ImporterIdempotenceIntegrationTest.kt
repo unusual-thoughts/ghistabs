@@ -2,7 +2,7 @@ package ghistabs.importer
 
 import ghidra.program.database.ProgramBuilder
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghistabs.StabsOptions.Companion.markStabsDone
+import ghistabs.ImportOptions.Companion.markStabsDone
 import ghistabs.defaultContext
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -75,10 +75,10 @@ class ImporterIdempotenceIntegrationTest : AbstractGhidraHeadlessIntegrationTest
         val symbolCount2 = program.symbolTable.numSymbols
 
         // Assert idempotence: counts should be identical
-        assertEquals(result1.parseErrors, result2.parseErrors, "Parse error counts should be identical")
+        assertEquals(result1.parsed.errors, result2.parsed.errors, "Parse error counts should be identical")
         assertEquals(
-            result1.typesMaterialized,
-            result2.typesMaterialized,
+            result1.types.materialized,
+            result2.types.materialized,
             "Type materialization counts should be identical",
         )
         assertEquals(symbolCount1, symbolCount2, "Symbol count should be identical on second run")
@@ -111,8 +111,8 @@ class ImporterIdempotenceIntegrationTest : AbstractGhidraHeadlessIntegrationTest
             val result = importer.run()
 
             // Verify result is reasonable (no negative counts)
-            assertTrue(result.recordsRead >= 0, "Records read should be non-negative in run $i")
-            assertTrue(result.typesMaterialized >= 0, "Types materialized should be non-negative in run $i")
+            assertTrue(result.parsed.records >= 0, "Records read should be non-negative in run $i")
+            assertTrue(result.types.materialized >= 0, "Types materialized should be non-negative in run $i")
         }
     }
 

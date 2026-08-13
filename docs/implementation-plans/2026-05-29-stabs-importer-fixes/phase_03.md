@@ -431,7 +431,7 @@ Insert:
 DemanglerReplacer(ctx, typeRegistry).run()
 ```
 
-Unconditional in Phase 3; runtime toggle via `StabsOptions` if needed later (Phase H tuning).
+Unconditional in Phase 3; runtime toggle via `ImportOptions` if needed later (Phase H tuning).
 
 **Testing:**
 

@@ -96,7 +96,7 @@ This phase implements and tests:
 
 <!-- START_TASK_1 -->
 
-### Task 1: `ImportContext`, `StabsOptions`, `PassResult` value types
+### Task 1: `ImportContext`, `ImportOptions`, `PassResult` value types
 
 **Files:**
 
@@ -658,7 +658,7 @@ git commit -m "test(importer): globals, file-statics, bookmark/log split"
 
 ## Phase Done When
 
-- [ ] `importer/ImportContext.kt` exports `ImportContext`, `StabsOptions`, `PassResult`.
+- [ ] `importer/ImportContext.kt` exports `ImportContext`, `ImportOptions`, `PassResult`.
 - [ ] `importer/Importer.kt` exports `StabsImporter` with a fully wired `run()`.
 - [ ] `TypeRegistry.dataTypeFor(decl)` exists.
 - [ ] `SymbolApplyTest` covers: function-with-params, locals, scope comments, resolved + unresolved globals,

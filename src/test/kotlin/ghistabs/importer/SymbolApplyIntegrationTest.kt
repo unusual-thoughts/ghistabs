@@ -76,8 +76,8 @@ class SymbolApplyIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         // Verify that the importer processes records without exceptions.
         // With minimal synthetic stabs, globalsApplied may be 0 (no type info),
         // but the importer should handle it gracefully.
-        assertTrue(result.recordsParsed >= 0, "Importer should have non-negative record count")
-        assertFalse(result.parseErrors > 0, "Importer should not have parse errors on valid stab records")
+        assertTrue(result.parsed.parsed >= 0, "Importer should have non-negative record count")
+        assertFalse(result.parsed.errors > 0, "Importer should not have parse errors on valid stab records")
     }
 
     /**
@@ -132,11 +132,11 @@ class SymbolApplyIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             importer.runOnRecords(StabReader.Result(records, totalRecordCount = records.size, truncatedTail = 0))
 
         // Importer should complete without throwing (robustness test)
-        assertTrue(result.recordsParsed > 0, "Importer should have parsed some records")
+        assertTrue(result.parsed.parsed > 0, "Importer should have parsed some records")
         // The malformed record should result in a parse error
-        assertTrue(result.parseErrors > 0, "Importer should report parse error for malformed record")
+        assertTrue(result.parsed.errors > 0, "Importer should report parse error for malformed record")
         // But other records should still be processed
-        assertTrue(result.typesMaterialized > 0, "Importer should have materialized valid types despite errors")
+        assertTrue(result.types.materialized > 0, "Importer should have materialized valid types despite errors")
     }
 
     /**
@@ -158,7 +158,7 @@ class SymbolApplyIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             StabReader.Result(records, totalRecordCount = records.size, truncatedTail = 0),
         )
 
-        assertEquals(1, result.constantsApplied, "one constant should apply")
+        assertEquals(1, result.applied.constants, "one constant should apply")
 
         val equate = program.equateTable.equates.asSequence().single()
         assertEquals(0xFFFFFFFFL, equate.value, "equate carries the constant value")
