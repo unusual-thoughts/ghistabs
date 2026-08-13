@@ -131,6 +131,18 @@
           <CODE>INFO</CODE>, <CODE>WARN</CODE> or <CODE>ERROR</CODE>. Bookmarks and the
           end-of-import counter summary are emitted regardless.</TD>
         </TR>
+
+        <TR>
+          <TD><B>Source roots</B></TD>
+          <TD>none</TD>
+          <TD>Local checkouts of the sources this binary was built from, <CODE>;</CODE>-separated.
+          Every recorded source directory found under a root is registered as a directory
+          transform (<I>Source Files and Transforms</I>), so the recorded paths resolve to real
+          files. The <B>Browse</B> button chooses directories only, takes several at once, and
+          adds them to the list rather than replacing it; the field itself stays editable. Read
+          at import time only &mdash; adding a root later needs a re-import, though a transform
+          added directly in the Source Files dialog is picked up immediately.</TD>
+        </TR>
       </TABLE>
     </BLOCKQUOTE>
 

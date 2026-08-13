@@ -111,6 +111,7 @@ Options (`Analysis > Auto Analyze… > Stabs Importer`):
 | **Fold source-file spellings**           | on      | Collapse gcc's two spellings of one physical header (full include path vs bare `#include "x.h"`) onto one rendered output file, by unique basename.                           |
 | **Overlay `.stab` section structs**      | on      | Decode every `.stab` entry into a `StabRecord` struct with references into `.stabstr` and back to the code/data it describes.                                                 |
 | **Minimum log level**                    | `INFO`  | Floor for diagnostics written to the analysis log. Bookmarks and counters are emitted regardless.                                                                             |
+| **Source roots**                         | none    | `;`-separated local checkouts of the sources this binary was built from; each recorded source directory found under a root becomes a directory transform, so paths resolve to real files. The **Browse** button picks directories only, multi-selects, and appends to the list. Read at import time — adding a root later needs a re-import. |
 
 Diagnostics land in three places: the analysis **MessageLog** (filtered by the log level),
 an **`Analysis` bookmark** at every addressed diagnostic, and a summary of counters at the
