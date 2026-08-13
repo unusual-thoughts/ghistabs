@@ -1,4 +1,4 @@
-package ghistabs.source
+package ghistabs.scan
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test

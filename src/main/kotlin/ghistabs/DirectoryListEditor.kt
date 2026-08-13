@@ -14,15 +14,16 @@ import javax.swing.event.DocumentEvent
 import javax.swing.event.DocumentListener
 
 /**
- * Editor for the `;`-separated [StabsOptions.SOURCE_ROOTS] string: the same text field the option
- * had, plus a browse button whose chooser takes **directories only**, multi-selects, and *appends*
- * what it picked instead of replacing the field — roots accumulate, and the field stays typeable.
+ * Editor for a `;`-separated list of directories, [ImportOptions.SOURCE_ROOTS] being the one that has
+ * one: the plain text field such an option would get anyway, plus a browse button whose chooser takes
+ * **directories only**, multi-selects, and *appends* what it picked instead of replacing the field —
+ * entries accumulate, and the field stays typeable.
  *
  * Ghidra's [docking.options.editor.FileChooserEditor] is the stock answer for a path-valued option
  * ([ghidra.app.plugin.core.analysis.ApplyDataArchiveAnalyzer] uses it), but it hardcodes
  * `FILES_AND_DIRECTORIES` and holds one path, so it can't express either half of this.
  */
-class SourceRootsEditor : PropertyEditorSupport() {
+class DirectoryListEditor(private val chooserTitle: String) : PropertyEditorSupport() {
     private val textField = JTextField(NUMBER_OF_COLUMNS)
 
     override fun getValue(): Any = asText
@@ -43,32 +44,28 @@ class SourceRootsEditor : PropertyEditorSupport() {
         layout = BoxLayout(this, BoxLayout.X_AXIS)
         add(textField)
         add(Box.createHorizontalStrut(5))
-        add(BrowseButton().also { browse -> browse.addActionListener { chooseRoots(browse) } })
+        add(BrowseButton().also { browse -> browse.addActionListener { chooseDirs(browse) } })
         textField.addActionListener { firePropertyChange() }
         textField.document.addDocumentListener(
             object : DocumentListener {
                 override fun insertUpdate(e: DocumentEvent) = firePropertyChange()
-
                 override fun removeUpdate(e: DocumentEvent) = firePropertyChange()
-
                 override fun changedUpdate(e: DocumentEvent) = firePropertyChange()
             },
         )
     }
 
-    private fun roots() = asText.split(';').map { it.trim() }.filter { it.isNotEmpty() }
+    private val roots get() = asText.split(';').map { it.trim() }.filter { it.isNotEmpty() }
 
-    private fun chooseRoots(parent: Component) {
-        val chooser = GhidraFileChooser(parent).apply {
-            setFileSelectionMode(GhidraFileChooserMode.DIRECTORIES_ONLY)
-            isMultiSelectionEnabled = true
-            title = "Choose source root(s)"
-            setApproveButtonText("Add")
-            roots().lastOrNull()?.let(::File)?.parentFile?.let(::setCurrentDirectory)
-        }
-        val chosen = chooser.selectedFiles.map { it.absolutePath }
-        chooser.dispose()
-        if (chosen.isNotEmpty()) asText = (roots() + chosen).distinct().joinToString(";")
+    private fun chooseDirs(parent: Component) = GhidraFileChooser(parent).run {
+        setFileSelectionMode(GhidraFileChooserMode.DIRECTORIES_ONLY)
+        isMultiSelectionEnabled = true
+        title = chooserTitle
+        setApproveButtonText("Add")
+        roots.lastOrNull()?.let(::File)?.parentFile?.let(::setCurrentDirectory)
+        selectedFiles.map { it.absolutePath }.also { dispose() }
+    }.let { chosen ->
+        if (chosen.isNotEmpty()) asText = (roots + chosen).distinct().joinToString(";")
     }
 
     private companion object {

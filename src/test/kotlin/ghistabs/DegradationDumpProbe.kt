@@ -43,7 +43,7 @@ class DegradationDumpProbe : AbstractGhidraHeadlessIntegrationTest() {
                 val ctx = ImportContext(
                     program,
                     monitor,
-                    StabsOptions(),
+                    ImportOptions(),
                     CapturingSink(),
                     StabsDiagnostics(),
                 )

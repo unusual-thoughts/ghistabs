@@ -48,12 +48,14 @@ class DataTypeRegistry(
     /** Id-less DataType registrations (typedefs, vftable/vtable composites, FunctionDefinitions). */
     private val extrasByName = LinkedHashMap<String, LinkedHashSet<DataType>>()
 
-    /** Every DataType this importer materialized or registered. */
-    internal val allCreatedDataTypes by lazy {
-        LinkedHashSet<DataType>().apply {
-            addAll(byId.values)
-            for (bucket in extrasByName.values) addAll(bucket)
-        }
+    /**
+     * Every DataType this importer materialized or registered. Recomputed per read, not cached:
+     * [materializeAll] returns its size, and pass C keeps registering after that — ClassBuilder's
+     * member-method FunctionDefinitions — which a snapshot taken at pass B would miss.
+     */
+    internal val allCreatedDataTypes get() = buildSet {
+        addAll(byId.values)
+        for (bucket in extrasByName.values) addAll(bucket)
     }
 
     /**

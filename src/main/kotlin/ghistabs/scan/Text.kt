@@ -1,4 +1,4 @@
-package ghistabs.source
+package ghistabs.scan
 
 /**
  * [text] with the contents of comments and literals replaced by spaces, every offset and every

@@ -12,7 +12,7 @@ import ghidra.framework.plugintool.PluginTool
 import ghidra.framework.plugintool.util.PluginStatus
 import ghidra.util.HelpLocation
 import ghidra.util.Msg
-import ghistabs.StabsOptions.Companion.markStabsDone
+import ghistabs.ImportOptions.Companion.markStabsDone
 import ghistabs.parse.StabReader
 
 /**

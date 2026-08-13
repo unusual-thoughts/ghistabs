@@ -1,4 +1,4 @@
-package ghistabs.source
+package ghistabs.scan
 
 import ghidra.app.util.cparser.CPP.PreProcessor
 import ghistabs.diagnose.DiagnosticSink

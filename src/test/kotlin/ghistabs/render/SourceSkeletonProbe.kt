@@ -7,6 +7,8 @@ import ghidra.program.model.listing.Program
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghistabs.*
+import ghistabs.ImportOptions.Companion.LOG_LEVEL
+import ghistabs.ImportOptions.Companion.SHORTEN_TYPEDEFS
 import ghistabs.diagnose.Level
 import ghistabs.harvest.HarvestIndex
 import ghistabs.harvest.Harvester
@@ -72,8 +74,8 @@ class SourceSkeletonProbe : AbstractGhidraHeadlessIntegrationTest() {
                     program.getOptions(Program.ANALYSIS_PROPERTIES)
                         .getOptions("Stabs Importer")
                         .apply {
-                            setBoolean(StabsOptions.SHORTEN_TYPEDEFS, true)
-                            setEnum(StabsOptions.LOG_LEVEL, Level.DEBUG)
+                            this[SHORTEN_TYPEDEFS] = true
+                            this[LOG_LEVEL] = Level.DEBUG
                         }
                 }
                 program.disableWindowsResourceAnalyzer()

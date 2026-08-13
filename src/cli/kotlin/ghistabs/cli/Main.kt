@@ -18,9 +18,9 @@ import ghidra.framework.options.OptionType
 import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
+import ghistabs.ImportOptions
 import ghistabs.StabsAnalyzer
 import ghistabs.StabsAnalyzer.Companion.import
-import ghistabs.StabsOptions
 import ghistabs.diagnose.*
 import ghistabs.importer.ImportArtifacts
 import ghistabs.importer.ImportContext
@@ -57,7 +57,7 @@ private class DecompCommand :
 
 /**
  * Freestanding headless driver: boot Ghidra, load [binary], run the stabs import with the given
- * [StabsOptions], optionally emit the record/harvest/registry JSON dumps, then render every source
+ * [ImportOptions], optionally emit the record/harvest/registry JSON dumps, then render every source
  * into [outDir] in [mode]. Mirrors the pipeline the analyzer + render probes run, but from a `main()`
  * rather than a Ghidra tool or an integration test.
  *
@@ -117,7 +117,7 @@ private abstract class RenderCommand(name: String, help: String) : CliktCommand(
 
     private val options
         get() =
-            StabsOptions(
+            ImportOptions(
                 false,
                 buildClasses,
                 shortenTypedefs,
@@ -146,7 +146,7 @@ private abstract class RenderCommand(name: String, help: String) : CliktCommand(
                 try {
                     val ctx = ImportContext(program, monitor, options, StreamSink(logLevel, out), StabsDiagnostics())
                     ctx.autoAnalyze()
-                    val artifacts = program.runTransaction("stabs-cli-import") { ctx.import() }
+                    val artifacts = program.runTransaction("stabs-cli-import") { ctx.import().artifacts }
                     msgLog.toString().takeIf { it.isNotBlank() }?.let { out.append("--- loader MessageLog ---\n$it\n") }
 
                     ctx.writeDumps(artifacts)
