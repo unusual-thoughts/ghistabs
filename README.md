@@ -123,15 +123,22 @@ end of the import.
   runs again over the current program. Use it after changing analyzer options. Enabled only
   when the program actually has `.stab`/`.stabstr` blocks.
 
-### `File > Export Program… > Stabs Decompilation`
+### `File > Export Program…`
 
-Writes the reconstructed render, one file per source file, with gcc SjLj exception scaffolding
-elided. The export dialog takes a *file* path and its browse button offers files only, so the
-first option is an **Output directory** — a directories-only chooser, and where the render
-lands when set; left empty, the dialog's path is used as the directory (hence the `.src`
-extension it appends). The rest are the render flags the headless driver exposes: *Skeleton
-only*, *Elide gcc SjLj exception scaffolding*, *Annotate locals with their storage*, *Render
-source line n at output line n*. Requires the importer to have run first.
+Two formats write the reconstructed sources, one file per source file — the headless driver's
+two modes, picked in the format list (Ghidra fixes an exporter's extension at construction, so
+they're two exporters rather than one with a mode option):
+
+- **Stabs Decompilation** (`.decomp`) — code at the original source lines, gcc SjLj exception
+  scaffolding elided.
+- **Stabs Source Skeleton** (`.skeleton`) — every declaration at its original line, no code.
+
+The export dialog takes a *file* path and its browse button offers files only, so the first
+option is an **Output directory** — a directories-only chooser, and where the render lands when
+set; left empty, the dialog's path is used as the directory (hence the appended extension). The
+rest are render flags: *Elide gcc SjLj exception scaffolding* (decompilation only), *Annotate
+locals with their storage*, *Render source line n at output line n*. Requires the importer to
+have run first.
 
 ### Supporting analyzers
 

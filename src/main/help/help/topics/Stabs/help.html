@@ -29,14 +29,14 @@
     <P>Everything is driven by the <A href="#Stabs_Importer_Analyzer">Stabs Importer</A>
     analyzer. Three <A href="#Stabs_Supporting_Analyzers">supporting analyzers</A> clean up
     code and ABI details around it, <A href="#Stabs_Tools_Menu">Tools &rarr; Stabs</A> re-runs
-    the import, and the <A href="#Stabs_Export_Decompilation">Stabs Decompilation</A> exporter
-    writes out the reconstructed sources.</P>
+    the import, and two <A href="#Stabs_Export_Decompilation">exporters</A> write out the
+    reconstructed sources.</P>
 
     <BLOCKQUOTE>
       <P><B>Note:</B> The extension does nothing on a program that carries no stabs &mdash;
       neither a <CODE>.stab</CODE>/<CODE>.stabstr</CODE> pair nor an a.out symbol table. The
-      analyzer does not appear as applicable, the menu action stays disabled and the exporter
-      is not offered.</P>
+      analyzer does not appear as applicable, the menu action stays disabled and the exporters
+      are not offered.</P>
     </BLOCKQUOTE>
 
     <H2><A name="Stabs_Importer_Analyzer"></A>Stabs Importer Analyzer</H2>
@@ -164,11 +164,14 @@
     but the pass is not free &mdash; on a large C++ binary it takes as long as the first
     import did.</P>
 
-    <H2><A name="Stabs_Export_Decompilation"></A>File &rarr; Export Program&hellip; &rarr; Stabs
-    Decompilation</H2>
+    <H2><A name="Stabs_Export_Decompilation"></A>File &rarr; Export Program&hellip;</H2>
 
-    <P>Writes a reconstructed <B>decompilation</B>:
-    one file per source file the debug info names, laid out at the original source lines, with
+    <P>Two formats in the export dialog's list write the reconstructed sources, one file per
+    source file the debug info names: <B>Stabs Decompilation</B> (<CODE>.decomp</CODE>) and
+    <B>Stabs Source Skeleton</B> (<CODE>.skeleton</CODE>). They are two exporters rather than
+    one with a mode option because Ghidra fixes an exporter's file extension at construction.</P>
+
+    <P><B>Stabs Decompilation</B> lays the code out at the original source lines, with
     Ghidra's decompiled statements placed across each function's line span and each tagged with
     the source line its instructions came from. gcc's SjLj exception scaffolding is elided (a
     no-op on ELF binaries, which use DWARF exception handling).</P>
@@ -181,20 +184,22 @@
     carrying its original line's provenance. Real file-scope globals keep their line.
     <CODE>#include</CODE> lines are reconstructed and trailing blank lines trimmed.</P>
 
+    <P><B>Stabs Source Skeleton</B> does none of that: every declaration stays at its original
+    line, misattributions included and flagged, plus a trailing block for anonymous aggregates
+    that have no line to sit on. Use the skeleton to see what the debug info claimed, and the
+    decompilation to read the code.</P>
+
     <P>The render is one file per source, but the export dialog takes a file path and its browse
     button offers files only. So the first export <B>option</B> is an <I>Output directory</I>
     &mdash; a directories-only chooser, and where the render lands when it is set. Left empty,
     the path chosen in the dialog is used as the output directory instead; that is what the
-    <CODE>.src</CODE> extension the dialog appends to it is for.</P>
+    appended extension is for.</P>
 
-    <P>The remaining <B>options</B> switch the render off one flag at a time: <I>Skeleton only</I>
-    renders no code at all &mdash; every declaration stays at its original line,
-    misattributions included and flagged, plus a trailing block for anonymous aggregates that
-    have no line to sit on (use the skeleton to see what the debug info claimed, and the
-    decompilation to read the code); <I>Elide gcc SjLj exception scaffolding</I> is on by
-    default; <I>Annotate locals with their storage</I> adds the <CODE>(stack)</CODE>/
-    <CODE>(reg)</CODE> gcc gave each one; <I>Render source line n at output line n</I> keeps
-    blank runs intact, which is what a diff against the real source wants.</P>
+    <P>The other <B>options</B> are the render's flags: <I>Elide gcc SjLj exception
+    scaffolding</I> (decompilation only, on by default); <I>Annotate locals with their
+    storage</I>, which adds the <CODE>(stack)</CODE>/<CODE>(reg)</CODE> gcc gave each one; and
+    <I>Render source line n at output line n</I>, which keeps blank runs intact &mdash; what a
+    diff against the real source wants.</P>
 
     <P>The importer must have run first &mdash; the render reads the types and signatures it
     applied. If it hasn't, the export writes nothing and says so in its results log.</P>
