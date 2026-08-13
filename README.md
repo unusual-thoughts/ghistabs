@@ -126,10 +126,12 @@ end of the import.
 ### `File > Export Program… > Stabs Decompilation`
 
 Writes the reconstructed render, one file per source file, with gcc SjLj exception scaffolding
-elided. The dialog only takes a file path, so the path chosen *is* the output directory (hence
-the `.src` extension it appends). Options: *Skeleton only*, *Elide gcc SjLj exception
-scaffolding*, *Annotate locals with their storage*, *Render source line n at output line n* —
-the render flags the headless driver exposes. Requires the importer to have run first.
+elided. The export dialog takes a *file* path and its browse button offers files only, so the
+first option is an **Output directory** — a directories-only chooser, and where the render
+lands when set; left empty, the dialog's path is used as the directory (hence the `.src`
+extension it appends). The rest are the render flags the headless driver exposes: *Skeleton
+only*, *Elide gcc SjLj exception scaffolding*, *Annotate locals with their storage*, *Render
+source line n at output line n*. Requires the importer to have run first.
 
 ### Supporting analyzers
 
