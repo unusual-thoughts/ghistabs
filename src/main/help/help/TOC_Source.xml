@@ -55,7 +55,7 @@
 			         target="help/topics/Stabs/help.html#Stabs_Importer_Analyzer" />
 			<tocdef id="Stabs_Tools_Menu" text="Tools &#x2192; Stabs"
 			         target="help/topics/Stabs/help.html#Stabs_Tools_Menu" />
-			<tocdef id="Stabs_Export_Decompilation" text="Export &#x2192; Stabs Decompilation"
+			<tocdef id="Stabs_Export_Decompilation" text="Export &#x2192; reconstructed sources"
 			         target="help/topics/Stabs/help.html#Stabs_Export_Decompilation" />
 			<tocdef id="Stabs_Supporting_Analyzers" text="Supporting Analyzers"
 			         target="help/topics/Stabs/help.html#Stabs_Supporting_Analyzers" />
