@@ -119,12 +119,16 @@ end of the import.
 ### `Tools > Stabs`
 
 - **Re-import** — clears the `Stabs Imported` flag and re-runs auto-analysis, so the importer
-  runs again over the current program. Use it after changing analyzer options.
-- **Export decompilation…** — asks for a target folder and writes the reconstructed
-  decompilation there, one file per source file, with gcc SjLj exception scaffolding elided.
-  Requires the importer to have run first.
+  runs again over the current program. Use it after changing analyzer options. Enabled only
+  when the program actually has `.stab`/`.stabstr` blocks.
 
-Both actions are enabled only when the program actually has `.stab`/`.stabstr` blocks.
+### `File > Export Program… > Stabs Decompilation`
+
+Writes the reconstructed render, one file per source file, with gcc SjLj exception scaffolding
+elided. The dialog only takes a file path, so the path chosen *is* the output directory (hence
+the `.src` extension it appends). Options: *Skeleton only*, *Elide gcc SjLj exception
+scaffolding*, *Annotate locals with their storage*, *Render source line n at output line n* —
+the render flags the headless driver exposes. Requires the importer to have run first.
 
 ### Supporting analyzers
 
