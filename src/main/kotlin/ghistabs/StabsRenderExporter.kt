@@ -21,20 +21,23 @@ import ghistabs.render.Renderer
 import java.io.File
 
 /**
- * `File > Export Program… > Stabs Decompilation`: reconstructs the per-source-file render — the same
- * output the headless driver and the integration harness write.
+ * `File > Export Program…`: reconstructs the per-source-file render — the same output the headless
+ * driver and the integration harness write. Its two modes are two exporters rather than one option,
+ * because `getDefaultFileExtension()` is final on [Exporter]: the extension is fixed at construction,
+ * so `.decomp` vs `.skeleton` can only come from separate instances. They read as the headless
+ * driver's two subcommands do, picked in the format combo.
  *
  * The render is one file per source, but the export dialog only takes a file path and its browse
  * button is hardwired to `FILES_ONLY` ([ghidra.app.plugin.core.exporter.ExporterDialog] builds that
  * chooser privately, so no exporter can reach it). Hence [OUTPUT_DIR], an option that *is* a
  * directory chooser; left empty, the chosen path is used as the output directory instead — which is
- * what the `.src` extension the dialog appends is for.
+ * what the extension the dialog appends to it is for.
  */
-class StabsDecompExporter :
-    Exporter("Stabs Decompilation", "src", HelpLocation("Stabs", "Stabs_Export_Decompilation")) {
+sealed class StabsRenderExporter(name: String, extension: String) :
+    Exporter(name, extension, HelpLocation("Stabs", "Stabs_Export_Decompilation")) {
+    protected abstract val mode: Mode
+
     private var outputDir = ""
-    private var skeleton = false
-    private var elideSjlj = true
     private var showStorage = false
     private var lineAligned = false
 
@@ -45,24 +48,22 @@ class StabsDecompExporter :
 
     override fun getOptions(domainObjectService: DomainObjectService) = listOf(
         OutputDirectoryOption(OUTPUT_DIR, outputDir),
-        Option(SKELETON, skeleton),
-        Option(ELIDE_SJLJ, elideSjlj),
         Option(SHOW_STORAGE, showStorage),
         Option(LINE_ALIGNED, lineAligned),
     )
 
-    override fun setOptions(options: List<Option>) = options.forEach { option ->
+    override fun setOptions(options: List<Option>) = options.forEach(::apply)
+
+    protected open fun apply(option: Option) {
         when (option.name) {
             OUTPUT_DIR -> outputDir = (option.value as? String).orEmpty().trim()
-            SKELETON -> skeleton = option.on
-            ELIDE_SJLJ -> elideSjlj = option.on
             SHOW_STORAGE -> showStorage = option.on
             LINE_ALIGNED -> lineAligned = option.on
             else -> throw OptionException("Unknown option: ${option.name}")
         }
     }
 
-    private val Option.on
+    protected val Option.on
         get() = value as? Boolean ?: throw OptionException("Invalid type for option: $name")
 
     override fun export(file: File, domainObj: DomainObject, addrSet: AddressSetView?, monitor: TaskMonitor): Boolean {
@@ -84,11 +85,7 @@ class StabsDecompExporter :
         val written = Renderer(
             HarvestIndex(harvest, options.foldSources, ctx),
             program,
-            when {
-                skeleton -> Mode.SKELETON
-                elideSjlj -> Mode.ELIDE_SJLJ
-                else -> Mode.DECOMPILE
-            },
+            mode,
             ctx.resolver,
             showStorage = showStorage,
             lineAligned = lineAligned,
@@ -102,11 +99,29 @@ class StabsDecompExporter :
         return false
     }
 
-    private companion object {
+    protected companion object {
         const val OUTPUT_DIR = "Output directory (else the path above, as a directory)"
-        const val SKELETON = "Skeleton only (declarations, no decompiled code)"
         const val ELIDE_SJLJ = "Elide gcc SjLj exception scaffolding"
         const val SHOW_STORAGE = "Annotate locals with their storage"
         const val LINE_ALIGNED = "Render source line n at output line n"
     }
+}
+
+/** Decompilation per source file, `.decomp`. */
+class StabsDecompExporter : StabsRenderExporter("Stabs Decompilation", "decomp") {
+    // Cygwin/PE binaries use SjLj EH, so elision is the readable default; off yields the raw
+    // decompilation. Either way a no-op on DWARF-EH (ELF).
+    private var elideSjlj = true
+
+    override val mode get() = if (elideSjlj) Mode.ELIDE_SJLJ else Mode.DECOMPILE
+
+    override fun getOptions(domainObjectService: DomainObjectService) =
+        super.getOptions(domainObjectService) + Option(ELIDE_SJLJ, elideSjlj)
+
+    override fun apply(option: Option) = if (option.name == ELIDE_SJLJ) elideSjlj = option.on else super.apply(option)
+}
+
+/** Declarations at their original lines and no code, `.skeleton`. */
+class StabsSkeletonExporter : StabsRenderExporter("Stabs Source Skeleton", "skeleton") {
+    override val mode = Mode.SKELETON
 }
