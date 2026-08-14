@@ -8,24 +8,24 @@ package ghistabs.scan
  *
  * Line continuations count: a `//` comment and a literal both run past a backslash-newline.
  */
-fun scannable(text: String): CharArray {
-    val out = text.toCharArray()
+fun String.stripCommentsAndLiterals(): CharArray = toCharArray().apply {
     var i = 0
-    while (i < out.size) {
+    while (i < size) {
         i = when {
-            out.startsAt(i, "//") -> out.blank(i, out.lineEnd(i))
-            out.startsAt(i, "/*") -> out.blank(i, out.past("*/", i + 2))
-            out[i] == '"' || out[i] == '\'' -> out.blank(i, out.literalEnd(i))
+            startsAt(i, "//") -> blank(i..<lineEnd(i))
+            startsAt(i, "/*") -> blank(i..<past("*/", i + 2))
+            this[i] == '"' || this[i] == '\'' -> this.blank(i..<this.literalEnd(i))
             else -> i + 1
         }
     }
-    return out
 }
 
-/** Space out `[from, to)`, keeping newlines. Returns [to], so it reads as a cursor move. */
-private fun CharArray.blank(from: Int, to: Int): Int {
-    (from until to).forEach { if (this[it] != '\n') this[it] = ' ' }
-    return to
+/** Space out `range`, keeping newlines. Returns [range.last+1], so it reads as a cursor move. */
+private fun CharArray.blank(range: IntRange): Int {
+    for (i in range) {
+        if (this[i] != '\n') this[i] = ' '
+    }
+    return range.last + 1
 }
 
 private fun CharArray.startsAt(i: Int, s: String) = i + s.length <= size && s.indices.all { this[i + it] == s[it] }

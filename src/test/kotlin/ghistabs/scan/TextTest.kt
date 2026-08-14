@@ -5,7 +5,7 @@ import org.junit.jupiter.api.Test
 
 /** Blanking has to keep every offset and newline, or every line number downstream is wrong. */
 class TextTest {
-    private fun blanked(text: String) = String(scannable(text))
+    private fun blanked(text: String) = String(text.stripCommentsAndLiterals())
 
     @Test
     fun `comments and literals go, positions stay`() {
