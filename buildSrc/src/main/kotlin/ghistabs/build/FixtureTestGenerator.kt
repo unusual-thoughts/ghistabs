@@ -1,5 +1,7 @@
 package ghistabs.build
 
+import org.gradle.api.Project
+
 /**
  * Source of one generated `StabsImportRegressionBase` subclass. Split out of the task so the emitted
  * text can be asserted directly — the file it produces has to compile, and ktlint has to accept it.
@@ -18,4 +20,26 @@ fun fixtureTestSource(binary: String, mode: String): String {
         "",
         if (oneLine.length <= 120) oneLine else "class $cls :\n    StabsImportRegressionBase$args",
     ).joinToString("\n", postfix = "\n")
+}
+
+/**
+ * Write one [fixtureTestSource] per binary × mode. Gradle schedules whole classes onto forks, so the
+ * generated class per pair is what parallelises the corpus run.
+ */
+fun Project.registerFixtureTestGenerator(fixtures: Fixtures) = tasks.register("generateFixtureTests") {
+    description = "Generate one StabsImportRegressionBase subclass per fixture binary"
+    val outDir = layout.buildDirectory.dir("generated/sources/fixtureTests/kotlin")
+    // Listing is an input so adding/removing a binary regenerates; the task is cheap either way.
+    inputs.property("fixtures", fixtures.binaries)
+    outputs.dir(outDir)
+    doLast {
+        val pkgDir = outDir.get().asFile.resolve(Fixtures.GENERATED_PACKAGE.replace('.', '/'))
+        pkgDir.deleteRecursively()
+        pkgDir.mkdirs()
+        val pairs = fixtures.binaries.flatMap { b -> fixtures.modes.map { m -> b to m } }
+        pairs.forEach { (binary, mode) ->
+            pkgDir.resolve("${Fixtures.className(binary, mode)}.kt").writeText(fixtureTestSource(binary, mode))
+        }
+        logger.lifecycle("generateFixtureTests: ${pairs.size} fixture classes")
+    }
 }
