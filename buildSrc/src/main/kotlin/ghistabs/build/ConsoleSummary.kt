@@ -17,13 +17,10 @@ private val STAMP = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss-SSS")
 private val COARSE_STAMP = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")
 
 /**
- * Print per-test events + a final pass/fail/skip summary to the console of the same command that ran
- * the tests (no XML/HTML spelunking), and archive each run under a per-invocation timestamped dir so a
- * later run never clobbers an earlier one — and two concurrent runs don't collide on the shared
- * `in-progress-results-generic.bin` (the NoSuchFileException we hit).
+ * Per-test events and a final summary on the console, with each run's reports under its own timestamped
+ * dir — concurrent runs otherwise collide on the shared `in-progress-results-generic.bin`.
  *
- * [fixtures] drives the live progress + ETA line for the slow corpus runs. Inert for the unit-test
- * task, which has no generated classes for the labels to match.
+ * [fixtures] drives the progress + ETA line; inert for tasks with no generated classes.
  */
 fun Test.reportWithConsoleSummary(reportName: String, fixtures: Fixtures) {
     val stamp = LocalDateTime.now().format(STAMP) + "-${ProcessHandle.current().pid()}"
@@ -39,8 +36,7 @@ fun Test.reportWithConsoleSummary(reportName: String, fixtures: Fixtures) {
         showCauses = true
         showStackTraces = true
     }
-    // These take minutes and print nothing when UP-TO-DATE, which reads as a silent no-op; always
-    // re-run so a fresh result + summary print every invocation.
+    // UP-TO-DATE prints nothing, which reads as a silent no-op.
     outputs.upToDateWhen { false }
 
     archivePreviousResults(buildDir.dir("test-output/results").get().asFile, stamp)
@@ -48,18 +44,14 @@ fun Test.reportWithConsoleSummary(reportName: String, fixtures: Fixtures) {
 }
 
 /**
- * LiveTestReporter (JUnit SPI, runs in-fork) appends per-fork result files to `results/`; catting that
- * directory should show only the current run, so before each run archive the previous results into a
- * timestamped backup rather than deleting them. Captured as Files (not a `project` ref) to stay
- * configuration-cache friendly.
+ * LiveTestReporter (JUnit SPI) appends per-fork result files to `results/`, which should show only the
+ * current run — so archive the previous one rather than deleting it.
  */
 private fun Test.archivePreviousResults(resultsDir: java.io.File, stamp: String) {
     val history = resultsDir.resolveSibling("results-history")
     doFirst {
         if (resultsDir.isDirectory && resultsDir.list()?.isNotEmpty() == true) {
-            // Archive under the PREVIOUS run's own stamp (each run records its `.run-stamp`), not
-            // now() — tagging old results with the current time would be a lie. Fall back to the
-            // results' mtime for pre-existing runs that never wrote a stamp.
+            // The previous run's own `.run-stamp`, not now(); mtime for runs that never wrote one.
             val prev = resultsDir.resolve(".run-stamp").takeIf { it.isFile }?.readText()?.trim()
                 ?: LocalDateTime.ofInstant(Instant.ofEpochMilli(resultsDir.lastModified()), ZoneId.systemDefault())
                     .format(COARSE_STAMP)
@@ -67,11 +59,11 @@ private fun Test.archivePreviousResults(resultsDir: java.io.File, stamp: String)
             resultsDir.renameTo(history.resolve(prev))
         }
         resultsDir.mkdirs()
-        resultsDir.resolve(".run-stamp").writeText(stamp) // tag THIS run so the next archive is accurate
+        resultsDir.resolve(".run-stamp").writeText(stamp)
     }
 }
 
-/** ETA uses observed throughput, so it self-adjusts to the fork count. */
+/** ETA from observed throughput, so it self-adjusts to the fork count. */
 private fun Test.liveProgress(reportName: String, fixtures: Fixtures, htmlDir: org.gradle.api.file.DirectoryProperty) {
     val failures = mutableListOf<String>()
     val runStart = AtomicLong(0L)
@@ -90,7 +82,7 @@ private fun Test.liveProgress(reportName: String, fixtures: Fixtures, htmlDir: o
         }
 
         override fun afterSuite(suite: TestDescriptor, result: TestResult) {
-            // One generated class == one unit of work; matching known FQNs excludes root/fork suites.
+            // Matching known FQNs excludes root/fork suites.
             val known = suite.className?.let { fixtures.labels[it] }
             if (known != null) {
                 val n = done.incrementAndGet()
