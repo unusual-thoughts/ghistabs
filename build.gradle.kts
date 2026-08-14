@@ -1,6 +1,6 @@
 import com.sun.management.OperatingSystemMXBean
-import org.gradle.api.tasks.testing.logging.TestExceptionFormat
-import org.gradle.api.tasks.testing.logging.TestLogEvent
+import ghistabs.build.Fixtures
+import ghistabs.build.reportWithConsoleSummary
 import java.lang.management.ManagementFactory.getOperatingSystemMXBean
 import java.time.Instant
 import java.time.LocalDateTime
@@ -116,43 +116,28 @@ val ghidraJvmArgs = listOf(
 // ── Fixture corpus ───────────────────────────────────────────────────────────────────────────
 // The binaries directory is the corpus (IntegrationFixtures.ALL lists it at runtime); gradle
 // schedules whole classes onto forks, so one generated class per fixture × mode is what parallelises.
-
-/** Analyzer modes each fixture is generated for — mirrors ghistabs.Mode. */
-val fixtureModes = listOf("CONCURRENT", "AFTER")
-
-/** Every fixture binary on disk, sorted. `.md` is the folder's own README, not a fixture. */
-val fixtureBinaries by lazy {
-    layout.projectDirectory.dir("src/test/resources/binaries").asFile
-        .listFiles()?.filter { it.isFile && it.extension != "md" }?.map { it.name }?.sorted().orEmpty()
-}
-
-/** Fixture filename + analyzer mode -> generated class name. Shared by generator, filter, listener. */
-fun fixtureClassName(binary: String, mode: String) =
-    binary.split(Regex("[^A-Za-z0-9]+")).filter { it.isNotEmpty() }.joinToString("") { part ->
-        part.replaceFirstChar { it.uppercase() }
-    } + mode.lowercase().replaceFirstChar { it.uppercase() } + "Test"
-
-/** `-Pfixture=<file>[,…]`, defaulting to the whole corpus. */
-val selectedFixtures get() = providers.gradleProperty("fixture").orNull.orEmpty()
-    .split(',').map { it.trim() }.filter { it.isNotEmpty() }.ifEmpty { fixtureBinaries }
-
-/** `-Pmode=CONCURRENT|AFTER`, defaulting to both. */
-val selectedModes get() = providers.gradleProperty("mode").orNull.orEmpty()
-    .split(',').map { it.trim().uppercase() }.filter { it.isNotEmpty() }.ifEmpty { fixtureModes }
+// `.md` is the folder's own README, not a fixture. Naming and -P narrowing live in buildSrc's
+// `Fixtures`, which the generator, the task filters and the progress listener all read.
+val fixtures = Fixtures(
+    binaries = layout.projectDirectory.dir("src/test/resources/binaries").asFile
+        .listFiles()?.filter { it.isFile && it.extension != "md" }?.map { it.name }?.sorted().orEmpty(),
+    fixtureFilter = providers.gradleProperty("fixture").orNull,
+    modeFilter = providers.gradleProperty("mode").orNull,
+)
 
 val generateFixtureTests = tasks.register("generateFixtureTests") {
     description = "Generate one StabsImportRegressionBase subclass per fixture binary"
     val outDir = layout.buildDirectory.dir("generated/sources/fixtureTests/kotlin")
     // Listing is an input so adding/removing a binary regenerates; the task is cheap either way.
-    inputs.property("fixtures", provider { fixtureBinaries })
+    inputs.property("fixtures", fixtures.binaries)
     outputs.dir(outDir)
     doLast {
         val root = outDir.get().asFile
         root.deleteRecursively()
         root.resolve("ghistabs/fixtures").mkdirs()
-        fixtureBinaries.forEach { binary ->
-            fixtureModes.forEach { mode ->
-                val cls = fixtureClassName(binary, mode)
+        fixtures.binaries.forEach { binary ->
+            fixtures.modes.forEach { mode ->
+                val cls = Fixtures.className(binary, mode)
                 // ktlint wants the super type inline when it fits 120 cols, wrapped when it doesn't.
                 val args = """("$binary", Mode.$mode)"""
                 val oneLine = "class $cls : StabsImportRegressionBase$args"
@@ -169,108 +154,11 @@ val generateFixtureTests = tasks.register("generateFixtureTests") {
                 )
             }
         }
-        logger.lifecycle("generateFixtureTests: ${fixtureBinaries.size * fixtureModes.size} fixture classes")
+        logger.lifecycle("generateFixtureTests: ${fixtures.binaries.size * fixtures.modes.size} fixture classes")
     }
 }
 
 kotlin.sourceSets.test { kotlin.srcDir(generateFixtureTests) }
-
-// Print per-test events + a final pass/fail/skip summary to the console of the same command
-// that ran the tests (no XML/HTML spelunking), and archive each run under a per-invocation
-// timestamped dir so a later run never clobbers an earlier one — and two concurrent runs don't
-// collide on the shared `in-progress-results-generic.bin` (the NoSuchFileException we hit).
-fun Test.reportWithConsoleSummary(name: String) {
-    val stamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss-SSS")) +
-        "-${ProcessHandle.current().pid()}"
-    binaryResultsDirectory.set(project.layout.buildDirectory.dir("test-results/$name/$stamp/binary"))
-    reports {
-        junitXml.outputLocation.set(project.layout.buildDirectory.dir("test-results/$name/$stamp"))
-        html.outputLocation.set(project.layout.buildDirectory.dir("reports/tests/$name/$stamp"))
-    }
-    testLogging {
-        events(TestLogEvent.PASSED, TestLogEvent.SKIPPED, TestLogEvent.FAILED)
-        exceptionFormat = TestExceptionFormat.FULL
-        showCauses = true
-        showStackTraces = true
-    }
-    // These take minutes and print nothing when UP-TO-DATE, which reads as a silent no-op; always
-    // re-run so a fresh result + summary print every invocation.
-    outputs.upToDateWhen { false }
-
-    // LiveTestReporter (JUnit SPI, runs in-fork) appends per-fork result files here; a run's
-    // `cat build/test-output/results/*.txt` should show only that run, so before each run archive the
-    // previous results into a timestamped backup rather than deleting them. Captured as Files (not a
-    // `project` ref) to stay configuration-cache friendly.
-    val resultsDir = project.layout.buildDirectory.dir("test-output/results").get().asFile
-    val resultsHistory = project.layout.buildDirectory.dir("test-output/results-history").get().asFile
-    doFirst {
-        if (resultsDir.isDirectory && resultsDir.list()?.isNotEmpty() == true) {
-            // Archive under the PREVIOUS run's own stamp (each run records its `.run-stamp`), not
-            // now() — tagging old results with the current time would be a lie. Fall back to the
-            // results' mtime for pre-existing runs that never wrote a stamp.
-            val prev = resultsDir.resolve(".run-stamp").takeIf { it.isFile }?.readText()?.trim()
-                ?: LocalDateTime.ofInstant(
-                    Instant.ofEpochMilli(resultsDir.lastModified()),
-                    ZoneId.systemDefault(),
-                ).format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"))
-            resultsHistory.mkdirs()
-            resultsDir.renameTo(resultsHistory.resolve(prev))
-        }
-        resultsDir.mkdirs()
-        resultsDir.resolve(".run-stamp").writeText(stamp) // tag THIS run so the next archive is accurate
-    }
-
-    val htmlDir = reports.html.outputLocation
-    val failures = mutableListOf<String>()
-
-    // Live progress + ETA for the slow corpus; ETA uses observed throughput, so it self-adjusts
-    // to the fork count. Inert for the unit-test task, which has no generated classes.
-    val plannedTotal = (selectedFixtures.size * selectedModes.size).coerceAtLeast(1)
-    // Generated class FQN -> "fixture/MODE" label, via the generator's own naming.
-    val suiteLabels = fixtureBinaries
-        .flatMap { b -> fixtureModes.map { m -> "ghistabs.fixtures.${fixtureClassName(b, m)}" to "$b/$m" } }
-        .toMap()
-    val runStart = AtomicLong(0L)
-    val done = AtomicInteger(0)
-    fun hms(ms: Long) = "%dm%02ds".format(ms / 60000, (ms / 1000) % 60)
-
-    addTestListener(object : TestListener {
-        override fun beforeSuite(suite: TestDescriptor) {
-            runStart.compareAndSet(0L, System.currentTimeMillis())
-        }
-        override fun beforeTest(testDescriptor: TestDescriptor) = Unit
-        override fun afterTest(d: TestDescriptor, result: TestResult) {
-            if (result.resultType == TestResult.ResultType.FAILURE) failures += "${d.className}.${d.displayName}"
-        }
-
-        override fun afterSuite(suite: TestDescriptor, result: TestResult) {
-            // One generated class == one unit of work; matching known FQNs excludes root/fork suites.
-            val known = suite.className?.let { suiteLabels[it] }
-            if (known != null) {
-                val n = done.incrementAndGet()
-                val elapsed = System.currentTimeMillis() - runStart.get()
-                val eta = if (n < plannedTotal) (elapsed.toDouble() / n * (plannedTotal - n)).toLong() else 0L
-                logger.lifecycle(
-                    "  ✓ [%d/%d] %s — [%dP:%dF:%dS] in %ds | elapsed %s, ETA ~%s".format(
-                        n, plannedTotal, known,
-                        result.successfulTestCount, result.failedTestCount, result.skippedTestCount,
-                        (result.endTime - result.startTime) / 1000, hms(elapsed), hms(eta),
-                    ),
-                )
-            }
-            if (suite.parent != null) return
-            logger.lifecycle(
-                "\n$name: ${result.resultType} — ${result.testCount} tests, ${result.successfulTestCount} passed, " +
-                    "${result.failedTestCount} failed, ${result.skippedTestCount} skipped",
-            )
-            failures.forEach { logger.lifecycle("  FAILED $it") }
-            logger.lifecycle("HTML report: ${htmlDir.get().asFile}/index.html")
-            logger.lifecycle(
-                "Per-test results (status + skip reasons + setUp aborts): cat build/test-output/results/*.txt",
-            )
-        }
-    })
-}
 
 // Shared config for the headless-Ghidra test tasks: classpath, one-Ghidra-per-fork parallelism,
 // -Pfixture/-PregenerateBaselines wiring, JVM args, and the console summary + archived reports.
@@ -281,7 +169,7 @@ fun Test.reportWithConsoleSummary(name: String) {
 // overflows the -Xmx512m default and crashes the worker with a NoSuchFileException on the result bin.
 fun Test.headlessGhidraConfig(reportName: String, narrowGeneratedClasses: Boolean = false) {
     group = "verification"
-    reportWithConsoleSummary(reportName)
+    reportWithConsoleSummary(reportName, fixtures)
     testClassesDirs = sourceSets["test"].output.classesDirs
     classpath = sourceSets["test"].runtimeClasspath
     shouldRunAfter("test")
@@ -311,11 +199,9 @@ fun Test.headlessGhidraConfig(reportName: String, narrowGeneratedClasses: Boolea
     // -Pfixture and -Pmode intersect, selecting generated classes by name. Only the regression suite
     // has generated classes: applying this to probeDump would intersect with its `--tests` pattern and
     // silently select nothing (Gradle ANDs commandLineIncludePatterns with the build-script filter).
-    if (narrowGeneratedClasses && (selectedFixtures != fixtureBinaries || selectedModes != fixtureModes)) {
+    if (narrowGeneratedClasses && fixtures.isNarrowed) {
         filter {
-            selectedFixtures.forEach { b ->
-                selectedModes.forEach { m -> includeTestsMatching("ghistabs.fixtures.${fixtureClassName(b, m)}") }
-            }
+            fixtures.selectedClasses.forEach { includeTestsMatching(it) }
             isFailOnNoMatchingTests = false
         }
     }
