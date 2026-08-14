@@ -20,9 +20,8 @@ plugins {
 
 dependencies {
     implementation(kotlin("stdlib"))
-    testImplementation(libs.junit.jupiter)
+    testImplementation(libs.bundles.junit) // jupiter + junit4, the latter for Ghidra's test harness
     testRuntimeOnly(libs.junit.platform.launcher)
-    testImplementation(libs.junit4)
     // Only the CLI and the tests serialize, so `-json` stays off the extension's classpath — one less
     // jar to clash there (see the apiVersion note below). `-core` can't follow: the plugin caches an
     // enum property's serializer in the containing class's `<clinit>`, so without it a plain parse dies
