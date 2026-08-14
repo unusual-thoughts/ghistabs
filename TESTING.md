@@ -8,6 +8,13 @@ Three test tiers, split by JUnit tag. Pick the narrowest one for the change you 
 | `./gradlew integrationTest` | `@Tag("integration")` — real-fixture assertion suite + synthetic-program behavioural tests.          | ~minutes | before pushing; after touching the import/materialize pipeline |
 | `./gradlew probeDump`       | `@Tag("probe")` — diagnostic generators (no pass/fail). Writes dumps under `build/test-output/`.     | ~minutes | on demand, when investigating                                  |
 
+Plus one guard task outside the tiers: **`./gradlew noSerializationTest`** re-runs one real-fixture
+import with `kotlinx-serialization-json` off the classpath, since main declares it `compileOnly` and the
+extension ships without it. Run it after touching dependencies, or after adding a `@Serializable` /
+`Json` use anywhere under `src/main/` — if the analyzer path ever reaches for the JSON format, this is
+what turns a GUI-only `NoClassDefFoundError` into a build failure. Dumps live in the `cli` source set
+(`ghistabs.diagnose.Dumps`) for the same reason; tests get them off the cli output.
+
 All three print per-test PASS/FAIL/SKIP and a final summary line to the console of the same
 command (no XML/HTML spelunking), and archive their report to a per-run timestamped dir
 (`build/reports/tests/<task>/<stamp>/index.html`) so a later run never clobbers an earlier one.

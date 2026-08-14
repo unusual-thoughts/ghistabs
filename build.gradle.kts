@@ -13,17 +13,23 @@ import kotlin.io.path.Path
 import kotlin.io.path.relativeTo
 
 plugins {
-    kotlin("jvm") version "2.3.21"
-    kotlin("plugin.serialization") version "2.3.21"
-    id("org.jlleitschuh.gradle.ktlint") version "14.2.0"
+    alias(libs.plugins.kotlin.jvm)
+    alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.ktlint)
 }
 
 dependencies {
     implementation(kotlin("stdlib"))
-    testImplementation("org.junit.jupiter:junit-jupiter:5.14.4")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-    testImplementation("junit:junit:4.13.2")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.10.0")
+    testImplementation(libs.junit.jupiter)
+    testRuntimeOnly(libs.junit.platform.launcher)
+    testImplementation(libs.junit4)
+    // Only the CLI and the tests serialize, so `-json` stays off the extension's classpath — one less
+    // jar to clash there (see the apiVersion note below). `-core` can't follow: the plugin caches an
+    // enum property's serializer in the containing class's `<clinit>`, so without it a plain parse dies
+    // in `StabRecord.<clinit>`. `noSerializationTest` guards the line between the two.
+    implementation(libs.kotlinx.serialization.core)
+    compileOnly(libs.kotlinx.serialization.json)
+    testImplementation(libs.kotlinx.serialization.json)
 }
 
 // Add Ghidra test JARs for integration tests (AbstractGhidraHeadlessIntegrationTest)
@@ -347,6 +353,19 @@ tasks.register<Test>("integrationTest") {
     finalizedBy(auditWhitelist)
 }
 
+// main declares `-json` compileOnly, betting nothing on the analyzer path serializes. Generated code
+// reaches for serializers from class initializers, not just serialize() calls, so losing that bet costs
+// a NoClassDefFoundError in the GUI while every test passes — the kotlin-stdlib apiVersion bug again.
+// So import a real fixture against exactly what we ship. AoutStabsIntegrationTest drives the full path
+// over committed C and C++ fixtures and writes no dumps.
+tasks.register<Test>("noSerializationTest") {
+    description = "Import a fixture with kotlinx-serialization-json off the classpath (guards `compileOnly`)"
+    useJUnitPlatform { includeTags("integration") }
+    headlessGhidraConfig("noSerializationTest")
+    classpath = classpath.filter { !it.name.startsWith("kotlinx-serialization-json") }
+    filter { includeTestsMatching("ghistabs.AoutStabsIntegrationTest") }
+}
+
 // Diagnostic generators (degradation dumps, source skeletons, type probes) — @Tag("probe"), split
 // out of `integrationTest` so they don't run in CI. Run on demand, narrow with -Pfixture=<name>.
 // Corpus-level audits (@Tag("audit")) read the per-fixture dumps integrationTest produces, so they
@@ -413,7 +432,8 @@ apply(from = File(ghidraInstallDir).resolve("support/buildExtension.gradle"))
 // The freestanding headless CLI lives in its own `cli` source set so neither it nor its clikt
 // dependency land on the main runtimeClasspath — buildExtension's copyDependencies would otherwise
 // bundle clikt into the extension zip's lib/. `cliImplementation` inherits main's deps (`api` carries
-// the Ghidra jars, `implementation` the serialization libs) plus the main output and clikt.
+// the Ghidra jars) plus the main output, clikt and the serialization libs. The JSON dumps
+// (`ghistabs.diagnose.Dumps`) live here for the same reason; the tests read them off the cli output.
 val cli = sourceSets.create("cli")
 configurations["cliImplementation"].extendsFrom(configurations["api"], configurations["implementation"])
 
@@ -425,7 +445,9 @@ kotlin.target.compilations.named("cli") {
 
 dependencies {
     "cliImplementation"(sourceSets["main"].output)
-    "cliImplementation"("com.github.ajalt.clikt:clikt:4.4.0")
+    "cliImplementation"(libs.clikt)
+    "cliImplementation"(libs.kotlinx.serialization.json)
+    testImplementation(sourceSets["cli"].output)
 }
 
 // We boot Ghidra from a flat classpath rather than via `ghidra.Ghidra`/GhidraClassLoader, so — like the
@@ -558,6 +580,13 @@ tasks.register("installExtension") {
         logger.lifecycle("Installed ${zip.name} → $targetDir")
         logger.lifecycle("Restart Ghidra to load the new build.")
     }
+}
+
+// copyDependencies is a Copy, not a Sync, and buildExtension.gradle puts `lib/*.jar` back on the `api`
+// configuration — so a dropped dependency lingers there, keeps itself on both classpaths, and keeps
+// shipping in the zip, silently undoing the compileOnly split above. lib/ is gitignored build output.
+tasks.named<Copy>("copyDependencies") {
+    doFirst { delete(fileTree("lib") { include("*.jar") }) }
 }
 
 // buildExtension zips the whole projectDir, which here is full of uncommitted research corpora, a git
