@@ -294,6 +294,15 @@ fun Test.headlessGhidraConfig(reportName: String, narrowGeneratedClasses: Boolea
     systemProperty("fixtureFilter", providers.gradleProperty("fixture").getOrElse(""))
     // -PdisableAnalyzers=<name substring>[,…] turns those analyzers off, for A/B probe runs.
     systemProperty("disableAnalyzers", providers.gradleProperty("disableAnalyzers").getOrElse(""))
+    // -PsourceRoot=<dir>[;<dir>] — local checkouts of the sources a fixture was built from, for the
+    // probes that need ground truth. Falls back to the environment so CI and a laptop differ by
+    // configuration rather than by code; absent, those probes skip.
+    systemProperty(
+        "sourceRoot",
+        providers.gradleProperty("sourceRoot")
+            .orElse(providers.environmentVariable("GHISTABS_SOURCE_ROOT"))
+            .getOrElse(""),
+    )
     // -Pfixture and -Pmode intersect, selecting generated classes by name. Only the regression suite
     // has generated classes: applying this to probeDump would intersect with its `--tests` pattern and
     // silently select nothing (Gradle ANDs commandLineIncludePatterns with the build-script filter).

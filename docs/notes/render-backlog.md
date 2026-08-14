@@ -1801,6 +1801,79 @@ offset can be resolved to the method it calls rather than printed as arithmetic.
 
 ---
 
+## 48. The attribution scorecard — DONE, and it re-grades §44 automatically
+
+§44 was an afternoon of hand-checking against libstdc++ 3.2.3, and item 9 shipped a silent content
+loss precisely because nothing repeated it. `render.Scorecard` now computes it: run
+`./gradlew probeDump --tests 'ghistabs.render.AttributionProbe' -Pfixture=<binary> -PsourceRoot=<dir>`
+and it writes `build/test-output/attribution/<fixture>.txt` — the table, then every item behind it.
+Without a root the probe skips and the counters stay silent, so nothing about a rootless run changes.
+
+**Two columns, not one.** The declarations are graded twice, under the attribution the render ships
+and under the *base* attribution the root has not touched, so the dump reproduces §44's own table
+next to what §46 made of it:
+
+| unpackfile vs `~/git/gcc` @3.2.3 | before root | after root |
+| --- | --- | --- |
+| with ground truth | 148 | 133 |
+| right line (±3) | 82 (55%) | **122 (91%)** |
+| right file, wrong line | 4 (2%) | 3 (2%) |
+| name absent from the file | 57 (38%) | 8 (6%) |
+| past EOF | 5 (3%) | 0 |
+
+Inlines: 177 distinct `(file, line)` stretches, 130 named, **0 unnamed in a file the root mapped**,
+47 in files it did not — §45's "the miss rate of the index itself is zero", now a number the build
+produces rather than one someone counted.
+
+**It agrees with §44 in shape, not to the decimal, and the gap is the agreement guard.** §44 graded
+185 declarations at 63% right-line; the probe grades 148 at 55%. The populations differ by design:
+§44 mapped its files by hand, the probe only grades files phase 3 mapped *and* phase 2's agreement
+guard kept — and §47 already recorded that the guard drops correct files (`basic_string.tcc` 0-of-17,
+`stl_threads.h` 1-of-3) precisely where attribution was worst. So the probe is the stricter of the
+two, and it is strict about the same files. The one number that can be compared like-for-like does
+match exactly: `source-root-refiled` 250, `source-root-confirms` 75, `source-root-over-hint` 13, as
+in §46. Its "126 distinct" is a different distinct: 44 `(name, line)` declarations moved against the
+base attribution, one of which (`iterator_traits L122`) moves out of four CUs at once.
+
+**A wrong root is loudly wrong.** unpackfile against a **3.4.6** `libstdc++-v3/{include,config}`
+archive instead of 3.2.3:
+
+| | 3.2.3 | 3.4.6 |
+| --- | --- | --- |
+| sources mapped | 24 of 55 | 17 of 55 |
+| stretches named | 130 (100% of mapped) | 33 (32%) |
+| right line | 122 (91%) | 10 (19%) |
+| `source-root-mismatch` | 10 | **141** |
+| declarations re-filed | 44 distinct / 227 | 3 / 29 |
+
+The guard rejects fourteen times as much, the score falls to a fifth, and re-attribution all but
+stops: a mismatched tree degrades to *doing nothing*, not to confident wrong answers. That is the
+acceptance criterion for the phase and it is met without a code path of its own — the same
+per-file agreement check does it.
+
+**Counters alongside the dump**, so a regression is greppable rather than only readable:
+`inlines-named` / `inlines-unnamed` /
+`inlines-unmapped`, `decl-line-exact` / `decl-line-wrong` / `decl-name-absent` / `decl-past-eof` /
+`decl-ungraded` / `decl-reattributed` at INFO, with `inline-unnamed`, `decl-misplaced` and
+`decl-moved` itemised at DEBUG. **Nothing computes them during a render** — the probe does, after
+the render returns. The plan had `renderAll` tally them so a rootless run reported them too; that
+put a measurement on the path of the thing measured, for numbers only the probe reads. (The plan
+also called the second counter `decl-file-wrong`; it is renamed,
+the file being right by construction — a declaration is graded against the file it was attributed
+to, so "wrong file" is not a verdict this can reach.)
+
+**What the 8 remaining misplacements are**, since the itemisation is the point: three are typedefs
+gcc dates at the alias rather than the definition (`__string_type` basic_string.h:615, source 962),
+five are names the pristine 3.2.3 release does not spell where MinGW's build put them
+(`sentry` istream.tcc:211, `_Impl` localefwd.h:311, `basic_string` stringfwd.h:56) — §44's second
+kind of unattributable, unchanged and now listed by name every run.
+
+**Not run on xmltest.** `xmltest_gcc421` against the 3.2.3 tree maps 3 of 11 sources and grades
+nothing, which is the version guard working rather than a measurement; the 4.2.1 worktree §46 used
+is gone, so that baseline is not re-established here.
+
+---
+
 ## 47. An included file's extent is the file's length — DONE, and inert on today's corpus
 
 §43's extent for an included file is measured by the declarations it is judging, which is circular.
