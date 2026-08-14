@@ -3,12 +3,8 @@ plugins {
     alias(libs.plugins.ktlint)
 }
 
-// Not covered by the root build's ktlintCheck — buildSrc is a separate build.
-// Run `./gradlew -p buildSrc ktlintFormat` when touching these files.
-ktlint {
-    additionalEditorconfig.set(mapOf("ktlint_standard_no-wildcard-imports" to "disabled"))
-}
-
+// ktlint reads the repo-root .editorconfig for these files too, but the root build's ktlintCheck
+// can't reach a separate build: run `./gradlew -p buildSrc ktlintFormat` when touching them.
 dependencies {
     testImplementation(libs.bundles.junit)
     testRuntimeOnly(libs.junit.platform.launcher)
