@@ -2,10 +2,7 @@ package ghistabs.build
 
 import org.gradle.api.Project
 
-/**
- * Source of one generated `StabsImportRegressionBase` subclass. Split out of the task so the emitted
- * text can be asserted directly — the file it produces has to compile, and ktlint has to accept it.
- */
+/** One generated `StabsImportRegressionBase` subclass. Separate from the task so it can be tested. */
 fun fixtureTestSource(binary: String, mode: String): String {
     val cls = Fixtures.className(binary, mode)
     val args = """("$binary", Mode.$mode)"""
@@ -22,21 +19,18 @@ fun fixtureTestSource(binary: String, mode: String): String {
     ).joinToString("\n", postfix = "\n")
 }
 
-/**
- * Write one [fixtureTestSource] per binary × mode. Gradle schedules whole classes onto forks, so the
- * generated class per pair is what parallelises the corpus run.
- */
+/** One [fixtureTestSource] per binary × mode. */
 fun Project.registerFixtureTestGenerator(fixtures: Fixtures) = tasks.register("generateFixtureTests") {
     description = "Generate one StabsImportRegressionBase subclass per fixture binary"
     val outDir = layout.buildDirectory.dir("generated/sources/fixtureTests/kotlin")
-    // Listing is an input so adding/removing a binary regenerates; the task is cheap either way.
+    // An input, so adding/removing a binary regenerates.
     inputs.property("fixtures", fixtures.binaries)
     outputs.dir(outDir)
     doLast {
         val pkgDir = outDir.get().asFile.resolve(Fixtures.GENERATED_PACKAGE.replace('.', '/'))
         pkgDir.deleteRecursively()
         pkgDir.mkdirs()
-        val pairs = fixtures.binaries.flatMap { b -> fixtures.modes.map { m -> b to m } }
+        val pairs = fixtures.binaries.flatMap { b -> Fixtures.MODES.map { m -> b to m } }
         pairs.forEach { (binary, mode) ->
             pkgDir.resolve("${Fixtures.className(binary, mode)}.kt").writeText(fixtureTestSource(binary, mode))
         }
