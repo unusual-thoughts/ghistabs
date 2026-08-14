@@ -1,5 +1,7 @@
 package ghistabs.build
 
+import java.io.File
+
 /**
  * The fixture corpus: every binary under `src/test/resources/binaries`, crossed with the analyzer
  * modes. Gradle schedules whole classes onto forks, so one generated test class per binary × mode is
@@ -34,6 +36,13 @@ class Fixtures(val binaries: List<String>, fixtureFilter: String? = null, modeFi
         .split(',').map { it.trim() }.filter { it.isNotEmpty() }.ifEmpty { null }
 
     companion object {
+        /** The corpus is whatever binaries are in [dir]; `.md` is the folder's own README. */
+        fun scan(dir: File, fixtureFilter: String?, modeFilter: String?) = Fixtures(
+            dir.listFiles()?.filter { it.isFile && it.extension != "md" }?.map { it.name }?.sorted().orEmpty(),
+            fixtureFilter,
+            modeFilter,
+        )
+
         /** Mirrors `ghistabs.Mode`. */
         val MODES = listOf("CONCURRENT", "AFTER")
 
