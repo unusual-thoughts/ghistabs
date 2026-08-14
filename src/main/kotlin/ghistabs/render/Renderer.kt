@@ -6,6 +6,7 @@ import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Program
 import ghidra.program.model.sourcemap.SourceMapEntry
 import ghidra.util.task.TaskMonitor
+import ghistabs.ImportOptions
 import ghistabs.ImportOptions.Companion.stabsTypedefsShortened
 import ghistabs.harvest.Func
 import ghistabs.harvest.GhidraSourceFile
@@ -16,6 +17,7 @@ import ghistabs.materialize.TemplateNameShortener
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
 import ghistabs.runTransaction
+import ghistabs.scan.Preprocessed
 import ghistabs.scan.SourceIndexes
 import java.io.Closeable
 import java.io.File
@@ -123,7 +125,30 @@ class Renderer(
         }
     }
 
-    private val sourceIndexes = SourceIndexes()
+    /**
+     * The mapped translation units, and the directories an `#include` in one of them can name —
+     * every directory between a mapped file and the root it was found under. Both are empty without
+     * a source root, which is what makes the preprocessing below a no-op there.
+     */
+    private val units by lazy { mapped.map { it.second }.filter { it.extension in UNIT_EXTENSIONS } }
+
+    private val includePaths by lazy {
+        val roots = ImportOptions(program).sourceRoots.map { File(it).canonicalFile.path }
+        mapped.asSequence().map { it.second.canonicalFile }
+            .flatMap { generateSequence(it.parentFile, File::getParentFile) }
+            .filter { dir -> roots.any(dir.path::startsWith) }
+            .distinct()
+            // Shallowest first: `#include <bits/stl_vector.h>` names the directory above `bits/`.
+            .sortedBy { it.path.count(File.separatorChar::equals) }
+            .toList()
+    }
+
+    /**
+     * Blanks the lines a conditional dropped, so a `{` in the arm the compiler skipped cannot close
+     * a body that never opened — the one thing a header's raw text cannot say. Reads raw text where
+     * the environment is too incomplete to be believed, saying so once per unit ([Preprocessed]).
+     */
+    private val sourceIndexes by lazy { SourceIndexes(Preprocessed.lines(units, includePaths, index)) }
 
     /**
      * The definition [line] of [source] sits in, read off the real file — null without a root, and
@@ -286,3 +311,6 @@ private const val DECOMPILE_SECONDS = 30
 
 /** How far off gcc's declaration line the source's own may be — see [Renderer.declarerOf]. */
 private const val DECL_SLACK = 1
+
+/** What a compiler is handed on the command line; everything else a unit reaches by #include. */
+private val UNIT_EXTENSIONS = setOf("c", "cc", "cpp", "cxx", "c++", "C", "ii")
