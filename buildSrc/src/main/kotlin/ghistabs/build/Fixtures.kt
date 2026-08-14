@@ -1,5 +1,7 @@
 package ghistabs.build
 
+import org.gradle.api.Project
+import org.gradle.internal.extensions.core.extra
 import java.io.File
 
 /**
@@ -37,6 +39,14 @@ class Fixtures(val binaries: List<String>, fixtureFilter: String? = null, modeFi
             fixtureFilter,
             modeFilter,
         )
+
+        val Project.fixtures get() = extra.getOrCreate("fixtures") {
+            scan(
+                dir = layout.projectDirectory.dir("src/test/resources/binaries").asFile,
+                fixtureFilter = providers.gradleProperty("fixture").orNull,
+                modeFilter = providers.gradleProperty("mode").orNull,
+            )
+        }
 
         /** Mirrors `ghistabs.Mode`. */
         val MODES = listOf("CONCURRENT", "AFTER")

@@ -1,6 +1,7 @@
 package ghistabs.build
 
 import com.sun.management.OperatingSystemMXBean
+import ghistabs.build.Fixtures.Companion.fixtures
 import org.gradle.api.Project
 import org.gradle.api.tasks.TaskProvider
 import org.gradle.api.tasks.testing.Test
@@ -19,6 +20,15 @@ val GHIDRA_JVM_ARGS = listOf(
     "--add-opens=java.desktop/java.awt=ALL-UNNAMED",
 )
 
+val HEADLESS_JVM_ARGS = GHIDRA_JVM_ARGS + listOf(
+    // Must be declared at JVM startup, else the BuiltinFilterFactory wins the race.
+    "-Djdk.serialFilterFactory=ghidra.framework.remote.GhidraSerialFilterFactory",
+    "-DSystemUtilities.isTesting=true",
+    "--add-opens=java.desktop/sun.swing=ALL-UNNAMED",
+    "--add-opens=java.desktop/javax.swing=ALL-UNNAMED",
+    "--add-opens=java.desktop/javax.swing.text=ALL-UNNAMED",
+)
+
 /** Total RAM in MB. */
 private val osMemoryMB get() = (getOperatingSystemMXBean() as OperatingSystemMXBean).totalMemorySize.shr(20).toInt()
 
@@ -26,12 +36,12 @@ private val osMemoryMB get() = (getOperatingSystemMXBean() as OperatingSystemMXB
  * Shared config for the headless-Ghidra test tasks. Ghidra's Application bootstrap is idempotent, so
  * classes share one install per JVM: no fork per class, parallelise across forks instead.
  */
-fun Test.headlessGhidraConfig(reportName: String, fixtures: Fixtures, narrowGeneratedClasses: Boolean = false) {
+fun Test.headlessGhidraConfig(reportName: String, narrowGeneratedClasses: Boolean = false) {
     val testSourceSet = project.sourceSets["test"]
     val props = project.providers
 
     group = "verification"
-    reportWithConsoleSummary(reportName, fixtures)
+    reportWithConsoleSummary(reportName)
     testClassesDirs = testSourceSet.output.classesDirs
     classpath = testSourceSet.runtimeClasspath
     shouldRunAfter("test")
@@ -52,6 +62,7 @@ fun Test.headlessGhidraConfig(reportName: String, fixtures: Fixtures, narrowGene
         "sourceRoot",
         props.gradleProperty("sourceRoot").orElse(props.environmentVariable("GHISTABS_SOURCE_ROOT")).getOrElse(""),
     )
+    val fixtures = project.fixtures
     // Only for the generated suite: Gradle ANDs this with `--tests`, so applying it elsewhere
     // silently selects nothing.
     if (narrowGeneratedClasses && fixtures.isNarrowed) {
@@ -64,17 +75,7 @@ fun Test.headlessGhidraConfig(reportName: String, fixtures: Fixtures, narrowGene
     systemProperty("modeFilter", props.gradleProperty("mode").getOrElse(""))
     // -PregenerateBaselines=true rewrites baseline JSONs from observed counters instead of asserting.
     systemProperty("regenerateBaselines", props.gradleProperty("regenerateBaselines").getOrElse(""))
-    jvmArgs(
-        GHIDRA_JVM_ARGS +
-            listOf(
-                // Must be declared at JVM startup, else the BuiltinFilterFactory wins the race.
-                "-Djdk.serialFilterFactory=ghidra.framework.remote.GhidraSerialFilterFactory",
-                "-DSystemUtilities.isTesting=true",
-                "--add-opens=java.desktop/sun.swing=ALL-UNNAMED",
-                "--add-opens=java.desktop/javax.swing=ALL-UNNAMED",
-                "--add-opens=java.desktop/javax.swing.text=ALL-UNNAMED",
-            ),
-    )
+    jvmArgs(HEADLESS_JVM_ARGS)
     // -Pjfr[=<file>]. Read recordings with the jdk.jfr.consumer API — `jfr print` crashes on Kotlin
     // synthetic frames.
     props.gradleProperty("jfr").orNull?.let { jfr ->
@@ -91,12 +92,11 @@ fun Project.registerHeadlessTest(
     name: String,
     description: String,
     tag: String,
-    fixtures: Fixtures,
     narrowGeneratedClasses: Boolean = false,
     configure: Test.() -> Unit = {},
 ): TaskProvider<Test> = tasks.register<Test>(name) {
     this.description = description
     useJUnitPlatform { includeTags(tag) }
-    headlessGhidraConfig(name, fixtures, narrowGeneratedClasses)
+    headlessGhidraConfig(name, narrowGeneratedClasses)
     configure()
 }
