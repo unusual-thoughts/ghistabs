@@ -39,7 +39,12 @@ export GHIDRA_INSTALL_DIR=/opt/ghidra     # or pass -PGHIDRA_INSTALL_DIR=...
 ./gradlew ktlintCheck                     # verify formatting
 ./gradlew test                            # fast unit tests (excludes integration)
 ./gradlew integrationTest                 # headless-Ghidra tests against fixtures (slow, ~minutes)
+./gradlew noSerializationTest             # guards the compileOnly split (see TESTING.md)
 ```
+
+Dependency versions live in `gradle/libs.versions.toml` — declare them there, never inline in
+`build.gradle.kts`. `kotlinx-serialization-json` is `compileOnly` for main: JSON dumps belong to the
+`cli` source set and the tests, and the extension must not ship the jar.
 
 Useful flags on `integrationTest`:
 
