@@ -66,12 +66,6 @@ kotlin {
     compilerOptions { apiVersion.set(org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_1_9) }
 }
 
-ktlint {
-    additionalEditorconfig.set(
-        mapOf("ktlint_standard_no-wildcard-imports" to "disabled"),
-    )
-}
-
 // Don't copy `binaries/` into build/resources/test/. It's a ~21M
 // pile of manually-placed test fixtures that integration tests open
 // directly via File("src/test/resources/binaries/…"); copying it to the
