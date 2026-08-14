@@ -127,19 +127,18 @@ val auditWhitelist = tasks.register<Test>("auditWhitelist") {
     testLogging { events("passed", "skipped", "failed") }
 }
 
-// List every test class grouped by its tag (unit / integration / probe) with its package + file, so
-// tests are discoverable even though integration/probe tests are co-located in their SUT's package
-// rather than a dedicated folder. Source scan — no compile/boot needed.
-registerTestInventory(layout.projectDirectory.dir("src/test/kotlin").asFile)
+// Tests are co-located with their SUT rather than split into per-tag folders, so a per-tag inventory is
+// the only way to see what exists.
+registerTestInventory()
 
-apply(from = ghidraInstallDir.toFile().resolve("support/buildExtension.gradle"))
+apply(from = ghidraInstallDir.resolve("support/buildExtension.gradle").toFile())
 
 // The freestanding headless CLI lives in its own `cli` source set so neither it nor its clikt
 // dependency land on the main runtimeClasspath — buildExtension's copyDependencies would otherwise
 // bundle clikt into the extension zip's lib/. `cliImplementation` inherits main's deps (`api` carries
 // the Ghidra jars) plus the main output, clikt and the serialization libs. The JSON dumps
 // (`ghistabs.diagnose.Dumps`) live here for the same reason; the tests read them off the cli output.
-val cli = sourceSets.create("cli")
+val cli = sourceSets.maybeCreate("cli")
 configurations["cliImplementation"].extendsFrom(configurations["api"], configurations["implementation"])
 
 // Friend the cli compilation to main so it sees main's `internal` API (Harvester.harvest etc.) —
@@ -183,11 +182,7 @@ val cliJar = tasks.register<Jar>("cliJar") {
 
 registerCliLauncher(cli, cliJar.flatMap { it.archiveFile }, cliJvmArgs)
 
-registerInstallExtension(
-    zip = (tasks.named("buildExtension").get() as Zip).archiveFile,
-    distroPrefix = project.extra["DISTRO_PREFIX"].toString(),
-    releaseName = project.extra["RELEASE_NAME"].toString(),
-)
+registerInstallExtension((tasks.named("buildExtension").get() as Zip).archiveFile)
 
 registerExtensionLibs()
 
