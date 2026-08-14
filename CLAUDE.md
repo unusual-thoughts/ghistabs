@@ -46,6 +46,11 @@ Dependency versions live in `gradle/libs.versions.toml` — declare them there, 
 `build.gradle.kts`. `kotlinx-serialization-json` is `compileOnly` for main: JSON dumps belong to the
 `cli` source set and the tests, and the extension must not ship the jar.
 
+Build logic lives in `buildSrc/src/main/kotlin/ghistabs/build/` (fixture matrix, test conventions,
+console reporting, CLI launcher, extension install). `build.gradle.kts` should hold decisions — which
+tasks exist, what they depend on — not mechanism. buildSrc is a separate build, so the root
+`ktlintCheck` doesn't see it: run **`./gradlew -p buildSrc ktlintFormat test`** when you touch it.
+
 Useful flags on `integrationTest`:
 
 - `-Pfixture=unpackfile.exe` — restrict fixture-parameterised probes to one binary (fast cycles).
