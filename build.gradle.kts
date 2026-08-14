@@ -582,12 +582,31 @@ tasks.register("installExtension") {
     }
 }
 
-// copyDependencies is a Copy, not a Sync, and buildExtension.gradle puts `lib/*.jar` back on the `api`
-// configuration — so a dropped dependency lingers there, keeps itself on both classpaths, and keeps
-// shipping in the zip, silently undoing the compileOnly split above. lib/ is gitignored build output.
-tasks.named<Copy>("copyDependencies") {
-    doFirst { delete(fileTree("lib") { include("*.jar") }) }
+// Replaces buildExtension.gradle's copyDependencies, which is a Copy, not a Sync — and since that
+// script also puts `lib/*.jar` back on the `api` configuration, a dropped dependency lingered there,
+// kept itself on both classpaths and kept shipping in the zip. Its exclude spec is also a hard error in
+// Gradle 10 (`Task.project` at execution time), and it ordered only compileJava, so compileKotlin raced
+// an emptied lib/.
+val syncExtensionLibs = tasks.register<Sync>("syncExtensionLibs") {
+    group = "ghidra"
+    description = "Populate lib/ with exactly the dependencies the extension ships"
+    val libDir = layout.projectDirectory.dir("lib").asFile
+    // Subtracting by path because there's no configuration that means "ours": that script's `api`
+    // fileTrees hold both the Ghidra install and lib/ itself, and `implementation` extends `api`.
+    // Prefixes rather than the script's own vals — a provider lambda closing over those captures the
+    // script object, which the configuration cache can't serialize.
+    val skip = listOf(File(ghidraInstallDir), libDir).map { it.canonicalPath + File.separator }
+    from(
+        configurations.named("runtimeClasspath").map { cfg ->
+            cfg.filter { jar -> skip.none { jar.canonicalPath.startsWith(it) } }
+        },
+    )
+    into(libDir)
+    preserve { include("README.txt") } // Ghidra's, not ours
 }
+tasks.named("copyDependencies") { enabled = false }
+tasks.named("compileKotlin") { dependsOn(syncExtensionLibs) }
+tasks.named("buildExtension") { dependsOn(syncExtensionLibs) }
 
 // buildExtension zips the whole projectDir, which here is full of uncommitted research corpora, a git
 // worktree (prout/), IDE dirs and docs. Rather than exclude that pile, whitelist the actual extension
