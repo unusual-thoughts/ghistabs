@@ -22,7 +22,7 @@ data class Definition(val name: String, val params: String, val startLine: Int, 
  * in the next.
  */
 class DeclaratorIndex(text: String, compiledOut: Set<Int> = emptySet()) {
-    private val chars = scannable(text)
+    private val chars = text.stripCommentsAndLiterals()
     private val lineStarts = listOf(0) + chars.indices.filter { chars[it] == '\n' }.map { it + 1 }
 
     /** How many lines the file has — the one non-circular extent an included file can be given (§43). */
@@ -86,8 +86,8 @@ class DeclaratorIndex(text: String, compiledOut: Set<Int> = emptySet()) {
     }
 
     /**
-     * Where the head above a body begins: the previous `;`, `}` or `{`, counted outside parentheses
-     * so `for (i = 0; …)` is one head and not two.
+     * Where the head above a body begins: the previous `;`, `}` or `{`, counted outside parentheses.
+     * (so `for (i = 0; …)` is one head and not two.)
      */
     private fun headStart(open: Int): Int {
         var depth = 0
