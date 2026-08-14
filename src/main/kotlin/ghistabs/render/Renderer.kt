@@ -17,6 +17,7 @@ import ghistabs.materialize.TemplateNameShortener
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
 import ghistabs.runTransaction
+import ghistabs.scan.Definition
 import ghistabs.scan.Preprocessed
 import ghistabs.scan.SourceIndexes
 import java.io.Closeable
@@ -154,7 +155,21 @@ class Renderer(
      * The definition [line] of [source] sits in, read off the real file — null without a root, and
      * null for a file the root did not map or the agreement guard dropped.
      */
-    fun enclosing(source: GhidraSourceFile, line: Int) = localSources[source]?.let { sourceIndexes[it].enclosing(line) }
+    fun enclosing(source: GhidraSourceFile, line: Int) = enclosings.getOrPut(source to line) {
+        localSources[source]?.let { sourceIndexes[it].enclosing(line) }
+    }
+
+    /**
+     * Every stretch the render asked the source to name, and the answer — memoised because each is
+     * asked several times over (the call, the head, the run grouping), and kept because it *is* the
+     * inline half of the [Scorecard]: the question was put by the render, so what it graded is what
+     * the render draws rather than a second traversal's idea of it.
+     */
+    val enclosings = mutableMapOf<Pair<GhidraSourceFile, Int>, Definition?>()
+
+    /** The lines the real source declares [name] on in [source] — null where there is no file to ask. */
+    fun declaredAt(source: GhidraSourceFile, name: String) =
+        localSources[source]?.let { sourceIndexes[it].declarations[name].orEmpty() }
 
     /** How long [source] really is, on the same terms as [enclosing] — null without a usable local file. */
     fun lengthOf(source: GhidraSourceFile) = localSources[source]?.let { sourceIndexes[it].lineCount }
