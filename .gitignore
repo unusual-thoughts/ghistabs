@@ -1,6 +1,8 @@
-# Build outputs
-build/
-dist/
+# Build outputs. Anchored: an unanchored `build/` also matches source directories whose package
+# happens to be named `build` — it silently swallowed buildSrc/src/main/kotlin/ghistabs/build/.
+/build/
+buildSrc/build/
+/dist/
 
 # Gradle
 .gradle/
