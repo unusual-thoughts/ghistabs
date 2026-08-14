@@ -3,56 +3,75 @@ package ghistabs.build
 import org.gradle.api.Project
 import org.gradle.api.file.RegularFile
 import org.gradle.api.provider.Provider
-import org.gradle.api.tasks.SourceSet
+import org.gradle.api.tasks.JavaExec
+import org.gradle.api.tasks.SourceSetContainer
+import org.gradle.kotlin.dsl.get
+import org.gradle.kotlin.dsl.getByType
+import org.gradle.kotlin.dsl.register
 import java.io.File
 import kotlin.io.path.Path
 import kotlin.io.path.relativeTo
 
+// The CLI has its own source set so neither it nor clikt land on the main runtimeClasspath, which is
+// what the extension zip's lib/ is built from.
+val Project.sourceSets get() = extensions.getByType<SourceSetContainer>()
+val Project.cli get() = sourceSets["cli"]
+
+// No `-Djdk.serialFilterFactory` unlike the test harness: HeadlessGhidraApplicationConfiguration
+// installs Ghidra's factory itself, and setting both throws "filter factory already instantiated".
+val CLI_JVM_ARGS = GHIDRA_JVM_ARGS + listOf("-Xmx2g", "--enable-native-access=ALL-UNNAMED")
+
+// Run the CLI in-process against the `cli` runtime classpath (Ghidra jars + main output + clikt).
+// Pass args with `-Pargs="skeleton <binary> -d out"`.
+fun Project.registerRunCli() = tasks.register<JavaExec>("runCli") {
+    group = "application"
+    description = "Run the headless skeleton/decomp CLI (ghistabs.cli.MainKt)"
+    dependsOn(cli.classesTaskName)
+    classpath = cli.runtimeClasspath
+    mainClass.set("ghistabs.cli.MainKt")
+    jvmArgs(CLI_JVM_ARGS)
+    args = providers.gradleProperty("args").getOrElse("").split(" ").filter { it.isNotEmpty() }
+}
+
 /**
- * Emit a standalone launcher (`build/cli/ghidra-stabs`) that runs the CLI without Gradle. Everything
- * outside Ghidra — our code jar plus the maven deps — is packaged into `build/cli/lib/` (not left in the
- * Gradle cache), referenced relative to the script's own location so `build/cli/` can be moved as a unit.
- * Only the Ghidra jars stay referenced in place (absolute, under `GHIDRA_INSTALL_DIR`), so regenerate
- * after a Ghidra reinstall.
- *
- * `./gradlew buildCli` → run `build/cli/ghidra-stabs skeleton <binary> -d out`.
+ * Standalone launcher at `build/cli/ghidra-stabs`. Everything outside Ghidra is copied into
+ * `build/cli/lib/` and referenced relative to the script, so the directory moves as a unit; the Ghidra
+ * jars are referenced in place, so regenerate after a Ghidra reinstall.
  */
-fun Project.registerCliLauncher(cli: SourceSet, cliJar: Provider<RegularFile>, jvmArgs: List<String>) =
-    tasks.register("buildCli") {
-        group = "application"
-        description = "Generate a standalone launcher script for the CLI at build/cli/ghidra-stabs"
-        val cliDir = layout.buildDirectory.dir("cli")
-        val runtimeClasspath = cli.runtimeClasspath
-        inputs.file(cliJar) // carries the dependency on :cliJar — the provider alone does not
-        outputs.dir(cliDir)
-        doLast {
-            val lib = cliDir.get().dir("lib").asFile
-            lib.deleteRecursively()
-            lib.mkdirs()
-            // Our code + every non-Ghidra runtime jar (clikt tree, kotlin-stdlib, serialization) into lib/;
-            // the Ghidra jars are kept out and referenced in place.
-            cliJar.get().asFile.copyTo(File(lib, "ghidra-stabs-cli.jar"))
-            val (ghidraJars, ours) = runtimeClasspath.files.partition { it.toPath().startsWith(ghidraInstallDir) }
-            ours.filter { it.isFile }.forEach { it.copyTo(File(lib, it.name), overwrite = true) }
+fun Project.registerBuildCli(cliJar: Provider<RegularFile>) = tasks.register("buildCli") {
+    group = "application"
+    description = "Generate a standalone launcher script for the CLI at build/cli/ghidra-stabs"
+    val cliDir = layout.buildDirectory.dir("cli")
+    val runtimeClasspath = cli.runtimeClasspath
+    val ghidraRoot = ghidraInstallDir // resolved here: doLast must not capture the Project
+    inputs.file(cliJar) // carries the dependency on :cliJar — the provider alone does not
+    outputs.dir(cliDir)
+    doLast {
+        val lib = cliDir.get().dir("lib").asFile
+        lib.deleteRecursively()
+        lib.mkdirs()
+        cliJar.get().asFile.copyTo(File(lib, "ghidra-stabs-cli.jar"))
+        val (ghidraJars, ours) = runtimeClasspath.files.partition { it.toPath().startsWith(ghidraRoot) }
+        ours.filter { it.isFile }.forEach { it.copyTo(File(lib, it.name), overwrite = true) }
 
-            val classpath = ghidraJars
-                .map { Path($$"$GHIDRA_INSTALL_DIR").resolve(it.toPath().relativeTo(ghidraInstallDir)) }
-                .joinToString(":")
+        val classpath = ghidraJars
+            .map { Path($$"$GHIDRA_INSTALL_DIR").resolve(it.toPath().relativeTo(ghidraRoot)) }
+            .joinToString(":")
 
-            cliDir.get().file("ghidra-stabs").asFile.apply {
-                writeText(
-                    buildString {
-                        appendLine("#!/bin/sh")
-                        appendLine("# Generated by `gradle buildCli`. lib/ is self-contained.")
-                        appendLine("GHIDRA_INSTALL_DIR=\"$ghidraInstallDir\"")
-                        appendLine($$"dir=$(CDPATH= cd -- \"$(dirname -- \"$0\")\" && pwd)")
-                        appendLine("exec java ${jvmArgs.joinToString(" ")} \\")
-                        appendLine($$"  -cp \"$dir/lib/*:$$classpath\" \\")
-                        appendLine("  ghistabs.cli.MainKt \"$@\"")
-                    },
-                )
-                setExecutable(true)
-                logger.lifecycle("Wrote $this (+ ${lib.listFiles()?.size ?: 0} jars in lib/)")
-            }
+        cliDir.get().file("ghidra-stabs").asFile.apply {
+            writeText(
+                buildString {
+                    appendLine("#!/bin/sh")
+                    appendLine("# Generated by `gradle buildCli`. lib/ is self-contained.")
+                    appendLine("GHIDRA_INSTALL_DIR=\"$ghidraRoot\"")
+                    appendLine($$"dir=$(CDPATH= cd -- \"$(dirname -- \"$0\")\" && pwd)")
+                    appendLine("exec java ${CLI_JVM_ARGS.joinToString(" ")} \\")
+                    appendLine($$"  -cp \"$dir/lib/*:$$classpath\" \\")
+                    appendLine("  ghistabs.cli.MainKt \"$@\"")
+                },
+            )
+            setExecutable(true)
+            logger.lifecycle("Wrote $this (+ ${lib.listFiles()?.size ?: 0} jars in lib/)")
         }
     }
+}

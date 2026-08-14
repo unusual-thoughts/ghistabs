@@ -2,19 +2,13 @@ package ghistabs.build
 
 import com.sun.management.OperatingSystemMXBean
 import org.gradle.api.Project
-import org.gradle.api.plugins.JavaPluginExtension
 import org.gradle.api.tasks.TaskProvider
 import org.gradle.api.tasks.testing.Test
 import org.gradle.kotlin.dsl.get
-import org.gradle.kotlin.dsl.getByType
 import org.gradle.kotlin.dsl.register
 import java.lang.management.ManagementFactory.getOperatingSystemMXBean
 
-/**
- * Flags every Ghidra JVM needs, headless test or CLI — mirrors
- * `~/git/ghidra/gradle/javaTestProject.gradle:initTestJVM` so Ghidra's
- * HeadlessGhidraApplicationConfiguration boots cleanly under JDK 21.
- */
+/** Mirrors ghidra's `javaTestProject.gradle:initTestJVM`. */
 val GHIDRA_JVM_ARGS = listOf(
     "-Djava.awt.headless=true",
     "-Dfile.encoding=UTF8",
@@ -29,16 +23,11 @@ val GHIDRA_JVM_ARGS = listOf(
 private val osMemoryMB get() = (getOperatingSystemMXBean() as OperatingSystemMXBean).totalMemorySize.shr(20).toInt()
 
 /**
- * Shared config for the headless-Ghidra test tasks: classpath, one-Ghidra-per-fork parallelism,
- * `-Pfixture`/`-PregenerateBaselines` wiring, JVM args, and the console summary + archived reports.
- *
- * Ghidra's Application bootstrap is idempotent, so classes in one JVM share one install; we don't fork
- * per class (`forkEvery = 0`) and parallelise across forks instead. Each fork needs a real heap —
- * loading a fixture + autoanalysis overflows the -Xmx512m default and crashes the worker with a
- * NoSuchFileException on the result bin.
+ * Shared config for the headless-Ghidra test tasks. Ghidra's Application bootstrap is idempotent, so
+ * classes share one install per JVM: no fork per class, parallelise across forks instead.
  */
 fun Test.headlessGhidraConfig(reportName: String, fixtures: Fixtures, narrowGeneratedClasses: Boolean = false) {
-    val testSourceSet = project.extensions.getByType<JavaPluginExtension>().sourceSets["test"]
+    val testSourceSet = project.sourceSets["test"]
     val props = project.providers
 
     group = "verification"
@@ -47,29 +36,24 @@ fun Test.headlessGhidraConfig(reportName: String, fixtures: Fixtures, narrowGene
     classpath = testSourceSet.runtimeClasspath
     shouldRunAfter("test")
     forkEvery = 0
-    // Measured knee is 6 on 8 physical cores / 30GB (1016s, vs 1143s at 4 and 1047s at 8): past that,
-    // extra forks buy stalls, not throughput — LLC is 4MB per CCX and a fork's working set doesn't fit.
-    // Capped by RAM (~2.5GB/fork incl. heap) so a smaller CI box scales down instead of swapping.
-    // -PmaxForks overrides; use 1 for perf work, where parallel forks jitter timings.
+    // Measured knee is 6 on 8 physical cores / 30GB; past that forks buy stalls, not throughput.
+    // Capped by RAM (~2.5GB/fork) so a smaller box scales down instead of swapping.
     maxParallelForks = props.gradleProperty("maxForks").orNull?.toIntOrNull()
         ?: minOf(6, Runtime.getRuntime().availableProcessors() / 2, osMemoryMB / 2500).coerceAtLeast(1)
     maxHeapSize = "2g"
-    // -Pfixture=<exact filename>[,…] narrows two ways: the system property still gates the base
-    // class (skips a stray invocation), and the gradle filter drops the generated classes outright
-    // so unselected fixtures never boot a JVM at all.
+    // -Pfixture=<exact filename>[,…]. The property gates the base class; the filter below drops the
+    // generated classes outright, so unselected fixtures never boot a JVM.
     systemProperty("fixtureFilter", props.gradleProperty("fixture").getOrElse(""))
     // -PdisableAnalyzers=<name substring>[,…] turns those analyzers off, for A/B probe runs.
     systemProperty("disableAnalyzers", props.gradleProperty("disableAnalyzers").getOrElse(""))
-    // -PsourceRoot=<dir>[;<dir>] — local checkouts of the sources a fixture was built from, for the
-    // probes that need ground truth. Falls back to the environment so CI and a laptop differ by
-    // configuration rather than by code; absent, those probes skip.
+    // -PsourceRoot=<dir>[;<dir>] — checkouts of the sources a fixture was built from. Absent, the
+    // probes needing ground truth skip.
     systemProperty(
         "sourceRoot",
         props.gradleProperty("sourceRoot").orElse(props.environmentVariable("GHISTABS_SOURCE_ROOT")).getOrElse(""),
     )
-    // -Pfixture and -Pmode intersect, selecting generated classes by name. Only the regression suite
-    // has generated classes: applying this to probeDump would intersect with its `--tests` pattern and
-    // silently select nothing (Gradle ANDs commandLineIncludePatterns with the build-script filter).
+    // Only for the generated suite: Gradle ANDs this with `--tests`, so applying it elsewhere
+    // silently selects nothing.
     if (narrowGeneratedClasses && fixtures.isNarrowed) {
         filter {
             fixtures.selectedClasses.forEach { includeTestsMatching(it) }
@@ -83,8 +67,7 @@ fun Test.headlessGhidraConfig(reportName: String, fixtures: Fixtures, narrowGene
     jvmArgs(
         GHIDRA_JVM_ARGS +
             listOf(
-                // Ghidra installs its own ObjectInputFilter factory; under JDK 21 it must be declared
-                // at JVM startup, else the BuiltinFilterFactory wins the race.
+                // Must be declared at JVM startup, else the BuiltinFilterFactory wins the race.
                 "-Djdk.serialFilterFactory=ghidra.framework.remote.GhidraSerialFilterFactory",
                 "-DSystemUtilities.isTesting=true",
                 "--add-opens=java.desktop/sun.swing=ALL-UNNAMED",
@@ -92,8 +75,8 @@ fun Test.headlessGhidraConfig(reportName: String, fixtures: Fixtures, narrowGene
                 "--add-opens=java.desktop/javax.swing.text=ALL-UNNAMED",
             ),
     )
-    // -Pjfr[=<file>]: profile from JVM start. Read recordings with the jdk.jfr.consumer
-    // RecordingFile API — `jfr print`/`jfr view` crash on Kotlin synthetic frames.
+    // -Pjfr[=<file>]. Read recordings with the jdk.jfr.consumer API — `jfr print` crashes on Kotlin
+    // synthetic frames.
     props.gradleProperty("jfr").orNull?.let { jfr ->
         val buildDir = project.layout.buildDirectory.get().asFile
         val path = jfr.ifBlank { "$buildDir/test-output/jfr/$reportName-%p.jfr" }
@@ -103,10 +86,7 @@ fun Test.headlessGhidraConfig(reportName: String, fixtures: Fixtures, narrowGene
     }
 }
 
-/**
- * Register a headless-Ghidra test task: [name] is both the task and the report directory, [tag] the
- * JUnit tag it runs. [configure] lands last, so it can narrow what [headlessGhidraConfig] set up.
- */
+/** [name] is both the task and its report directory. [configure] lands last, so it can narrow. */
 fun Project.registerHeadlessTest(
     name: String,
     description: String,
