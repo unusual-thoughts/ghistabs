@@ -50,8 +50,10 @@ decides which task runs it. So a class's unit test, integration test, and probe 
 to the SUT — e.g. `ghistabs.importer` holds `DemanglerReplaceCoreTest` (unit) and
 `DemanglerReplaceIntegrationTest` (integration) side by side.
 
-Run **`./gradlew listTests`** to see every test class grouped by tag, with its package, file, and test
-count — the way to find where a test lives.
+Run **`./gradlew listTests`** to see every test class grouped by tag, with its test count — the way to
+find where a test lives. It asks JUnit rather than reading sources, so it sees the generated fixture
+classes and tags inherited from a base class; the price is that it needs the tests compiled first.
+`@ParameterizedTest` classes list as `(parameterized)`, since a dry run never expands them.
 
 - **`StabsImportRegressionTest`** (`ghistabs`) — the core suite. Runs the full import over each fixture
   in both analyzer modes (`CONCURRENT`/`AFTER`) and asserts the materialized output + baseline counters.
