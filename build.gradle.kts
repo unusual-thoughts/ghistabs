@@ -1,10 +1,4 @@
-import ghistabs.build.Fixtures
-import ghistabs.build.GHIDRA_JVM_ARGS
-import ghistabs.build.fixtureTestSource
-import ghistabs.build.headlessGhidraConfig
-import ghistabs.build.registerCliLauncher
-import ghistabs.build.registerInstallExtension
-import ghistabs.build.registerTestInventory
+import ghistabs.build.*
 
 plugins {
     alias(libs.plugins.kotlin.jvm)
@@ -23,31 +17,9 @@ dependencies {
     implementation(libs.kotlinx.serialization.core)
     compileOnly(libs.kotlinx.serialization.json)
     testImplementation(libs.kotlinx.serialization.json)
-}
-
-// Add Ghidra test JARs for integration tests (AbstractGhidraHeadlessIntegrationTest)
-val ghidraInstallDir = System.getenv("GHIDRA_INSTALL_DIR")
-    ?: project.findProperty("GHIDRA_INSTALL_DIR")?.toString() ?: "/opt/ghidra"
-
-dependencies {
-    testImplementation(
-        fileTree(
-            mapOf(
-                "dir" to "$ghidraInstallDir/Ghidra/Features/Base/lib",
-                "include" to "Base.jar",
-            ),
-        ),
-    )
-    // Add Ghidra Test JARs for AbstractGhidraHeadlessIntegrationTest.
-    // Resolves test harness dependencies from standard Ghidra installation paths.
-    testImplementation(
-        fileTree(
-            mapOf(
-                "dir" to "$ghidraInstallDir/Ghidra/Test",
-                "include" to listOf("**/lib/*.jar"),
-            ),
-        ),
-    )
+    // AbstractGhidraHeadlessIntegrationTest and its harness, from the standard install paths.
+    testImplementation(fileTree(ghidraInstallDir.resolve("Ghidra/Features/Base/lib")) { include("Base.jar") })
+    testImplementation(fileTree(ghidraInstallDir.resolve("Ghidra/Test")) { include("**/lib/*.jar") })
 }
 
 repositories {
@@ -92,59 +64,60 @@ tasks.test {
 // schedules whole classes onto forks, so one generated class per fixture × mode is what parallelises.
 // `.md` is the folder's own README, not a fixture. Naming and -P narrowing live in buildSrc's
 // `Fixtures`, which the generator, the task filters and the progress listener all read.
-val fixtures = Fixtures(
-    binaries = layout.projectDirectory.dir("src/test/resources/binaries").asFile
-        .listFiles()?.filter { it.isFile && it.extension != "md" }?.map { it.name }?.sorted().orEmpty(),
+val fixtures = Fixtures.scan(
+    dir = layout.projectDirectory.dir("src/test/resources/binaries").asFile,
     fixtureFilter = providers.gradleProperty("fixture").orNull,
     modeFilter = providers.gradleProperty("mode").orNull,
 )
 
-val generateFixtureTests = tasks.register("generateFixtureTests") {
-    description = "Generate one StabsImportRegressionBase subclass per fixture binary"
-    val outDir = layout.buildDirectory.dir("generated/sources/fixtureTests/kotlin")
-    // Listing is an input so adding/removing a binary regenerates; the task is cheap either way.
-    inputs.property("fixtures", fixtures.binaries)
-    outputs.dir(outDir)
-    doLast {
-        val pkgDir = outDir.get().asFile.resolve(Fixtures.GENERATED_PACKAGE.replace('.', '/'))
-        pkgDir.deleteRecursively()
-        pkgDir.mkdirs()
-        fixtures.binaries.forEach { binary ->
-            fixtures.modes.forEach { mode ->
-                pkgDir.resolve("${Fixtures.className(binary, mode)}.kt")
-                    .writeText(fixtureTestSource(binary, mode))
-            }
-        }
-        logger.lifecycle("generateFixtureTests: ${fixtures.binaries.size * fixtures.modes.size} fixture classes")
-    }
-}
+kotlin.sourceSets.test { kotlin.srcDir(registerFixtureTestGenerator(fixtures)) }
 
-kotlin.sourceSets.test { kotlin.srcDir(generateFixtureTests) }
-
-tasks.register<Test>("integrationTest") {
-    description = "Real-binary assertion tests against ADK fixtures (@Tag(\"integration\"))"
-    useJUnitPlatform { includeTags("integration") }
-    headlessGhidraConfig("integrationTest", fixtures, narrowGeneratedClasses = true)
-    finalizedBy(auditWhitelist)
-}
+registerHeadlessTest(
+    "integrationTest",
+    "Real-binary assertion tests against ADK fixtures (@Tag(\"integration\"))",
+    tag = "integration",
+    fixtures,
+    narrowGeneratedClasses = true,
+) { finalizedBy(auditWhitelist) }
 
 // main declares `-json` compileOnly, betting nothing on the analyzer path serializes. Generated code
 // reaches for serializers from class initializers, not just serialize() calls, so losing that bet costs
 // a NoClassDefFoundError in the GUI while every test passes — the kotlin-stdlib apiVersion bug again.
-// So import a real fixture against exactly what we ship. AoutStabsIntegrationTest drives the full path
-// over committed C and C++ fixtures and writes no dumps.
-tasks.register<Test>("noSerializationTest") {
-    description = "Import a fixture with kotlinx-serialization-json off the classpath (guards `compileOnly`)"
-    useJUnitPlatform { includeTags("integration") }
-    headlessGhidraConfig("noSerializationTest", fixtures)
+// So import a real fixture against exactly what we ship: that test drives the full path over committed
+// C and C++ fixtures and writes no dumps.
+registerHeadlessTest(
+    "noSerializationTest",
+    "Import a fixture with kotlinx-serialization-json off the classpath (guards `compileOnly`)",
+    tag = "integration",
+    fixtures,
+) {
     classpath = classpath.filter { !it.name.startsWith("kotlinx-serialization-json") }
     filter { includeTestsMatching("ghistabs.AoutStabsIntegrationTest") }
 }
 
 // Diagnostic generators (degradation dumps, source skeletons, type probes) — @Tag("probe"), split
 // out of `integrationTest` so they don't run in CI. Run on demand, narrow with -Pfixture=<name>.
-// Corpus-level audits (@Tag("audit")) read the per-fixture dumps integrationTest produces, so they
-// must run after it — as ordinary integration classes they raced their own inputs and skipped.
+registerHeadlessTest(
+    "probeDump",
+    "Run @Tag(\"probe\") diagnostic dumps (not part of integrationTest)",
+    tag = "probe",
+    fixtures,
+)
+
+// One fixture × one analyzer setting per invocation — a full load+autoanalysis each — writing a roster
+// per setting; `diff`ing the two is the with/without comparison. Its own task because `integrationTest`
+// narrows generated classes and Gradle ANDs that with `--tests`, which would select nothing at all and
+// still report SUCCESS.
+registerHeadlessTest(
+    "noReturnTest",
+    "Non-returning roster for one fixture (-Pfixture=<file>; add -PdisableAnalyzers=reachability for before)",
+    tag = "integration",
+    fixtures,
+) { filter { includeTestsMatching("ghistabs.NoReturnFixtureIntegrationTest") } }
+
+// Corpus-level audits (@Tag("audit")) read the per-fixture dumps integrationTest produces, so they must
+// run after it — as ordinary integration classes they raced their own inputs and skipped. No headless
+// config: they read dumps off disk rather than booting Ghidra.
 val auditWhitelist = tasks.register<Test>("auditWhitelist") {
     description = "Corpus-level audits over the dumps integrationTest wrote"
     useJUnitPlatform { includeTags("audit") }
@@ -154,30 +127,12 @@ val auditWhitelist = tasks.register<Test>("auditWhitelist") {
     testLogging { events("passed", "skipped", "failed") }
 }
 
-tasks.register<Test>("probeDump") {
-    description = "Run @Tag(\"probe\") diagnostic dumps (not part of integrationTest)"
-    useJUnitPlatform { includeTags("probe") }
-    headlessGhidraConfig("probeDump", fixtures)
-}
-
-// One fixture × one analyzer setting per invocation — a full load+autoanalysis each — writing a roster
-// per setting; `diff`ing the two is the with/without comparison. Its own task because `integrationTest`
-// narrows generated classes and Gradle ANDs that with `--tests`, which would select nothing at all and
-// still report SUCCESS.
-tasks.register<Test>("noReturnTest") {
-    description =
-        "Non-returning roster for one fixture (-Pfixture=<file>; add -PdisableAnalyzers=reachability for before)"
-    useJUnitPlatform { includeTags("integration") }
-    headlessGhidraConfig("noReturnTest", fixtures)
-    filter { includeTestsMatching("ghistabs.NoReturnFixtureIntegrationTest") }
-}
-
 // List every test class grouped by its tag (unit / integration / probe) with its package + file, so
 // tests are discoverable even though integration/probe tests are co-located in their SUT's package
 // rather than a dedicated folder. Source scan — no compile/boot needed.
 registerTestInventory(layout.projectDirectory.dir("src/test/kotlin").asFile)
 
-apply(from = File(ghidraInstallDir).resolve("support/buildExtension.gradle"))
+apply(from = ghidraInstallDir.toFile().resolve("support/buildExtension.gradle"))
 
 // The freestanding headless CLI lives in its own `cli` source set so neither it nor its clikt
 // dependency land on the main runtimeClasspath — buildExtension's copyDependencies would otherwise
@@ -226,7 +181,7 @@ val cliJar = tasks.register<Jar>("cliJar") {
     from(sourceSets["main"].output, sourceSets["cli"].output)
 }
 
-registerCliLauncher(cli, cliJar.flatMap { it.archiveFile }, ghidraInstallDir, cliJvmArgs)
+registerCliLauncher(cli, cliJar.flatMap { it.archiveFile }, cliJvmArgs)
 
 registerInstallExtension(
     zip = (tasks.named("buildExtension").get() as Zip).archiveFile,
@@ -234,31 +189,7 @@ registerInstallExtension(
     releaseName = project.extra["RELEASE_NAME"].toString(),
 )
 
-// Replaces buildExtension.gradle's copyDependencies, which is a Copy, not a Sync — and since that
-// script also puts `lib/*.jar` back on the `api` configuration, a dropped dependency lingered there,
-// kept itself on both classpaths and kept shipping in the zip. Its exclude spec is also a hard error in
-// Gradle 10 (`Task.project` at execution time), and it ordered only compileJava, so compileKotlin raced
-// an emptied lib/.
-val syncExtensionLibs = tasks.register<Sync>("syncExtensionLibs") {
-    group = "ghidra"
-    description = "Populate lib/ with exactly the dependencies the extension ships"
-    val libDir = layout.projectDirectory.dir("lib").asFile
-    // Subtracting by path because there's no configuration that means "ours": that script's `api`
-    // fileTrees hold both the Ghidra install and lib/ itself, and `implementation` extends `api`.
-    // Prefixes rather than the script's own vals — a provider lambda closing over those captures the
-    // script object, which the configuration cache can't serialize.
-    val skip = listOf(File(ghidraInstallDir), libDir).map { it.canonicalPath + File.separator }
-    from(
-        configurations.named("runtimeClasspath").map { cfg ->
-            cfg.filter { jar -> skip.none { jar.canonicalPath.startsWith(it) } }
-        },
-    )
-    into(libDir)
-    preserve { include("README.txt") } // Ghidra's, not ours
-}
-tasks.named("copyDependencies") { enabled = false }
-tasks.named("compileKotlin") { dependsOn(syncExtensionLibs) }
-tasks.named("buildExtension") { dependsOn(syncExtensionLibs) }
+registerExtensionLibs()
 
 // buildExtension zips the whole projectDir, which here is full of uncommitted research corpora, a git
 // worktree (prout/), IDE dirs and docs. Rather than exclude that pile, whitelist the actual extension

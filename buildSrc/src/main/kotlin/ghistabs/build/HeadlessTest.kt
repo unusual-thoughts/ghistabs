@@ -1,10 +1,13 @@
 package ghistabs.build
 
 import com.sun.management.OperatingSystemMXBean
+import org.gradle.api.Project
 import org.gradle.api.plugins.JavaPluginExtension
+import org.gradle.api.tasks.TaskProvider
 import org.gradle.api.tasks.testing.Test
 import org.gradle.kotlin.dsl.get
 import org.gradle.kotlin.dsl.getByType
+import org.gradle.kotlin.dsl.register
 import java.lang.management.ManagementFactory.getOperatingSystemMXBean
 
 /**
@@ -98,4 +101,22 @@ fun Test.headlessGhidraConfig(reportName: String, fixtures: Fixtures, narrowGene
         java.io.File(path).parentFile?.mkdirs()
         jvmArgs("-XX:StartFlightRecording=settings=profile,dumponexit=true,maxsize=500m,filename=$path")
     }
+}
+
+/**
+ * Register a headless-Ghidra test task: [name] is both the task and the report directory, [tag] the
+ * JUnit tag it runs. [configure] lands last, so it can narrow what [headlessGhidraConfig] set up.
+ */
+fun Project.registerHeadlessTest(
+    name: String,
+    description: String,
+    tag: String,
+    fixtures: Fixtures,
+    narrowGeneratedClasses: Boolean = false,
+    configure: Test.() -> Unit = {},
+): TaskProvider<Test> = tasks.register<Test>(name) {
+    this.description = description
+    useJUnitPlatform { includeTags(tag) }
+    headlessGhidraConfig(name, fixtures, narrowGeneratedClasses)
+    configure()
 }
