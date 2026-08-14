@@ -1,5 +1,6 @@
 package ghistabs.build
 
+import ghistabs.build.Fixtures.Companion.fixtures
 import org.gradle.api.Project
 
 /** One generated `StabsImportRegressionBase` subclass. Separate from the task so it can be tested. */
@@ -20,7 +21,7 @@ fun fixtureTestSource(binary: String, mode: String): String {
 }
 
 /** One [fixtureTestSource] per binary × mode. */
-fun Project.registerFixtureTestGenerator(fixtures: Fixtures) = tasks.register("generateFixtureTests") {
+fun Project.registerGenerateFixtureTest() = tasks.register("generateFixtureTests") {
     description = "Generate one StabsImportRegressionBase subclass per fixture binary"
     val outDir = layout.buildDirectory.dir("generated/sources/fixtureTests/kotlin")
     // An input, so adding/removing a binary regenerates.

@@ -1,5 +1,7 @@
 package ghistabs.build
 
+import ghistabs.build.Fixtures.Companion.fixtures
+import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.tasks.testing.Test
 import org.gradle.api.tasks.testing.TestDescriptor
 import org.gradle.api.tasks.testing.TestListener
@@ -22,7 +24,7 @@ private val COARSE_STAMP = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")
  *
  * [fixtures] drives the progress + ETA line; inert for tasks with no generated classes.
  */
-fun Test.reportWithConsoleSummary(reportName: String, fixtures: Fixtures) {
+fun Test.reportWithConsoleSummary(reportName: String) {
     val stamp = LocalDateTime.now().format(STAMP) + "-${ProcessHandle.current().pid()}"
     val buildDir = project.layout.buildDirectory
     binaryResultsDirectory.set(buildDir.dir("test-results/$reportName/$stamp/binary"))
@@ -40,7 +42,7 @@ fun Test.reportWithConsoleSummary(reportName: String, fixtures: Fixtures) {
     outputs.upToDateWhen { false }
 
     archivePreviousResults(buildDir.dir("test-output/results").get().asFile, stamp)
-    liveProgress(reportName, fixtures, reports.html.outputLocation)
+    liveProgress(reportName, reports.html.outputLocation)
 }
 
 /**
@@ -64,7 +66,7 @@ private fun Test.archivePreviousResults(resultsDir: java.io.File, stamp: String)
 }
 
 /** ETA from observed throughput, so it self-adjusts to the fork count. */
-private fun Test.liveProgress(reportName: String, fixtures: Fixtures, htmlDir: org.gradle.api.file.DirectoryProperty) {
+private fun Test.liveProgress(reportName: String, htmlDir: DirectoryProperty) {
     val failures = mutableListOf<String>()
     val runStart = AtomicLong(0L)
     val done = AtomicInteger(0)
@@ -82,6 +84,7 @@ private fun Test.liveProgress(reportName: String, fixtures: Fixtures, htmlDir: o
         }
 
         override fun afterSuite(suite: TestDescriptor, result: TestResult) {
+            val fixtures = project.fixtures
             // Matching known FQNs excludes root/fork suites.
             val known = suite.className?.let { fixtures.labels[it] }
             if (known != null) {

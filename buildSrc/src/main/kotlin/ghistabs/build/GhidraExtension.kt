@@ -3,33 +3,43 @@ package ghistabs.build
 import org.gradle.api.GradleException
 import org.gradle.api.Project
 import org.gradle.api.file.RegularFile
+import org.gradle.api.plugins.ExtraPropertiesExtension
 import org.gradle.api.provider.Provider
 import org.gradle.api.tasks.Sync
 import org.gradle.internal.extensions.core.extra
 import org.gradle.kotlin.dsl.register
 import java.io.File
-import java.nio.file.Path
 import java.util.zip.ZipFile
 import kotlin.io.path.Path
 import kotlin.io.path.createDirectories
 import kotlin.io.path.exists
 
+fun Project.envOrProp(key: String) = System.getenv(key)?.ifBlank { null }
+    ?: findProperty(key)?.toString()?.ifBlank { null }
+
+@Suppress("UNCHECKED_CAST")
+fun <V> ExtraPropertiesExtension.getOrCreate(key: String, create: () -> V): V = when {
+    has(key) -> get(key) as V
+    else -> create().also { set(key, it) }
+}
+
 /** `GHIDRA_INSTALL_DIR`, else `-PGHIDRA_INSTALL_DIR`, else the usual place. */
-val Project.ghidraInstallDir get() = Path(
-    System.getenv("GHIDRA_INSTALL_DIR")?.ifBlank { null }
-        ?: findProperty("GHIDRA_INSTALL_DIR")?.toString()?.ifBlank { null }
-        ?: "/opt/ghidra",
-)
+val Project.ghidraInstallDir get() = extra.getOrCreate("GHIDRA_INSTALL_DIR") {
+    Path(envOrProp("GHIDRA_INSTALL_DIR") ?: "/opt/ghidra")
+}
 
 /** Ghidra's user dir, named `<distroPrefix>_<releaseName>` e.g. `ghidra_12.1.2_DEV`. */
-private fun ghidraUserDir(distroPrefix: String, releaseName: String): Path {
-    System.getenv("GHIDRA_USER_DIR")?.let { return Path(it) }
-    val dirName = "${distroPrefix}_$releaseName" // e.g. ghidra_12.0.4_DEV
-    val home = System.getProperty("user.home")
-    val modern = Path("$home/.config/ghidra/$dirName")
-    val legacy = Path("$home/.ghidra/.$dirName")
-    return listOf(modern, legacy).firstOrNull { it.exists() }
-        ?: throw GradleException("No Ghidra user dir found at $modern or $legacy. Set GHIDRA_USER_DIR to override.")
+val Project.ghidraUserDir get() = extra.getOrCreate("GHIDRA_USER_DIR") {
+    envOrProp("GHIDRA_USER_DIR")?.let { Path(it) } ?: run {
+        val distroPrefix = extra["DISTRO_PREFIX"].toString()
+        val releaseName = extra["RELEASE_NAME"].toString()
+        val dirName = "${distroPrefix}_$releaseName" // e.g. ghidra_12.0.4_DEV
+        val home = System.getProperty("user.home")
+        val modern = Path("$home/.config/ghidra/$dirName")
+        val legacy = Path("$home/.ghidra/.$dirName")
+        listOf(modern, legacy).firstOrNull { it.exists() }
+            ?: throw GradleException("No Ghidra user dir found at $modern or $legacy. Set GHIDRA_USER_DIR to override.")
+    }
 }
 
 /**
@@ -41,18 +51,16 @@ fun Project.registerInstallExtension(zip: Provider<RegularFile>) = tasks.registe
     description = "Build and install the extension into the Ghidra user extensions directory"
     dependsOn("buildExtension")
     val projectName = name
-    val distroPrefix = extra["DISTRO_PREFIX"].toString()
-    val releaseName = extra["RELEASE_NAME"].toString()
+    val extensionDir = ghidraUserDir.resolve("Extensions")
     doLast {
-        val targetDir = ghidraUserDir(distroPrefix, releaseName).resolve("Extensions").createDirectories().toFile()
+        val targetDir = extensionDir.createDirectories().toFile()
         targetDir.resolve(projectName).takeIf { it.exists() }?.let {
             it.deleteRecursively()
             logger.lifecycle("Removed previous install: $it")
         }
-        zip.get().asFile.let { archive ->
-            archive.unzipInto(targetDir)
-            logger.lifecycle("Installed ${archive.name} → $targetDir")
-        }
+        val archive = zip.get().asFile
+        archive.unzipInto(targetDir)
+        logger.lifecycle("Installed ${archive.name} → $targetDir")
         logger.lifecycle("Restart Ghidra to load the new build.")
     }
 }

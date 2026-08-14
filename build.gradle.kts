@@ -46,23 +46,14 @@ tasks.test {
     systemProperty("libstdcxxInclude", providers.gradleProperty("libstdcxxInclude").getOrElse(""))
 }
 
-// Gradle schedules whole classes onto forks, so one generated class per fixture × mode is what
-// parallelises the corpus run. filtered by -Pfixture (comma separated) and -Pmode
-val fixtures = Fixtures.scan(
-    dir = layout.projectDirectory.dir("src/test/resources/binaries").asFile,
-    fixtureFilter = providers.gradleProperty("fixture").orNull,
-    modeFilter = providers.gradleProperty("mode").orNull,
-)
-
 // Generate fixture integration tests code, and add it to the test sourceSet
-kotlin.sourceSets.test { kotlin.srcDir(registerFixtureTestGenerator(fixtures)) }
+kotlin.sourceSets.test { kotlin.srcDir(registerGenerateFixtureTest()) }
 
 // Run the integration tests per binary × mode
 registerHeadlessTest(
     "integrationTest",
     "Real-binary assertion tests against binary fixtures (@Tag(\"integration\"))",
     tag = "integration",
-    fixtures,
     narrowGeneratedClasses = true,
 ) { finalizedBy(auditWhitelist) }
 
@@ -72,7 +63,6 @@ registerHeadlessTest(
     "noSerializationTest",
     "Import a fixture with kotlinx-serialization-json off the classpath (guards `compileOnly`)",
     tag = "integration",
-    fixtures,
 ) {
     classpath = classpath.filter { !it.name.startsWith("kotlinx-serialization-json") }
     filter { includeTestsMatching("ghistabs.AoutStabsIntegrationTest") }
@@ -83,7 +73,6 @@ registerHeadlessTest(
     "probeDump",
     "Run @Tag(\"probe\") diagnostic dumps (not part of integrationTest)",
     tag = "probe",
-    fixtures,
 )
 
 // Own task, not `integrationTest --tests`: Gradle ANDs that with the generated-class filter, which
@@ -92,7 +81,6 @@ registerHeadlessTest(
     "noReturnTest",
     "Non-returning roster for one fixture (-Pfixture=<file>; add -PdisableAnalyzers=reachability for before)",
     tag = "integration",
-    fixtures,
 ) { filter { includeTestsMatching("ghistabs.NoReturnFixtureIntegrationTest") } }
 
 // Reads the dumps integrationTest wrote, so it must run after it — and needs no headless config.
