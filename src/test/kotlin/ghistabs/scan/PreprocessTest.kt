@@ -64,6 +64,28 @@ class PreprocessTest {
         assertNull(indexes[hdr].enclosing(9), "the arm that did not compile defines nothing")
     }
 
+    /** What the render asks for: every mapped unit, one answer per header, no unit trusted alone. */
+    @Test
+    fun `dropped lines merge across the units that reached a header`() {
+        val hdr = write("inc/hdr.h", header)
+        val plain = write("plain.cpp", """#include "hdr.h"${'\n'}int a() { return sized(1); }""")
+        val reentrant = write(
+            "reentrant.cpp",
+            """#define _REENTRANT${'\n'}#include "hdr.h"${'\n'}int b() { return sized(1); }""",
+        )
+
+        val dropped = Preprocessed.lines(
+            listOf(plain, reentrant),
+            listOf(root.resolve("inc").toFile()),
+            CapturingSink(),
+        )
+
+        // L9 is the arm `plain.cpp` dropped, L11 the one `reentrant.cpp` dropped. Neither survives:
+        // a header compiled both ways has no arm the scan can believe, and leaving both is the
+        // unbalanced brace this is here to prevent.
+        assertEquals(setOf(9, 11), dropped(hdr))
+    }
+
     /** A source tarball has no generated `bits/c++config.h`; that must degrade, not throw. */
     @Test
     fun `an incomplete include environment is reported once and gives no answer`() {

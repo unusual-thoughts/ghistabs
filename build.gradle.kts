@@ -89,6 +89,9 @@ tasks.test {
     testLogging {
         events("passed", "skipped", "failed")
     }
+    // -PlibstdcxxInclude=<dir> points the scan tests at a libstdc++ checkout other than the default
+    // (~/git/gcc/libstdc++-v3/include). Absent, those tests skip: the corpus is not vendored.
+    systemProperty("libstdcxxInclude", providers.gradleProperty("libstdcxxInclude").getOrElse(""))
 }
 
 /** Total RAM in MB */
