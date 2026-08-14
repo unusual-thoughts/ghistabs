@@ -1,13 +1,6 @@
-import com.sun.management.OperatingSystemMXBean
 import ghistabs.build.Fixtures
-import ghistabs.build.reportWithConsoleSummary
-import java.lang.management.ManagementFactory.getOperatingSystemMXBean
-import java.time.Instant
-import java.time.LocalDateTime
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.atomic.AtomicLong
+import ghistabs.build.GHIDRA_JVM_ARGS
+import ghistabs.build.headlessGhidraConfig
 import java.util.zip.ZipFile
 import kotlin.io.path.Path
 import kotlin.io.path.relativeTo
@@ -99,20 +92,6 @@ tasks.test {
     systemProperty("libstdcxxInclude", providers.gradleProperty("libstdcxxInclude").getOrElse(""))
 }
 
-/** Total RAM in MB */
-val osMemoryMB get() = (getOperatingSystemMXBean() as OperatingSystemMXBean).totalMemorySize.shr(20).toInt()
-
-// Flags every Ghidra JVM needs (mirrors ghidra's javaTestProject.gradle:initTestJVM).
-val ghidraJvmArgs = listOf(
-    "-Djava.awt.headless=true",
-    "-Dfile.encoding=UTF8",
-    "-Duser.country=US",
-    "-Duser.language=en",
-    "--add-opens=java.base/java.util.concurrent=ALL-UNNAMED",
-    "--add-opens=java.desktop/sun.awt=ALL-UNNAMED",
-    "--add-opens=java.desktop/java.awt=ALL-UNNAMED",
-)
-
 // ── Fixture corpus ───────────────────────────────────────────────────────────────────────────
 // The binaries directory is the corpus (IntegrationFixtures.ALL lists it at runtime); gradle
 // schedules whole classes onto forks, so one generated class per fixture × mode is what parallelises.
@@ -160,81 +139,10 @@ val generateFixtureTests = tasks.register("generateFixtureTests") {
 
 kotlin.sourceSets.test { kotlin.srcDir(generateFixtureTests) }
 
-// Shared config for the headless-Ghidra test tasks: classpath, one-Ghidra-per-fork parallelism,
-// -Pfixture/-PregenerateBaselines wiring, JVM args, and the console summary + archived reports.
-// JVM args mirror ~/git/ghidra/gradle/javaTestProject.gradle:initTestJVM so Ghidra's
-// HeadlessGhidraApplicationConfiguration boots cleanly under JDK 21. Ghidra's Application bootstrap
-// is idempotent, so classes in one JVM share one install; we don't fork per class (forkEvery=0) and
-// parallelise across forks instead. Each fork needs a real heap — loading a fixture + autoanalysis
-// overflows the -Xmx512m default and crashes the worker with a NoSuchFileException on the result bin.
-fun Test.headlessGhidraConfig(reportName: String, narrowGeneratedClasses: Boolean = false) {
-    group = "verification"
-    reportWithConsoleSummary(reportName, fixtures)
-    testClassesDirs = sourceSets["test"].output.classesDirs
-    classpath = sourceSets["test"].runtimeClasspath
-    shouldRunAfter("test")
-    forkEvery = 0
-    // Measured knee is 6 on 8 physical cores / 30GB (1016s, vs 1143s at 4 and 1047s at 8): past that,
-    // extra forks buy stalls, not throughput — LLC is 4MB per CCX and a fork's working set doesn't fit.
-    // Capped by RAM (~2.5GB/fork incl. heap) so a smaller CI box scales down instead of swapping.
-    // -PmaxForks overrides; use 1 for perf work, where parallel forks jitter timings.
-    maxParallelForks = providers.gradleProperty("maxForks").orNull?.toIntOrNull()
-        ?: minOf(6, Runtime.getRuntime().availableProcessors() / 2, osMemoryMB / 2500).coerceAtLeast(1)
-    maxHeapSize = "2g"
-    // -Pfixture=<exact filename>[,…] narrows two ways: the system property still gates the base
-    // class (skips a stray invocation), and the gradle filter drops the generated classes outright
-    // so unselected fixtures never boot a JVM at all.
-    systemProperty("fixtureFilter", providers.gradleProperty("fixture").getOrElse(""))
-    // -PdisableAnalyzers=<name substring>[,…] turns those analyzers off, for A/B probe runs.
-    systemProperty("disableAnalyzers", providers.gradleProperty("disableAnalyzers").getOrElse(""))
-    // -PsourceRoot=<dir>[;<dir>] — local checkouts of the sources a fixture was built from, for the
-    // probes that need ground truth. Falls back to the environment so CI and a laptop differ by
-    // configuration rather than by code; absent, those probes skip.
-    systemProperty(
-        "sourceRoot",
-        providers.gradleProperty("sourceRoot")
-            .orElse(providers.environmentVariable("GHISTABS_SOURCE_ROOT"))
-            .getOrElse(""),
-    )
-    // -Pfixture and -Pmode intersect, selecting generated classes by name. Only the regression suite
-    // has generated classes: applying this to probeDump would intersect with its `--tests` pattern and
-    // silently select nothing (Gradle ANDs commandLineIncludePatterns with the build-script filter).
-    if (narrowGeneratedClasses && fixtures.isNarrowed) {
-        filter {
-            fixtures.selectedClasses.forEach { includeTestsMatching(it) }
-            isFailOnNoMatchingTests = false
-        }
-    }
-    // -Pmode=CONCURRENT|AFTER narrows the analyzer execution mode similarly (blank = both).
-    systemProperty("modeFilter", providers.gradleProperty("mode").getOrElse(""))
-    // -PregenerateBaselines=true rewrites baseline JSONs from observed counters instead of asserting.
-    systemProperty("regenerateBaselines", providers.gradleProperty("regenerateBaselines").getOrElse(""))
-    jvmArgs(
-        ghidraJvmArgs +
-            listOf(
-                // Ghidra installs its own ObjectInputFilter factory; under JDK 21 it must be declared
-                // at JVM startup, else the BuiltinFilterFactory wins the race.
-                "-Djdk.serialFilterFactory=ghidra.framework.remote.GhidraSerialFilterFactory",
-                "-DSystemUtilities.isTesting=true",
-                "--add-opens=java.desktop/sun.swing=ALL-UNNAMED",
-                "--add-opens=java.desktop/javax.swing=ALL-UNNAMED",
-                "--add-opens=java.desktop/javax.swing.text=ALL-UNNAMED",
-            ),
-    )
-    // -Pjfr[=<file>]: profile from JVM start. Read recordings with the jdk.jfr.consumer
-    // RecordingFile API — `jfr print`/`jfr view` crash on Kotlin synthetic frames.
-    providers.gradleProperty("jfr").orNull?.let { jfr ->
-        val path = jfr.ifBlank { "${layout.buildDirectory.get().asFile}/test-output/jfr/$reportName-%p.jfr" }
-        // JFR aborts JVM startup rather than create a missing directory.
-        file(path).parentFile?.mkdirs()
-        jvmArgs("-XX:StartFlightRecording=settings=profile,dumponexit=true,maxsize=500m,filename=$path")
-    }
-}
-
 tasks.register<Test>("integrationTest") {
     description = "Real-binary assertion tests against binary fixtures (@Tag(\"integration\"))"
     useJUnitPlatform { includeTags("integration") }
-    headlessGhidraConfig("integrationTest", narrowGeneratedClasses = true)
+    headlessGhidraConfig("integrationTest", fixtures, narrowGeneratedClasses = true)
     finalizedBy(auditWhitelist)
 }
 
@@ -246,7 +154,7 @@ tasks.register<Test>("integrationTest") {
 tasks.register<Test>("noSerializationTest") {
     description = "Import a fixture with kotlinx-serialization-json off the classpath (guards `compileOnly`)"
     useJUnitPlatform { includeTags("integration") }
-    headlessGhidraConfig("noSerializationTest")
+    headlessGhidraConfig("noSerializationTest", fixtures)
     classpath = classpath.filter { !it.name.startsWith("kotlinx-serialization-json") }
     filter { includeTestsMatching("ghistabs.AoutStabsIntegrationTest") }
 }
@@ -267,7 +175,7 @@ val auditWhitelist = tasks.register<Test>("auditWhitelist") {
 tasks.register<Test>("probeDump") {
     description = "Run @Tag(\"probe\") diagnostic dumps (not part of integrationTest)"
     useJUnitPlatform { includeTags("probe") }
-    headlessGhidraConfig("probeDump")
+    headlessGhidraConfig("probeDump", fixtures)
 }
 
 // One fixture × one analyzer setting per invocation — a full load+autoanalysis each — writing a roster
@@ -278,7 +186,7 @@ tasks.register<Test>("noReturnTest") {
     description =
         "Non-returning roster for one fixture (-Pfixture=<file>; add -PdisableAnalyzers=reachability for before)"
     useJUnitPlatform { includeTags("integration") }
-    headlessGhidraConfig("noReturnTest")
+    headlessGhidraConfig("noReturnTest", fixtures)
     filter { includeTestsMatching("ghistabs.NoReturnFixtureIntegrationTest") }
 }
 
@@ -340,7 +248,7 @@ dependencies {
 // we DON'T set `-Djdk.serialFilterFactory`: HeadlessGhidraApplicationConfiguration installs the Ghidra
 // factory programmatically (the test harness only sets the -D because its own serialization runs before
 // init), and setting both throws "filter factory already instantiated".
-val cliJvmArgs = ghidraJvmArgs + listOf("-Xmx2g", "--enable-native-access=ALL-UNNAMED")
+val cliJvmArgs = GHIDRA_JVM_ARGS + listOf("-Xmx2g", "--enable-native-access=ALL-UNNAMED")
 
 // Run the CLI in-process against the `cli` runtime classpath (Ghidra jars + main output + clikt).
 // Pass args with `-Pargs="skeleton <binary> -d out"`.
