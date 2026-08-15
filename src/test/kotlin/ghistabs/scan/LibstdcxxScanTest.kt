@@ -59,6 +59,6 @@ class LibstdcxxScanTest {
     }
 
     private companion object {
-        val DEFAULT = File(System.getProperty("user.home"), "git/gcc/libstdc++-v3/include").path
+        val DEFAULT: String = File(System.getProperty("user.home"), "git/gcc/libstdc++-v3/include").path
     }
 }

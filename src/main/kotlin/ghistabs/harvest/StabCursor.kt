@@ -1,6 +1,5 @@
 package ghistabs.harvest
 
-import ghidra.program.model.address.Address
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.importer.AddressResolver
 import ghistabs.parse.*
@@ -42,16 +41,15 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
     /**
      * A function being accumulated: its record-order params and its block tree
      */
-    private class FunctionScope(
-        val name: String,
-        val addr: Address,
-        val decl: SymbolDecl.Function<GlobalTypeId>,
-        val cu: SourceFile.CUSource,
-    ) {
+    private inner class FunctionScope(func: FunctionSymbol, val cu: SourceFile.CUSource) {
         val blocks = BlockTreeBuilder()
-        val params = mutableListOf<Symbol>()
+        val params = mutableListOf<ParamSymbol>()
         val lineEntries = mutableListOf<LineEntry>()
         var sizeBytes: ULong? = null
+        val decl = func.body
+        val name = func.body.name.substringBefore(':')
+        val addr = resolver.forSymbol(func)!!
+        val declLine = func.declLine.takeIf { it != 0 }
 
         fun toHarvested(): Func {
             // The function's own file: its lowest-address line entry, matching TypeResolver.functionSource.
@@ -59,7 +57,7 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
             val (locals, attributedBlocks) = blocks.finish(lineEntries, source)
             val attributedParams = params.map { it.copy(sourceFile = source) }
             return Func(
-                name, addr, decl, cu, locals, attributedParams, attributedBlocks, lineEntries, sizeBytes,
+                name, addr, decl, cu, locals, attributedParams, attributedBlocks, lineEntries, sizeBytes, declLine,
             )
         }
     }
@@ -159,26 +157,24 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
      */
     fun lineEntry(rec: StabRecord) {
         val source = lineSource ?: return
-        val entry = LineEntry(rec.desc, resolver.stabAddress(rec.value, currentScope?.addr), source)
+        val entry = LineEntry(rec.desc, resolver.stabAddress(rec.value, currentScope?.addr, this), source)
         lineEntriesByFile.getOrPut(source) { mutableListOf() } += entry
         currentScope?.lineEntries?.add(entry)
     }
 
-    /** Named N_FUN: `name` is `mangled:descriptor`, `value` the entry address. */
-    fun openFunction(rec: StabRecord, decl: SymbolDecl.Function<GlobalTypeId>) {
+    /** Named N_FUN: `name` is `mangled:descriptor`, `value` entry address, `desc` declaration line (under -gstabs+) */
+    fun openFunction(func: FunctionSymbol) {
         currentScope?.finaliseGcc12FunctionSize()
-        val name = rec.name.substringBefore(':')
-        val addr = resolver.buildAddress(rec.value)
-        currentScope = FunctionScope(name, addr, decl, cu).also { scopes += it }
+        currentScope = FunctionScope(func, cu).also { scopes += it }
     }
 
     /** N_PSYM / register-param N_RSYM: the function's own, so no block resolution needed. */
-    fun param(record: Symbol) {
+    fun param(record: ParamSymbol) {
         currentScope?.params?.add(record)
     }
 
     /** N_LSYM / N_RSYM local: held by the block builder until a bracket claims it. */
-    fun local(record: Symbol) {
+    fun local(record: LocalSymbol) {
         currentScope?.blocks?.local(record)
     }
 
@@ -190,7 +186,7 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
 
     fun bracket(rec: StabRecord) {
         currentScope?.apply {
-            val addr = resolver.stabAddress(rec.value, addr)
+            val addr = resolver.stabAddress(rec.value, addr, this@StabCursor)
             when (rec.type) {
                 // open a lexical scope, which owns the locals emitted just before it.
                 StabType.N_LBRAC -> blocks.open(addr)

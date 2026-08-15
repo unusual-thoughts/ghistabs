@@ -154,7 +154,7 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
     // file. Render never sees these — only the folded per-source views in the facade below. ──
     val sourceFolds: Map<GhidraSourceFile, GhidraSourceFile> by lazy {
         foldSourcePaths(
-            harvest.lineEntries.keys + harvest.symbolsByCu.keys +
+            harvest.lineEntries.keys + harvest.staticsByCu.keys +
                 typeAsts.values.flatMap { listOfNotNull(it.declSourceFile, it.id.source.identity) },
         )
     }
@@ -170,7 +170,7 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
         (if (foldSources) sourceFolds[source] ?: source else source).let { cuDirectories[it] ?: it }
 
     private fun LineEntry.folded() = copy(source = fold(source))
-    private fun Symbol.folded() = copy(sourceFile = sourceFile?.let(::fold))
+    private fun <S : SymbolDecl<GlobalTypeId>> Symbol<S>.folded() = copy(sourceFile = sourceFile?.let(::fold))
 
     // Blocks carry a source too, and it was the one field left raw — so `inlineParams`, which asks
     // whether a block belongs to the file being rendered, compared a raw N_SOL spelling against a
@@ -405,15 +405,13 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
      * It must be in place before anything reads attribution, because the per-source views memoise;
      * assigning after that is a silently-ignored root, so it is refused instead.
      */
-    var declarers: ((name: String, line: Int) -> GhidraSourceFile?)? = null
+    var declarers: ((Type.Decl) -> GhidraSourceFile?)? = null
         set(value) {
             check(!effectiveSources.isInitialized()) { "a source root must be installed before attribution is read" }
             field = value
         }
 
-    private fun declarerOf(type: Type) = type.name?.substringBefore('<')
-        ?.takeIf { type.declLine > 0 }
-        ?.let { declarers?.invoke(it, type.declLine) }
+    private fun declarerOf(type: Type) = type.declKey()?.let { declarers?.invoke(it) }
 
     // Keyed by id, not by Type: Type is a data class holding the whole TypeDecl body, so a Type-keyed
     // map deep-hashes an entire type tree on every lookup — and this is looked up once per type per
@@ -443,7 +441,7 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
         (harvest.functions.map { it.cu } + typeAsts.values.map { it.id.source })
             .filterIsInstance<SourceFile.CUSource>()
             .map { it.identity }
-            .plus(harvest.symbolsByCu.keys)
+            .plus(harvest.staticsByCu.keys)
             .mapTo(mutableSetOf(), ::fold)
     }
 
@@ -466,9 +464,9 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
     }
 
     /** File-scope symbols per source — by CU, except where the symbol itself names a better one. */
-    val symbolsBySource: Map<GhidraSourceFile, List<Symbol>> by lazy {
-        harvest.symbolsByCu.entries
-            .flatMap { (cu, syms) -> syms.map { (typeinfoSource(it) ?: fold(cu)) to it.folded() } }
+    val staticsBySource: Map<GhidraSourceFile, List<StaticSymbol>> by lazy {
+        harvest.staticsByCu.entries
+            .flatMap { (cu, syms) -> syms.map { (it.body.typeinfoSource() ?: fold(cu)) to it.folded() } }
             .groupBy({ it.first }, { it.second })
     }
 
@@ -483,8 +481,8 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
      * sibling `_ZTS` string is not the same case — bouniaf gives one class five different lines
      * across five CUs — so nothing about those is worth trusting but the address.)
      */
-    private fun typeinfoSource(sym: Symbol) = (sym.body as? SymbolDecl.Static)?.name
-        ?.let(Itanium::typeinfoClassOf)
+    private fun SymbolDecl.Static<*>.typeinfoSource() = name
+        .let(Itanium::typeinfoClassOf)
         ?.let { classRenderSourceByName[it] }
 
     /**
@@ -520,7 +518,7 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
             ?: outermostClass()?.let { classSourceByName[it] }?.let(::fold)
     }
 
-    /** Functions per source — the inverted view render needs, matching [linesBySource]/[symbolsBySource]
+    /** Functions per source — the inverted view render needs, matching [linesBySource]/[staticsBySource]
      *  rather than making every caller scan the whole function list once per rendered file. */
     val functionsBySource: Map<GhidraSourceFile, List<Func>> by lazy {
         functions.mapNotNull { f -> f.source()?.let { it to f } }.groupBy({ it.first }, { it.second })
@@ -559,7 +557,7 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
      * fpos.h and a typedef elsewhere, `string` likewise, so one namespace makes them conflict with
      * each other and `class string` loses its place in stringfwd.h to a typedef of the same name.
      */
-    val conflictedTemplateDecls: Set<Pair<String, Int>> by lazy {
+    val conflictedTemplateDecls: Set<Type.Decl> by lazy {
         conflictsAmong(templateDecls, ::effectiveSourceFor)
     }
 
@@ -569,7 +567,7 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
      * stl_uninitialized.h. Only one of each pair is the declaration; the file that reaches the line
      * keeps it.
      */
-    val conflictedTypedefDecls: Set<Pair<String, Int>> by lazy {
+    val conflictedTypedefDecls: Set<Type.Decl> by lazy {
         conflictsAmong(typedefDecls, ::effectiveSourceFor)
     }
 
@@ -580,7 +578,7 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
      * removes evidence with it, and the reason the two are counted apart is a placement rule the
      * guard has no part in.
      */
-    val baseConflictedDecls: Set<Pair<String, Int>> by lazy {
+    val baseConflictedDecls: Set<Type.Decl> by lazy {
         conflictsAmong(templateDecls) { it.baseSource() } + conflictsAmong(typedefDecls) { it.baseSource() }
     }
 
@@ -589,10 +587,11 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
     private val typedefDecls get() = typeAsts.values.filter { it.body !is TypeDecl.Struct && it.body !is TypeDecl.Enum }
 
     private fun conflictsAmong(asts: Collection<Type>, sourceOf: (Type) -> GhidraSourceFile) = asts
-        .filter { it.name != null && it.declLine > 0 }
-        .groupBy({ it.name!!.substringBefore('<') to it.declLine }, sourceOf)
+        .groupBy({ it.declKey() }, sourceOf)
         .filterValues { it.distinct().size > 1 }
         .keys
+        .filterNotNull()
+        .toSet()
 
     /**
      * Canonical (category, ghidraName) → group; drives TypeRegistry slot assignment. XRef-targets are

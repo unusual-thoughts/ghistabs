@@ -81,7 +81,7 @@ class HarvesterTest {
 
         val harvest = harvester.harvest(records)
 
-        val harvestedSymbols = harvest.symbolsByCu.values.flatten()
+        val harvestedSymbols = harvest.staticsByCu.values.flatten()
         assertEquals(1, harvestedSymbols.size, "One global symbol should be harvested")
         val gsymRecord = harvestedSymbols[0]
         assertEquals("g", gsymRecord.body.name, "Symbol name should be 'g'")
@@ -192,7 +192,7 @@ class HarvesterTest {
         val typeAst = harvest.types.values.first()
         assertEquals("MyStruct", typeAst.ghidraName, "Tagged type name should be 'MyStruct'")
         // Tagged types should NOT be in symbolsByCu
-        assertEquals(0, harvest.symbolsByCu.values.flatten().size, "Tagged type should NOT be in harvested symbols")
+        assertEquals(0, harvest.staticsByCu.values.flatten().size, "Tagged type should NOT be in harvested symbols")
     }
 
     /**
@@ -583,10 +583,10 @@ class HarvesterTest {
         val harvest = harvester.harvest(records)
 
         assertEquals(0, sink.parseErrors)
-        assertTrue(harvest.symbolsByCu.containsKey(sourceFileOf("cu1.c")), "CU1 should be registered in symbolsByCu")
-        assertTrue(harvest.symbolsByCu.containsKey(sourceFileOf("cu2.c")), "CU2 should be registered in symbolsByCu")
-        assertEquals(1, harvest.symbolsByCu[sourceFileOf("cu1.c")]!!.size, "cu1.c should have exactly one symbol")
-        assertEquals(1, harvest.symbolsByCu[sourceFileOf("cu2.c")]!!.size, "cu2.c should have exactly one symbol")
+        assertTrue(harvest.staticsByCu.containsKey(sourceFileOf("cu1.c")), "CU1 should be registered in symbolsByCu")
+        assertTrue(harvest.staticsByCu.containsKey(sourceFileOf("cu2.c")), "CU2 should be registered in symbolsByCu")
+        assertEquals(1, harvest.staticsByCu[sourceFileOf("cu1.c")]!!.size, "cu1.c should have exactly one symbol")
+        assertEquals(1, harvest.staticsByCu[sourceFileOf("cu2.c")]!!.size, "cu2.c should have exactly one symbol")
     }
 
     /**
@@ -673,7 +673,7 @@ class HarvesterTest {
         val harvest = harvester.harvest(records)
 
         assertEquals(0, sink.parseErrors)
-        assertTrue(harvest.symbolsByCu.containsKey(sourceFileOf("a.c")), "CU a.c should be registered in symbolsByCu")
-        assertTrue(harvest.symbolsByCu.containsKey(sourceFileOf("b.c")), "CU b.c should be registered in symbolsByCu")
+        assertTrue(harvest.staticsByCu.containsKey(sourceFileOf("a.c")), "CU a.c should be registered in symbolsByCu")
+        assertTrue(harvest.staticsByCu.containsKey(sourceFileOf("b.c")), "CU b.c should be registered in symbolsByCu")
     }
 }

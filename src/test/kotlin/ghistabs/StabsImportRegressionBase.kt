@@ -19,6 +19,7 @@ import ghistabs.diagnose.CapturingSink
 import ghistabs.diagnose.dumpJson
 import ghistabs.diagnose.writeRegistryDump
 import ghistabs.harvest.ContentIndex
+import ghistabs.harvest.Type
 import ghistabs.importer.*
 import ghistabs.materialize.conflictCount
 import ghistabs.materialize.itanium.Itanium
@@ -422,8 +423,8 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         )
 
         // Every published address, so the predecessor of the gap really is a predecessor.
-        val addresses = artifacts.harvest.lineEntries.values.flatten()
-            .map { it.addr }.filter { program.memory.getBlock(it) != null }.distinct().sorted()
+        val addresses = artifacts.harvest.lineEntries.values.asSequence().flatten()
+            .map { it.addr }.filter { program.memory.getBlock(it) != null }.distinct().sorted().toList()
         val (statement, inside) = addresses.zipWithNext()
             .firstNotNullOfOrNull { (a, b) ->
                 (b.offset - a.offset).takeIf { it > 1 && a.hasSameAddressSpace(b) }?.let { a to a.add(it / 2) }
@@ -459,9 +460,9 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         // Three claims at least, or the file is not judged at all — one misfiled declaration must not
         // be able to discard a correctly mapped file.
         val claims = listOf(
-            LocalSources.Claim("Widget", 3),
-            LocalSources.Claim("Gadget", 4),
-            LocalSources.Claim("Sprocket", 5),
+            Type.Decl(3, "Widget"),
+            Type.Decl(4, "Gadget"),
+            Type.Decl(5, "Sprocket"),
         )
         val agreeing = LocalSources(program, context) { claims }
         Assertions.assertEquals(local.toFile(), agreeing[source], "transform should resolve to the local file")
