@@ -7,10 +7,8 @@ import ghistabs.harvest.Harvest
 import ghistabs.harvest.HarvestIndex
 import ghistabs.harvest.Harvester
 import ghistabs.materialize.*
-import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.StabReader
 import ghistabs.parse.StaticScope
-import ghistabs.parse.SymbolDecl
 import ghistabs.runTransaction
 import java.nio.file.Path
 
@@ -94,24 +92,22 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
         debug("harvest-records-read", count = stabs.totalRecordCount.toLong())
         debug("harvest-records-parsed", count = (stabs.records.size - parseErrors).toLong())
         debug("harvest-functions", count = harvest.functions.size.toLong())
-        val allSyms = harvest.symbolsByCu.values.flatten()
+        val allSyms = harvest.staticsByCu.values.flatten()
         debug("harvest-symbols", count = allSyms.size.toLong())
         debug(
             "harvest-globals",
-            count = allSyms.map { it.body }.filterIsInstance<SymbolDecl.Static<GlobalTypeId>>()
-                .count { it.scope == StaticScope.GLOBAL }.toLong(),
+            count = allSyms.count { it.body.scope == StaticScope.GLOBAL }.toLong(),
         )
         debug(
             "harvest-statics",
-            count = allSyms.map { it.body }.filterIsInstance<SymbolDecl.Static<GlobalTypeId>>()
-                .count { it.scope != StaticScope.GLOBAL }.toLong(),
+            count = allSyms.count { it.body.scope != StaticScope.GLOBAL }.toLong(),
         )
         debug("harvest-typeAsts", count = harvest.types.size.toLong())
         val byKind = harvest.types.values.groupingBy { it.body::class.simpleName ?: "Unknown" }.eachCount()
         for ((kind, n) in byKind.toSortedMap()) {
             debug("harvest-typeAsts-$kind", count = n.toLong())
         }
-        debug("harvest-cus", count = harvest.symbolsByCu.size.toLong())
+        debug("harvest-cus", count = harvest.staticsByCu.size.toLong())
         val uniqueTypeIds = harvest.types.keys.size
         debug("harvest-typeAsts-unique-by-id", count = uniqueTypeIds.toLong())
         debug("harvest-typeAsts-dup-by-id", count = (harvest.types.size - uniqueTypeIds).toLong())

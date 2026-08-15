@@ -5,6 +5,7 @@ import ghidra.program.model.listing.Program
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.DummySink
 import ghistabs.harvest.GhidraSourceFile
+import ghistabs.harvest.Type
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
@@ -131,10 +132,8 @@ fun Program.applySourceRoots(roots: List<Path>, sink: DiagnosticSink) {
 class LocalSources(
     program: Program,
     private val sink: DiagnosticSink = DummySink,
-    private val claims: (GhidraSourceFile) -> List<Claim> = { emptyList() },
+    private val claims: (GhidraSourceFile) -> List<Type.Decl> = { emptyList() },
 ) : DiagnosticSink by sink {
-    /** A declaration the harvest attributes to a file at a line — what a local file is checked against. */
-    data class Claim(val name: String, val line: Int)
 
     private val transformer = UserDataPathTransformer.getPathTransformer(program)
     private val resolved = mutableMapOf<GhidraSourceFile, File?>()
@@ -160,7 +159,7 @@ class LocalSources(
      * which is not a false positive: for those, it is the same file.
      */
     private fun agrees(source: GhidraSourceFile, file: File): Boolean {
-        val expected = claims(source).filter { it.line > 0 }
+        val expected = claims(source)
         // Too few claims to convict on: `istream.tcc` is attributed one declaration, so a single
         // misfiled name would score it 0% and discard a correctly mapped file. No evidence and not
         // enough evidence are the same verdict — the transform stands.

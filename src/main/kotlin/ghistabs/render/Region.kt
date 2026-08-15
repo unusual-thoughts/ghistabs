@@ -6,7 +6,6 @@ import ghistabs.harvest.Func
 import ghistabs.harvest.GhidraSourceFile
 import ghistabs.harvest.LineEntry
 import ghistabs.harvest.blockAt
-import ghistabs.parse.SymbolDecl
 
 /**
  * One inlined region, or the statements of one this-file source line. [file] is the file an inlined
@@ -112,8 +111,8 @@ class Region(private val ctx: RenderContext, val file: GhidraSourceFile?) {
             ctx.program.functionManager.getFunctionAt(inliner.addr)
                 ?.prototype(rename = ::asFree) ?: inliner.name
             ) + " {"
-        val params = inlineParams(inliner).mapNotNull { p ->
-            (p.body as? SymbolDecl.Local)?.let { with(ctx) { it.type.renderDecl(asFree(it.name)) } }
+        val params = inlineParams(inliner).map { p ->
+            with(ctx) { p.body.type.renderDecl(asFree(p.body.name)) }
         }
         val list = params.joinToString().ifEmpty { definition()?.params.orEmpty() }
         return "void $id($list) { " + "/* inlined into ${inliner.name} */"
@@ -145,10 +144,7 @@ class Region(private val ctx: RenderContext, val file: GhidraSourceFile?) {
             ?: return "$assign$id(${crossingIn.joinToString()});"
         val args = inlineParams(inliner)
             .ifEmpty { return "$assign$id(${crossingIn.joinToString()});" }
-            .map { p ->
-                p.storageAddress(ctx.program)?.let { flow.nameAt(it, start) }
-                    ?: (p.body as? SymbolDecl.Local)?.name.orEmpty()
-            }
+            .map { p -> ctx.resolver.forSymbol(p)?.let { flow.nameAt(it, start) } ?: p.body.name }
         return "$assign$id(${args.joinToString()});"
     }
 }

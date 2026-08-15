@@ -1,14 +1,9 @@
 package ghistabs.render
 
 import ghidra.program.model.address.Address
-import ghistabs.harvest.Func
-import ghistabs.harvest.GhidraSourceFile
-import ghistabs.harvest.Symbol
-import ghistabs.harvest.Type
-import ghistabs.harvest.hasHeaderExtension
-import ghistabs.harvest.includeSpelling
+import ghistabs.chunkOf
+import ghistabs.harvest.*
 import ghistabs.parse.GlobalTypeId
-import ghistabs.parse.SymbolDecl
 import ghistabs.parse.TypeDecl
 
 class FileRenderer(val renderer: Renderer, override val source: GhidraSourceFile) : RenderContext {
@@ -22,23 +17,24 @@ class FileRenderer(val renderer: Renderer, override val source: GhidraSourceFile
 
     private val rawFuncs = index.functionsBySource[source].orEmpty()
     private val lines = renderer.linesBySource[source].orEmpty()
-    private val typeDecls = index.typesBySource[source].orEmpty().filter { it.name != null && it.declLine > 0 }
-    private val symbols = index.symbolsBySource[source].orEmpty()
+    private val typeDecls = index.typesBySource[source].orEmpty().filter { it.name != null && it.declLine != null }
+    private val statics = index.staticsBySource[source].orEmpty()
 
     private val spans = FunctionSpans.of(rawFuncs, source)
 
-    override fun indentFor(line: Int) = if (spans.inFunction(line)) 4 else 0
+    override fun indentFor(line: Int?) = if (line != null && spans.inFunction(line)) 4 else 0
 
-    private val lineExtent = lines.maxOfOrNull { it.lineNumber } ?: 0
-    private val bodyExtent = spans.ranges.maxOfOrNull { it.endInclusive } ?: 0
+    private val lineExtent = lines.maxOfOrNull { it.lineNumber }
+    private val bodyExtent = spans.ranges.maxOfOrNull { it.endInclusive }
+    private val maxExtent = setOfNotNull(lineExtent, bodyExtent).maxOrNull()
 
     /**
      * The file's real length, where `--source-root` resolved it and phase 2's agreement guard kept
      * it. This is the one input to the extents below that is not derived from the declarations they
      * judge, so where it exists §43's circularity is simply gone.
      */
-    private val sourceLength = believedLength(renderer.lengthOf(source), maxOf(lineExtent, bodyExtent)) { length ->
-        index.warn("source-length-conflict", "$source: code reaches L${maxOf(lineExtent, bodyExtent)} of $length lines")
+    private val sourceLength = believedLength(renderer.lengthOf(source), maxExtent) { length ->
+        index.warn("source-length-conflict", "$source: code reaches L$maxExtent of $length lines")
     }
 
     /**
@@ -68,13 +64,13 @@ class FileRenderer(val renderer: Renderer, override val source: GhidraSourceFile
      * misfiled, which is the whole of §38.
      */
     private val activityExtent = when (source in index.compilationUnits) {
-        true -> maxOf(lineExtent, bodyExtent)
+        true -> maxExtent
 
-        false -> sourceLength ?: sequenceOf(
+        false -> sourceLength ?: setOfNotNull(
             lineExtent,
-            symbols.maxOfOrNull { it.declLine } ?: 0,
-            typeDecls.maxOfOrNull { it.declLine } ?: 0,
-        ).max()
+            statics.mapNotNull { it.declLine }.maxOrNull(),
+            typeDecls.mapNotNull { it.declLine }.maxOrNull(),
+        ).maxOrNull()
     }
 
     /**
@@ -87,26 +83,24 @@ class FileRenderer(val renderer: Renderer, override val source: GhidraSourceFile
      * the declarations in dispute.
      */
     private val ownExtent by lazy {
-        sourceLength ?: sequenceOf(
+        sourceLength ?: setOfNotNull(
             lineExtent,
             bodyExtent,
-            symbols.maxOfOrNull { it.declLine } ?: 0,
-            typeDecls.filterNot { disputed(it) }.maxOfOrNull { it.declLine } ?: 0,
+            statics.mapNotNull { it.declLine }.maxOrNull(),
+            typeDecls.filterNot { disputed(it) }.mapNotNull { it.declLine }.maxOrNull(),
         ).max()
     }
 
     // A decl at this line is misattributed (stale N_SOL) if it sits past the file's activity.
-    override fun isStale(line: Int) = line > activityExtent
+    override fun isStale(line: Int?) = line != null && activityExtent != null && line > activityExtent
 
     override fun enclosing(source: GhidraSourceFile, line: Int) = renderer.enclosing(source, line)
 
     /** A declaration several files claim at one line — at most one of them rightly. */
-    private fun disputed(type: Type) = type.name!!.substringBefore('<') to type.declLine in
-        if (type.body is TypeDecl.Struct || type.body is TypeDecl.Enum) {
-            index.conflictedTemplateDecls
-        } else {
-            index.conflictedTypedefDecls
-        }
+    private fun disputed(type: Type) = when (type.body) {
+        is TypeDecl.Struct, is TypeDecl.Enum -> index.conflictedTemplateDecls
+        else -> index.conflictedTypedefDecls
+    }.let { type.declKey() in it }
 
     /**
      * [disputed], on a line this file cannot reach.
@@ -114,7 +108,7 @@ class FileRenderer(val renderer: Renderer, override val source: GhidraSourceFile
      * An uncontested declaration past the reach stays: that is `class bouniaf` at header.h L36, four
      * lines past the last of the header that happened to be inlined, and it is the file's own content.
      */
-    private fun misfiled(type: Type) = disputed(type) && type.declLine > ownExtent
+    private fun misfiled(type: Type) = disputed(type) && type.declLine != null && type.declLine > ownExtent
 
     /**
      * How tall the canvas is: the file's attested activity, plus every declaration that is not
@@ -126,11 +120,11 @@ class FileRenderer(val renderer: Renderer, override val source: GhidraSourceFile
      * displaced appendix, which is where a declaration whose line is unusable belongs. Filtering at
      * the source instead loses it silently: unfile.cpp's appendix went from 78 entries to 21.
      */
-    private val maxLine = sequenceOf(
+    private val maxLine = setOfNotNull(
         spans.maxLine,
         lineExtent,
-        typeDecls.filterNot { isStale(it.declLine) }.maxOfOrNull { it.declLine } ?: 0,
-        symbols.filterNot { isStale(it.declLine) }.maxOfOrNull { it.declLine } ?: 0,
+        typeDecls.filterNot { isStale(it.declLine) }.mapNotNull { it.declLine }.maxOrNull(),
+        statics.filterNot { isStale(it.declLine) }.mapNotNull { it.declLine }.maxOrNull(),
     ).max()
 
     private val canvas = Canvas(maxLine)
@@ -394,13 +388,11 @@ class FileRenderer(val renderer: Renderer, override val source: GhidraSourceFile
         }
     }
 
-    private data class DeclKey(val line: Int, val name: String)
-
-    private val seenDecls = mutableSetOf<DeclKey>()
+    private val seenDecls = mutableSetOf<Type.Decl>()
 
     // One declaration per (line, name); `this` never renders. Guards every decl pass. Not bounded by
     // the canvas — a declaration past it is the allocator's to turn away, and the appendix's to show.
-    private fun dedup(line: Int, name: String) = line > 0 && name != "this" && seenDecls.add(DeclKey(line, name))
+    private fun dedup(line: Int?, name: String) = line != null && name != "this" && seenDecls.add(Type.Decl(line, name))
 
     private fun varsOf(f: Func): List<Var> = (f.params + f.locals).filter { it.sourceFile == source }.mapNotNull {
         it.renderVar(renderer.showStorage)
@@ -418,7 +410,7 @@ class FileRenderer(val renderer: Renderer, override val source: GhidraSourceFile
                     Owner.LOCAL,
                     it.line,
                     listOf(Row(it.text, indentFor(it.line), it.role)),
-                    stale = span == null || it.line !in span,
+                    stale = span == null || it.line == null || it.line !in span,
                 )
             }
         }
@@ -433,8 +425,8 @@ class FileRenderer(val renderer: Renderer, override val source: GhidraSourceFile
     // is the line, and the declaration goes to the appendix like any other that lost its row. One gcc
     // really did declare inside a function carries `enclosingFunction` and belongs where it is.
     private fun globalClaims(): List<Claim> {
-        val claims = symbols.mapNotNull { s ->
-            (s.body as? SymbolDecl.Static)?.takeIf { dedup(s.declLine, it.name) }?.let { emitGlobal(it, s) to s }
+        val claims = statics.mapNotNull { s ->
+            s.takeIf { dedup(s.declLine, s.body.name) }?.let { emitGlobal(s) to s }
         }
         val reasons = claims.mapNotNull { (claim, s) ->
             when {
@@ -465,32 +457,21 @@ class FileRenderer(val renderer: Renderer, override val source: GhidraSourceFile
      * every file's global list and one bad span would condemn all of it; a constant stride over three
      * or more is the generated-table signature that makes the run a single region. See §38.
      */
-    private val foreignRun: Set<Symbol> by lazy {
-        symbols
-            .filter { it.body is SymbolDecl.Static && it.enclosingFunction == null && it.rawValue != 0L }
-            .sortedBy { it.rawValue }
-            .uniformRuns()
-            .filter { run -> run.any { spans.insideBody(it.declLine) } }
-            .flatten()
+    private val foreignRun: Set<StaticSymbol> by lazy {
+        statics
+            .filter { it.enclosingFunction == null && it.rawValue != 0L }
+            .mapNotNull { s -> s.declLine?.to(s) }
+            .sortedBy { it.second.rawValue }
+            .chunkOf { run, (declLine, sym) ->
+                val lastLine = run.last().first
+                val step = declLine - lastLine
+                val stride = run.getOrNull(run.size - 2)?.let { lastLine - it.first }
+                step > 0 && (stride == null || stride == step)
+            }
+            .filter { run -> run.size >= 3 && run.any { spans.insideBody(it.first) } }
+            .flatMap { g -> g.map { it.second } }
             .toSet()
     }
-
-    /** Maximal runs of three or more whose [Symbol.declLine]s form an ascending arithmetic progression. */
-    private fun List<Symbol>.uniformRuns(): List<List<Symbol>> =
-        fold(mutableListOf<MutableList<Symbol>>()) { runs, sym ->
-            val run = runs.lastOrNull()
-            val step = run?.let { sym.declLine - it.last().declLine }
-            val stride = run?.takeIf { it.size > 1 }?.let { it.last().declLine - it[it.size - 2].declLine }
-            if (step != null &&
-                step > 0 &&
-                (stride == null || stride == step)
-            ) {
-                run += sym
-            } else {
-                runs += mutableListOf(sym)
-            }
-            runs
-        }.filter { it.size >= 3 }
 
     // Openers at startLine (self-closing decl when single-line), closers at the close line.
     private fun functionBraceClaims(): List<Claim> = buildList {
@@ -526,27 +507,25 @@ class FileRenderer(val renderer: Renderer, override val source: GhidraSourceFile
         // answer the allocator already gives inlined copies — rather than letting one instantiation's
         // members render under another's opener, which is a class that does not exist.
         val byDecl = typeDecls
-            .filter { it.name != null }
             .filter { it.body is TypeDecl.Struct || it.body is TypeDecl.Enum }
-            .distinctBy { it.declLine to it.name }
-            .groupBy { it.declLine to it.name!!.substringBefore('<') }
+            .groupBy { it.declKey() }
+            .filterKeys { it != null }
+            .entries
 
-        for ((key, group) in byDecl.entries.sortedBy { it.key.first }) {
-            val (line, _) = key
+        for ((_, group) in byDecl.sortedBy { it.key?.line }) {
             // Renders only where the line is one this file plausibly reaches: stl_vector.h's own
             // content runs past L900 and keeps its copy, image.h's stops at L53 and cannot be
             // declaring anything at L898. See [misfiled].
             if (misfiled(group.first())) {
-                group.first().emitTypeBody(line, group.size)?.let { displaced += Dropped(it, CONFLICTED_DECL) }
+                group.first().emitTypeBody(group.size)?.let { displaced += Dropped(it, CONFLICTED_DECL) }
                 mergedInstantiations += group.drop(1)
-                continue
+            } else {
+                // Deterministic pick: the most members, then by name, so the choice can't drift with
+                // unrelated type-resolution changes.
+                val ast = group.maxWith(compareBy({ it.body.memberCount() }, { it.name }))
+                mergedInstantiations += group.filterNot { it === ast }
+                ast.emitTypeBody(group.size)?.also { claims += it }
             }
-            // Deterministic pick: the most members, then by name, so the choice can't drift with
-            // unrelated type-resolution changes.
-            val ast = group.maxWithOrNull(compareBy({ it.body.memberCount() }, { it.name })) ?: continue
-            mergedInstantiations += group.filterNot { it === ast }
-
-            ast.emitTypeBody(line, group.size)?.also { claims += it }
         }
         return claims
     }
@@ -773,9 +752,9 @@ class FileRenderer(val renderer: Renderer, override val source: GhidraSourceFile
                 if (ast.declLine !in interior) continue
                 anomalies += "skeleton[$source]: type ${ast.name} declared at L${ast.declLine} $where"
             }
-            for (s in symbols) {
+            for (s in statics) {
                 if (s.declLine !in interior) continue
-                val nm = (s.body as? SymbolDecl.Static)?.name ?: continue
+                val nm = s.body.name
                 anomalies += "skeleton[$source]: global/static $nm at L${s.declLine} $where"
             }
         }
@@ -798,8 +777,8 @@ class FileRenderer(val renderer: Renderer, override val source: GhidraSourceFile
  * the length is refused and reported. A *declaration* past the end deliberately counts for nothing
  * here — it is the very thing the length is here to catch.
  */
-internal fun believedLength(length: Int?, code: Int, onConflict: (Int) -> Unit): Int? = when {
-    length == null -> null
+internal fun believedLength(length: Int?, code: Int?, onConflict: (Int) -> Unit): Int? = when {
+    length == null || code == null -> null
     code <= length -> length
     else -> null.also { onConflict(length) }
 }

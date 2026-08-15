@@ -1,21 +1,20 @@
 package ghistabs.render
 
+import ghidra.program.model.address.Address
 import ghistabs.harvest.Func
 import ghistabs.harvest.GhidraSourceFile
 import org.jetbrains.annotations.TestOnly
 
-// gcc emits N_SLINEs out of address order (SjLj landing pads map back near the decl),
-// so min/max source line over the same-source entries — not first/last by address —
-// bounds the body. `prologueLine` (lowest-address entry) is the fallback opener.
-private data class RawSpan(
-    val func: Func,
-    val prologueAddr: Long,
-    val prologueLine: Int,
-    val minLine: Int,
-    val end: Int,
-    val sameSource: Boolean,
-) {
-    fun toRange(prevEnd: Int) = FuncRange(func, if (sameSource && minLine > prevEnd) minLine else prologueLine, end)
+// gcc emits N_SLINEs out of address order (SjLj landing pads map back near the decl), so min/max
+// source line over the same-source entries — not first/last by address — bounds the body.
+private data class RawSpan(val func: Func, val addr: Address, val entryLine: Int, val openLine: Int?, val end: Int) {
+    // An opener above the previous function's end is gcc cross-attribution, not a real line.
+    fun validStartline(after: Int) = when {
+        openLine != null && openLine > after -> openLine
+        else -> entryLine
+    }
+
+    fun toRange(prevEnd: Int) = FuncRange(func, validStartline(prevEnd), end)
 }
 
 fun <T : Comparable<T>> ClosedRange<T>.includes(other: ClosedRange<T>) =
@@ -57,7 +56,7 @@ class FunctionSpans(val ranges: List<FuncRange>) {
     private val interiors = ranges.mapNotNull { it.interior }
 
     /** Is [line] between some function's braces — where no file-scope declaration can go? */
-    fun insideBody(line: Int) = interiors.any { line in it }
+    fun insideBody(line: Int?) = line != null && interiors.any { line in it }
 
     /**
      * The last row content anchored at [line] may take. A claim slides downward when the row it asked
@@ -79,7 +78,7 @@ class FunctionSpans(val ranges: List<FuncRange>) {
         fun of(rawFuncs: List<Func>, source: GhidraSourceFile): FunctionSpans {
             val rawRanges = buildList {
                 var prevEnd = Int.MIN_VALUE
-                for (s in rawFuncs.mapNotNull { it.rawSpan(source) }.sortedBy { it.prologueAddr }) {
+                for (s in rawFuncs.mapNotNull { it.rawSpan(source) }.sortedBy { it.addr }) {
                     add(s.toRange(prevEnd))
                     prevEnd = maxOf(prevEnd, s.end)
                 }
@@ -98,17 +97,16 @@ class FunctionSpans(val ranges: List<FuncRange>) {
         private fun Func.rawSpan(source: GhidraSourceFile): RawSpan? {
             val sameSource = lineEntries.filter { it.source == source }
             val inside = sameSource.ifEmpty { if (isSyntheticInit) emptyList() else lineEntries }
-            if (inside.isEmpty()) return null
-            val sortedByAddr = inside.sortedBy { it.addr.offset }
-            val hasSame = sameSource.isNotEmpty()
-            return RawSpan(
-                func = this,
-                prologueAddr = addr.offset,
-                prologueLine = sortedByAddr.first().line,
-                minLine = if (hasSame) sameSource.minOf { it.line } else sortedByAddr.first().line,
-                end = if (hasSame) sameSource.maxOf { it.line } else sortedByAddr.last().line,
-                sameSource = hasSame,
-            )
+
+            return inside.minByOrNull { it.addr.offset }?.line ?.let { entryLine ->
+                RawSpan(
+                    this,
+                    addr,
+                    entryLine,
+                    declLine ?: sameSource.minOfOrNull { it.line },
+                    sameSource.maxOfOrNull { it.line } ?: inside.maxBy { it.addr.offset }.line,
+                )
+            }
         }
     }
 }

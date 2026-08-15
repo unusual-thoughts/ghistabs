@@ -33,17 +33,41 @@ class SourceMapApplier(private val ctx: ImportContext<*>, private val index: Har
         val files = folds.keys + folds.values
         for (file in files) manager.addSourceFile(file)
 
-        val entries = index.harvest.lineEntries.values.flatten()
-        fun identity(entry: LineEntry) = Triple(folds[entry.source], entry.line, entry.addr)
+        // Statics carry a decl line no N_SLINE covers — only under -gstabs+, hence the null.
+        val staticEntries = index.staticsBySource.flatMap { (source, syms) ->
+            syms.mapNotNull { s ->
+                s.declLine?.let { line ->
+                    ctx.resolver.forSymbol(s)?.let { LineEntry(line, it, source) }
+                }
+            }
+        }
+        val entries = index.harvest.lineEntries.values.flatten() + staticEntries
+
+        fun identity(entry: LineEntry) = folds[entry.source]?.let { entry.copy(source = it) } ?: entry
         // Grouped by outcome, `""` being published. One warning per reason carrying a per-file
         // breakdown, rather than one per entry: an emitter whose addresses we resolve wrong has every
         // entry rejected, and that would be thousands of bookmarks.
-        val dropped = entries.groupBy(::publish)
-            .filterKeys { it.isNotEmpty() }
-            .onEach { (reason, bad) ->
-                warn(reason, "dropped ${bad.groupingBy { it.source.filename }.eachCount()}", count = bad.size.toLong())
+        val byError = entries.groupBy { entry ->
+            runCatching {
+                manager.addSourceMapEntry(entry.source, entry.line, entry.addr, 0)
+            }.exceptionOrNull()?.let {
+                // gcc's N_SLINE value is function-relative on PE/COFF; a function whose start we resolved
+                // wrong, or one in a section the loader left out, lands outside every block.
+                when (it) {
+                    is AddressOutOfBoundsException -> "sourcemap-entry-unmapped"
+                    is IllegalArgumentException -> "sourcemap-entry-rejected"
+                    else -> "sourcemap-error-${it.javaClass.name}"
+                }
             }
-            .values.flatten().mapTo(mutableSetOf(), ::identity)
+        }
+        for ((reason, bad) in byError) {
+            if (reason != null) {
+                warn(reason, "dropped ${bad.groupingBy {it.source.filename}.eachCount()}", count = bad.size.toLong())
+            }
+        }
+
+        val dropped = byError.filterKeys { it != null }.values.flatten().mapTo(mutableSetOf(), ::identity)
+
         // A duplicate that disappears is a content change, so it is counted rather than absorbed: the
         // manager silently returns the existing entry for a repeated (file, line, address, length),
         // and the fold makes more of them by merging two spellings onto one identity.
@@ -62,17 +86,5 @@ class SourceMapApplier(private val ctx: ImportContext<*>, private val index: Har
             count = published.size.toLong(),
         )
         return published.size
-    }
-
-    /** The counter [entry] failed under, or `""` when it was published. */
-    private fun publish(entry: LineEntry): String = try {
-        manager.addSourceMapEntry(entry.source, entry.line, entry.addr, 0)
-        ""
-    } catch (e: AddressOutOfBoundsException) {
-        // gcc's N_SLINE value is function-relative on PE/COFF; a function whose start we resolved
-        // wrong, or one in a section the loader left out, lands outside every block.
-        "sourcemap-entry-unmapped"
-    } catch (e: IllegalArgumentException) {
-        "sourcemap-entry-rejected"
     }
 }

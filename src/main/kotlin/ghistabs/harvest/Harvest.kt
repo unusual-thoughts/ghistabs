@@ -16,10 +16,10 @@ import kotlinx.serialization.Serializable
 data class Harvest(
     val types: Map<GlobalTypeId, Type>,
     val rawCollisions: Map<GlobalTypeId, Map<String, Set<TypeDecl<GlobalTypeId>>>>,
-    val symbolsByCu: Map<
+    val staticsByCu: Map<
         @Serializable(with = SourceFileSerializer::class)
         GhidraSourceFile,
-        List<Symbol>,
+        List<StaticSymbol>,
         >,
     val functions: List<Func>,
     /** N_SLINE entries grouped by N_SOL-effective source; sorted by line on insertion. */
@@ -36,7 +36,7 @@ data class Harvest(
         fun of(types: Map<GlobalTypeId, Type>) = Harvest(
             types = types,
             rawCollisions = mapOf(),
-            symbolsByCu = mapOf(),
+            staticsByCu = mapOf(),
             functions = listOf(),
             lineEntries = mapOf(),
             constants = listOf(),

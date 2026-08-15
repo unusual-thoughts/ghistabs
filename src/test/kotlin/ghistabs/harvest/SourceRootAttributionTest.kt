@@ -43,7 +43,7 @@ class SourceRootAttributionTest {
     fun `a unique declarer takes the declaration off the file gcc recorded`() {
         val isPod = typedef("_Is_POD", 111, wrong)
         val index = indexOf(isPod)
-        index.declarers = { name, line -> right.takeIf { name == "_Is_POD" && line == 111 } }
+        index.declarers = { (line, name) -> right.takeIf { name == "_Is_POD" && line == 111 } }
 
         assertEquals(right, index.effectiveSourceFor(isPod))
     }
@@ -53,7 +53,7 @@ class SourceRootAttributionTest {
         val isPod = typedef("_Is_POD", 111, wrong)
         assertEquals(wrong, indexOf(isPod).effectiveSourceFor(isPod))
 
-        val asked = indexOf(isPod).also { it.declarers = { _, _ -> null } }
+        val asked = indexOf(isPod).also { it.declarers = { _ -> null } }
         assertEquals(wrong, asked.effectiveSourceFor(isPod))
     }
 
@@ -67,11 +67,11 @@ class SourceRootAttributionTest {
         val here = typedef("_Trivial", 426, wrong)
         val there = typedef("_Trivial", 426, right)
         val disputed = indexOf(here, there)
-        assertTrue(("_Trivial" to 426) in disputed.conflictedTypedefDecls, "two files, one line: disputed")
+        assertTrue(Type.Decl(426, "_Trivial") in disputed.conflictedTypedefDecls, "two files, one line: disputed")
 
         val settled = indexOf(here, there)
-        settled.declarers = { name, line -> right.takeIf { name == "_Trivial" && line == 426 } }
-        assertEquals(emptySet<Pair<String, Int>>(), settled.conflictedTypedefDecls)
+        settled.declarers = { (line, name) -> right.takeIf { name == "_Trivial" && line == 426 } }
+        assertEquals(emptySet<Type.Decl>(), settled.conflictedTypedefDecls)
         assertEquals(listOf(right, right), listOf(here, there).map(settled::effectiveSourceFor))
     }
 
@@ -81,7 +81,7 @@ class SourceRootAttributionTest {
     fun `the base attribution keeps the recorded file whatever the root says`() {
         val isPod = typedef("_Is_POD", 111, wrong)
         val index = indexOf(isPod)
-        index.declarers = { _, _ -> right }
+        index.declarers = { _ -> right }
 
         assertEquals(listOf(isPod), index.baseTypesBySource[wrong])
         assertEquals(listOf(isPod), index.typesBySource[right])
@@ -93,6 +93,6 @@ class SourceRootAttributionTest {
         val index = indexOf(tag("_Vector_alloc_base", 79, wrong))
         index.typesBySource
 
-        assertThrows(IllegalStateException::class.java) { index.declarers = { _, _ -> right } }
+        assertThrows(IllegalStateException::class.java) { index.declarers = { _ -> right } }
     }
 }

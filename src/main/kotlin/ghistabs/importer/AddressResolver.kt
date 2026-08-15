@@ -3,35 +3,42 @@ package ghistabs.importer
 import ghidra.app.util.opinion.ElfLoader
 import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Program
+import ghistabs.baseStackParamOffset
 import ghistabs.diagnose.DiagnosticSink
-import ghistabs.parse.StabReader
+import ghistabs.diagnose.DummySink
+import ghistabs.harvest.Symbol
+import ghistabs.parse.*
 import ghistabs.plus
 
 interface AddressResolver {
-    /** Where [stabAddress] tallies its relative/absolute branch counters. */
-    val sink: DiagnosticSink
     fun buildAddress(offset: Long): Address
     fun resolve(name: String): Address?
+    fun forSymbol(sym: Symbol<*>): Address? = when (val decl = sym.body) {
+        is SymbolDecl.Static if decl.scope == StaticScope.GLOBAL -> resolve(decl.name)
+        is SymbolDecl.Function, is SymbolDecl.Static -> buildAddress(sym.rawValue)
+        is SymbolDecl.Constant, is SymbolDecl.NamedType, is SymbolDecl.Local, is SymbolDecl.Param -> null
+    }
 
     /**
      * Resolve a stab `n_value` that may be function-relative: block scopes and line numbers in
      * stabs-in-sections are offsets from [funcStart] (a genuine offset stays below it; an already
      * absolute value doesn't). Pass a null [funcStart] for records that are always absolute. Tallies
-     * which branch it took on the resolver's [sink] (`stab-value-func-relative` vs `stab-value-absolute`).
+     * which branch it took on [sink] (`stab-value-func-relative` vs `stab-value-absolute`).
      */
-    fun stabAddress(value: Long, funcStart: Address?): Address = if (funcStart != null && value < funcStart.offset) {
-        sink.debug("stab-value-func-relative")
-        funcStart + value
-    } else {
-        sink.debug("stab-value-absolute")
-        buildAddress(value)
-    }
+    fun stabAddress(value: Long, funcStart: Address?, sink: DiagnosticSink = DummySink) =
+        if (funcStart != null && value < funcStart.offset) {
+            sink.debug("stab-value-func-relative")
+            funcStart + value
+        } else {
+            sink.debug("stab-value-absolute")
+            buildAddress(value)
+        }
 }
 
 /**
  * Address resolver that searches program symbols and builds addresses in the default program address space.
  */
-class ProgramAddressResolver(private val program: Program, override val sink: DiagnosticSink) : AddressResolver {
+class ProgramAddressResolver(private val program: Program) : AddressResolver {
     // Stab values are link-time vaddrs. Ghidra relocates a PIE/ET_DYN ELF to its load
     // base (default 0x100000) without rewriting the stabs, so every address is off by
     // (loadBase - originalBase). PE has no such property → null → no fixup. Mirrors
@@ -61,4 +68,23 @@ class ProgramAddressResolver(private val program: Program, override val sink: Di
         program.symbolTable.getSymbols("_$name").firstOrNull()?.let { return it.address }
         return null
     }
+
+    /**
+     * Where gcc put this local, as an address the decompiler indexes storage by: the register itself, or
+     * the frame slot at Ghidra's origin rather than gcc's frame-pointer-relative one. Null for anything
+     * that is neither — and for the dbx register numbers [dbxRegisterName] declines to map (the x87
+     * stack), which is the same set the importer skips.
+     */
+    override fun forSymbol(sym: Symbol<*>) = when (sym.location) {
+        VariableLocation.REGISTER -> dbxRegisterName(program.defaultPointerSize, sym.rawValue.toInt())
+            ?.let { program.getRegister(it)?.address }
+
+        VariableLocation.STACK -> program.addressFactory.stackSpace.getAddress(
+            sym.rawValue - program.baseStackParamOffset,
+        )
+
+        null -> super.forSymbol(sym)
+    }
 }
+
+val Program.addressResolver get() = ProgramAddressResolver(this)

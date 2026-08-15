@@ -10,7 +10,7 @@ import ghistabs.parse.*
  * Harvest typed symbols and ASTs from a flat stab record stream. [cursor] holds the stream
  * position (CU, include context, source file, open function) and the N_SLINE entries; [store]
  * accumulates type ASTs. [harvest] is the dispatch loop that feeds both and collects the
- * address-bearing symbols into [symbolsByCu].
+ * address-bearing symbols into [staticsByCu].
  */
 class Harvester(private val monitor: TaskMonitor, private val sink: DiagnosticSink, resolver: AddressResolver) :
     DiagnosticSink by sink {
@@ -18,7 +18,7 @@ class Harvester(private val monitor: TaskMonitor, private val sink: DiagnosticSi
 
     private val store = TypeStore(sink = sink)
     private val cursor = StabCursor(resolver, sink)
-    private val symbolsByCu = mutableMapOf<GhidraSourceFile, MutableList<Symbol>>()
+    private val staticsByCu = mutableMapOf<GhidraSourceFile, MutableList<StaticSymbol>>()
     private val constants = mutableListOf<SymbolDecl.Constant<GlobalTypeId>>()
 
     internal fun harvest(records: List<StabRecord>): Harvest {
@@ -29,9 +29,10 @@ class Harvester(private val monitor: TaskMonitor, private val sink: DiagnosticSi
             monitor.increment()
             if (rec.desc != 0) {
                 when (rec.type) {
-                    StabType.N_FUN, StabType.N_SLINE, StabType.N_LSYM,
-                    StabType.N_PSYM, StabType.N_RSYM,
-                    StabType.N_GSYM, StabType.N_LCSYM, StabType.N_STSYM, StabType.N_ROSYM,
+                    StabType.N_SLINE,
+                    StabType.N_FUN, // desc available on -gstabs+
+                    StabType.N_PSYM, StabType.N_LSYM, StabType.N_RSYM, // params / locals
+                    StabType.N_GSYM, StabType.N_STSYM, StabType.N_LCSYM, StabType.N_ROSYM, // statics
                     -> {
                     }
 
@@ -56,29 +57,32 @@ class Harvester(private val monitor: TaskMonitor, private val sink: DiagnosticSi
                 StabType.N_FUN if rec.name.isEmpty() -> cursor.closeFunction(rec)
 
                 StabType.N_FUN -> parseSymbol(rec)?.also { sym ->
-                    when (sym.body) {
-                        is SymbolDecl.Function -> cursor.openFunction(rec, sym.body)
-                        is SymbolDecl.Static -> record(sym)
+                    when (val decl = sym.body) {
+                        is SymbolDecl.Function -> cursor.openFunction(sym.retype(decl))
+                        is SymbolDecl.Static -> harvestStatic(sym.retype(decl))
                         else -> warn("unexpected-nfun", "$sym")
                     }
                 }
 
-                // N_STSYM=data, N_LCSYM=bss, N_ROSYM=rodata : n_value carries the address.
+                // N_STSYM=data, N_LCSYM=bss, N_ROSYM=rodata, N_FUN=text : n_value carries the address.
                 // N_GSYM=globals: only refers by name
-                StabType.N_GSYM, StabType.N_STSYM, StabType.N_LCSYM, StabType.N_ROSYM -> parseSymbol(rec)?.also {
-                    record(it)
+                StabType.N_GSYM, StabType.N_STSYM, StabType.N_LCSYM, StabType.N_ROSYM -> parseSymbol(rec)?.also { sym ->
+                    when (val decl = sym.body) {
+                        is SymbolDecl.Static -> harvestStatic(sym.retype(decl))
+                        else -> warn("unexpected-static", "$sym")
+                    }
                 }
 
                 // Parameters and register locals
                 StabType.N_PSYM, StabType.N_RSYM -> parseSymbol(rec)?.also { sym ->
-                    when (sym.body) {
-                        is SymbolDecl.Param -> cursor.param(sym)
-                        is SymbolDecl.Local -> cursor.local(sym)
+                    when (val decl = sym.body) {
+                        is SymbolDecl.Param -> cursor.param(sym.retype(decl))
+                        is SymbolDecl.Local -> cursor.local(sym.retype(decl))
                         else -> warn("unexpected-psym-rsym", "$sym")
                     }
                 }
 
-                // Stack locals
+                // Stack locals, types and constants
                 StabType.N_LSYM -> parseSymbol(rec)?.also { sym ->
                     when (val decl = sym.body) {
                         // Bare `name:t(cu,n)` forward-declarations (body = self-Ref) are stored
@@ -92,16 +96,14 @@ class Harvester(private val monitor: TaskMonitor, private val sink: DiagnosticSi
                             declSourceFile = sym.sourceFile,
                         )
 
-                        is SymbolDecl.Local -> cursor.local(sym)
-
-                        // Function-scope statics get their address from rec.value.
-                        is SymbolDecl.Static -> record(sym)
+                        is SymbolDecl.Local -> cursor.local(sym.retype(decl))
 
                         // Addressless compile-time constant — no address, so it's applied as an
                         // equate + synthetic enum catalog rather than data (see SymbolApplier).
                         is SymbolDecl.Constant -> constants += decl
 
-                        is SymbolDecl.Function, is SymbolDecl.Param -> warn("unexpected-lsym", "$sym")
+                        is SymbolDecl.Function, is SymbolDecl.Param, is SymbolDecl.Static ->
+                            warn("unexpected-lsym", "$sym")
                     }
                 }
 
@@ -139,11 +141,11 @@ class Harvester(private val monitor: TaskMonitor, private val sink: DiagnosticSi
         val (typeAsts, rawCollisions) = store.toHarvest()
         debug("harvest-constants", count = constants.size.toLong())
 
-        return Harvest(typeAsts, rawCollisions, symbolsByCu, openFunctions, lineEntries, constants)
+        return Harvest(typeAsts, rawCollisions, staticsByCu, openFunctions, lineEntries, constants)
     }
 
-    private fun record(sym: Symbol) {
-        symbolsByCu.getOrPut(cursor.cu.identity) { mutableListOf() } += sym
+    private fun harvestStatic(sym: StaticSymbol) {
+        staticsByCu.getOrPut(cursor.cu.identity) { mutableListOf() } += sym
     }
 
     private fun parseSymbol(rec: StabRecord) = when (val res = cursor.parseSymbol(rec)) {

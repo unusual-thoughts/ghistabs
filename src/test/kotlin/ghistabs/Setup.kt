@@ -19,8 +19,6 @@ import ghistabs.materialize.DataTypeRegistry
  * [buildAddress] / [ghistabs.importer.AddressResolver.stabAddress], never [resolve].
  */
 object GenericAddressResolver : AddressResolver {
-    override val sink: DiagnosticSink = DummySink
-
     // Size is in *bits* — 8 caps the space at 0xff, so any realistic stab value throws
     // AddressOutOfBounds. One shared instance: addresses from different spaces don't compare.
     private val space = GenericAddressSpace("generic", 64, AddressSpace.TYPE_RAM, 0)

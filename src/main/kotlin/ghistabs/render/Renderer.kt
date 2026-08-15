@@ -11,6 +11,7 @@ import ghistabs.ImportOptions.Companion.stabsTypedefsShortened
 import ghistabs.harvest.Func
 import ghistabs.harvest.GhidraSourceFile
 import ghistabs.harvest.HarvestIndex
+import ghistabs.harvest.Type
 import ghistabs.importer.AddressResolver
 import ghistabs.importer.LocalSources
 import ghistabs.materialize.TemplateNameShortener
@@ -115,14 +116,12 @@ class Renderer(
     val localSources by lazy {
         LocalSources(program, index) { source ->
             index.baseTypesBySource[source].orEmpty()
-                .filter { it.declLine > 0 && it.name != null }
-                .map { it.name!!.substringBefore('<') to it.declLine }
+                .mapNotNull { t -> t.declKey() }
                 // Declarations several files claim at one line are excluded: at most one of those
                 // files is right and nothing here says which (§43), so holding a local file to them
                 // judges it on our own known-bad attribution. basic_string.h scored 0 of 17 against
                 // its *correct* source that way — all seventeen belong to stl_uninitialized.h.
                 .filterNot { it in index.baseConflictedDecls }
-                .map { (name, line) -> LocalSources.Claim(name, line) }
         }
     }
 
@@ -177,7 +176,7 @@ class Renderer(
     /** The local files a declaration can be re-attributed to, with the source each one stands for. */
     private val mapped by lazy { sources.mapNotNull { s -> localSources[s]?.let { s to it } } }
 
-    private val declarers = mutableMapOf<Pair<String, Int>, GhidraSourceFile?>()
+    private val declarers = mutableMapOf<Type.Decl, GhidraSourceFile?>()
 
     /**
      * The one file whose real text declares [name] at [line], or null where none does or several do.
@@ -185,10 +184,10 @@ class Renderer(
      * Unique answers only: the root is here to add facts, and "one of these files declares it" is
      * not one. Where it cannot tell, the existing hints keep the declaration they had.
      */
-    private fun declarerOf(name: String, line: Int) = declarers.getOrPut(name to line) {
-        val window = line - DECL_SLACK..line + DECL_SLACK
+    private fun declarerOf(decl: Type.Decl) = declarers.getOrPut(decl) {
+        val window = decl.line - DECL_SLACK..decl.line + DECL_SLACK
         mapped.singleOrNull { (_, file) ->
-            sourceIndexes[file].declarations[name].orEmpty().any { it in window }
+            sourceIndexes[file].declarations[decl.name].orEmpty().any { it in window }
         }?.first
     }
 

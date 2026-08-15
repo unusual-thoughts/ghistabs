@@ -17,7 +17,6 @@ import ghistabs.importer.DemanglerReplacer.Companion.DEMANGLER_CATEGORY
 import ghistabs.materialize.itanium.RttiStructs
 import ghistabs.parse.CATEGORY
 import ghistabs.parse.GlobalTypeId
-import ghistabs.parse.SymbolDecl
 import ghistabs.parse.TypeDecl
 
 /**
@@ -96,16 +95,17 @@ class DataTypeRegistry(
      * — measured at +714 `.conflict` types on crypto_mi_test_gcc421_fullstabs. Consumers that hand a
      * DataType to Ghidra must therefore check DTM residency; see `DemanglerReplacer.replace`.
      */
-    internal fun Type.seedPlaceholder(reason: String? = null): DataType =
+    internal fun Type.seedPlaceholder(reason: String): DataType =
         placeholders.getOrPut(id) { makePlaceholder(this, CATEGORY, reason) }
 
-    /** Canonical-group fan-out where every member id  shares its winner's in-flight stub.
+    /**
+     * Canonical-group fan-out where every member id  shares its winner's in-flight stub.
      * Winners are always XRef-targets (Struct/Union/Enum), so the stub always goes into the
      * DTM up front — in-place fill then lands on the DTM-resident object — and is shared across
      * the group's member ids so a Ref resolved before the winner materializes pulls in that one.
      */
     internal fun LocatedType.seedPlaceholder() {
-        val placeholder = makePlaceholder(type, location.category, name = location.name).resolveIntoDtm()
+        val placeholder = makePlaceholder(type, location.category, "fwd-decl", location.name).resolveIntoDtm()
         for (m in members) placeholders.putIfAbsent(m, placeholder)
     }
 
@@ -155,7 +155,7 @@ class DataTypeRegistry(
         byId[id] ?: placeholders[id] ?: index.byId(id)?.let { ast ->
             ast.substitute()?.let { cache(id, it) }
                 ?: if (ast.body is TypeDecl.Struct) {
-                    ast.seedPlaceholder()
+                    ast.seedPlaceholder("cycle-break")
                 } else {
                     materializeTopLevel(ast)
                 }
@@ -216,7 +216,7 @@ private val Demangled.categoryPath get(): CategoryPath =
 
 /** Pointee type-id of a member function's leading `this` param (`InlineDef?→Pointer→Ref`), else null. */
 private fun Func.thisParamTypeId(): GlobalTypeId? {
-    val p = params.firstOrNull()?.body as? SymbolDecl.Param ?: return null
+    val p = params.firstOrNull()?.body ?: return null
     if (p.name != "this") return null
     val inner = (p.type as? TypeDecl.InlineDef)?.inner ?: p.type
     return ((inner as? TypeDecl.Pointer)?.inner as? TypeDecl.Ref)?.id

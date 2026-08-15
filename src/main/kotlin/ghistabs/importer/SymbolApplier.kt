@@ -13,19 +13,15 @@ import ghidra.program.model.listing.*
 import ghidra.program.model.listing.Function
 import ghidra.program.model.symbol.SourceType
 import ghidra.program.model.symbol.SymbolTable
-import ghistabs.baseStackParamOffset
-import ghistabs.demangle
-import ghistabs.demangledName
+import ghistabs.*
 import ghistabs.diagnose.ApplyErrorBucket
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.Level
 import ghistabs.diagnose.degradation
-import ghistabs.forceCreateData
 import ghistabs.harvest.*
 import ghistabs.materialize.DataTypeRegistry
 import ghistabs.materialize.reasonFor
 import ghistabs.materialize.resolveRef
-import ghistabs.namespaceChain
 import ghistabs.parse.*
 
 /**
@@ -119,29 +115,25 @@ class SymbolApplier(
                 // Keeping the N_PSYM one produces duplicate-`this` signatures Ghidra can't evict.
                 val params = open.params
                     .filterNot {
-                        (it.body as? SymbolDecl.Param)?.name == "this"
+                        it.body.name == "this"
                     }
-                    .mapIndexed { i, p ->
-                        val pdecl = p.body
-                        val (pname, pdt) = when (pdecl) {
-                            is SymbolDecl.Param -> pdecl.name to registry.resolveRef(pdecl.type)
-                            else -> "arg$i" to null
-                        }
+                    .map { p ->
+                        val pdt = registry.resolveRef(p.body.type)
                         if (pdt == null) {
                             degradation(
                                 "param-untyped",
-                                "${open.name}.$pname",
+                                "${open.name}.${p.body.name}",
                             )
                         }
                         registry.reasonFor(pdt)?.let { reason ->
                             degradation(
                                 "param-typed-$reason",
-                                "${open.name}.$pname",
+                                "${open.name}.${p.body.name}",
                                 "type=${pdt?.pathName}",
                             )
                         }
                         ParameterImpl(
-                            pname,
+                            p.body.name,
                             pdt ?: Undefined4DataType.dataType,
                             ctx.program,
                             source,
@@ -188,11 +180,11 @@ class SymbolApplier(
     }
 
     internal fun applyAllGlobals(): Int {
-        ctx.monitor.initialize(harvest.symbolsByCu.values.sumOf { it.size }.toLong(), "Stabs: applying globals")
+        ctx.monitor.initialize(harvest.staticsByCu.values.sumOf { it.size }.toLong(), "Stabs: applying globals")
         var globals = 0
 
         // Globals + file-statics.
-        for ((cu, syms) in harvest.symbolsByCu) {
+        for ((cu, syms) in harvest.staticsByCu) {
             for (sym in syms) {
                 ctx.monitor.increment()
                 try {
@@ -326,23 +318,21 @@ class SymbolApplier(
         return if (base !in taken) base else generateSequence(1, Int::inc).map { "${base}_$it" }.first { it !in taken }
     }
 
-    private fun applyLocal(func: Function, loc: Symbol, paramNames: Set<String>, firstUse: Int) {
+    private fun applyLocal(func: Function, loc: LocalSymbol, paramNames: Set<String>, firstUse: Int) {
         val decl = loc.body
-        val resolvedDt = when (decl) {
-            is SymbolDecl.Local -> registry.resolveRef(decl.type)
-            else -> return
-        }
-        if (resolvedDt == null) {
+        val dt = registry.resolveRef(decl.type)?.also {
+            registry.reasonFor(it)?.let { reason ->
+                degradation(
+                    "local-typed-$reason",
+                    "${func.name}.${decl.name}",
+                    "type=${it.pathName}",
+                )
+            }
+        } ?: run {
             degradation("local-untyped", "${func.name}.${decl.name}]")
+            Undefined4DataType.dataType
         }
-        registry.reasonFor(resolvedDt)?.let { reason ->
-            degradation(
-                "local-typed-$reason",
-                "${func.name}.${decl.name}",
-                "type=${resolvedDt?.pathName}",
-            )
-        }
-        val dt = resolvedDt ?: Undefined4DataType.dataType
+
         try {
             when (decl.location) {
                 VariableLocation.STACK -> {
@@ -429,9 +419,9 @@ class SymbolApplier(
      * variable — Ghidra's frame maps an offset to at most one — so for everything shadowed there,
      * this comment is the only surviving record of the name, type and slot.
      */
-    private fun scopeCommentText(locals: List<Symbol>): String {
-        val (stack, registers) = locals.partition { (it.body as? SymbolDecl.Local)?.location == VariableLocation.STACK }
-        val rows = (stack.sortedBy { it.rawValue.toInt() } + registers.sortedBy { it.body.name }).map { loc ->
+    private fun scopeCommentText(locals: List<LocalSymbol>): String {
+        val (stack, registers) = locals.partition { it.body.location == VariableLocation.STACK }
+        val rows = (stack.sortedBy { it.rawValue } + registers.sortedBy { it.body.name }).map { loc ->
             val type = registry.resolveRef(loc.body.type)?.displayName ?: "?"
             val origin = loc.sourceFile?.let { "[${it.filename}:${loc.declLine}]" } ?: "[line ${loc.declLine}]"
             Triple("$type ${loc.body.name}", loc.storage(ctx.program).orEmpty(), origin)
@@ -443,20 +433,14 @@ class SymbolApplier(
         }
     }
 
-    private fun applyStatic(sym: Symbol): Boolean {
-        val decl = sym.body as? SymbolDecl.Static ?: run {
-            warn("unexpected-symbol", "${sym.body}")
+    private fun applyStatic(sym: StaticSymbol): Boolean {
+        val decl = sym.body
+        val addr = ctx.resolver.forSymbol(sym) ?: run {
+            warn("unresolved-symbol", "static ${decl.name}")
+            debug("static-skipped", "addr=${decl.name} reason=unresolved-symbol")
             return false
         }
-        val addr = when (decl.scope) {
-            StaticScope.GLOBAL -> ctx.resolver.resolve(decl.name) ?: run {
-                warn("unresolved-symbol", "static ${decl.name}")
-                debug("static-skipped", "addr=${decl.name} reason=unresolved-symbol")
-                return false
-            }
 
-            else -> ctx.resolver.buildAddress(sym.rawValue)
-        }
         ensureStabLabel(addr, sym.body.name)
 
         val dt = registry.resolveRef(decl.type) ?: run {

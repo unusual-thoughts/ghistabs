@@ -57,7 +57,7 @@ class Scorecard(private val renderer: Renderer) {
     private val unmapped by lazy { stretches.filter { !it.mapped } }
 
     /** One attribution's declarations: how many distinct ones it places, and the graded subset. */
-    inner class Grades(val total: Int, val graded: List<Graded>) {
+    class Grades(val total: Int, val graded: List<Graded>) {
         operator fun get(verdict: Verdict) = graded.count { it.verdict == verdict }
     }
 
@@ -77,9 +77,10 @@ class Scorecard(private val renderer: Renderer) {
     private fun gradeAll(sourceOf: (Type) -> GhidraSourceFile?): Grades {
         val decls = index.allTypes
             .mapNotNull { type ->
-                type.name?.substringBefore('<')
-                    ?.takeIf { type.declLine > 0 }
-                    ?.let { name -> sourceOf(type)?.let { Triple(it, name, type.declLine) } }
+                type.declLine?.let { line ->
+                    type.name?.substringBefore('<')
+                        ?.let { name -> sourceOf(type)?.let { Triple(it, name, line) } }
+                }
             }
             .distinct()
         return Grades(decls.size, decls.mapNotNull { (source, name, line) -> grade(source, name, line) })
@@ -91,7 +92,7 @@ class Scorecard(private val renderer: Renderer) {
      */
     val moved: List<Triple<String, GhidraSourceFile, GhidraSourceFile>> by lazy {
         index.allTypes
-            .filter { it.name != null && it.declLine > 0 }
+            .filter { it.name != null && it.declLine != null }
             .mapNotNull { type ->
                 val from = baseById[type.id] ?: return@mapNotNull null
                 index.effectiveSourceFor(type)
