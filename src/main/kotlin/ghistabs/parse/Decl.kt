@@ -337,6 +337,7 @@ sealed interface SymbolDecl<Id : IdInterface> {
     data class Function<Id : IdInterface>(
         override val name: String,
         val scope: FunctionScope,
+        /**  the return type */
         override val type: TypeDecl<Id>,
     ) : SymbolDecl<Id>
 

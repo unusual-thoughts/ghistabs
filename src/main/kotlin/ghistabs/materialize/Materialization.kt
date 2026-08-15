@@ -469,14 +469,14 @@ fun DataTypeRegistry.materializeAll(): Int {
         // up-front so later in-place mutations land on the DTM-resident object — and a
         // Ref resolved before the winner materializes pulls in that one object, not an
         // empty second copy that would collide with the filled type (`.conflict`).
-        for (group in index.byLocation.values) {
-            group.seedPlaceholder()
+        for (located in index.byLocation.values) {
+            located.seedPlaceholder()
         }
 
         monitor.initialize(index.byLocation.size.toLong(), "Stabs: materializing types")
-        for (group in index.byLocation.values) {
+        for (located in index.byLocation.values) {
             monitor.increment()
-            group.materialize()
+            located.materialize()
         }
 
         registerNamedPrimitiveTypedefs()
@@ -528,5 +528,5 @@ internal fun DataTypeRegistry.materializeTopLevel(ast: Type): DataType = cacheIf
     // flag every _ZTI global as a `degraded-*-typed-xref-stub` false alarm).
     ast.substitute()
         ?: index.byXRef(ast)?.let { materializeTopLevel(it) }
-        ?: materializeBody(ast, CATEGORY, ast.seedPlaceholder(reason = "ref-stub"))
+        ?: materializeBody(ast, CATEGORY, ast.seedPlaceholder("ref-stub"))
 }

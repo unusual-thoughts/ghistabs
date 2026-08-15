@@ -20,7 +20,7 @@ class TypeStore(
      * Gather TypeAsts for every InlineDef in [sym]. The nested asts inherit the
      * enclosing declaration's source location.
      */
-    fun hoistSymbolDefs(sym: Symbol, cu: SourceFile.CUSource) {
+    fun hoistSymbolDefs(sym: Symbol<*>, cu: SourceFile.CUSource) {
         fun TypeDecl<GlobalTypeId>.walk(): List<Type> = when (this) {
             // Emit the InlineDef ast AND recurse — gcc nests them (e.g. Method whose
             // return is an inline-defined Pointer-to-X). Without recursion the inner

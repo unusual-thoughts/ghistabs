@@ -9,7 +9,6 @@ import ghistabs.harvest.BlockScope
 import ghistabs.harvest.Func
 import ghistabs.harvest.GhidraSourceFile
 import ghistabs.harvest.blockAt
-import ghistabs.parse.SymbolDecl
 
 /** How a token is spelled in the render — see [Renderer.spell] for what the renderer substitutes. */
 typealias Spelling = (ClangToken) -> String
@@ -392,7 +391,7 @@ private val DEDUP_SUFFIX = Regex("_\\d+$")
 
 private fun ClangLine.declaresForeign(func: Func, source: GhidraSourceFile): Boolean {
     val name = significant().lastOrNull { it is ClangVariableToken }?.text?.replace(DEDUP_SUFFIX, "") ?: return false
-    val matching = func.locals.filter { (it.body as? SymbolDecl.Local)?.name == name }
+    val matching = func.locals.filter { it.body.name == name }
     return matching.isNotEmpty() && matching.all { it.sourceFile != source }
 }
 

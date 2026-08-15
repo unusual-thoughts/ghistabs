@@ -704,7 +704,7 @@ include path where it compiles the definitions, the bare `#include "dspinfo.h"` 
 where another TU only forward-references it. The two `N_BINCL`s carry **different
 checksums** (149935 vs 865864 — each CU's expansion differs), so they can't be merged by
 checksum. `SourceFile`/`HeaderFile` (`parse/IdInterface.kt`) key by the raw `filename`
-string, and everything downstream (`Harvest.lineEntries` keys, `symbolsByCu`,
+string, and everything downstream (`Harvest.lineEntries` keys, `staticsByCu`,
 `typeAsts[].id.source`, `TypeResolver.functionSource`/`effectiveSourceFor`,
 `Renderer.sources`) inherits that, so one file becomes two sources → two output files.
 
@@ -723,7 +723,7 @@ source filenames and route every source-string use through it:
 already derives `functionSource`/`effectiveSourceFor`) and applied at every point a source
 string is used as an output-file key or per-source filter: `Renderer.sources`, and the
 RenderContext filters (`functionSource[it] == source`, `lineEntries[source]`,
-`effectiveSourceFor(it) == source`, `symbolsByCu[source]`). `lineEntries`/`symbolsByCu` are
+`effectiveSourceFor(it) == source`, `symbolsByCu[source]`). `lineEntries`/`staticsByCu` are
 keyed by the raw string, so either re-key them by canonical name or look up via a
 canonical→raw fan-in. Extract the pure canonicalisation (list of filenames → map) so it's
 Kind-1 testable.
@@ -928,7 +928,7 @@ threaded through 8 render sites.
 
 - **Phase 1 — canon once, at the data layer.** New `Harvester.canonicalizeRenderSources()` post-pass
   (after `nameAnonymousTypedefTargets`, gated by `canonicalizePaths`) folds `LineEntry.source` /
-  `SymbolRecord.sourceFile` and re-keys `lineEntriesByFile`/`symbolsByCu` to canonical once; the fold map
+  `SymbolRecord.sourceFile` and re-keys `lineEntriesByFile`/`staticsByCu` to canonical once; the fold map
   is retained on `Harvest.sourceCanonicalization`. `id.source`/`GlobalTypeId` stay **raw** — DTM identity,
   content hash, and §20 grouping are content/id-based, not path-based.
 - **Phase 2 — render de-threaded.** `Renderer`/`FunctionSpans` revert to ~`af16e9e`: no per-record
@@ -2377,7 +2377,7 @@ blank space removed here was never between content, it was the run below the las
   **L29**; `_ZTI7XVImage` 36 = xvimage.h L36; `_ZTI8AppImage` 19 = appimage.h L19; `_ZTI8XDVImage` 18;
   `_ZTI15FileSystemImage` 28. The line is the *class's* declaration line, and the proof is that it is
   the same in every CU that emits the symbol — where the sibling `_ZTS` string gives one class five
-  different lines across five CUs, so only `_ZTI` is re-filed. `symbolsBySource` now demangles it back
+  different lines across five CUs, so only `_ZTI` is re-filed. `staticsBySource` now demangles it back
   to its class (`Itanium.typeinfoClassOf`, the `AddressTableHandler` path the vtable lookup already
   used) and files it where that class *renders*. Five of appquery's seven land in the header that
   declares the class; the two `std::` ones fall back to the CU because their class is itself misfiled

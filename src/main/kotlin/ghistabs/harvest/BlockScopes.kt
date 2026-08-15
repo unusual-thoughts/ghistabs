@@ -1,3 +1,5 @@
+@file:Suppress("SERIALIZER_TYPE_INCOMPATIBLE")
+
 package ghistabs.harvest
 
 import ghidra.program.model.address.Address
@@ -18,7 +20,7 @@ data class BlockScope(
     val start: Address,
     @Serializable(with = AddressSerializer::class)
     val end: Address,
-    val locals: List<Symbol>,
+    val locals: List<LocalSymbol>,
     val children: List<BlockScope> = emptyList(),
     // Resolved by BlockTreeBuilder.finish; null until then. See [finish] for how it is derived.
     @Serializable(with = SourceFileSerializer::class) val source: GhidraSourceFile? = null,
@@ -38,19 +40,19 @@ data class BlockScope(
  * single top-down walk and hands back the completed function-scope records.
  */
 internal class BlockTreeBuilder {
-    private class Frame(val start: Address, val locals: List<Symbol>) {
+    private class Frame(val start: Address, val locals: List<LocalSymbol>) {
         val children = mutableListOf<BlockScope>()
     }
 
     private val frames = mutableListOf<Frame>()
     private val roots = mutableListOf<BlockScope>()
-    private var pending = mutableListOf<Symbol>()
+    private var pending = mutableListOf<LocalSymbol>()
 
     /** Address of the last N_RBRAC seen — the function's end when gcc omits the N_FUN end marker. */
     var lastClose: Address? = null
         private set
 
-    fun local(record: Symbol) {
+    fun local(record: LocalSymbol) {
         pending += record
     }
 
@@ -84,8 +86,8 @@ internal class BlockTreeBuilder {
      * *after* the body, so every function-scope symbol carries whichever file the last line note in
      * the function happened to be in.
      */
-    fun finish(lines: List<LineEntry>, functionSource: GhidraSourceFile): Pair<List<Symbol>, List<BlockScope>> {
-        val flat = mutableListOf<Symbol>()
+    fun finish(lines: List<LineEntry>, functionSource: GhidraSourceFile): Pair<List<LocalSymbol>, List<BlockScope>> {
+        val flat = mutableListOf<LocalSymbol>()
 
         // Rebuilds rather than repointing in place: the tree and the flat list hand out the *same*
         // corrected copies, so they cannot disagree, and a Symbol stays immutable — it is reachable

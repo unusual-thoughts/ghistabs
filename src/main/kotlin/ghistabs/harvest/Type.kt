@@ -27,8 +27,8 @@ data class Type(
     val id: GlobalTypeId,
     val name: String?,
     val body: TypeDecl<GlobalTypeId>,
-    /** Source line from N_LSYM `desc`. gcc 3.x sets it; gcc 12 leaves 0. */
-    val declLine: Int = 0,
+    /** Source line from N_LSYM `desc`, null when the emitter left it 0 (no -gstabs+). */
+    val declLine: Int? = null,
     /** N_SOL-effective source at definition time (header for stdlib, CU for app-local). */
     @Serializable(with = SourceFileSerializer::class) val declSourceFile: GhidraSourceFile? = null,
 ) {
@@ -53,6 +53,14 @@ data class Type(
     }
 
     fun asStruct() = asType<TypeDecl.Struct<GlobalTypeId>>()
+
+    /** A declaration the harvest attributes to a file at a line — what a local file is checked against. */
+    data class Decl(val line: Int, val name: String)
+
+    fun declKey() = when {
+        declLine == null || name == null -> null
+        else -> Decl(declLine, name.substringBefore('<'))
+    }
 }
 
 /**
@@ -60,12 +68,12 @@ data class Type(
  * from the stab's `desc` field (0 when emitter omits it); `sourceFile` is the N_SOL-effective name.
  */
 @Serializable
-data class Symbol(
+data class Symbol<S : SymbolDecl<GlobalTypeId>>(
     val recordIndex: Int,
     val recordType: StabType,
-    val body: SymbolDecl<GlobalTypeId>,
+    val body: S,
     val rawValue: Long,
-    val declLine: Int = 0,
+    val declLine: Int? = null,
     /** N_SOL in effect when the record was read — except for function-scope symbols, where the N_SOL
      *  is meaningless, so [BlockTreeBuilder.finish] rebuilds them with the block's real source. */
     @Serializable(with = SourceFileSerializer::class) val sourceFile: GhidraSourceFile? = null,
@@ -75,14 +83,27 @@ data class Symbol(
 ) {
     constructor(
         record: StabRecord,
-        decl: SymbolDecl<GlobalTypeId>,
+        decl: S,
         sourceFile: GhidraSourceFile? = null,
         enclosingFunction: String? = null,
-    ) : this(record.index, record.type, decl, record.value, record.desc, sourceFile, enclosingFunction)
+    ) : this(
+        record.index,
+        record.type,
+        decl,
+        record.value,
+        record.desc.takeIf { it > 0 },
+        sourceFile,
+        enclosingFunction,
+    )
+
+    /** The same symbol with its body narrowed, for a `when (val decl = sym.body)` arm: smart-casting
+     *  the body doesn't narrow the Symbol around it, and casting it would be unchecked. */
+    fun <T : SymbolDecl<GlobalTypeId>> retype(body: T) =
+        Symbol(recordIndex, recordType, body, rawValue, declLine, sourceFile, enclosingFunction)
 
     val location get() = when (body) {
-        is SymbolDecl.Local -> body.location
-        is SymbolDecl.Param -> body.location
+        is SymbolDecl.Local<*> -> body.location
+        is SymbolDecl.Param<*> -> body.location
         else -> null
     }
 
@@ -93,22 +114,6 @@ data class Symbol(
             it == VariableLocation.REGISTER,
             program.baseStackParamOffset,
         )
-    }
-
-    /**
-     * Where gcc put this local, as an address the decompiler indexes storage by: the register itself, or
-     * the frame slot at Ghidra's origin rather than gcc's frame-pointer-relative one. Null for anything
-     * that is neither — and for the dbx register numbers [dbxRegisterName] declines to map (the x87
-     * stack), which is the same set the importer skips.
-     */
-    fun storageAddress(program: Program) = when (location) {
-        VariableLocation.REGISTER -> dbxRegisterName(program.defaultPointerSize, rawValue.toInt())
-            ?.let { program.getRegister(it)?.address }
-
-        VariableLocation.STACK ->
-            program.addressFactory.stackSpace.getAddress(rawValue - program.baseStackParamOffset)
-
-        null -> null
     }
 
     companion object {
@@ -127,6 +132,11 @@ data class Symbol(
         }
     }
 }
+
+typealias ParamSymbol = Symbol<SymbolDecl.Param<GlobalTypeId>>
+typealias LocalSymbol = Symbol<SymbolDecl.Local<GlobalTypeId>>
+typealias StaticSymbol = Symbol<SymbolDecl.Static<GlobalTypeId>>
+typealias FunctionSymbol = Symbol<SymbolDecl.Function<GlobalTypeId>>
 
 /** A source identity in a dump is its normalised path — the whole of what it is, minus an id type
  *  stabs never gives us. */
@@ -161,8 +171,8 @@ data class Func(
     // Both assigned once, by BlockTreeBuilder.finish, when the function's last record has been seen:
     // a function-scope symbol's source isn't knowable until then, so there is no window in which
     // these hold records that are about to be corrected.
-    val locals: List<Symbol> = emptyList(),
-    val params: List<Symbol> = emptyList(),
+    val locals: List<LocalSymbol> = emptyList(),
+    val params: List<ParamSymbol> = emptyList(),
     val blocks: List<BlockScope> = emptyList(),
     // N_SLINEs emitted between this function's N_FUN and the next, in stab-stream order.
     // This is the authoritative membership: it includes exception-handler / landing-pad
@@ -173,6 +183,8 @@ data class Func(
     // null = size not derivable from stabs (no N_LBRAC/N_RBRAC scope, no end-marker N_FUN).
     // Distinct from a genuine 0. Used by TypeResolver for header-hint address ranges.
     val sizeBytes: ULong? = null,
+    // N_FUN's desc: DECL_SOURCE_LINE, null unless built with -gstabs+.
+    val declLine: Int? = null,
 ) {
     val demangledName by lazy { demangledName(decl.name) }
 

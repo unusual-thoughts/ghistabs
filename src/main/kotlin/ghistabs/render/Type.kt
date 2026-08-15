@@ -4,10 +4,7 @@ import ghidra.program.model.data.ByteDataType
 import ghidra.program.model.data.CharDataType
 import ghidra.program.model.data.SignedByteDataType
 import ghidra.program.model.listing.Program
-import ghistabs.harvest.GhidraSourceFile
-import ghistabs.harvest.HarvestIndex
-import ghistabs.harvest.Symbol
-import ghistabs.harvest.Type
+import ghistabs.harvest.*
 import ghistabs.importer.AddressResolver
 import ghistabs.materialize.TemplateNameShortener
 import ghistabs.materialize.itanium.Itanium
@@ -16,7 +13,7 @@ import ghistabs.parse.*
 import ghistabs.scan.Definition
 
 /** One stabs variable of a function, declared in this file: where gcc put it and how it renders. */
-data class Var(val line: Int, val name: String, val text: String, val role: String?)
+data class Var(val line: Int?, val name: String, val text: String, val role: String?)
 
 interface RenderContext {
     val source: GhidraSourceFile
@@ -25,8 +22,8 @@ interface RenderContext {
     val index: HarvestIndex
     val shortener: TemplateNameShortener?
 
-    fun indentFor(line: Int): Int
-    fun isStale(line: Int): Boolean
+    fun indentFor(line: Int?): Int
+    fun isStale(line: Int?): Boolean
 
     /** The definition a line sits in, read off the real source `--source-root` mapped. */
     fun enclosing(source: GhidraSourceFile, line: Int): Definition?
@@ -185,7 +182,7 @@ interface RenderContext {
     // be one. A local's storage is real but is a fact about the compiled code rather than the
     // source being reconstructed, so it is opt-in — and spelled by the same [dbxStorageName] the
     // scope plate comments use, so `EBX` and `Stack[-0x38]` mean there exactly what they mean here.
-    fun Symbol.renderVar(showStorage: Boolean) = when (body) {
+    fun Symbol<*>.renderVar(showStorage: Boolean) = when (body) {
         is SymbolDecl.Local -> body.name to if (showStorage) storage(program) else null
         is SymbolDecl.Param -> body.name to null
         else -> null
@@ -227,7 +224,7 @@ interface RenderContext {
         else -> "$name;"
     }
 
-    fun Type.emitTypeBody(line: Int, instantiations: Int): Claim? {
+    fun Type.emitTypeBody(instantiations: Int): Claim? {
         if (name == null) {
             return null
         }
@@ -255,26 +252,27 @@ interface RenderContext {
             is TypeDecl.Enum -> "${body.members.size} members"
         }
         val sizeNote = "/* $extent" + (if (instantiations > 1) ", $instantiations instantiations" else "") + " */"
-        val stale = isStale(line)
+        val stale = isStale(declLine)
         return if (members.isNotEmpty()) {
             Claim(
                 Owner.TYPE_BODY,
-                line,
-                FileRenderer.braceRows(openText, members, "}; $sizeNote", indentFor(line), ""),
+                declLine,
+                FileRenderer.braceRows(openText, members, "}; $sizeNote", indentFor(declLine), ""),
                 Fit.ELASTIC,
                 stale,
             )
         } else {
             val keyword = if (body is TypeDecl.Struct) body.kind.cxxKeyword() else "enum"
-            val row = Row("$keyword $shortName; $sizeNote", indentFor(line), "")
-            Claim(Owner.TYPE_BODY, line, listOf(row), stale = stale)
+            val row = Row("$keyword $shortName; $sizeNote", indentFor(declLine), "")
+            Claim(Owner.TYPE_BODY, declLine, listOf(row), stale = stale)
         }
     }
 
     // A global/static: the linker's data at [addr] renders as its initializer — a scalar
     // inline, a multi-element aggregate spread over the blank lines below (the same
     // brace-block layout as a struct body).
-    fun emitGlobal(sym: SymbolDecl.Static<GlobalTypeId>, rec: Symbol): Claim {
+    fun emitGlobal(rec: StaticSymbol): Claim {
+        val sym = rec.body
         val scope = sym.scope.comment()
         val role = when (rec.recordType) {
             StabType.N_GSYM if sym.scope == StaticScope.GLOBAL -> "(global)"
@@ -285,10 +283,10 @@ interface RenderContext {
             else -> "($scope)"
         }
         // N_GSYM has rawValue=0 (linker resolves it from the mangled name) — look it up.
-        val addr = when {
-            rec.rawValue != 0L -> resolver.buildAddress(rec.rawValue)
-            else -> resolver.resolve(sym.name)
-        }
+        val addr = resolver.forSymbol(rec)
+
+        // Without -gstabs+ there is no decl line: the claim is band-anchored (Claim.anchoring), so
+        // there is no row to indent against and nothing for staleness to be judged past.
         val indent = indentFor(rec.declLine)
         val base = sym.type.renderDecl(sym.name)
         // A string-valued global (pointer-to-string whose slot Ghidra left an untyped

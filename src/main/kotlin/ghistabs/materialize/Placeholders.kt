@@ -1,7 +1,6 @@
 package ghistabs.materialize
 
 import ghidra.program.model.data.*
-import ghistabs.diagnose.Level
 import ghistabs.diagnose.degradation
 import ghistabs.harvest.Type
 import ghistabs.parse.AggrKind
@@ -16,7 +15,7 @@ import ghistabs.parse.TypeDecl
 internal fun DataTypeRegistry.makePlaceholder(
     ast: Type,
     category: CategoryPath,
-    reason: String? = null,
+    reason: String,
     // The canonical slot name — defaults to the stabs identity, but a scope-attributed group passes
     // its key name (the demangler's leaf) so the type materializes at the demangler's spelling
     // (`/std/string`, not `/std/basic_string<…>`), the slot Ghidra's this-param creator then reuses.
@@ -48,11 +47,7 @@ internal fun DataTypeRegistry.makePlaceholder(
 
         else -> StructureDataType(category, name, 0, dtm)
     }
-    log(
-        "placeholder-created",
-        "name=$name category=$category reason=${reason ?: "fwd-decl"}",
-        if (reason == null) Level.DEBUG else Level.WARN,
-    )
+    debug("placeholder-created", "name=$name category=$category reason=$reason")
     return dt
 }
 
