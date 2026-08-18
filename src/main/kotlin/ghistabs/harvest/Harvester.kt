@@ -92,8 +92,8 @@ class Harvester(private val monitor: TaskMonitor, private val sink: DiagnosticSi
                             decl.id,
                             decl.name,
                             decl.type,
-                            declLine = sym.declLine,
-                            declSourceFile = sym.sourceFile,
+                            line = sym.line,
+                            sourceFile = sym.sourceFile,
                         )
 
                         is SymbolDecl.Local -> cursor.local(sym.retype(decl))

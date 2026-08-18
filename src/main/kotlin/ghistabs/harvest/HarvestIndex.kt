@@ -155,7 +155,7 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
     val sourceFolds: Map<GhidraSourceFile, GhidraSourceFile> by lazy {
         foldSourcePaths(
             harvest.lineEntries.keys + harvest.staticsByCu.keys +
-                typeAsts.values.flatMap { listOfNotNull(it.declSourceFile, it.id.source.identity) },
+                typeAsts.values.flatMap { listOfNotNull(it.sourceFile, it.id.source.identity) },
         )
     }
 
@@ -225,7 +225,7 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
         // sharing a stem are dropped rather than guessed between.
         (
             harvest.lineEntries.keys + typeAsts.values.flatMap {
-                listOfNotNull(it.declSourceFile, it.id.source.identity)
+                listOfNotNull(it.sourceFile, it.id.source.identity)
             }
             )
             .filter { it.filename.hasHeaderExtension() && !it.path.isStdMarkerPath() }
@@ -359,7 +359,7 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
     private fun Type.hinted() = name?.let { multiSourceHeaderHints[it] }
 
     private fun Type.recorded() =
-        declSourceFile?.takeIf { body !is TypeDecl.Struct && body !is TypeDecl.Enum } ?: id.source.identity
+        sourceFile?.takeIf { body !is TypeDecl.Struct && body !is TypeDecl.Enum } ?: id.source.identity
 
     /** Attribution before a source root has a say. */
     private fun Type.baseSource() = fold(hinted() ?: recorded())
@@ -388,11 +388,11 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
         when {
             declared == null -> Unit
             hint != null && hint != declared ->
-                debug("source-root-over-hint", "$name L$declLine: $declared over $hint")
+                debug("source-root-over-hint", "$name L$line: $declared over $hint")
             chosen != fold(
                 recorded(),
-            ) -> debug("source-root-refiled", "$name L$declLine: ${fold(recorded())} → $chosen")
-            else -> debug("source-root-confirms", "$name L$declLine: $chosen")
+            ) -> debug("source-root-refiled", "$name L$line: ${fold(recorded())} → $chosen")
+            else -> debug("source-root-confirms", "$name L$line: $chosen")
         }
         return chosen
     }
@@ -542,11 +542,11 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
     fun effectiveSourceFor(type: Type) = effectiveSourceById[type.id] ?: type.effectiveSource()
 
     /**
-     * `(name, declLine)` pairs that end up filed under more than one source — so at most one of them
+     * `(name, line)` pairs that end up filed under more than one source — so at most one of them
      * is where the declaration sits, and nothing here says which.
      *
      * A declaration has one site. `_Alloc_traits<…>` arrives as eight instantiations all carrying
-     * declLine 898, spread across image.h, vminfo.h, xvimage.h and three CUs: they cannot all be
+     * line 898, spread across image.h, vminfo.h, xvimage.h and three CUs: they cannot all be
      * right, none of them is (its home is stl_alloc.h, which holds no instantiation of it at all,
      * so no vote or sibling can reach it — §38's grade-3 wall), and rendering it in each of those
      * files at line 898 both states a falsehood and stretches image.h's canvas to 903 rows for 25

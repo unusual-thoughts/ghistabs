@@ -119,7 +119,7 @@ data class Row(
  * A pass's request for space. [line] is the source line the content belongs to, null to float in the
  * band above the first anchored row (an `#include`, which belongs to the file rather than a line).
  *
- * [stale] marks a claim gcc misattributed — a declLine past the file's activity extent, a typedef
+ * [stale] marks a claim gcc misattributed — a line past the file's activity extent, a typedef
  * splayed across bogus lines by N_SOL. It loses every contested row, so a misattributed declaration
  * can no longer evict a real one; alone on its line it still renders, flagged.
  */

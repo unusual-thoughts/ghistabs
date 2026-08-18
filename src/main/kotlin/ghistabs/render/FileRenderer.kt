@@ -17,7 +17,7 @@ class FileRenderer(val renderer: Renderer, override val source: GhidraSourceFile
 
     private val rawFuncs = index.functionsBySource[source].orEmpty()
     private val lines = renderer.linesBySource[source].orEmpty()
-    private val typeDecls = index.typesBySource[source].orEmpty().filter { it.name != null && it.declLine != null }
+    private val typeDecls = index.typesBySource[source].orEmpty().filter { it.name != null && it.line != null }
     private val statics = index.staticsBySource[source].orEmpty()
 
     private val spans = FunctionSpans.of(rawFuncs, source)
@@ -68,8 +68,8 @@ class FileRenderer(val renderer: Renderer, override val source: GhidraSourceFile
 
         false -> sourceLength ?: setOfNotNull(
             lineExtent,
-            statics.mapNotNull { it.declLine }.maxOrNull(),
-            typeDecls.mapNotNull { it.declLine }.maxOrNull(),
+            statics.mapNotNull { it.line }.maxOrNull(),
+            typeDecls.mapNotNull { it.line }.maxOrNull(),
         ).maxOrNull()
     }
 
@@ -86,8 +86,8 @@ class FileRenderer(val renderer: Renderer, override val source: GhidraSourceFile
         sourceLength ?: setOfNotNull(
             lineExtent,
             bodyExtent,
-            statics.mapNotNull { it.declLine }.maxOrNull(),
-            typeDecls.filterNot { disputed(it) }.mapNotNull { it.declLine }.maxOrNull(),
+            statics.mapNotNull { it.line }.maxOrNull(),
+            typeDecls.filterNot { disputed(it) }.mapNotNull { it.line }.maxOrNull(),
         ).max()
     }
 
@@ -108,7 +108,7 @@ class FileRenderer(val renderer: Renderer, override val source: GhidraSourceFile
      * An uncontested declaration past the reach stays: that is `class XVImage` at xvimage.h L36, four
      * lines past the last of the header that happened to be inlined, and it is the file's own content.
      */
-    private fun misfiled(type: Type) = disputed(type) && type.declLine != null && type.declLine > ownExtent
+    private fun misfiled(type: Type) = disputed(type) && type.line != null && type.line > ownExtent
 
     /**
      * How tall the canvas is: the file's attested activity, plus every declaration that is not
@@ -123,8 +123,8 @@ class FileRenderer(val renderer: Renderer, override val source: GhidraSourceFile
     private val maxLine = setOfNotNull(
         spans.maxLine,
         lineExtent,
-        typeDecls.filterNot { isStale(it.declLine) }.mapNotNull { it.declLine }.maxOrNull(),
-        statics.filterNot { isStale(it.declLine) }.mapNotNull { it.declLine }.maxOrNull(),
+        typeDecls.filterNot { isStale(it.line) }.mapNotNull { it.line }.maxOrNull(),
+        statics.filterNot { isStale(it.line) }.mapNotNull { it.line }.maxOrNull(),
     ).max()
 
     private val canvas = Canvas(maxLine)
@@ -201,7 +201,7 @@ class FileRenderer(val renderer: Renderer, override val source: GhidraSourceFile
         return "\n\n/* ── displaced declarations (line unusable) ── */\n\n$rows\n"
     }
 
-    // Anonymous aggregates carry no source line (declLine == null), so they can't be placed inline
+    // Anonymous aggregates carry no source line (line == null), so they can't be placed inline
     // on the line-based canvas. Append them as a skeleton-only diagnostic block under their synthetic
     // Anon_ id; decomp omits them entirely. Deduped by ghidraName (content-hashed, §20).
     private fun anonAggregateAppendix(): String {
@@ -229,7 +229,7 @@ class FileRenderer(val renderer: Renderer, override val source: GhidraSourceFile
     }
 
     /**
-     * Instantiations that shared a declLine with the one rendered inline. Every instantiation of a
+     * Instantiations that shared a line with the one rendered inline. Every instantiation of a
      * template carries the *template's* line, so only one can hold that row; the rest would otherwise
      * vanish behind the `N instantiations` count. They differ in exactly the way that matters — the
      * substituted types — so they go here in full rather than being summarised away.
@@ -238,15 +238,15 @@ class FileRenderer(val renderer: Renderer, override val source: GhidraSourceFile
 
     private fun instantiationAppendix(): String {
         val (bodied, opaque) = mergedInstantiations
-            .sortedWith(compareBy({ it.declLine }, { it.name }))
+            .sortedWith(compareBy({ it.line }, { it.name }))
             .partition { it.body.memberCount() > 0 }
         // An instantiation with no members says nothing as `class X<…> {  }; /* 1 bytes */`, and 55 of
         // 68 appendix rows were exactly that. Its *name* is still the point — which specialisations
         // exist, which the `×N` count on the declaring line cannot say — so they list one line per
         // source line instead of one block each.
         val blocks = (
-            bodied.map { "/* L${it.declLine} */ ${it.oneLineBody()}" } +
-                opaque.groupBy { it.declLine }.map { (line, group) ->
+            bodied.map { "/* L${it.line} */ ${it.oneLineBody()}" } +
+                opaque.groupBy { it.line }.map { (line, group) ->
                     "/* L$line */ " + group.mapNotNull { it.name }
                         .joinToString(", ") { shortener.shortenedOrNull(it) ?: it } + ";"
                 }
@@ -303,7 +303,7 @@ class FileRenderer(val renderer: Renderer, override val source: GhidraSourceFile
 
     private fun typedefClaims(): List<Claim> {
         data class Td(val ast: Type, val name: String, val rendered: String) {
-            val line get() = ast.declLine
+            val line get() = ast.line
         }
 
         val typedefs = typeDecls
@@ -324,11 +324,11 @@ class FileRenderer(val renderer: Renderer, override val source: GhidraSourceFile
         }
 
         // Collapse duplicate (name, target) copies to one line. Keying on the pair — not the
-        // declLine the old dedup used — is what makes this fire when misattribution splays a
+        // line the old dedup used — is what makes this fire when misattribution splays a
         // typedef across several bogus lines.
         val seen = mutableSetOf<Pair<String, String>>()
         val claims = typedefs.sortedBy { it.line }.mapNotNull { (ast, name, rendered) ->
-            val line = ast.declLine
+            val line = ast.line
             val key = name to rendered
             if (!seen.add(key)) {
                 null
@@ -426,12 +426,12 @@ class FileRenderer(val renderer: Renderer, override val source: GhidraSourceFile
     // really did declare inside a function carries `enclosingFunction` and belongs where it is.
     private fun globalClaims(): List<Claim> {
         val claims = statics.mapNotNull { s ->
-            s.takeIf { dedup(s.declLine, s.body.name) }?.let { emitGlobal(s) to s }
+            s.takeIf { dedup(s.line, s.body.name) }?.let { emitGlobal(s) to s }
         }
         val reasons = claims.mapNotNull { (claim, s) ->
             when {
                 s.enclosingFunction != null -> null
-                spans.insideBody(s.declLine) -> Dropped(claim, INSIDE_BODY)
+                spans.insideBody(s.line) -> Dropped(claim, INSIDE_BODY)
                 s in foreignRun -> Dropped(claim, FOREIGN_RUN)
                 else -> null
             }
@@ -460,7 +460,7 @@ class FileRenderer(val renderer: Renderer, override val source: GhidraSourceFile
     private val foreignRun: Set<StaticSymbol> by lazy {
         statics
             .filter { it.enclosingFunction == null && it.rawValue != 0L }
-            .mapNotNull { s -> s.declLine?.to(s) }
+            .mapNotNull { s -> s.line?.to(s) }
             .sortedBy { it.second.rawValue }
             .chunkOf { run, (declLine, sym) ->
                 val lastLine = run.last().first
@@ -501,7 +501,7 @@ class FileRenderer(val renderer: Renderer, override val source: GhidraSourceFile
     // back to a one-line forward decl.
     private fun typeBodyClaims(): List<Claim> {
         val claims = mutableListOf<Claim>()
-        // Every instantiation of one template carries the *template's* declLine, so N of them arrive
+        // Every instantiation of one template carries the *template's* line, so N of them arrive
         // for a line the source declares once. They are not peers competing for space; they are one
         // declaration seen N times. Render the fullest body and say how many there were — the same
         // answer the allocator already gives inlined copies — rather than letting one instantiation's
@@ -749,13 +749,13 @@ class FileRenderer(val renderer: Renderer, override val source: GhidraSourceFile
                 }
             }
             for (ast in typeDecls) {
-                if (ast.declLine !in interior) continue
-                anomalies += "skeleton[$source]: type ${ast.name} declared at L${ast.declLine} $where"
+                if (ast.line !in interior) continue
+                anomalies += "skeleton[$source]: type ${ast.name} declared at L${ast.line} $where"
             }
             for (s in statics) {
-                if (s.declLine !in interior) continue
+                if (s.line !in interior) continue
                 val nm = s.body.name
-                anomalies += "skeleton[$source]: global/static $nm at L${s.declLine} $where"
+                anomalies += "skeleton[$source]: global/static $nm at L${s.line} $where"
             }
         }
         anomalies.forEach(::println)

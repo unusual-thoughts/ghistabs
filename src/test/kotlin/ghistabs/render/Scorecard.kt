@@ -77,7 +77,7 @@ class Scorecard(private val renderer: Renderer) {
     private fun gradeAll(sourceOf: (Type) -> GhidraSourceFile?): Grades {
         val decls = index.allTypes
             .mapNotNull { type ->
-                type.declLine?.let { line ->
+                type.line?.let { line ->
                     type.name?.substringBefore('<')
                         ?.let { name -> sourceOf(type)?.let { Triple(it, name, line) } }
                 }
@@ -92,12 +92,12 @@ class Scorecard(private val renderer: Renderer) {
      */
     val moved: List<Triple<String, GhidraSourceFile, GhidraSourceFile>> by lazy {
         index.allTypes
-            .filter { it.name != null && it.declLine != null }
+            .filter { it.name != null && it.line != null }
             .mapNotNull { type ->
                 val from = baseById[type.id] ?: return@mapNotNull null
                 index.effectiveSourceFor(type)
                     .takeIf { it != from }
-                    ?.let { Triple("${type.name!!.substringBefore('<')} L${type.declLine}", from, it) }
+                    ?.let { Triple("${type.name!!.substringBefore('<')} L${type.line}", from, it) }
             }
     }
 
