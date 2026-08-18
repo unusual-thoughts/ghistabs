@@ -69,6 +69,7 @@ class FunctionSpans(val ranges: List<FuncRange>) {
 
     /** The last line any function reaches, or null where this file holds no function at all. */
     val maxLine = ranges.maxOfOrNull { it.span.last }
+    val maxStabLine = ranges.maxOfOrNull { it.endInclusive }
 
     companion object {
         /**
