@@ -89,7 +89,7 @@ class Region(private val ctx: RenderContext, val file: GhidraSourceFile?) {
 
     /** What the real source says this stretch is part of, where `--source-root` resolved the file. */
     private fun definition() = entries.filter { it.source == origin }.minOfOrNull { it.line }
-        ?.let { ctx.enclosing(origin, it) }
+        ?.let { ctx.renderer.enclosing(origin, it) }
 
     /**
      * The head of this stretch's definition, as the file it was written in should show it —

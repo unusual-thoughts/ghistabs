@@ -6,15 +6,7 @@ import ghistabs.harvest.*
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
 
-class FileRenderer(val renderer: Renderer, override val source: GhidraSourceFile) : RenderContext {
-    override val program = renderer.program
-    override val shortener = renderer.shortener
-    override val resolver = renderer.resolver
-
-    // [source] and every per-record source field come from the resolver's facade with §15 folds
-    // already applied, so comparisons here are fold-to-fold with no per-site work.
-    override val index = renderer.index
-
+class FileRenderer(override val renderer: Renderer, override val source: GhidraSourceFile) : RenderContext {
     private val rawFuncs = index.functionsBySource[source].orEmpty()
     private val lines = renderer.linesBySource[source].orEmpty()
     private val typeDecls = index.typesBySource[source].orEmpty().filter { it.name != null && it.line != null }
@@ -22,11 +14,11 @@ class FileRenderer(val renderer: Renderer, override val source: GhidraSourceFile
 
     private val spans = FunctionSpans.of(rawFuncs, source)
 
-    override fun indentFor(line: Int?) = if (line != null && spans.inFunction(line)) 4 else 0
+    override fun Int?.indentAt() = if (this != null && spans.inFunction(this)) 4 else 0
 
     private val lineExtent = lines.maxOfOrNull { it.lineNumber }
     private val bodyExtent = spans.ranges.maxOfOrNull { it.endInclusive }
-    private val maxExtent = setOfNotNull(lineExtent, bodyExtent).maxOrNull()
+    private val maxExtent = extentOf(lineExtent, bodyExtent)
 
     /**
      * The file's real length, where `--source-root` resolved it and phase 2's agreement guard kept
@@ -66,11 +58,11 @@ class FileRenderer(val renderer: Renderer, override val source: GhidraSourceFile
     private val activityExtent = when (source in index.compilationUnits) {
         true -> maxExtent
 
-        false -> sourceLength ?: setOfNotNull(
+        false -> sourceLength ?: extentOf(
             lineExtent,
             statics.mapNotNull { it.line }.maxOrNull(),
             typeDecls.mapNotNull { it.line }.maxOrNull(),
-        ).maxOrNull()
+        )
     }
 
     /**
@@ -83,24 +75,22 @@ class FileRenderer(val renderer: Renderer, override val source: GhidraSourceFile
      * the declarations in dispute.
      */
     private val ownExtent by lazy {
-        sourceLength ?: setOfNotNull(
+        sourceLength ?: extentOf(
             lineExtent,
             bodyExtent,
             statics.mapNotNull { it.line }.maxOrNull(),
-            typeDecls.filterNot { disputed(it) }.mapNotNull { it.line }.maxOrNull(),
-        ).max()
+            typeDecls.filterNot { it.disputed() }.mapNotNull { it.line }.maxOrNull(),
+        )
     }
 
     // A decl at this line is misattributed (stale N_SOL) if it sits past the file's activity.
-    override fun isStale(line: Int?) = line != null && activityExtent != null && line > activityExtent
-
-    override fun enclosing(source: GhidraSourceFile, line: Int) = renderer.enclosing(source, line)
+    override fun Int?.isStale() = beyond(activityExtent)
 
     /** A declaration several files claim at one line — at most one of them rightly. */
-    private fun disputed(type: Type) = when (type.body) {
+    private fun Type.disputed() = when (body) {
         is TypeDecl.Struct, is TypeDecl.Enum -> index.conflictedTemplateDecls
         else -> index.conflictedTypedefDecls
-    }.let { type.declKey() in it }
+    }.let { declKey() in it }
 
     /**
      * [disputed], on a line this file cannot reach.
@@ -108,7 +98,7 @@ class FileRenderer(val renderer: Renderer, override val source: GhidraSourceFile
      * An uncontested declaration past the reach stays: that is `class bouniaf` at header.h L36, four
      * lines past the last of the header that happened to be inlined, and it is the file's own content.
      */
-    private fun misfiled(type: Type) = disputed(type) && type.line != null && type.line > ownExtent
+    private fun Type.misfiled() = disputed() && line.beyond(ownExtent)
 
     /**
      * How tall the canvas is: the file's attested activity, plus every declaration that is not
@@ -120,12 +110,12 @@ class FileRenderer(val renderer: Renderer, override val source: GhidraSourceFile
      * displaced appendix, which is where a declaration whose line is unusable belongs. Filtering at
      * the source instead loses it silently: unfile.cpp's appendix went from 78 entries to 21.
      */
-    private val maxLine = setOfNotNull(
+    private val maxLine = extentOf(
         spans.maxLine,
         lineExtent,
-        typeDecls.filterNot { isStale(it.line) }.mapNotNull { it.line }.maxOrNull(),
-        statics.filterNot { isStale(it.line) }.mapNotNull { it.line }.maxOrNull(),
-    ).max()
+        typeDecls.filterNot { isStale(it.declLine) }.mapNotNull { it.declLine }.maxOrNull(),
+        statics.filterNot { isStale(it.declLine) }.mapNotNull { it.declLine }.maxOrNull(),
+    )
 
     private val canvas = Canvas(maxLine)
 
@@ -248,7 +238,7 @@ class FileRenderer(val renderer: Renderer, override val source: GhidraSourceFile
             bodied.map { "/* L${it.line} */ ${it.oneLineBody()}" } +
                 opaque.groupBy { it.line }.map { (line, group) ->
                     "/* L$line */ " + group.mapNotNull { it.name }
-                        .joinToString(", ") { shortener.shortenedOrNull(it) ?: it } + ";"
+                        .joinToString(", ") { shortener?.shortenedOrNull(it) ?: it } + ";"
                 }
             ).sorted().joinToString("\n").ifEmpty { return "" }
         return "\n\n/* ── further template instantiations (sharing a declared line above) ── */\n\n$blocks\n"
@@ -277,7 +267,7 @@ class FileRenderer(val renderer: Renderer, override val source: GhidraSourceFile
             for ((key, addrs) in byKey) {
                 val runs = formatAddrRuns(addrs.toList(), program)
                 val note = if (key.codeUnit.isEmpty()) runs else "$runs: ${key.codeUnit}"
-                canvas[key.line] += Fragment(indentFor(key.line), note = note, shape = NoteShape.SLINE)
+                canvas[key.line] += Fragment(key.line.indentAt(), note = note, shape = NoteShape.SLINE)
             }
             return
         }
@@ -297,7 +287,7 @@ class FileRenderer(val renderer: Renderer, override val source: GhidraSourceFile
                 .map { it.getName(true) }
                 .distinct()
                 .ifEmpty { continue }
-            canvas[line] += Fragment(indentFor(line), "/* inlined into ${fns.joinToString(", ")} */")
+            canvas[line] += Fragment(line.indentAt(), "/* inlined into ${fns.joinToString(", ")} */")
         }
     }
 
@@ -336,8 +326,8 @@ class FileRenderer(val renderer: Renderer, override val source: GhidraSourceFile
                 Claim(
                     Owner.TYPEDEF,
                     line,
-                    listOf(Row("typedef $rendered $name;", indentFor(line), note = "")),
-                    stale = isStale(line) || key in splayed || misfiled(ast),
+                    listOf(Row("typedef $rendered $name;", line.indentAt(), note = "")),
+                    stale = line.isStale() || key in splayed || ast.misfiled(),
                 )
             }
         }
@@ -409,7 +399,7 @@ class FileRenderer(val renderer: Renderer, override val source: GhidraSourceFile
                 Claim(
                     Owner.LOCAL,
                     it.line,
-                    listOf(Row(it.text, indentFor(it.line), it.role)),
+                    listOf(Row(it.text, it.line.indentAt(), it.role)),
                     stale = span == null || it.line == null || it.line !in span,
                 )
             }
@@ -516,7 +506,7 @@ class FileRenderer(val renderer: Renderer, override val source: GhidraSourceFile
             // Renders only where the line is one this file plausibly reaches: stl_vector.h's own
             // content runs past L900 and keeps its copy, image.h's stops at L53 and cannot be
             // declaring anything at L898. See [misfiled].
-            if (misfiled(group.first())) {
+            if (group.first().misfiled()) {
                 group.first().emitTypeBody(group.size)?.let { displaced += Dropped(it, CONFLICTED_DECL) }
                 mergedInstantiations += group.drop(1)
             } else {
@@ -748,14 +738,16 @@ class FileRenderer(val renderer: Renderer, override val source: GhidraSourceFile
                     anomalies += "skeleton[$source]: function $name2 closes at L${r2.endInclusive} $where"
                 }
             }
+            // A decl with no line is nowhere, so it is not inside anything
             for (ast in typeDecls) {
-                if (ast.line !in interior) continue
-                anomalies += "skeleton[$source]: type ${ast.name} declared at L${ast.line} $where"
+                val line = ast.line ?: continue
+                if (line !in interior) continue
+                anomalies += "skeleton[$source]: type ${ast.name} declared at L$line $where"
             }
             for (s in statics) {
-                if (s.line !in interior) continue
-                val nm = s.body.name
-                anomalies += "skeleton[$source]: global/static $nm at L${s.line} $where"
+                val line = s.line ?: continue
+                if (line !in interior) continue
+                anomalies += "skeleton[$source]: global/static ${s.body.name} at L$line $where"
             }
         }
         anomalies.forEach(::println)
@@ -765,20 +757,32 @@ class FileRenderer(val renderer: Renderer, override val source: GhidraSourceFile
         /** `open` / one indented row per item / `close`, the shape both aggregate initializers and type bodies take. */
         fun braceRows(open: String, items: List<String>, close: String, indent: Int, role: String? = null) =
             listOf(Row(open, indent, role)) + items.map { Row(it, indent + 4) } + Row(close, indent)
+
+        /**
+         * A file's length as an extent, or null where it must not be trusted — [onConflict] is told which.
+         *
+         * A root for the wrong version resolves happily and gives a wrong length, and a *short* wrong length
+         * would displace real declarations rather than misfiled ones. [code] is the check: an N_SLINE or a
+         * function body past the end of the file is address-backed evidence that this is not that file, so
+         * the length is refused and reported. A *declaration* past the end deliberately counts for nothing
+         * here — it is the very thing the length is here to catch. No [code] at all is therefore not a doubt
+         * about the length but the absence of the only thing that could refute it: a header nothing was
+         * inlined out of still knows how long it is.
+         */
+        internal fun believedLength(length: Int?, code: Int?, onConflict: (Int) -> Unit): Int? = when {
+            length == null -> null
+            code == null || code <= length -> length
+            else -> null.also { onConflict(length) }
+        }
     }
 }
 
+/** The furthest line anything attests to, or null where nothing does — never a zero standing in. */
+internal fun extentOf(vararg lines: Int?) = lines.filterNotNull().maxOrNull()
+
 /**
- * A file's length as an extent, or null where it must not be trusted — [onConflict] is told which.
- *
- * A root for the wrong version resolves happily and gives a wrong length, and a *short* wrong length
- * would displace real declarations rather than misfiled ones. [code] is the check: an N_SLINE or a
- * function body past the end of the file is address-backed evidence that this is not that file, so
- * the length is refused and reported. A *declaration* past the end deliberately counts for nothing
- * here — it is the very thing the length is here to catch.
+ * Past an extent, where a file that reaches nothing is reached past by everything: the extents are
+ * what a line is judged against, and "no evidence" was the case that judged every line stale before
+ * they could be null. A null [this] is no line at all, so it is past nothing.
  */
-internal fun believedLength(length: Int?, code: Int?, onConflict: (Int) -> Unit): Int? = when {
-    length == null || code == null -> null
-    code <= length -> length
-    else -> null.also { onConflict(length) }
-}
+internal fun Int?.beyond(extent: Int?) = this != null && (extent == null || this > extent)

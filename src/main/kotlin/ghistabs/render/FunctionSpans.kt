@@ -67,7 +67,8 @@ class FunctionSpans(val ranges: List<FuncRange>) {
      */
     fun barrier(line: Int) = ranges.filter { it.start > line }.minOfOrNull { it.start - 1 }
 
-    val maxLine = ranges.maxOfOrNull { it.span.last } ?: 0
+    /** The last line any function reaches, or null where this file holds no function at all. */
+    val maxLine = ranges.maxOfOrNull { it.span.last }
 
     companion object {
         /**
