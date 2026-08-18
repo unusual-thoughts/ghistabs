@@ -204,6 +204,7 @@ class StabCursorGlobalizeTest {
     fun testGlobalizeInlineDefWithHoistSymbolDefs() {
         val cuName = "cu.c"
         val cu = SourceFile.CUSource(cuName)
+        val sourceFile = sourceFileOf(cuName)
         val store = TypeStore()
 
         val input = Symbol(
@@ -235,6 +236,7 @@ class StabCursorGlobalizeTest {
                 VariableLocation.STACK,
             ),
             0,
+            sourceFile,
         )
 
         // walkDefinitions should extract the emitted TypeAst

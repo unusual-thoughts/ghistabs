@@ -21,120 +21,140 @@ class Harvester(private val monitor: TaskMonitor, private val sink: DiagnosticSi
     private val staticsByCu = mutableMapOf<GhidraSourceFile, MutableList<StaticSymbol>>()
     private val constants = mutableListOf<SymbolDecl.Constant<GlobalTypeId>>()
 
+    /** Make sure we didn't drop `desc` or `value` fields */
+    private fun StabRecord.checkDroppedFields() {
+        if (desc != 0) {
+            when (type) {
+                StabType.N_UNDF, // symbol count
+                StabType.N_SLINE,
+                StabType.N_FUN, // desc available on -gstabs+
+                StabType.N_PSYM, StabType.N_LSYM, StabType.N_RSYM, // params / locals
+                StabType.N_GSYM, StabType.N_STSYM, StabType.N_LCSYM, StabType.N_ROSYM, // statics
+                -> {}
+
+                // Other record types with non-zero desc are dropping a line number.
+                else -> debug("desc-dropped-${type.repr()}", "desc=$desc name=${name.take(40)}")
+            }
+        }
+
+        if (value != 0L) {
+            when (type) {
+                StabType.N_UNDF, // string table byte size
+                StabType.N_SO, StabType.N_SOL, // file start/end address
+                StabType.N_BINCL, StabType.N_EXCL, // checksum
+                StabType.N_LBRAC, StabType.N_RBRAC, // address
+                StabType.N_SLINE, // address
+                StabType.N_FUN, // desc available on -gstabs+
+                StabType.N_PSYM, StabType.N_LSYM, StabType.N_RSYM, // stack offset or register number
+                StabType.N_GSYM, StabType.N_STSYM, StabType.N_LCSYM, StabType.N_ROSYM, // statics
+                -> {}
+
+                // Other record types with non-zero value are dropping an address or other data
+                else -> warn("value-dropped-${type.repr()}", "value=$value name=${name.take(40)}")
+            }
+        }
+
+        if (other != 0.toUByte()) {
+            warn("other-dropped-${type.repr()}", "other=$other name=${name.take(40)}")
+        }
+    }
+
+    private fun StabRecord.harvest() = when (type) {
+        StabType.N_SO -> cursor.sourceUnit(this)
+
+        // Already handled in the preSeed pass
+        StabType.N_BINCL, StabType.N_EINCL, StabType.N_EXCL -> {}
+
+        StabType.N_SOL -> cursor.switchSource(name)
+
+        StabType.N_SLINE -> cursor.lineEntry(this)
+
+        StabType.N_FUN if name.isEmpty() -> cursor.closeFunction(this)
+
+        StabType.N_FUN -> parseSymbol()?.also { sym ->
+            when (val decl = sym.body) {
+                is SymbolDecl.Function -> cursor.openFunction(sym.retype(decl))
+                is SymbolDecl.Static -> harvestStatic(sym.retype(decl))
+                else -> warn("unexpected-nfun", "$sym")
+            }
+        }
+
+        // N_STSYM=data, N_LCSYM=bss, N_ROSYM=rodata, N_FUN=text : n_value carries the address.
+        // N_GSYM=globals: only refers by name
+        StabType.N_GSYM, StabType.N_STSYM, StabType.N_LCSYM, StabType.N_ROSYM -> parseSymbol()?.also { sym ->
+            when (val decl = sym.body) {
+                is SymbolDecl.Static -> harvestStatic(sym.retype(decl))
+                else -> warn("unexpected-static", "$sym")
+            }
+        }
+
+        // Parameters and register locals
+        StabType.N_PSYM, StabType.N_RSYM -> parseSymbol()?.also { sym ->
+            when (val decl = sym.body) {
+                is SymbolDecl.Param -> cursor.param(sym.retype(decl))
+                is SymbolDecl.Local -> cursor.local(sym.retype(decl))
+                else -> warn("unexpected-psym-rsym", "$sym")
+            }
+        }
+
+        // Stack locals, types and constants
+        StabType.N_LSYM -> parseSymbol()?.also { sym ->
+            when (val decl = sym.body) {
+                // Bare `name:t(cu,n)` forward-declarations (body = self-Ref) are stored
+                // unfiltered; AstStore lets a real definition at the same id supersede them.
+                is SymbolDecl.NamedType -> store += Type(
+                    cursor.cu,
+                    decl.id,
+                    decl.name,
+                    decl.type,
+                    line = sym.line,
+                    sourceFile = sym.sourceFile,
+                )
+
+                is SymbolDecl.Local -> cursor.local(sym.retype(decl))
+
+                // Addressless compile-time constant — no address, so it's applied as an
+                // equate + synthetic enum catalog rather than data (see SymbolApplier).
+                is SymbolDecl.Constant -> constants += decl
+
+                is SymbolDecl.Function, is SymbolDecl.Param, is SymbolDecl.Static ->
+                    warn("unexpected-lsym", "$sym")
+            }
+        }
+
+        StabType.N_LBRAC, StabType.N_RBRAC -> cursor.bracket(this)
+
+        // Known-irrelevant for type/symbol harvesting.
+        StabType.N_DSLINE, StabType.N_BSLINE, StabType.N_FLINE,
+        StabType.N_OPT, StabType.N_OLEVEL, StabType.N_PARAMS, StabType.N_VERSION,
+        StabType.N_MAIN, StabType.N_PC, StabType.N_M2C, StabType.N_DEFD,
+        StabType.N_SSYM, StabType.N_ENDM, StabType.N_OSO, StabType.N_FNAME,
+        StabType.N_EHDECL, StabType.N_CATCH, StabType.N_LENG,
+        StabType.N_SCOPE, StabType.N_BCOMM, StabType.N_ECOMM, StabType.N_ECOML,
+        StabType.N_ENTRY, StabType.N_MAC_DEFINE, StabType.N_MAC_UNDEF,
+        // Apple/Sun cross-toolchain codes; benign on x86 PE/ELF.
+        StabType.N_BNSYM, StabType.N_ENSYM, StabType.N_OBJ,
+        StabType.N_ALIAS, StabType.N_NSYMS, StabType.N_NOMAP, StabType.N_PATCH,
+        StabType.N_WITH,
+        StabType.N_NBTEXT, StabType.N_NBDATA, StabType.N_NBBSS,
+        StabType.N_NBSTS, StabType.N_NBLCS,
+        -> debug("drop-record-${type.name.removePrefix("N_").lowercase()}")
+
+        // N_UNDF: cuOff/cuSize already advanced in StabReader.
+        StabType.N_UNDF -> debug("drop-record-${type.name.removePrefix("N_").lowercase()}-empty")
+
+        // Hard signal: byte-decoder recognized but no harvesting rule. Log once per type.
+        StabType.UNKNOWN -> warn("stab-unknown", "rawType=0x${"%02X".format(rawType)} @$index '${name.take(60)}'")
+    }
+
     internal fun harvest(records: List<StabRecord>): Harvest {
         monitor.initialize(records.size.toLong(), "Stabs: harvesting")
 
         cursor.preSeedHeaders(records)
         for (rec in records) {
             monitor.increment()
-            if (rec.desc != 0) {
-                when (rec.type) {
-                    StabType.N_SLINE,
-                    StabType.N_FUN, // desc available on -gstabs+
-                    StabType.N_PSYM, StabType.N_LSYM, StabType.N_RSYM, // params / locals
-                    StabType.N_GSYM, StabType.N_STSYM, StabType.N_LCSYM, StabType.N_ROSYM, // statics
-                    -> {
-                    }
-
-                    // Other record types with non-zero desc are silently dropping a line number.
-                    else -> debug(
-                        "desc-dropped-${rec.type.name.removePrefix("N_").lowercase()}",
-                        "desc=${rec.desc} name=${rec.name.take(40)}",
-                    )
-                }
-            }
-
-            when (rec.type) {
-                StabType.N_SO -> cursor.sourceUnit(rec)
-
-                // Already handled in the preSeed pass
-                StabType.N_BINCL, StabType.N_EINCL, StabType.N_EXCL -> {}
-
-                StabType.N_SOL if rec.name.isNotEmpty() -> cursor.switchSource(rec.name)
-
-                StabType.N_SLINE -> cursor.lineEntry(rec)
-
-                StabType.N_FUN if rec.name.isEmpty() -> cursor.closeFunction(rec)
-
-                StabType.N_FUN -> parseSymbol(rec)?.also { sym ->
-                    when (val decl = sym.body) {
-                        is SymbolDecl.Function -> cursor.openFunction(sym.retype(decl))
-                        is SymbolDecl.Static -> harvestStatic(sym.retype(decl))
-                        else -> warn("unexpected-nfun", "$sym")
-                    }
-                }
-
-                // N_STSYM=data, N_LCSYM=bss, N_ROSYM=rodata, N_FUN=text : n_value carries the address.
-                // N_GSYM=globals: only refers by name
-                StabType.N_GSYM, StabType.N_STSYM, StabType.N_LCSYM, StabType.N_ROSYM -> parseSymbol(rec)?.also { sym ->
-                    when (val decl = sym.body) {
-                        is SymbolDecl.Static -> harvestStatic(sym.retype(decl))
-                        else -> warn("unexpected-static", "$sym")
-                    }
-                }
-
-                // Parameters and register locals
-                StabType.N_PSYM, StabType.N_RSYM -> parseSymbol(rec)?.also { sym ->
-                    when (val decl = sym.body) {
-                        is SymbolDecl.Param -> cursor.param(sym.retype(decl))
-                        is SymbolDecl.Local -> cursor.local(sym.retype(decl))
-                        else -> warn("unexpected-psym-rsym", "$sym")
-                    }
-                }
-
-                // Stack locals, types and constants
-                StabType.N_LSYM -> parseSymbol(rec)?.also { sym ->
-                    when (val decl = sym.body) {
-                        // Bare `name:t(cu,n)` forward-declarations (body = self-Ref) are stored
-                        // unfiltered; AstStore lets a real definition at the same id supersede them.
-                        is SymbolDecl.NamedType -> store += Type(
-                            cursor.cu,
-                            decl.id,
-                            decl.name,
-                            decl.type,
-                            line = sym.line,
-                            sourceFile = sym.sourceFile,
-                        )
-
-                        is SymbolDecl.Local -> cursor.local(sym.retype(decl))
-
-                        // Addressless compile-time constant — no address, so it's applied as an
-                        // equate + synthetic enum catalog rather than data (see SymbolApplier).
-                        is SymbolDecl.Constant -> constants += decl
-
-                        is SymbolDecl.Function, is SymbolDecl.Param, is SymbolDecl.Static ->
-                            warn("unexpected-lsym", "$sym")
-                    }
-                }
-
-                StabType.N_LBRAC, StabType.N_RBRAC -> cursor.bracket(rec)
-
-                // Known-irrelevant for type/symbol harvesting.
-                StabType.N_DSLINE, StabType.N_BSLINE, StabType.N_FLINE,
-                StabType.N_OPT, StabType.N_OLEVEL, StabType.N_PARAMS, StabType.N_VERSION,
-                StabType.N_MAIN, StabType.N_PC, StabType.N_M2C, StabType.N_DEFD,
-                StabType.N_SSYM, StabType.N_ENDM, StabType.N_OSO, StabType.N_FNAME,
-                StabType.N_EHDECL, StabType.N_CATCH, StabType.N_LENG,
-                StabType.N_SCOPE, StabType.N_BCOMM, StabType.N_ECOMM, StabType.N_ECOML,
-                StabType.N_ENTRY, StabType.N_MAC_DEFINE, StabType.N_MAC_UNDEF,
-                // Apple/Sun cross-toolchain codes; benign on x86 PE/ELF.
-                StabType.N_BNSYM, StabType.N_ENSYM, StabType.N_OBJ,
-                StabType.N_ALIAS, StabType.N_NSYMS, StabType.N_NOMAP, StabType.N_PATCH,
-                StabType.N_WITH,
-                StabType.N_NBTEXT, StabType.N_NBDATA, StabType.N_NBBSS,
-                StabType.N_NBSTS, StabType.N_NBLCS,
-                -> debug("drop-record-${rec.type.name.removePrefix("N_").lowercase()}")
-
-                // N_UNDF: cuOff/cuSize already advanced in StabReader. Empty N_SOL: nothing to switch to.
-                StabType.N_UNDF, StabType.N_SOL ->
-                    debug("drop-record-${rec.type.name.removePrefix("N_").lowercase()}-empty")
-
-                // Hard signal: byte-decoder recognized but no harvesting rule. Log once per type.
-                StabType.UNKNOWN -> warn(
-                    "stab-unknown",
-                    "rawType=0x${"%02X".format(rec.rawType)} @${rec.index} '${rec.name.take(60)}'",
-                )
-            }
+            rec.harvest()
+            rec.checkDroppedFields()
         }
 
         val (openFunctions, lineEntries) = cursor.toHarvest()
