@@ -49,7 +49,7 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
         val decl = func.body
         val name = func.body.name.substringBefore(':')
         val addr = resolver.forSymbol(func)!!
-        val declLine = func.line.takeIf { it != 0 }
+        val declLine = func.line
 
         fun toHarvested(): Func {
             // The function's own file: its lowest-address line entry, matching TypeResolver.functionSource.
@@ -82,7 +82,7 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
      * Build every CU's [IncludeContext] up front, so an N_BINCL file number is resolvable from the
      * first record of the CU that uses it rather than only once the stream reaches the BINCL.
      */
-    fun preSeedHeaders(records: List<StabRecord>) {
+    fun preSeedHeaders(records: Iterable<StabRecord>) {
         for (rec in records) {
             when (rec.type) {
                 StabType.N_SO if rec.name.endsWith('/') -> pendingDirectory = rec.name
