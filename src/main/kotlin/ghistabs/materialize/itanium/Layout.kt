@@ -17,7 +17,7 @@ sealed class VfptrAction {
     data class CollisionAt(val offsetBytes: Int, val occupantFieldName: String) : VfptrAction()
 }
 
-data class ResolvedBase(val simpleName: String, val lengthBytes: Int)
+data class ResolvedBase(val simpleName: String?, val lengthBytes: Int)
 
 /** One `_base_<Name>` or `_vbase_<Name>` subobject to splice into a derived struct. */
 data class InsertOp(val offsetBytes: Int, val fieldName: String, val comment: String, val baseSimpleName: String)
@@ -60,8 +60,8 @@ object Layout {
         }
     }
 
-    fun baseFieldName(isVirtual: Boolean, simpleName: String) =
-        (if (isVirtual) Itanium.VBASE_PREFIX else Itanium.BASE_PREFIX) + simpleName
+    fun baseFieldName(isVirtual: Boolean, simpleName: String, baseCount: Int) =
+        (if (isVirtual) Itanium.VBASE_PREFIX else Itanium.BASE_PREFIX) + simpleName.takeIf { baseCount > 1 }.orEmpty()
 
     fun baseComment(base: Base<GlobalTypeId>) = buildString {
         append(base.access.name.lowercase())

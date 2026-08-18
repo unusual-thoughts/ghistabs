@@ -879,9 +879,8 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         )
         val name = first.fieldName ?: ""
         Assertions.assertTrue(
-            name.startsWith("_base_") && !name.startsWith("_base_unknown_"),
-            "XapInst first component is '$name' (type=${first.dataType.name}); " +
-                "expected _base_<parent-name> with a resolved parent class",
+            Itanium.isBaseField(name),
+            "XapInst first component is '$name' (type=${first.dataType.name}); expected a base subobject",
         )
         Assertions.assertEquals(
             "ExprInst",
@@ -1704,18 +1703,20 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         // CSymLexStream's base at +0 must be CLexStream itself (resolved, not
         // a synthesized placeholder). That's the cascade: CLexStream's
         // truncate-to-192 made it fit exactly in CSymLexStream's 192-byte gap.
+        // CSymLexStream declares one base, so the field is the bare prefix — the parent is named
+        // by the type, not the spelling ([Layout.baseFieldName]), and assertSame is what pins it.
         val csymFields = csym.components.associateBy { it.fieldName ?: "" }
-        val baseField = csymFields["_base_CLexStream"]
+        val baseField = csymFields[Itanium.BASE_PREFIX]
         Assertions.assertNotNull(
             baseField,
-            "_base_CLexStream missing from CSymLexStream; components: ${csymFields.keys}",
+            "${Itanium.BASE_PREFIX} missing from CSymLexStream; components: ${csymFields.keys}",
         )
-        Assertions.assertEquals(0, baseField!!.offset, "_base_CLexStream expected at +0")
-        Assertions.assertEquals(192, baseField.length, "_base_CLexStream expected to span 192 bytes")
+        Assertions.assertEquals(0, baseField!!.offset, "the base expected at +0")
+        Assertions.assertEquals(192, baseField.length, "the base expected to span 192 bytes")
         Assertions.assertSame(
             clex,
             baseField.dataType,
-            "_base_CLexStream's dataType should be the same CLexStream Structure",
+            "the base's dataType should be the same CLexStream Structure",
         )
 
         Assertions.assertEquals(192, csymFields["CurrentTok"]?.offset, "CurrentTok expected at +192")
