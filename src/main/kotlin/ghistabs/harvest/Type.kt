@@ -73,10 +73,10 @@ data class Symbol<S : SymbolDecl<GlobalTypeId>>(
     val recordType: StabType,
     val body: S,
     val rawValue: Long,
-    val line: Int? = null,
     /** N_SOL in effect when the record was read — except for function-scope symbols, where the N_SOL
      *  is meaningless, so [BlockTreeBuilder.finish] rebuilds them with the block's real source. */
-    @Serializable(with = SourceFileSerializer::class) val sourceFile: GhidraSourceFile? = null,
+    @Serializable(with = SourceFileSerializer::class) val sourceFile: GhidraSourceFile,
+    val line: Int? = null,
     /** Enclosing function (mangled/linkage name) when harvested inside a function scope — set for
      *  procedure-scope (`V`) statics so the applier can annotate which function owns them. */
     val enclosingFunction: String? = null,
@@ -84,22 +84,22 @@ data class Symbol<S : SymbolDecl<GlobalTypeId>>(
     constructor(
         record: StabRecord,
         decl: S,
-        sourceFile: GhidraSourceFile? = null,
+        sourceFile: GhidraSourceFile,
         enclosingFunction: String? = null,
     ) : this(
         record.index,
         record.type,
         decl,
         record.value,
-        record.desc.takeIf { it > 0 },
         sourceFile,
+        record.desc.takeIf { it > 0 },
         enclosingFunction,
     )
 
     /** The same symbol with its body narrowed, for a `when (val decl = sym.body)` arm: smart-casting
      *  the body doesn't narrow the Symbol around it, and casting it would be unchecked. */
     fun <T : SymbolDecl<GlobalTypeId>> retype(body: T) =
-        Symbol(recordIndex, recordType, body, rawValue, line, sourceFile, enclosingFunction)
+        Symbol(recordIndex, recordType, body, rawValue, sourceFile, line, enclosingFunction)
 
     val location get() = when (body) {
         is SymbolDecl.Local<*> -> body.location
@@ -120,7 +120,7 @@ data class Symbol<S : SymbolDecl<GlobalTypeId>>(
         fun parse(
             rec: StabRecord,
             globalizer: Globalizer,
-            sourceFile: GhidraSourceFile? = null,
+            sourceFile: GhidraSourceFile,
             enclosingFunction: String? = null,
         ) = Parser(rec.name).parseSymbol().map {
             Symbol(

@@ -170,7 +170,7 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
         (if (foldSources) sourceFolds[source] ?: source else source).let { cuDirectories[it] ?: it }
 
     private fun LineEntry.folded() = copy(source = fold(source))
-    private fun <S : SymbolDecl<GlobalTypeId>> Symbol<S>.folded() = copy(sourceFile = sourceFile?.let(::fold))
+    private fun <S : SymbolDecl<GlobalTypeId>> Symbol<S>.folded() = copy(sourceFile = fold(sourceFile))
 
     // Blocks carry a source too, and it was the one field left raw — so `inlineParams`, which asks
     // whether a block belongs to the file being rendered, compared a raw N_SOL spelling against a

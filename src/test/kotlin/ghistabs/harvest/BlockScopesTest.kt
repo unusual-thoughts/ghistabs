@@ -94,7 +94,7 @@ class BlockScopesTest {
                 "this" to "stl_alloc.h",
                 "this" to "stl_alloc.h",
             ),
-            locals.map { it.body.name to it.sourceFile?.filename }.sortedBy { it.first },
+            locals.map { it.body.name to it.sourceFile.filename }.sortedBy { it.first },
         )
     }
 
@@ -105,8 +105,8 @@ class BlockScopesTest {
         val spanning = lines + line(700, 0x120, "stl_construct.h")
         val (locals, _) = mainBuilder().finish(spanning, sourceFileOf("unfile.cpp"))
 
-        assertEquals("stl_alloc.h", locals.first { it.line == 664 }.sourceFile?.filename)
-        assertEquals("unfile.cpp", locals.first { it.body.name == "fs" }.sourceFile?.filename)
+        assertEquals("stl_alloc.h", locals.first { it.line == 664 }.sourceFile.filename)
+        assertEquals("unfile.cpp", locals.first { it.body.name == "fs" }.sourceFile.filename)
     }
 
     /**
@@ -118,7 +118,7 @@ class BlockScopesTest {
     fun `a local no block claims belongs to the function`() {
         val (locals, blocks) = mainBuilder().apply { local("orphan", 27) }.finish(lines, sourceFileOf("unfile.cpp"))
 
-        assertEquals("unfile.cpp", locals.single { it.body.name == "orphan" }.sourceFile?.filename)
+        assertEquals("unfile.cpp", locals.single { it.body.name == "orphan" }.sourceFile.filename)
         assertEquals(false, "orphan" in flatten(blocks))
     }
 }
