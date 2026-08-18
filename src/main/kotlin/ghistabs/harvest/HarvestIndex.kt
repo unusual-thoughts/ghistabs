@@ -428,7 +428,7 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
      * entries sit on the identity the render reads them back by.
      */
     val renderIdentityBySource: Map<GhidraSourceFile, GhidraSourceFile> by lazy {
-        harvest.lineEntries.keys.associateWith(::fold)
+        (harvest.lineEntries.keys + harvest.staticsByCu.keys).associateWith(::fold)
     }
 
     /**
