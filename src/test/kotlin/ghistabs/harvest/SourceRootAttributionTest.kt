@@ -24,8 +24,8 @@ class SourceRootAttributionTest {
         id = GlobalTypeId(cu, nextId++),
         name = name,
         body = TypeDecl.Ref(GlobalTypeId(cu, 0)),
-        declLine = line,
-        declSourceFile = declaredIn,
+        line = line,
+        sourceFile = declaredIn,
     )
 
     private fun tag(name: String, line: Int, declaredIn: GhidraSourceFile) = Type(
@@ -33,8 +33,8 @@ class SourceRootAttributionTest {
         id = GlobalTypeId(cu, nextId++),
         name = name,
         body = TypeDecl.Struct(AggrKind.CLASS, 4L, emptyList(), emptyList(), emptyList(), null),
-        declLine = line,
-        declSourceFile = declaredIn,
+        line = line,
+        sourceFile = declaredIn,
     )
 
     private fun indexOf(vararg types: Type) = HarvestIndex(Harvest.of(types.associateBy { it.id }), foldSources = false)

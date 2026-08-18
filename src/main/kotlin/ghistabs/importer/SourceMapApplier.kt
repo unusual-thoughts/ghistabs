@@ -36,7 +36,7 @@ class SourceMapApplier(private val ctx: ImportContext<*>, private val index: Har
         // Statics carry a decl line no N_SLINE covers — only under -gstabs+, hence the null.
         val staticEntries = index.staticsBySource.flatMap { (source, syms) ->
             syms.mapNotNull { s ->
-                s.declLine?.let { line ->
+                s.line?.let { line ->
                     ctx.resolver.forSymbol(s)?.let { LineEntry(line, it, source) }
                 }
             }
