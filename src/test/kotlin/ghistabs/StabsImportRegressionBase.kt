@@ -56,7 +56,7 @@ import kotlin.io.path.writeText
  *    sometimes not replaced (e.g. `/Demangler/XapArgRegInst`) — this was
  *    a DemanglerReplacer candidate-filtering bug, see DemanglerReplacer.
  */
-enum class Mode { CONCURRENT, AFTER }
+enum class Mode { BEFORE, CONCURRENT, AFTER }
 
 /**
  * Regression test harness for StabsAnalyzer on xapasmcsr.exe.
@@ -156,6 +156,13 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
                     artifacts = checkNotNull(probe.artifacts) { "artifacts not populated by CONCURRENT" }
                 }
 
+                Mode.BEFORE -> {
+                    // Just run our analyzer with no autoanalysis
+                    program.runTransaction("stabs-analyze") {
+                        artifacts = checkNotNull(context.import().artifacts) { "artifacts not populated by BEFORE" }
+                    }
+                }
+
                 Mode.AFTER -> {
                     // Disable our analyzer so auto-analysis (incl. demangler) settles
                     // without us, then re-run it manually with our CapturingSink.
@@ -235,6 +242,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
 
     @Test
     fun countersWithinBaseline() {
+        assumeTrue { mode == Mode.AFTER || mode == Mode.CONCURRENT }
         // Authoritative per-category counts. Not `log.tagFrequencies()`: that only sees categories
         // that reach the sink (record*/direct-inc bypass it) and ignores `count = n` tallies, which
         // made assertions on those categories (e.g. empty-scope) silently vacuous.
@@ -1722,6 +1730,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
      */
     @Test
     fun fillerBytesCollapsedToAlignment() {
+        assumeTrue { mode != Mode.BEFORE }
         val data = program.listing.getDefinedData(true)
         var runs = 0
         while (data.hasNext()) if (data.next().dataType is AlignmentDataType) runs++

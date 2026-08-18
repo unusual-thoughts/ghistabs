@@ -49,7 +49,7 @@ class Fixtures(val binaries: List<String>, fixtureFilter: String? = null, modeFi
         }
 
         /** Mirrors `ghistabs.Mode`. */
-        val MODES = listOf("CONCURRENT", "AFTER")
+        val MODES = listOf("CONCURRENT", "AFTER", "BEFORE")
         const val GENERATED_PACKAGE = "ghistabs.fixtures"
 
         /** `crypto_mi_test.exe` + `AFTER` -> `CryptoMiTestExeAfterTest`. */
