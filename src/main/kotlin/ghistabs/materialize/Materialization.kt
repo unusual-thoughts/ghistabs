@@ -153,10 +153,9 @@ internal fun DataTypeRegistry.fillStructBases(
             }
             continue
         }
-        val synthName = "unknown_$offsetBytes"
         val synthDt = ArrayDataType(Undefined1DataType.dataType, gap, 1)
         dataTypeByOffset[offsetBytes] = synthDt
-        resolvedBaseInfo[offsetBytes] = ResolvedBase(synthName, gap)
+        resolvedBaseInfo[offsetBytes] = ResolvedBase(null, gap)
         val reason = if (dt == null || dt.isZeroLength || dt.length <= 0) {
             "Ref unresolved, synthesised $gap-byte placeholder"
         } else {
@@ -177,12 +176,12 @@ internal fun DataTypeRegistry.fillStructBases(
         .mapNotNull { base ->
             val off = (base.offsetBits / 8).toInt()
             val info = resolvedBaseInfo[off] ?: return@mapNotNull null
-            if (info.simpleName.startsWith("unknown_")) return@mapNotNull null
+            val simpleName = info.simpleName ?: return@mapNotNull null
             InsertOp(
                 offsetBytes = off,
-                fieldName = Layout.baseFieldName(base.isVirtual, info.simpleName),
+                fieldName = Layout.baseFieldName(base.isVirtual, simpleName, body.bases.size),
                 comment = Layout.baseComment(base),
-                baseSimpleName = info.simpleName,
+                baseSimpleName = simpleName,
             )
         }
     for ((offsetBytes, fieldName, comment, baseSimpleName) in ops) {
