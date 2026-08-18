@@ -68,7 +68,8 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
     /** [currentCu] where a record can't legally appear outside a CU. */
     val cu get() = checkNotNull(currentCu) { "record outside any N_SO" }
 
-    private val lineSource get() = sourceFileOrNull(currentSourceForLines ?: currentCu?.filename)
+    private val cuSource get() = sourceFileOf(cu.filename)
+    private val lineSource get() = sourceFileOrNull(currentSourceForLines) ?: cuSource
 
     private val currentFunctionName get() = currentScope?.name
 
