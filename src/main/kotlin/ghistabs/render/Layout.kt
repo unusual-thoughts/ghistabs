@@ -108,23 +108,30 @@ class TargetLine(val line: Int) {
     }
 }
 
-// One [TargetLine] per 1-based source line (index 0 unused), so `canvas[n]` is where
-// source line n renders.
-class Canvas(val maxLine: Int) {
-    private val lines = List(maxLine + 1) { TargetLine(it) }
+// One [TargetLine] per 1-based source line, so `canvas[n]` is where source line n renders.
+class Canvas(maxLine: Int?) : ClosedRange<Int> {
+    override val start = 1
+    override val endInclusive = maxLine ?: 0
+    private val lines = maxLine?.let { n -> List(n) { TargetLine(it + 1) } }.orEmpty()
 
-    operator fun get(line: Int) = lines[line]
+    operator fun get(line: Int) = lines[line - 1]
 
     fun multiFragmentLines() = lines.filter { it.fragments.size > 1 }
 
     // The last line worth rendering: trailing blank lines and lines carrying only
     // misattributed (stale N_SOL) fragments are noise past the file's real content.
-    private fun lastMeaningfulLine() = (maxLine downTo 1).firstOrNull { line ->
-        // Anything on the line counts. Trimming on a staleness flag once deleted `class bouniaf` and
-        // its whole body from header.h the moment nothing happened to sit below it — a real
-        // declaration lost to a heuristic about where gcc said it was.
-        lines[line].fragments.isNotEmpty()
-    } ?: 0
+    private val lastMeaningfulLine by lazy {
+        lines.lastOrNull {
+            // Anything on the line counts. Trimming on a staleness flag once deleted `class bouniaf` and
+            // its whole body from header.h the moment nothing happened to sit below it — a real
+            // declaration lost to a heuristic about where gcc said it was.
+            it.fragments.isNotEmpty()
+        }?.line
+    }
+
+    // No meaningful line at all means every row is past the content, not that none is: a canvas
+    // holding nothing trims to nothing, which is what `1..0` used to say.
+    private fun TargetLine.needsTrimming() = line.beyond(lastMeaningfulLine)
 
     /**
      * Strict alignment: source line n → output line n. [trim] cuts trailing blank and
@@ -137,10 +144,12 @@ class Canvas(val maxLine: Int) {
      * though its position no longer encodes it.
      */
     fun render(trim: Boolean, compact: Boolean = false) = buildString {
-        val last = if (trim) lastMeaningfulLine() else maxLine
         var blank = false
-        for (line in 1..last) {
-            val text = this@Canvas[line].render()
+        for (line in lines) {
+            if (trim && line.needsTrimming()) {
+                break
+            }
+            val text = line.render()
             if (compact && text.isBlank()) {
                 if (!blank) append('\n')
                 blank = true

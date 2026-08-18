@@ -60,7 +60,9 @@ class Region(private val ctx: RenderContext, val file: GhidraSourceFile?) {
         return file?.filename?.plus(" ").orEmpty() + "L $lo" + if (hi > lo) "-$hi" else ""
     }
 
-    fun label(fallback: Int) = (labelOrNull() ?: "L $fallback") + if (copies > 1) " ×$copies" else ""
+    /** [labelOrNull], falling back to the line the region is anchored at — null where it has none. */
+    fun label(fallback: Int?) = (labelOrNull() ?: fallback?.let { "L $it" })
+        ?.plus(if (copies > 1) " ×$copies" else "")
 
     /**
      * `_M_deallocate__stl_vector_h_123`, or `__inline_stl_iterator_h_633` where the function that
@@ -323,7 +325,7 @@ fun List<Region>.claimsFor(limit: (row: Int) -> Int?, floor: Int = 1, owner: Own
             owner,
             row.takeIf { r.anchor != null },
             r.lines.map {
-                Row(it.text, it.depth, r.label(r.anchor ?: 0).takeIf { _ -> !r.foreign }, it.booleanCuts)
+                Row(it.text, it.depth, r.label(r.anchor).takeIf { _ -> !r.foreign }, it.booleanCuts)
             },
             Fit.ELASTIC,
             anchoring = Anchoring.AFTER,

@@ -152,7 +152,7 @@ const val OFF_CANVAS = "line outside the file"
 const val MISATTRIBUTED = "stale N_SOL"
 
 /**
- * Assign rows in `1..maxLine` to [claims].
+ * Assign rows in [range] to [claims].
  *
  * The two axes the design settles on are separate concerns, and collapsing them into one sort gets
  * the wrong answer: [Owner] decides **who wins a contested row**, [Fit] decides **how far a winner
@@ -174,7 +174,7 @@ const val MISATTRIBUTED = "stale N_SOL"
  *   them fight drops one of a legal pair. Exclusivity exists to stop a misattributed type body from
  *   evicting a function body, which is a contest *between* owners; within an owner they are peers.
  */
-fun allocate(claims: List<Claim>, maxLine: Int): Allocation {
+fun allocate(claims: List<Claim>, range: ClosedRange<Int>): Allocation {
     // Identical *declarations* at one line are the same declaration seen twice — that is where the
     // `×N` instantiation and inlined-copy counts come from. Identical *statements* are not: two
     // regions with the same text are two executions of it, and collapsing them loses code. So only
@@ -236,7 +236,7 @@ fun allocate(claims: List<Claim>, maxLine: Int): Allocation {
             // rows from its line is a lie — and wrong here, where it silently loses statements.
             Anchoring.AFTER -> {
                 val from = asked ?: cursor
-                val ceiling = claim.limit?.coerceAtMost(maxLine) ?: maxLine
+                val ceiling = claim.limit?.coerceAtMost(range.endInclusive) ?: range.endInclusive
                 (from..ceiling).firstOrNull { it !in held } ?: ceiling.takeIf { it >= 1 }
             }
 
@@ -244,7 +244,8 @@ fun allocate(claims: List<Claim>, maxLine: Int): Allocation {
         } ?: return@mapNotNull dropped.add(Dropped(claim, NO_ROOM)).let { null }
         if (claim.anchoring == Anchoring.AFTER) cursor = line + 1
         when {
-            line !in 1..maxLine -> dropped.add(Dropped(claim, OFF_CANVAS)).let { null }
+            line !in range -> dropped.add(Dropped(claim, OFF_CANVAS)).let { null }
+
             // A peer of the holder rides the row it already took; only the first expands. Peerage is
             // by owner alone — a misattributed local shares its line with a real one, as it always
             // has; `stale` decides who reserves *first*, which is what stops it taking the row.
@@ -258,7 +259,7 @@ fun allocate(claims: List<Claim>, maxLine: Int): Allocation {
     }
 
     for ((claim, copies, line) in reserved) {
-        val ceiling = claim.limit?.coerceAtMost(maxLine) ?: maxLine
+        val ceiling = claim.limit?.coerceAtMost(range.endInclusive) ?: range.endInclusive
         val wanted = if (claim.fit == Fit.RIGID) claim.rows.size else ceiling - line + 1
         val end = (line + 1 until line + wanted).takeWhile { it <= ceiling && it !in held }.lastOrNull() ?: line
         (line..end).forEach { held[it] = claim.owner.group }
@@ -269,7 +270,7 @@ fun allocate(claims: List<Claim>, maxLine: Int): Allocation {
 
     // The band above the first anchored row, one floating claim per row, in priority order.
     var next = 1
-    val firstAnchored = placed.minOfOrNull { it.range.first } ?: (maxLine + 1)
+    val firstAnchored = placed.minOfOrNull { it.range.first } ?: (range.endInclusive + 1)
     for ((claim, copies) in floating) {
         val row = (next until firstAnchored).firstOrNull { it !in held }
         if (row == null) {
