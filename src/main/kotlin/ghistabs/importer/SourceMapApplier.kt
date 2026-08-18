@@ -4,6 +4,7 @@ import ghidra.program.model.address.AddressOutOfBoundsException
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.harvest.HarvestIndex
 import ghistabs.harvest.LineEntry
+import ghistabs.materialize.itanium.Itanium
 
 /**
  * Publishes the harvested N_SLINEs as the program's own line map — `SourceFile`s and zero-length
@@ -33,11 +34,23 @@ class SourceMapApplier(private val ctx: ImportContext<*>, private val index: Har
         val files = folds.keys + folds.values
         for (file in files) manager.addSourceFile(file)
 
-        // Statics carry a decl line no N_SLINE covers — only under -gstabs+, hence the null.
-        val staticEntries = index.staticsBySource.flatMap { (source, syms) ->
-            syms.mapNotNull { s ->
+        // Statics carry a decl line no N_SLINE covers — only under -gstabs+, hence the null. Read
+        // off the raw harvest, not the render's per-source view: that view resolves attribution, and
+        // attribution is decided from the line map this pass is publishing (`Renderer.sources` reads
+        // it back), so asking it here is a cycle — it either refuses (`Renderer.declarers`) or
+        // answers from an empty map. The line is the emitter's fact about an address; which header
+        // the render draws the class in is a later question, and the render still asks it.
+        //
+        // Generated data is excluded because it has no line of its own to publish ([isGeneratedData]):
+        // `_ZTI`/`_ZTS`/`_ZTV` are COMDAT, so every CU naming the class emits one onto a single
+        // merged address and dates it from wherever that CU happened to be — `Image::typeinfo` on
+        // line 29 of four files, three of which never declared it. The `_ZTI` line does mean the
+        // class's declaration, but only once paired with the class's own file, and that pairing is
+        // the attribution this pass cannot ask for.
+        val staticEntries = index.harvest.staticsByCu.flatMap { (cu, syms) ->
+            syms.filterNot { Itanium.isGeneratedData(it.body.name) }.mapNotNull { s ->
                 s.line?.let { line ->
-                    ctx.resolver.forSymbol(s)?.let { LineEntry(line, it, source) }
+                    ctx.resolver.forSymbol(s)?.let { LineEntry(line, it, cu) }
                 }
             }
         }
