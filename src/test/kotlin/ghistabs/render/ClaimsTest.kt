@@ -17,7 +17,7 @@ class ClaimsTest {
     fun `a rigid claim takes its own line and nothing more`() {
         val a = claim(Owner.TYPEDEF, 10)
         val b = claim(Owner.TYPEDEF, 12)
-        val out = allocate(listOf(a, b), maxLine = 40)
+        val out = allocate(listOf(a, b), range = 1..40)
         assertEquals(10..10, out.at(10).range)
         assertEquals(12..12, out.at(12).range)
         assertEquals(emptyList<Dropped>(), out.dropped)
@@ -28,7 +28,7 @@ class ClaimsTest {
         // A big array knows where it starts, not where it ends; the typedef at 15 stops it.
         val out = allocate(
             listOf(claim(Owner.GLOBAL, 10, fit = Fit.ELASTIC), claim(Owner.TYPEDEF, 15)),
-            maxLine = 40,
+            range = 1..40,
         )
         assertEquals(10..14, out.at(10).range)
         assertEquals(15..15, out.at(15).range)
@@ -40,7 +40,7 @@ class ClaimsTest {
         // body stops at 12. Priority decides contested rows, not how far a winner may spread.
         val out = allocate(
             listOf(claim(Owner.FUNCTION_BODY, 10, fit = Fit.ELASTIC), claim(Owner.TYPEDEF, 13)),
-            maxLine = 40,
+            range = 1..40,
         )
         assertEquals(13..13, out.at(13).range)
         assertEquals(10..12, out.at(10).range)
@@ -52,7 +52,7 @@ class ClaimsTest {
         // dropped claim carrying why, which the renderer may trace and the diagnostics always count.
         val body = claim(Owner.FUNCTION_BODY, 10)
         val typedef = claim(Owner.TYPEDEF, 10)
-        val out = allocate(listOf(typedef, body), maxLine = 40)
+        val out = allocate(listOf(typedef, body), range = 1..40)
         assertEquals(10..10, out.at(10).range)
         assertEquals(Owner.FUNCTION_BODY, out.at(10).claim.owner)
         assertEquals(listOf(typedef), out.dropped.map { it.claim })
@@ -62,7 +62,7 @@ class ClaimsTest {
     fun `identical claims merge with a count instead of stacking`() {
         // A header line is compiled into every call site, so N identical claims arrive for one line.
         val copies = List(4) { claim(Owner.FUNCTION_BODY, 38) }
-        val out = allocate(copies, maxLine = 40)
+        val out = allocate(copies, range = 1..40)
         assertEquals(1, out.placed.size)
         assertEquals(4, out.at(38).copies)
         assertEquals(emptyList<Dropped>(), out.dropped)
@@ -74,7 +74,7 @@ class ClaimsTest {
         // Exclusivity is for contests *between* owners, not within one.
         val a = Claim(Owner.TYPEDEF, 7, listOf(Row("typedef int A;")))
         val b = Claim(Owner.TYPEDEF, 7, listOf(Row("typedef long B;")))
-        val out = allocate(listOf(a, b), maxLine = 40)
+        val out = allocate(listOf(a, b), range = 1..40)
         assertEquals(emptyList<Dropped>(), out.dropped)
         // Both placed, both on row 7, each keeping its own rows — the renderer joins them.
         val onSeven = out.placed.filter { it.range == 7..7 }
@@ -85,14 +85,14 @@ class ClaimsTest {
     fun `floating claims fill the band above the first anchored row`() {
         val a = Claim(Owner.INCLUDE, null, listOf(Row("#include \"a.h\"")))
         val b = Claim(Owner.INCLUDE, null, listOf(Row("#include \"b.h\"")))
-        val out = allocate(listOf(a, b, claim(Owner.FUNCTION_BODY, 5)), maxLine = 40)
+        val out = allocate(listOf(a, b, claim(Owner.FUNCTION_BODY, 5)), range = 1..40)
         assertEquals(listOf(1..1, 2..2), out.placed.filter { it.claim.owner == Owner.INCLUDE }.map { it.range })
         assertEquals(5..5, out.at(5).range)
     }
 
     @Test
     fun `a floating claim with no band left is dropped, not crammed onto content`() {
-        val out = allocate(listOf(claim(Owner.INCLUDE, null), claim(Owner.FUNCTION_BODY, 1)), maxLine = 40)
+        val out = allocate(listOf(claim(Owner.INCLUDE, null), claim(Owner.FUNCTION_BODY, 1)), range = 1..40)
         assertEquals(listOf(Owner.INCLUDE), out.dropped.map { it.claim.owner })
     }
 
@@ -106,7 +106,7 @@ class ClaimsTest {
             claim(Owner.GLOBAL, 99),
             claim(Owner.INCLUDE, null),
         )
-        val out = allocate(claims, maxLine = 10)
+        val out = allocate(claims, range = 1..10)
         assertEquals(claims.size, out.placed.sumOf { it.copies } + out.dropped.size)
         // GLOBAL's line 99 is past the canvas, and TYPE_BODY wanted row 3, which the higher-priority
         // FUNCTION_BODY reserved. Neither is clamped onto a neighbour; both are dropped with a reason.
@@ -130,7 +130,7 @@ class ClaimsTest {
     fun `a misattributed claim never takes a row a body wanted`() {
         val body = claim(Owner.FUNCTION_BODY, 10)
         val bogus = Claim(Owner.GLOBAL, 10, listOf(Row("int splayed;")), stale = true)
-        val out = allocate(listOf(bogus, body), maxLine = 40)
+        val out = allocate(listOf(bogus, body), range = 1..40)
         assertEquals(Owner.FUNCTION_BODY, out.at(10).claim.owner)
         assertEquals(listOf(bogus), out.dropped.map { it.claim })
         // Between declarations there is no contest: a misattributed one shares the row, as it always
@@ -138,7 +138,7 @@ class ClaimsTest {
         // demoting the loser to a `// stray:` comment.
         val real = claim(Owner.TYPEDEF, 20)
         val alsoBogus = Claim(Owner.GLOBAL, 20, listOf(Row("int splayed;")), stale = true)
-        val shared = allocate(listOf(alsoBogus, real), maxLine = 40)
+        val shared = allocate(listOf(alsoBogus, real), range = 1..40)
         assertEquals(emptyList<Dropped>(), shared.dropped)
     }
 
@@ -147,7 +147,7 @@ class ClaimsTest {
         // Ghidra revisits a source line; the second visit is real code that has to go somewhere.
         val a = Claim(Owner.FUNCTION_BODY, 10, listOf(Row("first")), anchoring = Anchoring.AFTER)
         val b = Claim(Owner.FUNCTION_BODY, 10, listOf(Row("second")), anchoring = Anchoring.AFTER)
-        val out = allocate(listOf(a, b), maxLine = 40)
+        val out = allocate(listOf(a, b), range = 1..40)
         assertEquals(listOf(10..10, 11..11), out.placed.map { it.range }.sortedBy { it.first })
         assertEquals(emptyList<Dropped>(), out.dropped)
     }
@@ -157,7 +157,7 @@ class ClaimsTest {
         // An inlined-region marker rides its call site rather than floating to the header band.
         val stmt = Claim(Owner.FUNCTION_BODY, 20, listOf(Row("code")), anchoring = Anchoring.AFTER)
         val marker = Claim(Owner.FUNCTION_BODY, null, listOf(Row("/* inlines x.h */")), anchoring = Anchoring.AFTER)
-        val out = allocate(listOf(stmt, marker), maxLine = 40)
+        val out = allocate(listOf(stmt, marker), range = 1..40)
         assertEquals(20..20, out.placed.first { it.claim === stmt }.range)
         assertEquals(21..21, out.placed.first { it.claim === marker }.range)
     }
@@ -166,7 +166,7 @@ class ClaimsTest {
     fun `EXACT is unchanged by the policy — a taken row is still shared or lost`() {
         val body = claim(Owner.FUNCTION_BODY, 10)
         val typedef = claim(Owner.TYPEDEF, 10)
-        val out = allocate(listOf(typedef, body), maxLine = 40)
+        val out = allocate(listOf(typedef, body), range = 1..40)
         assertEquals(Owner.FUNCTION_BODY, out.at(10).claim.owner)
         assertEquals(listOf(typedef), out.dropped.map { it.claim })
     }
@@ -177,7 +177,7 @@ class ClaimsTest {
         val claims = (1..5).map {
             Claim(Owner.FUNCTION_BODY, 10, listOf(Row("stmt$it")), anchoring = Anchoring.AFTER, limit = 12)
         }
-        val out = allocate(claims, maxLine = 40)
+        val out = allocate(claims, range = 1..40)
         assertEquals(emptyList<Dropped>(), out.dropped)
         // Three rows for five claims: 10, 11, 12, then the rest pile onto 12.
         assertEquals(listOf(10, 11, 12, 12, 12), out.placed.map { it.range.first }.sorted())

@@ -13,78 +13,42 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
     private val statics = index.staticsBySource[source].orEmpty()
 
     private val spans = FunctionSpans.of(rawFuncs, source)
-
     override fun Int?.indentAt() = if (this != null && spans.inFunction(this)) 4 else 0
 
     private val lineExtent = lines.maxOfOrNull { it.lineNumber }
-    private val bodyExtent = spans.ranges.maxOfOrNull { it.endInclusive }
-    private val maxExtent = extentOf(lineExtent, bodyExtent)
+    private val codeExtent = extentOf(lineExtent, spans.maxStabLine)
+    private val staticsExtent = statics.mapNotNull { it.line }.maxOrNull()
+    private val typesExtent = typeDecls.mapNotNull { it.line }.maxOrNull()
 
     /**
      * The file's real length, where `--source-root` resolved it and phase 2's agreement guard kept
      * it. This is the one input to the extents below that is not derived from the declarations they
      * judge, so where it exists §43's circularity is simply gone.
      */
-    private val sourceLength = believedLength(renderer.lengthOf(source), maxExtent) { length ->
-        index.warn("source-length-conflict", "$source: code reaches L$maxExtent of $length lines")
+    private val sourceLength = believedLength(renderer.lengthOf(source), codeExtent) { length ->
+        index.warn("source-length-conflict", "$source: code reaches L$codeExtent of $length lines")
     }
 
     /**
-     * How far into this file gcc showed evidence of real activity. Past it, a declaration's line is
-     * not to be trusted.
+     * How far gcc showed evidence of activity. Past it, a declaration's line is not to be trusted.
      *
-     * What counts depends on whether gcc compiled the file as a translation unit or only included it,
-     * and conflating the two breaks the signal in opposite directions. A CU is measured by its code,
-     * and by nothing a declaration says: misattributed libstdc++ declarations landing at line 898 of a
-     * 180-line file are exactly what this is meant to catch, so counting them defines the extent by
-     * the very thing it is judging. That held for types already; it did not for symbols, and
-     * `main.cpp` rendered 1456 rows for a file whose code stops at L166 because twenty
-     * `vmN_trapset_names` tables gcc misfiled into it reach L1342 and set their own extent (§38). An
-     * included file contributes N_SLINEs only where its code was inlined elsewhere, so measuring it
-     * that way read xvimage.h's extent off whatever happened to be inlined — it stopped at 32 and
-     * called the file's own `class XVImage` at 36 misattributed. There, declarations are the only
-     * evidence there is.
+     * A CU is measured by its code and by nothing a declaration says — the misattributed declarations
+     * this exists to catch would otherwise define the extent by the very thing it judges (§38). An
+     * included file contributes N_SLINEs only where its code was inlined elsewhere, so there
+     * declarations are the only evidence there is. Which regime applies is what gcc's `N_SO` says,
+     * not whether the file has spans: that leaks both ways.
      *
-     * Which regime a file is in is what gcc's `N_SO` says. It used to be `spans.ranges.isEmpty()`
-     * standing in for "is a header", and that leaks both ways: a header of inline methods has spans
-     * (`filesystemimage.h`, right answer by luck), and a CU whose every function was inlined away has
-     * none.
-     *
-     * An included file the source root knows is not estimated at all — [sourceLength] is what it
-     * reaches, and a declaration past it is stale by arithmetic. A CU keeps the code-derived extent
-     * even with the root: a .cpp's real length is not evidence about which of *its* declarations gcc
-     * misfiled, which is the whole of §38.
+     * A header the source root resolved is not estimated at all — [sourceLength] is what it reaches.
+     * A CU keeps the code-derived extent even then, its real length being no evidence about which of
+     * its *own* declarations gcc misfiled.
      */
-    private val activityExtent = when (source in index.compilationUnits) {
-        true -> maxExtent
-
-        false -> sourceLength ?: extentOf(
-            lineExtent,
-            statics.mapNotNull { it.line }.maxOrNull(),
-            typeDecls.mapNotNull { it.line }.maxOrNull(),
-        )
-    }
-
-    /**
-     * How far this file's *own* content reaches — code, globals, and the type declarations that are
-     * not themselves in dispute. Unlike [activityExtent] it is not a judgement about staleness; it is
-     * the yardstick for whether a line claimed by several files could be this one's.
-     *
-     * [sourceLength] answers it outright, for a CU as much as for a header: how long the file is *is*
-     * how far its own content can reach, where the estimate below only ever approximates that from
-     * the declarations in dispute.
-     */
-    private val ownExtent by lazy {
-        sourceLength ?: extentOf(
-            lineExtent,
-            bodyExtent,
-            statics.mapNotNull { it.line }.maxOrNull(),
-            typeDecls.filterNot { it.disputed() }.mapNotNull { it.line }.maxOrNull(),
-        )
+    private val staleAfter = when {
+        source in index.compilationUnits -> codeExtent
+        else -> sourceLength ?: extentOf(codeExtent, staticsExtent, typesExtent)
     }
 
     // A decl at this line is misattributed (stale N_SOL) if it sits past the file's activity.
-    override fun Int?.isStale() = beyond(activityExtent)
+    override fun Int?.isStale() = beyond(staleAfter)
 
     /** A declaration several files claim at one line — at most one of them rightly. */
     private fun Type.disputed() = when (body) {
@@ -93,44 +57,47 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
     }.let { declKey() in it }
 
     /**
+     * How far this file's *own* content reaches — code, globals, and the type declarations not
+     * themselves in dispute. Not a judgement about staleness like [staleAfter]: the yardstick for
+     * whether a line several files claim could be this one's. [sourceLength] answers it outright,
+     * for a CU as much as a header — how long the file is *is* how far its content can reach.
+     */
+    private val reachesTo = sourceLength ?: extentOf(
+        codeExtent,
+        staticsExtent,
+        typeDecls.filterNot { it.disputed() }.mapNotNull { it.line }.maxOrNull(),
+    )
+
+    /**
      * [disputed], on a line this file cannot reach.
      *
      * An uncontested declaration past the reach stays: that is `class XVImage` at xvimage.h L36, four
      * lines past the last of the header that happened to be inlined, and it is the file's own content.
      */
-    private fun Type.misfiled() = disputed() && line.beyond(ownExtent)
+    private fun Type.misfiled() = disputed() && line.beyond(reachesTo)
 
     /**
-     * How tall the canvas is: the file's attested activity, plus every declaration that is not
-     * [isStale]. A misattributed one is never laid out, so letting it set the height rendered
-     * `main.cpp` as 1456 rows for a file whose code stops at L166 (§38).
-     *
-     * The claim passes must therefore *not* gate on this. They build every declaration and let the
-     * allocator turn one past the end away as [OFF_CANVAS] — [write] carries a dropped claim to the
-     * displaced appendix, which is where a declaration whose line is unusable belongs. Filtering at
-     * the source instead loses it silently: unpackfile.cpp's appendix went from 78 entries to 21.
+     * How tall the canvas is: attested activity plus every declaration that is not [isStale]. A
+     * misattributed one is never laid out, so letting it set the height rendered `main.cpp` as 1456
+     * rows for 166 lines of code (§38). The claim passes must therefore *not* gate on this — they
+     * build everything and let the allocator turn a claim past the end away as [OFF_CANVAS], which
+     * [write] carries to the displaced appendix. Filtering at the source loses it silently.
      */
-    private val maxLine = extentOf(
-        spans.maxLine,
-        lineExtent,
-        typeDecls.filterNot { isStale(it.declLine) }.mapNotNull { it.declLine }.maxOrNull(),
-        statics.filterNot { isStale(it.declLine) }.mapNotNull { it.declLine }.maxOrNull(),
+    private val canvas = Canvas(
+        extentOf(
+            spans.maxLine, // includes possible closing brace
+            lineExtent,
+            typeDecls.filterNot { it.line.isStale() }.mapNotNull { it.line }.maxOrNull(),
+            statics.filterNot { it.line.isStale() }.mapNotNull { it.line }.maxOrNull(),
+        ),
     )
 
-    private val canvas = Canvas(maxLine)
-
     fun render(): String {
-        // Nothing this file knows sits on a *usable* line — but it can still hold anonymous
-        // aggregates, which have no line to be placed at and are exactly what the skeleton's appendix
-        // is for. `streambuf` is thirteen of them and was rendering as nothing at all. The old guard
-        // also asked only about functions, lines and types, so a file whose sole content was globals
-        // would have gone the same way; [maxLine] counts those, so this asks about all of it.
-        //
-        // Declarations whose line is unusable go the same way rather than being dropped. libstdc++'s
-        // `*-inst.cc` are whole CUs of them — explicit-instantiation units with no code of their own,
-        // so nothing attests any line — and returning before the claim passes lost 71 types and 80
-        // typedefs (`_Rope_*`, `_Setw`, `crope`) from the xmltest render without a word.
-        if (maxLine == 0) {
+        // Nothing sits on a usable line, but the file can still hold anonymous aggregates and
+        // declarations whose line is unusable — which is what the appendix is for. libstdc++'s
+        // `*-inst.cc` are whole CUs of them, and returning before the claim passes dropped 71 types
+        // and 80 typedefs from the xmltest render without a word.
+        if (canvas.isEmpty()) {
             displaced += (typedefClaims() + globalClaims() + typeBodyClaims()).map { Dropped(it, MISATTRIBUTED) }
             return anonAggregateAppendix() + instantiationAppendix() + displacedAppendix()
         }
@@ -160,7 +127,7 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
         // types appear only as arguments to std templates, which belong to the header, not the .cpp.
         val (misattributed, placeable) = claims.partition { it.stale }
         displaced += misattributed.map { Dropped(it, MISATTRIBUTED) }
-        write(allocate(placeable, maxLine))
+        write(allocate(placeable, canvas))
         // Annotations, not content: they carry no code and share a row with whatever holds it, so
         // they are never claims. In decomp mode the body restates them, so they go where it landed.
         emitSlineAnnotations()
@@ -245,13 +212,11 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
     }
 
     /**
-     * Skeleton: one `// L n @ 0xADDR[: code-unit]` annotation per (line, code-unit) group — an
-     * address map, which is what that mode is for.
+     * Skeleton: one `// L n @ 0xADDR[: code-unit]` per (line, code-unit) group — an address map,
+     * which is what that mode is for.
      *
-     * Decomp: the same fact said as provenance instead. A header line whose code we did not render
-     * here was compiled into somebody else's function, and naming that function is the useful half;
-     * the addresses are not. 204 rows carried a raw dump and 176 of them held no code at all, so what
-     * a reader met on those rows was an address list where the name of that function was the point.
+     * Decomp: the same fact as provenance instead. A header line whose code we did not render here
+     * was compiled into somebody else's function, and naming that function is the useful half.
      */
     private fun emitSlineAnnotations() {
         // Aggregates the addresses of N_SLINEs sharing a (line, codeUnit) into one annotation.
@@ -259,7 +224,7 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
 
         val byKey = mutableMapOf<SliceKey, MutableSet<Address>>()
         for (entry in lines) {
-            if (entry.lineNumber !in 1..maxLine) continue
+            if (entry.lineNumber !in canvas) continue
             val addr = entry.baseAddress
             byKey.getOrPut(SliceKey(entry.lineNumber, addr.render(program) ?: "")) { sortedSetOf() } += addr
         }
@@ -278,7 +243,7 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
         // better than any annotation could.
         val own = rawFuncs.mapTo(mutableSetOf()) { it.addr }
         for ((line, addrs) in lines.filter {
-            it.lineNumber in 1..maxLine
+            it.lineNumber in canvas
         }.groupBy({ it.lineNumber }, { it.baseAddress })) {
             if (canvas[line].fragments.any { it.shape == NoteShape.PROVENANCE }) continue
             val fns = addrs
@@ -406,14 +371,12 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
         }
     }
 
-    // Attributed by CU (`symbolsByCu`), not `s.sourceFile` — gcc emits no `N_SOL(cu)`
-    // before N_GSYM, so `sourceFile` points at the last header visited.
+    // Attributed by CU (`staticsByCu`), not `s.sourceFile`: gcc emits no `N_SOL(cu)` before N_GSYM,
+    // so `sourceFile` points at the last header visited.
     //
-    // A file-scope global whose line falls between a function's braces cannot be rendered there:
-    // `_ZTI5Image` sat between xdvimage.cpp's constructor head and its body. gcc dates its generated
-    // data — RTTI objects, string tables — by whatever it was emitting at the time, so what is wrong
-    // is the line, and the declaration goes to the appendix like any other that lost its row. One gcc
-    // really did declare inside a function carries `enclosingFunction` and belongs where it is.
+    // gcc dates generated data (RTTI, string tables) by whatever it was emitting at the time, so a
+    // global landing inside a function's braces has a wrong line, not a wrong home — it goes to the
+    // appendix like any claim that lost its row. A real one carries `enclosingFunction` and stays.
     private fun globalClaims(): List<Claim> {
         val claims = statics.mapNotNull { s ->
             s.takeIf { dedup(s.line, s.body.name) }?.let { emitGlobal(s) to s }
@@ -434,18 +397,13 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
     /**
      * Statics this file did not declare, caught as a group rather than one at a time.
      *
-     * One symbol at a time, the only proof is a collision: a file-scope definition cannot sit between
-     * a function's braces, so a declLine inside an attested span is foreign and everything else — past
-     * the code, above it, in a gap — is merely suspicious. That reaches 2 of main.cpp's twenty
-     * `vmN_trapset_names` tables. The other eighteen are carried by *uniformity*: an arithmetic
-     * progression of declLines whose members ascend with their addresses is one generated block (here
-     * a stride of exactly 70, `vm1…vm20` in order, ascending through `.rodata`), and a block cannot
-     * have three members in this file and seventeen in another with the progression unbroken across
-     * the boundary. So one collision condemns the run.
-     *
-     * Deliberately narrow. Globals are emitted in declaration order, so plain "ascending" describes
-     * every file's global list and one bad span would condemn all of it; a constant stride over three
-     * or more is the generated-table signature that makes the run a single region. See §38.
+     * Alone, the only proof is a collision: a file-scope definition cannot sit between a function's
+     * braces, so a line inside an attested span is foreign and everything else merely suspicious —
+     * 2 of main.cpp's twenty `vmN_trapset_names` tables. The rest are carried by *uniformity*: an
+     * arithmetic progression ascending with its addresses is one generated block, which cannot span
+     * two files unbroken, so one collision condemns the run. Narrow deliberately — globals are
+     * emitted in declaration order, so plain "ascending" would describe every file's global list;
+     * the constant stride over three or more is the generated-table signature. See §38.
      */
     private val foreignRun: Set<StaticSymbol> by lazy {
         statics
@@ -482,7 +440,7 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
             val openNote = if (r.isSingleLine) name else "opens $name$timedOut"
             this += Claim(Owner.FUNC_DELIM, r.start, listOf(Row(openText, note = openNote)))
             val closeLine = with(spans) { r.closeLine } ?: continue
-            if (closeLine !in 1..maxLine) continue
+            if (closeLine !in canvas) continue
             this += Claim(Owner.FUNC_DELIM, closeLine, listOf(Row("}", note = "closes $name")))
         }
     }
@@ -534,24 +492,16 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
     fun Func.ownRegions() = dropInlined(regionsOf(this, renderer.decompile(this).lines), this)
 
     /**
-     * Claims for every decompiled statement this file should show — its own functions' bodies, and
-     * the code it contributed to other files' functions by being inlined into them.
-     *
-     * No canvas, no sweep. A body's rows claim their own source lines and lose or win contested ones
-     * on [Owner] priority, which is what the retroactive "demote whoever wrote first to `// stray:`"
-     * pass was doing by hand.
+     * Every decompiled statement this file should show — its own function bodies, and the code it
+     * contributed to other files by being inlined. Rows claim their own source lines and win or lose
+     * contested ones on [Owner] priority, replacing the retroactive `// stray:` demotion pass.
      */
     private fun decompClaims(): List<Claim> = buildList {
-        // Aliased out-of-line copies — ctor C1/C2, dtor D0/D1/D2 — are one function gcc emitted
-        // several times, at *different* addresses, all mapped to one source line. Decompiling each
-        // stacked the duplicates: every constructor in xvimage.cpp appeared twice, opening brace and
-        // all. The skeleton merges them already, into `opens XVImage ×2`.
-        //
-        // Keyed on the signature at a shared start line, which is the signal the old single-line guard
-        // was already built on. Two genuinely distinct functions cannot collide, since the key carries
-        // their signatures; nothing past the signature can be in it, since the copies are decompiled
-        // separately and so Ghidra names their locals per copy — `xdvimage.cpp`'s two copies of one
-        // constructor declared `__ret_4`/`__n_3` against `local_78` and both rendered.
+        // Aliased out-of-line copies — ctor C1/C2, dtor D0/D1/D2 — are one function gcc emitted at
+        // several addresses, all mapped to one source line; decompiling each stacked the duplicates.
+        // Keyed on (start line, signature): two distinct functions cannot collide because the key
+        // carries their signatures, and nothing past the signature can be in it because Ghidra names
+        // the locals per copy.
         val seenHeads = mutableSetOf<Pair<Int, String>>()
         for (r in spans.ranges) {
             val closeLine = with(spans) { r.span.last }
@@ -644,16 +594,11 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
             addAll(anchored.claimsFor(spans::barrier, floor = r.start))
         }
 
-        // The code this file contributed to *other* files' functions. gcc inlined it from here, so its
-        // N_SLINEs name this file and its lines belong on this canvas. A header line is compiled into
-        // every call site, so identical copies collapse to one tagged `×N`.
-        //
-        // Each function's stretches are wrapped in that function's own definition. Standing bare they
-        // were statements at file scope, which no C++ construct admits — the single largest source of
-        // parse errors in the render, and the reason a header view could not be compiled or even
-        // reliably brace-matched. Balancing each stretch on its own (the old `balance()`) made every
-        // one self-contained but left them all outside any function; the wrapper subsumes it, since a
-        // definition balances the group as a whole.
+        // The code this file contributed to *other* files' functions. gcc inlined it from here, so
+        // its N_SLINEs name this file and its lines belong on this canvas; a header line compiled
+        // into every call site collapses to one copy tagged `×N`. Each function's stretches are
+        // wrapped in that function's own definition — bare, they are statements at file scope, which
+        // no C++ construct admits and nothing can brace-match.
         val inlined = index.functions
             .asSequence()
             .filter { f -> f !in rawFuncs && f.lineEntries.any { it.source == source } }
@@ -682,13 +627,11 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
     }
 
     /** A row nothing has claimed yet — only meaningful before allocation writes anything. */
-    // The headers this file pulls in, as #include lines in the blank space above the first line of
-    // content: the headers whose code got inlined here (non-.cpp N_SLINE sources) plus the headers
-    // that *define the types* its functions use — the type each signature/local names, resolved to
-    // its definition (an `XRef` forward-decl via its tag, a `Ref`/`InlineDef` via its id) and that
-    // type's base classes — so a .cpp that only calls out-of-line (nothing inlined, e.g. appimage.cpp)
-    // still declares its dependencies. Placed only within the available top room; overflow stacks on
-    // the last free line rather than pushing content down.
+    // The headers this file pulls in, as #include lines above the first line of content: those whose
+    // code was inlined here (non-.cpp N_SLINE sources), plus those defining the types its functions
+    // name — resolved through `XRef`/`Ref`/`InlineDef` to the definition and its bases — so a .cpp
+    // with nothing inlined still declares its dependencies. Placed within the available top room;
+    // overflow stacks on the last free line rather than pushing content down.
     private fun includeClaims(): List<Claim> {
         val referenced = mutableSetOf<Type>()
         fun collect(decl: TypeDecl<GlobalTypeId>) {
@@ -761,18 +704,15 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
         /**
          * A file's length as an extent, or null where it must not be trusted — [onConflict] is told which.
          *
-         * A root for the wrong version resolves happily and gives a wrong length, and a *short* wrong length
-         * would displace real declarations rather than misfiled ones. [code] is the check: an N_SLINE or a
-         * function body past the end of the file is address-backed evidence that this is not that file, so
-         * the length is refused and reported. A *declaration* past the end deliberately counts for nothing
-         * here — it is the very thing the length is here to catch. No [code] at all is therefore not a doubt
-         * about the length but the absence of the only thing that could refute it: a header nothing was
-         * inlined out of still knows how long it is.
+         * A root for the wrong version resolves happily and gives a wrong length. Only [code] may refute it,
+         * being address-backed; a *declaration* past the end counts for nothing here, since that is the very
+         * thing the length is here to catch. No [code] is therefore not doubt but the absence of anything
+         * that could refute — a header nothing was inlined out of still knows how long it is.
          */
         internal fun believedLength(length: Int?, code: Int?, onConflict: (Int) -> Unit): Int? = when {
             length == null -> null
-            code == null || code <= length -> length
-            else -> null.also { onConflict(length) }
+            code.beyond(length) -> null.also { onConflict(length) }
+            else -> length
         }
     }
 }
