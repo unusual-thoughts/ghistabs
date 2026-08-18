@@ -214,6 +214,8 @@ enum class StabType(val code: UByte) {
     N_LENG(0xFEu),
     ;
 
+    fun repr() = name.removePrefix("N_").lowercase()
+
     companion object {
         private val byCode: Map<UByte, StabType> = entries.filter { it != UNKNOWN }.associateBy { it.code }
 
@@ -296,9 +298,7 @@ class StabReader(
 
     constructor(stab: ByteArray, stabStr: ByteArray) : this(
         BinaryReader(
-            ByteArrayProvider(
-                stab,
-            ),
+            ByteArrayProvider(stab),
             true,
         ),
         { n ->

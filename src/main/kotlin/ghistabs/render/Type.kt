@@ -3,30 +3,26 @@ package ghistabs.render
 import ghidra.program.model.data.ByteDataType
 import ghidra.program.model.data.CharDataType
 import ghidra.program.model.data.SignedByteDataType
-import ghidra.program.model.listing.Program
 import ghistabs.harvest.*
-import ghistabs.importer.AddressResolver
 import ghistabs.materialize.TemplateNameShortener
 import ghistabs.materialize.itanium.Itanium
 import ghistabs.materialize.resolveBuiltin
 import ghistabs.parse.*
-import ghistabs.scan.Definition
 
 /** One stabs variable of a function, declared in this file: where gcc put it and how it renders. */
 data class Var(val line: Int?, val name: String, val text: String, val role: String?)
 
 interface RenderContext {
     val source: GhidraSourceFile
-    val program: Program
-    val resolver: AddressResolver
-    val index: HarvestIndex
-    val shortener: TemplateNameShortener?
+    val renderer: Renderer
 
-    fun indentFor(line: Int?): Int
-    fun isStale(line: Int?): Boolean
+    val program get() = renderer.program
+    val resolver get() = renderer.resolver
+    val index get() = renderer.index
+    val shortener: TemplateNameShortener? get() = renderer.shortener
 
-    /** The definition a line sits in, read off the real source `--source-root` mapped. */
-    fun enclosing(source: GhidraSourceFile, line: Int): Definition?
+    fun Int?.indentAt(): Int
+    fun Int?.isStale(): Boolean
 
     /**
      * Best-effort C-style rendering of a [TypeDecl]. Primitives go
@@ -252,18 +248,18 @@ interface RenderContext {
             is TypeDecl.Enum -> "${body.members.size} members"
         }
         val sizeNote = "/* $extent" + (if (instantiations > 1) ", $instantiations instantiations" else "") + " */"
-        val stale = isStale(line)
+        val stale = line.isStale()
         return if (members.isNotEmpty()) {
             Claim(
                 Owner.TYPE_BODY,
                 line,
-                FileRenderer.braceRows(openText, members, "}; $sizeNote", indentFor(line), ""),
+                FileRenderer.braceRows(openText, members, "}; $sizeNote", line.indentAt(), ""),
                 Fit.ELASTIC,
                 stale,
             )
         } else {
             val keyword = if (body is TypeDecl.Struct) body.kind.cxxKeyword() else "enum"
-            val row = Row("$keyword $shortName; $sizeNote", indentFor(line), "")
+            val row = Row("$keyword $shortName; $sizeNote", line.indentAt(), "")
             Claim(Owner.TYPE_BODY, line, listOf(row), stale = stale)
         }
     }
@@ -287,7 +283,7 @@ interface RenderContext {
 
         // Without -gstabs+ there is no decl line: the claim is band-anchored (Claim.anchoring), so
         // there is no row to indent against and nothing for staleness to be judged past.
-        val indent = indentFor(rec.line)
+        val indent = rec.line.indentAt()
         val base = sym.type.renderDecl(sym.name)
         // A string-valued global (pointer-to-string whose slot Ghidra left an untyped
         // scalar, or a char[N] holding an RTTI/string literal) renders as one quoted
@@ -305,7 +301,7 @@ interface RenderContext {
         // WINNING_GDB), so these are the *most* likely records to be filed under the wrong source —
         // twenty `vmN_trapset_names` tables from a header gcc filed into main.cpp, reaching L1342 in a
         // file whose code stops at L166. See §38.
-        val stale = isStale(rec.line)
+        val stale = rec.line.isStale()
         val owner = if (Itanium.isGeneratedData(sym.name)) Owner.GENERATED else Owner.GLOBAL
         return when {
             parts == null -> Claim(owner, rec.line, listOf(Row("$base;", indent, role)), stale = stale)

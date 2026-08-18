@@ -148,9 +148,9 @@ class Harvester(private val monitor: TaskMonitor, private val sink: DiagnosticSi
         staticsByCu.getOrPut(cursor.cu.identity) { mutableListOf() } += sym
     }
 
-    private fun parseSymbol(rec: StabRecord) = when (val res = cursor.parseSymbol(rec)) {
+    private fun StabRecord.parseSymbol() = when (val res = cursor.parseSymbol(this)) {
         is ParseResult.Error -> {
-            err("parse-error", "@${rec.index} '${rec.name.take(80)}': ${res.ex.message}")
+            err("parse-error", "@$index '${name.take(80)}': ${res.ex.message}")
             null
         }
 
