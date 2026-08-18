@@ -26,7 +26,7 @@ class BlockScopesTest {
             recordType = StabType.N_LSYM,
             body = SymbolDecl.Local(name, TypeDecl.Complex(0, 1), VariableLocation.STACK),
             rawValue = 0,
-            declLine = declLine,
+            line = declLine,
             // The trailing N_SOL gcc leaves in effect — always the CU, never the local's own file.
             sourceFile = sourceFileOf("unfile.cpp"),
         ),
@@ -105,7 +105,7 @@ class BlockScopesTest {
         val spanning = lines + line(700, 0x120, "stl_construct.h")
         val (locals, _) = mainBuilder().finish(spanning, sourceFileOf("unfile.cpp"))
 
-        assertEquals("stl_alloc.h", locals.first { it.declLine == 664 }.sourceFile?.filename)
+        assertEquals("stl_alloc.h", locals.first { it.line == 664 }.sourceFile?.filename)
         assertEquals("unfile.cpp", locals.first { it.body.name == "fs" }.sourceFile?.filename)
     }
 

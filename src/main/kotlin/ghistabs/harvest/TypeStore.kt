@@ -31,8 +31,8 @@ class TypeStore(
                     id,
                     null,
                     inner,
-                    declLine = sym.declLine,
-                    declSourceFile = sym.sourceFile,
+                    line = sym.line,
+                    sourceFile = sym.sourceFile,
                 ),
             ) + inner.walk()
 

@@ -98,7 +98,7 @@ internal class BlockTreeBuilder {
             }
             val blockSource = ownLines.map { it.source }.toSet().singleOrNull() ?: inherited
             val attributed = locals.map { local ->
-                val sourcesAtLine = ownLines.filter { it.line == local.declLine }.map { it.source }.toSet()
+                val sourcesAtLine = ownLines.filter { it.line == local.line }.map { it.source }.toSet()
                 local.copy(sourceFile = sourcesAtLine.singleOrNull() ?: blockSource).also { flat += it }
             }
             return copy(

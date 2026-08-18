@@ -28,9 +28,9 @@ data class Type(
     val name: String?,
     val body: TypeDecl<GlobalTypeId>,
     /** Source line from N_LSYM `desc`, null when the emitter left it 0 (no -gstabs+). */
-    val declLine: Int? = null,
+    val line: Int? = null,
     /** N_SOL-effective source at definition time (header for stdlib, CU for app-local). */
-    @Serializable(with = SourceFileSerializer::class) val declSourceFile: GhidraSourceFile? = null,
+    @Serializable(with = SourceFileSerializer::class) val sourceFile: GhidraSourceFile? = null,
 ) {
     val source get() = id.source
 
@@ -58,13 +58,13 @@ data class Type(
     data class Decl(val line: Int, val name: String)
 
     fun declKey() = when {
-        declLine == null || name == null -> null
-        else -> Decl(declLine, name.substringBefore('<'))
+        line == null || name == null -> null
+        else -> Decl(line, name.substringBefore('<'))
     }
 }
 
 /**
- * One symbol stab. `recordIndex` is the stream position (for scope filtering); `declLine` comes
+ * One symbol stab. `recordIndex` is the stream position (for scope filtering); `line` comes
  * from the stab's `desc` field (0 when emitter omits it); `sourceFile` is the N_SOL-effective name.
  */
 @Serializable
@@ -73,7 +73,7 @@ data class Symbol<S : SymbolDecl<GlobalTypeId>>(
     val recordType: StabType,
     val body: S,
     val rawValue: Long,
-    val declLine: Int? = null,
+    val line: Int? = null,
     /** N_SOL in effect when the record was read — except for function-scope symbols, where the N_SOL
      *  is meaningless, so [BlockTreeBuilder.finish] rebuilds them with the block's real source. */
     @Serializable(with = SourceFileSerializer::class) val sourceFile: GhidraSourceFile? = null,
@@ -99,7 +99,7 @@ data class Symbol<S : SymbolDecl<GlobalTypeId>>(
     /** The same symbol with its body narrowed, for a `when (val decl = sym.body)` arm: smart-casting
      *  the body doesn't narrow the Symbol around it, and casting it would be unchecked. */
     fun <T : SymbolDecl<GlobalTypeId>> retype(body: T) =
-        Symbol(recordIndex, recordType, body, rawValue, declLine, sourceFile, enclosingFunction)
+        Symbol(recordIndex, recordType, body, rawValue, line, sourceFile, enclosingFunction)
 
     val location get() = when (body) {
         is SymbolDecl.Local<*> -> body.location

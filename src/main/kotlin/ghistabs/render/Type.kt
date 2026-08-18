@@ -188,7 +188,7 @@ interface RenderContext {
         else -> null
     }?.let { (name, role) ->
         Var(
-            declLine,
+            line,
             name,
             "${body.type.renderDecl(body.name)};",
             role,
@@ -252,19 +252,19 @@ interface RenderContext {
             is TypeDecl.Enum -> "${body.members.size} members"
         }
         val sizeNote = "/* $extent" + (if (instantiations > 1) ", $instantiations instantiations" else "") + " */"
-        val stale = isStale(declLine)
+        val stale = isStale(line)
         return if (members.isNotEmpty()) {
             Claim(
                 Owner.TYPE_BODY,
-                declLine,
-                FileRenderer.braceRows(openText, members, "}; $sizeNote", indentFor(declLine), ""),
+                line,
+                FileRenderer.braceRows(openText, members, "}; $sizeNote", indentFor(line), ""),
                 Fit.ELASTIC,
                 stale,
             )
         } else {
             val keyword = if (body is TypeDecl.Struct) body.kind.cxxKeyword() else "enum"
-            val row = Row("$keyword $shortName; $sizeNote", indentFor(declLine), "")
-            Claim(Owner.TYPE_BODY, declLine, listOf(row), stale = stale)
+            val row = Row("$keyword $shortName; $sizeNote", indentFor(line), "")
+            Claim(Owner.TYPE_BODY, line, listOf(row), stale = stale)
         }
     }
 
@@ -287,7 +287,7 @@ interface RenderContext {
 
         // Without -gstabs+ there is no decl line: the claim is band-anchored (Claim.anchoring), so
         // there is no row to indent against and nothing for staleness to be judged past.
-        val indent = indentFor(rec.declLine)
+        val indent = indentFor(rec.line)
         val base = sym.type.renderDecl(sym.name)
         // A string-valued global (pointer-to-string whose slot Ghidra left an untyped
         // scalar, or a char[N] holding an RTTI/string literal) renders as one quoted
@@ -305,14 +305,14 @@ interface RenderContext {
         // WINNING_GDB), so these are the *most* likely records to be filed under the wrong source —
         // twenty `vmN_trapset_names` tables from a header gcc filed into main.cpp, reaching L1342 in a
         // file whose code stops at L166. See §38.
-        val stale = isStale(rec.declLine)
+        val stale = isStale(rec.line)
         val owner = if (Itanium.isGeneratedData(sym.name)) Owner.GENERATED else Owner.GLOBAL
         return when {
-            parts == null -> Claim(owner, rec.declLine, listOf(Row("$base;", indent, role)), stale = stale)
+            parts == null -> Claim(owner, rec.line, listOf(Row("$base;", indent, role)), stale = stale)
 
             parts.size == 1 -> Claim(
                 owner,
-                rec.declLine,
+                rec.line,
                 listOf(Row("$base = ${parts[0]};", indent, role)),
                 stale = stale,
             )
@@ -320,7 +320,7 @@ interface RenderContext {
             // A multi-element aggregate knows where it starts and not where it ends.
             else -> Claim(
                 owner,
-                rec.declLine,
+                rec.line,
                 FileRenderer.braceRows("$base = {", parts.map { "$it," }, "};", indent, role),
                 Fit.ELASTIC,
                 stale,

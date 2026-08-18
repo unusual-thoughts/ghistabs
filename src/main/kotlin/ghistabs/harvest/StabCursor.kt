@@ -49,7 +49,7 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
         val decl = func.body
         val name = func.body.name.substringBefore(':')
         val addr = resolver.forSymbol(func)!!
-        val declLine = func.declLine.takeIf { it != 0 }
+        val declLine = func.line.takeIf { it != 0 }
 
         fun toHarvested(): Func {
             // The function's own file: its lowest-address line entry, matching TypeResolver.functionSource.
