@@ -805,9 +805,4 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
         is TypeDecl.Ref -> t.id !in typeAsts
         else -> t.children.any { fields -> fields.any { walksToUnresolvedRef(it) } }
     }
-
-    companion object {
-        /** Empty resolver — useful for tests that only need oracle defaults. */
-        val Empty = HarvestIndex(Harvest.of(emptyMap()))
-    }
 }
