@@ -1,8 +1,7 @@
 package ghistabs.materialize.itanium
 
-import ghistabs.harvest.Harvest
-import ghistabs.harvest.HarvestIndex
 import ghistabs.harvest.Type
+import ghistabs.indexOf
 import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Struct.Base
 import ghistabs.parse.TypeDecl.Struct.Method
@@ -172,7 +171,7 @@ class PolymorphicBaseTest {
             methods = emptyList(),
             vptrBasetype = null,
         )
-        assertTrue(HarvestIndex.Empty.hasPolymorphicBaseSubobject(derived))
+        assertTrue(indexOf().hasPolymorphicBaseSubobject(derived))
     }
 
     @Test
@@ -186,7 +185,7 @@ class PolymorphicBaseTest {
             methods = emptyList(),
             vptrBasetype = null,
         )
-        assertFalse(HarvestIndex.Empty.hasPolymorphicBaseSubobject(derived))
+        assertFalse(indexOf().hasPolymorphicBaseSubobject(derived))
     }
 
     @Test
@@ -208,13 +207,13 @@ class PolymorphicBaseTest {
             methods = emptyList(),
             vptrBasetype = null,
         )
-        assertTrue(HarvestIndex.Empty.hasPolymorphicBaseSubobject(derived))
+        assertTrue(indexOf().hasPolymorphicBaseSubobject(derived))
     }
 
     @Test
     fun `noBases - empty bases list returns false`() {
         val derived = polyStruct(hasVtableMarker = false)
-        assertFalse(HarvestIndex.Empty.hasPolymorphicBaseSubobject(derived))
+        assertFalse(indexOf().hasPolymorphicBaseSubobject(derived))
     }
 
     @Test
@@ -228,7 +227,7 @@ class PolymorphicBaseTest {
             methods = emptyList(),
             vptrBasetype = null,
         )
-        assertTrue(HarvestIndex.Empty.hasPolymorphicBaseSubobject(derived))
+        assertTrue(indexOf().hasPolymorphicBaseSubobject(derived))
     }
 
     @Test
@@ -247,6 +246,6 @@ class PolymorphicBaseTest {
             methods = emptyList(),
             vptrBasetype = null,
         )
-        assertTrue(HarvestIndex(Harvest.of(mapOf(baseId to baseAst))).hasPolymorphicBaseSubobject(derived))
+        assertTrue(indexOf(baseAst).hasPolymorphicBaseSubobject(derived))
     }
 }
