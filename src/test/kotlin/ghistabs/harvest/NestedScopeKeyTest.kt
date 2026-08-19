@@ -2,6 +2,7 @@ package ghistabs.harvest
 
 import ghidra.program.model.data.CategoryPath
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
+import ghistabs.indexOf
 import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Struct.Field
 import ghistabs.parse.TypeDecl.Struct.Method
@@ -53,9 +54,6 @@ class NestedScopeKeyTest : AbstractGhidraHeadlessIntegrationTest() {
     private fun ast(id: GlobalTypeId, name: String?, body: TypeDecl<GlobalTypeId>) =
         Type(cu = cu, id = id, name = name, body = body)
 
-    private fun resolverOf(vararg asts: Type) =
-        HarvestIndex(Harvest.of(asts.associateBy { it.id }), foldSources = false)
-
     private val charString = "basic_string<char,std::char_traits<char>,std::allocator<char> >"
     private val wcharString = "basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t> >"
 
@@ -67,7 +65,7 @@ class NestedScopeKeyTest : AbstractGhidraHeadlessIntegrationTest() {
         val hider = ast(hiderId, "_Alloc_hider", struct(fields = listOf(field("_M_p", TypeDecl.Builtin(0)))))
         val reduced = ast(id(), charString, struct(fields = listOf(field("_M_dataplus", TypeDecl.Ref(hiderId)))))
 
-        val groups = resolverOf(full, hider, reduced).byLocation
+        val groups = indexOf(full, hider, reduced).byLocation
         val key = TypeLocation(CategoryPath("/std/string"), "_Alloc_hider")
         assertTrue(key in groups, "expected $key in ${groups.keys}")
         assertTrue(hiderId in groups.getValue(key).members)
@@ -81,7 +79,7 @@ class NestedScopeKeyTest : AbstractGhidraHeadlessIntegrationTest() {
         val sentryId = id()
         val sentry = ast(sentryId, "$ostream::sentry", struct(fields = listOf(field("_M_ok", TypeDecl.Builtin(0)))))
 
-        val groups = resolverOf(full, sentry).byLocation
+        val groups = indexOf(full, sentry).byLocation
         val key = TypeLocation(CategoryPath("/std/ostream"), "sentry")
         assertTrue(key in groups, "expected $key in ${groups.keys}")
         assertTrue(sentryId in groups.getValue(key).members)
@@ -94,7 +92,7 @@ class NestedScopeKeyTest : AbstractGhidraHeadlessIntegrationTest() {
             val hiderId = id()
             val hider = ast(hiderId, "_Alloc_hider", struct(fields = listOf(field("_M_p", TypeDecl.Pointer(pointee)))))
             val reduced = ast(id(), strName, struct(fields = listOf(field("_M_dataplus", TypeDecl.Ref(hiderId)))))
-            return resolverOf(full, hider, reduced).byLocation.entries.first { hiderId in it.value.members }.key
+            return indexOf(full, hider, reduced).byLocation.entries.first { hiderId in it.value.members }.key
         }
 
         val charKey = hiderKeyFor(charString, "_ZNSs5clearEv", TypeDecl.Builtin(2))

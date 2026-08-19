@@ -26,19 +26,7 @@ data class Harvest(
     /** Addressless `:c` compile-time constants — applied as equates + a synthetic enum catalog. */
     val constants: List<SymbolDecl.Constant<GlobalTypeId>>,
     /** N_SO/N_SOL text partition — which file each run of text came from, address-backed. */
-    val textRanges: Map<AddressRange, GhidraSourceFile> = mapOf(),
+    val textRanges: Map<AddressRange, GhidraSourceFile>,
     /** [N_SO start, N_SO end] per CU. Gaps between them are COMDAT shared by several CUs. */
-    val cuRanges: Map<AddressRange, GhidraSourceFile> = mapOf(),
-) {
-    companion object {
-        /** A harvest of nothing but [types] — for resolvers/tests that need no symbol side. */
-        fun of(types: Map<GlobalTypeId, Type>) = Harvest(
-            types = types,
-            rawCollisions = mapOf(),
-            staticsByCu = mapOf(),
-            functions = listOf(),
-            lineEntries = mapOf(),
-            constants = listOf(),
-        )
-    }
-}
+    val cuRanges: Map<AddressRange, GhidraSourceFile>,
+)

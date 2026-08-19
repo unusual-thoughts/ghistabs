@@ -1,5 +1,6 @@
 package ghistabs.harvest
 
+import ghistabs.indexOf
 import ghistabs.parse.AggrKind
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.SourceFile
@@ -36,8 +37,6 @@ class SourceRootAttributionTest {
         line = line,
         sourceFile = declaredIn,
     )
-
-    private fun indexOf(vararg types: Type) = HarvestIndex(Harvest.of(types.associateBy { it.id }), foldSources = false)
 
     @Test
     fun `a unique declarer takes the declaration off the file gcc recorded`() {
