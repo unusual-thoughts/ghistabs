@@ -65,7 +65,7 @@ class Harvester(private val monitor: TaskMonitor, private val sink: DiagnosticSi
         // Already handled in the preSeed pass
         StabType.N_BINCL, StabType.N_EINCL, StabType.N_EXCL -> {}
 
-        StabType.N_SOL -> cursor.switchSource(name)
+        StabType.N_SOL -> cursor.switchSource(this)
 
         StabType.N_SLINE -> cursor.lineEntry(this)
 

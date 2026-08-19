@@ -119,22 +119,17 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
                 currentScope?.finaliseGcc12FunctionSize()
                 currentCu = SourceFile.CUSource(rec.name, pendingDirectory)
                 pendingDirectory = null
-                if (rec.value != 0L) {
-                    debug(
-                        "file-start",
-                        "${currentCu?.directory.orEmpty()}${rec.name} starts here",
-                        address = resolver.buildAddress(rec.value),
-                    )
+                rec.value.takeIf { it > 0 }?.let { LineEntry(0, resolver.buildAddress(it), cuSource) }?.also { entry ->
+                    debug("file-start", "${entry.source} starts here", address = entry.addr)
                 }
             }
 
             else -> {
-                if (rec.value != 0L) {
-                    debug(
-                        "file-start",
-                        "${currentCu?.filename} ends here",
-                        address = resolver.buildAddress(rec.value),
-                    )
+                val lastLine = lineEntriesByFile[cuSource]?.maxOf { it.line } ?: 0
+                rec.value.takeIf { it > 0 }?.let { off ->
+                    LineEntry(lastLine, resolver.buildAddress(off), cuSource)
+                }?.also { entry ->
+                    debug("file-start", "${currentCu?.filename} ends here", address = entry.addr)
                 }
                 currentScope?.finaliseGcc12FunctionSize()
                 currentCu = null
@@ -145,8 +140,10 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
     }
 
     /** N_SOL: switch the file N_SLINEs are attributed to, without leaving the CU. */
-    fun switchSource(name: String) {
-        currentSourceForLines = resolved(name)
+    fun switchSource(rec: StabRecord) {
+        currentSourceForLines = resolved(rec.name)
+        val entry = lineEntry(rec)
+        debug("linesource-start", "source switches to ${entry.source}", address = entry.addr)
     }
 
     /** A `../`-relative spelling anchored to this CU's compilation directory. */
@@ -156,12 +153,11 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
      * N_SLINE: `desc` is the line, `value` is function-relative (gcc/COFF on PE) or already
      * absolute (gcc/ELF) — [AddressResolver.stabAddress] disambiguates against the function start.
      */
-    fun lineEntry(rec: StabRecord) {
-        val source = lineSource ?: return
-        val entry = LineEntry(rec.desc, resolver.stabAddress(rec.value, currentScope?.addr, this), source)
-        lineEntriesByFile.getOrPut(source) { mutableListOf() } += entry
-        currentScope?.lineEntries?.add(entry)
-    }
+    fun lineEntry(rec: StabRecord) =
+        LineEntry(rec.desc, resolver.stabAddress(rec.value, currentScope?.addr, this), lineSource).also {
+            lineEntriesByFile.getOrPut(lineSource) { mutableListOf() } += it
+            currentScope?.lineEntries?.add(it)
+        }
 
     /** Named N_FUN: `name` is `mangled:descriptor`, `value` entry address, `desc` declaration line (under -gstabs+) */
     fun openFunction(func: FunctionSymbol) {
