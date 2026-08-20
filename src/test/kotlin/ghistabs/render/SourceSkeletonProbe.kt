@@ -88,9 +88,7 @@ class SourceSkeletonProbe : AbstractGhidraHeadlessIntegrationTest() {
                     mgr.waitForAnalysis(null, monitor)
                 }
                 val reader = StabReader.fromProgram(program)!!.readAll()
-                val harvest = program.runTransaction("skeleton-harvest") {
-                    Harvester(ctx).harvest(reader.records)
-                }
+                val harvest = Harvester(ctx).harvest(reader.records)
 
                 val index = HarvestIndex(harvest)
                 val written = Mode.entries.sumOf { mode ->

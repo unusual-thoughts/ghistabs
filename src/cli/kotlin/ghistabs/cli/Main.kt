@@ -146,7 +146,10 @@ private abstract class RenderCommand(name: String, help: String) : CliktCommand(
                 try {
                     val ctx = ImportContext(program, monitor, options, StreamSink(logLevel, out), StabsDiagnostics())
                     ctx.autoAnalyze()
-                    val artifacts = program.runTransaction("stabs-cli-import") { ctx.import().artifacts }
+                    // No transaction: every write inside opens its own — the materialize/apply/
+                    // source-map passes, [StabSectionOverlay], and the done-flags through
+                    // `Program.set` — which is what the analyzer path relies on already.
+                    val artifacts = ctx.import().artifacts
                     msgLog.toString().takeIf { it.isNotBlank() }?.let { out.append("--- loader MessageLog ---\n$it\n") }
 
                     ctx.writeDumps(artifacts)
