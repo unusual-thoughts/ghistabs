@@ -64,9 +64,7 @@ sealed class StabsRenderExporter(name: String, extension: String, val options: S
             ?: return err("No stabs found in this program.")
         val options = ImportOptions(program)
         val ctx = ImportContext(program, monitor, options, sink, StabsDiagnostics())
-        val harvest = program.runTransaction("stabs-export-harvest") {
-            Harvester(ctx).harvest(records)
-        }
+        val harvest = Harvester(ctx).harvest(records)
 
         val dir = outputDir.takeIf { it.isNotEmpty() }?.let(::File) ?: file
         val written = Renderer(
