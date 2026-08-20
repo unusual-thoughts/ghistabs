@@ -69,10 +69,14 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
             // and wrong where it fires (`std::_Destroy` reads stl_construct.h by its lines and
             // `iomanip` by the partition, the label having been planted mid-symbol-flush).
             val source = lineEntries.minByOrNull { it.addr.offset }?.source ?: cu.identity
+            // gcc 12 and modern ELF emitters omit the empty-name N_FUN end marker and delimit with
+            // the outermost N_RBRAC instead. Read here rather than at every context switch: no
+            // bracket can join a function once the next one opens.
+            val extent = sizeBytes ?: blocks.lastClose?.let { (it.offset - addr.offset).toULong() }
             val (locals, attributedBlocks) = blocks.finish(lineEntries, source)
             val attributedParams = params.map { it.copy(sourceFile = source) }
             return Func(
-                name, addr, decl, cu, locals, attributedParams, attributedBlocks, lineEntries, sizeBytes, declLine,
+                name, addr, decl, cu, locals, attributedParams, attributedBlocks, lineEntries, extent, declLine,
             )
         }
     }
@@ -131,7 +135,6 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
             rec.name.endsWith('/') -> pendingDirectory = rec.name
 
             rec.name.isNotEmpty() -> {
-                currentScope?.finaliseGcc12FunctionSize()
                 currentCu = SourceFile.CUSource(rec.name, pendingDirectory)
                 pendingDirectory = null
                 rec.boundary(cu.identity)
@@ -142,7 +145,6 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
                 // template instantiation shared between CUs and owned by none, so nothing opens here.
                 rec.boundary(null)
                 span(currentInclude?.start, rec.boundaryAddress)?.to(cu.identity)?.let { cuRanges += it }
-                currentScope?.finaliseGcc12FunctionSize()
                 currentCu = null
                 pendingDirectory = null
                 currentSourceForLines = null
@@ -199,7 +201,6 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
 
     /** Named N_FUN: `name` is `mangled:descriptor`, `value` entry address, `desc` declaration line (under -gstabs+) */
     fun openFunction(func: FunctionSymbol) {
-        currentScope?.finaliseGcc12FunctionSize()
         currentScope = FunctionScope(func, cu).also { scopes += it }
     }
 
@@ -232,17 +233,6 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
                 else -> {}
             }
         }
-    }
-
-    /**
-     * gcc 12 (and modern ELF emitters) omit the empty-name N_FUN end marker, delimiting
-     * with the outermost N_RBRAC instead. Compute size from brackets before swapping
-     * function context.
-     */
-    private fun FunctionScope.finaliseGcc12FunctionSize() {
-        if (sizeBytes != null) return
-        val lastClose = blocks.lastClose ?: return
-        sizeBytes = (lastClose.offset - addr.offset).toULong()
     }
 
     /** Functions with their block trees resolved, and line entries grouped by source and sorted. */
