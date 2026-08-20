@@ -65,7 +65,7 @@ class ImportContext<Terminal : DiagnosticSink>(
 ) : DiagnosticSink by TeeSink(diagnostics, terminal) {
     val dtm: DataTypeManager = program.dataTypeManager
     val symtab: SymbolTable = program.symbolTable
-    val resolver: AddressResolver = program.addressResolver
+    val resolver: AddressResolver = ProgramAddressResolver(program, this)
 }
 
 /**

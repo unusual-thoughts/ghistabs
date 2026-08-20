@@ -157,11 +157,21 @@ class Harvester(private val monitor: TaskMonitor, private val sink: DiagnosticSi
             rec.checkDroppedFields()
         }
 
-        val (openFunctions, lineEntries) = cursor.toHarvest()
+        val (openFunctions, lineEntries, textRanges, cuRanges) = cursor.toHarvest()
         val (typeAsts, rawCollisions) = store.toHarvest()
         debug("harvest-constants", count = constants.size.toLong())
+        debug("harvest-text-ranges", count = textRanges.size.toLong())
 
-        return Harvest(typeAsts, rawCollisions, staticsByCu, openFunctions, lineEntries, constants)
+        return Harvest(
+            typeAsts,
+            rawCollisions,
+            staticsByCu,
+            openFunctions,
+            lineEntries,
+            constants,
+            textRanges,
+            cuRanges,
+        )
     }
 
     private fun harvestStatic(sym: StaticSymbol) {

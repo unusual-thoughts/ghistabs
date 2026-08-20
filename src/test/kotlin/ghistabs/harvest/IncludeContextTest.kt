@@ -19,7 +19,7 @@ class IncludeContextTest {
 
     @Test
     fun `beginInclude allocates fileNum and pushes stack`() {
-        val ctx = IncludeContext(SourceFile.CUSource("test.cpp"), sink, registry)
+        val ctx = IncludeContext(SourceFile.CUSource("test.cpp"), sink = sink, registry = registry)
         val fileNum = ctx.beginInclude("header.h", 0x123L)
         assertEquals(1, fileNum)
         val header = ctx.headerForFileNum(fileNum)
@@ -30,7 +30,7 @@ class IncludeContextTest {
 
     @Test
     fun `endInclude pops stack without changing fileNum`() {
-        val ctx = IncludeContext(SourceFile.CUSource("test.cpp"), sink, registry)
+        val ctx = IncludeContext(SourceFile.CUSource("test.cpp"), sink = sink, registry = registry)
         val fileNum = ctx.beginInclude("header.h", 0x123L)
         ctx.endInclude()
         // After popping, headerForFileNum should still return the header (it was registered by fileNum)
@@ -39,11 +39,11 @@ class IncludeContextTest {
 
     @Test
     fun `two CUs with same BINCL get same HeaderFile instance`() {
-        val ctx1 = IncludeContext(SourceFile.CUSource("cu1.cpp"), sink, registry)
+        val ctx1 = IncludeContext(SourceFile.CUSource("cu1.cpp"), sink = sink, registry = registry)
         val fileNum1 = ctx1.beginInclude("header.h", 0x123L)
         val header1 = ctx1.headerForFileNum(fileNum1)
 
-        val ctx2 = IncludeContext(SourceFile.CUSource("cu2.cpp"), sink, registry)
+        val ctx2 = IncludeContext(SourceFile.CUSource("cu2.cpp"), sink = sink, registry = registry)
         val fileNum2 = ctx2.beginInclude("header.h", 0x123L)
         val header2 = ctx2.headerForFileNum(fileNum2)
 
@@ -55,11 +55,11 @@ class IncludeContextTest {
 
     @Test
     fun `remount with prior BINCL reuses same HeaderFile`() {
-        val ctx1 = IncludeContext(SourceFile.CUSource("cu1.cpp"), sink, registry)
+        val ctx1 = IncludeContext(SourceFile.CUSource("cu1.cpp"), sink = sink, registry = registry)
         val fileNum1 = ctx1.beginInclude("header.h", 0x123L)
         val header1 = ctx1.headerForFileNum(fileNum1)
 
-        val ctx2 = IncludeContext(SourceFile.CUSource("cu2.cpp"), sink, registry)
+        val ctx2 = IncludeContext(SourceFile.CUSource("cu2.cpp"), sink = sink, registry = registry)
         val fileNum2 = ctx2.remount("header.h", 0x123L)
         val header2 = ctx2.headerForFileNum(fileNum2)
 
@@ -72,7 +72,7 @@ class IncludeContextTest {
 
     @Test
     fun `forward EXCL without prior BINCL allocates placeholder and logs`() {
-        val ctx = IncludeContext(SourceFile.CUSource("test.cpp"), sink, registry)
+        val ctx = IncludeContext(SourceFile.CUSource("test.cpp"), sink = sink, registry = registry)
         val fileNum2 = ctx.remount("unknown.h", 0x456L)
         val header = ctx.headerForFileNum(fileNum2)
 
@@ -90,7 +90,7 @@ class IncludeContextTest {
 
     @Test
     fun `forward EXCL then BINCL share the same HeaderFile instance (D1 fixed)`() {
-        val ctx1 = IncludeContext(SourceFile.CUSource("cu1.cpp"), sink, registry)
+        val ctx1 = IncludeContext(SourceFile.CUSource("cu1.cpp"), sink = sink, registry = registry)
         val fileNum1Excl = ctx1.remount("header.h", 0x123L)
         val header1Excl = ctx1.headerForFileNum(fileNum1Excl)
 
@@ -100,7 +100,7 @@ class IncludeContextTest {
 
         // A later CU with real BINCL must reuse the placeholder, so types attributed
         // to (filename, checksum) from either CU land at the same GlobalTypeId.
-        val ctx2 = IncludeContext(SourceFile.CUSource("cu2.cpp"), sink, registry)
+        val ctx2 = IncludeContext(SourceFile.CUSource("cu2.cpp"), sink = sink, registry = registry)
         val fileNum2Bincl = ctx2.beginInclude("header.h", 0x123L)
         val header2Bincl = ctx2.headerForFileNum(fileNum2Bincl)
 
@@ -109,7 +109,7 @@ class IncludeContextTest {
 
     @Test
     fun `endInclude with empty stack logs unbalanced warning`() {
-        val ctx = IncludeContext(SourceFile.CUSource("test.cpp"), sink, registry)
+        val ctx = IncludeContext(SourceFile.CUSource("test.cpp"), sink = sink, registry = registry)
 
         // Call endInclude on empty stack
         ctx.endInclude()
@@ -133,11 +133,11 @@ class IncludeContextTest {
 
         // === Part 1: WITH shared registry (correct behavior) ===
         val sharedRegistry = HeaderRegistry()
-        val cu1WithShared = IncludeContext(SourceFile.CUSource("cu1.cpp"), sink, sharedRegistry)
+        val cu1WithShared = IncludeContext(SourceFile.CUSource("cu1.cpp"), sink = sink, registry = sharedRegistry)
         val cu1HeaderFileNum = cu1WithShared.beginInclude("shared.h", 0xABCDL)
         val cu1Header = cu1WithShared.headerForFileNum(cu1HeaderFileNum)
 
-        val cu2WithShared = IncludeContext(SourceFile.CUSource("cu2.cpp"), sink, sharedRegistry)
+        val cu2WithShared = IncludeContext(SourceFile.CUSource("cu2.cpp"), sink = sink, registry = sharedRegistry)
         val cu2HeaderFileNum = cu2WithShared.beginInclude("shared.h", 0xABCDL)
         val cu2Header = cu2WithShared.headerForFileNum(cu2HeaderFileNum)
 
@@ -149,12 +149,12 @@ class IncludeContextTest {
 
         // === Part 2: WITHOUT shared registry (pre-fix bug) ===
         val cu1PrivateRegistry = HeaderRegistry()
-        val cu1WithPrivate = IncludeContext(SourceFile.CUSource("cu1.cpp"), sink, cu1PrivateRegistry)
+        val cu1WithPrivate = IncludeContext(SourceFile.CUSource("cu1.cpp"), sink = sink, registry = cu1PrivateRegistry)
         val cu1PrivHeaderFileNum = cu1WithPrivate.beginInclude("shared.h", 0xABCDL)
         val cu1PrivHeader = cu1WithPrivate.headerForFileNum(cu1PrivHeaderFileNum)
 
         val cu2PrivateRegistry = HeaderRegistry()
-        val cu2WithPrivate = IncludeContext(SourceFile.CUSource("cu2.cpp"), sink, cu2PrivateRegistry)
+        val cu2WithPrivate = IncludeContext(SourceFile.CUSource("cu2.cpp"), sink = sink, registry = cu2PrivateRegistry)
         val cu2PrivHeaderFileNum = cu2WithPrivate.beginInclude("shared.h", 0xABCDL)
         val cu2PrivHeader = cu2WithPrivate.headerForFileNum(cu2PrivHeaderFileNum)
 
@@ -180,7 +180,7 @@ class IncludeContextTest {
     @Test
     fun `BINCL re-entry for same header produces same HeaderFile instance`() {
         val registry = HeaderRegistry()
-        val ctx = IncludeContext(SourceFile.CUSource("test.c"), sink, registry)
+        val ctx = IncludeContext(SourceFile.CUSource("test.c"), sink = sink, registry = registry)
 
         val fn1 = ctx.beginInclude("hdr.h", 0xABCD)
         ctx.endInclude()
