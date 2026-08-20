@@ -8,9 +8,7 @@ import ghidra.app.util.demangler.MangledContext
 import ghidra.app.util.demangler.gnu.GnuDemangler
 import ghidra.app.util.demangler.gnu.GnuDemanglerOptions
 import ghidra.framework.model.DomainObject
-import ghidra.program.model.address.Address
-import ghidra.program.model.address.AddressRange
-import ghidra.program.model.address.AddressRangeImpl
+import ghidra.program.model.address.*
 import ghidra.program.model.data.DataType
 import ghidra.program.model.data.DataTypeManager
 import ghidra.program.model.data.DataUtilities
@@ -26,23 +24,30 @@ import ghidra.util.task.TaskMonitor
 /**
  * `currentAddress+10` returns a new Address
  */
-operator fun Address.plus(rhs: Long): Address = this.addNoWrap(rhs)
+operator fun Address.plus(rhs: Long): Address = addNoWrap(rhs)
 
-operator fun Address.plus(rhs: Int): Address = this.addNoWrap(rhs.toLong())
+operator fun Address.plus(rhs: Int): Address = addNoWrap(rhs.toLong())
 
 /**
  * `currentAddress-10` returns a new Address
  */
-operator fun Address.minus(rhs: Long): Address = this.subtractNoWrap(rhs)
+operator fun Address.minus(rhs: Long): Address = subtractNoWrap(rhs)
 
-operator fun Address.minus(rhs: Int): Address = this.subtractNoWrap(rhs.toLong())
+operator fun Address.minus(rhs: Int): Address = subtractNoWrap(rhs.toLong())
 
-operator fun Address.minus(rhs: Address): Long = this.subtract(rhs)
+operator fun Address.minus(rhs: Address): Long = subtract(rhs)
 
 /**
  * `currentAddress..otherAddress` gives an AddressRange with currentAddress as start, and otherAddress as end
  */
 operator fun Address.rangeTo(rhs: Address): AddressRange = AddressRangeImpl(this, rhs)
+
+operator fun AddressSetView.minus(addrs: AddressSetView): AddressSet = subtract(addrs)
+operator fun AddressSetView.minus(range: AddressRange): AddressSet = subtract(AddressSet(range))
+operator fun AddressSetView.minus(addr: Address): AddressSet = subtract(AddressSet(addr))
+operator fun AddressSetView.plus(addrs: AddressSetView): AddressSet = union(addrs)
+operator fun AddressSetView.plus(range: AddressRange): AddressSet = union(AddressSet(range))
+operator fun AddressSetView.plus(addr: Address): AddressSet = union(AddressSet(addr))
 
 /**
  * For a Data object that supports component (like arrays or structs) you can use
