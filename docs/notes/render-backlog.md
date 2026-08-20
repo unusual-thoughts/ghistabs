@@ -2733,3 +2733,100 @@ make this lookup go dark.
 trusting `declSourceFile` for typedefs. And `activityExtent` cannot flag them: for a file with no
 function spans it falls back to counting type declarations, which is the same circularity fixed for
 `.cpp` files — the misattributed declarations define the extent that is supposed to judge them.
+
+## 39. The N_SO/N_SOL address partition cannot attribute declarations — measured, closed
+
+Read from the `.stab` sections directly (`locale_test_customlibstdcxx`, `appquery`,
+`crypto_mi_test_gcc345`) and from gcc's own emitter, after three attempts to make the
+partition beat `votedHeaderHints` all regressed. Do not retry without new evidence.
+
+**What the records say.** Every CU closes — 61 opens / 61 closes (locale), 8/8 (appquery),
+91/90 (crypto). But `dbxout_init` values the opening `N_SO` at `Ltext0` and dbxcoff.h's
+`DBX_OUTPUT_MAIN_SOURCE_FILE_END` values the closer at `Letext`, and **both are labels in the
+object's plain `.text`**. MinGW's libstdc++ puts every function in its own COMDAT section, so
+those objects contribute nothing to plain `.text` and both labels collapse: 59 of 61 locale CUs
+declare a zero-length span (all at `0x401a10`), 11 of 91 in crypto. The functions are in the
+image regardless — 2945 of them — just not where the `Ltext` labels can see them.
+
+So CU spans are *exact where non-empty* and *silent exactly for COMDAT-compiled objects*.
+Coverage: appquery 17% of `.text`, locale 5%.
+
+**Correction: the N_SOL *value* is unreliable for declaration provenance, not for code
+attribution.** `TextPartitionProbe` scores each run against the N_SLINE entries landing inside it —
+run bounds come from boundary addresses, entry attribution from record order, so agreement is not
+circular. Sorted by address and closed by the next boundary, the runs are right about 9 times in 10:
+appquery 88% (3414 own / 465 foreign over 1923 N_SOL runs), xmltest 95%, locale_test 69%; N_SO runs
+97–100%. The error mass is a handful of long runs whose boundary was planted during the post-body
+symbol flush while the next boundary is far away, so the run swallows unrelated code
+(`basic_ios.tcc` own=2 foreign=433, `iomanip` own=2 foreign=94) — locale_test's 69% is four such
+runs. Zero-length runs (117 / 61 / 22 boundaries colliding on one address) are artifacts with
+nothing to publish, and are dropped at construction. Both records hardcode `desc` to 0, so a
+published run says "this range came from file F, line unknown".
+
+So `publishTextRanges` is defensible, and the precision fix is to publish a run only where its own
+line entries endorse it (≥1 entry naming its file, majority agreeing) — that drops the flush-planted
+mega-runs, which are the whole error mass. Not implemented; the probe already scores it.
+
+**N_SOL addresses do not carry declaration provenance.** `dbxout_source_file` plants a fresh `Ltext<n>` at the current
+assembly position after `text_section()`, and it is called from `dbxout_prepare_symbol` — before
+*symbols*, not only before code. 1049 of 1232 boundaries (locale) and 2148 of 2169 (appquery) are
+emitted while a function is open, i.e. during the post-body symbol flush. The N_SOL *record* is
+sound and already load-bearing (`lineSource` → N_SLINE/symbol attribution → the burst vote); only
+its value is noise. No difference between `-gstabs` and `-gstabs+` (crypto: identical 57/91/90).
+
+**A COMDAT flag that is reliable**, two independent derivations, zero contradictions across the
+three fixtures:
+
+- *span rule* — the CU's declared span is zero-length, or the function's address falls outside it
+  ⇒ the body was not in its CU's ordinary text run ⇒ separately sectioned. Total coverage
+  (`unknown: 0`), flags 50/215, 2592/2662, 7787/8901.
+- *multi-CU claim* — one address claimed by several CUs ⇒ the linker folded copies ⇒ the
+  definition was shared. 9 / 136 / 1868 addresses; `_ZSt3minIjERKT_S2_S2_` is claimed by 30 CUs.
+  A strict subset of the span rule (2013 cases, 0 contradictions), computable from
+  `harvest.functions` alone — `groupBy { it.addr }`, no address arithmetic.
+
+The span rule means "separately sectioned", *not* "came from a header": it also covers ordinary
+functions from `-ffunction-sections` objects. Only the multi-claim subset implies a shared
+definition. Note the useful part of `cuRanges` is the *emptiness* the producer currently drops.
+
+**Three formulations tried as a tier above the burst vote, all regressions on appquery** (A/B via
+two worktrees, `skeleton` over 4 fixtures, one-variable diff):
+
+1. partition source at each method's entry → `XVImage` to `appimage.h`, `AppImage` to `main.cpp`
+   (the case the hint exists to fix), `type_info` to `locale_facets.tcc`, `domain_error` to
+   `time_members.h`. Its one win — `bad_alloc` 29 copies → 1, `type_info` 24 → 1 on locale — came
+   from the noisy fallback tier, not the COMDAT one.
+2. COMDAT-gap membership → never fires (gaps are 53 bytes of alignment padding; 0 functions in
+   one), byte-identical output to HEAD.
+3. multi-CU claim + the merged body's own first line → `XVImage` to `filesystemimage.h` with one
+   copy, `appimage.h` voting all copies.
+
+`votedHeaderHints` is unchanged and remains the best answer for out-of-line classes, which is the
+case every address-backed signal is silent about.
+
+**Two bugs found and fixed on the way.** `boundaryAddress` passed the open function's start into
+`stabAddress`, so any boundary below it was rewritten as function-relative — 178 records in
+appquery, and the unexplained `stab-value-func-relative` 5780 → 5958 baseline drift. dbxcoff.h
+makes only line numbers and block addresses function-relative. And an empty CU span reached
+`AddressSet.add` as `start > end`, killing 3 of 4 fixtures under the CLI (`assert` in the old
+`TextRange` never fired — the CLI runs without `-ea`).
+
+**Fourth attempt, and the one that works: require the merged copies to agree.** Measured first, by
+`ComdatProvenanceProbe` (parser + harvester only, no autoanalysis; `build/test-output/comdat/`):
+agreement is a clean discriminator. Instantiations agree and name their real defining header —
+appquery 7 of 9 merged symbols, xmltest 47 of 63, crypto 1351 of 1868, all naming headers.
+Disagreement is dominated by implicit ctor/dtor clones, which have no source text of their own:
+2 of 2 on appquery, 16 of 16 on xmltest, 453 of 517 on crypto. So agreement is asked of the copies;
+disagreement abstains and leaves the burst vote alone, which is what keeps `XVImage` in `xvimage.h`.
+
+Render effect (A/B vs HEAD's vote, two worktrees, one-variable diff): 2 files changed on appquery,
+xmltest and locale_test, 4 on crypto. No class lost or displaced, and every change a correction —
+each moves a class from the file its *definitions* live in to the file that *declares* it:
+
+- `vector<std::string>`: stl_alloc.h → stl_vector.h (joining `vector<unsigned short>`)
+- `ctype<char>`: ctype_noninline.h → locale_facets.h (xmltest and crypto both)
+- `__moneypunct_cache<wchar_t,true>`: locale_facets.tcc → locale_facets.h, and
+  `__numpunct_cache<wchar_t>` gains a home there
+
+`XVImage` and `AppImage` are untouched: their only merged members are dtor clones, whose copies
+disagree, so the tier abstains and the burst vote still answers.
