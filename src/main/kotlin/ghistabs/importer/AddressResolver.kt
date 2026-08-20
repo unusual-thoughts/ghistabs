@@ -12,7 +12,12 @@ import ghistabs.plus
 
 interface AddressResolver {
     fun buildAddress(offset: Long): Address
+
+    /** Where the link-time symbol [name] ended up; the first bearer where several carry it. */
     fun resolve(name: String): Address?
+
+    /** Inclusive end of the memory block holding [addr] — where a range with no successor stops. */
+    fun blockEnd(addr: Address): Address? = null
     fun forSymbol(sym: Symbol<*>): Address? = when (val decl = sym.body) {
         is SymbolDecl.Static if decl.scope == StaticScope.GLOBAL -> resolve(decl.name)
         is SymbolDecl.Function, is SymbolDecl.Static -> buildAddress(sym.rawValue)
@@ -38,7 +43,8 @@ interface AddressResolver {
 /**
  * Address resolver that searches program symbols and builds addresses in the default program address space.
  */
-class ProgramAddressResolver(private val program: Program) : AddressResolver {
+class ProgramAddressResolver(private val program: Program, private val sink: DiagnosticSink = DummySink) :
+    AddressResolver {
     // Stab values are link-time vaddrs. Ghidra relocates a PIE/ET_DYN ELF to its load
     // base (default 0x100000) without rewriting the stabs, so every address is off by
     // (loadBase - originalBase). PE has no such property → null → no fixup. Mirrors
@@ -60,14 +66,18 @@ class ProgramAddressResolver(private val program: Program) : AddressResolver {
 
     /**
      * Resolve [name]: symbol table → `_<name>` (MinGW/PE cdecl underscore prefix —
-     * `Foo`→`_Foo`, `_ZTI4Foo`→`__ZTI4Foo`).
+     * `Foo`→`_Foo`, `_ZTI4Foo`→`__ZTI4Foo`). Several symbols carrying one name is common — 169 on
+     * bouniaf, 1991 on locale_test — and nothing here can tell them apart, so the first stands.
      */
     override fun resolve(name: String): Address? {
         linkSymbols[name]?.let { return buildAddress(it) }
-        program.symbolTable.getSymbols(name).firstOrNull()?.let { return it.address }
-        program.symbolTable.getSymbols("_$name").firstOrNull()?.let { return it.address }
-        return null
+        val candidates = (program.symbolTable.getSymbols(name) + program.symbolTable.getSymbols("_$name"))
+            .map { it.address }
+        if (candidates.size > 1) sink.debug("resolve-ambiguous", name)
+        return candidates.firstOrNull()
     }
+
+    override fun blockEnd(addr: Address) = program.memory.getBlock(addr)?.end
 
     /**
      * Where gcc put this local, as an address the decompiler indexes storage by: the register itself, or
@@ -86,5 +96,3 @@ class ProgramAddressResolver(private val program: Program) : AddressResolver {
         null -> super.forSymbol(sym)
     }
 }
-
-val Program.addressResolver get() = ProgramAddressResolver(this)

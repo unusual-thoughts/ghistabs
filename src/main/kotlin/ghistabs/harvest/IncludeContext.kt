@@ -2,6 +2,7 @@
 
 package ghistabs.harvest
 
+import ghidra.program.model.address.Address
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.DummySink
 import ghistabs.parse.HeaderFile
@@ -41,6 +42,8 @@ class HeaderRegistry(sink: DiagnosticSink = DummySink) : DiagnosticSink by sink 
 @Serializable
 class IncludeContext(
     val cu: SourceFile.CUSource,
+    /** Where this CU's text began — the `Ltext0` its opening N_SO carries, absent when it carries 0. */
+    val start: Address? = null,
     @Transient private val sink: DiagnosticSink = DummySink,
     @Transient val registry: HeaderRegistry = HeaderRegistry(sink),
 ) : DiagnosticSink by sink {

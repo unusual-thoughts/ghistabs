@@ -2,6 +2,7 @@
 
 package ghistabs.harvest
 
+import ghidra.program.model.address.AddressRange
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.SymbolDecl
 import ghistabs.parse.TypeDecl
@@ -30,6 +31,20 @@ data class Harvest(
         >,
     /** Addressless `:c` compile-time constants — applied as equates + a synthetic enum catalog. */
     val constants: List<SymbolDecl.Constant<GlobalTypeId>>,
+    /** N_SO/N_SOL text partition — which file each run of text came from, address-backed. */
+    val textRanges: Map<
+        @Serializable(with = AddressRangeSerializer::class)
+        AddressRange,
+        @Serializable(with = SourceFileSerializer::class)
+        GhidraSourceFile,
+        > = mapOf(),
+    /** [N_SO start, N_SO end] per CU. Gaps between them are COMDAT shared by several CUs. */
+    val cuRanges: Map<
+        @Serializable(with = AddressRangeSerializer::class)
+        AddressRange,
+        @Serializable(with = SourceFileSerializer::class)
+        GhidraSourceFile,
+        > = mapOf(),
 ) {
     companion object {
         /** A harvest of nothing but [types] — for resolvers/tests that need no symbol side. */

@@ -20,10 +20,10 @@ class HarvesterGapTest {
     @Test
     fun `forward EXCL placeholder is shared with later BINCL`() {
         val registry = HeaderRegistry()
-        val ctx1 = IncludeContext(SourceFile.CUSource("a.c"), DummySink, registry)
+        val ctx1 = IncludeContext(SourceFile.CUSource("a.c"), sink = DummySink, registry = registry)
         val fn1 = ctx1.remount("hdr.h", 0x1234L)
 
-        val ctx2 = IncludeContext(SourceFile.CUSource("b.c"), DummySink, registry)
+        val ctx2 = IncludeContext(SourceFile.CUSource("b.c"), sink = DummySink, registry = registry)
         val fn2 = ctx2.beginInclude("hdr.h", 0x1234L)
 
         val h1 = ctx1.headerForFileNum(fn1)
