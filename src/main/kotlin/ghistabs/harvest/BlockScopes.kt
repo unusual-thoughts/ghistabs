@@ -1,9 +1,10 @@
-@file:Suppress("SERIALIZER_TYPE_INCOMPATIBLE")
+@file:UseSerializers(AddressSerializer::class, SourceFileSerializer::class)
 
 package ghistabs.harvest
 
 import ghidra.program.model.address.Address
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
 
 /**
  * One lexical block of a function: its address range, the locals it owns, and its nested blocks.
@@ -16,14 +17,12 @@ import kotlinx.serialization.Serializable
  */
 @Serializable
 data class BlockScope(
-    @Serializable(with = AddressSerializer::class)
     val start: Address,
-    @Serializable(with = AddressSerializer::class)
     val end: Address,
     val locals: List<LocalSymbol>,
     val children: List<BlockScope> = emptyList(),
     // Resolved by BlockTreeBuilder.finish; null until then. See [finish] for how it is derived.
-    @Serializable(with = SourceFileSerializer::class) val source: GhidraSourceFile? = null,
+    val source: GhidraSourceFile? = null,
 ) {
     /** Innermost block covering [addr], or null when [addr] lies outside this one. */
     fun blockAt(addr: Address): BlockScope? =

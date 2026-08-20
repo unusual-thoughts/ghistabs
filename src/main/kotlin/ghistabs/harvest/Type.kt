@@ -1,4 +1,5 @@
 @file:Suppress("SERIALIZER_TYPE_INCOMPATIBLE")
+@file:UseSerializers(AddressSerializer::class, SourceFileSerializer::class)
 
 package ghistabs.harvest
 
@@ -13,6 +14,7 @@ import ghistabs.demangledName
 import ghistabs.parse.*
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
 import kotlinx.serialization.descriptors.PrimitiveKind.STRING
 import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
 import kotlinx.serialization.descriptors.SerialDescriptor
@@ -30,7 +32,7 @@ data class Type(
     /** Source line from N_LSYM `desc`, null when the emitter left it 0 (no -gstabs+). */
     val line: Int? = null,
     /** N_SOL-effective source at definition time (header for stdlib, CU for app-local). */
-    @Serializable(with = SourceFileSerializer::class) val sourceFile: GhidraSourceFile? = null,
+    val sourceFile: GhidraSourceFile? = null,
 ) {
     val source get() = id.source
 
@@ -75,7 +77,7 @@ data class Symbol<S : SymbolDecl<GlobalTypeId>>(
     val rawValue: Long,
     /** N_SOL in effect when the record was read — except for function-scope symbols, where the N_SOL
      *  is meaningless, so [BlockTreeBuilder.finish] rebuilds them with the block's real source. */
-    @Serializable(with = SourceFileSerializer::class) val sourceFile: GhidraSourceFile,
+    val sourceFile: GhidraSourceFile,
     val line: Int? = null,
     /** Enclosing function (mangled/linkage name) when harvested inside a function scope — set for
      *  procedure-scope (`V`) statics so the applier can annotate which function owns them. */
@@ -177,7 +179,6 @@ class AddressSerializer : KSerializer<Address> {
 @Serializable
 data class Func(
     val name: String,
-    @Serializable(with = AddressSerializer::class)
     val addr: Address,
     val decl: SymbolDecl.Function<GlobalTypeId>,
     val cu: SourceFile.CUSource,
@@ -265,11 +266,7 @@ data class Func(
  * wanting address order sorts by [addr] explicitly.
  */
 @Serializable
-data class LineEntry(
-    val line: Int,
-    @Serializable(with = AddressSerializer::class) val addr: Address,
-    @Serializable(with = SourceFileSerializer::class) val source: GhidraSourceFile,
-) : SourceMapEntry {
+data class LineEntry(val line: Int, val addr: Address, val source: GhidraSourceFile) : SourceMapEntry {
     override fun getLineNumber() = line
 
     override fun getSourceFile() = source
