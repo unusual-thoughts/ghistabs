@@ -5,6 +5,7 @@ import ghistabs.diagnose.DiagnosticSink
 import ghistabs.harvest.HarvestIndex
 import ghistabs.harvest.LineEntry
 import ghistabs.materialize.itanium.Itanium
+import ghistabs.minus
 
 /**
  * Publishes the harvested N_SLINEs as the program's own line map — `SourceFile`s and zero-length
@@ -49,12 +50,11 @@ class SourceMapApplier(private val ctx: ImportContext<*>, private val index: Har
         // the attribution this pass cannot ask for.
         val staticEntries = index.harvest.staticsByCu.flatMap { (cu, syms) ->
             syms.filterNot { Itanium.isGeneratedData(it.body.name) }.mapNotNull { s ->
-                s.line?.let { line ->
-                    ctx.resolver.forSymbol(s)?.let { LineEntry(line, it, cu) }
-                }
+                s.line?.let { line -> ctx.resolver.forSymbol(s)?.let { LineEntry(line, it, cu) } }
             }
         }
         val entries = index.harvest.lineEntries.values.flatten() + staticEntries
+        publishTextRanges()
 
         fun identity(entry: LineEntry) = folds[entry.source]?.let { entry.copy(source = it) } ?: entry
         // Grouped by outcome, `""` being published. One warning per reason carrying a per-file
@@ -99,5 +99,27 @@ class SourceMapApplier(private val ctx: ImportContext<*>, private val index: Har
             count = published.size.toLong(),
         )
         return published.size
+    }
+
+    /**
+     * The N_SO/N_SOL partition as ranged entries — gcc's own statement of which file each run of text
+     * came from, which nothing else in the import records.
+     *
+     * Line 0 because neither record carries one (gcc hardcodes `desc` to 0 for both), and Ghidra
+     * accepts it — only a negative line is refused. The ranges are disjoint by construction, which
+     * `SourceMapEntry` requires of any two entries with non-zero length that intersect; the
+     * zero-length N_SLINE entries are explicitly allowed to sit inside them.
+     */
+    private fun publishTextRanges() {
+        val ranges = index.harvest.textRanges.ifEmpty { return }
+        for (file in ranges.values.toSet()) manager.addSourceFile(file)
+        val failed = ranges.entries.groupingBy { (range, source) ->
+            runCatching { manager.addSourceMapEntry(source, 0, range.minAddress, range.length) }
+                .exceptionOrNull()?.javaClass?.simpleName
+        }.eachCount()
+        for ((reason, n) in failed) {
+            if (reason != null) warn("textrange-rejected", reason, count = n.toLong())
+        }
+        debug("textrange-entries", count = (failed[null] ?: 0).toLong())
     }
 }

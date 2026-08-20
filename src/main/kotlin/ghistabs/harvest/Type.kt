@@ -138,6 +138,19 @@ typealias LocalSymbol = Symbol<SymbolDecl.Local<GlobalTypeId>>
 typealias StaticSymbol = Symbol<SymbolDecl.Static<GlobalTypeId>>
 typealias FunctionSymbol = Symbol<SymbolDecl.Function<GlobalTypeId>>
 
+/**
+ * An [AddressRange] as `min-max`. Keys the text partition, and a map key has to encode as a string —
+ * hence not the surrogate shape [AddressSerializer] uses. Serialize-only, like every serializer here.
+ */
+class AddressRangeSerializer : KSerializer<AddressRange> {
+    override val descriptor = PrimitiveSerialDescriptor("ghidra.program.model.address.AddressRange", STRING)
+    override fun serialize(encoder: Encoder, value: AddressRange) =
+        encoder.encodeString("${value.minAddress}-${value.maxAddress}")
+
+    override fun deserialize(decoder: Decoder) =
+        throw UnsupportedOperationException("AddressRangeSerializer is serialize-only")
+}
+
 /** A source identity in a dump is its normalised path — the whole of what it is, minus an id type
  *  stabs never gives us. */
 class SourceFileSerializer : KSerializer<GhidraSourceFile> {
