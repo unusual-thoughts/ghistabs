@@ -272,6 +272,16 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
         }
     }
 
+    /**
+     * Every copy of a body several CUs claim at one address — the linker folded them from a
+     * definition all of them included. Grouped by mangled name, so the copies can be compared.
+     */
+    private val comdatCopiesByMangled: Map<String, List<Func>> by lazy {
+        harvest.functions.groupBy { it.addr }
+            .values.filter { copies -> copies.mapTo(mutableSetOf()) { it.cu }.size > 1 }
+            .flatten().groupBy { it.name }
+    }
+
     private val votedHeaderHints: Map<String, GhidraSourceFile> by lazy {
         val funcsByMangled = harvest.functions.filter { (it.sizeBytes ?: 0uL) > 0uL }.associateBy { it.name }
         val defSourcesByName = typeAsts.values
@@ -283,10 +293,7 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
         // entries)). Non-header sources never vote, so they're dropped up front.
         val hdrEntries = harvest.lineEntries.entries
             .filter { it.key.filename.hasHeaderExtension() }
-            .flatMap { (src, entries) ->
-                val std = src.path.isStdMarkerPath()
-                entries.map { Triple(it.addr.offset, src, std) }
-            }
+            .flatMap { (src, entries) -> entries.map { it.addr.offset to src } }
             .sortedBy { it.first }
         val hdrOffsets = LongArray(hdrEntries.size) { hdrEntries[it].first }
 
@@ -302,18 +309,31 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
                 val methods = asts.flatMap { (it.body as? TypeDecl.Struct<*>)?.methods.orEmpty() }
                 if (methods.isEmpty()) continue
                 // A type's own def sources win by body size, so exclude them from the vote.
-                val userVote = mutableMapOf<GhidraSourceFile, Int>()
-                val stdVote = mutableMapOf<GhidraSourceFile, Int>()
+                //
+                // A merged body's copies are asked first: each claiming CU attributed it to the file
+                // *it* saw the definition in, so where they agree, that file is where the definition
+                // lives. Where they disagree there is nothing to read — an implicit ctor/dtor clone
+                // has no source text of its own and inherits whatever N_SOL the emitter last named
+                // (`XVImage::~XVImage` reads `iostream` in one CU and `appimage.h` in another). The
+                // split is clean on the corpus: instantiations agree and name their defining header,
+                // clones disagree (ComdatProvenanceProbe). Disagreement abstains, leaving the N_SOL
+                // bursts inside the bodies — the only evidence an out-of-line class ever produces.
+                val merged = methods.mapNotNull { m ->
+                    val copies = comdatCopiesByMangled[m.mangled ?: return@mapNotNull null].orEmpty()
+                    copies.mapNotNull { c -> c.lineEntries.minByOrNull { it.addr.offset }?.source }
+                        .distinct().singleOrNull()
+                }
+                val bursts = mutableListOf<GhidraSourceFile>()
                 for (m in methods) {
                     val func = funcsByMangled[m.mangled ?: continue] ?: continue
-                    val lo = func.addr.offset
-                    val hi = lo + (func.sizeBytes ?: 0uL).toLong()
-                    var i = hdrOffsets.lowerBound(lo)
-                    while (i < hdrEntries.size && hdrOffsets[i] < hi) {
-                        val (_, src, isStd) = hdrEntries[i++]
-                        if (src !in defSources) (if (isStd) stdVote else userVote).merge(src, 1, Int::plus)
-                    }
+                    val hi = func.addr.offset + (func.sizeBytes ?: 0uL).toLong()
+                    var i = hdrOffsets.lowerBound(func.addr.offset)
+                    while (i < hdrEntries.size && hdrOffsets[i] < hi) bursts += hdrEntries[i++].second
                 }
+                val votes = merged.ifEmpty { bursts }
+                    .filter { it.filename.hasHeaderExtension() && it !in defSources }
+                    .groupingBy { it }.eachCount()
+                val (stdVote, userVote) = votes.entries.partition { it.key.path.isStdMarkerPath() }
                 // With no user header in the vote, the CU that defines the methods names one by
                 // convention. A class whose methods are all out-of-line contributes no N_SLINE of its
                 // own — nothing was ever inlined from its header — so it can never appear in the vote,
