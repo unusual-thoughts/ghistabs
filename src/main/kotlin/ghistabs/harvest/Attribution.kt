@@ -23,15 +23,6 @@ private val STD_MARKERS = Regex(
         """|/(mingw|cygwin|usr|gcc-lib)(/[^/]+)*?/include/""",
 )
 
-/** [path] without its last segment, empty when it has none. Both separators, as stabs mixes them. */
-private fun dropLastSegment(path: String) =
-    maxOf(path.lastIndexOf('/'), path.lastIndexOf('\\')).takeIf { it > 0 }?.let { path.take(it) }.orEmpty()
-
-private fun isExplicitlyRelative(path: String) = path.startsWith("./") ||
-    path.startsWith("../") ||
-    path.startsWith(""".\""") ||
-    path.startsWith("""..\""")
-
 /** libstdc++'s own subdirectories, which are part of the spelling (`<bits/stl_alloc.h>`) rather than
  *  search roots like the version and target-config directories around them. */
 private val STD_SUBDIRS = setOf("bits", "ext", "tr1", "tr2", "debug", "profile", "parallel", "backward")
@@ -66,35 +57,6 @@ fun includeSpelling(source: GhidraSourceFile): String {
         else -> versionless
     }
     return "<${spelled.joinToString("/")}>"
-}
-
-/**
- * A source spelling written relative to its compilation directory, resolved against it —
- * `../../../interface/host/bits/bits64.h` compiled in
- * `E:/work/cc/devtools/devtools-bouniaf-7-0/vm/project/` is
- * `E:/work/cc/devtools/interface/host/bits/bits64.h`. Unresolvable (more `..` than the directory has
- * segments) or [directory]-less spellings are returned unchanged.
- *
- * Only a spelling that *says* it is relative — opens with `./` or `../` — is resolved. gcc writes a
- * bare filename relative to the CU too, but resolving those would break [foldSourcePaths]: one
- * physical header staged into two places is spelled bare by the CU that owns it and by full path
- * everywhere else, and resolving the bare one gives the two spellings different parent directories.
- * `image.h` would split into `devHost/util/image/image.h` and `result/include/project/image.h`.
- */
-fun resolveAgainstDirectory(path: String, directory: String?): String {
-    if (directory == null || !isExplicitlyRelative(path)) return path
-    var base = directory.trimEnd('/', '\\')
-    val rest = mutableListOf<String>()
-    // A split and nothing more: this runs before any identity exists, on a spelling that says it is
-    // relative — so there is no drive letter to strip and no `..` yet resolved.
-    for (segment in path.split('/', '\\').filter { it.isNotEmpty() }) {
-        when (segment) {
-            "." -> {}
-            ".." -> base = dropLastSegment(base).ifEmpty { return path }
-            else -> rest += segment
-        }
-    }
-    return (listOf(base) + rest).joinToString("/")
 }
 
 private val CU_LOCAL_NAME = Regex("""\.?_anon_\d+""")

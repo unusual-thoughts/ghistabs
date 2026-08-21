@@ -98,7 +98,7 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
     fun preSeedHeaders(records: Iterable<StabRecord>) {
         for (rec in records) {
             when (rec.type) {
-                StabType.N_SO if rec.name.endsWith('/') -> pendingDirectory = rec.name
+                StabType.N_SO if rec.name.isDirectory -> pendingDirectory = rec.name
 
                 StabType.N_SO if rec.name.isNotEmpty() -> {
                     currentCu = SourceFile.CUSource(rec.name, pendingDirectory).also {
@@ -127,7 +127,7 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
     /** N_SO: trailing slash = compilation directory, non-empty = CU start, empty = CU end. */
     fun sourceUnit(rec: StabRecord) {
         when {
-            rec.name.endsWith('/') -> pendingDirectory = rec.name
+            rec.name.isDirectory -> pendingDirectory = rec.name
 
             rec.name.isNotEmpty() -> {
                 currentCu = SourceFile.CUSource(rec.name, pendingDirectory)
@@ -180,7 +180,7 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
         ?.let { resolver.stabAddress(it, currentScope?.addr, sink = this@StabCursor) }
 
     /** A `../`-relative spelling anchored to this CU's compilation directory. */
-    private fun resolved(name: String) = resolveAgainstDirectory(name, currentCu?.directory)
+    private fun resolved(name: String) = name.resolveAgainstDirectory(currentCu?.directory)
 
     /**
      * N_SLINE: `desc` is the line, `value` is function-relative (gcc/COFF on PE) or already
