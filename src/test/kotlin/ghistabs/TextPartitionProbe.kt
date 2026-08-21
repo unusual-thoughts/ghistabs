@@ -86,6 +86,20 @@ class TextPartitionProbe : AbstractGhidraHeadlessIntegrationTest() {
                     }
                 }
 
+                // What `publishTextRanges` will be handed. An empty run is publishable — the manager
+                // takes it as the zero-length point it is — so the failure modes are the other three:
+                // no memory block to place it in, a range running past the block's end, and two
+                // non-zero-length entries overlapping, which the manager refuses outright.
+                val published = harvest.textRanges.keys.sortedBy { it.minAddress }
+                val empty = published.count { it.length == 0L }
+                val unmapped = published.count { program.memory.getBlock(it.minAddress) == null }
+                val crossing = published.count {
+                    program.memory.getBlock(it.minAddress).let { b -> b != null && it.maxAddress > b.end }
+                }
+                val overlapping = published.zipWithNext().count { (a, b) ->
+                    a.length > 0 && b.length > 0 && b.minAddress <= a.maxAddress
+                }
+
                 val sol = runs.filter { it.fromInclude && it.entries > 0 }
                 val so = runs.filter { !it.fromInclude && it.entries > 0 }
                 fun score(rs: List<Run>) = rs.sumOf { it.own } to rs.sumOf { it.foreign }
@@ -103,6 +117,11 @@ class TextPartitionProbe : AbstractGhidraHeadlessIntegrationTest() {
                     w.write(" (${pct(solOwn, solOwn + solForeign)} agree, over ${sol.size} runs)\n")
                     w.write("  N_SO  runs: own=$soOwn foreign=$soForeign")
                     w.write(" (${pct(soOwn, soOwn + soForeign)} agree, over ${so.size} runs)\n\n")
+                    w.write("harvested ranges: ${published.size}\n")
+                    w.write("  empty, published as a point  $empty\n")
+                    w.write("  outside every block          $unmapped\n")
+                    w.write("  crossing a block end         $crossing\n")
+                    w.write("  overlapping the next         $overlapping\n")
                     w.write("worst N_SOL runs (most foreign entries):\n")
                     for (r in sol.sortedByDescending { it.foreign }.take(20)) {
                         w.write(
