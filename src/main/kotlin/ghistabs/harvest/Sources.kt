@@ -2,6 +2,8 @@ package ghistabs.harvest
 
 import ghidra.util.SourceFileUtils
 import ghistabs.parse.SourceFile
+import ghistabs.parse.isDriveLetter
+import ghistabs.parse.segments
 import java.util.concurrent.ConcurrentHashMap
 
 /** Ghidra's source-file identity, aliased because [ghistabs.parse.SourceFile] — the CU-vs-header
@@ -47,9 +49,8 @@ val SourceFile.identity get() = sourceFileOf(filename)
 
 /** Path segments: `/c:/mingw/include/x.h` → `[c:, mingw, include, x.h]`. Normalisation has already
  *  settled separators, drive letters and `..`, so this is a split and nothing more. */
-val GhidraSourceFile.segments get() = path.split('/').filter { it.isNotEmpty() }
+val GhidraSourceFile.segments get() = path.segments
 val GhidraSourceFile.rootSegment get() = segments.firstOrNull()
-val String.isDriveLetter get() = length == 2 && this[0].isLetter() && this[1] == ':'
 val GhidraSourceFile.inWindowsDrive get() = rootSegment?.isDriveLetter ?: false
 
 /** The segments that name the file rather than the volume it sits on. */

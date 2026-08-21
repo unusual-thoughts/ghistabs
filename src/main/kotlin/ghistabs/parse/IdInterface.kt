@@ -49,7 +49,18 @@ sealed class SourceFile : Comparable<SourceFile> {
     /** CU source. [directory] is set from the leading directory-`N_SO` (one ending in `/`). */
     @Serializable(with = ToStringSerializer::class)
     data class CUSource(override val filename: String, val directory: String? = null) : SourceFile() {
-        override fun toString() = if (directory != null) "$directory$filename" else filename
+        /**
+         * Where the CU is, directory and all.
+         *
+         * [directory] is where gcc *compiled*, not where the file is, and the two only compose while
+         * the spelling is relative to it. mingw's own build pairs `…/build_dir/objs/gcc/` with the
+         * rooted `…/build_dir/src/gcc-3.4.5…/libgcc2.c` it was handed — a different tree, `objs/`
+         * against `src/` — and concatenating them yields two paths glued end to end, naming a file
+         * that is nowhere. A rooted spelling already says where it is.
+         */
+        val spelling get() = directory?.takeUnless { filename.isRootedPath }?.plus(filename) ?: filename
+
+        override fun toString() = spelling
     }
 }
 
