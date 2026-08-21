@@ -106,6 +106,12 @@ class ComdatProvenanceProbe : AbstractGhidraHeadlessIntegrationTest() {
                         for (src in m.distinct) w.write("      $src\n")
                     }
                 }
+                // The run's own diagnostics, captured rather than re-derived: `empty-cu-range` and
+                // friends name the CU and the address they fired on, which a count cannot.
+                File("build/test-output/logs/${fixture.nameWithoutExtension}.comdat.log").apply {
+                    parentFile.mkdirs()
+                    writeText(ctx.terminal.dedupedOutput())
+                }
                 println(
                     "[$binaryName] merged=${merged.size} agree=${agree.size} " +
                         "(header=${agree.count { it.header }}) disagree=${disagree.size} → ${out.absolutePath}",
