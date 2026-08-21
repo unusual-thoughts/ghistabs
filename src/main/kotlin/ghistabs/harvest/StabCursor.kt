@@ -237,7 +237,7 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
 
     /** Functions with their block trees resolved, and line entries grouped by source and sorted. */
     fun toHarvest() = HarvestedStream(
-        scopes.map { it.toHarvested() }.withBoundedExtents(cuRanges),
+        scopes.map { it.toHarvested() },
         lineEntriesByFile.mapValues { (_, v) -> v.sortedWith(compareBy({ it.line }, { it.addr.offset })) },
         textRanges = textPartition(),
         cuRanges,
@@ -266,23 +266,6 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
      * Functions gcc gave no extent — no end-marker N_FUN, no brackets — bounded by whatever does say
      * where they stop: the next entry point, or the end of the CU's own text, whichever comes first.
      */
-    private fun List<Func>.withBoundedExtents(cus: Map<AddressRange, GhidraSourceFile>) =
-        mapTo(TreeSet()) { it.addr }.let { starts ->
-            map { func ->
-                when (func.sizeBytes) {
-                    null -> {
-                        val cuEnd = cus.keys.firstOrNull { it.contains(func.addr) }?.maxAddress?.next()
-                        listOfNotNull(starts.higher(func.addr), cuEnd).minOrNull()?.let {
-                            val which = if (it == cuEnd) "cu-end" else "next-entry"
-                            debug("function-extent-from-$which", func.name, address = func.addr)
-                            func.copy(sizeBytes = (it - func.addr).toULong())
-                        } ?: func
-                    }
-
-                    else -> func
-                }
-            }
-        }
 }
 
 /** What one pass over the stream accumulated, beyond the type store. */
