@@ -1,9 +1,9 @@
 package ghistabs.render
 
 import ghistabs.harvest.GhidraSourceFile
-import ghistabs.harvest.isDriveLetter
 import ghistabs.harvest.rootSegment
 import ghistabs.harvest.segments
+import ghistabs.parse.isDriveLetter
 import kotlin.io.path.Path
 
 /**

@@ -469,7 +469,8 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
      * Where a compilation unit lives, keyed by the bare spelling everything else names it by. gcc
      * records it in the leading trailing-slash `N_SO`, and `SourceFile.CUSource` has carried it all
      * along, so `main.cpp` is really `E:/work/cc/devtools/devtools-bluelab-7-0/vm/appquery/main.cpp`
-     * and [fold] gives it that identity. A header gets no such treatment: gcc gives it no directory
+     * and [fold] gives it that identity — where the directory applies at all, which
+     * [SourceFile.CUSource.spelling] decides. A header gets no such treatment: gcc gives it no directory
      * of its own, and inferring one from the CU that included it is the inference
      * [resolveAgainstDirectory] refuses for good reason.
      *
@@ -479,7 +480,7 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
     private val cuDirectories: Map<GhidraSourceFile, GhidraSourceFile> by lazy {
         (harvest.functions.map { it.cu } + typeAsts.values.map { it.id.source })
             .filterIsInstance<SourceFile.CUSource>()
-            .mapNotNull { cu -> cu.directory?.let { cu.identity to sourceFileOf(it + cu.filename) } }
+            .mapNotNull { cu -> cu.spelling.takeIf { it != cu.filename }?.let { cu.identity to sourceFileOf(it) } }
             .toMap()
     }
 
