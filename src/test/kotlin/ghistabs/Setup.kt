@@ -56,7 +56,7 @@ fun indexOf(vararg asts: Type) = HarvestIndex(
         lineEntries = emptyMap(),
         constants = emptyList(),
         textRanges = emptyMap(),
-        cuRanges = emptyMap(),
+        cuSpans = emptyMap(),
     ),
     foldSources = false,
 )
