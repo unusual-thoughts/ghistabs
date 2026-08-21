@@ -345,7 +345,7 @@ class HarvesterTest {
      *           N_EINCL]
      * Expected: The type stab produces a TypeAst with `id.source` being
      *           HeaderSource(types.h, 0xABCD), not CUSource(main.c).
-     *           The IncludeContext for main.c has types.h in fileNumToHeader.
+     *           The CuContext for main.c has types.h in fileNumToHeader.
      *
      * Source: stabs-canonicalization.md §3, §4 — both passes process include directives.
      */
@@ -590,16 +590,16 @@ class HarvesterTest {
     }
 
     /**
-     * Test: preSeedHeaders() allocates IncludeContext per CU.
+     * Test: preSeedHeaders() allocates CuContext per CU.
      *
      * Records: [N_SO("a.c"), N_BINCL("h1.h", 1), N_EINCL, N_SO("b.c"), N_BINCL("h2.h", 2), N_EINCL]
-     * Expected: preSeedHeaders() creates separate IncludeContext instances for each CU,
+     * Expected: preSeedHeaders() creates separate CuContext instances for each CU,
      *           each with its own include stack. The header registry is shared globally.
      *
      * Source: stabs-canonicalization.md §3 — per-CU include contexts with shared registry.
      */
     @Test
-    fun testPreSeedHeadersCreatesPerCUIncludeContexts() {
+    fun testPreSeedHeadersCreatesPerCuContexts() {
         val (sink, harvester) = dummyHarvester()
         val records = listOf(
             StabRecord(
