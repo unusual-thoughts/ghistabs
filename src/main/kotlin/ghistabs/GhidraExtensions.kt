@@ -9,38 +9,30 @@ import ghidra.app.util.demangler.gnu.GnuDemangler
 import ghidra.app.util.demangler.gnu.GnuDemanglerOptions
 import ghidra.framework.model.DomainObject
 import ghidra.program.model.address.*
+import ghidra.program.model.data.Composite
 import ghidra.program.model.data.DataType
 import ghidra.program.model.data.DataTypeManager
 import ghidra.program.model.data.DataUtilities
-import ghidra.program.model.data.Structure
 import ghidra.program.model.listing.Data
 import ghidra.program.model.listing.FunctionManager
 import ghidra.program.model.listing.Listing
 import ghidra.program.model.listing.Program
-import ghidra.program.model.mem.Memory
 import ghidra.program.model.mem.MemoryBlock
 import ghidra.util.task.TaskMonitor
 
-/**
- * `currentAddress+10` returns a new Address
- */
 operator fun Address.plus(rhs: Long): Address = addNoWrap(rhs)
-
 operator fun Address.plus(rhs: Int): Address = addNoWrap(rhs.toLong())
 
-/**
- * `currentAddress-10` returns a new Address
- */
 operator fun Address.minus(rhs: Long): Address = subtractNoWrap(rhs)
-
 operator fun Address.minus(rhs: Int): Address = subtractNoWrap(rhs.toLong())
-
 operator fun Address.minus(rhs: Address): Long = subtract(rhs)
 
-/**
- * `currentAddress..otherAddress` gives an AddressRange with currentAddress as start, and otherAddress as end
- */
 operator fun Address.rangeTo(rhs: Address): AddressRange = AddressRangeImpl(this, rhs)
+
+/** `a..<b`. Built by length rather than by bounds: the two-address constructor swaps what arrives out
+ *  of order, so `a..<a` would come back as `[a-1, a]`, while a length of 0 is an empty range that
+ *  contains nothing — the honest answer for an exclusive end at or below the start. */
+operator fun Address.rangeUntil(rhs: Address): AddressRange = AddressRangeImpl(this, (rhs - this).coerceAtLeast(0))
 
 operator fun AddressSetView.minus(addrs: AddressSetView): AddressSet = subtract(addrs)
 operator fun AddressSetView.minus(range: AddressRange): AddressSet = subtract(AddressSet(range))
@@ -49,26 +41,11 @@ operator fun AddressSetView.plus(addrs: AddressSetView): AddressSet = union(addr
 operator fun AddressSetView.plus(range: AddressRange): AddressSet = union(AddressSet(range))
 operator fun AddressSetView.plus(addr: Address): AddressSet = union(AddressSet(addr))
 
-/**
- * For a Data object that supports component (like arrays or structs) you can use
- * `data[i]` instead of `data.getComponent(i)`
- */
 operator fun Data.get(i: Int): Data? = this.getComponent(i)
-
-/**
- * For a Data object that represents a struct you can use `data[fieldName]`
- */
-operator fun Data.get(name: String): Data? {
-    if (this.dataType is Structure) {
-        val s = (this.dataType as Structure)
-        val idx = s.components.firstOrNull { it.fieldName == name }?.ordinal
-        return idx?.let(this::getComponent)
-    }
-    return null
-}
+operator fun Data.get(name: String): Data? =
+    (dataType as? Composite)?.components?.firstOrNull { it.fieldName == name }?.ordinal?.let(this::get)
 
 val FunctionManager.functions get() = this.getFunctions(true).asIterable()
-
 val Program.functions get() = this.functionManager.getFunctions(true).asIterable()
 
 /** find a function, if any, such that [addr] falls within its convex hull [entry, body.maxAddress]  */
@@ -101,7 +78,7 @@ fun <T> DataTypeManager.runTransaction(description: String = "Kotlin Lambda Tran
 // Ghidra's C++ demangler in one place — the only module that touches DemanglerUtil / DemanglerCmd /
 // DemanglerOptions. Pure name-string parsing (namespace/template splitting, mangled classification)
 // lives Ghidra-free in `ghistabs.parse` (Names.kt).
-val demangler by lazy { GnuDemangler() }
+private val demangler by lazy { GnuDemangler() }
 
 /** Demangle [mangled] to a [DemangledObject], or null if it isn't a mangled name / demangling fails. */
 fun demangle(mangled: String): DemangledObject? = runCatching {
@@ -138,11 +115,11 @@ fun Program.applyDemangling(
     },
 ).run { applyTo(this@applyDemangling, monitor) && result != null }
 
-/** Clear any instructions covering [addr]..+[length]; true if there were any. An unsized [length]
+/** Clear any instructions covering [range]; true if there were any. An empty [range]
  *  (a `Dynamic` type that would not resolve) clears nothing rather than guess a span. */
-fun Listing.clearAnyDisassembly(addr: Address, length: Int): Boolean {
-    if (length <= 0 || getInstructionContaining(addr) == null) return false
-    clearCodeUnits(addr, addr + (length - 1), false)
+fun Listing.clearAnyDisassembly(range: AddressRange): Boolean {
+    if (range.length == 0L || getInstructionContaining(range.minAddress) == null) return false
+    clearCodeUnits(range.minAddress, range.maxAddress, false)
     return true
 }
 
@@ -161,13 +138,11 @@ fun Program.forceCreateData(
     length: Int = dt.length,
     onClearedCode: () -> Unit = {},
 ): Data {
-    if (listing.clearAnyDisassembly(addr, length)) onClearedCode()
+    if (listing.clearAnyDisassembly(addr..<addr + length)) onClearedCode()
     return DataUtilities.createData(this, addr, dt, length, DataUtilities.ClearDataMode.CLEAR_ALL_CONFLICT_DATA)
 }
 
 val MemoryBlock.byteProvider get() = InputStreamByteProvider(data, size)
-
-fun Memory.getBlockContaining(addr: Address) = blocks.find { it.addressRange.contains(addr) }
 
 /**
  * Where the program's default calling convention starts its stack parameters — the bias between a
