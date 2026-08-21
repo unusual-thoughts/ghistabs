@@ -56,6 +56,15 @@ class ComdatProvenanceProbe : AbstractGhidraHeadlessIntegrationTest() {
                 assumeTrue(records != null, "no .stab section")
                 val harvest = Harvester(ctx).harvest(records!!)
 
+                // The other derivation, from what each CU declared: a body outside its own CU's span
+                // — or in a CU that declared none, its code having gone to COMDAT sections — was not
+                // in that CU's ordinary text. Broader than a multi-CU claim, which is the subset the
+                // linker demonstrably folded, and the two should never contradict (§39).
+                val bySpan = harvest.functions.groupingBy { f ->
+                    harvest.cuSpans[f.cu]?.let { if (it.contains(f.addr)) "plain .text" else "outside its span" }
+                        ?: "CU declared no text"
+                }.eachCount()
+
                 val byAddr = harvest.functions.groupBy { it.addr }
                 val shared = byAddr.filterValues { copies -> copies.mapTo(mutableSetOf()) { it.cu }.size > 1 }
                 val merged = shared.values
@@ -71,7 +80,15 @@ class ComdatProvenanceProbe : AbstractGhidraHeadlessIntegrationTest() {
                     w.write("function addresses: ${byAddr.size}, claimed by >1 CU: ${shared.size}\n")
                     w.write("merged symbols: ${merged.size}\n")
                     w.write("  copies agree on a source: ${agree.size} (${agree.count { it.header }} name a header)\n")
-                    w.write("  copies disagree:          ${disagree.size}\n\n")
+                    w.write("  copies disagree:          ${disagree.size}\n")
+                    w.write("what each CU declared, per function:\n")
+                    for ((verdict, n) in bySpan.entries.sortedByDescending { it.value }) {
+                        w.write("  ${verdict.padEnd(20)} $n\n")
+                    }
+                    val contradictions = merged.count { m ->
+                        m.copies.any { harvest.cuSpans[it.cu]?.contains(it.addr) == true }
+                    }
+                    w.write("  merged bodies their own CU claims as plain .text: $contradictions\n")
                     for (m in merged) {
                         w.write("${m.copies.size}x ${if (m.agrees) "AGREE   " else "DISAGREE"} ${m.name}\n")
                         for (src in m.distinct) w.write("      $src\n")
