@@ -33,7 +33,7 @@ class Harvester(private val monitor: TaskMonitor, private val sink: DiagnosticSi
                 -> {}
 
                 // Other record types with non-zero desc are dropping a line number.
-                else -> debug("desc-dropped-${type.repr()}", "desc=$desc name=${name.take(40)}")
+                else -> debug("desc-dropped-${typeRepr()}", "$this")
             }
         }
 
@@ -50,12 +50,12 @@ class Harvester(private val monitor: TaskMonitor, private val sink: DiagnosticSi
                 -> {}
 
                 // Other record types with non-zero value are dropping an address or other data
-                else -> warn("value-dropped-${type.repr()}", "value=$value name=${name.take(40)}")
+                else -> warn("value-dropped-${typeRepr()}", "$this")
             }
         }
 
         if (other != 0.toUByte()) {
-            warn("other-dropped-${type.repr()}", "other=$other name=${name.take(40)}")
+            warn("other-dropped-${typeRepr()}", "$this")
         }
     }
 
@@ -138,13 +138,13 @@ class Harvester(private val monitor: TaskMonitor, private val sink: DiagnosticSi
         StabType.N_WITH,
         StabType.N_NBTEXT, StabType.N_NBDATA, StabType.N_NBBSS,
         StabType.N_NBSTS, StabType.N_NBLCS,
-        -> debug("drop-record-${type.name.removePrefix("N_").lowercase()}")
+        -> debug("drop-record-${typeRepr()}", "$this")
 
         // N_UNDF: cuOff/cuSize already advanced in StabReader.
-        StabType.N_UNDF -> debug("drop-record-${type.name.removePrefix("N_").lowercase()}-empty")
+        StabType.N_UNDF -> debug("drop-record-undf-empty")
 
         // Hard signal: byte-decoder recognized but no harvesting rule. Log once per type.
-        StabType.UNKNOWN -> warn("stab-unknown", "rawType=0x${"%02X".format(rawType)} @$index '${name.take(60)}'")
+        StabType.UNKNOWN -> warn("stab-unknown", "$this")
     }
 
     internal fun harvest(records: List<StabRecord>): Harvest {

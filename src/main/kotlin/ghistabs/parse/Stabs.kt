@@ -265,7 +265,17 @@ data class StabRecord(val index: Int, val type: StabType, val raw: RawHeader, va
     val desc get() = raw.desc.toInt()
     val other get() = raw.other
 
+    fun typeRepr() = when (type) {
+        StabType.UNKNOWN -> rawType.toString()
+        else -> type.repr()
+    }
+
     var stabstrOffset: Long = 0
+    override fun toString() = "#$index [${typeRepr().uppercase()}]" +
+        desc.takeIf { it != 0 }?.let { " dsc=$it" }.orEmpty() +
+        value.takeIf { it != 0L }?.let { " val=$it" }.orEmpty() +
+        other.takeIf { it.toInt() != 0 }?.let { " oth=$it}" }.orEmpty() +
+        name.takeIf { it.isNotEmpty() }?.let { " '$it'" }.orEmpty()
 }
 
 /** Where the records came from, which decides how `n_strx` reads and what else shares the table. */
