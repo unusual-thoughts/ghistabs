@@ -5,6 +5,7 @@ package ghistabs.harvest
 
 import ghidra.program.model.address.AddressRange
 import ghistabs.parse.GlobalTypeId
+import ghistabs.parse.SourceFile
 import ghistabs.parse.SymbolDecl
 import ghistabs.parse.TypeDecl
 import kotlinx.serialization.Serializable
@@ -27,6 +28,7 @@ data class Harvest(
     val constants: List<SymbolDecl.Constant<GlobalTypeId>>,
     /** N_SO/N_SOL text partition — which file each run of text came from, address-backed. */
     val textRanges: Map<AddressRange, GhidraSourceFile>,
-    /** [N_SO start, N_SO end] per CU. Gaps between them are COMDAT shared by several CUs. */
-    val cuRanges: Map<AddressRange, GhidraSourceFile>,
+    /** What each CU's N_SO pair bracketed; null where it declared no text, its code having gone to
+     *  COMDAT sections that the `Ltext` labels never see — 59 of 61 CUs on locale_test (§39). */
+    val cuSpans: Map<SourceFile.CUSource, AddressRange?>,
 )

@@ -4,10 +4,8 @@ import ghidra.program.model.address.Address
 import ghidra.program.model.address.AddressRange
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.importer.AddressResolver
-import ghistabs.minus
 import ghistabs.parse.*
-import ghistabs.rangeTo
-import java.util.*
+import ghistabs.rangeUntil
 
 /**
  * Position in the stab record stream — the state a flat stream of records only means anything
@@ -138,8 +136,8 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
             }
 
             else -> {
-                // The N_SO value ends the CU's text. What follows until the next CU is COMDAT and
-                // template instantiation shared between CUs and owned by none, so nothing opens here.
+                // dbxcoff.h's `Letext`: the end of this object's plain .text. What follows is not the
+                // COMDAT region — CU spans abut, 53 bytes of alignment apart on appquery (§39).
                 rec.boundary(null)
                 currentCu = null
                 pendingDirectory = null
@@ -175,12 +173,11 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
         }
     }
 
-    // Absolute, never function-relative: gcc values both records with an `Ltext<n>` label
-    // ([dbxout_init], [dbxout_source_file], and dbxcoff.h's trailing `Letext`), and on COFF only
-    // line numbers and block addresses are function-relative. Passing the open function's start
-    // rewrote the 178 appquery boundaries that legitimately sit below it.
+    // Not always absolute: `dbxout_source_file` skips its `text_section()` call when the open
+    // function has a section of its own, planting `Ltext<n>` inside that section instead — 178 such
+    // boundaries on appquery, each an offset within its own function's body.
     private val StabRecord.boundaryAddress get() = value.takeIf { it != 0L }
-        ?.let { resolver.stabAddress(it, funcStart = null, sink = this@StabCursor) }
+        ?.let { resolver.stabAddress(it, currentScope?.addr, sink = this@StabCursor) }
 
     /** A `../`-relative spelling anchored to this CU's compilation directory. */
     private fun resolved(name: String) = resolveAgainstDirectory(name, currentCu?.directory)
@@ -236,7 +233,7 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
         scopes.map { it.toHarvested() },
         lineEntriesByFile.mapValues { (_, v) -> v.sortedWith(compareBy({ it.line }, { it.addr.offset })) },
         textRanges = textPartition(),
-        cuRanges = cuContexts.entries.mapNotNull{(src,ctx) -> ctx.addressRange()?.let{it to src.identity}}.toMap(),
+        cuSpans = cuContexts.mapValues { it.value.addressRange() },
     )
 
     /**
@@ -253,15 +250,13 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
         // it is what drops the unterminated run.
         val ends = sorted.drop(1).map { it.first } +
             listOfNotNull(sorted.lastOrNull()?.let { resolver.blockEnd(it.first)?.next() })
+        // Two boundaries on one address make an empty run — 97 on appquery — which is a real
+        // statement: the file was named and claimed no bytes. Kept, since a zero-length entry is
+        // exactly how the source map records a point.
         return sorted.zip(ends) { (start, source), end ->
-            source?.let { span(start, end)?.to(it) }
+            source?.let { start..<end to it }
         }.filterNotNull().toMap()
     }
-
-    /**
-     * Functions gcc gave no extent — no end-marker N_FUN, no brackets — bounded by whatever does say
-     * where they stop: the next entry point, or the end of the CU's own text, whichever comes first.
-     */
 }
 
 /** What one pass over the stream accumulated, beyond the type store. */
@@ -269,13 +264,5 @@ data class HarvestedStream(
     val functions: List<Func>,
     val lineEntries: Map<GhidraSourceFile, List<LineEntry>>,
     val textRanges: Map<AddressRange, GhidraSourceFile>,
-    val cuRanges: Map<AddressRange, GhidraSourceFile>,
+    val cuSpans: Map<SourceFile.CUSource, AddressRange?>,
 )
-
-/**
- * The range between two boundaries, or null where there is none to make: an address missing, or the
- * two landing together — an N_SO and the N_SOL after it share one address, and a CU can bracket no
- * text at all. Ghidra's ends are inclusive, so the exclusive [end] loses one on the way in.
- */
-private fun span(start: Address?, end: Address?) =
-    if (start != null && end != null && end > start) start..(end - 1) else null
