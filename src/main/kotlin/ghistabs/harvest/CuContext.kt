@@ -8,6 +8,7 @@ import ghistabs.diagnose.DummySink
 import ghistabs.parse.HeaderFile
 import ghistabs.parse.LocalTypeId
 import ghistabs.parse.SourceFile
+import ghistabs.rangeUntil
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
 import java.util.*
@@ -38,14 +39,18 @@ class HeaderRegistry(sink: DiagnosticSink = DummySink) : DiagnosticSink by sink 
     }
 }
 
-/** Per-CU `fileNum → header` map and BINCL/EINCL/EXCL stack tracking. */
+/**
+ * One CU's scope: the text it declared between its opening and closing N_SO, its `fileNum → header`
+ * map, and the BINCL/EINCL/EXCL stack that fills it.
+ */
 @Serializable
-class IncludeContext(
+class CuContext(
     val cu: SourceFile.CUSource,
-    /** Where this CU's text began — the `Ltext0` its opening N_SO carries, absent when it carries 0. */
-    val start: Address? = null,
     @Transient private val sink: DiagnosticSink = DummySink,
     @Transient val registry: HeaderRegistry = HeaderRegistry(sink),
+    /** Where this CU's text began — the `Ltext0` its opening N_SO carries, absent when it carries 0. */
+    val start: Address? = null,
+    var end: Address? = null,
 ) : DiagnosticSink by sink {
     private val fileNumToHeader: MutableMap<Int, HeaderFile> = mutableMapOf()
 
@@ -97,4 +102,18 @@ class IncludeContext(
     }
 
     fun getAllFileNums(): Set<Int> = fileNumToHeader.keys
+
+    /**
+     * The range between two boundaries, or null where there is none to make: an address missing, or the
+     * two landing together — an N_SO and the N_SOL after it share one address, and a CU can bracket no
+     * text at all. Ghidra's ends are inclusive, so the exclusive [end] loses one on the way in.
+     */
+    fun addressRange() = start?.let { s ->
+        when (val e = end) {
+            null -> null.also { debug("unfinished-cu", "$cu has no end address @$s") }
+            else if e == s -> null.also { debug("empty-cu-range", "$cu range empty @$e, must be comdat") }
+            else if e < s -> null.also { err("inverted-cu-range", "$cu range inverted $s..$e") }
+            else -> s..<e
+        }
+    }
 }

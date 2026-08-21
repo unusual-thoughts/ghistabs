@@ -30,6 +30,8 @@ import java.io.File
  * materialize/apply pass. A generator, not a pass/fail test — tagged `probe`, so it runs via
  * `probeDump`, writing `build/test-output/comdat/<fixture>.txt`.
  */
+private val CU_RANGE_TAGS = listOf("unfinished-cu", "empty-cu-range", "inverted-cu-range")
+
 @Tag("probe")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class ComdatProvenanceProbe : AbstractGhidraHeadlessIntegrationTest() {
@@ -65,6 +67,10 @@ class ComdatProvenanceProbe : AbstractGhidraHeadlessIntegrationTest() {
                         ?: "CU declared no text"
                 }.eachCount()
 
+                // Why a CU has no span, straight off the sink: `addressRange()` says which degenerate
+                // case it was and names the CU, where a count could only say how many.
+                val verdicts = ctx.terminal.lines.filter { it.tag in CU_RANGE_TAGS }
+
                 val byAddr = harvest.functions.groupBy { it.addr }
                 val shared = byAddr.filterValues { copies -> copies.mapTo(mutableSetOf()) { it.cu }.size > 1 }
                 val merged = shared.values
@@ -89,6 +95,12 @@ class ComdatProvenanceProbe : AbstractGhidraHeadlessIntegrationTest() {
                         m.copies.any { harvest.cuSpans[it.cu]?.contains(it.addr) == true }
                     }
                     w.write("  merged bodies their own CU claims as plain .text: $contradictions\n")
+                    w.write("CUs with no span, by why (CuContext.addressRange()):\n")
+                    for (tag in CU_RANGE_TAGS) {
+                        w.write("  ${tag.padEnd(18)} ${verdicts.count { it.tag == tag }}\n")
+                    }
+                    for (v in verdicts) w.write("  $v\n")
+                    w.write("\n")
                     for (m in merged) {
                         w.write("${m.copies.size}x ${if (m.agrees) "AGREE   " else "DISAGREE"} ${m.name}\n")
                         for (src in m.distinct) w.write("      $src\n")

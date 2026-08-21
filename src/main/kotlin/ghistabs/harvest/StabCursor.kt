@@ -17,7 +17,7 @@ import java.util.*
  * the open function; [ghistabs.parse.Cursor] is the same idea one level down, within a single stab.
  *
  * Also, the [Globalizer] — a [LocalTypeId]'s file number only means something against the
- * [IncludeContext] of the CU that emitted it. The [HeaderRegistry] is shared across those contexts
+ * [CuContext] of the CU that emitted it. The [HeaderRegistry] is shared across those contexts
  * so two CUs that BINCL the same (filename, checksum) get identical GlobalTypeIds for
  * header-attributed types (stabs-canonicalization.md §3).
  */
@@ -25,16 +25,12 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
     DiagnosticSink by sink,
     Globalizer {
 
-    private val includesByFile = mutableMapOf<SourceFile.CUSource, IncludeContext>()
+    private val cuContexts = mutableMapOf<SourceFile.CUSource, CuContext>()
     private val sharedHeaderRegistry = HeaderRegistry(this)
     private val lineEntriesByFile = mutableMapOf<GhidraSourceFile, MutableList<LineEntry>>()
 
     // (address, file) where gcc said the text switches; null file = the CU's text ended there.
     private val textBoundaries = mutableListOf<Pair<Address, GhidraSourceFile?>>()
-
-    // [N_SO start, N_SO end] per CU — which CU owns each run of text, one level above the file
-    // partition. The gaps between them are the shared COMDAT region.
-    private val cuRanges = mutableMapOf<AddressRange, GhidraSourceFile>()
 
     /**
      * Pending compilation directory from a trailing-slash N_SO (stabs.texinfo §"Source
@@ -91,14 +87,14 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
 
     private val currentFunctionName get() = currentScope?.name
 
-    private val currentInclude get() = includesByFile[currentCu]
+    private val cuContext get() = cuContexts[currentCu]
 
-    override fun globalIdFor(id: LocalTypeId) = GlobalTypeId(currentInclude?.sourceFor(id) ?: cu, id.n)
+    override fun globalIdFor(id: LocalTypeId) = GlobalTypeId(cuContext?.sourceFor(id) ?: cu, id.n)
 
     fun parseSymbol(rec: StabRecord) = Symbol.parse(rec, this, lineSource, currentFunctionName)
 
     /**
-     * Build every CU's [IncludeContext] up front, so an N_BINCL file number is resolvable from the
+     * Build every CU's [CuContext] up front, so an N_BINCL file number is resolvable from the
      * first record of the CU that uses it rather than only once the stream reaches the BINCL.
      */
     fun preSeedHeaders(records: Iterable<StabRecord>) {
@@ -108,21 +104,22 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
 
                 StabType.N_SO if rec.name.isNotEmpty() -> {
                     currentCu = SourceFile.CUSource(rec.name, pendingDirectory).also {
-                        includesByFile[it] = IncludeContext(it, rec.boundaryAddress, this, sharedHeaderRegistry)
+                        cuContexts[it] = CuContext(it, this, sharedHeaderRegistry, rec.boundaryAddress)
                     }
                     pendingDirectory = null
                 }
 
                 StabType.N_SO -> {
+                    cuContext?.end = rec.boundaryAddress
                     currentCu = null
                     pendingDirectory = null
                 }
 
-                StabType.N_BINCL -> currentInclude?.beginInclude(resolved(rec.name), rec.value)
+                StabType.N_BINCL -> cuContext?.beginInclude(resolved(rec.name), rec.value)
 
-                StabType.N_EINCL -> currentInclude?.endInclude()
+                StabType.N_EINCL -> cuContext?.endInclude()
 
-                StabType.N_EXCL -> currentInclude?.remount(resolved(rec.name), rec.value)
+                StabType.N_EXCL -> cuContext?.remount(resolved(rec.name), rec.value)
 
                 else -> {}
             }
@@ -144,7 +141,6 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
                 // The N_SO value ends the CU's text. What follows until the next CU is COMDAT and
                 // template instantiation shared between CUs and owned by none, so nothing opens here.
                 rec.boundary(null)
-                span(currentInclude?.start, rec.boundaryAddress)?.to(cu.identity)?.let { cuRanges += it }
                 currentCu = null
                 pendingDirectory = null
                 currentSourceForLines = null
@@ -240,7 +236,7 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
         scopes.map { it.toHarvested() },
         lineEntriesByFile.mapValues { (_, v) -> v.sortedWith(compareBy({ it.line }, { it.addr.offset })) },
         textRanges = textPartition(),
-        cuRanges,
+        cuRanges = cuContexts.entries.mapNotNull{(src,ctx) -> ctx.addressRange()?.let{it to src.identity}}.toMap(),
     )
 
     /**
