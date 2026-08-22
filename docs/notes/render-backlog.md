@@ -1851,20 +1851,26 @@ byte pattern — `eb <n>`, n NOPs, ending on a 16-byte boundary — finds 7 of 1
 (`fillerBytesCollapsedToAlignment` passes corpus-wide); it is the jumped-over variant that does not.
 Asserted by `jumpOverFillCollapsedToAlignment`, which previously ran on one fixture where it passes.
 
-## 49. Static member functions still get a `this` — open
+## 49. Static member functions still get a `this` — DONE
 
 `std::locale::global`, `__mt_alloc<char>::_S_get_options` and `__mt_alloc<wchar_t>::_S_get_options`
-come out of `locale_test`/`xmltest` gcc-3.4.5 with an injected `this` parameter although their stabs
-mark them `?` (static). Their declared parameters survive — this is not the old `?`-as-pure-virtual
-regression, which replaced them — so what is left is `reparentMethod` setting `__thiscall` on a
-method whose `VirtKind` is `STATIC`. All three return a small class by value, so
-`StructReturnAnalyzer` then reads that convention and lands on `__thiscall_memret`; whether the
-convention or the parameter is the thing to fix is the first question.
+came out of `locale_test`/`xmltest` gcc-3.4.5 with an injected `this` although their stabs mark them
+`?` (static). Their declared parameters survived, so it was never the old `?`-as-pure-virtual
+regression.
+
+**It was not us setting `__thiscall` — it was us not unsetting it.** `reparentMethod` already
+early-returns on `VirtKind.STATIC`, which is why the three are clean under `-Pmode=BEFORE` and dirty
+under `AFTER`: Itanium mangling cannot distinguish a static member from an instance one, so Ghidra's
+own demangler pass applies `__thiscall` to both, and Ghidra auto-injects `this` for any this-bearing
+convention on a `GhidraClass` member. Not `__thiscall_memret` either — `StructReturnAnalyzer` had
+left all three alone; the plain `__thiscall` from the demangler was the whole story. The stabs `?`
+flag is the only source that knows, so the static branch now resets the convention to the compiler
+spec's default (`hasThisPointer()` gated, so it touches nothing else) before returning.
 
 Found by generalizing the former `staticMemberFunctionTakesNoThis` — which only ever ran on two
 non-redistributable fixtures — onto every `STATIC`-flagged method in the harvest.
 `StabsImportRegressionBase.staticMethodsTakeNoThis` asserts both halves (declared params survive, no
-`this` injected); the second fails today, deliberately.
+`this` injected) and now names the convention in its failure message, which is what located this.
 
 ## 48. The attribution scorecard — DONE, and it re-grades §44 automatically
 

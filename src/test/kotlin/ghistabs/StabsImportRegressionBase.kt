@@ -491,9 +491,9 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
      *
      * Every `STATIC`-flagged method the harvest resolved to an address. Two halves, because they
      * broke separately: the declared parameters must survive, and no `this` may be injected
-     * alongside them. Not the calling convention — a static returning a small class by value
-     * legitimately gets a thiscall-shaped one from `StructReturnAnalyzer` (`__thiscall_memret`, for
-     * the hidden return pointer in ECX); the parameter is the defect.
+     * alongside them. The second half only ever failed under auto-analysis, because the injection
+     * is Ghidra's: the demangler cannot tell a static member from an instance one and applies
+     * `__thiscall` to both. Hence the convention in the failure message — it is the diagnosis.
      */
     @Test
     fun staticMethodsTakeNoThis() {
@@ -505,8 +505,10 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             .filter { f -> f.parameters.none { it.name != "this" && it.name != "__return_storage_ptr__" } }
             .filter { f -> f.parameters.any { it.name == "this" } }
         val injected = statics.values.filter { f -> f.parameters.any { it.name == "this" } }
-        fun render(fs: Collection<Function>) =
-            fs.map { "${it.parentNamespace.name}::${it.name}(${it.parameters.joinToString { p -> p.name }})" }
+        fun render(fs: Collection<Function>) = fs.map { f ->
+            val params = f.parameters.joinToString { it.name }
+            "[${f.callingConventionName}] ${f.parentNamespace.name}::${f.name}($params)"
+        }
         assertAll(
             {
                 Assertions.assertEquals(
