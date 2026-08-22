@@ -388,7 +388,7 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
      * The real source first, then the hint, then what gcc recorded.
      *
      * The plan had the hint first, on the reasoning that its vote follows method bodies and is
-     * therefore code rather than inference. Measured on unpackfile against 3.2.3, the two disagree
+     * therefore code rather than inference. Measured on a gcc 3.2.3 PE, the two disagree
      * **three times**, all of them `_Vector_alloc_base<…>` at L79, and stl_vector.h L79 reads
      * `class _Vector_alloc_base {` while the hint says stl_iterator.h and stl_algobase.h — headers
      * whose only claim is that the instantiation's methods were compiled there. A definition at the
@@ -468,7 +468,7 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
     /**
      * Where a compilation unit lives, keyed by the bare spelling everything else names it by. gcc
      * records it in the leading trailing-slash `N_SO`, and `SourceFile.CUSource` has carried it all
-     * along, so `main.cpp` is really `E:/work/cc/devtools/devtools-bluelab-7-0/vm/appquery/main.cpp`
+     * along, so `main.cpp` is really `E:/work/cc/devtools/toolchain/vm/tool/main.cpp`
      * and [fold] gives it that identity — where the directory applies at all, which
      * [SourceFile.CUSource.spelling] decides. A header gets no such treatment: gcc gives it no directory
      * of its own, and inferring one from the CU that included it is the inference
@@ -499,7 +499,7 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
      * symbol's own `N_SOL` only under `WINNING_GDB` — so these arrive filed under whatever CU was
      * last in effect. The *line* survives, and for a typeinfo object it is the class's own declaration
      * line: `_ZTI5Image` is L29 in every CU that emits it, and `class Image` is image.h L29. (Its
-     * sibling `_ZTS` string is not the same case — appquery gives one class five different lines
+     * sibling `_ZTS` string is not the same case — one PE fixture gives one class five different lines
      * across five CUs — so nothing about those is worth trusting but the address.)
      */
     private fun SymbolDecl.Static<*>.typeinfoSource() = name

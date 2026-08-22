@@ -243,7 +243,7 @@ class Renderer(
     /**
      * How a decompiler token is spelled in the render: its type name shortened to whatever typedef
      * the import installed, and the `~` Ghidra puts inside a vtable-pointer's name — `PTR_~runtime
-     * _error_0043ecfc` — respelled, `~` not being an identifier character (12 of unpackfile's 39
+     * _error_0043ecfc` — respelled, `~` not being an identifier character (12 of one fixture's 39
      * remaining structural errors).
      *
      * Per token rather than over the assembled row. A row's offsets then index its final text, and

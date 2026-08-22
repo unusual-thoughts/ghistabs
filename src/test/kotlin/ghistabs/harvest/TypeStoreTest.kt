@@ -289,7 +289,7 @@ class TypeStoreTest {
     /**
      * Test: Same type twice from same CU (duplicate with same hash).
      *
-     * This mirrors the appquery same-hash pattern. Two stabs records in the same CU
+     * This mirrors the same-hash pattern from the corpus. Two stabs records in the same CU
      * define the same type (same GlobalTypeId) with identical bodies.
      *
      * 1. Append the same TypeAst twice.

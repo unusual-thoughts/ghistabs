@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test
 /**
  * Pins [typedefShorteningRenames]: the pass that collapses long templated datatype names onto
  * shorter typedef aliases, recursively inside other templates, longest target first. Uses the
- * real appquery std-string spelling (gcc's `<char, …, … >` spacing) as fixtures.
+ * a real std-string spelling (gcc's `<char, …, … >` spacing) as fixtures.
  */
 class TypedefShorteningTest {
     // gcc's DTM spelling — note spaces after commas and before the closing `>`.

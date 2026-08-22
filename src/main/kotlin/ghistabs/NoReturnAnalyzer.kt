@@ -17,7 +17,7 @@ const val NO_RETURN_ANALYZER_NAME = "Non-returning functions (reachability)"
 /**
  * Mark a function whose every path runs into a call to a function that cannot return.
  *
- * unpackfile's `error()` calls `exit` and never comes back, but nothing marks it, so every caller
+ * A project `error()` that calls `exit` never comes back, but nothing marks it, so every caller
  * decompiles with the unreachable tail still attached — which is where the `goto LAB_…` soup and the
  * out-of-source-order branches the render then has to lay out come from.
  *
@@ -40,7 +40,7 @@ const val NO_RETURN_ANALYZER_NAME = "Non-returning functions (reachability)"
  * One edge needs help, and it is the reason Ghidra's own walk cannot simply be reused here: the
  * fall-through past a non-returning call. `setNoFallThru` repair has already removed it by the time
  * *its* walk runs and has not by the time ours does, so the model still offers it — and it points at
- * whatever the linker placed next, which is no part of this function. unpackfile's `error` ends at
+ * whatever the linker placed next, which is no part of this function. One such `error` ends at
  * `call exit` with 0x401300 (inline string data) behind it; follow that edge and `getCodeBlockAt`
  * returns null, which this reads as "assume it returns". Elsewhere the same edge runs into an
  * unrelated function and finds its `ret`. Either way the answer is wrong, so the edge is dropped

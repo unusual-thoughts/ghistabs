@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test
  * is [ghistabs.scan.DeclaratorIndex]'s job and is tested there.
  */
 class SourceRootAttributionTest {
-    private val cu = SourceFile.CUSource("unpackfile.cpp")
+    private val cu = SourceFile.CUSource("main.cpp")
     private val wrong = sourceFileOf("bits/basic_string.h")
     private val right = sourceFileOf("bits/stl_uninitialized.h")
     private var nextId = 1

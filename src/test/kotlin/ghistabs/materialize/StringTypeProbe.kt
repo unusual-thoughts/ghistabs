@@ -21,7 +21,8 @@ import ghistabs.importer.ImportProbe
 import ghistabs.runTransaction
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.MethodSource
 import java.io.File
 
 /**
@@ -34,18 +35,12 @@ import java.io.File
  */
 @Tag("probe")
 class StringTypeProbe : AbstractGhidraHeadlessIntegrationTest() {
-    @Test
-    fun probeXapasmcsr() {
-        val fixture = File("src/test/resources/binaries/xapasmcsr.exe")
+    @ParameterizedTest
+    @MethodSource("ghistabs.IntegrationFixtures#all")
+    fun probe(binaryName: String) {
+        val fixture = File("src/test/resources/binaries/$binaryName")
         assumeTrue(fixture.exists(), "fixture absent")
-        runProbe(fixture, "xapasmcsr")
-    }
-
-    @Test
-    fun probeAppquery() {
-        val fixture = File("src/test/resources/binaries/appquery.exe")
-        assumeTrue(fixture.exists(), "fixture absent")
-        runProbe(fixture, "appquery")
+        runProbe(fixture, fixture.nameWithoutExtension)
     }
 
     private fun runProbe(fixture: File, label: String) {

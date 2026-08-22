@@ -8,7 +8,7 @@
 # translation unit cannot declare every type it mentions — and there is no clang flag that turns them
 # off, so they are subtracted by name rather than by a whitelist of the errors we happen to expect.
 # Anything clang says that is *not* in that family is a render defect, including ones we have not
-# seen yet: an earlier whitelist of brace/paren messages scored 39 errors on unpackfile and hid ~1500
+# seen yet: an earlier whitelist of brace/paren messages scored 39 errors on one fixture and hid ~1500
 # others, among them `constructor cannot have a return type`, `invalid parameter name: 'this' is a
 # keyword`, and `invalid digit 8 in octal constant`.
 #
@@ -52,7 +52,7 @@ total=0
 bad=0
 badfiles=0
 # Recursive: the render mirrors the source tree (`E/work/.../appimage.h`), so a flat glob saw 9 of
-# appquery's 66 files and reported a total that meant nothing.
+# one fixture's 66 files and reported a total that meant nothing.
 while IFS= read -r f; do
     total=$((total + 1))
     out=$(scan "$f")

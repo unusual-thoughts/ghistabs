@@ -89,7 +89,7 @@ class AttributionTest {
 
     @Test
     fun realHeaderWinsOverFakeHeaderSibling() {
-        // .cpp HeaderSources happen when gcc BINCL's a sibling CU (xapasmcsr's
+        // .cpp HeaderSources happen when gcc BINCL's a sibling CU (the
         // `inst.cpp` included by other CUs). A real .h beats the fake header.
         val sources = setOf<SourceFile>(
             SourceFile.HeaderSource(HeaderFile("/proj/inst.cpp", checksum = 1, originatingCu = null)),

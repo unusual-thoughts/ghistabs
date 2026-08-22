@@ -21,7 +21,7 @@ open class TestContentIndex(val asts: Map<GlobalTypeId, Type>) :
  * template-instantiation clones must collapse into a single canonical
  * hash, while structurally-different types must remain distinct.
  *
- * The xapasmcsr harvest shows ~208 collisions of the form "same
+ * One harvest in the corpus shows ~208 collisions of the form "same
  * GlobalTypeId for `pair<int, X*>`, different bodies because each CU's
  * inner Refs point at CU-local primitive-type ids". After this hash
  * change those collide-into-same instead of collide-into-different.
@@ -83,7 +83,7 @@ class ContentIndexTest {
      * was `WithSizeAttr(8, Ref([CU_X, -16]))`, which fell through to
      * [ContentIndex]'s `unresolved` fallback and baked the source CU
      * into the hash → per-CU divergence → 3 spurious "real" collisions
-     * in xapasmcsr.
+     * in the corpus.
      */
     @Test
     fun perCuBoolSlotHashesEqual() {
@@ -121,7 +121,7 @@ class ContentIndexTest {
     }
 
     /**
-     * The motivating xapasmcsr case: per-CU `pair<int, X*>` clones with
+     * The motivating case: per-CU `pair<int, X*>` clones with
      * structurally-identical field-name-and-kind layouts collide-into-
      * same despite living at distinct GlobalTypeIds.
      */
@@ -309,7 +309,7 @@ class ContentIndexTest {
     }
 
     /**
-     * Mirror of the xapasmcsr `pair<const int, CSourceSymbolData*>`
+     * Mirror of the real `pair<const int, SymbolData*>`
      * collision case: two CUs each emit the same outer pair struct;
      * CU1 expresses an inner Pointer-to-self via `Ref(id_A)` where
      * `id_A` is a separately-emitted TypeAst, CU2 expresses it as
@@ -318,7 +318,7 @@ class ContentIndexTest {
      * type. If they don't, classifyCollisions buckets them as "real"
      * when they're actually spurious.
      *
-     * Faithful replay of the xapasmcsr `[sym.h,87]` pair-collision:
+     * Faithful replay of the `[sym.h,87]` pair-collision:
      * the outer Struct itself has self-referential methods (cls=Ref to
      * the pair id), and the variants differ only in how param[0] of
      * one method is expressed (Ref vs InlineDef). typeAsts contains

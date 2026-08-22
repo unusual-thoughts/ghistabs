@@ -6,7 +6,6 @@ import ghidra.app.util.importer.ProgramLoader
 import ghidra.program.model.data.Composite
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
-import ghistabs.IntegrationFixtures
 import ghistabs.defaultContext
 import ghistabs.disableWindowsResourceAnalyzer
 import ghistabs.runTransaction
@@ -15,7 +14,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.MethodSource
 import java.io.File
 
 /**
@@ -28,9 +27,8 @@ import java.io.File
 @Tag("probe")
 class TypedefShorteningProbe : AbstractGhidraHeadlessIntegrationTest() {
     @ParameterizedTest
-    @ValueSource(strings = ["appquery.exe", "xapasmcsr.exe"])
+    @MethodSource("ghistabs.IntegrationFixtures#all")
     fun dumpRenames(binaryName: String) {
-        assumeTrue(IntegrationFixtures.accepts(binaryName), "fixture filtered out by -Pfixture")
         val fixture = File("src/test/resources/binaries/$binaryName")
         assumeTrue(fixture.exists(), "fixture absent")
 
