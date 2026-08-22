@@ -4,6 +4,7 @@ import ghidra.program.model.address.Address
 import ghidra.program.model.address.AddressRange
 import ghidra.program.model.address.AddressSet
 import ghidra.program.model.listing.Program
+import ghidra.program.model.mem.MemoryBlock
 import ghistabs.importer.ImportContext
 import ghistabs.inHull
 import ghistabs.parse.StabReader
@@ -46,7 +47,7 @@ fun ImportContext<*>.analyzeDataCoverage() {
     }
 }
 
-private fun ImportContext<*>.reportDataRun(block: ghidra.program.model.mem.MemoryBlock, range: AddressRange) {
+private fun ImportContext<*>.reportDataRun(block: MemoryBlock, range: AddressRange) {
     val reportable = if (block.isInitialized) !range.isAllZero(program) else range.length >= ALIGN_PADDING
     if (reportable) {
         debug(
