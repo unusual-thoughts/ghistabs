@@ -8,6 +8,7 @@ import ghidra.program.model.data.Undefined
 import ghistabs.diagnose.GapRecord
 import ghistabs.diagnose.degradation
 import ghistabs.harvest.Type
+import ghistabs.importer.DemanglerReplacer
 import ghistabs.parse.TypeDecl
 
 /**
@@ -116,7 +117,28 @@ fun DataTypeRegistry.reportConflictDelta() {
             .map { (DataTypeUtilities.getBaseDataType(it) ?: it).pathName }
             .distinct().sorted().take(10)
             .forEach { debug("dtm-conflicts-created", it, count = 0) }
+        reportDemanglerIncumbents(conflicts)
     }
+}
+
+/**
+ * A `/Demangler` fork is only possible against a *non-equivalent* incumbent, and Ghidra's own
+ * placeholders are all zero-length "PlaceHolder Structure" — so they compare equal and never fork.
+ * Something is therefore putting a populated type at a stub's path during our import; name the
+ * incumbent so the next AFTER run identifies it rather than another round of log archaeology.
+ */
+private fun DataTypeRegistry.reportDemanglerIncumbents(conflicts: List<DataType>) {
+    conflicts.filter { it.categoryPath.isAncestorOrSelf(DemanglerReplacer.DEMANGLER_CATEGORY) }
+        .forEach { fork ->
+            val incumbent = dtm.getDataType(fork.categoryPath, DataTypeUtilities.getNameWithoutConflict(fork.name))
+            warn(
+                "dtm-conflict-demangler-incumbent",
+                "${fork.pathName} forked against " + (
+                    incumbent?.let { "${it.pathName} len=${it.length} desc=${it.description}" }
+                        ?: "nothing at that path"
+                    ),
+            )
+        }
 }
 
 // Ghidra's gap-fill byte is DataType.DEFAULT (DefaultDataType), which does NOT implement Undefined,

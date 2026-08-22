@@ -4,6 +4,7 @@ import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.app.util.importer.MessageLog
 import ghidra.app.util.importer.ProgramLoader
 import ghidra.app.util.opinion.LoadResults
+import ghidra.program.database.data.DataTypeUtilities
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.*
 import ghidra.program.model.data.Array
@@ -1126,6 +1127,11 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         // across the whole corpus — an entry live in no fixture is dead and should be pruned.
         emptyStubDumpFile.apply { parentFile.mkdirs() }
             .writeText(allEmpty.map { it.name }.toSortedSet().joinToString("\n"))
+        // A `.conflict` fork is never whitelistable: the whitelist excuses names with no concrete
+        // type to bind to, but a fork exists precisely *because* something already holds that name.
+        // fewConflictRenames can't see these — one fork sits far under its 25-wide spike threshold.
+        val forks = allEmpty.filter { DataTypeUtilities.isConflictDataTypeName(it.name) }.map { it.pathName }
+        Assertions.assertEquals(emptyList<String>(), forks.sorted(), "${forks.size} empty /Demangler .conflict forks")
         val emptyStubs = allEmpty
             .filterNot { it.name in DemanglerWhitelist.ALLOWED }
             .map { "${it.categoryPath.path}/${it.name}" }
