@@ -1670,6 +1670,12 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
      *
      * The sites are found by scanning the bytes for the idiom, independently of the listing the
      * analyzer wrote — so this is a cross-check of `FillerByteAnalyzer`, not a restatement of it.
+     *
+     * Padding *between* functions only. gas emits the same three bytes for `-falign-loops` inside a
+     * live function body (box2d has 17 of those and no other kind), where the JMP is reached by
+     * fallthrough and is the function's own control flow: collapsing it to data would punch a hole
+     * through the instruction stream and cost the enclosing function its decompilation. Nothing the
+     * analyzer should touch, so nothing this should demand.
      */
     @Test
     fun jumpOverFillCollapsedToAlignment() {
@@ -1682,6 +1688,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
                     .filter { jumpOverFillAt(bytes, it, block.start.offset) }
                     .map { block.start.add(it.toLong()) }
             }
+            .filter { program.functionManager.getFunctionContaining(it) == null }
         assumeTrue(sites.isNotEmpty(), "Skipping: no jump-over-fill idiom in $binaryName")
 
         val uncollapsed = sites.filterNot { program.listing.getDataAt(it)?.dataType is AlignmentDataType }
