@@ -1,8 +1,8 @@
 {
     "counters": {
         "base-empty-ebo": {
-            "min": 12,
-            "max": 12
+            "min": 31,
+            "max": 31
         },
         "canonical-content-merged": {
             "min": 22,
@@ -41,16 +41,20 @@
             "max": 5
         },
         "degraded-local-typed-all-undefined": {
-            "min": 21,
-            "max": 21
+            "min": 24,
+            "max": 24
         },
         "degraded-param-unnamed-padded": {
             "min": 112,
             "max": 112
         },
+        "degraded-placeholder-undefined-fields": {
+            "min": 15,
+            "max": 15
+        },
         "degraded-struct-mostly-undefined": {
-            "min": 20,
-            "max": 20
+            "min": 14,
+            "max": 14
         },
         "degraded-struct-truncated": {
             "min": 7,
@@ -84,10 +88,6 @@
             "min": 24,
             "max": 24
         },
-        "desc-dropped-undf": {
-            "min": 1,
-            "max": 1
-        },
         "done": {
             "min": 1,
             "max": 1
@@ -107,6 +107,10 @@
         "dtm-conflicts-pre": {
             "min": 0,
             "max": 0
+        },
+        "empty-cu-range": {
+            "min": 4,
+            "max": 4
         },
         "empty-scope": {
             "min": 1,
@@ -171,6 +175,10 @@
         "harvest-symbols": {
             "min": 507,
             "max": 507
+        },
+        "harvest-text-ranges": {
+            "min": 665,
+            "max": 665
         },
         "harvest-typeAsts": {
             "min": 31417,
@@ -253,12 +261,16 @@
             "max": 31417
         },
         "inheritance-applied": {
-            "min": 100,
-            "max": 100
+            "min": 81,
+            "max": 81
         },
         "inheritance-pseudo-fields-promoted": {
             "min": 1,
             "max": 1
+        },
+        "linesource-start": {
+            "min": 604,
+            "max": 604
         },
         "local-var-add-success": {
             "min": 1539,
@@ -308,6 +320,10 @@
             "min": 119,
             "max": 119
         },
+        "resolve-ambiguous": {
+            "min": 1120,
+            "max": 1120
+        },
         "rtti-pseudo-substituted": {
             "min": 51,
             "max": 51
@@ -317,20 +333,20 @@
             "max": 538
         },
         "sourcemap-entries": {
-            "min": 11157,
-            "max": 11157
+            "min": 11384,
+            "max": 11384
         },
         "sourcemap-files": {
-            "min": 136,
-            "max": 136
+            "min": 157,
+            "max": 157
         },
         "sourcemap-folded-files": {
-            "min": 31,
-            "max": 31
+            "min": 44,
+            "max": 44
         },
         "stab-value-absolute": {
-            "min": 16,
-            "max": 16
+            "min": 862,
+            "max": 862
         },
         "stab-value-func-relative": {
             "min": 13541,
@@ -352,6 +368,10 @@
             "min": 2,
             "max": 2
         },
+        "text-boundaries-out-of-order": {
+            "min": 1,
+            "max": 1
+        },
         "text-data-no-coverage": {
             "min": 73,
             "max": 74
@@ -360,9 +380,17 @@
             "min": 564,
             "max": 568
         },
+        "textrange-entries": {
+            "min": 665,
+            "max": 665
+        },
         "typedef-named-anon-aggregate": {
             "min": 121,
             "max": 121
+        },
+        "unfinished-cu": {
+            "min": 1,
+            "max": 1
         },
         "unresolved-symbol": {
             "min": 1350,

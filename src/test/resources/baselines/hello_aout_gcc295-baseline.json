@@ -88,6 +88,10 @@
             "min": 3,
             "max": 3
         },
+        "harvest-text-ranges": {
+            "min": 0,
+            "max": 0
+        },
         "harvest-typeAsts": {
             "min": 24,
             "max": 24
@@ -161,8 +165,8 @@
             "max": 1
         },
         "stab-value-absolute": {
-            "min": 8,
-            "max": 8
+            "min": 10,
+            "max": 10
         },
         "stab-value-func-relative": {
             "min": 8,

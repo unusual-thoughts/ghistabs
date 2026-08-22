@@ -1,20 +1,20 @@
 {
     "counters": {
         "base-empty-ebo": {
-            "min": 38,
-            "max": 38
+            "min": 181,
+            "max": 181
         },
         "canonical-content-merged": {
-            "min": 26,
-            "max": 26
+            "min": 27,
+            "max": 27
         },
         "canonical-key-merged": {
-            "min": 1413,
-            "max": 1413
+            "min": 1434,
+            "max": 1434
         },
         "canonical-key-multi-hash": {
-            "min": 105,
-            "max": 105
+            "min": 84,
+            "max": 84
         },
         "canonical-scope-collision": {
             "min": 1,
@@ -45,8 +45,8 @@
             "max": 85
         },
         "degraded-local-typed-all-undefined": {
-            "min": 21,
-            "max": 21
+            "min": 24,
+            "max": 24
         },
         "degraded-param-typed-all-undefined": {
             "min": 26,
@@ -61,16 +61,16 @@
             "max": 648
         },
         "degraded-placeholder-undefined-fields": {
-            "min": 4,
-            "max": 4
+            "min": 204,
+            "max": 204
         },
         "degraded-struct-mostly-undefined": {
-            "min": 56,
-            "max": 56
+            "min": 23,
+            "max": 23
         },
         "degraded-struct-truncated": {
-            "min": 11,
-            "max": 11
+            "min": 8,
+            "max": 8
         },
         "degraded-vtable-failed": {
             "min": 68,
@@ -93,20 +93,16 @@
             "max": 8980
         },
         "demangler-exact-match": {
-            "min": 713,
-            "max": 713
+            "min": 714,
+            "max": 714
         },
         "demangler-reverse-demangle-match": {
             "min": 103,
             "max": 103
         },
         "demangler-skip-no-replacement": {
-            "min": 85,
-            "max": 85
-        },
-        "desc-dropped-undf": {
-            "min": 1,
-            "max": 1
+            "min": 84,
+            "max": 84
         },
         "done": {
             "min": 1,
@@ -121,12 +117,16 @@
             "max": 35
         },
         "dtm-conflicts-post": {
-            "min": 1,
-            "max": 1
+            "min": 0,
+            "max": 0
         },
         "dtm-conflicts-pre": {
             "min": 1,
             "max": 1
+        },
+        "empty-cu-range": {
+            "min": 3,
+            "max": 3
         },
         "empty-scope": {
             "min": 26,
@@ -191,6 +191,10 @@
         "harvest-symbols": {
             "min": 3157,
             "max": 3157
+        },
+        "harvest-text-ranges": {
+            "min": 3118,
+            "max": 3118
         },
         "harvest-typeAsts": {
             "min": 48204,
@@ -273,12 +277,16 @@
             "max": 48204
         },
         "inheritance-applied": {
-            "min": 601,
-            "max": 601
+            "min": 606,
+            "max": 606
         },
         "inheritance-pseudo-fields-promoted": {
             "min": 1,
             "max": 1
+        },
+        "linesource-start": {
+            "min": 3027,
+            "max": 3027
         },
         "local-var-add-success": {
             "min": 3544,
@@ -305,8 +313,8 @@
             "max": 66
         },
         "placeholder-created": {
-            "min": 25905,
-            "max": 25905
+            "min": 25904,
+            "max": 25904
         },
         "pointee-typed": {
             "min": 16,
@@ -325,8 +333,12 @@
             "max": 141
         },
         "replaced-demangler": {
-            "min": 816,
-            "max": 816
+            "min": 817,
+            "max": 817
+        },
+        "resolve-ambiguous": {
+            "min": 1207,
+            "max": 1207
         },
         "rtti-pseudo-substituted": {
             "min": 152,
@@ -337,24 +349,24 @@
             "max": 9744
         },
         "sourcemap-entries": {
-            "min": 33759,
-            "max": 33759
+            "min": 33987,
+            "max": 33987
         },
         "sourcemap-files": {
-            "min": 242,
-            "max": 242
+            "min": 263,
+            "max": 263
         },
         "sourcemap-folded-files": {
-            "min": 33,
-            "max": 33
+            "min": 46,
+            "max": 46
         },
         "stab-value-absolute": {
-            "min": 16,
-            "max": 16
+            "min": 3349,
+            "max": 3349
         },
         "stab-value-func-relative": {
-            "min": 47893,
-            "max": 47893
+            "min": 47949,
+            "max": 47949
         },
         "static-local-plate": {
             "min": 23,
@@ -372,17 +384,33 @@
             "min": 2,
             "max": 2
         },
+        "text-boundaries-out-of-order": {
+            "min": 1,
+            "max": 1
+        },
         "text-data-no-coverage": {
             "min": 82,
             "max": 91
         },
         "text-undisassembled-code": {
-            "min": 3625,
-            "max": 3635
+            "min": 3636,
+            "max": 3636
+        },
+        "textrange-entries": {
+            "min": 3117,
+            "max": 3117
+        },
+        "textrange-rejected": {
+            "min": 1,
+            "max": 1
         },
         "typedef-named-anon-aggregate": {
             "min": 121,
             "max": 121
+        },
+        "unfinished-cu": {
+            "min": 1,
+            "max": 1
         },
         "unresolved-symbol": {
             "min": 1363,
