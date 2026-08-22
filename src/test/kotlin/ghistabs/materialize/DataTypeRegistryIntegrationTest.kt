@@ -260,7 +260,7 @@ class DataTypeRegistryIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
         )
     }
 
-    /** Named primitive typedef: `unsigned int:t(0,4)=r(0,4);0;4294967295;` → /unsignedint TypeDef. */
+    /** Named primitive typedef: `unsigned int:t(0,4)=r(0,4);0;4294967295;` → /unsigned_int TypeDef. */
     @Test
     fun namedPrimitiveTypedef() {
         val program = builder.program
@@ -272,18 +272,18 @@ class DataTypeRegistryIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
         StabsImporter(ctx).runOnRecords(StabReader.Result(records))
 
         val dtm = program.dataTypeManager
-        val found = dtm.allDataTypes.asSequence().filter { it.name == "unsignedint" }.toList()
+        val found = dtm.allDataTypes.asSequence().filter { it.name == "unsigned_int" }.toList()
         val u = found.singleOrNull()
         assertNotNull(
             u,
-            "expected 1 type named 'unsignedint', got ${found.size}: " +
+            "expected 1 type named 'unsigned_int', got ${found.size}: " +
                 found.map { "${it::class.simpleName}@${it.categoryPath}" },
         )
         val nnu = u ?: return
         val base = (nnu as? TypeDef)?.baseDataType ?: nnu
         assertTrue(
             base.isEquivalent(UnsignedIntegerDataType()),
-            "expected unsignedint -> uint, got ${nnu::class.simpleName}(${nnu.name})",
+            "expected unsigned_int -> uint, got ${nnu::class.simpleName}(${nnu.name})",
         )
     }
 }

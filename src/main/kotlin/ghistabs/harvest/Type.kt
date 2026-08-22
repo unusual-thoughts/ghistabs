@@ -3,6 +3,7 @@
 
 package ghistabs.harvest
 
+import ghidra.app.util.demangler.DemanglerUtil
 import ghidra.program.model.address.Address
 import ghidra.program.model.address.AddressRange
 import ghidra.program.model.data.CategoryPath
@@ -46,7 +47,14 @@ data class Type(
      */
     val nameOrUnique = name?.ifEmpty { null } ?: (body as? TypeDecl.XRef)?.tagName?.ifEmpty { null } ?: uniqueName
 
-    val ghidraName: String = SymbolUtilities.replaceInvalidChars(nameOrUnique, false).ifEmpty { uniqueName }
+    // Reach the demangler's spelling of the same class: drop every space that is punctuation-adjacent,
+    // then substitute `_` for the ones left inside a multiword builtin — which is what
+    // `DemangledType.setName` does (`stripSuperfluousSignatureSpaces` then `.replace(' ', '_')`).
+    // Both strippers are needed: Ghidra's covers ` *`, ` &`, `( `, `, `, but not the ` >` of gcc's
+    // `allocator<char> >`, which [canonTemplateName] does — leaving it cost 181 exact stub matches.
+    val ghidraName: String = SymbolUtilities
+        .replaceInvalidChars(DemanglerUtil.stripSuperfluousSignatureSpaces(canonTemplateName(nameOrUnique)), true)
+        .ifEmpty { uniqueName }
 
     inline fun <reified T : TypeDecl<GlobalTypeId>> asType() = if (body is T) {
         this to body
