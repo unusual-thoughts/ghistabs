@@ -48,6 +48,18 @@
             "min": 0,
             "max": 0
         },
+        "demangler-unbound-stub": {
+            "min": 0,
+            "max": 0
+        },
+        "demangler-unbound-stub-in-signature": {
+            "min": 0,
+            "max": 0
+        },
+        "demangler-unbound-stub-signature-site": {
+            "min": 0,
+            "max": 0
+        },
         "done": {
             "min": 1,
             "max": 1
