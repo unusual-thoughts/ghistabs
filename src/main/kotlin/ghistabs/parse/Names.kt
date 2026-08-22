@@ -59,21 +59,6 @@ private val TEMPLATE_PUNCT = Regex("""\s*([<>,])\s*""")
  */
 fun canonTemplateName(name: String): String = TEMPLATE_PUNCT.replace(name.trim()) { it.groupValues[1] }
 
-private const val BUILTIN_WORD = "signed|unsigned|short|long|int|char|float|double"
-private val BUILTIN_WORD_RUN = Regex("""\b(?:$BUILTIN_WORD)(?:_(?:$BUILTIN_WORD))+\b""")
-
-/**
- * `unsigned_char` → `unsignedchar`: the two sanitizers disagree on what to do with the space in a
- * multiword builtin. Ghidra's demangler substitutes an underscore (`DemangledType.setName` does
- * `.replace(' ', '_')`); [ghistabs.harvest.Type.ghidraName] drops the char, because
- * `SymbolUtilities.replaceInvalidChars(name, false)` deletes rather than replaces. So one type
- * reaches the DTM spelled both ways and a `/Demangler` stub can't find its own body.
- *
- * Only collapses runs of two or more builtin words, which is the only place that space could have
- * been — `_off_t`, `MIDL_STUB_DESC` and `__int_type` are left alone.
- */
-fun collapseBuiltinSpelling(name: String): String = BUILTIN_WORD_RUN.replace(name) { it.value.replace("_", "") }
-
 /** An Itanium-mangled name. The Cygwin PE/COFF loader prepends `_`, so they also appear as `__Z…`. */
 fun isMangled(name: String): Boolean = name.startsWith("_Z") || name.startsWith("__Z")
 

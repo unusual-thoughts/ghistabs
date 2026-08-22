@@ -14,7 +14,6 @@ import ghistabs.diagnose.degradation
 import ghistabs.materialize.DataTypeRegistry
 import ghistabs.materialize.itanium.RttiStructs
 import ghistabs.parse.CATEGORY
-import ghistabs.parse.collapseBuiltinSpelling
 import ghistabs.parse.isMangled
 import java.util.*
 
@@ -171,13 +170,11 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val registry:
             // A `.conflict` fork is a second stub Ghidra made for a name we already occupy; it
             // names the same type, so it looks up debased. Nothing else keys off the fork's name.
             val name = DataTypeUtilities.getNameWithoutConflict(stub.name)
-            // Priority: exact DTM name → exact demangler-link (byDemangledClass) → builtin-spelling
-            // name → RTTI layout. The spelling fallback sits *below* byDemangledClass: that link is
-            // grounded in the mangled symbol's own `this`-pointee, so it outranks a normalized-name
-            // guess (put above, it silently rerouted 49 of this fixture's stubs off it).
+            // Priority: exact DTM name → exact demangler-link (byDemangledClass) → RTTI layout.
+            // byDemangledClass stays below the name match but above anything inferred: it is grounded
+            // in the mangled symbol's own `this`-pointee.
             val candidate = findByExactName(name, preferredCategory)?.also { debug("demangler-exact-match") }
                 ?: registry.byDemangledClass[stub.pathName]?.also { debug("demangler-reverse-demangle-match") }
-                ?: findByBuiltinSpelling(name, preferredCategory)?.also { debug("demangler-builtin-spelling-match") }
                 ?: rtti.typeInfoLayout(name)?.let { dtm.resolve(it, null) }
                     ?.also { debug("demangler-rtti-match") }
                 ?: continue
@@ -248,17 +245,9 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val registry:
     /** Every datatype the registry materialized, by name (checked first, so exact names never go through normalization) */
     private val byExactName = registry.allCreatedDataTypes.groupBy { it.name }.mapValues { it.value.toSet() }
 
-    /** The same index under [collapseBuiltinSpelling], to bridge `unsigned_char` to our `unsignedchar`. */
-    private val byBuiltinSpelling =
-        registry.allCreatedDataTypes.groupBy { collapseBuiltinSpelling(it.name) }.mapValues { it.value.toSet() }
-
     /** Exact DTM-name match for a demangler stub — no spelling normalization. */
     fun findByExactName(simpleName: String, preferredCategory: CategoryPath? = null): DataType? =
         disambiguate(byExactName[simpleName].orEmpty(), simpleName, preferredCategory)
-
-    /** Match modulo multiword-builtin spelling: the demangler's `unsigned_char` for our `unsignedchar`. */
-    fun findByBuiltinSpelling(simpleName: String, preferredCategory: CategoryPath? = null): DataType? =
-        disambiguate(byBuiltinSpelling[collapseBuiltinSpelling(simpleName)].orEmpty(), simpleName, preferredCategory)
 
     /** Pick a single winner from [matches]; null when empty or genuinely ambiguous. */
     private fun disambiguate(
