@@ -120,10 +120,10 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
         }
         // A misattributed claim is not laid out at all. Its line is the one thing about it known to be
         // wrong, so rendering it there — flagged, but in place — spent the file's real estate on a lie:
-        // unfile.cpp is ~180 lines and was 977 rows because gcc filed libstdc++ down to L898 in it.
+        // One .cpp is ~180 lines and was 977 rows because gcc filed libstdc++ down to L898 in it.
         // Surveyed across three programs before removing them: every misattributed row is a Win32
         // typedef in crt1.c, a libgcc internal in cygwin.asm (a *.asm* file, 1060 rows of C locals), or
-        // libstdc++ in unfile.cpp. tinyxml's and cryptopp's own sources have none at all. Project
+        // libstdc++ in that same .cpp. tinyxml's and cryptopp's own sources have none at all. Project
         // types appear only as arguments to std templates, which belong to the header, not the .cpp.
         val (misattributed, placeable) = claims.partition { it.stale }
         displaced += misattributed.map { Dropped(it, MISATTRIBUTED) }
@@ -531,7 +531,7 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
             // Storage goes in one trailing block comment rather than beside each declarator: the head
             // groups same-typed locals into `int a,b,c;`, so there is no per-name position to annotate
             // without breaking the grouping. Looked up by name, so it covers Ghidra's own declarations
-            // too — annotating only the merged extras reached 2 of unbouniaf's locals instead of all
+            // too — annotating only the merged extras reached 2 of that file's locals instead of all
             // of them. A `//` here would comment out the rest of the row.
             val storage = vars.filter { it.role != null }
                 .sortedWith(compareBy({ it.role?.startsWith("Stack") != true }, { it.role }, { it.name }))
@@ -617,7 +617,7 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
             // Adjacent stretches of one function share a wrapper. They cannot interleave with another
             // function's by definition, so nesting is safe, and one `vector<Exclusion,…>::operator=`
             // signature stands over its five consecutive stretches instead of being repeated above
-            // each — 644 wrapper heads on unbouniaf down to what the functions actually need.
+            // each — 644 wrapper heads on one fixture down to what the functions actually need.
             .fold(mutableListOf<Pair<Func, MutableList<Region>>>()) { acc, (f, r) ->
                 acc.lastOrNull()?.takeIf { it.first == f }?.second?.add(r) ?: acc.add(f to mutableListOf(r))
                 acc

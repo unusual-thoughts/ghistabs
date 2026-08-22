@@ -51,7 +51,7 @@ Two axes, deliberately separate. **`-Pregression`** picks the *suite*; **`-Pfixt
   `AlignmentDataType`, `StructReturnAnalyzer`'s conventions) need the other modes, and those
   `assumeTrue { mode != Mode.BEFORE }`.
   ```
-  ./gradlew integrationTest -Pmode=BEFORE -Pregression=bouniafbouniaf.exe       # seconds, one fixture
+  ./gradlew integrationTest -Pmode=BEFORE -Pregression=box2d_tests      # seconds, one fixture
   ./gradlew integrationTest -Pmode=all                                     # belt and braces, for CI
   ```
 - **`-PregenerateBaselines=true`** — rewrite the baseline JSONs from observed counters instead of

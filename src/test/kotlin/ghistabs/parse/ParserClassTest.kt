@@ -396,7 +396,7 @@ class ParserClassTest {
 
     /**
      * `?` in a method trailer is a *static* member function (gdb stabsread.c `case '?'`), not a
-     * pure virtual. Corpus shape from unbouniaf's `FileSystemImage`: a static's signature is a
+     * pure virtual. Corpus shape from a real class: a static's signature is a
      * plain `f(ret)`, never a `#(cls,…)` method type, and it takes no `this`.
      */
     @Test

@@ -15,10 +15,8 @@ import ghistabs.diagnose.StabsDiagnostics
 import ghistabs.importer.ImportContext
 import ghistabs.importer.ImportProbe
 import org.junit.jupiter.api.Assertions
-import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
-import java.io.File
 
 /**
  * Guards TODO issue 1: `std::string` must materialize as a single filled struct that Ghidra reuses as
@@ -43,8 +41,7 @@ class StringDedupIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     fun singleStringTypeShorteningOn() = assertSingleStringType(shorten = true)
 
     private fun assertSingleStringType(shorten: Boolean) {
-        val fixture = File("src/test/resources/binaries/bouniafbouniaf.exe")
-        assumeTrue(fixture.exists(), "fixture absent")
+        val fixture = IntegrationFixtures.orDefault(DEFAULT_FIXTURE)
 
         val log = MessageLog()
         val monitor = TaskMonitor.DUMMY
@@ -128,5 +125,10 @@ class StringDedupIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                     "`/std/string` is an empty shadow (shorten=$shorten)",
                 )
             }
+    }
+
+    private companion object {
+        /** Any libstdc++-linked C++ fixture will do; this one is committed and std::string-heavy. */
+        const val DEFAULT_FIXTURE = "locale_test_gcc345_fullstabs.exe"
     }
 }

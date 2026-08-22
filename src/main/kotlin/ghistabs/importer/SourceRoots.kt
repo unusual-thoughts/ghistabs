@@ -152,7 +152,7 @@ class LocalSources(
      * [SLACK] lines of where it says they are. Per file, never per root, because a project is quite
      * likely to share a root with a stdlib that does not match.
      *
-     * [MIN_AGREEMENT] is measured, not guessed. Against gcc 3.2.3 — the version unbouniaf was built
+     * [MIN_AGREEMENT] is measured, not guessed. Against gcc 3.2.3 — the version the oldest PE fixtures were built
      * with — every file scores 75% or more and most score 100%; against 3.4.6's `bits/` the same files
      * score 54% and below. The two populations do not overlap, and 0.7 sits between them. What still
      * passes from the wrong tree is the handful of headers that did not change in the lines claimed,

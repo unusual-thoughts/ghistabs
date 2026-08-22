@@ -344,7 +344,7 @@ class SymbolApplier(
                     // rejects a non-zero firstUseOffset on stack storage ("Stack-based variable must
                     // have firstUseOffset of 0") — and suffixing them by slot instead is destructive:
                     // the extra copies land at offsets inside a real variable's footprint and Ghidra
-                    // silently evicts it (unbouniaf `main` lost `FileSystemImage fs` outright).
+                    // silently evicts it (one fixture's `main` lost a whole struct local outright).
                     if (decl.name in func.localVariables.map { it.name }) {
                         debug("local-var-skipped-dup-local")
                         return

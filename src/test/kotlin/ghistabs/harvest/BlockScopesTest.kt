@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
 /**
- * The record stream of `unbouniaf.exe`'s `main` (records 1771-1813), where gcc inlined six
+ * The record stream of a `main` (records 1771-1813) where gcc inlined six
  * std::string/allocator members: one `fs` of its own, then a `this`/`__str`/`this`/`__val` per
  * expansion, each emitted immediately *before* the N_LBRAC of the block it belongs to.
  */
@@ -28,7 +28,7 @@ class BlockScopesTest {
             rawValue = 0,
             line = declLine,
             // The trailing N_SOL gcc leaves in effect — always the CU, never the local's own file.
-            sourceFile = sourceFileOf("unfile.cpp"),
+            sourceFile = sourceFileOf("main.cpp"),
         ),
     )
 
@@ -56,7 +56,7 @@ class BlockScopesTest {
     }
 
     private val lines = listOf(
-        line(75, 0x5d, "unfile.cpp"),
+        line(75, 0x5d, "main.cpp"),
         line(664, 0x11f, "stl_alloc.h"),
         line(953, 0x15d, "basic_string.h"),
         line(665, 0x1b2, "stl_alloc.h"),
@@ -70,7 +70,7 @@ class BlockScopesTest {
 
     @Test
     fun `a block owns the symbols emitted before its LBRAC, not the ones between its brackets`() {
-        val (_, blocks) = mainBuilder().finish(lines, sourceFileOf("unfile.cpp"))
+        val (_, blocks) = mainBuilder().finish(lines, sourceFileOf("main.cpp"))
 
         val root = blocks.single()
         assertEquals(listOf("fs"), root.locals.map { it.body.name })
@@ -84,13 +84,13 @@ class BlockScopesTest {
 
     @Test
     fun `a local's source is its block's, not the N_SOL left over at the closing brace`() {
-        val (locals, _) = mainBuilder().finish(lines, sourceFileOf("unfile.cpp"))
+        val (locals, _) = mainBuilder().finish(lines, sourceFileOf("main.cpp"))
 
         assertEquals(
             listOf(
                 "__str" to "basic_string.h",
                 "__val" to "atomicity.h",
-                "fs" to "unfile.cpp", // the function's own local: inherits the function
+                "fs" to "main.cpp", // the function's own local: inherits the function
                 "this" to "stl_alloc.h",
                 "this" to "stl_alloc.h",
             ),
@@ -103,10 +103,10 @@ class BlockScopesTest {
         // 0x11f..0x122 now covers stl_alloc.h:664 and stl_construct.h:700, so the range alone can't
         // decide — the decl line still pins it. Only a local with no line match would inherit.
         val spanning = lines + line(700, 0x120, "stl_construct.h")
-        val (locals, _) = mainBuilder().finish(spanning, sourceFileOf("unfile.cpp"))
+        val (locals, _) = mainBuilder().finish(spanning, sourceFileOf("main.cpp"))
 
         assertEquals("stl_alloc.h", locals.first { it.line == 664 }.sourceFile.filename)
-        assertEquals("unfile.cpp", locals.first { it.body.name == "fs" }.sourceFile.filename)
+        assertEquals("main.cpp", locals.first { it.body.name == "fs" }.sourceFile.filename)
     }
 
     /**
@@ -116,9 +116,9 @@ class BlockScopesTest {
      */
     @Test
     fun `a local no block claims belongs to the function`() {
-        val (locals, blocks) = mainBuilder().apply { local("orphan", 27) }.finish(lines, sourceFileOf("unfile.cpp"))
+        val (locals, blocks) = mainBuilder().apply { local("orphan", 27) }.finish(lines, sourceFileOf("main.cpp"))
 
-        assertEquals("unfile.cpp", locals.single { it.body.name == "orphan" }.sourceFile.filename)
+        assertEquals("main.cpp", locals.single { it.body.name == "orphan" }.sourceFile.filename)
         assertEquals(false, "orphan" in flatten(blocks))
     }
 }

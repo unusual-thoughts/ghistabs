@@ -86,7 +86,7 @@ class ClassBuilder(
 
     /**
      * Build every class/vtable group once. Each class header included by N CUs produces N TypeAsts
-     * with distinct ids but identical ghidraName (bouniafbouniaf: 86 names duplicated up to 11x);
+     * with distinct ids but identical ghidraName (one PE fixture: 86 names duplicated up to 11x);
      * materializeAll already collapsed by name, and iterating canonical groups builds each class
      * once, off the most-detailed body. Returns the number of classes built.
      */
