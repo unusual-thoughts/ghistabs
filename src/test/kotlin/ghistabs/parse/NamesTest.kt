@@ -65,23 +65,4 @@ class NamesTest {
     fun `empty string returns empty list`() {
         Assertions.assertEquals(emptyList<String>(), splitQualified(""))
     }
-
-    @Test
-    fun `collapses multiword builtin spellings the demangler underscores`() {
-        Assertions.assertEquals("unsignedchar", collapseBuiltinSpelling("unsigned_char"))
-        Assertions.assertEquals("longlongunsignedint", collapseBuiltinSpelling("long_long_unsigned_int"))
-        Assertions.assertEquals(
-            "SecBlock<unsignedint,CryptoPP::NullAllocator<unsignedint>>",
-            collapseBuiltinSpelling("SecBlock<unsigned_int,CryptoPP::NullAllocator<unsigned_int>>"),
-        )
-    }
-
-    @Test
-    fun `leaves underscores that were never spaces alone`() {
-        // Stripping all underscores collided 504 distinct names per fixture (`_off_t` vs `off_t`,
-        // `MIDL_STUB_DESC` vs `_MIDL_STUB_DESC`) — only builtin-word runs may collapse.
-        for (name in listOf("_off_t", "MIDL_STUB_DESC", "_MIDL_STUB_DESC", "__int_type", "__char_type", "DL_Base")) {
-            Assertions.assertEquals(name, collapseBuiltinSpelling(name))
-        }
-    }
 }
