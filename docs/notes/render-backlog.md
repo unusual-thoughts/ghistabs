@@ -1837,28 +1837,48 @@ Found by folding the former `methodsUseThiscall` — one hand-picked method on o
 `StabsImportRegressionBase.mingwClassMethodsCarryThiscall`, which checks the `this` parameter's type
 for every `__thiscall` method.
 
-## 50. Two class-layout invariants that do not hold — measured, open
+## 50. Three class-layout invariants that do not hold — DONE
 
-Both found by generalizing single-fixture regression assertions onto the whole corpus, both real.
-Measured on gcc 3.4.5 / 4.2.1 PEs, identical in all three modes. Both are asserted — the tests below
-fail today, deliberately.
+Three defects, and two of the measurements were the test's own fault. Both class assertions paired
+an *arbitrary* harvested body with the group winner's Structure, so wherever gcc's CUs disagreed
+about a class they reported that disagreement as ours. `builtClasses()` now pairs the winner body
+with the type that body built (`index.byLocation`), which is what `fieldsSitAtTheirDeclaredOffsets`
+already did.
 
-**(a) A derived class with a non-empty base shows no base subobject.** No `_base_`/`_vbase_`
-component, and its own first field at offset 0 — so the base bytes are neither named nor reserved.
-177 of 4568 on `crypto_mi_test_gcc421` (`TwoBases<CryptoPP::BlockCipher,CryptoPP::Rijndael_Info>` and
-the rest of the cryptlib policy mixins), 16 of 2133 on `locale_test_customlibstdcxx_stripped`
-(`basic_stringstream<…>`), 1 of 78 on `xmltest_gcc345_fullstabs` (`std::fstream`). Empty bases are
-excluded — the empty-base optimization means a `sizeof == 1` base contributes nothing and the derived
-class's own field *does* start at 0 — so these are all bases that occupy space.
+**(a) A derived class with a non-empty base shows no base subobject — two real causes, one phantom.**
 
-**(b) A single-base class's base field holds an ancestor, not the base.** 32 on
-`crypto_mi_test_gcc421`: `InvalidKeyLength`'s base field is `Exception` where its declared base is
-`InvalidArgument` (which itself derives from `Exception`). The layout is the right size, so nothing
-downstream complains — the field just names the wrong class, one or more levels up the chain.
+*The pseudo-field detector was half-blind.* gcc emits C++ inheritance as a leading member whose
+bitsize is bytes×**64**, and `TypeStore` recognised it by `sizeBits > struct.sizeBytes * 8` — a proxy
+that structurally cannot fire for a base small enough to fit inside its own derived class. An *empty*
+base is one byte, and every cryptlib policy mixin is empty:
+`TwoBases<BlockCipher,Rijndael_Info>` declares `Rijndael_Info` at 64 bits inside a 96-bit struct, so
+only the 12-byte `BlockCipher` was ever promoted. The ×64 signature is now taken exactly whenever the
+referenced body is in scope (a real field's bitsize is size×8, so ×64 can only be the double
+conversion); the size comparison stays the fallback for a Ref the CU never defines. gcc 3.4.5 also
+spells the base inline — `BlockCipher:(0,70)=xsBlockCipher:,0,768` — which the `TypeDecl.Ref`-only
+guard skipped outright; `InlineDef` now counts too, which is what `PrivateKeyAlgorithm` needed.
 
-`StabsImportRegressionBase.derivedClassesCarryTheirBaseSubobject` asserts (a);
-`classesAreTruncatedToTheirLastDescribedByte` asserts (b) alongside the half that does hold
-corpus-wide (no class carries bytes past its last described field).
+*Two bases at the same offset clobbered each other.* `fillStructBases` keyed its resolutions by
+offset, so with EBO — `TwoBases` declares both bases at +0 — the empty one arriving second took the
+slot the 12-byte one had already claimed, and the merged entry then failed the name check and was
+dropped, leaving the class with no inheritance at all. Empty bases are now filtered out up front
+(they occupy nothing) and each base is resolved and spliced on its own.
+
+*The phantom:* 16 on `locale_test_customlibstdcxx_stripped` (`basic_stringstream<…>`) and 1 on
+`xmltest_gcc345_fullstabs` (`std::fstream`) were the deliberate reserve-as-Undefined1 degradation the
+test's own KDoc blesses — read through `components`, which includes Ghidra's autofill, so the bare
+reserved bytes presented as own fields at +0. `definedComponents` was the whole fix.
+
+**(b) A single-base class's base field holds an ancestor, not the base.** Not real. cryptopp defines
+`InvalidKeyLength` eight times — `Exception` in two CUs, `InvalidArgument` in the other six — and the
+32 hits were the two losers' bodies judged against the winner's Structure. Gone with `builtClasses()`.
+
+Behind it, though, was a real one the corpus turned up: on `xmltest_gcc421_fullstabs`,
+`basic_ostringstream`'s base field held `basic_ostream<…>.conflict`. `getOrMaterialize` falls back to
+a cycle-break stub that [seedPlaceholder] deliberately keeps *out* of the DTM, and splicing one in
+makes `replaceAtOffset` resolve it on the way in — forking a `.conflict` twin of a class we had
+already built properly. `dtm.contains` now gates the splice: a base we have not actually built is
+left as reserved bytes, same as an unresolved one.
 
 **(c) `FillerByteAnalyzer` does not collapse the gas jump-over-fill idiom — DONE.** An unconditional
 short jump to the aligned boundary with NOPs behind it (`eb 0d 90…`) is padding, and the Alignment

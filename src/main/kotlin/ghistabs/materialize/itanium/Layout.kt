@@ -17,11 +17,6 @@ sealed class VfptrAction {
     data class CollisionAt(val offsetBytes: Int, val occupantFieldName: String) : VfptrAction()
 }
 
-data class ResolvedBase(val simpleName: String?, val lengthBytes: Int)
-
-/** One `_base_<Name>` or `_vbase_<Name>` subobject to splice into a derived struct. */
-data class InsertOp(val offsetBytes: Int, val fieldName: String, val comment: String, val baseSimpleName: String)
-
 /** Pure C++ record-layout decisions: where the vfptr goes and how base subobjects are spliced in. */
 object Layout {
     /** Extracted from `ClassBuilder.ensureVfptrFirstField` for pure unit testing. */

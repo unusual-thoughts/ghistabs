@@ -783,16 +783,18 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
      */
     @Test
     fun derivedClassesCarryTheirBaseSubobject() {
-        val derived = artifacts.harvest.types.values
-            .mapNotNull { it.asStruct() }
-            .filter { (_, body) -> body.bases.any { it.offsetBits == 0L && occupiesSpace(it.type) } }
-            .mapNotNull { (ast, _) -> artifacts.registry.dataTypeFor(ast.id) as? Structure }
+        val derived = builtClasses()
+            .filter { (body, _) -> body.bases.any { it.offsetBits == 0L && occupiesSpace(it.type) } }
+            .map { (_, dt) -> dt }
             .filter { it.numComponents > 0 }
         assumeTrue(derived.isNotEmpty(), "Skipping: no derived classes materialized in this fixture")
 
+        // Defined components only: the reserved-as-Undefined1 shape has *no* component naming the
+        // base, and Ghidra's autofill would otherwise present those bare bytes as own fields at 0.
         val flat = derived.filterNot { cls ->
-            val own = cls.components.filterNot { Itanium.isBaseField(it.fieldName.orEmpty()) }
-            own.size < cls.numComponents || own.firstOrNull()?.offset?.let { it > 0 } == true
+            cls.definedComponents.let { own ->
+                own.any { Itanium.isBaseField(it.fieldName.orEmpty()) } || (own.firstOrNull()?.offset ?: 1) > 0
+            }
         }
         Assertions.assertEquals(
             emptyList<String>(),
@@ -1615,13 +1617,13 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     @Test
     fun classesAreTruncatedToTheirLastDescribedByte() {
         val classes = artifacts.harvest.types.values.mapNotNull { it.asStruct() }
-            .mapNotNull { (ast, body) -> (artifacts.registry.dataTypeFor(ast.id) as? Structure)?.let { it to body } }
-            .filter { (dt, _) -> dt.numComponents > 0 && !dt.isZeroLength }
+            .mapNotNull { (ast, _) -> artifacts.registry.dataTypeFor(ast.id) as? Structure }
+            .filter { it.numComponents > 0 && !it.isZeroLength }
         assumeTrue(classes.isNotEmpty(), "Skipping: no classes materialized in this fixture")
 
         val padded = classes
-            .filterNot { (dt, _) -> dt.length == dt.components.last().endOffset + 1 }
-            .map { (dt, _) -> "${dt.name}: length=${dt.length}, layout ends at ${dt.components.last().endOffset + 1}" }
+            .filterNot { it.length == it.components.last().endOffset + 1 }
+            .map { "${it.name}: length=${it.length}, layout ends at ${it.components.last().endOffset + 1}" }
         Assertions.assertEquals(
             emptyList<String>(),
             padded.take(10),
@@ -1631,7 +1633,8 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         // A single base at +0 is the *same* Structure instance as the base class, not a same-sized
         // synthetic standing in for it — that is what the truncate-at-placeholder-creation ordering
         // buys, and holding an ancestor instead means the base loop resolved the wrong link.
-        val synthetic = classes.mapNotNull { (dt, body) ->
+        //
+        val synthetic = builtClasses().mapNotNull { (body, dt) ->
             val base = body.bases.singleOrNull()
                 ?.takeIf { it.offsetBits == 0L && !it.isVirtual && occupiesSpace(it.type) }
                 ?: return@mapNotNull null
@@ -1701,6 +1704,22 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     }
 
     // ---- Shared lookups for the corpus-wide assertions above. ----
+
+    /**
+     * Every class as it was actually built: the canonical group's *winner* body paired with the
+     * Structure that body produced.
+     *
+     * Not `harvest.types`, which is every ast a CU ever emitted. A group folds definitions that
+     * disagree, and pairing a loser's body with `dataTypeFor` compares two different declarations —
+     * cryptopp defines `InvalidKeyLength` eight times (`Exception` in two CUs, `InvalidArgument` in
+     * six) and `tagMONITORINFOEXA` both flat and derived, so a layout assertion driven that way
+     * reports gcc's inconsistency as our defect.
+     */
+    private fun builtClasses(): List<Pair<TypeDecl.Struct<GlobalTypeId>, Structure>> =
+        artifacts.index.byLocation.values.mapNotNull { located ->
+            val body = located.type.body as? TypeDecl.Struct ?: return@mapNotNull null
+            (artifacts.registry.dataTypeFor(located.type.id) as? Structure)?.let { body to it }
+        }
 
     /** Every `<Class>_vftable` that got slots, one copy per name (the fullest). */
     private fun filledVftables() = program.dataTypeManager.allDataTypes.asSequence()

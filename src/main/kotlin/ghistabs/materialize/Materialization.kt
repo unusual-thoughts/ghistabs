@@ -110,100 +110,68 @@ internal fun DataTypeRegistry.fillStructBases(
     body: TypeDecl.Struct<GlobalTypeId>,
     placeholder: Structure,
     qualifiedName: String,
-) { // Layout boundary to infer size of unresolved bases: offset of next
+) {
+    // An empty base occupies nothing (EBO) and must not be given the offset it shares with a
+    // space-occupying sibling: cryptopp's `TwoBases<BlockCipher,Rijndael_Info>` declares both at +0,
+    // and the empty one arriving second used to take the slot the 12-byte one had already claimed.
+    val occupying = body.bases.filterNot { index.resolveBaseAstStatic(it.type)?.sizeBytes?.let { n -> n <= 1 } == true }
+    if (occupying.size < body.bases.size) debug("base-empty-ebo")
+
+    // Layout boundary to infer size of unresolved bases: offset of next
     // base or first non-static field is where this subobject must end.
-    val sortedBaseOffsetsBytes = body.bases.map { (it.offsetBits / 8).toInt() }.toSortedSet()
+    val sortedBaseOffsetsBytes = occupying.map { (it.offsetBits / 8).toInt() }.toSortedSet()
     val firstFieldOffsetBytes = body.fields
         .filter { !it.isStatic }
         .minOfOrNull { (it.offsetBits / 8).toInt() }
         ?: body.sizeBytes.toInt()
 
-    val dataTypeByOffset = mutableMapOf<Int, DataType>()
-    val resolvedBaseInfo = mutableMapOf<Int, ResolvedBase>()
-    for (base in body.bases) {
+    for (base in occupying.sortedBy { it.offsetBits }) {
         val offsetBytes = (base.offsetBits / 8).toInt()
-        val dt = resolveRef(base.type)
         // gcc's inheritance line doesn't transmit subobject size — derive
         // from the consuming struct's own-field offset (CSymLexStream sees
         // CLexStream as 192 bytes here even though canonical CLexStream is 328
         // because another CU saw a richer definition).
-        val nextOffset =
-            sortedBaseOffsetsBytes.firstOrNull { it > offsetBytes } ?: firstFieldOffsetBytes
-        val gap = nextOffset - offsetBytes
-
-        // Empty placeholders report length=1 (Ghidra's enforced minimum);
-        // isZeroLength gives the logical truth. Treat as unresolved.
-        if (dt != null && !dt.isZeroLength && dt.length > 0 && dt.length <= gap) {
-            dataTypeByOffset[offsetBytes] = dt
-            resolvedBaseInfo[offsetBytes] = ResolvedBase(dt.name, dt.length)
-            continue
-        }
-
-        // Either unresolved or larger-than-gap (cross-CU size disagreement).
-        // Synthesize a gap-sized placeholder so own fields don't have to
-        // clear half of an oversized base.
-        if (gap <= 0) {
-            // Empty Base Optimization: subobject takes 0 bytes. Resolved-to-empty
-            // (std::allocator<char> in _Alloc_hider) or unresolved-but-gap-zero
-            // (libstdc++ iterator-tag bases living in headers). Skip insertion;
-            // own fields at offset 0 take the slot.
-            if (dt == null) {
+        val gap = (sortedBaseOffsetsBytes.firstOrNull { it > offsetBytes } ?: firstFieldOffsetBytes) - offsetBytes
+        val raw = resolveRef(base.type)
+        // Empty placeholders report length=1 (Ghidra's enforced minimum); isZeroLength gives the
+        // logical truth. `dtm.contains` rejects a cycle-break stub, which [seedPlaceholder]
+        // deliberately keeps out of the DTM: splicing one in makes `replaceAtOffset` resolve it on
+        // the way in, forking a `.conflict` twin of a class we already built properly. Both are
+        // "we have no base type here" for layout purposes.
+        val dt = raw?.takeIf { dtm.contains(it) && !it.isZeroLength && it.length in 1..gap }
+        if (dt == null) {
+            // Unresolved, or larger-than-gap (cross-CU size disagreement). Leave the span as
+            // Ghidra's default Undefined1 fill rather than name a subobject we can't stand behind.
+            if (gap <= 0) {
+                // Unresolved-but-gap-zero: libstdc++ iterator-tag bases living in headers this CU
+                // only forward-declared. Own fields at offset 0 take the slot.
                 debug("base-empty-ebo-inferred")
             } else {
-                debug("base-empty-ebo")
+                degradation(
+                    "base-synthesized",
+                    "$qualifiedName@+$offsetBytes",
+                    if (raw == null || raw.isZeroLength || raw.length <= 0 || !dtm.contains(raw)) {
+                        "Ref unresolved, $gap-byte subobject left undefined"
+                    } else {
+                        "${raw.name} (${raw.length}b) larger than gap ($gap b); left undefined"
+                    },
+                )
             }
             continue
         }
-        val synthDt = ArrayDataType(Undefined1DataType.dataType, gap, 1)
-        dataTypeByOffset[offsetBytes] = synthDt
-        resolvedBaseInfo[offsetBytes] = ResolvedBase(null, gap)
-        val reason = if (dt == null || dt.isZeroLength || dt.length <= 0) {
-            "Ref unresolved, synthesised $gap-byte placeholder"
-        } else {
-            "${dt.name} (${dt.length}b) larger than gap ($gap b); synthesised $gap-byte placeholder"
-        }
-        degradation(
-            "base-synthesized",
-            "$qualifiedName@+$offsetBytes",
-            reason,
-        )
-    }
-
-    // Skip synthesized placeholders (`unknown_<off>`): leave as Ghidra's
-    // default Undefined1 fill instead of pretending to be a real base.
-    // The `base-synthesized` degradation already records the diagnostic.
-    val ops = body.bases
-        .sortedBy { it.offsetBits }
-        .mapNotNull { base ->
-            val off = (base.offsetBits / 8).toInt()
-            val info = resolvedBaseInfo[off] ?: return@mapNotNull null
-            val simpleName = info.simpleName ?: return@mapNotNull null
-            InsertOp(
-                offsetBytes = off,
-                fieldName = Layout.baseFieldName(base.isVirtual, simpleName, body.bases.size),
-                comment = Layout.baseComment(base),
-                baseSimpleName = simpleName,
-            )
-        }
-    for ((offsetBytes, fieldName, comment, baseSimpleName) in ops) {
-        val baseDt = dataTypeByOffset[offsetBytes] ?: continue
-        try {
+        runCatching {
             placeholder.replaceAtOffset(
                 offsetBytes,
-                baseDt,
-                baseDt.length,
-                fieldName,
-                comment,
+                dt,
+                dt.length,
+                Layout.baseFieldName(base.isVirtual, dt.name, body.bases.size),
+                Layout.baseComment(base),
             )
-            debug("inheritance-applied")
-        } catch (e: IllegalArgumentException) {
-            degradation(
-                "base-layout-failed",
-                "$qualifiedName::$baseSimpleName",
-                e.message,
-            )
-            debug("inheritance-failed")
-        }
+        }.onSuccess { debug("inheritance-applied") }
+            .onFailure {
+                degradation("base-layout-failed", "$qualifiedName::${dt.name}", it.message)
+                debug("inheritance-failed")
+            }
     }
 
     // Plate-comment summary of base classes on the derived struct.
