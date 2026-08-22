@@ -289,9 +289,19 @@ class ClassBuilder(
         // A static member takes no `this`, so it keeps the default convention and the params
         // applyAllFunctions already read off its N_PSYMs. Falling through forced __thiscall
         // (a phantom `FileSystemImage *this`) and then replaced the real params with the empty
-        // list its `f(ret)` signature carries.
+        // list its `f(ret)` signature carries. Returning is not enough: Itanium mangling cannot
+        // distinguish a static member from an instance one, so Ghidra's own demangler pass already
+        // gave it __thiscall, and Ghidra auto-injects `this` for any this-bearing convention on a
+        // GhidraClass member. The stabs `?` flag is the only thing that knows better.
         if (m.virt == VirtKind.STATIC) {
             debug("method-static-no-this")
+            if (func.callingConvention?.hasThisPointer() == true) {
+                runCatching {
+                    func.setCallingConvention(program.compilerSpec.defaultCallingConvention.name)
+                }.onFailure {
+                    warn("method-calling-convention", "$className::${m.name}: ${it.message}", func.entryPoint)
+                }
+            }
             return
         }
 
