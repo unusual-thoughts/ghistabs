@@ -97,20 +97,8 @@
             "max": 703
         },
         "demangler-retarget-bound": {
-            "min": 0,
-            "max": 0
-        },
-        "demangler-retarget-demangle-failed": {
-            "min": 0,
-            "max": 0
-        },
-        "demangler-retarget-no-mangled-name": {
-            "min": 0,
-            "max": 0
-        },
-        "demangler-retarget-no-namespace": {
-            "min": 0,
-            "max": 0
+            "min": 19,
+            "max": 19
         },
         "demangler-retarget-no-type": {
             "min": 17,
@@ -127,6 +115,10 @@
         "demangler-skip-no-replacement": {
             "min": 75,
             "max": 75
+        },
+        "demangler-sole-instantiation-declined": {
+            "min": 31,
+            "max": 31
         },
         "demangler-sole-instantiation-match": {
             "min": 8,

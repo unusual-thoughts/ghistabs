@@ -80,25 +80,9 @@
             "min": 22,
             "max": 22
         },
-        "demangler-retarget-demangle-failed": {
-            "min": 0,
-            "max": 0
-        },
-        "demangler-retarget-no-mangled-name": {
-            "min": 0,
-            "max": 0
-        },
-        "demangler-retarget-no-namespace": {
-            "min": 0,
-            "max": 0
-        },
         "demangler-retarget-no-type": {
             "min": 67,
             "max": 67
-        },
-        "demangler-retargeted-stub-site": {
-            "min": 0,
-            "max": 0
         },
         "demangler-reverse-demangle-match": {
             "min": 3,
