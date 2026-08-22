@@ -59,7 +59,7 @@ class TextPartitionProbe : AbstractGhidraHeadlessIntegrationTest() {
                 // builds the runs, and the only reading under which they are disjoint at all.
                 var cu = ""
                 val boundaries = mutableListOf<Triple<Long, String, Boolean>>()
-                for (rec in records!!) {
+                for (rec in records) {
                     val include = rec.type == StabType.N_SOL
                     if (rec.type != StabType.N_SO && !include) continue
                     if (!include) cu = rec.name.ifEmpty { cu }

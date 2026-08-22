@@ -11,10 +11,6 @@ buildSrc/build/
 # Vendored runtime jars (downloaded by buildExtension.gradle)
 lib/
 
-# BFG repo cleaner artifacts
-..bfg-report/
-.bfg-report/
-
 # OS artifacts
 os/
 
@@ -23,14 +19,14 @@ os/
 .vscode/
 *.iml
 
-# OS
-.DS_Store
-Thumbs.db
-
 *.log
 
-
-# Local-only scratch & working copies kept out of git
 src/test/resources.bak/
 docs/implementation-plans/
 tinyxml2/
+corpus/
+corpus.new/
+/scratch*/
+/build*/
+..bfg-report/
+.bfg-report/

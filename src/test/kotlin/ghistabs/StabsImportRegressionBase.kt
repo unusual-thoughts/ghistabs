@@ -293,7 +293,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
      * Every array global lands with the element count its stab declares. gcc encodes the count only
      * via the index Range (`ar(0,1);0;15;`), never as a length, and the old Array case bailed
      * whenever either the element Ref failed to resolve or the length was absent — leaving the
-     * global untyped. [ghistabs.materialize.TypeRegistry] now derives the count from the Range and
+     * global untyped. [ghistabs.materialize.DataTypeRegistry] now derives the count from the Range and
      * falls back to Undefined1 elements.
      *
      * Driven from the harvest rather than a named symbol, so it covers every array global in every
@@ -638,8 +638,9 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
 
         val checked = declared.mapNotNull { (func, name, want) ->
             val applied = program.functionManager.getFunctionAt(func.addr)
-                ?.localVariables?.filter { it.name == name && it.variableStorage.isRegisterStorage }
-                ?.singleOrNull() // ambiguous on Ghidra's side too — nothing to pair against
+                ?.localVariables
+                // ambiguous on Ghidra's side too — nothing to pair against
+                ?.singleOrNull { it.name == name && it.variableStorage.isRegisterStorage }
                 ?: return@mapNotNull null
             val got = applied.variableStorage.registers.single()
             Triple("${func.name}:$name", want, generateSequence(got) { it.parentRegister }.map { it.name }.toList())
@@ -677,7 +678,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     }
 
     /**
-     * Every slot [HarvestIndex.byLocation] declares is filled, at the path it declared.
+     * Every slot [ghistabs.harvest.HarvestIndex.byLocation] declares is filled, at the path it declared.
      *
      * That map *is* the contract: `TypeRegistry` seeds and materializes each group at exactly
      * `(location.category, location.name)`, so it is the pipeline's own statement of what the DTM
@@ -1223,7 +1224,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     fun globalsCoverEachDataTypeKind() {
         val seenKinds = mutableSetOf<String>()
         program.listing.getDefinedData(true).forEach { data ->
-            seenKinds += when (val dt = data.dataType) {
+            seenKinds += when (data.dataType) {
                 is Structure -> "Structure"
                 is Array -> "Array"
                 is Union -> "Union"
@@ -1402,7 +1403,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     @Test
     fun mangledFunctionNamesGetDemangled() {
         val demanglable = artifacts.harvest.functions
-            .filter { isMangled(it.decl.name) && it.demangledName != null }
+            .filter { isMangled(it.decl.name) }
             .mapNotNull { func -> program.functionManager.getFunctionAt(func.addr)?.let { func to it } }
         assumeTrue(demanglable.isNotEmpty(), "Skipping: no demanglable mangled functions in this fixture")
 
@@ -1716,8 +1717,8 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         .mapNotNull { mangled ->
             sequenceOf(mangled, "_$mangled")
                 .mapNotNull { program.symbolTable.getSymbols(it).firstOrNull() }
-                .mapNotNull { program.functionManager.getFunctionAt(it.address) }
-                .firstOrNull()?.let { mangled to it }
+                .firstNotNullOfOrNull { program.functionManager.getFunctionAt(it.address) }
+                ?.let { mangled to it }
         }.toMap()
 
     /** The gas idiom at [at]: `eb <n>` then n NOPs, landing on a 16-byte boundary. */
