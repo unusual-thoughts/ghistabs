@@ -1801,24 +1801,41 @@ offset can be resolved to the method it calls rather than printed as arithmetic.
 
 ---
 
-## 51. `__thiscall` methods that do not take their own class pointer — open
+## 51. `__thiscall` methods that do not take their own class pointer — DONE
 
-14 class methods per fixture come out `__thiscall` with a first parameter typed `undefined4` rather
+14 class methods per fixture came out `__thiscall` with a first parameter typed `undefined4` rather
 than a pointer to the class: `__class_type_info::__do_find_public_src`, `ctype<char>` members, and
-the rest of the libsupc++ RTTI surface. Identical count on `appquery`, `packfile`, `unpackfile` and
-`xapasmcsr`; four fixtures in AFTER, none in BEFORE, so it needs auto-analysis to be present.
+the rest of the libsupc++/locale surface. Identical count on `appquery`, `packfile` and `unpackfile`
+(`xapasmcsr` has none), in AFTER and CONCURRENT alike, none in BEFORE.
 
-`__thiscall` is what makes Ghidra inject the leading `this`, and it injects one typed from the class
-the method was reparented under. An `undefined4` there means the convention was set on a method whose
-class type never resolved — these are exactly the classes with no stab body anywhere in the corpus
-(§ the `DemanglerWhitelist` note on `__class_type_info` and friends), so `reparentMethod` tags the
-convention off the mangled name while the type behind it stays a stub. Either the convention should
-not be set without a resolved class, or the RTTI classes need the `typeInfoLayout` treatment applied
-before methods are reparented.
+**It was not `reparentMethod` — we never touched these functions.** Their signature source is still
+`ANALYSIS`, and their classes have no stab body anywhere in the corpus (`ctype<char>` exists only as
+the empty `/Demangler/std/ctype<char>` stub; `__class_type_info` not at all). What every offender did
+carry is `hasCustomVariableStorage() = true`, with a **non-auto** `this` at `Stack[0x4]` and
+`SourceType.USER_DEFINED` — the fingerprint of Ghidra's **Decompiler Parameter ID** analyzer. It
+decompiles every function whose signature is still `DEFAULT` (on a C++ binary: every method the stabs
+do not describe, already `__thiscall` and class-namespaced from the demangler), the decompiler
+reports the this-pointer as an ordinary parameter, that storage cannot match what the convention
+assigns, and `HighFunctionDBUtil.commitParamsToDatabase` therefore retries the commit in
+`CUSTOM_STORAGE` (its `ParameterImpl(name, dt, storage, program)` is where `USER_DEFINED` comes
+from). Custom storage is exactly what stops the convention injecting `this`, so the decompiler's
+`undefined4` guess *becomes* the signature. It sits at `DATA_TYPE_PROPOGATION.after().after()`, far
+ahead of our `LOW`, which is why CONCURRENT shows the same 14 and BEFORE none.
+
+Fixed by `ThisParamAnalyzer`: for a class-namespaced method with a this-bearing convention, custom
+storage and an explicit `this`, re-apply the formals with `DYNAMIC_STORAGE_FORMAL_PARAMS`. That drops
+custom storage, and Ghidra re-derives `this` as a pointer to the class — creating the class structure
+when the class has none, which is how `__class_type_info` gets one. 16 restored per affected fixture.
+
+An analyzer, not an import pass, because none of it reads the stabs: the damage is the decompiler's
+and lands on any C++ program, so this way it also runs where there are no stabs to import, and can be
+re-run alone after a Decompiler Parameter ID that re-froze the signatures. It takes the
+`AnalysisPriority` slot after the importer, and `StructReturnAnalyzer` moves one further out — its
+`correctionFor` skips custom storage, so the repair is what lets it see those methods at all.
 
 Found by folding the former `methodsUseThiscall` — one hand-picked method on one binary — into
-`StabsImportRegressionBase.mingwClassMethodsCarryThiscall`, which now checks the `this` parameter's
-type for every `__thiscall` method. The test asserts it and fails on those four fixtures.
+`StabsImportRegressionBase.mingwClassMethodsCarryThiscall`, which checks the `this` parameter's type
+for every `__thiscall` method.
 
 ## 50. Two class-layout invariants that do not hold — measured, open
 
