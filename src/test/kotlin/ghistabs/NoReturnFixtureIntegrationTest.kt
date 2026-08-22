@@ -40,7 +40,7 @@ class NoReturnFixtureIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             // Derived from what was actually disabled, not from the flag text, so a typo'd
             // `-PdisableAnalyzers` cannot mislabel an on-run as the baseline.
             val on = NO_RETURN_ANALYZER_NAME !in disabled
-            val marked = program.functionManager.getFunctions(true).filter { it.hasNoReturn() }
+            val marked = program.functionManager.functionsIterable.filter { it.hasNoReturn() }
 
             File("build/test-output/noreturn").apply { mkdirs() }
                 .resolve("$binary.${if (on) "on" else "off"}.txt")

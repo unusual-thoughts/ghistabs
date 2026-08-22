@@ -7,9 +7,7 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertFalse
-import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertAll
@@ -33,7 +31,7 @@ import org.junit.jupiter.api.assertAll
 class StructReturnFixtureIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     @Test
     fun localeTestStructReturns() = withAnalyzed { program ->
-        val corrected = program.functionManager.getFunctions(true)
+        val corrected = program.functionManager.functionsIterable
             .filter { f -> Correction.entries.any { f.callingConventionName.endsWith(it.suffix) } }
         val (toMemory, toRegister) = corrected.partition {
             it.callingConventionName.endsWith(Correction.TO_MEMORY.suffix)
