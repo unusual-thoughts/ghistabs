@@ -395,16 +395,8 @@ private fun TypeDecl.Enum<GlobalTypeId>.fillEnum(placeholder: GhidraEnum): DataT
     for ((mname, mval) in members) add(mname, mval)
 }
 
-fun TypeDecl.Array<*>.buildArray(elem: DataType): ArrayDataType {
-    // Length: this.length, else derive from indexType Range as max-min+1
-    // (gcc often omits length, encodes bound only via Range — e.g.
-    // BranchInstructions indexed 0..15 → 16 elements), else 1.
-    val rangeLen = (indexType as? TypeDecl.Range)
-        ?.let { it.max - it.min + 1 }
-        ?.takeIf { it > 0 }
-    val numElements = (length ?: rangeLen ?: 1L).toInt().coerceAtLeast(1)
-    return ArrayDataType(elem, numElements, elem.length)
-}
+fun TypeDecl.Array<*>.buildArray(elem: DataType): ArrayDataType =
+    ArrayDataType(elem, (declaredElements ?: 1L).toInt().coerceAtLeast(1), elem.length)
 
 /**
  * Build a FunctionDefinition (not yet added to DTM) from stab types. Resolves

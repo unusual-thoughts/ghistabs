@@ -160,6 +160,10 @@ sealed interface TypeDecl<out Id : IdInterface> {
     @Serializable
     data class Array<Id : IdInterface>(val element: TypeDecl<Id>, val length: Long?, val indexType: TypeDecl<Id>?) :
         TypeDecl<Id> {
+        /** gcc usually leaves [length] null and puts the bound in [indexType] (`ar<idx>;lo;hi`). */
+        val declaredElements: Long?
+            get() = length ?: (indexType as? Range)?.let { it.max - it.min + 1 }?.takeIf { it > 0 }
+
         override val children get() = listOf(listOf(element), listOfNotNull(indexType))
         override val layoutData get() = listOfNotNull(length)
         override val sizeBytes get() = element.sizeBytes?.let { elementSize -> length?.let { it * elementSize } }
@@ -185,6 +189,9 @@ sealed interface TypeDecl<out Id : IdInterface> {
         val vptrBasetype: TypeDecl<Id>?,
     ) : TypeDecl<Id> {
         val hasVTablePointerMarker get() = vptrBasetype != null
+
+        /** Whether the record carries a body at all — a bare `s0` / `u0` is a declaration. */
+        val hasMembers get() = fields.isNotEmpty() || methods.isNotEmpty()
 
         // gcc 3.x stabs emit `s` for both `struct` and `class`; promote to "class" when
         // any method or base carries non-public access, OR when there are any methods
