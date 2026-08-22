@@ -14,9 +14,13 @@ import ghidra.program.model.data.DataType
 import ghidra.program.model.data.DataTypeManager
 import ghidra.program.model.data.DataUtilities
 import ghidra.program.model.listing.Data
+import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.FunctionManager
+import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Listing
+import ghidra.program.model.listing.Parameter
 import ghidra.program.model.listing.Program
+import ghidra.program.model.listing.Variable
 import ghidra.program.model.mem.MemoryBlock
 import ghidra.util.task.TaskMonitor
 
@@ -45,8 +49,19 @@ operator fun Data.get(i: Int): Data? = this.getComponent(i)
 operator fun Data.get(name: String): Data? =
     (dataType as? Composite)?.components?.firstOrNull { it.fieldName == name }?.ordinal?.let(this::get)
 
-val FunctionManager.functions get() = this.getFunctions(true).asIterable()
-val Program.functions get() = this.functionManager.getFunctions(true).asIterable()
+/** The two [ghidra.program.model.listing.AutoParameterType] display names. */
+private val INJECTED_PARAM_NAMES = setOf(Function.THIS_PARAM_NAME, Function.RETURN_PTR_PARAM_NAME)
+
+/** The convention's parameter, not the source's: an auto-param, or the stored copy of one left by an
+ *  analyzer that committed in custom storage. */
+val Parameter.isInjected get() = isAutoParameter || name in INJECTED_PARAM_NAMES
+
+/** A local wearing an injected parameter's name — it blocks the auto-param a convention change reinstates. */
+val Variable.collidesWithInjectedParameter get() = name in INJECTED_PARAM_NAMES
+
+inline val FunctionManager.functionsIterable get() = this.getFunctions(true) as Iterable<Function>
+inline val FunctionManager.functions get() = functionsIterable.asSequence()
+inline val Program.functions get() = functionManager.functions
 
 /** find a function, if any, such that [addr] falls within its convex hull [entry, body.maxAddress]  */
 fun FunctionManager.getFunctionWrapping(addr: Address) = getFunctionContaining(addr)
@@ -54,6 +69,8 @@ fun FunctionManager.getFunctionWrapping(addr: Address) = getFunctionContaining(a
 
 /** [addr] falls within the convex hull [entry, body.maxAddress] of a function. */
 fun FunctionManager.inHull(addr: Address) = getFunctionWrapping(addr) != null
+
+val Function.isMethod get() = parentNamespace is GhidraClass
 
 fun <T> DomainObject.runTransaction(description: String = "Kotlin Lambda Transaction", transaction: () -> T): T =
     startTransaction(description).let { txID ->

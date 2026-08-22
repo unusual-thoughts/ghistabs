@@ -1,6 +1,7 @@
 package ghistabs.materialize
 
 import ghidra.program.model.data.*
+import ghidra.program.model.lang.CompilerSpec
 import ghistabs.diagnose.degradation
 import ghistabs.harvest.Type
 import ghistabs.materialize.itanium.*
@@ -74,7 +75,7 @@ internal fun DataTypeRegistry.materializeBody(ast: Type, category: CategoryPath,
             ret = body.ret,
             params = body.params,
             thisType = resolveRef(body.cls) ?: undef("method-this-cls", ast.ghidraName, body.cls),
-            callingConvention = "__thiscall",
+            callingConvention = CompilerSpec.CALLING_CONVENTION_thiscall,
             at = ast.ghidraName,
         )
 

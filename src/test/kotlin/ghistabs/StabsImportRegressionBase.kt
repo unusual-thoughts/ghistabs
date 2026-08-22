@@ -1462,8 +1462,8 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
      */
     @Test
     fun classMethodsHaveAtMostOneThis() {
-        val offenders = program.functionManager.getFunctions(true).iterator().asSequence()
-            .filter { it.parentNamespace is ghidra.program.model.listing.GhidraClass }
+        val offenders = program.functions
+            .filter { it.isMethod }
             .filter { f -> f.parameters.count { it.name == "this" } > 1 }
             .map { f ->
                 val params = f.parameters.joinToString(", ") { "${it.name}: ${it.dataType.name}" }
@@ -1520,8 +1520,8 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             binaryName.endsWith(".exe"),
             "Skipping: __thiscall check only meaningful on mingw fixtures",
         )
-        val classFuncs = program.functionManager.getFunctions(true).iterator().asSequence()
-            .filter { it.parentNamespace is ghidra.program.model.listing.GhidraClass }
+        val classFuncs = program.functions
+            .filter { it.isMethod }
             .toList()
         // reparentMethod only reaches setCallingConvention("__thiscall") for a method it can pin to
         // an address: either an in-TU N_FUN stab (works even stripped) or, absent that, the COFF

@@ -4,6 +4,7 @@ import ghidra.app.util.NamespaceUtils
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.*
 import ghidra.program.model.gclass.ClassUtils
+import ghidra.program.model.lang.CompilerSpec
 import ghidra.program.model.listing.CommentType
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.GhidraClass
@@ -18,6 +19,8 @@ import ghistabs.harvest.HarvestIndex
 import ghistabs.harvest.LocatedType
 import ghistabs.harvest.demangledClassPath
 import ghistabs.importer.ImportContext
+import ghistabs.isInjected
+import ghistabs.isMethod
 import ghistabs.materialize.itanium.*
 import ghistabs.materialize.itanium.Layout
 import ghistabs.namespaceChain
@@ -37,10 +40,6 @@ class ClassBuilder(
     companion object {
         private val source = SourceType.IMPORTED
 
-        // Injected/hidden params that must not be mistaken for source-level formals when
-        // harvesting N_PSYM names: Ghidra's __thiscall `this` and StructReturnAnalyzer's
-        // by-value return pointer.
-        private val HIDDEN_PARAM_NAMES = setOf("this", "__return_storage_ptr__")
         fun LocatedType.isClass() = type.body is TypeDecl.Struct &&
             (
                 type.body.methods.isNotEmpty() ||
@@ -310,10 +309,10 @@ class ClassBuilder(
         // namespace = Ghidra auto-injects hidden `this: Class*` at render time. Don't probe
         // func.getParameter(0)?.name to detect — for force-created functions the param list
         // isn't populated yet.
-        val thiscallAccepted = runCatching { func.setCallingConvention("__thiscall") }
+        val thiscallAccepted = runCatching { func.setCallingConvention(CompilerSpec.CALLING_CONVENTION_thiscall) }
             .onFailure { warn("method-calling-convention", "$className::${m.name}: ${it.message}", func.entryPoint) }
             .isSuccess
-        val ghidraInjectsThis = thiscallAccepted && func.parentNamespace is GhidraClass
+        val ghidraInjectsThis = thiscallAccepted && func.isMethod
 
         val paramDecls = when (sig) {
             is TypeDecl.Method -> if (ghidraInjectsThis) sig.params.drop(1) else sig.params
@@ -342,15 +341,17 @@ class ClassBuilder(
             resolvedParams
         }.map { if (it is VoidDataType) Undefined4DataType.dataType else it }
 
-        // Build the full param list ourselves (explicit `this` prefix + formals) and use
-        // DYNAMIC_STORAGE_ALL_PARAMS. DYNAMIC_STORAGE_FORMAL_PARAMS + __thiscall varies by
-        // Ghidra version on whether it auto-prepends `this`, and would rename our `arg0`
+        // Explicit `this` + formals, under DYNAMIC_STORAGE_ALL_PARAMS: FORMAL_PARAMS + __thiscall
+        // varies by Ghidra version on whether it auto-prepends `this`, and would rename our `arg0`
         // to `this` when the storage analyzer placed it in the canonical this-slot.
+        // The parameter is then stripped and re-derived from the DTM's class structure, not from
+        // [classPtr] — but passing it is what keeps ALL_PARAMS from taking a formal for an
+        // "inferred unnamed this".
         val classPtr = PointerDataType(structDt, dtm)
         val explicitThis = if (ghidraInjectsThis) {
             listOf(
                 ParameterImpl(
-                    "this",
+                    Function.THIS_PARAM_NAME,
                     classPtr,
                     program,
                     source,
@@ -364,7 +365,7 @@ class ClassBuilder(
         // also holds injected `this` and (for by-value struct returns) StructReturnAnalyzer's
         // `__return_storage_ptr__` — a fixed offset misaligns and stamps `this` onto formal 0.
         val priorNames = func.parameters
-            .filterNot { it.isAutoParameter || it.name in HIDDEN_PARAM_NAMES }
+            .filterNot { it.isInjected }
             .map { it.name }
         val formals = paramTypes.mapIndexed { i, pdt ->
             ParameterImpl(
@@ -484,7 +485,7 @@ class ClassBuilder(
             ret = method.ret,
             params = method.params,
             thisType = registry.resolveRef(method.cls) ?: PointerDataType(VoidDataType(), dtm),
-            callingConvention = "__thiscall",
+            callingConvention = CompilerSpec.CALLING_CONVENTION_thiscall,
             at = "$className::${m.name}",
         )
         val resolved = registry.register(funcDef) as FunctionDefinition
