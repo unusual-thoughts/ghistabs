@@ -51,13 +51,11 @@ class FillerByteAnalyzer :
         var marked = 0
         for (range in listing.getUndefinedRanges(target, false, monitor)) {
             monitor.checkCancelled()
-            val len = leadingFillerLength(pdis, range)
-            if (len > 0 &&
-                runCatching { program.forceCreateData(range.minAddress, AlignmentDataType(), len.toInt()) }
-                    .isSuccess
-            ) {
-                bookmarks.setBookmark(range.minAddress, BookmarkType.ANALYSIS, NAME, "collapsed $len filler bytes")
-                marked++
+            for ((at, len) in fillSpans(pdis, range)) {
+                if (runCatching { program.forceCreateData(at, AlignmentDataType(), len.toInt()) }.isSuccess) {
+                    bookmarks.setBookmark(at, BookmarkType.ANALYSIS, NAME, "collapsed $len filler bytes")
+                    marked++
+                }
             }
         }
         if (marked != 0) {
@@ -67,37 +65,58 @@ class FillerByteAnalyzer :
     }
 
     /**
-     * Bytes of leading effect-free padding at the start of [range] (0 if it doesn't begin with any).
+     * Every `(address, length)` span of effect-free padding in [range], in address order.
      *
      * Two GAS `.p2align` forms are recognised:
-     *  - a plain run of NOP-equivalent instructions;
-     *  - the jump-over-fill idiom (`eb 0d 90…`): a leading unconditional forward JMP whose target is
-     *    the aligned boundary, every skipped byte NOP-equivalent. The target is just the boundary — the
-     *    next function, or (for a string block gcc parked in `.text`) the next constant — so the whole
-     *    `[min, target)` span is collapsed regardless of what actually follows it.
+     *  - a plain run of NOP-equivalent instructions, which only ever leads the range (anything
+     *    before it would have kept the bytes out of the undefined set);
+     *  - the jump-over-fill idiom (`eb 0d 90…`): an unconditional forward JMP whose target is the
+     *    aligned boundary, every skipped byte NOP-equivalent. That one is found *anywhere* in the
+     *    range, not just at its head — gcc parks dead tails behind a `ret` (`add [esp+4],-4` on
+     *    cryptopp), so the padding gcc wrote for the next function starts mid-range.
+     *
+     * The jump target is just the boundary — the next function, or a constant block gcc parked in
+     * `.text` — so the whole `[jmp, target)` span collapses regardless of what follows it.
+     *
+     * Every offset is tried for the JMP, not the instruction starts a linear walk would produce:
+     * the bytes ahead of the padding are dead, so "instruction start" is not defined for them, and
+     * a dead tail that happens to decode across the `eb` hides the padding behind it (one site per
+     * binary on appquery/packfile/unpackfile/xapasmcsr, none on cryptopp — where the junk decodes
+     * to exactly the right length by luck).
      */
-    private fun leadingFillerLength(pdis: PseudoDisassembler, range: AddressRange): Long {
-        val first = runCatching { pdis.disassemble(range.minAddress) }.getOrNull()
-        if (first != null && first.flowType.isJump && !first.flowType.isConditional) {
-            val target = first.flows.singleOrNull()
-            if (target != null && target > range.minAddress) {
-                val fill = target.subtract(range.minAddress)
-                if (fill <= range.length &&
-                    nopRunFillsGap(pdis, range.minAddress.add(first.length.toLong()), target)
-                ) {
-                    return fill
-                }
-            }
-        }
+    private fun fillSpans(pdis: PseudoDisassembler, range: AddressRange): List<Pair<Address, Long>> = buildList {
         var addr = range.minAddress
-        var len = 0L
+        nopRunLength(pdis, addr, range.maxAddress).takeIf { it > 0 }?.let {
+            add(addr to it)
+            addr = addr.add(it)
+        }
         while (addr <= range.maxAddress) {
+            val fill = runCatching { pdis.disassemble(addr) }.getOrNull()
+                ?.let { jumpOverFillLength(pdis, it, range.maxAddress) }
+            if (fill != null) add(addr to fill)
+            addr = addr.add(fill ?: 1L)
+        }
+    }
+
+    /** Length of the jump-over-fill idiom led by [jmp], or null if [jmp] doesn't lead one. */
+    private fun jumpOverFillLength(pdis: PseudoDisassembler, jmp: Instruction, last: Address): Long? {
+        if (!jmp.flowType.isJump || jmp.flowType.isConditional) return null
+        val target = jmp.flows.singleOrNull()?.takeIf { it > jmp.address } ?: return null
+        return target.subtract(jmp.address).takeIf {
+            it <= last.subtract(jmp.address) + 1 &&
+                nopRunFillsGap(pdis, jmp.address.add(jmp.length.toLong()), target)
+        }
+    }
+
+    /** Bytes of NOP-equivalent instructions starting at [from], not running past [last]. */
+    private fun nopRunLength(pdis: PseudoDisassembler, from: Address, last: Address): Long {
+        var addr = from
+        while (addr <= last) {
             val insn = runCatching { pdis.disassemble(addr) }.getOrNull() ?: break
-            if (insn.length == 0 || !insn.isNopEquivalent() || len + insn.length > range.length) break
-            len += insn.length
+            if (insn.length == 0 || !insn.isNopEquivalent() || addr.add(insn.length - 1L) > last) break
             addr = addr.add(insn.length.toLong())
         }
-        return len
+        return addr.subtract(from)
     }
 
     /** True when every instruction in `[from, to)` is NOP-equivalent and the run lands exactly on [to]. */

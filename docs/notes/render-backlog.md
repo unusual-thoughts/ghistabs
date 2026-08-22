@@ -1843,13 +1843,33 @@ downstream complains — the field just names the wrong class, one or more level
 `classesAreTruncatedToTheirLastDescribedByte` asserts (b) alongside the half that does hold
 corpus-wide (no class carries bytes past its last described field).
 
-**(c) `FillerByteAnalyzer` does not collapse the gas jump-over-fill idiom.** An unconditional short
-jump to the aligned boundary with NOPs behind it (`eb 0d 90…`) is padding, and the Alignment has to
-start on the JMP or the jump disassembles as live code in front of it. Scanning `.text` for the
-byte pattern — `eb <n>`, n NOPs, ending on a 16-byte boundary — finds 7 of 14 uncollapsed on
-`crypto_mi_test_gcc421` and 17 of 17 on `box2d_tests`. The plain-NOP-run case does collapse
-(`fillerBytesCollapsedToAlignment` passes corpus-wide); it is the jumped-over variant that does not.
-Asserted by `jumpOverFillCollapsedToAlignment`, which previously ran on one fixture where it passes.
+**(c) `FillerByteAnalyzer` does not collapse the gas jump-over-fill idiom — DONE.** An unconditional
+short jump to the aligned boundary with NOPs behind it (`eb 0d 90…`) is padding, and the Alignment
+has to start on the JMP or the jump disassembles as live code in front of it. Two causes, and a third
+of the sites turned out not to be padding at all.
+
+*It only looked at the range's leading edge.* gcc parks a dead tail behind the `ret` (`add [esp+4],-4`
+on cryptopp), so the `eb 01 90` it wrote for the next function starts mid-range and was never
+examined. The analyzer now collects every span in a range rather than one leading run — 7 of 14 on
+`crypto_mi_test_gcc421`.
+
+*A linear decode misses one site per mingw binary.* Advancing by decoded instruction length assumes
+"next instruction" is meaningful in bytes that are dead by construction, and it is not: on
+`appquery`/`packfile`/`unpackfile`/`xapasmcsr` — the same CSR library routine in four builds, so one
+site seen four times — the tail reads `… e8 44ceffff  eb c5 │ 3a 28 00 │ eb 0d 90×13`, and the walk
+decodes `3a 28` (CMP) then **`00 eb`** (ADD BL,CH), which swallows the JMP opcode and lands on `0d`.
+cryptopp escaped it only because its junk (`83 44 24 04 fc`) happens to end flush on the `eb`. The
+idiom is now tried at every offset in the range, which costs nothing measurable — the analyzer's
+share of a fixture is invisible next to auto-analysis — and is how the assertion finds its own sites,
+so the two cannot silently disagree about where a site is.
+
+*The remaining 17 of 17, on `box2d_tests`, are not padding to collapse.* They are `-falign-loops`
+fill *inside* live function bodies, where the JMP is reached by fallthrough and is the function's own
+control flow; turning it into data would punch a hole through the instruction stream and cost 17
+functions their decompilation. `FillerByteAnalyzer` never sees them — it only walks
+`getUndefinedRanges`, so bytes already claimed as code are outside its remit by construction — and
+`jumpOverFillCollapsedToAlignment` is now scoped to padding between functions to match. box2d, having
+no other kind, skips it.
 
 ## 49. Static member functions still get a `this` — DONE
 
