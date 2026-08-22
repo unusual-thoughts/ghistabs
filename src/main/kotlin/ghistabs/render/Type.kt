@@ -60,12 +60,7 @@ interface RenderContext {
 
         is TypeDecl.Volatile -> "${inner.render(seen)} volatile"
 
-        is TypeDecl.Array -> {
-            // gcc stores the bound in indexType (`ar<idx>;lo;hi`), leaving length null;
-            // derive count as hi-lo+1, same as TypeRegistry's array materialization.
-            val len = length ?: (indexType as? TypeDecl.Range)?.let { it.max - it.min + 1 }
-            "${element.render(seen)}[${len ?: ""}]"
-        }
+        is TypeDecl.Array -> "${element.render(seen)}[${declaredElements ?: ""}]"
 
         is TypeDecl.Builtin,
         is TypeDecl.Range,
