@@ -7,6 +7,7 @@ import ghidra.app.util.importer.MessageLog
 import ghidra.program.database.SpecExtension
 import ghidra.program.model.address.AddressSetView
 import ghidra.program.model.data.Composite
+import ghidra.program.model.lang.CompilerSpec
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
 import ghidra.program.model.pcode.XmlEncode
@@ -24,7 +25,7 @@ import javax.xml.transform.stream.StreamResult
 const val STRUCT_RETURN_ANALYZER_NAME = "Struct-return ABI (x86 gcc)"
 
 /** Conventions this analyzer derives from, e.g. `__thiscall` → `__thiscall_memret`. */
-val CORRECTABLE_CONVENTIONS = setOf("__cdecl", "__thiscall")
+val CORRECTABLE_CONVENTIONS = setOf(CompilerSpec.CALLING_CONVENTION_cdecl, CompilerSpec.CALLING_CONVENTION_thiscall)
 
 /** Which way round the epilogue says the cspec has a function's aggregate return. */
 enum class Correction(val suffix: String) {
@@ -133,16 +134,12 @@ class StructReturnAnalyzer :
     private fun reassign(f: Function, convention: String, log: MessageLog?): Boolean = runCatching {
         // reparentMethod's explicit-`this` under __thiscall leaves a spurious local named `this`,
         // which collides with the auto-parameter the derived convention reinstates.
-        f.localVariables.filter { it.name in RESERVED_PARAM_NAMES }.forEach { f.removeVariable(it) }
+        f.localVariables.filter { it.collidesWithInjectedParameter }.forEach { f.removeVariable(it) }
         f.setCallingConvention(convention)
         true
     }.getOrElse {
         log?.appendMsg(STRUCT_RETURN_ANALYZER_NAME, "failed on ${f.name} @ ${f.entryPoint}: ${it.message}")
         false
-    }
-
-    private companion object {
-        val RESERVED_PARAM_NAMES = setOf("this", "__return_storage_ptr__")
     }
 }
 
