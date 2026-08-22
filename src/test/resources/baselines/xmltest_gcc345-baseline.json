@@ -25,8 +25,8 @@
             "max": 4
         },
         "data-no-coverage": {
-            "min": 103,
-            "max": 103
+            "min": 99,
+            "max": 99
         },
         "degraded-base-synthesized": {
             "min": 3,
@@ -64,13 +64,9 @@
             "min": 7,
             "max": 7
         },
-        "degraded-vtable-failed": {
-            "min": 61,
-            "max": 61
-        },
         "demangle-applied": {
-            "min": 1876,
-            "max": 1876
+            "min": 3752,
+            "max": 3752
         },
         "demangle-attempted": {
             "min": 3752,
@@ -88,9 +84,41 @@
             "min": 100,
             "max": 100
         },
+        "demangler-retarget-demangle-failed": {
+            "min": 0,
+            "max": 0
+        },
+        "demangler-retarget-no-mangled-name": {
+            "min": 0,
+            "max": 0
+        },
+        "demangler-retarget-no-namespace": {
+            "min": 0,
+            "max": 0
+        },
+        "demangler-retarget-no-type": {
+            "min": 0,
+            "max": 0
+        },
+        "demangler-retargeted-stub-site": {
+            "min": 0,
+            "max": 0
+        },
         "demangler-skip-no-replacement": {
             "min": 22,
             "max": 22
+        },
+        "demangler-unbound-stub": {
+            "min": 22,
+            "max": 22
+        },
+        "demangler-unbound-stub-in-signature": {
+            "min": 0,
+            "max": 0
+        },
+        "demangler-unbound-stub-signature-site": {
+            "min": 0,
+            "max": 0
         },
         "done": {
             "min": 1,
@@ -329,8 +357,8 @@
             "max": 100
         },
         "resolve-ambiguous": {
-            "min": 983,
-            "max": 983
+            "min": 1287,
+            "max": 1287
         },
         "rtti-pseudo-substituted": {
             "min": 49,
@@ -416,17 +444,17 @@
             "min": 7,
             "max": 7
         },
-        "vtable-failed": {
-            "min": 61,
-            "max": 61
-        },
-        "vtable-failed-truly-missing": {
+        "vtable-applied": {
             "min": 61,
             "max": 61
         },
         "vtable-skipped": {
             "min": 2,
             "max": 2
+        },
+        "vtable-virtual-no-impl": {
+            "min": 14,
+            "max": 14
         },
         "xref-ambiguous": {
             "min": 2,

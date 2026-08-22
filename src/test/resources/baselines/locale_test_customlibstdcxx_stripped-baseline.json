@@ -80,9 +80,41 @@
             "min": 0,
             "max": 0
         },
+        "demangler-retarget-demangle-failed": {
+            "min": 0,
+            "max": 0
+        },
+        "demangler-retarget-no-mangled-name": {
+            "min": 0,
+            "max": 0
+        },
+        "demangler-retarget-no-namespace": {
+            "min": 0,
+            "max": 0
+        },
+        "demangler-retarget-no-type": {
+            "min": 0,
+            "max": 0
+        },
+        "demangler-retargeted-stub-site": {
+            "min": 0,
+            "max": 0
+        },
         "demangler-skip-no-replacement": {
             "min": 2,
             "max": 2
+        },
+        "demangler-unbound-stub": {
+            "min": 2,
+            "max": 2
+        },
+        "demangler-unbound-stub-in-signature": {
+            "min": 0,
+            "max": 0
+        },
+        "demangler-unbound-stub-signature-site": {
+            "min": 0,
+            "max": 0
         },
         "desc-dropped-so": {
             "min": 122,

@@ -29,8 +29,8 @@
             "max": 27
         },
         "data-no-coverage": {
-            "min": 199,
-            "max": 199
+            "min": 195,
+            "max": 195
         },
         "degraded-base-synthesized": {
             "min": 8,
@@ -61,12 +61,12 @@
             "max": 17
         },
         "degraded-vtable-failed": {
-            "min": 121,
-            "max": 121
+            "min": 9,
+            "max": 9
         },
         "demangle-applied": {
-            "min": 3097,
-            "max": 3097
+            "min": 6250,
+            "max": 6250
         },
         "demangle-attempted": {
             "min": 6252,
@@ -80,17 +80,65 @@
             "min": 2498,
             "max": 2498
         },
+        "demangle-failed-demangled-not-applied/pe-prefixed": {
+            "min": 1,
+            "max": 1
+        },
+        "demangle-failed-demangled-not-applied/plain": {
+            "min": 1,
+            "max": 1
+        },
         "demangler-ambiguous": {
-            "min": 4,
-            "max": 4
+            "min": 2,
+            "max": 2
         },
         "demangler-exact-match": {
             "min": 166,
             "max": 166
         },
+        "demangler-retarget-bound": {
+            "min": 0,
+            "max": 0
+        },
+        "demangler-retarget-demangle-failed": {
+            "min": 0,
+            "max": 0
+        },
+        "demangler-retarget-no-mangled-name": {
+            "min": 0,
+            "max": 0
+        },
+        "demangler-retarget-no-namespace": {
+            "min": 0,
+            "max": 0
+        },
+        "demangler-retarget-no-type": {
+            "min": 8,
+            "max": 8
+        },
+        "demangler-retargeted-stub-site": {
+            "min": 1,
+            "max": 1
+        },
         "demangler-skip-no-replacement": {
             "min": 23,
             "max": 23
+        },
+        "demangler-unbound-stub": {
+            "min": 23,
+            "max": 23
+        },
+        "demangler-unbound-stub-in-signature": {
+            "min": 2,
+            "max": 2
+        },
+        "demangler-unbound-stub-signature-site": {
+            "min": 10,
+            "max": 10
+        },
+        "demangler-unbound-stub-site-origin": {
+            "min": 10,
+            "max": 10
         },
         "desc-dropped-so": {
             "min": 122,
@@ -321,8 +369,8 @@
             "max": 168
         },
         "resolve-ambiguous": {
-            "min": 1984,
-            "max": 1984
+            "min": 2570,
+            "max": 2570
         },
         "rtti-pseudo-substituted": {
             "min": 38,
@@ -413,16 +461,20 @@
             "max": 8
         },
         "vtable-applied": {
-            "min": 1,
-            "max": 1
+            "min": 113,
+            "max": 113
         },
         "vtable-failed": {
-            "min": 121,
-            "max": 121
+            "min": 9,
+            "max": 9
         },
         "vtable-failed-truly-missing": {
-            "min": 121,
-            "max": 121
+            "min": 9,
+            "max": 9
+        },
+        "vtable-virtual-no-impl": {
+            "min": 28,
+            "max": 28
         },
         "xref-ambiguous": {
             "min": 6,

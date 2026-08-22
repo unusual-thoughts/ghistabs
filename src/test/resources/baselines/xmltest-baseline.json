@@ -80,6 +80,26 @@
             "min": 22,
             "max": 22
         },
+        "demangler-retarget-demangle-failed": {
+            "min": 0,
+            "max": 0
+        },
+        "demangler-retarget-no-mangled-name": {
+            "min": 0,
+            "max": 0
+        },
+        "demangler-retarget-no-namespace": {
+            "min": 0,
+            "max": 0
+        },
+        "demangler-retarget-no-type": {
+            "min": 67,
+            "max": 67
+        },
+        "demangler-retargeted-stub-site": {
+            "min": 0,
+            "max": 0
+        },
         "demangler-reverse-demangle-match": {
             "min": 3,
             "max": 3
@@ -87,6 +107,22 @@
         "demangler-skip-no-replacement": {
             "min": 9,
             "max": 9
+        },
+        "demangler-unbound-stub": {
+            "min": 9,
+            "max": 9
+        },
+        "demangler-unbound-stub-in-signature": {
+            "min": 9,
+            "max": 9
+        },
+        "demangler-unbound-stub-signature-site": {
+            "min": 67,
+            "max": 67
+        },
+        "demangler-unbound-stub-site-origin": {
+            "min": 67,
+            "max": 67
         },
         "desc-dropped-so": {
             "min": 2,
