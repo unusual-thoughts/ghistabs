@@ -7,11 +7,11 @@ import org.junit.jupiter.api.Test
 class RelativeSourceTest {
     @Test
     fun parentSegmentsPopTheCompilationDirectory() {
-        // appquery's `bits64.h`, the spelling that sent it to a made-up `interface/` root.
+        // A `../../../` spelling of the kind that sent a header to a made-up `interface/` root.
         assertEquals(
             "E:/work/cc/devtools/interface/host/bits/bits64.h",
             "../../../interface/host/bits/bits64.h"
-                .resolveAgainstDirectory("E:/work/cc/devtools/devtools-bluelab-7-0/vm/appquery/"),
+                .resolveAgainstDirectory("E:/work/cc/devtools/toolchain/vm/tool/"),
         )
     }
 

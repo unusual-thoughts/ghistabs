@@ -23,32 +23,53 @@ class FixturesTest {
     }
 
     @Test
-    fun noFiltersMeansTheWholeMatrix() {
+    fun noFiltersMeansEveryFixtureInTheDefaultMode() {
         val f = Fixtures(corpus)
-        assertFalse(f.isNarrowed)
-        assertEquals(6, f.plannedTotal)
-        assertEquals(6, f.labels.size)
+        assertFalse(f.regressionOnly, "no -Pregression means the run is not the matrix alone")
+        assertEquals(Fixtures.DEFAULT_MODES, f.selectedModes)
+        assertEquals(corpus.size, f.plannedTotal)
+        // Labels stay whole-corpus: the listener has to recognise any suite the run happens to emit.
+        assertEquals(corpus.size * Fixtures.MODES.size, f.labels.size)
+        // The other two modes are subtracted, so the behavioural classes keep running.
+        assertEquals(corpus.size * (Fixtures.MODES.size - 1), f.unselectedModeClasses.size)
     }
 
     @Test
-    fun filtersNarrowBothAxesAndTolerateWhitespace() {
-        val f = Fixtures(corpus, fixtureFilter = " two_sample , one_sample.exe ", modeFilter = "after")
-        assertTrue(f.isNarrowed)
+    fun regressionNarrowsTheSuiteAndModeNarrowsTheMatrix() {
+        val f = Fixtures(corpus, regressionFilter = " two_sample , one_sample.exe ", modeFilter = "before")
+        assertTrue(f.regressionOnly)
         assertEquals(2, f.plannedTotal)
         assertEquals(
-            listOf("ghistabs.fixtures.TwoSampleAfterTest", "ghistabs.fixtures.OneSampleExeAfterTest"),
+            listOf("ghistabs.fixtures.TwoSampleBeforeTest", "ghistabs.fixtures.OneSampleExeBeforeTest"),
             f.selectedClasses,
         )
-        // Labels stay whole-corpus: the listener has to recognise any suite the run happens to emit.
-        assertEquals(6, f.labels.size)
+        assertEquals(corpus.size * (Fixtures.MODES.size - 1), f.unselectedModeClasses.size)
+    }
+
+    @Test
+    fun bareRegressionIsEveryFixture() {
+        val f = Fixtures(corpus, regressionFilter = "")
+        assertTrue(f.regressionOnly, "-Pregression with no value still means the matrix alone")
+        assertEquals(corpus, f.selectedBinaries)
+    }
+
+    @Test
+    fun modeAllRestoresTheWholeMatrix() {
+        val f = Fixtures(corpus, modeFilter = "all")
+        assertEquals(Fixtures.MODES, f.selectedModes)
+        assertEquals(emptyList<String>(), f.unselectedModeClasses)
+    }
+
+    @Test
+    fun modesAreCommaSeparatedAndDeduplicated() {
+        val f = Fixtures(corpus, modeFilter = "after, BEFORE ,after")
+        assertEquals(listOf("AFTER", "BEFORE"), f.selectedModes)
     }
 
     @Test
     fun blankFiltersAreNotNarrowing() {
-        val f = Fixtures(corpus, fixtureFilter = "", modeFilter = "  ,  ")
-        assertFalse(f.isNarrowed)
-        assertEquals(corpus, f.selectedBinaries)
-        assertEquals(Fixtures.MODES, f.selectedModes)
+        val f = Fixtures(corpus, modeFilter = "  ,  ")
+        assertEquals(Fixtures.DEFAULT_MODES, f.selectedModes)
     }
 }
 

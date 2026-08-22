@@ -2,7 +2,6 @@ package ghistabs
 
 import ghidra.program.database.ProgramBuilder
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghistabs.ImportOptions.Companion.STABS_DONE
 import ghistabs.ImportOptions.Companion.isStabsDone
 import ghistabs.ImportOptions.Companion.markStabsDone
 import org.junit.jupiter.api.AfterEach
@@ -13,13 +12,11 @@ import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 
 /**
- * Real Ghidra headless integration tests for StabsAnalyzer lifecycle and done-flag management.
- *
- * AC1.3 (first run): After marking done, the done-flag is persisted.
- * AC1.4 (re-import): Clearing the done-flag allows re-analysis.
- *
- * These tests use real Ghidra Program objects with actual option storage,
- * verifying done-flag persistence across transactions.
+ * The done-flag decides whether [StabsAnalyzer] runs, and it is what stops auto-analysis importing
+ * the same stabs a second time on every re-analyze. So the contract is `canAnalyze`, not the
+ * option's own round-trip: a program with stabs and no flag is analyzable, the same program with
+ * the flag is not, and clearing it again makes it analyzable — which is exactly what a re-import
+ * from the Tools menu does.
  */
 @Tag("integration")
 class StabsAnalyzerLifecycleIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
@@ -27,78 +24,39 @@ class StabsAnalyzerLifecycleIntegrationTest : AbstractGhidraHeadlessIntegrationT
 
     @BeforeEach
     fun setUp() {
-        // Create a minimal test program with x86 architecture
         builder = ProgramBuilder("test", ProgramBuilder._X86)
-        // Add memory blocks and stab sections with initialized (zero-filled) memory
         builder.createMemory(".text", "0x400000", 512)
         builder.createMemory(".stab", "0x401000", 4)
         builder.createMemory(".stabstr", "0x402000", 4)
     }
 
     @AfterEach
-    fun tearDown() {
-        builder.dispose()
-    }
+    fun tearDown() = builder.dispose()
 
-    /**
-     * AC1.3 (first run): markStabsDone(true) persists the done-flag.
-     *
-     * - Create a program
-     * - Verify done-flag is initially false
-     * - Call markStabsDone(true)
-     * - Verify done-flag is true
-     * - Verify the state persists after the transaction
-     */
     @Test
-    fun firstRunSetsFlag() {
+    fun theDoneFlagGatesReanalysis() {
         val program = builder.program
+        val analyzer = StabsAnalyzer()
 
-        // Initially, done-flag should be false
-        assertFalse(program.isStabsDone, "Done-flag should be false initially")
+        assertFalse(program.isStabsDone, "a freshly built program has not been imported")
+        assertTrue(analyzer.canAnalyze(program), "a program with .stab/.stabstr must be analyzable")
 
-        // Mark as done
         program.markStabsDone(true)
+        assertFalse(analyzer.canAnalyze(program), "the done-flag must keep auto-analysis from re-importing")
 
-        // Verify it's now true
-        assertTrue(program.isStabsDone, "Done-flag should be true after marking")
-
-        // Verify program state persists (done by checking the internal option)
-        val options = program.getOptions(ghidra.program.model.listing.Program.PROGRAM_INFO)
-        assertTrue(
-            options[STABS_DONE],
-            "Done-flag should persist in program options",
-        )
-    }
-
-    /**
-     * AC1.4 (re-import): markStabsDone(false) clears the flag to allow re-analysis.
-     *
-     * - Create a program
-     * - Mark done flag as true
-     * - Verify it's true
-     * - Clear the flag with markStabsDone(false)
-     * - Verify it's false again
-     * - Verify state persists after the transaction
-     */
-    @Test
-    fun reimportAfterFlagClear() {
-        val program = builder.program
-
-        // First, set the flag to true
-        program.markStabsDone(true)
-        assertTrue(program.isStabsDone, "Done-flag should be true after marking")
-
-        // Now clear the flag to allow re-import
         program.markStabsDone(false)
+        assertTrue(analyzer.canAnalyze(program), "clearing the flag must re-enable the analyzer")
+    }
 
-        // Verify it's false again
-        assertFalse(program.isStabsDone, "Done-flag should be false after clearing")
-
-        // Verify program state persists
-        val options = program.getOptions(ghidra.program.model.listing.Program.PROGRAM_INFO)
-        assertFalse(
-            options[STABS_DONE],
-            "Done-flag should persist as false in program options after clearing",
-        )
+    /** No stab sections, no analyzer — whatever the flag says. */
+    @Test
+    fun aProgramWithoutStabsIsNeverAnalyzable() {
+        val bare = ProgramBuilder("bare", ProgramBuilder._X86)
+        try {
+            bare.createMemory(".text", "0x400000", 512)
+            assertFalse(StabsAnalyzer().canAnalyze(bare.program))
+        } finally {
+            bare.dispose()
+        }
     }
 }

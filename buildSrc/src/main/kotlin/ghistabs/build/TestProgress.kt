@@ -46,8 +46,9 @@ fun Test.reportWithConsoleSummary(reportName: String) {
 }
 
 /**
- * LiveTestReporter (JUnit SPI) appends per-fork result files to `results/`, which should show only the
- * current run — so archive the previous one rather than deleting it.
+ * LiveTestReporter and ExpectedToFailExtension (JUnit SPI) append per-fork result files to `results/`,
+ * which should show only the current run — so archive the previous one rather than deleting it. The
+ * audits read those dumps, and a stale one misrepresents the corpus.
  */
 private fun Test.archivePreviousResults(resultsDir: java.io.File, stamp: String) {
     val history = resultsDir.resolveSibling("results-history")

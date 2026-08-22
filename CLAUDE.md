@@ -53,7 +53,11 @@ tasks exist, what they depend on — not mechanism. buildSrc is a separate build
 
 Useful flags on `integrationTest`:
 
-- `-Pfixture=unpackfile.exe` — restrict fixture-parameterised probes to one binary (fast cycles).
+- `-Pregression[=<binary>[,…]]` — run only the fixture matrix, optionally narrowed to those binaries.
+- `-Pfixture=<binary>[,…]` — the corpus the *other* fixture-parameterised suites draw from; selects no
+  class. The listing of `src/test/resources/binaries/` is the set of valid names.
+- `-Pmode=<MODE>[,…]|all` — `AFTER` by default. `-Pmode=BEFORE` skips auto-analysis and is 10-40x
+  faster: use it to iterate on anything driven by the harvest/registry/DTM.
 - `-PregenerateBaselines=true` — rewrite `RegressionTest` counter baselines from observed counts.
 - `--tests 'ghistabs.integration.SourceSkeletonIntegrationTest'` — one class.
 

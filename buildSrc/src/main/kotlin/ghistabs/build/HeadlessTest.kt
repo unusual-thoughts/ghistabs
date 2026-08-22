@@ -51,8 +51,9 @@ fun Test.headlessGhidraConfig(reportName: String, narrowGeneratedClasses: Boolea
     maxParallelForks = props.gradleProperty("maxForks").orNull?.toIntOrNull()
         ?: minOf(6, Runtime.getRuntime().availableProcessors() / 2, osMemoryMB / 2500).coerceAtLeast(1)
     maxHeapSize = "2g"
-    // -Pfixture=<exact filename>[,…]. The property gates the base class; the filter below drops the
-    // generated classes outright, so unselected fixtures never boot a JVM.
+    // -Pfixture=<exact filename>[,…] — the corpus `IntegrationFixtures` offers the hand-written
+    // fixture-parameterised suites (NoReturnFixtureIntegrationTest picks its single binary this way).
+    // It deliberately selects no test class: -Pregression is the axis that narrows the fixture matrix.
     systemProperty("fixtureFilter", props.gradleProperty("fixture").getOrElse(""))
     // -PdisableAnalyzers=<name substring>[,…] turns those analyzers off, for A/B probe runs.
     systemProperty("disableAnalyzers", props.gradleProperty("disableAnalyzers").getOrElse(""))
@@ -65,9 +66,14 @@ fun Test.headlessGhidraConfig(reportName: String, narrowGeneratedClasses: Boolea
     val fixtures = project.fixtures
     // Only for the generated suite: Gradle ANDs this with `--tests`, so applying it elsewhere
     // silently selects nothing.
-    if (narrowGeneratedClasses && fixtures.isNarrowed) {
+    if (narrowGeneratedClasses) {
         filter {
-            fixtures.selectedClasses.forEach { includeTestsMatching(it) }
+            // -Pmode. Always applied, since the default is a single mode; see [unselectedModeClasses]
+            // for why the mode axis subtracts where the suite axis selects.
+            fixtures.unselectedModeClasses.forEach { excludeTestsMatching(it) }
+            // -Pregression[=<binary>[,…]] — the fixture matrix alone, narrowed to those binaries.
+            // Absent, nothing is included and every other integration class runs alongside it.
+            if (fixtures.regressionOnly) fixtures.selectedClasses.forEach { includeTestsMatching(it) }
             isFailOnNoMatchingTests = false
         }
     }
