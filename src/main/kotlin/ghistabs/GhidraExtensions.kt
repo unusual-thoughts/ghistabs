@@ -3,7 +3,6 @@ package ghistabs
 import ghidra.app.cmd.label.DemanglerCmd
 import ghidra.app.util.bin.InputStreamByteProvider
 import ghidra.app.util.demangler.DemangledObject
-import ghidra.app.util.demangler.DemanglerOptions
 import ghidra.app.util.demangler.MangledContext
 import ghidra.app.util.demangler.gnu.GnuDemangler
 import ghidra.app.util.demangler.gnu.GnuDemanglerOptions
@@ -97,9 +96,20 @@ fun <T> DataTypeManager.runTransaction(description: String = "Kotlin Lambda Tran
 // lives Ghidra-free in `ghistabs.parse` (Names.kt).
 private val demangler by lazy { GnuDemangler() }
 
+/**
+ * What `GnuDemanglerAnalyzer` uses, which is *not* the class default. `DemanglerOptions` defaults
+ * `demangleOnlyKnownPatterns` to true, and that gates `GnuDemangler.isKnownMangledString`, whose
+ * `isInvalidDoubleUnderscoreString` check is wrong for a name that *starts* with `__`: the leading text
+ * is `substring(0, 0)`, and `demangled.contains("")` is always true, so the result is discarded. The
+ * Cygwin PE loader prefixes every symbol with `_`, making that every `__Z…` name — 12208 of 27355 on
+ * crypto_mi_test_gcc421. Ghidra's own analyzer never sees it because it sets the flag false; we take
+ * the same setting rather than work around a check we shouldn't be running.
+ */
+private fun gnuOptions() = GnuDemanglerOptions().apply { setDemangleOnlyKnownPatterns(false) }
+
 /** Demangle [mangled] to a [DemangledObject], or null if it isn't a mangled name / demangling fails. */
 fun demangle(mangled: String): DemangledObject? = runCatching {
-    demangler.demangle(MangledContext(null, GnuDemanglerOptions(), mangled, null))
+    demangler.demangle(MangledContext(null, gnuOptions(), mangled, null))
 }.getOrNull()
 
 /** Human-readable name for [mangled], falling back to [mangled] */
@@ -125,7 +135,7 @@ fun Program.applyDemangling(
 ) = DemanglerCmd(
     addr,
     mangled,
-    DemanglerOptions().apply {
+    gnuOptions().apply {
         setApplySignature(applySignature)
         setApplyCallingConvention(applyCallingConvention)
         setDoDisassembly(doDisassembly)
