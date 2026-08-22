@@ -92,10 +92,6 @@
             "min": 2,
             "max": 2
         },
-        "desc-dropped-undf": {
-            "min": 1,
-            "max": 1
-        },
         "done": {
             "min": 1,
             "max": 1
@@ -176,6 +172,10 @@
             "min": 107,
             "max": 107
         },
+        "harvest-text-ranges": {
+            "min": 14,
+            "max": 14
+        },
         "harvest-typeAsts": {
             "min": 264,
             "max": 264
@@ -237,12 +237,16 @@
             "max": 264
         },
         "inheritance-applied": {
-            "min": 6,
-            "max": 6
+            "min": 9,
+            "max": 9
         },
         "inheritance-pseudo-fields-promoted": {
             "min": 1,
             "max": 1
+        },
+        "linesource-start": {
+            "min": 12,
+            "max": 12
         },
         "local-var-add-success": {
             "min": 498,
@@ -280,9 +284,13 @@
             "min": 0,
             "max": 0
         },
+        "stab-value-absolute": {
+            "min": 5,
+            "max": 5
+        },
         "stab-value-func-relative": {
-            "min": 7536,
-            "max": 7536
+            "min": 7551,
+            "max": 7551
         },
         "static-local-plate": {
             "min": 91,
@@ -291,6 +299,18 @@
         "static-skipped": {
             "min": 1,
             "max": 1
+        },
+        "text-boundaries-out-of-order": {
+            "min": 1,
+            "max": 1
+        },
+        "textrange-entries": {
+            "min": 9,
+            "max": 9
+        },
+        "textrange-rejected": {
+            "min": 5,
+            "max": 5
         },
         "vfptr-normalized": {
             "min": 4,

@@ -9,8 +9,8 @@
             "max": 3
         },
         "base-empty-ebo": {
-            "min": 19,
-            "max": 19
+            "min": 44,
+            "max": 44
         },
         "canonical-key-merged": {
             "min": 302,
@@ -41,16 +41,20 @@
             "max": 2
         },
         "degraded-local-typed-all-undefined": {
-            "min": 40,
-            "max": 40
+            "min": 46,
+            "max": 46
         },
         "degraded-param-unnamed-padded": {
             "min": 136,
             "max": 136
         },
+        "degraded-placeholder-undefined-fields": {
+            "min": 202,
+            "max": 202
+        },
         "degraded-struct-mostly-undefined": {
-            "min": 15,
-            "max": 15
+            "min": 3,
+            "max": 3
         },
         "degraded-struct-truncated": {
             "min": 17,
@@ -77,8 +81,8 @@
             "max": 2498
         },
         "demangler-ambiguous": {
-            "min": 2,
-            "max": 2
+            "min": 4,
+            "max": 4
         },
         "demangler-exact-match": {
             "min": 166,
@@ -91,10 +95,6 @@
         "desc-dropped-so": {
             "min": 122,
             "max": 122
-        },
-        "desc-dropped-undf": {
-            "min": 1,
-            "max": 1
         },
         "done": {
             "min": 1,
@@ -127,6 +127,10 @@
         "dtm-conflicts-pre": {
             "min": 0,
             "max": 0
+        },
+        "empty-cu-range": {
+            "min": 59,
+            "max": 59
         },
         "empty-scope": {
             "min": 5,
@@ -187,6 +191,10 @@
         "harvest-symbols": {
             "min": 211,
             "max": 211
+        },
+        "harvest-text-ranges": {
+            "min": 903,
+            "max": 903
         },
         "harvest-typeAsts": {
             "min": 58848,
@@ -269,8 +277,12 @@
             "max": 58848
         },
         "inheritance-applied": {
-            "min": 155,
-            "max": 155
+            "min": 130,
+            "max": 130
+        },
+        "linesource-start": {
+            "min": 900,
+            "max": 900
         },
         "local-var-add-success": {
             "min": 2604,
@@ -308,33 +320,37 @@
             "min": 168,
             "max": 168
         },
+        "resolve-ambiguous": {
+            "min": 1984,
+            "max": 1984
+        },
         "rtti-pseudo-substituted": {
             "min": 38,
             "max": 38
         },
         "sourcemap-duplicate-entries": {
-            "min": 876,
-            "max": 876
+            "min": 882,
+            "max": 882
         },
         "sourcemap-entries": {
-            "min": 17396,
-            "max": 17396
+            "min": 17601,
+            "max": 17601
         },
         "sourcemap-entry-unmapped": {
             "min": 11,
             "max": 11
         },
         "sourcemap-files": {
-            "min": 136,
-            "max": 136
+            "min": 161,
+            "max": 161
         },
         "sourcemap-folded-files": {
-            "min": 21,
-            "max": 21
+            "min": 39,
+            "max": 39
         },
         "stab-value-absolute": {
-            "min": 11,
-            "max": 11
+            "min": 1155,
+            "max": 1155
         },
         "stab-value-func-relative": {
             "min": 20820,
@@ -352,13 +368,21 @@
             "min": 378,
             "max": 378
         },
+        "text-boundaries-out-of-order": {
+            "min": 1,
+            "max": 1
+        },
         "text-data-no-coverage": {
             "min": 3,
             "max": 6
         },
         "text-undisassembled-code": {
-            "min": 305,
-            "max": 342
+            "min": 344,
+            "max": 344
+        },
+        "textrange-entries": {
+            "min": 903,
+            "max": 903
         },
         "typedef-named-anon-aggregate": {
             "min": 3,
@@ -371,6 +395,14 @@
         "unresolved-xref": {
             "min": 18,
             "max": 18
+        },
+        "value-dropped-bnsym": {
+            "min": 2618,
+            "max": 2618
+        },
+        "value-dropped-ensym": {
+            "min": 2971,
+            "max": 2971
         },
         "vfptr-inherited-from-base": {
             "min": 114,
