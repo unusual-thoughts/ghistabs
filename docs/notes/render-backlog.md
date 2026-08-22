@@ -1801,6 +1801,71 @@ offset can be resolved to the method it calls rather than printed as arithmetic.
 
 ---
 
+## 51. `__thiscall` methods that do not take their own class pointer — open
+
+14 class methods per fixture come out `__thiscall` with a first parameter typed `undefined4` rather
+than a pointer to the class: `__class_type_info::__do_find_public_src`, `ctype<char>` members, and
+the rest of the libsupc++ RTTI surface. Identical count on `appquery`, `packfile`, `unpackfile` and
+`xapasmcsr`; four fixtures in AFTER, none in BEFORE, so it needs auto-analysis to be present.
+
+`__thiscall` is what makes Ghidra inject the leading `this`, and it injects one typed from the class
+the method was reparented under. An `undefined4` there means the convention was set on a method whose
+class type never resolved — these are exactly the classes with no stab body anywhere in the corpus
+(§ the `DemanglerWhitelist` note on `__class_type_info` and friends), so `reparentMethod` tags the
+convention off the mangled name while the type behind it stays a stub. Either the convention should
+not be set without a resolved class, or the RTTI classes need the `typeInfoLayout` treatment applied
+before methods are reparented.
+
+Found by folding the former `methodsUseThiscall` — one hand-picked method on one binary — into
+`StabsImportRegressionBase.mingwClassMethodsCarryThiscall`, which now checks the `this` parameter's
+type for every `__thiscall` method. The test asserts it and fails on those four fixtures.
+
+## 50. Two class-layout invariants that do not hold — measured, open
+
+Both found by generalizing single-fixture regression assertions onto the whole corpus, both real.
+Measured on gcc 3.4.5 / 4.2.1 PEs, identical in all three modes. Both are asserted — the tests below
+fail today, deliberately.
+
+**(a) A derived class with a non-empty base shows no base subobject.** No `_base_`/`_vbase_`
+component, and its own first field at offset 0 — so the base bytes are neither named nor reserved.
+177 of 4568 on `crypto_mi_test_gcc421` (`TwoBases<CryptoPP::BlockCipher,CryptoPP::Rijndael_Info>` and
+the rest of the cryptlib policy mixins), 16 of 2133 on `locale_test_customlibstdcxx_stripped`
+(`basic_stringstream<…>`), 1 of 78 on `xmltest_gcc345_fullstabs` (`std::fstream`). Empty bases are
+excluded — the empty-base optimization means a `sizeof == 1` base contributes nothing and the derived
+class's own field *does* start at 0 — so these are all bases that occupy space.
+
+**(b) A single-base class's base field holds an ancestor, not the base.** 32 on
+`crypto_mi_test_gcc421`: `InvalidKeyLength`'s base field is `Exception` where its declared base is
+`InvalidArgument` (which itself derives from `Exception`). The layout is the right size, so nothing
+downstream complains — the field just names the wrong class, one or more levels up the chain.
+
+`StabsImportRegressionBase.derivedClassesCarryTheirBaseSubobject` asserts (a);
+`classesAreTruncatedToTheirLastDescribedByte` asserts (b) alongside the half that does hold
+corpus-wide (no class carries bytes past its last described field).
+
+**(c) `FillerByteAnalyzer` does not collapse the gas jump-over-fill idiom.** An unconditional short
+jump to the aligned boundary with NOPs behind it (`eb 0d 90…`) is padding, and the Alignment has to
+start on the JMP or the jump disassembles as live code in front of it. Scanning `.text` for the
+byte pattern — `eb <n>`, n NOPs, ending on a 16-byte boundary — finds 7 of 14 uncollapsed on
+`crypto_mi_test_gcc421` and 17 of 17 on `box2d_tests`. The plain-NOP-run case does collapse
+(`fillerBytesCollapsedToAlignment` passes corpus-wide); it is the jumped-over variant that does not.
+Asserted by `jumpOverFillCollapsedToAlignment`, which previously ran on one fixture where it passes.
+
+## 49. Static member functions still get a `this` — open
+
+`std::locale::global`, `__mt_alloc<char>::_S_get_options` and `__mt_alloc<wchar_t>::_S_get_options`
+come out of `locale_test`/`xmltest` gcc-3.4.5 with an injected `this` parameter although their stabs
+mark them `?` (static). Their declared parameters survive — this is not the old `?`-as-pure-virtual
+regression, which replaced them — so what is left is `reparentMethod` setting `__thiscall` on a
+method whose `VirtKind` is `STATIC`. All three return a small class by value, so
+`StructReturnAnalyzer` then reads that convention and lands on `__thiscall_memret`; whether the
+convention or the parameter is the thing to fix is the first question.
+
+Found by generalizing the former `staticMemberFunctionTakesNoThis` — which only ever ran on two
+non-redistributable fixtures — onto every `STATIC`-flagged method in the harvest.
+`StabsImportRegressionBase.staticMethodsTakeNoThis` asserts both halves (declared params survive, no
+`this` injected); the second fails today, deliberately.
+
 ## 48. The attribution scorecard — DONE, and it re-grades §44 automatically
 
 §44 was an afternoon of hand-checking against libstdc++ 3.2.3, and item 9 shipped a silent content
