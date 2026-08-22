@@ -136,24 +136,15 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val registry:
                 // Two separable questions behind one "didn't apply": whether the *name* defeats the
                 // demangler, or whether it demangles and only the apply step declines (already named,
                 // symbol conflict…). Bucket by both so 12k failures read as a handful of causes.
-                val parsed = if (demangle(name) == null) "undemanglable" else "demangled-not-applied"
-                failures.getOrPut("$parsed/${mangleShape(name)}") { mutableListOf() }.add(name)
+                val parsed = if (demangle(name) == null) "demangle-failed" else "demangle-not-applied"
+                failures.getOrPut(parsed) { mutableListOf() }.add(name)
             }
         }
         debug("demangle-attempted", count = attempted.toLong())
         debug("demangle-applied", count = demangled.toLong())
         for ((bucket, names) in failures.entries.sortedByDescending { it.value.size }) {
-            debug("demangle-failed-$bucket", names.take(5).joinToString(), count = names.size.toLong())
+            debug(bucket, names.take(5).joinToString(), count = names.size.toLong())
         }
-    }
-
-    /** Coarse shape of a mangled name, for bucketing demangler failures. */
-    private fun mangleShape(name: String) = when {
-        '@' in name -> "versioned"
-        name.startsWith("___") -> "triple-underscore"
-        name.startsWith("__Z") -> "pe-prefixed"
-        name.startsWith("_Z") -> "plain"
-        else -> "other"
     }
 
     /**
@@ -289,11 +280,6 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val registry:
             .toSet()
         if (unbound.isEmpty()) return
 
-        var retargeted = 0
-        var noMangled = 0
-        var noNamespace = 0
-        var demangleFailed = 0
-        var noType = 0
         for (f in ctx.program.functionManager.getFunctions(true)) {
             val hit = (f.parameters.map { it.dataType } + f.returnType)
                 .mapNotNull { undecorate(it) }.filter { it in unbound }.distinct()
@@ -301,45 +287,36 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val registry:
             val at = "${f.name}@${f.entryPoint} :: ${hit.joinToString { it.pathName }}"
             val spelling = when (val o = ownerSpelling(f)) {
                 Owner.NoMangledName -> {
-                    noMangled++
-                    debug("demangler-retarget-no-mangled-name", at, count = 0)
+                    debug("demangler-retarget-no-mangled-name", at)
                     continue
                 }
                 Owner.DemangleFailed -> {
-                    demangleFailed++
-                    debug("demangler-retarget-demangle-failed", "$at <- ${mangledFor(f)}", count = 0)
+                    debug("demangler-retarget-demangle-failed", "$at <- ${mangledFor(f)}")
                     continue
                 }
                 Owner.NoNamespace -> {
-                    noNamespace++
-                    debug("demangler-retarget-no-namespace", at, count = 0)
+                    debug("demangler-retarget-no-namespace", at)
                     continue
                 }
                 is Owner.Spelled -> o.name
             }
             val owner = findByExactName(spelling) ?: soleInstantiation[spelling]
             if (owner == null) {
-                noType++
                 val n = instantiationsByBase[spelling.substringBefore('<')].orEmpty().size
-                debug("demangler-retarget-no-type", "$spelling ($n instantiations) <- $at", count = 0)
+                debug("demangler-retarget-no-type", "$spelling ($n instantiations) <- $at")
                 continue
             }
-            debug("demangler-retarget-bound", "$at -> ${owner.pathName}", count = 0)
+            debug("demangler-retarget-bound", "$at -> ${owner.pathName}")
             for (p in f.parameters) {
                 val redecorated = redecorate(p.dataType, owner) { it in unbound } ?: continue
                 p.setDataType(redecorated, SourceType.IMPORTED)
-                retargeted++
+                debug("demangler-retargeted-stub-site", at)
             }
             redecorate(f.returnType, owner) { it in unbound }?.let {
                 f.setReturnType(it, SourceType.IMPORTED)
-                retargeted++
+                debug("demangler-retargeted-stub-site", at)
             }
         }
-        debug("demangler-retargeted-stub-site", count = retargeted.toLong())
-        debug("demangler-retarget-no-mangled-name", count = noMangled.toLong())
-        debug("demangler-retarget-no-namespace", count = noNamespace.toLong())
-        debug("demangler-retarget-demangle-failed", count = demangleFailed.toLong())
-        debug("demangler-retarget-no-type", count = noType.toLong())
     }
 
     /** Why [ownerSpelling] couldn't name the class owning a site. Each cause is counted separately —
@@ -366,13 +343,19 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val registry:
         val demangled = demangle(mangled) ?: return Owner.DemangleFailed
         val namespace = demangled.namespace ?: return Owner.NoNamespace
         val leaf = splitQualified(namespace.namespaceString).lastOrNull() ?: return Owner.NoNamespace
-        return Owner.Spelled(
-            SymbolUtilities.replaceInvalidChars(
-                DemanglerUtil.stripSuperfluousSignatureSpaces(canonTemplateName(leaf)),
-                true,
-            ),
-        )
+        return Owner.Spelled(ourSpelling(leaf))
     }
+
+    /**
+     * A demangled name in *our* spelling — the pipeline [Type.ghidraName] runs. Both the site lookup and
+     * the instantiation census go through it, so "distinct instantiation" is measured in the same spelling
+     * space we resolve in: three renderings of one class collapse to one, instead of declining a bind that
+     * was only ever ambiguous as a string.
+     */
+    private fun ourSpelling(leaf: String): String = SymbolUtilities.replaceInvalidChars(
+        DemanglerUtil.stripSuperfluousSignatureSpaces(canonTemplateName(leaf)),
+        true,
+    )
 
     /** [dt] with its pointer/array/typedef decoration rebuilt over [replacement], if its base matches [isTarget]. */
     private fun redecorate(dt: DataType?, replacement: DataType, isTarget: (DataType?) -> Boolean): DataType? = when {
@@ -475,15 +458,60 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val registry:
     }
 
     /**
-     * Bare template name → its instantiation, where the harvest holds exactly one *stab type* for it.
-     * That is weaker than "the binary instantiated it once": a template can be instantiated many times
-     * and reach the stabs once — COMDAT folding and dropped inline members are what produce these stubs
-     * in the first place — so this can bind a site that meant a different instantiation. It is an
-     * inference, not a deduction. Two same-named types in different categories count as two and it
-     * declines.
+     * Every instantiation the *binary* names, by bare template name — read off the demangled symbols
+     * rather than the stabs. Each mangled name carries its enclosing class with template args in
+     * `DemangledType.template`, so the class spellings come from the demangler's own structure instead of
+     * scanning strings. Only usable now that every symbol demangles; while 45% failed this would have
+     * undercounted exactly the templates it was meant to guard.
+     */
+    private val instantiationsInBinary: Map<String, Set<String>> by lazy {
+        buildMap<String, MutableSet<String>> {
+            for (mangled in mangledByAddress.values) {
+                var scope = demangle(mangled)?.namespace
+                while (scope != null) {
+                    // Read the args off `namespaceString` — the same accessor [ownerSpelling] resolves
+                    // sites through. `DemangledType.template` looks like the structured way to ask, but
+                    // it is null on every namespace the GNU parser builds, so testing it counted nothing.
+                    // Ghidra decorates a scope name with a `-in-<namespace>` disambiguator and pointer
+                    // marks; left on, one class counts as three instantiations and vetoes its own bind.
+                    // Requiring the leaf to close a template also drops non-class scopes.
+                    val leaf = splitQualified(scope.namespaceString).lastOrNull()
+                        ?.substringBefore("-in-")?.trimEnd('*', '&', ' ')
+                    if (leaf != null && '<' in leaf && leaf.endsWith('>')) {
+                        getOrPut(leaf.substringBefore('<')) { mutableSetOf() }.add(ourSpelling(leaf))
+                    }
+                    scope = scope.namespace
+                }
+            }
+        }
+    }
+
+    /**
+     * Bare template name → the instantiation it can only have meant: one we materialized, *and* one the
+     * binary instantiates exactly once.
+     *
+     * The registry side alone is not enough. It counts stab types, and a template can be instantiated
+     * many times while reaching the stabs once — COMDAT folding and dropped inline members are what
+     * produce these stubs in the first place — so binding on it could pick the wrong instantiation for a
+     * site. Requiring the binary's own symbols to name exactly one closes that: the arity-free stub then
+     * has a single candidate in the program, not merely a single candidate in what we harvested.
+     *
+     * Declines when either side is ambiguous, and on a binary whose symbols name none — including
+     * anything the stabs describe but no symbol mentions.
      */
     private val soleInstantiation: Map<String, DataType> by lazy {
-        instantiationsByBase.filterValues { it.size == 1 }.mapValues { it.value.single() }
+        instantiationsByBase.filterValues { it.size == 1 }
+            .filterKeys { base ->
+                (instantiationsInBinary[base]?.size == 1).also {
+                    if (!it) {
+                        debug(
+                            "demangler-sole-instantiation-declined",
+                            "$base: ${instantiationsInBinary[base].orEmpty().joinToString(" | ")}",
+                        )
+                    }
+                }
+            }
+            .mapValues { it.value.single() }
     }
 
     /** Pick a single winner from [matches]; null when empty or genuinely ambiguous. */
