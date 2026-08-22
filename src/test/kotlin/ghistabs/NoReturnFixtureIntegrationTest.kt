@@ -126,10 +126,14 @@ class NoReturnFixtureIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         val LIBRARY_MANGLINGS = listOf("_ZSt", "_ZNSt", "_ZNKSt", "_ZN9__gnu_cxx", "_ZNK9__gnu_cxx")
         val NEVER_RETURNS_BY_DESIGN = listOf("__throw", "terminate", "unexpected", "__cxa", "_Unwind")
 
-        /** Per fixture, the functions the analyzer exists to find — each verified in the disassembly. */
+        /**
+         * Per fixture, the functions the analyzer exists to find — each verified in the disassembly,
+         * and each outside Ghidra's own known-function marks, so a pass here is the walk working
+         * rather than the loader's list. `__assert` is mingw's assert helper, which prints and falls
+         * into `abort`; `BERDecodeError` is a constructor that only throws.
+         */
         val MUST_BE_MARKED = mapOf(
-            "unbouniaf.exe" to listOf("error"),
-            "bouniaf.exe" to listOf("error", "usage"),
+            "crypto_mi_test_gcc421.exe" to listOf("__assert", "BERDecodeError"),
         )
     }
 }

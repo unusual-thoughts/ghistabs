@@ -192,7 +192,7 @@ fun FileRenderer.regionsOf(func: Func, cLines: List<DecompLine>): List<Region> =
  *
  * A decompiled function is one brace-nested body with the inlined statements interleaved into the
  * caller's own, so dropping a region wholesale takes with it the `}` that closed a block this
- * file's code opened: unfile.cpp went from 61/61 braces to 15/13 and stopped parsing. Keeping
+ * file's code opened: one .cpp went from 61/61 braces to 15/13 and stopped parsing. Keeping
  * the region's brace-*only* rows doesn't fix it either — those are all closers, an opener riding
  * its statement (`if (x) {`) — which swung it the other way, to 15/59.
  *
@@ -237,7 +237,7 @@ fun FileRenderer.dropInlined(regions: List<Region>, func: Func): List<Region> = 
         // immediately, and with the marker outside it read as `if (index < uVar1) { } /* ⇐ inlines
         // stl_iterator.h L 584 */` — an empty block with a footnote. Inside, the same tokens say
         // what is actually true: `if (index < uVar1) { /* ⇐ inlines stl_iterator.h L 584 */ }`,
-        // the body is over there. 80 rows on unbouniaf read as empty blocks.
+        // the body is over there. 80 rows on one fixture read as empty blocks.
         // Ghidra emits an already-closed block as `{}`; the marker goes between its braces for the
         // same reason, so an inlined-away loop body reads `for (…) { /* ⇐ inlines … */ }`. A `{}`
         // with no marker is Ghidra's own empty loop and stays as it is.
@@ -281,7 +281,7 @@ fun FileRenderer.dropInlined(regions: List<Region>, func: Func): List<Region> = 
  *
  * Consecutive stretches only, never all of a function's. Two functions inlined from one header
  * interleave by line, so a wrapper spanning everything one function contributed nests as
- * `A{ B{ A} B}` — that took unbouniaf from 7 rows of negative nesting to 14. Adjacent stretches
+ * `A{ B{ A} B}` — that took one fixture from 7 rows of negative nesting to 14. Adjacent stretches
  * cannot interleave, so a wrapper over a run of them is safe and self-contained; [braceFix] gives
  * it both ends, so a group that starts mid-block (`} else {`) opens one rather than closing one
  * it never opened.

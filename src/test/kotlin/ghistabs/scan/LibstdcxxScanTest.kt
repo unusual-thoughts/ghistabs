@@ -8,7 +8,7 @@ import org.junit.jupiter.api.Test
 import java.io.File
 
 /**
- * The scan against the headers it exists for: gcc 3.2.3's libstdc++, the tree `unbouniaf` was built
+ * The scan against the headers it exists for: gcc 3.2.3's libstdc++, the tree the gcc 3.2.3 fixtures were built
  * from. Synthetic C++ can be written to suit the scanner; these were not, and every construct that
  * has ever broken it — a licence block full of braces, a body on the same line as its head, a member
  * inside a class inside a namespace, an `#ifdef` around a specialisation — is in them already.

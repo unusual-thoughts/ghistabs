@@ -29,21 +29,24 @@ class BaselineLoaderTest {
         assertEquals(CounterRange(50, 200), baseline.counters["local-var-skipped-dup-param"])
     }
 
+    /** Every committed baseline, so a hand-edit that inverts a range fails here and not mid-import. */
     @Test
-    fun load_parses_bouniafbouniafBaseline() {
-        val baselineFile = File("src/test/resources/baselines/bouniafbouniaf-baseline.json")
-        assertTrue(baselineFile.exists(), "baseline file should exist")
+    fun load_parsesEveryCommittedBaseline() {
+        val baselines = File("src/test/resources/baselines").listFiles { f: File -> f.extension == "json" }.orEmpty()
+        assertTrue(baselines.isNotEmpty(), "no committed baselines to load")
 
-        val baseline = BaselineLoader.load(baselineFile)
-
-        // Mostly BaselineWriter point snapshots (min == max), but a counter with known runtime
-        // nondeterminism may be hand-widened (xref-base-tag-resolved is [41..49] for CONCURRENT
-        // demangler-order jitter). So assert well-formed ranges, not point ranges.
-        assertTrue(baseline.counters.isNotEmpty())
-        assertTrue(baseline.counters.containsKey("local-var-add-success"))
-        assertTrue(baseline.counters.containsKey("harvest-records-read"))
-        baseline.counters.forEach { (name, range) ->
-            assertTrue(range.min <= range.max, "$name has an inverted range ${range.min}..${range.max}")
+        baselines.forEach { file ->
+            val baseline = BaselineLoader.load(file)
+            assertTrue(baseline.counters.isNotEmpty(), "${file.name} parsed to no counters")
+            // Mostly BaselineWriter point snapshots (min == max), but a counter with known runtime
+            // nondeterminism may be hand-widened (xref-base-tag-resolved is [41..49] for CONCURRENT
+            // demangler-order jitter). So assert well-formed ranges, not point ranges.
+            baseline.counters.forEach { (name, range) ->
+                assertTrue(
+                    range.min <= range.max,
+                    "${file.name}: $name has an inverted range ${range.min}..${range.max}",
+                )
+            }
         }
     }
 

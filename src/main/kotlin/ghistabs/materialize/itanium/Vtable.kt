@@ -100,7 +100,7 @@ fun Program.layVtable(
 /**
  * Authoritative Itanium `__cxxabiv1` typeinfo struct layouts, adapted from Ghidra's
  * `RTTIGccClassRecoverer`. The implementation of last resort for the gcc-internal
- * `__*_type_info_pseudo` records that are absent from the stabs on bouniafbouniaf etc.:
+ * `__*_type_info_pseudo` records that are absent from the stabs on most fixtures:
  */
 class RttiStructs(private val dtm: DataTypeManager) {
     private val pointerSize = dtm.dataOrganization.pointerSize

@@ -2,8 +2,9 @@ package ghistabs.parse
 
 import ghistabs.parse.TypeDecl.Struct.Field
 import org.junit.jupiter.api.Assertions.*
-import org.junit.jupiter.api.Assumptions
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.MethodSource
 import java.io.File
 import kotlin.time.measureTime
 
@@ -168,66 +169,27 @@ class ParserBugfixTest {
     }
 
     /**
-     * AC2.1: Golden corpus test.
-     * Parse every line from the bouniafbouniaf.exe corpus exported by stabs_stats.py.
-     * Uses Assumptions.assumeTrue to skip if corpus file is absent (CI without Ghidra).
+     * Golden corpus: every descriptor line in `src/test/resources/corpus/` parses. The files are
+     * `stabs_stats.py --dump-descriptors` exports; the directory listing *is* the corpus, so
+     * dropping an export in puts it under test with no registration step and no filename named here
+     * — which is what keeps exports from non-redistributable binaries out of the source.
+     *
+     * `#` comments and the N_SO source-file paths the dump interleaves are not descriptors.
      */
-    @Test
-    fun testGoldenCorpus() {
-        val resourceUrl = javaClass.classLoader.getResource("corpus/bouniafbouniaf-stabs.txt")
-        val corpusFile = if (resourceUrl != null) File(resourceUrl.toURI()) else File("")
+    @ParameterizedTest
+    @MethodSource("corpusFiles")
+    fun everyCorpusDescriptorParses(corpus: File) {
+        val lines = corpus.readLines()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() && !it.startsWith("#") }
+            .filterNot { it.matches(Regex("^[A-Za-z]:/.*")) } // Windows drive-letter N_SO paths
+            .filterNot { it.endsWith("/") } // Unix directory N_SO paths
+        assertTrue(lines.isNotEmpty(), "${corpus.name} has no descriptor lines")
 
-        Assumptions.assumeTrue(corpusFile.exists(), "Golden corpus file not present (Ghidra not available)")
-
-        // Skip N_SO source-file path lines (e.g. "E:/work/cc/...", or Unix paths ending in "/")
-        // These are filename records emitted by the stabs_stats dump, not symbol descriptors.
-        val lines = corpusFile
-            .readLines()
-            .filter { it.isNotEmpty() }
-            .filterNot { it.matches(Regex("^[A-Za-z]:/.*")) } // Windows drive-letter paths
-            .filterNot { it.endsWith("/") } // Unix directory paths
-        assertTrue(lines.size >= 1000, "Corpus should have at least 1000 descriptor lines, got ${lines.size}")
-
-        // Parse each line; none should throw
         for ((lineNum, line) in lines.withIndex()) {
             assertDoesNotThrow({
                 Parser(line).parseSymbol().expectOk()
-            }, "Line ${lineNum + 1} should parse: ${line.take(100)}")
-        }
-    }
-
-    @Test
-    fun testGcc345ParsingErrorDoubleColon() {
-        val resourceUrl = javaClass.classLoader.getResource("corpus/crypto_gcc345.txt")
-        val corpusFile = if (resourceUrl != null) File(resourceUrl.toURI()) else File("")
-
-        Assumptions.assumeTrue(corpusFile.exists(), "crypto_gcc345 corpus file not present")
-
-        val lines = corpusFile.readLines()
-
-        // Parse each line; none should throw
-        for ((lineNum, line) in lines.withIndex()) {
-            assertDoesNotThrow({
-                Parser(line).parseSymbol().expectOk()
-            }, "Line ${lineNum + 1} should parse: ${line.take(100)}")
-        }
-    }
-
-    @Test
-    fun testGoldenCorpusPack() {
-        val resourceUrl = javaClass.classLoader.getResource("corpus/bouniaf-stabs.txt")
-        val corpusFile = if (resourceUrl != null) File(resourceUrl.toURI()) else File("")
-
-        Assumptions.assumeTrue(corpusFile.exists(), "Golden corpus file not present (Ghidra not available)")
-
-        val lines = corpusFile.readLines()
-        assertTrue(lines.size >= 1000, "Corpus should have at least 1000 descriptor lines, got ${lines.size}")
-
-        // Parse each line; none should throw
-        for ((lineNum, line) in lines.withIndex()) {
-            assertDoesNotThrow({
-                Parser(line).parseSymbol().expectOk()
-            }, "Line ${lineNum + 1} should parse: ${line.take(100)}")
+            }, "${corpus.name}:${lineNum + 1} should parse: ${line.take(100)}")
         }
     }
 
@@ -370,5 +332,13 @@ class ParserBugfixTest {
             parser.parseSymbol().expectOk(),
         )
         assertEquals("", parser.remaining, "scope specifier must be fully consumed")
+    }
+
+    private companion object {
+        /** The corpus directory listing. Empty on a checkout with no exports: the suite then has
+         *  nothing to run rather than failing. */
+        @JvmStatic
+        fun corpusFiles(): List<File> = File("src/test/resources/corpus")
+            .listFiles { f: File -> f.extension == "txt" }.orEmpty().sortedBy { it.name }
     }
 }

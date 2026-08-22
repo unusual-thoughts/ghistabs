@@ -137,7 +137,7 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
 
             else -> {
                 // dbxcoff.h's `Letext`: the end of this object's plain .text. What follows is not the
-                // COMDAT region — CU spans abut, 53 bytes of alignment apart on bouniaf (§39).
+                // COMDAT region — CU spans abut, 53 bytes of alignment apart on one PE fixture (§39).
                 rec.boundary(null)
                 currentCu = null
                 pendingDirectory = null
@@ -175,7 +175,7 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
 
     // Not always absolute: `dbxout_source_file` skips its `text_section()` call when the open
     // function has a section of its own, planting `Ltext<n>` inside that section instead — 178 such
-    // boundaries on bouniaf, each an offset within its own function's body.
+    // boundaries on one PE fixture, each an offset within its own function's body.
     private val StabRecord.boundaryAddress get() = value.takeIf { it != 0L }
         ?.let { resolver.stabAddress(it, currentScope?.addr, sink = this@StabCursor) }
 
@@ -250,7 +250,7 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
         // it is what drops the unterminated run.
         val ends = sorted.drop(1).map { it.first } +
             listOfNotNull(sorted.lastOrNull()?.let { resolver.blockEnd(it.first)?.next() })
-        // Two boundaries on one address make an empty run — 97 on bouniaf — which is a real
+        // Two boundaries on one address make an empty run — 97 on one PE fixture — which is a real
         // statement: the file was named and claimed no bytes. Kept, since a zero-length entry is
         // exactly how the source map records a point.
         return sorted.zip(ends) { (start, source), end ->

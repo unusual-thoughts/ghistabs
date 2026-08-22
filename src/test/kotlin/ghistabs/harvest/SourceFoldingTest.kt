@@ -58,10 +58,10 @@ class SourceFoldingTest {
 
     @Test
     fun aBareNameWithNoFullSpellingStaysBare() {
-        // Nothing better is known about it. `file.cpp` is a CU and never has one.
-        val map = fold("filesystemimage.h", "file.cpp")
+        // Nothing better is known about it. A CU never has one.
+        val map = fold("filesystemimage.h", "main.cpp")
         assertEquals("/filesystemimage.h", map.getValue("/filesystemimage.h"))
-        assertEquals("/file.cpp", map.getValue("/file.cpp"))
+        assertEquals("/main.cpp", map.getValue("/main.cpp"))
     }
 
     @Test

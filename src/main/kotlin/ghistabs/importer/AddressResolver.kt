@@ -67,7 +67,7 @@ class ProgramAddressResolver(private val program: Program, private val sink: Dia
     /**
      * Resolve [name]: symbol table → `_<name>` (MinGW/PE cdecl underscore prefix —
      * `Foo`→`_Foo`, `_ZTI4Foo`→`__ZTI4Foo`). Several symbols carrying one name is common — 169 on
-     * bouniaf, 1991 on locale_test — and nothing here can tell them apart, so the first stands.
+     * one PE fixture, 1991 on locale_test — and nothing here can tell them apart, so the first stands.
      */
     override fun resolve(name: String): Address? {
         linkSymbols[name]?.let { return buildAddress(it) }
