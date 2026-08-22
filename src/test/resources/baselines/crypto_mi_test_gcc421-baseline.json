@@ -9,8 +9,12 @@
             "max": 6
         },
         "base-empty-ebo": {
-            "min": 50,
-            "max": 50
+            "min": 221,
+            "max": 221
+        },
+        "base-empty-ebo-inferred": {
+            "min": 4,
+            "max": 4
         },
         "canonical-key-merged": {
             "min": 1891,
@@ -53,16 +57,16 @@
             "max": 728
         },
         "degraded-placeholder-undefined-fields": {
-            "min": 9,
-            "max": 9
+            "min": 766,
+            "max": 766
         },
         "degraded-struct-mostly-undefined": {
-            "min": 73,
-            "max": 73
+            "min": 30,
+            "max": 30
         },
         "degraded-struct-truncated": {
-            "min": 17,
-            "max": 17
+            "min": 13,
+            "max": 13
         },
         "demangle-applied": {
             "min": 15147,
@@ -80,9 +84,13 @@
             "min": 7586,
             "max": 7586
         },
+        "demangler-builtin-spelling-match": {
+            "min": 3,
+            "max": 3
+        },
         "demangler-exact-match": {
-            "min": 699,
-            "max": 699
+            "min": 700,
+            "max": 700
         },
         "demangler-reverse-demangle-match": {
             "min": 99,
@@ -93,16 +101,12 @@
             "max": 3
         },
         "demangler-skip-no-replacement": {
-            "min": 113,
-            "max": 113
+            "min": 109,
+            "max": 109
         },
         "desc-dropped-so": {
             "min": 33,
             "max": 33
-        },
-        "desc-dropped-undf": {
-            "min": 1,
-            "max": 1
         },
         "done": {
             "min": 1,
@@ -116,13 +120,9 @@
             "min": 6,
             "max": 6
         },
-        "dtm-conflicts-created": {
+        "dtm-conflicts-post": {
             "min": 1,
             "max": 1
-        },
-        "dtm-conflicts-post": {
-            "min": 2,
-            "max": 2
         },
         "dtm-conflicts-pre": {
             "min": 1,
@@ -187,6 +187,10 @@
         "harvest-symbols": {
             "min": 158,
             "max": 158
+        },
+        "harvest-text-ranges": {
+            "min": 3173,
+            "max": 3173
         },
         "harvest-typeAsts": {
             "min": 36903,
@@ -253,12 +257,16 @@
             "max": 36903
         },
         "inheritance-applied": {
-            "min": 812,
-            "max": 812
+            "min": 733,
+            "max": 733
         },
         "inheritance-pseudo-fields-promoted": {
             "min": 1,
             "max": 1
+        },
+        "linesource-start": {
+            "min": 3244,
+            "max": 3244
         },
         "local-var-add-success": {
             "min": 2380,
@@ -281,8 +289,12 @@
             "max": 3
         },
         "replaced-demangler": {
-            "min": 801,
-            "max": 801
+            "min": 805,
+            "max": 805
+        },
+        "resolve-ambiguous": {
+            "min": 57,
+            "max": 57
         },
         "sourcemap-duplicate-entries": {
             "min": 10927,
@@ -300,13 +312,21 @@
             "min": 0,
             "max": 0
         },
+        "stab-value-absolute": {
+            "min": 3257,
+            "max": 3257
+        },
         "stab-value-func-relative": {
-            "min": 38988,
-            "max": 38988
+            "min": 39107,
+            "max": 39107
         },
         "static-local-plate": {
             "min": 38,
             "max": 38
+        },
+        "text-boundaries-out-of-order": {
+            "min": 1,
+            "max": 1
         },
         "text-data-no-coverage": {
             "min": 485,
@@ -315,6 +335,10 @@
         "text-undisassembled-code": {
             "min": 3107,
             "max": 3118
+        },
+        "textrange-entries": {
+            "min": 3173,
+            "max": 3173
         },
         "unresolved-xref": {
             "min": 392,

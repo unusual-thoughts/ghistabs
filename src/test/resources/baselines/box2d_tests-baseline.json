@@ -48,10 +48,6 @@
             "min": 56,
             "max": 56
         },
-        "desc-dropped-undf": {
-            "min": 1,
-            "max": 1
-        },
         "done": {
             "min": 1,
             "max": 1
@@ -132,6 +128,10 @@
             "min": 509,
             "max": 509
         },
+        "harvest-text-ranges": {
+            "min": 198,
+            "max": 198
+        },
         "harvest-typeAsts": {
             "min": 6360,
             "max": 6360
@@ -192,6 +192,10 @@
             "min": 6360,
             "max": 6360
         },
+        "linesource-start": {
+            "min": 142,
+            "max": 142
+        },
         "local-var-add-success": {
             "min": 6346,
             "max": 6346
@@ -220,13 +224,25 @@
             "min": 0,
             "max": 0
         },
+        "stab-value-absolute": {
+            "min": 113,
+            "max": 113
+        },
         "stab-value-func-relative": {
-            "min": 48333,
-            "max": 48333
+            "min": 48586,
+            "max": 48586
         },
         "static-local-plate": {
             "min": 32,
             "max": 32
+        },
+        "textrange-entries": {
+            "min": 171,
+            "max": 171
+        },
+        "textrange-rejected": {
+            "min": 27,
+            "max": 27
         },
         "unresolved-xref": {
             "min": 39,

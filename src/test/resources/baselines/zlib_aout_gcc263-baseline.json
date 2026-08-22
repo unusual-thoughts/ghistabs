@@ -120,6 +120,10 @@
             "min": 31,
             "max": 31
         },
+        "harvest-text-ranges": {
+            "min": 29,
+            "max": 29
+        },
         "harvest-typeAsts": {
             "min": 694,
             "max": 694
@@ -168,6 +172,10 @@
             "min": 694,
             "max": 694
         },
+        "linesource-start": {
+            "min": 16,
+            "max": 16
+        },
         "local-var-add-success": {
             "min": 115,
             "max": 115
@@ -204,25 +212,29 @@
             "min": 148,
             "max": 148
         },
+        "resolve-ambiguous": {
+            "min": 6,
+            "max": 6
+        },
         "sourcemap-duplicate-entries": {
             "min": 0,
             "max": 0
         },
         "sourcemap-entries": {
-            "min": 1995,
-            "max": 1995
+            "min": 2026,
+            "max": 2026
         },
         "sourcemap-files": {
-            "min": 13,
-            "max": 13
+            "min": 23,
+            "max": 23
         },
         "sourcemap-folded-files": {
-            "min": 6,
-            "max": 6
+            "min": 11,
+            "max": 11
         },
         "stab-value-absolute": {
-            "min": 1997,
-            "max": 1997
+            "min": 2039,
+            "max": 2039
         },
         "stab-value-func-relative": {
             "min": 278,
@@ -235,6 +247,14 @@
         "text-data-no-coverage": {
             "min": 9,
             "max": 9
+        },
+        "textrange-entries": {
+            "min": 29,
+            "max": 29
+        },
+        "unfinished-cu": {
+            "min": 13,
+            "max": 13
         },
         "unresolved-xref": {
             "min": 1,

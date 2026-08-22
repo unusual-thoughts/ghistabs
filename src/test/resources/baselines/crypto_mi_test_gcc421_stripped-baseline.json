@@ -9,8 +9,12 @@
             "max": 6
         },
         "base-empty-ebo": {
-            "min": 50,
-            "max": 50
+            "min": 221,
+            "max": 221
+        },
+        "base-empty-ebo-inferred": {
+            "min": 4,
+            "max": 4
         },
         "canonical-key-merged": {
             "min": 1891,
@@ -53,16 +57,16 @@
             "max": 728
         },
         "degraded-placeholder-undefined-fields": {
-            "min": 9,
-            "max": 9
+            "min": 766,
+            "max": 766
         },
         "degraded-struct-mostly-undefined": {
-            "min": 73,
-            "max": 73
+            "min": 30,
+            "max": 30
         },
         "degraded-struct-truncated": {
-            "min": 17,
-            "max": 17
+            "min": 13,
+            "max": 13
         },
         "demangle-applied": {
             "min": 15209,
@@ -95,10 +99,6 @@
         "desc-dropped-so": {
             "min": 33,
             "max": 33
-        },
-        "desc-dropped-undf": {
-            "min": 1,
-            "max": 1
         },
         "done": {
             "min": 1,
@@ -192,6 +192,10 @@
             "min": 158,
             "max": 158
         },
+        "harvest-text-ranges": {
+            "min": 3173,
+            "max": 3173
+        },
         "harvest-typeAsts": {
             "min": 36903,
             "max": 36903
@@ -257,12 +261,16 @@
             "max": 36903
         },
         "inheritance-applied": {
-            "min": 812,
-            "max": 812
+            "min": 733,
+            "max": 733
         },
         "inheritance-pseudo-fields-promoted": {
             "min": 1,
             "max": 1
+        },
+        "linesource-start": {
+            "min": 3244,
+            "max": 3244
         },
         "local-var-add-success": {
             "min": 2380,
@@ -304,9 +312,13 @@
             "min": 0,
             "max": 0
         },
+        "stab-value-absolute": {
+            "min": 3257,
+            "max": 3257
+        },
         "stab-value-func-relative": {
-            "min": 38988,
-            "max": 38988
+            "min": 39107,
+            "max": 39107
         },
         "static-local-plate": {
             "min": 38,
@@ -316,6 +328,10 @@
             "min": 98,
             "max": 98
         },
+        "text-boundaries-out-of-order": {
+            "min": 1,
+            "max": 1
+        },
         "text-data-no-coverage": {
             "min": 531,
             "max": 539
@@ -323,6 +339,10 @@
         "text-undisassembled-code": {
             "min": 3107,
             "max": 3118
+        },
+        "textrange-entries": {
+            "min": 3173,
+            "max": 3173
         },
         "unresolved-symbol": {
             "min": 98,
