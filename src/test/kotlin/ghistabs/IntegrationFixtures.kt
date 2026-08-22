@@ -32,6 +32,15 @@ object IntegrationFixtures {
     val singleFile: File get() = acceptedFiles.singleOrNull()
         ?: Assumptions.abort("set -Pfixture=<exact filename> to exactly one binary")
 
+    /**
+     * [name] by default, or whatever `-Pfixture` narrowed to when it named exactly one binary — for
+     * a suite that needs *a* fixture of a given shape rather than the whole corpus. Skips the calling
+     * test when neither exists, so a corpus missing the default still runs everything else.
+     */
+    fun orDefault(name: String): File = acceptedFiles.singleOrNull().takeIf { wanted.isNotEmpty() }
+        ?: File(dir, name).takeIf { it.exists() && accepts(name) }
+        ?: Assumptions.abort("$name absent and -Pfixture named no single replacement")
+
     /** [ALL] narrowed by `-Pfixture`; errors on a filter that matches nothing, so a typo fails loudly. */
     @JvmStatic
     fun all(): Stream<String> = ALL.filter(::accepts)
