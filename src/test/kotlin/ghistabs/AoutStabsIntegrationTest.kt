@@ -57,6 +57,7 @@ class AoutStabsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     private lateinit var program: Program
 
     private fun load(name: String) {
+        assumeTrue(IntegrationFixtures.accepts(name), "excluded by -Pfixture")
         val fixture = File("src/test/resources/binaries/$name")
         assumeTrue(fixture.isFile, "a.out fixture missing: $fixture")
         program = ProgramLoader.builder()

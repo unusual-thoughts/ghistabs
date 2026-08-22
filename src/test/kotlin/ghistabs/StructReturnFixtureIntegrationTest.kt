@@ -10,11 +10,9 @@ import ghidra.util.task.TaskMonitor
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
-import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertAll
-import java.io.File
 
 /**
  * [StructReturnAnalyzer] against a real gcc 3.4.5 PE, through the ordinary analyzer pipeline — the
@@ -34,7 +32,7 @@ import java.io.File
 @Tag("integration")
 class StructReturnFixtureIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     @Test
-    fun localeTestStructReturns() = withAnalyzed("locale_test_gcc345_fullstabs.exe") { program ->
+    fun localeTestStructReturns() = withAnalyzed { program ->
         val corrected = program.functionManager.getFunctions(true)
             .filter { f -> Correction.entries.any { f.callingConventionName.endsWith(it.suffix) } }
         val (toMemory, toRegister) = corrected.partition {
@@ -68,10 +66,8 @@ class StructReturnFixtureIntegrationTest : AbstractGhidraHeadlessIntegrationTest
 
     private fun Function.hasReturnStoragePtr() = parameters.any { it.name == "__return_storage_ptr__" }
 
-    private fun withAnalyzed(binary: String, check: (Program) -> Unit) {
-        val fixture = File("src/test/resources/binaries/$binary")
-        assumeTrue(fixture.exists(), "fixture absent")
-        assumeTrue(IntegrationFixtures.accepts(binary), "excluded by -Pfixture")
+    private fun withAnalyzed(check: (Program) -> Unit) {
+        val fixture = IntegrationFixtures.orDefault(DEFAULT_FIXTURE)
         ProgramLoader.builder()
             .source(fixture)
             .compiler("gcc")
@@ -92,5 +88,10 @@ class StructReturnFixtureIntegrationTest : AbstractGhidraHeadlessIntegrationTest
                 }
                 check(program)
             }
+    }
+
+    private companion object {
+        /** Any libstdc++-linked gcc 3.4.5 PE exercises both directions; `-Pfixture` redirects it. */
+        const val DEFAULT_FIXTURE = "locale_test_gcc345_fullstabs.exe"
     }
 }
