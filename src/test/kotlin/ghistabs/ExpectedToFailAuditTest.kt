@@ -49,7 +49,7 @@ class ExpectedToFailAuditTest {
         Assertions.assertEquals(
             emptyList<String>(),
             dead.sorted(),
-            "${dead.size} dead @ExpectedToFail entries",
+            "${dead.size} dead @ExpectedToFail entries: ${dead.joinToString("\n")}",
         )
     }
 }
