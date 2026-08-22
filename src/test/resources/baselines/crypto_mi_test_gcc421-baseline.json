@@ -89,16 +89,8 @@
             "max": 752
         },
         "demangler-retarget-bound": {
-            "min": 0,
-            "max": 0
-        },
-        "demangler-retarget-demangle-failed": {
-            "min": 0,
-            "max": 0
-        },
-        "demangler-retarget-no-mangled-name": {
-            "min": 0,
-            "max": 0
+            "min": 205,
+            "max": 205
         },
         "demangler-retarget-no-namespace": {
             "min": 5,
@@ -123,6 +115,10 @@
         "demangler-skip-no-replacement": {
             "min": 102,
             "max": 102
+        },
+        "demangler-sole-instantiation-declined": {
+            "min": 27,
+            "max": 27
         },
         "demangler-sole-instantiation-match": {
             "min": 7,
