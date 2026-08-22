@@ -78,8 +78,17 @@ class DemanglerWhitelistAuditTest {
         val expected = IntegrationFixtures.ALL.map { it.substringBeforeLast('.') }.toSet()
         val have = dumps.map { it.nameWithoutExtension }.toSet()
         assumeTrue(have.containsAll(expected), "need a full-corpus dump (missing ${expected - have})")
-        val live = dumps.flatMap { it.readLines() }.filter { it.isNotBlank() }.toSet()
+        val live = dumps.flatMap { f -> f.readLines().filter { it.isNotBlank() }.map { it to f.name } }
+            .groupBy { it.first }.mapValues { (_, l) -> l.map { it.second }.toSortedSet().joinToString(" ") }
         val dead = DemanglerWhitelist.ALLOWED.filterNot { it in live }
         Assertions.assertTrue(dead.isEmpty(), "Dead DemanglerWhitelist.ALLOWED entries (prune): $dead")
+
+        for ((files, types) in (live - DemanglerWhitelist.ALLOWED).entries.sortedBy { it.value }.groupBy { it.value }) {
+            println("# Remaining stubs in $files :")
+            for ((type, _) in types) {
+                println("  - $type")
+            }
+            println()
+        }
     }
 }
