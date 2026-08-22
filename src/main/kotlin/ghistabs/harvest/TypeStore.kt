@@ -97,9 +97,8 @@ class TypeStore(
      * is bytes×64 (a double byte→bit conversion bug; gdb itself crashes on these). Example:
      * `XMLText:T(0,81)=s112XMLNode:(0,25),0,6656;…` — XMLNode is 104B (832b) but stab says 6656.
      *
-     * Detect via `field.sizeBits > struct.sizeBytes * 8` (real fields can't exceed their
-     * enclosing struct), then move the field into `bases[]` and — if the Ref id is
-     * dangling — synthesize an XRef-stub named after the field for cross-CU resolution.
+     * Detected by [isInheritancePseudoField], then moved into `bases[]` and — if the Ref id is
+     * dangling — given a synthesized XRef-stub named after the field for cross-CU resolution.
      */
     private fun synthesizeXRefStubsForDanglingInheritanceRefs() {
         val synthetic = mutableListOf<Type>()
@@ -112,18 +111,25 @@ class TypeStore(
             val struct = ast.body as? TypeDecl.Struct ?: continue
             val structBits = struct.sizeBytes * 8
             for (field in struct.fields) {
-                val ref = field.type as? TypeDecl.Ref ?: continue
+                // Either spelling of "the base is over there": a plain `(0,333)` Ref, or the
+                // inline cross-reference `(0,70)=xsBlockCipher:` gcc 3.4.5 writes when the CU has
+                // only seen the base forward-declared. Both carry the id the base will resolve at.
+                val refId = when (val t = field.type) {
+                    is TypeDecl.Ref -> t.id
+                    is TypeDecl.InlineDef -> t.id
+                    else -> null
+                } ?: continue
                 if (field.name.isEmpty()) continue
-                if (field.sizeBits <= structBits) continue
+                if (!isInheritancePseudoField(field, refId, structBits)) continue
                 // Rewrite fires regardless of whether the Ref is bound — the bogus-bitsize
                 // signal is independent of cross-CU resolution.
                 outerRewrites.getOrPut(ast.id) { mutableListOf() }.add(field)
                 // Stub only needed when the Ref has no binding (materializer resolves
                 // bound Refs directly).
-                if (ref.id in byId) continue
+                if (refId in byId) continue
                 synthetic.add(
                     ast.copy(
-                        id = ref.id,
+                        id = refId,
                         name = field.name,
                         body = TypeDecl.XRef(AggrKind.STRUCT, field.name),
                     ),
@@ -155,6 +161,20 @@ class TypeStore(
                 "${outerRewrites.size} outer struct(s) rewritten to populate bases[]",
             )
         }
+    }
+
+    /**
+     * The bytes×64 signature, taken exactly whenever the referenced body is in scope: a real field's
+     * bitsize is its type's size×8, so ×64 can only be gcc's double conversion. `sizeBits >
+     * structBits` alone misses every base small enough to fit inside its own derived class — an
+     * *empty* base is one byte, and cryptopp's policy mixins are all empty, so
+     * `TwoBases<BlockCipher,Rijndael_Info>` (`Rijndael_Info` at 64 bits inside a 96-bit struct)
+     * promoted only the 12-byte `BlockCipher` and came out reflecting half its inheritance. The size
+     * comparison stays the fallback for a Ref this CU never defines.
+     */
+    private fun isInheritancePseudoField(field: Field<GlobalTypeId>, refId: GlobalTypeId, structBits: Long): Boolean {
+        val base = byId[refId]?.body as? TypeDecl.Struct ?: return field.sizeBits > structBits
+        return field.sizeBits > structBits || (base.sizeBytes > 0 && field.sizeBits == base.sizeBytes * 64)
     }
 
     /**
