@@ -1,10 +1,11 @@
-package ghistabs
+package ghistabs.integration
 
 import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.Structure
 import ghidra.program.model.listing.CommentType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
+import ghistabs.defaultContext
 import ghistabs.importer.StabSectionOverlay
 import ghistabs.parse.STAB_RECORD_SIZE
 import org.junit.jupiter.api.AfterEach

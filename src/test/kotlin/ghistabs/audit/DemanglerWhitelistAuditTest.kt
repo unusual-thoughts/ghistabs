@@ -1,5 +1,6 @@
-package ghistabs
+package ghistabs.audit
 
+import ghistabs.integration.Fixtures
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
@@ -9,7 +10,7 @@ import java.io.File
 /**
  * The demangler-stub whitelist, and the audit that keeps it honest. Lives in its own class because
  * it is a CORPUS-level invariant, not a per-fixture one: it reads the per-fixture dumps that
- * [StabsImportRegressionBase.demanglerHasNoEmptyStubs] writes. Tagged `audit` and run by the
+ * [ghistabs.integration.StabsImportRegressionBase.demanglerHasNoEmptyStubs] writes. Tagged `audit` and run by the
  * :auditWhitelist task, which `integrationTest` is finalizedBy — as a plain `integration` class it
  * raced the fixtures that produce its input and silently skipped.
  */
@@ -67,7 +68,7 @@ class DemanglerWhitelistAuditTest {
      * Whitelist hygiene: every [DemanglerWhitelist.ALLOWED] entry must correspond to a real empty
      * stub in at least one fixture — else it's dead cruft (e.g. now filled by the demangler
      * reverse-index bridge). Reads the per-fixture dumps
-     * [StabsImportRegressionBase.demanglerHasNoEmptyStubs] writes — once, not once per fixture.
+     * [ghistabs.integration.StabsImportRegressionBase.demanglerHasNoEmptyStubs] writes — once, not once per fixture.
      */
     @Test
     fun whitelistEntriesAreLive() {
@@ -75,7 +76,7 @@ class DemanglerWhitelistAuditTest {
         // Corpus-wide audit: only meaningful once EVERY fixture has dumped. A count threshold isn't
         // enough — stale dumps from an earlier partial run satisfy it while misrepresenting the
         // corpus (seen calling `less`/`exception` dead), so a partial set skips instead.
-        val expected = IntegrationFixtures.ALL.map { it.substringBeforeLast('.') }.toSet()
+        val expected = Fixtures.ALL.map { it.substringBeforeLast('.') }.toSet()
         val have = dumps.map { it.nameWithoutExtension }.toSet()
         assumeTrue(have.containsAll(expected), "need a full-corpus dump (missing ${expected - have})")
         val live = dumps.flatMap { f -> f.readLines().filter { it.isNotBlank() }.map { it to f.name } }

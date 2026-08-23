@@ -1,4 +1,4 @@
-package ghistabs
+package ghistabs.probe
 
 import ghidra.app.util.importer.MessageLog
 import ghidra.app.util.importer.ProgramLoader
@@ -53,7 +53,7 @@ class CuDirectoryProbe : AbstractGhidraHeadlessIntegrationTest() {
     }
 
     @ParameterizedTest
-    @MethodSource("ghistabs.IntegrationFixtures#all")
+    @MethodSource("ghistabs.integration.Fixtures#all")
     fun dumpCuDirectories(binaryName: String) {
         val fixture = File("src/test/resources/binaries/$binaryName")
         assumeTrue(fixture.exists(), "fixture absent")

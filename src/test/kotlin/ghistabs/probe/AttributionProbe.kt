@@ -1,4 +1,4 @@
-package ghistabs.render
+package ghistabs.probe
 
 import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.app.util.importer.MessageLog
@@ -15,6 +15,9 @@ import ghistabs.disableWindowsResourceAnalyzer
 import ghistabs.harvest.HarvestIndex
 import ghistabs.harvest.Harvester
 import ghistabs.parse.StabReader
+import ghistabs.render.Mode
+import ghistabs.render.Renderer
+import ghistabs.render.Scorecard
 import ghistabs.runTransaction
 import ghistabs.set
 import org.junit.jupiter.api.Assumptions.assumeTrue
@@ -39,7 +42,7 @@ import java.io.File
 @Tag("probe")
 class AttributionProbe : AbstractGhidraHeadlessIntegrationTest() {
     @ParameterizedTest
-    @MethodSource("ghistabs.IntegrationFixtures#all")
+    @MethodSource("ghistabs.integration.Fixtures#all")
     fun grade(binaryName: String) {
         // The environment too, and not only through gradle's `-PsourceRoot`, so the probe runs from an IDE.
         val roots = listOfNotNull(System.getProperty("sourceRoot"), System.getenv("GHISTABS_SOURCE_ROOT"))

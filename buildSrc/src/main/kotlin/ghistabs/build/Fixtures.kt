@@ -11,7 +11,7 @@ import java.io.File
  * [regressionFilter] is the raw `-Pregression[=<binary>[,…]]` value and selects the *suite*: present at
  * all means the run is the fixture matrix and nothing else. `-Pfixture` is a different axis and does
  * not appear here — it names the corpus the fixture-parameterised hand-written suites draw from
- * (`IntegrationFixtures`), and narrowing it must not deselect any class.
+ * ([Fixtures]), and narrowing it must not deselect any class.
  *
  * [modeFilter] is `-Pmode=<MODE>[,…]`, `all` for every mode; [DEFAULT_MODES] when absent.
  */

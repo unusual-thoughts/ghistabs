@@ -1,4 +1,4 @@
-package ghistabs
+package ghistabs.integration
 
 import ghidra.app.cmd.function.FunctionPurgeAnalysisCmd
 import ghidra.app.util.importer.MessageLog
@@ -9,6 +9,9 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.symbol.SourceType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
+import ghistabs.STRUCT_RETURN_ANALYZER_NAME
+import ghistabs.StructReturnAnalyzer
+import ghistabs.runTransaction
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse

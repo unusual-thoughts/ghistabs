@@ -51,7 +51,7 @@ fun Test.headlessGhidraConfig(reportName: String, narrowGeneratedClasses: Boolea
     maxParallelForks = props.gradleProperty("maxForks").orNull?.toIntOrNull()
         ?: minOf(6, Runtime.getRuntime().availableProcessors() / 2, osMemoryMB / 2500).coerceAtLeast(1)
     maxHeapSize = "2g"
-    // -Pfixture=<exact filename>[,…] — the corpus `IntegrationFixtures` offers the hand-written
+    // -Pfixture=<exact filename>[,…] — the corpus `Fixtures` offers the hand-written
     // fixture-parameterised suites (NoReturnFixtureIntegrationTest picks its single binary this way).
     // It deliberately selects no test class: -Pregression is the axis that narrows the fixture matrix.
     systemProperty("fixtureFilter", props.gradleProperty("fixture").getOrElse(""))

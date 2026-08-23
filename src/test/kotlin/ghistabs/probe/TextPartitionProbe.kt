@@ -1,9 +1,10 @@
-package ghistabs
+package ghistabs.probe
 
 import ghidra.app.util.importer.MessageLog
 import ghidra.app.util.importer.ProgramLoader
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
+import ghistabs.defaultContext
 import ghistabs.harvest.Harvester
 import ghistabs.parse.StabReader
 import ghistabs.parse.StabType
@@ -41,7 +42,7 @@ class TextPartitionProbe : AbstractGhidraHeadlessIntegrationTest() {
     }
 
     @ParameterizedTest
-    @MethodSource("ghistabs.IntegrationFixtures#all")
+    @MethodSource("ghistabs.integration.Fixtures#all")
     fun dumpTextPartition(binaryName: String) {
         val fixture = File("src/test/resources/binaries/$binaryName")
         assumeTrue(fixture.exists(), "fixture absent")

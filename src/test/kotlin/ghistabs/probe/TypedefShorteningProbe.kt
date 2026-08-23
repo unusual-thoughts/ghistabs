@@ -1,4 +1,4 @@
-package ghistabs.materialize
+package ghistabs.probe
 
 import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.app.util.importer.MessageLog
@@ -8,6 +8,7 @@ import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghistabs.defaultContext
 import ghistabs.disableWindowsResourceAnalyzer
+import ghistabs.materialize.TypedefShortener
 import ghistabs.runTransaction
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -27,7 +28,7 @@ import java.io.File
 @Tag("probe")
 class TypedefShorteningProbe : AbstractGhidraHeadlessIntegrationTest() {
     @ParameterizedTest
-    @MethodSource("ghistabs.IntegrationFixtures#all")
+    @MethodSource("ghistabs.integration.Fixtures#all")
     fun dumpRenames(binaryName: String) {
         val fixture = File("src/test/resources/binaries/$binaryName")
         assumeTrue(fixture.exists(), "fixture absent")

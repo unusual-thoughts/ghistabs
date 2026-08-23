@@ -1,12 +1,14 @@
-package ghistabs.materialize
+package ghistabs.probe
 
 import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.app.util.importer.MessageLog
 import ghidra.app.util.importer.ProgramLoader
 import ghidra.program.model.data.Composite
+import ghidra.program.model.data.DataType
 import ghidra.program.model.data.Pointer
 import ghidra.program.model.data.Structure
 import ghidra.program.model.data.TypeDef
+import ghidra.program.model.listing.Program
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghistabs.ImportOptions
@@ -18,11 +20,13 @@ import ghistabs.diagnose.StabsDiagnostics
 import ghistabs.disableWindowsResourceAnalyzer
 import ghistabs.importer.ImportContext
 import ghistabs.importer.ImportProbe
+import ghistabs.materialize.isUndefined
 import ghistabs.runTransaction
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
+import java.io.BufferedWriter
 import java.io.File
 
 /**
@@ -36,7 +40,7 @@ import java.io.File
 @Tag("probe")
 class StringTypeProbe : AbstractGhidraHeadlessIntegrationTest() {
     @ParameterizedTest
-    @MethodSource("ghistabs.IntegrationFixtures#all")
+    @MethodSource("ghistabs.integration.Fixtures#all")
     fun probe(binaryName: String) {
         val fixture = File("src/test/resources/binaries/$binaryName")
         assumeTrue(fixture.exists(), "fixture absent")
@@ -66,7 +70,7 @@ class StringTypeProbe : AbstractGhidraHeadlessIntegrationTest() {
                     StabsDiagnostics(),
                 )
                 ImportProbe.install(ctx)
-                val options = program.getOptions(ghidra.program.model.listing.Program.ANALYSIS_PROPERTIES)
+                val options = program.getOptions(Program.ANALYSIS_PROPERTIES)
                 program.runTransaction("disable-stabs-analyzer") {
                     options.setBoolean(StabsAnalyzer().name, false)
                 }
@@ -137,13 +141,7 @@ class StringTypeProbe : AbstractGhidraHeadlessIntegrationTest() {
             }
     }
 
-    private fun dumpTree(
-        dt: ghidra.program.model.data.DataType,
-        prefix: String,
-        depth: Int,
-        visited: MutableSet<String>,
-        w: java.io.BufferedWriter,
-    ) {
+    private fun dumpTree(dt: DataType, prefix: String, depth: Int, visited: MutableSet<String>, w: BufferedWriter) {
         if (depth > 5) {
             w.write("$prefix… (depth > 5)\n")
             return
@@ -192,11 +190,7 @@ class StringTypeProbe : AbstractGhidraHeadlessIntegrationTest() {
         }
     }
 
-    private fun collectUndef(
-        dt: ghidra.program.model.data.DataType,
-        visited: MutableSet<String>,
-        out: MutableSet<String>,
-    ) {
+    private fun collectUndef(dt: DataType, visited: MutableSet<String>, out: MutableSet<String>) {
         if (!visited.add(dt.pathName)) return
         if (dt.isUndefined) {
             out.add(dt.pathName)

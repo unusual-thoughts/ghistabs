@@ -1,4 +1,4 @@
-package ghistabs.materialize
+package ghistabs.integration
 
 import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.app.util.importer.MessageLog
@@ -41,7 +41,7 @@ class StringDedupIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     fun singleStringTypeShorteningOn() = assertSingleStringType(shorten = true)
 
     private fun assertSingleStringType(shorten: Boolean) {
-        val fixture = IntegrationFixtures.orDefault(DEFAULT_FIXTURE)
+        val fixture = Fixtures.orDefault(DEFAULT_FIXTURE)
 
         val log = MessageLog()
         val monitor = TaskMonitor.DUMMY

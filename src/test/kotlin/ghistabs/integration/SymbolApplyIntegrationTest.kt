@@ -1,10 +1,12 @@
-package ghistabs.importer
+package ghistabs.integration
 
 import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.*
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghistabs.defaultContext
+import ghistabs.importer.StabsImporter
+import ghistabs.importer.sweepPointees
 import ghistabs.parse.StabReader
 import ghistabs.parse.StabRecord
 import ghistabs.parse.StabType

@@ -1,4 +1,4 @@
-package ghistabs
+package ghistabs.integration
 
 import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.app.util.importer.MessageLog
@@ -13,8 +13,10 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
+import ghistabs.*
 import ghistabs.ImportOptions.Companion.OVERLAY_SECTION
 import ghistabs.StabsAnalyzer.Companion.import
+import ghistabs.audit.DemanglerWhitelist
 import ghistabs.baseline.BaselineLoader
 import ghistabs.baseline.BaselineWriter
 import ghistabs.diagnose.CapturingSink
@@ -27,6 +29,7 @@ import ghistabs.materialize.conflictCount
 import ghistabs.materialize.itanium.Itanium
 import ghistabs.materialize.itanium.hasPolymorphicBaseSubobject
 import ghistabs.parse.*
+import ghistabs.testing.ExpectedToFail
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.encodeToStream
 import org.junit.jupiter.api.*

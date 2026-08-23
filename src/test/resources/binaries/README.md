@@ -7,7 +7,7 @@ retrieved from distribution archives first.
 
 The directory listing *is* the corpus. Every file here is auto-discovered by
 `:generateFixtureTests` (one regression class per fixture × `CONCURRENT`/`AFTER` mode) and by
-`IntegrationFixtures.ALL`, so dropping a binary in is enough to put it under test and nothing
+`Fixtures.ALL`, so dropping a binary in is enough to put it under test and nothing
 can sit here silently untested. Both skip `.md`, which is why this file doesn't become a
 fixture named `README.md`.
 
