@@ -6,7 +6,7 @@ import ghidra.program.model.data.DataType
 import ghidra.program.model.data.DataTypeConflictHandler
 import ghidra.program.model.data.DataTypeManager
 import ghidra.util.task.TaskMonitor
-import ghistabs.demangle
+import ghistabs.Demangler
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.StabsDiagnostics
 import ghistabs.harvest.Func
@@ -191,7 +191,7 @@ class DataTypeRegistry(
             // would copy every function and its three lists on an import that never renders.
             for (fn in index.harvest.functions) {
                 val dt = fn.thisParamTypeId()?.let { dataTypeFor(it) } ?: continue
-                demangle(fn.name)?.namespace?.let { putIfAbsent(it.categoryPath.path, dt) }
+                Demangler.of(fn.name)?.namespace?.let { putIfAbsent(it.categoryPath.path, dt) }
             }
             // A member function is not the only symbol that ties a class to its demangled path: a
             // static data member's linkage name carries the same chain, and is the *only* one a
@@ -203,7 +203,7 @@ class DataTypeRegistry(
                 val dt = dataTypeFor(ast.id) ?: continue
                 for (field in body.fields) {
                     val mangled = field.mangled?.takeIf { field.isStatic } ?: continue
-                    demangle(mangled)?.namespace?.let { putIfAbsent(it.categoryPath.path, dt) }
+                    Demangler.of(mangled)?.namespace?.let { putIfAbsent(it.categoryPath.path, dt) }
                 }
             }
         }
