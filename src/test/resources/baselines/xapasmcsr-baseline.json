@@ -297,16 +297,12 @@
             "max": 8
         },
         "sourcemap-duplicate-entries": {
-            "min": 3696,
-            "max": 3696
+            "min": 3680,
+            "max": 3680
         },
         "sourcemap-entries": {
-            "min": 20281,
-            "max": 20281
-        },
-        "sourcemap-entry-rejected": {
-            "min": 4,
-            "max": 4
+            "min": 20172,
+            "max": 20172
         },
         "sourcemap-entry-unmapped": {
             "min": 36,

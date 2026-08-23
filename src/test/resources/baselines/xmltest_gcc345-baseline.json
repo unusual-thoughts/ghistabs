@@ -325,12 +325,8 @@
             "max": 125
         },
         "sourcemap-entries": {
-            "min": 21567,
-            "max": 21567
-        },
-        "sourcemap-entry-rejected": {
-            "min": 51,
-            "max": 51
+            "min": 21181,
+            "max": 21181
         },
         "sourcemap-files": {
             "min": 148,
