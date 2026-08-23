@@ -1,5 +1,8 @@
-package ghistabs
+package ghistabs.audit
 
+import ghistabs.integration.Fixtures
+import ghistabs.integration.StabsImportRegressionBase
+import ghistabs.testing.ExpectedToFail
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
@@ -17,7 +20,7 @@ import java.io.File
  *
  * Corpus-level, like [DemanglerWhitelistAuditTest], and for the same reason: an entry is dead only if
  * *no* fixture×mode invocation failed on it, which is not knowable until the whole run is in. Reads the
- * per-fork dumps [ExpectedToFailExtension] writes into `test-output/results/` and is run by the
+ * per-fork dumps [ghistabs.testing.ExpectedToFailExtension] writes into `test-output/results/` and is run by the
  * `:auditWhitelist` task that `integrationTest` is finalizedBy.
  */
 @Tag("audit")
@@ -36,7 +39,7 @@ class ExpectedToFailAuditTest {
             .mapNotNull { m -> m.getAnnotation(ExpectedToFail::class.java)?.let { m.name to it.fixtures.toSet() } }
         assumeTrue(declared.isNotEmpty(), "no @ExpectedToFail entries to audit")
         val reached = lines.groupBy({ it[0] }, { it[1] }).mapValues { it.value.toSet() }
-        val corpus = IntegrationFixtures.ALL.toSet()
+        val corpus = Fixtures.ALL.toSet()
         val short = declared.mapNotNull { (method, _) ->
             (corpus - reached[method].orEmpty()).takeIf { it.isNotEmpty() }?.let { "$method missing $it" }
         }

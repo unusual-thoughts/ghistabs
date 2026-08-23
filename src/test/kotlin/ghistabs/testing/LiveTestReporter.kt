@@ -1,9 +1,10 @@
-package ghistabs
+package ghistabs.testing
 
+import ghistabs.integration.StabsImportRegressionBase
 import org.junit.jupiter.api.extension.ExtensionContext
 import org.junit.jupiter.api.extension.TestWatcher
 import java.io.File
-import java.util.Optional
+import java.util.*
 
 /**
  * Live, greppable per-test reporting so outcomes — especially skip *reasons*, which gradle's

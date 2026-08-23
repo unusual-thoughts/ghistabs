@@ -1,5 +1,6 @@
-package ghistabs
+package ghistabs.testing
 
+import ghistabs.integration.StabsImportRegressionBase
 import org.junit.jupiter.api.extension.ExtendWith
 import org.junit.jupiter.api.extension.ExtensionContext
 import org.junit.jupiter.api.extension.InvocationInterceptor
@@ -25,7 +26,7 @@ import java.lang.reflect.Method
  * `assumeTrue` skips pass straight through — they are never mistaken for the expected failure. That
  * leaves one hole this cannot close per-invocation: an entry whose test *skips* on its fixture is inert,
  * and skipping is legitimate for a method gated by mode (`demanglerHasNoEmptyStubs` runs only in AFTER).
- * [ExpectedToFailAuditTest] closes it over the corpus, from the outcomes this records.
+ * [ghistabs.audit.ExpectedToFailAuditTest] closes it over the corpus, from the outcomes this records.
  */
 @Target(AnnotationTarget.FUNCTION)
 @Retention(AnnotationRetention.RUNTIME)

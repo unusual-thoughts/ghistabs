@@ -1,13 +1,15 @@
-package ghistabs
+package ghistabs.probe
 
 import ghidra.app.util.importer.MessageLog
 import ghidra.app.util.importer.ProgramLoader
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
+import ghistabs.ImportOptions
 import ghistabs.StabsAnalyzer.Companion.import
 import ghistabs.diagnose.CapturingSink
 import ghistabs.diagnose.StabsDiagnostics
 import ghistabs.importer.ImportContext
+import ghistabs.runTransaction
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.TestInstance
@@ -25,7 +27,7 @@ import java.io.File
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class DegradationDumpProbe : AbstractGhidraHeadlessIntegrationTest() {
     @ParameterizedTest
-    @MethodSource("ghistabs.IntegrationFixtures#all")
+    @MethodSource("ghistabs.integration.Fixtures#all")
     fun dumpDegradations(binaryName: String) {
         val fixture = File("src/test/resources/binaries/$binaryName")
         assumeTrue(fixture.exists(), "fixture absent")

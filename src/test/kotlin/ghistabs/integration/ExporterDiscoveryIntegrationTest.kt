@@ -1,8 +1,9 @@
-package ghistabs
+package ghistabs.integration
 
 import ghidra.app.util.exporter.Exporter
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.classfinder.ClassSearcher
+import ghistabs.StabsRenderExporter
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test

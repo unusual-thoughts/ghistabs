@@ -1,9 +1,10 @@
-package ghistabs
+package ghistabs.integration
 
 import ghidra.program.database.ProgramBuilder
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghistabs.ImportOptions.Companion.isStabsDone
 import ghistabs.ImportOptions.Companion.markStabsDone
+import ghistabs.StabsAnalyzer
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue

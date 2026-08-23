@@ -34,7 +34,7 @@ Two axes, deliberately separate. **`-Pregression`** picks the *suite*; **`-Pfixt
   ./gradlew integrationTest -Pregression                                   # matrix, every fixture
   ./gradlew integrationTest -Pregression=xmltest_gcc345_fullstabs.exe      # matrix, one fixture
   ```
-- **`-Pfixture=<filename>[,…]`** — the corpus `IntegrationFixtures` offers to the *other* suites: the
+- **`-Pfixture=<filename>[,…]`** — the corpus `Fixtures` offers to the *other* suites: the
   fixture-parameterised probes, `AoutStabsIntegrationTest`, `StructReturnFixtureIntegrationTest`,
   `StringDedupIntegrationTest`, and `NoReturnFixtureIntegrationTest`, which needs it narrowed to
   exactly one binary to choose its subject. It selects no test class, so those suites keep running.
@@ -101,7 +101,7 @@ classes and tags inherited from a base class; the price is that it needs the tes
 - **Probes** (`@Tag("probe")`, generators only, run via `probeDump`): `DegradationDumpProbe` (`ghistabs`),
   `SourceSkeletonProbe` (`render`), `StringTypeProbe` / `TypedefShorteningProbe` (`materialize`).
 
-`IntegrationFixtures` (`ghistabs`) is the single source of the fixture corpus and the `-Pfixture`
+`Fixtures` (`ghistabs`) is the single source of the fixture corpus and the `-Pfixture`
 narrowing — parameterised suites draw their list from it (`select(...)` or `@MethodSource`).
 
 ## Adding a test
@@ -109,7 +109,7 @@ narrowing — parameterised suites draw their list from it (`select(...)` or `@M
 - A fixture-wide invariant about imported output → a method on `StabsImportRegressionTest` (it already
   imports every fixture). Gate on the *shape* the invariant needs — "no register locals in this
   fixture", "no populated vftable" — never on the fixture's name.
-- A suite that needs *a* fixture of a given shape rather than the corpus → `IntegrationFixtures
+- A suite that needs *a* fixture of a given shape rather than the corpus → `Fixtures
   .orDefault("<committed fixture>")`, which `-Pfixture` can still redirect.
 - Logic testable without a real binary → a `test` (unit) test, or a synthetic behavioural class.
 - A diagnostic dump with no assertion → tag it `@Tag("probe")`, not `integration`.

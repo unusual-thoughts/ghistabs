@@ -1,4 +1,4 @@
-package ghistabs
+package ghistabs.integration
 
 import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.app.util.importer.MessageLog
@@ -7,6 +7,7 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
+import ghistabs.*
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Tag
@@ -14,7 +15,7 @@ import org.junit.jupiter.api.Test
 import java.io.File
 
 /**
- * [NoReturnAnalyzer] against one real binary, through the ordinary analyzer pipeline.
+ * [ghistabs.NoReturnAnalyzer] against one real binary, through the ordinary analyzer pipeline.
  *
  * **One configuration per invocation**, because each is a full load + autoanalysis. Both write
  * `build/test-output/noreturn/<fixture>.<on|off>.txt`, and `diff`ing the two files *is* the with/
@@ -33,7 +34,7 @@ import java.io.File
 class NoReturnFixtureIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     @Test
     fun nonReturningRoster() {
-        val fixture = IntegrationFixtures.singleFile
+        val fixture = Fixtures.singleFile
         val binary = fixture.name
 
         withAnalyzed(fixture) { program, disabled ->
@@ -66,7 +67,7 @@ class NoReturnFixtureIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             // Nothing schedules this analyzer explicitly, so a broken priority or a `canAnalyze`
             // regression would leave every other assertion here passing over Ghidra's own marks.
             val discovered = AutoAnalysisManager.getAnalysisManager(program).getAnalyzer(NO_RETURN_ANALYZER_NAME)
-            assertTrue(discovered is NoReturnAnalyzer, "ClassSearcher did not pick up $NO_RETURN_ANALYZER_NAME")
+            assertTrue(discovered is NoReturnAnalyzer, "ClassSearcher did not pick up ${NO_RETURN_ANALYZER_NAME}")
 
             // Running it again, separately, must find nothing the automatic pass missed — the fixed
             // point has to be order-independent, and re-running has to stay cheap and idempotent.

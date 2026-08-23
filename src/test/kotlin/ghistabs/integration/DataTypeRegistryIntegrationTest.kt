@@ -1,4 +1,4 @@
-package ghistabs.materialize
+package ghistabs.integration
 
 import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.data.TypeDef
