@@ -1,11 +1,11 @@
 package ghistabs.harvest
 
-import ghistabs.GenericAddressResolver
 import ghistabs.parse.StabType
 import ghistabs.parse.SymbolDecl
 import ghistabs.parse.TypeDecl
 import ghistabs.parse.VariableLocation
-import org.junit.jupiter.api.Assertions.assertEquals
+import ghistabs.test.GenericAddressResolver
+import ghistabs.test.mustBe
 import org.junit.jupiter.api.Test
 
 /**
@@ -73,28 +73,25 @@ class BlockScopesTest {
         val (_, blocks) = mainBuilder().finish(lines, sourceFileOf("main.cpp"))
 
         val root = blocks.single()
-        assertEquals(listOf("fs"), root.locals.map { it.body.name })
-        assertEquals(addr(0x5d) to addr(0xad2), root.start to root.end)
+        root.locals.map { it.body.name } mustBe listOf("fs")
+        (root.start to root.end) mustBe (addr(0x5d) to addr(0xad2))
 
-        assertEquals(listOf(listOf("this"), listOf("__str")), names(root.children))
+        names(root.children) mustBe listOf(listOf("this"), listOf("__str"))
         val (first, second) = root.children
-        assertEquals(addr(0x11f) to addr(0x122), first.start to first.end)
-        assertEquals(listOf(listOf("this"), listOf("__val")), names(second.children))
+        (first.start to first.end) mustBe (addr(0x11f) to addr(0x122))
+        names(second.children) mustBe listOf(listOf("this"), listOf("__val"))
     }
 
     @Test
     fun `a local's source is its block's, not the N_SOL left over at the closing brace`() {
         val (locals, _) = mainBuilder().finish(lines, sourceFileOf("main.cpp"))
 
-        assertEquals(
-            listOf(
-                "__str" to "basic_string.h",
-                "__val" to "atomicity.h",
-                "fs" to "main.cpp", // the function's own local: inherits the function
-                "this" to "stl_alloc.h",
-                "this" to "stl_alloc.h",
-            ),
-            locals.map { it.body.name to it.sourceFile.filename }.sortedBy { it.first },
+        locals.map { it.body.name to it.sourceFile.filename }.sortedBy { it.first } mustBe listOf(
+            "__str" to "basic_string.h",
+            "__val" to "atomicity.h",
+            "fs" to "main.cpp", // the function's own local: inherits the function
+            "this" to "stl_alloc.h",
+            "this" to "stl_alloc.h",
         )
     }
 
@@ -105,8 +102,8 @@ class BlockScopesTest {
         val spanning = lines + line(700, 0x120, "stl_construct.h")
         val (locals, _) = mainBuilder().finish(spanning, sourceFileOf("main.cpp"))
 
-        assertEquals("stl_alloc.h", locals.first { it.line == 664 }.sourceFile.filename)
-        assertEquals("main.cpp", locals.first { it.body.name == "fs" }.sourceFile.filename)
+        locals.first { it.line == 664 }.sourceFile.filename mustBe "stl_alloc.h"
+        locals.first { it.body.name == "fs" }.sourceFile.filename mustBe "main.cpp"
     }
 
     /**
@@ -118,7 +115,7 @@ class BlockScopesTest {
     fun `a local no block claims belongs to the function`() {
         val (locals, blocks) = mainBuilder().apply { local("orphan", 27) }.finish(lines, sourceFileOf("main.cpp"))
 
-        assertEquals("main.cpp", locals.single { it.body.name == "orphan" }.sourceFile.filename)
-        assertEquals(false, "orphan" in flatten(blocks))
+        locals.single { it.body.name == "orphan" }.sourceFile.filename mustBe "main.cpp"
+        ("orphan" in flatten(blocks)) mustBe false
     }
 }

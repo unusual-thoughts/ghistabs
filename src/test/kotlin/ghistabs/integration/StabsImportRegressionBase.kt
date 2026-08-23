@@ -29,7 +29,7 @@ import ghistabs.materialize.conflictCount
 import ghistabs.materialize.itanium.Itanium
 import ghistabs.materialize.itanium.hasPolymorphicBaseSubobject
 import ghistabs.parse.*
-import ghistabs.testing.ExpectedToFail
+import ghistabs.test.*
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.encodeToStream
 import org.junit.jupiter.api.*
@@ -142,8 +142,8 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
                     // (build/classes/kotlin/main is on the test classpath). If this
                     // assertion ever fails the test would be silently meaningless.
                     val discovered = mgr.getAnalyzer(StabsAnalyzer.NAME)
-                    Assertions.assertNotNull(discovered, "StabsAnalyzer not discovered by ClassSearcher")
-                    assertInstanceOf<StabsAnalyzer>(discovered)
+                    discovered.mustNotBeNull("StabsAnalyzer not discovered by ClassSearcher")
+                    discovered.mustBeA<StabsAnalyzer>()
 
                     // Pre-build the test's context and install its CapturingSink as a
                     // side-channel on the Program. StabsAnalyzer.added() will tee its
@@ -345,25 +345,17 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         }
         assertAll(
             {
-                Assertions.assertEquals(
-                    emptyList<String>(),
-                    untyped.sorted().take(10),
-                    "${untyped.size} of ${declared.size} declared array globals never became an Array",
-                )
+                untyped.sorted().take(
+                    10,
+                ).mustBeEmpty("${untyped.size} of ${declared.size} declared array globals never became an Array")
             },
             {
-                Assertions.assertEquals(
-                    emptyList<String>(),
-                    wrong.take(10),
-                    "${wrong.size} of ${applied.size} array globals lost their declared extent",
-                )
+                wrong.take(10).mustBeEmpty("${wrong.size} of ${applied.size} array globals lost their declared extent")
             },
             {
-                Assertions.assertEquals(
-                    emptyList<String>(),
-                    undefinedElements.take(10),
-                    "${undefinedElements.size} array globals fell back to Undefined elements",
-                )
+                undefinedElements.take(
+                    10,
+                ).mustBeEmpty("${undefinedElements.size} array globals fell back to Undefined elements")
             },
         )
     }
@@ -387,23 +379,20 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         val counters = context.diagnostics.snapshotCounters()
         val expected = counters.getOrDefault("sourcemap-entries", 0) + counters.getOrDefault("textrange-entries", 0)
 
-        Assertions.assertEquals(
-            expected,
-            manager.allSourceFiles.sumOf { manager.getSourceMapEntries(it).size }.toLong(),
-            "source map entries in the program",
-        )
-        Assertions.assertTrue(
-            manager.allSourceFiles.containsAll(folds.keys + folds.values),
+        manager.allSourceFiles.sumOf {
+            manager.getSourceMapEntries(it).size
+        }.toLong().mustBe(expected, "source map entries in the program")
+        manager.allSourceFiles.must(
             "every spelling and every fold target must be listed: missing " +
-                ((folds.keys + folds.values) - manager.allSourceFiles.toSet()).map { it.path },
-        )
+                ((folds.keys + folds.values) - manager.allSourceFiles.toSet()).map {
+                    it.path
+                },
+        ) { containsAll(folds.keys + folds.values) }
         for ((raw, target) in folds) {
             if (raw == target) continue
-            Assertions.assertEquals(
-                0,
-                manager.getSourceMapEntries(raw).size,
-                "${raw.path} folded onto ${target.path} must keep no entries",
-            )
+            manager.getSourceMapEntries(
+                raw,
+            ).size.mustBe(0, "${raw.path} folded onto ${target.path} must keep no entries")
         }
     }
 
@@ -428,9 +417,9 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         val missing = entries.filterNot { e ->
             manager.getSourceMapEntries(e.addr).any { it.sourceFile == e.source && it.lineNumber == e.line }
         }
-        Assertions.assertEquals(
-            emptyList<String>(),
-            missing.take(5).map { "${it.source.filename}:${it.line} @ ${it.addr}" },
+        missing.take(5).map {
+            "${it.source.filename}:${it.line} @ ${it.addr}"
+        }.mustBeEmpty(
             "${missing.size} of ${entries.size} line entries are absent from the program at their own address",
         )
 
@@ -441,11 +430,10 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             .firstNotNullOfOrNull { (a, b) ->
                 (b.offset - a.offset).takeIf { it > 1 && a.hasSameAddressSpace(b) }?.let { a to a.add(it / 2) }
             } ?: return
-        Assertions.assertEquals(
-            statement,
-            manager.getSourceMapEntryIterator(inside, false).firstOrNull()?.baseAddress,
-            "walking back from $inside, mid-statement",
-        )
+        manager.getSourceMapEntryIterator(
+            inside,
+            false,
+        ).firstOrNull()?.baseAddress.mustBe(statement, "walking back from $inside, mid-statement")
     }
 
     /**
@@ -477,14 +465,13 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             Type.Decl(5, "Sprocket"),
         )
         val agreeing = LocalSources(program, context) { claims }
-        Assertions.assertEquals(local.toFile(), agreeing[source], "transform should resolve to the local file")
+        agreeing[source].mustBe(local.toFile(), "transform should resolve to the local file")
 
         val disagreeing = LocalSources(program, context) { claims.map { it.copy(line = it.line + 30) } }
-        Assertions.assertNull(disagreeing[source], "a file that does not carry the claim must be dropped")
-        Assertions.assertTrue(
-            context.diagnostics.snapshotCounters().getOrDefault("source-root-mismatch", 0L) > 0,
+        disagreeing[source].mustBeNull("a file that does not carry the claim must be dropped")
+        context.diagnostics.snapshotCounters().getOrDefault("source-root-mismatch", 0L).must(
             "the drop must be reported",
-        )
+        ) { this > 0 }
     }
 
     /**
@@ -515,19 +502,17 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         }
         assertAll(
             {
-                Assertions.assertEquals(
-                    emptyList<String>(),
-                    render(stripped).take(10),
+                render(stripped).take(10).mustBeEmpty(
                     "${stripped.size} of ${statics.size} static member functions kept only an injected " +
                         "`this` — their declared parameters were replaced",
                 )
             },
             {
-                Assertions.assertEquals(
-                    emptyList<String>(),
-                    render(injected).take(10),
-                    "${injected.size} of ${statics.size} static member functions were given a `this`",
-                )
+                render(
+                    injected,
+                ).take(
+                    10,
+                ).mustBeEmpty("${injected.size} of ${statics.size} static member functions were given a `this`")
             },
         )
     }
@@ -544,9 +529,8 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         val cls = program.symbolTable.getSymbols("ctype_base")
             .firstOrNull { it.symbolType == ghidra.program.model.symbol.SymbolType.CLASS }
         assumeTrue(cls != null, "Skipping: ctype_base class namespace absent")
-        Assertions.assertEquals(
+        cls!!.parentNamespace.name.mustBe(
             "std",
-            cls!!.parentNamespace.name,
             "ctype_base sits under '${cls.parentNamespace.getName(true)}' — the class's namespace " +
                 "chain was not recovered from its static members' linkage names",
         )
@@ -570,10 +554,9 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         val sizes = flags.associate { s ->
             s.name to program.listing.getDataAt(s.address)?.let { "${it.dataType.name}(${it.length})" }
         }
-        Assertions.assertTrue(
-            sizes.values.all { it != null && it.endsWith("(1)") },
-            "each bool flag should own exactly its own byte; got $sizes",
-        )
+        sizes.values.must("each bool flag should own exactly its own byte; got $sizes") {
+            all { it != null && it.endsWith("(1)") }
+        }
     }
 
     /**
@@ -602,12 +585,11 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             .any { it.name == "npos" && it.mangled != null }
         assumeTrue(declared, "Skipping: this build's stabs carry no linkage name for npos")
         val dt = program.listing.getDataAt(sym!!.address)?.dataType
-        Assertions.assertNotNull(dt, "no data applied at std::string::npos (${sym.address})")
-        Assertions.assertFalse(
-            dt is Undefined,
-            "std::string::npos is ${dt?.name} — the static member's declared type never reached it",
+        dt.mustNotBeNull("no data applied at std::string::npos (${sym.address})")
+        dt.mustNotBeA<Undefined>(
+            "std::string::npos is ${dt!!.name} — the static member's declared type never reached it",
         )
-        Assertions.assertEquals(4, dt!!.length, "std::string::npos should be 4 bytes, got ${dt.name}")
+        dt.length.mustBe(4, "std::string::npos should be 4 bytes, got ${dt.name}")
     }
 
     /**
@@ -652,9 +634,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         assumeTrue(checked.isNotEmpty(), "Skipping: no register local reached the program")
         val wrong = checked.filterNot { (_, want, got) -> want in got }
             .map { (where, want, got) -> "$where: stab says $want, applied to ${got.first()}" }
-        Assertions.assertEquals(
-            emptyList<String>(),
-            wrong.take(10),
+        wrong.take(10).mustBeEmpty(
             "${wrong.size} of ${checked.size} register locals ignored their stab's n_value " +
                 "(all landing in one register means the number was lost)",
         )
@@ -674,8 +654,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             .map { "${it.address} ${it.parentNamespace.getName(true)}::${it.name} (${it.symbolType})" }
             .take(20)
             .toList()
-        Assertions.assertTrue(
-            offenders.isEmpty(),
+        offenders.mustBeEmpty(
             "Found ${offenders.size} mangled symbols inside a namespace (showing first 20):\n" +
                 offenders.joinToString("\n") { "  $it" },
         )
@@ -734,40 +713,14 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
                 .takeIf { members > 0 && (dt as? Enum)?.count?.let { it > 0 } != true }
         }
         assertAll(
+            { report(absent).mustBeEmpty("${absent.size} declared slots never materialized") },
+            { report(misfiled).mustBeEmpty("${misfiled.size} slots materialized off their declared category") },
+            { report(hollow).mustBeEmpty("${hollow.size} slots with a declared body are empty stubs") },
+            { report(merged).mustBeEmpty("${merged.size} DataTypes are claimed by more than one slot") },
             {
-                Assertions.assertEquals(
-                    emptyList<String>(),
-                    report(absent),
-                    "${absent.size} declared slots never materialized",
-                )
-            },
-            {
-                Assertions.assertEquals(
-                    emptyList<String>(),
-                    report(misfiled),
-                    "${misfiled.size} slots materialized off their declared category",
-                )
-            },
-            {
-                Assertions.assertEquals(
-                    emptyList<String>(),
-                    report(hollow),
-                    "${hollow.size} slots with a declared body are empty stubs",
-                )
-            },
-            {
-                Assertions.assertEquals(
-                    emptyList<String>(),
-                    report(merged),
-                    "${merged.size} DataTypes are claimed by more than one slot",
-                )
-            },
-            {
-                Assertions.assertEquals(
-                    emptyList<String>(),
-                    report(flatEnums),
-                    "${flatEnums.size} declared enums materialized without their values",
-                )
+                report(
+                    flatEnums,
+                ).mustBeEmpty("${flatEnums.size} declared enums materialized without their values")
             },
         )
     }
@@ -800,9 +753,9 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
                 own.any { Itanium.isBaseField(it.fieldName.orEmpty()) } || (own.firstOrNull()?.offset ?: 1) > 0
             }
         }
-        Assertions.assertEquals(
-            emptyList<String>(),
-            flat.map { it.pathName }.take(10),
+        flat.map {
+            it.pathName
+        }.take(10).mustBeEmpty(
             "${flat.size} of ${derived.size} derived classes reflect no inheritance at all: " +
                 "no base subobject component and their own first field at offset 0",
         )
@@ -829,9 +782,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         val bad = labels
             .filterNot { pointsIntoCode(it) && !pointsIntoCode(it.subtract(ptr)) }
             .map { "vftable at $it → ${wordAt(it)?.toString(16)}" }
-        Assertions.assertEquals(
-            emptyList<String>(),
-            bad.take(10),
+        bad.take(10).mustBeEmpty(
             "${bad.size} of ${labels.size} vftable labels are not on the address point " +
                 "(mislaid on the rtti or vbase-offset word)",
         )
@@ -851,9 +802,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             .map { program.symbolTable.getPrimarySymbol(it.address) }
             .filter { isMangled(it.name) }
             .map { "${it.address} ${it.name}" }
-        Assertions.assertEquals(
-            emptyList<String>(),
-            clobbered.take(10),
+        clobbered.take(10).mustBeEmpty(
             "${clobbered.size} typeinfo globals have a mangled primary label — " +
                 "the stab name clobbered the demangled one",
         )
@@ -879,7 +828,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             .filter { it.name in names && it.numComponents == 0 }
             .map { it.pathName }
             .toList()
-        Assertions.assertTrue(stubs.isEmpty(), "typeinfo base classes left as empty stubs: $stubs")
+        stubs.mustBeEmpty("typeinfo base classes left as empty stubs: $stubs")
     }
 
     /**
@@ -906,14 +855,13 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         val wrong = primitives.mapNotNull { (ast, width) ->
             when (val dt = artifacts.registry.dataTypeFor(ast.id)) {
                 null -> "${ast.ghidraName} never materialized"
+
                 else ->
                     "${ast.ghidraName} is ${dt.name} (${dt.length} bytes), stab declares $width"
                         .takeIf { dt.length.toLong() != width }
             }
         }.distinct()
-        Assertions.assertEquals(
-            emptyList<String>(),
-            wrong.sorted().take(10),
+        wrong.sorted().take(10).mustBeEmpty(
             "${wrong.size} named primitive typedefs did not materialize at their declared width",
         )
     }
@@ -951,33 +899,31 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
                     DataTypeConflictHandler.KEEP_HANDLER,
                 )
         }
-        Assertions.assertNotNull(
-            program.dataTypeManager.getDataType(demanglerCat, "string"),
-            "precondition: injected stub should exist",
-        )
+        program.dataTypeManager.getDataType(
+            demanglerCat,
+            "string",
+        ).mustNotBeNull("precondition: injected stub should exist")
 
         program.runTransaction("rerun-demangler-replacer") {
             DemanglerReplacer(context, typeRegistry).replace()
         }
 
-        Assertions.assertNull(
-            program.dataTypeManager.getDataType(demanglerCat, "string"),
-            "/Demangler/std/string should have been replaced by /stabs/string",
-        )
+        program.dataTypeManager.getDataType(
+            demanglerCat,
+            "string",
+        ).mustBeNull("/Demangler/std/string should have been replaced by /stabs/string")
     }
 
     @Test
     fun demanglerStringReplaced() {
         assumeTrue(harvestsStdString, "Skipping: this fixture's stabs declare no std::string")
-        val strings = program.dataTypeManager.allDataTypes.asSequence()
-            .filter { it.name == "string" }.toList()
+        val strings = program.dataTypeManager.allDataTypes.asSequence().filter { it.name == "string" }.toList()
         val goodString = strings.find { !it.categoryPath.path.startsWith("/Demangler") }
-        Assertions.assertNotNull(goodString, "no non-Demangler `string` DataType: $strings")
-        Assertions.assertFalse(goodString!!.isZeroLength, "`string` is zero-length: $goodString")
-        Assertions.assertFalse(
-            strings.any { it.categoryPath.path.startsWith("/Demangler") },
-            "/Demangler/string still present: $strings",
-        )
+        goodString.mustNotBeNull("no non-Demangler `string` DataType: $strings")
+        goodString!!.mustNot("`string` is zero-length: $goodString") { isZeroLength }
+        strings.mustNot("/Demangler/string still present: $strings") {
+            any { it.categoryPath.path.startsWith("/Demangler") }
+        }
     }
 
     /**
@@ -1001,10 +947,8 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
                 .firstOrNull { it.name == ast.ghidraName }
                 ?.pathName
         }
-        Assertions.assertTrue(
-            leaked.isEmpty(),
-            "gcc-void asts leaked as Structures: $leaked (out of ${voidAsts.size} void asts)",
-        )
+
+        leaked.mustBeEmpty("gcc-void asts leaked as Structures: $leaked (out of ${voidAsts.size} void asts)")
     }
 
     /**
@@ -1037,9 +981,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         }
         assumeTrue(withOwnVtable.isNotEmpty(), "Skipping: no inheriting class has its own vtable symbol")
         val bare = withOwnVtable.filter { (ast, _) -> ast.ghidraName !in vftables }.map { (ast, _) -> ast.ghidraName }
-        Assertions.assertEquals(
-            emptyList<String>(),
-            bare.distinct().sorted().take(10),
+        bare.distinct().sorted().take(10).mustBeEmpty(
             "${bare.size} of ${withOwnVtable.size} classes with their own vtable inherit a vfptr " +
                 "but have no populated vftable",
         )
@@ -1072,7 +1014,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             println("atLeastOneVtableStructApplied[$binaryName/$mode]: vftables=${vftables.size}")
             return
         }
-        Assertions.assertTrue(vftables.isNotEmpty(), "Expected at least one *_vftable struct with components")
+        vftables.mustNotBeEmpty("Expected at least one *_vftable struct with components")
         // A derived class inherits its vfptr through its `_base_<Parent>` subobject, so most carry
         // no pointer directly — but the root of every chain must, or ClassBuilder's vfptr insertion
         // is broken end to end.
@@ -1082,15 +1024,14 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
                 .filter { it.name == vft.name.removeSuffix("_vftable") }
                 .any { cls -> cls.components.any { (it.dataType as? Pointer)?.dataType === vft } }
         }
-        Assertions.assertTrue(
-            backEdges >= 1,
+
+        backEdges.must(
             "Expected ≥ 1 *_vftable to have a back-edge {vfptr} from its class; got $backEdges / ${vftables.size}",
-        )
+        ) { this >= 1 }
         // Every slot is a pointer to the function definition its own field is named for.
         val badSlots = vftables.flatMap { it.components.asIterable() }
             .filter { (it.dataType as? Pointer)?.dataType?.name != it.fieldName }
-        Assertions.assertTrue(
-            badSlots.isEmpty(),
+        badSlots.mustBeEmpty(
             "${badSlots.map { it.parent.name }.toSet()} have fields that aren't proper function " +
                 "pointers: ${badSlots.map { it.dataType.name }.toSet()}",
         )
@@ -1134,12 +1075,12 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         // type to bind to, but a fork exists precisely *because* something already holds that name.
         // fewConflictRenames can't see these — one fork sits far under its 25-wide spike threshold.
         val forks = allEmpty.filter { DataTypeUtilities.isConflictDataTypeName(it.name) }.map { it.pathName }
-        Assertions.assertEquals(emptyList<String>(), forks.sorted(), "${forks.size} empty /Demangler .conflict forks")
+        forks.sorted().mustBeEmpty("${forks.size} empty /Demangler .conflict forks")
         val emptyStubs = allEmpty
             .filterNot { it.name in DemanglerWhitelist.ALLOWED }
             .map { "${it.categoryPath.path}/${it.name}" }
-        Assertions.assertTrue(
-            emptyStubs.isEmpty(),
+
+        emptyStubs.mustBeEmpty(
             "Expected zero unexpected empty /Demangler/* stubs, found ${emptyStubs.size}: " +
                 emptyStubs.take(10).joinToString(),
         )
@@ -1156,10 +1097,9 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         // caught gcc anonymous `$_N` aggregates and legitimately-numbered Win32 structs (JOB_INFO_1,
         // PRINTER_INFO_6, pulled in via mingw headers) — 250–920 "renames" for a real count of ~0.
         val conflicts = program.dataTypeManager.conflictCount()
-        Assertions.assertTrue(
-            conflicts < 25,
+        conflicts.must(
             "Suspiciously many .conflict-renamed types: $conflicts (expected < 25)",
-        )
+        ) { this < 25 }
     }
 
     /**
@@ -1184,11 +1124,9 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         assumeTrue(vftables.isNotEmpty(), "Skipping: no populated vftable in this fixture")
 
         val misfiled = vftables.filterNot { "ClassDataTypes" in it.categoryPath.path }.map { it.pathName }
-        Assertions.assertEquals(
-            emptyList<String>(),
-            misfiled.take(10),
-            "${misfiled.size} vftables sit outside ClassDataTypes (RecoveredClassHelper convention)",
-        )
+        misfiled.take(
+            10,
+        ).mustBeEmpty("${misfiled.size} vftables sit outside ClassDataTypes (RecoveredClassHelper convention)")
         val untyped = vftables.filterNot { vft ->
             val typed = vft.components.count { (it.dataType as? Pointer)?.dataType is FunctionDefinition }
             typed > 0 && typed >= vft.numComponents / 2
@@ -1196,11 +1134,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             "${vft.name}: ${vft.components.count { (it.dataType as? Pointer)?.dataType is FunctionDefinition }}" +
                 "/${vft.numComponents} slots typed"
         }
-        Assertions.assertEquals(
-            emptyList<String>(),
-            untyped.take(10),
-            "${untyped.size} of ${vftables.size} vftables are mostly untyped slots",
-        )
+        untyped.take(10).mustBeEmpty("${untyped.size} of ${vftables.size} vftables are mostly untyped slots")
     }
 
     /**
@@ -1220,11 +1154,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
                 val virtuals = body.methods.filter { it.virt == VirtKind.VIRTUAL }.map { it.name }.toSet()
                 (virtuals - slots).takeIf { it.isNotEmpty() }?.let { "${ast.ghidraName} missing $it" }
             }
-        Assertions.assertEquals(
-            emptyList<String>(),
-            missing.sorted().take(10),
-            "${missing.size} classes have declared virtuals with no vftable slot",
-        )
+        missing.sorted().take(10).mustBeEmpty("${missing.size} classes have declared virtuals with no vftable slot")
     }
 
     @Test
@@ -1250,8 +1180,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         // The other kinds reflect basic global-application coverage.
         val required = setOf("Structure", "Pointer", "Primitive")
         val missing = required - seenKinds
-        Assertions.assertTrue(
-            missing.isEmpty(),
+        missing.mustBeEmpty(
             "Missing DataType kinds in globals: $missing (saw: $seenKinds)",
         )
     }
@@ -1269,10 +1198,9 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             "Skipping: no function-local (V) statics in this fixture",
         )
         val plated = context.diagnostics.snapshotCounters()["static-local-plate"] ?: 0L
-        Assertions.assertTrue(
-            plated > 0,
+        plated.must(
             "expected function-local (V) statics to get 'static local of <fn>' plate comments; got $plated",
-        )
+        ) { this > 0 }
     }
 
     @OptIn(ExperimentalSerializationApi::class)
@@ -1391,11 +1319,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         }.map { (func, applied) ->
             "${func.name}: stabs name ${declaredNames(func)}, applied ${applied.parameters.map { it.name }}"
         }
-        Assertions.assertEquals(
-            emptyList<String>(),
-            lost.take(10),
-            "${lost.size} of ${declared.size} functions lost stab parameters",
-        )
+        lost.take(10).mustBeEmpty("${lost.size} of ${declared.size} functions lost stab parameters")
     }
 
     /**
@@ -1421,9 +1345,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         val stillMangled = demanglable
             .filter { (func, applied) -> applied.name == func.decl.name }
             .map { (_, applied) -> "${applied.entryPoint} ${applied.name}" }
-        Assertions.assertEquals(
-            emptyList<String>(),
-            stillMangled.sorted().take(10),
+        stillMangled.sorted().take(10).mustBeEmpty(
             "${stillMangled.size} of ${demanglable.size} functions kept the raw mangled name the stab gave them",
         )
     }
@@ -1454,11 +1376,9 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             println("inheritanceWasApplied[$binaryName/$mode]: applied=$applied")
             return
         }
-        Assertions.assertTrue(
-            applied > 0,
-            "Expected inheritance-applied counter > 0, got $applied " +
-                "(no C++ inheritance edges were materialized)",
-        )
+        applied.must(
+            "Expected inheritance-applied counter > 0, got $applied (no C++ inheritance edges were materialized)",
+        ) { this > 0 }
     }
 
     /**
@@ -1482,8 +1402,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             }
             .take(20)
             .toList()
-        Assertions.assertTrue(
-            offenders.isEmpty(),
+        offenders.mustBeEmpty(
             "Class methods must have at most one `this` (no duplicate-this regression): " +
                 "${offenders.size} offenders:\n  - " + offenders.joinToString("\n  - "),
         )
@@ -1544,8 +1463,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         // only after auto-analysis. That is a property of Ghidra and the binary, not of the import.
         val declaredMethods = artifacts.harvest.types.values.sumOf { it.asStruct()?.second?.methods?.size ?: 0 }
         if (declaredMethods > 0) {
-            Assertions.assertTrue(
-                thiscalled.isNotEmpty(),
+            thiscalled.mustNotBeEmpty(
                 "binary=$binaryName: ${classFuncs.size} class methods, none tagged __thiscall, " +
                     "though the stabs declare $declaredMethods (reparentMethod never tagged one)",
             )
@@ -1559,9 +1477,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             "${f.parentNamespace.name}::${f.name}(${self.dataType.name} this)"
                 .takeUnless { (self.dataType as? Pointer)?.dataType?.name == f.parentNamespace.name }
         }
-        Assertions.assertEquals(
-            emptyList<String>(),
-            wrongThis.take(10),
+        wrongThis.take(10).mustBeEmpty(
             "${wrongThis.size} of ${thiscalled.size} __thiscall methods do not take their own class pointer",
         )
     }
@@ -1604,9 +1520,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             .map { (dt, field, c) -> "${dt.name}.${field.name} at +${c.offset}, stab says +${field.offsetBits / 8}" }
         assertAll(
             {
-                Assertions.assertEquals(
-                    emptyList<String>(),
-                    misplaced.sorted().take(10),
+                misplaced.sorted().take(10).mustBeEmpty(
                     "${misplaced.size} of ${checked.size} fields are not at their declared offset",
                 )
             },
@@ -1633,9 +1547,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         val padded = classes
             .filterNot { it.length == it.components.last().endOffset + 1 }
             .map { "${it.name}: length=${it.length}, layout ends at ${it.components.last().endOffset + 1}" }
-        Assertions.assertEquals(
-            emptyList<String>(),
-            padded.take(10),
+        padded.take(10).mustBeEmpty(
             "${padded.size} of ${classes.size} classes carry bytes past their last described field",
         )
 
@@ -1654,9 +1566,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             "${dt.name}: base field is ${field.dataType.pathName}, base class is ${baseType.pathName}"
                 .takeUnless { field.offset == 0 && field.dataType === baseType }
         }
-        Assertions.assertEquals(
-            emptyList<String>(),
-            synthetic.take(10),
+        synthetic.take(10).mustBeEmpty(
             "${synthetic.size} single-base classes hold a stand-in rather than the base Structure itself",
         )
     }
@@ -1672,7 +1582,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         val data = program.listing.getDefinedData(true)
         var runs = 0
         while (data.hasNext()) if (data.next().dataType is AlignmentDataType) runs++
-        Assertions.assertTrue(runs > 0, "FillerByteAnalyzer collapsed no padding in $binaryName")
+        runs.must("FillerByteAnalyzer collapsed no padding in $binaryName") { this > 0 }
     }
 
     /**
@@ -1705,11 +1615,8 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         assumeTrue(sites.isNotEmpty(), "Skipping: no jump-over-fill idiom in $binaryName")
 
         val uncollapsed = sites.filterNot { program.listing.getDataAt(it)?.dataType is AlignmentDataType }
-        Assertions.assertEquals(
-            emptyList<Address>(),
-            uncollapsed.take(10),
-            "${uncollapsed.size} of ${sites.size} jump-over-fill runs were left uncollapsed",
-        )
+        uncollapsed.take(10)
+            .mustBeEmpty("${uncollapsed.size} of ${sites.size} jump-over-fill runs were left uncollapsed")
     }
 
     // ---- Shared lookups for the corpus-wide assertions above. ----
@@ -1824,8 +1731,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             }
         }
         assumeTrue(checked > 0, "no func-relative records in $binaryName")
-        Assertions.assertTrue(
-            notCode.isEmpty(),
+        notCode.mustBeEmpty(
             "func-relative stab values resolved outside executable code in $binaryName " +
                 "(${notCode.size}/$checked):\n${notCode.take(20).joinToString("\n")}",
         )

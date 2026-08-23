@@ -1,7 +1,9 @@
 package ghistabs.diagnose
 
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertTrue
+import ghistabs.test.must
+import ghistabs.test.mustBe
+import ghistabs.test.mustBeIn
+import ghistabs.test.mustNotBeIn
 import org.junit.jupiter.api.Test
 
 class StabsDiagnosticsTest {
@@ -18,13 +20,13 @@ class StabsDiagnosticsTest {
         diag.writeSummary(sink)
         val output = sink.capturedOutput()
 
-        assertTrue(output.contains("=== diagnostics ==="))
-        assertTrue(output.contains("unresolved-ref = 1"))
-        assertTrue(output.contains("placeholder-created = 1"))
-        assertTrue(output.contains("dedup-rename = 1"))
-        assertTrue(output.contains("vtable-applied = 1"))
-        assertTrue(output.contains("unresolved-ref top examples:"))
-        assertTrue(output.contains("placeholder-created top examples:"))
+        "=== diagnostics ===" mustBeIn output
+        "unresolved-ref = 1" mustBeIn output
+        "placeholder-created = 1" mustBeIn output
+        "dedup-rename = 1" mustBeIn output
+        "vtable-applied = 1" mustBeIn output
+        "unresolved-ref top examples:" mustBeIn output
+        "placeholder-created top examples:" mustBeIn output
     }
 
     @Test
@@ -40,8 +42,8 @@ class StabsDiagnosticsTest {
         diag.writeSummary(sink)
         val secondHeaderCount = sink.capturedOutput().split("=== diagnostics ===").size - 1
 
-        assertEquals(1, firstHeaderCount)
-        assertEquals(1, secondHeaderCount)
+        firstHeaderCount mustBe 1
+        secondHeaderCount mustBe 1
     }
 
     @Test
@@ -59,10 +61,10 @@ class StabsDiagnosticsTest {
         diag.writeSummary(sink)
         val output = sink.capturedOutput()
 
-        assertTrue(output.contains("gap census:"))
-        assertTrue(output.contains("MyCategory/MyStruct: gap @+32 bits len=32 between field1..field2"))
-        assertTrue(output.contains("MyCategory/MyStruct: gap @+96 bits len=16 between field3..(end)"))
-        assertTrue(!output.contains("PackedStruct"))
+        "gap census:" mustBeIn output
+        "MyCategory/MyStruct: gap @+32 bits len=32 between field1..field2" mustBeIn output
+        "MyCategory/MyStruct: gap @+96 bits len=16 between field3..(end)" mustBeIn output
+        "PackedStruct" mustNotBeIn output
     }
 
     @Test
@@ -75,12 +77,12 @@ class StabsDiagnosticsTest {
         diag.log("placeholder-created", "name=T2 category=cat reason=reason2")
         diag.log("placeholder-created", "name=T3 category=cat reason=reason3")
 
-        assertEquals(2, diag["unresolved-ref"])
-        assertEquals(3, diag["placeholder-created"])
+        diag["unresolved-ref"] mustBe 2
+        diag["placeholder-created"] mustBe 3
 
         val snapshot = diag.snapshotCounters()
-        assertTrue(snapshot.containsKey("unresolved-ref"))
-        assertTrue(snapshot.containsKey("placeholder-created"))
+        snapshot.must { containsKey("unresolved-ref") }
+        snapshot.must { containsKey("placeholder-created") }
     }
 
     @Test
@@ -94,10 +96,7 @@ class StabsDiagnosticsTest {
         diag.log("global-applied", "addr=0x1000 dtKind=int")
 
         val keys = diag.snapshotCounters().keys.toList()
-        assertEquals(
-            listOf("vtable-applied", "unresolved-ref", "placeholder-created", "dedup-rename", "global-applied"),
-            keys,
-        )
+        keys mustBe listOf("vtable-applied", "unresolved-ref", "placeholder-created", "dedup-rename", "global-applied")
     }
 
     @Test
@@ -111,7 +110,7 @@ class StabsDiagnosticsTest {
         val output = sink.capturedOutput()
 
         val exampleLines = output.split("\n").filter { it.contains("  - ref=") }
-        assertEquals(10, exampleLines.size)
+        exampleLines.size mustBe 10
     }
 
     @Test
@@ -124,13 +123,13 @@ class StabsDiagnosticsTest {
 
         diag.writeSummary(sink)
 
-        assertEquals(1, diag["unresolved-ref"])
-        assertEquals(1, diag["placeholder-created"])
+        diag["unresolved-ref"] mustBe 1
+        diag["placeholder-created"] mustBe 1
 
         val snapshot = diag.snapshotCounters()
-        assertEquals(2, snapshot.size)
-        assertTrue(snapshot.containsKey("unresolved-ref"))
-        assertTrue(snapshot.containsKey("placeholder-created"))
+        snapshot.size mustBe 2
+        snapshot.must { containsKey("unresolved-ref") }
+        snapshot.must { containsKey("placeholder-created") }
     }
 
     @Test
@@ -145,9 +144,9 @@ class StabsDiagnosticsTest {
         diag.writeSummary(sink)
         val output = sink.capturedOutput()
 
-        assertTrue(output.contains("counter-a = 1"))
-        assertTrue(output.contains("counter-b = 0"))
-        assertTrue(output.contains("counter-c = 3"))
+        "counter-a = 1" mustBeIn output
+        "counter-b = 0" mustBeIn output
+        "counter-c = 3" mustBeIn output
     }
 
     @Test
@@ -160,8 +159,8 @@ class StabsDiagnosticsTest {
         sink.log("foo-tag", "third message")
 
         val output = sink.capturedOutput()
-        assertTrue(output.contains("foo-tag"))
-        assertTrue(output.contains("bar-tag"))
+        "foo-tag" mustBeIn output
+        "bar-tag" mustBeIn output
     }
 
     @Test
@@ -178,7 +177,7 @@ class StabsDiagnosticsTest {
         diag.writeSummary(sink)
         val output = sink.capturedOutput()
 
-        assertTrue(output.contains("test/MyStruct: gap @+64 bits len=16 between x..y"))
-        assertTrue(!output.contains("test/MyStruct: gap @+32 bits len=32"))
+        "test/MyStruct: gap @+64 bits len=16 between x..y" mustBeIn output
+        "test/MyStruct: gap @+32 bits len=32" mustNotBeIn output
     }
 }

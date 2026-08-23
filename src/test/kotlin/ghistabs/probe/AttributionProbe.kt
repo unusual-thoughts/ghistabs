@@ -9,9 +9,7 @@ import ghidra.util.task.TaskMonitor
 import ghistabs.ImportOptions.Companion.LOG_LEVEL
 import ghistabs.ImportOptions.Companion.SHORTEN_TYPEDEFS
 import ghistabs.ImportOptions.Companion.SOURCE_ROOTS
-import ghistabs.defaultContext
 import ghistabs.diagnose.Level
-import ghistabs.disableWindowsResourceAnalyzer
 import ghistabs.harvest.HarvestIndex
 import ghistabs.harvest.Harvester
 import ghistabs.parse.StabReader
@@ -20,6 +18,8 @@ import ghistabs.render.Renderer
 import ghistabs.render.Scorecard
 import ghistabs.runTransaction
 import ghistabs.set
+import ghistabs.test.defaultContext
+import ghistabs.test.disableWindowsResourceAnalyzer
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.params.ParameterizedTest

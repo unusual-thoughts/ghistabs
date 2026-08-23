@@ -4,8 +4,7 @@ import ghidra.program.model.data.CategoryPath
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Struct.Method
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertNull
+import ghistabs.test.mustBe
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 
@@ -45,38 +44,38 @@ class EnclosingScopeTest : AbstractGhidraHeadlessIntegrationTest() {
     @Test fun namespacedClassDropsOwnLeaf() {
         // _ZNSs5clearEv → std::string::clear(); `Ss` expands to the short `string`, not basic_string<…>.
         val scope = ast("basic_string<char>", struct(method("_ZNSs5clearEv"))).enclosingScope()
-        assertEquals(listOf("std"), scope)
-        assertEquals(CategoryPath("/std"), scopeCategory(scope!!))
+        scope mustBe listOf("std")
+        scopeCategory(scope!!) mustBe CategoryPath("/std")
     }
 
     @Test fun globalClassScopeIsRoot() {
         // _ZN10CLexStream5ParseEv → CLexStream::Parse(); a global class has the empty enclosing scope.
         val scope = ast("CLexStream", struct(method("_ZN10CLexStream5ParseEv"))).enclosingScope()
-        assertEquals(emptyList<String>(), scope)
-        assertEquals(CategoryPath.ROOT, scopeCategory(scope!!))
+        scope mustBe emptyList<String>()
+        scopeCategory(scope!!) mustBe CategoryPath.ROOT
     }
 
     @Test fun nestedClassKeepsOuterScope() {
         // _ZN3Foo3Bar1fEv → Foo::Bar::f(); the class's own leaf (Bar) drops, its outer scope stays.
         val scope = ast("Bar", struct(method("_ZN3Foo3Bar1fEv"))).enclosingScope()
-        assertEquals(listOf("Foo"), scope)
-        assertEquals(CategoryPath("/Foo"), scopeCategory(scope!!))
+        scope mustBe listOf("Foo")
+        scopeCategory(scope!!) mustBe CategoryPath("/Foo")
     }
 
     @Test fun firstDemanglableMethodWins() {
         val scope = ast("X", struct(method(null), method("_ZNSs5clearEv"))).enclosingScope()
-        assertEquals(listOf("std"), scope)
+        scope mustBe listOf("std")
     }
 
     @Test fun methodlessTypeHasNoScope() {
-        assertNull(ast("PlainC", struct()).enclosingScope())
+        ast("PlainC", struct()).enclosingScope() mustBe null
     }
 
     @Test fun nonStructBodyHasNoScope() {
-        assertNull(ast("anEnum", TypeDecl.Enum(listOf("A" to 0L))).enclosingScope())
+        ast("anEnum", TypeDecl.Enum(listOf("A" to 0L))).enclosingScope() mustBe null
     }
 
     @Test fun unmangleableMethodHasNoScope() {
-        assertNull(ast("X", struct(method("not_a_mangle"))).enclosingScope())
+        ast("X", struct(method("not_a_mangle"))).enclosingScope() mustBe null
     }
 }

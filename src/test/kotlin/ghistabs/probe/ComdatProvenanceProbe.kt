@@ -4,11 +4,11 @@ import ghidra.app.util.importer.MessageLog
 import ghidra.app.util.importer.ProgramLoader
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
-import ghistabs.defaultContext
 import ghistabs.harvest.Func
 import ghistabs.harvest.Harvester
 import ghistabs.harvest.hasHeaderExtension
 import ghistabs.parse.StabReader
+import ghistabs.test.defaultContext
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.TestInstance

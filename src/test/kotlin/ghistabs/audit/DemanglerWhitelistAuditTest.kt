@@ -1,7 +1,7 @@
 package ghistabs.audit
 
 import ghistabs.integration.Fixtures
-import org.junit.jupiter.api.Assertions
+import ghistabs.test.mustBeEmpty
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
@@ -82,7 +82,7 @@ class DemanglerWhitelistAuditTest {
         val live = dumps.flatMap { f -> f.readLines().filter { it.isNotBlank() }.map { it to f.name } }
             .groupBy { it.first }.mapValues { (_, l) -> l.map { it.second }.toSortedSet().joinToString(" ") }
         val dead = DemanglerWhitelist.ALLOWED - live.keys
-        Assertions.assertTrue(dead.isEmpty(), "Dead DemanglerWhitelist.ALLOWED entries (prune): $dead")
+        dead.mustBeEmpty("Dead DemanglerWhitelist.ALLOWED entries (prune): $dead")
 
         for ((files, types) in (live - DemanglerWhitelist.ALLOWED).entries.sortedBy { it.value }.groupBy { it.value }) {
             println("# Remaining stubs in $files :")

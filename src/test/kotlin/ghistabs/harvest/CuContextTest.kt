@@ -3,7 +3,7 @@ package ghistabs.harvest
 import ghistabs.diagnose.CapturingSink
 import ghistabs.parse.LocalTypeId
 import ghistabs.parse.SourceFile
-import org.junit.jupiter.api.Assertions.*
+import ghistabs.test.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
@@ -21,11 +21,11 @@ class CuContextTest {
     fun `beginInclude allocates fileNum and pushes stack`() {
         val ctx = CuContext(SourceFile.CUSource("test.cpp"), sink = sink, registry = registry)
         val fileNum = ctx.beginInclude("header.h", 0x123L)
-        assertEquals(1, fileNum)
+        fileNum mustBe 1
         val header = ctx.headerForFileNum(fileNum)
-        assertNotNull(header)
-        assertEquals("header.h", header!!.filename)
-        assertEquals(0x123L, header.checksum)
+        header mustNotBe null
+        header!!.filename mustBe "header.h"
+        header.checksum mustBe 0x123L
     }
 
     @Test
@@ -34,7 +34,7 @@ class CuContextTest {
         val fileNum = ctx.beginInclude("header.h", 0x123L)
         ctx.endInclude()
         // After popping, headerForFileNum should still return the header (it was registered by fileNum)
-        assertNotNull(ctx.headerForFileNum(fileNum))
+        ctx.headerForFileNum(fileNum) mustNotBe null
     }
 
     @Test
@@ -48,9 +48,9 @@ class CuContextTest {
         val header2 = ctx2.headerForFileNum(fileNum2)
 
         // Same instance (object identity)
-        assertTrue(header1 === header2)
-        assertEquals("header.h", header1!!.filename)
-        assertEquals(0x123L, header1.checksum)
+        header1 mustBeSameAs header2
+        header1!!.filename mustBe "header.h"
+        header1.checksum mustBe 0x123L
     }
 
     @Test
@@ -64,10 +64,10 @@ class CuContextTest {
         val header2 = ctx2.headerForFileNum(fileNum2)
 
         // Same instance
-        assertTrue(header1 === header2)
+        header1 mustBeSameAs header2
         // same local id
-        assertTrue(fileNum1 == 1)
-        assertTrue(fileNum2 == 1)
+        fileNum1 mustBe 1
+        fileNum2 mustBe 1
     }
 
     @Test
@@ -76,16 +76,16 @@ class CuContextTest {
         val fileNum2 = ctx.remount("unknown.h", 0x456L)
         val header = ctx.headerForFileNum(fileNum2)
 
-        assertNotNull(header)
-        assertEquals("unknown.h", header!!.filename)
-        assertEquals(0x456L, header.checksum)
-        assertNull(header.originatingCu)
+        header mustNotBe null
+        header!!.filename mustBe "unknown.h"
+        header.checksum mustBe 0x456L
+        header.originatingCu mustBe null
 
         // Check log was emitted
         val forwardExclLog = sink.lines.find { it.tag == "forward-excl" }
-        assertNotNull(forwardExclLog)
-        assertTrue(forwardExclLog!!.msg!!.contains("unknown.h"))
-        assertTrue(forwardExclLog.msg.contains("0x456"))
+        forwardExclLog mustNotBe null
+        "unknown.h" mustBeIn forwardExclLog!!.msg!!
+        "0x456" mustBeIn forwardExclLog.msg
     }
 
     @Test
@@ -95,8 +95,8 @@ class CuContextTest {
         val header1Excl = ctx1.headerForFileNum(fileNum1Excl)
 
         // Verify forward-excl log was emitted exactly once
-        assertEquals(1, sink.lines.filter { it.tag == "forward-excl" }.size)
-        assertNull(header1Excl!!.originatingCu)
+        sink.lines.filter { it.tag == "forward-excl" }.size mustBe 1
+        header1Excl!!.originatingCu mustBe null
 
         // A later CU with real BINCL must reuse the placeholder, so types attributed
         // to (filename, checksum) from either CU land at the same GlobalTypeId.
@@ -104,7 +104,7 @@ class CuContextTest {
         val fileNum2Bincl = ctx2.beginInclude("header.h", 0x123L)
         val header2Bincl = ctx2.headerForFileNum(fileNum2Bincl)
 
-        assertTrue(header1Excl === header2Bincl)
+        header1Excl mustBeSameAs header2Bincl
     }
 
     @Test
@@ -116,8 +116,8 @@ class CuContextTest {
 
         // Check log was emitted
         val unbalancedLog = sink.lines.find { it.tag == "einc-unbalanced" }
-        assertNotNull(unbalancedLog)
-        assertTrue(unbalancedLog!!.msg!!.contains("empty stack"))
+        unbalancedLog mustNotBe null
+        "empty stack" mustBeIn unbalancedLog!!.msg!!
     }
 
     @Test
@@ -142,8 +142,9 @@ class CuContextTest {
         val cu2Header = cu2WithShared.headerForFileNum(cu2HeaderFileNum)
 
         // CRITICAL: With shared registry, both CUs get the SAME HeaderFile instance
-        assertTrue(
-            cu1Header === cu2Header,
+
+        cu1Header.mustBeSameAs(
+            cu2Header,
             "C1 fix FAILED: CUs with shared registry must get same HeaderFile instance",
         )
 
@@ -160,19 +161,18 @@ class CuContextTest {
 
         // WITHOUT shared registry (pre-fix), the two CUs get DIFFERENT HeaderFile instances
         // (even though the canonical keys are identical). This demonstrates the bug.
-        assertTrue(
-            cu1PrivHeader !== cu2PrivHeader,
+        cu1PrivHeader.mustNotBeSameAs(
+            cu2PrivHeader,
             "Pre-fix bug verification: CUs with separate registries get different HeaderFile instances",
         )
-        assertEquals(cu1PrivHeader!!.filename, cu2PrivHeader!!.filename)
-        assertEquals(cu1PrivHeader.checksum, cu2PrivHeader.checksum)
+        cu2PrivHeader!!.filename mustBe cu1PrivHeader!!.filename
+        cu2PrivHeader.checksum mustBe cu1PrivHeader.checksum
 
         // === Verify cross-CU sourceFor resolves to the same SourceFile for same (filename, checksum) ===
         val typeIdInCu1 = LocalTypeId(cu1HeaderFileNum, 99)
         val typeIdInCu2 = LocalTypeId(cu2HeaderFileNum, 99)
-        assertEquals(
+        cu2WithShared.sourceFor(typeIdInCu2).mustBe(
             cu1WithShared.sourceFor(typeIdInCu1),
-            cu2WithShared.sourceFor(typeIdInCu2),
             "C1 fix: sourceFor for same (filename, checksum) must yield equal SourceFile across CUs",
         )
     }
@@ -188,18 +188,18 @@ class CuContextTest {
         ctx.endInclude()
 
         // Two fileNums were allocated
-        assertTrue(fn1 != fn2, "Re-entry should allocate two distinct fileNums")
+        fn1.mustNotBe(fn2, "Re-entry should allocate two distinct fileNums")
 
         // Both map to the same HeaderFile instance
         val h1 = ctx.headerForFileNum(fn1)
         val h2 = ctx.headerForFileNum(fn2)
-        assertNotNull(h1)
-        assertNotNull(h2)
-        assertTrue(h1 === h2, "Same (filename, checksum) should resolve to same HeaderFile instance")
+        h1 mustNotBe null
+        h2 mustNotBe null
+        h1.mustBeSameAs(h2, "Same (filename, checksum) should resolve to same HeaderFile instance")
 
         // Types via either fileNum produce the same GlobalTypeId
         val id1 = ctx.sourceFor(LocalTypeId(fn1, 7))
         val id2 = ctx.sourceFor(LocalTypeId(fn2, 7))
-        assertEquals(id1, id2, "Same fileNum type should produce equal GlobalTypeId")
+        id2.mustBe(id1, "Same fileNum type should produce equal GlobalTypeId")
     }
 }

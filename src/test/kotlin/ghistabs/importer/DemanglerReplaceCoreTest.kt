@@ -1,15 +1,10 @@
 package ghistabs.importer
 
-import ghidra.program.model.data.CategoryPath
-import ghidra.program.model.data.DataType
-import ghidra.program.model.data.PointerDataType
-import ghidra.program.model.data.Structure
-import ghidra.program.model.data.StructureDataType
-import ghidra.program.model.data.TypedefDataType
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertInstanceOf
-import org.junit.jupiter.api.Assertions.assertSame
-import org.junit.jupiter.api.Assertions.assertTrue
+import ghidra.program.model.data.*
+import ghistabs.test.mustBe
+import ghistabs.test.mustBeA
+import ghistabs.test.mustBeEmpty
+import ghistabs.test.mustBeSameAs
 import org.junit.jupiter.api.Test
 
 /**
@@ -34,17 +29,17 @@ class DemanglerReplaceCoreTest {
 
         val (ops, skips) = DemanglerReplacer.decide(listOf(foo), mapOf("Foo" to real))
 
-        assertTrue(skips.isEmpty(), "no skips expected")
-        assertSame(foo, ops.single().first)
-        assertSame(real, ops.single().second)
+        skips.mustBeEmpty("no skips expected")
+        foo mustBeSameAs ops.single().first
+        real mustBeSameAs ops.single().second
     }
 
     @Test
     fun skipsAStubWithNoCandidate() {
         val (ops, skips) = DemanglerReplacer.decide(listOf(stub("/Demangler", "Foo")), emptyMap())
 
-        assertTrue(ops.isEmpty())
-        assertInstanceOf(Skip.NoReplacement::class.java, skips.single())
+        ops.mustBeEmpty()
+        skips.single().mustBeA<Skip.NoReplacement>()
     }
 
     @Test
@@ -53,8 +48,8 @@ class DemanglerReplaceCoreTest {
 
         val (ops, skips) = DemanglerReplacer.decide(listOf(foo), mapOf("Foo" to filled("/proj", "Foo")))
 
-        assertTrue(ops.isEmpty(), "a stub with components is already resolved")
-        assertTrue(skips.isEmpty(), "and is not a degradation either")
+        ops.mustBeEmpty("a stub with components is already resolved")
+        skips.mustBeEmpty("and is not a degradation either")
     }
 
     /** Foo→Bar where Bar transitively contains Foo would make the type contain itself post-replace. */
@@ -66,8 +61,8 @@ class DemanglerReplaceCoreTest {
 
         val (ops, skips) = DemanglerReplacer.decide(listOf(foo), mapOf("Foo" to cyclic))
 
-        assertTrue(ops.isEmpty())
-        assertInstanceOf(Skip.WouldBeCycle::class.java, skips.single())
+        ops.mustBeEmpty()
+        skips.single().mustBeA<Skip.WouldBeCycle>()
     }
 
     /**
@@ -86,8 +81,8 @@ class DemanglerReplaceCoreTest {
 
         val (ops, skips) = DemanglerReplacer.decide(listOf(stringStub), mapOf("string" to alias))
 
-        assertTrue(skips.isEmpty(), "a typedef replacement must not trip the cycle guard")
-        assertSame(alias, ops.single().second)
+        skips.mustBeEmpty("a typedef replacement must not trip the cycle guard")
+        alias mustBeSameAs ops.single().second
     }
 
     @Test
@@ -103,7 +98,7 @@ class DemanglerReplaceCoreTest {
             mapOf("Foo" to filled("/proj", "Foo"), "Baz" to cyclicBaz),
         )
 
-        assertEquals(listOf(foo), ops.map { it.first })
-        assertEquals(listOf(Skip.NoReplacement("Bar"), Skip.WouldBeCycle("Baz")), skips)
+        ops.map { it.first } mustBe listOf(foo)
+        skips mustBe listOf(Skip.NoReplacement("Bar"), Skip.WouldBeCycle("Baz"))
     }
 }

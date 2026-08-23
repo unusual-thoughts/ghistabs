@@ -1,4 +1,4 @@
-package ghistabs.testing
+package ghistabs.test
 
 import ghistabs.integration.StabsImportRegressionBase
 import org.junit.jupiter.api.extension.ExtendWith

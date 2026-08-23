@@ -2,8 +2,7 @@ package ghistabs.harvest
 
 import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Struct.Field
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertTrue
+import ghistabs.test.*
 import org.junit.jupiter.api.Test
 
 /**
@@ -67,14 +66,11 @@ class TypeStoreTest {
 
         // Verify: typeAsts[id] contains Struct (replaced the XRef)
         val (typeAsts, rawCollisions) = store.toHarvest()
-        assertTrue(typeAsts.containsKey(globalId), "Type should be in typeAsts")
+        typeAsts.must("Type should be in typeAsts") { containsKey(globalId) }
         val body = typeAsts[globalId]!!.body
-        assertTrue(body is TypeDecl.Struct, "Body should be Struct, not XRef")
+        body.mustBeA<TypeDecl.Struct<*>>("Body should be Struct, not XRef")
         // Verify: collidingAsts should NOT contain entry
-        assertTrue(
-            !rawCollisions.containsKey(globalId),
-            "XRef replacement should not create collision entry",
-        )
+        rawCollisions.mustNot("XRef replacement should not create collision entry") { containsKey(globalId) }
     }
 
     /**
@@ -121,12 +117,11 @@ class TypeStoreTest {
 
         // Verify: exactly one entry exists
         val (typeAsts, rawCollisions) = store.toHarvest()
-        assertEquals(1, typeAsts.size, "Should have exactly one entry after same-hash append")
+        typeAsts.size.mustBe(1, "Should have exactly one entry after same-hash append")
         // Verify: collidingAsts should NOT contain entry
-        assertTrue(
-            !rawCollisions.containsKey(globalId),
+        rawCollisions.mustNot(
             "Same-hash should not create collision entry",
-        )
+        ) { containsKey(globalId) }
     }
 
     /**
@@ -212,16 +207,10 @@ class TypeStoreTest {
 
         // Verify: typeAsts[id].body equals first body
         val (typeAsts, rawCollisions) = store.toHarvest()
-        assertEquals(firstBody, typeAsts[globalId]!!.body, "First writer should win")
+        typeAsts[globalId]!!.body.mustBe(firstBody, "First writer should win")
         // Verify: collidingAsts[id] is non-empty
-        assertTrue(
-            rawCollisions.containsKey(globalId),
-            "Hash-differing bodies should create collision entry",
-        )
-        assertTrue(
-            rawCollisions[globalId]!!.isNotEmpty(),
-            "Collision entry should be non-empty",
-        )
+        rawCollisions.must("Hash-differing bodies should create collision entry") { containsKey(globalId) }
+        rawCollisions[globalId]!!.mustNotBeEmpty("Collision entry should be non-empty")
     }
 
     /**
@@ -237,7 +226,7 @@ class TypeStoreTest {
 
         val (typeAsts, _) = store.toHarvest()
         val body = typeAsts[id]?.body
-        assertTrue(body is TypeDecl.Ref && body.id == id, "lone self-ref (void) must survive, not be skipped")
+        (body as? TypeDecl.Ref)?.id.mustBe(id, "lone self-ref (void) must survive, not be skipped")
     }
 
     /**
@@ -273,17 +262,13 @@ class TypeStoreTest {
             this += selfRef
             this += concrete
         }
-        assertEquals(struct, selfRefFirst.toHarvest().first[id]!!.body, "real body supersedes self-ref")
+        selfRefFirst.toHarvest().first[id]!!.body.mustBe(struct, "real body supersedes self-ref")
 
         val concreteFirst = TypeStore().apply {
             this += concrete
             this += selfRef
         }
-        assertEquals(
-            struct,
-            concreteFirst.toHarvest().first[id]!!.body,
-            "self-ref never demotes a real body",
-        )
+        concreteFirst.toHarvest().first[id]!!.body.mustBe(struct, "self-ref never demotes a real body")
     }
 
     /**
@@ -316,11 +301,8 @@ class TypeStoreTest {
 
         // Verify: exactly one entry
         val (typeAsts, rawCollisions) = store.toHarvest()
-        assertEquals(1, typeAsts.size, "Should have exactly one entry after duplicate append")
+        typeAsts.size.mustBe(1, "Should have exactly one entry after duplicate append")
         // Verify: collidingAsts should NOT contain entry
-        assertTrue(
-            !rawCollisions.containsKey(globalId),
-            "Duplicate should not create collision entry",
-        )
+        rawCollisions.mustNot("Duplicate should not create collision entry") { containsKey(globalId) }
     }
 }

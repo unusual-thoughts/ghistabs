@@ -1,6 +1,6 @@
 package ghistabs.render
 
-import org.junit.jupiter.api.Assertions.assertEquals
+import ghistabs.test.mustBe
 import org.junit.jupiter.api.Test
 
 /**
@@ -12,9 +12,9 @@ import org.junit.jupiter.api.Test
 class DeclaratorTest {
     @Test
     fun `an array extent follows the declarator, as C requires`() {
-        assertEquals("char const _ZTS7XVImage[9]", declarator("char const[9]", "_ZTS7XVImage"))
-        assertEquals("int grid[4][8]", declarator("int[4][8]", "grid"))
+        declarator("char const[9]", "_ZTS7XVImage") mustBe "char const _ZTS7XVImage[9]"
+        declarator("int[4][8]", "grid") mustBe "int grid[4][8]"
         // No extent to move: the type is emitted as-is, name appended.
-        assertEquals("char * argv", declarator("char *", "argv"))
+        declarator("char *", "argv") mustBe "char * argv"
     }
 }

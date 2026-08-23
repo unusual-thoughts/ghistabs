@@ -12,10 +12,11 @@ import ghidra.util.task.TaskMonitor
 import ghistabs.STRUCT_RETURN_ANALYZER_NAME
 import ghistabs.StructReturnAnalyzer
 import ghistabs.runTransaction
+import ghistabs.test.must
+import ghistabs.test.mustBe
+import ghistabs.test.mustBeEmpty
+import ghistabs.test.mustNot
 import org.junit.jupiter.api.AfterEach
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertFalse
-import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
@@ -76,31 +77,31 @@ class StructReturnAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTes
     /** The premise: the cspec cannot separate these, Ghidra's own purge pass can. */
     @Test
     fun onlyPurgeSeparatesTheAbis() {
-        assertFalse(function(REG_RETURN).`return`.isForcedIndirect)
-        assertFalse(function(HIDDEN_RETURN).`return`.isForcedIndirect)
-        assertTrue(function(CDECL_POD).`return`.isForcedIndirect, "__cdecl force-indirects every struct")
-        assertEquals(0, function(REG_RETURN).stackPurgeSize)
-        assertEquals(4, function(HIDDEN_RETURN).stackPurgeSize)
-        assertEquals(0, function(CDECL_POD).stackPurgeSize)
+        function(REG_RETURN).`return`.mustNot { isForcedIndirect }
+        function(HIDDEN_RETURN).`return`.mustNot { isForcedIndirect }
+        function(CDECL_POD).`return`.must("__cdecl force-indirects every struct") { isForcedIndirect }
+        function(REG_RETURN).stackPurgeSize mustBe 0
+        function(HIDDEN_RETURN).stackPurgeSize mustBe 4
+        function(CDECL_POD).stackPurgeSize mustBe 0
     }
 
     @Test
     fun agreedRegisterReturnIsLeftAlone() {
         runAnalyzer()
         val f = function(REG_RETURN)
-        assertEquals("__thiscall", f.callingConventionName, "an 8-byte EDX:EAX return must keep the cspec convention")
-        assertTrue(f.parameters.none { it.name == RETURN_STORAGE_PTR }, "no hidden pointer should be injected")
+        f.callingConventionName.mustBe("__thiscall", "an 8-byte EDX:EAX return must keep the cspec convention")
+        f.parameters.must("no hidden pointer should be injected") { none { it.name == RETURN_STORAGE_PTR } }
     }
 
     @Test
     fun purgingCalleeGetsHiddenPointer() {
         runAnalyzer()
         val f = function(HIDDEN_RETURN)
-        assertEquals("__thiscall_memret", f.callingConventionName)
-        assertTrue(f.`return`.isForcedIndirect)
-        assertEquals(RETURN_STORAGE_PTR, f.parameters.first().name)
-        assertEquals("this", f.parameters[1].name, "hasthis must survive the rename")
-        assertFalse(f.hasCustomVariableStorage(), "storage should come from the convention, not be frozen")
+        f.callingConventionName mustBe "__thiscall_memret"
+        f.`return`.must { isForcedIndirect }
+        f.parameters.first().name mustBe RETURN_STORAGE_PTR
+        f.parameters[1].name.mustBe("this", "hasthis must survive the rename")
+        f.mustNot("storage should come from the convention, not be frozen") { hasCustomVariableStorage() }
     }
 
     /** The mirror direction — and the case the old custom-storage design could never reach. */
@@ -108,10 +109,10 @@ class StructReturnAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTes
     fun nonPurgingCalleeLosesHiddenPointer() {
         runAnalyzer()
         val f = function(CDECL_POD)
-        assertEquals("__cdecl_regret", f.callingConventionName)
-        assertFalse(f.`return`.isForcedIndirect, "a bare RET means the POD really came back in EDX:EAX")
-        assertTrue(f.parameters.none { it.name == RETURN_STORAGE_PTR })
-        assertTrue(f.parameters.none { it.name == "this" }, "hasthis must NOT leak into a __cdecl-derived model")
+        f.callingConventionName mustBe "__cdecl_regret"
+        f.`return`.mustNot("a bare RET means the POD really came back in EDX:EAX") { isForcedIndirect }
+        f.parameters.must { none { it.name == RETURN_STORAGE_PTR } }
+        f.parameters.must("hasthis must NOT leak into a __cdecl-derived model") { none { it.name == "this" } }
     }
 
     /** A program with nothing to correct must not be left carrying a spec extension it never used. */
@@ -121,7 +122,7 @@ class StructReturnAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTes
             listOf(HIDDEN_RETURN, CDECL_POD).forEach { program.functionManager.removeFunction(builder.addr(it)) }
         }
         runAnalyzer()
-        assertTrue(SpecExtension.getCompilerSpecExtensions(program).isEmpty())
+        SpecExtension.getCompilerSpecExtensions(program).mustBeEmpty()
     }
 
     /** Only the models actually used get installed — a memret-only program gains no regret model. */
@@ -131,10 +132,8 @@ class StructReturnAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTes
             program.functionManager.removeFunction(builder.addr(CDECL_POD))
         }
         runAnalyzer()
-        assertEquals(
-            listOf("__thiscall_memret"),
-            SpecExtension.getCompilerSpecExtensions(program).map { SpecExtension.getFormalName(it.first) },
-        )
+        SpecExtension.getCompilerSpecExtensions(program).map { SpecExtension.getFormalName(it.first) } mustBe
+            listOf("__thiscall_memret")
     }
 
     /** Re-running must not disturb already-corrected functions, in either direction. */
@@ -143,7 +142,7 @@ class StructReturnAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTes
         runAnalyzer()
         val before = signatures()
         runAnalyzer()
-        assertEquals(before, signatures())
+        signatures() mustBe before
     }
 
     private fun signatures() = FIXTURES.keys.associateWith { at ->

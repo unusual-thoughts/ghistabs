@@ -7,14 +7,17 @@ import ghidra.program.model.data.Structure
 import ghidra.program.model.listing.Program
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
-import ghistabs.*
+import ghistabs.ImportOptions
 import ghistabs.ImportOptions.Companion.SHORTEN_TYPEDEFS
+import ghistabs.StabsAnalyzer
 import ghistabs.diagnose.CapturingSink
 import ghistabs.diagnose.Level
 import ghistabs.diagnose.StabsDiagnostics
 import ghistabs.importer.ImportContext
 import ghistabs.importer.ImportProbe
-import org.junit.jupiter.api.Assertions
+import ghistabs.runTransaction
+import ghistabs.set
+import ghistabs.test.*
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 
@@ -66,7 +69,7 @@ class StringDedupIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                 // CONCURRENT: schedule our analyzer for the next pass so it runs at LOW_PRIORITY
                 // alongside Ghidra's demangler (which creates the `/std/string` class struct).
                 val discovered = mgr.getAnalyzer(StabsAnalyzer.NAME)
-                Assertions.assertNotNull(discovered, "StabsAnalyzer not discovered by ClassSearcher")
+                discovered.mustNotBeNull("StabsAnalyzer not discovered by ClassSearcher")
                 val options = program.getOptions(Program.ANALYSIS_PROPERTIES)
                 program.runTransaction("configure-analysis") {
                     options.setBoolean(StabsAnalyzer.NAME, true)
@@ -92,9 +95,8 @@ class StringDedupIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                     .filter { !it.categoryPath.path.startsWith("/Demangler") }
                     .filter { it.name == filledName || it.name == "string" }
                 val filled = bodies.filter { it.numComponents > 0 }
-                Assertions.assertEquals(
+                filled.size.mustBe(
                     1,
-                    filled.size,
                     "expected exactly one filled string struct (shorten=$shorten); got " +
                         bodies.joinToString { "${it.pathName}(nc=${it.numComponents})" },
                 )
@@ -105,25 +107,19 @@ class StringDedupIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                 val emptyStubs = structs
                     .filter { it.name == "string" && (it.numComponents == 0 || it.isZeroLength) }
                     .map { it.pathName }
-                Assertions.assertTrue(
-                    emptyStubs.isEmpty(),
-                    "empty `string` stub(s) survived the fold (shorten=$shorten): $emptyStubs",
-                )
+                emptyStubs.mustBeEmpty("empty `string` stub(s) survived the fold (shorten=$shorten): $emptyStubs")
 
                 // (3) `/std/string` — the exact slot Ghidra's this-param creator looks up for `Ss` — is a
                 // filled Structure. This is the whole point: our type owns that path so it's reused, not
                 // shadowed. (The former `/stabs/string` typedef is now redundant and correctly dropped —
                 // the struct itself carries the `string` name.)
                 val stdString = dtm.getDataType("/std/string")
-                Assertions.assertInstanceOf(
-                    Structure::class.java,
-                    stdString,
+                stdString.mustBeA<Structure>(
                     "`/std/string` is not a Structure (shorten=$shorten): ${stdString?.pathName}",
                 )
-                Assertions.assertTrue(
-                    (stdString as Structure).numComponents > 0,
-                    "`/std/string` is an empty shadow (shorten=$shorten)",
-                )
+                (stdString as Structure).must("`/std/string` is an empty shadow (shorten=$shorten)") {
+                    numComponents > 0
+                }
             }
     }
 

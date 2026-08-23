@@ -1,9 +1,8 @@
 package ghistabs.materialize
 
 import ghistabs.parse.canonTemplateName
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertNull
-import org.junit.jupiter.api.Assertions.assertTrue
+import ghistabs.test.mustBe
+import ghistabs.test.mustBeEmpty
 import org.junit.jupiter.api.Test
 
 /**
@@ -22,11 +21,8 @@ class TypedefShorteningTest {
 
     @Test
     fun `canonical spelling strips whitespace only around template punctuation`() {
-        assertEquals(
-            "basic_string<char,std::char_traits<char>,std::allocator<char>>",
-            canonTemplateName(basicString),
-        )
-        assertEquals("short unsigned int", canonTemplateName("short unsigned int"))
+        canonTemplateName(basicString) mustBe "basic_string<char,std::char_traits<char>,std::allocator<char>>"
+        canonTemplateName("short unsigned int") mustBe "short unsigned int"
     }
 
     @Test
@@ -43,18 +39,16 @@ class TypedefShorteningTest {
         renames.forEach { (from, to) -> println("$from\n  -> $to") }
 
         // Target itself collapses to its alias.
-        assertEquals("string", renames[basicString])
+        renames[basicString] mustBe "string"
         // Substring rewrite inside another template, with std:: prefix preserved.
-        assertEquals(
-            "list<std::string>",
-            renames["list<std::basic_string<char, std::char_traits<char>, std::allocator<char> > >"],
-        )
+        renames["list<std::basic_string<char, std::char_traits<char>, std::allocator<char> > >"] mustBe
+            "list<std::string>"
         // Longest target wins: the whole vector matches StringVec, not vector<std::string,…>.
-        assertEquals("StringVec", renames[stringVec])
-        assertEquals("map<int,StringVec>", renames["map<int, $stringVec >"])
+        renames[stringVec] mustBe "StringVec"
+        renames["map<int, $stringVec >"] mustBe "map<int,StringVec>"
         // Non-templated / multi-word names are left alone (no whitespace-only renames).
-        assertNull(renames["int"])
-        assertNull(renames["short unsigned int"])
+        renames["int"] mustBe null
+        renames["short unsigned int"] mustBe null
     }
 
     @Test
@@ -64,11 +58,9 @@ class TypedefShorteningTest {
             mapOf("_Value_type" to basicString, "string" to basicString, "_ValueType" to basicString),
             setOf(basicString, "list<std::basic_string<char, std::char_traits<char>, std::allocator<char> > >"),
         ).associate { it.from to it.to }
-        assertEquals("string", renames[basicString])
-        assertEquals(
-            "list<std::string>",
-            renames["list<std::basic_string<char, std::char_traits<char>, std::allocator<char> > >"],
-        )
+        renames[basicString] mustBe "string"
+        renames["list<std::basic_string<char, std::char_traits<char>, std::allocator<char> > >"] mustBe
+            "list<std::string>"
     }
 
     @Test
@@ -79,7 +71,7 @@ class TypedefShorteningTest {
             mapOf("S" to basicString, "__string_type" to basicString, "string" to basicString),
             setOf(basicString),
         ).associate { it.from to it.to }
-        assertEquals("string", renames[basicString])
+        renames[basicString] mustBe "string"
     }
 
     @Test
@@ -87,7 +79,7 @@ class TypedefShorteningTest {
         // The internal-name filter must fall back rather than skip the rename entirely.
         val renames = typedefShorteningRenames(mapOf("N" to "Node"), setOf("Node"))
             .associate { it.from to it.to }
-        assertEquals("N", renames["Node"])
+        renames["Node"] mustBe "N"
     }
 
     @Test
@@ -97,11 +89,11 @@ class TypedefShorteningTest {
             mapOf("N" to "Node"),
             setOf("Node", "NodeList", "TreeNode", "vector<Node>", "vector<NodeList>"),
         ).associate { it.from to it.to }
-        assertEquals("N", renames["Node"])
-        assertEquals("vector<N>", renames["vector<Node>"])
-        assertNull(renames["NodeList"])
-        assertNull(renames["TreeNode"])
-        assertNull(renames["vector<NodeList>"])
+        renames["Node"] mustBe "N"
+        renames["vector<Node>"] mustBe "vector<N>"
+        renames["NodeList"] mustBe null
+        renames["TreeNode"] mustBe null
+        renames["vector<NodeList>"] mustBe null
     }
 
     @Test
@@ -110,21 +102,17 @@ class TypedefShorteningTest {
             mapOf("LongAliasName" to "int", "Foo" to "Bar"),
             setOf("int", "Bar", "vector<int>", "vector<Bar>"),
         )
-        assertTrue(renames.isEmpty(), "no alias is strictly shorter than its target: $renames")
+        renames.mustBeEmpty("no alias is strictly shorter than its target: $renames")
     }
 
     @Test
     fun `substitute rewrites a line of code without canonicalising its spacing`() {
         val s = TemplateNameShortener(mapOf("string" to "basic_string<char,std::char_traits<char>>"))
-        assertEquals(
-            "f(string *a, int b) { return a > b; }",
-            s.substitute("f(basic_string<char,std::char_traits<char>> *a, int b) { return a > b; }"),
-        )
+        s.substitute("f(basic_string<char,std::char_traits<char>> *a, int b) { return a > b; }") mustBe
+            "f(string *a, int b) { return a > b; }"
         // shorten() canonicalises first, which on a code line closes up `a, int`, `a > b`, and — worst
         // — the space after the closing `>`, welding the declarator onto its type as `string*a`.
-        assertEquals(
-            "f(string*a,int b) { return a>b; }",
-            s.shorten("f(basic_string<char,std::char_traits<char>> *a, int b) { return a > b; }"),
-        )
+        s.shorten("f(basic_string<char,std::char_traits<char>> *a, int b) { return a > b; }") mustBe
+            "f(string*a,int b) { return a>b; }"
     }
 }

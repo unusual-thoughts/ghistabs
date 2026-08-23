@@ -1,6 +1,6 @@
 package ghistabs.harvest
 
-import org.junit.jupiter.api.Assertions.assertEquals
+import ghistabs.test.mustBe
 import org.junit.jupiter.api.Test
 
 /** Spellings in, normalised paths out — the fold decides which spelling wins, the identity decides
@@ -14,8 +14,8 @@ class SourceFoldingTest {
         // The bare `dspinfo.h` and its single full-path spelling collapse onto the full one — the
         // render writes a tree, so the directory the stabs know is worth keeping.
         val map = fold("dspinfo.h", "/work/include/dspinfo/dspinfo.h")
-        assertEquals("/work/include/dspinfo/dspinfo.h", map.getValue("/dspinfo.h"))
-        assertEquals("/work/include/dspinfo/dspinfo.h", map.getValue("/work/include/dspinfo/dspinfo.h"))
+        map.getValue("/dspinfo.h") mustBe "/work/include/dspinfo/dspinfo.h"
+        map.getValue("/work/include/dspinfo/dspinfo.h") mustBe "/work/include/dspinfo/dspinfo.h"
     }
 
     @Test
@@ -28,7 +28,7 @@ class SourceFoldingTest {
             "/jenkins/bluesuite/result/include/xvimage/image.h",
             "/work/devtools/result/include/xvimage/image.h",
         )
-        for (i in map.keys) assertEquals("/jenkins/bluesuite/result/include/xvimage/image.h", map.getValue(i))
+        for (i in map.keys) map.getValue(i) mustBe "/jenkins/bluesuite/result/include/xvimage/image.h"
     }
 
     @Test
@@ -37,8 +37,8 @@ class SourceFoldingTest {
         // cannot drift with the order the spellings were harvested in.
         val map = fold("/work/include/xvimage/image.h", "/jenkins/include/xvimage/image.h")
         val reversed = fold("/jenkins/include/xvimage/image.h", "/work/include/xvimage/image.h")
-        for (i in map.keys) assertEquals("/jenkins/include/xvimage/image.h", map.getValue(i))
-        assertEquals(map, reversed)
+        for (i in map.keys) map.getValue(i) mustBe "/jenkins/include/xvimage/image.h"
+        reversed mustBe map
     }
 
     @Test
@@ -46,22 +46,22 @@ class SourceFoldingTest {
         // mingw's `stdarg.h` and gcc's own both sit in an `include/`, which is why one directory of
         // agreement is not enough to call two paths the same file.
         val map = fold("c:/mingw/include/stdarg.h", "c:/mingw/lib/gcc-lib/mingw32/3.2.3/include/stdarg.h")
-        for (i in map.keys) assertEquals(i, map.getValue(i))
+        for (i in map.keys) map.getValue(i) mustBe i
     }
 
     @Test
     fun distinctHeadersSharingBasenameDoNotMerge() {
         // Different parent dirs → genuinely distinct files; the bare name is ambiguous, nothing folds.
         val map = fold("config.h", "/proj/moduleA/config.h", "/proj/moduleB/config.h")
-        for (i in map.keys) assertEquals(i, map.getValue(i))
+        for (i in map.keys) map.getValue(i) mustBe i
     }
 
     @Test
     fun aBareNameWithNoFullSpellingStaysBare() {
         // Nothing better is known about it. A CU never has one.
         val map = fold("filesystemimage.h", "main.cpp")
-        assertEquals("/filesystemimage.h", map.getValue("/filesystemimage.h"))
-        assertEquals("/main.cpp", map.getValue("/main.cpp"))
+        map.getValue("/filesystemimage.h") mustBe "/filesystemimage.h"
+        map.getValue("/main.cpp") mustBe "/main.cpp"
     }
 
     @Test
@@ -69,14 +69,14 @@ class SourceFoldingTest {
         // Windows-style separators count as full paths (stabs mixes both) — normalisation settles
         // them into one spelling before the fold ever sees them.
         val map = fold("foo.h", """C:\work\include\foo.h""")
-        assertEquals("/C:/work/include/foo.h", map.getValue("/foo.h"))
+        map.getValue("/foo.h") mustBe "/C:/work/include/foo.h"
     }
 
     @Test
     fun differentExtensionsAreDistinctFiles() {
         // A bare `.c` never folds onto a `.h` (different physical files sharing a stem).
         val map = fold("dspinfo.c", "/work/include/dspinfo/dspinfo.h")
-        assertEquals("/dspinfo.c", map.getValue("/dspinfo.c"))
-        assertEquals("/work/include/dspinfo/dspinfo.h", map.getValue("/work/include/dspinfo/dspinfo.h"))
+        map.getValue("/dspinfo.c") mustBe "/dspinfo.c"
+        map.getValue("/work/include/dspinfo/dspinfo.h") mustBe "/work/include/dspinfo/dspinfo.h"
     }
 }
