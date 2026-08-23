@@ -1,0 +1,69 @@
+name: Build and test Ghidra Extension
+
+env:
+  GHIDRA_VERSION: '12.1.2'
+  GHIDRA_RELEASE: PUBLIC
+  GHIDRA_DATE: '20260605'
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      checks: write
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up JDK 21
+      uses: actions/setup-java@v4
+      with:
+        java-version: '21'
+        distribution: 'temurin'
+
+    - name: Install ghidra
+      run: |
+        GHIDRA_ZIP="ghidra_${GHIDRA_VERSION}_${GHIDRA_RELEASE}_${GHIDRA_DATE}.zip" &&
+        wget "https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_${GHIDRA_VERSION}_build/${GHIDRA_ZIP}" &&
+        mkdir -p /opt/ &&
+        unzip ${GHIDRA_ZIP} &&
+        mv ghidra_${GHIDRA_VERSION}_${GHIDRA_RELEASE} /opt/ghidra
+
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v6
+
+    - name: Generate and submit dependency graph
+      uses: gradle/actions/dependency-submission@v6
+
+    - name: Check formatting
+      run: ./gradlew ktlintCheck
+
+    - name: Run unit tests
+      run: ./gradlew test
+
+    - name: Run integration tests
+      run: ./gradlew integrationTest -Pmode=all
+
+    - name: Publish Test Report
+      id: report
+      uses: mikepenz/action-junit-report@v6
+      if: success() || failure() # always run even if the previous step fails
+      with:
+        report_paths: '**/build/test-results/**/TEST-*.xml'
+
+    - name: Build extension zip
+      run: ./gradlew buildExtension
+
+    - name: Build CLI JAR
+      run: ./gradlew buildExtension
+
+    - name: Upload zips
+      uses: actions/upload-artifact@v7
+      with:
+        name: extension and CLI packages
+        path: dist/*.zip
