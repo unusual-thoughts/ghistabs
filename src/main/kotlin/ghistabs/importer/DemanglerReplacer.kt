@@ -11,8 +11,8 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.symbol.SourceType
 import ghidra.program.model.symbol.SymbolType
 import ghidra.program.model.symbol.SymbolUtilities
+import ghistabs.Demangler
 import ghistabs.applyDemangling
-import ghistabs.demangle
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.degradation
 import ghistabs.materialize.DataTypeRegistry
@@ -136,7 +136,7 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val registry:
                 // Two separable questions behind one "didn't apply": whether the *name* defeats the
                 // demangler, or whether it demangles and only the apply step declines (already named,
                 // symbol conflict…). Bucket by both so 12k failures read as a handful of causes.
-                val parsed = if (demangle(name) == null) "demangle-failed" else "demangle-not-applied"
+                val parsed = if (Demangler.of(name) == null) "demangle-failed" else "demangle-not-applied"
                 failures.getOrPut(parsed) { mutableListOf() }.add(name)
             }
         }
@@ -163,7 +163,7 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val registry:
         var dropped = 0
         var renamed = 0
         for (sym in displaced) {
-            val leaf = demangle(sym.name)?.name
+            val leaf = Demangler.of(sym.name)?.name
             when {
                 sym.symbolType == SymbolType.LABEL -> {
                     sym.delete()
@@ -340,7 +340,7 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val registry:
 
     private fun ownerSpelling(f: Function): Owner {
         val mangled = mangledFor(f) ?: return Owner.NoMangledName
-        val demangled = demangle(mangled) ?: return Owner.DemangleFailed
+        val demangled = Demangler.of(mangled) ?: return Owner.DemangleFailed
         val namespace = demangled.namespace ?: return Owner.NoNamespace
         val leaf = splitQualified(namespace.namespaceString).lastOrNull() ?: return Owner.NoNamespace
         return Owner.Spelled(ourSpelling(leaf))
@@ -467,7 +467,7 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val registry:
     private val instantiationsInBinary: Map<String, Set<String>> by lazy {
         buildMap<String, MutableSet<String>> {
             for (mangled in mangledByAddress.values) {
-                var scope = demangle(mangled)?.namespace
+                var scope = Demangler.of(mangled)?.namespace
                 while (scope != null) {
                     // Read the args off `namespaceString` — the same accessor [ownerSpelling] resolves
                     // sites through. `DemangledType.template` looks like the structured way to ask, but
