@@ -80,7 +80,7 @@ class DemanglerWhitelistAuditTest {
         assumeTrue(have.containsAll(expected), "need a full-corpus dump (missing ${expected - have})")
         val live = dumps.flatMap { f -> f.readLines().filter { it.isNotBlank() }.map { it to f.name } }
             .groupBy { it.first }.mapValues { (_, l) -> l.map { it.second }.toSortedSet().joinToString(" ") }
-        val dead = DemanglerWhitelist.ALLOWED.filterNot { it in live }
+        val dead = DemanglerWhitelist.ALLOWED - live.keys
         Assertions.assertTrue(dead.isEmpty(), "Dead DemanglerWhitelist.ALLOWED entries (prune): $dead")
 
         for ((files, types) in (live - DemanglerWhitelist.ALLOWED).entries.sortedBy { it.value }.groupBy { it.value }) {
