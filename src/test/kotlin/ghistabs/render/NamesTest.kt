@@ -1,6 +1,6 @@
 package ghistabs.render
 
-import org.junit.jupiter.api.Assertions.assertEquals
+import ghistabs.test.mustBe
 import org.junit.jupiter.api.Test
 
 /**
@@ -10,15 +10,15 @@ import org.junit.jupiter.api.Test
 class NamesTest {
     @Test
     fun `underscores survive, and only illegal characters are replaced`() {
-        assertEquals("__destroy_aux", "__destroy_aux".asIdentifier())
-        assertEquals("dtor_vector", "~vector".asIdentifier())
-        assertEquals("operator_", "operator=".asIdentifier())
-        assertEquals("vector__Tp__Alloc__M_insert_aux", "vector<_Tp, _Alloc>::_M_insert_aux".asIdentifier())
+        "__destroy_aux".asIdentifier() mustBe "__destroy_aux"
+        "~vector".asIdentifier() mustBe "dtor_vector"
+        "operator=".asIdentifier() mustBe "operator_"
+        "vector<_Tp, _Alloc>::_M_insert_aux".asIdentifier() mustBe "vector__Tp__Alloc__M_insert_aux"
     }
 
     /** The filename half keeps collapsing runs — `stl_vector.h` is one `_` at the dot, not two. */
     @Test
     fun `the file stem still collapses`() {
-        assertEquals("stl_vector_h", "stl_vector.h".sanitizeIdentifier())
+        "stl_vector.h".sanitizeIdentifier() mustBe "stl_vector_h"
     }
 }

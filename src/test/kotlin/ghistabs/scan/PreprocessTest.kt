@@ -1,7 +1,9 @@
 package ghistabs.scan
 
 import ghistabs.diagnose.CapturingSink
-import org.junit.jupiter.api.Assertions.*
+import ghistabs.test.must
+import ghistabs.test.mustBe
+import ghistabs.test.mustBeNull
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.io.File
@@ -49,8 +51,8 @@ class PreprocessTest {
         // L9 is `inline int locked()`, inside the `#ifdef _REENTRANT` nothing defined — and it is
         // the ninth line of the header, not of the preprocessor's own output, which has neither the
         // three-line comment nor `n * WIDTH`.
-        assertEquals(setOf(9), dropped?.get(hdr))
-        assertEquals("inline int locked() { return 1; }", hdr.readLines()[8])
+        dropped?.get(hdr) mustBe setOf(9)
+        hdr.readLines()[8] mustBe "inline int locked() { return 1; }"
     }
 
     @Test
@@ -60,8 +62,8 @@ class PreprocessTest {
         val dropped = Preprocessed.of(unit, listOf(root.resolve("inc").toFile()), CapturingSink())
 
         val indexes = SourceIndexes { dropped?.get(it).orEmpty() }
-        assertEquals("unlocked", indexes[hdr].enclosing(11)?.name)
-        assertNull(indexes[hdr].enclosing(9), "the arm that did not compile defines nothing")
+        indexes[hdr].enclosing(11)?.name mustBe "unlocked"
+        indexes[hdr].enclosing(9).mustBeNull("the arm that did not compile defines nothing")
     }
 
     /** What the render asks for: every mapped unit, one answer per header, no unit trusted alone. */
@@ -83,7 +85,7 @@ class PreprocessTest {
         // L9 is the arm `plain.cpp` dropped, L11 the one `reentrant.cpp` dropped. Neither survives:
         // a header compiled both ways has no arm the scan can believe, and leaving both is the
         // unbalanced brace this is here to prevent.
-        assertEquals(setOf(9, 11), dropped(hdr))
+        dropped(hdr) mustBe setOf(9, 11)
     }
 
     /** A source tarball has no generated `bits/c++config.h`; that must degrade, not throw. */
@@ -92,10 +94,9 @@ class PreprocessTest {
         val unit = write("main.cpp", """#include "absent.h"${'\n'}int main() { return 0; }""")
         val sink = CapturingSink()
 
-        assertNull(Preprocessed.of(unit, listOf(File(root.toFile(), "inc")), sink))
-        assertTrue(
-            sink.lines.any { it.tag == "source-preprocess-incomplete" },
-            "the fallback to raw reading must be said once: ${sink.capturedOutput()}",
-        )
+        Preprocessed.of(unit, listOf(File(root.toFile(), "inc")), sink) mustBe null
+        sink.lines.must("the fallback to raw reading must be said once: ${sink.capturedOutput()}") {
+            any { it.tag == "source-preprocess-incomplete" }
+        }
     }
 }

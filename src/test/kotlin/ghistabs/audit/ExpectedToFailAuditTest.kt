@@ -2,8 +2,8 @@ package ghistabs.audit
 
 import ghistabs.integration.Fixtures
 import ghistabs.integration.StabsImportRegressionBase
-import ghistabs.testing.ExpectedToFail
-import org.junit.jupiter.api.Assertions
+import ghistabs.test.ExpectedToFail
+import ghistabs.test.mustBeEmpty
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
@@ -20,7 +20,7 @@ import java.io.File
  *
  * Corpus-level, like [DemanglerWhitelistAuditTest], and for the same reason: an entry is dead only if
  * *no* fixture×mode invocation failed on it, which is not knowable until the whole run is in. Reads the
- * per-fork dumps [ghistabs.testing.ExpectedToFailExtension] writes into `test-output/results/` and is run by the
+ * per-fork dumps [ghistabs.test.ExpectedToFailExtension] writes into `test-output/results/` and is run by the
  * `:auditWhitelist` task that `integrationTest` is finalizedBy.
  */
 @Tag("audit")
@@ -49,10 +49,6 @@ class ExpectedToFailAuditTest {
         val dead = declared.flatMap { (method, fixtures) ->
             (fixtures - failing[method].orEmpty()).map { "$method: '$it' never failed — drop it" }
         }
-        Assertions.assertEquals(
-            emptyList<String>(),
-            dead.sorted(),
-            "${dead.size} dead @ExpectedToFail entries: ${dead.joinToString("\n")}",
-        )
+        dead.sorted().mustBeEmpty("${dead.size} dead @ExpectedToFail entries: ${dead.joinToString("\n")}")
     }
 }

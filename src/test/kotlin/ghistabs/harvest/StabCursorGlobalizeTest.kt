@@ -1,10 +1,10 @@
 package ghistabs.harvest
 
-import ghistabs.dummyCursor
 import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Struct.Field
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertTrue
+import ghistabs.test.dummyCursor
+import ghistabs.test.mustBe
+import ghistabs.test.mustBeA
 import org.junit.jupiter.api.Test
 
 /**
@@ -30,17 +30,17 @@ class StabCursorGlobalizeTest {
         // TypeDecl.Complex: terminal
         val complex = TypeDecl.Complex<LocalTypeId>(rCode = 3, sizeBytes = 128)
         val globalizedComplex = complex.globalize(cursor)
-        assertEquals(complex, globalizedComplex)
+        globalizedComplex mustBe complex
 
         // TypeDecl.Enum: terminal
         val enumType = TypeDecl.Enum<LocalTypeId>(members = listOf("A" to 0L, "B" to 1L))
         val globalizedEnum = enumType.globalize(cursor)
-        assertEquals(enumType, globalizedEnum)
+        globalizedEnum mustBe enumType
 
         // TypeDecl.XRef: terminal
         val xref = TypeDecl.XRef<LocalTypeId>(kind = AggrKind.STRUCT, tagName = "Foo")
         val globalizedXref = xref.globalize(cursor)
-        assertEquals(xref, globalizedXref)
+        globalizedXref mustBe xref
     }
 
     /**
@@ -73,7 +73,7 @@ class StabCursorGlobalizeTest {
         val expected = TypeDecl.Pointer(
             inner = TypeDecl.Ref(GlobalTypeId(SourceFile.CUSource(cuName), 5)),
         )
-        assertEquals(expected, result)
+        result mustBe expected
     }
 
     /**
@@ -109,7 +109,7 @@ class StabCursorGlobalizeTest {
             length = 10L,
             indexType = TypeDecl.Ref(GlobalTypeId(SourceFile.CUSource(cuName), 4)),
         )
-        assertEquals(expected, result)
+        result mustBe expected
     }
 
     /**
@@ -190,7 +190,7 @@ class StabCursorGlobalizeTest {
             methods = emptyList(),
             vptrBasetype = null,
         )
-        assertEquals(expected, result)
+        result mustBe expected
     }
 
     /**
@@ -243,10 +243,10 @@ class StabCursorGlobalizeTest {
         store.hoistSymbolDefs(input, cu)
         val (asts, _) = store.toHarvest()
 
-        assertEquals(1, asts.size, "walkDefinitions should return exactly one TypeAst from InlineDef")
+        asts.size.mustBe(1, "walkDefinitions should return exactly one TypeAst from InlineDef")
         val ast = asts.values.first()
-        assertEquals(GlobalTypeId(SourceFile.CUSource(cuName), 7), ast.id)
-        assertEquals(cuName, ast.cu.filename)
+        ast.id mustBe GlobalTypeId(SourceFile.CUSource(cuName), 7)
+        ast.cu.filename mustBe cuName
     }
 
     /**
@@ -275,7 +275,7 @@ class StabCursorGlobalizeTest {
         val result = input.globalize(cursor)
 
         val expected = TypeDecl.Ref(GlobalTypeId(SourceFile.CUSource(cuName), 5))
-        assertEquals(expected, result)
+        result mustBe expected
     }
 
     /**
@@ -320,7 +320,7 @@ class StabCursorGlobalizeTest {
         // The result should have a GlobalTypeId with a HeaderSource
         val resultRef = result as TypeDecl.Ref<GlobalTypeId>
         val resultId = resultRef.id
-        assertTrue(resultId.source is SourceFile.HeaderSource, "Expected HeaderSource, got ${resultId.source}")
-        assertEquals(3, resultId.n)
+        resultId.source.mustBeA<SourceFile.HeaderSource>("Expected HeaderSource, got ${resultId.source}")
+        resultId.n mustBe 3
     }
 }

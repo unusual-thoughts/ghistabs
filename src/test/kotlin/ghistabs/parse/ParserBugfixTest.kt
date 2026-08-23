@@ -1,7 +1,7 @@
 package ghistabs.parse
 
 import ghistabs.parse.TypeDecl.Struct.Field
-import org.junit.jupiter.api.Assertions.*
+import ghistabs.test.*
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
@@ -25,20 +25,18 @@ class ParserBugfixTest {
         requireNotNull(resourceUrl) { "corpus/issue2-strings.txt not found in classpath" }
 
         val corpusFile = File(resourceUrl.toURI())
-        assertTrue(corpusFile.exists(), "corpus file must exist")
+        corpusFile.must("corpus file must exist") { exists() }
 
         val lines = corpusFile
             .readLines()
             .filter { it.isNotEmpty() }
             .filterNot { it.startsWith("#") } // Skip comment lines
-        assertTrue(lines.isNotEmpty(), "corpus must have at least one line")
+        lines.mustNotBeEmpty("corpus must have at least one line")
 
         // Each line must parse successfully
         for ((lineNum, line) in lines.withIndex()) {
-            val symbol = assertDoesNotThrow({
-                Parser(line).parseSymbol().expectOk()
-            }, "Line ${lineNum + 1} should parse: $line")
-            assertNotNull(symbol, "Parse result must not be null")
+            val symbol = Parser(line).parseSymbol().mustBeOk("Line ${lineNum + 1} ($line)")
+            symbol.mustNotBeNull("Parse result must not be null")
         }
     }
 
@@ -50,14 +48,14 @@ class ParserBugfixTest {
     fun testParseErrorReporting() {
         val input = "garbage:T(0,1)=@@@?"
 
-        val exception = Parser(input).parseSymbol().expectError()
+        val exception = Parser(input).parseSymbol().mustBeError()
 
         // Cursor should be beyond the start of the input (pos > 0)
-        assertTrue(exception.pos > 0, "Exception pos must be > 0, got ${exception.pos}")
+        exception.must("Exception pos must be > 0, got ${exception.pos}") { pos > 0 }
 
         // Excerpt should contain a caret marker
         val excerpt = exception.excerpt()
-        assertTrue(excerpt.contains("^"), "Excerpt must contain caret marker: $excerpt")
+        excerpt.must("Excerpt must contain caret marker: $excerpt") { contains("^") }
     }
 
     /**
@@ -67,11 +65,10 @@ class ParserBugfixTest {
      */
     @Test
     fun testUnknownSymbolDescriptorRejected() {
-        val exception = Parser("weird:a(0,1)").parseSymbol().expectError()
-        assertTrue(
-            exception.message!!.contains("unhandled symbol descriptor 'a'"),
-            "message should name the descriptor: ${exception.message}",
-        )
+        val exception = Parser("weird:a(0,1)").parseSymbol().mustBeError()
+        exception.message!!.must("message should name the descriptor: ${exception.message}") {
+            contains("unhandled symbol descriptor 'a'")
+        }
     }
 
     /**
@@ -86,26 +83,25 @@ class ParserBugfixTest {
         val input = "ptr:t(0,30)=*(0,30)"
 
         val duration = measureTime {
-            val symbol = Parser(input).parseSymbol().expectOk()
+            val symbol = Parser(input).parseSymbol().mustBeOk()
 
-            assertNotNull(symbol, "Parse result should not be null")
+            symbol.mustNotBeNull("Parse result should not be null")
             if (symbol is SymbolDecl.NamedType) {
                 val ptr = symbol.type
                 if (ptr is TypeDecl.Pointer) {
                     // The pointer should reference (0,30), which is the type being defined
                     if (ptr.inner is TypeDecl.Ref) {
                         val ref = ptr.inner
-                        assertEquals(LocalTypeId(0, 30), ref.id, "Ref should be to (0,30) (the type itself)")
+                        ref.id.mustBe(LocalTypeId(0, 30), "Ref should be to (0,30) (the type itself)")
                     }
                 }
             }
         }
 
         // Should complete in less than 1 second
-        assertTrue(
-            duration.inWholeMilliseconds < 1000,
+        duration.must(
             "Parse should complete in <1s, took ${duration.inWholeMilliseconds}ms",
-        )
+        ) { inWholeMilliseconds < 1000 }
     }
 
     /**
@@ -118,43 +114,39 @@ class ParserBugfixTest {
         val input = "Node:T(0,1)=s8next:(0,2)=*(0,1),0,32;val:(0,3)=(0,1),32,32;;"
 
         val duration = measureTime {
-            val symbol = Parser(input).parseSymbol().expectOk()
+            val symbol = Parser(input).parseSymbol().mustBeOk()
 
-            assertNotNull(symbol, "Parse result should not be null")
+            symbol.mustNotBeNull("Parse result should not be null")
             if (symbol is SymbolDecl.NamedType) {
                 val struct = symbol.type
                 if (struct is TypeDecl.Struct) {
                     // Should have 2 fields
-                    assertEquals(2, struct.fields.size, "Struct should have 2 fields")
+                    struct.fields.size.mustBe(2, "Struct should have 2 fields")
 
                     // First field 'next' should have type InlineDef wrapping Pointer(Ref(TypeId(0,1)))
                     val nextField = struct.fields[0]
-                    assertEquals("next", nextField.name, "First field should be named 'next'")
+                    nextField.name.mustBe("next", "First field should be named 'next'")
                     if (nextField.type is TypeDecl.InlineDef) {
                         val inlineDef = nextField.type
-                        assertEquals(LocalTypeId(0, 2), inlineDef.id, "Inline def id should be (0,2)")
+                        inlineDef.id.mustBe(LocalTypeId(0, 2), "Inline def id should be (0,2)")
                         if (inlineDef.inner is TypeDecl.Pointer) {
                             val ptr = inlineDef.inner
                             if (ptr.inner is TypeDecl.Ref) {
                                 val ref = ptr.inner
-                                assertEquals(
-                                    LocalTypeId(0, 1),
-                                    ref.id,
-                                    "Pointer should reference (0,1) (self-reference)",
-                                )
+                                ref.id.mustBe(LocalTypeId(0, 1), "Pointer should reference (0,1) (self-reference)")
                             }
                         }
                     }
 
                     // Second field 'val' should have type InlineDef(0,3) wrapping Ref(0,1)
                     val valField = struct.fields[1]
-                    assertEquals("val", valField.name, "Second field should be named 'val'")
+                    valField.name.mustBe("val", "Second field should be named 'val'")
                     if (valField.type is TypeDecl.InlineDef) {
                         val inlineDef = valField.type
-                        assertEquals(LocalTypeId(0, 3), inlineDef.id, "Inline def id should be (0,3)")
+                        inlineDef.id.mustBe(LocalTypeId(0, 3), "Inline def id should be (0,3)")
                         if (inlineDef.inner is TypeDecl.Ref) {
                             val ref = inlineDef.inner
-                            assertEquals(LocalTypeId(0, 1), ref.id, "Body should be Ref to (0,1)")
+                            ref.id.mustBe(LocalTypeId(0, 1), "Body should be Ref to (0,1)")
                         }
                     }
                 }
@@ -162,10 +154,9 @@ class ParserBugfixTest {
         }
 
         // Should complete in less than 1 second
-        assertTrue(
-            duration.inWholeMilliseconds < 1000,
-            "Parse should complete in <1s, took ${duration.inWholeMilliseconds}ms",
-        )
+        duration.must("Parse should complete in <1s, took ${duration.inWholeMilliseconds}ms") {
+            inWholeMilliseconds < 1000
+        }
     }
 
     /**
@@ -184,12 +175,10 @@ class ParserBugfixTest {
             .filter { it.isNotEmpty() && !it.startsWith("#") }
             .filterNot { it.matches(Regex("^[A-Za-z]:/.*")) } // Windows drive-letter N_SO paths
             .filterNot { it.endsWith("/") } // Unix directory N_SO paths
-        assertTrue(lines.isNotEmpty(), "${corpus.name} has no descriptor lines")
+        lines.mustNotBeEmpty("${corpus.name} has no descriptor lines")
 
         for ((lineNum, line) in lines.withIndex()) {
-            assertDoesNotThrow({
-                Parser(line).parseSymbol().expectOk()
-            }, "${corpus.name}:${lineNum + 1} should parse: ${line.take(100)}")
+            Parser(line).parseSymbol().mustBeOk("${corpus.name}:${lineNum + 1} (${line.take(100)})")
         }
     }
 
@@ -207,7 +196,7 @@ class ParserBugfixTest {
             id = LocalTypeId(0, 50),
             type = TypeDecl.XRef(kind = AggrKind.STRUCT, tagName = "MyStruct"),
         )
-        assertEquals(expected, Parser(input).parseSymbol().expectOk())
+        Parser(input).parseSymbol() mustBe ParseResult.Ok(expected)
     }
 
     /**
@@ -224,7 +213,7 @@ class ParserBugfixTest {
             id = LocalTypeId(0, 51),
             type = TypeDecl.XRef(kind = AggrKind.UNION, tagName = "MyUnion"),
         )
-        assertEquals(expected, Parser(input).parseSymbol().expectOk())
+        Parser(input).parseSymbol() mustBe ParseResult.Ok(expected)
     }
 
     /**
@@ -241,7 +230,7 @@ class ParserBugfixTest {
             id = LocalTypeId(0, 52),
             type = TypeDecl.XRef(kind = AggrKind.ENUM, tagName = "MyEnum"),
         )
-        assertEquals(expected, Parser(input).parseSymbol().expectOk())
+        Parser(input).parseSymbol() mustBe ParseResult.Ok(expected)
     }
 
     /**
@@ -316,7 +305,7 @@ class ParserBugfixTest {
                 ),
             ),
         )
-        assertEquals(expected, Parser(input).parseSymbol().expectOk())
+        Parser(input).parseSymbol() mustBe ParseResult.Ok(expected)
     }
 
     /**
@@ -327,11 +316,9 @@ class ParserBugfixTest {
     @Test
     fun testNestedFunctionScopeSpecifierConsumed() {
         val parser = Parser("Push:f(0,1),Push,main")
-        assertEquals(
-            SymbolDecl.Function("Push", FunctionScope.FILE, type = TypeDecl.Ref(LocalTypeId(0, 1))),
-            parser.parseSymbol().expectOk(),
-        )
-        assertEquals("", parser.remaining, "scope specifier must be fully consumed")
+        parser.parseSymbol() mustBe
+            ParseResult.Ok(SymbolDecl.Function("Push", FunctionScope.FILE, type = TypeDecl.Ref(LocalTypeId(0, 1))))
+        parser.remaining.mustBeEmpty("scope specifier must be fully consumed")
     }
 
     private companion object {

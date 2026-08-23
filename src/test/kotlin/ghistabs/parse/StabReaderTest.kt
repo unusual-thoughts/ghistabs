@@ -1,6 +1,6 @@
 package ghistabs.parse
 
-import org.junit.jupiter.api.Assertions
+import ghistabs.test.mustBe
 import org.junit.jupiter.api.Test
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -65,19 +65,19 @@ class StabReaderTest {
         val result = reader.readAll()
 
         // Expect 5 records (1 N_UNDF + 4 N_LSYM, no continuation merging)
-        Assertions.assertEquals(5, result.records.size, "records size")
-        Assertions.assertEquals(5, result.totalRecordCount, "physical record count")
-        Assertions.assertEquals(0, result.truncatedTail, "no truncated tail")
+        result.records.size.mustBe(5, "records size")
+        result.totalRecordCount.mustBe(5, "physical record count")
+        result.truncatedTail.mustBe(0, "no truncated tail")
 
         // N_UNDF surfaces its resolved filename, not an empty name.
-        Assertions.assertEquals(StabType.N_UNDF, result.records[0].type)
-        Assertions.assertEquals("var1", result.records[0].name)
+        result.records[0].type mustBe StabType.N_UNDF
+        result.records[0].name mustBe "var1"
 
         // Check N_LSYM records
-        Assertions.assertEquals("var1", result.records[1].name)
-        Assertions.assertEquals("var2", result.records[2].name)
-        Assertions.assertEquals("var3", result.records[3].name)
-        Assertions.assertEquals("var4", result.records[4].name)
+        result.records[1].name mustBe "var1"
+        result.records[2].name mustBe "var2"
+        result.records[3].name mustBe "var3"
+        result.records[4].name mustBe "var4"
     }
 
     /**
@@ -106,15 +106,15 @@ class StabReaderTest {
         val result = reader.readAll()
 
         // Expect 2 records (1 N_UNDF + 1 merged N_FUN)
-        Assertions.assertEquals(2, result.records.size, "records size")
-        Assertions.assertEquals(4, result.totalRecordCount, "physical record count (1 UNDF + 3 FUN)")
-        Assertions.assertEquals(0, result.truncatedTail)
+        result.records.size.mustBe(2, "records size")
+        result.totalRecordCount.mustBe(4, "physical record count (1 UNDF + 3 FUN)")
+        (result.truncatedTail mustBe 0)
 
         // Check merged N_FUN: "foo\\" -> "foo" + "middle\\" -> "middle" + "tail" -> "tail"
         val merged = result.records[1]
-        Assertions.assertEquals(StabType.N_FUN, merged.type)
-        Assertions.assertEquals("foomiddletail", merged.name)
-        Assertions.assertEquals(1, merged.index, "first physical record index after UNDF")
+        merged.type mustBe StabType.N_FUN
+        merged.name mustBe "foomiddletail"
+        merged.index.mustBe(1, "first physical record index after UNDF")
     }
 
     /**
@@ -148,16 +148,16 @@ class StabReaderTest {
         val result = reader.readAll()
 
         // Expect 4 records: 2 N_UNDF headers + 2 N_LSYM
-        Assertions.assertEquals(4, result.records.size)
-        Assertions.assertEquals(4, result.totalRecordCount)
+        result.records.size mustBe 4
+        result.totalRecordCount mustBe 4
 
         // Check CU1 LSYM: stabstr[0+6=6..] = "xyz"
         val cu1Record = result.records[1]
-        Assertions.assertEquals("xyz", cu1Record.name, "CU1 LSYM should read from CU1's stabstr")
+        cu1Record.name.mustBe("xyz", "CU1 LSYM should read from CU1's stabstr")
 
         // Check CU2 LSYM: stabstr[10+0=10..] = "banana"
         val cu2Record = result.records[3]
-        Assertions.assertEquals("banana", cu2Record.name, "CU2 LSYM should read from CU2's stabstr")
+        cu2Record.name.mustBe("banana", "CU2 LSYM should read from CU2's stabstr")
     }
 
     /**
@@ -174,11 +174,11 @@ class StabReaderTest {
         val reader = StabReader(stab, stabstr)
         val result = reader.readAll()
 
-        Assertions.assertEquals(2, result.records.size)
+        result.records.size mustBe 2
         val unknownRecord = result.records[1]
-        Assertions.assertEquals(StabType.UNKNOWN, unknownRecord.type)
-        Assertions.assertEquals(0xAB.toUByte(), unknownRecord.rawType)
-        Assertions.assertEquals("test", unknownRecord.name)
+        unknownRecord.type mustBe StabType.UNKNOWN
+        unknownRecord.rawType mustBe 0xAB.toUByte()
+        unknownRecord.name mustBe "test"
     }
 
     /**
@@ -199,9 +199,9 @@ class StabReaderTest {
         val result = reader.readAll()
 
         // Should have read the 2 complete records, ignore the 5-byte tail
-        Assertions.assertEquals(2, result.records.size)
-        Assertions.assertEquals(2, result.totalRecordCount)
-        Assertions.assertEquals(5, result.truncatedTail)
+        result.records.size mustBe 2
+        result.totalRecordCount mustBe 2
+        result.truncatedTail mustBe 5
     }
 
     /**
@@ -223,15 +223,13 @@ class StabReaderTest {
         val physical = StabReader(stab, stabstr).physicalRecords().toList()
 
         // No continuation merging: all 4 physical records surface in file order.
-        Assertions.assertEquals(4, physical.size)
-        Assertions.assertEquals(listOf(0, 1, 2, 3), physical.map { it.index })
-        Assertions.assertEquals(
-            listOf(StabType.N_UNDF, StabType.N_FUN, StabType.N_FUN, StabType.N_FUN),
-            physical.map { it.type },
-        )
+        physical.size mustBe 4
+        physical.map { it.index } mustBe listOf(0, 1, 2, 3)
+        physical.map { it.type } mustBe listOf(StabType.N_UNDF, StabType.N_FUN, StabType.N_FUN, StabType.N_FUN)
+
         // Each record keeps its own (unmerged) string, trailing `\` included.
-        Assertions.assertEquals(listOf("", "foo\\", "middle\\", "tail"), physical.map { it.name })
-        Assertions.assertEquals(1000L, physical[1].value)
+        physical.map { it.name } mustBe listOf("", "foo\\", "middle\\", "tail")
+        physical[1].value mustBe 1000L
     }
 
     /**
@@ -252,10 +250,10 @@ class StabReaderTest {
 
         val physical = StabReader(stab, stabstr).physicalRecords().toList()
 
-        Assertions.assertEquals(6, physical[1].stabstrOffset)
-        Assertions.assertEquals("xyz", physical[1].name)
-        Assertions.assertEquals(10, physical[3].stabstrOffset)
-        Assertions.assertEquals("banana", physical[3].name)
+        physical[1].stabstrOffset mustBe 6
+        physical[1].name mustBe "xyz"
+        physical[3].stabstrOffset mustBe 10
+        physical[3].name mustBe "banana"
     }
 
     /**
@@ -269,8 +267,8 @@ class StabReaderTest {
         val reader = StabReader(stab, stabstr)
         val result = reader.readAll()
 
-        Assertions.assertEquals(0, result.records.size)
-        Assertions.assertEquals(0, result.totalRecordCount)
-        Assertions.assertEquals(0, result.truncatedTail)
+        result.records.size mustBe 0
+        result.totalRecordCount mustBe 0
+        result.truncatedTail mustBe 0
     }
 }

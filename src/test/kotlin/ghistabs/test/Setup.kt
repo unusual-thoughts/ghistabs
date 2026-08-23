@@ -1,4 +1,4 @@
-package ghistabs
+package ghistabs.test
 
 import ghidra.framework.options.OptionType
 import ghidra.program.model.address.Address
@@ -6,16 +6,18 @@ import ghidra.program.model.address.AddressSpace
 import ghidra.program.model.address.GenericAddressSpace
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
+import ghistabs.ImportOptions
 import ghistabs.diagnose.*
 import ghistabs.harvest.*
 import ghistabs.importer.AddressResolver
 import ghistabs.importer.ImportContext
 import ghistabs.materialize.DataTypeRegistry
+import ghistabs.runTransaction
 
 /**
  * Program-less [AddressResolver] for harvest unit tests: builds addresses in a standalone generic space
  * and resolves no names (name→address lookup needs a Program's symbol table). Harvest only ever calls
- * [buildAddress] / [ghistabs.importer.AddressResolver.stabAddress], never [resolve].
+ * [buildAddress] / [stabAddress], never [resolve].
  */
 object GenericAddressResolver : AddressResolver {
     // Size is in *bits* — 8 caps the space at 0xff, so any realistic stab value throws

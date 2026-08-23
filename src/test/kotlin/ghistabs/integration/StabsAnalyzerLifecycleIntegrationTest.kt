@@ -5,9 +5,9 @@ import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghistabs.ImportOptions.Companion.isStabsDone
 import ghistabs.ImportOptions.Companion.markStabsDone
 import ghistabs.StabsAnalyzer
+import ghistabs.test.must
+import ghistabs.test.mustNot
 import org.junit.jupiter.api.AfterEach
-import org.junit.jupiter.api.Assertions.assertFalse
-import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
@@ -39,14 +39,14 @@ class StabsAnalyzerLifecycleIntegrationTest : AbstractGhidraHeadlessIntegrationT
         val program = builder.program
         val analyzer = StabsAnalyzer()
 
-        assertFalse(program.isStabsDone, "a freshly built program has not been imported")
-        assertTrue(analyzer.canAnalyze(program), "a program with .stab/.stabstr must be analyzable")
+        program.mustNot("a freshly built program has not been imported") { isStabsDone }
+        analyzer.must("a program with .stab/.stabstr must be analyzable") { canAnalyze(program) }
 
         program.markStabsDone(true)
-        assertFalse(analyzer.canAnalyze(program), "the done-flag must keep auto-analysis from re-importing")
+        analyzer.mustNot("the done-flag must keep auto-analysis from re-importing") { canAnalyze(program) }
 
         program.markStabsDone(false)
-        assertTrue(analyzer.canAnalyze(program), "clearing the flag must re-enable the analyzer")
+        analyzer.must("clearing the flag must re-enable the analyzer") { canAnalyze(program) }
     }
 
     /** No stab sections, no analyzer — whatever the flag says. */
@@ -55,7 +55,7 @@ class StabsAnalyzerLifecycleIntegrationTest : AbstractGhidraHeadlessIntegrationT
         val bare = ProgramBuilder("bare", ProgramBuilder._X86)
         try {
             bare.createMemory(".text", "0x400000", 512)
-            assertFalse(StabsAnalyzer().canAnalyze(bare.program))
+            StabsAnalyzer().mustNot { canAnalyze(bare.program) }
         } finally {
             bare.dispose()
         }

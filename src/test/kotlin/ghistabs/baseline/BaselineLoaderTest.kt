@@ -1,7 +1,9 @@
 package ghistabs.baseline
 
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertTrue
+import ghistabs.test.must
+import ghistabs.test.mustBe
+import ghistabs.test.mustNotBeEmpty
+import ghistabs.test.mustNotBeNull
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.io.File
@@ -24,28 +26,25 @@ class BaselineLoaderTest {
 
         val baseline = BaselineLoader.load(baselineFile)
 
-        assertEquals(2, baseline.counters.size)
-        assertEquals(CounterRange(0, 35), baseline.counters["local-var-error"])
-        assertEquals(CounterRange(50, 200), baseline.counters["local-var-skipped-dup-param"])
+        baseline.counters.size mustBe 2
+        baseline.counters["local-var-error"] mustBe CounterRange(0, 35)
+        baseline.counters["local-var-skipped-dup-param"] mustBe CounterRange(50, 200)
     }
 
     /** Every committed baseline, so a hand-edit that inverts a range fails here and not mid-import. */
     @Test
     fun load_parsesEveryCommittedBaseline() {
         val baselines = File("src/test/resources/baselines").listFiles { f: File -> f.extension == "json" }.orEmpty()
-        assertTrue(baselines.isNotEmpty(), "no committed baselines to load")
+        baselines.mustNotBeEmpty("no committed baselines to load")
 
         baselines.forEach { file ->
             val baseline = BaselineLoader.load(file)
-            assertTrue(baseline.counters.isNotEmpty(), "${file.name} parsed to no counters")
+            baseline.counters.mustNotBeEmpty("${file.name} parsed to no counters")
             // Mostly BaselineWriter point snapshots (min == max), but a counter with known runtime
             // nondeterminism may be hand-widened (xref-base-tag-resolved is [41..49] for CONCURRENT
             // demangler-order jitter). So assert well-formed ranges, not point ranges.
             baseline.counters.forEach { (name, range) ->
-                assertTrue(
-                    range.min <= range.max,
-                    "${file.name}: $name has an inverted range ${range.min}..${range.max}",
-                )
+                range.must("${file.name}: $name has an inverted range ${range.min}..${range.max}") { min <= max }
             }
         }
     }
@@ -60,7 +59,6 @@ class BaselineLoaderTest {
         } catch (e: IllegalArgumentException) {
             e
         }
-
-        assertTrue(exception != null, "Should throw IllegalArgumentException for missing file")
+        exception.mustNotBeNull("Should throw IllegalArgumentException for missing file")
     }
 }

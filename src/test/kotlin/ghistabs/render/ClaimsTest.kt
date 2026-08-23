@@ -1,6 +1,6 @@
 package ghistabs.render
 
-import org.junit.jupiter.api.Assertions.assertEquals
+import ghistabs.test.mustBe
 import org.junit.jupiter.api.Test
 
 /**
@@ -18,9 +18,9 @@ class ClaimsTest {
         val a = claim(Owner.TYPEDEF, 10)
         val b = claim(Owner.TYPEDEF, 12)
         val out = allocate(listOf(a, b), range = 1..40)
-        assertEquals(10..10, out.at(10).range)
-        assertEquals(12..12, out.at(12).range)
-        assertEquals(emptyList<Dropped>(), out.dropped)
+        out.at(10).range mustBe 10..10
+        out.at(12).range mustBe 12..12
+        out.dropped mustBe emptyList<Dropped>()
     }
 
     @Test
@@ -30,8 +30,8 @@ class ClaimsTest {
             listOf(claim(Owner.GLOBAL, 10, fit = Fit.ELASTIC), claim(Owner.TYPEDEF, 15)),
             range = 1..40,
         )
-        assertEquals(10..14, out.at(10).range)
-        assertEquals(15..15, out.at(15).range)
+        out.at(10).range mustBe 10..14
+        out.at(15).range mustBe 15..15
     }
 
     @Test
@@ -42,8 +42,8 @@ class ClaimsTest {
             listOf(claim(Owner.FUNCTION_BODY, 10, fit = Fit.ELASTIC), claim(Owner.TYPEDEF, 13)),
             range = 1..40,
         )
-        assertEquals(13..13, out.at(13).range)
-        assertEquals(10..12, out.at(10).range)
+        out.at(13).range mustBe 13..13
+        out.at(10).range mustBe 10..12
     }
 
     @Test
@@ -53,9 +53,9 @@ class ClaimsTest {
         val body = claim(Owner.FUNCTION_BODY, 10)
         val typedef = claim(Owner.TYPEDEF, 10)
         val out = allocate(listOf(typedef, body), range = 1..40)
-        assertEquals(10..10, out.at(10).range)
-        assertEquals(Owner.FUNCTION_BODY, out.at(10).claim.owner)
-        assertEquals(listOf(typedef), out.dropped.map { it.claim })
+        out.at(10).range mustBe 10..10
+        out.at(10).claim.owner mustBe Owner.FUNCTION_BODY
+        out.dropped.map { it.claim } mustBe listOf(typedef)
     }
 
     @Test
@@ -63,9 +63,9 @@ class ClaimsTest {
         // A header line is compiled into every call site, so N identical claims arrive for one line.
         val copies = List(4) { claim(Owner.FUNCTION_BODY, 38) }
         val out = allocate(copies, range = 1..40)
-        assertEquals(1, out.placed.size)
-        assertEquals(4, out.at(38).copies)
-        assertEquals(emptyList<Dropped>(), out.dropped)
+        out.placed.size mustBe 1
+        out.at(38).copies mustBe 4
+        out.dropped mustBe emptyList<Dropped>()
     }
 
     @Test
@@ -75,10 +75,10 @@ class ClaimsTest {
         val a = Claim(Owner.TYPEDEF, 7, listOf(Row("typedef int A;")))
         val b = Claim(Owner.TYPEDEF, 7, listOf(Row("typedef long B;")))
         val out = allocate(listOf(a, b), range = 1..40)
-        assertEquals(emptyList<Dropped>(), out.dropped)
+        out.dropped mustBe emptyList<Dropped>()
         // Both placed, both on row 7, each keeping its own rows — the renderer joins them.
         val onSeven = out.placed.filter { it.range == 7..7 }
-        assertEquals(listOf("typedef int A;", "typedef long B;"), onSeven.flatMap { it.claim.rows }.map { it.text })
+        onSeven.flatMap { it.claim.rows }.map { it.text } mustBe listOf("typedef int A;", "typedef long B;")
     }
 
     @Test
@@ -86,14 +86,14 @@ class ClaimsTest {
         val a = Claim(Owner.INCLUDE, null, listOf(Row("#include \"a.h\"")))
         val b = Claim(Owner.INCLUDE, null, listOf(Row("#include \"b.h\"")))
         val out = allocate(listOf(a, b, claim(Owner.FUNCTION_BODY, 5)), range = 1..40)
-        assertEquals(listOf(1..1, 2..2), out.placed.filter { it.claim.owner == Owner.INCLUDE }.map { it.range })
-        assertEquals(5..5, out.at(5).range)
+        out.placed.filter { it.claim.owner == Owner.INCLUDE }.map { it.range } mustBe listOf(1..1, 2..2)
+        out.at(5).range mustBe 5..5
     }
 
     @Test
     fun `a floating claim with no band left is dropped, not crammed onto content`() {
         val out = allocate(listOf(claim(Owner.INCLUDE, null), claim(Owner.FUNCTION_BODY, 1)), range = 1..40)
-        assertEquals(listOf(Owner.INCLUDE), out.dropped.map { it.claim.owner })
+        out.dropped.map { it.claim.owner } mustBe listOf(Owner.INCLUDE)
     }
 
     @Test
@@ -107,23 +107,23 @@ class ClaimsTest {
             claim(Owner.INCLUDE, null),
         )
         val out = allocate(claims, range = 1..10)
-        assertEquals(claims.size, out.placed.sumOf { it.copies } + out.dropped.size)
+        out.placed.sumOf { it.copies } + out.dropped.size mustBe claims.size
         // GLOBAL's line 99 is past the canvas, and TYPE_BODY wanted row 3, which the higher-priority
         // FUNCTION_BODY reserved. Neither is clamped onto a neighbour; both are dropped with a reason.
-        assertEquals(listOf(Owner.GLOBAL, Owner.TYPE_BODY), out.dropped.map { it.claim.owner }.sorted())
+        out.dropped.map { it.claim.owner }.sorted() mustBe listOf(Owner.GLOBAL, Owner.TYPE_BODY)
     }
 
     @Test
     fun `fitRows spreads while there is room and crams the remainder onto the last slot`() {
         val rows = listOf(Row("struct S {"), Row("int a;"), Row("int b;"), Row("};"))
         // Room for all four.
-        assertEquals(listOf(10, 11, 12, 13), fitRows(rows, 10..13).map { it.first })
+        fitRows(rows, 10..13).map { it.first } mustBe listOf(10, 11, 12, 13)
         // Three slots: two spread, the rest joined onto the last — layoutBraceBlock's middle case.
         val tight = fitRows(rows, 10..12)
-        assertEquals(listOf(10, 11, 12), tight.map { it.first })
-        assertEquals("int b; };", tight.last().second.text)
+        tight.map { it.first } mustBe listOf(10, 11, 12)
+        tight.last().second.text mustBe "int b; };"
         // One slot: everything on it.
-        assertEquals("struct S { int a; int b; };", fitRows(rows, 10..10).single().second.text)
+        fitRows(rows, 10..10).single().second.text mustBe "struct S { int a; int b; };"
     }
 
     @Test
@@ -131,15 +131,15 @@ class ClaimsTest {
         val body = claim(Owner.FUNCTION_BODY, 10)
         val bogus = Claim(Owner.GLOBAL, 10, listOf(Row("int splayed;")), stale = true)
         val out = allocate(listOf(bogus, body), range = 1..40)
-        assertEquals(Owner.FUNCTION_BODY, out.at(10).claim.owner)
-        assertEquals(listOf(bogus), out.dropped.map { it.claim })
+        out.at(10).claim.owner mustBe Owner.FUNCTION_BODY
+        out.dropped.map { it.claim } mustBe listOf(bogus)
         // Between declarations there is no contest: a misattributed one shares the row, as it always
         // has. Exclusivity is body-versus-declaration, which is the contest that used to end in
         // demoting the loser to a `// stray:` comment.
         val real = claim(Owner.TYPEDEF, 20)
         val alsoBogus = Claim(Owner.GLOBAL, 20, listOf(Row("int splayed;")), stale = true)
         val shared = allocate(listOf(alsoBogus, real), range = 1..40)
-        assertEquals(emptyList<Dropped>(), shared.dropped)
+        shared.dropped mustBe emptyList<Dropped>()
     }
 
     @Test
@@ -148,8 +148,8 @@ class ClaimsTest {
         val a = Claim(Owner.FUNCTION_BODY, 10, listOf(Row("first")), anchoring = Anchoring.AFTER)
         val b = Claim(Owner.FUNCTION_BODY, 10, listOf(Row("second")), anchoring = Anchoring.AFTER)
         val out = allocate(listOf(a, b), range = 1..40)
-        assertEquals(listOf(10..10, 11..11), out.placed.map { it.range }.sortedBy { it.first })
-        assertEquals(emptyList<Dropped>(), out.dropped)
+        out.placed.map { it.range }.sortedBy { it.first } mustBe listOf(10..10, 11..11)
+        out.dropped mustBe emptyList<Dropped>()
     }
 
     @Test
@@ -158,8 +158,8 @@ class ClaimsTest {
         val stmt = Claim(Owner.FUNCTION_BODY, 20, listOf(Row("code")), anchoring = Anchoring.AFTER)
         val marker = Claim(Owner.FUNCTION_BODY, null, listOf(Row("/* inlines x.h */")), anchoring = Anchoring.AFTER)
         val out = allocate(listOf(stmt, marker), range = 1..40)
-        assertEquals(20..20, out.placed.first { it.claim === stmt }.range)
-        assertEquals(21..21, out.placed.first { it.claim === marker }.range)
+        out.placed.first { it.claim === stmt }.range mustBe 20..20
+        out.placed.first { it.claim === marker }.range mustBe 21..21
     }
 
     @Test
@@ -167,8 +167,8 @@ class ClaimsTest {
         val body = claim(Owner.FUNCTION_BODY, 10)
         val typedef = claim(Owner.TYPEDEF, 10)
         val out = allocate(listOf(typedef, body), range = 1..40)
-        assertEquals(Owner.FUNCTION_BODY, out.at(10).claim.owner)
-        assertEquals(listOf(typedef), out.dropped.map { it.claim })
+        out.at(10).claim.owner mustBe Owner.FUNCTION_BODY
+        out.dropped.map { it.claim } mustBe listOf(typedef)
     }
 
     @Test
@@ -178,8 +178,8 @@ class ClaimsTest {
             Claim(Owner.FUNCTION_BODY, 10, listOf(Row("stmt$it")), anchoring = Anchoring.AFTER, limit = 12)
         }
         val out = allocate(claims, range = 1..40)
-        assertEquals(emptyList<Dropped>(), out.dropped)
+        out.dropped mustBe emptyList<Dropped>()
         // Three rows for five claims: 10, 11, 12, then the rest pile onto 12.
-        assertEquals(listOf(10, 11, 12, 12, 12), out.placed.map { it.range.first }.sorted())
+        out.placed.map { it.range.first }.sorted() mustBe listOf(10, 11, 12, 12, 12)
     }
 }

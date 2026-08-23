@@ -1,12 +1,10 @@
 package ghistabs.materialize.itanium
 
 import ghistabs.harvest.Type
-import ghistabs.indexOf
 import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Struct.Base
 import ghistabs.parse.TypeDecl.Struct.Method
-import org.junit.jupiter.api.Assertions.assertFalse
-import org.junit.jupiter.api.Assertions.assertTrue
+import ghistabs.test.*
 import org.junit.jupiter.api.Test
 
 class VfptrDecisionTest {
@@ -18,7 +16,7 @@ class VfptrDecisionTest {
             componentAtTargetOffset = null,
             canonicalVfptrFieldName = "{vfptr}",
         )
-        assertTrue(action is VfptrAction.SkipInheritedFromBase)
+        action.mustBeA<VfptrAction.SkipInheritedFromBase>()
     }
 
     @Test
@@ -29,8 +27,8 @@ class VfptrDecisionTest {
             componentAtTargetOffset = null,
             canonicalVfptrFieldName = "{vfptr}",
         )
-        assertTrue(action is VfptrAction.Insert)
-        assertTrue((action as VfptrAction.Insert).offsetBytes == 0)
+        action.mustBeA<VfptrAction.Insert>()
+        (action as VfptrAction.Insert).offsetBytes mustBe 0
     }
 
     @Test
@@ -41,8 +39,8 @@ class VfptrDecisionTest {
             componentAtTargetOffset = null,
             canonicalVfptrFieldName = "{vfptr}",
         )
-        assertTrue(action is VfptrAction.Insert)
-        assertTrue((action as VfptrAction.Insert).offsetBytes == 4)
+        action.mustBeA<VfptrAction.Insert>()
+        (action as VfptrAction.Insert).offsetBytes mustBe 4
     }
 
     @Test
@@ -54,7 +52,7 @@ class VfptrDecisionTest {
             componentAtTargetOffset = snapshot,
             canonicalVfptrFieldName = "{vfptr}",
         )
-        assertTrue(action is VfptrAction.AlreadyCanonical)
+        action.mustBeA<VfptrAction.AlreadyCanonical>()
     }
 
     @Test
@@ -66,10 +64,10 @@ class VfptrDecisionTest {
             componentAtTargetOffset = snapshot,
             canonicalVfptrFieldName = "{vfptr}",
         )
-        assertTrue(action is VfptrAction.Replace)
+        action.mustBeA<VfptrAction.Replace>()
         val replace = action as VfptrAction.Replace
-        assertTrue(replace.offsetBytes == 0)
-        assertTrue(replace.wasFieldName == $$"_vptr$Foo")
+        replace.offsetBytes mustBe 0
+        replace.wasFieldName mustBe $$"_vptr$Foo"
     }
 
     @Test
@@ -81,10 +79,10 @@ class VfptrDecisionTest {
             componentAtTargetOffset = snapshot,
             canonicalVfptrFieldName = "{vfptr}",
         )
-        assertTrue(action is VfptrAction.CollisionAt)
+        action.mustBeA<VfptrAction.CollisionAt>()
         val collision = action as VfptrAction.CollisionAt
-        assertTrue(collision.offsetBytes == 0)
-        assertTrue(collision.occupantFieldName == "x")
+        collision.offsetBytes mustBe 0
+        collision.occupantFieldName mustBe "x"
     }
 
     @Test
@@ -100,7 +98,7 @@ class VfptrDecisionTest {
             componentAtTargetOffset = snapshot,
             canonicalVfptrFieldName = "{vfptr}",
         )
-        assertTrue(action is VfptrAction.SkipInheritedFromBase)
+        action.mustBeA<VfptrAction.SkipInheritedFromBase>()
     }
 
     @Test
@@ -112,7 +110,7 @@ class VfptrDecisionTest {
             componentAtTargetOffset = snapshot,
             canonicalVfptrFieldName = "{vfptr}",
         )
-        assertTrue(action is VfptrAction.SkipInheritedFromBase)
+        action.mustBeA<VfptrAction.SkipInheritedFromBase>()
     }
 
     @Test
@@ -124,7 +122,7 @@ class VfptrDecisionTest {
             componentAtTargetOffset = snapshot,
             canonicalVfptrFieldName = "{vfptr}",
         )
-        assertTrue(action is VfptrAction.Insert)
+        action.mustBeA<VfptrAction.Insert>()
     }
 }
 
@@ -171,7 +169,7 @@ class PolymorphicBaseTest {
             methods = emptyList(),
             vptrBasetype = null,
         )
-        assertTrue(indexOf().hasPolymorphicBaseSubobject(derived))
+        indexOf().must { hasPolymorphicBaseSubobject(derived) }
     }
 
     @Test
@@ -185,7 +183,7 @@ class PolymorphicBaseTest {
             methods = emptyList(),
             vptrBasetype = null,
         )
-        assertFalse(indexOf().hasPolymorphicBaseSubobject(derived))
+        indexOf().mustNot { hasPolymorphicBaseSubobject(derived) }
     }
 
     @Test
@@ -207,13 +205,13 @@ class PolymorphicBaseTest {
             methods = emptyList(),
             vptrBasetype = null,
         )
-        assertTrue(indexOf().hasPolymorphicBaseSubobject(derived))
+        indexOf().must { hasPolymorphicBaseSubobject(derived) }
     }
 
     @Test
     fun `noBases - empty bases list returns false`() {
         val derived = polyStruct(hasVtableMarker = false)
-        assertFalse(indexOf().hasPolymorphicBaseSubobject(derived))
+        indexOf().mustNot { hasPolymorphicBaseSubobject(derived) }
     }
 
     @Test
@@ -227,7 +225,7 @@ class PolymorphicBaseTest {
             methods = emptyList(),
             vptrBasetype = null,
         )
-        assertTrue(indexOf().hasPolymorphicBaseSubobject(derived))
+        indexOf().must { hasPolymorphicBaseSubobject(derived) }
     }
 
     @Test
@@ -246,6 +244,6 @@ class PolymorphicBaseTest {
             methods = emptyList(),
             vptrBasetype = null,
         )
-        assertTrue(indexOf(baseAst).hasPolymorphicBaseSubobject(derived))
+        indexOf(baseAst).must { hasPolymorphicBaseSubobject(derived) }
     }
 }

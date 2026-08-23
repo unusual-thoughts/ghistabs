@@ -2,8 +2,8 @@ package ghistabs.diagnose
 
 import ghistabs.parse.HeaderFile
 import ghistabs.parse.SourceFile
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertTrue
+import ghistabs.test.must
+import ghistabs.test.mustBe
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
@@ -15,7 +15,7 @@ class AttributionTraceDumpTest {
     @Test
     fun testFormatForTypeNoMatches() {
         val result = AttributionTraceDump.formatForType("Foo", emptyList())
-        assertEquals("Foo: no attribution trace recorded in this run", result)
+        result mustBe "Foo: no attribution trace recorded in this run"
     }
 
     @Test
@@ -30,9 +30,9 @@ class AttributionTraceDumpTest {
             ),
         )
         val result = AttributionTraceDump.formatForType("Bar", traces)
-        assertTrue(result.contains("Bar"))
-        assertTrue(result.contains(path))
-        assertTrue(result.contains("/std/string"))
+        result.must { contains("Bar") }
+        result.must { contains(path) }
+        result.must { contains("/std/string") }
     }
 
     @Test
@@ -53,9 +53,9 @@ class AttributionTraceDumpTest {
         )
         val result = AttributionTraceDump.formatForType("Baz", traces)
         val lines = result.split("\n")
-        assertEquals(2, lines.size)
-        assertTrue(lines[0].contains("Baz"))
-        assertTrue(lines[1].contains("Baz"))
+        lines.size mustBe 2
+        lines[0].must { contains("Baz") }
+        lines[1].must { contains("Baz") }
     }
 
     @Test
@@ -76,10 +76,10 @@ class AttributionTraceDumpTest {
             filename = "test-trace.txt",
         )
         val outFile = outDir.resolve("test-trace.txt")
-        assertTrue(Files.exists(outFile))
+        outFile.toFile().must { exists() }
         val content = Files.readString(outFile)
-        assertTrue(content.contains("Test"))
-        assertTrue(content.contains("/std/string"))
+        content.must { contains("Test") }
+        content.must { contains("/std/string") }
     }
 
     @Test
@@ -92,8 +92,8 @@ class AttributionTraceDumpTest {
             filename = "unrouted-trace.txt",
         )
         val outFile = outDir.resolve("unrouted-trace.txt")
-        assertTrue(Files.exists(outFile))
+        outFile.toFile().must { exists() }
         val content = Files.readString(outFile)
-        assertEquals("Unrouted: no attribution trace recorded in this run", content)
+        content mustBe "Unrouted: no attribution trace recorded in this run"
     }
 }

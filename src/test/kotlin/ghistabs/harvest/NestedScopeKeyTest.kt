@@ -2,11 +2,10 @@ package ghistabs.harvest
 
 import ghidra.program.model.data.CategoryPath
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghistabs.indexOf
 import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Struct.Field
 import ghistabs.parse.TypeDecl.Struct.Method
-import org.junit.jupiter.api.Assertions.*
+import ghistabs.test.*
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 
@@ -67,8 +66,8 @@ class NestedScopeKeyTest : AbstractGhidraHeadlessIntegrationTest() {
 
         val groups = indexOf(full, hider, reduced).byLocation
         val key = TypeLocation(CategoryPath("/std/string"), "_Alloc_hider")
-        assertTrue(key in groups, "expected $key in ${groups.keys}")
-        assertTrue(hiderId in groups.getValue(key).members)
+        groups.must("expected $key in ${groups.keys}") { contains(key) }
+        hiderId mustBeIn groups.getValue(key).members
     }
 
     @Test fun qualifiedNameScopesMethodlessNested() {
@@ -81,8 +80,8 @@ class NestedScopeKeyTest : AbstractGhidraHeadlessIntegrationTest() {
 
         val groups = indexOf(full, sentry).byLocation
         val key = TypeLocation(CategoryPath("/std/ostream"), "sentry")
-        assertTrue(key in groups, "expected $key in ${groups.keys}")
-        assertTrue(sentryId in groups.getValue(key).members)
+        groups.must("expected $key in ${groups.keys}") { contains(key) }
+        sentryId mustBeIn groups.getValue(key).members
     }
 
     @Test fun charAndWcharVariantsGetDistinctKeys() {
@@ -97,7 +96,7 @@ class NestedScopeKeyTest : AbstractGhidraHeadlessIntegrationTest() {
 
         val charKey = hiderKeyFor(charString, "_ZNSs5clearEv", TypeDecl.Builtin(2))
         val wcharKey = hiderKeyFor(wcharString, "_ZNSbIwSt11char_traitsIwESaIwEE5clearEv", TypeDecl.Builtin(21))
-        assertEquals("_Alloc_hider", charKey.name)
-        assertNotEquals(charKey.category, wcharKey.category)
+        charKey.name mustBe "_Alloc_hider"
+        wcharKey.category.mustNotBe(charKey.category)
     }
 }

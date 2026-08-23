@@ -8,8 +8,7 @@ import ghidra.program.model.listing.Program
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghistabs.*
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertTrue
+import ghistabs.test.*
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import java.io.File
@@ -56,29 +55,29 @@ class NoReturnFixtureIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
 
             // Liveness, not a result: zero is *correct* for the unlinked a.out `.o` fixtures, which
             // have no libc linked and so nothing known non-returning to anchor a walk.
-            assertTrue(program.functionManager.functionCount > 0, "no functions at all — did analysis run?")
+            program.functionManager.must("no functions at all — did analysis run?") { functionCount > 0 }
 
             // libstdc++'s locale and iostream functions are switch-table-heavy, which is what the
             // reverted instruction walk mistook for proof that they cannot return.
-            assertEquals(emptyList<String>(), marked.filter(::isLibraryCxx).map { "${it.entryPoint} ${it.name}" })
+            marked.filter(::isLibraryCxx).map { "${it.entryPoint} ${it.name}" } mustBe emptyList<String>()
 
             if (!on) return@withAnalyzed // the baseline roster is the whole product of an off run
 
             // Nothing schedules this analyzer explicitly, so a broken priority or a `canAnalyze`
             // regression would leave every other assertion here passing over Ghidra's own marks.
             val discovered = AutoAnalysisManager.getAnalysisManager(program).getAnalyzer(NO_RETURN_ANALYZER_NAME)
-            assertTrue(discovered is NoReturnAnalyzer, "ClassSearcher did not pick up ${NO_RETURN_ANALYZER_NAME}")
+            discovered.mustBeA<NoReturnAnalyzer>("ClassSearcher did not pick up $NO_RETURN_ANALYZER_NAME")
 
             // Running it again, separately, must find nothing the automatic pass missed — the fixed
             // point has to be order-independent, and re-running has to stay cheap and idempotent.
             val again = program.runTransaction(NO_RETURN_ANALYZER_NAME) {
                 markNoReturn(program, program.memory.loadedAndInitializedAddressSet)
             }
-            assertEquals(emptyList<String>(), again.map(Function::getName), "a second pass found more")
+            again.map(Function::getName).mustBeEmpty("a second pass found more")
 
             // A conservative rule that fires on nothing is no use either.
             MUST_BE_MARKED[binary].orEmpty().forEach { want ->
-                assertTrue(marked.any { it.name == want }, "$want must be marked non-returning")
+                marked.must("$want must be marked non-returning") { any { it.name == want } }
             }
         }
     }

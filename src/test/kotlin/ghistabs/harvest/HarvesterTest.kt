@@ -1,11 +1,12 @@
 package ghistabs.harvest
 
-import ghistabs.dummyHarvester
 import ghistabs.parse.SourceFile
 import ghistabs.parse.StabRecord
 import ghistabs.parse.StabType
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertTrue
+import ghistabs.test.dummyHarvester
+import ghistabs.test.must
+import ghistabs.test.mustBe
+import ghistabs.test.mustBeA
 import org.junit.jupiter.api.Test
 
 /**
@@ -45,7 +46,7 @@ class HarvesterTest {
 
         // harvest() should process the N_SO record without errors.
         // We verify the record was processed by checking parse errors is 0.
-        assertEquals(0, sink.parseErrors, "N_SO alone should not cause parse errors")
+        sink.parseErrors.mustBe(0, "N_SO alone should not cause parse errors")
     }
 
     /**
@@ -82,10 +83,10 @@ class HarvesterTest {
         val harvest = harvester.harvest(records)
 
         val harvestedSymbols = harvest.staticsByCu.values.flatten()
-        assertEquals(1, harvestedSymbols.size, "One global symbol should be harvested")
+        harvestedSymbols.size.mustBe(1, "One global symbol should be harvested")
         val gsymRecord = harvestedSymbols[0]
-        assertEquals("g", gsymRecord.body.name, "Symbol name should be 'g'")
-        assertEquals(StabType.N_GSYM, gsymRecord.recordType, "Record type should be N_GSYM")
+        gsymRecord.body.name.mustBe("g", "Symbol name should be 'g'")
+        gsymRecord.recordType.mustBe(StabType.N_GSYM, "Record type should be N_GSYM")
     }
 
     /**
@@ -139,15 +140,15 @@ class HarvesterTest {
 
         val harvest = harvester.harvest(records)
 
-        assertEquals(0, sink.parseErrors)
-        assertEquals(1, harvest.functions.size, "Exactly one function should be opened")
+        sink.parseErrors mustBe 0
+        harvest.functions.size.mustBe(1, "Exactly one function should be opened")
         val func = harvest.functions[0]
-        assertEquals("f", func.name, "Function name should be 'f'")
-        assertEquals(1, func.locals.size, "Function should have exactly one local")
+        func.name.mustBe("f", "Function name should be 'f'")
+        func.locals.size.mustBe(1, "Function should have exactly one local")
         val xLocal = func.locals[0]
-        assertEquals("x", xLocal.body.name, "Local variable name should be 'x'")
-        assertEquals(4L, xLocal.rawValue, "Local stack offset should be 4")
-        assertEquals(100UL, func.sizeBytes, "Function size should be 100")
+        xLocal.body.name.mustBe("x", "Local variable name should be 'x'")
+        xLocal.rawValue.mustBe(4L, "Local stack offset should be 4")
+        func.sizeBytes.mustBe(100UL, "Function size should be 100")
     }
 
     /**
@@ -187,12 +188,12 @@ class HarvesterTest {
 
         val harvest = harvester.harvest(records)
 
-        assertEquals(0, sink.parseErrors)
-        assertEquals(1, harvest.types.size, "Tagged type should populate typeAsts")
+        sink.parseErrors mustBe 0
+        harvest.types.size.mustBe(1, "Tagged type should populate typeAsts")
         val typeAst = harvest.types.values.first()
-        assertEquals("MyStruct", typeAst.ghidraName, "Tagged type name should be 'MyStruct'")
+        typeAst.ghidraName.mustBe("MyStruct", "Tagged type name should be 'MyStruct'")
         // Tagged types should NOT be in symbolsByCu
-        assertEquals(0, harvest.staticsByCu.values.flatten().size, "Tagged type should NOT be in harvested symbols")
+        harvest.staticsByCu.values.flatten().size.mustBe(0, "Tagged type should NOT be in harvested symbols")
     }
 
     /**
@@ -245,13 +246,13 @@ class HarvesterTest {
 
         val harvest = harvester.harvest(records)
 
-        assertEquals(0, sink.parseErrors)
-        assertEquals(1, harvest.functions.size, "Exactly one function should be recorded")
+        sink.parseErrors mustBe 0
+        harvest.functions.size.mustBe(1, "Exactly one function should be recorded")
         val func = harvest.functions[0]
-        assertEquals(1, func.locals.size, "Function should have exactly one local record")
+        func.locals.size.mustBe(1, "Function should have exactly one local record")
         val varLocal = func.locals[0]
-        assertEquals("var", varLocal.body.name, "Local name should be 'var'")
-        assertEquals(8L, varLocal.rawValue, "Local stack offset should be 8")
+        varLocal.body.name.mustBe("var", "Local name should be 'var'")
+        varLocal.rawValue.mustBe(8L, "Local stack offset should be 8")
     }
 
     /**
@@ -317,23 +318,21 @@ class HarvesterTest {
 
         val harvest = harvester.harvest(records)
 
-        assertEquals(0, sink.parseErrors)
+        sink.parseErrors mustBe 0
         // Verify: the type reference (1,3) maps to hdr.h (fileNum 1 from BINCL), not other.h.
         // N_SOL does NOT allocate a new fileNum — it only changes line-tracking context.
-        assertEquals(1, harvest.types.size, "One type should be harvested")
+        harvest.types.size.mustBe(1, "One type should be harvested")
         val typeAst = harvest.types.values.first()
-        assertEquals("AfterSOL", typeAst.ghidraName, "Type name should be AfterSOL")
+        typeAst.ghidraName.mustBe("AfterSOL", "Type name should be AfterSOL")
         val source = typeAst.source
-        assertTrue(
-            source is SourceFile.HeaderSource,
+        source.mustBeA<SourceFile.HeaderSource>(
             "Type source should be HeaderSource — fileNum 1 maps to hdr.h (BINCL), not other.h (N_SOL)",
         )
-        assertEquals(
+        (source as SourceFile.HeaderSource).header.filename.mustBe(
             "hdr.h",
-            (source as SourceFile.HeaderSource).header.filename,
             "Type attributed to hdr.h (fileNum 1 from BINCL); N_SOL did not allocate a new fileNum",
         )
-        assertEquals(42L, source.header.checksum, "Header checksum should match BINCL value")
+        source.header.checksum.mustBe(42L, "Header checksum should match BINCL value")
     }
 
     /**
@@ -391,27 +390,16 @@ class HarvesterTest {
 
         val harvest = harvester.harvest(records)
 
-        assertEquals(0, sink.parseErrors)
+        sink.parseErrors mustBe 0
         // The type inside the BINCL should be attributed to the header, not the CU
-        assertEquals(1, harvest.types.size, "Type inside BINCL should be recorded in typeAsts")
+        harvest.types.size.mustBe(1, "Type inside BINCL should be recorded in typeAsts")
         val typeAst = harvest.types.values.first()
-        assertEquals("HeaderType", typeAst.ghidraName, "Type name should be HeaderType")
+        typeAst.ghidraName.mustBe("HeaderType", "Type name should be HeaderType")
         val source = typeAst.source
-        assertTrue(
-            source is SourceFile.HeaderSource,
-            "Type inside BINCL should be attributed to HeaderSource, not CUSource",
-        )
+        source.mustBeA<SourceFile.HeaderSource>("Type inside BINCL should be attributed to HeaderSource, not CUSource")
         val headerSource = source as SourceFile.HeaderSource
-        assertEquals(
-            "types.h",
-            headerSource.header.filename,
-            "Header source should be types.h",
-        )
-        assertEquals(
-            0xABCDL,
-            headerSource.header.checksum,
-            "Header checksum should match BINCL value",
-        )
+        headerSource.header.filename.mustBe("types.h", "Header source should be types.h")
+        headerSource.header.checksum.mustBe(0xABCDL, "Header checksum should match BINCL value")
     }
 
     /**
@@ -499,30 +487,19 @@ class HarvesterTest {
 
         val harvest = harvester.harvest(records)
 
-        assertEquals(0, sink.parseErrors)
+        sink.parseErrors mustBe 0
         // Both type stabs should deduplicate to the same GlobalTypeId.
         // The dedup happens because both CUs reference the SAME HeaderFile instance
         // (via the shared HeaderRegistry), so (1,5) in both CUs produces the same
         // GlobalTypeId(HeaderSource(same HeaderFile), 5).
-        assertEquals(1, harvest.types.size, "Both types should deduplicate to one GlobalTypeId entry")
+        harvest.types.size.mustBe(1, "Both types should deduplicate to one GlobalTypeId entry")
         val typeAst = harvest.types.values.first()
-        assertEquals("SharedType", typeAst.ghidraName, "Type name should be SharedType")
+        typeAst.ghidraName.mustBe("SharedType", "Type name should be SharedType")
         val source = typeAst.source
-        assertTrue(
-            source is SourceFile.HeaderSource,
-            "Shared type should be attributed to HeaderSource",
-        )
+        source.mustBeA<SourceFile.HeaderSource>("Shared type should be attributed to HeaderSource")
         val headerSource = source as SourceFile.HeaderSource
-        assertEquals(
-            "header.h",
-            headerSource.header.filename,
-            "Shared type should come from header.h",
-        )
-        assertEquals(
-            0x1234L,
-            headerSource.header.checksum,
-            "Header checksum should match both BINCL and EXCL value",
-        )
+        headerSource.header.filename.mustBe("header.h", "Shared type should come from header.h")
+        headerSource.header.checksum.mustBe(0x1234L, "Header checksum should match both BINCL and EXCL value")
     }
 
     /**
@@ -582,11 +559,11 @@ class HarvesterTest {
 
         val harvest = harvester.harvest(records)
 
-        assertEquals(0, sink.parseErrors)
-        assertTrue(harvest.staticsByCu.containsKey(sourceFileOf("cu1.c")), "CU1 should be registered in symbolsByCu")
-        assertTrue(harvest.staticsByCu.containsKey(sourceFileOf("cu2.c")), "CU2 should be registered in symbolsByCu")
-        assertEquals(1, harvest.staticsByCu[sourceFileOf("cu1.c")]!!.size, "cu1.c should have exactly one symbol")
-        assertEquals(1, harvest.staticsByCu[sourceFileOf("cu2.c")]!!.size, "cu2.c should have exactly one symbol")
+        sink.parseErrors mustBe 0
+        harvest.staticsByCu.must("CU1 should be registered in symbolsByCu") { containsKey(sourceFileOf("cu1.c")) }
+        harvest.staticsByCu.must("CU2 should be registered in symbolsByCu") { containsKey(sourceFileOf("cu2.c")) }
+        harvest.staticsByCu[sourceFileOf("cu1.c")]!!.size.mustBe(1, "cu1.c should have exactly one symbol")
+        harvest.staticsByCu[sourceFileOf("cu2.c")]!!.size.mustBe(1, "cu2.c should have exactly one symbol")
     }
 
     /**
@@ -672,8 +649,8 @@ class HarvesterTest {
 
         val harvest = harvester.harvest(records)
 
-        assertEquals(0, sink.parseErrors)
-        assertTrue(harvest.staticsByCu.containsKey(sourceFileOf("a.c")), "CU a.c should be registered in symbolsByCu")
-        assertTrue(harvest.staticsByCu.containsKey(sourceFileOf("b.c")), "CU b.c should be registered in symbolsByCu")
+        sink.parseErrors mustBe 0
+        harvest.staticsByCu.must("CU a.c should be registered in symbolsByCu") { containsKey(sourceFileOf("a.c")) }
+        harvest.staticsByCu.must("CU b.c should be registered in symbolsByCu") { containsKey(sourceFileOf("b.c")) }
     }
 }

@@ -1,6 +1,5 @@
 package ghistabs.render
 
-import ghistabs.GenericAddressResolver
 import ghistabs.harvest.Func
 import ghistabs.harvest.LineEntry
 import ghistabs.harvest.sourceFileOf
@@ -8,7 +7,9 @@ import ghistabs.parse.FunctionScope
 import ghistabs.parse.SourceFile
 import ghistabs.parse.SymbolDecl
 import ghistabs.parse.TypeDecl
-import org.junit.jupiter.api.Assertions.assertEquals
+import ghistabs.test.GenericAddressResolver
+import ghistabs.test.mustBe
+import ghistabs.test.mustBeEmpty
 import org.junit.jupiter.api.Test
 
 /**
@@ -21,41 +22,35 @@ class NestingTest {
 
     @Test
     fun `a balanced run still needs braces when its nesting dips`() {
-        assertEquals(1 to 1, fix("}{"))
-        assertEquals(2 to 2, fix("}}", "", "{{"))
-        assertEquals(0 to 0, fix("{", "", "}"))
+        fix("}{") mustBe (1 to 1)
+        fix("}}", "", "{{") mustBe (2 to 2)
+        fix("{", "", "}") mustBe (0 to 0)
     }
 
     @Test
     fun `an unbalanced run is closed or opened at the end that is short`() {
-        assertEquals(0 to 2, fix("{", "{"))
-        assertEquals(2 to 0, fix("", "}", "}"))
+        fix("{", "{") mustBe (0 to 2)
+        fix("", "}", "}") mustBe (2 to 0)
     }
 
     // `Integer::IsConvertableToLong`: `if (sign == POSITIVE) {` anchored at L2805, both of its
     // branches at L2803. Placed at their anchors the branches render outside the block.
     @Test
     fun `a block's contents are held below its opener`() {
-        assertEquals(
-            listOf(2799, 2805, 2805, 2805),
-            nestingRows(listOf(2799, 2805, 2803, 2803), floor = 2798),
-        )
+        nestingRows(listOf(2799, 2805, 2803, 2803), floor = 2798) mustBe listOf(2799, 2805, 2805, 2805)
     }
 
     // A sibling block anchored earlier than the one before it would sort above the lot and wrap it —
     // balanced, never negative, clauses inverted. Only a total order rules that out.
     @Test
     fun `a sibling block cannot rise above the block before it`() {
-        assertEquals(
-            listOf(100, 101, 102, 102),
-            nestingRows(listOf(100, 101, 102, 50), floor = 99),
-        )
+        nestingRows(listOf(100, 101, 102, 50), floor = 99) mustBe listOf(100, 101, 102, 102)
     }
 
     // An anchorless region rides whatever came before it rather than resetting the floor.
     @Test
     fun `a null anchor neither moves the floor nor is placed`() {
-        assertEquals(listOf(100, 100, 100), nestingRows(listOf(100, null, 40), floor = 99))
+        nestingRows(listOf(100, null, 40), floor = 99) mustBe listOf(100, 100, 100)
     }
 
     private fun fn(name: String, base: Long, lines: List<Int>) = Func(
@@ -80,11 +75,8 @@ class NestingTest {
     fun `a function still open where the next one opens is reported`() {
         val rows = listOf("", "void a() {", "  x();", "  y();", "", "void b() {", "  z();", "}", "}")
 
-        assertEquals(
-            listOf(
-                "function a opens at L2 and is still open where the next one opens at L6 (span says it closes at L4)",
-            ),
-            spansOf().closeAnomalies(rows),
+        spansOf().closeAnomalies(rows) mustBe listOf(
+            "function a opens at L2 and is still open where the next one opens at L6 (span says it closes at L4)",
         )
     }
 
@@ -95,7 +87,7 @@ class NestingTest {
         val late = listOf("", "void a() {", "  x();", "  y();", "}", "void b() {", "  z();", "}")
         val crammed = listOf("", "void a() { x(); }", "", "", "", "void b() {", "  z();", "}")
 
-        assertEquals(emptyList<String>(), spansOf().closeAnomalies(late))
-        assertEquals(emptyList<String>(), spansOf().closeAnomalies(crammed))
+        spansOf().closeAnomalies(late).mustBeEmpty()
+        spansOf().closeAnomalies(crammed).mustBeEmpty()
     }
 }

@@ -4,7 +4,7 @@ import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.data.DataUtilities
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghistabs.runTransaction
-import org.junit.jupiter.api.Assertions.assertEquals
+import ghistabs.test.mustBeEmpty
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 
@@ -48,7 +48,7 @@ class RttiStructsDedupIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
                 .filter { it.name.contains("TypeInfoStructure") && it.name.contains(".conflict") }
                 .map { it.pathName }
                 .toList()
-            assertEquals(emptyList<String>(), conflicts, "typeinfo layouts forked conflict types: $conflicts")
+            conflicts.mustBeEmpty("typeinfo layouts forked conflict types: $conflicts")
         } finally {
             builder.dispose()
         }

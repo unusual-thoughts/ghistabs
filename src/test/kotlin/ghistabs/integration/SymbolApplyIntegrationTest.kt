@@ -4,15 +4,17 @@ import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.*
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghistabs.defaultContext
 import ghistabs.importer.StabsImporter
 import ghistabs.importer.sweepPointees
 import ghistabs.parse.StabReader
 import ghistabs.parse.StabRecord
 import ghistabs.parse.StabType
 import ghistabs.runTransaction
+import ghistabs.test.defaultContext
+import ghistabs.test.must
+import ghistabs.test.mustBe
+import ghistabs.test.mustNot
 import org.junit.jupiter.api.AfterEach
-import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
@@ -78,8 +80,8 @@ class SymbolApplyIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         // Verify that the importer processes records without exceptions.
         // With minimal synthetic stabs, globalsApplied may be 0 (no type info),
         // but the importer should handle it gracefully.
-        assertTrue(result.parsed.parsed >= 0, "Importer should have non-negative record count")
-        assertFalse(result.parsed.errors > 0, "Importer should not have parse errors on valid stab records")
+        result.parsed.must("Importer should have non-negative record count") { parsed >= 0 }
+        result.parsed.mustNot("Importer should not have parse errors on valid stab records") { errors > 0 }
     }
 
     /**
@@ -134,11 +136,11 @@ class SymbolApplyIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             importer.runOnRecords(StabReader.Result(records, totalRecordCount = records.size, truncatedTail = 0))
 
         // Importer should complete without throwing (robustness test)
-        assertTrue(result.parsed.parsed > 0, "Importer should have parsed some records")
+        result.parsed.must("Importer should have parsed some records") { parsed > 0 }
         // The malformed record should result in a parse error
-        assertTrue(result.parsed.errors > 0, "Importer should report parse error for malformed record")
+        result.parsed.must("Importer should report parse error for malformed record") { errors > 0 }
         // But other records should still be processed
-        assertTrue(result.types.materialized > 0, "Importer should have materialized valid types despite errors")
+        result.types.must("Importer should have materialized valid types despite errors") { materialized > 0 }
     }
 
     /**
@@ -160,16 +162,16 @@ class SymbolApplyIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             StabReader.Result(records, totalRecordCount = records.size, truncatedTail = 0),
         )
 
-        assertEquals(1, result.applied.constants, "one constant should apply")
+        result.applied.constants.mustBe(1, "one constant should apply")
 
         val equate = program.equateTable.equates.asSequence().single()
-        assertEquals(0xFFFFFFFFL, equate.value, "equate carries the constant value")
+        equate.value.mustBe(0xFFFFFFFFL, "equate carries the constant value")
 
         val enum = program.dataTypeManager.allDataTypes.asSequence()
             .filterIsInstance<GhidraEnum>()
             .single { it.categoryPath.path.startsWith("/stabs/constants") }
-        assertEquals(4, enum.length, "0xFFFFFFFF sizes to a 4-byte enum")
-        assertEquals(0xFFFFFFFFL, enum.values.single(), "sole member carries the value")
+        enum.length.mustBe(4, "0xFFFFFFFF sizes to a 4-byte enum")
+        enum.values.single().mustBe(0xFFFFFFFFL, "sole member carries the value")
     }
 
     private fun addr(off: Long): Address = builder.program.addressFactory.defaultAddressSpace.getAddress(off)
@@ -188,10 +190,10 @@ class SymbolApplyIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             program.sweepPointees(program.listing.createData(addr(0x401000), PointerDataType(CharDataType.dataType)))
         }
 
-        assertEquals(1, defined, "one target newly defined")
+        defined.mustBe(1, "one target newly defined")
         val target = program.listing.getDataAt(addr(0x401010))
-        assertTrue(target.isDefined && target.value is String, "char* target typed as a string")
-        assertEquals("hi", target.value)
+        target.must("char* target typed as a string") { isDefined && value is String }
+        target.value mustBe "hi"
     }
 
     /**
@@ -213,9 +215,9 @@ class SymbolApplyIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             program.sweepPointees(program.listing.createData(addr(0x401000), PointerDataType(point)))
         }
 
-        assertEquals(1, defined, "one target newly defined")
+        defined.mustBe(1, "one target newly defined")
         val target = program.listing.getDataAt(addr(0x401010))
-        assertEquals("Point", target.dataType.name, "concrete pointee laid verbatim, not a string")
+        target.dataType.name.mustBe("Point", "concrete pointee laid verbatim, not a string")
     }
 
     /**
@@ -233,7 +235,7 @@ class SymbolApplyIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             program.sweepPointees(program.listing.createData(addr(0x401000), PointerDataType(point)))
         }
 
-        assertEquals(1, defined, "placeholder overwritten counts as one defined")
-        assertEquals("Point", program.listing.getDataAt(addr(0x401010)).dataType.name)
+        defined.mustBe(1, "placeholder overwritten counts as one defined")
+        program.listing.getDataAt(addr(0x401010)).dataType.name mustBe "Point"
     }
 }

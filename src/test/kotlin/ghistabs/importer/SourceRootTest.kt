@@ -1,6 +1,6 @@
 package ghistabs.importer
 
-import org.junit.jupiter.api.Assertions.assertEquals
+import ghistabs.test.mustBe
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Path
@@ -30,10 +30,8 @@ class SourceRootTest {
         )
         val derived = derive("/c:/mingw/include/c++/3.2.3/bits/", "stl_vector.h", "stl_alloc.h")
 
-        assertEquals(
-            listOf(DirectoryTransform("/c:/mingw/include/c++/3.2.3/bits/", "$root/libstdc++-v3/include/bits/")),
-            derived.transforms,
-        )
+        derived.transforms mustBe
+            listOf(DirectoryTransform("/c:/mingw/include/c++/3.2.3/bits/", "$root/libstdc++-v3/include/bits/"))
     }
 
     /** gcc keeps one `atomicity.h` per architecture. Nothing about the recorded path says which was
@@ -46,11 +44,9 @@ class SourceRootTest {
         )
         val derived = derive("/c:/mingw/include/c++/3.2.3/mingw32/bits/", "atomicity.h")
 
-        assertEquals(emptyList<DirectoryTransform>(), derived.transforms)
-        assertEquals(
-            listOf("$root/config/cpu/arm/bits", "$root/config/cpu/i486/bits"),
-            derived.ambiguous.getValue("/c:/mingw/include/c++/3.2.3/mingw32/bits/"),
-        )
+        derived.transforms mustBe emptyList<DirectoryTransform>()
+        derived.ambiguous.getValue("/c:/mingw/include/c++/3.2.3/mingw32/bits/") mustBe
+            listOf("$root/config/cpu/arm/bits", "$root/config/cpu/i486/bits")
     }
 
     /** Two shared segments beat one, before the files are ever consulted — so a decoy holding a
@@ -60,7 +56,7 @@ class SourceRootTest {
         tree("proj/util/project/image.h", "vendor/project/image.h")
         val derived = derive("/E:/work/cc/util/project/", "image.h")
 
-        assertEquals("$root/proj/util/project/", derived.transforms.single().local)
+        derived.transforms.single().local mustBe "$root/proj/util/project/"
     }
 
     /** The installed `mingw32/bits/` against gcc's own tree: `config/os/mingw32/bits/` agrees on two
@@ -75,11 +71,9 @@ class SourceRootTest {
         )
         val derived = derive("/c:/mingw/include/c++/3.2.3/mingw32/bits/", "atomicity.h")
 
-        assertEquals(emptyList<DirectoryTransform>(), derived.transforms)
-        assertEquals(
-            listOf("$root/config/cpu/arm/bits", "$root/config/cpu/i486/bits"),
-            derived.ambiguous.getValue("/c:/mingw/include/c++/3.2.3/mingw32/bits/"),
-        )
+        derived.transforms mustBe emptyList<DirectoryTransform>()
+        derived.ambiguous.getValue("/c:/mingw/include/c++/3.2.3/mingw32/bits/") mustBe
+            listOf("$root/config/cpu/arm/bits", "$root/config/cpu/i486/bits")
     }
 
     @Test
@@ -87,8 +81,8 @@ class SourceRootTest {
         tree("include/bits/stl_vector.h")
         val derived = derive("/c:/mingw/include/c++/3.2.3/bits/", "unrelated.h")
 
-        assertEquals(emptyList<DirectoryTransform>(), derived.transforms)
-        assertEquals(listOf("/c:/mingw/include/c++/3.2.3/bits/"), derived.unmatched)
+        derived.transforms mustBe emptyList<DirectoryTransform>()
+        derived.unmatched mustBe listOf("/c:/mingw/include/c++/3.2.3/bits/")
     }
 
     @Test
@@ -96,6 +90,6 @@ class SourceRootTest {
         tree("include/bits/stl_vector.h")
         val derived = derive("/E:/work/cc/devtools/imageutil/", "xdvimage.h")
 
-        assertEquals(listOf("/E:/work/cc/devtools/imageutil/"), derived.unmatched)
+        derived.unmatched mustBe listOf("/E:/work/cc/devtools/imageutil/")
     }
 }

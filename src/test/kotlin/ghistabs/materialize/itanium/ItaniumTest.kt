@@ -3,80 +3,79 @@ package ghistabs.materialize.itanium
 import ghidra.app.util.demangler.DemangledAddressTable
 import ghidra.app.util.demangler.DemangledFunction
 import ghidra.app.util.demangler.DemangledNamespaceNode
-import org.junit.jupiter.api.Assertions.*
+import ghistabs.test.must
+import ghistabs.test.mustBe
+import ghistabs.test.mustNot
 import org.junit.jupiter.api.Test
 
 class ItaniumTest {
     @Test
     fun testZtvCandidatesSimpleName() {
         val candidates = Itanium.ztvCandidates("ThisStream")
-        assertEquals(
-            listOf(
-                "_ZTV10ThisStream",
-                "__ZTV10ThisStream",
-                $$"_vt$ThisStream$",
-                "ThisStream::vtable",
-            ),
-            candidates,
+        candidates mustBe listOf(
+            "_ZTV10ThisStream",
+            "__ZTV10ThisStream",
+            $$"_vt$ThisStream$",
+            "ThisStream::vtable",
         )
     }
 
     @Test
     fun testZtvCandidatesNestedName() {
         val candidates = Itanium.ztvCandidates("Foo::Bar")
-        assertEquals("_ZTVN3Foo3BarE", candidates[0])
-        assertEquals("__ZTVN3Foo3BarE", candidates[1])
+        candidates[0] mustBe "_ZTVN3Foo3BarE"
+        candidates[1] mustBe "__ZTVN3Foo3BarE"
     }
 
     @Test
     fun testMangleClassNameSimple() {
-        assertEquals("10bouniaf", Itanium.mangleClassName("bouniaf"))
+        Itanium.mangleClassName("ThisStream") mustBe "10ThisStream"
     }
 
     @Test
     fun testMangleClassNameNested() {
-        assertEquals("N3Foo3BarE", Itanium.mangleClassName("Foo::Bar"))
+        Itanium.mangleClassName("Foo::Bar") mustBe "N3Foo3BarE"
     }
 
     @Test
     fun testMangleClassNameTripleNested() {
-        assertEquals("N3Foo3Bar3BazE", Itanium.mangleClassName("Foo::Bar::Baz"))
+        Itanium.mangleClassName("Foo::Bar::Baz") mustBe "N3Foo3Bar3BazE"
     }
 
     @Test
     fun testMangleClassNameTemplated() {
-        assertEquals("vector<int>", Itanium.mangleClassName("vector<int>"))
+        Itanium.mangleClassName("vector<int>") mustBe "vector<int>"
     }
 
     @Test
     fun testLooksLikeZtv() {
-        assertTrue(Itanium.looksLikeZtv("_ZTV10ThisStream"))
-        assertTrue(Itanium.looksLikeZtv("__ZTV10ThisStream"))
-        assertTrue(Itanium.looksLikeZtv("ZTVbare"))
-        assertFalse(Itanium.looksLikeZtv("XYZ_ZTV9ThisStream"))
-        assertFalse(Itanium.looksLikeZtv("_ZN3FooC1Ev"))
+        Itanium.must { looksLikeZtv("_ZTV10ThisStream") }
+        Itanium.must { looksLikeZtv("__ZTV10ThisStream") }
+        Itanium.must { looksLikeZtv("ZTVbare") }
+        Itanium.mustNot { looksLikeZtv("XYZ_ZTV9ThisStream") }
+        Itanium.mustNot { looksLikeZtv("_ZN3FooC1Ev") }
     }
 
     @Test
     fun testDemangledMatchesSimpleClass() {
         val obj = vtableObj("ThisStream")
-        assertTrue(Itanium.demangledMatchesClass(obj, "bouniaf"))
-        assertFalse(Itanium.demangledMatchesClass(obj, "OtherClass"))
+        Itanium.must { demangledMatchesClass(obj, "ThisStream") }
+        Itanium.mustNot { demangledMatchesClass(obj, "OtherClass") }
     }
 
     @Test
     fun testDemangledMatchesNestedClass() {
         val obj = vtableObj("Foo", "Bar")
-        assertTrue(Itanium.demangledMatchesClass(obj, "Foo::Bar"))
-        assertFalse(Itanium.demangledMatchesClass(obj, "Foo"))
-        assertFalse(Itanium.demangledMatchesClass(obj, "Bar"))
+        Itanium.must { demangledMatchesClass(obj, "Foo::Bar") }
+        Itanium.mustNot { demangledMatchesClass(obj, "Foo") }
+        Itanium.mustNot { demangledMatchesClass(obj, "Bar") }
     }
 
     @Test
     fun testDemangledMatchesRejectsNonVtable() {
         val func = DemangledFunction("_ZN3FooC1Ev", "Foo::Foo()", "Foo")
         func.namespace = DemangledNamespaceNode("_ZN3FooC1Ev", "Foo", "Foo")
-        assertFalse(Itanium.demangledMatchesClass(func, "Foo"))
+        Itanium.mustNot { demangledMatchesClass(func, "Foo") }
     }
 
     /**

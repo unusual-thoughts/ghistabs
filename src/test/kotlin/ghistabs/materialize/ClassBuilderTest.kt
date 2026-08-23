@@ -2,7 +2,7 @@ package ghistabs.materialize
 
 import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Struct.Method
-import org.junit.jupiter.api.Assertions.*
+import ghistabs.test.*
 import org.junit.jupiter.api.Test
 
 /**
@@ -26,19 +26,19 @@ class ClassBuilderTest {
         val ctorRe = Regex("""C([123])E[a-zA-Z_0-9$]*$""")
         val dtorRe = Regex("""D([012])E[a-zA-Z_0-9$]*$""")
 
-        assertNotNull(ctorRe.find(ctorC1))
-        assertNotNull(ctorRe.find(ctorC2))
-        assertNotNull(ctorRe.find(ctorC3))
-        assertNull(ctorRe.find(normalMethod))
+        ctorRe.find(ctorC1) mustNotBe null
+        ctorRe.find(ctorC2) mustNotBe null
+        ctorRe.find(ctorC3) mustNotBe null
+        ctorRe.find(normalMethod) mustBe null
 
-        assertNotNull(dtorRe.find(dtorD0))
-        assertNotNull(dtorRe.find(dtorD1))
-        assertNotNull(dtorRe.find(dtorD2))
-        assertNull(dtorRe.find(normalMethod))
+        dtorRe.find(dtorD0) mustNotBe null
+        dtorRe.find(dtorD1) mustNotBe null
+        dtorRe.find(dtorD2) mustNotBe null
+        dtorRe.find(normalMethod) mustBe null
 
-        assertEquals("1", ctorRe.find(ctorC1)?.groupValues?.get(1))
-        assertEquals("2", ctorRe.find(ctorC2)?.groupValues?.get(1))
-        assertEquals("0", dtorRe.find(dtorD0)?.groupValues?.get(1))
+        ctorRe.find(ctorC1)?.groupValues?.get(1) mustBe "1"
+        ctorRe.find(ctorC2)?.groupValues?.get(1) mustBe "2"
+        dtorRe.find(dtorD0)?.groupValues?.get(1) mustBe "0"
     }
 
     @Test
@@ -52,7 +52,7 @@ class ClassBuilderTest {
             '<' !in singleName -> "${singleName.length}$singleName"
             else -> singleName
         }
-        assertEquals("3Foo", singleMangle)
+        singleMangle mustBe "3Foo"
 
         val nestedMangle = when {
             nestedName.contains("::") && '<' !in nestedName ->
@@ -60,7 +60,7 @@ class ClassBuilderTest {
 
             else -> nestedName
         }
-        assertEquals("N3Foo3BarE", nestedMangle)
+        nestedMangle mustBe "N3Foo3BarE"
 
         val tripleMangle = when {
             tripleNested.contains("::") && '<' !in tripleNested ->
@@ -68,7 +68,7 @@ class ClassBuilderTest {
 
             else -> tripleNested
         }
-        assertEquals("N3Foo3Bar3BazE", tripleMangle)
+        tripleMangle mustBe "N3Foo3Bar3BazE"
     }
 
     @Test
@@ -94,10 +94,10 @@ class ClassBuilderTest {
             vptrBasetype = null,
         )
 
-        assertEquals(1, classStruct.methods.size)
-        assertEquals("bar", classStruct.methods[0].name)
-        assertEquals("_ZN3Foo3barEv", classStruct.methods[0].mangled)
-        assertFalse(classStruct.hasVTablePointerMarker)
+        classStruct.methods.size mustBe 1
+        classStruct.methods[0].name mustBe "bar"
+        classStruct.methods[0].mangled mustBe "_ZN3Foo3barEv"
+        classStruct.mustNot { hasVTablePointerMarker }
     }
 
     @Test
@@ -113,8 +113,8 @@ class ClassBuilderTest {
             vtableOffsetBits = 0L,
         )
 
-        assertEquals(VirtKind.VIRTUAL, virtualMethod.virt)
-        assertEquals(0L, virtualMethod.vtableOffsetBits)
+        virtualMethod.virt mustBe VirtKind.VIRTUAL
+        virtualMethod.vtableOffsetBits mustBe 0L
 
         val inherited = listOf(virtualMethod)
         val own = listOf(
@@ -136,17 +136,17 @@ class ClassBuilderTest {
             if (idx >= 0) merged[idx] = m else merged += m
         }
 
-        assertEquals(1, merged.size)
-        assertEquals("_ZN7Derived4drawEv", merged[0].mangled)
+        merged.size mustBe 1
+        merged[0].mangled mustBe "_ZN7Derived4drawEv"
     }
 
     @Test
     fun testNestedNamespaceNames() {
         val parts = "Foo::Bar::Baz".split("::").filter { it.isNotEmpty() }
-        assertEquals(3, parts.size)
-        assertEquals("Foo", parts[0])
-        assertEquals("Bar", parts[1])
-        assertEquals("Baz", parts[2])
+        parts.size mustBe 3
+        parts[0] mustBe "Foo"
+        parts[1] mustBe "Bar"
+        parts[2] mustBe "Baz"
     }
 
     @Test
@@ -155,9 +155,9 @@ class ClassBuilderTest {
         val templateName = "std::vector<int>"
         val complexTemplateName = "std::basic_string<char, std::allocator<char>>"
 
-        assertFalse(simpleName.contains('<'))
-        assertTrue(templateName.contains('<'))
-        assertTrue(complexTemplateName.contains('<'))
+        '<' mustNotBeIn simpleName
+        '<' mustBeIn templateName
+        '<' mustBeIn complexTemplateName
     }
 
     @Test
@@ -170,15 +170,15 @@ class ClassBuilderTest {
         fun isParserEmitted(name: String): Boolean =
             name.startsWith("_vptr$") || name.startsWith("_vptr.") || name == "_vptr"
 
-        assertTrue(isParserEmitted(vptrFieldName1))
-        assertTrue(isParserEmitted(vptrFieldName2))
-        assertTrue(isParserEmitted(vptrFieldName3))
-        assertFalse(isParserEmitted(nonVptrFieldName))
+        isParserEmitted(vptrFieldName1).mustBeTrue()
+        isParserEmitted(vptrFieldName2).mustBeTrue()
+        isParserEmitted(vptrFieldName3).mustBeTrue()
+        isParserEmitted(nonVptrFieldName).mustBeFalse()
     }
 
     @Test
     fun testCanonicalVfptrFieldName() {
         val canonicalName = "{vfptr}"
-        assertEquals("{vfptr}", canonicalName)
+        canonicalName mustBe "{vfptr}"
     }
 }

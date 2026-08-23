@@ -4,7 +4,7 @@ import ghidra.app.util.exporter.Exporter
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.classfinder.ClassSearcher
 import ghistabs.StabsRenderExporter
-import org.junit.jupiter.api.Assertions.assertEquals
+import ghistabs.test.mustBe
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 
@@ -20,11 +20,9 @@ import org.junit.jupiter.api.Test
 class ExporterDiscoveryIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     @Test
     fun bothExportersAreDiscovered() {
-        assertEquals(
-            mapOf("Stabs Decompilation" to "decomp", "Stabs Source Skeleton" to "skeleton"),
-            ClassSearcher.getInstances(Exporter::class.java)
-                .filterIsInstance<StabsRenderExporter>()
-                .associate { it.name to it.defaultFileExtension },
-        )
+        ClassSearcher.getInstances(Exporter::class.java)
+            .filterIsInstance<StabsRenderExporter>()
+            .associate { it.name to it.defaultFileExtension } mustBe
+            mapOf("Stabs Decompilation" to "decomp", "Stabs Source Skeleton" to "skeleton")
     }
 }
