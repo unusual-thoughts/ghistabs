@@ -4,7 +4,7 @@ import ghidra.program.model.data.CategoryPath
 import ghistabs.diagnose.StabsDiagnostics
 import ghistabs.parse.HeaderFile
 import ghistabs.parse.SourceFile
-import org.junit.jupiter.api.Assertions.assertEquals
+import ghistabs.test.mustBe
 import org.junit.jupiter.api.Test
 
 /**
@@ -31,26 +31,26 @@ class AttributionTest {
     @Test
     fun stdlibCppStringHeader() {
         val cat = attr.keyFor("basic_string", srcs("/usr/include/c++/3.4.4/string"))
-        assertEquals(CategoryPath("/std/string"), cat.category)
+        cat.category mustBe CategoryPath("/std/string")
     }
 
     @Test
     fun stdlibMingwStdint() {
         val cat = attr.keyFor("int32_t", srcs("/usr/include/mingw/stdint.h"))
-        assertEquals(CategoryPath("/std/stdint"), cat.category)
+        cat.category mustBe CategoryPath("/std/stdint")
     }
 
     @Test
     fun stdlibSkipsBitsIntermediate() {
         // bits/ is a known intermediate dir — skipped, basename comes from the next segment
         val cat = attr.keyFor("vector_base", srcs("/usr/include/c++/3.4.4/bits/stl_vector.h"))
-        assertEquals(CategoryPath("/std/stl_vector"), cat.category)
+        cat.category mustBe CategoryPath("/std/stl_vector")
     }
 
     @Test
     fun stdlibWithOneIntermediateDir() {
         val cat = attr.keyFor("Foo", srcs("/usr/local/mingw/stdint.h"))
-        assertEquals(CategoryPath("/std/stdint"), cat.category)
+        cat.category mustBe CategoryPath("/std/stdint")
     }
 
     // --- Single source ------------------------------------------------------
@@ -58,19 +58,19 @@ class AttributionTest {
     @Test
     fun singleHeaderSourcePreservesFullPath() {
         val cat = attr.keyFor("Foo", srcs("/proj/include/foo.h"))
-        assertEquals(CategoryPath("/proj/include/foo.h"), cat.category)
+        cat.category mustBe CategoryPath("/proj/include/foo.h")
     }
 
     @Test
     fun singleCuSourcePreservesFullPath() {
         val cat = attr.keyFor("LocalThing", srcs("/proj/src/main.cpp"))
-        assertEquals(CategoryPath("/proj/src/main.cpp"), cat.category)
+        cat.category mustBe CategoryPath("/proj/src/main.cpp")
     }
 
     @Test
     fun normalizesDotDotInPath() {
         val cat = attr.keyFor("Foo", srcs("/proj/src/../include/foo.h"))
-        assertEquals(CategoryPath("/proj/include/foo.h"), cat.category)
+        cat.category mustBe CategoryPath("/proj/include/foo.h")
     }
 
     @Test
@@ -82,7 +82,7 @@ class AttributionTest {
             SourceFile.HeaderSource(HeaderFile("/proj/include/foo.h", checksum = 1L, originatingCu = originator)),
             SourceFile.HeaderSource(HeaderFile("/proj/include/foo.h", checksum = 2L, originatingCu = null)),
         )
-        assertEquals(CategoryPath("/proj/include/foo.h"), attr.keyFor("Foo", defSources).category)
+        attr.keyFor("Foo", defSources).category mustBe CategoryPath("/proj/include/foo.h")
     }
 
     // --- Real-header preference --------------------------------------------
@@ -96,7 +96,7 @@ class AttributionTest {
             SourceFile.HeaderSource(HeaderFile("/proj/parse.cpp", checksum = 2, originatingCu = null)),
             SourceFile.HeaderSource(HeaderFile("/proj/include/inst.h", checksum = 3, originatingCu = null)),
         )
-        assertEquals(CategoryPath("/proj/include/inst.h"), attr.keyFor("SomeInst", sources).category)
+        attr.keyFor("SomeInst", sources).category mustBe CategoryPath("/proj/include/inst.h")
     }
 
     @Test
@@ -107,7 +107,7 @@ class AttributionTest {
             SourceFile.CUSource("/proj/b.cpp"),
             SourceFile.HeaderSource(HeaderFile("/proj/include/collision.h", checksum = 0, originatingCu = null)),
         )
-        assertEquals(CategoryPath("/proj/include/collision.h"), attr.keyFor("b2Hull", sources).category)
+        attr.keyFor("b2Hull", sources).category mustBe CategoryPath("/proj/include/collision.h")
     }
 
     @Test
@@ -116,7 +116,7 @@ class AttributionTest {
             SourceFile.HeaderSource(HeaderFile("/proj/include/zeta.h", checksum = 0, originatingCu = null)),
             SourceFile.HeaderSource(HeaderFile("/proj/include/alpha.h", checksum = 0, originatingCu = null)),
         )
-        assertEquals(CategoryPath("/proj/include/alpha.h"), attr.keyFor("Foo", sources).category)
+        attr.keyFor("Foo", sources).category mustBe CategoryPath("/proj/include/alpha.h")
     }
 
     @Test
@@ -129,7 +129,7 @@ class AttributionTest {
         // basic_string.tcc → /std/basic_string (stdlib remap wins first; this test
         // just confirms .tcc participates in the real-header pool by routing
         // through stdlib, not into the multi-source fallback).
-        assertEquals(CategoryPath("/std/basic_string"), attr.keyFor("basic_string", sources).category)
+        attr.keyFor("basic_string", sources).category mustBe CategoryPath("/std/basic_string")
     }
 
     @Test
@@ -139,7 +139,7 @@ class AttributionTest {
             SourceFile.HeaderSource(HeaderFile("/proj/inst.cpp", checksum = 1, originatingCu = null)),
             SourceFile.HeaderSource(HeaderFile("/proj/parse.cpp", checksum = 2, originatingCu = null)),
         )
-        assertEquals(CategoryPath("/proj/inst.cpp/multi"), attr.keyFor("SomeInst", sources).category)
+        attr.keyFor("SomeInst", sources).category mustBe CategoryPath("/proj/inst.cpp/multi")
     }
 
     // --- Multi-source -------------------------------------------------------
@@ -147,13 +147,13 @@ class AttributionTest {
     @Test
     fun multiSourceUsesLexFirstPlusMulti() {
         val cat = attr.keyFor("Shared", srcs("/proj/a.cpp", "/proj/b.cpp"))
-        assertEquals(CategoryPath("/proj/a.cpp/multi"), cat.category)
+        cat.category mustBe CategoryPath("/proj/a.cpp/multi")
     }
 
     @Test
     fun multiSourceTemplateInstantiation() {
         val cat = attr.keyFor("vector<int,allocator<int>>", srcs("/proj/b.cpp", "/proj/a.cpp"))
-        assertEquals(CategoryPath("/proj/a.cpp/multi"), cat.category)
+        cat.category mustBe CategoryPath("/proj/a.cpp/multi")
     }
 
     @Test
@@ -163,7 +163,7 @@ class AttributionTest {
             SourceFile.HeaderSource(HeaderFile("/proj/zeta.cpp", checksum = 1, originatingCu = null)),
             SourceFile.HeaderSource(HeaderFile("/proj/alpha.cpp", checksum = 2, originatingCu = null)),
         )
-        assertEquals(CategoryPath("/proj/alpha.cpp/multi"), attr.keyFor("Foo", sources).category)
+        attr.keyFor("Foo", sources).category mustBe CategoryPath("/proj/alpha.cpp/multi")
     }
 
     // --- Project-prefix stripping ------------------------------------------
@@ -172,7 +172,7 @@ class AttributionTest {
     fun projectPrefixStrippedFromSourcePath() {
         val a = Attribution(commonProjectPrefix = "/xml/box2d")
         val cat = a.keyFor("b2Hull", srcs("/xml/box2d/src/../include/box2d/collision.h"))
-        assertEquals(CategoryPath("/include/box2d/collision.h"), cat.category)
+        cat.category mustBe CategoryPath("/include/box2d/collision.h")
     }
 
     @Test
@@ -180,7 +180,7 @@ class AttributionTest {
         // stdlib remapping still wins; project prefix doesn't apply to /usr/include/...
         val a = Attribution(commonProjectPrefix = "/xml/box2d")
         val cat = a.keyFor("basic_string", srcs("/usr/include/c++/3.4.4/string"))
-        assertEquals(CategoryPath("/std/string"), cat.category)
+        cat.category mustBe CategoryPath("/std/string")
     }
 
     @Test
@@ -190,7 +190,7 @@ class AttributionTest {
             SourceFile.CUSource("/xml/box2d/samples/donut.cpp"),
             SourceFile.CUSource("/xml/box2d/src/body.c"),
         )
-        assertEquals("/xml/box2d", commonProjectPrefix(sources))
+        commonProjectPrefix(sources) mustBe "/xml/box2d"
     }
 
     @Test
@@ -201,7 +201,7 @@ class AttributionTest {
             SourceFile.CUSource("/xml/box2d/samples/donut.cpp"),
             SourceFile.HeaderSource(HeaderFile("/usr/include/c++/3.4.4/string", checksum = 0, originatingCu = null)),
         )
-        assertEquals("/xml/box2d/samples", commonProjectPrefix(sources))
+        commonProjectPrefix(sources) mustBe "/xml/box2d/samples"
     }
 
     // --- Diagnostic traces --------------------------------------------------
@@ -210,11 +210,11 @@ class AttributionTest {
     fun traceRecordedOnStdRoute() {
         val diag = StabsDiagnostics()
         val cat = attr.keyFor("basic_string", srcs("/usr/include/c++/3.4.4/string"), diag)
-        assertEquals(CategoryPath("/std/string"), cat.category)
+        cat.category mustBe CategoryPath("/std/string")
         val traces = diag.snapshotAttributionTraces()
-        assertEquals(1, traces.size)
-        assertEquals("basic_string", traces[0].typeName)
-        assertEquals("/std/string", traces[0].routedTo)
+        traces.size mustBe 1
+        traces[0].typeName mustBe "basic_string"
+        traces[0].routedTo mustBe "/std/string"
     }
 
     @Test
@@ -224,8 +224,8 @@ class AttributionTest {
             attr.keyFor("Type$i", srcs("/usr/include/c++/3.4.4/string$i"), diag)
         }
         val traces = diag.snapshotAttributionTraces()
-        assertEquals(200, traces.size, "Traces should be capped at 200")
-        assertEquals(250L, diag["attribution-routed-std"], "Counter should track all 250 calls")
+        traces.size.mustBe(200, "Traces should be capped at 200")
+        diag["attribution-routed-std"].mustBe(250L, "Counter should track all 250 calls")
     }
 
     // --- Windows drive-letter paths ----------------------------------------
@@ -233,13 +233,13 @@ class AttributionTest {
     @Test
     fun windowsDriveLetterStrippedFromCuPath() {
         val cat = attr.keyFor("Foo", srcs("E:/dev/code/apps/sink/main.cpp"))
-        assertEquals(CategoryPath("/dev/code/apps/sink/main.cpp"), cat.category)
+        cat.category mustBe CategoryPath("/dev/code/apps/sink/main.cpp")
     }
 
     @Test
     fun windowsDriveLetterStrippedFromHeaderPath() {
         val cat = attr.keyFor("Foo", srcs("c:/proj/lib/inc/widget.h"))
-        assertEquals(CategoryPath("/proj/lib/inc/widget.h"), cat.category)
+        cat.category mustBe CategoryPath("/proj/lib/inc/widget.h")
     }
 
     @Test
@@ -248,7 +248,7 @@ class AttributionTest {
         // other way round (`/usr/include/c++/…`), and used to miss the marker entirely — so mingw's
         // libc counted as a possible home for a user type. It is no more one than <vector> is.
         val cat = attr.keyFor("Foo", srcs("c:/mingw/include/stdint.h"))
-        assertEquals(CategoryPath("/std/stdint"), cat.category)
+        cat.category mustBe CategoryPath("/std/stdint")
     }
 
     @Test
@@ -257,7 +257,7 @@ class AttributionTest {
             SourceFile.CUSource("E:/dev/code/apps/sink/main.cpp"),
             SourceFile.CUSource("E:/dev/code/apps/sink/audio.cpp"),
         )
-        assertEquals("/dev/code/apps/sink", commonProjectPrefix(sources))
+        commonProjectPrefix(sources) mustBe "/dev/code/apps/sink"
     }
 
     @Test
@@ -269,7 +269,7 @@ class AttributionTest {
         val prefix = commonProjectPrefix(sources)
         val a = Attribution(commonProjectPrefix = prefix)
         val cat = a.keyFor("Foo", srcs("E:/dev/code/apps/sink/main.cpp"))
-        assertEquals(CategoryPath("/main.cpp"), cat.category)
+        cat.category mustBe CategoryPath("/main.cpp")
     }
 
     // --- Stdlib false positives --------------------------------------------
@@ -277,13 +277,13 @@ class AttributionTest {
     @Test
     fun noFalsePositiveOnProjectCxxDir() {
         val cat = attr.keyFor("Foo", srcs("/proj/src/c++_helpers/foo.cpp"))
-        assertEquals(CategoryPath("/proj/src/c++_helpers/foo.cpp"), cat.category)
+        cat.category mustBe CategoryPath("/proj/src/c++_helpers/foo.cpp")
     }
 
     @Test
     fun noFalsePositiveOnUsrLocalProj() {
         // Two intermediate dirs after /usr/ (local + myproj) — outside the regex's allowance.
         val cat = attr.keyFor("Foo", srcs("/usr/local/myproj/c++_helpers/foo.cpp"))
-        assertEquals(CategoryPath("/usr/local/myproj/c++_helpers/foo.cpp"), cat.category)
+        cat.category mustBe CategoryPath("/usr/local/myproj/c++_helpers/foo.cpp")
     }
 }

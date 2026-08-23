@@ -1,7 +1,8 @@
 package ghistabs
 
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertFalse
+import ghistabs.test.GenericAddressResolver
+import ghistabs.test.mustBe
+import ghistabs.test.mustNot
 import org.junit.jupiter.api.Test
 
 /**
@@ -16,31 +17,31 @@ class AddressOperatorTest {
     @Test
     fun `exclusive end stops one short`() {
         val range = addr(0x100)..<addr(0x110)
-        assertEquals(addr(0x100), range.minAddress)
-        assertEquals(addr(0x10f), range.maxAddress)
-        assertEquals(0x10L, range.length)
+        range.minAddress mustBe addr(0x100)
+        range.maxAddress mustBe addr(0x10f)
+        range.length mustBe 0x10L
     }
 
     @Test
     fun `one-byte range is the shortest expressible`() {
         val range = addr(0x100)..<addr(0x101)
-        assertEquals(addr(0x100), range.minAddress)
-        assertEquals(addr(0x100), range.maxAddress)
-        assertEquals(1L, range.length)
+        range.minAddress mustBe addr(0x100)
+        range.maxAddress mustBe addr(0x100)
+        range.length mustBe 1L
     }
 
     @Test
     fun `an end at the start is empty, not widened downwards`() {
         val range = addr(0x100)..<addr(0x100)
-        assertEquals(0L, range.length)
-        assertFalse(range.contains(addr(0x100)))
-        assertFalse(range.contains(addr(0xff)))
+        range.length mustBe 0L
+        range.mustNot { contains(addr(0x100)) }
+        range.mustNot { range.contains(addr(0xff)) }
     }
 
     @Test
     fun `an end below the start is empty, not swapped`() {
         val range = addr(0x110)..<addr(0x100)
-        assertEquals(0L, range.length)
-        assertFalse(range.contains(addr(0x108)))
+        range.length mustBe 0L
+        range.mustNot { range.contains(addr(0x108)) }
     }
 }

@@ -10,13 +10,12 @@ import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghistabs.ImportOptions
 import ghistabs.StabsAnalyzer.Companion.import
-import ghistabs.defaultContext
 import ghistabs.diagnose.CapturingSink
 import ghistabs.diagnose.Level
 import ghistabs.diagnose.StabsDiagnostics
 import ghistabs.importer.ImportContext
+import ghistabs.test.*
 import org.junit.jupiter.api.AfterEach
-import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
@@ -84,14 +83,14 @@ class AoutStabsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         fun find(name: String) = dtm.allDataTypes.asSequence().firstOrNull { it.name == name }
 
         val message = find("message")
-        assertNotNull(message, "struct 'message' was not materialized from the a.out symbol table")
-        assertEquals(28, (message as Composite).length, "struct 'message' has the wrong size")
+        message.mustNotBeNull("struct 'message' was not materialized from the a.out symbol table")
+        (message as Composite).length.mustBe(28, "struct 'message' has the wrong size")
 
         val kind = find("kind")
-        assertNotNull(kind, "enum 'kind' was not materialized")
-        assertEquals(3, (kind as Enum).count, "enum 'kind' should have three enumerators")
+        kind.mustNotBeNull("enum 'kind' was not materialized")
+        (kind as Enum).count.mustBe(3, "enum 'kind' should have three enumerators")
 
-        assertNotNull(find("uint32"), "typedef 'uint32' was not materialized")
+        find("uint32").mustNotBeNull("typedef 'uint32' was not materialized")
     }
 
     /**
@@ -108,11 +107,11 @@ class AoutStabsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             CapturingSink(),
             StabsDiagnostics(),
         )
-        assertTrue(ctx.options.overlaySection, "this test is meaningless unless the overlay is on")
+        ctx.options.must("this test is meaningless unless the overlay is on") { overlaySection }
         ctx.import()
 
         val symtab = program.memory.getBlock(".symtab")
-        assertNotNull(symtab, "a.out loader should expose the symbol table as .symtab")
+        symtab.mustNotBeNull("a.out loader should expose the symbol table as .symtab")
 
         // Not at symtab.start: entry 0 is a link-time symbol (`.Ltext0`), which SYMTAB layout
         // skips. Only the stab-typed entries get decorated.
@@ -120,11 +119,13 @@ class AoutStabsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             .takeWhile { it.address <= symtab.end }
             .filter { it.dataType.name == "StabRecord" }
             .toList()
-        assertTrue(overlaid.isNotEmpty(), "no decoded StabRecord laid anywhere in .symtab")
-        assertTrue(
-            overlaid.any { program.listing.getComment(CommentType.EOL, it.address)?.contains("N_SO") == true },
-            "expected the N_SO record to be decoded and commented",
-        )
+        overlaid.mustNotBeEmpty("no decoded StabRecord laid anywhere in .symtab")
+        overlaid.must("expected the N_SO record to be decoded and commented") {
+            any {
+                program.listing.getComment(CommentType.EOL, it.address)?.contains("N_SO") ==
+                    true
+            }
+        }
     }
 
     /**
@@ -143,14 +144,14 @@ class AoutStabsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         // One type from each of two different translation units — proves N_SO-delimited CU tracking
         // rather than just that the first unit parsed.
         val gz = find("gz_stream")
-        assertNotNull(gz, "gz_stream (gzio.c) was not materialized")
-        assertEquals(100, (gz as Composite).length, "gz_stream has the wrong size")
+        gz.mustNotBeNull("gz_stream (gzio.c) was not materialized")
+        (gz as Composite).length.mustBe(100, "gz_stream has the wrong size")
 
         val blocks = find("inflate_blocks_state")
-        assertNotNull(blocks, "inflate_blocks_state (infblock.c) was not materialized")
-        assertEquals(64, (blocks as Composite).length, "inflate_blocks_state has the wrong size")
+        blocks.mustNotBeNull("inflate_blocks_state (infblock.c) was not materialized")
+        (blocks as Composite).length.mustBe(64, "inflate_blocks_state has the wrong size")
 
-        assertNotNull(find("config_s"), "config_s (deflate.c) was not materialized")
+        find("config_s").mustNotBeNull("config_s (deflate.c) was not materialized")
 
         // zlib also gives a divergent cross-CU definition for free: `internal_state` is a 4-byte
         // opaque stub in zlib.h but the real 5816-byte struct inside deflate.c. Not asserted here —

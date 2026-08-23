@@ -5,11 +5,12 @@ import ghidra.program.model.address.Address
 import ghidra.program.model.data.Structure
 import ghidra.program.model.listing.CommentType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghistabs.defaultContext
 import ghistabs.importer.StabSectionOverlay
 import ghistabs.parse.STAB_RECORD_SIZE
+import ghistabs.test.defaultContext
+import ghistabs.test.mustBe
+import ghistabs.test.mustNotBeNull
 import org.junit.jupiter.api.AfterEach
-import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
@@ -60,29 +61,29 @@ class StabSectionOverlayIntegrationTest : AbstractGhidraHeadlessIntegrationTest(
     fun overlaysDecodedStructsRefsAndComments() {
         val program = builder.program
         val applied = StabSectionOverlay(program.defaultContext()).apply()
-        assertEquals(3, applied, "all three physical records overlaid")
+        applied.mustBe(3, "all three physical records overlaid")
 
         // Every record is a StabRecord struct.
         for (i in 0 until 3) {
             val data = program.listing.getDataAt(addr(stabBase + i * STAB_RECORD_SIZE))
-            assertNotNull(data, "data at record $i")
-            assertTrue(data!!.dataType is Structure && data.dataType.name == "StabRecord", "record $i is StabRecord")
+            data.mustNotBeNull("data at record $i")
+            (data!!.dataType as? Structure)?.name.mustBe("StabRecord", "record $i is StabRecord")
         }
 
         val funRec = stabBase + STAB_RECORD_SIZE
 
         // N_FUN: n_strx (field 0) → "main" at .stabstr+1; n_value (offset 8) → the function.
         val strxRefs = program.referenceManager.getReferencesFrom(addr(funRec))
-        assertEquals(stabstrBase + 1, strxRefs.single().toAddress.offset, "n_strx → main string")
+        strxRefs.single().toAddress.offset.mustBe(stabstrBase + 1, "n_strx → main string")
         val valueRefs = program.referenceManager.getReferencesFrom(addr(funRec + 8))
-        assertEquals(funcAddr, valueRefs.single().toAddress.offset, "n_value → function")
+        valueRefs.single().toAddress.offset.mustBe(funcAddr, "n_value → function")
 
         // EOL comment decodes type + name.
-        assertEquals("N_FUN \"main\"", program.listing.getComment(CommentType.EOL, addr(funRec)))
+        program.listing.getComment(CommentType.EOL, addr(funRec)) mustBe "N_FUN \"main\""
 
         // The referenced .stabstr strings are defined.
         val mainStr = program.listing.getDataAt(addr(stabstrBase + 1))
-        assertTrue(mainStr?.value == "main", "main string defined in .stabstr")
+        mainStr?.value.mustBe("main", "main string defined in .stabstr")
     }
 
     @Test
@@ -90,7 +91,7 @@ class StabSectionOverlayIntegrationTest : AbstractGhidraHeadlessIntegrationTest(
         val program = builder.program
         StabSectionOverlay(program.defaultContext()).apply()
         val again = StabSectionOverlay(program.defaultContext()).apply()
-        assertEquals(3, again, "re-apply reuses the StabRecord datatype and re-overlays cleanly")
-        assertEquals(1, program.dataTypeManager.allStructures.asSequence().count { it.name == "StabRecord" })
+        again.mustBe(3, "re-apply reuses the StabRecord datatype and re-overlays cleanly")
+        program.dataTypeManager.allStructures.asSequence().count { it.name == "StabRecord" } mustBe 1
     }
 }

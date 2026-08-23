@@ -5,8 +5,8 @@ import ghistabs.diagnose.DummySink
 import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Struct.Field
 import ghistabs.parse.TypeDecl.Struct.Method
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertNotEquals
+import ghistabs.test.mustBe
+import ghistabs.test.mustNotBe
 import org.junit.jupiter.api.Test
 
 open class TestContentIndex(val asts: Map<GlobalTypeId, Type>) :
@@ -65,14 +65,14 @@ class ContentIndexTest {
     fun refsToSameNamedTypeFromDifferentCUsHashIdentically() {
         val refToIntFromCU1 = TypeDecl.Ref(intInCU1.id)
         val refToIntFromCU2 = TypeDecl.Ref(intInCU2.id)
-        assertEquals(oracle.content(refToIntFromCU1), oracle.content(refToIntFromCU2))
+        oracle.content(refToIntFromCU2) mustBe oracle.content(refToIntFromCU1)
     }
 
     @Test
     fun refsToDifferentlyNamedTypesHashDifferently() {
         val refToInt = TypeDecl.Ref(intInCU1.id)
         val refToChar = TypeDecl.Ref(charInCU1.id)
-        assertNotEquals(oracle.content(refToInt), oracle.content(refToChar))
+        oracle.content(refToChar).mustNotBe(oracle.content(refToInt))
     }
 
     /**
@@ -101,13 +101,10 @@ class ContentIndexTest {
         )
         val store = mapOf(boolInCU1.id to boolInCU1, boolInCU2.id to boolInCU2)
         val o = TestContentIndex(store)
-        assertEquals(o.content(boolInCU1.body), o.content(boolInCU2.body))
+        o.content(boolInCU2.body) mustBe o.content(boolInCU1.body)
         // And the Refs into them — what the surrounding struct's field
         // type expression actually looks like — must agree too.
-        assertEquals(
-            o.content(TypeDecl.Ref(boolInCU1.id)),
-            o.content(TypeDecl.Ref(boolInCU2.id)),
-        )
+        o.content(TypeDecl.Ref(boolInCU2.id)) mustBe o.content(TypeDecl.Ref(boolInCU1.id))
     }
 
     @Test
@@ -117,7 +114,7 @@ class ContentIndexTest {
         // Two evaluations of the same unresolved ref agree with each
         // other; the unresolved branch must be deterministic so
         // collision detection isn't randomized.
-        assertEquals(oracle.content(ref), oracle.content(ref))
+        oracle.content(ref) mustBe oracle.content(ref)
     }
 
     /**
@@ -148,7 +145,7 @@ class ContentIndexTest {
         val clone2Body = clone1Body.copy(
             fields = listOf(clone1Body.fields[0].copy(type = TypeDecl.Ref(intInCU2.id))),
         )
-        assertEquals(oracle.content(clone1Body), oracle.content(clone2Body))
+        oracle.content(clone2Body) mustBe oracle.content(clone1Body)
     }
 
     @Test
@@ -172,7 +169,7 @@ class ContentIndexTest {
             vptrBasetype = null,
         )
         val s2 = s1.copy(fields = listOf(s1.fields[0].copy(type = TypeDecl.Ref(charInCU1.id))))
-        assertNotEquals(oracle.content(s1), oracle.content(s2))
+        oracle.content(s2).mustNotBe(oracle.content(s1))
     }
 
     /**
@@ -200,8 +197,8 @@ class ContentIndexTest {
             fields = base.fields +
                 Field("s", TypeDecl.Ref(charInCU1.id), 0L, 0L, isStatic = true, Access.PUBLIC, mangled = null),
         )
-        assertEquals(oracle.content(base), oracle.content(withStaticInt))
-        assertEquals(oracle.content(withStaticInt), oracle.content(withStaticChar))
+        oracle.content(withStaticInt) mustBe oracle.content(base)
+        oracle.content(withStaticChar) mustBe oracle.content(withStaticInt)
     }
 
     /**
@@ -216,7 +213,7 @@ class ContentIndexTest {
         val body = TypeDecl.Pointer(TypeDecl.Ref(charInCU1.id))
         val inline1 = TypeDecl.InlineDef(intInCU1.id, body)
         val inline2 = TypeDecl.InlineDef(intInCU2.id, body)
-        assertEquals(oracle.content(inline1), oracle.content(inline2))
+        oracle.content(inline2) mustBe oracle.content(inline1)
     }
 
     /**
@@ -243,7 +240,7 @@ class ContentIndexTest {
             GlobalTypeId(SourceFile.CUSource("d.cpp"), 99),
             TypeDecl.Pointer(TypeDecl.Ref(intInCU1.id)),
         )
-        assertEquals(oracle2.content(asRef), oracle2.content(asInline))
+        oracle2.content(asInline) mustBe oracle2.content(asRef)
     }
 
     /**
@@ -293,11 +290,7 @@ class ContentIndexTest {
         // Ref(97) must hash to the same value as the actual struct body
         val hashViaForwardRef = o.content(TypeDecl.Ref(id97))
         val hashViaDirectRef = o.content(ioFileBody)
-        assertEquals(
-            hashViaDirectRef,
-            hashViaForwardRef,
-            "forward-ref alias must hash as the struct body, not BACK_EDGE_HASH",
-        )
+        hashViaForwardRef.mustBe(hashViaDirectRef, "forward-ref alias must hash as the struct body, not BACK_EDGE_HASH")
     }
 
     @Test
@@ -305,7 +298,7 @@ class ContentIndexTest {
         val h = oracle.content(intInCU1.body)
         // Plain assertion that it returned; if it had infinite-looped
         // we'd never get here.
-        assertNotEquals(ContentIndex.LayoutContent(), h)
+        h.mustNotBe(ContentIndex.LayoutContent())
     }
 
     /**
@@ -406,7 +399,7 @@ class ContentIndexTest {
 
         val h0 = storeOracle.content(variant0)
         val h1 = storeOracle.content(variant1)
-        assertEquals(h0, h1, "variant_0 (Ref param) and variant_1 (InlineDef param) must hash identically")
+        h1.mustBe(h0, "variant_0 (Ref param) and variant_1 (InlineDef param) must hash identically")
     }
 
     /**
@@ -423,9 +416,9 @@ class ContentIndexTest {
         val sized = TypeDecl.WithSizeAttr(8, range)
         val slot = TypeDecl.Builtin<GlobalTypeId>(-2)
         val signedCharRange = TypeDecl.Range(GlobalTypeId(SourceFile.CUSource("a.cpp"), 14), -128L, 127L)
-        assertEquals(oracle.content(range), oracle.content(sized))
-        assertEquals(oracle.content(range), oracle.content(slot))
-        assertEquals(oracle.content(range), oracle.content(signedCharRange))
+        oracle.content(sized) mustBe oracle.content(range)
+        oracle.content(slot) mustBe oracle.content(range)
+        oracle.content(signedCharRange) mustBe oracle.content(range)
     }
 
     /**
@@ -438,9 +431,9 @@ class ContentIndexTest {
         val char = TypeDecl.Range(GlobalTypeId(SourceFile.CUSource("a.cpp"), 2), 0L, 127L)
         val unsignedChar = TypeDecl.Range(GlobalTypeId(SourceFile.CUSource("a.cpp"), 11), 0L, 255L)
         val wcharRange = TypeDecl.Range(GlobalTypeId(SourceFile.CUSource("a.cpp"), 30), 0L, 65535L)
-        assertNotEquals(oracle.content(char), oracle.content(unsignedChar))
-        assertNotEquals(oracle.content(char), oracle.content(wcharRange))
-        assertNotEquals(oracle.content(unsignedChar), oracle.content(wcharRange))
+        oracle.content(unsignedChar).mustNotBe(oracle.content(char))
+        oracle.content(wcharRange).mustNotBe(oracle.content(char))
+        oracle.content(wcharRange).mustNotBe(oracle.content(unsignedChar))
     }
 
     @Test
@@ -476,7 +469,7 @@ class ContentIndexTest {
             TypeDecl.Pointer(TypeDecl.Ref(pairId)),
         )
 
-        assertEquals(storeOracle.content(formA), storeOracle.content(formB))
+        storeOracle.content(formB) mustBe storeOracle.content(formA)
     }
 
     /**
@@ -497,6 +490,7 @@ class ContentIndexTest {
             isVolatile = false,
             vtableOffsetBits = vtoff,
         )
+
         fun cls(method: Method<GlobalTypeId>) = TypeDecl.Struct(
             rawKind = AggrKind.CLASS,
             sizeBytes = 4,
@@ -505,14 +499,13 @@ class ContentIndexTest {
             methods = listOf(method),
             vptrBasetype = null,
         )
+
         val definingCu = cls(method(VirtKind.VIRTUAL, 0L))
         val referencingCu = cls(method(VirtKind.NORMAL, null))
 
-        assertEquals(
-            oracle.content(definingCu),
-            oracle.content(referencingCu),
-            "contentHash ignores per-CU method virt/order noise",
-        )
+        oracle.content(
+            referencingCu,
+        ).mustBe(oracle.content(definingCu), "contentHash ignores per-CU method virt/order noise")
     }
 
     /**
@@ -524,7 +517,7 @@ class ContentIndexTest {
     fun contentResolvesRefsBeneathGenericLayoutNodes() {
         val toInt = TypeDecl.Pointer(TypeDecl.Ref(intInCU1.id))
         val toChar = TypeDecl.Pointer(TypeDecl.Ref(charInCU1.id))
-        assertNotEquals(oracle.content(toInt), oracle.content(toChar), "content distinguishes int* from char*")
+        oracle.content(toInt).mustNotBe(oracle.content(toChar), "content distinguishes int* from char*")
     }
 
     @Test
@@ -537,10 +530,11 @@ class ContentIndexTest {
             methods = emptyList(),
             vptrBasetype = null,
         )
+
         val a = cls(TypeDecl.Ref(intInCU1.id))
         val b = cls(TypeDecl.Float(8))
-        assertNotEquals(oracle.content(a), oracle.content(b), "different field type ⇒ not content-equal")
+        oracle.content(a).mustNotBe(oracle.content(b), "different field type ⇒ not content-equal")
         // Same layout built twice ⇒ one value, so grouping puts them in one class.
-        assertEquals(oracle.content(a), oracle.content(cls(TypeDecl.Ref(intInCU1.id))))
+        oracle.content(cls(TypeDecl.Ref(intInCU1.id))) mustBe oracle.content(a)
     }
 }

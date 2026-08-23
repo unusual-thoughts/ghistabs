@@ -1,10 +1,11 @@
 package ghistabs.harvest
 
 import ghistabs.diagnose.DummySink
-import ghistabs.dummyHarvester
 import ghistabs.parse.SourceFile
-import org.junit.jupiter.api.Assertions.assertNotNull
-import org.junit.jupiter.api.Assertions.assertSame
+import ghistabs.test.dummyHarvester
+import ghistabs.test.mustBeSameAs
+import ghistabs.test.mustNotBe
+import ghistabs.test.mustNotBeNull
 import org.junit.jupiter.api.Test
 
 /**
@@ -28,15 +29,15 @@ class HarvesterGapTest {
 
         val h1 = ctx1.headerForFileNum(fn1)
         val h2 = ctx2.headerForFileNum(fn2)
-        assertNotNull(h1, "forward-EXCL should create a placeholder HeaderFile")
-        assertNotNull(h2, "BINCL should reuse the placeholder")
-        assertSame(h1, h2, "placeholder and real BINCL must share one HeaderFile instance")
+        h1.mustNotBeNull("forward-EXCL should create a placeholder HeaderFile")
+        h2.mustNotBeNull("BINCL should reuse the placeholder")
+        h1.mustBeSameAs(h2, "placeholder and real BINCL must share one HeaderFile instance")
     }
 
     /** Collisions surface on [Harvest.rawCollisions] for post-hoc diagnostics; no production consumer reads it. */
     @Test
     fun `rawCollisions is accessible on an empty harvest`() {
         val harvest = dummyHarvester().second.harvest(emptyList())
-        assertNotNull(harvest.rawCollisions)
+        harvest.rawCollisions mustNotBe null
     }
 }

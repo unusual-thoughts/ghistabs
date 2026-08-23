@@ -1,42 +1,33 @@
 package ghistabs.parse
 
-import org.junit.jupiter.api.Assertions
+import ghistabs.test.mustBe
 import org.junit.jupiter.api.Test
 
 class NamesTest {
     @Test
     fun `splits plain namespace chain`() {
-        Assertions.assertEquals(listOf("std", "vector"), splitQualified("std::vector"))
+        splitQualified("std::vector") mustBe listOf("std", "vector")
     }
 
     @Test
     fun `keeps inner scope-sep inside angle brackets together`() {
-        Assertions.assertEquals(
-            listOf("std", "map<std::string, int>"),
-            splitQualified("std::map<std::string, int>"),
-        )
+        splitQualified("std::map<std::string, int>") mustBe listOf("std", "map<std::string, int>")
     }
 
     @Test
     fun `handles deeply nested templates`() {
-        val input =
-            "std::basic_string<char, std::char_traits<char>, std::allocator<char>>::basic_string"
-        Assertions.assertEquals(
-            listOf(
-                "std",
-                "basic_string<char, std::char_traits<char>, std::allocator<char>>",
-                "basic_string",
-            ),
-            splitQualified(input),
+        val input = "std::basic_string<char, std::char_traits<char>, std::allocator<char>>::basic_string"
+
+        splitQualified(input) mustBe listOf(
+            "std",
+            "basic_string<char, std::char_traits<char>, std::allocator<char>>",
+            "basic_string",
         )
     }
 
     @Test
     fun `keeps scope-sep inside parens together`() {
-        Assertions.assertEquals(
-            listOf("ns", "f(std::pair<int, int>)"),
-            splitQualified("ns::f(std::pair<int, int>)"),
-        )
+        splitQualified("ns::f(std::pair<int, int>)") mustBe listOf("ns", "f(std::pair<int, int>)")
     }
 
     @Test
@@ -45,24 +36,21 @@ class NamesTest {
         // not as comparison operators — gcc writes type expressions, not
         // value expressions. We only need depth tracking that survives
         // balanced templates.
-        Assertions.assertEquals(
-            listOf("ns", "less<int>", "operator()"),
-            splitQualified("ns::less<int>::operator()"),
-        )
+        splitQualified("ns::less<int>::operator()") mustBe listOf("ns", "less<int>", "operator()")
     }
 
     @Test
     fun `empty leading separator collapses to single segment`() {
-        Assertions.assertEquals(listOf("foo"), splitQualified("::foo"))
+        splitQualified("::foo") mustBe listOf("foo")
     }
 
     @Test
     fun `single name returns itself`() {
-        Assertions.assertEquals(listOf("Foo"), splitQualified("Foo"))
+        splitQualified("Foo") mustBe listOf("Foo")
     }
 
     @Test
     fun `empty string returns empty list`() {
-        Assertions.assertEquals(emptyList<String>(), splitQualified(""))
+        splitQualified("") mustBe emptyList()
     }
 }

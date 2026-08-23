@@ -1,7 +1,7 @@
 package ghistabs.scan
 
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertNull
+import ghistabs.test.mustBe
+import ghistabs.test.mustBeNull
 import org.junit.jupiter.api.Test
 
 /** What the declarator index reads off C++ text, on the shapes libstdc++ actually contains. */
@@ -23,9 +23,9 @@ class ScanTest {
               }
             };
         """
-        assertEquals("size", enclosing(src, 4))
-        assertEquals("grow", enclosing(src, 7))
-        assertNull(enclosing(src, 2), "a class body is not a function")
+        enclosing(src, 4) mustBe "size"
+        enclosing(src, 7) mustBe "grow"
+        enclosing(src, 2).mustBeNull("a class body is not a function")
     }
 
     @Test
@@ -34,8 +34,8 @@ class ScanTest {
             void f() { char c = '}'; /* } */ }
             void g() { }
         """
-        assertEquals("f", enclosing(src, 1))
-        assertEquals("g", enclosing(src, 2))
+        enclosing(src, 1) mustBe "f"
+        enclosing(src, 2) mustBe "g"
     }
 
     /** The template argument list must not be mistaken for part of the name. */
@@ -49,9 +49,9 @@ class ScanTest {
               ++_M_finish;
             }
         """
-        assertEquals("vector<_Tp, _Alloc>::_M_insert_aux", enclosing(src, 5))
+        enclosing(src, 5) mustBe "vector<_Tp, _Alloc>::_M_insert_aux"
         // The parameter list comes along, whitespace collapsed, for the heads gcc left without one.
-        assertEquals("iterator __position, const _Tp& __x", index(src).definitions.single().params)
+        index(src).definitions.single().params mustBe "iterator __position, const _Tp& __x"
     }
 
     @Test
@@ -69,7 +69,7 @@ class ScanTest {
             }
             }
         """
-        assertEquals(listOf("f"), index(src).definitions.map { it.name })
+        index(src).definitions.map { it.name } mustBe listOf("f")
     }
 
     /**
@@ -90,8 +90,8 @@ class ScanTest {
               _Tp* _M_start;
             };
         """
-        assertEquals("_Vector_alloc_base", enclosing(src, 7))
-        assertEquals("get_allocator", enclosing(src, 3))
+        enclosing(src, 7) mustBe "_Vector_alloc_base"
+        enclosing(src, 3) mustBe "get_allocator"
     }
 
     @Test
@@ -102,7 +102,7 @@ class ScanTest {
             private: A() : _n(0) { }
             };
         """
-        assertEquals(listOf("f", "A"), index(src).definitions.map { it.name })
+        index(src).definitions.map { it.name } mustBe listOf("f", "A")
     }
 
     @Test
@@ -115,10 +115,7 @@ class ScanTest {
               ~_Less() throw() { }
             };
         """
-        assertEquals(
-            listOf("operator()", "operator<", "operator new", "~_Less"),
-            index(src).definitions.map { it.name },
-        )
+        index(src).definitions.map { it.name } mustBe listOf("operator()", "operator<", "operator new", "~_Less")
     }
 
     /** A header read mid-write, or one whose last branch a conditional left open. */
@@ -128,7 +125,7 @@ class ScanTest {
             void f() {
               int a = 1;
         """
-        assertEquals(Definition("f", "", 1, 2), index(src).definitions.single())
+        index(src).definitions.single() mustBe Definition("f", "", 1, 2)
     }
 
     /** `class _Rope;` is not one: a forward declaration would let `stringfwd.h` outrank the header
@@ -143,22 +140,19 @@ class ScanTest {
             struct _Rope { int _M_c; };
             enum _Kind { _Small };
         """
-        assertEquals(
-            mapOf(
-                "_Rope" to listOf(5),
-                "_Size" to listOf(2),
-                "_Pair" to listOf(3),
-                "_Cmp" to listOf(4),
-                "_Kind" to listOf(6),
-            ),
-            index(src).declarations,
+        index(src).declarations mustBe mapOf(
+            "_Rope" to listOf(5),
+            "_Size" to listOf(2),
+            "_Pair" to listOf(3),
+            "_Cmp" to listOf(4),
+            "_Kind" to listOf(6),
         )
     }
 
     /** The extent an included file is given (§43) — a trailing newline does not add a line to it. */
     @Test
     fun `the line count is the file's last line`() {
-        assertEquals(2, DeclaratorIndex("void f() { }\nvoid g() { }\n").lineCount)
-        assertEquals(2, DeclaratorIndex("void f() { }\nvoid g() { }").lineCount)
+        DeclaratorIndex("void f() { }\nvoid g() { }\n").lineCount mustBe 2
+        DeclaratorIndex("void f() { }\nvoid g() { }").lineCount mustBe 2
     }
 }

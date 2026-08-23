@@ -3,11 +3,7 @@ package ghistabs.probe
 import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.app.util.importer.MessageLog
 import ghidra.app.util.importer.ProgramLoader
-import ghidra.program.model.data.Composite
-import ghidra.program.model.data.DataType
-import ghidra.program.model.data.Pointer
-import ghidra.program.model.data.Structure
-import ghidra.program.model.data.TypeDef
+import ghidra.program.model.data.*
 import ghidra.program.model.listing.Program
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
@@ -17,11 +13,11 @@ import ghistabs.StabsAnalyzer.Companion.import
 import ghistabs.diagnose.CapturingSink
 import ghistabs.diagnose.Level
 import ghistabs.diagnose.StabsDiagnostics
-import ghistabs.disableWindowsResourceAnalyzer
 import ghistabs.importer.ImportContext
 import ghistabs.importer.ImportProbe
 import ghistabs.materialize.isUndefined
 import ghistabs.runTransaction
+import ghistabs.test.disableWindowsResourceAnalyzer
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.params.ParameterizedTest

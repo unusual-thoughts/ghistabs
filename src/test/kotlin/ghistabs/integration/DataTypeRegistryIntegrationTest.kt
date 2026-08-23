@@ -4,14 +4,14 @@ import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.data.TypeDef
 import ghidra.program.model.data.UnsignedIntegerDataType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghistabs.defaultContext
 import ghistabs.importer.StabsImporter
 import ghistabs.parse.StabReader
 import ghistabs.parse.StabRecord
 import ghistabs.parse.StabType
+import ghistabs.test.defaultContext
+import ghistabs.test.must
+import ghistabs.test.mustNotBeNull
 import org.junit.jupiter.api.AfterEach
-import org.junit.jupiter.api.Assertions.assertNotNull
-import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
@@ -91,10 +91,9 @@ class DataTypeRegistryIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
         val result = importer.runOnRecords(StabReader.Result(records))
 
         // Verify types were materialized (dedup happens internally)
-        assertTrue(
-            result.types.harvested > 0,
+        result.types.harvested.must(
             "Importer should have materialized types (with internal dedup)",
-        )
+        ) { this > 0 }
     }
 
     /**
@@ -139,7 +138,7 @@ class DataTypeRegistryIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
         val result = importer.runOnRecords(StabReader.Result(records))
 
         // Importer should complete successfully, handling conflicts internally
-        assertTrue(result.types.harvested > 0, "Conflict handling should preserve both struct definitions")
+        result.types.must("Conflict handling should preserve both struct definitions") { harvested > 0 }
     }
 
     /**
@@ -172,7 +171,7 @@ class DataTypeRegistryIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
         val result = importer.runOnRecords(StabReader.Result(records))
 
         // Verify types were materialized with attribution
-        assertTrue(result.types.harvested > 0, "Types should be materialized with category attribution")
+        result.types.must("Types should be materialized with category attribution") { harvested > 0 }
     }
 
     /**
@@ -207,10 +206,8 @@ class DataTypeRegistryIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
         val result = importer.runOnRecords(StabReader.Result(records))
 
         // Importer should complete successfully without infinite loop
-        assertTrue(
-            result.types.harvested > 0,
-            "Self-referential types should be handled correctly",
-        )
+
+        result.types.must("Self-referential types should be handled correctly") { harvested > 0 }
     }
 
     /**
@@ -254,10 +251,7 @@ class DataTypeRegistryIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
         val result = importer.runOnRecords(StabReader.Result(records))
 
         // Both structures should be materialized without infinite loop
-        assertTrue(
-            result.types.harvested >= 2,
-            "Mutually referential types should be handled correctly",
-        )
+        result.types.must("Mutually referential types should be handled correctly") { harvested >= 2 }
     }
 
     /** Named primitive typedef: `unsigned int:t(0,4)=r(0,4);0;4294967295;` → /unsigned_int TypeDef. */
@@ -274,16 +268,14 @@ class DataTypeRegistryIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
         val dtm = program.dataTypeManager
         val found = dtm.allDataTypes.asSequence().filter { it.name == "unsigned_int" }.toList()
         val u = found.singleOrNull()
-        assertNotNull(
-            u,
+        u.mustNotBeNull(
             "expected 1 type named 'unsigned_int', got ${found.size}: " +
                 found.map { "${it::class.simpleName}@${it.categoryPath}" },
         )
         val nnu = u ?: return
         val base = (nnu as? TypeDef)?.baseDataType ?: nnu
-        assertTrue(
-            base.isEquivalent(UnsignedIntegerDataType()),
-            "expected unsigned_int -> uint, got ${nnu::class.simpleName}(${nnu.name})",
-        )
+        base.must("expected unsigned_int -> uint, got ${nnu::class.simpleName}(${nnu.name})") {
+            isEquivalent(UnsignedIntegerDataType())
+        }
     }
 }

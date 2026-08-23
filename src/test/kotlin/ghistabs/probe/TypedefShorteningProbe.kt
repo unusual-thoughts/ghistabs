@@ -6,12 +6,12 @@ import ghidra.app.util.importer.ProgramLoader
 import ghidra.program.model.data.Composite
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
-import ghistabs.defaultContext
-import ghistabs.disableWindowsResourceAnalyzer
 import ghistabs.materialize.TypedefShortener
 import ghistabs.runTransaction
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertTrue
+import ghistabs.test.defaultContext
+import ghistabs.test.disableWindowsResourceAnalyzer
+import ghistabs.test.must
+import ghistabs.test.mustBe
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.params.ParameterizedTest
@@ -63,10 +63,10 @@ class TypedefShorteningProbe : AbstractGhidraHeadlessIntegrationTest() {
                 // — including folding the pre-existing `string` typedef out of the way (name collision).
                 assumeTrue(renames.any { it.to == "string" }, "no std::string typedef in this binary")
                 val renamed = program.runTransaction("probe-apply") { shortener.apply() }
-                assertTrue(renamed > 0, "apply renamed nothing")
+                renamed.must("apply renamed nothing") { this > 0 }
                 val stringStruct = program.dataTypeManager.allDataTypes.asSequence()
                     .any { it.name == "string" && it is Composite }
-                assertEquals(true, stringStruct, "basic_string should now be a Composite named 'string'")
+                stringStruct.mustBe(true, "basic_string should now be a Composite named 'string'")
             }
     }
 }

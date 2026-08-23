@@ -1,6 +1,5 @@
 package ghistabs.render
 
-import ghistabs.GenericAddressResolver
 import ghistabs.harvest.Func
 import ghistabs.harvest.LineEntry
 import ghistabs.harvest.sourceFileOf
@@ -8,8 +7,8 @@ import ghistabs.parse.FunctionScope
 import ghistabs.parse.SourceFile
 import ghistabs.parse.SymbolDecl
 import ghistabs.parse.TypeDecl
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertNull
+import ghistabs.test.GenericAddressResolver
+import ghistabs.test.mustBe
 import org.junit.jupiter.api.Test
 
 /**
@@ -41,9 +40,9 @@ class FunctionSpansTest {
         val b = fn("b", 0x2000, "s.cpp", listOf(20, 21, 22))
         val spans = FunctionSpans.of(listOf(a, b), sourceFileOf("s.cpp"))
 
-        assertEquals(listOf(10..12, 20..22), spans.ranges.map { it.lines })
-        assertEquals(13, spans.closeOf(a))
-        assertEquals(23, spans.closeOf(b))
+        spans.ranges.map { it.lines } mustBe listOf(10..12, 20..22)
+        spans.closeOf(a) mustBe 13
+        spans.closeOf(b) mustBe 23
     }
 
     @Test
@@ -52,8 +51,8 @@ class FunctionSpansTest {
         val b = fn("b", 0x2000, "s.cpp", listOf(13, 14)) // opens exactly where a would close
         val spans = FunctionSpans.of(listOf(a, b), sourceFileOf("s.cpp"))
 
-        assertEquals(12, spans.closeOf(a)) // not 13 — would collide with b's opener
-        assertEquals(15, spans.closeOf(b))
+        spans.closeOf(a) mustBe 12 // not 13 — would collide with b's opener
+        spans.closeOf(b) mustBe 15
     }
 
     @Test
@@ -65,7 +64,7 @@ class FunctionSpansTest {
         val spans = FunctionSpans.of(listOf(a, b), sourceFileOf("s.cpp"))
 
         val bRange = spans.ranges.single { it.func === b }
-        assertEquals(40, bRange.start) // clamped to prologue, not 5
+        bRange.start mustBe 40 // clamped to prologue, not 5
     }
 
     @Test
@@ -74,7 +73,7 @@ class FunctionSpansTest {
         val inner = fn("inner", 0x2000, "s.cpp", listOf(20, 30)) // 20..30 ⊂ 10..50
         val spans = FunctionSpans.of(listOf(outer, inner), sourceFileOf("s.cpp"))
 
-        assertEquals(listOf(outer), spans.ranges.map { it.func })
+        spans.ranges.map { it.func } mustBe listOf(outer)
     }
 
     @Test
@@ -82,9 +81,9 @@ class FunctionSpansTest {
         val f = fn("f", 0x1000, "s.cpp", listOf(10))
         val spans = FunctionSpans.of(listOf(f), sourceFileOf("s.cpp"))
 
-        assertEquals(1, spans.ranges.size)
-        assertNull(spans.closeOf(f))
-        assertEquals(true, spans.inFunction(10))
+        spans.ranges.size mustBe 1
+        spans.closeOf(f) mustBe null
+        spans.inFunction(10) mustBe true
     }
 
     // The interior is what `reportAnomalies` scans for a function/type/global filed inside
@@ -93,10 +92,10 @@ class FunctionSpansTest {
     fun `interior is the lines strictly between the brackets, in both close-line cases`() {
         val a = fn("a", 0x1000, "s.cpp", listOf(10, 11, 12)) // closes on 13
         val b = fn("b", 0x2000, "s.cpp", listOf(20, 21, 22))
-        assertEquals(11..12, FunctionSpans.of(listOf(a, b), sourceFileOf("s.cpp")).interiorOf(a))
+        FunctionSpans.of(listOf(a, b), sourceFileOf("s.cpp")).interiorOf(a) mustBe 11..12
 
         val c = fn("c", 0x2000, "s.cpp", listOf(13, 14)) // opens where a would close, pulling it to 12
-        assertEquals(11..11, FunctionSpans.of(listOf(a, c), sourceFileOf("s.cpp")).interiorOf(a))
+        FunctionSpans.of(listOf(a, c), sourceFileOf("s.cpp")).interiorOf(a) mustBe 11..11
     }
 
     @Test
@@ -106,7 +105,7 @@ class FunctionSpansTest {
         val f = fn("f", 0x1000, "hdr.h", listOf(50, 10))
         val spans = FunctionSpans.of(listOf(f), sourceFileOf("s.cpp"))
 
-        assertEquals(10..50, spans.ranges.single().lines)
-        assertEquals(51, spans.closeOf(f))
+        spans.ranges.single().lines mustBe 10..50
+        spans.closeOf(f) mustBe 51
     }
 }

@@ -1,11 +1,13 @@
 package ghistabs.harvest
 
-import ghistabs.indexOf
 import ghistabs.parse.AggrKind
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.SourceFile
 import ghistabs.parse.TypeDecl
-import org.junit.jupiter.api.Assertions.*
+import ghistabs.test.indexOf
+import ghistabs.test.must
+import ghistabs.test.mustBe
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 
 /**
@@ -44,16 +46,16 @@ class SourceRootAttributionTest {
         val index = indexOf(isPod)
         index.declarers = { (line, name) -> right.takeIf { name == "_Is_POD" && line == 111 } }
 
-        assertEquals(right, index.effectiveSourceFor(isPod))
+        index.effectiveSourceFor(isPod) mustBe right
     }
 
     @Test
     fun `no answer and no root leave the declaration where it was`() {
         val isPod = typedef("_Is_POD", 111, wrong)
-        assertEquals(wrong, indexOf(isPod).effectiveSourceFor(isPod))
+        indexOf(isPod).effectiveSourceFor(isPod) mustBe wrong
 
         val asked = indexOf(isPod).also { it.declarers = { _ -> null } }
-        assertEquals(wrong, asked.effectiveSourceFor(isPod))
+        asked.effectiveSourceFor(isPod) mustBe wrong
     }
 
     /**
@@ -66,12 +68,12 @@ class SourceRootAttributionTest {
         val here = typedef("_Trivial", 426, wrong)
         val there = typedef("_Trivial", 426, right)
         val disputed = indexOf(here, there)
-        assertTrue(Type.Decl(426, "_Trivial") in disputed.conflictedTypedefDecls, "two files, one line: disputed")
+        disputed.conflictedTypedefDecls.must("two files, one line: disputed") { contains(Type.Decl(426, "_Trivial")) }
 
         val settled = indexOf(here, there)
         settled.declarers = { (line, name) -> right.takeIf { name == "_Trivial" && line == 426 } }
-        assertEquals(emptySet<Type.Decl>(), settled.conflictedTypedefDecls)
-        assertEquals(listOf(right, right), listOf(here, there).map(settled::effectiveSourceFor))
+        settled.conflictedTypedefDecls mustBe emptySet<Type.Decl>()
+        listOf(here, there).map(settled::effectiveSourceFor) mustBe listOf(right, right)
     }
 
     /** The guard the root itself is judged by must see attribution *without* it, or it decides its
@@ -82,8 +84,8 @@ class SourceRootAttributionTest {
         val index = indexOf(isPod)
         index.declarers = { _ -> right }
 
-        assertEquals(listOf(isPod), index.baseTypesBySource[wrong])
-        assertEquals(listOf(isPod), index.typesBySource[right])
+        index.baseTypesBySource[wrong] mustBe listOf(isPod)
+        index.typesBySource[right] mustBe listOf(isPod)
     }
 
     /** Installed late, the root would be silently ignored: the per-source views memoise. */

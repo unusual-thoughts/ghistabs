@@ -1,7 +1,7 @@
 package ghistabs.scan
 
 import ghistabs.diagnose.CapturingSink
-import org.junit.jupiter.api.Assertions.assertEquals
+import ghistabs.test.mustBe
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -33,8 +33,8 @@ class LibstdcxxScanTest {
     fun `enclosing names the member a line falls in`() {
         val indexes = SourceIndexes()
 
-        assertEquals("_M_deallocate", indexes[include.resolve("bits/stl_vector.h")].enclosing(123)?.name)
-        assertEquals("_M_data", indexes[include.resolve("bits/basic_string.h")].enclosing(229)?.name)
+        indexes[include.resolve("bits/stl_vector.h")].enclosing(123)?.name mustBe "_M_deallocate"
+        indexes[include.resolve("bits/basic_string.h")].enclosing(229)?.name mustBe "_M_data"
     }
 
     /**
@@ -54,8 +54,8 @@ class LibstdcxxScanTest {
         // `# ifdef _GLIBCPP_USE_WCHAR_T` at L138 guards the wchar_t specialisation on L139-146.
         // Nothing defined it, so those are the header's dropped lines — numbered as the file numbers
         // them, not as the preprocessor's own output does.
-        assertEquals((139..146).toSet(), dropped)
-        assertEquals("struct __is_integer<wchar_t>", header.readLines()[139].trim())
+        dropped mustBe (139..146).toSet()
+        header.readLines()[139].trim() mustBe "struct __is_integer<wchar_t>"
     }
 
     private companion object {

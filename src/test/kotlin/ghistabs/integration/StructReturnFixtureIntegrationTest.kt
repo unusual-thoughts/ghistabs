@@ -8,10 +8,9 @@ import ghidra.program.model.listing.Program
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghistabs.Correction
-import ghistabs.disableWindowsResourceAnalyzer
 import ghistabs.functionsIterable
 import ghistabs.runTransaction
-import org.junit.jupiter.api.Assertions.*
+import ghistabs.test.*
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertAll
@@ -43,18 +42,18 @@ class StructReturnFixtureIntegrationTest : AbstractGhidraHeadlessIntegrationTest
         val pointer = program.defaultPointerSize
 
         assertAll(
-            { assertTrue(toMemory.isNotEmpty(), "expected non-trivial small class returns to be corrected to sret") },
-            { assertTrue(toRegister.isNotEmpty(), "expected trivial POD returns to be corrected to register") },
+            { toMemory.mustNotBeEmpty("expected non-trivial small class returns to be corrected to sret") },
+            { toRegister.mustNotBeEmpty("expected trivial POD returns to be corrected to register") },
             // Every correction is justified by the epilogue, in the direction it claims.
-            { toMemory.forEach { assertEquals(pointer, it.stackPurgeSize, "${it.name} @ ${it.entryPoint} purge") } },
-            { toRegister.forEach { assertEquals(0, it.stackPurgeSize, "${it.name} @ ${it.entryPoint} purge") } },
-            { toMemory.forEach { assertTrue(it.`return`.isForcedIndirect, "${it.name} must return indirect") } },
-            { toRegister.forEach { assertFalse(it.`return`.isForcedIndirect, "${it.name} must return in registers") } },
-            { toMemory.forEach { assertTrue(it.hasReturnStoragePtr(), "${it.name} needs the hidden pointer") } },
-            { toRegister.forEach { assertFalse(it.hasReturnStoragePtr(), "${it.name} must drop the hidden pointer") } },
+            { toMemory.forEach { it.stackPurgeSize.mustBe(pointer, "${it.name} @ ${it.entryPoint} purge") } },
+            { toRegister.forEach { it.stackPurgeSize.mustBe(0, "${it.name} @ ${it.entryPoint} purge") } },
+            { toMemory.forEach { it.`return`.must("${it.name} must return indirect") { isForcedIndirect } } },
+            { toRegister.forEach { it.`return`.mustNot("${it.name} must return in registers") { isForcedIndirect } } },
+            { toMemory.forEach { it.must("${it.name} needs the hidden pointer") { hasReturnStoragePtr() } } },
+            { toRegister.forEach { it.mustNot("${it.name} must drop the hidden pointer") { hasReturnStoragePtr() } } },
             { corrected.forEach { assertThisOffset(it, pointer) } },
             // Storage comes from the convention, never frozen onto the function.
-            { corrected.forEach { assertFalse(it.hasCustomVariableStorage(), "${it.name} has custom storage") } },
+            { corrected.forEach { it.mustNot("${it.name} has custom storage") { hasCustomVariableStorage() } } },
         )
     }
 
@@ -63,7 +62,7 @@ class StructReturnFixtureIntegrationTest : AbstractGhidraHeadlessIntegrationTest
         val self = f.parameters.firstOrNull { it.name == "this" } ?: return
         if (!self.variableStorage.isStackStorage) return
         val expected = pointer + if (f.hasReturnStoragePtr()) pointer else 0
-        assertEquals(expected, self.variableStorage.stackOffset, "${f.name} @ ${f.entryPoint}: `this` offset")
+        self.variableStorage.stackOffset.mustBe(expected, "${f.name} @ ${f.entryPoint}: `this` offset")
     }
 
     private fun Function.hasReturnStoragePtr() = parameters.any { it.name == "__return_storage_ptr__" }

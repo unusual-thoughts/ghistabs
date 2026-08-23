@@ -1,18 +1,12 @@
 package ghistabs.integration
 
 import ghidra.program.database.ProgramBuilder
-import ghidra.program.model.data.CategoryPath
-import ghidra.program.model.data.DataTypeConflictHandler
-import ghidra.program.model.data.Structure
-import ghidra.program.model.data.StructureDataType
-import ghidra.program.model.data.TypedefDataType
+import ghidra.program.model.data.*
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghistabs.defaultContext
-import ghistabs.defaultTypeRegistry
 import ghistabs.importer.DemanglerReplacer
 import ghistabs.runTransaction
+import ghistabs.test.*
 import org.junit.jupiter.api.AfterEach
-import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
@@ -94,16 +88,11 @@ class DemanglerReplaceIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
         // Verify that the stub is gone and the replacement remains.
         val stubPath = CategoryPath("/Demangler")
         val stubAfter = dtm.getDataType(stubPath, "Foo")
-        assertTrue(stubAfter == null, "/Demangler/Foo stub should have been replaced; still present: $stubAfter")
+        stubAfter.mustBeNull("/Demangler/Foo stub should have been replaced; still present: $stubAfter")
         val projPath = CategoryPath("/proj")
         val projAfter = dtm.getDataType(projPath, "Foo")
-        assertTrue(projAfter != null, "/proj/Foo (replacement) should still exist after DemanglerReplacer runs")
-        if (projAfter != null) {
-            assertTrue(
-                projAfter is Structure,
-                "/proj/Foo should remain a Structure",
-            )
-        }
+        projAfter.mustNotBeNull("/proj/Foo (replacement) should still exist after DemanglerReplacer runs")
+        projAfter.mustBeA<Structure>("/proj/Foo should remain a Structure")
     }
 
     /**
@@ -143,7 +132,7 @@ class DemanglerReplaceIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
         // Assert /proj/Foo still exists
         val projPath = CategoryPath("/proj")
         val projAfter = dtm.getDataType(projPath, "Foo")
-        assertTrue(projAfter != null, "/proj/Foo should still exist after idempotent run")
+        projAfter.mustNotBeNull("/proj/Foo should still exist after idempotent run")
     }
 
     /**
@@ -181,8 +170,7 @@ class DemanglerReplaceIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
             dtm.createCategory(CategoryPath("/Demangler/std")).addDataType(stub, DataTypeConflictHandler.KEEP_HANDLER)
         }
 
-        assertTrue(
-            dtm.getDataType(CategoryPath("/Demangler/std"), "string") != null,
+        dtm.getDataType(CategoryPath("/Demangler/std"), "string").mustNotBeNull(
             "precondition: injected /Demangler/std/string stub should exist",
         )
 
@@ -190,8 +178,7 @@ class DemanglerReplaceIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
             DemanglerReplacer(ctx, registry).replace()
         }
 
-        assertTrue(
-            dtm.getDataType(CategoryPath("/Demangler/std"), "string") == null,
+        dtm.getDataType(CategoryPath("/Demangler/std"), "string").mustBeNull(
             "/Demangler/std/string should be replaced despite the typedef/renamed-struct name collision",
         )
     }
@@ -224,8 +211,7 @@ class DemanglerReplaceIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
             DemanglerReplacer(ctx, registry).replace()
         }
 
-        assertTrue(
-            dtm.getDataType(CategoryPath("/Demangler/std"), "codecvt<char,char,int>") == null,
+        dtm.getDataType(CategoryPath("/Demangler/std"), "codecvt<char,char,int>").mustBeNull(
             "/Demangler/std stub should be replaced by the real candidate, not left ambiguous with the /stabs placeholder",
         )
     }
