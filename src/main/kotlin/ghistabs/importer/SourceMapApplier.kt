@@ -5,7 +5,6 @@ import ghistabs.diagnose.DiagnosticSink
 import ghistabs.harvest.HarvestIndex
 import ghistabs.harvest.LineEntry
 import ghistabs.materialize.itanium.Itanium
-import ghistabs.minus
 
 /**
  * Publishes the harvested N_SLINEs as the program's own line map — `SourceFile`s and zero-length
