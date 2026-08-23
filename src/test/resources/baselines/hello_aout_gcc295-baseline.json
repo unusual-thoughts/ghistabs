@@ -165,8 +165,8 @@
             "max": 2
         },
         "sourcemap-entries": {
-            "min": 10,
-            "max": 10
+            "min": 13,
+            "max": 13
         },
         "sourcemap-files": {
             "min": 2,
