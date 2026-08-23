@@ -1,4 +1,4 @@
-package ghistabs
+package ghistabs.integration
 
 import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.app.util.importer.MessageLog
@@ -7,13 +7,17 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
+import ghistabs.Correction
+import ghistabs.disableWindowsResourceAnalyzer
+import ghistabs.functionsIterable
+import ghistabs.runTransaction
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertAll
 
 /**
- * [StructReturnAnalyzer] against a real gcc 3.4.5 PE, through the ordinary analyzer pipeline — the
+ * [ghistabs.StructReturnAnalyzer] against a real gcc 3.4.5 PE, through the ordinary analyzer pipeline — the
  * Stabs Importer supplies the return types this reads, so the priority ordering is exercised for
  * real rather than simulated.
  *
@@ -65,7 +69,7 @@ class StructReturnFixtureIntegrationTest : AbstractGhidraHeadlessIntegrationTest
     private fun Function.hasReturnStoragePtr() = parameters.any { it.name == "__return_storage_ptr__" }
 
     private fun withAnalyzed(check: (Program) -> Unit) {
-        val fixture = IntegrationFixtures.orDefault(DEFAULT_FIXTURE)
+        val fixture = Fixtures.orDefault(DEFAULT_FIXTURE)
         ProgramLoader.builder()
             .source(fixture)
             .compiler("gcc")

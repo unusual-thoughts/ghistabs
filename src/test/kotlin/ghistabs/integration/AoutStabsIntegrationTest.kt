@@ -1,4 +1,4 @@
-package ghistabs
+package ghistabs.integration
 
 import ghidra.app.util.importer.MessageLog
 import ghidra.app.util.importer.ProgramLoader
@@ -8,7 +8,9 @@ import ghidra.program.model.listing.CommentType
 import ghidra.program.model.listing.Program
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
+import ghistabs.ImportOptions
 import ghistabs.StabsAnalyzer.Companion.import
+import ghistabs.defaultContext
 import ghistabs.diagnose.CapturingSink
 import ghistabs.diagnose.Level
 import ghistabs.diagnose.StabsDiagnostics
@@ -57,7 +59,7 @@ class AoutStabsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     private lateinit var program: Program
 
     private fun load(name: String) {
-        assumeTrue(IntegrationFixtures.accepts(name), "excluded by -Pfixture")
+        assumeTrue(Fixtures.accepts(name), "excluded by -Pfixture")
         val fixture = File("src/test/resources/binaries/$name")
         assumeTrue(fixture.isFile, "a.out fixture missing: $fixture")
         program = ProgramLoader.builder()

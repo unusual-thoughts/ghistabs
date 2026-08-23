@@ -1,4 +1,4 @@
-package ghistabs
+package ghistabs.integration
 
 import org.junit.jupiter.api.Assumptions
 import java.io.File
@@ -11,7 +11,7 @@ import java.util.stream.Stream
  * hand-placed under `src/test/resources/binaries/` (gitignored, EULA-restricted); an absent one is
  * skipped by the individual test.
  */
-object IntegrationFixtures {
+object Fixtures {
     private val dir = File("src/test/resources/binaries")
 
     /** The directory listing IS the corpus — a binary on disk can never sit silently untested.

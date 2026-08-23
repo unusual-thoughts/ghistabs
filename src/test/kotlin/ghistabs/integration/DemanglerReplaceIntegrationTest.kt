@@ -1,13 +1,15 @@
-package ghistabs.importer
+package ghistabs.integration
 
 import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.data.CategoryPath
 import ghidra.program.model.data.DataTypeConflictHandler
+import ghidra.program.model.data.Structure
 import ghidra.program.model.data.StructureDataType
 import ghidra.program.model.data.TypedefDataType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghistabs.defaultContext
 import ghistabs.defaultTypeRegistry
+import ghistabs.importer.DemanglerReplacer
 import ghistabs.runTransaction
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -98,7 +100,7 @@ class DemanglerReplaceIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
         assertTrue(projAfter != null, "/proj/Foo (replacement) should still exist after DemanglerReplacer runs")
         if (projAfter != null) {
             assertTrue(
-                projAfter is ghidra.program.model.data.Structure,
+                projAfter is Structure,
                 "/proj/Foo should remain a Structure",
             )
         }

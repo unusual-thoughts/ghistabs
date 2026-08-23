@@ -193,7 +193,7 @@ containing field/typedef when unambiguous.
   Application alone (it invokes the bundled native `demangler_gnu`); `demangle` / `demangledName` /
   `namespaceChain` are now top-level over one shared `GnuDemangler`, dropping the `Program` receiver
   from every call site (SymbolApplier, ClassBuilder, Itanium, Renderer, `OpenFunction.demangledName`).
-- [x] **`-Pfixture` accepts a comma-separated list** — `1085472`. `IntegrationFixtures.select` parses a
+- [x] **`-Pfixture` accepts a comma-separated list** — `1085472`. `Fixtures.select` parses a
   set of exact filenames + an `accepts(name)` for the `assumeTrue`-style suites, so one
   `-Pfixture=a.exe,b.exe` narrows every `@MethodSource` suite to a chosen subset.
 - [x] **Sweep global/static pointees to types at import time (`## new issues`)** — `03a5fcd`. The useful

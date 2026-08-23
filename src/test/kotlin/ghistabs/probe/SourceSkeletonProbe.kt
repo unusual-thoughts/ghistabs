@@ -1,4 +1,4 @@
-package ghistabs.render
+package ghistabs.probe
 
 import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.app.util.importer.MessageLog
@@ -13,6 +13,8 @@ import ghistabs.diagnose.Level
 import ghistabs.harvest.HarvestIndex
 import ghistabs.harvest.Harvester
 import ghistabs.parse.StabReader
+import ghistabs.render.Mode
+import ghistabs.render.Renderer
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.params.ParameterizedTest
@@ -44,7 +46,7 @@ import java.io.File
 @Tag("probe")
 class SourceSkeletonProbe : AbstractGhidraHeadlessIntegrationTest() {
     @ParameterizedTest
-    @MethodSource("ghistabs.IntegrationFixtures#all")
+    @MethodSource("ghistabs.integration.Fixtures#all")
     fun writeRenderings(binaryName: String) = runPipeline(binaryName)
 
     private val Mode.outDirName get() = when (this) {

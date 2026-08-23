@@ -27,7 +27,7 @@ class SourceMapApplier(private val ctx: ImportContext<*>, private val index: Har
     private val manager = ctx.program.sourceFileManager
 
     /** How many entries the program holds afterwards, counted from the harvest rather than read back:
-     *  the two agreeing is what [ghistabs.StabsImportRegressionBase] asserts. */
+     *  the two agreeing is what [ghistabs.integration.StabsImportRegressionBase] asserts. */
     fun apply(): Int {
         val startedAt = System.nanoTime()
         val folds = index.renderIdentityBySource

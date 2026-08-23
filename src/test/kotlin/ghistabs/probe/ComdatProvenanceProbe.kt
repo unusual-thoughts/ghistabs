@@ -1,9 +1,10 @@
-package ghistabs
+package ghistabs.probe
 
 import ghidra.app.util.importer.MessageLog
 import ghidra.app.util.importer.ProgramLoader
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
+import ghistabs.defaultContext
 import ghistabs.harvest.Func
 import ghistabs.harvest.Harvester
 import ghistabs.harvest.hasHeaderExtension
@@ -44,7 +45,7 @@ class ComdatProvenanceProbe : AbstractGhidraHeadlessIntegrationTest() {
     }
 
     @ParameterizedTest
-    @MethodSource("ghistabs.IntegrationFixtures#all")
+    @MethodSource("ghistabs.integration.Fixtures#all")
     fun dumpComdatProvenance(binaryName: String) {
         val fixture = File("src/test/resources/binaries/$binaryName")
         assumeTrue(fixture.exists(), "fixture absent")
