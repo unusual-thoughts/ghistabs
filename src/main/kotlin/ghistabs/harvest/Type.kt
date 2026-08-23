@@ -10,8 +10,8 @@ import ghidra.program.model.data.CategoryPath
 import ghidra.program.model.listing.Program
 import ghidra.program.model.sourcemap.SourceMapEntry
 import ghidra.program.model.symbol.SymbolUtilities
+import ghistabs.Demangler
 import ghistabs.baseStackParamOffset
-import ghistabs.demangledName
 import ghistabs.parse.*
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
@@ -208,7 +208,7 @@ data class Func(
     // N_FUN's desc: DECL_SOURCE_LINE, null unless built with -gstabs+.
     val declLine: Int? = null,
 ) {
-    val demangledName by lazy { demangledName(decl.name) }
+    val demangledName by lazy { Demangler.name(decl.name) }
 
     /**
      * Function signature via Ghidra's API at the function's entry address — Ghidra has

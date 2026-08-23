@@ -6,7 +6,7 @@ import ghidra.program.model.data.CategoryPath
 import ghidra.program.model.data.DataType
 import ghidra.program.model.data.IntegerDataType
 import ghidra.program.model.data.LongLongDataType
-import ghistabs.demangle
+import ghistabs.Demangler
 import ghistabs.parse.splitQualified
 
 /**
@@ -91,7 +91,7 @@ object Itanium {
      *  instead of re-scanning + re-demangling every symbol per class ([ghistabs.materialize.ClassBuilder.resolveVtableAddress]). */
     fun vtableClassOf(symbolName: String): String? {
         if (!looksLikeZtv(symbolName)) return null
-        return demangle(symbolName)?.let(::demangledVtableClass)
+        return Demangler.of(symbolName)?.let(::demangledVtableClass)
     }
 
     /** The qualified class a `_ZTI<class>` typeinfo object belongs to, or null if [symbolName] isn't
@@ -99,7 +99,7 @@ object Itanium {
      *  line, so knowing the class is enough to file it where the class is declared — see §38. */
     fun typeinfoClassOf(symbolName: String): String? {
         if (!symbolName.trimStart('_').startsWith(TYPEINFO_PREFIX.trimStart('_'))) return null
-        return demangle(symbolName)?.let { addressTableClass(it, DEMANGLED_TYPEINFO) }
+        return Demangler.of(symbolName)?.let { addressTableClass(it, DEMANGLED_TYPEINFO) }
     }
 
     /** Data gcc generated for a class rather than anything the source declares — typeinfo objects,

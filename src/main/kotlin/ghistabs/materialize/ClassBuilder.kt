@@ -11,6 +11,7 @@ import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.ParameterImpl
 import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
+import ghistabs.Demangler
 import ghistabs.applyDemangling
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.Level
@@ -23,7 +24,6 @@ import ghistabs.isInjected
 import ghistabs.isMethod
 import ghistabs.materialize.itanium.*
 import ghistabs.materialize.itanium.Layout
-import ghistabs.namespaceChain
 import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Struct.Method
 
@@ -142,7 +142,7 @@ class ClassBuilder(
         val parts = (
             classBody.methods.firstNotNullOfOrNull { it.mangled }
                 ?: classBody.fields.firstNotNullOfOrNull { it.mangled }
-            )?.let { namespaceChain(it) }
+            )?.let { Demangler.namespaces(it) }
             ?: splitQualified(className)
         return buildNamespaceChain(parts.filter { it.isNotEmpty() })
     }

@@ -13,11 +13,13 @@ import ghidra.program.model.listing.*
 import ghidra.program.model.listing.Function
 import ghidra.program.model.symbol.SourceType
 import ghidra.program.model.symbol.SymbolTable
-import ghistabs.*
+import ghistabs.Demangler
+import ghistabs.baseStackParamOffset
 import ghistabs.diagnose.ApplyErrorBucket
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.Level
 import ghistabs.diagnose.degradation
+import ghistabs.forceCreateData
 import ghistabs.harvest.*
 import ghistabs.materialize.DataTypeRegistry
 import ghistabs.materialize.reasonFor
@@ -52,7 +54,7 @@ class SymbolApplier(
      * comes out right either way. `this` is not among the demangled parameters; ClassBuilder owns it.
      */
     private fun List<ParameterImpl>.padToMangledArity(mangled: String): List<ParameterImpl> {
-        val declared = (demangle(mangled) as? DemangledFunction)?.parameters
+        val declared = (Demangler.of(mangled) as? DemangledFunction)?.parameters
             ?.map { it.type }
             ?.filterNot { it.isVoid && it.pointerLevels == 0 && !it.isReference && !it.isArray }
             ?: return this
@@ -215,8 +217,8 @@ class SymbolApplier(
         for ((name, type, value) in harvest.constants) {
             // demangledName() is the unqualified leaf; rebuild the qualified name from the
             // namespace chain so the equate reads `CryptoPP::INFINITE_TIME`, not `INFINITE_TIME`.
-            val ns = namespaceChain(name).orEmpty()
-            val leaf = demangle(name)?.name ?: name
+            val ns = Demangler.namespaces(name).orEmpty()
+            val leaf = Demangler.of(name)?.name ?: name
             val qualified = (ns + leaf).joinToString("::")
 
             when (val existing = equates.getEquate(qualified)) {
@@ -462,7 +464,7 @@ class SymbolApplier(
             ctx.program.listing.setComment(
                 addr,
                 CommentType.PLATE,
-                "static local of ${demangledName(sym.enclosingFunction)}()",
+                "static local of ${Demangler.name(sym.enclosingFunction)}()",
             )
             debug("static-local-plate", address = addr)
         }
@@ -539,7 +541,7 @@ class SymbolApplier(
         // Compiler-generated globals (typeinfo, typeinfo-name) carry their mangled `_ZTI…`/`_ZTS…`
         // linkage name in the stab. If the demangled label (`EAsm::typeinfo`) is already at this
         // address, leave it primary rather than promoting the raw mangled string over it.
-        val demangledSimple = demangle(name)?.name
+        val demangledSimple = Demangler.of(name)?.name
         if (demangledSimple != null && symtab.getSymbols(addr).any { it.name == demangledSimple }) return
 
         val existing = symtab.getSymbols(addr).firstOrNull { it.name == name }
