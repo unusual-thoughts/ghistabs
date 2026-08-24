@@ -59,29 +59,6 @@ object Itanium {
 
     fun zti(className: String) = "$TYPEINFO_PREFIX${mangleClassName(className)}"
 
-    /** GCC 3.x emits abbreviated RTTI names for the standard stream classes. */
-    fun ztiCandidates(className: String): List<String> = buildList {
-        add(zti(className))
-        when (className) {
-            "allocator" -> add("_ZTISa")
-            "iostream" -> add("_ZTISd")
-            "istream" -> add("_ZTISi")
-            "ostream" -> add("_ZTISo")
-            "fstream" -> add("_ZTISt13basic_fstreamIcSt11char_traitsIcEE")
-            "ifstream" -> add("_ZTISt14basic_ifstreamIcSt11char_traitsIcEE")
-            "ofstream" -> add("_ZTISt14basic_ofstreamIcSt11char_traitsIcEE")
-            "wiostream" -> add("_ZTISt14basic_iostreamIwSt11char_traitsIwEE")
-            "wistream" -> add("_ZTISt13basic_istreamIwSt11char_traitsIwEE")
-            "wostream" -> add("_ZTISt13basic_ostreamIwSt11char_traitsIwEE")
-            "wfstream" -> add("_ZTISt13basic_fstreamIwSt11char_traitsIwEE")
-            "wifstream" -> add("_ZTISt14basic_ifstreamIwSt11char_traitsIwEE")
-            "wofstream" -> add("_ZTISt14basic_ofstreamIwSt11char_traitsIwEE")
-            "stringstream" -> add("_ZTISt18basic_stringstreamIcSt11char_traitsIcESaIcEE")
-            "istringstream" -> add("_ZTISt19basic_istringstreamIcSt11char_traitsIcESaIcEE")
-            "ostringstream" -> add("_ZTISt19basic_ostringstreamIcSt11char_traitsIcESaIcEE")
-            "basic_string" -> addAll(listOf("_ZTISs", "_ZTISb"))
-        }
-    }
     fun isTemplated(name: String) = '<' in name
 
     /** gcc emits the vfptr either as the `~%<id>;` stab marker or as a plain `_vptr.<Class>` field. */
