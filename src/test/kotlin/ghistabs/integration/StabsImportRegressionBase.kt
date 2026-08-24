@@ -1043,6 +1043,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             "xmltest",
             "crypto_mi_test_gcc345.exe", "crypto_mi_test_gcc345_fullstabs.exe",
             "crypto_mi_test_gcc421.exe", "crypto_mi_test_gcc421_fullstabs.exe",
+            "crypto_mi_test_gcc421_fullstabs_stripped.exe",
             "crypto_mi_test_gcc421_stripped.exe", "locale_test_gcc345_fullstabs.exe",
             "xmltest_gcc345.exe", "xmltest_gcc345_fullstabs.exe", "xmltest_gcc421.exe",
         ],
