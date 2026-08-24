@@ -1,27 +1,17 @@
-package ghistabs.build
-
-import org.gradle.api.Project
-import org.gradle.api.Task
-import org.gradle.api.tasks.TaskProvider
-import org.gradle.api.tasks.testing.Test
-import org.gradle.api.tasks.testing.TestDescriptor
-import org.gradle.api.tasks.testing.TestListener
-import org.gradle.api.tasks.testing.TestResult
-import org.gradle.kotlin.dsl.get
-import org.gradle.kotlin.dsl.register
+import ghistabs.build.sourceSets
 import java.util.concurrent.ConcurrentHashMap
 
 /** Every tag the suites are split by. "unit" is the absence of the others, as in `tasks.test`. */
-private val TAGS = listOf("unit", "integration", "probe", "audit")
+private val tags = listOf("unit", "integration", "probe", "audit")
 
-fun Project.registerTagInventory(tag: String) = tasks.register<Test>(
+fun registerTagInventory(tag: String) = tasks.register<Test>(
     "listTests${tag.replaceFirstChar { it.uppercase() }}",
 ) {
     description = "Discover the $tag tests without running them"
     testClassesDirs = sourceSets["test"].output.classesDirs
     classpath = sourceSets["test"].runtimeClasspath
     useJUnitPlatform {
-        if (tag == "unit") excludeTags(*(TAGS - tag).toTypedArray()) else includeTags(tag)
+        if (tag == "unit") excludeTags(*(tags - tag).toTypedArray()) else includeTags(tag)
     }
     systemProperty("junit.platform.execution.dryRun.enabled", "true")
     testLogging { events() } // the listener below is the whole output
@@ -35,20 +25,19 @@ fun Project.registerTagInventory(tag: String) = tasks.register<Test>(
     reportGroupedByClass(tag)
 }
 
+val perTag = tags.map(::registerTagInventory)
+
 /**
  * List test classes by tag, via JUnit discovery in dry-run mode. Scanning sources instead misses tags
  * inherited from a base class — which is how the generated fixture classes get theirs.
  *
  * One run per tag: a Gradle TestDescriptor carries no tags, so filtering happens before JVM start.
  */
-fun Project.registerTestInventory(): TaskProvider<Task> {
-    val perTag = TAGS.map(::registerTagInventory) // not inside the register below: no nested registration
-    return tasks.register("listTests") {
-        group = "verification"
-        description = "List test classes grouped by tag (unit/integration/probe/audit)"
-        dependsOn(perTag)
-        doLast { logger.lifecycle("\nRun: ./gradlew test | integrationTest [-Pfixture=<name>] | probeDump") }
-    }
+tasks.register("listTests") {
+    group = "verification"
+    description = "List test classes grouped by tag (unit/integration/probe/audit)"
+    dependsOn(perTag)
+    doLast { logger.lifecycle("\nRun: ./gradlew test | integrationTest [-Pfixture=<name>] | probeDump") }
 }
 
 private fun Test.reportGroupedByClass(tag: String) = addTestListener(object : TestListener {
