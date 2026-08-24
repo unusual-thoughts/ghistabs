@@ -26,10 +26,8 @@ object DemanglerWhitelist {
         "moneypunct", "money_get", "money_put", "num_get", "num_put", "numpunct",
         "time_get", "time_put", "istreambuf_iterator", "__normal_iterator",
         "__moneypunct_cache", "__numpunct_cache", "__timepunct", "__timepunct_cache",
-        "_Rope_RopeRep", "signed", "__gthread_mutex_t", "bitset", "less", "pair",
-        "vector",
+        "_Rope_RopeRep", "signed", "__gthread_mutex_t",
         // std exception / EH hierarchy (forward-declared for RTTI, never fully defined)
-        "exception", "bad_alloc", "bad_cast", "bad_exception", "bad_typeid", "failure",
         "logic_error", "runtime_error", "domain_error", "invalid_argument", "length_error",
         "out_of_range", "overflow_error", "range_error", "underflow_error",
         // libsupc++ / libgcc unwinder + RTTI internals
@@ -44,21 +42,8 @@ object DemanglerWhitelist {
         "__concurrence_lock_error", "__concurrence_unlock_error", "recursive_init_error",
         "__array_type_info", "__enum_type_info", "__function_type_info", "__fundamental_type_info",
         // locale facets forward-declared in non-libstdc++ fixtures (full instantiations elsewhere)
-        "__codecvt_abstract_base<char,char,int>", "__ctype_abstract_base<char>",
-        "__timepunct<char>", "codecvt<char,char,int>", "codecvt_byname<char,char,int>",
-        "collate<char>", "collate_byname<char>", "ctype<char>", "ctype_byname<char>",
-        "messages<char>", "messages_byname<char>", "numpunct<char>", "numpunct_byname<char>",
-        "moneypunct<char,false>", "moneypunct<char,true>",
-        "moneypunct_byname<char,false>", "moneypunct_byname<char,true>",
+        "__ctype_abstract_base<char>",
         "stdio_filebuf<char,std::char_traits<char>>",
-        "money_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>",
-        "money_put<char,std::ostreambuf_iterator<char,std::char_traits<char>>>",
-        "num_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>",
-        "num_put<char,std::ostreambuf_iterator<char,std::char_traits<char>>>",
-        "time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>",
-        "time_get_byname<char,std::istreambuf_iterator<char,std::char_traits<char>>>",
-        "time_put<char,std::ostreambuf_iterator<char,std::char_traits<char>>>",
-        "time_put_byname<char,std::ostreambuf_iterator<char,std::char_traits<char>>>",
     )
 }
 
