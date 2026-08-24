@@ -1080,10 +1080,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             .filterNot { it.name in DemanglerWhitelist.ALLOWED }
             .map { "${it.categoryPath.path}/${it.name}" }
 
-        emptyStubs.mustBeEmpty(
-            "Expected zero unexpected empty /Demangler/* stubs, found ${emptyStubs.size}: " +
-                emptyStubs.take(10).joinToString(),
-        )
+        emptyStubs.mustBeEmpty("Expected zero unexpected empty /Demangler/* stubs, found ${emptyStubs.size}: ")
     }
 
     @Test
