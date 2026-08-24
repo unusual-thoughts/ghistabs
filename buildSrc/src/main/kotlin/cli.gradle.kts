@@ -87,7 +87,7 @@ tasks.register<Zip>("zipCli") {
     description = "Build CLI distribution zip"
     inputs.file(cliJar)
     inputs.file(cliScript)
-    archiveFileName.set("ghidra-cli.zip")
+    archiveFileName.set("ghistabs-cli.zip")
     destinationDirectory.set(layout.projectDirectory.dir("dist"))
     from(
         cliJar,
