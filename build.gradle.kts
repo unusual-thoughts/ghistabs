@@ -1,9 +1,15 @@
-import ghistabs.build.*
+import ghistabs.build.ghidraInstallDir
+import ghistabs.build.sourceSets
 
 plugins {
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ktlint)
+    id("cli")
+    id("test-inventory")
+    id("ghidra-extension")
+    id("fixture-test-generator")
+    id("integration-tests")
 }
 
 dependencies {
@@ -47,53 +53,7 @@ tasks.test {
 }
 
 // Generate fixture integration tests code, and add it to the test sourceSet
-kotlin.sourceSets.test { kotlin.srcDir(registerGenerateFixtureTest()) }
-
-// Run the integration tests per binary × mode
-registerHeadlessTest(
-    "integrationTest",
-    "Real-binary assertion tests against ADK fixtures (@Tag(\"integration\"))",
-    tag = "integration",
-    narrowGeneratedClasses = true,
-) { finalizedBy(auditWhitelist) }
-
-// Imports a real fixture against exactly what we ship: serializers get reached from class
-// initializers, so a missing `-json` fails in the GUI while every ordinary test passes.
-registerHeadlessTest(
-    "noSerializationTest",
-    "Import a fixture with kotlinx-serialization-json off the classpath (guards `compileOnly`)",
-    tag = "integration",
-) {
-    classpath = classpath.filter { !it.name.startsWith("kotlinx-serialization-json") }
-    filter { includeTestsMatching("ghistabs.AoutStabsIntegrationTest") }
-}
-
-// Diagnostic generators, split out of integrationTest so they don't run in CI.
-registerHeadlessTest(
-    "probeDump",
-    "Run @Tag(\"probe\") diagnostic dumps (not part of integrationTest)",
-    tag = "probe",
-)
-
-// Own task, not `integrationTest --tests`: Gradle ANDs that with the generated-class filter, which
-// selects nothing and still reports SUCCESS.
-registerHeadlessTest(
-    "noReturnTest",
-    "Non-returning roster for one fixture (-Pfixture=<file>; add -PdisableAnalyzers=reachability for before)",
-    tag = "integration",
-) { filter { includeTestsMatching("ghistabs.NoReturnFixtureIntegrationTest") } }
-
-// Reads the dumps integrationTest wrote, so it must run after it — and needs no headless config.
-val auditWhitelist = tasks.register<Test>("auditWhitelist") {
-    description = "Corpus-level audits over the dumps integrationTest wrote"
-    useJUnitPlatform { includeTags("audit") }
-    testClassesDirs = sourceSets["test"].output.classesDirs
-    classpath = sourceSets["test"].runtimeClasspath
-    outputs.upToDateWhen { false }
-    testLogging { events("passed", "skipped", "failed") }
-}
-
-registerTestInventory()
+kotlin.sourceSets.test { kotlin.srcDir(tasks.named("generateFixtureTests")) }
 
 // CLI target configuration
 val cli = sourceSets.create("cli") {
@@ -111,24 +71,4 @@ val cli = sourceSets.create("cli") {
 // Friends cli to main for its `internal` API
 kotlin.target.compilations.named(cli.name) {
     associateWith(kotlin.target.compilations.getByName(SourceSet.MAIN_SOURCE_SET_NAME))
-}
-
-registerCli()
-
-apply(from = ghidraInstallDir.resolve("support/buildExtension.gradle").toFile())
-registerInstallExtension((tasks.named("buildExtension").get() as Zip).archiveFile)
-registerExtensionLibs()
-
-// buildExtension zips the whole projectDir, so whitelist the content instead
-tasks.named<Zip>("buildExtension") {
-    includeEmptyDirs = false
-    include(
-        "extension.properties",
-        "Module.manifest",
-        "README.md",
-        "lib/**",
-        "ghidra_scripts/**",
-        "${project.name}.jar",
-        "${project.name}-src.zip",
-    )
 }

@@ -3,9 +3,11 @@ package ghistabs.build
 import com.sun.management.OperatingSystemMXBean
 import ghistabs.build.Fixtures.Companion.fixtures
 import org.gradle.api.Project
+import org.gradle.api.tasks.SourceSetContainer
 import org.gradle.api.tasks.TaskProvider
 import org.gradle.api.tasks.testing.Test
 import org.gradle.kotlin.dsl.get
+import org.gradle.kotlin.dsl.getByType
 import org.gradle.kotlin.dsl.register
 import java.lang.management.ManagementFactory.getOperatingSystemMXBean
 
@@ -28,6 +30,8 @@ val HEADLESS_JVM_ARGS = GHIDRA_JVM_ARGS + listOf(
     "--add-opens=java.desktop/javax.swing=ALL-UNNAMED",
     "--add-opens=java.desktop/javax.swing.text=ALL-UNNAMED",
 )
+
+val Project.sourceSets get() = extensions.getByType<SourceSetContainer>()
 
 /** Total RAM in MB. */
 private val osMemoryMB get() = (getOperatingSystemMXBean() as OperatingSystemMXBean).totalMemorySize.shr(20).toInt()
