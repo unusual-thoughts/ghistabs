@@ -34,7 +34,9 @@ class BaselineLoaderTest {
     /** Every committed baseline, so a hand-edit that inverts a range fails here and not mid-import. */
     @Test
     fun load_parsesEveryCommittedBaseline() {
-        val baselines = File("src/test/resources/baselines").listFiles { f: File -> f.extension == "json" }.orEmpty()
+        val baselines = File("src/test/resources/baselines").listFiles { f: File ->
+            f.extension == "json"
+        }.orEmpty().toList()
         baselines.mustNotBeEmpty("no committed baselines to load")
 
         baselines.forEach { file ->
