@@ -53,17 +53,22 @@ jobs:
       with:
         report_paths: '**/build/test-results/**/TEST-*.xml'
 
-    - name: Build extension zip
-      run: ./gradlew buildExtension
+    - name: Build zips
+      run: ./gradlew buildExtension zipCli
 
-    - name: Build CLI JAR
-      run: ./gradlew buildExtension
-
-    - name: Upload zips
+    - name: Upload extension zip
       uses: actions/upload-artifact@v7
       with:
         name: extension and CLI packages
-        path: dist/*.zip
+        path: dist/ghidra_*.zip
+        archive: false
+
+    - name: Upload CLI zip
+      uses: actions/upload-artifact@v7
+      with:
+        name: extension and CLI packages
+        path: dist/ghidra-cli.zip
+        archive: false
 
     - name: Generate and submit dependency graph
       uses: gradle/actions/dependency-submission@v6
