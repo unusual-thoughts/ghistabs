@@ -20,7 +20,7 @@ import ghistabs.parse.StabReader
  * The render is exported through [StabsDecompExporter] (`File > Export Program…`), not from here.
  */
 @PluginInfo(
-    status = PluginStatus.STABLE,
+    status = PluginStatus.RELEASED,
     packageName = CorePluginPackage.NAME,
     category = PluginCategoryNames.ANALYSIS,
     shortDescription = "Re-run the STABS importer on the current program.",
