@@ -16,10 +16,10 @@ import ghistabs.applyDemangling
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.degradation
 import ghistabs.materialize.DataTypeRegistry
+import ghistabs.materialize.itanium.Itanium.isProbablyMangled
 import ghistabs.materialize.itanium.RttiStructs
 import ghistabs.parse.CATEGORY
 import ghistabs.parse.canonTemplateName
-import ghistabs.parse.isMangled
 import ghistabs.parse.splitQualified
 import java.util.*
 
@@ -109,7 +109,7 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val registry:
      * [demangleMangledLabels] to capture — but the harvest kept one.
      */
     private val harvestedMangled by lazy {
-        registry.index.harvest.functions.filter { isMangled(it.name) }.associate { it.addr to it.name }
+        registry.index.harvest.functions.filter { isProbablyMangled(it.name) }.associate { it.addr to it.name }
     }
 
     /**
@@ -127,7 +127,7 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val registry:
         for (sym in ctx.program.symbolTable.symbolIterator) {
             ctx.monitor.increment()
             val name = sym.name
-            if (!isMangled(name)) continue
+            if (!isProbablyMangled(name)) continue
             mangledByAddress.putIfAbsent(sym.address, name)
             attempted++
             if (ctx.program.applyDemangling(sym.address, name, monitor = ctx.monitor)) {
@@ -158,7 +158,7 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val registry:
      */
     private fun dropDisplacedMangledLabels() {
         val displaced = ctx.program.symbolTable.symbolIterator
-            .filter { isMangled(it.name) && !it.parentNamespace.isGlobal }
+            .filter { isProbablyMangled(it.name) && !it.parentNamespace.isGlobal }
             .toList()
         var dropped = 0
         var renamed = 0
@@ -336,7 +336,7 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val registry:
      */
     private fun mangledFor(f: Function): String? = mangledByAddress[f.entryPoint]
         ?: harvestedMangled[f.entryPoint]
-        ?: ctx.program.symbolTable.getSymbols(f.entryPoint).firstOrNull { isMangled(it.name) }?.name
+        ?: ctx.program.symbolTable.getSymbols(f.entryPoint).firstOrNull { isProbablyMangled(it.name) }?.name
 
     private fun ownerSpelling(f: Function): Owner {
         val mangled = mangledFor(f) ?: return Owner.NoMangledName

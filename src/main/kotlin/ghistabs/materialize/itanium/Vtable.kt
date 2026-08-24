@@ -81,7 +81,7 @@ fun Program.layVtable(
         .firstOrNull { slot ->
             readWord(slot)?.let { value ->
                 symbolTable.getSymbols(resolver.buildAddress(value)).any {
-                    it.name.startsWith(Itanium.TYPEINFO_PREFIX) || it.name == Itanium.DEMANGLED_TYPEINFO
+                    Itanium.looksLikeZti(it.name) || it.name == Itanium.DEMANGLED_TYPEINFO
                 }
             } == true
         }
