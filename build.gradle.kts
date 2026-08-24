@@ -113,16 +113,7 @@ kotlin.target.compilations.named(cli.name) {
     associateWith(kotlin.target.compilations.getByName(SourceSet.MAIN_SOURCE_SET_NAME))
 }
 
-// Our code as one jar, for the standalone launcher's lib/.
-val cliJar = tasks.register<Jar>("cliJar") {
-    description = "Generate the JAR for headless skeleton/decomp CLI"
-    archiveBaseName.set("ghidra-stabs-cli")
-    from(sourceSets["main"].output, cli.output)
-}
-
-// ./gradlew runCli -Pargs="skeleton <binary> -d out"
-registerRunCli()
-registerBuildCli(cliJar.flatMap { it.archiveFile })
+registerCli()
 
 apply(from = ghidraInstallDir.resolve("support/buildExtension.gradle").toFile())
 registerInstallExtension((tasks.named("buildExtension").get() as Zip).archiveFile)
