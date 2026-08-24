@@ -58,6 +58,21 @@ object Itanium {
         if (ptrSize == 8) LongLongDataType.dataType else IntegerDataType.dataType
 
     fun zti(className: String) = "$TYPEINFO_PREFIX${mangleClassName(className)}"
+
+    /** GCC 3.x emits abbreviated RTTI names for the standard stream classes. */
+    fun ztiCandidates(className: String): List<String> = buildList {
+        add(zti(className))
+        when (className) {
+            "allocator" -> add("_ZTISa")
+            "iostream" -> add("_ZTISd")
+            "istream" -> add("_ZTISi")
+            "ostream" -> add("_ZTISo")
+            "fstream" -> add("_ZTISt13basic_fstreamIcSt11char_traitsIcEE")
+            "ifstream" -> add("_ZTISt14basic_ifstreamIcSt11char_traitsIcEE")
+            "ofstream" -> add("_ZTISt14basic_ofstreamIcSt11char_traitsIcEE")
+            "basic_string" -> addAll(listOf("_ZTISs", "_ZTISb"))
+        }
+    }
     fun isTemplated(name: String) = '<' in name
 
     /** gcc emits the vfptr either as the `~%<id>;` stab marker or as a plain `_vptr.<Class>` field. */

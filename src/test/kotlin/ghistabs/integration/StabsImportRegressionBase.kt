@@ -776,12 +776,14 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         val ptr = program.defaultPointerSize.toLong()
         val labels = program.symbolTable.symbolIterator.iterator().asSequence()
             .filter { Itanium.VFTABLE in it.name && program.memory.getBlock(it.address) != null }
-            .map { it.address }.distinct().toList()
+            .map { it.parentSymbol.name to it.address }.distinct().toList()
         assumeTrue(labels.isNotEmpty(), "Skipping: no vftable labels in this fixture")
 
         val bad = labels
-            .filterNot { pointsIntoCode(it) && !pointsIntoCode(it.subtract(ptr)) }
-            .map { "vftable at $it → ${wordAt(it)?.toString(16)}" }
+            .filterNot { pointsIntoCode(it.second) && !pointsIntoCode(it.second - ptr) }
+            .map { (ns, addr) ->
+                "vftable for $ns@$addr → [${wordAt(addr - ptr)?.toString(16)};${wordAt(addr)?.toString(16)}] "
+            }
         bad.take(10).mustBeEmpty(
             "${bad.size} of ${labels.size} vftable labels are not on the address point " +
                 "(mislaid on the rtti or vbase-offset word)",

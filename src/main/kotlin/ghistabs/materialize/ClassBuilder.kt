@@ -411,7 +411,7 @@ class ClassBuilder(
         for (m in virtuals) vftable.add(buildVirtualSlotType(m), m.name, "virtual ${m.name}")
 
         val addr = resolveVtableAddress() ?: return
-        val rttiAddr = resolver.resolve(Itanium.zti(className))
+        val rttiAddr = Itanium.ztiCandidates(className).firstNotNullOfOrNull(resolver::resolve)
         val addressPoint = program.layVtable(addr, vftable, className, ns, rttiAddr)
         debug("vtable-applied", "class=$className", address = addressPoint)
 
