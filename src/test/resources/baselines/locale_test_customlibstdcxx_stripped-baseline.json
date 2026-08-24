@@ -385,8 +385,8 @@
             "max": 16
         },
         "text-undisassembled-code": {
-            "min": 344,
-            "max": 344
+            "min": 307,
+            "max": 307
         },
         "textrange-entries": {
             "min": 903,
