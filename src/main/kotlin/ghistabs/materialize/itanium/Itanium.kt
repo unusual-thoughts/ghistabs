@@ -99,18 +99,25 @@ object Itanium {
      *  one. Unlike its sibling `_ZTS` string, a typeinfo object carries the *class's* own declaration
      *  line, so knowing the class is enough to file it where the class is declared — see §38. */
     fun typeinfoClassOf(symbolName: String): String? {
-        if (!symbolName.trimStart('_').startsWith(TYPEINFO_PREFIX.trimStart('_'))) return null
+        if (!looksLikeZti(symbolName)) return null
         return Demangler.of(symbolName)?.let { addressTableClass(it, DEMANGLED_TYPEINFO) }
     }
 
+    private fun String.trimDoubleUnderscore() = if (startsWith("__")) substring(1) else this
+
+    /** An Itanium-mangled name. The Cygwin PE/COFF loader prepends `_`, so they also appear as `__Z…`. */
+    fun isProbablyMangled(name: String): Boolean = name.trimDoubleUnderscore().startsWith("_Z")
+
     /** Data gcc generated for a class rather than anything the source declares — typeinfo objects,
      *  their name strings, vtables. None of it has a source line of its own. */
-    fun isGeneratedData(name: String) = name.trimStart('_').let { n ->
-        listOf(VTABLE_PREFIX, TYPEINFO_PREFIX, TYPEINFO_NAME_PREFIX).any { n.startsWith(it.trimStart('_')) }
+    fun isGeneratedData(name: String) = name.trimDoubleUnderscore().let { n ->
+        listOf(VTABLE_PREFIX, TYPEINFO_PREFIX, TYPEINFO_NAME_PREFIX).any { n.startsWith(it) }
     }
 
     /** String-level pre-filter so we don't pay the demangler cost on every label. */
-    internal fun looksLikeZtv(symbolName: String) = symbolName.trimStart('_').startsWith("ZTV")
+    internal fun looksLikeZtv(symbolName: String) = symbolName.trimDoubleUnderscore().startsWith(VTABLE_PREFIX)
+
+    internal fun looksLikeZti(symbolName: String) = symbolName.trimDoubleUnderscore().startsWith(TYPEINFO_PREFIX)
 
     /** Pure inspection of a demangled object — extracted for unit testing without a real `Program`. */
     internal fun demangledMatchesClass(obj: DemangledObject, className: String) = demangledVtableClass(obj) == className

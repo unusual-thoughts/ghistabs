@@ -71,8 +71,10 @@ class ProgramAddressResolver(private val program: Program, private val sink: Dia
      */
     override fun resolve(name: String): Address? {
         linkSymbols[name]?.let { return buildAddress(it) }
-        val candidates = (program.symbolTable.getSymbols(name) + program.symbolTable.getSymbols("_$name"))
-            .map { it.address }
+        val candidates = (
+            program.symbolTable.getSymbols(name).map { it.address } +
+                program.symbolTable.getSymbols("_$name").map { it.address }
+            )
         if (candidates.size > 1) sink.debug("resolve-ambiguous", name)
         return candidates.firstOrNull()
     }
