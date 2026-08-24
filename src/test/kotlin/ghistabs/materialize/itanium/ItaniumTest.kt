@@ -51,7 +51,7 @@ class ItaniumTest {
     fun testLooksLikeZtv() {
         Itanium.must { looksLikeZtv("_ZTV10ThisStream") }
         Itanium.must { looksLikeZtv("__ZTV10ThisStream") }
-        Itanium.must { looksLikeZtv("ZTVbare") }
+        Itanium.mustNot { looksLikeZtv("ZTVbare") }
         Itanium.mustNot { looksLikeZtv("XYZ_ZTV9ThisStream") }
         Itanium.mustNot { looksLikeZtv("_ZN3FooC1Ev") }
     }

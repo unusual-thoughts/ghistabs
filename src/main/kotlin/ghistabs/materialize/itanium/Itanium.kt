@@ -48,6 +48,20 @@ object Itanium {
     const val BASE_PREFIX = "_base_"
     const val VBASE_PREFIX = "_vbase_"
 
+    /**
+     * Itanium-mangled `_ZN…` whose first scope is `std::`, `__gnu_cxx::`, or an STL shortcut
+     * (`Ss`/`Sa`/`Si`/`So`/`Sd`/`St`). gcc declares these in stabs even when COMDAT-dropped, so a
+     * missing Function at the asserted address is expected — routed to `*-inlined-std`.
+     */
+    private val INLINE_STD_MEMBER = Regex("""^_ZN[KV]*(?:S[adios]|St|9__gnu_cxx)""")
+
+    /**
+     * A gcc implicit trivial special member by its Itanium tail: `C[123]`=ctor (in-charge/not-in-charge/
+     * allocating), `D[012]`=dtor (deleting/in-charge/not-in-charge), `aS`=operator=; `E` closes the
+     * nested-name; the arg list is `v`=(), `RKS_`=(const Self&) or `OS_`=(Self&&).
+     */
+    private val IMPLICIT_SPECIAL_MEMBER_TAIL = Regex("""(?:C[123]|D[012]|aS)E(?:v|RKS_|OS_)$""")
+
     val classDataTypesRoot by lazy { CategoryPath(CategoryPath.ROOT, "ClassDataTypes") }
 
     /** Vtable header before the function-pointer array: offset_to_top + rtti = 2 pointers. */
@@ -136,4 +150,9 @@ object Itanium {
             .asReversed()
             .joinToString("::")
     }
+
+    fun isInlineStdMember(name: String): Boolean = INLINE_STD_MEMBER.containsMatchIn(name)
+
+    fun isImplicitTrivialSpecialMember(mangled: String): Boolean =
+        mangled.startsWith("_ZN") && IMPLICIT_SPECIAL_MEMBER_TAIL.containsMatchIn(mangled)
 }
