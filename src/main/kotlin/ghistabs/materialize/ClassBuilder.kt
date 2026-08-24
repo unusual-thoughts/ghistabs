@@ -23,9 +23,13 @@ import ghistabs.importer.ImportContext
 import ghistabs.isInjected
 import ghistabs.isMethod
 import ghistabs.materialize.itanium.*
-import ghistabs.materialize.itanium.Layout
-import ghistabs.parse.*
+import ghistabs.materialize.itanium.Itanium.isImplicitTrivialSpecialMember
+import ghistabs.materialize.itanium.Itanium.isInlineStdMember
+import ghistabs.parse.GlobalTypeId
+import ghistabs.parse.TypeDecl
 import ghistabs.parse.TypeDecl.Struct.Method
+import ghistabs.parse.VirtKind
+import ghistabs.parse.splitQualified
 
 class ClassBuilder(
     private val registry: DataTypeRegistry,

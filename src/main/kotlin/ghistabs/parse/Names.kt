@@ -60,25 +60,6 @@ private val TEMPLATE_PUNCT = Regex("""\s*([<>,])\s*""")
 fun canonTemplateName(name: String): String = TEMPLATE_PUNCT.replace(name.trim()) { it.groupValues[1] }
 
 /**
- * Itanium-mangled `_ZN…` whose first scope is `std::`, `__gnu_cxx::`, or an STL shortcut
- * (`Ss`/`Sa`/`Si`/`So`/`Sd`/`St`). gcc declares these in stabs even when COMDAT-dropped, so a
- * missing Function at the asserted address is expected — routed to `*-inlined-std`.
- */
-private val INLINE_STD_MEMBER = Regex("""^_ZN[KV]*(?:S[adios]|St|9__gnu_cxx)""")
-
-fun isInlineStdMember(name: String): Boolean = INLINE_STD_MEMBER.containsMatchIn(name)
-
-/**
- * A gcc implicit trivial special member by its Itanium tail: `C[123]`=ctor (in-charge/not-in-charge/
- * allocating), `D[012]`=dtor (deleting/in-charge/not-in-charge), `aS`=operator=; `E` closes the
- * nested-name; the arg list is `v`=(), `RKS_`=(const Self&) or `OS_`=(Self&&).
- */
-private val IMPLICIT_SPECIAL_MEMBER_TAIL = Regex("""(?:C[123]|D[012]|aS)E(?:v|RKS_|OS_)$""")
-
-fun isImplicitTrivialSpecialMember(mangled: String): Boolean =
-    mangled.startsWith("_ZN") && IMPLICIT_SPECIAL_MEMBER_TAIL.containsMatchIn(mangled)
-
-/**
  * Outermost class/namespace name from an Itanium nested-name mangle: `_ZN13EquExpressionC1ERKS_` →
  * `EquExpression`, `_ZN7CParser11ParseSymbolEv` → `CParser`. Reads the first length-prefixed segment.
  * Null for a non-nested mangle (`_Z…` without `N`) or a substitution-prefix first segment (`St`=std,

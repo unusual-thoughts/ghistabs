@@ -650,7 +650,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     @Test
     fun noMangledNameInsideANamespace() {
         val offenders = program.symbolTable.symbolIterator.iterator().asSequence()
-            .filter { isMangled(it.name) && !it.parentNamespace.isGlobal }
+            .filter { Itanium.isProbablyMangled(it.name) && !it.parentNamespace.isGlobal }
             .map { "${it.address} ${it.parentNamespace.getName(true)}::${it.name} (${it.symbolType})" }
             .take(20)
             .toList()
@@ -802,7 +802,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         assumeTrue(demangled.isNotEmpty(), "Skipping: no demangled typeinfo symbols in this fixture")
         val clobbered = demangled
             .map { program.symbolTable.getPrimarySymbol(it.address) }
-            .filter { isMangled(it.name) }
+            .filter { Itanium.isProbablyMangled(it.name) }
             .map { "${it.address} ${it.name}" }
         clobbered.take(10).mustBeEmpty(
             "${clobbered.size} typeinfo globals have a mangled primary label — " +
@@ -1338,7 +1338,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     @Test
     fun mangledFunctionNamesGetDemangled() {
         val demanglable = artifacts.harvest.functions
-            .filter { isMangled(it.decl.name) }
+            .filter { Itanium.isProbablyMangled(it.decl.name) }
             .mapNotNull { func -> program.functionManager.getFunctionAt(func.addr)?.let { func to it } }
         assumeTrue(demanglable.isNotEmpty(), "Skipping: no demanglable mangled functions in this fixture")
 
