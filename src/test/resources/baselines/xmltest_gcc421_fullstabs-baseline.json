@@ -413,8 +413,8 @@
             "max": 6
         },
         "text-undisassembled-code": {
-            "min": 341,
-            "max": 341
+            "min": 307,
+            "max": 307
         },
         "textrange-entries": {
             "min": 922,
