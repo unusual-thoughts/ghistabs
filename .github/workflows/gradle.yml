@@ -44,7 +44,7 @@ jobs:
       run: ./gradlew test
 
     - name: Run integration tests
-      run: ./gradlew integrationTest -Pmode=BEFORE
+      run: ./gradlew integrationTest -Pmode=all --fail-fast
 
     - name: Publish Test Report
       id: report

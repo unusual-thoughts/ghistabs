@@ -66,7 +66,7 @@ class Fixtures(val binaries: List<String>, regressionFilter: String? = null, mod
         }
 
         /** Mirrors `ghistabs.Mode`. */
-        val MODES = listOf("CONCURRENT", "AFTER", "BEFORE")
+        val MODES = listOf("BEFORE", "CONCURRENT", "AFTER")
 
         /** `AFTER` is the mode a GUI re-import actually takes and the one every assertion is written
          *  for, so it is what an ordinary run checks. The other two exist to catch ordering effects
