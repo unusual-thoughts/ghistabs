@@ -8,6 +8,7 @@ import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
 import ghistabs.forceCreateData
 import ghistabs.harvest.HarvestIndex
+import ghistabs.importer.AddressResolver
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
 import ghistabs.parse.TypeDecl.Struct.Method
@@ -72,14 +73,18 @@ fun Program.layVtable(
     vftable: Structure,
     className: String,
     ns: Namespace,
-    rttiAddr: Address?,
+    resolver: AddressResolver,
 ): Address {
     val ptr = defaultPointerSize.toLong()
-    val rttiSlot = rttiAddr?.let { target ->
-        generateSequence(ztv) { it.add(ptr) }
-            .take(MAX_VTABLE_PREFIX_WORDS)
-            .firstOrNull { readWord(it) == target.offset }
-    }
+    val rttiSlot = generateSequence(ztv) { it.add(ptr) }
+        .take(MAX_VTABLE_PREFIX_WORDS)
+        .firstOrNull { slot ->
+            readWord(slot)?.let { value ->
+                symbolTable.getSymbols(resolver.buildAddress(value)).any {
+                    it.name.startsWith(Itanium.TYPEINFO_PREFIX) || it.name == Itanium.DEMANGLED_TYPEINFO
+                }
+            } == true
+        }
     val topSlot = rttiSlot?.subtract(ptr) ?: ztv
     val rttiHeader = rttiSlot ?: ztv.add(ptr)
     val addressPoint = rttiSlot?.add(ptr) ?: ztv.add(Itanium.vtablePrefixBytes(defaultPointerSize))
