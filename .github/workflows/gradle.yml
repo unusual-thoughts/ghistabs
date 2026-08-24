@@ -67,7 +67,7 @@ jobs:
       uses: actions/upload-artifact@v7
       with:
         name: extension and CLI packages
-        path: dist/ghidra-cli.zip
+        path: dist/ghistabs-cli.zip
         archive: false
 
     - name: Generate and submit dependency graph
