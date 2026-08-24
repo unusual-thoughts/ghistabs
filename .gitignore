@@ -1,7 +1,7 @@
 # Build outputs. Anchored: an unanchored `build/` also matches source directories whose package
 # happens to be named `build` — it silently swallowed buildSrc/src/main/kotlin/ghistabs/build/.
 /build/
-buildSrc/build/
+/buildSrc/build/
 /dist/
 
 # Gradle
@@ -27,6 +27,6 @@ tinyxml2/
 corpus/
 corpus.new/
 /scratch*/
-/build*/
+/build.*/
 ..bfg-report/
 .bfg-report/
