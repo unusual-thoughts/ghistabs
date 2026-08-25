@@ -25,8 +25,8 @@
             "max": 8
         },
         "data-no-coverage": {
-            "min": 187,
-            "max": 187
+            "min": 182,
+            "max": 182
         },
         "degraded-base-synthesized": {
             "min": 2,
@@ -85,8 +85,8 @@
             "max": 44
         },
         "demangler-sole-instantiation-declined": {
-            "min": 12,
-            "max": 12
+            "min": 11,
+            "max": 11
         },
         "demangler-unbound-stub": {
             "min": 44,
@@ -351,6 +351,10 @@
         "vtable-skipped": {
             "min": 12,
             "max": 12
+        },
+        "vtable-swept": {
+            "min": 115,
+            "max": 115
         },
         "xref-undefined": {
             "min": 60,
