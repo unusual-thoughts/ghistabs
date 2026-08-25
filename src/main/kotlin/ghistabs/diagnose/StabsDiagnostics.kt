@@ -5,6 +5,13 @@ import ghistabs.parse.SourceFile
 
 enum class Level { DEBUG, INFO, WARN, ERROR }
 
+fun Level.color() = when (this) {
+    Level.DEBUG -> "\u001b[1;34mD \u001b[2;34m"
+    Level.INFO -> "\u001b[1;32mI \u001b[0m"
+    Level.WARN -> "\u001b[1;33mW \u001b[0;33m"
+    Level.ERROR -> "\u001b[1;31mE \u001b[0;31m"
+}
+
 interface DiagnosticSink {
     /**
      * A diagnostic event. [count] lets one call stand in for a bulk tally (`log(cat, count = n)`
