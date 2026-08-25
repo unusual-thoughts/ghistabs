@@ -85,7 +85,7 @@ sealed class StabsRenderExporter(name: String, extension: String, val options: S
         return false
     }
 
-    protected companion object {
+    companion object {
         val OUTPUT_DIR = DirectoryOption(
             "Output directory (else the path above, as a directory)",
             "Where the per-source files are written. Empty means the path chosen in the dialog, " +
@@ -99,7 +99,7 @@ sealed class StabsRenderExporter(name: String, extension: String, val options: S
         )
         val SHOW_STORAGE = BoolOption(
             "Annotate locals with their storage",
-            "Mark each local (stack) or (reg) — a property of the compiled code, not of the source.",
+            "Mark each local with the storage gcc gave it, (stack) or (reg)",
             false,
         )
         val LINE_ALIGNED = BoolOption(
