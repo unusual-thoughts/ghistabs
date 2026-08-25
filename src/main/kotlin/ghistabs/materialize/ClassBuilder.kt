@@ -423,11 +423,9 @@ class ClassBuilder(
         val shape = program.vtableShape(addr, resolver)
 
         // One vbase offset per virtual base, so the two counts must agree. They are derived
-        // independently — the stab's base list vs. where vtableShape put offset_to_top — which makes
+        // independently — the stab's base graph vs. where vtableShape put offset_to_top — which makes
         // a disagreement the one cheap check that the address point was located correctly.
-        // Names where the base resolves, a placeholder where it doesn't: the list's *length* drives
-        // the vcall/vbase split, so dropping an unresolved base would misattribute every word.
-        val virtualBases = classBody.bases.filter { it.isVirtual }
+        val virtualBases = index.virtualBases(classBody)
             .map { registry.resolveRef(it.type)?.name ?: "<unresolved base>" }
         val prefixWords = ((shape.topSlot.offset - addr.offset) / program.defaultPointerSize).toInt()
         if (prefixWords < virtualBases.size) {
@@ -438,7 +436,7 @@ class ClassBuilder(
             )
         }
 
-        val addressPoint = program.layVtable(addr, shape, vftable, className, ns, virtualBases)
+        val addressPoint = program.layVtable(addr, shape, vftable, className, ns, resolver, virtualBases)
         debug("vtable-applied", "class=$className", address = addressPoint)
 
         // Plate-comment each virtual. An unresolved mangled name here is expected for
@@ -559,7 +557,7 @@ class ClassBuilder(
             }
 
             val ns = buildNamespaceChain(splitQualified(qualified))
-            val addressPoint = program.layVtable(addr, shape, vftable, qualified, ns)
+            val addressPoint = program.layVtable(addr, shape, vftable, qualified, ns, resolver)
             debug("vtable-swept", "class=$qualified slots=${targets.size}", address = addressPoint)
         }
     }

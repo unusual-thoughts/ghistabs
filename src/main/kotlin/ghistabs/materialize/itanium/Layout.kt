@@ -80,6 +80,31 @@ fun HarvestIndex.firstPolymorphicBase(typeDecl: TypeDecl.Struct<GlobalTypeId>): 
         } ?: false
     }
 
+/**
+ * Every virtual base in [typeDecl]'s graph, not only the directly-declared ones — a vtable carries one
+ * vbase offset per *distinct* virtual base however deep it was inherited. `std::iostream` is the case
+ * that forces it: `_ZTISd` declares `istream` and `ostream`, neither virtual, and `__ZTVSd` still has a
+ * vbase offset, for the `basic_ios` both of them inherit virtually.
+ *
+ * Not folded into [Virtuals], which walks the same edges: that one wants each struct once, bases-first,
+ * to collect methods, while this wants every *edge*, because a virtual edge to a class already reached
+ * through a non-virtual one still contributes a vbase offset. One traversal serving both only reads as
+ * a traversal with two modes.
+ */
+fun HarvestIndex.virtualBases(typeDecl: TypeDecl.Struct<GlobalTypeId>): List<Base<GlobalTypeId>> {
+    val found = mutableListOf<Base<GlobalTypeId>>()
+    val seen = mutableSetOf<TypeDecl.Struct<GlobalTypeId>>()
+    fun walk(cls: TypeDecl.Struct<GlobalTypeId>) {
+        if (!seen.add(cls)) return
+        for (base in cls.bases) {
+            if (base.isVirtual) found += base
+            resolveBaseAstStatic(base.type)?.let(::walk)
+        }
+    }
+    walk(typeDecl)
+    return found
+}
+
 fun HarvestIndex.resolveBaseAstStatic(typeDecl: TypeDecl<GlobalTypeId>): TypeDecl.Struct<GlobalTypeId>? =
     when (typeDecl) {
         is TypeDecl.Ref -> getStruct(typeDecl.id)
