@@ -62,6 +62,10 @@ object Itanium {
      */
     private val IMPLICIT_SPECIAL_MEMBER_TAIL = Regex("""(?:C[123]|D[012]|aS)E(?:v|RKS_|OS_)$""")
 
+    // The same `C[123]`/`D[012]` tails, without the implicit-member restriction on the arg list.
+    private val CTOR_TAIL = Regex("""C[123]E[a-zA-Z_0-9$]*$""")
+    private val DTOR_TAIL = Regex("""D[012]E[a-zA-Z_0-9$]*$""")
+
     val classDataTypesRoot by lazy { CategoryPath(CategoryPath.ROOT, "ClassDataTypes") }
 
     /** Vtable header before the function-pointer array: offset_to_top + rtti = 2 pointers. */
@@ -155,4 +159,13 @@ object Itanium {
 
     fun isImplicitTrivialSpecialMember(mangled: String): Boolean =
         mangled.startsWith("_ZN") && IMPLICIT_SPECIAL_MEMBER_TAIL.containsMatchIn(mangled)
+
+    /** In-class display form of a ctor/dtor linkage name — `_ZN3FooC[123]E…` → `Foo`,
+     *  `_ZN3FooD[012]E…` → `~Foo`. Itanium emits up to three symbols per ctor/dtor, all carrying one
+     *  source-level name; Ghidra tells them apart by address. Null for anything else. */
+    fun specialMemberDisplayName(mangled: String, className: String): String? = when {
+        CTOR_TAIL.containsMatchIn(mangled) -> className
+        DTOR_TAIL.containsMatchIn(mangled) -> "~$className"
+        else -> null
+    }
 }

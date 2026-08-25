@@ -14,7 +14,7 @@ import ghistabs.harvest.HarvestIndex
 import ghistabs.harvest.LocatedType
 import ghistabs.harvest.Type
 import ghistabs.importer.DemanglerReplacer.Companion.DEMANGLER_CATEGORY
-import ghistabs.materialize.itanium.RttiStructs
+import ghistabs.materialize.itanium.Rtti
 import ghistabs.parse.CATEGORY
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
@@ -71,7 +71,7 @@ class DataTypeRegistry(
     // RENAME_AND_ADDs two genuinely-distinct non-empty types, like DEFAULT_HANDLER).
     private val conflictHandler = DataTypeConflictHandler.REPLACE_EMPTY_STRUCTS_OR_RENAME_AND_ADD_HANDLER
 
-    internal val rttiStructs by lazy { RttiStructs(dtm) }
+    internal val rttiStructs by lazy { Rtti(dtm) }
 
     // ── The only writers of byId / placeholders / xrefStubs. [cache] sets the authoritative
     // resolution for an id; [cacheIfAbsent] is the alias/member fan-out that must not clobber a
@@ -163,7 +163,7 @@ class DataTypeRegistry(
 
     /**
      * Authoritative, fully-resolved type for an ast gcc references but never defines: a primitive via
-     * [resolveBuiltin], or a `__*_type_info_pseudo` RTTI record via [RttiStructs]. These are final types,
+     * [resolveBuiltin], or a `__*_type_info_pseudo` RTTI record via [Rtti]. These are final types,
      * not cycle-break stubs — callers cache them in [byId] and must never file them under [xrefStubs].
      */
     internal fun Type.substitute(): DataType? = body.resolveBuiltin()

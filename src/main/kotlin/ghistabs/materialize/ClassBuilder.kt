@@ -27,12 +27,9 @@ import ghistabs.isMethod
 import ghistabs.materialize.itanium.*
 import ghistabs.materialize.itanium.Itanium.isImplicitTrivialSpecialMember
 import ghistabs.materialize.itanium.Itanium.isInlineStdMember
-import ghistabs.parse.GlobalTypeId
-import ghistabs.parse.TypeDecl
+import ghistabs.materialize.itanium.Layout
+import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Struct.Method
-import ghistabs.parse.VirtKind
-import ghistabs.parse.canonTemplateName
-import ghistabs.parse.splitQualified
 
 class ClassBuilder(
     private val registry: DataTypeRegistry,
@@ -266,7 +263,7 @@ class ClassBuilder(
         if (!program.applyDemangling(addr, mangled)) {
             // Fall back to manual namespace + display-name handling.
             func.parentNamespace = ns
-            val fallbackName = displayNameFor(mangled, className) ?: m.name
+            val fallbackName = Itanium.specialMemberDisplayName(mangled, className) ?: m.name
             if (func.name != fallbackName) func.setName(fallbackName, source)
             degradation(
                 "method-demangle-fallback",
@@ -389,20 +386,6 @@ class ClassBuilder(
             true,
             source,
         )
-    }
-
-    /**
-     * Map a ctor/dtor mangled name to its in-class display form
-     * (`_ZN3FooC[123]E…` → `Foo`, `_ZN3FooD[012]E…` → `~Foo`). Itanium emits up to three
-     * symbols per ctor/dtor — same source-level name; Ghidra disambiguates by address.
-     * Returns null for non-ctor/dtor methods.
-     */
-    private fun displayNameFor(mangled: String, className: String): String? {
-        val ctorRe = Regex("""C[123]E[a-zA-Z_0-9$]*$""")
-        val dtorRe = Regex("""D[012]E[a-zA-Z_0-9$]*$""")
-        ctorRe.containsMatchIn(mangled).let { if (it) return className }
-        dtorRe.containsMatchIn(mangled).let { if (it) return "~$className" }
-        return null
     }
 
     private fun LocatedType.buildAndApplyVtable(ns: GhidraClass) {
@@ -638,5 +621,5 @@ class ClassBuilder(
         return null
     }
 
-    private fun LocatedType.collectAllVirtuals() = Virtuals(index).process(classBody)
+    private fun LocatedType.collectAllVirtuals() = index.collectAllVirtuals(classBody)
 }

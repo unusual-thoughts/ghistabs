@@ -17,7 +17,7 @@ import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.degradation
 import ghistabs.materialize.DataTypeRegistry
 import ghistabs.materialize.itanium.Itanium.isProbablyMangled
-import ghistabs.materialize.itanium.RttiStructs
+import ghistabs.materialize.itanium.Rtti
 import ghistabs.parse.CATEGORY
 import ghistabs.parse.canonTemplateName
 import ghistabs.parse.splitQualified
@@ -290,14 +290,17 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val registry:
                     debug("demangler-retarget-no-mangled-name", at)
                     continue
                 }
+
                 Owner.DemangleFailed -> {
                     debug("demangler-retarget-demangle-failed", "$at <- ${mangledFor(f)}")
                     continue
                 }
+
                 Owner.NoNamespace -> {
                     debug("demangler-retarget-no-namespace", at)
                     continue
                 }
+
                 is Owner.Spelled -> o.name
             }
             val owner = findByExactName(spelling) ?: soleInstantiation[spelling]
@@ -440,7 +443,7 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val registry:
         if (dropped > 0) debug("demangler-dropped-empty-conflict-fork", count = dropped.toLong())
     }
 
-    private val rtti by lazy { RttiStructs(ctx.dtm) }
+    private val rtti by lazy { Rtti(ctx.dtm) }
 
     /** Every datatype the registry materialized, by name (checked first, so exact names never go through normalization) */
     private val byExactName = registry.allCreatedDataTypes.groupBy { it.name }.mapValues { it.value.toSet() }

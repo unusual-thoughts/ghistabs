@@ -9,6 +9,7 @@ import ghidra.program.model.address.Address
 import ghidra.program.model.data.*
 import ghidra.program.model.data.Array
 import ghidra.program.model.data.Enum
+import ghidra.program.model.listing.CommentType
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
@@ -617,6 +618,74 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         unfiled.sorted().take(10).mustBeEmpty(
             "${unfiled.size} of ${implicit.size} implicit methods have no source despite their " +
                 "class being declared in this binary",
+        )
+    }
+
+    /**
+     * The header words in front of a laid vtable must describe what is actually there. Two ways they
+     * did not, both invisible until someone read a listing:
+     *
+     * - the rtti comment printed a closed-form `Itanium.zti` spelling, which does not exist for
+     *   anything the STL shorthand or a template spells differently: `std::istream` rendered
+     *   `rtti: _ZTIN3std7istreamE` on a line where Ghidra resolves the same pointer to
+     *   `std::istream::typeinfo`, the real symbol being `_ZTISi`;
+     * - the vbase/vcall split counted only *directly declared* virtual bases, so a class that
+     *   inherits its virtual base through non-virtual ones had a genuine vbase offset labelled a
+     *   vcall offset. `std::iostream` is the case: `_ZTISd` declares `istream` and `ostream`, neither
+     *   virtual, and `__ZTVSd` still carries one vbase offset for the `basic_ios` behind them.
+     *
+     * The second is gated by an ABI invariant rather than by re-deriving the count: a *primary*
+     * vtable — the record a `_ZTV` symbol names, which is the only kind laid today — has vbase
+     * offsets only. Vcall offsets live in the secondary sub-vtables (§54), so a "vcall offset" on a
+     * primary means the split under-counted.
+     */
+    @Test
+    fun vtableHeaderCommentsDescribeWhatIsThere() {
+        val ptr = program.defaultPointerSize.toLong()
+        fun eol(a: Address) = program.listing.getComment(CommentType.EOL, a)
+
+        val addressPoints = program.symbolTable.symbolIterator.iterator().asSequence()
+            .filter { it.name == Itanium.VFTABLE && program.memory.getBlock(it.address) != null }
+            .map { it.address }.distinct().toList()
+        assumeTrue(addressPoints.isNotEmpty(), "Skipping: no vftable laid in this fixture")
+
+        val misnamedRtti = mutableListOf<String>()
+        val vcallOnPrimary = mutableListOf<String>()
+        var namedVbases = 0
+
+        for (point in addressPoints) {
+            val rttiHeader = runCatching { point.subtract(ptr) }.getOrNull() ?: continue
+            eol(rttiHeader)?.removePrefix("${Itanium.RTTI}: ")?.substringBefore(" typeinfo")?.let { named ->
+                // Only a *contradiction* counts: with no symbol at the target there is nothing to
+                // name and the closed form is the honest fallback.
+                val present = wordAt(rttiHeader)
+                    ?.let { program.addressFactory.defaultAddressSpace.getAddress(it) }
+                    ?.let { program.symbolTable.getSymbols(it).map { s -> s.name } }
+                    .orEmpty()
+                if (present.isNotEmpty() && named !in present) {
+                    misnamedRtti += "$rttiHeader: comment says '$named', symbols there are $present"
+                }
+            }
+
+            // offset_to_top sits one word before rtti; the prefix runs backwards from there.
+            var word = runCatching { rttiHeader.subtract(ptr) }.getOrNull() ?: continue
+            while (true) {
+                val prev = runCatching { word.subtract(ptr) }.getOrNull() ?: break
+                val comment = eol(prev)?.takeIf { "offset" in it } ?: break
+                if (comment.startsWith("vcall")) vcallOnPrimary += "$prev: $comment"
+                if (comment.startsWith("vbase offset:")) namedVbases++
+                word = prev
+            }
+        }
+
+        misnamedRtti.take(10).mustBeEmpty("${misnamedRtti.size} rtti comments name a symbol that is not there")
+        vcallOnPrimary.take(10).mustBeEmpty(
+            "${vcallOnPrimary.size} vcall offsets on primary vtables — a primary carries vbase offsets " +
+                "only, so the vbase count under-counted (transitive virtual bases missed?)",
+        )
+        println(
+            "vtableHeaderCommentsDescribeWhatIsThere[$binaryName/$mode]: " +
+                "${addressPoints.size} vtables, $namedVbases named vbase offsets",
         )
     }
 

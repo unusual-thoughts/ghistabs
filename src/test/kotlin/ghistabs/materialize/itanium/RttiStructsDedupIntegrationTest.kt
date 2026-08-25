@@ -25,7 +25,7 @@ class RttiStructsDedupIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
         val dtm = program.dataTypeManager
         try {
             program.runTransaction("rtti-dedup") {
-                val rtti = RttiStructs(dtm)
+                val rtti = Rtti(dtm)
                 // Both the plain (PointerTypedef) and Si (nested ClassTypeInfoStructure*) layouts,
                 // each applied at several distinct addresses — the COMDAT-duplication pattern.
                 for ((slot, name) in listOf(Itanium.CLASS_TYPE_INFO_PSEUDO, Itanium.SI_CLASS_TYPE_INFO_PSEUDO)
