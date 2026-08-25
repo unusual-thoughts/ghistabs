@@ -593,6 +593,34 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     }
 
     /**
+     * A gcc-implicit method (defaulted ctor/dtor/assignment) is emitted with no N_SLINE at all, so
+     * its linkage name is the only thing that can file it: `Func.source()` falls back to the header
+     * its class is declared in. The lookup keys the demangled scope chain against the stab type
+     * names, and the two spell a class differently — gcc omits an enclosing namespace from a stab
+     * name but keeps an enclosing class, and templates differ by whitespace. Anything that regresses
+     * that match drops these functions out of every rendered file silently, with no diagnostic.
+     */
+    @Test
+    fun implicitMethodsAreFiledAtTheirClassDeclaration() {
+        val index = artifacts.index
+        val declaredClasses = index.typesBySource.values.flatten()
+            .mapNotNull { it.name?.let(::canonTemplateName) }.toSet()
+
+        val implicit = index.functions
+            .filter { it.lineEntries.isEmpty() && !it.isSyntheticInit }
+            .mapNotNull { f -> f.scopePath()?.last()?.let { f to it } }
+            .filter { (_, cls) -> cls in declaredClasses }
+        assumeTrue(implicit.isNotEmpty(), "Skipping: no line-less method with a declared class here")
+
+        val unfiled = implicit.filter { (f, _) -> with(index) { f.source() } == null }
+            .map { (f, cls) -> "${f.name} (class $cls)" }
+        unfiled.sorted().take(10).mustBeEmpty(
+            "${unfiled.size} of ${implicit.size} implicit methods have no source despite their " +
+                "class being declared in this binary",
+        )
+    }
+
+    /**
      * A register local lands in the register its stab names. The number is the record's n_value —
      * `w:r(0,5)` carries no register in the descriptor — and `readTrailingReg()` used to return a
      * hardcoded 0, so every register local in every fixture was placed in dbx 0 = EAX. Nothing

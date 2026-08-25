@@ -58,19 +58,3 @@ private val TEMPLATE_PUNCT = Regex("""\s*([<>,])\s*""")
  * like `short unsigned int` keep their spaces).
  */
 fun canonTemplateName(name: String): String = TEMPLATE_PUNCT.replace(name.trim()) { it.groupValues[1] }
-
-/**
- * Outermost class/namespace name from an Itanium nested-name mangle: `_ZN13EquExpressionC1ERKS_` →
- * `EquExpression`, `_ZN7CParser11ParseSymbolEv` → `CParser`. Reads the first length-prefixed segment.
- * Null for a non-nested mangle (`_Z…` without `N`) or a substitution-prefix first segment (`St`=std,
- * etc.) — callers want those to keep their N_SLINE attribution rather than be pinned to a class.
- */
-fun outermostClassOf(mangled: String): String? {
-    if (!mangled.startsWith("_ZN")) return null
-    val start = 3
-    if (start >= mangled.length || !mangled[start].isDigit()) return null
-    var j = start
-    while (j < mangled.length && mangled[j].isDigit()) j++
-    val len = mangled.substring(start, j).toIntOrNull() ?: return null
-    return if (j + len <= mangled.length) mangled.substring(j, j + len) else null
-}

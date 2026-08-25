@@ -231,20 +231,17 @@ data class Func(
     }
 
     /**
-     * Pull the outermost class / namespace name out of an Itanium-ABI
-     * mangled symbol — e.g. `_ZN13EquExpressionC1ERKS_` → `EquExpression`,
-     * `_ZN7CParser11ParseSymbolEv` → `CParser`. Used to look up the
-     * class's `declSourceFile` and pin the function there when N_SLINE
-     * would otherwise drag a defaulted/implicit method into whichever
-     * header materialized it (e.g. gcc's implicit `EquExpression` copy
-     * ctor materialized inside `std::pair<…, EquExpression>` lands at
-     * `stl_pair.h:84`; the class itself lives elsewhere).
+     * Scope chain the linkage name declares, root-first and canonically spelled
+     * (`_ZN13EquExpressionC1ERKS_` → `[EquExpression]`,
+     * `_ZNSt6vectorIiSaIiEE9push_backERKi` → `[std, vector<int,std::allocator<int>>]`) — so the
+     * *class* is the last element. Null for a free function.
      *
-     * Returns null for non-nested-name mangles (`_Z…` without `N`) and
-     * for symbols whose first segment is a substitution-prefix like
-     * `St` (std) — we WANT those to keep their N_SLINE attribution.
+     * Used to file a gcc-implicit method at the header its class is declared in: such a method has
+     * no N_SLINE of its own, so nothing else says where it belongs, and gcc materializes it inside
+     * whichever CU first needed it (the implicit `EquExpression` copy ctor materializes inside
+     * `std::pair<…, EquExpression>` and would land at `stl_pair.h:84`).
      */
-    fun outermostClass(): String? = outermostClassOf(name)
+    fun scopePath(): List<String>? = Demangler.namespaces(name)?.map(::canonTemplateName)
 
     /**
      * gcc emits file-scope synthetic init/destruct wrappers
