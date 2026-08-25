@@ -1,6 +1,8 @@
 package ghistabs.materialize
 
 import ghidra.app.util.NamespaceUtils
+import ghidra.app.util.demangler.DemangledDataType
+import ghidra.app.util.demangler.DemangledFunction
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.*
 import ghidra.program.model.gclass.ClassUtils
@@ -29,6 +31,7 @@ import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
 import ghistabs.parse.TypeDecl.Struct.Method
 import ghistabs.parse.VirtKind
+import ghistabs.parse.canonTemplateName
 import ghistabs.parse.splitQualified
 
 class ClassBuilder(
@@ -106,6 +109,7 @@ class ClassBuilder(
                 err("class-apply-error", "${group.location}: ${t.message}")
             }
         }
+        sweepUnclaimedVtables()
         return built
     }
 
@@ -415,7 +419,26 @@ class ClassBuilder(
         for (m in virtuals) vftable.add(buildVirtualSlotType(m), m.name, "virtual ${m.name}")
 
         val addr = resolveVtableAddress() ?: return
-        val addressPoint = program.layVtable(addr, vftable, className, ns, resolver)
+        claimedVtables += addr
+        val shape = program.vtableShape(addr, resolver)
+
+        // One vbase offset per virtual base, so the two counts must agree. They are derived
+        // independently — the stab's base list vs. where vtableShape put offset_to_top — which makes
+        // a disagreement the one cheap check that the address point was located correctly.
+        // Names where the base resolves, a placeholder where it doesn't: the list's *length* drives
+        // the vcall/vbase split, so dropping an unresolved base would misattribute every word.
+        val virtualBases = classBody.bases.filter { it.isVirtual }
+            .map { registry.resolveRef(it.type)?.name ?: "<unresolved base>" }
+        val prefixWords = ((shape.topSlot.offset - addr.offset) / program.defaultPointerSize).toInt()
+        if (prefixWords < virtualBases.size) {
+            degradation(
+                "vtable-vbase-count-mismatch",
+                className,
+                "$prefixWords prefix word(s) before offset_to_top, ${virtualBases.size} virtual base(s) declared",
+            )
+        }
+
+        val addressPoint = program.layVtable(addr, shape, vftable, className, ns, virtualBases)
         debug("vtable-applied", "class=$className", address = addressPoint)
 
         // Plate-comment each virtual. An unresolved mangled name here is expected for
@@ -494,6 +517,94 @@ class ClassBuilder(
         val resolved = registry.register(funcDef) as FunctionDefinition
         return PointerDataType(resolved, dtm)
     }
+
+    /** Vtable records a harvested class claimed, so [sweepUnclaimedVtables] can tell what is left. */
+    private val claimedVtables = mutableSetOf<Address>()
+
+    /**
+     * Lay every `_ZTV…` symbol no harvested class claimed. `buildAndApplyVtable` runs per group, i.e.
+     * only for a class we have a `T`-stab body for; libsupc++ and libstdc++ link without stabs, so
+     * their polymorphic classes (`__cxxabiv1::__si_class_type_info`, `std::basic_filebuf<char,…>`)
+     * own a real vtable that nothing ever visits — 53 of unbouniaf's 58 `_ZTV` symbols.
+     *
+     * Lossy by nature: with no method list the slots can only be named and typed from whatever sits
+     * at the addresses they point to, and the array's length is inferred (see [vtableSlotTargets]).
+     * The class struct is *not* synthesised — this is the vtable level only; §24 covers the same
+     * classes at the typeinfo-record level.
+     */
+    private fun sweepUnclaimedVtables() {
+        val unclaimed = symtab.symbolIterator
+            .filter { it.address !in claimedVtables }
+            .mapNotNull { sym -> Itanium.vtableClassOf(sym.name)?.let { sym.address to it } }
+            .distinctBy { (addr, _) -> addr }
+            .toList()
+
+        for ((addr, qualified) in unclaimed) {
+            val shape = program.vtableShape(addr, resolver)
+            val targets = program.vtableSlotTargets(shape.addressPoint, resolver)
+            if (targets.isEmpty()) {
+                degradation("vtable-swept-empty", qualified, "no function pointers at ${shape.addressPoint}")
+                continue
+            }
+            val leaf = canonTemplateName(splitQualified(qualified).last())
+            val category = CategoryPath(Itanium.classDataTypesRoot, leaf)
+            val vftable = registry.getOrRegister<Structure>(category, "${leaf}_vftable") {
+                StructureDataType(category, "${leaf}_vftable", 0, dtm)
+            }
+            // A class whose own group failed to resolve its vtable left its stab-typed slots here;
+            // those beat anything read back off the target addresses.
+            if (vftable.numComponents == 0) {
+                val used = mutableSetOf<String>()
+                for (target in targets) vftable.addSweptSlot(category, target, used)
+            }
+
+            val ns = buildNamespaceChain(splitQualified(qualified))
+            val addressPoint = program.layVtable(addr, shape, vftable, qualified, ns)
+            debug("vtable-swept", "class=$qualified slots=${targets.size}", address = addressPoint)
+        }
+    }
+
+    /**
+     * Add the swept slot pointing at [target]. Always `Pointer→FunctionDefinition`, never a bare
+     * `void*`: an abstract class's slots point at `__cxa_pure_virtual`, a real function that honestly
+     * has no signature to recover, and a `void*` there reads as a failure to type it.
+     *
+     * One name serves as both the field name and the definition's — `atLeastOneVtableStructApplied`
+     * requires they agree (RecoveredClassHelper / shift-S round-trip) — so it has to be unique in the
+     * category too: `std::num_get` has six `do_get` overloads and `std::ctype` two of each `do_is`/
+     * `do_widen`/…, and one name across all of them forks a `.conflict` per slot (32 on unbouniaf).
+     * [used] carries the names already spent on this table.
+     */
+    private fun Structure.addSweptSlot(category: CategoryPath, target: Address, used: MutableSet<String>) {
+        val linkage = symtab.getSymbols(target).map { it.name }.firstOrNull(Itanium::isProbablyMangled)
+            ?: symtab.getPrimarySymbol(target)?.name
+            ?: "slot"
+        val leaf = Demangler.of(linkage)?.name ?: linkage
+        val name = generateSequence(0) { it + 1 }
+            .map { if (it == 0) leaf else "${leaf}_$it" }
+            .first(used::add)
+
+        val funcDef = program.functionManager.getFunctionAt(target)
+            ?.let { FunctionDefinitionDataType(category, name, it.signature, dtm) }
+            ?: demangledDefinition(category, name, linkage)
+        add(PointerDataType(registry.register(funcDef), dtm), name, "$target")
+    }
+
+    /** FunctionDefinition [name] carrying what [linkage] declares — the only type source for a slot
+     *  target that has a linkage name and nothing else. Names but does not type an unmangled one. */
+    private fun demangledDefinition(category: CategoryPath, name: String, linkage: String) =
+        FunctionDefinitionDataType(category, name, dtm).apply {
+            fun DemangledDataType.dt() = runCatching { getDataType(dtm) }.getOrNull() ?: Undefined4DataType.dataType
+            (Demangler.of(linkage) as? DemangledFunction)?.let { df ->
+                df.returnType?.let { returnType = it.dt() }
+                setArguments(
+                    *df.parameters
+                        .filterNot { it.type.isVoid && it.type.pointerLevels == 0 && !it.type.isReference }
+                        .mapIndexed { i, p -> ParameterDefinitionImpl("arg$i", p.type.dt(), null) }
+                        .toTypedArray(),
+                )
+            }
+        }
 
     /** `_ZTV<class>` demangled qualified-class-name → address, built once. Replaces the per-class
      *  `O(classes × symbols)` demangle scan that made [resolveVtableAddress] pathological on CryptoPP

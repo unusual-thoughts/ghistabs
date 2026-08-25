@@ -1020,15 +1020,16 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     @Test
     @ExpectedToFail(
         fixtures = [
-            "crypto_mi_test_gcc421.exe", "crypto_mi_test_gcc421_stripped.exe",
-            "xmltest_gcc421.exe", "xmltest_gcc421_stripped.exe",
+            // Stripped: no symbol table at all, so neither the stab method list nor §25's `_ZTV`
+            // sweep has anything to read. Their unstripped twins pass on the sweep alone.
+            "crypto_mi_test_gcc421_stripped.exe", "xmltest_gcc421_stripped.exe",
             // a.out: both fixtures are plain C, so there are no classes and no vtables at all.
             "hello_aout_gcc295.o", "zlib_aout_gcc263.o",
             // C++, but gcc 2.95's minimal-debug `##` method encoding fails the class body, and its
             // vtables are pre-Itanium `__vt_9TiXmlNode` symbols rather than `_ZTV` regardless.
             "tinyxml_aout_gcc295.o",
         ],
-        reason = "gcc 12 omits the method stab section for polymorphic classes, so no vftable is applied",
+        reason = "no _ZTV symbol and no method stab section, so nothing can locate or fill a vftable",
     )
     fun atLeastOneVtableStructApplied() {
         // box2d_tests shows no detectable C++ surface (no mangled symbols, no `_vptr`, no virtuals);
