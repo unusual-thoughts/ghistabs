@@ -3001,7 +3001,7 @@ each moves a class from the file its *definitions* live in to the file that *dec
 `XVImage` and `AppImage` are untouched: their only merged members are dtor clones, whose copies
 disagree, so the tier abstains and the burst vote still answers.
 
-## 54. Secondary (virtual-base) sub-vtables are never laid — open (confirmed 2026-08-25)
+## 54. Secondary (virtual-base) sub-vtables are never laid — DONE
 
 A `_ZTV` object is not one table. A class with virtual bases gets a *group*: the primary vtable,
 then one secondary sub-vtable per virtual base, each with its own
@@ -3049,3 +3049,46 @@ signatures. Treat them the way §25 types swept slots — off the target's linka
 
 The count of sub-vtables should equal the number of virtual bases, giving the same cross-check
 `vtable-vbase-count-mismatch` now applies to the primary's prefix.
+
+### Done
+
+`secondaryVtables` walks the group after the primary and `laySecondaryVtables` lays each record the
+way the primary is laid, with an `internal_vftable` label at the address point (Ghidra's own
+`RTTIGccClassRecoverer` spelling for a non-primary vftable). Both the harvested and the swept path go
+through it. Data now covered rather than left raw, per fixture:
+
+| fixture | sub-vtables | `data-no-coverage` |
+| --- | --- | --- |
+| `crypto_mi_test_gcc345` | 436 | 1029 → 504 |
+| `crypto_mi_test_gcc421` | 444 | 1125 → 586 |
+| `xmltest_gcc421` | 16 | 182 → 154 |
+| `locale_test_customlibstdcxx` | 24 | 195 → 153 |
+
+Three things the note got wrong, each found by running it:
+
+- **The group has no delimiter, but it does have an invariant.** Walking "until the next
+  symbol-bearing address" is not usable — auto-analysis sprays `PTR_` labels through `.rdata`. What
+  actually bounds the group is that every record in it describes the *same complete object*, so every
+  record's rtti word holds the same pointer. A record whose rtti differs is the next object; the walk
+  stops before touching it. That is also what makes the walk safe on a swept class we know nothing
+  about.
+- **The sub-vtable count does *not* equal the virtual-base count.** CryptoPP's interface lattice gives
+  `PrivateKey` twelve vbase offsets, all zero, and zero sub-vtables — an empty virtual base sits at
+  offset 0 and shares the primary vptr, so it needs no vptr of its own and gets no secondary. The
+  cross-check the note asked for was written, fired on eleven crypto_mi classes, and was removed once
+  the bytes at `_ZTV13PrivateKey` showed all eleven were correct. Multiple inheritance breaks it from
+  the other side too (§23).
+- **Where the primary ends has to be read off memory, not off the laid `<Class>_vftable`.**
+  `CryptoPP::Base` declares fewer virtuals in its stabs than its table holds, so the struct's end sat
+  *inside* the function array, where the first word already points into code and the scan gives up at
+  once. Its one real secondary was silently missed. `vtableSlotTargets` gives the physical end.
+
+Slot typing went through `addSweptSlot` as planned, but each secondary needs its own
+`ClassDataTypes/<leaf>/internal_<i>` category: a thunk demangles to the same leaf name as the method it
+forwards to, and sharing the class category forked a `.conflict` per slot against the primary's
+definition of that name — 1874 on crypto_mi, caught by `fewConflictRenames`.
+
+Guarded by `noSubVtableInsideAGroupIsLeftUnlabelled`, which is independent of the walk: it finds
+sub-vtables by asking the symbol table which words point at a `_ZTI…`, bounds itself by the next
+Itanium-mangled symbol, and requires an `internal_vftable` one word later. That is what caught the
+`CryptoPP::Base` miss.

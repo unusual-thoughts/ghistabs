@@ -29,8 +29,8 @@
             "max": 27
         },
         "data-no-coverage": {
-            "min": 195,
-            "max": 195
+            "min": 153,
+            "max": 153
         },
         "degraded-base-synthesized": {
             "min": 8,
@@ -63,6 +63,10 @@
         "degraded-vtable-failed": {
             "min": 9,
             "max": 9
+        },
+        "degraded-vtable-vbase-count-mismatch": {
+            "min": 6,
+            "max": 6
         },
         "demangle-applied": {
             "min": 6250,
@@ -459,6 +463,10 @@
         "vtable-failed-truly-missing": {
             "min": 9,
             "max": 9
+        },
+        "vtable-secondary": {
+            "min": 24,
+            "max": 24
         },
         "vtable-virtual-no-impl": {
             "min": 28,
