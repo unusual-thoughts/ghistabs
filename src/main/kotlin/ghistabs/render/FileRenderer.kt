@@ -2,11 +2,14 @@ package ghistabs.render
 
 import ghidra.program.model.address.Address
 import ghistabs.chunkOf
+import ghistabs.diagnose.DiagnosticSink
 import ghistabs.harvest.*
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
 
-class FileRenderer(override val renderer: Renderer, override val source: GhidraSourceFile) : RenderContext {
+class FileRenderer(override val renderer: Renderer, override val source: GhidraSourceFile) :
+    RenderContext,
+    DiagnosticSink by renderer {
     private val rawFuncs = index.functionsBySource[source].orEmpty()
     private val lines = renderer.linesBySource[source].orEmpty()
     private val typeDecls = index.typesBySource[source].orEmpty().filter { it.name != null && it.line != null }
@@ -26,7 +29,7 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
      * judge, so where it exists §43's circularity is simply gone.
      */
     private val sourceLength = believedLength(renderer.lengthOf(source), codeExtent) { length ->
-        index.warn("source-length-conflict", "$source: code reaches L$codeExtent of $length lines")
+        warn("source-length-conflict", "$source: code reaches L$codeExtent of $length lines")
     }
 
     /**
@@ -135,7 +138,7 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
         // Trailing blank/stale lines are trimmed only in decomp mode; skeleton output
         // stays fully source-aligned.
         val rendered = canvas.render(trim = renderer.decomp != null, compact = !renderer.lineAligned)
-        spans.closeAnomalies(rendered.lines()).forEach { println("skeleton[$source]: $it") }
+        spans.closeAnomalies(rendered.lines()).forEach { warn("skeleton[$source]: $it") }
         return rendered + anonAggregateAppendix() + instantiationAppendix() + displacedAppendix()
     }
 
@@ -336,7 +339,7 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
         for (drop in allocation.dropped) {
             if (drop.claim.owner == Owner.FUNC_DELIM) continue
             displaced += drop
-            println(
+            warn(
                 "skeleton[$source]: dropped ${drop.claim.owner} at L${drop.claim.line} — " +
                     "${drop.reason}: ${drop.claim.rows.first().text}",
             )
@@ -693,7 +696,7 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
                 anomalies += "skeleton[$source]: global/static ${s.body.name} at L$line $where"
             }
         }
-        anomalies.forEach(::println)
+        anomalies.forEach(this::warn)
     }
 
     companion object {

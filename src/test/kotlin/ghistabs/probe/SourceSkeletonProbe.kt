@@ -104,7 +104,7 @@ class SourceSkeletonProbe : AbstractGhidraHeadlessIntegrationTest() {
                         oldDir.deleteRecursively()
                         outDir.renameTo(oldDir)
                     }
-                    Renderer(index, program, mode, ctx.resolver).use { renderer ->
+                    Renderer(index, program, mode, ctx.resolver, sink = ctx).use { renderer ->
                         renderer.renderAll(outDir).also {
                             println(
                                 "Pipeline[$binaryName, ${mode.outDirName}]: " +
