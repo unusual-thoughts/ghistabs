@@ -1007,26 +1007,68 @@ the stabs don't fully carry. Two levels, in priority order:
 Then point the vtable `rtti` pointee at the class's typeinfo struct instead of `Undefined4*`.
 Behavioural: shifts regression counters — regen baselines with `-PregenerateBaselines=true`.
 
-## 25. `_ZTV` symbols with no stabs class are never annotated — open
+## 25. `_ZTV` symbols with no stabs class are never annotated — DONE
 
-`buildAndApplyVtable` runs per `LocatedType`, i.e. only for classes we harvested a `T`-stab
-body for. libsupc++ is linked without stabs, so its own polymorphic classes — `std::type_info`,
-`__cxxabiv1::__{class,si_class,vmi_class}_type_info` — have a `_ZTV…` symbol and a real vtable in
-`.data` but no group, and `resolveVtableAddress` is never called for them. On unpackfile,
-`__ZTVN10__cxxabiv120__si_class_type_infoE` at `0043e954` is the canonical 2-word shape
-(`offset_to_top=0`, `rtti=0043e34c`, address point `0043e95c`), yet the address point keeps
-Ghidra's auto-generated `PTR_~__si_class_type_info_0043e95c` instead of a `vftable` symbol +
-`<Class>_vftable` struct.
+**Fixed by a post-group sweep; and the diagnosis this section carried was wrong on both halves.**
 
-§24 covers the same classes at the *typeinfo record* level (`RttiStructs` → `DemanglerReplacer`);
-this is the vtable level. Fix: after the per-group pass, sweep `Itanium.vtableClassOf`-matching
-symbols with no group and `layVtable` them. Lossy — with no method list the slot types can only
-come from the demangled signatures of the functions the slots point at, so decide whether to lay
-header + address-point label only, or synthesise the vftable struct from the slot targets.
+`buildAndApplyVtable` runs per `LocatedType`, i.e. only for a class we harvested a `T`-stab body
+for. libsupc++ and libstdc++ link without stabs, so their polymorphic classes own a real `_ZTV`
+that nothing ever visits. `ClassBuilder.sweepUnclaimedVtables` now runs after the group pass over
+every `Itanium.vtableClassOf`-matching symbol whose address no group claimed (`claimedVtables`),
+and lays it.
 
-Neither `dcinstShiftSCompatibility` nor `cSymLexStreamVtableAddressPointSkipsVbaseOffset` covers
-this: both assert on the output of `buildAndApplyVtable` for a stabs-bearing class and skip
-outright on any fixture without it.
+**Measured, `unpackfile.exe`: 5 `vtable-applied` → 5 applied + 55 swept, of 58 `_ZTV` symbols, 0
+empty.** Slot counts check out against the ABI (`std::ostream` = 2, its two dtor entries;
+`__cxxabiv1::__class_type_info` = 9).
+
+### What the previous note got wrong
+
+It claimed most of the 400 `vtable-failed-truly-missing` was a name-construction gap — no STL
+substitution shorthand (`Ss`/`Si`/`So`) in `ztvCandidates` — "cheap and testable", to be measured on
+a fullstabs/stripped pair. Both halves are false, and one `nm` each shows it:
+
+- **Stripped fixtures have no symbol table at all.** `nm xmltest_gcc421_fullstabs_stripped.exe` →
+  *no symbols*. Neither a candidate list nor the demangled index can resolve a `_ZTV` there; the
+  121 failures are unreachable by name, full stop. Nothing name-shaped was ever going to move them.
+- **The 17 failures on the unstripped twin have no `_ZTV` symbol in the binary either** —
+  `__fundamental_type_info`, `__array_type_info`, …, `stringbuf`, `istringstream`,
+  `char_producer<char>`. They are correctly bucketed `truly-missing`. Restoring the shorthand moves
+  zero.
+
+The shorthand also does not need restoring for its original purpose: both sides of the
+`vtableAddressByClass` lookup come from the *same* demangler — `qualifiedClassName` off a member's
+mangled name, the key off the `_ZTV` symbol — so `_ZTVSo` and `std::basic_ostream<char,…>` already
+meet. That is why `885a649`'s `ztiCandidates` table was removable in `ddaa01a` with no loss.
+
+### Slot typing, and the three invariants it has to satisfy
+
+With no method list the slots are typed from the targets: the applied `Function`'s signature where
+auto-analysis produced one, else what the target's own mangled name declares (`Demangler`), which is
+all a stabs-free libstdc++ vtable ever has. Array length is inferred — `vtableSlotTargets` runs while
+the words point into executable memory, which stops at the next record's `offset_to_top` (0) or rtti
+pointer (into .data). Three things the first cut got wrong, each caught by an existing test:
+
+- **A pure-virtual slot is not untyped.** `__ZTVSt21__ctype_abstract_baseIcE` is `[0, &_ZTI…, D1Ev,
+  D0Ev, 12× ___cxa_pure_virtual]` — "2/14 typed" was accurate, the class is abstract. `void*` there
+  reads as a failure to type it; `__cxa_pure_virtual` is a real function and gets a real (empty)
+  definition.
+- **One FD name per demangled leaf forks a `.conflict` per overload.** `std::num_get` has six
+  `do_get`, `std::ctype` two of each `do_is`/`do_widen`/… — 32 conflicts on unpackfile against a
+  baseline of 1.
+- **Field name and pointee FD name must agree** (`atLeastOneVtableStructApplied`; RecoveredClassHelper
+  matches slots to definitions by name for the shift-S round-trip). So the dedup suffix has to apply
+  to both, not just the field.
+
+### Side effect: the gcc-12 missing-method-stab fixtures
+
+`crypto_mi_test_gcc421.exe` and `xmltest_gcc421.exe` were `@ExpectedToFail` on
+`atLeastOneVtableStructApplied` because gcc 12 omits the method stab section for polymorphic classes,
+leaving nothing to build slots from. The sweep does not need the method list — it reads the slots out
+of the vtable — so both now pass and have been removed from the list. Their `_stripped` twins stay:
+no symbol table, nothing to sweep.
+
+§24 covers the same classes at the *typeinfo record* level; this is the vtable level. Not done here:
+the class struct is not synthesised for a swept class, so there is no `{vfptr}` back-edge to it.
 
 ## 26. Bitfields are laid at their containing byte, not as bitfields — open
 
@@ -2958,3 +3000,52 @@ each moves a class from the file its *definitions* live in to the file that *dec
 
 `XVImage` and `AppImage` are untouched: their only merged members are dtor clones, whose copies
 disagree, so the tier abstains and the burst vote still answers.
+
+## 54. Secondary (virtual-base) sub-vtables are never laid — open (confirmed 2026-08-25)
+
+A `_ZTV` object is not one table. A class with virtual bases gets a *group*: the primary vtable,
+then one secondary sub-vtable per virtual base, each with its own
+`[vcall offsets…] offset_to_top rtti [function pointers]`. `layVtable` lays the primary and stops at
+the end of its function array (`vtableSlotTargets` halts at the first non-code word — which is the
+next sub-vtable's `offset_to_top`). Everything after that is untouched.
+
+`__ZTVSi` (`std::istream`, unpackfile `0x43ea7c`), read out of the PE:
+
+```
++0   0x00000008  vbase offset (to basic_ios)   ← laid
++4   0x00000000  offset_to_top                 ← laid
++8   &__ZTISi    rtti                          ← laid
++12  __ZNSiD1Ev  ← address point, "vftable" label, 2 slots
++16  __ZNSiD0Ev
+────────── virtual-base sub-vtable, entirely unannotated ──────────
++20  0xfffffff8  vcall offset
++24  0xfffffff8  offset_to_top
++28  &__ZTISi    rtti
++32  __ZTv0_n12_NSiD1Ev
++36  __ZTv0_n12_NSiD0Ev
+```
+
+Half the record on `Si`, two thirds on `Sd` (`std::iostream`, three sub-vtables).
+
+**What that costs, in order:**
+
+- `+32` is the address point a `basic_ios` subobject's vfptr holds. It gets no `vftable` symbol, so
+  an upcast `basic_ios*` in the decompiler points at a raw address — the exact failure `layVtable`
+  exists to prevent, one sub-vtable over.
+- The `_ZTv0_n12_` virtual-call thunks stay untyped bare pointers, so a virtual call through a
+  virtual base resolves to nothing.
+- The secondary's `offset_to_top` (negative — the distance back to the complete object) and its vcall
+  offsets carry the adjustment a reader needs to follow the thunk, and are unlabelled data.
+
+**Why the §25 sweep cannot reach them:** it iterates *symbols*, and a secondary sub-vtable has none —
+it is interior to the `_ZTV` object. Finding them means walking the record instead: after the primary
+array, the next word begins another `[vcall…] offset_to_top rtti [fns]` triple, repeating until the
+next symbol-bearing address. That is a different traversal from the one `sweepUnclaimedVtables` does,
+and it applies to harvested and swept classes alike.
+
+Slot typing for a secondary is not the primary's list re-laid: the entries are `_ZTv0_n<N>_` /
+`_ZThn<N>_` thunks, which are distinct symbols with their own names and their own (identical)
+signatures. Treat them the way §25 types swept slots — off the target's linkage name.
+
+The count of sub-vtables should equal the number of virtual bases, giving the same cross-check
+`vtable-vbase-count-mismatch` now applies to the primary's prefix.
