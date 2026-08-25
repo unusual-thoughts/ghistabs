@@ -183,14 +183,16 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
         children = children.map { it.folded() },
     )
 
-    // name → its defining source. Prefer concrete Struct/Enum over forward-decl XRef stubs: gcc emits
-    // those for classes merely mentioned by pointer in unrelated headers (e.g. reachable via <iostream>),
-    // and picking one would route the class's methods to that header instead of its real home.
+    // name → its defining source, keyed canonically so a demangled scope chain can match it (gcc
+    // spells stab template args with the spaces the demangler also emits, inconsistently). Prefer
+    // concrete Struct/Enum over forward-decl XRef stubs: gcc emits those for classes merely mentioned
+    // by pointer in unrelated headers (e.g. reachable via <iostream>), and picking one would route the
+    // class's methods to that header instead of its real home.
     private val classSourceByName: Map<String, GhidraSourceFile> by lazy {
         buildMap {
             val bestRank = mutableMapOf<String, Int>()
             for ((_, id, name, body) in typeAsts.values) {
-                val n = name ?: continue
+                val n = name?.let(::canonTemplateName) ?: continue
                 val rank = when (body) {
                     is TypeDecl.Struct, is TypeDecl.Enum -> 2
                     is TypeDecl.XRef -> 0
@@ -536,7 +538,17 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
     fun Func.source() = when {
         isSyntheticInit -> fold(cu.identity)
         else -> lineEntries.minByOrNull { it.addr.offset }?.source
-            ?: outermostClass()?.let { classSourceByName[it] }?.let(::fold)
+            ?: declaringClassSource()?.let(::fold)
+    }
+
+    /**
+     * Where the class owning this method is declared. gcc leaves an enclosing *namespace* out of a
+     * type's stab name but keeps an enclosing *class* in it (`Outer::Inner`), so no single element of
+     * the demangled scope chain is the key: try progressively shorter suffixes, longest first —
+     * `std::locale::facet` → `locale::facet` → `facet`.
+     */
+    private fun Func.declaringClassSource(): GhidraSourceFile? = scopePath()?.let { path ->
+        path.indices.firstNotNullOfOrNull { i -> classSourceByName[path.drop(i).joinToString("::")] }
     }
 
     /** Functions per source — the inverted view render needs, matching [linesBySource]/[staticsBySource]
