@@ -8,6 +8,7 @@ import ghidra.program.model.sourcemap.SourceMapEntry
 import ghidra.util.task.TaskMonitor
 import ghistabs.ImportOptions
 import ghistabs.ImportOptions.Companion.stabsTypedefsShortened
+import ghistabs.diagnose.DiagnosticSink
 import ghistabs.harvest.Func
 import ghistabs.harvest.GhidraSourceFile
 import ghistabs.harvest.HarvestIndex
@@ -48,7 +49,9 @@ class Renderer(
     // Render source line n at output line n, blank rows and all. Off by default — see [Canvas.render]
     // — but it is what a diff against the real source needs, so it stays one flag away.
     val lineAligned: Boolean = false,
-) : Closeable {
+    val sink: DiagnosticSink,
+) : Closeable,
+    DiagnosticSink by sink {
     /**
      * Collapses long template spellings (`basic_string<char,…>` → `string`) across *everything* the
      * render emits, declarations and decompiled code alike. Shortening only the AST half is what left
@@ -82,7 +85,7 @@ class Renderer(
             // map at all, and every SLINE annotation would just quietly be missing.
             .also {
                 if (it.isEmpty() && index.harvest.lineEntries.isNotEmpty()) {
-                    println(
+                    warn(
                         "render: ${index.harvest.lineEntries.size} sources have N_SLINEs but the program's line map is empty",
                     )
                 }
@@ -224,7 +227,7 @@ class Renderer(
         }
         if (decomp != null && results?.decompileCompleted() != true) {
             undecompiled += func.addr
-            println("render[${func.demangledName}]: ${results?.errorMessage ?: "no decompilation"}")
+            error("render[${func.demangledName}]: ${results?.errorMessage ?: "no decompilation"}")
         }
         // Folded onto the function's *own* source, not the file asking: that only governs which locals
         // drop out of the head fold, and the head is used only where the function is defined.
@@ -273,7 +276,7 @@ class Renderer(
         // Said once, up front: with a source root given, how much of it the render can actually read.
         // Free without one — no transform means no file to check.
         sources.count { localSources[it] != null }
-            .let { if (it > 0) println("render: $it of ${sources.size} sources resolved to a local file") }
+            .let { if (it > 0) log("render: $it of ${sources.size} sources resolved to a local file") }
         return program.runTransaction("stabs-render-all") {
             sources.asSequence()
                 .map { it to renderSkeleton(it) }
@@ -281,7 +284,7 @@ class Renderer(
                 // A source with nothing to show writes no file. Said out loud rather than skipped in
                 // silence: an empty render is either a file gcc mentioned and never described, or a
                 // bug in attribution, and the difference is only visible if the name is named.
-                .onEach { (source, text) -> if (text.isBlank()) println("render[$source]: empty, no file written") }
+                .onEach { (source, text) -> if (text.isBlank()) log("render[$source]: empty, no file written") }
                 .filter { (_, text) -> text.isNotBlank() }
                 .onEach { (source, text) ->
                     dir.resolve(source.outputPath.toFile()).apply { parentFile?.mkdirs() }.writeText(text)

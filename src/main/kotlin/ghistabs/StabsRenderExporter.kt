@@ -74,6 +74,7 @@ sealed class StabsRenderExporter(name: String, extension: String, val options: S
             ctx.resolver,
             showStorage = showStorage,
             lineAligned = lineAligned,
+            sink = ctx,
         ).use { it.renderAll(dir, monitor) }
         sink.log("export", "Wrote $written files to $dir")
         return true

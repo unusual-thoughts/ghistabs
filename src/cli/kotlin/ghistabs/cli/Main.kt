@@ -15,9 +15,8 @@ import ghidra.app.util.importer.ProgramLoader
 import ghidra.framework.Application
 import ghidra.framework.HeadlessGhidraApplicationConfiguration
 import ghidra.framework.options.OptionType
-import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Program
-import ghidra.util.task.TaskMonitor
+import ghidra.util.Msg
 import ghistabs.ImportOptions
 import ghistabs.StabsAnalyzer
 import ghistabs.StabsAnalyzer.Companion.import
@@ -27,7 +26,6 @@ import ghistabs.importer.ImportContext
 import ghistabs.render.Mode
 import ghistabs.render.Renderer
 import ghistabs.runTransaction
-import java.io.Flushable
 
 fun main(args: Array<String>) = NoOpCliktCommand(name = "ghidra-stabs")
     .subcommands(SkeletonCommand(), DecompCommand())
@@ -68,19 +66,13 @@ private abstract class RenderCommand(name: String, help: String) : CliktCommand(
 
     private val binary by argument(help = "ELF/PE binary carrying .stab/.stabstr debug info (gcc 3.2–12)")
         .file(mustExist = true, canBeDir = false, mustBeReadable = true)
-
     private val outDir by option("-d", "--target-dir", help = "directory to write the rendered per-source files into")
         .file(canBeFile = false).required()
 
-    private val buildClasses by option(
-        "--classes",
-        help = "reconstruct C++ classes — namespaces, this-typed member methods, vtable structs; " +
-            "--no-classes leaves plain structs (member calls lose this/args, virtual calls unresolved)",
-    ).flag("--no-classes", default = true)
-    private val shortenTypedefs by option(
-        "--shorten-typedefs",
-        help = "rename long templated types onto their shorter typedef aliases (basic_string<char,…> → string)",
-    ).flag("--no-shorten-typedefs", default = false)
+    private val buildClasses by option("--classes", help = ImportOptions.CLASSES.desc)
+        .flag("--no-classes", default = ImportOptions.CLASSES.default)
+    private val shortenTypedefs by option("--shorten-typedefs", help = ImportOptions.SHORTEN_TYPEDEFS.desc)
+        .flag("--no-shorten-typedefs", default = ImportOptions.SHORTEN_TYPEDEFS.default)
     private val varStorage by option(
         "--var-storage",
         help = "annotate each local with the storage gcc gave it, (stack) or (reg)",
@@ -89,18 +81,13 @@ private abstract class RenderCommand(name: String, help: String) : CliktCommand(
         "--line-aligned",
         help = "render source line n at output line n, blank rows and all, instead of collapsing blank runs",
     ).flag("--no-line-aligned", default = false)
-    private val foldSources by option(
-        "--fold-sources",
-        help = "fold gcc's two spellings of one header (full include path vs bare name) onto one output file",
-    ).flag("--no-fold-sources", default = true)
+    private val foldSources by option("--fold-sources", help = ImportOptions.FOLD_SOURCES.desc)
+        .flag("--no-fold-sources", default = ImportOptions.FOLD_SOURCES.default)
+
     private val logLevel by option("-v", "--log-level", help = "minimum level streamed to the log").enum<Level>()
         .default(Level.INFO)
-    private val sourceRoots by option(
-        "--source-root",
-        help = "local checkout of the sources this binary was built from (repeatable). Recorded source " +
-            "directories found under it are registered as Ghidra directory transforms, so paths resolve " +
-            "to real files.",
-    ).file(mustExist = true, canBeFile = false).multiple()
+    private val sourceRoots by option("--source-root", help = ImportOptions.SOURCE_ROOTS.desc)
+        .file(mustExist = true, canBeFile = false).multiple()
     private val disableAnalyzers by option(
         "--disable-analyzer",
         help = "turn off every analyzer whose name contains this, case-insensitively (repeatable). " +
@@ -110,57 +97,65 @@ private abstract class RenderCommand(name: String, help: String) : CliktCommand(
     private val recordsJson by option("--records-json", help = "dump parsed StabRecords as JSON").file(canBeDir = false)
     private val harvestJson by option("--harvest-json", help = "dump the harvest as JSON").file(canBeDir = false)
     private val registryJson by option("--registry-json", help = "dump type registry as JSON").file(canBeDir = false)
-    private val logFile by option("--log", help = "redirect the live import log to this file instead of stderr")
+    private val logFile by option("--log", help = "redirect the live import log to this file as well as stdout")
         .file(canBeDir = false)
     private val degradationLog by option("--degradation-log", help = "write grouped materialization degradations here")
         .file(canBeDir = false)
 
-    private val options
-        get() =
-            ImportOptions(
-                false,
-                buildClasses,
-                shortenTypedefs,
-                foldSources,
-                logLevel,
-                false,
-                sourceRoots = sourceRoots.map { it.path },
-            )
+    private val options get() = ImportOptions(
+        false,
+        buildClasses,
+        shortenTypedefs,
+        foldSources,
+        logLevel,
+        false,
+        sourceRoots = sourceRoots.map { it.path },
+    )
 
     override fun run() {
+        val monitor = BarLoggerMonitorSink(options.minLogLevel)
+        Msg.setErrorLogger(monitor)
         if (!Application.isInitialized()) {
             Application.initializeApplication(GhidraApplicationLayout(), HeadlessGhidraApplicationConfiguration())
         }
-        val monitor = TaskMonitor.DUMMY
-        val msgLog = MessageLog()
-        val consumer = Any()
-        val writer = logFile?.also { it.parentFile?.mkdirs() }?.bufferedWriter()
-        val out = writer ?: System.err
-        writer?.let { echo("log -> $logFile") }
+        val fileWriter = logFile?.also { it.parentFile?.mkdirs() }?.bufferedWriter()
+            ?.also { echo("log -> $logFile") }
+        val fileSink = fileWriter?.let { StreamSink(options.minLogLevel, it) }
+
         // WindowsResourceReferenceAnalyzer runs a named script during PE autoanalysis; start the OSGi
         // bundle host (as HeadlessAnalyzer does) so its GhidraScriptUtil.bundleHost lookup isn't null.
         GhidraScriptUtil.acquireBundleHostReference()
+        Msg.setErrorLogger(monitor)
+        val msgLog = MessageLog()
         try {
             ProgramLoader.builder().source(binary).compiler("gcc").log(msgLog).monitor(monitor).load().use { results ->
-                val program = results.getPrimaryDomainObject(consumer)
+                val program = results.getPrimaryDomainObject(this)
                 try {
-                    val ctx = ImportContext(program, monitor, options, StreamSink(logLevel, out), StabsDiagnostics())
+                    val ctx = ImportContext(
+                        program,
+                        monitor,
+                        options,
+                        TeeSink(monitor, fileSink),
+                        StabsDiagnostics(),
+                    )
                     ctx.autoAnalyze()
                     // No transaction: every write inside opens its own — the materialize/apply/
                     // source-map passes, [StabSectionOverlay], and the done-flags through
                     // `Program.set` — which is what the analyzer path relies on already.
                     val artifacts = ctx.import().artifacts
-                    msgLog.toString().takeIf { it.isNotBlank() }?.let { out.append("--- loader MessageLog ---\n$it\n") }
+                    fileWriter?.apply {
+                        msgLog.toString().takeIf { it.isNotBlank() }?.let { append("--- loader MessageLog ---\n$it\n") }
+                    }
 
                     ctx.writeDumps(artifacts)
                     ctx.render(artifacts)
                 } finally {
-                    program.release(consumer)
+                    program.release(this)
                 }
             }
         } finally {
             GhidraScriptUtil.releaseBundleHostReference()
-            writer?.close()
+            fileWriter?.close()
         }
     }
 
@@ -235,19 +230,10 @@ private abstract class RenderCommand(name: String, help: String) : CliktCommand(
             resolver,
             showStorage = varStorage,
             lineAligned = lineAligned,
+            sink = this,
         ).use { renderer ->
             val written = renderer.renderAll(outDir)
             echo("rendered ${renderer.sources.size} sources -> $written files in $outDir")
         }
-    }
-}
-
-/** Streams each diagnostic line at or above [minLevel] to [out], flushing so the log is live. */
-private class StreamSink(private val minLevel: Level, private val out: Appendable) : DiagnosticSink {
-    override fun log(category: String, message: String?, level: Level, address: Address?, count: Long) {
-        if (message == null || level < minLevel) return
-        val at = address?.let { "[@$it]" } ?: ""
-        out.append("[$level][$category]$at $message\n")
-        (out as? Flushable)?.flush()
     }
 }
