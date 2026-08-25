@@ -1017,7 +1017,7 @@ that nothing ever visits. `ClassBuilder.sweepUnclaimedVtables` now runs after th
 every `Itanium.vtableClassOf`-matching symbol whose address no group claimed (`claimedVtables`),
 and lays it.
 
-**Measured, `unpackfile.exe`: 5 `vtable-applied` → 5 applied + 55 swept, of 58 `_ZTV` symbols, 0
+**Measured, `unpackfile.exe`: 5 `vtable-applied` → 5 applied + 53 swept = all 58 `_ZTV` symbols, 0
 empty.** Slot counts check out against the ABI (`std::ostream` = 2, its two dtor entries;
 `__cxxabiv1::__class_type_info` = 9).
 
