@@ -42,6 +42,9 @@ import java.nio.file.Path
 import kotlin.io.path.createDirectories
 import kotlin.io.path.writeText
 
+/** Cap on the words scanned inside one `_ZTV` group, for the fixture whose next symbol is far off. */
+private const val MAX_GROUP_WORDS = 512
+
 /**
  * Execution-order mode for the regression harness.
  *
@@ -635,9 +638,9 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
      *   virtual, and `__ZTVSd` still carries one vbase offset for the `basic_ios` behind them.
      *
      * The second is gated by an ABI invariant rather than by re-deriving the count: a *primary*
-     * vtable — the record a `_ZTV` symbol names, which is the only kind laid today — has vbase
-     * offsets only. Vcall offsets live in the secondary sub-vtables (§54), so a "vcall offset" on a
-     * primary means the split under-counted.
+     * vtable — the record a `_ZTV` symbol names — has vbase offsets only. Vcall offsets live in the
+     * secondary sub-vtables (§54), which carry no `vftable` symbol and so are not looked at here, so a
+     * "vcall offset" on a primary means the split under-counted.
      */
     @Test
     fun vtableHeaderCommentsDescribeWhatIsThere() {
@@ -885,6 +888,43 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             "${bad.size} of ${labels.size} vftable labels are not on the address point " +
                 "(mislaid on the rtti or vbase-offset word)",
         )
+    }
+
+    /**
+     * A `_ZTV` is a *group*: the primary, then one secondary sub-vtable per virtual base subobject
+     * that needs its own vptr, each `[vcall offsets…] offset_to_top rtti [thunks]` (§54). Only the
+     * primary bears a symbol, so what marks a secondary inside the object is its rtti header — a word
+     * holding the address of a `_ZTI…` symbol. Every one of those must be followed by an
+     * `internal_vftable` label; an unlabelled one is an address point some subobject's vfptr holds
+     * that the decompiler will resolve to a raw address (`_ZTVSi+32`, the §54 case).
+     *
+     * Independent of the walk under test, which bounds itself by rtti *value* equality: this reads the
+     * symbol table, and bounds itself by the next Itanium-mangled symbol, i.e. the next object.
+     */
+    @Test
+    fun noSubVtableInsideAGroupIsLeftUnlabelled() {
+        val ptr = program.defaultPointerSize.toLong()
+        fun labelsAt(a: Address) = program.symbolTable.getSymbols(a).map { it.name }
+        fun isRttiHeader(a: Address) = wordAt(a)
+            ?.let { program.addressFactory.defaultAddressSpace.getAddress(it) }
+            ?.let { target -> labelsAt(target).any(Itanium::looksLikeZti) } == true
+
+        val primaries = program.symbolTable.symbolIterator.iterator().asSequence()
+            .filter { it.name == Itanium.VFTABLE && program.memory.getBlock(it.address) != null }
+            .map { it.parentSymbol.name to it.address }.distinct().toList()
+        assumeTrue(primaries.isNotEmpty(), "Skipping: no vftable laid in this fixture")
+
+        val unlabelled = primaries.flatMap { (cls, point) ->
+            val nextObject = program.symbolTable.getSymbolIterator(point.add(ptr), true).iterator().asSequence()
+                .firstOrNull { Itanium.isProbablyMangled(it.name) }?.address
+            generateSequence(point) { it.add(ptr) }
+                .takeWhile { nextObject == null || it < nextObject }
+                .take(MAX_GROUP_WORDS)
+                .filter { isRttiHeader(it) }
+                .filterNot { Itanium.INTERNAL_VFTABLE in labelsAt(it.add(ptr)) }
+                .map { "$cls@$point: sub-vtable rtti at $it, no ${Itanium.INTERNAL_VFTABLE} at ${it.add(ptr)}" }
+        }
+        unlabelled.take(10).mustBeEmpty("${unlabelled.size} sub-vtables inside a _ZTV group are unannotated")
     }
 
     /**

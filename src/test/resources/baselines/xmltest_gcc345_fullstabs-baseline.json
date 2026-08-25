@@ -25,8 +25,8 @@
             "max": 4
         },
         "data-no-coverage": {
-            "min": 94,
-            "max": 94
+            "min": 80,
+            "max": 80
         },
         "degraded-base-synthesized": {
             "min": 3,
@@ -59,6 +59,10 @@
         "degraded-struct-truncated": {
             "min": 7,
             "max": 7
+        },
+        "degraded-vtable-vbase-count-mismatch": {
+            "min": 2,
+            "max": 2
         },
         "demangle-applied": {
             "min": 4318,
@@ -436,9 +440,17 @@
             "min": 61,
             "max": 61
         },
+        "vtable-secondary": {
+            "min": 8,
+            "max": 8
+        },
         "vtable-skipped": {
             "min": 2,
             "max": 2
+        },
+        "vtable-swept": {
+            "min": 11,
+            "max": 11
         },
         "vtable-virtual-no-impl": {
             "min": 14,

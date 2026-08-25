@@ -14,7 +14,7 @@ import ghistabs.importer.AddressResolver
 private const val MAX_VTABLE_PREFIX_WORDS = 64
 
 /** Pointer-sized word at [a] from initialized memory (endianness-aware), or null if unmapped. */
-private fun Program.readWord(a: Address): Long? = runCatching {
+internal fun Program.readWord(a: Address): Long? = runCatching {
     if (defaultPointerSize == 8) memory.getLong(a) else memory.getInt(a).toLong() and 0xFFFFFFFFL
 }.getOrNull()
 
@@ -25,8 +25,8 @@ private fun Program.readWord(a: Address): Long? = runCatching {
 private fun Program.codeTargetAt(a: Address, resolver: AddressResolver): Address? =
     readWord(a)?.let(resolver::buildAddress)?.takeIf { memory.getBlock(it)?.isExecute == true }
 
-/** Where the three fixed words of an Itanium vtable record sit — see [vtableShape]. */
-data class VtableShape(val topSlot: Address, val rttiHeader: Address, val addressPoint: Address)
+/** Where the record at [start] keeps its three fixed words — see [vtableShape]. */
+data class VtableShape(val start: Address, val topSlot: Address, val rttiHeader: Address, val addressPoint: Address)
 
 /**
  * What prefix word [i] of [total] is, given the class's [virtualBases]. The ABI orders the words
@@ -79,10 +79,47 @@ fun Program.vtableShape(ztv: Address, resolver: AddressResolver): VtableShape {
             } == true
         }
     return VtableShape(
+        start = ztv,
         topSlot = rttiSlot?.subtract(ptr) ?: ztv,
         rttiHeader = rttiSlot ?: ztv.add(ptr),
         addressPoint = rttiSlot?.add(ptr) ?: ztv.add(Itanium.vtablePrefixBytes(defaultPointerSize)),
     )
+}
+
+/** A record of a `_ZTV` group: where its fixed words sit, and the function pointers it holds. */
+data class SubVtable(val shape: VtableShape, val targets: List<Address>) {
+    fun endOfSlots(ptrSize: Int): Address = shape.addressPoint.add(targets.size.toLong() * ptrSize)
+}
+
+/**
+ * The secondary sub-vtables following the primary record, whose slots end at [afterPrimary] — one per
+ * virtual base, each its own `[vcall offsets…] offset_to_top rtti [thunks]` (ABI §2.5.2). None of them
+ * bears a symbol, so [ghistabs.materialize.ClassBuilder]'s symbol-driven sweep cannot see them and the
+ * address point a virtual-base subobject's vfptr actually holds goes unlabelled.
+ *
+ * Nothing delimits the group, so the walk leans on the one invariant that does: every record in it
+ * describes the same complete object, hence carries the same [rtti] pointer. A record that does not is
+ * the next object, and the walk stops before annotating anything inside it.
+ */
+fun Program.secondaryVtables(afterPrimary: Address, rtti: Long, resolver: AddressResolver): List<SubVtable> =
+    generateSequence(subVtableAt(afterPrimary, rtti, resolver)) {
+        subVtableAt(it.endOfSlots(defaultPointerSize), rtti, resolver)
+    }.toList()
+
+/** The sub-vtable beginning at [start], or null if what is there does not belong to [rtti]'s group. */
+private fun Program.subVtableAt(start: Address, rtti: Long, resolver: AddressResolver): SubVtable? {
+    val ptr = defaultPointerSize.toLong()
+    val rttiSlot = generateSequence(start) { it.add(ptr) }
+        .take(MAX_VTABLE_PREFIX_WORDS)
+        .takeWhile { codeTargetAt(it, resolver) == null }
+        // `> start` because offset_to_top precedes the rtti word: a match on the first word would put
+        // the top slot back inside the primary's function array.
+        .firstOrNull { it > start && readWord(it) == rtti }
+        ?: return null
+    val shape = VtableShape(start, rttiSlot.subtract(ptr), rttiSlot, rttiSlot.add(ptr))
+    return vtableSlotTargets(shape.addressPoint, resolver)
+        .takeIf { it.isNotEmpty() }
+        ?.let { SubVtable(shape, it) }
 }
 
 /**
@@ -99,25 +136,25 @@ fun Program.vtableSlotTargets(addressPoint: Address, resolver: AddressResolver):
         .toList()
 
 /**
- * Lay the Itanium vtable record at [ztv], whose geometry is [shape], and return its address point.
- * The header is `[vbase/vcall offsets…] offset_to_top rtti` and the [vftable] function-pointer
- * array + a "vftable" symbol go at the address point — the value a `{vfptr}` holds — so a
- * constructor's `this->vfptr = &<Class>::vftable` resolves to a symbol, not a raw address.
+ * Lay the Itanium vtable record whose geometry is [shape], and return its address point. The header is
+ * `[vbase/vcall offsets…] offset_to_top rtti` and the [vftable] function-pointer array + a [label]
+ * symbol go at the address point — the value a `{vfptr}` holds — so a constructor's
+ * `this->vfptr = &<Class>::vftable` resolves to a symbol, not a raw address.
  * The rtti pointee stays an untyped `void*` until backlog §24 wires it.
  */
 fun Program.layVtable(
-    ztv: Address,
     shape: VtableShape,
     vftable: Structure,
     className: String,
     ns: Namespace,
     resolver: AddressResolver,
     virtualBases: List<String> = emptyList(),
+    label: String = Itanium.VFTABLE,
 ): Address {
     val ptr = defaultPointerSize.toLong()
-    val (topSlot, rttiHeader, addressPoint) = shape
+    val (start, topSlot, rttiHeader, addressPoint) = shape
 
-    val prefix = generateSequence(ztv) { it.add(ptr) }.takeWhile { it < topSlot }.toList()
+    val prefix = generateSequence(start) { it.add(ptr) }.takeWhile { it < topSlot }.toList()
     prefix.forEachIndexed { i, slot ->
         forceCreateData(slot, Itanium.offsetToTopType(defaultPointerSize))
         listing.setComment(slot, CommentType.EOL, prefixKind(i, prefix.size, virtualBases))
@@ -136,6 +173,6 @@ fun Program.layVtable(
         ?: Itanium.zti(className)
     listing.setComment(rttiHeader, CommentType.EOL, "${Itanium.RTTI}: $rttiName typeinfo")
     forceCreateData(addressPoint, vftable)
-    symbolTable.createLabel(addressPoint, Itanium.VFTABLE, ns, SourceType.IMPORTED)
+    symbolTable.createLabel(addressPoint, label, ns, SourceType.IMPORTED)
     return addressPoint
 }

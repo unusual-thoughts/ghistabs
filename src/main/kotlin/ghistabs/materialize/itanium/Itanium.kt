@@ -43,6 +43,11 @@ object Itanium {
 
     // Conventional field/label names RecoveredClassHelper / shift-S round-trip on.
     const val VFTABLE = "vftable"
+
+    // A secondary sub-vtable's address point. Ghidra's own RTTIGccClassRecoverer spells non-primary
+    // vftables this way, and duplicates it across the several a class with several virtual bases has.
+    const val INTERNAL_VFTABLE = "internal_vftable"
+
     const val OFFSET_TO_TOP = "offset_to_top"
     const val RTTI = "rtti"
     const val BASE_PREFIX = "_base_"

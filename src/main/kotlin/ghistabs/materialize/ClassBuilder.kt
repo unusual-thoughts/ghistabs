@@ -419,8 +419,9 @@ class ClassBuilder(
             )
         }
 
-        val addressPoint = program.layVtable(addr, shape, vftable, className, ns, resolver, virtualBases)
+        val addressPoint = program.layVtable(shape, vftable, className, ns, resolver, virtualBases)
         debug("vtable-applied", "class=$className", address = addressPoint)
+        laySecondaryVtables(shape, className, ns)
 
         // Plate-comment each virtual. An unresolved mangled name here is expected for
         // pure virtuals (slot points at __cxa_pure_virtual, no symbol emitted) or
@@ -540,8 +541,44 @@ class ClassBuilder(
             }
 
             val ns = buildNamespaceChain(splitQualified(qualified))
-            val addressPoint = program.layVtable(addr, shape, vftable, qualified, ns, resolver)
+            val addressPoint = program.layVtable(shape, vftable, qualified, ns, resolver)
             debug("vtable-swept", "class=$qualified slots=${targets.size}", address = addressPoint)
+            laySecondaryVtables(shape, leaf, ns)
+        }
+    }
+
+    /**
+     * Lay the sub-vtables that follow the primary record [primary] (§54). Slots are typed the way
+     * [addSweptSlot] types a swept table rather than from the primary's method list: a secondary holds
+     * `_ZTv0_n…`/`_ZThn…` thunks, which are their own symbols with their own names, and reading them
+     * back off the targets is the only thing that names them.
+     *
+     * Where the primary ends is read off memory, not off the [vftable] just laid there: `CryptoPP::Base`
+     * declares fewer virtuals in its stabs than its table holds, and starting the walk at the struct's
+     * end left it inside the function array, where the first word already points into code and the scan
+     * gives up immediately.
+     *
+     * Each sub-vtable gets its own `internal_<i>` category: a thunk demangles to the same leaf name as
+     * the method it forwards to, so sharing the class category would fork a `.conflict` per slot
+     * against the primary's definition of the same name (1874 of them on crypto_mi).
+     */
+    private fun laySecondaryVtables(primary: VtableShape, leaf: String, ns: Namespace) {
+        val rtti = program.readWord(primary.rttiHeader) ?: return
+        val ptr = program.defaultPointerSize.toLong()
+        val slots = program.vtableSlotTargets(primary.addressPoint, resolver).size
+        val subs = program.secondaryVtables(primary.addressPoint.add(slots * ptr), rtti, resolver)
+        subs.forEachIndexed { i, sub ->
+            val category = CategoryPath(CategoryPath(Itanium.classDataTypesRoot, leaf), "internal_$i")
+            val name = "${leaf}_vftable_internal_$i"
+            val vftable = registry.getOrRegister<Structure>(category, name) {
+                StructureDataType(category, name, 0, dtm)
+            }
+            if (vftable.numComponents == 0) {
+                val used = mutableSetOf<String>()
+                for (target in sub.targets) vftable.addSweptSlot(category, target, used)
+            }
+            val at = program.layVtable(sub.shape, vftable, leaf, ns, resolver, label = Itanium.INTERNAL_VFTABLE)
+            debug("vtable-secondary", "class=$leaf index=$i slots=${sub.targets.size}", address = at)
         }
     }
 

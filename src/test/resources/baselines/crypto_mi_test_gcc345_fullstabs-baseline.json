@@ -25,8 +25,8 @@
             "max": 4
         },
         "data-no-coverage": {
-            "min": 1066,
-            "max": 1066
+            "min": 500,
+            "max": 500
         },
         "degraded-base-synthesized": {
             "min": 7,
@@ -72,6 +72,10 @@
             "min": 8,
             "max": 8
         },
+        "degraded-vtable-vbase-count-mismatch": {
+            "min": 2,
+            "max": 2
+        },
         "demangle-applied": {
             "min": 28541,
             "max": 28541
@@ -109,20 +113,20 @@
             "max": 95
         },
         "demangler-skip-no-replacement": {
-            "min": 75,
-            "max": 75
+            "min": 82,
+            "max": 82
         },
         "demangler-sole-instantiation-declined": {
             "min": 29,
             "max": 29
         },
         "demangler-sole-instantiation-match": {
-            "min": 9,
-            "max": 9
+            "min": 2,
+            "max": 2
         },
         "demangler-unbound-stub": {
-            "min": 75,
-            "max": 75
+            "min": 82,
+            "max": 82
         },
         "demangler-unbound-stub-in-signature": {
             "min": 6,
@@ -365,8 +369,8 @@
             "max": 141
         },
         "replaced-demangler": {
-            "min": 826,
-            "max": 826
+            "min": 819,
+            "max": 819
         },
         "resolve-ambiguous": {
             "min": 1533,
@@ -464,9 +468,17 @@
             "min": 68,
             "max": 68
         },
+        "vtable-secondary": {
+            "min": 436,
+            "max": 436
+        },
         "vtable-skipped": {
             "min": 43,
             "max": 43
+        },
+        "vtable-swept": {
+            "min": 460,
+            "max": 460
         },
         "vtable-virtual-no-impl": {
             "min": 14,
