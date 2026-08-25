@@ -208,6 +208,64 @@ class PolymorphicBaseTest {
         indexOf().must { hasPolymorphicBaseSubobject(derived) }
     }
 
+    /**
+     * A vtable carries one vbase offset per *distinct* virtual base however deep it was inherited, so
+     * the walk cannot stop at directly-declared bases. `std::iostream` is the real case: it declares
+     * `istream` and `ostream`, neither virtual, and `__ZTVSd` still has a vbase offset for the
+     * `basic_ios` both of them inherit virtually. Counting only direct bases returns zero here, which
+     * leaves the word labelled with the "no base list" fallback — or, when the class does have some
+     * direct virtual base, mislabels a real vbase offset as a vcall offset.
+     *
+     * Gated here rather than on a fixture: the integration corpus cannot distinguish the two, because
+     * the stabs for its whole iostream family record `basic_istream`'s `basic_ios` edge as
+     * non-virtual, so the honest answer there is the fallback either way.
+     */
+    @Test
+    fun `virtualBases - virtual base reached through a non-virtual edge still counts`() {
+        val vbase = polyStruct(hasVtableMarker = true)
+        val middle = TypeDecl.Struct(
+            rawKind = AggrKind.CLASS,
+            sizeBytes = 12L,
+            bases = listOf(inlineBase(1, vbase).copy(isVirtual = true)),
+            fields = emptyList(),
+            methods = emptyList(),
+            vptrBasetype = null,
+        )
+        val derived = TypeDecl.Struct(
+            rawKind = AggrKind.CLASS,
+            sizeBytes = 16L,
+            bases = listOf(inlineBase(2, middle)),
+            fields = emptyList(),
+            methods = emptyList(),
+            vptrBasetype = null,
+        )
+        indexOf().virtualBases(derived).map { it.type }.mustBe(listOf(TypeDecl.InlineDef(gid(1), vbase)))
+    }
+
+    /** A virtual edge to a class already reached non-virtually still contributes its own vbase
+     *  offset, so the walk deduplicates *recursion*, never edge collection. */
+    @Test
+    fun `virtualBases - virtual edge to an already-visited class is still collected`() {
+        val shared = polyStruct(hasVtableMarker = true)
+        val middle = TypeDecl.Struct(
+            rawKind = AggrKind.CLASS,
+            sizeBytes = 12L,
+            bases = listOf(inlineBase(1, shared)),
+            fields = emptyList(),
+            methods = emptyList(),
+            vptrBasetype = null,
+        )
+        val derived = TypeDecl.Struct(
+            rawKind = AggrKind.CLASS,
+            sizeBytes = 16L,
+            bases = listOf(inlineBase(2, middle), inlineBase(1, shared).copy(isVirtual = true)),
+            fields = emptyList(),
+            methods = emptyList(),
+            vptrBasetype = null,
+        )
+        indexOf().virtualBases(derived).size.mustBe(1)
+    }
+
     @Test
     fun `noBases - empty bases list returns false`() {
         val derived = polyStruct(hasVtableMarker = false)

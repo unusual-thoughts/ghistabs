@@ -4,6 +4,7 @@ import ghistabs.harvest.HarvestIndex
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
 import ghistabs.parse.TypeDecl.Struct.Base
+import ghistabs.parse.TypeDecl.Struct.Method
 import ghistabs.parse.VirtKind
 
 /** Component snapshot at a target offset, fed into vfptr placement decisions. */
@@ -73,7 +74,7 @@ fun HarvestIndex.hasPolymorphicBaseSubobject(typeDecl: TypeDecl.Struct<GlobalTyp
 fun HarvestIndex.firstPolymorphicBase(typeDecl: TypeDecl.Struct<GlobalTypeId>): Base<GlobalTypeId>? = typeDecl.bases
     .sortedBy { it.offsetBits }
     .firstOrNull { base ->
-        resolveBaseAstStatic(base.type)?.run {
+        baseStructOf(base.type)?.run {
             hasVTablePointerMarker ||
                 methods.any { it.virt == VirtKind.VIRTUAL } ||
                 firstPolymorphicBase(this) != null
@@ -91,32 +92,66 @@ fun HarvestIndex.firstPolymorphicBase(typeDecl: TypeDecl.Struct<GlobalTypeId>): 
  * through a non-virtual one still contributes a vbase offset. One traversal serving both only reads as
  * a traversal with two modes.
  */
-fun HarvestIndex.virtualBases(typeDecl: TypeDecl.Struct<GlobalTypeId>): List<Base<GlobalTypeId>> {
-    val found = mutableListOf<Base<GlobalTypeId>>()
+fun HarvestIndex.virtualBases(typeDecl: TypeDecl.Struct<GlobalTypeId>) = buildList {
     val seen = mutableSetOf<TypeDecl.Struct<GlobalTypeId>>()
     fun walk(cls: TypeDecl.Struct<GlobalTypeId>) {
         if (!seen.add(cls)) return
         for (base in cls.bases) {
-            if (base.isVirtual) found += base
-            resolveBaseAstStatic(base.type)?.let(::walk)
+            if (base.isVirtual) add(base)
+            baseStructOf(base.type)?.let(::walk)
         }
     }
     walk(typeDecl)
-    return found
 }
 
-fun HarvestIndex.resolveBaseAstStatic(typeDecl: TypeDecl<GlobalTypeId>): TypeDecl.Struct<GlobalTypeId>? =
-    when (typeDecl) {
-        is TypeDecl.Ref -> getStruct(typeDecl.id)
+/**
+ * The struct body defining the base class [typeDecl] names, or null if it cannot be reached. Every
+ * walk of the inheritance graph goes through here — vfptr inheritance, virtual collection,
+ * vbase counting — because gcc spells the same base three ways depending on what the CU had already
+ * emitted, and a caller that handled only one of them would silently see a class as having no bases:
+ *
+ * - `Ref(id)` — the ordinary case, the base was already defined; take the ast at that id.
+ * - `XRef` — a forward declaration carrying only a tag name; find the ast that defines the tag.
+ * - `InlineDef(id, inner)` — the definition spliced in at the point of use. Prefer the ast registered
+ *   at the id over `inner`, which is frequently itself a forward `XRef`: without that preference
+ *   polymorphism detection misses inherited vfptrs (`bouniaf` → `InlineDef(ExprInst id, XRef body)`).
+ */
+fun HarvestIndex.baseStructOf(typeDecl: TypeDecl<GlobalTypeId>): TypeDecl.Struct<GlobalTypeId>? = when (typeDecl) {
+    is TypeDecl.Ref -> getStruct(typeDecl.id)
 
-        is TypeDecl.XRef -> byXRef(typeDecl)?.body as? TypeDecl.Struct<GlobalTypeId>
+    is TypeDecl.XRef -> byXRef(typeDecl)?.body as? TypeDecl.Struct<GlobalTypeId>
 
-        // Prefer the ast at this id (real struct body) over the inline body, which is
-        // often a forward XRef. Without the fallback, polymorphism detection misses
-        // inherited vfptrs (e.g. bouniaf → InlineDef(ExprInst id, XRef body)).
-        is TypeDecl.InlineDef -> getStruct(typeDecl.id)
-            ?: (typeDecl.inner as? TypeDecl.Struct)
-            ?: resolveBaseAstStatic(typeDecl.inner)
+    is TypeDecl.InlineDef -> getStruct(typeDecl.id)
+        ?: (typeDecl.inner as? TypeDecl.Struct)
+        ?: baseStructOf(typeDecl.inner)
 
-        else -> null
+    else -> null
+}
+
+/**
+ * Collects a class's full vtable slot list from its inheritance chain and orders it by the
+ * stab-declared slot offset. The walk gathers virtuals bases-first so a derived override (matched
+ * by name) replaces the inherited slot and its offset wins; output order is set by the final sort,
+ * not the walk. Override matching is by name only — fine for the non-overloaded gcc 3.4.4 corpus.
+ */
+fun HarvestIndex.collectAllVirtuals(struct: TypeDecl.Struct<GlobalTypeId>) = object {
+    val table: MutableList<Method<GlobalTypeId>> = mutableListOf()
+    private val visited: MutableSet<TypeDecl.Struct<GlobalTypeId>> = mutableSetOf()
+
+    private fun walkBases(cls: TypeDecl.Struct<GlobalTypeId>) {
+        for (base in cls.bases) {
+            baseStructOf(base.type)?.takeIf { visited.add(it) }?.let { collectAll(it) }
+        }
     }
+
+    fun collectAll(cls: TypeDecl.Struct<GlobalTypeId>) {
+        walkBases(cls)
+        for (m in cls.methods.filter { it.virt == VirtKind.VIRTUAL }) {
+            val idx = table.indexOfFirst { it.name == m.name }
+            if (idx >= 0) table[idx] = m else table += m
+        }
+    }
+}.run {
+    collectAll(struct)
+    table.sortedBy { it.vtableOffsetBits!! }
+}
