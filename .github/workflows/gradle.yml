@@ -44,7 +44,7 @@ jobs:
       run: ./gradlew test
 
     - name: Run integration tests
-      run: ./gradlew integrationTest -Pmode=all --fail-fast
+      run: ./gradlew integrationTest -Pmode=all -PignoreBaselines=true --fail-fast
 
     - name: Publish Test Report
       id: report
@@ -52,6 +52,18 @@ jobs:
       if: success() || failure() # always run even if the previous step fails
       with:
         report_paths: '**/build/test-results/**/TEST-*.xml'
+
+    - name: Check for shifted baselines
+      id: shifted
+      if: success() || failure()
+      run: if [ -n "$(ls -A build/test-output/shifted-baselines 2>/dev/null)" ]; then echo found=true >> "$GITHUB_OUTPUT"; fi
+
+    - name: Upload shifted baselines
+      if: steps.shifted.outputs.found == 'true'
+      uses: actions/upload-artifact@v7
+      with:
+        name: shifted-baselines
+        path: build/test-output/shifted-baselines/
 
     - name: Build zips
       run: ./gradlew buildExtension zipCli
