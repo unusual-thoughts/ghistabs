@@ -464,6 +464,10 @@
             "min": 8,
             "max": 8
         },
+        "vtable-swept": {
+            "min": 11,
+            "max": 11
+        },
         "vtable-virtual-no-impl": {
             "min": 28,
             "max": 28
