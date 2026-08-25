@@ -78,7 +78,14 @@ data class VtableShape(val topSlot: Address, val rttiHeader: Address, val addres
 private fun prefixKind(i: Int, total: Int, virtualBases: List<String>): String {
     val vcalls = total - virtualBases.size
     if (virtualBases.isEmpty() || vcalls < 0) return "vbase/vcall offset"
-    return if (i < vcalls) "vcall offset" else "vbase offset: ${virtualBases[i - vcalls]}"
+    // Naming the word only when there is one virtual base to name. The ABI fixes the order of the
+    // vbase offsets, but nothing here has verified it against a class with several, and a confidently
+    // wrong base name in a comment is worse than none.
+    return when {
+        i < vcalls -> "vcall offset"
+        virtualBases.size == 1 -> "vbase offset: ${virtualBases.single()}"
+        else -> "vbase offset"
+    }
 }
 
 /**
@@ -140,6 +147,7 @@ fun Program.layVtable(
     vftable: Structure,
     className: String,
     ns: Namespace,
+    resolver: AddressResolver,
     virtualBases: List<String> = emptyList(),
 ): Address {
     val ptr = defaultPointerSize.toLong()
@@ -153,7 +161,16 @@ fun Program.layVtable(
     forceCreateData(topSlot, Itanium.offsetToTopType(defaultPointerSize))
     listing.setComment(topSlot, CommentType.EOL, "${Itanium.OFFSET_TO_TOP} (to top of complete object)")
     forceCreateData(rttiHeader, PointerDataType(dataTypeManager))
-    listing.setComment(rttiHeader, CommentType.EOL, "${Itanium.RTTI}: ${Itanium.zti(className)} typeinfo")
+    // Report the typeinfo symbol that is actually there. `Itanium.zti` builds a closed-form name,
+    // and for anything the shorthand or a template spells differently that name does not exist:
+    // `std::istream`'s record is `_ZTISi`, not the `_ZTIN3std7istreamE` the builder produces.
+    // Prefer the linkage name over Ghidra's own demangled label, which is also a symbol at that
+    // address and would render as "rtti: typeinfo typeinfo".
+    val rttiName = readWord(rttiHeader)
+        ?.let { symbolTable.getSymbols(resolver.buildAddress(it)).map { s -> s.name } }
+        ?.let { names -> names.firstOrNull(Itanium::looksLikeZti) ?: names.firstOrNull() }
+        ?: Itanium.zti(className)
+    listing.setComment(rttiHeader, CommentType.EOL, "${Itanium.RTTI}: $rttiName typeinfo")
     forceCreateData(addressPoint, vftable)
     symbolTable.createLabel(addressPoint, Itanium.VFTABLE, ns, SourceType.IMPORTED)
     return addressPoint
