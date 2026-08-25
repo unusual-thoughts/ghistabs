@@ -410,12 +410,12 @@ class ClassBuilder(
         // a disagreement the one cheap check that the address point was located correctly.
         val virtualBases = index.virtualBases(classBody)
             .map { registry.resolveRef(it.type)?.name ?: "<unresolved base>" }
-        val prefixWords = ((shape.topSlot.offset - addr.offset) / program.defaultPointerSize).toInt()
-        if (prefixWords < virtualBases.size) {
+        if (shape.prefix.size < virtualBases.size) {
             degradation(
                 "vtable-vbase-count-mismatch",
                 className,
-                "$prefixWords prefix word(s) before offset_to_top, ${virtualBases.size} virtual base(s) declared",
+                "${shape.prefix.size} prefix word(s) before offset_to_top, " +
+                    "${virtualBases.size} virtual base(s) declared",
             )
         }
 

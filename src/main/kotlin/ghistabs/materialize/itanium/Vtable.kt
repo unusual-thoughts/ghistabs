@@ -25,8 +25,28 @@ internal fun Program.readWord(a: Address): Long? = runCatching {
 private fun Program.codeTargetAt(a: Address, resolver: AddressResolver): Address? =
     readWord(a)?.let(resolver::buildAddress)?.takeIf { memory.getBlock(it)?.isExecute == true }
 
-/** Where the record at [start] keeps its three fixed words — see [vtableShape]. */
-data class VtableShape(val start: Address, val topSlot: Address, val rttiHeader: Address, val addressPoint: Address)
+/**
+ * An Itanium vtable record, decomposed: the [prefix] of vbase/vcall-offset words, then the two fixed
+ * header words, then the address point the function array starts at. Built by [vtableShape].
+ */
+data class VtableShape(
+    val prefix: List<Address>,
+    val topSlot: Address,
+    val rttiHeader: Address,
+    val addressPoint: Address,
+)
+
+/** The record at [start] whose rtti word sits at [rttiSlot], or the canonical 2-word shape if null. */
+private fun Program.shapeOf(start: Address, rttiSlot: Address?): VtableShape {
+    val ptr = defaultPointerSize.toLong()
+    val topSlot = rttiSlot?.subtract(ptr) ?: start
+    return VtableShape(
+        prefix = generateSequence(start) { it.add(ptr) }.takeWhile { it < topSlot }.toList(),
+        topSlot = topSlot,
+        rttiHeader = rttiSlot ?: start.add(ptr),
+        addressPoint = rttiSlot?.add(ptr) ?: start.add(Itanium.vtablePrefixBytes(defaultPointerSize)),
+    )
+}
 
 /**
  * What prefix word [i] of [total] is, given the class's [virtualBases]. The ABI orders the words
@@ -78,12 +98,7 @@ fun Program.vtableShape(ztv: Address, resolver: AddressResolver): VtableShape {
                 }
             } == true
         }
-    return VtableShape(
-        start = ztv,
-        topSlot = rttiSlot?.subtract(ptr) ?: ztv,
-        rttiHeader = rttiSlot ?: ztv.add(ptr),
-        addressPoint = rttiSlot?.add(ptr) ?: ztv.add(Itanium.vtablePrefixBytes(defaultPointerSize)),
-    )
+    return shapeOf(ztv, rttiSlot)
 }
 
 /** A record of a `_ZTV` group: where its fixed words sit, and the function pointers it holds. */
@@ -116,7 +131,7 @@ private fun Program.subVtableAt(start: Address, rtti: Long, resolver: AddressRes
         // the top slot back inside the primary's function array.
         .firstOrNull { it > start && readWord(it) == rtti }
         ?: return null
-    val shape = VtableShape(start, rttiSlot.subtract(ptr), rttiSlot, rttiSlot.add(ptr))
+    val shape = shapeOf(start, rttiSlot)
     return vtableSlotTargets(shape.addressPoint, resolver)
         .takeIf { it.isNotEmpty() }
         ?.let { SubVtable(shape, it) }
@@ -151,10 +166,8 @@ fun Program.layVtable(
     virtualBases: List<String> = emptyList(),
     label: String = Itanium.VFTABLE,
 ): Address {
-    val ptr = defaultPointerSize.toLong()
-    val (start, topSlot, rttiHeader, addressPoint) = shape
+    val (prefix, topSlot, rttiHeader, addressPoint) = shape
 
-    val prefix = generateSequence(start) { it.add(ptr) }.takeWhile { it < topSlot }.toList()
     prefix.forEachIndexed { i, slot ->
         forceCreateData(slot, Itanium.offsetToTopType(defaultPointerSize))
         listing.setComment(slot, CommentType.EOL, prefixKind(i, prefix.size, virtualBases))
