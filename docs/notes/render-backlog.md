@@ -3,6 +3,52 @@
 Open rendering issues in `render/`, captured from output review. Fixtures
 regenerate under `build/test-output/{skeletons,decomps}/<binary>/`.
 
+## Status audit, 2026-08-25
+
+Every open item re-checked against the code and against the 24 regenerated baselines
+(`src/test/resources/baselines/`, 2026-08-24 — 160 counters across the whole corpus). Four items
+had been fixed without the note being updated (§24's Level B, §40's silent fallback, §23's vbase
+prefix, §32's stray sweep); four were confirmed open by reading the code that would have had to
+change and hadn't (§25, §26, §30's `this`, §37(d)); §36 was downgraded to needs-re-measure, and
+§41 was reframed from one red fixture to a corpus-wide number.
+
+**A baseline counter is a range, not a value.** Each carries `min`/`max` across run modes, mostly
+equal but hand-widened where a mode genuinely differs — 46 entries across the corpus are widened.
+So a *total* summed over fixtures inherits that slack (`demangler-unbound-stub` is 840–841), while
+a single fixture's figure is usually exact. Every per-fixture number quoted in this file's
+2026-08-25 additions was checked to be a point snapshot; the totals are given as ranges where they
+are not.
+
+### Every section, classified
+
+**§1–§52, no gaps, no duplicates** — after renumbering the second §39 (see §52). Plus four
+unnumbered sections. Sections are numbered in the order they were *found*, so the numbering carries
+no meaning beyond identity; this is the whole set, and nothing below is unclassified.
+
+**Open or partial — 12.** §23 (MI/VTT half), §24 (vtable `rtti` link + Level A), §25 (plus the
+`ztvCandidates` shorthand gap found under it), §26, §30 (the missing `this`), §32 (the model swap),
+§36 (needs re-measure), §37 (d/f/g), §38, §40 (the 30 s budget), §41, §44 (measurement).
+Unnumbered: **`4900866`** (open question, now baseline-pinned) and **Render output is not parseable
+C++** (groups 2–3).
+
+**Done or closed — 40**, i.e. §1–§22 except §13's stale write-up (fixed here), §27–§29, §31,
+§33–§35, §39, §42, §43, §45–§52. Unnumbered: **Misattributed declarations** (DONE) and **Class
+attribution: `class Image`** (SUPERSEDED by priority 2).
+
+Three carry a header that no longer matches their body and were corrected in this pass rather than
+reclassified: §13 (DONE, but its ABI premise and mechanism were wrong), §23 and §24 (were headed
+"open", were partly done), §32 and §40 (were headed "open"/"not started", were partly done).
+
+**Check an item against the baselines before reading output.** `rtti-pseudo-substituted`,
+`demangler-unbound-stub`, `vtable-failed-truly-missing`, `degraded-param-unnamed-padded`,
+`empty-scope` and `reglocal-renamed-scope` each settle a question this file used to ask of one
+fixture's render. Where an item has *no* counter — §26 is the case — that absence is the finding:
+nothing would detect the defect if a fixture grew one.
+
+`render/` has had one commit since the previous pass, so anything settleable only by regenerating
+output (§36's two-sided arity, §37(d)/(f), the grammar totals) is marked *needs re-measure* below
+rather than verified-open.
+
 ## Priorities
 
 Ranked by what a reader of the output gets per unit of work, as of the grammar pass. Sections are
@@ -131,7 +177,9 @@ numbered in the order they were *found*, not worked; this is the order to work t
 7. **§37(d), member calls still pass `this`.** `find_slt(this,…)` ×5 while the definition it calls has
    had the parameter stripped, so the two halves of the render contradict each other. Mechanical, and
    the same token knowledge `renameThis` already uses — the grammar section's `'this' is a keyword`
-   family fixed only the definition side.
+   family fixed only the definition side. **Verified still open (2026-08-25):** `renameThis` is
+   applied in exactly one place, `wrapAsDefinition` (`Region.kt:303`), which is the definition side;
+   no call site consults it.
 8. ~~**8 markers still outside their block.**~~ — DONE, see §42.
 9. ~~**`activityExtent`'s header proxy.**~~ — DONE, see §43 and §47. The regime is gcc's `N_SO` now,
    and where a source root maps the file its extent is the file's own length rather than an estimate
@@ -151,13 +199,59 @@ numbered in the order they were *found*, not worked; this is the order to work t
     default arguments, so the declaration is not straightforwardly derivable.
 12. **§37(g), resolve the vtable-slot call.** `(**(code **)(*(int *)this + 8))(…)` is an offset into a
     vtable whose type the render declares in the same file, so it can be spelled as the method it
-    calls. Small, and it reads as a real call rather than arithmetic.
+    calls. Small, and it reads as a real call rather than arithmetic. Nothing in `render/` reads a
+    vtable slot today, so this is still all of the work it was.
 13. **§37(f), the displaced/stale tail.** 19 rows on a ~150-line file, four claiming lines 302–348.
     The `stale N_SOL` ones are the activity extent already saying they do not belong; this is the
     "Misattributed declarations" work applied to the trailing block rather than to placement.
 14. §23 multi-vtable ABI, §24 RTTI wiring, §25 unannotated `_ZTV`, §26 bitfields, §30 unnamed
     parameters, §21 leftovers, and the `4900866` a.out neutrality question. All pre-date this pass and
     none block a reader of the render.
+
+### Re-ranked open set, 2026-08-25
+
+The list above is kept as the record of what was worked in what order. This is what is actually
+left, ranked after the audit. Rows 1–3 are the ones a reader or a maintainer hits; 4–6 are real
+defects with no reader visible yet; the rest are bounded work with a known shape.
+
+| #  | Item                                                              | Why here                                                                                                                                                                                                                                                                                                                                                                                      | Size                                                |
+|----|-------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------|
+| 1  | **§26 bitfields**                                                 | The only item that *silently destroys data* — `replaceAtOffset(offsetBits/8)` makes the second bitfield overwrite the first, and no counter anywhere would report it. Verify a fixture has one first.                                                                                                                                                                                         | small once a fixture is found                       |
+| 2  | **§37(d) `this` at call sites**                                   | Cheapest reader-visible contradiction left; one lookup away from code that already exists.                                                                                                                                                                                                                                                                                                    | small                                               |
+| 3  | **§41 triage the unbound stubs**                                  | Now a corpus-wide number (840–841 across 19 fixtures) rather than one red fixture; until it is triaged nobody knows whether it is inherent or a materialization gap.                                                                                                                                                                                                                          | a reading pass                                      |
+| 4  | **§30 the missing `this`**                                        | 248/542 cryptopp methods *as measured then, on a smaller corpus and never re-checked*; padding is in and working corpus-wide (5468 across 20 fixtures) but the origin is untouched and has *no counter* — instrument it as the first step, which also re-establishes the 248.                                                                                                                 | medium, suspect named                               |
+| 5  | **§36 re-measure, then unify the key**                            | The disagreement table predates the source-root work; re-measure before committing to a `regionsOf` change.                                                                                                                                                                                                                                                                                   | measure, then medium                                |
+| 6  | **§24 remainder**                                                 | Level B shipped; what is left is pointing the vtable `rtti` field at the typeinfo struct (one line's worth of wiring against `Vtable.kt`'s own TODO) plus Level A, which the corpus barely needs.                                                                                                                                                                                             | small                                               |
+| 7  | **§40 remainder**                                                 | The silent half is fixed — a timeout now renders. Left: whether 30 s is the right budget, i.e. reproducibility itself.                                                                                                                                                                                                                                                                        | small                                               |
+| 8  | **§25 — but first, restore the STL shorthand to `ztvCandidates`** | `vtable-failed-truly-missing` = 400 across 6 fixtures, ~10× worse on the stripped twins (crypto_mi_test_gcc421_fullstabs 10 → its `_stripped` twin 121). Diagnosed: the closed-form candidate builder can spell neither `Ss`/`Sa`/`Si`/`So`/`Sd`/`St` shorthand nor any template, and the symbol index that covered for it is what a strip deletes. Most of the 400 is that, not §25's sweep. | **small** for the shorthand; medium for what's left |
+| 9  | **§32 the rest of the layout rewrite**                            | Claim-and-resolve landed; front-positioned provenance and retiring `Fragment`/`TargetLine` did not. Pure debt.                                                                                                                                                                                                                                                                                | large                                               |
+| 10 | **§38, §37(f), prio-4 `redefinition of X`, grammar groups 2–3**   | All need output regenerated before they can be re-stated honestly.                                                                                                                                                                                                                                                                                                                            | measure first                                       |
+| 11 | **§23 residual, §44, `4900866`**                                  | Limitations and open questions, none blocking a reader. `4900866` has the sharpest edge: the disputed behaviour is now *pinned by a baseline* while which block tree is correct was never established.                                                                                                                                                                                        | —                                                   |
+
+### The non-render half, ranked on its own
+
+The table above mixes two kinds of work. Everything that lands in the *program* — types, vtables,
+signatures, symbols — is worth its own ordering, because it is what every consumer sees whether or
+not a skeleton is ever rendered, and because none of it needs output regenerated to work on.
+
+| # | Item                                                  | Evidence                                                                                          | Size                        |
+|---|-------------------------------------------------------|---------------------------------------------------------------------------------------------------|-----------------------------|
+| 1 | **STL shorthand in `ztvCandidates`** (§25 front half) | `vtable-failed-truly-missing` 400/6 fixtures; cause diagnosed, not inferred                       | small                       |
+| 2 | **§26 bitfields**                                     | no counter exists; second bitfield overwrites the first                                           | small once a fixture exists |
+| 3 | **§21 conflict drift**                                | `dtm-conflicts-created` 0 → 30/13 fixtures against an explicit "zero" claim; names already dumped | a read                      |
+| 4 | **§30 the missing `this`**                            | 248/542 then, uncounted now — instrument first                                                    | medium                      |
+| 5 | **§41 unbound stub triage**                           | 840–841/19 fixtures; fullstabs-vs-stripped pairs separate inherent from gap                       | a reading pass              |
+| 6 | **§24 vtable `rtti` link**                            | Level B live (705 substitutions); the pointee is still `void*`                                    | small                       |
+| 7 | **`4900866` a.out block tree**                        | zlib `empty-scope` 24, `reglocal-renamed-scope` 19 — shipped, baselined, never adjudicated        | medium                      |
+| 8 | **§53 unstripped static-member miss rate**            | 378 unresolved vs 120 applied *with symbols present*                                              | measure                     |
+| 9 | **§23 MI/VTT, §8 N_RSYM liveness**                    | deliberate limitations; no corpus pressure                                                        | —                           |
+
+Rows 1–3 are all small and all sit on stated-zero or unmeasured claims, which is the cheapest kind
+of work to be right about. Row 7 is the one that gets worse with time: it is frozen by a baseline.
+
+Row 8 of the main table is mis-ranked by that table's own logic and left in place only to keep the numbering stable:
+the `ztvCandidates` shorthand is a **small** change against the largest single counter here (400),
+so take it with rows 1–3. The rank stands for the sweep that shares the section, not for the fix.
 
 ---
 
@@ -639,7 +733,31 @@ Verified across all six fixtures: `main`→`main`, every C++ method stays demang
 raw-mangled function definitions anywhere. appquery decomp diff vs baseline = only `_main`→`main`
 (and its propagation into provenance annotations).
 
-## 13. Struct/non-pointer by-value return uses wrong calling convention — DONE
+## 13. Struct/non-pointer by-value return uses wrong calling convention — DONE, but this note's ABI premise was wrong
+
+**Correction, and the mechanism below is no longer what ships.** The note asserts gcc/MinGW i386
+returns *every* by-value struct through the hidden pointer. It does not: mingw/cygwin set
+`DEFAULT_PCC_STRUCT_RETURN=0`, so `-freg-struct-return` is the default and a POD (trivial for
+calls) of size 1/2/4/8 really is returned in AL/AX/EAX/**EDX:EAX**. Only classes non-trivial for
+calls — non-trivial copy ctor or dtor, so `std::string`, `list`, `vector` — go to memory,
+*regardless of size*. The cspec's register return is therefore right for PODs and wrong only for
+non-trivial classes. Counterexample in unpackfile: `FileSystemImage::root()` returns the 8-byte POD
+`FileSystemEntry` in EDX:EAX with `this` at `+0x8` and a plain `RET`, and its caller consumes both
+registers; a blanket `return.dataType is Composite` rewrites it wrongly. The cheap discriminator is
+the terminating **`RET 0x4`** — gcc's callee pops the hidden pointer — plus
+`f.stackPurgeSize == program.defaultPointerSize` in the predicate.
+
+**And the implementation was reworked off custom storage.** `StructReturnAnalyzer` now installs a
+calling convention as a spec extension (`__thiscall_memret` / `__cdecl_regret`, derived from the
+function's own convention) via `SpecExtension.addReplaceCompilerSpecExtension` and calls
+`setCallingConvention`; Ghidra lays out the hidden pointer and `this` itself. The
+oversized-dummy `getStorageLocations` trick, the `ParameterImpl`/`ReturnParameterImpl` juggling and
+`CUSTOM_STORAGE` described at the end of this section are gone. Two traps worth keeping: use
+`f.return.formalDataType`, not `dataType` (on a forced-indirect return the latter is already the
+hidden pointer), and `hasthis="true"` is required on the renamed model because auto-`this` is keyed
+off the literal name `__thiscall`.
+
+Original note, as written:
 
 Methods returning a `string` by value (e.g. unpackfile `FileSystemEntry::name`, `children`) came
 out with the **return `string*` in stack[4] and `this*` in stack[8]** — the hidden return-slot
@@ -920,6 +1038,15 @@ spanning >1 group, source folds, and duplicate-named DataTypes — rather than b
   no longer lists any enum (only same-simple-name methods at distinct class categories, and the pre-existing
   benign `char → /char` primitive-typedef path); all integration baselines green.
 
+- **Drift, 2026-08-25: "zero `.conflict`" no longer holds corpus-wide.** That was verified on the
+  six-fixture corpus; on today's 24, `dtm-conflicts-created` is **30 across 13 fixtures** and
+  `dtm-conflicts-post` **33 across 15** — 8 on crypto_mi_test_gcc421_fullstabs and 8 on its stripped
+  twin, 3 on each xmltest_gcc421_fullstabs, 1 elsewhere. `dtm-conflicts-pre` is 5, so most are ours.
+  `fewConflictRenames` still passes because it asserts `< 25` *per fixture*; its comment
+  ("corpus-wide it sits at 0") is the stale part. Not necessarily this section's enum bug returning —
+  §46 records a different `.conflict` fork path — but nothing owns the new ones, and
+  `duplicateNamedTypes` already dumps the names, so diagnosing this is a read, not an investigation.
+
 ## 22. Single-arbiter attribution: canon at the data layer, §20 merge folded — DONE
 
 Plan `zesty-tinkering-sparkle` (single-source-of-truth attribution, remove canon threading, robust
@@ -958,7 +1085,22 @@ reproduces on unmodified HEAD (baseline too tight for CONCURRENT demangler-order
 `*`/`**` return-pointer wobble is Ghidra decompiler nondeterminism (HEAD single-fixture ≠ HEAD full-suite),
 not attribution — which is why the deterministic dump, not decomp text, is the audit surface.
 
-## 23. C++ ABI: itanium model is flat single-vtable — open (limitation, not a bug on corpus)
+## 23. C++ ABI: itanium model is flat single-vtable — the vbase half is DONE, the MI half open
+
+**Audit 2026-08-25: the first bullet below is stale.** `layVtable` no longer assumes the record
+starts at `offset_to_top`. It locates the rtti header by scanning up to `MAX_VTABLE_PREFIX_WORDS`
+(64) words from `_ZTV` for the slot holding a `_ZTI…`/typeinfo symbol, takes `offset_to_top` as the
+word before and the address point as the word after, and lays each preceding word as an
+`offset_to_top`-typed datum commented `vbase/vcall offset`; it falls back to the canonical
+`2*ptr` shape only when there is no rtti to find (templates). That is what `885a649`
+(`vftableLabelsSitOnTheAddressPoint` failing on iostream), `67cd457` and `ddaa01a` were. A class
+with a virtual base anywhere in its hierarchy — anything derived from an iostream — is the case
+that drove it, so this is exercised, not theoretical.
+
+Still open, and genuinely: **secondary vtables** (non-primary bases under MI), **VTT** and
+**construction vtables**. The original reasoning for not modelling them stands unchanged below.
+
+Original note, as written:
 
 The `materialize/itanium/` package models the Itanium vtable as a single flat record
 (`offset_to_top` + `rtti` + one embedded `_vftable` function-pointer array), applied at the
@@ -979,9 +1121,31 @@ isn't in the stabs — recovering it means the memory-scanning machinery of Ghid
 payoff on single-inheritance-dominant BlueCore code; revisit only if a virtual-base class shows
 up in a fixture.
 
-## 24. Last-resort RTTI typeinfo wiring — open (RttiStructs present but unwired)
+## 24. Last-resort RTTI typeinfo wiring — Level B DONE, the vtable link and Level A open
 
-`itanium/Vtable.kt`'s `RttiStructs` builds the authoritative `__cxxabiv1` typeinfo structs
+**Audit 2026-08-25: this section's header was wrong — `Rtti` is wired.**
+`DataTypeRegistry.substitute()` returns `rttiStructs.typeInfoLayout(ghidraName)` for an ast gcc
+references but never defines, logging `rtti-pseudo-substituted`, and the counter fires on **15 of
+24 fixtures**, 705 substitutions in total: crypto_mi_test_gcc345 150,
+xmltest_gcc345_fullstabs 51, locale_test_gcc345_fullstabs 50, appquery 9, xapasmcsr 8,
+unpackfile/packfile 7. Level B — the common case, a typeinfo global whose
+pseudo *type* is stubbed — is done, and it went further than the plan: `typeInfoLayout` also reads
+the base count out of a `__vmi_class_type_info_pseudo<N>` **name**, so the VMI shape is covered
+without a memory read.
+
+Two pieces remain:
+
+- **The vtable `rtti` field still points at nothing.** `layVtable` lays that slot as a bare
+  `PointerDataType(dataTypeManager)`; its own doc comment says "the rtti pointee stays an untyped
+  `void*` until backlog §24 wires it". Now that the structs materialize, pointing the slot at the
+  class's typeinfo struct is the small remaining half, and it is the half a reader sees.
+- **Level A proper** — no typeinfo global at all, base count read from the applied typeinfo Data's
+  `numBaseClasses` (component index 3), cf. `RTTIGccClassRecoverer.updateVmiTypeinfo`. No memory-read
+  path exists. Still the rare case: the corpus shows no `__vmi_…_pseudo` outside the name-derived form.
+
+Original note, as written:
+
+`itanium/Vtable.kt`'s `Rtti` builds the authoritative `__cxxabiv1` typeinfo structs
 (`classTypeInfoStructure` / `siClassTypeInfoStructure` / `vmiClassTypeInfoStructure(n)` /
 `baseClassTypeInfoStructure`) but nothing consumes them yet — the vtable `rtti` field points at
 `Undefined4*`. They are the implementation of last resort for the gcc-internal typeinfo records
@@ -992,7 +1156,7 @@ the stabs don't fully carry. Two levels, in priority order:
   `_ZTI10CLexStream`, … — each typed `struct __{class,si}_class_type_info_pseudo const`. But the
   gcc-internal pseudo struct types aren't in the stabs (libsupc++ built without them), so they land
   as unresolved XRefs (`type=/stabs/__si_class_type_info_pseudo`) and get stubbed opaque. Fix:
-  substitute the matching `RttiStructs` impl for the stub, keyed by XRef name — hook the same
+  substitute the matching `Rtti` impl for the stub, keyed by XRef name — hook the same
   unresolved-XRef substitution path as commit 8936ae1 (unresolved enum → `Enum` not `Struct`).
   Layouts already match gcc's pseudo shape: `__class_type_info_pseudo` = {typeinfo-vtable-ptr,
   __type_name} ↔ `classTypeInfoStructure` (2 ptrs); `__si_…_pseudo` adds `__base_type` ↔
@@ -1070,7 +1234,19 @@ no symbol table, nothing to sweep.
 §24 covers the same classes at the *typeinfo record* level; this is the vtable level. Not done here:
 the class struct is not synthesised for a swept class, so there is no `{vfptr}` back-edge to it.
 
-## 26. Bitfields are laid at their containing byte, not as bitfields — open
+## 26. Bitfields are laid at their containing byte, not as bitfields — open (confirmed 2026-08-25)
+
+**Confirmed open, unchanged, and invisible.** `Materialization.kt:255` still passes
+`(offsetBits / 8).toInt()` to `replaceAtOffset`; `ClassBuilder.kt:177` and the base-layout code do
+the same division. `insertBitFieldAt` is called nowhere, and `addBitField` still only in
+`itanium/Vtable.kt` for the hand-built `__base_class_type_info`.
+
+**No counter in the baselines matches `bit` at all.** This is the only open item where the defect
+would destroy a field — the second bitfield overwrites the first — with nothing to report it, on
+any of the 24 fixtures. That combination is why it ranks first now, ahead of items with more
+visible symptoms. The first step is unchanged and cheap: establish whether any fixture contains a
+packed bitfield struct, since if none does, the right move is a detection counter plus a fixture,
+not a materialization change.
 
 `Field` (`parse/Ast.kt`) carries `offsetBits`/`sizeBits` faithfully, but every consumer
 divides by 8. `fillComposite` (`materialize/Materialization.kt`) ends in
@@ -1176,12 +1352,24 @@ exactly the `_List_node`/`allocator<char>`/`basic_ios`/`__c1`/`__str` internals.
 
 ---
 
-## 32. Layout rewrite — DRAFTED, not started
+## 32. Layout rewrite — PARTLY LANDED (claim-and-resolve is in; the model and provenance are not)
 
 The `Fragment`/`TargetLine` model and the emit-then-reconcile pass structure are being replaced:
 front-positioned `/* L n */` provenance, claim-and-resolve allocation, and no `// stray:` bucket.
 Design in [`docs/design-plans/layout-rewrite.md`](../design-plans/layout-rewrite.md). §29's five fixes
 were all symptoms of the two decisions that draft removes.
+
+**Audit 2026-08-25 — one of the three shipped.** `render/Claims.kt` exists with a `Claim` type, an
+`Owner` priority enum and a resolve pass that "settles contested ones on `Owner` priority, replacing
+the retroactive `// stray:` demotion pass" (`FileRenderer.kt:500`), and misattributed claims are
+partitioned into `displaced` before anything is written rather than swept afterwards
+(`Layout.kt:36`). So claim-and-resolve is the live allocator and the retroactive stray bucket is
+gone as a *mechanism* — `// stray:` survives only as the spelling of a demotion the resolver
+decides up front.
+
+Not done: `Layout.kt` still defines `Canvas ⊃ TargetLine ⊃ Fragment`, and provenance is still
+rendered as a trailing `// ⇐ L NN` rather than a front-positioned `/* L n */`. What is left is the
+model swap, which is the large part.
 
 ## 29. Decomp placement: the stray sweep ate its own output; rows now anchor to their source line — DONE
 
@@ -1278,6 +1466,14 @@ the short list under `DYNAMIC_STORAGE_FORMAL_PARAMS` re-laid every slot and the 
 `SymbolApplier.padToMangledArity` now extends the N_PSYM list to the demangled arity, typing the
 padding from `DemangledDataType.getDataType`. **729 functions** padded on cryptopp;
 `in_stack_` artifacts 668 → 598 file-wide, and 8 → 0 in `hmac.cpp`.
+
+**Audit 2026-08-25: padding is in and scaled; the `this` half is untouched and unmeasured.**
+`SymbolApplier.padToMangledArity` is live corpus-wide — `degraded-param-unnamed-padded` totals
+**5468 across 20 fixtures**, 855 on crypto_mi_test_gcc421_fullstabs (the note's 729 was measured
+before the corpus grew). The missing-`this` half has **no counter**: `method-static-no-this` (946
+across 15 fixtures) counts §49's deliberate case, not this failure, so nothing distinguishes a
+method that correctly has no `this` from one that lost it. Instrument that first — the suspect
+below is a guess until a counter separates the two populations.
 
 **Still open: the missing `this`.** 248 of 542 method signatures still render without one, and
 `UncheckedSetKey`'s body still treats `userKey` as the object
@@ -1705,6 +1901,14 @@ the fallback for stretches gcc bracketed no block for.
 covering *every* address its line touches, null wherever they disagree, which §28 measured at 70% of
 inlined lines; parameter lists came out empty. Looking the block up by the stretch's first N_SLINE
 address instead cut zero-argument calls from ~150 to **21** on both fixtures.
+
+**Open — but the table below needs re-measuring before it is acted on (audit 2026-08-25).** It was
+taken before `09069ac` (name inlined stretches from a source root), and `Region.pseudoName`'s own
+doc now argues the two sides cannot be made to disagree by the source root, since both read the
+same line entries and both ask the same file's real source for the name. `regionsOf` still keys the
+caller side on the foreign source (`block?.source ?: entry?.source`), so the structural cause the
+note identifies is intact — but whether the 34-of-92 arity agreement still holds is unknown, and
+that number is the whole case for changing `regionsOf`. Regenerate before deciding.
 
 **Open: call and definition are derived from different splits, so they disagree.**
 
@@ -2401,7 +2605,35 @@ untouched `{ }`.
 
 ---
 
-## 41. `demanglerHasNoEmptyStubs` has never passed on the newest fixture — open
+## 41. Unbound demangler stubs — reframed: a corpus-wide number, still untriaged
+
+**Audit 2026-08-25.** The premise ("one fixture entered the corpus red") is no longer the shape of
+this. Since it was written the binding machinery was reworked four times — `64fab79` bind across
+the builtin-spelling split, `476a00b` spell type names the way Ghidra's demangler does, `5e79670`
+retarget the signature sites an unbindable stub reached, `6a7b73f` bind a bare stub only when the
+binary instantiates it once — the test moved to `audit/DemanglerWhitelistAuditTest.kt`, and
+`5531cf0` pruned the whitelist. `DemanglerWhitelist.ALLOWED` still contains **no CryptoPP entry**.
+
+It is now baselined rather than asserted-to-zero, so the number is visible everywhere:
+`demangler-unbound-stub` totals **840–841 across 19 fixtures** — crypto_mi_test_gcc421 102,
+xapasmcsr 66, packfile 65, appquery 64, unpackfile 62, and the fixture this section is about,
+`crypto_mi_test_gcc421_fullstabs_stripped`, at **43**. Against it, `demangler-exact-match` reaches
+808 on crypto_mi_test_gcc421_fullstabs, and `demangler-unbound-stub-signature-site` 1795–1797 says
+what those stubs still reach.
+
+Two cautions on those totals. They are sums over fixtures of a per-fixture *range*: baselines carry
+`min`/`max` across run modes, and `crypto_mi_test_gcc421_stripped` is genuinely mode-dependent here
+(`demangler-unbound-stub` 42..43, `…-signature-site` 74..76), which is where the slack in both
+totals comes from. Every per-fixture figure quoted above is a point snapshot (`min == max`). And 43
+is **not** "42 plus one": the 42 in the note below was produced by a different demangler, so the two
+are not a before/after pair — only the triage question carries over.
+
+The original question is unchanged and still unanswered — **inherent, or a materialization gap** —
+but it is now a corpus-wide triage rather than a whitelist decision about one binary, and the
+fullstabs/stripped pairs are the lever: a stub that binds on `…_fullstabs` and not on
+`…_fullstabs_stripped` is a symbol-table dependency, not an inherent one.
+
+Original note, as written:
 
 `crypto_mi_test_gcc421_fullstabs_stripped.exe` yields **42 empty `/Demangler/CryptoPP/*` stubs**
 (`AbstractGroup`, `AlgorithmImpl`, `BlockCipherFinal`, …) and `DemanglerWhitelist.ALLOWED` contains
@@ -2427,7 +2659,19 @@ evidence. Check when a fixture entered the corpus before bisecting a fixture-spe
 
 ---
 
-## 40. The render is not reproducible under load — open
+## 40. The render is not reproducible under load — the silent half is DONE
+
+**Audit 2026-08-25.** The part the note called the one that matters more is in:
+`Renderer.decompile` records every function Ghidra did not finish in `undecompiled`, and
+`FileRenderer.kt:442` renders `, decompilation did not finish` on it, so a reader can now tell an
+empty function from one Ghidra gave up on. `DECOMPILE_SECONDS` is still **30**, so the underlying
+non-determinism is unchanged — but it is now a visible difference between two renders rather than
+a silent one, which is what made it cost an hour of bisecting.
+
+Left: decide whether 30 s is the budget. Note the timeout is also the reason a diff of two renders
+is not by itself evidence about a change — check `undecompiled` before concluding anything from one.
+
+Original note, as written:
 
 `Renderer.decompile` gives Ghidra 30 seconds per function
 (`decompileFunction(ghFunc, 30, …)`). `xmltest.cpp`'s `main` — hundreds of locals — sits on that
@@ -2686,6 +2930,13 @@ a.out. All three a.out fixtures moved (`tinyxml` 298→49, `zlib` 140→24, `hel
 **Open:** which tree is *correct* isn't established — fewer empty scopes may be the fix or may be
 scopes being dropped. Any future neutrality claim here needs an a.out fixture in the check.
 
+**Audit 2026-08-25: the disputed side is now pinned by a baseline.** `zlib_aout_gcc263`'s
+`empty-scope` is **24** and its `reglocal-renamed-scope` **19** — both exactly the `4900866` column
+of the table above, and `tinyxml_aout_gcc295`'s `empty-scope` is **49**, exactly the 298→49 that
+section records. All point snapshots, so this is the shipped behaviour and not a mode artefact. So the behaviour shipped, was baselined, and any future change back would now read as
+a regression against a number nobody has established is right. That is the sharpest edge left in
+this file: not that it is unresolved, but that it is unresolved *and* frozen.
+
 ---
 
 ## Misattributed declarations and duplicate locals — DONE
@@ -2856,7 +3107,14 @@ prelude was tried and changes nothing; the templates, not the namespace, are wha
 
 ---
 
-## Class attribution: `class Image` lands in stl_vector.h, image.h gets 903 rows of libstdc++
+## Class attribution: `class Image` lands in stl_vector.h, image.h gets 903 rows of libstdc++ — SUPERSEDED
+
+**Superseded by priority 2, which reversed both halves.** `class Image`, `XVImage` and `VmInfo`
+all stay in their own headers, and image.h is **56 → 28 rows / 903 → 59 lines**. Kept for the
+evidence table below — the four-CU `declSourceFile` disagreement is still the clearest statement
+of why that signal cannot be trusted — but nothing here is open. Read priority 2 for what was done.
+
+Original note, as written:
 
 A straight swap, both directions, from the same unreliable signal. `image.h` is ~50 lines of source
 and renders 903 rows containing no project code at all — only `vector<unsigned short>`,
@@ -2904,7 +3162,41 @@ trusting `declSourceFile` for typedefs. And `activityExtent` cannot flag them: f
 function spans it falls back to counting type declarations, which is the same circularity fixed for
 `.cpp` files — the misattributed declarations define the extent that is supposed to judge them.
 
-## 39. The N_SO/N_SOL address partition cannot attribute declarations — measured, closed
+## 53. Mangled-name resolution is symbol-table-bound, and the corpus now measures what that costs — open (measurement)
+
+Several subsystems locate a thing by constructing its Itanium-mangled name and asking the symbol
+table. That is fine on a linked PE with symbols and degrades sharply without them, and the corpus
+now contains stripped twins of three fixtures, so the cost is visible for the first time:
+
+| counter                                                         | unstripped | its `_stripped` twin |
+|-----------------------------------------------------------------|------------|----------------------|
+| `vtable-failed-truly-missing` (crypto_mi_test_gcc421_fullstabs) | 10         | **121**              |
+| `vtable-failed-truly-missing` (locale_test_customlibstdcxx)     | 9          | **122**              |
+| `static-member-unresolved` (both of the above)                  | 378        | **498**              |
+| `static-member-applied` (both of the above)                     | 120        | **absent**           |
+
+**The static-member half is by design, documented, and exact** — `applyAllStaticMembers`' own doc
+says "Symbol-table-bound: a stripped binary resolves none", because a static member has no stab
+address and can only link to the emitted symbol. The arithmetic confirms it to the unit:
+378 + 120 = 498, i.e. the strip loses precisely the 120 the unstripped build applied and nothing
+else moves. Nothing to fix; it belongs here as the calibration for the row above it.
+
+**The vtable half is not**, and §25 records why: `ztvCandidates` cannot spell STL substitution
+shorthand or templates, so the symbol index is not a fallback but the *only* path for those classes.
+That is the difference between a subsystem that degrades on a strip and one that only ever worked
+because of the symbol table.
+
+Worth knowing before reading any stripped fixture's numbers, and worth a check when adding a
+resolve-by-mangled-name path: ask which of the two it is. The unstripped `static-member-unresolved`
+level itself (378 here, 393–409 on the PE fixtures, against 120–149 applied — a 3:1 miss rate with
+symbols present) is unexplained and may be nothing, since gcc drops COMDAT statics; it has never
+been looked at.
+
+## 52. The N_SO/N_SOL address partition cannot attribute declarations — measured, closed
+
+*Renumbered 2026-08-25: this was committed as a second §39 (`e821935`), colliding with "The render
+is a source tree". Neither of the two `§39` cross-references in this file pointed here, so nothing
+else needed changing.*
 
 Read from the `.stab` sections directly (`locale_test_customlibstdcxx`, `appquery`,
 `crypto_mi_test_gcc345`) and from gcc's own emitter, after three attempts to make the
