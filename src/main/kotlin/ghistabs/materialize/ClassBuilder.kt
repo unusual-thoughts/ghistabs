@@ -548,19 +548,14 @@ class ClassBuilder(
     }
 
     /**
-     * Lay the sub-vtables that follow the primary record [primary] (§54). Slots are typed the way
-     * [addSweptSlot] types a swept table rather than from the primary's method list: a secondary holds
-     * `_ZTv0_n…`/`_ZThn…` thunks, which are their own symbols with their own names, and reading them
-     * back off the targets is the only thing that names them.
+     * Lay the sub-vtables that follow the primary record [primary] (§54). Slots are typed off their
+     * targets like a swept table's: a secondary holds `_ZTv0_n…`/`_ZThn…` thunks, which are their own
+     * symbols with their own names.
      *
-     * Where the primary ends is read off memory, not off the [vftable] just laid there: `CryptoPP::Base`
-     * declares fewer virtuals in its stabs than its table holds, and starting the walk at the struct's
-     * end left it inside the function array, where the first word already points into code and the scan
-     * gives up immediately.
-     *
-     * Each sub-vtable gets its own `internal_<i>` category: a thunk demangles to the same leaf name as
-     * the method it forwards to, so sharing the class category would fork a `.conflict` per slot
-     * against the primary's definition of the same name (1874 of them on crypto_mi).
+     * Where the primary ends is read off memory, not off the vftable laid there — `CryptoPP::Base`
+     * declares fewer virtuals than its table holds, which put the walk inside the function array.
+     * Each sub-vtable gets its own `internal_<i>` category, or a thunk sharing its target's leaf name
+     * forks a `.conflict` per slot (1874 on crypto_mi).
      */
     private fun laySecondaryVtables(primary: VtableShape, leaf: String, ns: Namespace) {
         val rtti = program.readWord(primary.rttiHeader) ?: return

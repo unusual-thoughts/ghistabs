@@ -108,13 +108,9 @@ data class SubVtable(val shape: VtableShape, val targets: List<Address>) {
 
 /**
  * The secondary sub-vtables following the primary record, whose slots end at [afterPrimary] — one per
- * virtual base, each its own `[vcall offsets…] offset_to_top rtti [thunks]` (ABI §2.5.2). None of them
- * bears a symbol, so [ghistabs.materialize.ClassBuilder]'s symbol-driven sweep cannot see them and the
- * address point a virtual-base subobject's vfptr actually holds goes unlabelled.
- *
- * Nothing delimits the group, so the walk leans on the one invariant that does: every record in it
- * describes the same complete object, hence carries the same [rtti] pointer. A record that does not is
- * the next object, and the walk stops before annotating anything inside it.
+ * virtual base, each its own `[vcall offsets…] offset_to_top rtti [thunks]` (ABI §2.5.2), none bearing
+ * a symbol. Nothing delimits the group, so the walk is bounded by the one invariant that does: every
+ * record in it describes the same complete object, hence carries the same [rtti] pointer.
  */
 fun Program.secondaryVtables(afterPrimary: Address, rtti: Long, resolver: AddressResolver): List<SubVtable> =
     generateSequence(subVtableAt(afterPrimary, rtti, resolver)) {
@@ -127,8 +123,8 @@ private fun Program.subVtableAt(start: Address, rtti: Long, resolver: AddressRes
     val rttiSlot = generateSequence(start) { it.add(ptr) }
         .take(MAX_VTABLE_PREFIX_WORDS)
         .takeWhile { codeTargetAt(it, resolver) == null }
-        // `> start` because offset_to_top precedes the rtti word: a match on the first word would put
-        // the top slot back inside the primary's function array.
+        // offset_to_top precedes rtti, so a match on the first word would put the top slot back
+        // inside the primary's function array.
         .firstOrNull { it > start && readWord(it) == rtti }
         ?: return null
     val shape = shapeOf(start, rttiSlot)
