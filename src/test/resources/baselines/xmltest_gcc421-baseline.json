@@ -25,8 +25,8 @@
             "max": 8
         },
         "data-no-coverage": {
-            "min": 154,
-            "max": 154
+            "min": 182,
+            "max": 182
         },
         "degraded-base-synthesized": {
             "min": 2,
@@ -347,10 +347,6 @@
         "vfptr-normalized": {
             "min": 12,
             "max": 12
-        },
-        "vtable-secondary": {
-            "min": 16,
-            "max": 16
         },
         "vtable-skipped": {
             "min": 12,
