@@ -1,8 +1,6 @@
 package ghistabs.cli
 
-import com.github.ajalt.clikt.core.CliktCommand
-import com.github.ajalt.clikt.core.NoOpCliktCommand
-import com.github.ajalt.clikt.core.subcommands
+import com.github.ajalt.clikt.core.*
 import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.options.*
 import com.github.ajalt.clikt.parameters.types.enum
@@ -18,8 +16,15 @@ import ghidra.framework.options.OptionType
 import ghidra.program.model.listing.Program
 import ghidra.util.Msg
 import ghistabs.ImportOptions
+import ghistabs.ImportOptions.Companion.CLASSES
+import ghistabs.ImportOptions.Companion.FOLD_SOURCES
+import ghistabs.ImportOptions.Companion.SHORTEN_TYPEDEFS
+import ghistabs.ImportOptions.Companion.SOURCE_ROOTS
 import ghistabs.StabsAnalyzer
 import ghistabs.StabsAnalyzer.Companion.import
+import ghistabs.StabsRenderExporter.Companion.ELIDE_SJLJ
+import ghistabs.StabsRenderExporter.Companion.LINE_ALIGNED
+import ghistabs.StabsRenderExporter.Companion.SHOW_STORAGE
 import ghistabs.diagnose.*
 import ghistabs.importer.ImportArtifacts
 import ghistabs.importer.ImportContext
@@ -31,25 +36,19 @@ fun main(args: Array<String>) = NoOpCliktCommand(name = "ghidra-stabs")
     .subcommands(SkeletonCommand(), DecompCommand())
     .main(args)
 
-private class SkeletonCommand :
-    RenderCommand(
-        name = "skeleton",
-        help = "Reconstruct a line-aligned source skeleton per file (types, signatures, locals, N_SLINE map).",
-    ) {
+private class SkeletonCommand : RenderCommand(name = "skeleton") {
+    override fun help(context: Context) =
+        "Reconstruct a line-aligned source skeleton per file (types, signatures, locals, N_SLINE map)."
+
     override val mode = Mode.SKELETON
 }
 
-private class DecompCommand :
-    RenderCommand(
-        name = "decomp",
-        help = "Render decompilation per source file (elides gcc SjLj exception scaffolding by default).",
-    ) {
-    // Cygwin/PE binaries use SjLj EH, so elision is the readable default; --no-elide-sjlj yields the
-    // raw decompilation (Mode.DECOMPILE). Either way a no-op on DWARF-EH (ELF).
-    private val elideSjlj by option(
-        "--elide-sjlj",
-        help = "elide gcc SjLj exception scaffolding from the decompilation (default; no-op on ELF/DWARF-EH)",
-    ).flag("--no-elide-sjlj", default = true)
+private class DecompCommand : RenderCommand(name = "decomp") {
+    override fun help(context: Context) =
+        "Render decompilation per source file (elides gcc SjLj exception scaffolding by default)."
+
+    private val elideSjlj by option("--elide-sjlj", help = ELIDE_SJLJ.desc)
+        .flag("--no-elide-sjlj", default = ELIDE_SJLJ.default)
     override val mode get() = if (elideSjlj) Mode.ELIDE_SJLJ else Mode.DECOMPILE
 }
 
@@ -61,7 +60,7 @@ private class DecompCommand :
  *
  * The import log streams live to stderr (filtered at `--log-level`); `--log FILE` redirects it there.
  */
-private abstract class RenderCommand(name: String, help: String) : CliktCommand(name = name, help = help) {
+private abstract class RenderCommand(name: String) : CliktCommand(name = name) {
     protected abstract val mode: Mode
 
     private val binary by argument(help = "ELF/PE binary carrying .stab/.stabstr debug info (gcc 3.2–12)")
@@ -69,24 +68,22 @@ private abstract class RenderCommand(name: String, help: String) : CliktCommand(
     private val outDir by option("-d", "--target-dir", help = "directory to write the rendered per-source files into")
         .file(canBeFile = false).required()
 
-    private val buildClasses by option("--classes", help = ImportOptions.CLASSES.desc)
-        .flag("--no-classes", default = ImportOptions.CLASSES.default)
-    private val shortenTypedefs by option("--shorten-typedefs", help = ImportOptions.SHORTEN_TYPEDEFS.desc)
-        .flag("--no-shorten-typedefs", default = ImportOptions.SHORTEN_TYPEDEFS.default)
-    private val varStorage by option(
-        "--var-storage",
-        help = "annotate each local with the storage gcc gave it, (stack) or (reg)",
-    ).flag("--no-var-storage", default = false)
+    private val buildClasses by option("--classes", help = CLASSES.desc)
+        .flag("--no-classes", default = CLASSES.default)
+    private val shortenTypedefs by option("--shorten-typedefs", help = SHORTEN_TYPEDEFS.desc)
+        .flag("--no-shorten-typedefs", default = SHORTEN_TYPEDEFS.default)
+    private val varStorage by option("--var-storage", help = SHOW_STORAGE.desc)
+        .flag("--no-var-storage", default = SHOW_STORAGE.default)
     private val lineAligned by option(
         "--line-aligned",
         help = "render source line n at output line n, blank rows and all, instead of collapsing blank runs",
-    ).flag("--no-line-aligned", default = false)
-    private val foldSources by option("--fold-sources", help = ImportOptions.FOLD_SOURCES.desc)
-        .flag("--no-fold-sources", default = ImportOptions.FOLD_SOURCES.default)
+    ).flag("--no-line-aligned", default = LINE_ALIGNED.default)
+    private val foldSources by option("--fold-sources", help = FOLD_SOURCES.desc)
+        .flag("--no-fold-sources", default = FOLD_SOURCES.default)
 
     private val logLevel by option("-v", "--log-level", help = "minimum level streamed to the log").enum<Level>()
         .default(Level.INFO)
-    private val sourceRoots by option("--source-root", help = ImportOptions.SOURCE_ROOTS.desc)
+    private val sourceRoots by option("--source-root", help = SOURCE_ROOTS.desc)
         .file(mustExist = true, canBeFile = false).multiple()
     private val disableAnalyzers by option(
         "--disable-analyzer",
@@ -113,7 +110,7 @@ private abstract class RenderCommand(name: String, help: String) : CliktCommand(
     )
 
     override fun run() {
-        val monitor = BarLoggerMonitorSink(options.minLogLevel)
+        val monitor = BarLoggerMonitorSink(options.minLogLevel, currentContext.terminal)
         Msg.setErrorLogger(monitor)
         if (!Application.isInitialized()) {
             Application.initializeApplication(GhidraApplicationLayout(), HeadlessGhidraApplicationConfiguration())
@@ -154,6 +151,7 @@ private abstract class RenderCommand(name: String, help: String) : CliktCommand(
                 }
             }
         } finally {
+            monitor.stop()
             GhidraScriptUtil.releaseBundleHostReference()
             fileWriter?.close()
         }

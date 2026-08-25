@@ -12,7 +12,10 @@ val Project.cli get() = sourceSets["cli"]
 
 // No `-Djdk.serialFilterFactory` unlike the test harness: HeadlessGhidraApplicationConfiguration
 // installs Ghidra's factory itself, and setting both throws "filter factory already instantiated".
-val cliJvmargs = GHIDRA_JVM_ARGS + listOf("-Xmx2g", "--enable-native-access=ALL-UNNAMED")
+// ghistabs-log4j2.xml ships in the cli jar; LoggingInitialization resolves the property off the
+// classpath, so Ghidra's own console appender never gets between the animation and the terminal.
+val cliJvmargs = GHIDRA_JVM_ARGS +
+    listOf("-Xmx2g", "--enable-native-access=ALL-UNNAMED", "-Dlog4j.configurationFile=ghistabs-log4j2.xml")
 
 // Run the CLI in-process against the `cli` runtime classpath (Ghidra jars + main output + clikt).
 // Pass args with `-Pargs="skeleton <binary> -d out"`.

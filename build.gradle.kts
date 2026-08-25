@@ -63,7 +63,6 @@ val cli = sourceSets.create("cli") {
     dependencies {
         implementationConfigurationName(sourceSets["main"].output)
         implementationConfigurationName(libs.clikt)
-        implementationConfigurationName(libs.progressbar)
         implementationConfigurationName(libs.kotlinx.serialization.json)
         testImplementation(output)
     }
