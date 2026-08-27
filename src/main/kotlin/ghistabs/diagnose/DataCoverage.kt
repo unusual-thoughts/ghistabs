@@ -52,7 +52,7 @@ private fun ImportContext<*>.reportDataRun(block: MemoryBlock, range: AddressRan
     if (reportable) {
         debug(
             "data-no-coverage",
-            "@ ${range.minAddress}..${range.maxAddress} (${range.length} bytes) in ${block.name}",
+            "@${range.minAddress}..${range.maxAddress} (${range.length} bytes) in ${block.name}",
             address = range.minAddress,
         )
     }
@@ -63,13 +63,13 @@ private fun ImportContext<*>.reportTextRun(range: AddressRange, cuStarts: List<P
     // Inside a function's convex hull [entry, maxBody] → a hot/cold split hole or EH fragment Ghidra
     // left undisassembled, not data. getFunctionContaining sees only the body, so it misses holes.
     if (program.functionManager.inHull(range.minAddress)) {
-        debug("text-undisassembled-code", "@ ${range.minAddress} (${range.length} bytes)", address = range.minAddress)
+        debug("text-undisassembled-code", "(${range.length} bytes)", address = range.minAddress)
         return
     }
     val cu = cuStarts.lastOrNull { it.first <= range.minAddress }?.let { " in ${it.second}" }.orEmpty()
     debug(
         "text-data-no-coverage",
-        "@ ${range.minAddress}..${range.maxAddress} (${range.length} bytes)$cu",
+        "@${range.minAddress}..${range.maxAddress} (${range.length} bytes)$cu",
         address = range.minAddress,
     )
 }

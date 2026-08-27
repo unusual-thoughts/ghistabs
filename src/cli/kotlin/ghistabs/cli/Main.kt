@@ -19,7 +19,6 @@ import ghistabs.ImportOptions
 import ghistabs.ImportOptions.Companion.CLASSES
 import ghistabs.ImportOptions.Companion.FOLD_SOURCES
 import ghistabs.ImportOptions.Companion.SHORTEN_TYPEDEFS
-import ghistabs.ImportOptions.Companion.SOURCE_ROOTS
 import ghistabs.StabsAnalyzer
 import ghistabs.StabsAnalyzer.Companion.import
 import ghistabs.StabsRenderExporter.Companion.ELIDE_SJLJ
@@ -65,8 +64,13 @@ private abstract class RenderCommand(name: String) : CliktCommand(name = name) {
 
     private val binary by argument(help = "ELF/PE binary carrying .stab/.stabstr debug info (gcc 3.2–12)")
         .file(mustExist = true, canBeDir = false, mustBeReadable = true)
-    private val outDir by option("-d", "--target-dir", help = "directory to write the rendered per-source files into")
+    private val outDir by option("-d", "--target-dir", help = "Directory to write the rendered per-source files into")
         .file(canBeFile = false).required()
+    private val sourceRoots by option(
+        "--source-root",
+        help = "Directory containing partial original sources from the binary, to correlate and " +
+            "improve decompilation output (eg. stdlib)",
+    ).file(mustExist = true, canBeFile = false).multiple()
 
     private val buildClasses by option("--classes", help = CLASSES.desc)
         .flag("--no-classes", default = CLASSES.default)
@@ -76,28 +80,28 @@ private abstract class RenderCommand(name: String) : CliktCommand(name = name) {
         .flag("--no-var-storage", default = SHOW_STORAGE.default)
     private val lineAligned by option(
         "--line-aligned",
-        help = "render source line n at output line n, blank rows and all, instead of collapsing blank runs",
+        help = "Render source line n at output line n, blank rows and all, instead of collapsing blank runs",
     ).flag("--no-line-aligned", default = LINE_ALIGNED.default)
     private val foldSources by option("--fold-sources", help = FOLD_SOURCES.desc)
         .flag("--no-fold-sources", default = FOLD_SOURCES.default)
-
-    private val logLevel by option("-v", "--log-level", help = "minimum level streamed to the log").enum<Level>()
-        .default(Level.INFO)
-    private val sourceRoots by option("--source-root", help = SOURCE_ROOTS.desc)
-        .file(mustExist = true, canBeFile = false).multiple()
     private val disableAnalyzers by option(
         "--disable-analyzer",
         help = "turn off every analyzer whose name contains this, case-insensitively (repeatable). " +
             "Render the same binary with and without one to A/B what it actually changes.",
     ).multiple()
 
-    private val recordsJson by option("--records-json", help = "dump parsed StabRecords as JSON").file(canBeDir = false)
-    private val harvestJson by option("--harvest-json", help = "dump the harvest as JSON").file(canBeDir = false)
-    private val registryJson by option("--registry-json", help = "dump type registry as JSON").file(canBeDir = false)
-    private val logFile by option("--log", help = "redirect the live import log to this file as well as stdout")
+    private val logLevel by option("-v", "--log-level", help = "Minimum level streamed to the log").enum<Level>()
+        .default(Level.INFO)
+    private val logGhidra by option("--log-ghidra", help = "Also show Ghidra log messages")
+        .flag("--log-no-ghidra", default = false)
+    private val logFile by option("--log", help = "Redirect the import log to this file as well as stdout")
         .file(canBeDir = false)
-    private val degradationLog by option("--degradation-log", help = "write grouped materialization degradations here")
+
+    private val degradationLog by option("--degradation-log", help = "Write grouped materialization degradations here")
         .file(canBeDir = false)
+    private val recordsJson by option("--records-json", help = "Dump parsed StabRecords as JSON").file(canBeDir = false)
+    private val harvestJson by option("--harvest-json", help = "Dump the harvest as JSON").file(canBeDir = false)
+    private val registryJson by option("--registry-json", help = "Dump type registry as JSON").file(canBeDir = false)
 
     private val options get() = ImportOptions(
         false,
@@ -110,14 +114,14 @@ private abstract class RenderCommand(name: String) : CliktCommand(name = name) {
     )
 
     override fun run() {
-        val monitor = BarLoggerMonitorSink(options.minLogLevel, currentContext.terminal)
+        val monitor = BarLoggerMonitorSink(options.minLogLevel, currentContext.terminal, logGhidra)
         Msg.setErrorLogger(monitor)
         if (!Application.isInitialized()) {
             Application.initializeApplication(GhidraApplicationLayout(), HeadlessGhidraApplicationConfiguration())
         }
         val fileWriter = logFile?.also { it.parentFile?.mkdirs() }?.bufferedWriter()
-            ?.also { echo("log -> $logFile") }
-        val fileSink = fileWriter?.let { StreamSink(options.minLogLevel, it) }
+            ?.also { monitor.debug("log", "appending to $logFile") }
+        val fileSink = fileWriter?.let { WriterSink(options.minLogLevel, it) }
 
         // WindowsResourceReferenceAnalyzer runs a named script during PE autoanalysis; start the OSGi
         // bundle host (as HeadlessAnalyzer does) so its GhidraScriptUtil.bundleHost lookup isn't null.
@@ -174,7 +178,7 @@ private abstract class RenderCommand(name: String) : CliktCommand(name = name) {
                 }
             }.forEach {
                 analysis.setBoolean(it, false)
-                echo("disabled analyzer: $it")
+                debug("analyzers", "disabled analyzer: $it")
             }
         }
         mgr.initializeOptions()
@@ -230,8 +234,8 @@ private abstract class RenderCommand(name: String) : CliktCommand(name = name) {
             lineAligned = lineAligned,
             sink = this,
         ).use { renderer ->
-            val written = renderer.renderAll(outDir)
-            echo("rendered ${renderer.sources.size} sources -> $written files in $outDir")
+            val written = renderer.renderAll(outDir, monitor)
+            log("render", "rendered ${renderer.sources.size} sources -> $written files in $outDir")
         }
     }
 }

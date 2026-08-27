@@ -1,6 +1,7 @@
 package ghistabs.materialize
 
 import ghidra.program.model.data.*
+import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.materialize.itanium.Itanium
 import ghistabs.parse.canonTemplateName
@@ -94,7 +95,11 @@ fun typedefShorteningRenames(aliases: Map<String, String>, typeNames: Set<String
  * `basic_string<char, std::char_traits<char>, …>` spelling. Pure rename computation lives in
  * [typedefShorteningRenames]; this reads the aliases and names out of the DTM and applies them.
  */
-class TypedefShortener(private val dtm: DataTypeManager, sink: DiagnosticSink) : DiagnosticSink by sink {
+class TypedefShortener(
+    private val dtm: DataTypeManager,
+    sink: DiagnosticSink,
+    private val monitor: TaskMonitor = TaskMonitor.DUMMY,
+) : DiagnosticSink by sink {
     private val allTypes by lazy { dtm.allDataTypes.asSequence().toList() }
 
     /**
@@ -121,13 +126,18 @@ class TypedefShortener(private val dtm: DataTypeManager, sink: DiagnosticSink) :
         val shortener = TemplateNameShortener(aliases(allTypes))
         if (shortener.isEmpty) return 0
         val byName = allTypes.groupBy { it.name }
+        val composites = allTypes.filterIsInstance<Composite>()
+        monitor.initialize((byName.size + composites.size).toLong(), "Stabs: shortening typedefs")
         val typeRenamed = byName.keys.sumOf { name ->
+            monitor.increment()
             shortener.shortenedOrNull(name)?.let { short -> byName.getValue(name).count { rename(it, short) } } ?: 0
         }
         // Base-class subobject fields (`_base_<Name>`/`_vbase_<Name>`) embed the base type's name at
         // build time, so renaming the base datatype never reaches them — rewrite those field names too.
-        val fieldRenamed = allTypes.filterIsInstance<Composite>()
-            .sumOf { c -> c.components.count { it.shortenBaseField(shortener) } }
+        val fieldRenamed = composites.sumOf { c ->
+            monitor.increment()
+            c.components.count { it.shortenBaseField(shortener) }
+        }
         log("typedef-shorten", "renamed $typeRenamed datatypes, $fieldRenamed base fields")
         return typeRenamed + fieldRenamed
     }
