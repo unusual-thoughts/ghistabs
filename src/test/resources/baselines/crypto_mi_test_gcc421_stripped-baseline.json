@@ -70,11 +70,11 @@
         },
         "demangle-applied": {
             "min": 15208,
-            "max": 15209
+            "max": 15208
         },
         "demangle-attempted": {
             "min": 15208,
-            "max": 15209
+            "max": 15208
         },
         "demangle-displaced-function-renamed": {
             "min": 0,
@@ -94,7 +94,7 @@
         },
         "demangler-retarget-no-type": {
             "min": 73,
-            "max": 74
+            "max": 73
         },
         "demangler-retargeted-stub-site": {
             "min": 129,
@@ -106,7 +106,7 @@
         },
         "demangler-skip-no-replacement": {
             "min": 42,
-            "max": 43
+            "max": 42
         },
         "demangler-sole-instantiation-declined": {
             "min": 28,
@@ -118,27 +118,23 @@
         },
         "demangler-unbound-stub": {
             "min": 42,
-            "max": 43
+            "max": 42
         },
         "demangler-unbound-stub-in-signature": {
             "min": 6,
-            "max": 7
+            "max": 6
         },
         "demangler-unbound-stub-signature-site": {
             "min": 74,
-            "max": 76
+            "max": 74
         },
         "demangler-unbound-stub-site-origin": {
             "min": 74,
-            "max": 76
+            "max": 74
         },
         "desc-dropped-so": {
             "min": 33,
             "max": 33
-        },
-        "done": {
-            "min": 1,
-            "max": 1
         },
         "drop-record-opt": {
             "min": 33,
@@ -296,6 +292,10 @@
             "min": 36903,
             "max": 36903
         },
+        "import": {
+            "min": 1,
+            "max": 1
+        },
         "inheritance-applied": {
             "min": 733,
             "max": 733
@@ -370,11 +370,11 @@
         },
         "text-data-no-coverage": {
             "min": 531,
-            "max": 539
+            "max": 531
         },
         "text-undisassembled-code": {
             "min": 3107,
-            "max": 3118
+            "max": 3107
         },
         "textrange-entries": {
             "min": 3173,

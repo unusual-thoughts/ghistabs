@@ -27,7 +27,6 @@ import ghistabs.StabsRenderExporter.Companion.SHOW_STORAGE
 import ghistabs.diagnose.*
 import ghistabs.importer.ImportArtifacts
 import ghistabs.importer.ImportContext
-import ghistabs.render.Mode
 import ghistabs.render.Renderer
 import ghistabs.runTransaction
 
@@ -39,7 +38,7 @@ private class SkeletonCommand : RenderCommand(name = "skeleton") {
     override fun help(context: Context) =
         "Reconstruct a line-aligned source skeleton per file (types, signatures, locals, N_SLINE map)."
 
-    override val mode = Mode.SKELETON
+    override val mode = Renderer.Mode.SKELETON
 }
 
 private class DecompCommand : RenderCommand(name = "decomp") {
@@ -48,7 +47,7 @@ private class DecompCommand : RenderCommand(name = "decomp") {
 
     private val elideSjlj by option("--elide-sjlj", help = ELIDE_SJLJ.desc)
         .flag("--no-elide-sjlj", default = ELIDE_SJLJ.default)
-    override val mode get() = if (elideSjlj) Mode.ELIDE_SJLJ else Mode.DECOMPILE
+    override val mode get() = if (elideSjlj) Renderer.Mode.ELIDE_SJLJ else Renderer.Mode.DECOMPILE
 }
 
 /**
@@ -60,7 +59,7 @@ private class DecompCommand : RenderCommand(name = "decomp") {
  * The import log streams live to stderr (filtered at `--log-level`); `--log FILE` redirects it there.
  */
 private abstract class RenderCommand(name: String) : CliktCommand(name = name) {
-    protected abstract val mode: Mode
+    protected abstract val mode: Renderer.Mode
 
     private val binary by argument(help = "ELF/PE binary carrying .stab/.stabstr debug info (gcc 3.2–12)")
         .file(mustExist = true, canBeDir = false, mustBeReadable = true)

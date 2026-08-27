@@ -144,10 +144,6 @@
             "min": 19,
             "max": 19
         },
-        "done": {
-            "min": 1,
-            "max": 1
-        },
         "drop-record-opt": {
             "min": 90,
             "max": 90
@@ -315,6 +311,10 @@
         "harvest-typeAsts-unique-by-id": {
             "min": 48058,
             "max": 48058
+        },
+        "import": {
+            "min": 1,
+            "max": 1
         },
         "inheritance-applied": {
             "min": 606,

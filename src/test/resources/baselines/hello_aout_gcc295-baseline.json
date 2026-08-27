@@ -28,10 +28,6 @@
             "min": 0,
             "max": 0
         },
-        "done": {
-            "min": 1,
-            "max": 1
-        },
         "drop-record-opt": {
             "min": 1,
             "max": 1
@@ -147,6 +143,10 @@
         "harvest-typeAsts-unique-by-id": {
             "min": 24,
             "max": 24
+        },
+        "import": {
+            "min": 1,
+            "max": 1
         },
         "local-var-add-success": {
             "min": 2,

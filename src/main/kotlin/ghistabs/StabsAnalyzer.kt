@@ -91,7 +91,7 @@ class StabsAnalyzer :
             }
 
             val results = StabsImporter(this).run()
-            log("done", "import complete: $results")
+            log("import", "import complete: $results")
             program.markStabsDone(true)
             return results
         }

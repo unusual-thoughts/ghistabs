@@ -108,10 +108,6 @@
             "min": 0,
             "max": 0
         },
-        "done": {
-            "min": 1,
-            "max": 1
-        },
         "drop-record-opt": {
             "min": 60,
             "max": 60
@@ -280,6 +276,10 @@
             "min": 31281,
             "max": 31281
         },
+        "import": {
+            "min": 1,
+            "max": 1
+        },
         "inheritance-applied": {
             "min": 81,
             "max": 81
@@ -398,11 +398,11 @@
         },
         "text-data-no-coverage": {
             "min": 307,
-            "max": 338
+            "max": 307
         },
         "text-undisassembled-code": {
             "min": 204,
-            "max": 265
+            "max": 204
         },
         "textrange-entries": {
             "min": 7838,

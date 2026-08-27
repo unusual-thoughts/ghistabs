@@ -12,8 +12,8 @@ import ghistabs.diagnose.Level
 import ghistabs.harvest.HarvestIndex
 import ghistabs.harvest.Harvester
 import ghistabs.parse.StabReader
-import ghistabs.render.Mode
 import ghistabs.render.Renderer
+import ghistabs.render.Renderer.Mode
 import ghistabs.runTransaction
 import ghistabs.set
 import ghistabs.test.defaultContext
