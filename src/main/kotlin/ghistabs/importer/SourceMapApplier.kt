@@ -59,7 +59,9 @@ class SourceMapApplier(private val ctx: ImportContext<*>, private val index: Har
         // Grouped by outcome, `""` being published. One warning per reason carrying a per-file
         // breakdown, rather than one per entry: an emitter whose addresses we resolve wrong has every
         // entry rejected, and that would be thousands of bookmarks.
+        ctx.monitor.initialize(entries.size.toLong(), "Stabs: publishing source map")
         val byError = entries.groupBy { entry ->
+            ctx.monitor.increment()
             runCatching {
                 manager.addSourceMapEntry(entry.source, entry.line, entry.addr, 0)
             }.exceptionOrNull()?.let {

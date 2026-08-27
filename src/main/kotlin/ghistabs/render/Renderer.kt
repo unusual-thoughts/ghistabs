@@ -271,7 +271,7 @@ class Renderer(
      * is canceled.
      */
     fun renderAll(dir: File, monitor: TaskMonitor = TaskMonitor.DUMMY): Int {
-        monitor.initialize(sources.size.toLong())
+        monitor.initialize(sources.size.toLong(), "Stabs: rendering sources")
         dir.mkdirs()
         // Said once, up front: with a source root given, how much of it the render can actually read.
         // Free without one — no transform means no file to check.
@@ -279,6 +279,9 @@ class Renderer(
             .let { if (it > 0) log("render: $it of ${sources.size} sources resolved to a local file") }
         return program.runTransaction("stabs-render-all") {
             sources.asSequence()
+                // Named before it is rendered: one source is a whole file's decompilation, seconds of
+                // it, and the count alone doesn't say which file is taking them.
+                .onEach { monitor.message = "Stabs: rendering ${it.filename}" }
                 .map { it to renderSkeleton(it) }
                 .takeWhile { runCatching { monitor.incrementProgress() }.isSuccess }
                 // A source with nothing to show writes no file. Said out loud rather than skipped in

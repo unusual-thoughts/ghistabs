@@ -85,7 +85,7 @@ fun DataTypeRegistry.reportSurvivingPlaceholders() {
         }
         degradation(
             tag,
-            "${composite.categoryPath}/${composite.name}",
+            composite.name,
             when (tag) {
                 "placeholder-unresolved" -> "never had its body materialized (id=$id)"
                 else -> "materialized but every field fell back to Undefined (id=$id)"
