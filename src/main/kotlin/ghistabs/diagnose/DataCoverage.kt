@@ -2,13 +2,14 @@ package ghistabs.diagnose
 
 import ghidra.program.model.address.Address
 import ghidra.program.model.address.AddressRange
-import ghidra.program.model.address.AddressSet
 import ghidra.program.model.listing.Program
 import ghidra.program.model.mem.MemoryBlock
 import ghistabs.importer.ImportContext
 import ghistabs.inHull
 import ghistabs.parse.StabReader
 import ghistabs.parse.StabType
+import ghistabs.range
+import ghistabs.undefinedRangesIn
 
 // a.out keeps its stabs in the linker symbol table, so `.symtab`/`.strtab` are debug info here too.
 private val NON_DATA_BLOCKS = setOf(".stab", ".stabstr", ".symtab", ".strtab", ".comment")
@@ -36,15 +37,16 @@ fun ImportContext<*>.analyzeDataCoverage() {
         if (!block.isRead || block.isMapped || block.name in NON_DATA_BLOCKS || block.name.startsWith(".debug")) {
             continue
         }
-        val undefined = program.listing.getUndefinedRanges(AddressSet(block.start, block.end), false, monitor)
+        monitor.initialize(block.size, "Stabs: analysing data in ${block.name}")
+        val undefined = program.listing.undefinedRangesIn(block.addressRange, monitor)
         if (block.isExecute) {
-            undefined.forEach {
-                reportTextRun(it, cuStarts)
-            }
+            undefined.forEach { reportTextRun(it, cuStarts) }
         } else {
             undefined.forEach { reportDataRun(block, it) }
         }
+        monitor.progress = block.size
     }
+    monitor.setShowProgressValue(false)
 }
 
 private fun ImportContext<*>.reportDataRun(block: MemoryBlock, range: AddressRange) {

@@ -7,6 +7,7 @@ import ghidra.program.model.data.Composite
 import ghidra.program.model.data.DataType
 import ghidra.program.model.data.DataTypeManager
 import ghidra.program.model.data.DataUtilities
+import ghidra.program.model.listing.CodeUnit
 import ghidra.program.model.listing.Data
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.FunctionManager
@@ -16,6 +17,7 @@ import ghidra.program.model.listing.Parameter
 import ghidra.program.model.listing.Program
 import ghidra.program.model.listing.Variable
 import ghidra.program.model.mem.MemoryBlock
+import ghidra.util.task.TaskMonitor
 
 operator fun Address.plus(rhs: Long): Address = addNoWrap(rhs)
 operator fun Address.plus(rhs: Int): Address = addNoWrap(rhs.toLong())
@@ -24,7 +26,9 @@ operator fun Address.minus(rhs: Long): Address = subtractNoWrap(rhs)
 operator fun Address.minus(rhs: Int): Address = subtractNoWrap(rhs.toLong())
 operator fun Address.minus(rhs: Address): Long = subtract(rhs)
 
-operator fun Address.rangeTo(rhs: Address): AddressRange = AddressRangeImpl(this, rhs)
+/** `a..b`. Built by length for the same reason as [rangeUntil]: bounds that arrive out of order would
+ *  otherwise be swapped into a range that looks valid, so `b..a` would come back as `[a, b]`. */
+operator fun Address.rangeTo(rhs: Address): AddressRange = AddressRangeImpl(this, (rhs - this + 1).coerceAtLeast(0))
 
 /** `a..<b`. Built by length rather than by bounds: the two-address constructor swaps what arrives out
  *  of order, so `a..<a` would come back as `[a-1, a]`, while a length of 0 is an empty range that
@@ -41,6 +45,27 @@ operator fun AddressSetView.plus(addr: Address): AddressSet = union(AddressSet(a
 operator fun Data.get(i: Int): Data? = this.getComponent(i)
 operator fun Data.get(name: String): Data? =
     (dataType as? Composite)?.components?.firstOrNull { it.fieldName == name }?.ordinal?.let(this::get)
+
+fun Iterable<AddressRange>.gapsIn(range: AddressRange, action: (AddressRange) -> Unit = { }) = sequence {
+    var start = range.minAddress
+    for (r in this@gapsIn) {
+        action(r)
+        (start..<r.minAddress).takeIf { it.length > 0 }?.let { yield((it)) }
+        if (r.maxAddress >= range.maxAddress) return@sequence
+        start = r.maxAddress.next()
+    }
+    (start..range.maxAddress).takeIf { it.length > 0 }?.let { yield((it)) }
+}
+
+fun Iterable<AddressRange>.monitoredGapsIn(range: AddressRange, monitor: TaskMonitor? = null) = gapsIn(range) {
+    monitor?.progress = it.minAddress - range.minAddress
+}
+
+/** Undefined runs in [range] — the gaps between instructions and defined data, as `getUndefinedRanges` walks them. */
+fun Listing.undefinedRangesIn(range: AddressRange, monitor: TaskMonitor? = null) = getCodeUnits(AddressSet(range), true)
+    .filter { (it as? Data)?.isDefined != false } // instructions + defined data
+    .map { it.range }
+    .monitoredGapsIn(range, monitor)
 
 /** The two [ghidra.program.model.listing.AutoParameterType] display names. */
 private val INJECTED_PARAM_NAMES = setOf(Function.THIS_PARAM_NAME, Function.RETURN_PTR_PARAM_NAME)
@@ -84,6 +109,8 @@ fun <T> DataTypeManager.runTransaction(description: String = "Kotlin Lambda Tran
             throw e
         }
     }
+
+val CodeUnit.range get() = minAddress..maxAddress
 
 /** Clear any instructions covering [range]; true if there were any. An empty [range]
  *  (a `Dynamic` type that would not resolve) clears nothing rather than guess a span. */
