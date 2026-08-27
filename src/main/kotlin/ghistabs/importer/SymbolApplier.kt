@@ -215,7 +215,9 @@ class SymbolApplier(
         val enums = LinkedHashMap<Pair<List<String>, Int>, LinkedHashMap<String, Long>>()
         var applied = 0
 
+        ctx.monitor.initialize(harvest.constants.size.toLong(), "Stabs: applying constants")
         for ((name, type, value) in harvest.constants) {
+            ctx.monitor.increment()
             // demangledName() is the unqualified leaf; rebuild the qualified name from the
             // namespace chain so the equate reads `CryptoPP::INFINITE_TIME`, not `INFINITE_TIME`.
             val ns = Demangler.namespaces(name).orEmpty()
@@ -506,7 +508,9 @@ class SymbolApplier(
         // One class is re-declared per including CU, so the same member arrives N times.
         val seen = mutableSetOf<String>()
         var applied = 0
+        ctx.monitor.initialize(registry.index.allTypes.size.toLong(), "Stabs: applying static members")
         for (ast in registry.index.allTypes) {
+            ctx.monitor.increment()
             val body = ast.body as? TypeDecl.Struct<GlobalTypeId> ?: continue
             for (field in body.fields) {
                 val mangled = field.mangled ?: continue

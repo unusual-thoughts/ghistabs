@@ -6,6 +6,8 @@ import ghistabs.test.mustBeIn
 import ghistabs.test.mustNotBeIn
 import org.junit.jupiter.api.Test
 
+private const val SUMMARY_HEADER = "=== Summary of diagnostic categories ==="
+
 class StabsDiagnosticsTest {
     @Test
     fun testDiagnosticsSummaryEmission() {
@@ -20,7 +22,7 @@ class StabsDiagnosticsTest {
         diag.writeSummary(sink)
         val output = sink.capturedOutput()
 
-        "=== diagnostics ===" mustBeIn output
+        "=== Summary of diagnostic categories ===" mustBeIn output
         "unresolved-ref = 1" mustBeIn output
         "placeholder-created = 1" mustBeIn output
         "dedup-rename = 1" mustBeIn output
@@ -37,10 +39,10 @@ class StabsDiagnosticsTest {
         diag.log("unresolved-ref", "ref=null in fn")
 
         diag.writeSummary(sink)
-        val firstHeaderCount = sink.capturedOutput().split("=== diagnostics ===").size - 1
+        val firstHeaderCount = sink.capturedOutput().split(SUMMARY_HEADER).size - 1
 
         diag.writeSummary(sink)
-        val secondHeaderCount = sink.capturedOutput().split("=== diagnostics ===").size - 1
+        val secondHeaderCount = sink.capturedOutput().split(SUMMARY_HEADER).size - 1
 
         firstHeaderCount mustBe 1
         secondHeaderCount mustBe 1
@@ -61,7 +63,7 @@ class StabsDiagnosticsTest {
         diag.writeSummary(sink)
         val output = sink.capturedOutput()
 
-        "gap census:" mustBeIn output
+        "=== gap census ===" mustBeIn output
         "MyCategory/MyStruct: gap @+32 bits len=32 between field1..field2" mustBeIn output
         "MyCategory/MyStruct: gap @+96 bits len=16 between field3..(end)" mustBeIn output
         "PackedStruct" mustNotBeIn output

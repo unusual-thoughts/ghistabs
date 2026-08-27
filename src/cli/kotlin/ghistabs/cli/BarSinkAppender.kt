@@ -37,7 +37,7 @@ class BarSinkAppender private constructor(name: String, filter: Filter?) :
     override fun append(event: LogEvent) {
         val sink = BarLoggerMonitorSink.active ?: return
         val logger = event.loggerName?.substringAfterLast('.').orEmpty()
-        sink.logAtLevel("${event.message.formattedMessage} ($logger)", event.level.toDiagnostic())
+        sink.logGhidra("${event.message.formattedMessage}", event.marker?.name ?: logger, event.level.toDiagnostic())
         event.thrown?.let { sink.run { it.exception(event.level.toDiagnostic()) } }
     }
 

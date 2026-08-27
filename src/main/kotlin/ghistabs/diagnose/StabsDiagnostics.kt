@@ -3,42 +3,6 @@ package ghistabs.diagnose
 import ghidra.program.model.address.Address
 import ghistabs.parse.SourceFile
 
-enum class Level { DEBUG, INFO, WARN, ERROR }
-
-interface DiagnosticSink {
-    /**
-     * A diagnostic event. [count] lets one call stand in for a bulk tally (`log(cat, count = n)`
-     * replaces the old `inc(cat, n)`); [message] null means a silent counter bump (no output).
-     */
-    fun log(
-        category: String,
-        message: String? = null,
-        level: Level = Level.INFO,
-        address: Address? = null,
-        count: Long = 1,
-    )
-
-    fun debug(category: String, message: String? = null, address: Address? = null, count: Long = 1) =
-        log(category, message, level = Level.DEBUG, address, count)
-
-    fun warn(category: String, message: String? = null, address: Address? = null, count: Long = 1) =
-        log(category, message, level = Level.WARN, address, count)
-
-    fun err(category: String, message: String? = null, address: Address? = null, count: Long = 1) =
-        log(category, message, level = Level.ERROR, address, count)
-}
-
-object DummySink : DiagnosticSink {
-    override fun log(category: String, message: String?, level: Level, address: Address?, count: Long) {}
-}
-
-/** Fan-out sink — tees the [StabsDiagnostics] accumulator alongside a terminal (Bookmark/Capturing). */
-class TeeSink(private vararg val sinks: DiagnosticSink?) : DiagnosticSink {
-    override fun log(category: String, message: String?, level: Level, address: Address?, count: Long) {
-        for (s in sinks) s?.log(category, message, level, address, count)
-    }
-}
-
 /** A gap between struct fields. `prev`/`next` are null at struct start/end. */
 data class GapRecord(val offsetBits: Long, val lengthBits: Long, val prevField: String?, val nextField: String?)
 
@@ -145,35 +109,48 @@ class StabsDiagnostics : DiagnosticSink {
         }
         isSealed = true
 
-        sink.log("diagnostics", "=== diagnostics ===")
-
-        for ((name, levels) in counters) {
-            for ((level, value) in levels) {
-                sink.log("diagnostics", "$name = $value", level = level)
-            }
-        }
+        sink.debug(
+            "diagnostics",
+            buildString {
+                appendLine("=== Summary of diagnostic categories ===")
+                for ((name, levels) in counters) {
+                    for ((level, value) in levels) {
+                        appendLine("$name = $value") // level)
+                    }
+                }
+            }.trimEnd(),
+        )
 
         for ((category, msgs) in examples) {
             if (msgs.isNotEmpty()) {
-                sink.debug("diagnostics", "$category top examples:")
-                for (msg in msgs) {
-                    sink.debug("diagnostics", "  - $msg")
-                }
+                sink.debug(
+                    "diagnostics",
+                    buildString {
+                        appendLine("$category top examples:")
+                        for (msg in msgs) {
+                            appendLine("  - $msg")
+                        }
+                    }.trimEnd(),
+                )
             }
         }
 
-        if (gapCensus.isNotEmpty()) {
-            sink.debug("diagnostics", "gap census:")
-            for ((qualifiedName, gaps) in gapCensus) {
-                for ((offsetBits, lengthBits, prevField, nextField) in gaps) {
-                    val prevStr = prevField ?: "(start)"
-                    val nextStr = nextField ?: "(end)"
-                    sink.debug(
-                        "diagnostics",
-                        "  $qualifiedName: gap @+$offsetBits bits len=$lengthBits between $prevStr..$nextStr",
-                    )
+        sink.debug(
+            "diagnostics",
+            buildString {
+                if (gapCensus.isNotEmpty()) {
+                    appendLine("=== gap census ===")
+                    for ((qualifiedName, gaps) in gapCensus) {
+                        for ((offsetBits, lengthBits, prevField, nextField) in gaps) {
+                            val prevStr = prevField ?: "(start)"
+                            val nextStr = nextField ?: "(end)"
+                            appendLine(
+                                "  $qualifiedName: gap @+$offsetBits bits len=$lengthBits between $prevStr..$nextStr",
+                            )
+                        }
+                    }
                 }
-            }
-        }
+            }.trimEnd(),
+        )
     }
 }

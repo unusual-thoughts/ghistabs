@@ -5,6 +5,7 @@ import ghidra.app.util.bin.ByteArrayProvider
 import ghidra.program.model.data.*
 import ghidra.program.model.listing.Program
 import ghidra.program.model.mem.MemoryBlock
+import ghidra.util.task.TaskMonitor
 import ghistabs.byteProvider
 import kotlinx.serialization.Serializable
 
@@ -316,9 +317,16 @@ class StabReader(
         },
     )
 
-    fun readAll(): Result {
+    fun readAll(monitor: TaskMonitor = TaskMonitor.DUMMY): Result {
         var total = 0
-        val records = mergeContinuations(physicalRecords().onEach { total++ })
+        // Fixed-size records, so the count is the section length — known before reading any of them.
+        monitor.initialize(stab.length() / STAB_RECORD_SIZE, "Stabs: reading records")
+        val records = mergeContinuations(
+            physicalRecords().onEach {
+                total++
+                monitor.increment()
+            },
+        )
         return Result(
             records = records,
             totalRecordCount = total,

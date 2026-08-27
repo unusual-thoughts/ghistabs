@@ -54,9 +54,11 @@ class StabSectionOverlay(private val ctx: ImportContext<*>) : DiagnosticSink by 
         val records = StabReader.fromProgram(program)?.physicalRecords()?.toList().orEmpty()
         if (records.isEmpty()) return 0
 
+        ctx.monitor.initialize(records.size.toLong(), "Stabs: overlaying stab records")
         program.runTransaction("Stabs: overlay stab records") {
             var funcStart: Address? = null
             records.forEach { rec ->
+                ctx.monitor.increment()
                 if (rec.type == StabType.N_FUN) {
                     funcStart = rec.name.ifEmpty { null }?.let { ctx.resolver.buildAddress(rec.value) }
                 }

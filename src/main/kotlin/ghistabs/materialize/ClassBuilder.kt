@@ -521,7 +521,9 @@ class ClassBuilder(
             .distinctBy { (addr, _) -> addr }
             .toList()
 
+        ctx.monitor.initialize(unclaimed.size.toLong(), "Stabs: sweeping unclaimed vtables")
         for ((addr, qualified) in unclaimed) {
+            ctx.monitor.increment()
             val shape = program.vtableShape(addr, resolver)
             val targets = program.vtableSlotTargets(shape.addressPoint, resolver)
             if (targets.isEmpty()) {
