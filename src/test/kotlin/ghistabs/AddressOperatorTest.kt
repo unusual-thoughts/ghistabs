@@ -41,6 +41,13 @@ class AddressOperatorTest {
     }
 
     @Test
+    fun `an end at the first address of the space is empty, not an underflow`() {
+        val range = addr(0)..<addr(0)
+        range.length mustBe 0L
+        range.mustNot { contains(addr(0)) }
+    }
+
+    @Test
     fun `an end below the start is empty, not swapped`() {
         val range = addr(0x110)..<addr(0x100)
         range.length mustBe 0L

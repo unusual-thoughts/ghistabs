@@ -26,14 +26,20 @@ operator fun Address.minus(rhs: Long): Address = subtractNoWrap(rhs)
 operator fun Address.minus(rhs: Int): Address = subtractNoWrap(rhs.toLong())
 operator fun Address.minus(rhs: Address): Long = subtract(rhs)
 
+/** The empty range at this address. Ghidra spells emptiness `max == min - 1`, which the first address
+ *  of a space cannot express — there it is spelled `min == max + 1`, one above. Both are zero-length
+ *  and contain nothing. */
+private fun Address.emptyRange(): AddressRange = AddressRangeImpl(if (previous() == null) next() else this, 0)
+
 /** `a..b`. Built by length for the same reason as [rangeUntil]: bounds that arrive out of order would
  *  otherwise be swapped into a range that looks valid, so `b..a` would come back as `[a, b]`. */
-operator fun Address.rangeTo(rhs: Address): AddressRange = AddressRangeImpl(this, (rhs - this + 1).coerceAtLeast(0))
+operator fun Address.rangeTo(rhs: Address): AddressRange = if (rhs < this) emptyRange() else AddressRangeImpl(this, rhs)
 
 /** `a..<b`. Built by length rather than by bounds: the two-address constructor swaps what arrives out
- *  of order, so `a..<a` would come back as `[a-1, a]`, while a length of 0 is an empty range that
- *  contains nothing — the honest answer for an exclusive end at or below the start. */
-operator fun Address.rangeUntil(rhs: Address): AddressRange = AddressRangeImpl(this, (rhs - this).coerceAtLeast(0))
+ *  of order, so `a..<a` would come back as `[a-1, a]`, while an empty range contains nothing — the
+ *  honest answer for an exclusive end at or below the start. */
+operator fun Address.rangeUntil(rhs: Address): AddressRange =
+    if (rhs <= this) emptyRange() else AddressRangeImpl(this, rhs - 1)
 
 operator fun AddressSetView.minus(addrs: AddressSetView): AddressSet = subtract(addrs)
 operator fun AddressSetView.minus(range: AddressRange): AddressSet = subtract(AddressSet(range))
