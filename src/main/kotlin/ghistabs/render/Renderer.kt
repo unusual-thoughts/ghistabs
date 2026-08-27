@@ -18,6 +18,7 @@ import ghistabs.importer.LocalSources
 import ghistabs.materialize.TemplateNameShortener
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
+import ghistabs.render.Renderer.Companion.DECOMPILE_SECONDS
 import ghistabs.runTransaction
 import ghistabs.scan.Definition
 import ghistabs.scan.Preprocessed
@@ -25,15 +26,6 @@ import ghistabs.scan.SourceIndexes
 import java.io.Closeable
 import java.io.File
 import java.util.*
-
-enum class Mode {
-    SKELETON,
-    DECOMPILE,
-
-    // Elide gcc SjLj exception scaffolding (the __Unwind_SjLj_* calls, personality store, and the
-    // per-call-site index writes) from decompilation output. No-op on DWARF-EH (ELF) binaries.
-    ELIDE_SJLJ,
-}
 
 class Renderer(
     val index: HarvestIndex,
@@ -52,6 +44,15 @@ class Renderer(
     val sink: DiagnosticSink,
 ) : Closeable,
     DiagnosticSink by sink {
+    enum class Mode {
+        SKELETON,
+        DECOMPILE,
+
+        // Elide gcc SjLj exception scaffolding (the __Unwind_SjLj_* calls, personality store, and the
+        // per-call-site index writes) from decompilation output. No-op on DWARF-EH (ELF) binaries.
+        ELIDE_SJLJ,
+    }
+
     /**
      * Collapses long template spellings (`basic_string<char,…>` → `string`) across *everything* the
      * render emits, declarations and decompiled code alike. Shortening only the AST half is what left
@@ -323,14 +324,16 @@ class Renderer(
     override fun close() {
         decomp?.dispose()
     }
+
+    companion object {
+        // Ghidra's own default is 30s; a function that needs longer is rare enough to be worth naming
+        // rather than waiting for (§40).
+        private const val DECOMPILE_SECONDS = 30
+
+        /** How far off gcc's declaration line the source's own may be — see [Renderer.declarerOf]. */
+        private const val DECL_SLACK = 1
+
+        /** What a compiler is handed on the command line; everything else a unit reaches by #include. */
+        private val UNIT_EXTENSIONS = setOf("c", "cc", "cpp", "cxx", "c++", "C", "ii")
+    }
 }
-
-// Ghidra's own default is 30s; a function that needs longer is rare enough to be worth naming
-// rather than waiting for (§40).
-private const val DECOMPILE_SECONDS = 30
-
-/** How far off gcc's declaration line the source's own may be — see [Renderer.declarerOf]. */
-private const val DECL_SLACK = 1
-
-/** What a compiler is handed on the command line; everything else a unit reaches by #include. */
-private val UNIT_EXTENSIONS = setOf("c", "cc", "cpp", "cxx", "c++", "C", "ii")

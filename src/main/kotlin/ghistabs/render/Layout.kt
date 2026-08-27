@@ -1,5 +1,7 @@
 package ghistabs.render
 
+import ghistabs.harvest.Type
+
 /**
  * Break a long decompiler statement across rows at its shallowest `&&`/`||` boundaries, so a crammed
  * `if` condition (Ghidra wraps then §9 rejoins onto one 300-char row) spreads into blank rows instead.
@@ -26,6 +28,34 @@ private fun splitCondition(text: String, span: IntRange, cuts: List<Cut>, minLen
     return spans.flatMap { splitCondition(text, it, cuts, minLen) }
 }
 
+// "L  17" — the source-line reference stamped on every tag.
+private fun lineRef(line: Int) = "L" + line.toString().padStart(4)
+
+/**
+ * How a row's [note] is spelled once it reaches the page.
+ *
+ * Four cases, because four is how many the rendered text actually distinguishes. The `FragmentKind`
+ * this replaces had eight, five of which ([DECLARATION]'s) produced the same comment — a distinction
+ * that existed only to be mapped back from [Owner], and had to be kept in step with it for no gain.
+ */
+enum class NoteShape {
+    /** An N_SLINE address annotation: which instructions the line compiled to. */
+    SLINE,
+
+    /** A function's opening or closing brace, naming what it delimits. */
+    DELIMITER,
+
+    /**
+     * Which source line a decompiled statement's instructions came from. Reaches [commentFor] only
+     * for a row with no code of its own; where there is code the marker goes in *front* of it, which
+     * [TargetLine.render] does because collapsing repeats needs the whole row.
+     */
+    PROVENANCE,
+
+    /** A declaration's provenance tag, carrying its role — the shape everything else takes. */
+    DECLARATION,
+}
+
 // Pure layout model: Canvas ⊃ TargetLine ⊃ Fragment.
 
 // One piece of a line, fully semantic: [code] is the C text (null for a bare comment), [note] the
@@ -41,7 +71,17 @@ data class Fragment(
     val note: String? = null,
     val shape: NoteShape = NoteShape.DECLARATION,
 ) {
-    fun commentAt(line: Int) = note?.let { commentFor(line, shape, it) }
+    /**
+     * The trailing comment for a fragment carrying [note] at [line], shaped by [shape]. A [DECLARATION]
+     * tag's [note] is the role: empty for a typedef or type body, "(param)" and the like for a decl.
+     */
+    fun commentAt(line: Int) = when (shape) {
+        else if note == null -> null
+        NoteShape.SLINE -> "// ${lineRef(line)} @ $note"
+        NoteShape.DELIMITER -> "/* ${lineRef(line)} — $note */"
+        NoteShape.PROVENANCE -> "// ⇐ $note"
+        NoteShape.DECLARATION -> "// ${lineRef(line)}" + if (note.isEmpty()) "" else " $note"
+    }
 }
 
 // An empty block and the markers naming what was inlined out of it: `for (…) { }` followed by
@@ -161,4 +201,19 @@ class Canvas(maxLine: Int?) : ClosedRange<Int> {
     }
 
     override fun toString() = render(trim = false)
+}
+
+/** The furthest line anything attests to, or null where nothing does — never a zero standing in. */
+internal fun extentOf(vararg lines: Int?) = lines.filterNotNull().maxOrNull()
+
+/**
+ * Past an extent, where a file that reaches nothing is reached past by everything: the extents are
+ * what a line is judged against, and "no evidence" was the case that judged every line stale before
+ * they could be null. A null [this] is no line at all, so it is past nothing.
+ */
+internal fun Int?.beyond(extent: Int?) = this != null && (extent == null || this > extent)
+
+/** One stabs variable of a function, declared in this file: where gcc put it and how it renders. */
+data class Var(val line: Int?, val name: String, val text: String, val role: String?) {
+    fun declKey() = line?.let { Type.Decl(it, name) }
 }

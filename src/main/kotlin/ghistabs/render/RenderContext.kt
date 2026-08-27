@@ -9,9 +9,6 @@ import ghistabs.materialize.itanium.Itanium
 import ghistabs.materialize.resolveBuiltin
 import ghistabs.parse.*
 
-/** One stabs variable of a function, declared in this file: where gcc put it and how it renders. */
-data class Var(val line: Int?, val name: String, val text: String, val role: String?)
-
 interface RenderContext {
     val source: GhidraSourceFile
     val renderer: Renderer
@@ -262,11 +259,10 @@ interface RenderContext {
     // A global/static: the linker's data at [addr] renders as its initializer — a scalar
     // inline, a multi-element aggregate spread over the blank lines below (the same
     // brace-block layout as a struct body).
-    fun emitGlobal(rec: StaticSymbol): Claim {
-        val sym = rec.body
-        val scope = sym.scope.comment()
-        val role = when (rec.recordType) {
-            StabType.N_GSYM if sym.scope == StaticScope.GLOBAL -> "(global)"
+    fun StaticSymbol.emitGlobal(): Claim {
+        val scope = body.scope.comment()
+        val role = when (recordType) {
+            StabType.N_GSYM if body.scope == StaticScope.GLOBAL -> "(global)"
             StabType.N_GSYM -> "(weird global $scope)"
             StabType.N_LCSYM -> "(.bss $scope)"
             StabType.N_STSYM -> "(.data $scope)"
@@ -274,19 +270,19 @@ interface RenderContext {
             else -> "($scope)"
         }
         // N_GSYM has rawValue=0 (linker resolves it from the mangled name) — look it up.
-        val addr = resolver.forSymbol(rec)
+        val addr = resolver.forSymbol(this)
 
         // Without -gstabs+ there is no decl line: the claim is band-anchored (Claim.anchoring), so
         // there is no row to indent against and nothing for staleness to be judged past.
-        val indent = rec.line.indentAt()
-        val base = sym.type.renderDecl(sym.name)
+        val indent = line.indentAt()
+        val base = body.type.renderDecl(body.name)
         // A string-valued global (pointer-to-string whose slot Ghidra left an untyped
         // scalar, or a char[N] holding an RTTI/string literal) renders as one quoted
         // literal; initializerAt would otherwise miss it or spread a per-byte list.
         val literal = addr?.let {
             when {
-                sym.type.isPointer(index) -> program.pointerString(it)
-                sym.type.isCharArray(index) -> program.stringLiteralAt(it)
+                body.type.isPointer(index) -> program.pointerString(it)
+                body.type.isCharArray(index) -> program.stringLiteralAt(it)
                 else -> null
             }
         }
@@ -296,14 +292,14 @@ interface RenderContext {
         // WINNING_GDB), so these are the *most* likely records to be filed under the wrong source —
         // twenty `vmN_trapset_names` tables from a header gcc filed into main.cpp, reaching L1342 in a
         // file whose code stops at L166. See §38.
-        val stale = rec.line.isStale()
-        val owner = if (Itanium.isGeneratedData(sym.name)) Owner.GENERATED else Owner.GLOBAL
+        val stale = line.isStale()
+        val owner = if (Itanium.isGeneratedData(body.name)) Owner.GENERATED else Owner.GLOBAL
         return when {
-            parts == null -> Claim(owner, rec.line, listOf(Row("$base;", indent, role)), stale = stale)
+            parts == null -> Claim(owner, line, listOf(Row("$base;", indent, role)), stale = stale)
 
             parts.size == 1 -> Claim(
                 owner,
-                rec.line,
+                line,
                 listOf(Row("$base = ${parts[0]};", indent, role)),
                 stale = stale,
             )
@@ -311,7 +307,7 @@ interface RenderContext {
             // A multi-element aggregate knows where it starts and not where it ends.
             else -> Claim(
                 owner,
-                rec.line,
+                line,
                 FileRenderer.braceRows("$base = {", parts.map { "$it," }, "};", indent, role),
                 Fit.ELASTIC,
                 stale,

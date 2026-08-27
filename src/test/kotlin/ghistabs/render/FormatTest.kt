@@ -3,19 +3,27 @@ package ghistabs.render
 import ghistabs.test.mustBe
 import org.junit.jupiter.api.Test
 
-/** Pins [commentFor]: the comment each [NoteShape] spells, and the padding of the line reference. */
+/** Pins [Fragment.commentAt]: the comment each [NoteShape] spells, and the padding of the line reference. */
 class FormatTest {
+    private fun note(note: String?, shape: NoteShape) = Fragment(note = note, shape = shape)
+
     @Test
     fun `each shape has its own comment`() {
-        commentFor(17, NoteShape.SLINE, "0x1000: mov") mustBe "// L  17 @ 0x1000: mov"
-        commentFor(17, NoteShape.DELIMITER, "opens Foo") mustBe "/* L  17 — opens Foo */"
-        commentFor(17, NoteShape.PROVENANCE, "L 42") mustBe "// ⇐ L 42"
+        note("0x1000: mov", NoteShape.SLINE).commentAt(17) mustBe "// L  17 @ 0x1000: mov"
+        note("opens Foo", NoteShape.DELIMITER).commentAt(17) mustBe "/* L  17 — opens Foo */"
+        note("L 42", NoteShape.PROVENANCE).commentAt(17) mustBe "// ⇐ L 42"
     }
 
     @Test
     fun `a declaration tag carries the role and pads the line ref`() {
-        commentFor(1, NoteShape.DECLARATION, "") mustBe "// L   1"
-        commentFor(17, NoteShape.DECLARATION, "(param)") mustBe "// L  17 (param)"
+        note("", NoteShape.DECLARATION).commentAt(1) mustBe "// L   1"
+        note("(param)", NoteShape.DECLARATION).commentAt(17) mustBe "// L  17 (param)"
+    }
+
+    /** A pure-code fragment has no payload, and a comment shape it never uses spells nothing. */
+    @Test
+    fun `no note is no comment, whatever the shape`() {
+        NoteShape.entries.map { note(null, it).commentAt(17) } mustBe NoteShape.entries.map { null }
     }
 
     @Test

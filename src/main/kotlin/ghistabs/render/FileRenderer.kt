@@ -165,7 +165,7 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
     // on the line-based canvas. Append them as a skeleton-only diagnostic block under their synthetic
     // Anon_ id; decomp omits them entirely. Deduped by ghidraName (content-hashed, §20).
     private fun anonAggregateAppendix(): String {
-        if (renderer.mode != Mode.SKELETON) return ""
+        if (renderer.mode != Renderer.Mode.SKELETON) return ""
         val anon = renderer.index.anonAggregates[source]
 
         if (anon.isNullOrEmpty()) return ""
@@ -350,9 +350,9 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
 
     // One declaration per (line, name); `this` never renders. Guards every decl pass. Not bounded by
     // the canvas — a declaration past it is the allocator's to turn away, and the appendix's to show.
-    private fun dedup(line: Int?, name: String) = line != null && name != "this" && seenDecls.add(Type.Decl(line, name))
+    private fun Type.Decl?.dedup() = this != null && name != "this" && seenDecls.add(Type.Decl(line, name))
 
-    private fun varsOf(f: Func): List<Var> = (f.params + f.locals).filter { it.sourceFile == source }.mapNotNull {
+    private fun Func.vars(): List<Var> = (params + locals).filter { it.sourceFile == source }.mapNotNull {
         it.renderVar(renderer.showStorage)
     }
 
@@ -363,7 +363,7 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
         // rest lost the contested row to the body and left the file entirely.
         return rawFuncs.filterNot { it in bodied }.flatMap { f ->
             val span = with(spans) { rangeByFunc[f]?.span }
-            varsOf(f).filter { dedup(it.line, it.name) }.map {
+            f.vars().filter { it.declKey().dedup() }.map {
                 Claim(
                     Owner.LOCAL,
                     it.line,
@@ -382,7 +382,7 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
     // appendix like any claim that lost its row. A real one carries `enclosingFunction` and stays.
     private fun globalClaims(): List<Claim> {
         val claims = statics.mapNotNull { s ->
-            s.takeIf { dedup(s.line, s.body.name) }?.let { emitGlobal(s) to s }
+            s.takeIf { s.declKey().dedup() }?.let { s.emitGlobal() to s }
         }
         val reasons = claims.mapNotNull { (claim, s) ->
             when {
@@ -529,7 +529,7 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
             // Merged by name into the head — the head already *is* the declaration block, so a stabs
             // local has somewhere to go that isn't a row the body wants. Kept out of `dedup` so a
             // later pass can still place a same-named file-scope declaration.
-            val vars = varsOf(r.func).distinctBy { it.name }
+            val vars = r.func.vars().distinctBy { it.name }
             val extra = vars.filterNot { it.name in head.declares }
             // Storage goes in one trailing block comment rather than beside each declarator: the head
             // groups same-typed locals into `int a,b,c;`, so there is no per-name position to annotate
@@ -719,13 +719,3 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
         }
     }
 }
-
-/** The furthest line anything attests to, or null where nothing does — never a zero standing in. */
-internal fun extentOf(vararg lines: Int?) = lines.filterNotNull().maxOrNull()
-
-/**
- * Past an extent, where a file that reaches nothing is reached past by everything: the extents are
- * what a line is judged against, and "no evidence" was the case that judged every line stale before
- * they could be null. A null [this] is no line at all, so it is past nothing.
- */
-internal fun Int?.beyond(extent: Int?) = this != null && (extent == null || this > extent)

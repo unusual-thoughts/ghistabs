@@ -148,10 +148,6 @@
             "min": 33,
             "max": 33
         },
-        "done": {
-            "min": 1,
-            "max": 1
-        },
         "drop-record-opt": {
             "min": 33,
             "max": 33
@@ -296,6 +292,10 @@
             "min": 36903,
             "max": 36903
         },
+        "import": {
+            "min": 1,
+            "max": 1
+        },
         "inheritance-applied": {
             "min": 733,
             "max": 733
@@ -317,7 +317,7 @@
             "max": 492
         },
         "local-var-skipped-dup-param": {
-            "min": 685,
+            "min": 708,
             "max": 708
         },
         "placeholder-created": {
@@ -370,11 +370,11 @@
         },
         "text-data-no-coverage": {
             "min": 485,
-            "max": 493
+            "max": 485
         },
         "text-undisassembled-code": {
             "min": 3107,
-            "max": 3118
+            "max": 3107
         },
         "textrange-entries": {
             "min": 3173,

@@ -15,7 +15,6 @@ import ghistabs.harvest.HarvestIndex
 import ghistabs.harvest.Harvester
 import ghistabs.importer.ImportContext
 import ghistabs.parse.StabReader
-import ghistabs.render.Mode
 import ghistabs.render.Renderer
 import java.io.File
 
@@ -35,7 +34,7 @@ import java.io.File
 sealed class StabsRenderExporter(name: String, extension: String, val options: StabOptions = StabOptions()) :
     Exporter(name, extension, HelpLocation("Stabs", "Stabs_Export_Decompilation")),
     StabOption.Set by options {
-    protected abstract val mode: Mode
+    protected abstract val mode: Renderer.Mode
 
     // Declaring the property is what enrols the option, here and in any subclass — see [OptionSet].
     private val outputDir by OUTPUT_DIR
@@ -116,10 +115,10 @@ class StabsDecompExporter : StabsRenderExporter("Stabs Decompilation", "decomp")
     // decompilation. Either way a no-op on DWARF-EH (ELF).
     private val elideSjlj by ELIDE_SJLJ
 
-    override val mode get() = if (elideSjlj) Mode.ELIDE_SJLJ else Mode.DECOMPILE
+    override val mode get() = if (elideSjlj) Renderer.Mode.ELIDE_SJLJ else Renderer.Mode.DECOMPILE
 }
 
 /** Declarations at their original lines and no code, `.skeleton`. */
 class StabsSkeletonExporter : StabsRenderExporter("Stabs Source Skeleton", "skeleton") {
-    override val mode = Mode.SKELETON
+    override val mode = Renderer.Mode.SKELETON
 }
