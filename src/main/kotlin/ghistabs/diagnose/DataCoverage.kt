@@ -31,7 +31,6 @@ private const val ALIGN_PADDING = 16L
  * the enclosing N_SO source file).
  */
 fun ImportContext<*>.analyzeDataCoverage() {
-    monitor.message = "Stabs: analysing data coverage"
     val cuStarts by lazy { cuTextStarts() }
     for (block in program.memory.blocks) {
         if (!block.isRead || block.isMapped || block.name in NON_DATA_BLOCKS || block.name.startsWith(".debug")) {

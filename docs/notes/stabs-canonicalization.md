@@ -56,7 +56,7 @@ When a stab string in a type-carrying record exceeds the compiler's line-length 
 
 **Implication:** `Parser.kt` must accumulate continuations during stab reading, merging them before parsing the complete type string.
 
-**Source:** **Stabs.kt** lines 294–428 (continuation merging logic and `TYPES_WITH_CONTINUATION` set definition).
+**Source:** **Stabs.kt** lines 294–428 (continuation merging logic and `WITH_CONTINUATION` set definition).
 
 ---
 
@@ -529,7 +529,7 @@ This section evaluates the pipeline layering, data-flow boundaries, and context 
 **Finding:** The boundary is clean. Parser is stateless and produces only grammar-level ASTs. Harvester manages all stream state (CU tracking, include contexts, symbol accumulation). 
 
 However:
-- **Continuation-line joining** (backslash-terminated records) is performed by `Stabs.kt` before Parser sees the string (**Stabs.kt** lines 294–428, `TYPES_WITH_CONTINUATION` set). This is correctly located at the record level, not Parser level, since continuation is a physical-record property, not a grammar property.
+- **Continuation-line joining** (backslash-terminated records) is performed by `Stabs.kt` before Parser sees the string (**Stabs.kt** lines 294–428, `WITH_CONTINUATION` set). This is correctly located at the record level, not Parser level, since continuation is a physical-record property, not a grammar property.
 - **No logic in Parser consumes or produces Harvest-level data structures.** All typing metadata (`LocalTypeId`, type-ID resolution) is Parser's concern; all stream state is Harvester's.
 - **LocalTypeId → GlobalTypeId globalization** happens in Harvester (`globalize()` method, lines 333–373), after Parser produces `TypeDecl<LocalTypeId>`. This is correct: the globalization step requires knowledge of the current `IncludeContext`, which Parser has no access to.
 
@@ -690,7 +690,7 @@ Boundaries are clean; data flows unidirectionally downstream (Harvest → TypeRe
   - `start_symtab()` / `end_symtab()` - CU open/close
 
 - **ghistabs codebase:**
-  - **Stabs.kt** lines 294–428: `TYPES_WITH_CONTINUATION` set and continuation record merging logic
+  - **Stabs.kt** lines 294–428: `WITH_CONTINUATION` set and continuation record merging logic
   - **ghistabs/parser/IdInterface.kt**: `LocalTypeId`, `GlobalTypeId`, `SourceFile` definitions
   - **ghistabs/parser/IncludeContext.kt** line 26: `recall()` method for forward-EXCL placeholder creation
   - **ghistabs/parser/IncludeContext.kt** line 64: `beginInclude()` method for header block allocation

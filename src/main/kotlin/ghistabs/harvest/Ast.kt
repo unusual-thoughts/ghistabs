@@ -111,6 +111,8 @@ data class Symbol<S : SymbolDecl<GlobalTypeId>>(
     fun <T : SymbolDecl<GlobalTypeId>> retype(body: T) =
         Symbol(recordIndex, recordType, body, rawValue, sourceFile, line, enclosingFunction)
 
+    fun declKey() = line?.let { Type.Decl(it, body.name) }
+
     val location get() = when (body) {
         is SymbolDecl.Local<*> -> body.location
         is SymbolDecl.Param<*> -> body.location

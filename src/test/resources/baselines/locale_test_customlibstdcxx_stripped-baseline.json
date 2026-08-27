@@ -104,10 +104,6 @@
             "min": 122,
             "max": 122
         },
-        "done": {
-            "min": 1,
-            "max": 1
-        },
         "drop-record-bnsym": {
             "min": 2971,
             "max": 2971
@@ -292,6 +288,10 @@
             "min": 58848,
             "max": 58848
         },
+        "import": {
+            "min": 1,
+            "max": 1
+        },
         "inheritance-applied": {
             "min": 130,
             "max": 130
@@ -382,11 +382,11 @@
         },
         "text-data-no-coverage": {
             "min": 13,
-            "max": 16
+            "max": 13
         },
         "text-undisassembled-code": {
             "min": 307,
-            "max": 344
+            "max": 307
         },
         "textrange-entries": {
             "min": 903,

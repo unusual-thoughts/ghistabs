@@ -160,10 +160,6 @@
             "min": 155,
             "max": 155
         },
-        "done": {
-            "min": 1,
-            "max": 1
-        },
         "drop-record-bnsym": {
             "min": 2841,
             "max": 2841
@@ -340,6 +336,10 @@
             "min": 92232,
             "max": 92232
         },
+        "import": {
+            "min": 1,
+            "max": 1
+        },
         "inheritance-applied": {
             "min": 888,
             "max": 888
@@ -361,7 +361,7 @@
             "max": 580
         },
         "local-var-skipped-dup-param": {
-            "min": 1018,
+            "min": 1043,
             "max": 1043
         },
         "method-implicit-not-emitted": {
@@ -442,11 +442,11 @@
         },
         "text-data-no-coverage": {
             "min": 3,
-            "max": 14
+            "max": 3
         },
         "text-undisassembled-code": {
             "min": 370,
-            "max": 492
+            "max": 370
         },
         "textrange-entries": {
             "min": 4014,
