@@ -34,7 +34,7 @@ tasks.register<JavaExec>("runCli") {
  */
 val cliJar = tasks.register<Jar>("cliJar") {
     description = "Generate the JAR for headless skeleton/decomp CLI"
-    archiveBaseName.set("ghidra-stabs-cli")
+    archiveBaseName.set("ghistabs-cli")
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     manifest {
         attributes(mapOf("Main-Class" to cliMain))
@@ -52,13 +52,14 @@ val cliJar = tasks.register<Jar>("cliJar") {
 }.flatMap { it.archiveFile }
 
 /**
- * Standalone launcher at `build/libs/ghidra-stabs` that runs the fat CLI JAR at `build/libs/ghidra-stabs.jar`
+ * Standalone launcher at `build/libs/ghistabs` that runs the fat CLI JAR at `build/libs/ghistabs-cli.jar`
  * and builds the classpath with ghidra's jars
  */
-val cliScript = tasks.register("cliScript") {
+val buildCli = tasks.register("buildCli") {
     group = "application"
-    description = "Generate a standalone launcher script for the CLI at build/cli/ghidra-stabs"
-    val script = layout.buildDirectory.dir("libs").map { it.file(("ghidra-stabs")) }
+    description = "Build the fat CLI jar and its standalone launcher at build/libs/ghistabs"
+    dependsOn(cliJar) // the launcher is useless without the jar it puts on the classpath
+    val script = layout.buildDirectory.dir("libs").map { it.file(("ghistabs")) }
     val runtimeClasspath = cli.runtimeClasspath
     val ghidraRoot = ghidraInstallDir // resolved here: doLast must not capture the Project
     outputs.file(script)
@@ -77,7 +78,7 @@ val cliScript = tasks.register("cliScript") {
                     appendLine("GHIDRA_INSTALL_DIR=\"\${GHIDRA_INSTALL_DIR:-$ghidraRoot}\"")
                     appendLine($$"dir=$(CDPATH= cd -- \"$(dirname -- \"$0\")\" && pwd)")
                     appendLine("exec java ${cliJvmargs.joinToString(" ")} \\")
-                    appendLine($$"  -cp \"$dir/ghidra-stabs-cli.jar:$$classpath\" \\")
+                    appendLine($$"  -cp \"$dir/ghistabs-cli.jar:$$classpath\" \\")
                     appendLine("  $cliMain \"$@\"")
                 },
             )
@@ -86,14 +87,14 @@ val cliScript = tasks.register("cliScript") {
     }
 }.map { it.outputs.files.singleFile }
 
-tasks.register<Zip>("zipCli") {
+tasks.register<Zip>("packageCli") {
     description = "Build CLI distribution zip"
     inputs.file(cliJar)
-    inputs.file(cliScript)
+    inputs.file(buildCli)
     archiveFileName.set("ghistabs-cli.zip")
     destinationDirectory.set(layout.projectDirectory.dir("dist"))
     from(
         cliJar,
-        cliScript,
+        buildCli,
     )
 }
