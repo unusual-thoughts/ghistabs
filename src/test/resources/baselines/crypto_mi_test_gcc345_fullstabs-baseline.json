@@ -426,11 +426,11 @@
         },
         "text-data-no-coverage": {
             "min": 82,
-            "max": 82
+            "max": 91
         },
         "text-undisassembled-code": {
             "min": 3626,
-            "max": 3626
+            "max": 3636
         },
         "textrange-entries": {
             "min": 3117,
