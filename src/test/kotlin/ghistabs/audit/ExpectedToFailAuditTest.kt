@@ -21,7 +21,7 @@ import java.io.File
  * Corpus-level, like [DemanglerWhitelistAuditTest], and for the same reason: an entry is dead only if
  * *no* fixture×mode invocation failed on it, which is not knowable until the whole run is in. Reads the
  * per-fork dumps [ghistabs.test.ExpectedToFailExtension] writes into `test-output/results/` and is run by the
- * `:auditWhitelist` task that `integrationTest` is finalizedBy.
+ * `:auditTests` task that `integrationTest` is finalizedBy.
  */
 @Tag("audit")
 class ExpectedToFailAuditTest {

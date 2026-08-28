@@ -1,4 +1,4 @@
-# ghidra-stabs
+# ghistabs
 
 A Ghidra extension that imports [**STABS**](https://sourceware.org/gdb/onlinedocs/stabs.pdf) debug
 info (`.stab` / `.stabstr`) into a program: data types, function signatures, parameters and locals,
@@ -77,7 +77,7 @@ release it was built against.
 export GHIDRA_INSTALL_DIR=/opt/ghidra   # or pass -PGHIDRA_INSTALL_DIR=...
 ./gradlew buildExtension                # zip under dist/
 ./gradlew installExtension              # build + install into the Ghidra user dir
-./gradlew buildCli                      # standalone headless CLI at build/cli/ghidra-stabs
+./gradlew buildCli                      # standalone headless CLI at build/libs/ghistabs
 ./gradlew test                          # unit tests (see TESTING.md for the other tiers)
 ```
 
@@ -152,14 +152,14 @@ compiler scaffolding as missing.
 
 ## Headless CLI
 
-`./gradlew buildCli` emits a self-contained launcher at `build/cli/ghidra-stabs` that boots
+`./gradlew buildCli` emits a self-contained launcher at `build/libs/ghistabs` that boots
 Ghidra, loads a binary, runs full auto-analysis plus the stabs import, and renders every
 source file — no GUI, no Ghidra project. (`./gradlew runCli -Pargs="…"` runs the same entry
 point in-process.)
 
 ```bash
-build/cli/ghidra-stabs skeleton myprogram.exe -d out/skeletons
-build/cli/ghidra-stabs decomp   myprogram.exe -d out/decomps --shorten-typedefs
+build/libs/ghistabs skeleton myprogram.exe -d out/skeletons
+build/libs/ghistabs decomp   myprogram.exe -d out/decomps --shorten-typedefs
 ```
 
 The two modes are not the same output with decompilation bolted on — they answer different

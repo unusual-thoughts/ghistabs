@@ -7,7 +7,7 @@ registerHeadlessTest(
     "Real-binary assertion tests against binary fixtures (@Tag(\"integration\"))",
     tag = "integration",
     narrowGeneratedClasses = true,
-) { finalizedBy(auditWhitelist) }
+) { finalizedBy(auditTests) }
 
 // Imports a real fixture against exactly what we ship: serializers get reached from class
 // initializers, so a missing `-json` fails in the GUI while every ordinary test passes.
@@ -17,7 +17,7 @@ registerHeadlessTest(
     tag = "integration",
 ) {
     classpath = classpath.filter { !it.name.startsWith("kotlinx-serialization-json") }
-    filter { includeTestsMatching("ghistabs.AoutStabsIntegrationTest") }
+    filter { includeTestsMatching("ghistabs.integration.AoutStabsIntegrationTest") }
 }
 
 // Own task, not `integrationTest --tests`: Gradle ANDs that with the generated-class filter, which
@@ -36,7 +36,7 @@ registerHeadlessTest(
 )
 
 // Reads the dumps integrationTest wrote, so it must run after it — and needs no headless config.
-val auditWhitelist = tasks.register<Test>("auditWhitelist") {
+val auditTests = tasks.register<Test>("auditTests") {
     description = "Corpus-level audits over the dumps integrationTest wrote"
     useJUnitPlatform { includeTags("audit") }
     testClassesDirs = sourceSets["test"].output.classesDirs

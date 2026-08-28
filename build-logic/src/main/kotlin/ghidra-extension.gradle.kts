@@ -27,7 +27,7 @@ tasks.register("installExtension") {
     group = "ghidra"
     description = "Build and install the extension into the Ghidra user extensions directory"
     dependsOn("buildExtension")
-    val projectName = name
+    val projectName = project.name // not `name`: inside register{} that is the task's own name
     val extensionDir = ghidraUserDir.resolve("Extensions")
     val zip = (tasks.named("buildExtension").get() as Zip).archiveFile
     doLast {

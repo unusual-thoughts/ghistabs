@@ -30,7 +30,7 @@ import ghistabs.importer.ImportContext
 import ghistabs.render.Renderer
 import ghistabs.runTransaction
 
-fun main(args: Array<String>) = NoOpCliktCommand(name = "ghidra-stabs")
+fun main(args: Array<String>) = NoOpCliktCommand(name = "ghistabs")
     .subcommands(SkeletonCommand(), DecompCommand())
     .main(args)
 
