@@ -32,7 +32,7 @@ interface RenderContext {
      * on legitimately deep types (e.g. an array of const char pointers:
      * Array→InlineDef→Const→Ref→Pointer→Ref→Const→Ref→char).
      */
-    fun TypeDecl<GlobalTypeId>.render(seen: Set<GlobalTypeId> = emptySet()): String = when (this) {
+    fun GlobalTypeDecl.render(seen: Set<GlobalTypeId> = emptySet()): String = when (this) {
         TypeDecl.Void -> "void"
 
         is TypeDecl.Ref -> {
@@ -89,7 +89,7 @@ interface RenderContext {
     }
 
     /** True if this resolves to a pointer, seeing through refs, cv-qualifiers and typedefs. */
-    fun TypeDecl<GlobalTypeId>.isPointer(index: HarvestIndex): Boolean = when (this) {
+    fun GlobalTypeDecl.isPointer(index: HarvestIndex): Boolean = when (this) {
         is TypeDecl.Pointer -> true
         is TypeDecl.Const -> inner.isPointer(index)
         is TypeDecl.Volatile -> inner.isPointer(index)
@@ -99,7 +99,7 @@ interface RenderContext {
     }
 
     /** True if this resolves to an array of char — a string literal — through cv-quals and typedefs. */
-    fun TypeDecl<GlobalTypeId>.isCharArray(index: HarvestIndex): Boolean = when (this) {
+    fun GlobalTypeDecl.isCharArray(index: HarvestIndex): Boolean = when (this) {
         is TypeDecl.Array -> element.isCharType(index)
         is TypeDecl.Const -> inner.isCharArray(index)
         is TypeDecl.Volatile -> inner.isCharArray(index)
@@ -108,7 +108,7 @@ interface RenderContext {
         else -> false
     }
 
-    private fun TypeDecl<GlobalTypeId>.isCharType(index: HarvestIndex): Boolean = when (this) {
+    private fun GlobalTypeDecl.isCharType(index: HarvestIndex): Boolean = when (this) {
         is TypeDecl.Const -> inner.isCharType(index)
 
         is TypeDecl.Volatile -> inner.isCharType(index)
@@ -188,7 +188,7 @@ interface RenderContext {
      * name, so `char const[18] _ZTS7XVImage` — which is what type-then-name produces, and what clang
      * rejects with "brackets are not allowed here" — has to be `char const _ZTS7XVImage[18]`.
      */
-    fun TypeDecl<GlobalTypeId>.renderDecl(name: String): String = declarator(render(), name)
+    fun GlobalTypeDecl.renderDecl(name: String): String = declarator(render(), name)
 
     /** A type body on one line — the appendix form, where alignment to a source line is meaningless. */
     fun Type.oneLineBody(): String = when (val b = body) {

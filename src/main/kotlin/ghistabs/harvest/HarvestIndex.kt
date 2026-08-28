@@ -140,7 +140,7 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
     }
 
     /** Multi-body collisions after content-equivalence filtering — only genuinely divergent ones. */
-    val divergentCollisions: Map<GlobalTypeId, Map<String, Set<TypeDecl<GlobalTypeId>>>> by lazy {
+    val divergentCollisions: Map<GlobalTypeId, Map<String, Set<GlobalTypeDecl>>> by lazy {
         harvest.rawCollisions.filterValues { byName ->
             byName.values.flatten().groupBy(::content).size > 1
         }.mapValues { (_, byName) ->
@@ -793,21 +793,21 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
      * Shared by both winner selections (per-key in [classifyGroup], per-content-class in §B): they rank
      * different things — Types vs whole slots — but by one policy, which previously drifted apart.
      */
-    private fun <T> List<T>.pickWinner(bodyOf: (T) -> TypeDecl<GlobalTypeId>, tiebreak: (T) -> String) = maxWith(
+    private fun <T> List<T>.pickWinner(bodyOf: (T) -> GlobalTypeDecl, tiebreak: (T) -> String) = maxWith(
         compareBy<T> { bodyOf(it).sizeBytes }
             .thenBy { (bodyOf(it) as? TypeDecl.Struct)?.methods?.size ?: 0 }
             .thenByDescending { countUnresolvedRefs(bodyOf(it)) }
             .thenBy(tiebreak),
     )
 
-    private fun countUnresolvedRefs(body: TypeDecl<GlobalTypeId>): Int {
+    private fun countUnresolvedRefs(body: GlobalTypeDecl): Int {
         if (body !is TypeDecl.Struct) return 0
         return body.fields.count { f -> walksToUnresolvedRef(f.type) }
     }
 
     /** Id of the struct/union [t] embeds by value (through Ref/InlineDef/Const/Volatile only, never a
      *  pointer/array), or null — the containment edge that scopes a method-less nested member type. */
-    private tailrec fun byValueStructId(t: TypeDecl<GlobalTypeId>): GlobalTypeId? = when (t) {
+    private tailrec fun byValueStructId(t: GlobalTypeDecl): GlobalTypeId? = when (t) {
         is TypeDecl.Ref -> t.id.takeIf { typeAsts[it]?.body is TypeDecl.Struct }
         is TypeDecl.InlineDef -> if (t.inner is TypeDecl.Struct) t.id else byValueStructId(t.inner)
         is TypeDecl.Const -> byValueStructId(t.inner)
@@ -815,7 +815,7 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
         else -> null
     }
 
-    private fun walksToUnresolvedRef(t: TypeDecl<GlobalTypeId>): Boolean = when (t) {
+    private fun walksToUnresolvedRef(t: GlobalTypeDecl): Boolean = when (t) {
         is TypeDecl.Ref -> t.id !in typeAsts
         else -> t.children.any { fields -> fields.any { walksToUnresolvedRef(it) } }
     }

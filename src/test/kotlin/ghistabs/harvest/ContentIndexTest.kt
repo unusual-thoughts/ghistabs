@@ -337,7 +337,7 @@ class ContentIndexTest {
         val methodBindAId = GlobalTypeId(SourceFile.CUSource("Keywords.cpp"), 440)
         val methodBindBId = GlobalTypeId(SourceFile.CUSource("assemble.cpp"), 228)
 
-        fun makePairBody(param0: TypeDecl<GlobalTypeId>): TypeDecl.Struct<GlobalTypeId> = TypeDecl.Struct(
+        fun makePairBody(param0: GlobalTypeDecl): TypeDecl.Struct<GlobalTypeId> = TypeDecl.Struct(
             rawKind = AggrKind.STRUCT,
             sizeBytes = 8L,
             bases = emptyList(),
@@ -522,7 +522,7 @@ class ContentIndexTest {
 
     @Test
     fun contentDistinguishesFieldLayout() {
-        fun cls(fieldType: TypeDecl<GlobalTypeId>) = TypeDecl.Struct(
+        fun cls(fieldType: GlobalTypeDecl) = TypeDecl.Struct(
             rawKind = AggrKind.CLASS,
             sizeBytes = 4,
             bases = emptyList(),

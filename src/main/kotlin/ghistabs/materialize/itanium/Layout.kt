@@ -1,6 +1,7 @@
 package ghistabs.materialize.itanium
 
 import ghistabs.harvest.HarvestIndex
+import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
 import ghistabs.parse.TypeDecl.Struct.Base
@@ -116,7 +117,7 @@ fun HarvestIndex.virtualBases(typeDecl: TypeDecl.Struct<GlobalTypeId>) = buildLi
  *   at the id over `inner`, which is frequently itself a forward `XRef`: without that preference
  *   polymorphism detection misses inherited vfptrs (`DCInst` → `InlineDef(ExprInst id, XRef body)`).
  */
-fun HarvestIndex.baseStructOf(typeDecl: TypeDecl<GlobalTypeId>): TypeDecl.Struct<GlobalTypeId>? = when (typeDecl) {
+fun HarvestIndex.baseStructOf(typeDecl: GlobalTypeDecl): TypeDecl.Struct<GlobalTypeId>? = when (typeDecl) {
     is TypeDecl.Ref -> getStruct(typeDecl.id)
 
     is TypeDecl.XRef -> byXRef(typeDecl)?.body as? TypeDecl.Struct<GlobalTypeId>

@@ -331,6 +331,9 @@ sealed interface TypeDecl<out Id : IdInterface> {
     }
 }
 
+typealias LocalTypeDecl = TypeDecl<LocalTypeId>
+typealias GlobalTypeDecl = TypeDecl<GlobalTypeId>
+
 /** Symbol AST: what one stab record's `name:descriptor` decodes to. */
 @Serializable
 @OptIn(ExperimentalSerializationApi::class)

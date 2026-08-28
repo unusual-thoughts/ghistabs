@@ -68,7 +68,7 @@ class Parser(src: String) {
     /**
      * Parse a type descriptor body, exposed for testing.
      */
-    fun parseTypeBody(): ParseResult<TypeDecl<LocalTypeId>> = try {
+    fun parseTypeBody(): ParseResult<LocalTypeDecl> = try {
         // Argument order matters: parseType() must run before trailingMessage reads the cursor tail.
         ParseResult.Ok(c.parseType(), trailingMessage)
     } catch (e: StabsParseException) {
@@ -213,7 +213,7 @@ class Parser(src: String) {
      * definition (`=`) site so it becomes [TypeDecl.Void]; a bare `name:t(x,y)` (no `=`, handled by
      * the caller's else-branch) stays a [TypeDecl.Ref] forward reference — it is *not* void.
      */
-    private fun selfDefToVoid(id: LocalTypeId, body: TypeDecl<LocalTypeId>): TypeDecl<LocalTypeId> =
+    private fun selfDefToVoid(id: LocalTypeId, body: LocalTypeDecl): LocalTypeDecl =
         if (body is TypeDecl.Ref && body.id == id) TypeDecl.Void else body
 
     // ===== Type descriptor dispatch =====
@@ -226,7 +226,7 @@ class Parser(src: String) {
      *
      * Mirror of gdb/stabsread.c:read_type.
      */
-    private fun Cursor.parseType(): TypeDecl<LocalTypeId> = when (val ch = peekOrNull()) {
+    private fun Cursor.parseType(): LocalTypeDecl = when (val ch = peekOrNull()) {
         'a' -> parseArray()
 
         'e' -> parseEnum()
@@ -526,7 +526,7 @@ class Parser(src: String) {
      * Parse an enum body. Format: `<name>:<value>,<name>:<value>,...;`. Mirror of
      * gdb/stabsread.c:read_enum_type, except for bool — see [boolOrEnum].
      */
-    private fun Cursor.parseEnum(): TypeDecl<LocalTypeId> = boolOrEnum(parseEnumBody())
+    private fun Cursor.parseEnum(): LocalTypeDecl = boolOrEnum(parseEnumBody())
 
     /**
      * Classic stabs has no boolean descriptor, so without `-gstabs+` gcc cannot record bool's width
@@ -550,12 +550,11 @@ class Parser(src: String) {
      * `enum Flag { False, True }` decodes to bool too — gcc's spelling is identical to it — and this
      * way at least every occurrence agrees rather than half of them.
      */
-    private fun boolOrEnum(body: TypeDecl.Enum<LocalTypeId>): TypeDecl<LocalTypeId> =
-        if (body.members == BOOL_ENUM_MEMBERS) {
-            TypeDecl.WithSizeAttr(BITS_PER_BYTE, TypeDecl.Builtin(BUILTIN_BOOL))
-        } else {
-            body
-        }
+    private fun boolOrEnum(body: TypeDecl.Enum<LocalTypeId>): LocalTypeDecl = if (body.members == BOOL_ENUM_MEMBERS) {
+        TypeDecl.WithSizeAttr(BITS_PER_BYTE, TypeDecl.Builtin(BUILTIN_BOOL))
+    } else {
+        body
+    }
 
     private fun Cursor.parseEnumBody() = TypeDecl.Enum<LocalTypeId>(
         buildList {
@@ -583,7 +582,7 @@ class Parser(src: String) {
      *
      * Mirror of gdb/stabsread.c:read_range_type.
      */
-    private fun Cursor.parseRange(): TypeDecl<LocalTypeId> {
+    private fun Cursor.parseRange(): LocalTypeDecl {
         consume('r')
         val typeId = readTypeId()
         // GCC may define the base type inline: r(cu,n)=<inner-type>;lo;hi;
@@ -693,7 +692,7 @@ class Parser(src: String) {
         consume(',')
         val retType = parseType()
 
-        val params = mutableListOf<TypeDecl<LocalTypeId>>()
+        val params = mutableListOf<LocalTypeDecl>()
         while (consumeIf(',')) {
             params.add(parseType())
         }
