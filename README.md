@@ -156,18 +156,26 @@ compiler scaffolding as missing.
 Ghidra, loads a binary and runs full auto-analysis plus the stabs import — no GUI, no Ghidra
 project. (`./gradlew runCli -Pargs="…"` runs the same entry point in-process.)
 
-Three subcommands share that pipeline and differ only in what they do with the result:
+Five subcommands share that pipeline and differ in how far down it they go:
 
 ```bash
 build/libs/ghistabs skeleton myprogram.exe -d out/skeletons
 build/libs/ghistabs decomp   myprogram.exe -d out/decomps --shorten-typedefs
 build/libs/ghistabs dump     myprogram.exe --harvest h.json --registry r.json
+build/libs/ghistabs harvest  myprogram.exe --harvest h.json
+build/libs/ghistabs parse    myprogram.exe --records r.json
 ```
 
 `dump` is the import on its own: it writes the JSON/degradation dumps and stops — no
 decompiler, no rendered files, so no `-d`. Use it to inspect what the stabs yielded without
-paying for the render. It requires at least one of `--records`, `--harvest`, `--registry`,
-`--degradation-log` (checked before Ghidra boots).
+paying for the render. It needs at least one dump option to be worth running, and says so
+before Ghidra boots.
+
+`harvest` and `parse` stop earlier still, and **skip auto-analysis entirely**: neither pass
+reads anything Ghidra's analyzers produce, so they finish in seconds where the others take
+minutes, and neither writes anything to the program. `harvest` runs the byte decode plus the
+harvest and requires `--harvest FILE` (`--records` optional); `parse` runs the byte decode
+alone and requires `--records FILE`. Use them when iterating on the parser or the harvest.
 
 The two render modes are not the same output with decompilation bolted on — they answer
 different questions.
@@ -195,20 +203,31 @@ statement of decompilation in `decomp`, with the rest either gone or demoted to 
 the skeleton when you want to see what the stabs *claimed*; read `decomp` when you want the
 code.
 
-Shared options (all three subcommands):
+Common options — logging and dumps, the only two things every command does the same way. Every
+command takes them after its own name, and `ghistabs --help` lists them as well as each
+`ghistabs <command> --help`:
 
-| Option                                       | Default | Effect                                                                                                                               |
-| -------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `--classes` / `--no-classes`                 | on      | Same as the analyzer's class reconstruction.                                                                                         |
-| `--shorten-typedefs`                         | off     | Same as the analyzer's typedef shortening.                                                                                           |
-| `--fold-sources` / `--no-fold-sources`       | on      | Same as the analyzer's source folding.                                                                                               |
-| `--source-root DIR`                          | —       | Local checkout of sources the binary was built from, to correlate against (repeatable).                                              |
-| `--disable-analyzer NAME`                    | —       | Turn off every analyzer whose name contains `NAME` (repeatable). Render the same binary with and without one to A/B what it changes. |
-| `-v`, `--log-level`                          | `INFO`  | `DEBUG`/`INFO`/`WARN`/`ERROR`; the log streams live to stderr.                                                                       |
-| `--log FILE`                                 | stderr  | Also write the import log to a file.                                                                                                 |
-| `--log-ghidra`                               | off     | Include Ghidra's own log messages in the stream.                                                                                     |
-| `--records`, `--harvest`, `--registry` FILE  | —       | Dump the parsed stab records / harvest / materialized type registry as JSON.                                                         |
-| `--degradation-log FILE`                     | —       | Grouped report of every type that materialized to something weaker than the stabs described.                                         |
+| Option                                      | Default | Effect                                                                                                        |
+| ------------------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------- |
+| `-v`, `--log-level`                         | `INFO`  | `DEBUG`/`INFO`/`WARN`/`ERROR`; the log streams live to stderr.                                                |
+| `--log FILE`                                | stderr  | Also write the import log to a file.                                                                          |
+| `--log-ghidra`                              | off     | Include Ghidra's own log messages in the stream.                                                              |
+| `--records`, `--harvest`, `--registry` FILE | —       | Dump the parsed stab records / harvest / materialized type registry as JSON.                                  |
+| `--degradation-log FILE`                    | —       | Grouped report of every type that materialized to something weaker than the stabs described.                  |
+
+`--registry` and `--degradation-log` are products of materialization, so only `dump`, `skeleton`
+and `decomp` write them; `harvest` and `parse` reject the ones they cannot produce rather than
+writing nothing.
+
+Import options, on the commands that actually import (`dump`, `skeleton`, `decomp`):
+
+| Option                                 | Default | Effect                                                                                                                               |
+| -------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `--classes` / `--no-classes`           | on      | Same as the analyzer's class reconstruction.                                                                                         |
+| `--shorten-typedefs`                   | off     | Same as the analyzer's typedef shortening.                                                                                           |
+| `--fold-sources` / `--no-fold-sources` | on      | Same as the analyzer's source folding.                                                                                               |
+| `--source-root DIR`                    | —       | Local checkout of sources the binary was built from, to correlate against (repeatable).                                              |
+| `--disable-analyzer NAME`              | —       | Turn off every analyzer whose name contains `NAME` (repeatable). Render the same binary with and without one to A/B what it changes. |
 
 Render options (`skeleton` and `decomp` only):
 
