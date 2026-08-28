@@ -4,6 +4,10 @@
             "min": 1,
             "max": 1
         },
+        "array-count-substituted": {
+            "min": 3,
+            "max": 3
+        },
         "canonical-key-merged": {
             "min": 8,
             "max": 8
@@ -15,14 +19,6 @@
         "data-no-coverage": {
             "min": 2,
             "max": 2
-        },
-        "degraded-field-dropped": {
-            "min": 3,
-            "max": 3
-        },
-        "degraded-struct-mostly-undefined": {
-            "min": 12,
-            "max": 12
         },
         "demangle-applied": {
             "min": 0,
@@ -40,18 +36,6 @@
             "min": 0,
             "max": 0
         },
-        "demangler-unbound-stub": {
-            "min": 0,
-            "max": 0
-        },
-        "demangler-unbound-stub-in-signature": {
-            "min": 0,
-            "max": 0
-        },
-        "demangler-unbound-stub-signature-site": {
-            "min": 0,
-            "max": 0
-        },
         "dtm-conflicts-post": {
             "min": 0,
             "max": 0
@@ -63,6 +47,10 @@
         "empty-scope": {
             "min": 24,
             "max": 24
+        },
+        "field-dropped": {
+            "min": 3,
+            "max": 3
         },
         "file-start": {
             "min": 13,
@@ -188,13 +176,13 @@
             "min": 16,
             "max": 16
         },
+        "local-dropped": {
+            "min": 42,
+            "max": 42
+        },
         "local-var-add-success": {
             "min": 115,
             "max": 115
-        },
-        "local-var-error": {
-            "min": 42,
-            "max": 42
         },
         "local-var-skipped-dup-local": {
             "min": 13,
@@ -255,6 +243,10 @@
         "static-local-plate": {
             "min": 2,
             "max": 2
+        },
+        "struct-mostly-undefined": {
+            "min": 12,
+            "max": 12
         },
         "text-data-no-coverage": {
             "min": 9,

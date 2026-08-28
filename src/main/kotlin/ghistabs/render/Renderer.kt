@@ -87,7 +87,8 @@ class Renderer(
             .also {
                 if (it.isEmpty() && index.harvest.lineEntries.isNotEmpty()) {
                     warn(
-                        "render: ${index.harvest.lineEntries.size} sources have N_SLINEs but the program's line map is empty",
+                        "render-line-map-empty",
+                        "${index.harvest.lineEntries.size} sources have N_SLINEs but the program's line map is empty",
                     )
                 }
             }
@@ -277,7 +278,7 @@ class Renderer(
         // Said once, up front: with a source root given, how much of it the render can actually read.
         // Free without one — no transform means no file to check.
         sources.count { localSources[it] != null }
-            .let { if (it > 0) log("render: $it of ${sources.size} sources resolved to a local file") }
+            .let { if (it > 0) log("render-sources-resolved", "$it of ${sources.size} resolved to a local file") }
         return program.runTransaction("stabs-render-all") {
             sources.asSequence()
                 // Named before it is rendered: one source is a whole file's decompilation, seconds of
@@ -288,7 +289,7 @@ class Renderer(
                 // A source with nothing to show writes no file. Said out loud rather than skipped in
                 // silence: an empty render is either a file gcc mentioned and never described, or a
                 // bug in attribution, and the difference is only visible if the name is named.
-                .onEach { (source, text) -> if (text.isBlank()) log("render[$source]: empty, no file written") }
+                .onEach { (source, text) -> if (text.isBlank()) warn("render-empty", "$source: no file written") }
                 .filter { (_, text) -> text.isNotBlank() }
                 .onEach { (source, text) ->
                     dir.resolve(source.outputPath.toFile()).apply { parentFile?.mkdirs() }.writeText(text)

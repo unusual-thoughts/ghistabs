@@ -93,7 +93,7 @@ class CuContext(
     fun sourceFor(id: LocalTypeId) = when (val header = headerForFileNum(id.file)) {
         null -> {
             if (id.file != 0) { // 0 = current CU, expected
-                log("unknown-header-num", "$id header not yet defined for $cu")
+                degradation("unknown-header-num", "$cu", "$id header not yet defined")
             }
             cu
         }

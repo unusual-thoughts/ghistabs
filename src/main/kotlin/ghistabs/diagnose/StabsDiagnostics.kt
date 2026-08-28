@@ -14,18 +14,20 @@ data class AttributionTrace(
     val routedTo: String,
 )
 
-/** A materialization fallback (Undefined4, dropped field, placeholder base, skipped vtable slot…). */
-data class DegradationRecord(val category: String, val detail: String)
-
-const val DEGRADED_PREFIX = "degraded-"
-
 /**
- * Record a materialization degradation: a WARN log under `degraded-<category>` (surfaced live and
- * counted like anything else) that the [StabsDiagnostics] accumulator also files as a structured
- * [DegradationRecord] for the per-fixture dumps. [context] and [detail] are joined into the message.
+ * A materialization fallback (Undefined4, dropped field, placeholder base, skipped vtable slot…) —
+ * every [DiagnosticSink.log] that carried a [degrades]. See [DiagnosticSink.degradation].
  */
-fun DiagnosticSink.degradation(category: String, context: String, detail: String? = null) =
-    warn("$DEGRADED_PREFIX$category", if (detail != null) "$context :: $detail" else context)
+data class DegradationRecord(
+    val category: String,
+    val degrades: String,
+    val detail: String? = null,
+    val address: Address? = null,
+    val level: Level = Level.WARN,
+) {
+    /** `degrades :: detail @ address`, the punch-list line. */
+    override fun toString() = diagnosticText(degrades, detail) + (address?.let { " @ $it" } ?: "")
+}
 
 /**
  * Per-run diagnostic aggregator — the accumulating [DiagnosticSink] terminal. Each [log] bumps the
@@ -41,14 +43,19 @@ class StabsDiagnostics : DiagnosticSink {
 
     private var isSealed = false
 
-    override fun log(category: String, message: String?, level: Level, address: Address?, count: Long) {
+    override fun log(
+        category: String,
+        message: String?,
+        level: Level,
+        address: Address?,
+        degrades: String?,
+        count: Long,
+    ) {
         inc(category, level, count)
-        if (message != null) {
-            recordExample(category, message)
-            if (category.startsWith(DEGRADED_PREFIX)) {
-                degradations.add(DegradationRecord(category.removePrefix(DEGRADED_PREFIX), message))
-            }
+        diagnosticText(degrades, message)?.let {
+            recordExample(category, if (address != null) "$it @ $address" else it)
         }
+        if (degrades != null) degradations.add(DegradationRecord(category, degrades, message, address, level))
     }
 
     private fun inc(name: String, level: Level, by: Long = 1) {
@@ -99,7 +106,7 @@ class StabsDiagnostics : DiagnosticSink {
 
     fun snapshotAttributionTraces() = attributionTraces.toList()
 
-    /** Structured degradations, filed by [log] when it sees a `degraded-` category (see [degradation]). */
+    /** Structured degradations, filed by [log] for every event carrying a `degrades` (see [DiagnosticSink.degradation]). */
     fun snapshotDegradations(): List<DegradationRecord> = degradations.toList()
 
     /** One-shot — subsequent calls are no-ops. Emits counters, example buckets, and gap census. */
@@ -126,7 +133,7 @@ class StabsDiagnostics : DiagnosticSink {
                 sink.debug(
                     "diagnostics",
                     buildString {
-                        appendLine("$category top examples:")
+                        appendLine("$category top ${msgs.size}/${counters[category]?.values?.sum()} examples:")
                         for (msg in msgs) {
                             appendLine("  - $msg")
                         }

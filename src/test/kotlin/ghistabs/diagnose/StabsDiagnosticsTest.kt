@@ -27,8 +27,8 @@ class StabsDiagnosticsTest {
         "placeholder-created = 1" mustBeIn output
         "dedup-rename = 1" mustBeIn output
         "vtable-applied = 1" mustBeIn output
-        "unresolved-ref top examples:" mustBeIn output
-        "placeholder-created top examples:" mustBeIn output
+        "unresolved-ref top 1/1 examples:" mustBeIn output
+        "placeholder-created top 1/1 examples:" mustBeIn output
     }
 
     @Test

@@ -8,9 +8,17 @@
             "min": 3,
             "max": 3
         },
+        "array-count-substituted": {
+            "min": 70,
+            "max": 70
+        },
         "base-empty-ebo": {
             "min": 44,
             "max": 44
+        },
+        "base-synthesized": {
+            "min": 8,
+            "max": 8
         },
         "canonical-key-merged": {
             "min": 302,
@@ -31,38 +39,6 @@
         "data-no-coverage": {
             "min": 295,
             "max": 295
-        },
-        "degraded-base-synthesized": {
-            "min": 8,
-            "max": 8
-        },
-        "degraded-global-typed-all-undefined": {
-            "min": 1,
-            "max": 1
-        },
-        "degraded-local-typed-all-undefined": {
-            "min": 46,
-            "max": 46
-        },
-        "degraded-param-unnamed-padded": {
-            "min": 136,
-            "max": 136
-        },
-        "degraded-placeholder-undefined-fields": {
-            "min": 202,
-            "max": 202
-        },
-        "degraded-struct-mostly-undefined": {
-            "min": 3,
-            "max": 3
-        },
-        "degraded-struct-truncated": {
-            "min": 17,
-            "max": 17
-        },
-        "degraded-vtable-failed": {
-            "min": 122,
-            "max": 122
         },
         "demangle-applied": {
             "min": 3147,
@@ -91,14 +67,6 @@
         "demangler-unbound-stub": {
             "min": 2,
             "max": 2
-        },
-        "demangler-unbound-stub-in-signature": {
-            "min": 0,
-            "max": 0
-        },
-        "demangler-unbound-stub-signature-site": {
-            "min": 0,
-            "max": 0
         },
         "desc-dropped-so": {
             "min": 122,
@@ -155,6 +123,10 @@
         "global-applied": {
             "min": 65,
             "max": 65
+        },
+        "global-typed-all-undefined": {
+            "min": 1,
+            "max": 1
         },
         "harvest-collisions-divergent": {
             "min": 0,
@@ -300,6 +272,10 @@
             "min": 900,
             "max": 900
         },
+        "local-typed-all-undefined": {
+            "min": 46,
+            "max": 46
+        },
         "local-var-add-success": {
             "min": 2604,
             "max": 2604
@@ -320,9 +296,17 @@
             "min": 86,
             "max": 86
         },
+        "param-unnamed-padded": {
+            "min": 136,
+            "max": 136
+        },
         "placeholder-created": {
             "min": 43364,
             "max": 43364
+        },
+        "placeholder-undefined-fields": {
+            "min": 202,
+            "max": 202
         },
         "pointee-typed": {
             "min": 99,
@@ -375,6 +359,14 @@
         "static-skipped": {
             "min": 146,
             "max": 146
+        },
+        "struct-mostly-undefined": {
+            "min": 3,
+            "max": 3
+        },
+        "struct-truncated": {
+            "min": 17,
+            "max": 17
         },
         "text-boundaries-out-of-order": {
             "min": 1,

@@ -19,7 +19,6 @@ import com.github.ajalt.mordant.widgets.progress.*
 import ghidra.program.model.address.Address
 import ghidra.util.ErrorLogger
 import ghidra.util.task.TaskMonitorAdapter
-import ghistabs.diagnose.DEGRADED_PREFIX
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.Level
 import ghistabs.formatSi
@@ -106,7 +105,13 @@ class BarLoggerMonitorSink(
 
     fun stop() = animator.stop()
 
-    private fun out(level: Level, message: String, category: String? = null, address: Address? = null) {
+    private fun out(
+        level: Level,
+        message: String,
+        category: String? = null,
+        address: Address? = null,
+        degrades: String? = null,
+    ) {
         if (message.isBlank() || level < minLevel) return
         val (tag, cat, body) = level.styles
 
@@ -126,8 +131,13 @@ class BarLoggerMonitorSink(
                         overflowWrap = OverflowWrap.ELLIPSES
                     }
                 }
-                address?.let { cell(green("@$it")) }
-                cell(body(message)) {
+                cell(
+                    listOfNotNull(
+                        address?.let { green($"@$it") },
+                        degrades?.let { magenta(italic(it)) },
+                        body(message),
+                    ).joinToString(" "),
+                ) {
                     whitespace = Whitespace.PRE_WRAP
                     overflowWrap = OverflowWrap.BREAK_WORD
                 }
@@ -136,8 +146,15 @@ class BarLoggerMonitorSink(
         )
     }
 
-    override fun log(category: String, message: String?, level: Level, address: Address?, count: Long) {
-        out(level, message ?: return, category.removePrefix(DEGRADED_PREFIX).kebabToCamelCase(), address)
+    override fun log(
+        category: String,
+        message: String?,
+        level: Level,
+        address: Address?,
+        degrades: String?,
+        count: Long,
+    ) {
+        out(level, message ?: return, category.kebabToCamelCase(), address, degrades)
     }
 
     fun Throwable.exception(level: Level) {

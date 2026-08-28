@@ -8,6 +8,10 @@
             "min": 10,
             "max": 10
         },
+        "array-count-substituted": {
+            "min": 74,
+            "max": 74
+        },
         "base-empty-ebo": {
             "min": 49,
             "max": 49
@@ -15,6 +19,10 @@
         "base-empty-ebo-inferred": {
             "min": 16,
             "max": 16
+        },
+        "base-synthesized": {
+            "min": 30,
+            "max": 30
         },
         "canonical-content-merged": {
             "min": 4,
@@ -39,38 +47,6 @@
         "data-no-coverage": {
             "min": 291,
             "max": 291
-        },
-        "degraded-base-synthesized": {
-            "min": 30,
-            "max": 30
-        },
-        "degraded-global-typed-all-undefined": {
-            "min": 4,
-            "max": 4
-        },
-        "degraded-local-typed-all-undefined": {
-            "min": 46,
-            "max": 46
-        },
-        "degraded-param-unnamed-padded": {
-            "min": 149,
-            "max": 149
-        },
-        "degraded-placeholder-undefined-fields": {
-            "min": 215,
-            "max": 215
-        },
-        "degraded-struct-mostly-undefined": {
-            "min": 13,
-            "max": 13
-        },
-        "degraded-struct-truncated": {
-            "min": 40,
-            "max": 40
-        },
-        "degraded-vtable-failed": {
-            "min": 121,
-            "max": 121
         },
         "demangle-applied": {
             "min": 3546,
@@ -141,8 +117,8 @@
             "max": 15
         },
         "dtm-conflicts-created": {
-            "min": 3,
-            "max": 3
+            "min": 1,
+            "max": 1
         },
         "dtm-conflicts-post": {
             "min": 3,
@@ -175,6 +151,10 @@
         "global-applied": {
             "min": 70,
             "max": 70
+        },
+        "global-typed-all-undefined": {
+            "min": 4,
+            "max": 4
         },
         "harvest-collisions-divergent": {
             "min": 0,
@@ -324,6 +304,10 @@
             "min": 918,
             "max": 918
         },
+        "local-typed-all-undefined": {
+            "min": 46,
+            "max": 46
+        },
         "local-var-add-success": {
             "min": 2738,
             "max": 2738
@@ -344,9 +328,17 @@
             "min": 85,
             "max": 85
         },
+        "param-unnamed-padded": {
+            "min": 149,
+            "max": 149
+        },
         "placeholder-created": {
             "min": 40876,
             "max": 40876
+        },
+        "placeholder-undefined-fields": {
+            "min": 215,
+            "max": 215
         },
         "pointee-typed": {
             "min": 99,
@@ -399,6 +391,14 @@
         "static-skipped": {
             "min": 148,
             "max": 148
+        },
+        "struct-mostly-undefined": {
+            "min": 13,
+            "max": 13
+        },
+        "struct-truncated": {
+            "min": 40,
+            "max": 40
         },
         "text-boundaries-out-of-order": {
             "min": 1,

@@ -248,7 +248,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
                 byCategory.forEach { (cat, list) -> appendLine("  $cat = ${list.size}") }
                 byCategory.forEach { (cat, list) ->
                     appendLine("\n=== $cat (${list.size}) ===")
-                    list.forEach { appendLine("  ${it.detail}") }
+                    list.forEach { appendLine("  $it") }
                 }
             },
         )

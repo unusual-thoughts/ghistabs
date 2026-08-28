@@ -61,11 +61,7 @@ class Preprocessed private constructor(private val dropped: Map<String, Set<Int>
             }
             val missing = pp.parseMessages.lines().filter { MISSING_INCLUDE in it }
             if (missing.isNotEmpty()) {
-                sink.warn(
-                    "source-preprocess-incomplete",
-                    "${unit.name}: ${missing.size} includes unresolved, reading raw — ${missing.first().trim()}",
-                    count = missing.size.toLong(),
-                )
+                missing.forEach { sink.warn("source-preprocess-incomplete", "${unit.name}: ${it.trim()}") }
                 return null
             }
             return Preprocessed(droppedLines(out.toString()))
