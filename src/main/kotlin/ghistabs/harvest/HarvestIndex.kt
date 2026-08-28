@@ -807,12 +807,12 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
 
     /** Id of the struct/union [t] embeds by value (through Ref/InlineDef/Const/Volatile only, never a
      *  pointer/array), or null — the containment edge that scopes a method-less nested member type. */
-    private tailrec fun byValueStructId(t: GlobalTypeDecl): GlobalTypeId? = when (t) {
-        is TypeDecl.Ref -> t.id.takeIf { typeAsts[it]?.body is TypeDecl.Struct }
-        is TypeDecl.InlineDef -> if (t.inner is TypeDecl.Struct) t.id else byValueStructId(t.inner)
-        is TypeDecl.Const -> byValueStructId(t.inner)
-        is TypeDecl.Volatile -> byValueStructId(t.inner)
-        else -> null
+    private fun byValueStructId(t: GlobalTypeDecl) = resolveWith(t) { d ->
+        when (d) {
+            is TypeDecl.Ref -> d.id.takeIf { typeAsts[it]?.body is TypeDecl.Struct }
+            is TypeDecl.InlineDef -> d.id.takeIf { d.inner is TypeDecl.Struct }
+            else -> null
+        }
     }
 
     private fun walksToUnresolvedRef(t: GlobalTypeDecl): Boolean = when (t) {
@@ -820,3 +820,37 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
         else -> t.children.any { fields -> fields.any { walksToUnresolvedRef(it) } }
     }
 }
+
+/**
+ * [decl] through `Ref`/`XRef`/`InlineDef` indirection and cv-wrappers to the first body [pick]
+ * accepts, or null. `Pointer`/`Reference` are terminals: `Foo *` does not name a `Foo`.
+ *
+ * An `InlineDef` tries the ast registered at its id before the body spliced in at the use site,
+ * which is frequently itself a forward `XRef` — without the preference, polymorphism detection
+ * misses inherited vfptrs (`Cat` → `InlineDef(Animal id, XRef body)`) — and falls back to that
+ * body when the id leads nowhere, without which a base whose id no CU defined reads as no base.
+ */
+fun <R : Any> HarvestIndex.resolveWith(
+    decl: GlobalTypeDecl,
+    visited: MutableSet<GlobalTypeId> = mutableSetOf(),
+    pick: (GlobalTypeDecl) -> R?,
+): R? {
+    pick(decl)?.let { return it }
+    fun step(next: GlobalTypeDecl?) = next?.let { resolveWith(it, visited, pick) }
+    fun stepId(id: GlobalTypeId) = if (visited.add(id)) step(byId(id)?.body) else null
+    return when (decl) {
+        is TypeDecl.Ref -> stepId(decl.id)
+        is TypeDecl.XRef -> byXRef(decl)?.takeIf { visited.add(it.id) }?.let { step(it.body) }
+        is TypeDecl.InlineDef -> stepId(decl.id) ?: step(decl.inner)
+        is TypeDecl.Const -> step(decl.inner)
+        is TypeDecl.Volatile -> step(decl.inner)
+        is TypeDecl.WithSizeAttr -> step(decl.inner)
+        else -> null
+    }
+}
+
+inline fun HarvestIndex.resolveAny(decl: GlobalTypeDecl, crossinline pick: (GlobalTypeDecl) -> Boolean) =
+    resolveWith(decl) { pick(it).takeIf { it } } == true
+
+/** The first [T] [decl] names, through the indirection [resolveWith] walks. */
+inline fun <reified T : GlobalTypeDecl> HarvestIndex.resolve(decl: GlobalTypeDecl): T? = resolveWith(decl) { it as? T }
