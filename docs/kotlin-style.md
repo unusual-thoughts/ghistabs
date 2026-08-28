@@ -1,6 +1,6 @@
 # Kotlin Style Guide
 
-House style for `ghidra-stabs`. The goal is idiomatic, concise Kotlin that
+House style for `ghistabs`. The goal is idiomatic, concise Kotlin that
 reads like the surrounding code. Generated code that ignores this tends to be
 verbose, imperative, and over-commented — fix it to match here.
 

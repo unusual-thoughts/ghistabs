@@ -1,4 +1,4 @@
-# ghidra-stabs
+# ghistabs
 
 A Ghidra extension (Kotlin) that imports STABS debug info (`.stab`/`.stabstr`) from
 Cygwin/MinGW **gcc 3.x** PE binaries — types, function signatures, locals, C++ classes,
@@ -46,10 +46,11 @@ Dependency versions live in `gradle/libs.versions.toml` — declare them there, 
 `build.gradle.kts`. `kotlinx-serialization-json` is `compileOnly` for main: JSON dumps belong to the
 `cli` source set and the tests, and the extension must not ship the jar.
 
-Build logic lives in `buildSrc/src/main/kotlin/ghistabs/build/` (fixture matrix, test conventions,
+Build logic lives in `build-logic/src/main/kotlin/ghistabs/build/` (fixture matrix, test conventions,
 console reporting, CLI launcher, extension install). `build.gradle.kts` should hold decisions — which
-tasks exist, what they depend on — not mechanism. buildSrc is a separate build, so the root
-`ktlintCheck` doesn't see it: run **`./gradlew -p buildSrc ktlintFormat test`** when you touch it.
+tasks exist, what they depend on — not mechanism. `build-logic` is an included build (not `buildSrc`,
+which is unaddressable), so the root `ktlintCheck`/`ktlintFormat`/`test` fan out to it automatically;
+`./gradlew -p build-logic <task>` still works to run it alone.
 
 Useful flags on `integrationTest`:
 

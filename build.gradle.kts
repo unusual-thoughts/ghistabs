@@ -72,3 +72,8 @@ val cli = sourceSets.create("cli") {
 kotlin.target.compilations.named(cli.name) {
     associateWith(kotlin.target.compilations.getByName(SourceSet.MAIN_SOURCE_SET_NAME))
 }
+
+// build-logic is a separate build: fan the umbrella tasks out to it so one command covers both.
+listOf("ktlintCheck", "ktlintFormat", "test").forEach { name ->
+    tasks.named(name) { dependsOn(gradle.includedBuild("build-logic").task(":$name")) }
+}
