@@ -39,7 +39,7 @@ class DataTypeRegistry(
     // Baseline the DTM's `.conflict` census at construction (before any of our passes touch the DTM;
     // harvest doesn't). Ghidra's own analysis may have forked some, so the end-of-import delta
     // ([reportConflictDelta]) attributes only the forks the stabs import introduced.
-    internal val conflictsBefore = dtm.conflictCount()
+    internal val conflictsBefore = dtm.conflictPaths()
 
     /** XRef stubs that fell through to placeholders. Use sites are flagged via [recordXRefStubAt]. */
     internal val xrefStubs = mutableSetOf<DataType>()
