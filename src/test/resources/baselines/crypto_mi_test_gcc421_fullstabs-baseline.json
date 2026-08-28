@@ -85,8 +85,8 @@
             "max": 131
         },
         "demangler-reverse-demangle-match": {
-            "min": 50,
-            "max": 50
+            "min": 52,
+            "max": 52
         },
         "demangler-skip-no-replacement": {
             "min": 80,

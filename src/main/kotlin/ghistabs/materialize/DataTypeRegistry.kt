@@ -190,7 +190,7 @@ class DataTypeRegistry(
             // the param's SymbolDecl, and folding rewrites only Symbol.sourceFile. Forcing that lazy
             // would copy every function and its three lists on an import that never renders.
             for (fn in index.harvest.functions) {
-                val dt = fn.thisParamTypeId()?.let { dataTypeFor(it) } ?: continue
+                val dt = index.thisParamTypeId(fn)?.let { dataTypeFor(it) } ?: continue
                 Demangler.of(fn.name)?.namespace?.let { putIfAbsent(it.categoryPath.path, dt) }
             }
             // A member function is not the only symbol that ties a class to its demangled path: a
@@ -214,10 +214,34 @@ class DataTypeRegistry(
 private val Demangled.categoryPath get(): CategoryPath =
     (namespace?.categoryPath ?: DEMANGLER_CATEGORY).extend(name)
 
-/** Pointee type-id of a member function's leading `this` param (`InlineDef?→Pointer→Ref`), else null. */
-private fun Func.thisParamTypeId(): GlobalTypeId? {
-    val p = params.firstOrNull()?.body ?: return null
-    if (p.name != "this") return null
-    val inner = (p.type as? TypeDecl.InlineDef)?.inner ?: p.type
-    return ((inner as? TypeDecl.Pointer)?.inner as? TypeDecl.Ref)?.id
+/**
+ * Pointee type-id of [fn]'s leading `this` param, else null.
+ *
+ * Which shape gcc emits for the pointer is per-CU history, not meaning: inline
+ * (`InlineDef→Pointer→Ref`), by id (a plain `Ref` to a separately-numbered pointer type), and with a
+ * `Const` wrapper on a const method. Matching only the inline shape missed every by-id and every
+ * const `this` — which is what left `std::ostream::sentry` with no reverse-demangle link.
+ */
+private fun HarvestIndex.thisParamTypeId(fn: Func): GlobalTypeId? {
+    val p = fn.params.firstOrNull()?.body?.takeIf { it.name == "this" } ?: return null
+    return (resolveDecl(p.type) as? TypeDecl.Pointer)?.inner?.let(::namedId)
+}
+
+/** [decl] through qualifier/definition wrappers and `Ref` indirections, to the body it names. */
+private tailrec fun HarvestIndex.resolveDecl(decl: TypeDecl<GlobalTypeId>?, fuel: Int = 8): TypeDecl<GlobalTypeId>? =
+    when (decl) {
+        is TypeDecl.Ref -> if (fuel == 0) null else resolveDecl(byId(decl.id)?.body, fuel - 1)
+        is TypeDecl.InlineDef -> resolveDecl(decl.inner, fuel)
+        is TypeDecl.Const -> resolveDecl(decl.inner, fuel)
+        is TypeDecl.Volatile -> resolveDecl(decl.inner, fuel)
+        else -> decl
+    }
+
+/** The id [decl] names, through the same wrappers — without resolving it to a body. */
+private tailrec fun namedId(decl: TypeDecl<GlobalTypeId>): GlobalTypeId? = when (decl) {
+    is TypeDecl.Ref -> decl.id
+    is TypeDecl.InlineDef -> decl.id
+    is TypeDecl.Const -> namedId(decl.inner)
+    is TypeDecl.Volatile -> namedId(decl.inner)
+    else -> null
 }
