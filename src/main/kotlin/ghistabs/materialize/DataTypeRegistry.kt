@@ -9,13 +9,11 @@ import ghidra.util.task.TaskMonitor
 import ghistabs.Demangler
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.StabsDiagnostics
-import ghistabs.harvest.Func
-import ghistabs.harvest.HarvestIndex
-import ghistabs.harvest.LocatedType
-import ghistabs.harvest.Type
+import ghistabs.harvest.*
 import ghistabs.importer.DemanglerReplacer.Companion.DEMANGLER_CATEGORY
 import ghistabs.materialize.itanium.Rtti
 import ghistabs.parse.CATEGORY
+import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
 
@@ -228,17 +226,16 @@ private fun HarvestIndex.thisParamTypeId(fn: Func): GlobalTypeId? {
 }
 
 /** [decl] through qualifier/definition wrappers and `Ref` indirections, to the body it names. */
-private tailrec fun HarvestIndex.resolveDecl(decl: TypeDecl<GlobalTypeId>?, fuel: Int = 8): TypeDecl<GlobalTypeId>? =
-    when (decl) {
-        is TypeDecl.Ref -> if (fuel == 0) null else resolveDecl(byId(decl.id)?.body, fuel - 1)
-        is TypeDecl.InlineDef -> resolveDecl(decl.inner, fuel)
-        is TypeDecl.Const -> resolveDecl(decl.inner, fuel)
-        is TypeDecl.Volatile -> resolveDecl(decl.inner, fuel)
-        else -> decl
-    }
+private tailrec fun HarvestIndex.resolveDecl(decl: GlobalTypeDecl?, fuel: Int = 8): GlobalTypeDecl? = when (decl) {
+    is TypeDecl.Ref -> if (fuel == 0) null else resolveDecl(byId(decl.id)?.body, fuel - 1)
+    is TypeDecl.InlineDef -> resolveDecl(decl.inner, fuel)
+    is TypeDecl.Const -> resolveDecl(decl.inner, fuel)
+    is TypeDecl.Volatile -> resolveDecl(decl.inner, fuel)
+    else -> decl
+}
 
 /** The id [decl] names, through the same wrappers — without resolving it to a body. */
-private tailrec fun namedId(decl: TypeDecl<GlobalTypeId>): GlobalTypeId? = when (decl) {
+private tailrec fun namedId(decl: GlobalTypeDecl): GlobalTypeId? = when (decl) {
     is TypeDecl.Ref -> decl.id
     is TypeDecl.InlineDef -> decl.id
     is TypeDecl.Const -> namedId(decl.inner)

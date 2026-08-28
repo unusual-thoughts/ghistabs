@@ -4,10 +4,10 @@
 package ghistabs.harvest
 
 import ghidra.program.model.address.AddressRange
+import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.SourceFile
 import ghistabs.parse.SymbolDecl
-import ghistabs.parse.TypeDecl
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.UseSerializers
 
@@ -19,7 +19,7 @@ import kotlinx.serialization.UseSerializers
 @Serializable
 data class Harvest(
     val types: Map<GlobalTypeId, Type>,
-    val rawCollisions: Map<GlobalTypeId, Map<String, Set<TypeDecl<GlobalTypeId>>>>,
+    val rawCollisions: Map<GlobalTypeId, Map<String, Set<GlobalTypeDecl>>>,
     val staticsByCu: Map<GhidraSourceFile, List<StaticSymbol>>,
     val functions: List<Func>,
     /** N_SLINE entries grouped by N_SOL-effective source; sorted by line on insertion. */

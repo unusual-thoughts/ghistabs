@@ -1,9 +1,6 @@
 package ghistabs.harvest
 
-import ghistabs.parse.AggrKind
-import ghistabs.parse.GlobalTypeId
-import ghistabs.parse.SourceFile
-import ghistabs.parse.TypeDecl
+import ghistabs.parse.*
 import ghistabs.test.mustBe
 import org.junit.jupiter.api.Test
 
@@ -18,8 +15,7 @@ class AnonymousTypedefTargetNamesTest {
         methods = emptyList(),
         vptrBasetype = null,
     )
-    private fun ast(n: Int, name: String?, body: TypeDecl<GlobalTypeId>) =
-        Type(cu = cu, id = id(n), name = name, body = body)
+    private fun ast(n: Int, name: String?, body: GlobalTypeDecl) = Type(cu = cu, id = id(n), name = name, body = body)
     private fun map(vararg asts: Type) = TypeStore(asts.associateBy { it.id }.toMutableMap())
 
     @Test fun namesAnonymousInlineStruct() {

@@ -38,7 +38,7 @@ class EnclosingScopeTest : AbstractGhidraHeadlessIntegrationTest() {
         vptrBasetype = null,
     )
 
-    private fun ast(name: String?, body: TypeDecl<GlobalTypeId>) =
+    private fun ast(name: String?, body: GlobalTypeDecl) =
         Type(cu = cu, id = GlobalTypeId(cu, 1), name = name, body = body)
 
     @Test fun namespacedClassDropsOwnLeaf() {

@@ -4,7 +4,7 @@ import ghidra.program.model.address.Address
 import ghistabs.chunkOf
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.harvest.*
-import ghistabs.parse.GlobalTypeId
+import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.TypeDecl
 
 class FileRenderer(override val renderer: Renderer, override val source: GhidraSourceFile) :
@@ -490,7 +490,7 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
     }
 
     /** How many members a body declares — the tiebreak when instantiations of one template differ. */
-    private fun TypeDecl<GlobalTypeId>.memberCount() = when (this) {
+    private fun GlobalTypeDecl.memberCount() = when (this) {
         is TypeDecl.Struct -> fields.size
         is TypeDecl.Enum -> members.size
         else -> 0
@@ -645,7 +645,7 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
     // overflow stacks on the last free line rather than pushing content down.
     private fun includeClaims(): List<Claim> {
         val referenced = mutableSetOf<Type>()
-        fun collect(decl: TypeDecl<GlobalTypeId>) {
+        fun collect(decl: GlobalTypeDecl) {
             val ast = when (decl) {
                 is TypeDecl.Ref -> index.byId(decl.id)
                 is TypeDecl.XRef -> index.byXRef(decl, silent = true)

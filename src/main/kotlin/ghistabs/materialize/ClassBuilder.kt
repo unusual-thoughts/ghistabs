@@ -474,8 +474,8 @@ class ClassBuilder(
     }
 
     /** Walk Ref/InlineDef wrappers to the underlying Method/FunctionT (gcc binds signatures to their own type id). */
-    private fun unwrapSignature(sig: TypeDecl<GlobalTypeId>): TypeDecl<GlobalTypeId>? {
-        var cur: TypeDecl<GlobalTypeId>? = sig
+    private fun unwrapSignature(sig: GlobalTypeDecl): GlobalTypeDecl? {
+        var cur: GlobalTypeDecl? = sig
         while (cur != null) {
             cur = when (cur) {
                 is TypeDecl.Method, is TypeDecl.FunctionT -> return cur

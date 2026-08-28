@@ -2,6 +2,7 @@ package ghistabs.harvest
 
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.materialize.ghidraClass
+import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
 import ghistabs.parse.TypeDecl.Struct.Base
@@ -35,9 +36,9 @@ abstract class ContentIndex(val contentCache: MutableMap<GlobalTypeId, LayoutCon
      * Cycles break via [visited]: a re-entry yields the empty back-edge marker. [contentCache] memoizes
      * successful (non-back-edge) results per id, which is also what makes the graph shared.
      */
-    fun content(decl: TypeDecl<GlobalTypeId>, visited: Set<GlobalTypeId> = emptySet()) = decl.describe(visited)
+    fun content(decl: GlobalTypeDecl, visited: Set<GlobalTypeId> = emptySet()) = decl.describe(visited)
 
-    private fun TypeDecl<GlobalTypeId>.describe(visited: Set<GlobalTypeId> = emptySet()): LayoutContent = when (this) {
+    private fun GlobalTypeDecl.describe(visited: Set<GlobalTypeId> = emptySet()): LayoutContent = when (this) {
         is TypeDecl.Ref -> refKey(id, visited)
 
         TypeDecl.Void, is TypeDecl.Float, is TypeDecl.Complex, is TypeDecl.Enum, // no children
@@ -60,7 +61,7 @@ abstract class ContentIndex(val contentCache: MutableMap<GlobalTypeId, LayoutCon
         // defining CU and NORMAL elsewhere, reordering methods per CU. So static fields and methods are
         // dropped: a layout-identical class is one value everywhere.
         is TypeDecl.Struct -> LayoutContent(
-            this.javaClass,
+            javaClass,
             layoutData,
             listOf(
                 bases.map { it.layoutContent(visited) },
@@ -136,7 +137,7 @@ abstract class ContentIndex(val contentCache: MutableMap<GlobalTypeId, LayoutCon
         }
     }
 
-    private fun TypeDecl<GlobalTypeId>.layoutContent(visited: Set<GlobalTypeId>) = LayoutContent(
+    private fun GlobalTypeDecl.layoutContent(visited: Set<GlobalTypeId>) = LayoutContent(
         javaClass,
         layoutData,
         children.map { field -> field.map { it.describe(visited) } },

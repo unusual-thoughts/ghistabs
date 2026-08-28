@@ -3,8 +3,12 @@ package ghistabs.materialize
 import ghidra.program.model.data.*
 import ghidra.program.model.lang.CompilerSpec
 import ghistabs.harvest.Type
-import ghistabs.materialize.itanium.*
+import ghistabs.materialize.itanium.Itanium
+import ghistabs.materialize.itanium.Layout
+import ghistabs.materialize.itanium.baseStructOf
+import ghistabs.materialize.itanium.firstPolymorphicBase
 import ghistabs.parse.CATEGORY
+import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
 import ghistabs.runTransaction
@@ -297,7 +301,7 @@ internal fun DataTypeRegistry.fillComposite(
 private fun DataTypeRegistry.undef(
     category: String,
     at: String,
-    decl: TypeDecl<GlobalTypeId>,
+    decl: GlobalTypeDecl,
     fallback: DataType = Undefined4DataType.dataType,
 ): DataType {
     degradation(category, at, decl.toString())
@@ -309,7 +313,7 @@ private fun DataTypeRegistry.undef(
  * type keeps its real name and category but carries no layout, so the site is named here rather than
  * left for [computeDegraded] to infer from the shape.
  */
-private fun DataTypeRegistry.stub(ast: Type, placeholder: DataType, body: TypeDecl<GlobalTypeId>): DataType {
+private fun DataTypeRegistry.stub(ast: Type, placeholder: DataType, body: GlobalTypeDecl): DataType {
     degradation("body-unresolved", ast.ghidraName, body.toString())
     return placeholder
 }
@@ -319,14 +323,14 @@ private fun DataTypeRegistry.stub(ast: Type, placeholder: DataType, body: TypeDe
  * (definition sites): wrap the resolved [pointee] in a target-sized [PointerDataType], degrading to
  * [undef] under the caller's [label]/[at] when the pointee doesn't resolve.
  */
-private fun DataTypeRegistry.pointerTo(pointee: TypeDecl<GlobalTypeId>, label: String, at: String): PointerDataType =
+private fun DataTypeRegistry.pointerTo(pointee: GlobalTypeDecl, label: String, at: String): PointerDataType =
     PointerDataType(resolveRef(pointee) ?: undef(label, at, pointee), dtm.dataOrganization.pointerSize, dtm)
 
 /**
  * Resolve a TypeDecl reference site to a DataType. Struct/Enum/Method/XRef return null (they
  * only have identity through their owning TypeAst id; use [DataTypeRegistry.getOrMaterialize] for those).
  */
-fun DataTypeRegistry.resolveRef(decl: TypeDecl<GlobalTypeId>): DataType? = when (decl) {
+fun DataTypeRegistry.resolveRef(decl: GlobalTypeDecl): DataType? = when (decl) {
     is TypeDecl.Void -> VoidDataType()
 
     is TypeDecl.Ref -> getOrMaterialize(decl.id)
@@ -401,8 +405,8 @@ internal fun DataTypeRegistry.buildArray(decl: TypeDecl.Array<*>, elem: DataType
 fun DataTypeRegistry.buildFunctionDefinition(
     category: CategoryPath,
     name: String,
-    ret: TypeDecl<GlobalTypeId>,
-    params: List<TypeDecl<GlobalTypeId>>,
+    ret: GlobalTypeDecl,
+    params: List<GlobalTypeDecl>,
     thisType: DataType? = null,
     callingConvention: String? = null,
     at: String = name,

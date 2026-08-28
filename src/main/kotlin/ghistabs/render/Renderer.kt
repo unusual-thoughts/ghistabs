@@ -16,7 +16,7 @@ import ghistabs.harvest.Type
 import ghistabs.importer.AddressResolver
 import ghistabs.importer.LocalSources
 import ghistabs.materialize.TemplateNameShortener
-import ghistabs.parse.GlobalTypeId
+import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.TypeDecl
 import ghistabs.render.Renderer.Companion.DECOMPILE_SECONDS
 import ghistabs.runTransaction
@@ -305,7 +305,7 @@ class Renderer(
      * `<`) are used — that excludes base-type aliases (`fpos_t`→`longlong`) without DataType lookups.
      */
     fun harvestTemplateShortener(): TemplateNameShortener {
-        fun targetName(decl: TypeDecl<GlobalTypeId>): String? = when (decl) {
+        fun targetName(decl: GlobalTypeDecl): String? = when (decl) {
             is TypeDecl.Ref -> index.byId(decl.id)?.name
             is TypeDecl.XRef -> decl.tagName
             is TypeDecl.InlineDef -> targetName(decl.inner)

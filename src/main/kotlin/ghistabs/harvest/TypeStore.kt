@@ -6,7 +6,7 @@ import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Struct.Base
 import ghistabs.parse.TypeDecl.Struct.Field
 
-typealias CollisionBucket = MutableSet<TypeDecl<GlobalTypeId>>
+typealias CollisionBucket = MutableSet<GlobalTypeDecl>
 typealias NameBuckets = MutableMap<String, CollisionBucket>
 typealias Collisions = MutableMap<GlobalTypeId, NameBuckets>
 
@@ -21,7 +21,7 @@ class TypeStore(
      * enclosing declaration's source location.
      */
     fun hoistSymbolDefs(sym: Symbol<*>, cu: SourceFile.CUSource) {
-        fun TypeDecl<GlobalTypeId>.walk(): List<Type> = when (this) {
+        fun GlobalTypeDecl.walk(): List<Type> = when (this) {
             // Emit the InlineDef ast AND recurse — gcc nests them (e.g. Method whose
             // return is an inline-defined Pointer-to-X). Without recursion the inner
             // ids are referenced but never registered → dangling Refs + false collisions.
@@ -218,7 +218,7 @@ class TypeStore(
         }
     }
 
-    fun toHarvest(): Pair<Map<GlobalTypeId, Type>, Map<GlobalTypeId, Map<String, Set<TypeDecl<GlobalTypeId>>>>> {
+    fun toHarvest(): Pair<Map<GlobalTypeId, Type>, Map<GlobalTypeId, Map<String, Set<GlobalTypeDecl>>>> {
         synthesizeXRefStubsForDanglingInheritanceRefs()
         nameAnonymousTypedefTargets()
         return byId to collisions

@@ -2,9 +2,7 @@
 
 package ghistabs.parse
 
-import ghistabs.parse.TypeDecl.Struct.Base
-import ghistabs.parse.TypeDecl.Struct.Field
-import ghistabs.parse.TypeDecl.Struct.Method
+import ghistabs.parse.TypeDecl.Struct.*
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.descriptors.PrimitiveKind
@@ -81,9 +79,9 @@ interface Globalizer {
  * sibling walker (`walkDefinitions` / `appendAsts`), not here.
  */
 @Suppress("UNCHECKED_CAST")
-fun TypeDecl<LocalTypeId>.globalize(g: Globalizer): TypeDecl<GlobalTypeId> = when (this) {
+fun LocalTypeDecl.globalize(g: Globalizer): GlobalTypeDecl = when (this) {
     is TypeDecl.Complex, is TypeDecl.Float, is TypeDecl.Enum, is TypeDecl.XRef, is TypeDecl.Builtin, TypeDecl.Void ->
-        this as TypeDecl<GlobalTypeId>
+        this as GlobalTypeDecl
 
     is TypeDecl.Range -> TypeDecl.Range(g.globalIdFor(of), min, max)
 

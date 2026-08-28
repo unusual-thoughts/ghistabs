@@ -25,11 +25,24 @@ import kotlin.io.path.Path
 import kotlin.io.path.nameWithoutExtension
 
 @Serializable
+@JvmInline
+value class LineNumber(val inner: UInt) : Comparable<LineNumber> {
+    override fun compareTo(other: LineNumber) = inner.compareTo(other.inner)
+
+    init {
+        require(inner != 0U)
+    }
+    companion object {
+        fun fromInt(x: Int) = x.takeIf { it > 0 }?.let { LineNumber(it.toUInt()) }
+    }
+}
+
+@Serializable
 data class Type(
     val cu: SourceFile.CUSource,
     val id: GlobalTypeId,
     val name: String?,
-    val body: TypeDecl<GlobalTypeId>,
+    val body: GlobalTypeDecl,
     /** Source line from N_LSYM `desc`, null when the emitter left it 0 (no -gstabs+). */
     val line: Int? = null,
     /** N_SOL-effective source at definition time (header for stdlib, CU for app-local). */
@@ -56,7 +69,7 @@ data class Type(
         .replaceInvalidChars(DemanglerUtil.stripSuperfluousSignatureSpaces(canonTemplateName(nameOrUnique)), true)
         .ifEmpty { uniqueName }
 
-    inline fun <reified T : TypeDecl<GlobalTypeId>> asType() = if (body is T) {
+    inline fun <reified T : GlobalTypeDecl> asType() = if (body is T) {
         this to body
     } else {
         null
