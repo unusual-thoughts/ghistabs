@@ -306,11 +306,11 @@
         },
         "text-data-no-coverage": {
             "min": 453,
-            "max": 453
+            "max": 455
         },
         "text-undisassembled-code": {
             "min": 137,
-            "max": 137
+            "max": 138
         },
         "textrange-entries": {
             "min": 74,

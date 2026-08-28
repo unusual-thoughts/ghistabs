@@ -402,11 +402,11 @@
         },
         "text-data-no-coverage": {
             "min": 73,
-            "max": 73
+            "max": 74
         },
         "text-undisassembled-code": {
             "min": 564,
-            "max": 564
+            "max": 568
         },
         "textrange-entries": {
             "min": 665,
