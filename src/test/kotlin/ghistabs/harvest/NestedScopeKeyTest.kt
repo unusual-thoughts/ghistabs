@@ -35,7 +35,7 @@ class NestedScopeKeyTest : AbstractGhidraHeadlessIntegrationTest() {
         vtableOffsetBits = null,
     )
 
-    private fun field(name: String, type: TypeDecl<GlobalTypeId>) =
+    private fun field(name: String, type: GlobalTypeDecl) =
         Field(name, type, 0, 32, isStatic = false, access = Access.PUBLIC, mangled = null)
 
     private fun struct(
@@ -50,7 +50,7 @@ class NestedScopeKeyTest : AbstractGhidraHeadlessIntegrationTest() {
         vptrBasetype = null,
     )
 
-    private fun ast(id: GlobalTypeId, name: String?, body: TypeDecl<GlobalTypeId>) =
+    private fun ast(id: GlobalTypeId, name: String?, body: GlobalTypeDecl) =
         Type(cu = cu, id = id, name = name, body = body)
 
     private val charString = "basic_string<char,std::char_traits<char>,std::allocator<char> >"
@@ -85,7 +85,7 @@ class NestedScopeKeyTest : AbstractGhidraHeadlessIntegrationTest() {
     }
 
     @Test fun charAndWcharVariantsGetDistinctKeys() {
-        fun hiderKeyFor(strName: String, clearMangled: String, pointee: TypeDecl<GlobalTypeId>): TypeLocation {
+        fun hiderKeyFor(strName: String, clearMangled: String, pointee: GlobalTypeDecl): TypeLocation {
             nextId = 1
             val full = ast(id(), strName, struct(methods = listOf(method(clearMangled))))
             val hiderId = id()

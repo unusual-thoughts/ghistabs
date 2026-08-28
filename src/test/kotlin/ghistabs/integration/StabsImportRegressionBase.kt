@@ -1815,11 +1815,11 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     /** Whether a base contributes bytes. An empty class is `sizeof == 1` and the empty-base
      *  optimization drops it from the layout entirely; member *functions* do not make it occupy
      *  space, so [TypeDecl.Struct.hasMembers] is the wrong question here. */
-    private fun occupiesSpace(base: TypeDecl<GlobalTypeId>) =
+    private fun occupiesSpace(base: GlobalTypeDecl) =
         (resolve(base) as? TypeDecl.Struct)?.let { it.sizeBytes > 1 } == true
 
     /** A [TypeDecl.Ref] followed to the harvest body it names; anything else unchanged. */
-    private fun resolve(type: TypeDecl<GlobalTypeId>): TypeDecl<GlobalTypeId> =
+    private fun resolve(type: GlobalTypeDecl): GlobalTypeDecl =
         (type as? TypeDecl.Ref)?.let { artifacts.harvest.types[it.id]?.body } ?: type
 
     private val harvestsStdString
