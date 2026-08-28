@@ -41,17 +41,13 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val registry:
          * Pure planner: which stubs can be safely replaced, and why the rest can't. Ghidra's
          * DataTypes are plain objects — no Application runtime — so this stays a unit test.
          */
-        fun decide(
-            stubs: List<Structure>,
-            replacements: Map<String, DataType>,
-        ): Pair<List<Pair<Structure, DataType>>, List<Skip>> {
+        fun decide(candidates: List<Pair<Structure, DataType?>>): Pair<List<Pair<Structure, DataType>>, List<Skip>> {
             val ops = mutableListOf<Pair<Structure, DataType>>()
             val skips = mutableListOf<Skip>()
 
-            for (stub in stubs) {
+            for ((stub, replacement) in candidates) {
                 if (stub.length != 0 && stub.numComponents != 0) continue
 
-                val replacement = replacements[stub.name]
                 if (replacement == null) {
                     skips.add(Skip.NoReplacement(stub.name))
                     continue
@@ -187,41 +183,38 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val registry:
         debug("demangle-displaced-function-renamed", count = renamed.toLong())
     }
 
+    /** Choose the potential replacment for a stub structure */
+    fun Structure.chooseReplacement(): DataType? {
+        // The stub's own category with the /Demangler root lifted off (`/Demangler/std` → `/std`),
+        // as the hint for which of several same-named candidates is meant.
+        val preferredCategory = CategoryPath.ROOT.extend(
+            categoryPath.pathElements.drop(DEMANGLER_CATEGORY.pathElements.size),
+        )
+        // A `.conflict` fork is a second stub Ghidra made for a name we already occupy; it
+        // names the same type, so it looks up debased. Nothing else keys off the fork's name.
+        val bareName = DataTypeUtilities.getNameWithoutConflict(name)
+        // Priority: exact DTM name → exact demangler-link (byDemangledClass) → RTTI layout.
+        // byDemangledClass stays below the name match but above anything inferred: it is grounded
+        // in the mangled symbol's own `this`-pointee.
+        return findByExactName(bareName, preferredCategory)?.also { debug("demangler-exact-match") }
+            ?: registry.byDemangledClass[pathName]?.also { debug("demangler-reverse-demangle-match") }
+            ?: soleInstantiation[bareName]?.also { debug("demangler-sole-instantiation-match", bareName) }
+            ?: rtti.typeInfoLayout(bareName)?.let { ctx.dtm.resolve(it, null) }
+                ?.also { debug("demangler-rtti-match") }
+    }
+
     fun replace() {
         demangleMangledLabels()
         dropDisplacedMangledLabels()
-        val dtm = ctx.dtm
 
-        val stubs = dtm.allDataTypes.asSequence()
+        // Only types WE registered qualify — swapping one Ghidra-bundled stub for another is meaningless.
+        val candidates = ctx.dtm.allDataTypes.asSequence()
             .filter { it.categoryPath.isAncestorOrSelf(DEMANGLER_CATEGORY) }
             .filterIsInstance<Structure>()
             .toList()
-        val replacements = mutableMapOf<String, DataType>()
+            .map { it to it.chooseReplacement() }
 
-        // Only types WE registered qualify — swapping one Ghidra-bundled stub for another
-        // is meaningless. Verified 2026-06-23: leaving non-registered stubs in place is a no-op.
-        for (stub in stubs) {
-            // The stub's own category with the /Demangler root lifted off (`/Demangler/std` → `/std`),
-            // as the hint for which of several same-named candidates is meant.
-            val preferredCategory = CategoryPath.ROOT.extend(
-                stub.categoryPath.pathElements.drop(DEMANGLER_CATEGORY.pathElements.size),
-            )
-            // A `.conflict` fork is a second stub Ghidra made for a name we already occupy; it
-            // names the same type, so it looks up debased. Nothing else keys off the fork's name.
-            val name = DataTypeUtilities.getNameWithoutConflict(stub.name)
-            // Priority: exact DTM name → exact demangler-link (byDemangledClass) → RTTI layout.
-            // byDemangledClass stays below the name match but above anything inferred: it is grounded
-            // in the mangled symbol's own `this`-pointee.
-            val candidate = findByExactName(name, preferredCategory)?.also { debug("demangler-exact-match") }
-                ?: registry.byDemangledClass[stub.pathName]?.also { debug("demangler-reverse-demangle-match") }
-                ?: soleInstantiation[name]?.also { debug("demangler-sole-instantiation-match", name) }
-                ?: rtti.typeInfoLayout(name)?.let { dtm.resolve(it, null) }
-                    ?.also { debug("demangler-rtti-match") }
-                ?: continue
-            replacements[stub.name] = candidate
-        }
-
-        val (ops, skips) = decide(stubs, replacements)
+        val (ops, skips) = decide(candidates)
 
         for (skip in skips) {
             val counterKey = when (skip) {
@@ -242,15 +235,15 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val registry:
         // and skipping leaves it behind empty — the gap demanglerHasNoEmptyStubs guards.
         val pairs = ops.mapNotNull { (stub, repl) ->
             when {
-                !dtm.contains(stub) -> null
-                !dtm.contains(repl) -> stub to dtm.resolve(repl, DataTypeConflictHandler.DEFAULT_HANDLER)
+                !ctx.dtm.contains(stub) -> null
+                !ctx.dtm.contains(repl) -> stub to ctx.dtm.resolve(repl, DataTypeConflictHandler.DEFAULT_HANDLER)
                 else -> stub to repl
             }
         }
         // Batched: one whole-program reference sweep for all replacements (updateCategoryPath=false keeps
         // each at its real category), instead of Ghidra's per-`replaceDataType` sweep — O(stubs × program).
         try {
-            (dtm as DataTypeManagerDB).replaceDataTypesBatched(pairs)
+            (ctx.dtm as DataTypeManagerDB).replaceDataTypesBatched(pairs)
             pairs.forEach { (stub, repl) -> debug("replaced-demangler", "${stub.pathName} -> ${repl.pathName}") }
         } catch (e: Exception) {
             debug("replaced-demangler-failed")
