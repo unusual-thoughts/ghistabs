@@ -20,7 +20,6 @@ import ghistabs.materialize.itanium.Rtti
 import ghistabs.parse.CATEGORY
 import ghistabs.parse.canonTemplateName
 import ghistabs.parse.splitQualified
-import java.util.*
 
 sealed class Skip(open val reason: String) {
     data class NoReplacement(val name: String) : Skip("no-replacement-for-$name")
@@ -76,26 +75,8 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val registry:
          * `replacementDt.dependsOn(existingDt)` guard never fires for the struct replacements here,
          * and why the caller needs this one.
          */
-        fun collectDependsOnPaths(dt: DataType): Set<String> {
-            val visited = mutableSetOf<String>()
-            val queue = ArrayDeque<DataType>()
-            queue.add(dt)
-
-            while (queue.isNotEmpty()) {
-                val cur = queue.removeFirst()
-                if (!visited.add(cur.pathName)) continue
-                when (cur) {
-                    is Structure -> cur.components.forEach { queue.add(it.dataType) }
-                    is Pointer -> cur.dataType?.let { queue.add(it) }
-                    is Array -> queue.add(cur.dataType)
-                    is TypeDef -> queue.add(cur.baseDataType)
-                    else -> {}
-                }
-            }
-
-            visited.remove(dt.pathName)
-            return visited
-        }
+        fun collectDependsOnPaths(dt: DataType): Set<String> =
+            DataTypeUtilities.getContainedDataTypes(dt).mapTo(mutableSetOf()) { it.pathName } - dt.pathName
     }
 
     /**
