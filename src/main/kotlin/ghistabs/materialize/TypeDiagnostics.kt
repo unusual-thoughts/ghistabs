@@ -94,8 +94,11 @@ fun DataTypeRegistry.reportSurvivingPlaceholders() {
 }
 
 /** DTM-wide `.conflict` census (name-suffixed forks: `.conflict`, `.conflict1`, …). */
-internal fun DataTypeManager.conflictCount(): Long =
-    allDataTypes.asSequence().count { DataTypeUtilities.isConflictDataType(it) }.toLong()
+internal fun DataTypeManager.conflictCount(): Long = conflictPaths().size.toLong()
+
+/** The forks themselves, by pathName — a set, so the end-of-import census can tell which are *ours*. */
+internal fun DataTypeManager.conflictPaths(): Set<String> =
+    allDataTypes.asSequence().filter { DataTypeUtilities.isConflictDataType(it) }.mapTo(mutableSetOf()) { it.pathName }
 
 /**
  * A `.conflict` fork means a type was applied whose layout didn't compare equal to an existing
@@ -105,16 +108,18 @@ internal fun DataTypeManager.conflictCount(): Long =
  */
 fun DataTypeRegistry.reportConflictDelta() {
     val conflicts = dtm.allDataTypes.asSequence().filter { DataTypeUtilities.isConflictDataType(it) }.toList()
-    debug("dtm-conflicts-pre", count = conflictsBefore)
+    debug("dtm-conflicts-pre", count = conflictsBefore.size.toLong())
     debug("dtm-conflicts-post", count = conflicts.size.toLong())
-    val added = conflicts.size - conflictsBefore
-    if (added > 0) {
-        // Name the forked types (pointers/arrays collapsed onto their conflict base), so the record
-        // answers *which* types clashed; the pre/post counters above carry how many.
-        val forked = conflicts.asSequence()
+    // Only the forks *this import* introduced: Ghidra's own analysis may have forked some before we
+    // ran, and a census over all of them would bill us for those too.
+    val introduced = conflicts.filterNot { it.pathName in conflictsBefore }
+    if (introduced.isNotEmpty()) {
+        // One degradation per forked type (pointers/arrays collapsed onto their conflict base): each
+        // is a second, wrong copy of a type we already built.
+        introduced.asSequence()
             .map { (DataTypeUtilities.getBaseDataType(it) ?: it).pathName }
-            .distinct().sorted().toList()
-        degradation("dtm-conflicts-created", "$added new fork(s)", forked.take(10).joinToString())
+            .distinct().sorted()
+            .forEach { degradation("dtm-conflicts-created", it) }
         reportDemanglerIncumbents(conflicts)
     }
 }
