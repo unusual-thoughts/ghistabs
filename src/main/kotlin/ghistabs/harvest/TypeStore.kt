@@ -212,8 +212,10 @@ class TypeStore(
      */
     private fun nameAnonymousTypedefTargets() {
         val renames = anonymousTypedefTargetNames()
-        for ((id, name) in renames) byId[id] = byId.getValue(id).copy(name = name)
-        if (renames.isNotEmpty()) debug("typedef-named-anon-aggregate", count = renames.size.toLong())
+        for ((id, name) in renames) {
+            byId[id] = byId.getValue(id).copy(name = name)
+            debug("typedef-named-anon-aggregate", "$id → $name")
+        }
     }
 
     fun toHarvest(): Pair<Map<GlobalTypeId, Type>, Map<GlobalTypeId, Map<String, Set<TypeDecl<GlobalTypeId>>>>> {

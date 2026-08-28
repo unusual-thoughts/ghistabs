@@ -1,7 +1,6 @@
 package ghistabs.materialize
 
 import ghidra.program.model.data.*
-import ghistabs.diagnose.degradation
 import ghistabs.harvest.Type
 import ghistabs.parse.AggrKind
 import ghistabs.parse.GlobalTypeId

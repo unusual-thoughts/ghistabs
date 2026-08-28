@@ -8,6 +8,10 @@
             "min": 7,
             "max": 7
         },
+        "array-count-substituted": {
+            "min": 8,
+            "max": 8
+        },
         "base-empty-ebo": {
             "min": 18,
             "max": 18
@@ -15,6 +19,10 @@
         "base-empty-ebo-inferred": {
             "min": 4,
             "max": 4
+        },
+        "base-synthesized": {
+            "min": 2,
+            "max": 2
         },
         "canonical-key-merged": {
             "min": 240,
@@ -27,30 +35,6 @@
         "data-no-coverage": {
             "min": 154,
             "max": 154
-        },
-        "degraded-base-synthesized": {
-            "min": 2,
-            "max": 2
-        },
-        "degraded-global-typed-all-undefined": {
-            "min": 4,
-            "max": 4
-        },
-        "degraded-param-unnamed-padded": {
-            "min": 22,
-            "max": 22
-        },
-        "degraded-placeholder-undefined-fields": {
-            "min": 20,
-            "max": 20
-        },
-        "degraded-struct-mostly-undefined": {
-            "min": 4,
-            "max": 4
-        },
-        "degraded-struct-truncated": {
-            "min": 11,
-            "max": 11
         },
         "demangle-applied": {
             "min": 3465,
@@ -139,6 +123,10 @@
         "global-applied": {
             "min": 10,
             "max": 10
+        },
+        "global-typed-all-undefined": {
+            "min": 4,
+            "max": 4
         },
         "harvest-collisions-divergent": {
             "min": 0,
@@ -284,9 +272,17 @@
             "min": 10,
             "max": 10
         },
+        "param-unnamed-padded": {
+            "min": 22,
+            "max": 22
+        },
         "placeholder-created": {
             "min": 667,
             "max": 667
+        },
+        "placeholder-undefined-fields": {
+            "min": 20,
+            "max": 20
         },
         "pointee-typed": {
             "min": 2,
@@ -324,6 +320,14 @@
             "min": 2,
             "max": 2
         },
+        "struct-mostly-undefined": {
+            "min": 4,
+            "max": 4
+        },
+        "struct-truncated": {
+            "min": 11,
+            "max": 11
+        },
         "text-boundaries-out-of-order": {
             "min": 1,
             "max": 1
@@ -348,6 +352,10 @@
             "min": 12,
             "max": 12
         },
+        "vtable-reconstructed": {
+            "min": 115,
+            "max": 115
+        },
         "vtable-secondary": {
             "min": 16,
             "max": 16
@@ -356,14 +364,10 @@
             "min": 12,
             "max": 12
         },
-        "vtable-swept": {
-            "min": 115,
-            "max": 115
-        },
         "xref-undefined": {
             "min": 60,
             "max": 60
         }
     },
-    "source": "xmltest_gcc421.exe - generated from snapshotCounters()"
+    "source": "xmltest_gcc421.exe - shifted from committed"
 }

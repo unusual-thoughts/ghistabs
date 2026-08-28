@@ -1,8 +1,16 @@
 {
     "counters": {
+        "array-count-substituted": {
+            "min": 30,
+            "max": 30
+        },
         "base-empty-ebo": {
             "min": 181,
             "max": 181
+        },
+        "base-synthesized": {
+            "min": 7,
+            "max": 7
         },
         "canonical-content-merged": {
             "min": 27,
@@ -27,54 +35,6 @@
         "data-no-coverage": {
             "min": 500,
             "max": 500
-        },
-        "degraded-base-synthesized": {
-            "min": 7,
-            "max": 7
-        },
-        "degraded-field-dropped": {
-            "min": 1,
-            "max": 1
-        },
-        "degraded-global-typed-all-undefined": {
-            "min": 25,
-            "max": 25
-        },
-        "degraded-global-typed-xref-stub": {
-            "min": 85,
-            "max": 85
-        },
-        "degraded-local-typed-all-undefined": {
-            "min": 24,
-            "max": 24
-        },
-        "degraded-param-typed-all-undefined": {
-            "min": 26,
-            "max": 26
-        },
-        "degraded-param-typed-anonymous": {
-            "min": 26,
-            "max": 26
-        },
-        "degraded-param-unnamed-padded": {
-            "min": 648,
-            "max": 648
-        },
-        "degraded-placeholder-undefined-fields": {
-            "min": 204,
-            "max": 204
-        },
-        "degraded-struct-mostly-undefined": {
-            "min": 23,
-            "max": 23
-        },
-        "degraded-struct-truncated": {
-            "min": 8,
-            "max": 8
-        },
-        "degraded-vtable-vbase-count-mismatch": {
-            "min": 2,
-            "max": 2
         },
         "demangle-applied": {
             "min": 28541,
@@ -164,6 +124,10 @@
             "min": 26,
             "max": 26
         },
+        "field-dropped": {
+            "min": 1,
+            "max": 1
+        },
         "file-start": {
             "min": 181,
             "max": 181
@@ -175,6 +139,14 @@
         "global-applied": {
             "min": 3155,
             "max": 3155
+        },
+        "global-typed-all-undefined": {
+            "min": 25,
+            "max": 25
+        },
+        "global-typed-xref-stub": {
+            "min": 85,
+            "max": 85
         },
         "harvest-collisions-divergent": {
             "min": 1,
@@ -324,13 +296,17 @@
             "min": 3027,
             "max": 3027
         },
+        "local-dropped": {
+            "min": 10,
+            "max": 10
+        },
+        "local-typed-all-undefined": {
+            "min": 24,
+            "max": 24
+        },
         "local-var-add-success": {
             "min": 3548,
             "max": 3548
-        },
-        "local-var-error": {
-            "min": 10,
-            "max": 10
         },
         "local-var-skipped-dup-local": {
             "min": 416,
@@ -348,9 +324,25 @@
             "min": 66,
             "max": 66
         },
+        "param-typed-all-undefined": {
+            "min": 26,
+            "max": 26
+        },
+        "param-typed-anonymous": {
+            "min": 26,
+            "max": 26
+        },
+        "param-unnamed-padded": {
+            "min": 648,
+            "max": 648
+        },
         "placeholder-created": {
             "min": 25904,
             "max": 25904
+        },
+        "placeholder-undefined-fields": {
+            "min": 204,
+            "max": 204
         },
         "pointee-typed": {
             "min": 16,
@@ -420,6 +412,14 @@
             "min": 2,
             "max": 2
         },
+        "struct-mostly-undefined": {
+            "min": 23,
+            "max": 23
+        },
+        "struct-truncated": {
+            "min": 8,
+            "max": 8
+        },
         "text-boundaries-out-of-order": {
             "min": 1,
             "max": 1
@@ -468,6 +468,10 @@
             "min": 68,
             "max": 68
         },
+        "vtable-reconstructed": {
+            "min": 460,
+            "max": 460
+        },
         "vtable-secondary": {
             "min": 436,
             "max": 436
@@ -476,9 +480,9 @@
             "min": 43,
             "max": 43
         },
-        "vtable-swept": {
-            "min": 460,
-            "max": 460
+        "vtable-vbase-count-mismatch": {
+            "min": 2,
+            "max": 2
         },
         "vtable-virtual-no-impl": {
             "min": 14,

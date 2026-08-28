@@ -68,7 +68,7 @@ class DegradationDumpProbe : AbstractGhidraHeadlessIntegrationTest() {
                     w.write("\n")
                     for ((cat, list) in byCategory) {
                         w.write("=== $cat (${list.size}) ===\n")
-                        for (e in list) w.write("  ${e.detail}\n")
+                        for (e in list) w.write("  $e\n")
                         w.write("\n")
                     }
                 }

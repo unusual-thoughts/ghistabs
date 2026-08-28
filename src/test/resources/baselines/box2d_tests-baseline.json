@@ -12,22 +12,6 @@
             "min": 40,
             "max": 40
         },
-        "degraded-global-typed-anonymous": {
-            "min": 2,
-            "max": 2
-        },
-        "degraded-local-typed-anonymous": {
-            "min": 284,
-            "max": 284
-        },
-        "degraded-struct-mostly-undefined": {
-            "min": 17,
-            "max": 17
-        },
-        "degraded-xref-stub-in-array-element": {
-            "min": 1,
-            "max": 1
-        },
         "demangle-applied": {
             "min": 0,
             "max": 0
@@ -41,18 +25,6 @@
             "max": 0
         },
         "demangle-displaced-label-dropped": {
-            "min": 0,
-            "max": 0
-        },
-        "demangler-unbound-stub": {
-            "min": 0,
-            "max": 0
-        },
-        "demangler-unbound-stub-in-signature": {
-            "min": 0,
-            "max": 0
-        },
-        "demangler-unbound-stub-signature-site": {
             "min": 0,
             "max": 0
         },
@@ -87,6 +59,10 @@
         "global-applied": {
             "min": 509,
             "max": 509
+        },
+        "global-typed-anonymous": {
+            "min": 2,
+            "max": 2
         },
         "harvest-collisions-divergent": {
             "min": 0,
@@ -208,6 +184,10 @@
             "min": 142,
             "max": 142
         },
+        "local-typed-anonymous": {
+            "min": 284,
+            "max": 284
+        },
         "local-var-add-success": {
             "min": 6346,
             "max": 6346
@@ -215,6 +195,10 @@
         "local-var-skipped-dup-local": {
             "min": 1696,
             "max": 1696
+        },
+        "named-typedef-unresolved": {
+            "min": 1,
+            "max": 1
         },
         "placeholder-created": {
             "min": 4739,
@@ -248,6 +232,10 @@
             "min": 32,
             "max": 32
         },
+        "struct-mostly-undefined": {
+            "min": 17,
+            "max": 17
+        },
         "textrange-entries": {
             "min": 171,
             "max": 171
@@ -259,6 +247,10 @@
         "unresolved-xref": {
             "min": 39,
             "max": 39
+        },
+        "xref-stub-in-array-element": {
+            "min": 1,
+            "max": 1
         },
         "xref-undefined": {
             "min": 39,

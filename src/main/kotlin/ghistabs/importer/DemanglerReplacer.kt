@@ -14,7 +14,6 @@ import ghidra.program.model.symbol.SymbolUtilities
 import ghistabs.Demangler
 import ghistabs.applyDemangling
 import ghistabs.diagnose.DiagnosticSink
-import ghistabs.diagnose.degradation
 import ghistabs.materialize.DataTypeRegistry
 import ghistabs.materialize.itanium.Itanium.isProbablyMangled
 import ghistabs.materialize.itanium.Rtti
@@ -142,9 +141,7 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val registry:
         }
         debug("demangle-attempted", count = attempted.toLong())
         debug("demangle-applied", count = demangled.toLong())
-        for ((bucket, names) in failures.entries.sortedByDescending { it.value.size }) {
-            debug(bucket, names.take(5).joinToString(), count = names.size.toLong())
-        }
+        failures.forEach { (bucket, names) -> names.forEach { debug(bucket, it) } }
     }
 
     /**
@@ -384,7 +381,7 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val registry:
             .filterIsInstance<Structure>()
             .filter { it.isZeroLength || it.numComponents == 0 }
             .toSet()
-        debug("demangler-unbound-stub", count = unbound.size.toLong())
+        unbound.forEach { debug("demangler-unbound-stub", it.pathName) }
 
         val sites = mutableMapOf<DataType, MutableList<String>>()
         // Split by who put the type there. A decompiler-synthesized temp holding a stubbed `this` is
@@ -403,14 +400,9 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val registry:
         }
         byOrigin.entries.sortedByDescending { it.value }
             .forEach { (origin, n) -> debug("demangler-unbound-stub-site-origin", origin, count = n.toLong()) }
-        debug("demangler-unbound-stub-in-signature", count = sites.size.toLong())
-        debug("demangler-unbound-stub-signature-site", count = sites.values.sumOf { it.size }.toLong())
-        sites.entries.sortedByDescending { it.value.size }.take(20).forEach { (stub, where) ->
-            debug(
-                "demangler-unbound-stub-in-signature",
-                "${stub.pathName} <- ${where.size}: ${where.take(3).joinToString()}",
-                count = 0,
-            )
+        sites.forEach { (stub, where) ->
+            debug("demangler-unbound-stub-in-signature", "${stub.pathName} <- ${where.size} sites")
+            where.forEach { debug("demangler-unbound-stub-signature-site", "${stub.pathName} <- $it") }
         }
     }
 
