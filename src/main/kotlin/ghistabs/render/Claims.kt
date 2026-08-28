@@ -262,7 +262,7 @@ fun allocate(claims: List<Claim>, range: ClosedRange<Int>): Allocation {
         val ceiling = claim.limit?.coerceAtMost(range.endInclusive) ?: range.endInclusive
         val wanted = if (claim.fit == Fit.RIGID) claim.rows.size else ceiling - line + 1
         val end = (line + 1 until line + wanted).takeWhile { it <= ceiling && it !in held }.lastOrNull() ?: line
-        (line..end).forEach { held[it] = claim.owner.group }
+        for (r in line..end) held[r] = claim.owner.group
         placed += Placement(claim, line..end, copies)
     }
     // Peers take exactly the row they share, never the extent its holder expanded to.
@@ -278,7 +278,7 @@ fun allocate(claims: List<Claim>, range: ClosedRange<Int>): Allocation {
             continue
         }
         val end = (row until row + claim.rows.size).takeWhile { it < firstAnchored && it !in held }.last()
-        (row..end).forEach { held[it] = claim.owner.group }
+        for (r in row..end) held[r] = claim.owner.group
         placed += Placement(claim, row..end, copies)
         next = end + 1
     }

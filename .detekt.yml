@@ -1,0 +1,90 @@
+# Overrides on top of detekt's defaults (buildUponDefaultConfig). Only rules this codebase
+# genuinely disagrees with are listed; everything else stays at its stock setting.
+#
+# Size/complexity thresholds are set from the observed distribution over `src/main` rather than
+# by feel — measured 2026-08-28 across 402 functions. Re-measure before moving one: run detekt
+# with the limit set to 1 and read the reported numbers back out.
+
+complexity:
+  ComplexCondition:
+    allowedConditions: 4
+
+  CyclomaticComplexMethod:
+    excludes: ['**/test/**']
+    # A `when` dispatch table and a function with nested named helpers both bill their whole
+    # subtree to the enclosing declaration, which is where most of the stock hits came from.
+    ignoreSingleWhenExpression: true
+    ignoreSimpleWhenEntries: true
+    ignoreLocalFunctions: true
+    # Distribution: p50=3, p90=10, p95=13, max=29. 18 sits well clear of p95, so it flags the
+    # genuine outliers (10 of them) and not the merely-branchy.
+    allowedComplexity: 17
+
+  LongMethod:
+    excludes: ['**/test/**']
+    # Distribution: p50=9, p90=27, p95=41, max=132. The stock 60 lands right: 7 functions, all
+    # of them real.
+    allowedLines: 60
+
+  LargeClass:
+    excludes: ['**/test/**']
+
+  NestedBlockDepth:
+    excludes: ['**/test/**']
+
+  TooManyFunctions:
+    # Per *file* the counts cliff hard — 24 (GhidraExtensions.kt) and 23 (render/Tokens.kt), then
+    # nothing above 9. Both are deliberate flat helper collections, so 25 clears them and still
+    # catches a third one appearing. Same for the one namespace `object` (Itanium, 19).
+    # Per *class* the counts run 13, 12, 10, 9 … with no cliff, so that limit stays at stock: a
+    # class with 12 methods is worth a look.
+    allowedFunctionsPerFile: 25
+    allowedFunctionsPerObject: 20
+    ignorePrivate: true
+
+exceptions:
+  # Every site is a resilience boundary around a Ghidra API call that records a diagnostic
+  # (err/degradation) and continues, or a transaction guard that rolls back and rethrows.
+  # Narrowing the catch would mean enumerating what Ghidra throws, which is not documented.
+  TooGenericExceptionCaught:
+    active: false
+
+  # A test harness printing the trace of the failure it just caught is doing its job.
+  PrintStackTrace:
+    excludes: ['**/test/**']
+
+naming:
+  # Test support files group fixtures and helpers by role, not by a single declaration.
+  MatchingDeclarationName:
+    excludes: ['**/test/**']
+
+style:
+  # Kept on, and it earns its place: ktlint's max-line-length does not police comment lines, so
+  # this is the only thing catching an overlong KDoc or `//`. Same limit as .editorconfig.
+  MaxLineLength:
+    maxLineLength: 120
+
+  # Positional unpacking of a 4-field record is not a readability problem.
+  DestructuringDeclarationWithTooManyEntries:
+    active: false
+
+  # House style: guard clauses and early returns over nested null-checks.
+  ReturnCount:
+    active: false
+
+  # `maxJumpCount` counts `break` and `continue` together, so it cannot express the thing it is
+  # actually for — a loop interleaving the two around a flag variable. Measured 2026-08-28: all 10
+  # flagged loops were pure `continue`-guards, 43 of them, and not one `break` between them. That
+  # is a guard clause applied to an iteration, same as ReturnCount above.
+  LoopWithTooManyJumpStatements:
+    active: false
+
+  # ktlint owns this, and has it switched off on purpose
+  # (`ktlint_standard_no-wildcard-imports = disabled` in .editorconfig).
+  WildcardImport:
+    active: false
+
+  # Fires on layout arithmetic, bit widths and stab type codes, where the literal *is* the
+  # meaning and a named constant would only restate it.
+  MagicNumber:
+    active: false

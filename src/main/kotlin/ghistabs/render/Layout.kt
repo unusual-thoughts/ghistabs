@@ -17,7 +17,7 @@ fun wrapDecompLine(text: String, depth: Int, cuts: List<Cut>, minLen: Int = 120)
     splitCondition(text, text.indices, cuts, minLen).mapIndexed { i, s -> (if (i == 0) depth else depth + 2) to s }
 
 private fun splitCondition(text: String, span: IntRange, cuts: List<Cut>, minLen: Int): List<String> {
-    val piece = { it: IntRange -> text.substring(it.first, it.last + 1).trim() }
+    val piece = { r: IntRange -> text.substring(r.first, r.last + 1).trim() }
     if (span.last - span.first + 1 <= minLen) return listOf(piece(span))
     // Shallowest first, and only within this piece: a nested boundary is a split point for the piece
     // it ends up in, not for this one.

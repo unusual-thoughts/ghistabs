@@ -5,6 +5,7 @@ plugins {
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ktlint)
+    alias(libs.plugins.detekt)
     id("cli")
     id("test-inventory")
     id("ghidra-extension")
@@ -35,6 +36,15 @@ kotlin {
     // Ghidra shares one classpath across installed extensions, so the oldest kotlin-stdlib wins —
     // GhidraJupyterKotlin pins 1.9.23. Binding above it fails at runtime in the GUI only.
     compilerOptions { apiVersion.set(org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_1_9) }
+}
+
+// The baseline freezes the size/complexity findings that predate the config so the rules act as a
+// ratchet: new violations fail, the known-big functions don't. Shrink it as those get split; don't
+// regenerate it wholesale to bury a new hit (`./gradlew detektBaseline` if you must).
+detekt {
+    buildUponDefaultConfig = true
+    config.from(files(".detekt.yml"))
+    baseline = file(".detekt-baseline.xml")
 }
 
 // Don't copy `binaries/` into build/resources/test/.

@@ -71,6 +71,7 @@ private fun DataTypeRegistry.recordTruncation(ast: Type, originalBytes: Long, tr
     degradation(
         "struct-truncated",
         ast.ghidraName,
-        "stab claims $originalBytes bytes, last described byte $truncatedBytes; trimmed ${originalBytes - truncatedBytes}",
+        "stab claims $originalBytes bytes, last described byte $truncatedBytes; " +
+            "trimmed ${originalBytes - truncatedBytes}",
     )
 }

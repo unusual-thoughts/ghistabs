@@ -72,7 +72,14 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val registry:
             return ops to skips
         }
 
-        /** Transitive dependency pathNames of [dt] (Structure components, Pointer/Array/TypeDef targets). Excludes self. */
+        /**
+         * Transitive containment closure of [dt] by pathName, excluding self.
+         *
+         * Not [DataType.dependsOn], which asks the narrower deletion-cascade question and is a flat
+         * `false` on every Composite — which is also why [DataTypeManagerDB]'s own
+         * `replacementDt.dependsOn(existingDt)` guard never fires for the struct replacements here,
+         * and why the caller needs this one.
+         */
         fun collectDependsOnPaths(dt: DataType): Set<String> {
             val visited = mutableSetOf<String>()
             val queue = ArrayDeque<DataType>()
@@ -437,7 +444,10 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val registry:
 
     private val rtti by lazy { Rtti(ctx.dtm) }
 
-    /** Every datatype the registry materialized, by name (checked first, so exact names never go through normalization) */
+    /**
+     * Every datatype the registry materialized, by name (checked first, so exact names never go
+     * through normalization).
+     */
     private val byExactName = registry.allCreatedDataTypes.groupBy { it.name }.mapValues { it.value.toSet() }
 
     /** Exact DTM-name match for a demangler stub — no spelling normalization. */

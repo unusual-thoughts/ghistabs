@@ -90,7 +90,7 @@ object DummySink : DiagnosticSink {
         address: Address?,
         degrades: String?,
         count: Long,
-    ) {}
+    ) = Unit
 }
 
 /** Fan-out sink — tees the [StabsDiagnostics] accumulator alongside a terminal (Bookmark/Capturing). */

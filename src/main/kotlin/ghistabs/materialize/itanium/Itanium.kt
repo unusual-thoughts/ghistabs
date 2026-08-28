@@ -110,7 +110,8 @@ object Itanium {
 
     /** The qualified class name a `_ZTV<class>` [symbolName] names (e.g. `std::basic_ios<char,…>`), or
      *  null if it isn't a vtable. Lets a caller demangle the symbol table once into a class→address index
-     *  instead of re-scanning + re-demangling every symbol per class ([ghistabs.materialize.ClassBuilder.resolveVtableAddress]). */
+     *  instead of re-scanning + re-demangling every symbol per class
+     *  ([ghistabs.materialize.ClassBuilder.resolveVtableAddress]). */
     fun vtableClassOf(symbolName: String): String? {
         if (!looksLikeZtv(symbolName)) return null
         return Demangler.of(symbolName)?.let(::demangledVtableClass)
