@@ -106,7 +106,10 @@ class StabsDiagnostics : DiagnosticSink {
 
     fun snapshotAttributionTraces() = attributionTraces.toList()
 
-    /** Structured degradations, filed by [log] for every event carrying a `degrades` (see [DiagnosticSink.degradation]). */
+    /**
+     * Structured degradations, filed by [log] for every event carrying a `degrades`
+     * (see [DiagnosticSink.degradation]).
+     */
     fun snapshotDegradations(): List<DegradationRecord> = degradations.toList()
 
     /** One-shot — subsequent calls are no-ops. Emits counters, example buckets, and gap census. */

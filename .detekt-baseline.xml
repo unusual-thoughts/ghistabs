@@ -1,0 +1,25 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>CyclomaticComplexMethod:Claims.kt:fun allocate: Allocation</ID>
+    <ID>CyclomaticComplexMethod:ClassBuilder.kt:ClassBuilder$private fun LocatedType.reparentMethod</ID>
+    <ID>CyclomaticComplexMethod:DemanglerReplacer.kt:DemanglerReplacer$private fun retargetStubSites</ID>
+    <ID>CyclomaticComplexMethod:FileRenderer.kt:FileRenderer$private fun decompClaims: List&lt;Claim&gt;</ID>
+    <ID>CyclomaticComplexMethod:FileRenderer.kt:FileRenderer$private fun reportAnomalies</ID>
+    <ID>CyclomaticComplexMethod:Materialization.kt:internal fun DataTypeRegistry.fillComposite: DataType</ID>
+    <ID>CyclomaticComplexMethod:Materialization.kt:internal fun DataTypeRegistry.fillStructBases</ID>
+    <ID>CyclomaticComplexMethod:Parser.kt:Parser$private fun Cursor.parseStruct: TypeDecl.Struct&lt;LocalTypeId&gt;</ID>
+    <ID>CyclomaticComplexMethod:SymbolApplier.kt:SymbolApplier$internal fun applyAllFunctions: Int</ID>
+    <ID>CyclomaticComplexMethod:TypeStore.kt:TypeStore$private fun synthesizeXRefStubsForDanglingInheritanceRefs</ID>
+    <ID>LongMethod:Claims.kt:fun allocate: Allocation</ID>
+    <ID>LongMethod:ClassBuilder.kt:ClassBuilder$private fun LocatedType.reparentMethod</ID>
+    <ID>LongMethod:FileRenderer.kt:FileRenderer$private fun decompClaims: List&lt;Claim&gt;</ID>
+    <ID>LongMethod:Materialization.kt:internal fun DataTypeRegistry.fillComposite: DataType</ID>
+    <ID>LongMethod:Parser.kt:Parser$private fun Cursor.parseStruct: TypeDecl.Struct&lt;LocalTypeId&gt;</ID>
+    <ID>LongMethod:SymbolApplier.kt:SymbolApplier$internal fun applyAllFunctions: Int</ID>
+    <ID>LongMethod:SymbolApplier.kt:SymbolApplier$private fun applyLocal</ID>
+    <ID>TooManyFunctions:DataTypeRegistry.kt:DataTypeRegistry : DiagnosticSink</ID>
+    <ID>TooManyFunctions:StabCursor.kt:StabCursor : DiagnosticSinkGlobalizer</ID>
+  </CurrentIssues>
+</SmellBaseline>

@@ -7,6 +7,7 @@ kotlinxSerialization = "1.10.0"
 junitJupiter = "5.14.4"
 junit4 = "4.13.2"
 clikt = "5.1.0"
+detekt = "2.0.0-alpha.6"
 
 [libraries]
 kotlinx-serialization-core = { module = "org.jetbrains.kotlinx:kotlinx-serialization-core", version.ref = "kotlinxSerialization" }
@@ -24,3 +25,4 @@ junit = ["junit-jupiter", "junit4"]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlint" }
+detekt = { id = "dev.detekt", version.ref = "detekt" }

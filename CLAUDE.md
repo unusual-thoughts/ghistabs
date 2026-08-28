@@ -37,6 +37,7 @@ export GHIDRA_INSTALL_DIR=/opt/ghidra     # or pass -PGHIDRA_INSTALL_DIR=...
 ./gradlew compileKotlin                   # compile
 ./gradlew ktlintFormat                    # autoformat (run before every commit)
 ./gradlew ktlintCheck                     # verify formatting
+./gradlew detekt                          # static analysis (part of `check`)
 ./gradlew test                            # fast unit tests (excludes integration)
 ./gradlew integrationTest                 # headless-Ghidra tests against fixtures (slow, ~minutes)
 ./gradlew noSerializationTest             # guards the compileOnly split (see TESTING.md)
@@ -74,6 +75,13 @@ render changes (the probe tests only assert "something was produced").
 - **Prefer the Ghidra API** (`program.symbolTable`/`memory`/`dataTypeManager`) over re-parsing
   PE/ELF/COFF headers or hand-walking serialized dumps.
 - ktlint is authoritative for formatting; run `ktlintFormat` on every `.kt` change.
+- detekt is configured in `.detekt.yml` (overrides on top of the defaults; each entry carries the
+  reason). Rules that punish house style — early return, dispatch tables, catch-and-record at the
+  Ghidra boundary — are off there on purpose. Size/complexity thresholds are set from the measured
+  distribution over `src/main`, not by feel; re-measure before moving one. `MaxLineLength` stays
+  **on** because ktlint's own rule doesn't police comment lines.
+- `.detekt-baseline.xml` freezes the pre-existing size/complexity hits so the rules ratchet: shrink
+  it as those functions get split, don't regenerate it to paper over a new violation.
 
 ## Tests
 

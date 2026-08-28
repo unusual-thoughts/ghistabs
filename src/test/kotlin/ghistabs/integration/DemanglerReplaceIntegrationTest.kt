@@ -212,7 +212,8 @@ class DemanglerReplaceIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
         }
 
         dtm.getDataType(CategoryPath("/Demangler/std"), "codecvt<char,char,int>").mustBeNull(
-            "/Demangler/std stub should be replaced by the real candidate, not left ambiguous with the /stabs placeholder",
+            "/Demangler/std stub should be replaced by the real candidate, " +
+                "not left ambiguous with the /stabs placeholder",
         )
     }
 }

@@ -40,6 +40,18 @@ jobs:
     - name: Check formatting
       run: ./gradlew ktlintCheck
 
+    - name: Run static analysis
+      id: detekt
+      if: success() || failure()
+      run: ./gradlew detekt
+
+    - name: Upload detekt report
+      if: steps.detekt.conclusion == 'failure'
+      uses: actions/upload-artifact@v7
+      with:
+        name: detekt-report
+        path: build/reports/detekt/detekt.html
+
     - name: Run unit tests
       run: ./gradlew test
 
