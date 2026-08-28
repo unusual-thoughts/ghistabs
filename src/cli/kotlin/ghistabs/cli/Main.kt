@@ -31,7 +31,7 @@ import ghistabs.render.Renderer
 import ghistabs.runTransaction
 
 fun main(args: Array<String>) = NoOpCliktCommand(name = "ghistabs")
-    .subcommands(SkeletonCommand(), DecompCommand())
+    .subcommands(SkeletonCommand(), DecompCommand(), DumpCommand())
     .main(args)
 
 private class SkeletonCommand : RenderCommand(name = "skeleton") {
@@ -50,21 +50,29 @@ private class DecompCommand : RenderCommand(name = "decomp") {
     override val mode get() = if (elideSjlj) Renderer.Mode.ELIDE_SJLJ else Renderer.Mode.DECOMPILE
 }
 
+/** Import only, for the JSON/degradation dumps — no decompiler, no rendered output. */
+private class DumpCommand : StabsCommand(name = "dump") {
+    override fun help(context: Context) =
+        "Import and write the requested dumps only (at least one of --records/--harvest/--registry/--degradation-log)."
+
+    override fun validate() {
+        if (!wantsDumps) throw UsageError("nothing to dump: pass --records, --harvest, --registry or --degradation-log")
+    }
+
+    override fun emit(ctx: ImportContext<*>, artifacts: ImportArtifacts?) = Unit
+}
+
 /**
  * Freestanding headless driver: boot Ghidra, load [binary], run the stabs import with the given
- * [ImportOptions], optionally emit the record/harvest/registry JSON dumps, then render every source
- * into [outDir] in [mode]. Mirrors the pipeline the analyzer + render probes run, but from a `main()`
- * rather than a Ghidra tool or an integration test.
+ * [ImportOptions], then emit the record/harvest/registry JSON dumps and whatever the subcommand
+ * produces on top ([emit]). Mirrors the pipeline the analyzer + render probes run, but from a
+ * `main()` rather than a Ghidra tool or an integration test.
  *
  * The import log streams live to stderr (filtered at `--log-level`); `--log FILE` redirects it there.
  */
-private abstract class RenderCommand(name: String) : CliktCommand(name = name) {
-    protected abstract val mode: Renderer.Mode
-
+private abstract class StabsCommand(name: String) : CliktCommand(name = name) {
     private val binary by argument(help = "ELF/PE binary carrying .stab/.stabstr debug info (gcc 3.2–12)")
         .file(mustExist = true, canBeDir = false, mustBeReadable = true)
-    private val outDir by option("-d", "--target-dir", help = "Directory to write the rendered per-source files into")
-        .file(canBeFile = false).required()
     private val sourceRoots by option(
         "--source-root",
         help = "Directory containing partial original sources from the binary, to correlate and " +
@@ -75,12 +83,6 @@ private abstract class RenderCommand(name: String) : CliktCommand(name = name) {
         .flag("--no-classes", default = CLASSES.default)
     private val shortenTypedefs by option("--shorten-typedefs", help = SHORTEN_TYPEDEFS.desc)
         .flag("--no-shorten-typedefs", default = SHORTEN_TYPEDEFS.default)
-    private val varStorage by option("--var-storage", help = SHOW_STORAGE.desc)
-        .flag("--no-var-storage", default = SHOW_STORAGE.default)
-    private val lineAligned by option(
-        "--line-aligned",
-        help = "Render source line n at output line n, blank rows and all, instead of collapsing blank runs",
-    ).flag("--no-line-aligned", default = LINE_ALIGNED.default)
     private val foldSources by option("--fold-sources", help = FOLD_SOURCES.desc)
         .flag("--no-fold-sources", default = FOLD_SOURCES.default)
     private val disableAnalyzers by option(
@@ -98,9 +100,17 @@ private abstract class RenderCommand(name: String) : CliktCommand(name = name) {
 
     private val degradationLog by option("--degradation-log", help = "Write grouped materialization degradations here")
         .file(canBeDir = false)
-    private val recordsJson by option("--records-json", help = "Dump parsed StabRecords as JSON").file(canBeDir = false)
-    private val harvestJson by option("--harvest-json", help = "Dump the harvest as JSON").file(canBeDir = false)
-    private val registryJson by option("--registry-json", help = "Dump type registry as JSON").file(canBeDir = false)
+    private val recordsJson by option("--records", help = "Dump parsed StabRecords as JSON").file(canBeDir = false)
+    private val harvestJson by option("--harvest", help = "Dump the harvest as JSON").file(canBeDir = false)
+    private val registryJson by option("--registry", help = "Dump type registry as JSON").file(canBeDir = false)
+
+    protected val wantsDumps get() = listOfNotNull(degradationLog, recordsJson, harvestJson, registryJson).isNotEmpty()
+
+    /** Whatever this subcommand produces from the finished import, beyond the shared dumps. */
+    protected abstract fun emit(ctx: ImportContext<*>, artifacts: ImportArtifacts?)
+
+    /** Checked before Ghidra boots, so a misuse fails in milliseconds rather than after a full analysis. */
+    protected open fun validate() = Unit
 
     private val options get() = ImportOptions(
         false,
@@ -113,6 +123,7 @@ private abstract class RenderCommand(name: String) : CliktCommand(name = name) {
     )
 
     override fun run() {
+        validate()
         val monitor = BarLoggerMonitorSink(options.minLogLevel, currentContext.terminal, logGhidra)
         Msg.setErrorLogger(monitor)
         if (!Application.isInitialized()) {
@@ -148,7 +159,7 @@ private abstract class RenderCommand(name: String) : CliktCommand(name = name) {
                     }
 
                     ctx.writeDumps(artifacts)
-                    ctx.render(artifacts)
+                    emit(ctx, artifacts)
                 } finally {
                     program.release(this)
                 }
@@ -221,20 +232,34 @@ private abstract class RenderCommand(name: String) : CliktCommand(name = name) {
             )
         }
     }
+}
 
-    private fun ImportContext<*>.render(artifacts: ImportArtifacts?) {
+/** Renders every source file into [outDir] in [mode], on top of the shared import. */
+private abstract class RenderCommand(name: String) : StabsCommand(name = name) {
+    protected abstract val mode: Renderer.Mode
+
+    private val outDir by option("-d", "--target-dir", help = "Directory to write the rendered per-source files into")
+        .file(canBeFile = false).required()
+    private val varStorage by option("--var-storage", help = SHOW_STORAGE.desc)
+        .flag("--no-var-storage", default = SHOW_STORAGE.default)
+    private val lineAligned by option(
+        "--line-aligned",
+        help = "Render source line n at output line n, blank rows and all, instead of collapsing blank runs",
+    ).flag("--no-line-aligned", default = LINE_ALIGNED.default)
+
+    override fun emit(ctx: ImportContext<*>, artifacts: ImportArtifacts?) {
         artifacts ?: return
         Renderer(
             artifacts.index,
-            program,
+            ctx.program,
             mode,
-            resolver,
+            ctx.resolver,
             showStorage = varStorage,
             lineAligned = lineAligned,
-            sink = this,
+            sink = ctx,
         ).use { renderer ->
-            val written = renderer.renderAll(outDir, monitor)
-            log("render", "rendered ${renderer.sources.size} sources -> $written files in $outDir")
+            val written = renderer.renderAll(outDir, ctx.monitor)
+            ctx.log("render", "rendered ${renderer.sources.size} sources -> $written files in $outDir")
         }
     }
 }

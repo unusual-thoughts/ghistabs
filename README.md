@@ -153,17 +153,24 @@ compiler scaffolding as missing.
 ## Headless CLI
 
 `./gradlew buildCli` emits a self-contained launcher at `build/libs/ghistabs` that boots
-Ghidra, loads a binary, runs full auto-analysis plus the stabs import, and renders every
-source file — no GUI, no Ghidra project. (`./gradlew runCli -Pargs="…"` runs the same entry
-point in-process.)
+Ghidra, loads a binary and runs full auto-analysis plus the stabs import — no GUI, no Ghidra
+project. (`./gradlew runCli -Pargs="…"` runs the same entry point in-process.)
+
+Three subcommands share that pipeline and differ only in what they do with the result:
 
 ```bash
 build/libs/ghistabs skeleton myprogram.exe -d out/skeletons
 build/libs/ghistabs decomp   myprogram.exe -d out/decomps --shorten-typedefs
+build/libs/ghistabs dump     myprogram.exe --harvest h.json --registry r.json
 ```
 
-The two modes are not the same output with decompilation bolted on — they answer different
-questions.
+`dump` is the import on its own: it writes the JSON/degradation dumps and stops — no
+decompiler, no rendered files, so no `-d`. Use it to inspect what the stabs yielded without
+paying for the render. It requires at least one of `--records`, `--harvest`, `--registry`,
+`--degradation-log` (checked before Ghidra boots).
+
+The two render modes are not the same output with decompilation bolted on — they answer
+different questions.
 
 - **`skeleton`** is the *diagnostic* view: everything the debug info places in that file, at its
   original line — typedefs, type bodies, globals, function signatures, every parameter and
@@ -188,19 +195,29 @@ statement of decompilation in `decomp`, with the rest either gone or demoted to 
 the skeleton when you want to see what the stabs *claimed*; read `decomp` when you want the
 code.
 
-Shared options:
+Shared options (all three subcommands):
 
-| Option                                                | Default  | Effect                                                                                                                               |
-| ----------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `-d`, `--target-dir`                                  | required | Output directory; one file per source, named from the source path.                                                                   |
-| `--classes` / `--no-classes`                          | on       | Same as the analyzer's class reconstruction.                                                                                         |
-| `--shorten-typedefs`                                  | off      | Same as the analyzer's typedef shortening.                                                                                           |
-| `--fold-sources` / `--no-fold-sources`                | on       | Same as the analyzer's source folding.                                                                                               |
-| `-v`, `--log-level`                                   | `INFO`   | `DEBUG`/`INFO`/`WARN`/`ERROR`; the log streams live to stderr.                                                                       |
-| `--log FILE`                                          | stderr   | Redirect the import log to a file.                                                                                                   |
-| `--disable-analyzer NAME`                             | —        | Turn off every analyzer whose name contains `NAME` (repeatable). Render the same binary with and without one to A/B what it changes. |
-| `--records-json`, `--harvest-json`, `--registry-json` | —        | Dump the parsed stab records / harvest / materialized type registry as JSON.                                                         |
-| `--degradation-log FILE`                              | —        | Grouped report of every type that materialized to something weaker than the stabs described.                                         |
+| Option                                       | Default | Effect                                                                                                                               |
+| -------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `--classes` / `--no-classes`                 | on      | Same as the analyzer's class reconstruction.                                                                                         |
+| `--shorten-typedefs`                         | off     | Same as the analyzer's typedef shortening.                                                                                           |
+| `--fold-sources` / `--no-fold-sources`       | on      | Same as the analyzer's source folding.                                                                                               |
+| `--source-root DIR`                          | —       | Local checkout of sources the binary was built from, to correlate against (repeatable).                                              |
+| `--disable-analyzer NAME`                    | —       | Turn off every analyzer whose name contains `NAME` (repeatable). Render the same binary with and without one to A/B what it changes. |
+| `-v`, `--log-level`                          | `INFO`  | `DEBUG`/`INFO`/`WARN`/`ERROR`; the log streams live to stderr.                                                                       |
+| `--log FILE`                                 | stderr  | Also write the import log to a file.                                                                                                 |
+| `--log-ghidra`                               | off     | Include Ghidra's own log messages in the stream.                                                                                     |
+| `--records`, `--harvest`, `--registry` FILE  | —       | Dump the parsed stab records / harvest / materialized type registry as JSON.                                                         |
+| `--degradation-log FILE`                     | —       | Grouped report of every type that materialized to something weaker than the stabs described.                                         |
+
+Render options (`skeleton` and `decomp` only):
+
+| Option                    | Default  | Effect                                                                       |
+| ------------------------- | -------- | ----------------------------------------------------------------------------- |
+| `-d`, `--target-dir`      | required | Output directory; one file per source, named from the source path.           |
+| `--var-storage`           | off      | Annotate locals and parameters with their storage.                           |
+| `--line-aligned`          | off      | Source line n at output line n, blank rows and all, instead of collapsing runs. |
+| `--elide-sjlj`            | on       | `decomp` only; see above.                                                    |
 
 ## Status
 
