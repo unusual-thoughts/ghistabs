@@ -27,7 +27,7 @@ class DemanglerReplaceCoreTest {
         val foo = stub("/Demangler", "Foo")
         val real = filled("/proj", "Foo")
 
-        val (ops, skips) = DemanglerReplacer.decide(listOf(foo), mapOf("Foo" to real))
+        val (ops, skips) = DemanglerReplacer.decide(listOf(foo to real))
 
         skips.mustBeEmpty("no skips expected")
         foo mustBeSameAs ops.single().first
@@ -36,7 +36,7 @@ class DemanglerReplaceCoreTest {
 
     @Test
     fun skipsAStubWithNoCandidate() {
-        val (ops, skips) = DemanglerReplacer.decide(listOf(stub("/Demangler", "Foo")), emptyMap())
+        val (ops, skips) = DemanglerReplacer.decide(listOf(stub("/Demangler", "Foo") to null))
 
         ops.mustBeEmpty()
         skips.single().mustBeA<Skip.NoReplacement>()
@@ -46,7 +46,7 @@ class DemanglerReplaceCoreTest {
     fun leavesANonEmptyStubAlone() {
         val foo = filled("/Demangler", "Foo")
 
-        val (ops, skips) = DemanglerReplacer.decide(listOf(foo), mapOf("Foo" to filled("/proj", "Foo")))
+        val (ops, skips) = DemanglerReplacer.decide(listOf(foo to filled("/proj", "Foo")))
 
         ops.mustBeEmpty("a stub with components is already resolved")
         skips.mustBeEmpty("and is not a degradation either")
@@ -59,7 +59,7 @@ class DemanglerReplaceCoreTest {
         val cyclic = StructureDataType(CategoryPath("/proj"), "Foo", 0)
             .apply { add(PointerDataType(foo), "back", null) }
 
-        val (ops, skips) = DemanglerReplacer.decide(listOf(foo), mapOf("Foo" to cyclic))
+        val (ops, skips) = DemanglerReplacer.decide(listOf(foo to cyclic))
 
         ops.mustBeEmpty()
         skips.single().mustBeA<Skip.WouldBeCycle>()
@@ -79,7 +79,7 @@ class DemanglerReplaceCoreTest {
             .apply { add(PointerDataType(stringStub), "self", null) }
         val alias: DataType = TypedefDataType(CategoryPath("/std"), "string", basicString)
 
-        val (ops, skips) = DemanglerReplacer.decide(listOf(stringStub), mapOf("string" to alias))
+        val (ops, skips) = DemanglerReplacer.decide(listOf(stringStub to alias))
 
         skips.mustBeEmpty("a typedef replacement must not trip the cycle guard")
         alias mustBeSameAs ops.single().second
@@ -94,8 +94,7 @@ class DemanglerReplaceCoreTest {
             .apply { add(PointerDataType(baz), "b", null) }
 
         val (ops, skips) = DemanglerReplacer.decide(
-            listOf(foo, bar, baz),
-            mapOf("Foo" to filled("/proj", "Foo"), "Baz" to cyclicBaz),
+            listOf(foo to filled("/proj", "Foo"), bar to null, baz to cyclicBaz),
         )
 
         ops.map { it.first } mustBe listOf(foo)
