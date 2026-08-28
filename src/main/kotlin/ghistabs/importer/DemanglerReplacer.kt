@@ -69,32 +69,32 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val registry:
         }
 
         /**
-         * Transitive containment closure of [dt] by pathName, excluding self.
+         * Transitive dependency closure of [dt] by pathName, excluding self: [DataType.dependsOn]'s
+         * relation — Pointer→pointee, Array→element, Typedef→target — plus by-value Composite
+         * members, which `dependsOn` reports a flat `false` for. That gap is why
+         * [DataTypeManagerDB]'s own `replacementDt.dependsOn(existingDt)` precondition never fires
+         * for the struct replacements here.
          *
-         * Not [DataType.dependsOn], which asks the narrower deletion-cascade question and is a flat
-         * `false` on every Composite — which is also why [DataTypeManagerDB]'s own
-         * `replacementDt.dependsOn(existingDt)` guard never fires for the struct replacements here,
-         * and why the caller needs this one.
+         * Must not descend into FunctionDefinition parameters, which is why the Ghidra reachability
+         * walks are unusable: that makes every vtable-bearing class reach its own stub through its
+         * virtual methods' `this`.
          */
         fun collectDependsOnPaths(dt: DataType): Set<String> {
             val visited = mutableSetOf<String>()
             val queue = ArrayDeque<DataType>()
             queue.add(dt)
-
             while (queue.isNotEmpty()) {
                 val cur = queue.removeFirst()
                 if (!visited.add(cur.pathName)) continue
                 when (cur) {
-                    is Structure -> cur.components.forEach { queue.add(it.dataType) }
+                    is Composite -> cur.components.forEach { queue.add(it.dataType) }
                     is Pointer -> cur.dataType?.let { queue.add(it) }
                     is Array -> queue.add(cur.dataType)
                     is TypeDef -> queue.add(cur.baseDataType)
                     else -> {}
                 }
             }
-
-            visited.remove(dt.pathName)
-            return visited
+            return visited - dt.pathName
         }
     }
 
@@ -308,6 +308,7 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val registry:
             }
             debug("demangler-retarget-bound", "$at -> ${owner.pathName}")
             for (p in f.parameters) {
+                if (p.isAutoParameter) continue
                 val redecorated = redecorate(p.dataType, owner) { it in unbound } ?: continue
                 p.setDataType(redecorated, SourceType.IMPORTED)
                 debug("demangler-retargeted-stub-site", at)
