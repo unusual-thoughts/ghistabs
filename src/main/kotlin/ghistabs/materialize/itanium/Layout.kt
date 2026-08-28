@@ -1,6 +1,7 @@
 package ghistabs.materialize.itanium
 
 import ghistabs.harvest.HarvestIndex
+import ghistabs.harvest.resolve
 import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
@@ -75,7 +76,7 @@ fun HarvestIndex.hasPolymorphicBaseSubobject(typeDecl: TypeDecl.Struct<GlobalTyp
 fun HarvestIndex.firstPolymorphicBase(typeDecl: TypeDecl.Struct<GlobalTypeId>): Base<GlobalTypeId>? = typeDecl.bases
     .sortedBy { it.offsetBits }
     .firstOrNull { base ->
-        baseStructOf(base.type)?.run {
+        resolveStruct(base.type)?.run {
             hasVTablePointerMarker ||
                 methods.any { it.virt == VirtKind.VIRTUAL } ||
                 firstPolymorphicBase(this) != null
@@ -99,35 +100,13 @@ fun HarvestIndex.virtualBases(typeDecl: TypeDecl.Struct<GlobalTypeId>) = buildLi
         if (!seen.add(cls)) return
         for (base in cls.bases) {
             if (base.isVirtual) add(base)
-            baseStructOf(base.type)?.let(::walk)
+            resolveStruct(base.type)?.let(::walk)
         }
     }
     walk(typeDecl)
 }
 
-/**
- * The struct body defining the base class [typeDecl] names, or null if it cannot be reached. Every
- * walk of the inheritance graph goes through here — vfptr inheritance, virtual collection,
- * vbase counting — because gcc spells the same base three ways depending on what the CU had already
- * emitted, and a caller that handled only one of them would silently see a class as having no bases:
- *
- * - `Ref(id)` — the ordinary case, the base was already defined; take the ast at that id.
- * - `XRef` — a forward declaration carrying only a tag name; find the ast that defines the tag.
- * - `InlineDef(id, inner)` — the definition spliced in at the point of use. Prefer the ast registered
- *   at the id over `inner`, which is frequently itself a forward `XRef`: without that preference
- *   polymorphism detection misses inherited vfptrs (`bouniaf` → `InlineDef(ExprInst id, XRef body)`).
- */
-fun HarvestIndex.baseStructOf(typeDecl: GlobalTypeDecl): TypeDecl.Struct<GlobalTypeId>? = when (typeDecl) {
-    is TypeDecl.Ref -> getStruct(typeDecl.id)
-
-    is TypeDecl.XRef -> byXRef(typeDecl)?.body as? TypeDecl.Struct<GlobalTypeId>
-
-    is TypeDecl.InlineDef -> getStruct(typeDecl.id)
-        ?: (typeDecl.inner as? TypeDecl.Struct)
-        ?: baseStructOf(typeDecl.inner)
-
-    else -> null
-}
+fun HarvestIndex.resolveStruct(typeDecl: GlobalTypeDecl) = resolve<TypeDecl.Struct<GlobalTypeId>>(typeDecl)
 
 /**
  * Collects a class's full vtable slot list from its inheritance chain and orders it by the
@@ -141,7 +120,7 @@ fun HarvestIndex.collectAllVirtuals(struct: TypeDecl.Struct<GlobalTypeId>) = obj
 
     private fun walkBases(cls: TypeDecl.Struct<GlobalTypeId>) {
         for (base in cls.bases) {
-            baseStructOf(base.type)?.takeIf { visited.add(it) }?.let { collectAll(it) }
+            resolveStruct(base.type)?.takeIf { visited.add(it) }?.let { collectAll(it) }
         }
     }
 

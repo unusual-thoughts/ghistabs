@@ -5,8 +5,8 @@ import ghidra.program.model.lang.CompilerSpec
 import ghistabs.harvest.Type
 import ghistabs.materialize.itanium.Itanium
 import ghistabs.materialize.itanium.Layout
-import ghistabs.materialize.itanium.baseStructOf
 import ghistabs.materialize.itanium.firstPolymorphicBase
+import ghistabs.materialize.itanium.resolveStruct
 import ghistabs.parse.CATEGORY
 import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.GlobalTypeId
@@ -115,7 +115,7 @@ internal fun DataTypeRegistry.fillStructBases(
     // An empty base occupies nothing (EBO) and must not be given the offset it shares with a
     // space-occupying sibling: cryptopp's `TwoBases<BlockCipher,Rijndael_Info>` declares both at +0,
     // and the empty one arriving second used to take the slot the 12-byte one had already claimed.
-    val occupying = body.bases.filterNot { index.baseStructOf(it.type)?.sizeBytes?.let { n -> n <= 1 } == true }
+    val occupying = body.bases.filterNot { index.resolveStruct(it.type)?.sizeBytes?.let { n -> n <= 1 } == true }
     if (occupying.size < body.bases.size) debug("base-empty-ebo")
 
     // Layout boundary to infer size of unresolved bases: offset of next

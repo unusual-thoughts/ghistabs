@@ -222,23 +222,14 @@ private val Demangled.categoryPath get(): CategoryPath =
  */
 private fun HarvestIndex.thisParamTypeId(fn: Func): GlobalTypeId? {
     val p = fn.params.firstOrNull()?.body?.takeIf { it.name == "this" } ?: return null
-    return (resolveDecl(p.type) as? TypeDecl.Pointer)?.inner?.let(::namedId)
-}
-
-/** [decl] through qualifier/definition wrappers and `Ref` indirections, to the body it names. */
-private tailrec fun HarvestIndex.resolveDecl(decl: GlobalTypeDecl?, fuel: Int = 8): GlobalTypeDecl? = when (decl) {
-    is TypeDecl.Ref -> if (fuel == 0) null else resolveDecl(byId(decl.id)?.body, fuel - 1)
-    is TypeDecl.InlineDef -> resolveDecl(decl.inner, fuel)
-    is TypeDecl.Const -> resolveDecl(decl.inner, fuel)
-    is TypeDecl.Volatile -> resolveDecl(decl.inner, fuel)
-    else -> decl
+    return resolve<TypeDecl.Pointer<GlobalTypeId>>(p.type)?.inner?.let { namedId(it) }
 }
 
 /** The id [decl] names, through the same wrappers — without resolving it to a body. */
-private tailrec fun namedId(decl: GlobalTypeDecl): GlobalTypeId? = when (decl) {
-    is TypeDecl.Ref -> decl.id
-    is TypeDecl.InlineDef -> decl.id
-    is TypeDecl.Const -> namedId(decl.inner)
-    is TypeDecl.Volatile -> namedId(decl.inner)
-    else -> null
+private fun HarvestIndex.namedId(decl: GlobalTypeDecl) = resolveWith(decl) {
+    when (it) {
+        is TypeDecl.Ref -> it.id
+        is TypeDecl.InlineDef -> it.id
+        else -> null
+    }
 }

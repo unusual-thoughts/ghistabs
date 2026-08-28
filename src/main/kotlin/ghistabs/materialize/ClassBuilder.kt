@@ -20,6 +20,7 @@ import ghistabs.diagnose.Level
 import ghistabs.harvest.HarvestIndex
 import ghistabs.harvest.LocatedType
 import ghistabs.harvest.demangledClassPath
+import ghistabs.harvest.resolveWith
 import ghistabs.importer.ImportContext
 import ghistabs.isInjected
 import ghistabs.isMethod
@@ -474,18 +475,8 @@ class ClassBuilder(
     }
 
     /** Walk Ref/InlineDef wrappers to the underlying Method/FunctionT (gcc binds signatures to their own type id). */
-    private fun unwrapSignature(sig: GlobalTypeDecl): GlobalTypeDecl? {
-        var cur: GlobalTypeDecl? = sig
-        while (cur != null) {
-            cur = when (cur) {
-                is TypeDecl.Method, is TypeDecl.FunctionT -> return cur
-                is TypeDecl.Ref -> index.byId(cur.id)?.body
-                is TypeDecl.InlineDef -> cur.inner
-                else -> return null
-            }
-        }
-        return null
-    }
+    private fun unwrapSignature(sig: GlobalTypeDecl) =
+        index.resolveWith(sig) { it.takeIf { d -> d is TypeDecl.Method || d is TypeDecl.FunctionT } }
 
     /**
      * Build the typed function-pointer slot for [m]: `Pointer→FunctionDefinition(<sig>)`.

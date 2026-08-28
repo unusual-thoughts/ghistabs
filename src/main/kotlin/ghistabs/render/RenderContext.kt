@@ -89,40 +89,16 @@ interface RenderContext {
     }
 
     /** True if this resolves to a pointer, seeing through refs, cv-qualifiers and typedefs. */
-    fun GlobalTypeDecl.isPointer(index: HarvestIndex): Boolean = when (this) {
-        is TypeDecl.Pointer -> true
-        is TypeDecl.Const -> inner.isPointer(index)
-        is TypeDecl.Volatile -> inner.isPointer(index)
-        is TypeDecl.InlineDef -> inner.isPointer(index)
-        is TypeDecl.Ref -> index.byId(id)?.body?.isPointer(index) ?: false
-        else -> false
-    }
+    fun GlobalTypeDecl.isPointer(index: HarvestIndex) = index.resolve<TypeDecl.Pointer<GlobalTypeId>>(this) != null
 
     /** True if this resolves to an array of char — a string literal — through cv-quals and typedefs. */
-    fun GlobalTypeDecl.isCharArray(index: HarvestIndex): Boolean = when (this) {
-        is TypeDecl.Array -> element.isCharType(index)
-        is TypeDecl.Const -> inner.isCharArray(index)
-        is TypeDecl.Volatile -> inner.isCharArray(index)
-        is TypeDecl.InlineDef -> inner.isCharArray(index)
-        is TypeDecl.Ref -> index.byId(id)?.body?.isCharArray(index) ?: false
-        else -> false
-    }
+    fun GlobalTypeDecl.isCharArray(index: HarvestIndex) =
+        index.resolve<TypeDecl.Array<GlobalTypeId>>(this)?.element?.isCharType(index) == true
 
-    private fun GlobalTypeDecl.isCharType(index: HarvestIndex): Boolean = when (this) {
-        is TypeDecl.Const -> inner.isCharType(index)
-
-        is TypeDecl.Volatile -> inner.isCharType(index)
-
-        is TypeDecl.InlineDef -> inner.isCharType(index)
-
-        is TypeDecl.Ref -> index.byId(id)?.body?.isCharType(index) ?: false
-
-        // Any 1-byte integer element: cygwin's named `char` resolves through its Range body to
-        // Byte, not Char. The printable-run guard in stringLiteralAt keeps binary byte[] as hex.
-        else -> when (resolveBuiltin()) {
-            is CharDataType, is ByteDataType, is SignedByteDataType -> true
-            else -> false
-        }
+    // Any 1-byte integer element: cygwin's named `char` resolves through its Range body to
+    // Byte, not Char. The printable-run guard in stringLiteralAt keeps binary byte[] as hex.
+    private fun GlobalTypeDecl.isCharType(index: HarvestIndex) = index.resolveAny(this) { decl ->
+        decl.resolveBuiltin().let { it is CharDataType || it is ByteDataType || it is SignedByteDataType }
     }
 
     /** Render a Struct's body members for in-skeleton expansion: one bare C-style decl per entry. */
