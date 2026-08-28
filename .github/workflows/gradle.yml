@@ -19,9 +19,9 @@ jobs:
       checks: write
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     - name: Set up JDK 21
-      uses: actions/setup-java@v4
+      uses: actions/setup-java@v6
       with:
         java-version: '21'
         distribution: 'temurin'
@@ -62,7 +62,7 @@ jobs:
       if: steps.shifted.outputs.found == 'true'
       uses: actions/upload-artifact@v7
       with:
-        name: shifted-baselines
+        name: shifted-baselines.zip
         path: build/test-output/shifted-baselines/
 
     - name: Build zips
