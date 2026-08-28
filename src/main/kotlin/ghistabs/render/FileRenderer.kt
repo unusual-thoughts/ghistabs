@@ -29,7 +29,7 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
      * judge, so where it exists §43's circularity is simply gone.
      */
     private val sourceLength = believedLength(renderer.lengthOf(source), codeExtent) { length ->
-        warn("source-length-conflict", "$source: code reaches L$codeExtent of $length lines")
+        degradation("source-length-conflict", "$source", "code reaches L$codeExtent of $length lines")
     }
 
     /**
@@ -130,6 +130,13 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
         // types appear only as arguments to std templates, which belong to the header, not the .cpp.
         val (misattributed, placeable) = claims.partition { it.stale }
         displaced += misattributed.map { Dropped(it, MISATTRIBUTED) }
+        if (misattributed.isNotEmpty()) {
+            degradation(
+                "skeleton-misattributed",
+                "$source",
+                "${misattributed.size} declaration(s) left the canvas for the appendix",
+            )
+        }
         write(allocate(placeable, canvas))
         // Annotations, not content: they carry no code and share a row with whatever holds it, so
         // they are never claims. In decomp mode the body restates them, so they go where it landed.
@@ -138,7 +145,7 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
         // Trailing blank/stale lines are trimmed only in decomp mode; skeleton output
         // stays fully source-aligned.
         val rendered = canvas.render(trim = renderer.decomp != null, compact = !renderer.lineAligned)
-        spans.closeAnomalies(rendered.lines()).forEach { warn("skeleton[$source]: $it") }
+        spans.closeAnomalies(rendered.lines()).forEach { degradation("skeleton-close-anomaly", "$source", it) }
         return rendered + anonAggregateAppendix() + instantiationAppendix() + displacedAppendix()
     }
 
@@ -339,9 +346,10 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
         for (drop in allocation.dropped) {
             if (drop.claim.owner == Owner.FUNC_DELIM) continue
             displaced += drop
-            warn(
-                "skeleton[$source]: dropped ${drop.claim.owner} at L${drop.claim.line} — " +
-                    "${drop.reason}: ${drop.claim.rows.first().text}",
+            degradation(
+                "skeleton-claim-dropped",
+                "$source:${drop.claim.line}",
+                "${drop.claim.owner} ${drop.reason}: ${drop.claim.rows.first().text}",
             )
         }
     }

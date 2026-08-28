@@ -56,9 +56,7 @@ class SourceMapApplier(private val ctx: ImportContext<*>, private val index: Har
         publishTextRanges()
 
         fun identity(entry: LineEntry) = folds[entry.source]?.let { entry.copy(source = it) } ?: entry
-        // Grouped by outcome, `""` being published. One warning per reason carrying a per-file
-        // breakdown, rather than one per entry: an emitter whose addresses we resolve wrong has every
-        // entry rejected, and that would be thousands of bookmarks.
+        // Grouped by outcome, `""` being published.
         ctx.monitor.initialize(entries.size.toLong(), "Stabs: publishing source map")
         val byError = entries.groupBy { entry ->
             ctx.monitor.increment()
@@ -75,9 +73,7 @@ class SourceMapApplier(private val ctx: ImportContext<*>, private val index: Har
             }
         }
         for ((reason, bad) in byError) {
-            if (reason != null) {
-                warn(reason, "dropped ${bad.groupingBy {it.source.filename}.eachCount()}", count = bad.size.toLong())
-            }
+            if (reason != null) bad.forEach { warn(reason, "${it.source.filename}:${it.line} @ ${it.addr}") }
         }
 
         val dropped = byError.filterKeys { it != null }.values.flatten().mapTo(mutableSetOf(), ::identity)
@@ -114,13 +110,13 @@ class SourceMapApplier(private val ctx: ImportContext<*>, private val index: Har
     private fun publishTextRanges() {
         val ranges = index.harvest.textRanges.ifEmpty { return }
         for (file in ranges.values.toSet()) manager.addSourceFile(file)
-        val failed = ranges.entries.groupingBy { (range, source) ->
+        val outcomes = ranges.entries.map { (range, source) ->
             runCatching { manager.addSourceMapEntry(source, 0, range.minAddress, range.length) }
-                .exceptionOrNull()?.javaClass?.simpleName
-        }.eachCount()
-        for ((reason, n) in failed) {
-            if (reason != null) warn("textrange-rejected", reason, count = n.toLong())
+                .exceptionOrNull()
+                ?.also {
+                    warn("textrange-rejected", "${source.filename} :: ${it.javaClass.simpleName}", range.minAddress)
+                }
         }
-        debug("textrange-entries", count = (failed[null] ?: 0).toLong())
+        debug("textrange-entries", count = outcomes.count { it == null }.toLong())
     }
 }

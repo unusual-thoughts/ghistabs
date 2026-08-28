@@ -6,7 +6,6 @@ import ghidra.program.model.data.DataType
 import ghidra.program.model.data.DataTypeManager
 import ghidra.program.model.data.Undefined
 import ghistabs.diagnose.GapRecord
-import ghistabs.diagnose.degradation
 import ghistabs.harvest.Type
 import ghistabs.importer.DemanglerReplacer
 import ghistabs.parse.TypeDecl
@@ -101,8 +100,8 @@ internal fun DataTypeManager.conflictCount(): Long =
 /**
  * A `.conflict` fork means a type was applied whose layout didn't compare equal to an existing
  * type of the same name — usually re-resolving an unresolved template (RttiStructs per-CU-COMDAT
- * typeinfo was the offender) rather than a genuine ODR clash. Report how many the import added
- * over the construction-time baseline; a nonzero delta is a WARN.
+ * typeinfo was the offender) rather than a genuine ODR clash. A fork is a second, wrong copy of a
+ * type we already built, so a nonzero delta over the construction-time baseline is a degradation.
  */
 fun DataTypeRegistry.reportConflictDelta() {
     val conflicts = dtm.allDataTypes.asSequence().filter { DataTypeUtilities.isConflictDataType(it) }.toList()
@@ -110,13 +109,12 @@ fun DataTypeRegistry.reportConflictDelta() {
     debug("dtm-conflicts-post", count = conflicts.size.toLong())
     val added = conflicts.size - conflictsBefore
     if (added > 0) {
-        warn("dtm-conflicts-created", count = added)
-        // Name the forked types (pointers/arrays collapsed onto their conflict base) as examples,
-        // so "top examples" answers *which* types clashed, not just how many.
-        conflicts.asSequence()
+        // Name the forked types (pointers/arrays collapsed onto their conflict base), so the record
+        // answers *which* types clashed; the pre/post counters above carry how many.
+        val forked = conflicts.asSequence()
             .map { (DataTypeUtilities.getBaseDataType(it) ?: it).pathName }
-            .distinct().sorted().take(10)
-            .forEach { debug("dtm-conflicts-created", it, count = 0) }
+            .distinct().sorted().toList()
+        degradation("dtm-conflicts-created", "$added new fork(s)", forked.take(10).joinToString())
         reportDemanglerIncumbents(conflicts)
     }
 }
@@ -131,9 +129,10 @@ private fun DataTypeRegistry.reportDemanglerIncumbents(conflicts: List<DataType>
     conflicts.filter { it.categoryPath.isAncestorOrSelf(DemanglerReplacer.DEMANGLER_CATEGORY) }
         .forEach { fork ->
             val incumbent = dtm.getDataType(fork.categoryPath, DataTypeUtilities.getNameWithoutConflict(fork.name))
-            warn(
+            degradation(
                 "dtm-conflict-demangler-incumbent",
-                "${fork.pathName} forked against " + (
+                fork.pathName,
+                "forked against " + (
                     incumbent?.let { "${it.pathName} len=${it.length} desc=${it.description}" }
                         ?: "nothing at that path"
                     ),

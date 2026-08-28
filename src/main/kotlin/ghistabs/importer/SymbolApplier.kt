@@ -18,7 +18,6 @@ import ghistabs.baseStackParamOffset
 import ghistabs.diagnose.ApplyErrorBucket
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.Level
-import ghistabs.diagnose.degradation
 import ghistabs.forceCreateData
 import ghistabs.harvest.*
 import ghistabs.materialize.DataTypeRegistry
@@ -64,7 +63,10 @@ class SymbolApplier(
         return this +
             declared.drop(size).mapIndexed { i, t ->
                 val dt = runCatching { t.getDataType(ctx.program.dataTypeManager) }.getOrNull()
-                ParameterImpl("param_${size + i + 1}", dt ?: Undefined4DataType.dataType, ctx.program, source)
+                    ?: Undefined4DataType.dataType.also {
+                        degradation("param-unnamed-untyped", mangled, "demangler gave no type for $t")
+                    }
+                ParameterImpl("param_${size + i + 1}", dt, ctx.program, source)
             }
     }
 
@@ -126,6 +128,7 @@ class SymbolApplier(
                             degradation(
                                 "param-untyped",
                                 "${open.name}.${p.body.name}",
+                                address = open.addr,
                             )
                         }
                         registry.reasonFor(pdt)?.let { reason ->
@@ -133,6 +136,7 @@ class SymbolApplier(
                                 "param-typed-$reason",
                                 "${open.name}.${p.body.name}",
                                 "type=${pdt?.pathName}",
+                                open.addr,
                             )
                         }
                         ParameterImpl(
@@ -176,7 +180,7 @@ class SymbolApplier(
             } catch (t: Throwable) {
                 val bucket = ApplyErrorBucket.bucket(t)
                 err("apply-error-$bucket", "function ${open.name}: ${t.message}", address = open.addr)
-                err("apply-error", "function ${open.name}: ${t.message}", address = open.addr)
+                degradation("function-partially-applied", open.name, bucket, open.addr)
             }
         }
         return functions
@@ -331,10 +335,11 @@ class SymbolApplier(
                     "local-typed-$reason",
                     "${func.name}.${decl.name}",
                     "type=${it.pathName}",
+                    func.entryPoint,
                 )
             }
         } ?: run {
-            degradation("local-untyped", "${func.name}.${decl.name}]")
+            degradation("local-untyped", "${func.name}.${decl.name}", address = func.entryPoint)
             Undefined4DataType.dataType
         }
 
@@ -373,6 +378,7 @@ class SymbolApplier(
                             "reglocal-unmapped-regnum",
                             "${func.name}.${decl.name}",
                             "dbx-reg=$dbxNum arch-ptr-size=$pointerSize",
+                            func.entryPoint,
                         )
                         return
                     }
@@ -395,7 +401,7 @@ class SymbolApplier(
                 }
             }
         } catch (e: Exception) {
-            warn("local-var-error", "Could not add local '${decl.name}' to ${func.name}: ${e.message}", func.entryPoint)
+            degradation("local-dropped", "${func.name}.${decl.name}", e.message, func.entryPoint)
         }
     }
 
@@ -409,7 +415,7 @@ class SymbolApplier(
                         ctx.program.listing.setComment(start, CommentType.PLATE, scopeCommentText(locals))
                     }
                 } catch (e: Exception) {
-                    warn("scope-comment-error", "Failed to set scope comment: ${e.message}", func.entryPoint)
+                    degradation("scope-comment-dropped", "${func.name}", e.message, start)
                 }
                 comment(children)
             }
@@ -449,7 +455,7 @@ class SymbolApplier(
         ensureStabLabel(addr, sym.body.name)
 
         val dt = registry.resolveRef(decl.type) ?: run {
-            warn("static-skipped", "reason=unresolved-ref", addr)
+            degradation("global-untyped", decl.name, "unresolved ${decl.type}", addr)
             return false
         }
         registry.reasonFor(dt)?.let { reason ->
@@ -457,6 +463,7 @@ class SymbolApplier(
                 "global-typed-$reason",
                 sym.body.name,
                 "type=${dt.pathName}",
+                addr,
             )
         }
 

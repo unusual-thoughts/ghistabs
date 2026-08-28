@@ -17,7 +17,6 @@ import ghistabs.Demangler
 import ghistabs.applyDemangling
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.Level
-import ghistabs.diagnose.degradation
 import ghistabs.harvest.HarvestIndex
 import ghistabs.harvest.LocatedType
 import ghistabs.harvest.demangledClassPath
@@ -223,16 +222,17 @@ class ClassBuilder(
                 debug("vfptr-normalized")
             }
 
-            is VfptrAction.CollisionAt -> warn(
+            is VfptrAction.CollisionAt -> degradation(
                 "vfptr-collision",
-                "$className: cannot place {vfptr} at +${action.offsetBytes} (occupied by ${action.occupantFieldName})",
+                className,
+                "cannot place {vfptr} at +${action.offsetBytes} (occupied by ${action.occupantFieldName})",
             )
         }
     }
 
     private fun LocatedType.reparentMethod(m: Method<GlobalTypeId>, ns: GhidraClass, structDt: Structure) {
         val mangled = m.mangled ?: run {
-            log("method-no-mangled", "$className::${m.name}: stab has no mangled symbol")
+            degradation("method-no-mangled", "$className::${m.name}", "stab has no mangled symbol")
             return
         }
         val addr = resolver.resolve(mangled) ?: run {
@@ -269,6 +269,7 @@ class ClassBuilder(
                 "method-demangle-fallback",
                 "$className::${m.name}",
                 "demangler did not apply to $mangled",
+                func.entryPoint,
             )
         }
 
@@ -279,7 +280,12 @@ class ClassBuilder(
         val retDecl = when (sig) {
             is TypeDecl.Method -> sig.ret
             is TypeDecl.FunctionT -> sig.ret
-            else -> return
+            else -> return degradation(
+                "method-signature-unwrap-failed",
+                "$className::${m.name}",
+                "${m.signature}",
+                func.entryPoint,
+            )
         }
 
         registry.resolveRef(retDecl)?.let { ret ->
@@ -288,6 +294,7 @@ class ClassBuilder(
             "method-ret-unresolved",
             "$className::${m.name}",
             retDecl.toString(),
+            func.entryPoint,
         )
 
         // A static member takes no `this`, so it keeps the default convention and the params
@@ -303,7 +310,7 @@ class ClassBuilder(
                 runCatching {
                     func.setCallingConvention(program.compilerSpec.defaultCallingConvention.name)
                 }.onFailure {
-                    warn("method-calling-convention", "$className::${m.name}: ${it.message}", func.entryPoint)
+                    degradation("method-calling-convention", "$className::${m.name}", it.message, func.entryPoint)
                 }
             }
             return
@@ -315,7 +322,9 @@ class ClassBuilder(
         // func.getParameter(0)?.name to detect — for force-created functions the param list
         // isn't populated yet.
         val thiscallAccepted = runCatching { func.setCallingConvention(CompilerSpec.CALLING_CONVENTION_thiscall) }
-            .onFailure { warn("method-calling-convention", "$className::${m.name}: ${it.message}", func.entryPoint) }
+            .onFailure {
+                degradation("method-calling-convention", "$className::${m.name}", it.message, func.entryPoint)
+            }
             .isSuccess
         val ghidraInjectsThis = thiscallAccepted && func.isMethod
 
@@ -335,6 +344,7 @@ class ClassBuilder(
                     "method-param-unresolved",
                     "$className::${m.name}",
                     decl.toString(),
+                    func.entryPoint,
                 )
             }
         }
@@ -344,7 +354,19 @@ class ClassBuilder(
             resolvedParams.dropLastWhile { it is VoidDataType }
         } else {
             resolvedParams
-        }.map { if (it is VoidDataType) Undefined4DataType.dataType else it }
+        }.mapIndexed { i, dt ->
+            if (dt is VoidDataType) {
+                degradation(
+                    "method-param-void",
+                    "$className::${m.name}",
+                    "void at [$i]; substituted Undefined4 to keep arity",
+                    func.entryPoint,
+                )
+                Undefined4DataType.dataType
+            } else {
+                dt
+            }
+        }
 
         // Explicit `this` + formals, under DYNAMIC_STORAGE_ALL_PARAMS: FORMAL_PARAMS + __thiscall
         // varies by Ghidra version on whether it auto-prepends `this`, and would rename our `arg0`
@@ -439,7 +461,8 @@ class ClassBuilder(
                 } else {
                     debug(
                         "vtable-virtual-no-function",
-                        "no Function at $mAddr for virtual method ${m.name} in $className",
+                        "virtual method ${m.name} in $className not found",
+                        mAddr,
                     )
                 }
             } else {
@@ -492,7 +515,9 @@ class ClassBuilder(
             name = m.name,
             ret = method.ret,
             params = method.params,
-            thisType = registry.resolveRef(method.cls) ?: PointerDataType(VoidDataType(), dtm),
+            thisType = registry.resolveRef(method.cls) ?: PointerDataType(VoidDataType(), dtm).also {
+                degradation("vftable-slot-this-untyped", "$className::${m.name}", "${method.cls}; used void*")
+            },
             callingConvention = CompilerSpec.CALLING_CONVENTION_thiscall,
             at = "$className::${m.name}",
         )
@@ -527,7 +552,7 @@ class ClassBuilder(
             val shape = program.vtableShape(addr, resolver)
             val targets = program.vtableSlotTargets(shape.addressPoint, resolver)
             if (targets.isEmpty()) {
-                degradation("vtable-swept-empty", qualified, "no function pointers at ${shape.addressPoint}")
+                degradation("vtable-swept-empty", qualified, "no function pointers", shape.addressPoint)
                 continue
             }
             val leaf = canonTemplateName(splitQualified(qualified).last())
@@ -544,7 +569,7 @@ class ClassBuilder(
 
             val ns = buildNamespaceChain(splitQualified(qualified))
             val addressPoint = program.layVtable(shape, vftable, qualified, ns, resolver)
-            debug("vtable-swept", "class=$qualified slots=${targets.size}", address = addressPoint)
+            debug("vtable-reconstructed", "${targets.size} slot(s) typed from targets", addressPoint, qualified)
             laySecondaryVtables(shape, leaf, ns)
         }
     }
@@ -609,7 +634,10 @@ class ClassBuilder(
      *  target that has a linkage name and nothing else. Names but does not type an unmangled one. */
     private fun demangledDefinition(category: CategoryPath, name: String, linkage: String) =
         FunctionDefinitionDataType(category, name, dtm).apply {
-            fun DemangledDataType.dt() = runCatching { getDataType(dtm) }.getOrNull() ?: Undefined4DataType.dataType
+            fun DemangledDataType.dt() = runCatching { getDataType(dtm) }.getOrNull()
+                ?: Undefined4DataType.dataType.also {
+                    degradation("vftable-demangled-untyped", "$category/$name", "demangler gave no type for $this")
+                }
             (Demangler.of(linkage) as? DemangledFunction)?.let { df ->
                 df.returnType?.let { returnType = it.dt() }
                 setArguments(
@@ -645,8 +673,7 @@ class ClassBuilder(
 
             else -> "truly-missing"
         }
-        debug("vtable-failed", "class=$className reason=$failureBucket")
-        degradation("vtable-failed", className, failureBucket)
+        degradation("vtable-failed", className, "$failureBucket (tried ${candidates.joinToString()})")
         debug(
             "vtable-failed-$failureBucket",
             "class '$className': vtable not found (tried ${candidates.joinToString()})",

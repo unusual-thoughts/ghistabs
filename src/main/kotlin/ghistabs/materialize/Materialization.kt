@@ -2,7 +2,6 @@ package ghistabs.materialize
 
 import ghidra.program.model.data.*
 import ghidra.program.model.lang.CompilerSpec
-import ghistabs.diagnose.degradation
 import ghistabs.harvest.Type
 import ghistabs.materialize.itanium.*
 import ghistabs.parse.CATEGORY
@@ -19,18 +18,16 @@ internal fun DataTypeRegistry.materializeBody(ast: Type, category: CategoryPath,
 
         // Transparent wrappers/primitives resolve through resolveRef (which unwraps const/volatile
         // and routes the builtin-family via BuiltinTable), falling back to the placeholder.
-        is TypeDecl.Const, is TypeDecl.Volatile -> resolveRef(body) ?: placeholder
+        is TypeDecl.Const, is TypeDecl.Volatile -> resolveRef(body) ?: stub(ast, placeholder, body)
 
         // gcc emits anonymous nested aggregates as InlineDef(id, <aggregate body>);
         // resolveRef(body) picks up the harvested ast via getOrMaterialize(body.id)
         // instead of hitting the null `referenced-aggregate` branch.
-        is TypeDecl.InlineDef -> resolveRef(body)?.let { cache(body.id, it) } ?: placeholder
+        is TypeDecl.InlineDef -> resolveRef(body)?.let { cache(body.id, it) } ?: stub(ast, placeholder, body)
 
         is TypeDecl.Array -> {
-            val elem = resolveRef(body.element) ?: run {
-                degradation("array-element", ast.ghidraName, body.element.toString())
-                ByteDataType.dataType
-            }
+            val elem = resolveRef(body.element)
+                ?: undef("array-element", ast.ghidraName, body.element, ByteDataType.dataType)
             recordXRefStubAt("array-element", ast.ghidraName, elem)
 
             // ArrayDataType rejects length<1; FunctionDefinitionDataType reports
@@ -45,7 +42,7 @@ internal fun DataTypeRegistry.materializeBody(ast: Type, category: CategoryPath,
             } else {
                 elem
             }
-            body.buildArray(safeElem)
+            buildArray(body, safeElem, ast.ghidraName)
         }
 
         is TypeDecl.Enum -> body.fillEnum(placeholder as GhidraEnum)
@@ -55,7 +52,7 @@ internal fun DataTypeRegistry.materializeBody(ast: Type, category: CategoryPath,
         is TypeDecl.WithSizeAttr if body.inner is TypeDecl.Enum -> body.inner.fillEnum(placeholder as GhidraEnum)
 
         is TypeDecl.Range, is TypeDecl.Complex, is TypeDecl.Float, is TypeDecl.WithSizeAttr, is TypeDecl.Builtin ->
-            resolveRef(body) ?: placeholder
+            resolveRef(body) ?: stub(ast, placeholder, body)
 
         is TypeDecl.Struct -> fillComposite(body, placeholder as Composite, "$category/${ast.ghidraName}")
 
@@ -295,9 +292,26 @@ internal fun DataTypeRegistry.fillComposite(
     return placeholder
 }
 
-private fun DataTypeRegistry.undef(category: String, at: String, decl: TypeDecl<GlobalTypeId>): DataType {
+/** [fallback] is overridden where an Undefined-family substitute would be re-read by Ghidra — see
+ *  the array sites, which pass [ByteDataType]. */
+private fun DataTypeRegistry.undef(
+    category: String,
+    at: String,
+    decl: TypeDecl<GlobalTypeId>,
+    fallback: DataType = Undefined4DataType.dataType,
+): DataType {
     degradation(category, at, decl.toString())
-    return Undefined4DataType.dataType
+    return fallback
+}
+
+/**
+ * The empty seeded [placeholder], handed back because the wrapper/builtin body never resolved. The
+ * type keeps its real name and category but carries no layout, so the site is named here rather than
+ * left for [computeDegraded] to infer from the shape.
+ */
+private fun DataTypeRegistry.stub(ast: Type, placeholder: DataType, body: TypeDecl<GlobalTypeId>): DataType {
+    degradation("body-unresolved", ast.ghidraName, body.toString())
+    return placeholder
 }
 
 /**
@@ -333,7 +347,11 @@ fun DataTypeRegistry.resolveRef(decl: TypeDecl<GlobalTypeId>): DataType? = when 
     // ByteDataType (not Undefined1) for unresolved elements: Undefined1 is
     // type-equivalent to Ghidra's auto-analysis "undefined" bytes, so a downstream
     // data-ref analyzer will recoalesce our array into `undefined4`.
-    is TypeDecl.Array -> decl.buildArray(resolveRef(decl.element) ?: ByteDataType.dataType)
+    is TypeDecl.Array -> buildArray(
+        decl,
+        resolveRef(decl.element) ?: undef("array-element", "(anon)", decl.element, ByteDataType.dataType),
+        "(anon)",
+    )
 
     is TypeDecl.FunctionT -> buildFunctionDefinition(
         category = CategoryPath("/stabs/unnamed"),
@@ -364,8 +382,16 @@ private fun TypeDecl.Enum<GlobalTypeId>.fillEnum(placeholder: GhidraEnum): DataT
     for ((mname, mval) in members) add(mname, mval)
 }
 
-fun TypeDecl.Array<*>.buildArray(elem: DataType): ArrayDataType =
-    ArrayDataType(elem, (declaredElements ?: 1L).toInt().coerceAtLeast(1), elem.length)
+/**
+ * `ArrayDataType` takes an Int count ≥ 1, so an unsized (`char x[]`), zero-length or
+ * absurdly-long stab declaration has to be substituted — a shape the array does not have.
+ */
+internal fun DataTypeRegistry.buildArray(decl: TypeDecl.Array<*>, elem: DataType, at: String): ArrayDataType {
+    val declared = decl.declaredElements
+    val count = (declared ?: 1L).coerceIn(1L, Int.MAX_VALUE.toLong())
+    if (declared != count) degradation("array-count-substituted", at, "declared=$declared, built as [$count]")
+    return ArrayDataType(elem, count.toInt(), elem.length)
+}
 
 /**
  * Build a FunctionDefinition (not yet added to DTM) from stab types. Resolves
@@ -399,7 +425,12 @@ fun DataTypeRegistry.buildFunctionDefinition(
     // just name the first param `this`.
     val argDefs = effectiveParams.mapIndexed { i, p ->
         val resolved = resolveRef(p) ?: undef("function-param", "$at[$i]", p)
-        val safe = if (resolved is VoidDataType) Undefined4DataType.dataType else resolved
+        val safe = if (resolved is VoidDataType) {
+            degradation("function-param-void", "$at[$i]", "void mid-list; substituted Undefined4 to keep arity")
+            Undefined4DataType.dataType
+        } else {
+            resolved
+        }
         val argName = if (i == 0 && thisType != null) "this" else "arg$i"
         ParameterDefinitionImpl(argName, safe, null)
     }.toMutableList()
@@ -409,12 +440,14 @@ fun DataTypeRegistry.buildFunctionDefinition(
     if (thisType != null && argDefs.isEmpty()) {
         val safe = if (thisType is VoidDataType) PointerDataType(VoidDataType(), dtm) else thisType
         argDefs += ParameterDefinitionImpl("this", safe, null)
+        degradation("function-this-synthesized", at, "method signature carried no `this` param")
     }
     fd.setArguments(*argDefs.toTypedArray())
     // Skip unsupported conventions (e.g. __thiscall on x86-64 ELF would throw
     // when the FD attaches to the DTM).
     if (callingConvention != null && callingConvention in dtm.knownCallingConventionNames) {
         runCatching { fd.setCallingConvention(callingConvention) }
+            .onFailure { degradation("function-calling-convention", at, "$callingConvention rejected: ${it.message}") }
     }
     return fd
 }
@@ -423,7 +456,7 @@ fun DataTypeRegistry.materializeAll(): Int {
     // Two phases: (1) materialize each CanonicalGroup winner into its (cat,name)
     // slot and alias members to it; (2) non-registerable top-level asts
     // (FunctionT, Method, XRef aliases) via materializeTopLevel() — byId only, no DTM slot.
-    dtm.runTransaction("ghidra-stabs build types") {
+    dtm.runTransaction("ghistabs build types") {
         // Pre-seed placeholders for every member id so Ref(id) cycle-breaks during
         // body materialization. Struct/Union and Enum placeholders go into the DTM
         // up-front so later in-place mutations land on the DTM-resident object — and a
@@ -465,7 +498,10 @@ private fun DataTypeRegistry.registerNamedPrimitiveTypedefs() {
         // One shared typedef under /stabs (or root for primitives) for
         // DemanglerReplacer to substitute into `/Demangler/*` stubs.
         val firstBody = asts.first().body
-        val typedefTarget = firstBody.resolveBuiltin() ?: resolveRef(firstBody) ?: continue
+        val typedefTarget = firstBody.resolveBuiltin() ?: resolveRef(firstBody) ?: run {
+            warn("named-typedef-unresolved", "$ghidraName: no target type, typedef not registered")
+            continue
+        }
         // §20: when the target already carries this exact name (a `typedef struct {…}
         // Name;` whose anonymous aggregate we named after the typedef, then merged with
         // the named copy), a same-named `/stabs` typedef is just a second DataType with

@@ -1,8 +1,16 @@
 {
     "counters": {
+        "array-count-substituted": {
+            "min": 21,
+            "max": 21
+        },
         "base-empty-ebo": {
             "min": 29,
             "max": 29
+        },
+        "base-synthesized": {
+            "min": 5,
+            "max": 5
         },
         "canonical-content-merged": {
             "min": 14,
@@ -27,42 +35,6 @@
         "data-no-coverage": {
             "min": 73,
             "max": 73
-        },
-        "degraded-base-synthesized": {
-            "min": 5,
-            "max": 5
-        },
-        "degraded-field-dropped": {
-            "min": 1,
-            "max": 1
-        },
-        "degraded-global-typed-all-undefined": {
-            "min": 2,
-            "max": 2
-        },
-        "degraded-local-typed-all-undefined": {
-            "min": 24,
-            "max": 24
-        },
-        "degraded-param-unnamed-padded": {
-            "min": 97,
-            "max": 97
-        },
-        "degraded-placeholder-undefined-fields": {
-            "min": 16,
-            "max": 16
-        },
-        "degraded-struct-mostly-undefined": {
-            "min": 14,
-            "max": 14
-        },
-        "degraded-struct-truncated": {
-            "min": 9,
-            "max": 9
-        },
-        "degraded-vtable-vbase-count-mismatch": {
-            "min": 3,
-            "max": 3
         },
         "demangle-applied": {
             "min": 3635,
@@ -144,6 +116,10 @@
             "min": 2,
             "max": 2
         },
+        "field-dropped": {
+            "min": 1,
+            "max": 1
+        },
         "file-start": {
             "min": 115,
             "max": 115
@@ -155,6 +131,10 @@
         "global-applied": {
             "min": 469,
             "max": 469
+        },
+        "global-typed-all-undefined": {
+            "min": 2,
+            "max": 2
         },
         "harvest-collisions-divergent": {
             "min": 1,
@@ -300,13 +280,17 @@
             "min": 539,
             "max": 539
         },
+        "local-dropped": {
+            "min": 10,
+            "max": 10
+        },
+        "local-typed-all-undefined": {
+            "min": 24,
+            "max": 24
+        },
         "local-var-add-success": {
             "min": 1367,
             "max": 1367
-        },
-        "local-var-error": {
-            "min": 10,
-            "max": 10
         },
         "local-var-skipped-dup-local": {
             "min": 108,
@@ -324,9 +308,17 @@
             "min": 67,
             "max": 67
         },
+        "param-unnamed-padded": {
+            "min": 97,
+            "max": 97
+        },
         "placeholder-created": {
             "min": 17801,
             "max": 17801
+        },
+        "placeholder-undefined-fields": {
+            "min": 16,
+            "max": 16
         },
         "pointee-typed": {
             "min": 16,
@@ -396,6 +388,14 @@
             "min": 2,
             "max": 2
         },
+        "struct-mostly-undefined": {
+            "min": 14,
+            "max": 14
+        },
+        "struct-truncated": {
+            "min": 9,
+            "max": 9
+        },
         "text-boundaries-out-of-order": {
             "min": 1,
             "max": 1
@@ -443,6 +443,10 @@
         "vtable-secondary": {
             "min": 12,
             "max": 12
+        },
+        "vtable-vbase-count-mismatch": {
+            "min": 3,
+            "max": 3
         },
         "vtable-virtual-no-impl": {
             "min": 14,

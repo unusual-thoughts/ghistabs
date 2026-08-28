@@ -14,8 +14,15 @@ class CapturingSink : DiagnosticSink {
 
     internal val lines = mutableListOf<LogLine>()
 
-    override fun log(category: String, message: String?, level: Level, address: Address?, count: Long) {
-        lines.add(LogLine(tag = category, msg = message, address = address, level = level))
+    override fun log(
+        category: String,
+        message: String?,
+        level: Level,
+        address: Address?,
+        degrades: String?,
+        count: Long,
+    ) {
+        lines.add(LogLine(tag = category, msg = diagnosticText(degrades, message), address = address, level = level))
     }
 
     fun capturedOutput(): String = lines.filter { it.msg != null }.joinToString("\n")
@@ -57,7 +64,14 @@ class CapturingSink : DiagnosticSink {
 
 class CountingSink : DiagnosticSink {
     val counts = mutableMapOf<String, Long>()
-    override fun log(category: String, message: String?, level: Level, address: Address?, count: Long) {
+    override fun log(
+        category: String,
+        message: String?,
+        level: Level,
+        address: Address?,
+        degrades: String?,
+        count: Long,
+    ) {
         counts.compute(category) { _, x -> (x ?: 0) + count }
     }
     val parseErrors get() = counts["parse-errors"] ?: 0

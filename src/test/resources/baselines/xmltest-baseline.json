@@ -1,5 +1,9 @@
 {
     "counters": {
+        "body-pointer-pointee": {
+            "min": 24,
+            "max": 24
+        },
         "canonical-content-merged": {
             "min": 1,
             "max": 1
@@ -12,57 +16,13 @@
             "min": 3,
             "max": 3
         },
+        "dangling-ref": {
+            "min": 2,
+            "max": 2
+        },
         "data-no-coverage": {
             "min": 59,
             "max": 59
-        },
-        "degraded-body-pointer-pointee": {
-            "min": 24,
-            "max": 24
-        },
-        "degraded-dangling-ref": {
-            "min": 2,
-            "max": 2
-        },
-        "degraded-field-dropped": {
-            "min": 2,
-            "max": 2
-        },
-        "degraded-field-type": {
-            "min": 5,
-            "max": 5
-        },
-        "degraded-local-typed-all-undefined": {
-            "min": 1,
-            "max": 1
-        },
-        "degraded-local-untyped": {
-            "min": 56,
-            "max": 56
-        },
-        "degraded-param-unnamed-padded": {
-            "min": 20,
-            "max": 20
-        },
-        "degraded-param-untyped": {
-            "min": 101,
-            "max": 101
-        },
-        "degraded-placeholder-undefined-fields": {
-            "min": 2,
-            "max": 2
-        },
-        "degraded-struct-mostly-undefined": {
-            "min": 3,
-            "max": 3
-        },
-        "degraded-struct-truncated": {
-            "min": 1,
-            "max": 1
-        },
-        "degraded-vtable-swept-empty": {
-            "min": 18,
-            "max": 18
         },
         "demangle-applied": {
             "min": 1096,
@@ -136,6 +96,14 @@
             "min": 7,
             "max": 7
         },
+        "field-dropped": {
+            "min": 2,
+            "max": 2
+        },
+        "field-type": {
+            "min": 5,
+            "max": 5
+        },
         "file-start": {
             "min": 4,
             "max": 4
@@ -143,6 +111,10 @@
         "global-applied": {
             "min": 106,
             "max": 106
+        },
+        "global-untyped": {
+            "min": 1,
+            "max": 1
         },
         "harvest-collisions-divergent": {
             "min": 0,
@@ -272,6 +244,14 @@
             "min": 12,
             "max": 12
         },
+        "local-typed-all-undefined": {
+            "min": 1,
+            "max": 1
+        },
+        "local-untyped": {
+            "min": 56,
+            "max": 56
+        },
         "local-var-add-success": {
             "min": 498,
             "max": 498
@@ -280,9 +260,21 @@
             "min": 708,
             "max": 708
         },
+        "param-unnamed-padded": {
+            "min": 20,
+            "max": 20
+        },
+        "param-untyped": {
+            "min": 101,
+            "max": 101
+        },
         "placeholder-created": {
             "min": 217,
             "max": 217
+        },
+        "placeholder-undefined-fields": {
+            "min": 2,
+            "max": 2
         },
         "pointee-typed": {
             "min": 18,
@@ -320,7 +312,11 @@
             "min": 91,
             "max": 91
         },
-        "static-skipped": {
+        "struct-mostly-undefined": {
+            "min": 3,
+            "max": 3
+        },
+        "struct-truncated": {
             "min": 1,
             "max": 1
         },
@@ -343,6 +339,10 @@
         "vtable-skipped": {
             "min": 4,
             "max": 4
+        },
+        "vtable-swept-empty": {
+            "min": 18,
+            "max": 18
         },
         "xref-stubs-synthesized": {
             "min": 1,
