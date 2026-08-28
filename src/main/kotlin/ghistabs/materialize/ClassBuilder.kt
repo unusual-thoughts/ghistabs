@@ -26,7 +26,6 @@ import ghistabs.isMethod
 import ghistabs.materialize.itanium.*
 import ghistabs.materialize.itanium.Itanium.isImplicitTrivialSpecialMember
 import ghistabs.materialize.itanium.Itanium.isInlineStdMember
-import ghistabs.materialize.itanium.Layout
 import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Struct.Method
 
@@ -99,7 +98,7 @@ class ClassBuilder(
         for (group in classes) {
             ctx.monitor.increment()
             try {
-                build(group)
+                group.build()
                 built++
             } catch (t: Throwable) {
                 err("class-apply-error", "${group.location}: ${t.message}")
@@ -110,7 +109,7 @@ class ClassBuilder(
     }
 
     /** Materialize class struct + namespace + (optional) vtable struct, apply at _ZTV. */
-    fun build(group: LocatedType): Unit = group.run {
+    fun LocatedType.build() {
         val category = location.category
         val structDt = registry.dataTypeFor(type.id)
         if (structDt !is Structure) {
@@ -288,14 +287,13 @@ class ClassBuilder(
             )
         }
 
-        registry.resolveRef(retDecl)?.let { ret ->
-            func.setReturnType(ret, source)
-        } ?: degradation(
-            "method-ret-unresolved",
-            "$className::${m.name}",
-            retDecl.toString(),
-            func.entryPoint,
-        )
+        registry.resolveRef(retDecl)?.let { func.setReturnType(it, source) }
+            ?: degradation(
+                "method-ret-unresolved",
+                "$className::${m.name}",
+                retDecl.toString(),
+                func.entryPoint,
+            )
 
         // A static member takes no `this`, so it keeps the default convention and the params
         // applyAllFunctions already read off its N_PSYMs. Falling through forced __thiscall
