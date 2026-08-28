@@ -1837,8 +1837,9 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         ?.let { program.memory.getBlock(it)?.isExecute } == true
 
     /**
-     * The function-relative address heuristic ([ghistabs.GenericAddressResolver.stabAddress]): every `N_SLINE`/`N_LBRAC`/`N_RBRAC`
-     * record, resolved against its enclosing `N_FUN`, must land in executable memory. A value left
+     * The function-relative address heuristic ([ghistabs.GenericAddressResolver.stabAddress]):
+     * every `N_SLINE`/`N_LBRAC`/`N_RBRAC` record, resolved against its enclosing `N_FUN`, must
+     * land in executable memory. A value left
      * un-rebased resolves to a tiny address in no code block. Not asserted against the *enclosing*
      * function specifically — gcc clones ctors/dtors, so a stab function's line range legitimately
      * spans sibling clones. Runs on every fixture. (Folded from the former

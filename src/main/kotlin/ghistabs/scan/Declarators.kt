@@ -63,8 +63,12 @@ class DeclaratorIndex(text: String, compiledOut: Set<Int> = emptySet()) {
             .mapValues { (_, lines) -> lines.distinct().sorted() }
     }
 
-    private fun blankLine(start: Int) =
-        (start until chars.size).takeWhile { chars[it] != '\n' }.forEach { chars[it] = ' ' }
+    private fun blankLine(start: Int) {
+        for (i in start until chars.size) {
+            if (chars[i] == '\n') return
+            chars[i] = ' '
+        }
+    }
 
     private fun lineAt(offset: Int) = lineStarts.binarySearch(offset).let { if (it >= 0) it + 1 else -it - 1 }
 
