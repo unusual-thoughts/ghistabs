@@ -20,7 +20,6 @@ import ghistabs.diagnose.Level
 import ghistabs.harvest.HarvestIndex
 import ghistabs.harvest.LocatedType
 import ghistabs.harvest.demangledClassPath
-import ghistabs.harvest.resolveWith
 import ghistabs.importer.ImportContext
 import ghistabs.isInjected
 import ghistabs.isMethod
