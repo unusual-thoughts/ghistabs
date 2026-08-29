@@ -373,8 +373,8 @@
             "max": 800
         },
         "resolve-ambiguous": {
-            "min": 1401,
-            "max": 1401
+            "min": 1425,
+            "max": 1425
         },
         "rtti-pseudo-substituted": {
             "min": 150,
