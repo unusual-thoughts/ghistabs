@@ -357,12 +357,12 @@
             "max": 9551
         },
         "sourcemap-files": {
-            "min": 166,
-            "max": 166
+            "min": 284,
+            "max": 284
         },
         "sourcemap-folded-files": {
-            "min": 46,
-            "max": 46
+            "min": 58,
+            "max": 58
         },
         "stab-value-absolute": {
             "min": 785,

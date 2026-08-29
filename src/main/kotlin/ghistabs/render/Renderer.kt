@@ -9,6 +9,7 @@ import ghidra.util.task.TaskMonitor
 import ghistabs.ImportOptions
 import ghistabs.ImportOptions.Companion.stabsTypedefsShortened
 import ghistabs.diagnose.DiagnosticSink
+import ghistabs.harvest.EffectiveSource
 import ghistabs.harvest.Func
 import ghistabs.harvest.GhidraSourceFile
 import ghistabs.harvest.HarvestIndex
@@ -94,6 +95,8 @@ class Renderer(
             }
     }
 
+    val effectiveSource = EffectiveSource(index, ::declarerOf)
+
     /**
      * Every file the render emits: those with line entries, function bodies, or type declarations.
      *
@@ -103,7 +106,7 @@ class Renderer(
      * read of it, before the root that decides it has been installed.
      */
     val sources: Set<GhidraSourceFile> by lazy {
-        linesBySource.keys + index.functionsBySource.keys + index.baseTypesBySource.keys
+        linesBySource.keys + index.functionsBySource.keys + effectiveSource.baseTypesBySource.keys
     }
 
     /**
@@ -118,15 +121,15 @@ class Renderer(
      * anything. Judging a local file by an attribution the file itself decided is circular, and in
      * Kotlin terms it is a lazy that forces itself.
      */
-    val localSources by lazy {
+    val localSources: LocalSources by lazy {
         LocalSources(program, index) { source ->
-            index.baseTypesBySource[source].orEmpty()
+            effectiveSource.baseTypesBySource[source].orEmpty()
                 .mapNotNull { t -> t.declKey() }
                 // Declarations several files claim at one line are excluded: at most one of those
                 // files is right and nothing here says which (§43), so holding a local file to them
                 // judges it on our own known-bad attribution. basic_string.h scored 0 of 17 against
                 // its *correct* source that way — all seventeen belong to stl_uninitialized.h.
-                .filterNot { it in index.baseConflictedDecls }
+                .filterNot { it in effectiveSource.baseConflictedDecls }
         }
     }
 
@@ -137,7 +140,7 @@ class Renderer(
      */
     private val units by lazy { mapped.map { it.second }.filter { it.extension in UNIT_EXTENSIONS } }
 
-    private val includePaths by lazy {
+    private val includePaths: List<File>by lazy {
         val roots = ImportOptions(program).sourceRoots.map { File(it).canonicalFile.path }
         mapped.asSequence().map { it.second.canonicalFile }
             .flatMap { generateSequence(it.parentFile, File::getParentFile) }
@@ -194,17 +197,6 @@ class Renderer(
         mapped.singleOrNull { (_, file) ->
             sourceIndexes[file].declarations[decl.name].orEmpty().any { it in window }
         }?.first
-    }
-
-    init {
-        // Installed before anything reads attribution, because the per-source views memoise. It
-        // cannot recurse into itself: every input it has — the transforms, the agreement guard's
-        // claims, the candidate files — is drawn from the base attribution.
-        //
-        // Only once per index: a probe renders one harvest in all three modes, and the second
-        // Renderer would be assigning after the first had already read attribution. The answers
-        // would be the same — same program, same root — so the first installation stands.
-        if (index.declarers == null) index.declarers = ::declarerOf
     }
 
     // A function is decompiled once for the whole run, not once per file that renders part of it: with

@@ -1,7 +1,6 @@
 package ghistabs.materialize.itanium
 
 import ghistabs.harvest.HarvestIndex
-import ghistabs.harvest.resolve
 import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl

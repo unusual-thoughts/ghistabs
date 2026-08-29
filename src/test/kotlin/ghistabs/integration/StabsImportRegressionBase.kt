@@ -616,7 +616,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     @Test
     fun implicitMethodsAreFiledAtTheirClassDeclaration() {
         val index = artifacts.index
-        val declaredClasses = index.typesBySource.values.flatten()
+        val declaredClasses = index.allTypes
             .mapNotNull { it.name?.let(::canonTemplateName) }.toSet()
 
         val implicit = index.functions

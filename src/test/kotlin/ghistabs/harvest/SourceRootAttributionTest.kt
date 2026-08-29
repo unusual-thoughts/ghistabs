@@ -7,13 +7,12 @@ import ghistabs.parse.TypeDecl
 import ghistabs.test.indexOf
 import ghistabs.test.must
 import ghistabs.test.mustBe
-import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 
 /**
  * What a source root does to attribution: it moves a declaration to the file that declares it, and
- * only ever on a unique answer. The declarers hook stands in for the real files here — reading them
- * is [ghistabs.scan.DeclaratorIndex]'s job and is tested there.
+ * only ever on a unique answer. The declarers function stands in for the real files here — reading
+ * them is [ghistabs.scan.DeclaratorIndex]'s job and is tested there.
  */
 class SourceRootAttributionTest {
     private val cu = SourceFile.CUSource("main.cpp")
@@ -40,22 +39,23 @@ class SourceRootAttributionTest {
         sourceFile = declaredIn,
     )
 
+    /** [EffectiveSource] over [types], with [declarers] as the source root's answer. */
+    private fun attribution(vararg types: Type, declarers: (Type.Decl) -> GhidraSourceFile? = { null }) =
+        EffectiveSource(indexOf(*types), declarers)
+
     @Test
     fun `a unique declarer takes the declaration off the file gcc recorded`() {
         val isPod = typedef("_Is_POD", 111, wrong)
-        val index = indexOf(isPod)
-        index.declarers = { (line, name) -> right.takeIf { name == "_Is_POD" && line == 111 } }
+        val sources = attribution(isPod) { (line, name) -> right.takeIf { name == "_Is_POD" && line == 111 } }
 
-        index.effectiveSourceFor(isPod) mustBe right
+        sources.effectiveSourceFor(isPod) mustBe right
     }
 
     @Test
     fun `no answer and no root leave the declaration where it was`() {
         val isPod = typedef("_Is_POD", 111, wrong)
-        indexOf(isPod).effectiveSourceFor(isPod) mustBe wrong
-
-        val asked = indexOf(isPod).also { it.declarers = { _ -> null } }
-        asked.effectiveSourceFor(isPod) mustBe wrong
+        attribution(isPod).effectiveSourceFor(isPod) mustBe wrong
+        attribution(isPod) { null }.effectiveSourceFor(isPod) mustBe wrong
     }
 
     /**
@@ -67,11 +67,11 @@ class SourceRootAttributionTest {
     fun `a declaration the root settles is no longer conflicted`() {
         val here = typedef("_Trivial", 426, wrong)
         val there = typedef("_Trivial", 426, right)
-        val disputed = indexOf(here, there)
-        disputed.conflictedTypedefDecls.must("two files, one line: disputed") { contains(Type.Decl(426, "_Trivial")) }
+        attribution(here, there).conflictedTypedefDecls.must("two files, one line: disputed") {
+            contains(Type.Decl(426, "_Trivial"))
+        }
 
-        val settled = indexOf(here, there)
-        settled.declarers = { (line, name) -> right.takeIf { name == "_Trivial" && line == 426 } }
+        val settled = attribution(here, there) { (line, name) -> right.takeIf { name == "_Trivial" && line == 426 } }
         settled.conflictedTypedefDecls mustBe emptySet<Type.Decl>()
         listOf(here, there).map(settled::effectiveSourceFor) mustBe listOf(right, right)
     }
@@ -81,19 +81,9 @@ class SourceRootAttributionTest {
     @Test
     fun `the base attribution keeps the recorded file whatever the root says`() {
         val isPod = typedef("_Is_POD", 111, wrong)
-        val index = indexOf(isPod)
-        index.declarers = { _ -> right }
+        val sources = attribution(isPod) { right }
 
-        index.baseTypesBySource[wrong] mustBe listOf(isPod)
-        index.typesBySource[right] mustBe listOf(isPod)
-    }
-
-    /** Installed late, the root would be silently ignored: the per-source views memoise. */
-    @Test
-    fun `installing a root after attribution has been read is refused`() {
-        val index = indexOf(tag("_Vector_alloc_base", 79, wrong))
-        index.typesBySource
-
-        assertThrows(IllegalStateException::class.java) { index.declarers = { _ -> right } }
+        sources.baseTypesBySource[wrong] mustBe listOf(isPod)
+        sources.typesBySource[right] mustBe listOf(isPod)
     }
 }

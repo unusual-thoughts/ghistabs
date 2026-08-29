@@ -10,10 +10,11 @@ import ghistabs.parse.TypeDecl
 class FileRenderer(override val renderer: Renderer, override val source: GhidraSourceFile) :
     RenderContext,
     DiagnosticSink by renderer {
+    private val sources = renderer.effectiveSource
     private val rawFuncs = index.functionsBySource[source].orEmpty()
     private val lines = renderer.linesBySource[source].orEmpty()
-    private val typeDecls = index.typesBySource[source].orEmpty().filter { it.name != null && it.line != null }
-    private val statics = index.staticsBySource[source].orEmpty()
+    private val typeDecls = sources.typesBySource[source].orEmpty().filter { it.name != null && it.line != null }
+    private val statics = sources.staticsBySource[source].orEmpty()
 
     private val spans = FunctionSpans.of(rawFuncs, source)
     override fun Int?.indentAt() = if (this != null && spans.inFunction(this)) 4 else 0
@@ -55,8 +56,8 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
 
     /** A declaration several files claim at one line — at most one of them rightly. */
     private fun Type.disputed() = when (body) {
-        is TypeDecl.Struct, is TypeDecl.Enum -> index.conflictedTemplateDecls
-        else -> index.conflictedTypedefDecls
+        is TypeDecl.Struct, is TypeDecl.Enum -> sources.conflictedTemplateDecls
+        else -> sources.conflictedTypedefDecls
     }.let { declKey() in it }
 
     /**
@@ -173,7 +174,7 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
     // Anon_ id; decomp omits them entirely. Deduped by ghidraName (content-hashed, §20).
     private fun anonAggregateAppendix(): String {
         if (renderer.mode != Renderer.Mode.SKELETON) return ""
-        val anon = renderer.index.anonAggregates[source]
+        val anon = sources.anonAggregates[source]
 
         if (anon.isNullOrEmpty()) return ""
         val blocks = anon.joinToString("\n\n") { ast ->
@@ -660,7 +661,7 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
             for (s in f.params + f.locals) collect(s.body.type)
         }
 
-        val fromTypes = referenced.asSequence().map { index.effectiveSourceFor(it) }
+        val fromTypes = referenced.asSequence().map { sources.effectiveSourceFor(it) }
         val fromInlined = rawFuncs.asSequence().flatMap { it.lineEntries.asSequence() }.map { it.source }
         val headers = (fromInlined + fromTypes)
             .filter { it != source && it.filename.hasHeaderExtension() }
