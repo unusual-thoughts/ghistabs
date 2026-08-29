@@ -401,12 +401,12 @@
             "max": 11
         },
         "sourcemap-files": {
-            "min": 251,
-            "max": 251
+            "min": 289,
+            "max": 289
         },
         "sourcemap-folded-files": {
-            "min": 37,
-            "max": 37
+            "min": 61,
+            "max": 61
         },
         "stab-value-absolute": {
             "min": 4350,

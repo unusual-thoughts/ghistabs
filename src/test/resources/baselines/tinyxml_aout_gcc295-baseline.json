@@ -245,8 +245,8 @@
             "max": 1469
         },
         "sourcemap-files": {
-            "min": 4,
-            "max": 4
+            "min": 31,
+            "max": 31
         },
         "sourcemap-folded-files": {
             "min": 1,

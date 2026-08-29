@@ -62,7 +62,7 @@ class Scorecard(private val renderer: Renderer) {
     }
 
     /** Where the render places each declaration. */
-    val declarations by lazy { gradeAll { index.effectiveSourceFor(it) } }
+    val declarations by lazy { gradeAll { renderer.effectiveSource.effectiveSourceFor(it) } }
 
     /**
      * Where it placed them before the root had a say — §44's own table, so the two columns say what
@@ -71,7 +71,7 @@ class Scorecard(private val renderer: Renderer) {
     val base by lazy { gradeAll { baseById[it.id] } }
 
     private val baseById by lazy {
-        index.baseTypesBySource.flatMap { (source, types) -> types.map { it.id to source } }.toMap()
+        renderer.effectiveSource.baseTypesBySource.flatMap { (source, types) -> types.map { it.id to source } }.toMap()
     }
 
     private fun gradeAll(sourceOf: (Type) -> GhidraSourceFile?): Grades {
@@ -95,7 +95,7 @@ class Scorecard(private val renderer: Renderer) {
             .filter { it.name != null && it.line != null }
             .mapNotNull { type ->
                 val from = baseById[type.id] ?: return@mapNotNull null
-                index.effectiveSourceFor(type)
+                renderer.effectiveSource.effectiveSourceFor(type)
                     .takeIf { it != from }
                     ?.let { Triple("${type.name!!.substringBefore('<')} L${type.line}", from, it) }
             }

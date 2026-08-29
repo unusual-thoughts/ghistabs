@@ -225,12 +225,12 @@
             "max": 2026
         },
         "sourcemap-files": {
-            "min": 23,
-            "max": 23
+            "min": 29,
+            "max": 29
         },
         "sourcemap-folded-files": {
-            "min": 11,
-            "max": 11
+            "min": 14,
+            "max": 14
         },
         "stab-value-absolute": {
             "min": 2039,

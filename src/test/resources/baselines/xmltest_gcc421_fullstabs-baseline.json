@@ -76,6 +76,10 @@
             "min": 7,
             "max": 7
         },
+        "demangler-reverse-demangle-match": {
+            "min": 2,
+            "max": 2
+        },
         "demangler-skip-no-replacement": {
             "min": 23,
             "max": 23
@@ -369,12 +373,12 @@
             "max": 11
         },
         "sourcemap-files": {
-            "min": 151,
-            "max": 151
+            "min": 188,
+            "max": 188
         },
         "sourcemap-folded-files": {
-            "min": 37,
-            "max": 37
+            "min": 59,
+            "max": 59
         },
         "stab-value-absolute": {
             "min": 1185,
