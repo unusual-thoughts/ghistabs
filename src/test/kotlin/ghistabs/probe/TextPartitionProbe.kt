@@ -1,13 +1,13 @@
 package ghistabs.probe
 
 import ghidra.app.util.importer.MessageLog
-import ghidra.app.util.importer.ProgramLoader
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghistabs.harvest.Harvester
 import ghistabs.parse.StabReader
 import ghistabs.parse.StabType
 import ghistabs.test.defaultContext
+import ghistabs.withProgram
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.TestInstance
@@ -48,95 +48,92 @@ class TextPartitionProbe : AbstractGhidraHeadlessIntegrationTest() {
         assumeTrue(fixture.exists(), "fixture absent")
 
         val monitor = TaskMonitor.DUMMY
-        ProgramLoader.builder().source(fixture).compiler("gcc").log(MessageLog()).monitor(monitor).load()
-            .use { loadResults ->
-                val program = loadResults.getPrimaryDomainObject(this)
-                val ctx = program.defaultContext()
-                val records = StabReader.fromProgram(program)?.readAll()?.records
-                assumeTrue(records != null, "no .stab section")
-                val harvest = Harvester(ctx).harvest(records!!)
+        withProgram(fixture, log = MessageLog(), monitor = monitor) { program ->
+            val ctx = program.defaultContext()
+            val records = StabReader.fromProgram(program)?.readAll()?.records
+            assumeTrue(records != null, "no .stab section")
+            val harvest = Harvester(ctx).harvest(records!!)
 
-                // Boundaries sorted by address and closed by the next one — how `textPartition`
-                // builds the runs, and the only reading under which they are disjoint at all.
-                var cu = ""
-                val boundaries = mutableListOf<Triple<Long, String, Boolean>>()
-                for (rec in records) {
-                    val include = rec.type == StabType.N_SOL
-                    if (rec.type != StabType.N_SO && !include) continue
-                    if (!include) cu = rec.name.ifEmpty { cu }
-                    val file = rec.name.ifEmpty { cu }
-                    if (rec.value != 0L && !file.endsWith('/')) boundaries += Triple(rec.value, file, include)
-                }
-                val sorted = boundaries.distinct().sortedBy { it.first }
-                val collisions = sorted.zipWithNext().count { (a, b) -> a.first == b.first }
-                val runs = sorted.zipWithNext().mapNotNull { (b, next) ->
-                    Run(b.first, b.second, b.third).takeIf { next.first > b.first }?.also { it.end = next.first }
-                }
-
-                // Score each run by the line entries that land in it. Both sorted, walked in step.
-                val entries = harvest.lineEntries
-                    .flatMap { (src, es) -> es.map { it.addr.offset to src.path } }
-                    .sortedBy { it.first }
-                var i = 0
-                for (run in runs) {
-                    while (i < entries.size && entries[i].first < run.start) i++
-                    var j = i
-                    while (j < entries.size && entries[j].first < run.end) {
-                        if (entries[j].second.endsWith(run.file.substringAfterLast('/'))) run.own++ else run.foreign++
-                        j++
-                    }
-                }
-
-                // What `publishTextRanges` will be handed. An empty run is publishable — the manager
-                // takes it as the zero-length point it is — so the failure modes are the other three:
-                // no memory block to place it in, a range running past the block's end, and two
-                // non-zero-length entries overlapping, which the manager refuses outright.
-                val published = harvest.textRanges.keys.sortedBy { it.minAddress }
-                val empty = published.count { it.length == 0L }
-                val unmapped = published.count { program.memory.getBlock(it.minAddress) == null }
-                val crossing = published.count {
-                    program.memory.getBlock(it.minAddress).let { b -> b != null && it.maxAddress > b.end }
-                }
-                val overlapping = published.zipWithNext().count { (a, b) ->
-                    a.length > 0 && b.length > 0 && b.minAddress <= a.maxAddress
-                }
-
-                val sol = runs.filter { it.fromInclude && it.entries > 0 }
-                val so = runs.filter { !it.fromInclude && it.entries > 0 }
-                fun score(rs: List<Run>) = rs.sumOf { it.own } to rs.sumOf { it.foreign }
-                val (solOwn, solForeign) = score(sol)
-                val (soOwn, soForeign) = score(so)
-
-                val out = File("build/test-output/textpartition/${fixture.nameWithoutExtension}.txt")
-                out.parentFile.mkdirs()
-                out.bufferedWriter().use { w ->
-                    w.write("fixture: $binaryName\n")
-                    w.write("runs: ${runs.size} (${runs.count { it.fromInclude }} from N_SOL), ")
-                    w.write("zero-length (two boundaries on one address): $collisions\n")
-                    w.write("line entries inside a run, by whether they name the run's own file:\n")
-                    w.write("  N_SOL runs: own=$solOwn foreign=$solForeign")
-                    w.write(" (${pct(solOwn, solOwn + solForeign)} agree, over ${sol.size} runs)\n")
-                    w.write("  N_SO  runs: own=$soOwn foreign=$soForeign")
-                    w.write(" (${pct(soOwn, soOwn + soForeign)} agree, over ${so.size} runs)\n\n")
-                    w.write("harvested ranges: ${published.size}\n")
-                    w.write("  empty, published as a point  $empty\n")
-                    w.write("  outside every block          $unmapped\n")
-                    w.write("  crossing a block end         $crossing\n")
-                    w.write("  overlapping the next         $overlapping\n")
-                    w.write("worst N_SOL runs (most foreign entries):\n")
-                    for (r in sol.sortedByDescending { it.foreign }.take(20)) {
-                        w.write(
-                            "  0x${r.start.toString(16)}..0x${r.end.toString(16)} own=${r.own} " +
-                                "foreign=${r.foreign}  ${r.file}\n",
-                        )
-                    }
-                }
-                println(
-                    "[$binaryName] N_SOL runs agree ${pct(solOwn, solOwn + solForeign)}, " +
-                        "N_SO runs agree ${pct(soOwn, soOwn + soForeign)}, collisions=$collisions",
-                )
-                program.release(this)
+            // Boundaries sorted by address and closed by the next one — how `textPartition`
+            // builds the runs, and the only reading under which they are disjoint at all.
+            var cu = ""
+            val boundaries = mutableListOf<Triple<Long, String, Boolean>>()
+            for (rec in records) {
+                val include = rec.type == StabType.N_SOL
+                if (rec.type != StabType.N_SO && !include) continue
+                if (!include) cu = rec.name.ifEmpty { cu }
+                val file = rec.name.ifEmpty { cu }
+                if (rec.value != 0L && !file.endsWith('/')) boundaries += Triple(rec.value, file, include)
             }
+            val sorted = boundaries.distinct().sortedBy { it.first }
+            val collisions = sorted.zipWithNext().count { (a, b) -> a.first == b.first }
+            val runs = sorted.zipWithNext().mapNotNull { (b, next) ->
+                Run(b.first, b.second, b.third).takeIf { next.first > b.first }?.also { it.end = next.first }
+            }
+
+            // Score each run by the line entries that land in it. Both sorted, walked in step.
+            val entries = harvest.lineEntries
+                .flatMap { (src, es) -> es.map { it.addr.offset to src.path } }
+                .sortedBy { it.first }
+            var i = 0
+            for (run in runs) {
+                while (i < entries.size && entries[i].first < run.start) i++
+                var j = i
+                while (j < entries.size && entries[j].first < run.end) {
+                    if (entries[j].second.endsWith(run.file.substringAfterLast('/'))) run.own++ else run.foreign++
+                    j++
+                }
+            }
+
+            // What `publishTextRanges` will be handed. An empty run is publishable — the manager
+            // takes it as the zero-length point it is — so the failure modes are the other three:
+            // no memory block to place it in, a range running past the block's end, and two
+            // non-zero-length entries overlapping, which the manager refuses outright.
+            val published = harvest.textRanges.keys.sortedBy { it.minAddress }
+            val empty = published.count { it.length == 0L }
+            val unmapped = published.count { program.memory.getBlock(it.minAddress) == null }
+            val crossing = published.count {
+                program.memory.getBlock(it.minAddress).let { b -> b != null && it.maxAddress > b.end }
+            }
+            val overlapping = published.zipWithNext().count { (a, b) ->
+                a.length > 0 && b.length > 0 && b.minAddress <= a.maxAddress
+            }
+
+            val sol = runs.filter { it.fromInclude && it.entries > 0 }
+            val so = runs.filter { !it.fromInclude && it.entries > 0 }
+            fun score(rs: List<Run>) = rs.sumOf { it.own } to rs.sumOf { it.foreign }
+            val (solOwn, solForeign) = score(sol)
+            val (soOwn, soForeign) = score(so)
+
+            val out = File("build/test-output/textpartition/${fixture.nameWithoutExtension}.txt")
+            out.parentFile.mkdirs()
+            out.bufferedWriter().use { w ->
+                w.write("fixture: $binaryName\n")
+                w.write("runs: ${runs.size} (${runs.count { it.fromInclude }} from N_SOL), ")
+                w.write("zero-length (two boundaries on one address): $collisions\n")
+                w.write("line entries inside a run, by whether they name the run's own file:\n")
+                w.write("  N_SOL runs: own=$solOwn foreign=$solForeign")
+                w.write(" (${pct(solOwn, solOwn + solForeign)} agree, over ${sol.size} runs)\n")
+                w.write("  N_SO  runs: own=$soOwn foreign=$soForeign")
+                w.write(" (${pct(soOwn, soOwn + soForeign)} agree, over ${so.size} runs)\n\n")
+                w.write("harvested ranges: ${published.size}\n")
+                w.write("  empty, published as a point  $empty\n")
+                w.write("  outside every block          $unmapped\n")
+                w.write("  crossing a block end         $crossing\n")
+                w.write("  overlapping the next         $overlapping\n")
+                w.write("worst N_SOL runs (most foreign entries):\n")
+                for (r in sol.sortedByDescending { it.foreign }.take(20)) {
+                    w.write(
+                        "  0x${r.start.toString(16)}..0x${r.end.toString(16)} own=${r.own} " +
+                            "foreign=${r.foreign}  ${r.file}\n",
+                    )
+                }
+            }
+            println(
+                "[$binaryName] N_SOL runs agree ${pct(solOwn, solOwn + solForeign)}, " +
+                    "N_SO runs agree ${pct(soOwn, soOwn + soForeign)}, collisions=$collisions",
+            )
+        }
     }
 
     private fun pct(n: Int, total: Int) = if (total == 0) "n/a" else "${100 * n / total}%"
