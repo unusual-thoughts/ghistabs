@@ -2,7 +2,6 @@ package ghistabs.integration
 
 import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.app.util.importer.MessageLog
-import ghidra.app.util.opinion.Loaded
 import ghidra.program.database.data.DataTypeUtilities
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.*
@@ -109,7 +108,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         "$OUTPUT_ROOT/analysis-times/${fixture.nameWithoutExtension}.${mode.name.lowercase()}.txt",
     )
 
-    private lateinit var loaded: Loaded<Program>
+    private lateinit var loaded: LoadedProgram
     private lateinit var context: ImportContext<CapturingSink>
     private lateinit var artifacts: ImportArtifacts
     private val program get() = context.program
@@ -138,7 +137,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
                 abort("Skipping $binaryName: the importer could not load the fixture: $e")
             }
 
-            context = loaded.getDomainObject(this).defaultContext()
+            context = loaded.program.defaultContext()
 
             val mgr = AutoAnalysisManager.getAnalysisManager(program)
             val options = program.getOptions(Program.ANALYSIS_PROPERTIES)
@@ -256,7 +255,6 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     @AfterAll
     fun tearDown() {
         ImportProbe.clear(program)
-        program.release(this)
         loaded.close()
     }
 

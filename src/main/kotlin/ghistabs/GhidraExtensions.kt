@@ -163,20 +163,29 @@ val Program.baseStackParamOffset get() = compilerSpec.defaultCallingConvention.r
     stackParameterOffset?.toInt() ?: stackshift
 }
 
+class LoadedProgram internal constructor(val program: Program, private val consumer: Any) : AutoCloseable {
+    override fun close() {
+        program.release(consumer)
+    }
+}
+
 /**
  * Imports [binary], hinting the [compiler] spec (null leaves the loader its own preference). The
  * caller owns the result and must [close][LoadedProgram.close] it — prefer [withProgram] when the
  * program's life is a single scope.
  */
-fun loadProgram(binary: File, compiler: String? = "gcc", log: MessageLog? = null, monitor: TaskMonitor? = null) =
-    ProgramLoader.builder()
-        .source(binary).log(log).monitor(monitor)
-        .apply {
-            if (compiler != null) compiler(compiler)
-            if (monitor != null) monitor(monitor)
-            if (log != null) log(log)
-        }
-        .load().primary
+fun Any.loadProgram(binary: File, compiler: String? = "gcc", log: MessageLog? = null, monitor: TaskMonitor? = null) =
+    LoadedProgram(
+        ProgramLoader.builder()
+            .source(binary).log(log).monitor(monitor)
+            .apply {
+                if (compiler != null) compiler(compiler)
+                if (monitor != null) monitor(monitor)
+                if (log != null) log(log)
+            }
+            .load().getPrimaryDomainObject(this),
+        this,
+    )
 
 /** [loadProgram] scoped to [func], released even when it throws. */
 fun <R> Any.withProgram(
@@ -186,10 +195,5 @@ fun <R> Any.withProgram(
     monitor: TaskMonitor? = null,
     func: (Program) -> R,
 ): R = loadProgram(binary, compiler, log, monitor).use {
-    val program = it.getDomainObject(this)
-    try {
-        func(program)
-    } finally {
-        program.release(this)
-    }
+    func(it.program)
 }
