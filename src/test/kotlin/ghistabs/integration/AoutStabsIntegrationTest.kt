@@ -1,13 +1,12 @@
 package ghistabs.integration
 
-import ghidra.app.util.opinion.Loaded
 import ghidra.program.model.data.Composite
 import ghidra.program.model.data.Enum
 import ghidra.program.model.listing.CommentType
-import ghidra.program.model.listing.Program
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghistabs.ImportOptions
+import ghistabs.LoadedProgram
 import ghistabs.StabsAnalyzer.Companion.import
 import ghistabs.diagnose.CapturingSink
 import ghistabs.diagnose.Level
@@ -55,8 +54,8 @@ import java.io.File
  */
 @Tag("integration")
 class AoutStabsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
-    private lateinit var loaded: Loaded<Program>
-    private val program get() = loaded.getDomainObject(this)
+    private lateinit var loaded: LoadedProgram
+    private val program get() = loaded.program
 
     private fun load(name: String) {
         assumeTrue(Fixtures.accepts(name), "excluded by -Pfixture")
@@ -69,7 +68,6 @@ class AoutStabsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     @AfterEach
     fun tearDown() {
         if (::loaded.isInitialized) {
-            program.release(this)
             loaded.close()
         }
     }
