@@ -298,7 +298,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         }
         if (drift.isNotEmpty()) {
             shiftedBaselineFile.parentFile.mkdirs()
-            BaselineWriter.write(shiftedBaselineFile, counters, "$binaryName - shifted from committed")
+            BaselineWriter.write(shiftedBaselineFile, counters, "$binaryName - shifted from committed", baselineFile)
 
             if (System.getProperty("ignoreBaselines") != "true") {
                 drift.mustBeEmpty("Baseline drift detected")

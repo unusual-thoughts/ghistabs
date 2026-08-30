@@ -59,9 +59,9 @@ object BaselineWriter {
      * range in the file; regen preserves that range as long as the newly-observed value still falls
      * inside it, so a single-mode regen doesn't pin it back to a point and break the other mode.
      */
-    fun write(file: File, counters: Map<String, Long>, source: String) {
-        val prior = if (file.exists()) {
-            runCatching { BaselineLoader.load(file).counters }.getOrDefault(emptyMap())
+    fun write(file: File, counters: Map<String, Long>, source: String, priorFile: File = file) {
+        val prior = if (priorFile.exists()) {
+            runCatching { BaselineLoader.load(priorFile).counters }.getOrDefault(emptyMap())
         } else {
             emptyMap()
         }
