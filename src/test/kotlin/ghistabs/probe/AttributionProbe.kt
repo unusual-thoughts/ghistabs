@@ -2,7 +2,6 @@ package ghistabs.probe
 
 import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.app.util.importer.MessageLog
-import ghidra.app.util.importer.ProgramLoader
 import ghidra.program.model.listing.Program
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
@@ -20,6 +19,7 @@ import ghistabs.runTransaction
 import ghistabs.set
 import ghistabs.test.defaultContext
 import ghistabs.test.disableWindowsResourceAnalyzer
+import ghistabs.withProgram
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.params.ParameterizedTest
@@ -55,8 +55,7 @@ class AttributionProbe : AbstractGhidraHeadlessIntegrationTest() {
 
         val log = MessageLog()
         val monitor = TaskMonitor.DUMMY
-        ProgramLoader.builder().source(fixture).compiler("gcc").log(log).monitor(monitor).load().use { loaded ->
-            val program = loaded.getPrimaryDomainObject(this)
+        withProgram(fixture, log = log, monitor = monitor) { program ->
             val ctx = program.defaultContext()
             val mgr = AutoAnalysisManager.getAnalysisManager(program)
             mgr.initializeOptions()

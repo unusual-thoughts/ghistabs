@@ -2,7 +2,6 @@ package ghistabs.probe
 
 import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.app.util.importer.MessageLog
-import ghidra.app.util.importer.ProgramLoader
 import ghidra.program.model.listing.Program
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
@@ -19,6 +18,7 @@ import ghistabs.set
 import ghistabs.test.defaultContext
 import ghistabs.test.disableAnalyzersFromProperty
 import ghistabs.test.disableWindowsResourceAnalyzer
+import ghistabs.withProgram
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.params.ParameterizedTest
@@ -66,54 +66,50 @@ class SourceSkeletonProbe : AbstractGhidraHeadlessIntegrationTest() {
         assumeTrue(fixture.exists(), "fixture absent")
         val log = MessageLog()
         val monitor = TaskMonitor.DUMMY
-        ProgramLoader.builder()
-            .source(fixture)
-            .compiler("gcc")
-            .log(log).monitor(monitor).load().use { loadResults ->
-                val program = loadResults.getPrimaryDomainObject(this)
-                val ctx = program.defaultContext()
-                val mgr = AutoAnalysisManager.getAnalysisManager(program)
-                mgr.initializeOptions()
-                // Reconstruct with typedef-shortened names (string, vector<std::string>) so the
-                // skeleton and decomp read like source rather than full template spellings.
-                program.runTransaction("enable-typedef-shorten") {
-                    program.getOptions(Program.ANALYSIS_PROPERTIES)
-                        .getOptions("Stabs Importer")
-                        .apply {
-                            this[SHORTEN_TYPEDEFS] = true
-                            this[LOG_LEVEL] = Level.DEBUG
-                        }
-                }
-                program.disableWindowsResourceAnalyzer()
-                // -PdisableAnalyzers=<substring> — render the same fixture twice, once without an
-                // analyzer, and diff `<dir>.old` against `<dir>` to see exactly what it changes.
-                program.disableAnalyzersFromProperty().forEach { println("Pipeline[$binaryName]: disabled $it") }
-                mgr.reAnalyzeAll(null)
-                program.runTransaction("skeleton-autoanalyze") {
-                    mgr.startAnalysis(monitor)
-                    mgr.waitForAnalysis(null, monitor)
-                }
-                val reader = StabReader.fromProgram(program)!!.readAll()
-                val harvest = Harvester(ctx).harvest(reader.records)
-
-                val index = HarvestIndex(harvest)
-                val written = Mode.entries.sumOf { mode ->
-                    val outDir = File("build/test-output/${mode.outDirName}/${fixture.nameWithoutExtension}")
-                    if (outDir.exists()) {
-                        val oldDir = File("${outDir.path}.old")
-                        oldDir.deleteRecursively()
-                        outDir.renameTo(oldDir)
+        withProgram(fixture, log = log, monitor = monitor) { program ->
+            val ctx = program.defaultContext()
+            val mgr = AutoAnalysisManager.getAnalysisManager(program)
+            mgr.initializeOptions()
+            // Reconstruct with typedef-shortened names (string, vector<std::string>) so the
+            // skeleton and decomp read like source rather than full template spellings.
+            program.runTransaction("enable-typedef-shorten") {
+                program.getOptions(Program.ANALYSIS_PROPERTIES)
+                    .getOptions("Stabs Importer")
+                    .apply {
+                        this[SHORTEN_TYPEDEFS] = true
+                        this[LOG_LEVEL] = Level.DEBUG
                     }
-                    Renderer(index, program, mode, ctx.resolver, sink = ctx).use { renderer ->
-                        renderer.renderAll(outDir).also {
-                            println(
-                                "Pipeline[$binaryName, ${mode.outDirName}]: " +
-                                    "${renderer.sources.size} sources, $it files → $outDir",
-                            )
-                        }
-                    }
-                }
-                assumeTrue(written > 0, "no output (no N_SOL/N_SLINE in this binary?)")
             }
+            program.disableWindowsResourceAnalyzer()
+            // -PdisableAnalyzers=<substring> — render the same fixture twice, once without an
+            // analyzer, and diff `<dir>.old` against `<dir>` to see exactly what it changes.
+            program.disableAnalyzersFromProperty().forEach { println("Pipeline[$binaryName]: disabled $it") }
+            mgr.reAnalyzeAll(null)
+            program.runTransaction("skeleton-autoanalyze") {
+                mgr.startAnalysis(monitor)
+                mgr.waitForAnalysis(null, monitor)
+            }
+            val reader = StabReader.fromProgram(program)!!.readAll()
+            val harvest = Harvester(ctx).harvest(reader.records)
+
+            val index = HarvestIndex(harvest)
+            val written = Mode.entries.sumOf { mode ->
+                val outDir = File("build/test-output/${mode.outDirName}/${fixture.nameWithoutExtension}")
+                if (outDir.exists()) {
+                    val oldDir = File("${outDir.path}.old")
+                    oldDir.deleteRecursively()
+                    outDir.renameTo(oldDir)
+                }
+                Renderer(index, program, mode, ctx.resolver, sink = ctx).use { renderer ->
+                    renderer.renderAll(outDir).also {
+                        println(
+                            "Pipeline[$binaryName, ${mode.outDirName}]: " +
+                                "${renderer.sources.size} sources, $it files → $outDir",
+                        )
+                    }
+                }
+            }
+            assumeTrue(written > 0, "no output (no N_SOL/N_SLINE in this binary?)")
+        }
     }
 }

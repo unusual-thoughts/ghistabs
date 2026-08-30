@@ -2,7 +2,6 @@ package ghistabs.integration
 
 import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.app.util.importer.MessageLog
-import ghidra.app.util.importer.ProgramLoader
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
@@ -11,6 +10,7 @@ import ghistabs.Correction
 import ghistabs.functionsIterable
 import ghistabs.runTransaction
 import ghistabs.test.*
+import ghistabs.withProgram
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertAll
@@ -69,26 +69,19 @@ class StructReturnFixtureIntegrationTest : AbstractGhidraHeadlessIntegrationTest
 
     private fun withAnalyzed(check: (Program) -> Unit) {
         val fixture = Fixtures.orDefault(DEFAULT_FIXTURE)
-        ProgramLoader.builder()
-            .source(fixture)
-            .compiler("gcc")
-            .log(MessageLog())
-            .monitor(TaskMonitor.DUMMY)
-            .load()
-            .use { results ->
-                val program = results.getPrimaryDomainObject(this)
-                val mgr = AutoAnalysisManager.getAnalysisManager(program)
-                mgr.initializeOptions()
-                program.disableWindowsResourceAnalyzer()
-                // Without this nothing is queued and startAnalysis returns immediately: a load alone
-                // does not schedule the FUNCTION_ANALYZER pass this depends on.
-                mgr.reAnalyzeAll(null)
-                program.runTransaction("auto-analyze") {
-                    mgr.startAnalysis(TaskMonitor.DUMMY)
-                    mgr.waitForAnalysis(null, TaskMonitor.DUMMY)
-                }
-                check(program)
+        withProgram(fixture, log = MessageLog(), monitor = TaskMonitor.DUMMY) { program ->
+            val mgr = AutoAnalysisManager.getAnalysisManager(program)
+            mgr.initializeOptions()
+            program.disableWindowsResourceAnalyzer()
+            // Without this nothing is queued and startAnalysis returns immediately: a load alone
+            // does not schedule the FUNCTION_ANALYZER pass this depends on.
+            mgr.reAnalyzeAll(null)
+            program.runTransaction("auto-analyze") {
+                mgr.startAnalysis(TaskMonitor.DUMMY)
+                mgr.waitForAnalysis(null, TaskMonitor.DUMMY)
             }
+            check(program)
+        }
     }
 
     private companion object {

@@ -1,7 +1,6 @@
 package ghistabs.probe
 
 import ghidra.app.util.importer.MessageLog
-import ghidra.app.util.importer.ProgramLoader
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghistabs.harvest.sourceFileOf
@@ -9,6 +8,7 @@ import ghistabs.parse.SourceFile
 import ghistabs.parse.StabReader
 import ghistabs.parse.StabType
 import ghistabs.parse.isRootedPath
+import ghistabs.withProgram
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.TestInstance
@@ -58,44 +58,41 @@ class CuDirectoryProbe : AbstractGhidraHeadlessIntegrationTest() {
         val fixture = File("src/test/resources/binaries/$binaryName")
         assumeTrue(fixture.exists(), "fixture absent")
 
-        ProgramLoader.builder().source(fixture).compiler("gcc").log(MessageLog()).monitor(TaskMonitor.DUMMY).load()
-            .use { loadResults ->
-                val program = loadResults.getPrimaryDomainObject(this)
-                val records = StabReader.fromProgram(program)?.readAll()?.records
-                assumeTrue(records != null, "no .stab section")
+        withProgram(fixture, log = MessageLog(), monitor = TaskMonitor.DUMMY) { program ->
+            val records = StabReader.fromProgram(program)?.readAll()?.records
+            assumeTrue(records != null, "no .stab section")
 
-                // The cursor's own reading of N_SO: trailing slash = directory for the CU that
-                // follows, non-empty = CU start, empty = CU end.
-                var pending: String? = null
-                val cus = records!!.filter { it.type == StabType.N_SO }.mapNotNull { rec ->
-                    when {
-                        rec.name.endsWith('/') -> null.also { pending = rec.name }
-                        rec.name.isEmpty() -> null.also { pending = null }
-                        else -> Cu(pending, rec.name).also { pending = null }
-                    }
-                }.distinct()
-
-                val wrong = cus.filter { it.joined != it.named }
-                val out = File("build/test-output/cudirectory/${fixture.nameWithoutExtension}.txt")
-                out.parentFile.mkdirs()
-                out.bufferedWriter().use { w ->
-                    w.write("fixture: $binaryName\n")
-                    w.write("compilation units: ${cus.size}, misplaced by the join: ${wrong.size}\n")
-                    cus.groupingBy { it.shape }.eachCount().forEach { (shape, n) -> w.write("  $shape: $n\n") }
-                    for (cu in cus) {
-                        w.write("\n${cu.shape}${if (cu in wrong) " — MISPLACED" else ""}\n")
-                        w.write("  dir    ${cu.directory ?: "(none)"}\n")
-                        w.write("  file   ${cu.filename}\n")
-                        w.write("  joined ${cu.joined}\n")
-                        if (cu in wrong) w.write("  names  ${cu.named}\n")
-                    }
+            // The cursor's own reading of N_SO: trailing slash = directory for the CU that
+            // follows, non-empty = CU start, empty = CU end.
+            var pending: String? = null
+            val cus = records!!.filter { it.type == StabType.N_SO }.mapNotNull { rec ->
+                when {
+                    rec.name.endsWith('/') -> null.also { pending = rec.name }
+                    rec.name.isEmpty() -> null.also { pending = null }
+                    else -> Cu(pending, rec.name).also { pending = null }
                 }
-                println(
-                    "[$binaryName] CUs=${cus.size} misplaced=${wrong.size} ${cus.groupingBy {
-                        it.shape
-                    }.eachCount()}",
-                )
-                program.release(this)
+            }.distinct()
+
+            val wrong = cus.filter { it.joined != it.named }
+            val out = File("build/test-output/cudirectory/${fixture.nameWithoutExtension}.txt")
+            out.parentFile.mkdirs()
+            out.bufferedWriter().use { w ->
+                w.write("fixture: $binaryName\n")
+                w.write("compilation units: ${cus.size}, misplaced by the join: ${wrong.size}\n")
+                cus.groupingBy { it.shape }.eachCount().forEach { (shape, n) -> w.write("  $shape: $n\n") }
+                for (cu in cus) {
+                    w.write("\n${cu.shape}${if (cu in wrong) " — MISPLACED" else ""}\n")
+                    w.write("  dir    ${cu.directory ?: "(none)"}\n")
+                    w.write("  file   ${cu.filename}\n")
+                    w.write("  joined ${cu.joined}\n")
+                    if (cu in wrong) w.write("  names  ${cu.named}\n")
+                }
             }
+            println(
+                "[$binaryName] CUs=${cus.size} misplaced=${wrong.size} ${cus.groupingBy {
+                    it.shape
+                }.eachCount()}",
+            )
+        }
     }
 }
