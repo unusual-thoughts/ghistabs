@@ -3,6 +3,7 @@ package ghistabs
 import ghidra.app.util.bin.InputStreamByteProvider
 import ghidra.app.util.importer.MessageLog
 import ghidra.app.util.importer.ProgramLoader
+import ghidra.app.util.opinion.Loaded
 import ghidra.framework.model.DomainObject
 import ghidra.program.model.address.*
 import ghidra.program.model.data.Composite
@@ -163,8 +164,12 @@ val Program.baseStackParamOffset get() = compilerSpec.defaultCallingConvention.r
     stackParameterOffset?.toInt() ?: stackshift
 }
 
-class LoadedProgram internal constructor(val program: Program, private val consumer: Any) : AutoCloseable {
+class LoadedProgram internal constructor(val loaded: Loaded<Program>, val program: Program, private val consumer: Any) :
+    Program by program,
+    AutoCloseable {
+    constructor(loaded: Loaded<Program>, consumer: Any) : this(loaded, loaded.getDomainObject(consumer), consumer)
     override fun close() {
+        loaded.close()
         program.release(consumer)
     }
 }
@@ -183,7 +188,7 @@ fun Any.loadProgram(binary: File, compiler: String? = "gcc", log: MessageLog? = 
                 if (monitor != null) monitor(monitor)
                 if (log != null) log(log)
             }
-            .load().getPrimaryDomainObject(this),
+            .load().primary,
         this,
     )
 
