@@ -12,7 +12,6 @@ import ghidra.GhidraApplicationLayout
 import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.app.script.GhidraScriptUtil
 import ghidra.app.util.importer.MessageLog
-import ghidra.app.util.importer.ProgramLoader
 import ghidra.framework.Application
 import ghidra.framework.HeadlessGhidraApplicationConfiguration
 import ghidra.framework.options.OptionType
@@ -36,6 +35,7 @@ import ghistabs.parse.StabReader
 import ghistabs.parse.StabRecord
 import ghistabs.render.Renderer
 import ghistabs.runTransaction
+import ghistabs.withProgram
 import java.io.File
 
 fun main(args: Array<String>) = Ghistabs()
@@ -228,22 +228,11 @@ private abstract class StabsCommand(name: String) : CliktCommand(name = name) {
         Msg.setErrorLogger(monitor)
         val msgLog = MessageLog()
         try {
-            ProgramLoader.builder().source(binary).compiler("gcc").log(msgLog).monitor(monitor).load().use { results ->
-                val program = results.getPrimaryDomainObject(this)
-                try {
-                    val ctx = ImportContext(
-                        program,
-                        monitor,
-                        options,
-                        TeeSink(monitor, fileSink),
-                        StabsDiagnostics(),
-                    )
-                    ctx.execute()
-                    fileWriter?.apply {
-                        msgLog.toString().takeIf { it.isNotBlank() }?.let { append("--- loader MessageLog ---\n$it\n") }
-                    }
-                } finally {
-                    program.release(this)
+            withProgram(binary, log = msgLog, monitor = monitor) { program ->
+                val ctx = ImportContext(program, monitor, options, TeeSink(monitor, fileSink), StabsDiagnostics())
+                ctx.execute()
+                fileWriter?.apply {
+                    msgLog.toString().takeIf { it.isNotBlank() }?.let { append("--- loader MessageLog ---\n$it\n") }
                 }
             }
         } finally {

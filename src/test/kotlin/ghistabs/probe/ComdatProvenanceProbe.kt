@@ -1,7 +1,6 @@
 package ghistabs.probe
 
 import ghidra.app.util.importer.MessageLog
-import ghidra.app.util.importer.ProgramLoader
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghistabs.harvest.Func
@@ -9,6 +8,7 @@ import ghistabs.harvest.Harvester
 import ghistabs.harvest.hasHeaderExtension
 import ghistabs.parse.StabReader
 import ghistabs.test.defaultContext
+import ghistabs.withProgram
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.TestInstance
@@ -51,73 +51,70 @@ class ComdatProvenanceProbe : AbstractGhidraHeadlessIntegrationTest() {
         assumeTrue(fixture.exists(), "fixture absent")
 
         val monitor = TaskMonitor.DUMMY
-        ProgramLoader.builder().source(fixture).compiler("gcc").log(MessageLog()).monitor(monitor).load()
-            .use { loadResults ->
-                val program = loadResults.getPrimaryDomainObject(this)
-                val ctx = program.defaultContext()
-                val records = StabReader.fromProgram(program)?.readAll()?.records
-                assumeTrue(records != null, "no .stab section")
-                val harvest = Harvester(ctx).harvest(records!!)
+        withProgram(fixture, log = MessageLog(), monitor = monitor) { program ->
+            val ctx = program.defaultContext()
+            val records = StabReader.fromProgram(program)?.readAll()?.records
+            assumeTrue(records != null, "no .stab section")
+            val harvest = Harvester(ctx).harvest(records!!)
 
-                // The other derivation, from what each CU declared: a body outside its own CU's span
-                // — or in a CU that declared none, its code having gone to COMDAT sections — was not
-                // in that CU's ordinary text. Broader than a multi-CU claim, which is the subset the
-                // linker demonstrably folded, and the two should never contradict (§39).
-                val bySpan = harvest.functions.groupingBy { f ->
-                    harvest.cuSpans[f.cu]?.let { if (it.contains(f.addr)) "plain .text" else "outside its span" }
-                        ?: "CU declared no text"
-                }.eachCount()
+            // The other derivation, from what each CU declared: a body outside its own CU's span
+            // — or in a CU that declared none, its code having gone to COMDAT sections — was not
+            // in that CU's ordinary text. Broader than a multi-CU claim, which is the subset the
+            // linker demonstrably folded, and the two should never contradict (§39).
+            val bySpan = harvest.functions.groupingBy { f ->
+                harvest.cuSpans[f.cu]?.let { if (it.contains(f.addr)) "plain .text" else "outside its span" }
+                    ?: "CU declared no text"
+            }.eachCount()
 
-                // Why a CU has no span, straight off the sink: `addressRange()` says which degenerate
-                // case it was and names the CU, where a count could only say how many.
-                val verdicts = ctx.terminal.lines.filter { it.tag in CU_RANGE_TAGS }
+            // Why a CU has no span, straight off the sink: `addressRange()` says which degenerate
+            // case it was and names the CU, where a count could only say how many.
+            val verdicts = ctx.terminal.lines.filter { it.tag in CU_RANGE_TAGS }
 
-                val byAddr = harvest.functions.groupBy { it.addr }
-                val shared = byAddr.filterValues { copies -> copies.mapTo(mutableSetOf()) { it.cu }.size > 1 }
-                val merged = shared.values
-                    .groupBy { copies -> copies.first().name }
-                    .map { (name, groups) -> Merged(name, groups.flatten()) }
-                    .sortedByDescending { it.copies.size }
-                val (agree, disagree) = merged.partition { it.agrees }
+            val byAddr = harvest.functions.groupBy { it.addr }
+            val shared = byAddr.filterValues { copies -> copies.mapTo(mutableSetOf()) { it.cu }.size > 1 }
+            val merged = shared.values
+                .groupBy { copies -> copies.first().name }
+                .map { (name, groups) -> Merged(name, groups.flatten()) }
+                .sortedByDescending { it.copies.size }
+            val (agree, disagree) = merged.partition { it.agrees }
 
-                val out = File("build/test-output/comdat/${fixture.nameWithoutExtension}.txt")
-                out.parentFile.mkdirs()
-                out.bufferedWriter().use { w ->
-                    w.write("fixture: $binaryName\n")
-                    w.write("function addresses: ${byAddr.size}, claimed by >1 CU: ${shared.size}\n")
-                    w.write("merged symbols: ${merged.size}\n")
-                    w.write("  copies agree on a source: ${agree.size} (${agree.count { it.header }} name a header)\n")
-                    w.write("  copies disagree:          ${disagree.size}\n")
-                    w.write("what each CU declared, per function:\n")
-                    for ((verdict, n) in bySpan.entries.sortedByDescending { it.value }) {
-                        w.write("  ${verdict.padEnd(20)} $n\n")
-                    }
-                    val contradictions = merged.count { m ->
-                        m.copies.any { harvest.cuSpans[it.cu]?.contains(it.addr) == true }
-                    }
-                    w.write("  merged bodies their own CU claims as plain .text: $contradictions\n")
-                    w.write("CUs with no span, by why (CuContext.addressRange()):\n")
-                    for (tag in CU_RANGE_TAGS) {
-                        w.write("  ${tag.padEnd(18)} ${verdicts.count { it.tag == tag }}\n")
-                    }
-                    for (v in verdicts) w.write("  $v\n")
-                    w.write("\n")
-                    for (m in merged) {
-                        w.write("${m.copies.size}x ${if (m.agrees) "AGREE   " else "DISAGREE"} ${m.name}\n")
-                        for (src in m.distinct) w.write("      $src\n")
-                    }
+            val out = File("build/test-output/comdat/${fixture.nameWithoutExtension}.txt")
+            out.parentFile.mkdirs()
+            out.bufferedWriter().use { w ->
+                w.write("fixture: $binaryName\n")
+                w.write("function addresses: ${byAddr.size}, claimed by >1 CU: ${shared.size}\n")
+                w.write("merged symbols: ${merged.size}\n")
+                w.write("  copies agree on a source: ${agree.size} (${agree.count { it.header }} name a header)\n")
+                w.write("  copies disagree:          ${disagree.size}\n")
+                w.write("what each CU declared, per function:\n")
+                for ((verdict, n) in bySpan.entries.sortedByDescending { it.value }) {
+                    w.write("  ${verdict.padEnd(20)} $n\n")
                 }
-                // The run's own diagnostics, captured rather than re-derived: `empty-cu-range` and
-                // friends name the CU and the address they fired on, which a count cannot.
-                File("build/test-output/logs/${fixture.nameWithoutExtension}.comdat.log").apply {
-                    parentFile.mkdirs()
-                    writeText(ctx.terminal.dedupedOutput())
+                val contradictions = merged.count { m ->
+                    m.copies.any { harvest.cuSpans[it.cu]?.contains(it.addr) == true }
                 }
-                println(
-                    "[$binaryName] merged=${merged.size} agree=${agree.size} " +
-                        "(header=${agree.count { it.header }}) disagree=${disagree.size} → ${out.absolutePath}",
-                )
-                program.release(this)
+                w.write("  merged bodies their own CU claims as plain .text: $contradictions\n")
+                w.write("CUs with no span, by why (CuContext.addressRange()):\n")
+                for (tag in CU_RANGE_TAGS) {
+                    w.write("  ${tag.padEnd(18)} ${verdicts.count { it.tag == tag }}\n")
+                }
+                for (v in verdicts) w.write("  $v\n")
+                w.write("\n")
+                for (m in merged) {
+                    w.write("${m.copies.size}x ${if (m.agrees) "AGREE   " else "DISAGREE"} ${m.name}\n")
+                    for (src in m.distinct) w.write("      $src\n")
+                }
             }
+            // The run's own diagnostics, captured rather than re-derived: `empty-cu-range` and
+            // friends name the CU and the address they fired on, which a count cannot.
+            File("build/test-output/logs/${fixture.nameWithoutExtension}.comdat.log").apply {
+                parentFile.mkdirs()
+                writeText(ctx.terminal.dedupedOutput())
+            }
+            println(
+                "[$binaryName] merged=${merged.size} agree=${agree.size} " +
+                    "(header=${agree.count { it.header }}) disagree=${disagree.size} → ${out.absolutePath}",
+            )
+        }
     }
 }

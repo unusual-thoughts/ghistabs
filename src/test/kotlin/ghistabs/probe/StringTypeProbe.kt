@@ -2,7 +2,6 @@ package ghistabs.probe
 
 import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.app.util.importer.MessageLog
-import ghidra.app.util.importer.ProgramLoader
 import ghidra.program.model.data.*
 import ghidra.program.model.listing.Program
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
@@ -18,6 +17,7 @@ import ghistabs.importer.ImportProbe
 import ghistabs.materialize.isUndefined
 import ghistabs.runTransaction
 import ghistabs.test.disableWindowsResourceAnalyzer
+import ghistabs.withProgram
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.params.ParameterizedTest
@@ -46,95 +46,88 @@ class StringTypeProbe : AbstractGhidraHeadlessIntegrationTest() {
     private fun runProbe(fixture: File, label: String) {
         val log = MessageLog()
         val monitor = TaskMonitor.DUMMY
-        ProgramLoader.builder()
-            .source(fixture)
-            .compiler("gcc")
-            .log(log)
-            .monitor(monitor)
-            .load()
-            .use { loadResults ->
-                val program = loadResults.getPrimaryDomainObject(this)
-                val mgr = AutoAnalysisManager.getAnalysisManager(program)
-                // Enable typedef shortening (OPT_SHORTEN_TYPEDEFS) so the probe exercises the
-                // basic_string→string rename path — the regression in render-backlog §14 (the
-                // /Demangler/string stub no longer replaced) only appears when shortening is on.
-                val ctx = ImportContext(
-                    program,
-                    TaskMonitor.DUMMY,
-                    ImportOptions(shortenTypedefs = true, minLogLevel = Level.DEBUG),
-                    CapturingSink(),
-                    StabsDiagnostics(),
-                )
-                ImportProbe.install(ctx)
-                val options = program.getOptions(Program.ANALYSIS_PROPERTIES)
-                program.runTransaction("disable-stabs-analyzer") {
-                    options.setBoolean(StabsAnalyzer().name, false)
-                }
-                mgr.initializeOptions()
-                program.disableWindowsResourceAnalyzer()
-                program.runTransaction("auto-analyze") {
-                    mgr.startAnalysis(monitor)
-                    mgr.waitForAnalysis(null, monitor)
-                }
-                program.runTransaction("stabs-analyze") {
-                    ctx.import()
-                }
-
-                val out = File("build/test-output/degradations/$label.string-probe.txt")
-                out.parentFile.mkdirs()
-                out.bufferedWriter().use { w ->
-                    w.write("=== DataTypes whose name == \"string\" ===\n")
-                    val strings = program.dataTypeManager.allDataTypes.asSequence()
-                        .filter { it.name == "string" }
-                        .toList()
-                    for (s in strings) {
-                        val kind = s::class.simpleName
-                        val len = (s as? Composite)?.length ?: -1
-                        val nc = (s as? Composite)?.numComponents ?: -1
-                        val tdBase = (s as? TypeDef)?.baseDataType?.pathName
-                        w.write(
-                            "  ${s.categoryPath.path}/${s.name} kind=$kind len=$len components=$nc tdBase=$tdBase\n",
-                        )
-                    }
-
-                    w.write("\n=== All basic_string-shaped DataTypes (name contains 'basic_string') ===\n")
-                    val bs = program.dataTypeManager.allDataTypes.asSequence()
-                        .filter { it.name.contains("basic_string") }
-                        .toList()
-                    for (s in bs) {
-                        val kind = s::class.simpleName
-                        val len = (s as? Composite)?.length ?: -1
-                        val nc = (s as? Composite)?.numComponents ?: -1
-                        w.write("  ${s.categoryPath.path}/${s.name} kind=$kind len=$len components=$nc\n")
-                    }
-
-                    w.write("\n=== Field tree for the first non-Demangler basic_string<char,…> Structure ===\n")
-                    val primary = bs.asSequence()
-                        .filterIsInstance<Structure>()
-                        .filter { !it.categoryPath.path.startsWith("/Demangler") }
-                        // The real basic_string<char,…> — not template-instantiation-of-something-OVER-basic_string.
-                        .filter { it.name.startsWith("basic_string<") }.firstOrNull { it.numComponents > 0 }
-                    if (primary == null) {
-                        w.write("  (none)\n")
-                    } else {
-                        w.write("Root: ${primary.categoryPath.path}/${primary.name} (${primary.length} bytes)\n")
-                        val visited = mutableSetOf<String>()
-                        dumpTree(primary, prefix = "  ", depth = 0, visited = visited, w = w)
-                    }
-
-                    w.write("\n=== Undefined-named DataTypes referenced from basic_string subtree ===\n")
-                    if (primary != null) {
-                        val undef = mutableSetOf<String>()
-                        collectUndef(primary, mutableSetOf(), undef)
-                        if (undef.isEmpty()) {
-                            w.write("  none — fully resolved.\n")
-                        } else {
-                            for (u in undef.sorted()) w.write("  $u\n")
-                        }
-                    }
-                }
-                println("Wrote string probe to ${out.absolutePath}")
+        withProgram(fixture, log = log, monitor = monitor) { program ->
+            val mgr = AutoAnalysisManager.getAnalysisManager(program)
+            // Enable typedef shortening (OPT_SHORTEN_TYPEDEFS) so the probe exercises the
+            // basic_string→string rename path — the regression in render-backlog §14 (the
+            // /Demangler/string stub no longer replaced) only appears when shortening is on.
+            val ctx = ImportContext(
+                program,
+                TaskMonitor.DUMMY,
+                ImportOptions(shortenTypedefs = true, minLogLevel = Level.DEBUG),
+                CapturingSink(),
+                StabsDiagnostics(),
+            )
+            ImportProbe.install(ctx)
+            val options = program.getOptions(Program.ANALYSIS_PROPERTIES)
+            program.runTransaction("disable-stabs-analyzer") {
+                options.setBoolean(StabsAnalyzer().name, false)
             }
+            mgr.initializeOptions()
+            program.disableWindowsResourceAnalyzer()
+            program.runTransaction("auto-analyze") {
+                mgr.startAnalysis(monitor)
+                mgr.waitForAnalysis(null, monitor)
+            }
+            program.runTransaction("stabs-analyze") {
+                ctx.import()
+            }
+
+            val out = File("build/test-output/degradations/$label.string-probe.txt")
+            out.parentFile.mkdirs()
+            out.bufferedWriter().use { w ->
+                w.write("=== DataTypes whose name == \"string\" ===\n")
+                val strings = program.dataTypeManager.allDataTypes.asSequence()
+                    .filter { it.name == "string" }
+                    .toList()
+                for (s in strings) {
+                    val kind = s::class.simpleName
+                    val len = (s as? Composite)?.length ?: -1
+                    val nc = (s as? Composite)?.numComponents ?: -1
+                    val tdBase = (s as? TypeDef)?.baseDataType?.pathName
+                    w.write(
+                        "  ${s.categoryPath.path}/${s.name} kind=$kind len=$len components=$nc tdBase=$tdBase\n",
+                    )
+                }
+
+                w.write("\n=== All basic_string-shaped DataTypes (name contains 'basic_string') ===\n")
+                val bs = program.dataTypeManager.allDataTypes.asSequence()
+                    .filter { it.name.contains("basic_string") }
+                    .toList()
+                for (s in bs) {
+                    val kind = s::class.simpleName
+                    val len = (s as? Composite)?.length ?: -1
+                    val nc = (s as? Composite)?.numComponents ?: -1
+                    w.write("  ${s.categoryPath.path}/${s.name} kind=$kind len=$len components=$nc\n")
+                }
+
+                w.write("\n=== Field tree for the first non-Demangler basic_string<char,…> Structure ===\n")
+                val primary = bs.asSequence()
+                    .filterIsInstance<Structure>()
+                    .filter { !it.categoryPath.path.startsWith("/Demangler") }
+                    // The real basic_string<char,…> — not template-instantiation-of-something-OVER-basic_string.
+                    .filter { it.name.startsWith("basic_string<") }.firstOrNull { it.numComponents > 0 }
+                if (primary == null) {
+                    w.write("  (none)\n")
+                } else {
+                    w.write("Root: ${primary.categoryPath.path}/${primary.name} (${primary.length} bytes)\n")
+                    val visited = mutableSetOf<String>()
+                    dumpTree(primary, prefix = "  ", depth = 0, visited = visited, w = w)
+                }
+
+                w.write("\n=== Undefined-named DataTypes referenced from basic_string subtree ===\n")
+                if (primary != null) {
+                    val undef = mutableSetOf<String>()
+                    collectUndef(primary, mutableSetOf(), undef)
+                    if (undef.isEmpty()) {
+                        w.write("  none — fully resolved.\n")
+                    } else {
+                        for (u in undef.sorted()) w.write("  $u\n")
+                    }
+                }
+            }
+            println("Wrote string probe to ${out.absolutePath}")
+        }
     }
 
     private fun dumpTree(dt: DataType, prefix: String, depth: Int, visited: MutableSet<String>, w: BufferedWriter) {

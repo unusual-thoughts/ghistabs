@@ -2,7 +2,6 @@ package ghistabs.integration
 
 import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.app.util.importer.MessageLog
-import ghidra.app.util.importer.ProgramLoader
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
@@ -83,14 +82,8 @@ class NoReturnFixtureIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     }
 
     /** Loads [fixture] and runs full autoanalysis, returning the analyzers `-PdisableAnalyzers` turned off. */
-    private fun withAnalyzed(fixture: File, check: (Program, List<String>) -> Unit) = ProgramLoader.builder()
-        .source(fixture)
-        .compiler("gcc")
-        .log(MessageLog())
-        .monitor(TaskMonitor.DUMMY)
-        .load()
-        .use { results ->
-            val program = results.getPrimaryDomainObject(this)
+    private fun withAnalyzed(fixture: File, check: (Program, List<String>) -> Unit) =
+        withProgram(fixture, log = MessageLog(), monitor = TaskMonitor.DUMMY) { program ->
             val mgr = AutoAnalysisManager.getAnalysisManager(program)
             mgr.initializeOptions()
             program.disableWindowsResourceAnalyzer()

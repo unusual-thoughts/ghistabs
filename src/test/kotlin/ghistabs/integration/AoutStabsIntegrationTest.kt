@@ -1,7 +1,6 @@
 package ghistabs.integration
 
-import ghidra.app.util.importer.MessageLog
-import ghidra.app.util.importer.ProgramLoader
+import ghidra.app.util.opinion.Loaded
 import ghidra.program.model.data.Composite
 import ghidra.program.model.data.Enum
 import ghidra.program.model.listing.CommentType
@@ -14,6 +13,7 @@ import ghistabs.diagnose.CapturingSink
 import ghistabs.diagnose.Level
 import ghistabs.diagnose.StabsDiagnostics
 import ghistabs.importer.ImportContext
+import ghistabs.loadProgram
 import ghistabs.test.*
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assumptions.assumeTrue
@@ -55,23 +55,23 @@ import java.io.File
  */
 @Tag("integration")
 class AoutStabsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
-    private lateinit var program: Program
+    private lateinit var loaded: Loaded<Program>
+    private val program get() = loaded.getDomainObject(this)
 
     private fun load(name: String) {
         assumeTrue(Fixtures.accepts(name), "excluded by -Pfixture")
         val fixture = File("src/test/resources/binaries/$name")
         assumeTrue(fixture.isFile, "a.out fixture missing: $fixture")
-        program = ProgramLoader.builder()
-            .source(fixture)
-            .log(MessageLog())
-            .monitor(TaskMonitor.DUMMY)
-            .load()
-            .getPrimaryDomainObject(this)
+        // No compiler hint: a.out has one spec, and naming gcc here picks nothing.
+        loaded = loadProgram(fixture, compiler = null)
     }
 
     @AfterEach
     fun tearDown() {
-        if (::program.isInitialized) program.release(this)
+        if (::loaded.isInitialized) {
+            program.release(this)
+            loaded.close()
+        }
     }
 
     @Test

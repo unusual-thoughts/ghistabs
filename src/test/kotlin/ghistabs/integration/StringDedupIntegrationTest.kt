@@ -2,21 +2,17 @@ package ghistabs.integration
 
 import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.app.util.importer.MessageLog
-import ghidra.app.util.importer.ProgramLoader
 import ghidra.program.model.data.Structure
 import ghidra.program.model.listing.Program
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
-import ghistabs.ImportOptions
+import ghistabs.*
 import ghistabs.ImportOptions.Companion.SHORTEN_TYPEDEFS
-import ghistabs.StabsAnalyzer
 import ghistabs.diagnose.CapturingSink
 import ghistabs.diagnose.Level
 import ghistabs.diagnose.StabsDiagnostics
 import ghistabs.importer.ImportContext
 import ghistabs.importer.ImportProbe
-import ghistabs.runTransaction
-import ghistabs.set
 import ghistabs.test.*
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
@@ -48,79 +44,72 @@ class StringDedupIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
 
         val log = MessageLog()
         val monitor = TaskMonitor.DUMMY
-        ProgramLoader.builder()
-            .source(fixture)
-            .compiler("gcc")
-            .log(log)
-            .monitor(monitor)
-            .load()
-            .use { loadResults ->
-                val program = loadResults.getPrimaryDomainObject(this)
-                val mgr = AutoAnalysisManager.getAnalysisManager(program)
-                val ctx = ImportContext(
-                    program,
-                    TaskMonitor.DUMMY,
-                    ImportOptions(shortenTypedefs = shorten, minLogLevel = Level.DEBUG),
-                    CapturingSink(),
-                    StabsDiagnostics(),
-                )
-                ImportProbe.install(ctx)
+        withProgram(fixture, log = log, monitor = monitor) { program ->
+            val mgr = AutoAnalysisManager.getAnalysisManager(program)
+            val ctx = ImportContext(
+                program,
+                TaskMonitor.DUMMY,
+                ImportOptions(shortenTypedefs = shorten, minLogLevel = Level.DEBUG),
+                CapturingSink(),
+                StabsDiagnostics(),
+            )
+            ImportProbe.install(ctx)
 
-                // CONCURRENT: schedule our analyzer for the next pass so it runs at LOW_PRIORITY
-                // alongside Ghidra's demangler (which creates the `/std/string` class struct).
-                val discovered = mgr.getAnalyzer(StabsAnalyzer.NAME)
-                discovered.mustNotBeNull("StabsAnalyzer not discovered by ClassSearcher")
-                val options = program.getOptions(Program.ANALYSIS_PROPERTIES)
-                program.runTransaction("configure-analysis") {
-                    options.setBoolean(StabsAnalyzer.NAME, true)
-                    // The analyzer reads its own options from the per-analyzer subgroup, not the top level.
-                    options.getOptions(StabsAnalyzer.NAME)[SHORTEN_TYPEDEFS] = shorten
-                }
-                mgr.initializeOptions()
-                program.disableWindowsResourceAnalyzer()
-                mgr.scheduleOneTimeAnalysis(discovered, program.memory)
-                mgr.reAnalyzeAll(null)
-                program.runTransaction("auto-analyze") {
-                    mgr.startAnalysis(monitor)
-                    mgr.waitForAnalysis(null, monitor)
-                }
-
-                val dtm = program.dataTypeManager
-                // Shortening ON renames the body `basic_string<char,…>` → `string` in place.
-                val filledName = "basic_string<char,std::char_traits<char>,std::allocator<char>>"
-                val structs = dtm.allDataTypes.asSequence().filterIsInstance<Structure>().toList()
-
-                // (1) Exactly one filled (non-empty) `string`/`basic_string` struct, outside `/Demangler`.
-                val bodies = structs
-                    .filter { !it.categoryPath.path.startsWith("/Demangler") }
-                    .filter { it.name == filledName || it.name == "string" }
-                val filled = bodies.filter { it.numComponents > 0 }
-                filled.size.mustBe(
-                    1,
-                    "expected exactly one filled string struct (shorten=$shorten); got " +
-                        bodies.joinToString { "${it.pathName}(nc=${it.numComponents})" },
-                )
-
-                // (2) No empty `string`-named stub survives — our `/std/string` (named from the demangler
-                // leaf via the canonical key) pre-occupies the slot Ghidra's `Ss` class-struct would take,
-                // in either shortening mode. Empty structs report length 1 / 0 components.
-                val emptyStubs = structs
-                    .filter { it.name == "string" && (it.numComponents == 0 || it.isZeroLength) }
-                    .map { it.pathName }
-                emptyStubs.mustBeEmpty("empty `string` stub(s) survived the fold (shorten=$shorten): $emptyStubs")
-
-                // (3) `/std/string` — the exact slot Ghidra's this-param creator looks up for `Ss` — is a
-                // filled Structure. This is the whole point: our type owns that path so it's reused, not
-                // shadowed. (The former `/stabs/string` typedef is now redundant and correctly dropped —
-                // the struct itself carries the `string` name.)
-                val stdString = dtm.getDataType("/std/string")
-                stdString.mustBeA<Structure>(
-                    "`/std/string` is not a Structure (shorten=$shorten): ${stdString?.pathName}",
-                )
-                (stdString as Structure).must("`/std/string` is an empty shadow (shorten=$shorten)") {
-                    numComponents > 0
-                }
+            // CONCURRENT: schedule our analyzer for the next pass so it runs at LOW_PRIORITY
+            // alongside Ghidra's demangler (which creates the `/std/string` class struct).
+            val discovered = mgr.getAnalyzer(StabsAnalyzer.NAME)
+            discovered.mustNotBeNull("StabsAnalyzer not discovered by ClassSearcher")
+            val options = program.getOptions(Program.ANALYSIS_PROPERTIES)
+            program.runTransaction("configure-analysis") {
+                options.setBoolean(StabsAnalyzer.NAME, true)
+                // The analyzer reads its own options from the per-analyzer subgroup, not the top level.
+                options.getOptions(StabsAnalyzer.NAME)[SHORTEN_TYPEDEFS] = shorten
             }
+            mgr.initializeOptions()
+            program.disableWindowsResourceAnalyzer()
+            mgr.scheduleOneTimeAnalysis(discovered, program.memory)
+            mgr.reAnalyzeAll(null)
+            program.runTransaction("auto-analyze") {
+                mgr.startAnalysis(monitor)
+                mgr.waitForAnalysis(null, monitor)
+            }
+
+            val dtm = program.dataTypeManager
+            // Shortening ON renames the body `basic_string<char,…>` → `string` in place.
+            val filledName = "basic_string<char,std::char_traits<char>,std::allocator<char>>"
+            val structs = dtm.allDataTypes.asSequence().filterIsInstance<Structure>().toList()
+
+            // (1) Exactly one filled (non-empty) `string`/`basic_string` struct, outside `/Demangler`.
+            val bodies = structs
+                .filter { !it.categoryPath.path.startsWith("/Demangler") }
+                .filter { it.name == filledName || it.name == "string" }
+            val filled = bodies.filter { it.numComponents > 0 }
+            filled.size.mustBe(
+                1,
+                "expected exactly one filled string struct (shorten=$shorten); got " +
+                    bodies.joinToString { "${it.pathName}(nc=${it.numComponents})" },
+            )
+
+            // (2) No empty `string`-named stub survives — our `/std/string` (named from the demangler
+            // leaf via the canonical key) pre-occupies the slot Ghidra's `Ss` class-struct would take,
+            // in either shortening mode. Empty structs report length 1 / 0 components.
+            val emptyStubs = structs
+                .filter { it.name == "string" && (it.numComponents == 0 || it.isZeroLength) }
+                .map { it.pathName }
+            emptyStubs.mustBeEmpty("empty `string` stub(s) survived the fold (shorten=$shorten): $emptyStubs")
+
+            // (3) `/std/string` — the exact slot Ghidra's this-param creator looks up for `Ss` — is a
+            // filled Structure. This is the whole point: our type owns that path so it's reused, not
+            // shadowed. (The former `/stabs/string` typedef is now redundant and correctly dropped —
+            // the struct itself carries the `string` name.)
+            val stdString = dtm.getDataType("/std/string")
+            stdString.mustBeA<Structure>(
+                "`/std/string` is not a Structure (shorten=$shorten): ${stdString?.pathName}",
+            )
+            (stdString as Structure).must("`/std/string` is an empty shadow (shorten=$shorten)") {
+                numComponents > 0
+            }
+        }
     }
 
     private companion object {

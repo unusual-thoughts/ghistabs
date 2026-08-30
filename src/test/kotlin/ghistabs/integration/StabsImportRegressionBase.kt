@@ -2,8 +2,7 @@ package ghistabs.integration
 
 import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.app.util.importer.MessageLog
-import ghidra.app.util.importer.ProgramLoader
-import ghidra.app.util.opinion.LoadResults
+import ghidra.app.util.opinion.Loaded
 import ghidra.program.database.data.DataTypeUtilities
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.*
@@ -110,7 +109,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         "$OUTPUT_ROOT/analysis-times/${fixture.nameWithoutExtension}.${mode.name.lowercase()}.txt",
     )
 
-    private lateinit var loadResults: LoadResults<Program>
+    private lateinit var loaded: Loaded<Program>
     private lateinit var context: ImportContext<CapturingSink>
     private lateinit var artifacts: ImportArtifacts
     private val program get() = context.program
@@ -132,14 +131,14 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             // Loading the raw binary is the ONLY legitimately-skippable step: a corrupt or
             // format-unsupported fixture is an environment problem, not a bug in our analyzer.
             // Everything after it is code under test and must fail loudly (see the catch below).
-            loadResults = try {
-                ProgramLoader.builder().source(fixture).compiler("gcc").log(log).monitor(monitor).load()
+            loaded = try {
+                loadProgram(fixture, log = log, monitor = monitor)
             } catch (e: Exception) {
                 e.printStackTrace()
-                abort("Skipping $binaryName: ProgramLoader could not load the fixture: $e")
+                abort("Skipping $binaryName: the importer could not load the fixture: $e")
             }
 
-            context = loadResults.getPrimaryDomainObject(this).defaultContext()
+            context = loaded.getDomainObject(this).defaultContext()
 
             val mgr = AutoAnalysisManager.getAnalysisManager(program)
             val options = program.getOptions(Program.ANALYSIS_PROPERTIES)
@@ -258,7 +257,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     fun tearDown() {
         ImportProbe.clear(program)
         program.release(this)
-        loadResults.close()
+        loaded.close()
     }
 
     @Test
