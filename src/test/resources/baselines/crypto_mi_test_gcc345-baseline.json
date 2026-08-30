@@ -465,8 +465,8 @@
             "max": 104
         },
         "vfptr-inherited-from-base": {
-            "min": 63,
-            "max": 63
+            "min": 90,
+            "max": 90
         },
         "vfptr-normalized": {
             "min": 48,
@@ -475,6 +475,14 @@
         "vtable-applied": {
             "min": 68,
             "max": 68
+        },
+        "vtable-failed": {
+            "min": 27,
+            "max": 27
+        },
+        "vtable-failed-truly-missing": {
+            "min": 27,
+            "max": 27
         },
         "vtable-reconstructed": {
             "min": 460,

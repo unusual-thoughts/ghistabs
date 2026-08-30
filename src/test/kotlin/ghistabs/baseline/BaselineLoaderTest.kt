@@ -63,4 +63,44 @@ class BaselineLoaderTest {
         }
         exception.mustNotBeNull("Should throw IllegalArgumentException for missing file")
     }
+
+    private fun baselineOf(dir: File, name: String, vararg ranges: Pair<String, CounterRange>) = File(dir, name).apply {
+        val body = ranges.joinToString(",") { (k, r) -> """"$k": {"min": ${r.min}, "max": ${r.max}}""" }
+        writeText("""{"counters": {$body}}""")
+    }
+
+    /** A deliberate tolerance range survives a regen that lands inside it — see [BaselineWriter.write]. */
+    @Test
+    fun write_keepsAToleranceRangeTheObservationFallsInside(@TempDir tempDir: File) {
+        val file = baselineOf(tempDir, "b.json", "text-undisassembled-code" to CounterRange(3269, 3336))
+
+        BaselineWriter.write(file, mapOf("text-undisassembled-code" to 3269L), "regen")
+
+        BaselineLoader.load(file).counters["text-undisassembled-code"] mustBe CounterRange(3269, 3336)
+    }
+
+    /** …but an observation outside it means the range is stale, so it is pinned to what was seen. */
+    @Test
+    fun write_pinsARangeTheObservationFallsOutside(@TempDir tempDir: File) {
+        val file = baselineOf(tempDir, "b.json", "replaced-demangler" to CounterRange(799, 800))
+
+        BaselineWriter.write(file, mapOf("replaced-demangler" to 782L), "regen")
+
+        BaselineLoader.load(file).counters["replaced-demangler"] mustBe CounterRange(782, 782)
+    }
+
+    /**
+     * The shifted-baselines path: written to a file that does not exist yet, so the ranges have to be
+     * read from the committed baseline instead. Without [priorFile] every counter regenerated as a
+     * point, which silently un-widened the flaky ones on every CI run that published a shift.
+     */
+    @Test
+    fun write_readsRangesFromPriorFileWhenWritingElsewhere(@TempDir tempDir: File) {
+        val committed = baselineOf(tempDir, "committed.json", "text-data-no-coverage" to CounterRange(316, 356))
+        val shifted = File(tempDir, "shifted/b.json").apply { parentFile.mkdirs() }
+
+        BaselineWriter.write(shifted, mapOf("text-data-no-coverage" to 356L), "shifted", committed)
+
+        BaselineLoader.load(shifted).counters["text-data-no-coverage"] mustBe CounterRange(316, 356)
+    }
 }
