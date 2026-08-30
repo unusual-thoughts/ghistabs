@@ -45,6 +45,9 @@ sealed class StabsRenderExporter(name: String, extension: String, val options: S
 
     override fun supportsAddressRestrictedExport() = false
 
+    override fun canExportDomainObject(domainObjectClass: Class<out DomainObject>) =
+        Program::class.java.isAssignableFrom(domainObjectClass)
+
     override fun canExportDomainObject(domainObject: DomainObject?) =
         domainObject is Program && StabReader.hasStabs(domainObject)
 
