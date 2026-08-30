@@ -36,7 +36,7 @@ class TypeStoreTest {
             body = TypeDecl.XRef(kind = AggrKind.STRUCT, tagName = "Foo"),
         )
         val concreteStruct = TypeDecl.Struct(
-            rawKind = AggrKind.STRUCT,
+            kind = AggrKind.STRUCT,
             sizeBytes = 16L,
             bases = emptyList(),
             fields = listOf(
@@ -90,7 +90,7 @@ class TypeStoreTest {
 
         val globalId = GlobalTypeId(SourceFile.CUSource(cuName), 20)
         val body = TypeDecl.Struct<GlobalTypeId>(
-            rawKind = AggrKind.STRUCT,
+            kind = AggrKind.STRUCT,
             sizeBytes = 8L,
             bases = emptyList(),
             fields = emptyList(),
@@ -142,7 +142,7 @@ class TypeStoreTest {
         val globalId = GlobalTypeId(SourceFile.CUSource(cuName), 30)
 
         val firstBody = TypeDecl.Struct(
-            rawKind = AggrKind.STRUCT,
+            kind = AggrKind.STRUCT,
             sizeBytes = 8L,
             bases = emptyList(),
             fields = listOf(
@@ -161,7 +161,7 @@ class TypeStoreTest {
         )
 
         val secondBody = TypeDecl.Struct(
-            rawKind = AggrKind.STRUCT,
+            kind = AggrKind.STRUCT,
             sizeBytes = 16L,
             bases = emptyList(),
             fields = listOf(
@@ -239,7 +239,7 @@ class TypeStoreTest {
         val id = GlobalTypeId(SourceFile.CUSource(cuName), 20)
         val selfRef = Type(cu = SourceFile.CUSource(cuName), id = id, name = "Foo", body = TypeDecl.Ref(id))
         val struct = TypeDecl.Struct(
-            rawKind = AggrKind.STRUCT,
+            kind = AggrKind.STRUCT,
             sizeBytes = 8L,
             bases = emptyList(),
             fields = listOf(

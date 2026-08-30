@@ -7,6 +7,13 @@ package ghistabs.parse
  * when a mangled token is available, these are the string-only fallbacks and predicates.
  */
 
+/**
+ * gcc's vtable-pointer member: `_vptr$<Class>` through gcc 4.x, `_vptr.<Class>` from gcc 12, bare
+ * `_vptr` in between. The name is the only signal — the type it carries (`__vtbl_ptr_type *`) is
+ * one CU-shared node reused by every polymorphic record, so it identifies nothing.
+ */
+fun isVptrFieldName(name: String) = name.startsWith("_vptr$") || name.startsWith("_vptr.") || name == "_vptr"
+
 /** Split a source-form qualified name on `::`, ignoring separators inside `<>` or `()`. */
 fun splitQualified(name: String): List<String> {
     val parts = mutableListOf<String>()

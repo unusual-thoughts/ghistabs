@@ -42,7 +42,7 @@ class NestedScopeKeyTest : AbstractGhidraHeadlessIntegrationTest() {
         methods: List<Method<GlobalTypeId>> = emptyList(),
         fields: List<Field<GlobalTypeId>> = emptyList(),
     ) = TypeDecl.Struct(
-        rawKind = AggrKind.STRUCT,
+        kind = AggrKind.STRUCT,
         sizeBytes = 4L,
         bases = emptyList(),
         fields = fields,

@@ -68,7 +68,7 @@ interface RenderContext {
 
         is TypeDecl.XRef -> "${kind.cxxKeyword()} ${shortener?.shortenedOrNull(tagName) ?: tagName}"
 
-        is TypeDecl.Struct -> kind.cxxKeyword()
+        is TypeDecl.Struct -> cxxKeyword
 
         is TypeDecl.Enum -> "enum"
 
@@ -130,7 +130,7 @@ interface RenderContext {
         // access, starting at the type's default (private for a class, public for a struct/union), so a
         // uniform type stays label-free and only real transitions show.
         return buildList {
-            var current = if (kind == AggrKind.CLASS) Access.PRIVATE else Access.PUBLIC
+            var current = if (isCxxClass) Access.PRIVATE else Access.PUBLIC
             for ((access, line) in members) {
                 if (access != current) {
                     add("${access.name.lowercase()}:")
@@ -176,7 +176,7 @@ interface RenderContext {
                     "${it.access.name.lowercase()} ${it.type.render()}"
                 }
                 .orEmpty()
-            ("${b.kind.cxxKeyword()} ${shortener?.shortenedOrNull(name ?: "") ?: name}$bases { ")
+            ("${b.cxxKeyword} ${shortener?.shortenedOrNull(name ?: "") ?: name}$bases { ")
                 .asSpecialization(shortener?.shortenedOrNull(name ?: "") ?: name) +
                 b.renderFull(name?.simpleTypeName()).joinToString(" ") +
                 " }; /* ${b.sizeBytes} bytes */"
@@ -206,7 +206,7 @@ interface RenderContext {
             is TypeDecl.Struct -> body.bases.takeIf { it.isNotEmpty() }?.joinToString(", ", prefix = " : ") {
                 "${it.access.name.lowercase()} ${it.type.render()}"
             }.orEmpty().let { bases ->
-                "${body.kind.cxxKeyword()} $shortName$bases {".asSpecialization(shortName)
+                "${body.cxxKeyword} $shortName$bases {".asSpecialization(shortName)
             }
 
             is TypeDecl.Enum -> "enum $shortName {"
@@ -226,7 +226,7 @@ interface RenderContext {
                 stale,
             )
         } else {
-            val keyword = if (body is TypeDecl.Struct) body.kind.cxxKeyword() else "enum"
+            val keyword = if (body is TypeDecl.Struct) body.cxxKeyword else "enum"
             val row = Row("$keyword $shortName; $sizeNote", line.indentAt(), "")
             Claim(Owner.TYPE_BODY, line, listOf(row), stale = stale)
         }

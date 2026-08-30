@@ -8,7 +8,7 @@ class AnonymousTypedefTargetNamesTest {
     private val cu = SourceFile.CUSource("dspinfo.c")
     private fun id(n: Int) = GlobalTypeId(cu, n)
     private fun struct(size: Long = 4L) = TypeDecl.Struct<GlobalTypeId>(
-        rawKind = AggrKind.STRUCT,
+        kind = AggrKind.STRUCT,
         sizeBytes = size,
         bases = emptyList(),
         fields = emptyList(),
