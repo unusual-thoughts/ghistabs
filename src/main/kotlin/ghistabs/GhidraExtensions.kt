@@ -3,7 +3,6 @@ package ghistabs
 import ghidra.app.util.bin.InputStreamByteProvider
 import ghidra.app.util.importer.MessageLog
 import ghidra.app.util.importer.ProgramLoader
-import ghidra.app.util.opinion.Loaded
 import ghidra.framework.model.DomainObject
 import ghidra.program.model.address.*
 import ghidra.program.model.data.Composite
@@ -164,12 +163,8 @@ val Program.baseStackParamOffset get() = compilerSpec.defaultCallingConvention.r
     stackParameterOffset?.toInt() ?: stackshift
 }
 
-class LoadedProgram internal constructor(val loaded: Loaded<Program>, val program: Program, private val consumer: Any) :
-    Program by program,
-    AutoCloseable {
-    constructor(loaded: Loaded<Program>, consumer: Any) : this(loaded, loaded.getDomainObject(consumer), consumer)
+class LoadedProgram internal constructor(val program: Program, private val consumer: Any) : AutoCloseable {
     override fun close() {
-        loaded.close()
         program.release(consumer)
     }
 }
@@ -180,17 +175,19 @@ class LoadedProgram internal constructor(val loaded: Loaded<Program>, val progra
  * program's life is a single scope.
  */
 fun Any.loadProgram(binary: File, compiler: String? = "gcc", log: MessageLog? = null, monitor: TaskMonitor? = null) =
-    LoadedProgram(
-        ProgramLoader.builder()
-            .source(binary).log(log).monitor(monitor)
-            .apply {
-                if (compiler != null) compiler(compiler)
-                if (monitor != null) monitor(monitor)
-                if (log != null) log(log)
+    ProgramLoader.builder()
+        .source(binary)
+        .apply {
+            if (compiler != null) compiler(compiler)
+            if (monitor != null) monitor(monitor)
+            if (log != null) log(log)
+        }
+        .let { builder ->
+            builder.load().primary.getDomainObject(this).let { program ->
+                program.release(builder)
+                LoadedProgram(program, this)
             }
-            .load().primary,
-        this,
-    )
+        }
 
 /** [loadProgram] scoped to [func], released even when it throws. */
 fun <R> Any.withProgram(
