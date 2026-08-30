@@ -125,7 +125,7 @@ class ContentIndexTest {
     @Test
     fun perCuTemplateClonesHashIdentically() {
         val clone1Body = TypeDecl.Struct(
-            rawKind = AggrKind.STRUCT,
+            kind = AggrKind.STRUCT,
             sizeBytes = 8L,
             bases = emptyList(),
             fields = listOf(
@@ -151,7 +151,7 @@ class ContentIndexTest {
     @Test
     fun structurallyDifferentStructsHashDifferently() {
         val s1 = TypeDecl.Struct(
-            rawKind = AggrKind.STRUCT,
+            kind = AggrKind.STRUCT,
             sizeBytes = 4L,
             bases = emptyList(),
             fields = listOf(
@@ -180,7 +180,7 @@ class ContentIndexTest {
     @Test
     fun staticMembersExcludedFromLayoutHash() {
         val base = TypeDecl.Struct(
-            rawKind = AggrKind.STRUCT,
+            kind = AggrKind.STRUCT,
             sizeBytes = 4L,
             bases = emptyList(),
             fields = listOf(
@@ -262,7 +262,7 @@ class ContentIndexTest {
         val intId = GlobalTypeId(cu, 2)
         val intAst = Type(cu, intId, "int", TypeDecl.Range(intId, -2147483648L, 2147483647L))
         val ioFileBody = TypeDecl.Struct(
-            rawKind = AggrKind.STRUCT,
+            kind = AggrKind.STRUCT,
             sizeBytes = 216,
             bases = emptyList(),
             fields = listOf(
@@ -338,7 +338,7 @@ class ContentIndexTest {
         val methodBindBId = GlobalTypeId(SourceFile.CUSource("assemble.cpp"), 228)
 
         fun makePairBody(param0: GlobalTypeDecl): TypeDecl.Struct<GlobalTypeId> = TypeDecl.Struct(
-            rawKind = AggrKind.STRUCT,
+            kind = AggrKind.STRUCT,
             sizeBytes = 8L,
             bases = emptyList(),
             fields = listOf(
@@ -492,7 +492,7 @@ class ContentIndexTest {
         )
 
         fun cls(method: Method<GlobalTypeId>) = TypeDecl.Struct(
-            rawKind = AggrKind.CLASS,
+            kind = AggrKind.STRUCT,
             sizeBytes = 4,
             bases = emptyList(),
             fields = listOf(Field("x", TypeDecl.Ref(intInCU1.id), 0, 32, false, Access.PUBLIC, mangled = null)),
@@ -523,7 +523,7 @@ class ContentIndexTest {
     @Test
     fun contentDistinguishesFieldLayout() {
         fun cls(fieldType: GlobalTypeDecl) = TypeDecl.Struct(
-            rawKind = AggrKind.CLASS,
+            kind = AggrKind.STRUCT,
             sizeBytes = 4,
             bases = emptyList(),
             fields = listOf(Field("x", fieldType, 0, 32, false, Access.PUBLIC, mangled = null)),

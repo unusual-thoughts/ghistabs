@@ -182,7 +182,7 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
                 is TypeDecl.Struct -> {
                     val members = body.renderFull(ast.ghidraName.simpleTypeName())
                         .joinToString("\n    ", prefix = "\n    ", postfix = "\n")
-                    "${body.kind.cxxKeyword()} ${ast.ghidraName} {$members}; /* ${body.sizeBytes} bytes */"
+                    "${body.cxxKeyword} ${ast.ghidraName} {$members}; /* ${body.sizeBytes} bytes */"
                         .asSpecialization(ast.ghidraName)
                 }
 

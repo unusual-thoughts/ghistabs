@@ -16,20 +16,13 @@ enum class VirtKind { NORMAL, STATIC, VIRTUAL }
 /** What a [SymbolDecl.NamedType] binds: `:T` a tag (struct/union/class/enum), `:t` a typedef alias. */
 enum class TypeNameKind { TAG, TYPEDEF }
 
-enum class AggrKind {
-    STRUCT,
-    UNION,
-    CLASS,
-    ENUM,
-    ;
-
-    fun cxxKeyword() = when (this) {
-        STRUCT -> "struct"
-        UNION -> "union"
-        CLASS -> "class"
-        ENUM -> "enum"
-    }
-}
+/**
+ * The three record kinds stabs can name, as body descriptors (`s`/`u`/`e`) and as forward-reference
+ * kinds (`xs`/`xu`/`xe`). There is deliberately no CLASS: gcc spells every class `s`, and the Sun
+ * manual's forward-reference grammar (p125) glosses `s` as "class/structure" outright — so class-ness
+ * is never read, only guessed, by [TypeDecl.Struct.isCxxClass].
+ */
+enum class AggrKind { STRUCT, UNION, ENUM, }
 
 @Serializable
 enum class StaticScope {
@@ -178,7 +171,7 @@ sealed interface TypeDecl<out Id : IdInterface> {
 
     @Serializable
     data class Struct<Id : IdInterface>(
-        val rawKind: AggrKind,
+        val kind: AggrKind,
         override val sizeBytes: Long,
         val bases: List<Base<Id>>,
         val fields: List<Field<Id>>,
@@ -193,13 +186,26 @@ sealed interface TypeDecl<out Id : IdInterface> {
         /** Whether the record carries a body at all — a bare `s0` / `u0` is a declaration. */
         val hasMembers get() = fields.isNotEmpty() || methods.isNotEmpty()
 
-        // gcc 3.x stabs emit `s` for both `struct` and `class`; promote to "class" when
-        // any method or base carries non-public access, OR when there are any methods
-        // at all (plain C structs have none — the presence of methods means C++).
-        val kind get() = when (rawKind) {
-            AggrKind.STRUCT if (methods.isNotEmpty() || bases.any { it.access != Access.PUBLIC }) -> AggrKind.CLASS
-            else -> rawKind
-        }
+        /** Members only a C++ record can have: a method block, or a vfptr under either spelling. */
+        private val hasCxxMembers get() = methods.isNotEmpty() ||
+            hasVTablePointerMarker ||
+            fields.any { isVptrFieldName(it.name) }
+
+        /**
+         * C++ at all, so worth class materialization. Inheritance qualifies whatever its access —
+         * gcc emits the `!N,` base block only for C++ records, a C struct never has one.
+         */
+        val hasCxxSurface get() = hasCxxMembers || bases.isNotEmpty()
+
+        /**
+         * Was the keyword `class`? Unrecoverable in principle — dbxout.c emits the `/N` visibility
+         * marker only for non-public or non-FIELD_DECL members, so a public member is spelled
+         * identically under either keyword — leaving only these tells. Narrower than [hasCxxSurface]
+         * at exactly one term: a *non-public* base is evidence, because the default base access is
+         * private for `class` and public for `struct`, while `struct D : public B` is idiomatic C++
+         * and evidence of nothing.
+         */
+        val isCxxClass get() = hasCxxMembers || bases.any { it.access != Access.PUBLIC }
 
         override val children get() = listOf(
             bases.map { it.type },
@@ -208,7 +214,7 @@ sealed interface TypeDecl<out Id : IdInterface> {
             listOfNotNull(vptrBasetype),
         )
 
-        override val layoutData get() = listOf(rawKind, sizeBytes)
+        override val layoutData get() = listOf(kind, sizeBytes)
 
         @Serializable
         data class Field<Id : IdInterface>(
@@ -325,7 +331,7 @@ sealed interface TypeDecl<out Id : IdInterface> {
     }
 
     fun matchesXRefKind(xref: AggrKind) = when (this) {
-        is Struct -> rawKind == xref
+        is Struct -> kind == xref
         is Enum -> xref == AggrKind.ENUM
         else -> false
     }

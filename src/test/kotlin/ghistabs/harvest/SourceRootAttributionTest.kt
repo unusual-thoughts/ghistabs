@@ -34,7 +34,7 @@ class SourceRootAttributionTest {
         cu = cu,
         id = GlobalTypeId(cu, nextId++),
         name = name,
-        body = TypeDecl.Struct(AggrKind.CLASS, 4L, emptyList(), emptyList(), emptyList(), null),
+        body = TypeDecl.Struct(AggrKind.STRUCT, 4L, emptyList(), emptyList(), emptyList(), null),
         line = line,
         sourceFile = declaredIn,
     )

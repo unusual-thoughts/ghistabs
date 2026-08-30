@@ -3,7 +3,6 @@ package ghistabs.materialize
 import ghidra.program.model.data.*
 import ghidra.program.model.lang.CompilerSpec
 import ghistabs.harvest.Type
-import ghistabs.materialize.itanium.Itanium
 import ghistabs.materialize.itanium.Layout
 import ghistabs.materialize.itanium.firstPolymorphicBase
 import ghistabs.materialize.itanium.resolveStruct
@@ -11,6 +10,7 @@ import ghistabs.parse.CATEGORY
 import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
+import ghistabs.parse.isVptrFieldName
 import ghistabs.runTransaction
 import ghidra.program.model.data.Enum as GhidraEnum
 
@@ -208,7 +208,7 @@ internal fun DataTypeRegistry.fillComposite(
     for ((name, type, offsetBits, sizeBits, isStatic) in body.fields) {
         if (isStatic) continue
 
-        if (Itanium.isVptrField(name) &&
+        if (isVptrFieldName(name) &&
             ((polyBase != null && offsetBits == polyBase.offsetBits) || offsetBits in baseOffsets)
         ) {
             debug("vptr-skipped-inherited")

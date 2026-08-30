@@ -3,6 +3,8 @@ package ghistabs.render
 import ghistabs.harvest.GhidraSourceFile
 import ghistabs.harvest.rootSegment
 import ghistabs.harvest.segments
+import ghistabs.parse.AggrKind
+import ghistabs.parse.TypeDecl
 import ghistabs.parse.isDriveLetter
 import kotlin.io.path.Path
 
@@ -81,3 +83,14 @@ private val ARRAY_SUFFIX = Regex("""((?:\[[^\]]*\])+)$""")
 fun declarator(type: String, name: String) = ARRAY_SUFFIX.find(type)
     ?.let { "${type.removeSuffix(it.value).trimEnd()} $name${it.value}" }
     ?: "$type $name"
+
+fun AggrKind.cxxKeyword() = when (this) {
+    AggrKind.STRUCT -> "struct"
+    AggrKind.UNION -> "union"
+    AggrKind.ENUM -> "enum"
+}
+
+val TypeDecl.Struct<*>.cxxKeyword get() = when (kind) {
+    AggrKind.STRUCT if isCxxClass -> "class"
+    else -> kind.cxxKeyword()
+}

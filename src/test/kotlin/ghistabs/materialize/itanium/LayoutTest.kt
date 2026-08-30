@@ -132,7 +132,7 @@ class PolymorphicBaseTest {
 
     private fun polyStruct(hasVtableMarker: Boolean = false, methods: List<Method<GlobalTypeId>> = emptyList()) =
         TypeDecl.Struct(
-            rawKind = AggrKind.CLASS,
+            kind = AggrKind.STRUCT,
             sizeBytes = 8L,
             bases = emptyList(),
             fields = emptyList(),
@@ -162,7 +162,7 @@ class PolymorphicBaseTest {
     fun `polyBase - direct polymorphic base detected`() {
         val base = polyStruct(hasVtableMarker = true)
         val derived = TypeDecl.Struct(
-            rawKind = AggrKind.CLASS,
+            kind = AggrKind.STRUCT,
             sizeBytes = 12L,
             bases = listOf(inlineBase(1, base)),
             fields = emptyList(),
@@ -176,7 +176,7 @@ class PolymorphicBaseTest {
     fun `nonPolyBase - no virtual methods or markers detected`() {
         val base = polyStruct(hasVtableMarker = false)
         val derived = TypeDecl.Struct(
-            rawKind = AggrKind.CLASS,
+            kind = AggrKind.STRUCT,
             sizeBytes = 12L,
             bases = listOf(inlineBase(1, base)),
             fields = emptyList(),
@@ -190,7 +190,7 @@ class PolymorphicBaseTest {
     fun `transitive - polymorphism inherited through intermediate class`() {
         val base = polyStruct(hasVtableMarker = true)
         val middle = TypeDecl.Struct(
-            rawKind = AggrKind.CLASS,
+            kind = AggrKind.STRUCT,
             sizeBytes = 12L,
             bases = listOf(inlineBase(1, base)),
             fields = emptyList(),
@@ -198,7 +198,7 @@ class PolymorphicBaseTest {
             vptrBasetype = null,
         )
         val derived = TypeDecl.Struct(
-            rawKind = AggrKind.CLASS,
+            kind = AggrKind.STRUCT,
             sizeBytes = 16L,
             bases = listOf(inlineBase(2, middle)),
             fields = emptyList(),
@@ -224,7 +224,7 @@ class PolymorphicBaseTest {
     fun `virtualBases - virtual base reached through a non-virtual edge still counts`() {
         val vbase = polyStruct(hasVtableMarker = true)
         val middle = TypeDecl.Struct(
-            rawKind = AggrKind.CLASS,
+            kind = AggrKind.STRUCT,
             sizeBytes = 12L,
             bases = listOf(inlineBase(1, vbase).copy(isVirtual = true)),
             fields = emptyList(),
@@ -232,7 +232,7 @@ class PolymorphicBaseTest {
             vptrBasetype = null,
         )
         val derived = TypeDecl.Struct(
-            rawKind = AggrKind.CLASS,
+            kind = AggrKind.STRUCT,
             sizeBytes = 16L,
             bases = listOf(inlineBase(2, middle)),
             fields = emptyList(),
@@ -248,7 +248,7 @@ class PolymorphicBaseTest {
     fun `virtualBases - virtual edge to an already-visited class is still collected`() {
         val shared = polyStruct(hasVtableMarker = true)
         val middle = TypeDecl.Struct(
-            rawKind = AggrKind.CLASS,
+            kind = AggrKind.STRUCT,
             sizeBytes = 12L,
             bases = listOf(inlineBase(1, shared)),
             fields = emptyList(),
@@ -256,7 +256,7 @@ class PolymorphicBaseTest {
             vptrBasetype = null,
         )
         val derived = TypeDecl.Struct(
-            rawKind = AggrKind.CLASS,
+            kind = AggrKind.STRUCT,
             sizeBytes = 16L,
             bases = listOf(inlineBase(2, middle), inlineBase(1, shared).copy(isVirtual = true)),
             fields = emptyList(),
@@ -276,7 +276,7 @@ class PolymorphicBaseTest {
     fun `virtual method in base - detected as polymorphic`() {
         val base = polyStruct(methods = listOf(virtualMethod("foo")))
         val derived = TypeDecl.Struct(
-            rawKind = AggrKind.CLASS,
+            kind = AggrKind.STRUCT,
             sizeBytes = 12L,
             bases = listOf(inlineBase(1, base)),
             fields = emptyList(),
@@ -293,7 +293,7 @@ class PolymorphicBaseTest {
         val baseAst = Type(cu, baseId, "Base", base)
 
         val derived = TypeDecl.Struct(
-            rawKind = AggrKind.CLASS,
+            kind = AggrKind.STRUCT,
             sizeBytes = 12L,
             bases = listOf(
                 Base(type = TypeDecl.Ref(baseId), isVirtual = false, access = Access.PUBLIC, offsetBits = 0L),

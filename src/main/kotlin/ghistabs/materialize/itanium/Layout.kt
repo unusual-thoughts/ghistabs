@@ -7,6 +7,7 @@ import ghistabs.parse.TypeDecl
 import ghistabs.parse.TypeDecl.Struct.Base
 import ghistabs.parse.TypeDecl.Struct.Method
 import ghistabs.parse.VirtKind
+import ghistabs.parse.isVptrFieldName
 
 /** Component snapshot at a target offset, fed into vfptr placement decisions. */
 data class FirstComponentSnapshot(val fieldName: String?, val offsetBytes: Int, val isUndefined: Boolean)
@@ -50,7 +51,7 @@ object Layout {
             return VfptrAction.SkipInheritedFromBase
         }
 
-        return if (componentAtTargetOffset.fieldName?.let(Itanium::isVptrField) == true) {
+        return if (componentAtTargetOffset.fieldName?.let(::isVptrFieldName) == true) {
             VfptrAction.Replace(targetOffset, componentAtTargetOffset.fieldName)
         } else {
             VfptrAction.CollisionAt(targetOffset, componentAtTargetOffset.fieldName ?: "<anon>")

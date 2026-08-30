@@ -1361,7 +1361,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
 
         val classStructs = harvest.types.values
             .mapNotNull { it.asStruct() }
-            .filter { (_, body) -> body.rawKind == AggrKind.CLASS }
+            .filter { (_, body) -> body.isCxxClass }
             .toList()
         println("${classStructs.size} class structs")
 
@@ -1650,7 +1650,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     fun fieldsSitAtTheirDeclaredOffsets() {
         val checked = artifacts.index.byLocation.values.flatMap { located ->
             val body = located.type.body as? TypeDecl.Struct ?: return@flatMap emptyList()
-            if (body.rawKind == AggrKind.UNION) return@flatMap emptyList()
+            if (body.kind == AggrKind.UNION) return@flatMap emptyList()
             val dt = artifacts.registry.dataTypeFor(located.type.id) as? Structure ?: return@flatMap emptyList()
             val components = dt.components.associateBy { it.fieldName }
             body.fields

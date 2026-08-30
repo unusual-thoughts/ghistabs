@@ -273,10 +273,7 @@ class Parser(src: String) {
             parseStruct(AggrKind.UNION)
         }
 
-        'Y' -> {
-            advance()
-            parseStruct(AggrKind.CLASS)
-        }
+        // 'Y' is a C++ type descriptor for some compilers (Sun, IBM?)
 
         else if (peekStartsTypeId()) -> {
             // Forward reference, inline definition, or builtin slot: (cu,n) /
@@ -421,7 +418,7 @@ class Parser(src: String) {
         }
 
         return TypeDecl.Struct(
-            rawKind = kind,
+            kind = kind,
             sizeBytes = sizeBytes,
             bases = bases,
             fields = fields,
@@ -619,9 +616,11 @@ class Parser(src: String) {
 
     /**
      * Parse a cross-reference: `x<kind><name>:`
-     * Kind: 's'=struct, 'u'=union, 'c'=class, 'Y'=class (gcc-2 form).
-     *
-     * Mirror of gdb/stabsread.c:read_cross_ref and stabs.html §4.6.
+     * Kind: 's'=struct, 'u'=union, 'e'=enum — all three sources agree that is the whole list. Sun's
+     * grammar (p125) is `x [ e | s | u | Type ] name` and glosses `s` as "class/structure"
+     * stabs.info §5.3 says the same; gdb switches on only
+     * those three in `case 'x':` (stabsread.c, inside read_type).
+     * putting a `Type pair` inside the cross reference appears to be a Sun extension, unsupported.
      */
     private fun Cursor.parseXRef(): TypeDecl.XRef<LocalTypeId> {
         consume('x')
@@ -629,7 +628,6 @@ class Parser(src: String) {
             's' -> AggrKind.STRUCT
             'u' -> AggrKind.UNION
             'e' -> AggrKind.ENUM
-            'c', 'Y' -> AggrKind.CLASS
             else -> throw StabsParseException(pos - 1, src, "unknown cross-ref kind '$kindChar'")
         }
         val tagName = readXRefTagName() // skips :: inside <>, stops at single ':' at depth 0

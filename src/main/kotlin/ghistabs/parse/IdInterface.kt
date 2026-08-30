@@ -109,7 +109,7 @@ fun LocalTypeDecl.globalize(g: Globalizer): GlobalTypeDecl = when (this) {
     )
 
     is TypeDecl.Struct -> TypeDecl.Struct(
-        rawKind,
+        kind,
         sizeBytes,
         bases.map { Base(it.type.globalize(g), it.isVirtual, it.access, it.offsetBits) },
         fields.map {

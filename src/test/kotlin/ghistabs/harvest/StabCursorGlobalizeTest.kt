@@ -134,7 +134,7 @@ class StabCursorGlobalizeTest {
         val cursor = createTestCursor(records = records)
 
         val input = TypeDecl.Struct(
-            rawKind = AggrKind.STRUCT,
+            kind = AggrKind.STRUCT,
             sizeBytes = 8L,
             bases = emptyList(),
             fields = listOf(
@@ -164,7 +164,7 @@ class StabCursorGlobalizeTest {
 
         val globalCuSource = SourceFile.CUSource(cuName)
         val expected = TypeDecl.Struct(
-            rawKind = AggrKind.STRUCT,
+            kind = AggrKind.STRUCT,
             sizeBytes = 8L,
             bases = emptyList(),
             fields = listOf(
@@ -215,7 +215,7 @@ class StabCursorGlobalizeTest {
                 TypeDecl.InlineDef(
                     id = GlobalTypeId(cu, 7),
                     inner = TypeDecl.Struct(
-                        rawKind = AggrKind.STRUCT,
+                        kind = AggrKind.STRUCT,
                         sizeBytes = 4L,
                         bases = emptyList(),
                         fields = listOf(

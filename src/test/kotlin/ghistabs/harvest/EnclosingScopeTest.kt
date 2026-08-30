@@ -30,7 +30,7 @@ class EnclosingScopeTest : AbstractGhidraHeadlessIntegrationTest() {
     )
 
     private fun struct(vararg methods: Method<GlobalTypeId>) = TypeDecl.Struct(
-        rawKind = AggrKind.STRUCT,
+        kind = AggrKind.STRUCT,
         sizeBytes = 4L,
         bases = emptyList(),
         fields = emptyList(),

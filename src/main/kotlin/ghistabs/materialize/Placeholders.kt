@@ -21,7 +21,7 @@ internal fun DataTypeRegistry.makePlaceholder(
     name: String = ast.ghidraName,
 ): DataType {
     val dt = when (ast.body) {
-        is TypeDecl.Struct if (ast.body.rawKind == AggrKind.UNION) -> UnionDataType(category, name, dtm)
+        is TypeDecl.Struct if (ast.body.kind == AggrKind.UNION) -> UnionDataType(category, name, dtm)
 
         is TypeDecl.Struct -> {
             val sz = ast.body.usefulStructSize()
