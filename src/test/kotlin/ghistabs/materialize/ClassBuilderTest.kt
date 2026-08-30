@@ -86,7 +86,7 @@ class ClassBuilderTest {
         )
 
         val classStruct = TypeDecl.Struct(
-            rawKind = AggrKind.CLASS,
+            kind = AggrKind.STRUCT,
             sizeBytes = 4,
             bases = emptyList(),
             fields = emptyList(),
@@ -167,13 +167,10 @@ class ClassBuilderTest {
         val vptrFieldName3 = "_vptr"
         val nonVptrFieldName = "m_member"
 
-        fun isParserEmitted(name: String): Boolean =
-            name.startsWith("_vptr$") || name.startsWith("_vptr.") || name == "_vptr"
-
-        isParserEmitted(vptrFieldName1).mustBeTrue()
-        isParserEmitted(vptrFieldName2).mustBeTrue()
-        isParserEmitted(vptrFieldName3).mustBeTrue()
-        isParserEmitted(nonVptrFieldName).mustBeFalse()
+        isVptrFieldName(vptrFieldName1).mustBeTrue()
+        isVptrFieldName(vptrFieldName2).mustBeTrue()
+        isVptrFieldName(vptrFieldName3).mustBeTrue()
+        isVptrFieldName(nonVptrFieldName).mustBeFalse()
     }
 
     @Test

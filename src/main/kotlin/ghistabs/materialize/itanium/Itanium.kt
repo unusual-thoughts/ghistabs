@@ -82,8 +82,6 @@ object Itanium {
 
     fun isTemplated(name: String) = '<' in name
 
-    /** gcc emits the vfptr either as the `~%<id>;` stab marker or as a plain `_vptr.<Class>` field. */
-    fun isVptrField(name: String) = name.startsWith("_vptr$") || name.startsWith("_vptr.") || name == "_vptr"
     fun isBaseField(name: String) = name.startsWith(BASE_PREFIX) || name.startsWith(VBASE_PREFIX)
 
     /** Itanium-mangle a nested class name: `Foo`→`3Foo`, `Foo::Bar`→`N3Foo3BarE`. Templates unchanged. */

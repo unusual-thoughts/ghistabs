@@ -42,15 +42,7 @@ class ClassBuilder(
     companion object {
         private val source = SourceType.IMPORTED
 
-        fun LocatedType.isClass() = type.body is TypeDecl.Struct &&
-            (
-                type.body.methods.isNotEmpty() ||
-                    type.body.hasVTablePointerMarker ||
-                    // gcc 12 emits the vfptr as a regular `_vptr.XX` field instead of the
-                    // `~%<id>;` marker hasVTablePointerMarker watches for — without this check
-                    // every polymorphic class in xmltest would be skipped.
-                    type.body.fields.any { Itanium.isVptrField(it.name) }
-                )
+        fun LocatedType.isClass() = (type.body as? TypeDecl.Struct)?.hasCxxSurface == true
 
         private val LocatedType.classBody get() = type.body as TypeDecl.Struct<GlobalTypeId>
         private val LocatedType.className get() = location.name
@@ -126,7 +118,7 @@ class ClassBuilder(
         // is left unannotated. Virtuals.process walks bases, so the slots still resolve.
         val isPoly = classBody.hasVTablePointerMarker ||
             classBody.methods.any { it.virt == VirtKind.VIRTUAL } ||
-            classBody.fields.any { Itanium.isVptrField(it.name) } ||
+            classBody.fields.any { isVptrFieldName(it.name) } ||
             index.hasPolymorphicBaseSubobject(classBody)
         if (isPoly) ensureVfptrFirstField(structDt)
 
@@ -172,7 +164,7 @@ class ClassBuilder(
     private fun LocatedType.ensureVfptrFirstField(structDt: Structure) {
         val vfptrName = ClassUtils.VFPTR
         val parserVptrOffset = classBody.fields
-            .firstOrNull { Itanium.isVptrField(it.name) }
+            .firstOrNull { isVptrFieldName(it.name) }
             ?.let { (it.offsetBits / 8).toInt() }
 
         val targetOffset = parserVptrOffset ?: 0
