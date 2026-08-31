@@ -9,16 +9,11 @@ import ghidra.program.model.data.DataType
  * package so it can reach the `protected` [DataTypeManagerDB.addDataTypeToReplace]: queue every pair
  * but the last, then let one public `replaceDataType` drain the whole queue in a single sweep.
  *
- * Skips pairs the public path would reject anyway (missing stub, self-replace, dependency cycle,
- * invalid replacement) so the final flush can't throw mid-batch.
+ * Skips pairs the public path would reject anyway (missing stub, self-replace, dependency cycle)
+ * so the final flush can't throw mid-batch.
  */
 fun DataTypeManagerDB.replaceDataTypesBatched(pairs: List<Pair<DataType, DataType>>) {
-    val valid = pairs.filter { (old, new) ->
-        old !== new &&
-            contains(old) &&
-            !new.dependsOn(old) &&
-            runCatching { DataTypeUtilities.checkValidReplacement(old, new) }.isSuccess
-    }
+    val valid = pairs.filter { (old, new) -> old !== new && contains(old) && !new.dependsOn(old) }
     if (valid.isEmpty()) return
     valid.dropLast(1).forEach { (old, new) -> addDataTypeToReplace(old, new) }
     valid.last().let { (old, new) -> replaceDataType(old, new, false) }

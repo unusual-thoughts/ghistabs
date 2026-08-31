@@ -1,5 +1,6 @@
 package ghistabs.scan
 
+import ghistabs.ECHOES_DROPPED_LINES
 import ghistabs.diagnose.CapturingSink
 import ghistabs.test.mustBe
 import org.junit.jupiter.api.Assumptions.assumeTrue
@@ -44,6 +45,7 @@ class LibstdcxxScanTest {
      */
     @Test
     fun `the arm a compile dropped is masked in the header it came from`(@org.junit.jupiter.api.io.TempDir tmp: File) {
+        assumeTrue(ECHOES_DROPPED_LINES, "Ghidra below 11.3 does not echo dropped lines")
         val header = include.resolve("bits/cpp_type_traits.h")
         val unit = File(tmp, "main.cpp").apply {
             writeText("#include <bits/cpp_type_traits.h>\nint main() { return 0; }\n")

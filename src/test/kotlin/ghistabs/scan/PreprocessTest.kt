@@ -1,9 +1,12 @@
 package ghistabs.scan
 
+import ghistabs.ECHOES_DROPPED_LINES
 import ghistabs.diagnose.CapturingSink
 import ghistabs.test.must
 import ghistabs.test.mustBe
 import ghistabs.test.mustBeNull
+import org.junit.jupiter.api.Assumptions.assumeTrue
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.io.File
@@ -40,6 +43,10 @@ class PreprocessTest {
         #endif
         #endif
     """
+
+    @BeforeEach
+    fun requirePreprocessorDroppedLines() =
+        assumeTrue(ECHOES_DROPPED_LINES, "Ghidra below 11.3 does not echo dropped lines")
 
     @Test
     fun `the arm that did not compile is reported at its own line numbers`() {

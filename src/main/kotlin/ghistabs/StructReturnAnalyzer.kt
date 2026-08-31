@@ -123,7 +123,7 @@ class StructReturnAnalyzer :
     private fun install(program: Program, base: String, fix: Correction, log: MessageLog?): Boolean = runCatching {
         val xml = derivedConventionXml(program, base, fix)
         SpecExtension(program).run {
-            if (SpecExtension.getCompilerSpecExtension(program, testExtensionDocument(xml)) == null) {
+            if (testExtensionDocument(xml).installedIn(program) == null) {
                 addReplaceCompilerSpecExtension(xml, TaskMonitor.DUMMY)
             }
         }
@@ -157,7 +157,7 @@ class StructReturnAnalyzer :
  */
 private fun derivedConventionXml(program: Program, base: String, fix: Correction): String {
     val model = requireNotNull(program.compilerSpec.getCallingConvention(base)) { "no calling convention $base" }
-    val encoded = XmlEncode(true).apply { model.encode(this, program.compilerSpec.pcodeInjectLibrary) }.toString()
+    val encoded = XmlEncode().apply { model.encode(this, program.compilerSpec.pcodeInjectLibrary) }.toString()
     val doc = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(InputSource(StringReader(encoded)))
 
     doc.documentElement.setAttribute("name", fix.conventionFor(base))
@@ -185,3 +185,7 @@ private fun Element.children(tag: String) = childNodes.let { kids -> (0 until ki
     .filterIsInstance<Element>().filter {
         it.tagName == tag
     }
+
+/** The extension document already registered under this one's formal name, or null.  */
+private fun SpecExtension.DocInfo.installedIn(program: Program) =
+    SpecExtension.getCompilerSpecExtension(program, type, formalName)
