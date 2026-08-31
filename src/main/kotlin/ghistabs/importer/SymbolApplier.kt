@@ -10,6 +10,7 @@ import ghidra.program.model.data.DataTypeConflictHandler
 import ghidra.program.model.data.EnumDataType
 import ghidra.program.model.data.Undefined4DataType
 import ghidra.program.model.listing.*
+import ghidra.program.model.listing.CommentType
 import ghidra.program.model.listing.Function
 import ghidra.program.model.symbol.SourceType
 import ghidra.program.model.symbol.SymbolTable

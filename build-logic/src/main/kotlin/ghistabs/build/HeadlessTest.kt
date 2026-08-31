@@ -22,9 +22,11 @@ val GHIDRA_JVM_ARGS = listOf(
     "--add-opens=java.desktop/java.awt=ALL-UNNAMED",
 )
 
-val HEADLESS_JVM_ARGS = GHIDRA_JVM_ARGS + listOf(
-    // Must be declared at JVM startup, else the BuiltinFilterFactory wins the race.
-    "-Djdk.serialFilterFactory=ghidra.framework.remote.GhidraSerialFilterFactory",
+val Project.headlessJvmArgs get() = GHIDRA_JVM_ARGS + listOfNotNull(
+    // Must be declared at JVM startup, else the BuiltinFilterFactory wins the race. 12.0 added the
+    // class; naming it on 11 aborts the test JVM before a single test class loads.
+    "-Djdk.serialFilterFactory=ghidra.framework.remote.GhidraSerialFilterFactory"
+        .takeIf { ghidraAtLeast("12") },
     "-DSystemUtilities.isTesting=true",
     "--add-opens=java.desktop/sun.swing=ALL-UNNAMED",
     "--add-opens=java.desktop/javax.swing=ALL-UNNAMED",
@@ -87,7 +89,7 @@ fun Test.headlessGhidraConfig(reportName: String, narrowGeneratedClasses: Boolea
     systemProperty("regenerateBaselines", props.gradleProperty("regenerateBaselines").getOrElse(""))
     // -PignoreBaselines=true reports drift without failing; drifted fixtures still write their counters.
     systemProperty("ignoreBaselines", props.gradleProperty("ignoreBaselines").getOrElse(""))
-    jvmArgs(HEADLESS_JVM_ARGS)
+    jvmArgs(project.headlessJvmArgs)
     // -Pjfr[=<file>]. Read recordings with the jdk.jfr.consumer API — `jfr print` crashes on Kotlin
     // synthetic frames.
     props.gradleProperty("jfr").orNull?.let { jfr ->

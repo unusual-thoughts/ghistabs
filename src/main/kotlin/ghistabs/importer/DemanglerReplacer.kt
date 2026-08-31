@@ -1,9 +1,7 @@
 package ghistabs.importer
 
 import ghidra.app.util.demangler.DemanglerUtil
-import ghidra.program.database.data.DataTypeManagerDB
-import ghidra.program.database.data.DataTypeUtilities
-import ghidra.program.database.data.replaceDataTypesBatched
+import ghidra.program.database.data.*
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.*
 import ghidra.program.model.data.Array
@@ -13,10 +11,13 @@ import ghidra.program.model.symbol.SymbolType
 import ghidra.program.model.symbol.SymbolUtilities
 import ghistabs.Demangler
 import ghistabs.applyDemangling
+import ghistabs.conflictBase
 import ghistabs.diagnose.DiagnosticSink
+import ghistabs.isConflict
 import ghistabs.materialize.DataTypeRegistry
 import ghistabs.materialize.itanium.Itanium.isProbablyMangled
 import ghistabs.materialize.itanium.Rtti
+import ghistabs.nameWithoutConflict
 import ghistabs.parse.CATEGORY
 import ghistabs.parse.canonTemplateName
 import ghistabs.parse.splitQualified
@@ -192,7 +193,7 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val registry:
         )
         // A `.conflict` fork is a second stub Ghidra made for a name we already occupy; it
         // names the same type, so it looks up debased. Nothing else keys off the fork's name.
-        val bareName = DataTypeUtilities.getNameWithoutConflict(name)
+        val bareName = nameWithoutConflict
         // Priority: exact DTM name → exact demangler-link (byDemangledClass) → RTTI layout.
         // byDemangledClass stays below the name match but above anything inferred: it is grounded
         // in the mangled symbol's own `this`-pointee.
@@ -429,10 +430,10 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val registry:
         val forks = ctx.dtm.allDataTypes.asSequence()
             .filter { it.categoryPath.isAncestorOrSelf(DEMANGLER_CATEGORY) }
             .filterIsInstance<Structure>()
-            .filter { (it.isZeroLength || it.numComponents == 0) && DataTypeUtilities.isConflictDataTypeName(it.name) }
-            .filter { ctx.dtm.getDataType(it.categoryPath, DataTypeUtilities.getNameWithoutConflict(it.name)) != null }
+            .filter { (it.isZeroLength || it.numComponents == 0) && it.isConflict() }
+            .filter { ctx.dtm.conflictBase(it) != null }
             .toList()
-        val dropped = forks.count { ctx.dtm.remove(it) }
+        val dropped = forks.count { ctx.dtm.remove(it, ctx.monitor) }
         if (dropped > 0) debug("demangler-dropped-empty-conflict-fork", count = dropped.toLong())
     }
 
