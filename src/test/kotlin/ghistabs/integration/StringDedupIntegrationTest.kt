@@ -6,14 +6,18 @@ import ghidra.program.model.data.Structure
 import ghidra.program.model.listing.Program
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
-import ghistabs.*
+import ghistabs.ImportOptions
 import ghistabs.ImportOptions.Companion.SHORTEN_TYPEDEFS
+import ghistabs.StabsAnalyzer
 import ghistabs.diagnose.CapturingSink
 import ghistabs.diagnose.Level
 import ghistabs.diagnose.StabsDiagnostics
 import ghistabs.importer.ImportContext
 import ghistabs.importer.ImportProbe
+import ghistabs.runTransaction
+import ghistabs.set
 import ghistabs.test.*
+import ghistabs.withProgram
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 

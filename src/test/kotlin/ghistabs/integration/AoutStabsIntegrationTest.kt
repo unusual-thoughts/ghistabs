@@ -6,13 +6,14 @@ import ghidra.program.model.listing.CommentType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghistabs.ImportOptions
+import ghistabs.LOADS_AOUT
 import ghistabs.LoadedProgram
 import ghistabs.StabsAnalyzer.Companion.import
+import ghistabs.compat.loadProgram
 import ghistabs.diagnose.CapturingSink
 import ghistabs.diagnose.Level
 import ghistabs.diagnose.StabsDiagnostics
 import ghistabs.importer.ImportContext
-import ghistabs.loadProgram
 import ghistabs.test.*
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assumptions.assumeTrue
@@ -58,6 +59,7 @@ class AoutStabsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     private val program get() = loaded.program
 
     private fun load(name: String) {
+        assumeTrue(LOADS_AOUT, "Ghidra below 11.4 has no UnixAoutLoader")
         assumeTrue(Fixtures.accepts(name), "excluded by -Pfixture")
         val fixture = File("src/test/resources/binaries/$name")
         assumeTrue(fixture.isFile, "a.out fixture missing: $fixture")

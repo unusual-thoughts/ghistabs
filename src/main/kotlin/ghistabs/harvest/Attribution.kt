@@ -109,7 +109,7 @@ fun foldSourcePaths(sources: Iterable<GhidraSourceFile>): Map<GhidraSourceFile, 
     fun parentDirs(s: GhidraSourceFile) = s.segments.dropLast(1).takeLast(2)
 
     val all = sources.toSet()
-    val fold = all.groupBy(GhidraSourceFile::getFilename).mapNotNull { (_, spellings) ->
+    val fold = all.groupBy { it.filename }.mapNotNull { (_, spellings) ->
         spellings.filterNot(::isBare)
             .takeIf { it.isNotEmpty() && it.mapTo(mutableSetOf(), ::parentDirs).size == 1 }
             ?.minWithOrNull(compareBy({ it.segments.size }, { it.path }))

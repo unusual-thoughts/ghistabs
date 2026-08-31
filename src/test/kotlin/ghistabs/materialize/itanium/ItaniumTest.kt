@@ -2,7 +2,7 @@ package ghistabs.materialize.itanium
 
 import ghidra.app.util.demangler.DemangledAddressTable
 import ghidra.app.util.demangler.DemangledFunction
-import ghidra.app.util.demangler.DemangledNamespaceNode
+import ghidra.app.util.demangler.DemangledType
 import ghistabs.test.must
 import ghistabs.test.mustBe
 import ghistabs.test.mustNot
@@ -74,7 +74,7 @@ class ItaniumTest {
     @Test
     fun testDemangledMatchesRejectsNonVtable() {
         val func = DemangledFunction("_ZN3FooC1Ev", "Foo::Foo()", "Foo")
-        func.namespace = DemangledNamespaceNode("_ZN3FooC1Ev", "Foo", "Foo")
+        func.namespace = DemangledType("_ZN3FooC1Ev", "Foo", "Foo")
         Itanium.mustNot { demangledMatchesClass(func, "Foo") }
     }
 
@@ -86,9 +86,9 @@ class ItaniumTest {
      */
     private fun vtableObj(vararg parts: String): DemangledAddressTable {
         val obj = DemangledAddressTable("synthetic", "synthetic-vtable", "vtable", false)
-        var node: DemangledNamespaceNode? = null
+        var node: DemangledType? = null
         for (p in parts) {
-            val next = DemangledNamespaceNode("synthetic", p, p)
+            val next = DemangledType("synthetic", p, p)
             next.namespace = node
             node = next
         }

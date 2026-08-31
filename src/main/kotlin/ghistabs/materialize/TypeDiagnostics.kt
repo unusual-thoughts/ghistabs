@@ -5,9 +5,11 @@ import ghidra.program.model.data.Composite
 import ghidra.program.model.data.DataType
 import ghidra.program.model.data.DataTypeManager
 import ghidra.program.model.data.Undefined
+import ghistabs.conflictBase
 import ghistabs.diagnose.GapRecord
 import ghistabs.harvest.Type
 import ghistabs.importer.DemanglerReplacer
+import ghistabs.isConflict
 import ghistabs.parse.TypeDecl
 
 /**
@@ -98,7 +100,7 @@ internal fun DataTypeManager.conflictCount(): Long = conflictPaths().size.toLong
 
 /** The forks themselves, by pathName — a set, so the end-of-import census can tell which are *ours*. */
 internal fun DataTypeManager.conflictPaths(): Set<String> =
-    allDataTypes.asSequence().filter { DataTypeUtilities.isConflictDataType(it) }.mapTo(mutableSetOf()) { it.pathName }
+    allDataTypes.asSequence().filter { it.isConflict() }.mapTo(mutableSetOf()) { it.pathName }
 
 /**
  * A `.conflict` fork means a type was applied whose layout didn't compare equal to an existing
@@ -107,7 +109,7 @@ internal fun DataTypeManager.conflictPaths(): Set<String> =
  * type we already built, so a nonzero delta over the construction-time baseline is a degradation.
  */
 fun DataTypeRegistry.reportConflictDelta() {
-    val conflicts = dtm.allDataTypes.asSequence().filter { DataTypeUtilities.isConflictDataType(it) }.toList()
+    val conflicts = dtm.allDataTypes.asSequence().filter { it.isConflict() }.toList()
     debug("dtm-conflicts-pre", count = conflictsBefore.size.toLong())
     debug("dtm-conflicts-post", count = conflicts.size.toLong())
     // Only the forks *this import* introduced: Ghidra's own analysis may have forked some before we
@@ -133,7 +135,7 @@ fun DataTypeRegistry.reportConflictDelta() {
 private fun DataTypeRegistry.reportDemanglerIncumbents(conflicts: List<DataType>) {
     conflicts.filter { it.categoryPath.isAncestorOrSelf(DemanglerReplacer.DEMANGLER_CATEGORY) }
         .forEach { fork ->
-            val incumbent = dtm.getDataType(fork.categoryPath, DataTypeUtilities.getNameWithoutConflict(fork.name))
+            val incumbent = dtm.conflictBase(fork)
             degradation(
                 "dtm-conflict-demangler-incumbent",
                 fork.pathName,

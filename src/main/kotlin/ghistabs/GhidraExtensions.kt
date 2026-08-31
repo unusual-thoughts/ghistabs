@@ -1,9 +1,10 @@
+@file:Suppress("TooManyFunctions")
+
 package ghistabs
 
 import ghidra.app.util.bin.InputStreamByteProvider
 import ghidra.app.util.importer.MessageLog
-import ghidra.app.util.importer.ProgramLoader
-import ghidra.framework.model.DomainObject
+import ghidra.program.database.data.DataTypeUtilities
 import ghidra.program.model.address.*
 import ghidra.program.model.data.Composite
 import ghidra.program.model.data.DataType
@@ -20,6 +21,7 @@ import ghidra.program.model.listing.Program
 import ghidra.program.model.listing.Variable
 import ghidra.program.model.mem.MemoryBlock
 import ghidra.util.task.TaskMonitor
+import ghistabs.compat.loadProgram
 import java.io.File
 
 operator fun Address.plus(rhs: Long): Address = addNoWrap(rhs)
@@ -99,7 +101,11 @@ fun FunctionManager.inHull(addr: Address) = getFunctionWrapping(addr) != null
 
 val Function.isMethod get() = parentNamespace is GhidraClass
 
-fun <T> DomainObject.runTransaction(description: String = "Kotlin Lambda Transaction", transaction: () -> T): T =
+/**
+ * [Program] rather than `DomainObject`: 11.1 folded `UndoableDomainObject`'s transaction API into
+ * `DomainObject`, but a Program reaches it either way — so this needs no version-variant source.
+ */
+fun <T> Program.runTransaction(description: String = "Kotlin Lambda Transaction", transaction: () -> T): T =
     startTransaction(description).let { txID ->
         return try {
             transaction().also { endTransaction(txID, true) }
@@ -118,6 +124,10 @@ fun <T> DataTypeManager.runTransaction(description: String = "Kotlin Lambda Tran
             throw e
         }
     }
+
+val DataType.nameWithoutConflict: String get() = DataTypeUtilities.getNameWithoutConflict(this, false)
+fun DataType.isConflict() = nameWithoutConflict != name
+fun DataTypeManager.conflictBase(dt: DataType): DataType? = getDataType(dt.categoryPath, dt.nameWithoutConflict)
 
 val CodeUnit.range get() = minAddress..maxAddress
 
@@ -169,26 +179,6 @@ class LoadedProgram internal constructor(val program: Program, private val consu
     }
 }
 
-/**
- * Imports [binary], hinting the [compiler] spec (null leaves the loader its own preference). The
- * caller owns the result and must [close][LoadedProgram.close] it — prefer [withProgram] when the
- * program's life is a single scope.
- */
-fun Any.loadProgram(binary: File, compiler: String? = "gcc", log: MessageLog? = null, monitor: TaskMonitor? = null) =
-    ProgramLoader.builder()
-        .source(binary)
-        .apply {
-            if (compiler != null) compiler(compiler)
-            if (monitor != null) monitor(monitor)
-            if (log != null) log(log)
-        }
-        .let { builder ->
-            builder.load().primary.getDomainObject(this).let { program ->
-                program.release(builder)
-                LoadedProgram(program, this)
-            }
-        }
-
 /** [loadProgram] scoped to [func], released even when it throws. */
 fun <R> Any.withProgram(
     binary: File,
@@ -196,6 +186,4 @@ fun <R> Any.withProgram(
     log: MessageLog? = null,
     monitor: TaskMonitor? = null,
     func: (Program) -> R,
-): R = loadProgram(binary, compiler, log, monitor).use {
-    func(it.program)
-}
+): R = loadProgram(binary, compiler, log, monitor).use { func(it.program) }

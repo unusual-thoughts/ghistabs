@@ -2,7 +2,6 @@ package ghistabs.integration
 
 import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.app.util.importer.MessageLog
-import ghidra.program.database.data.DataTypeUtilities
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.*
 import ghidra.program.model.data.Array
@@ -18,6 +17,7 @@ import ghistabs.StabsAnalyzer.Companion.import
 import ghistabs.audit.DemanglerWhitelist
 import ghistabs.baseline.BaselineLoader
 import ghistabs.baseline.BaselineWriter
+import ghistabs.compat.loadProgram
 import ghistabs.diagnose.CapturingSink
 import ghistabs.diagnose.dumpJson
 import ghistabs.diagnose.writeRegistryDump
@@ -1219,7 +1219,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         // A `.conflict` fork is never whitelistable: the whitelist excuses names with no concrete
         // type to bind to, but a fork exists precisely *because* something already holds that name.
         // fewConflictRenames can't see these — one fork sits far under its 25-wide spike threshold.
-        val forks = allEmpty.filter { DataTypeUtilities.isConflictDataTypeName(it.name) }.map { it.pathName }
+        val forks = allEmpty.filter { it.isConflict() }.map { it.pathName }
         forks.sorted().mustBeEmpty("${forks.size} empty /Demangler .conflict forks")
         val emptyStubs = allEmpty
             .filterNot { it.name in DemanglerWhitelist.ALLOWED }

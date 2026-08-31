@@ -1,5 +1,8 @@
+import ghistabs.build.ghidraAtLeast
 import ghistabs.build.ghidraInstallDir
+import ghistabs.build.ghidraJavaVersion
 import ghistabs.build.sourceSets
+import org.jetbrains.kotlin.gradle.dsl.KotlinVersion
 
 plugins {
     alias(libs.plugins.kotlin.jvm)
@@ -32,10 +35,10 @@ repositories {
 }
 
 kotlin {
-    jvmToolchain(21)
+    jvmToolchain(ghidraJavaVersion)
     // Ghidra shares one classpath across installed extensions, so the oldest kotlin-stdlib wins —
     // GhidraJupyterKotlin pins 1.9.23. Binding above it fails at runtime in the GUI only.
-    compilerOptions { apiVersion.set(org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_1_9) }
+    compilerOptions { apiVersion.set(KotlinVersion.KOTLIN_1_9) }
 }
 
 // The baseline freezes the size/complexity findings that predate the config so the rules act as a
@@ -64,6 +67,18 @@ tasks.test {
 
 // Generate fixture integration tests code, and add it to the test sourceSet
 kotlin.sourceSets.test { kotlin.srcDir(tasks.named("generateFixtureTests")) }
+
+// Ghidra backwards-compatibility shims
+for (variant in projectDir.resolve("src").resolve("main").listFiles().orEmpty().filter {
+    when {
+        it.name.startsWith("kotlin-since") -> ghidraAtLeast(it.name.substring(12))
+        it.name.startsWith("kotlin-pre") -> !ghidraAtLeast(it.name.substring(10))
+        else -> false
+    }
+}) {
+    kotlin.sourceSets.main { kotlin.srcDir(variant) }
+    sourceSets.main { java.srcDir(variant) }
+}
 
 // CLI target configuration
 val cli = sourceSets.create("cli") {

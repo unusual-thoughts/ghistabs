@@ -1,6 +1,7 @@
 package ghistabs.scan
 
 import ghidra.app.util.cparser.CPP.PreProcessor
+import ghistabs.ECHOES_DROPPED_LINES
 import ghistabs.diagnose.DiagnosticSink
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -48,6 +49,11 @@ class Preprocessed private constructor(private val dropped: Map<String, Set<Int>
          * conditional decided on a macro that was never defined is worse than not asking.
          */
         fun of(unit: File, includePaths: List<File>, sink: DiagnosticSink): Preprocessed? {
+            // The `///-` echo of a dropped line is a CPP-grammar change in 11.3, not an API one.
+            if (!ECHOES_DROPPED_LINES) {
+                sink.warn("source-preprocess-unsupported", "${unit.name}: Ghidra 11.3+ echoes dropped lines")
+                return null
+            }
             val out = ByteArrayOutputStream()
             val pp = runCatching {
                 PreProcessor().apply {
