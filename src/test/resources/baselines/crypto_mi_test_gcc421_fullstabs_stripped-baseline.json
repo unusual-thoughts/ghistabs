@@ -141,8 +141,8 @@
             "max": 8
         },
         "dtm-conflicts-post": {
-            "min": 8,
-            "max": 8
+            "min": 13,
+            "max": 13
         },
         "dtm-conflicts-pre": {
             "min": 0,
