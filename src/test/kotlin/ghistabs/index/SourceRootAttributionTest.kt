@@ -1,5 +1,6 @@
-package ghistabs.harvest
+package ghistabs.index
 
+import ghistabs.harvest.*
 import ghistabs.parse.AggrKind
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.SourceFile

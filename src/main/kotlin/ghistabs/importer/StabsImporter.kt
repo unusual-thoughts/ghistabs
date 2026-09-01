@@ -4,8 +4,8 @@ import ghistabs.ImportOptions.Companion.markStabsTypedefsShortened
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.analyzeDataCoverage
 import ghistabs.harvest.Harvest
-import ghistabs.harvest.HarvestIndex
 import ghistabs.harvest.Harvester
+import ghistabs.index.HarvestIndex
 import ghistabs.materialize.*
 import ghistabs.parse.StabReader
 import ghistabs.parse.StaticScope
@@ -57,7 +57,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
                     constants = applyAllConstants(),
                     staticMembers = applyAllStaticMembers(),
                     classes = when {
-                        ctx.options.buildClasses -> ClassBuilder(registry, index, ctx).buildAll()
+                        ctx.options.buildClasses -> ClassBuilder(registry, index.types, ctx).buildAll()
                         else -> 0
                     },
                 )
@@ -118,10 +118,10 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
             count = harvest.rawCollisions.values.flatMap { it.values }.flatten().count().toLong(),
         )
         // Post-filter: only genuinely divergent multi-body collisions.
-        debug("harvest-collisions-divergent", count = index.divergentCollisions.size.toLong())
+        debug("harvest-collisions-divergent", count = index.types.divergentCollisions.size.toLong())
         debug(
             "harvest-collisions-divergent-total",
-            count = index.divergentCollisions.values.flatMap { it.values }.flatten().count().toLong(),
+            count = index.types.divergentCollisions.values.flatMap { it.values }.flatten().count().toLong(),
         )
     }
 }

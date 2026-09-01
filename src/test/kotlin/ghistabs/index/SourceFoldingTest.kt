@@ -1,5 +1,6 @@
-package ghistabs.harvest
+package ghistabs.index
 
+import ghistabs.harvest.*
 import ghistabs.test.mustBe
 import org.junit.jupiter.api.Test
 

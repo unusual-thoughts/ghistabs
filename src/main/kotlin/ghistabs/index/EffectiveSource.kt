@@ -1,23 +1,53 @@
-package ghistabs.harvest
+package ghistabs.index
 
 import ghistabs.diagnose.DiagnosticSink
+import ghistabs.harvest.*
 import ghistabs.materialize.itanium.Itanium
 import ghistabs.parse.*
 
 /**
- * Which file each harvested type is attributed to, once a source root has had its say — the question
- * `effectiveSourceFor` answers and every per-source view is grouped by.
+ * Which file each harvested type *and function* is attributed to, once a source root has had its say
+ * — the question `effectiveSourceFor` answers and every per-source view is grouped by.
  *
  * [SourceHints] is the floor: what gcc recorded, overridden by where a class's methods were compiled.
  * [declarers] outranks both and is the only evidence that reads real source text — defined by the
  * render once a source root has resolved files (§46), and absent otherwise, which leaves attribution
  * exactly as the hints left it.
+ *
+ * [Func.source] and [functionsBySource] live here rather than on [SourceIndex] because "which file
+ * does this belong to" is this class's question whichever kind of symbol asks it. They sat with the
+ * fold only because they need it, and that is a call, not a kinship — it was also the one thing
+ * making the fold depend on attribution.
  */
 class EffectiveSource(private val index: HarvestIndex, val declarers: (Type.Decl) -> GhidraSourceFile?) :
     DiagnosticSink by index {
-    private val hints: SourceHints = index.sourceHints
+    private val hints: SourceHints = index.hints
+    private val sources = index.sources
 
     private fun declarerOf(type: Type) = type.declKey()?.let { declarers(it) }
+
+    /** A function's source: lowest-address SLINE, else the class-decl source (gcc-implicit methods). */
+    fun Func.source() = when {
+        isSyntheticInit -> sources.fold(cu.identity)
+        else -> lineEntries.minByOrNull { it.addr.offset }?.source
+            ?: declaringClassSource()?.let(sources::fold)
+    }
+
+    /**
+     * Where the class owning this method is declared. gcc leaves an enclosing *namespace* out of a
+     * type's stab name but keeps an enclosing *class* in it (`Outer::Inner`), so no single element of
+     * the demangled scope chain is the key: try progressively shorter suffixes, longest first —
+     * `std::locale::facet` → `locale::facet` → `facet`.
+     */
+    private fun Func.declaringClassSource(): GhidraSourceFile? = scopePath()?.let { path ->
+        path.indices.firstNotNullOfOrNull { i -> hints.classSourceByName[path.drop(i).joinToString("::")] }
+    }
+
+    /** Functions per source — the inverted view render needs, matching `linesBySource`/[staticsBySource]
+     *  rather than making every caller scan the whole function list once per rendered file. */
+    val functionsBySource: Map<GhidraSourceFile, List<Func>> by lazy {
+        sources.functions.mapNotNull { f -> f.source()?.let { it to f } }.groupBy({ it.first }, { it.second })
+    }
 
     /**
      * The real source first, then the hint, then what gcc recorded.
@@ -54,7 +84,7 @@ class EffectiveSource(private val index: HarvestIndex, val declarers: (Type.Decl
     // Keyed by id, not by Type: Type is a data class holding the whole TypeDecl body, so a Type-keyed
     // map deep-hashes an entire type tree on every lookup — and this is looked up once per type per
     // rendered source. GlobalTypeId is (source, n).
-    private val effectiveSources = lazy { index.allTypes.associate { it.id to it.effectiveSource() } }
+    private val effectiveSources = lazy { index.types.allTypes.associate { it.id to it.effectiveSource() } }
     private val effectiveSourceById: Map<GlobalTypeId, GhidraSourceFile> by effectiveSources
 
     /** Type → its rendering source (§15) — render's sole type-attribution accessor. */
@@ -63,7 +93,7 @@ class EffectiveSource(private val index: HarvestIndex, val declarers: (Type.Decl
     /** Anonymous aggregates per effective source, deduped by ghidraName (which the §20 content merge
      *  already collapsed) and sorted by it — every CU emits its own copy of each anonymous type. */
     val anonAggregates by lazy {
-        index.allTypes
+        index.types.allTypes
             .filter { it.name.isNullOrEmpty() && it.body.isXRefTarget }
             .groupBy { effectiveSourceFor(it) }
             .mapValues { (_, asts) -> asts.distinctBy { it.ghidraName }.sortedBy { it.ghidraName } }
@@ -77,14 +107,14 @@ class EffectiveSource(private val index: HarvestIndex, val declarers: (Type.Decl
      * stub names whichever unrelated header mentioned the class by pointer.
      */
     internal val classRenderSourceByName: Map<String, GhidraSourceFile> by lazy {
-        index.allTypes
+        index.types.allTypes
             .filter { it.body is TypeDecl.Struct || it.body is TypeDecl.Enum }
             .mapNotNull { t -> t.name?.let { it to effectiveSourceFor(t) } }
             .toMap()
     }
 
     /** Declared types per source, same inversion as [functionsBySource]. */
-    val typesBySource: Map<GhidraSourceFile, List<Type>> by lazy { index.allTypes.groupBy(::effectiveSourceFor) }
+    val typesBySource: Map<GhidraSourceFile, List<Type>> by lazy { index.types.allTypes.groupBy(::effectiveSourceFor) }
 
     /**
      * The same before the source root is consulted — what decides whether a local file is the one
@@ -92,12 +122,15 @@ class EffectiveSource(private val index: HarvestIndex, val declarers: (Type.Decl
      * cannot recurse into the attribution it goes on to feed.
      */
     val baseTypesBySource: Map<GhidraSourceFile, List<Type>> by lazy {
-        index.allTypes.groupBy(hints::baseSourceOf)
+        index.types.allTypes.groupBy(hints::baseSourceOf)
     }
 
-    private val templateDecls get() = index.allTypes.filter { it.name?.contains('<') == true }
+    private val templateDecls get() = index.types.allTypes.filter { it.name?.contains('<') == true }
 
-    private val typedefDecls get() = index.allTypes.filter { it.body !is TypeDecl.Struct && it.body !is TypeDecl.Enum }
+    private val typedefDecls get() = index.types.allTypes.filter {
+        it.body !is TypeDecl.Struct &&
+            it.body !is TypeDecl.Enum
+    }
 
     /**
      * Both sets as they stand before the source root — the declarations the root's own agreement
@@ -160,7 +193,7 @@ class EffectiveSource(private val index: HarvestIndex, val declarers: (Type.Decl
     val staticsBySource: Map<GhidraSourceFile, List<StaticSymbol>> by lazy {
         index.harvest.sources.entries.flatMap { (cu, harvested) ->
             harvested.cu?.statics.orEmpty().map {
-                with(index) { (it.body.typeinfoSource() ?: fold(cu)) to it.folded() }
+                with(sources) { (it.body.typeinfoSource() ?: fold(cu)) to it.folded() }
             }
         }.groupBy({ it.first }, { it.second })
     }

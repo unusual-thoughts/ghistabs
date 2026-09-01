@@ -21,9 +21,10 @@ import ghistabs.compat.loadProgram
 import ghistabs.diagnose.CapturingSink
 import ghistabs.diagnose.dumpJson
 import ghistabs.diagnose.writeRegistryDump
-import ghistabs.harvest.ContentIndex
 import ghistabs.harvest.Type
 import ghistabs.importer.*
+import ghistabs.index.ContentIndex
+import ghistabs.index.EffectiveSource
 import ghistabs.materialize.conflictCount
 import ghistabs.materialize.itanium.Itanium
 import ghistabs.materialize.itanium.hasPolymorphicBaseSubobject
@@ -383,7 +384,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
      */
     @Test
     fun programLineMapMatchesHarvest() {
-        val folds = artifacts.index.renderIdentityBySource
+        val folds = artifacts.index.sources.renderIdentityBySource
         assumeTrue(folds.isNotEmpty(), "Skipping: no N_SLINE entries in this binary")
         val manager = program.sourceFileManager
         val counters = context.diagnostics.snapshotCounters()
@@ -420,7 +421,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     fun addressesResolveToTheirEntries() {
         val manager = program.sourceFileManager
         // Folded: that is the identity the entries were transferred onto.
-        val entries = artifacts.index.functions.flatMap { it.lineEntries }
+        val entries = artifacts.index.sources.functions.flatMap { it.lineEntries }
             .filter { program.memory.getBlock(it.addr) != null }
         assumeTrue(entries.isNotEmpty(), "Skipping: no N_SLINE entries in this binary")
 
@@ -613,16 +614,16 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     @Test
     fun implicitMethodsAreFiledAtTheirClassDeclaration() {
         val index = artifacts.index
-        val declaredClasses = index.allTypes
+        val declaredClasses = index.types.allTypes
             .mapNotNull { it.name?.let(::canonTemplateName) }.toSet()
 
-        val implicit = index.functions
+        val implicit = index.sources.functions
             .filter { it.lineEntries.isEmpty() && !it.isSyntheticInit }
             .mapNotNull { f -> f.scopePath()?.last()?.let { f to it } }
             .filter { (_, cls) -> cls in declaredClasses }
         assumeTrue(implicit.isNotEmpty(), "Skipping: no line-less method with a declared class here")
 
-        val unfiled = implicit.filter { (f, _) -> with(index) { f.source() } == null }
+        val unfiled = implicit.filter { (f, _) -> with(EffectiveSource(index) { null }) { f.source() } == null }
             .map { (f, cls) -> "${f.name} (class $cls)" }
         unfiled.sorted().take(10).mustBeEmpty(
             "${unfiled.size} of ${implicit.size} implicit methods have no source despite their " +
@@ -788,7 +789,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
      */
     @Test
     fun everyDeclaredSlotIsFilledWhereItWasDeclared() {
-        val slots = artifacts.index.byLocation
+        val slots = artifacts.registry.byLocation
         assumeTrue(slots.isNotEmpty(), "Skipping: no located types in this fixture")
 
         val applied = slots.map { (location, located) ->
@@ -1110,7 +1111,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     fun classesInheritingAVtableAreStillAnnotated() {
         val vftables = filledVftables().associateBy { it.name.removeSuffix("_vftable") }
         val inheriting = artifacts.harvest.types.values.mapNotNull { it.asStruct() }
-            .filter { (_, body) -> with(artifacts.index) { hasPolymorphicBaseSubobject(body) } }
+            .filter { (_, body) -> with(artifacts.index.types) { hasPolymorphicBaseSubobject(body) } }
             // Only classes that reached the DTM at all — a class with no type is [everyDeclaredSlot…]'s.
             .filter { (ast, _) -> artifacts.registry.dataTypeFor(ast.id) != null }
         assumeTrue(inheriting.isNotEmpty(), "Skipping: no class inherits a vtable in this fixture")
@@ -1371,7 +1372,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         val baseTypes =
             harvest.types.values.filter { it.id.source is SourceFile.CUSource && !it.body.isXRefTarget }.toList()
         val different = baseTypes
-            .groupBy { index.content(it.body) }
+            .groupBy { index.types.content(it.body) }
             .mapKeys { (k, v) -> k to v.map { it.name }.toSet() }
 
         // Never print a LayoutContent: the worst expands to ~11k nodes, and the old `println(different)`
@@ -1384,7 +1385,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             if (asts.size > 1 && names.contains(null)) {
                 println("- [${content.expandedNodes}]")
                 for (ast in asts.sortedBy { it.id.toString() }) {
-                    println("       =>  ${ast.id} ${ast.ghidraName} [${index.content(ast.body).expandedNodes}]")
+                    println("       =>  ${ast.id} ${ast.ghidraName} [${index.types.content(ast.body).expandedNodes}]")
                 }
             }
         }
@@ -1406,8 +1407,8 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
      * are counted once. `expanded` is what a structural walk (e.g. the generated toString) would visit —
      * memoized per node, so the *count* is O(nodes) even when the count itself is astronomical.
      */
-    private fun layoutStats(index: ghistabs.harvest.HarvestIndex): String {
-        val roots = index.contentCache.values
+    private fun layoutStats(index: ghistabs.index.HarvestIndex): String {
+        val roots = index.types.contentCache.values
         val seen = java.util.Collections.newSetFromMap(
             java.util.IdentityHashMap<ContentIndex.LayoutContent, Boolean>(),
         )
@@ -1645,7 +1646,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
      */
     @Test
     fun fieldsSitAtTheirDeclaredOffsets() {
-        val checked = artifacts.index.byLocation.values.flatMap { located ->
+        val checked = artifacts.registry.byLocation.values.flatMap { located ->
             val body = located.type.body as? TypeDecl.Struct ?: return@flatMap emptyList()
             if (body.kind == AggrKind.UNION) return@flatMap emptyList()
             val dt = artifacts.registry.dataTypeFor(located.type.id) as? Structure ?: return@flatMap emptyList()
@@ -1774,7 +1775,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
      * reports gcc's inconsistency as our defect.
      */
     private fun builtClasses(): List<Pair<TypeDecl.Struct<GlobalTypeId>, Structure>> =
-        artifacts.index.byLocation.values.mapNotNull { located ->
+        artifacts.registry.byLocation.values.mapNotNull { located ->
             val body = located.type.body as? TypeDecl.Struct ?: return@mapNotNull null
             (artifacts.registry.dataTypeFor(located.type.id) as? Structure)?.let { body to it }
         }

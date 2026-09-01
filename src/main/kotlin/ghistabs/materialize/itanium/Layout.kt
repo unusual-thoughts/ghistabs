@@ -1,6 +1,6 @@
 package ghistabs.materialize.itanium
 
-import ghistabs.harvest.HarvestIndex
+import ghistabs.index.TypeGraph
 import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
@@ -69,11 +69,11 @@ object Layout {
 }
 
 /** Does [typeDecl] inherit a vfptr from a polymorphic base subobject (vs. introducing its own)? */
-fun HarvestIndex.hasPolymorphicBaseSubobject(typeDecl: TypeDecl.Struct<GlobalTypeId>) =
+fun TypeGraph.hasPolymorphicBaseSubobject(typeDecl: TypeDecl.Struct<GlobalTypeId>) =
     firstPolymorphicBase(typeDecl) != null
 
 /** Lowest-offset polymorphic base, or null. Determines whether to insert a vfptr or inherit. */
-fun HarvestIndex.firstPolymorphicBase(typeDecl: TypeDecl.Struct<GlobalTypeId>): Base<GlobalTypeId>? = typeDecl.bases
+fun TypeGraph.firstPolymorphicBase(typeDecl: TypeDecl.Struct<GlobalTypeId>): Base<GlobalTypeId>? = typeDecl.bases
     .sortedBy { it.offsetBits }
     .firstOrNull { base ->
         resolveStruct(base.type)?.run {
@@ -94,7 +94,7 @@ fun HarvestIndex.firstPolymorphicBase(typeDecl: TypeDecl.Struct<GlobalTypeId>): 
  * through a non-virtual one still contributes a vbase offset. One traversal serving both only reads as
  * a traversal with two modes.
  */
-fun HarvestIndex.virtualBases(typeDecl: TypeDecl.Struct<GlobalTypeId>) = buildList {
+fun TypeGraph.virtualBases(typeDecl: TypeDecl.Struct<GlobalTypeId>) = buildList {
     val seen = mutableSetOf<TypeDecl.Struct<GlobalTypeId>>()
     fun walk(cls: TypeDecl.Struct<GlobalTypeId>) {
         if (!seen.add(cls)) return
@@ -106,7 +106,7 @@ fun HarvestIndex.virtualBases(typeDecl: TypeDecl.Struct<GlobalTypeId>) = buildLi
     walk(typeDecl)
 }
 
-fun HarvestIndex.resolveStruct(typeDecl: GlobalTypeDecl) = resolve<TypeDecl.Struct<GlobalTypeId>>(typeDecl)
+fun TypeGraph.resolveStruct(typeDecl: GlobalTypeDecl) = resolve<TypeDecl.Struct<GlobalTypeId>>(typeDecl)
 
 /**
  * Collects a class's full vtable slot list from its inheritance chain and orders it by the
@@ -114,7 +114,7 @@ fun HarvestIndex.resolveStruct(typeDecl: GlobalTypeDecl) = resolve<TypeDecl.Stru
  * by name) replaces the inherited slot and its offset wins; output order is set by the final sort,
  * not the walk. Override matching is by name only — fine for the non-overloaded gcc 3.4.4 corpus.
  */
-fun HarvestIndex.collectAllVirtuals(struct: TypeDecl.Struct<GlobalTypeId>) = object {
+fun TypeGraph.collectAllVirtuals(struct: TypeDecl.Struct<GlobalTypeId>) = object {
     val table: MutableList<Method<GlobalTypeId>> = mutableListOf()
     private val visited: MutableSet<TypeDecl.Struct<GlobalTypeId>> = mutableSetOf()
 

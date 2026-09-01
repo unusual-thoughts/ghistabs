@@ -4,6 +4,7 @@
 package ghistabs.harvest
 
 import ghidra.program.model.address.AddressRange
+import ghistabs.index.*
 import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.Language

@@ -75,7 +75,7 @@ class Scorecard(private val renderer: Renderer) {
     }
 
     private fun gradeAll(sourceOf: (Type) -> GhidraSourceFile?): Grades {
-        val decls = index.allTypes
+        val decls = index.types.allTypes
             .mapNotNull { type ->
                 type.line?.let { line ->
                     type.name?.substringBefore('<')
@@ -91,7 +91,7 @@ class Scorecard(private val renderer: Renderer) {
      * — the one fact here the source is not asked for, attribution having already decided it.
      */
     val moved: List<Triple<String, GhidraSourceFile, GhidraSourceFile>> by lazy {
-        index.allTypes
+        index.types.allTypes
             .filter { it.name != null && it.line != null }
             .mapNotNull { type ->
                 val from = baseById[type.id] ?: return@mapNotNull null

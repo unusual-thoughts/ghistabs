@@ -5,8 +5,8 @@ import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghistabs.harvest.Func
 import ghistabs.harvest.Harvester
-import ghistabs.harvest.hasHeaderExtension
 import ghistabs.harvest.identity
+import ghistabs.index.hasHeaderExtension
 import ghistabs.parse.StabReader
 import ghistabs.test.defaultContext
 import ghistabs.withProgram

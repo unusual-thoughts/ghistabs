@@ -85,7 +85,7 @@ internal fun DataTypeRegistry.materializeBody(ast: Type, category: CategoryPath,
         // emit `InlineDef(id, XRef(STRUCT,"Foo"))` and we'd materialize an
         // empty `XRef_[...]` Structure at the typeinfo location.
         // Resolver buckets its own degradations for failed lookups.
-        is TypeDecl.XRef -> index.byXRef(body)
+        is TypeDecl.XRef -> types.byXRef(body)
             ?.let { canonical -> getOrMaterialize(canonical.id)?.let { cache(ast.id, it) } }
             ?: placeholder.markXRefStub()
 
@@ -115,7 +115,7 @@ internal fun DataTypeRegistry.fillStructBases(
     // An empty base occupies nothing (EBO) and must not be given the offset it shares with a
     // space-occupying sibling: cryptopp's `TwoBases<BlockCipher,Rijndael_Info>` declares both at +0,
     // and the empty one arriving second used to take the slot the 12-byte one had already claimed.
-    val occupying = body.bases.filterNot { index.resolveStruct(it.type)?.sizeBytes?.let { n -> n <= 1 } == true }
+    val occupying = body.bases.filterNot { types.resolveStruct(it.type)?.sizeBytes?.let { n -> n <= 1 } == true }
     if (occupying.size < body.bases.size) debug("base-empty-ebo")
 
     // Layout boundary to infer size of unresolved bases: offset of next
@@ -197,7 +197,7 @@ internal fun DataTypeRegistry.fillComposite(
         fillStructBases(body, placeholder, qualifiedName)
     }
 
-    val polyBase = index.firstPolymorphicBase(body)
+    val polyBase = types.firstPolymorphicBase(body)
 
     // Any vptr at a base-occupied offset is inherited — base owns it. Skip it.
     // Catches the unresolved-base case (synthesized _base_unknown_*) where
@@ -367,7 +367,7 @@ fun DataTypeRegistry.resolveRef(decl: GlobalTypeDecl): DataType? = when (decl) {
 
     // XRef → canonical TypeAst by (kind, tagName), then materialized DataType
     // by id. Unified across struct/union/class/enum.
-    is TypeDecl.XRef -> index.byXRef(decl)?.let { getOrMaterialize(it.id) }
+    is TypeDecl.XRef -> types.byXRef(decl)?.let { getOrMaterialize(it.id) }
 
     // Aggregate bodies — meaningful only via owning TypeId; see KDoc.
     is TypeDecl.Struct, is TypeDecl.Enum, is TypeDecl.Method -> {
@@ -466,12 +466,12 @@ fun DataTypeRegistry.materializeAll(): Int {
         // up-front so later in-place mutations land on the DTM-resident object — and a
         // Ref resolved before the winner materializes pulls in that one object, not an
         // empty second copy that would collide with the filled type (`.conflict`).
-        for (located in index.byLocation.values) {
+        for (located in byLocation.values) {
             located.seedPlaceholder()
         }
 
-        monitor.initialize(index.byLocation.size.toLong(), "Stabs: materializing types")
-        for (located in index.byLocation.values) {
+        monitor.initialize(byLocation.size.toLong(), "Stabs: materializing types")
+        for (located in byLocation.values) {
             monitor.increment()
             located.materialize()
         }
@@ -479,7 +479,7 @@ fun DataTypeRegistry.materializeAll(): Int {
         registerNamedPrimitiveTypedefs()
 
         // Non-registerable top-level typeAsts (XRef body, FunctionT, Method, …)
-        for (ast in index.allTypes) {
+        for (ast in types.allTypes) {
             materializeTopLevel(ast)
         }
     }
@@ -492,7 +492,7 @@ fun DataTypeRegistry.materializeAll(): Int {
  * ghidraName for one typedef per logical name.
  */
 private fun DataTypeRegistry.registerNamedPrimitiveTypedefs() {
-    for ((ghidraName, asts) in index.namedPrimitiveTypedefs) {
+    for ((ghidraName, asts) in types.namedPrimitiveTypedefs) {
         // Per-ast resolution: one CU emits `bool:t=_Bool` (1B), another
         // `bool:t=int` (4B). Sharing one typedef across all ids would
         // produce wrong field sizes and `bool.conflict` in the DTM.
@@ -527,6 +527,6 @@ internal fun DataTypeRegistry.materializeTopLevel(ast: Type): DataType = cacheIf
     // must not fall through to the XRef-stub path below (which would file it under xrefStubs and
     // flag every _ZTI global as a `degraded-*-typed-xref-stub` false alarm).
     ast.substitute()
-        ?: index.byXRef(ast)?.let { materializeTopLevel(it) }
+        ?: types.byXRef(ast)?.let { materializeTopLevel(it) }
         ?: materializeBody(ast, CATEGORY, ast.seedPlaceholder("ref-stub"))
 }

@@ -11,9 +11,9 @@ import ghidra.util.task.TaskMonitor
 import ghistabs.ImportOptions.Companion.isStabsDone
 import ghistabs.diagnose.MessageLogSink
 import ghistabs.diagnose.StabsDiagnostics
-import ghistabs.harvest.HarvestIndex
 import ghistabs.harvest.Harvester
 import ghistabs.importer.ImportContext
+import ghistabs.index.HarvestIndex
 import ghistabs.parse.StabReader
 import ghistabs.render.Renderer
 import java.io.File

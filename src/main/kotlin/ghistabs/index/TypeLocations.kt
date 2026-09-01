@@ -1,22 +1,26 @@
-package ghistabs.harvest
+@file:Suppress("SERIALIZER_TYPE_INCOMPATIBLE")
+
+package ghistabs.index
 
 import ghidra.program.model.data.CategoryPath
 import ghistabs.diagnose.DiagnosticSink
+import ghistabs.harvest.*
 import ghistabs.parse.*
+import kotlinx.serialization.Serializable
 
-private fun HarvestIndex.walksToUnresolvedRef(t: GlobalTypeDecl): Boolean = when (t) {
+private fun TypeGraph.walksToUnresolvedRef(t: GlobalTypeDecl): Boolean = when (t) {
     is TypeDecl.Ref -> byId(t.id) == null
     else -> t.children.any { fields -> fields.any { walksToUnresolvedRef(it) } }
 }
 
-private fun HarvestIndex.countUnresolvedRefs(body: GlobalTypeDecl): Int {
+private fun TypeGraph.countUnresolvedRefs(body: GlobalTypeDecl): Int {
     if (body !is TypeDecl.Struct) return 0
     return body.fields.count { f -> walksToUnresolvedRef(f.type) }
 }
 
 /** Id of the struct/union [t] embeds by value (through Ref/InlineDef/Const/Volatile only, never a
  *  pointer/array), or null — the containment edge that scopes a method-less nested member type. */
-private fun HarvestIndex.byValueStructId(t: GlobalTypeDecl) = resolveWith(t) { d ->
+private fun TypeGraph.byValueStructId(t: GlobalTypeDecl) = resolveWith(t) { d ->
     when (d) {
         is TypeDecl.Ref -> d.id.takeIf { byId(it)?.body is TypeDecl.Struct }
         is TypeDecl.InlineDef -> d.id.takeIf { d.inner is TypeDecl.Struct }
@@ -39,13 +43,12 @@ private fun HarvestIndex.byValueStructId(t: GlobalTypeDecl) = resolveWith(t) { d
  * Shared by both winner selections (per-key in [classifyGroup], per-content-class in §B): they rank
  * different things — Types vs whole slots — but by one policy, which previously drifted apart.
  */
-private fun <T> List<T>.pickWinner(index: HarvestIndex, bodyOf: (T) -> GlobalTypeDecl, tiebreak: (T) -> String) =
-    maxWith(
-        compareBy<T> { bodyOf(it).sizeBytes }
-            .thenBy { (bodyOf(it) as? TypeDecl.Struct)?.methods?.size ?: 0 }
-            .thenByDescending { index.countUnresolvedRefs(bodyOf(it)) }
-            .thenBy(tiebreak),
-    )
+private fun <T> List<T>.pickWinner(index: TypeGraph, bodyOf: (T) -> GlobalTypeDecl, tiebreak: (T) -> String) = maxWith(
+    compareBy<T> { bodyOf(it).sizeBytes }
+        .thenBy { (bodyOf(it) as? TypeDecl.Struct)?.methods?.size ?: 0 }
+        .thenByDescending { index.countUnresolvedRefs(bodyOf(it)) }
+        .thenBy(tiebreak),
+)
 
 /**
  * The [TypeLocation] a type belongs at from its C++ scope alone — the `(category, name)` slot
@@ -60,7 +63,7 @@ private fun <T> List<T>.pickWinner(index: HarvestIndex, bodyOf: (T) -> GlobalTyp
  * by value, then filed under that enclosing template's member category so it unifies with its
  * qualified sibling instead of forking a `.conflict`.
  */
-class ScopeLocator(val index: HarvestIndex) : DiagnosticSink by index {
+class ScopeLocator(val index: TypeGraph) : DiagnosticSink by index {
     // Category each C++ class files its own nested members under, keyed by the class's canonicalised
     // stab name. Every method-bearing type contributes its own scope (`basic_string<char,…>` →
     // `/std/string`); method-less nested types below borrow it. Keyed by the stab name (not the
@@ -144,10 +147,25 @@ class ScopeLocator(val index: HarvestIndex) : DiagnosticSink by index {
  * anonymous ones included — collapses onto that name's largest slot. Content, not path, is the signal,
  * so it reaches headers that don't fold by basename; distinct-named or unnamed classes stay separate.
  */
-fun HarvestIndex.locateTypes(attribution: Attribution) = buildMap {
+fun TypeGraph.locateTypes(attribution: Attribution) = locateTypesWith(attribution)
+
+/**
+ * The assembly every real caller wants. An [Attribution] needs exactly two things — the graph's own
+ * source prefix and the header vote — so building one is not a decision a caller should be making.
+ * It had been inlined at the single production call site and copied verbatim into the scope tests,
+ * which is what a missing name looks like.
+ */
+fun TypeGraph.locateTypes(hints: SourceHints) = locateTypesWith(
+    Attribution(
+        commonProjectPrefix = commonProjectPrefix(allTypes.map { it.id.source }),
+        multiSourceHeaderHints = hints.multiSourceHeaderHints,
+    ),
+)
+
+private fun TypeGraph.locateTypesWith(attribution: Attribution) = buildMap {
     val byGhidraName = allTypes.groupBy { it.ghidraName }
     fun Type.headerKey() = attribution.keyForAst(this, byGhidraName.getValue(ghidraName).map { it.id.source }.toSet())
-    val nesting = ScopeLocator(this@locateTypes)
+    val nesting = ScopeLocator(this@locateTypesWith)
 
     // Scope→header→hash ladder. A type whose enclosing C++ scope is derivable (any member's
     // mangled name yields one) files under that namespace category — matching where Ghidra's
@@ -192,7 +210,7 @@ fun HarvestIndex.locateTypes(attribution: Attribution) = buildMap {
         }
         // Same layout ⇒ same size, so the size tiebreak ties here; the method count decides, which
         // is what makes the scope-keyed method-bearing copy win over a method-less one.
-        val winner = named.pickWinner(this@locateTypes, { it.type.body }, { it.location.toString() })
+        val winner = named.pickWinner(this@locateTypesWith, { it.type.body }, { it.location.toString() })
         debug(
             "canonical-content-merged",
             "${winner.location}: ${equivalent.size} groups (${
@@ -205,3 +223,20 @@ fun HarvestIndex.locateTypes(attribution: Attribution) = buildMap {
         )
     }
 }
+
+@Serializable(with = ToStringSerializer::class)
+data class TypeLocation(val category: CategoryPath, val name: String) {
+    constructor(path: String, name: String) : this(CategoryPath(path), name)
+
+    override fun toString() = "$category/$name"
+}
+
+/**
+ *  Types with the same [location] collapsed onto one DTM slot.
+ *  [type] is the one chosen to materialize
+ *  [members] and [distinct] are for diagnostics.
+ *  [members] contains all the harvested [Type]s that located there, and
+ *  [distinct] is the count of truly different types among them according to [ContentIndex]
+ */
+@Serializable
+data class LocatedType(val location: TypeLocation, val type: Type, val members: List<GlobalTypeId>, val distinct: Int)

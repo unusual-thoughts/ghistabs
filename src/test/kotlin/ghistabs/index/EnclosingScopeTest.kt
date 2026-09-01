@@ -1,7 +1,8 @@
-package ghistabs.harvest
+package ghistabs.index
 
 import ghidra.program.model.data.CategoryPath
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
+import ghistabs.harvest.*
 import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Struct.Method
 import ghistabs.test.mustBe

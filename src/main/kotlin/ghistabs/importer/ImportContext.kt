@@ -9,7 +9,7 @@ import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.StabsDiagnostics
 import ghistabs.diagnose.TeeSink
 import ghistabs.harvest.Harvest
-import ghistabs.harvest.HarvestIndex
+import ghistabs.index.HarvestIndex
 import ghistabs.materialize.DataTypeRegistry
 import ghistabs.parse.StabReader
 import ghistabs.parse.StabRecord

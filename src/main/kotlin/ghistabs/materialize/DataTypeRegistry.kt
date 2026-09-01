@@ -11,6 +11,7 @@ import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.StabsDiagnostics
 import ghistabs.harvest.*
 import ghistabs.importer.DemanglerReplacer.Companion.DEMANGLER_CATEGORY
+import ghistabs.index.*
 import ghistabs.materialize.itanium.Rtti
 import ghistabs.parse.CATEGORY
 import ghistabs.parse.GlobalTypeDecl
@@ -31,6 +32,23 @@ class DataTypeRegistry(
     internal val index: HarvestIndex,
     internal val monitor: TaskMonitor = TaskMonitor.DUMMY,
 ) : DiagnosticSink by sink {
+    val types = index.types
+
+    /**
+     * Canonical (category, ghidraName) → group; drives TypeRegistry slot assignment. XRef-targets are
+     * bucketed into `(category, ghidraName)` slots ([classifyGroup] picks each winner), then slots are
+     * unified by **content hash** (§20): gcc spells one header two ways, so one logical type lands in
+     * several slots (named, anonymous copy, typedef aliases) → several DataTypes → the decompiler picks
+     * the wrong same-named one. Within a content class holding exactly one named ghidraName, every slot —
+     * anonymous ones included — collapses onto that name's largest slot. Content, not path, is the signal,
+     * so it reaches headers that don't fold by basename; distinct-named or unnamed classes stay separate.
+     *
+     * Lives here rather than on the index because every reader is this phase and a [TypeLocation] is
+     * a DTM `CategoryPath` — materialize vocabulary. The algorithm stays in `index/`: grouping by
+     * content and picking winners is indexing, memoizing the result for one pass is not.
+     */
+    val byLocation: Map<TypeLocation, LocatedType> by lazy { types.locateTypes(index.hints) }
+
     private val byId = mutableMapOf<GlobalTypeId, DataType>()
     internal val placeholders = mutableMapOf<GlobalTypeId, DataType>()
 
@@ -150,7 +168,7 @@ class DataTypeRegistry(
      *    `char *`, not an empty placeholder
      */
     internal fun getOrMaterialize(id: GlobalTypeId): DataType? =
-        byId[id] ?: placeholders[id] ?: index.byId(id)?.let { ast ->
+        byId[id] ?: placeholders[id] ?: types.byId(id)?.let { ast ->
             ast.substitute()?.let { cache(id, it) }
                 ?: if (ast.body is TypeDecl.Struct) {
                     ast.seedPlaceholder("cycle-break")
@@ -188,7 +206,7 @@ class DataTypeRegistry(
             // the param's SymbolDecl, and folding rewrites only Symbol.sourceFile. Forcing that lazy
             // would copy every function and its three lists on an import that never renders.
             for (fn in index.harvest.functions) {
-                val dt = index.thisParamTypeId(fn)?.let { dataTypeFor(it) } ?: continue
+                val dt = types.thisParamTypeId(fn)?.let { dataTypeFor(it) } ?: continue
                 Demangler.of(fn.name)?.namespace?.let { putIfAbsent(it.categoryPath.path, dt) }
             }
             // A member function is not the only symbol that ties a class to its demangled path: a
@@ -196,7 +214,7 @@ class DataTypeRegistry(
             // pure-constants class has. `std::ctype_base` and `std::__ios_flags` declare no member
             // functions at all, so the loop above can never reach them and their stub had no
             // candidate. Here the owning AST supplies the type directly — no `this` param needed.
-            for (ast in index.allTypes) {
+            for (ast in types.allTypes) {
                 val body = ast.body as? TypeDecl.Struct<GlobalTypeId> ?: continue
                 val dt = dataTypeFor(ast.id) ?: continue
                 for (field in body.fields) {
@@ -220,13 +238,13 @@ private val Demangled.categoryPath get(): CategoryPath =
  * `Const` wrapper on a const method. Matching only the inline shape missed every by-id and every
  * const `this` — which is what left `std::ostream::sentry` with no reverse-demangle link.
  */
-private fun HarvestIndex.thisParamTypeId(fn: Func): GlobalTypeId? {
+private fun TypeGraph.thisParamTypeId(fn: Func): GlobalTypeId? {
     val p = fn.params.firstOrNull()?.body?.takeIf { it.name == "this" } ?: return null
     return resolve<TypeDecl.Pointer<GlobalTypeId>>(p.type)?.inner?.let { namedId(it) }
 }
 
 /** The id [decl] names, through the same wrappers — without resolving it to a body. */
-private fun HarvestIndex.namedId(decl: GlobalTypeDecl) = resolveWith(decl) {
+private fun TypeGraph.namedId(decl: GlobalTypeDecl) = resolveWith(decl) {
     when (it) {
         is TypeDecl.Ref -> it.id
         is TypeDecl.InlineDef -> it.id

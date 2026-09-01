@@ -2,6 +2,7 @@ package ghistabs.harvest
 
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.DummySink
+import ghistabs.index.*
 import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Struct.Base
 import ghistabs.parse.TypeDecl.Struct.Field

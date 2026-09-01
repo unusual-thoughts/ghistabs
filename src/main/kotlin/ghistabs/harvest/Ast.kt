@@ -6,12 +6,12 @@ package ghistabs.harvest
 import ghidra.app.util.demangler.DemanglerUtil
 import ghidra.program.model.address.Address
 import ghidra.program.model.address.AddressRange
-import ghidra.program.model.data.CategoryPath
 import ghidra.program.model.listing.Program
 import ghidra.program.model.sourcemap.SourceMapEntry
 import ghidra.program.model.symbol.SymbolUtilities
 import ghistabs.Demangler
 import ghistabs.baseStackParamOffset
+import ghistabs.index.*
 import ghistabs.parse.*
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
@@ -305,20 +305,3 @@ data class LineEntry(val line: Int, val addr: Address, val source: GhidraSourceF
             compareBy<SourceMapEntry>({ it.sourceFile }, { it.lineNumber }, { it.baseAddress }, { it.length })
     }
 }
-
-@Serializable(with = ToStringSerializer::class)
-data class TypeLocation(val category: CategoryPath, val name: String) {
-    constructor(path: String, name: String) : this(CategoryPath(path), name)
-
-    override fun toString() = "$category/$name"
-}
-
-/**
- *  Types with the same [location] collapsed onto one DTM slot.
- *  [type] is the one chosen to materialize
- *  [members] and [distinct] are for diagnostics.
- *  [members] contains all the harvested [Type]s that located there, and
- *  [distinct] is the count of truly different types among them according to [ContentIndex]
- */
-@Serializable
-data class LocatedType(val location: TypeLocation, val type: Type, val members: List<GlobalTypeId>, val distinct: Int)

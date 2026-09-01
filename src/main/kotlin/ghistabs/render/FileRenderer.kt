@@ -4,6 +4,7 @@ import ghidra.program.model.address.Address
 import ghistabs.chunkOf
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.harvest.*
+import ghistabs.index.*
 import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.TypeDecl
 
@@ -11,7 +12,7 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
     RenderContext,
     DiagnosticSink by renderer {
     private val sources = renderer.effectiveSource
-    private val rawFuncs = index.functionsBySource[source].orEmpty()
+    private val rawFuncs = sources.functionsBySource[source].orEmpty()
     private val lines = renderer.linesBySource[source].orEmpty()
     private val typeDecls = sources.typesBySource[source].orEmpty().filter { it.name != null && it.line != null }
     private val statics = sources.staticsBySource[source].orEmpty()
@@ -47,7 +48,7 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
      * its *own* declarations gcc misfiled.
      */
     private val staleAfter = when {
-        source in index.compilationUnits -> codeExtent
+        source in index.sources.compilationUnits -> codeExtent
         else -> sourceLength ?: extentOf(codeExtent, staticsExtent, typesExtent)
     }
 
@@ -611,7 +612,7 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
         // into every call site collapses to one copy tagged `×N`. Each function's stretches are
         // wrapped in that function's own definition — bare, they are statements at file scope, which
         // no C++ construct admits and nothing can brace-match.
-        val inlined = index.functions
+        val inlined = index.sources.functions
             .asSequence()
             .filter { f -> f !in rawFuncs && f.lineEntries.any { it.source == source } }
             .flatMap { f -> f.ownRegions().map { f to it } }
@@ -648,8 +649,8 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
         val referenced = mutableSetOf<Type>()
         fun collect(decl: GlobalTypeDecl) {
             val ast = when (decl) {
-                is TypeDecl.Ref -> index.byId(decl.id)
-                is TypeDecl.XRef -> index.byXRef(decl, silent = true)
+                is TypeDecl.Ref -> index.types.byId(decl.id)
+                is TypeDecl.XRef -> index.types.byXRef(decl, silent = true)
                 else -> return decl.children.flatten().forEach { collect(it) }
             }
             if (ast != null && referenced.add(ast)) {

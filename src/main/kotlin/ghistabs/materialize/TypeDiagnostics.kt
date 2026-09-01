@@ -40,13 +40,13 @@ internal fun DataTypeRegistry.computeDegraded(): Map<DataType, String> = buildMa
     // Canonical-group winners: the ast that actually built the dt. Non-winner
     // member ids alias to the same dt — don't let an anonymous member misclassify
     // a named winner's dt.
-    for (group in index.byLocation.values) {
+    for (group in byLocation.values) {
         dataTypeFor(group.type.id)?.let { classify(group.type, it) }
     }
     // Non-canonical top-level asts (XRef aliases, FunctionT, Method, …) that
     // materialized through resolve(); their own ast.id owns the dt directly.
-    val canonicalIds = index.byLocation.values.flatMap { it.members }.toSet()
-    for (ast in index.allTypes) {
+    val canonicalIds = byLocation.values.flatMap { it.members }.toSet()
+    for (ast in types.allTypes) {
         if (ast.id in canonicalIds) continue
         dataTypeFor(ast.id)?.let { classify(ast, it) }
     }
@@ -72,7 +72,7 @@ internal fun DataTypeRegistry.recordXRefStubAt(useSite: String, at: String, dt: 
  */
 fun DataTypeRegistry.reportSurvivingPlaceholders() {
     for ((id, placeholder) in placeholders) {
-        val ast = index.byId(id) ?: continue
+        val ast = types.byId(id) ?: continue
         if (ast.body !is TypeDecl.Struct) continue
         val composite = placeholder as? Composite ?: continue
         // Empty C++ trait/tag types: sizeBytes=1, no source members. Ghidra fills

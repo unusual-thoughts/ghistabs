@@ -9,13 +9,13 @@ import ghidra.util.task.TaskMonitor
 import ghistabs.ImportOptions
 import ghistabs.ImportOptions.Companion.stabsTypedefsShortened
 import ghistabs.diagnose.DiagnosticSink
-import ghistabs.harvest.EffectiveSource
 import ghistabs.harvest.Func
 import ghistabs.harvest.GhidraSourceFile
-import ghistabs.harvest.HarvestIndex
 import ghistabs.harvest.Type
 import ghistabs.importer.AddressResolver
 import ghistabs.importer.LocalSources
+import ghistabs.index.EffectiveSource
+import ghistabs.index.HarvestIndex
 import ghistabs.materialize.TemplateNameShortener
 import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.TypeDecl
@@ -107,7 +107,7 @@ class Renderer(
      * read of it, before the root that decides it has been installed.
      */
     val sources: Set<GhidraSourceFile> by lazy {
-        linesBySource.keys + index.functionsBySource.keys + effectiveSource.baseTypesBySource.keys
+        linesBySource.keys + effectiveSource.functionsBySource.keys + effectiveSource.baseTypesBySource.keys
     }
 
     /**
@@ -226,7 +226,7 @@ class Renderer(
         }
         // Folded onto the function's *own* source, not the file asking: that only governs which locals
         // drop out of the head fold, and the head is used only where the function is defined.
-        val lines = with(index) { func.source() }?.let { own ->
+        val lines = with(effectiveSource) { func.source() }?.let { own ->
             // Same address→line lookup [Region] membership uses, narrowed to the function's own
             // source: two branches are only in source order against one file's line numbering.
             val slines = func.lineEntries.filter { it.source == own }.sortedBy { it.addr }
@@ -299,14 +299,14 @@ class Renderer(
      */
     fun harvestTemplateShortener(): TemplateNameShortener {
         fun targetName(decl: GlobalTypeDecl): String? = when (decl) {
-            is TypeDecl.Ref -> index.byId(decl.id)?.name
+            is TypeDecl.Ref -> index.types.byId(decl.id)?.name
             is TypeDecl.XRef -> decl.tagName
             is TypeDecl.InlineDef -> targetName(decl.inner)
             else -> null
         }
 
         return TemplateNameShortener(
-            index.allTypes.mapNotNull { ast ->
+            index.types.allTypes.mapNotNull { ast ->
                 ast.name?.let { name ->
                     targetName(ast.body)?.takeIf { '<' in it && it.length > name.length }?.let { name to it }
                 }
