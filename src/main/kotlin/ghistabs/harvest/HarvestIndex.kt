@@ -33,8 +33,7 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
      * `id.source`.
      */
     val allSources by lazy {
-        harvest.lineEntries.keys + harvest.staticsByCu.keys +
-            typeAsts.values.flatMap { listOfNotNull(it.sourceFile, it.id.source.identity) }
+        harvest.sources.keys + typeAsts.values.flatMap { listOfNotNull(it.sourceFile, it.id.source.identity) }
     }
 
     /** All named aggregate / enum ASTs, indexed by raw stabs name. */
@@ -214,14 +213,17 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
     val sourceFolds: Map<GhidraSourceFile, GhidraSourceFile> by lazy { foldSourcePaths(allSources) }
 
     /**
-     * A raw spelling's render identity: its basename fold (§15), then its compilation directory where
-     * gcc gave it one. [foldSources] off → bypass, so `sourceFolds` is never computed.
+     * A raw spelling's render identity: its basename fold (§15). [foldSources] off → bypass, so
+     * `sourceFolds` is never computed.
      *
-     * The directory half was `locate()`, applied at the moment a file was written; a source that
-     * *is* an identity carries where it lives instead, so nothing downstream has to reconstruct it.
+     * A CU's compilation directory used to be joined on here too, from a `cuDirectories` map. It is
+     * applied at [ghistabs.harvest.identity] now, so a CU with a directory-`N_SO` shares one key with
+     * its own N_SOL/N_BINCL spellings from the harvest onward. The fold still carries the CUs gcc gave
+     * no directory-`N_SO` at all (33 of 94 on crypto_mi_gcc421): `spelling == filename` leaves those
+     * bare, and only a basename match against the full spelling reunites them — 9 of that fixture's 9
+     * remaining folds are such CUs, not the headers this pass was written for.
      */
-    internal fun fold(source: GhidraSourceFile) =
-        (if (foldSources) sourceFolds[source] ?: source else source).let { cuDirectories[it] ?: it }
+    internal fun fold(source: GhidraSourceFile) = if (foldSources) sourceFolds[source] ?: source else source
 
     fun LineEntry.folded() = copy(source = fold(source))
     fun <S : SymbolDecl<GlobalTypeId>> Symbol<S>.folded() = copy(sourceFile = fold(sourceFile))
@@ -255,35 +257,16 @@ class HarvestIndex(val harvest: Harvest, private val foldSources: Boolean = true
 
     /**
      * The sources gcc compiled as a translation unit — an `N_SO` of its own — as against the files it
-     * only ever included. Every stab record carries which of the two it came from ([SourceFile]); the
-     * render had been asking "does this file define functions", which is a different question and
-     * answers wrong for a header full of inline methods.
+     * only ever included. The render had been asking "does this file define functions", which is a
+     * different question and answers wrong for a header full of inline methods.
+     *
+     * Read straight off [SourceHarvest.cu], which is the `N_SO` itself. It used to union that with the
+     * CUs derived from `Func.cu` and each type's `id.source`, back when the declared half was only the
+     * CUs holding statics; those two are a strict subset now (54 against 55 on locale_test, whose
+     * COMDAT-only CU declares neither) and contribute nothing — measured 0 across four fixtures.
      */
     val compilationUnits: Set<GhidraSourceFile> by lazy {
-        (harvest.functions.map { it.cu } + typeAsts.values.map { it.id.source })
-            .filterIsInstance<SourceFile.CUSource>()
-            .map { it.identity }
-            .plus(harvest.staticsByCu.keys)
-            .mapTo(mutableSetOf(), ::fold)
-    }
-
-    /**
-     * Where a compilation unit lives, keyed by the bare spelling everything else names it by. gcc
-     * records it in the leading trailing-slash `N_SO`, and `SourceFile.CUSource` has carried it all
-     * along, so `main.cpp` is really `E:/work/cc/devtools/toolchain/vm/tool/main.cpp`
-     * and [fold] gives it that identity — where the directory applies at all, which
-     * [SourceFile.CUSource.spelling] decides. A header gets no such treatment: gcc gives it no directory
-     * of its own, and inferring one from the CU that included it is the inference
-     * [resolveAgainstDirectory] refuses for good reason.
-     *
-     * DTM categories are unaffected — those key off `cu.filename` through [Attribution], not through
-     * the render identity, and read better short (`/main.cpp/…`, not `/E:/work/…/main.cpp/…`).
-     */
-    private val cuDirectories: Map<GhidraSourceFile, GhidraSourceFile> by lazy {
-        (harvest.functions.map { it.cu } + typeAsts.values.map { it.id.source })
-            .filterIsInstance<SourceFile.CUSource>()
-            .mapNotNull { cu -> cu.spelling.takeIf { it != cu.filename }?.let { cu.identity to sourceFileOf(it) } }
-            .toMap()
+        harvest.sources.filterValues { it.cu != null }.keys.mapTo(mutableSetOf(), ::fold)
     }
 
     /** Open functions with their line entries / params / locals folded onto output spellings. */

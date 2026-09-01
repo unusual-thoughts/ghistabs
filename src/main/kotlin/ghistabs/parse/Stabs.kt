@@ -230,6 +230,36 @@ enum class StabType(val code: UByte) {
     }
 }
 
+/**
+ * The `N_SO_*` source language a CU's opening `N_SO` names in its `desc` — binutils'
+ * `include/aout/stab.def`.
+ *
+ * Carried by a CU's *opening* `N_SO` and by its directory-`N_SO`; the closing empty-name one is 0, so
+ * [fromCode] answering null there is normal rather than a failure. gcc 4.2.1 and 12.2 set it (`Cpp`
+ * for the C++ CUs, `C` for the couple of C files linked alongside); gcc 3.4.5, 2.95 and 2.6.3 leave
+ * it 0 throughout, so half the corpus exercises this and half does not.
+ */
+enum class Language(val code: Int) {
+    Assembly(0x1),
+    C(0x2), // K&R
+    AnsiC(0x3),
+    Cpp(0x4),
+    Fortran77(0x5),
+    Pascal(0x6),
+    Fortran90(0x7),
+    Java(0x8),
+    C99(0x9),
+    ObjC(0x32),
+    ObjCpp(0x33),
+    ;
+
+    companion object {
+        private val byCode = entries.associateBy { it.code }
+
+        fun fromCode(code: Int) = byCode[code]
+    }
+}
+
 /** Raw stab header, before type interpretation — the on-disk 12 bytes, faithfully unsigned. */
 @Serializable
 data class StabHeader(val strx: UInt, val type: UByte, val other: UByte, val desc: UShort, val value: UInt)

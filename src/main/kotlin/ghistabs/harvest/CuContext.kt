@@ -6,6 +6,7 @@ import ghidra.program.model.address.Address
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.DummySink
 import ghistabs.parse.HeaderFile
+import ghistabs.parse.Language
 import ghistabs.parse.LocalTypeId
 import ghistabs.parse.SourceFile
 import ghistabs.rangeUntil
@@ -48,10 +49,17 @@ class CuContext(
     val cu: SourceFile.CUSource,
     @Transient private val sink: DiagnosticSink = DummySink,
     @Transient val registry: HeaderRegistry = HeaderRegistry(sink),
+    val language: Language? = null,
     /** Where this CU's text began — the `Ltext0` its opening N_SO carries, absent when it carries 0. */
     val start: Address? = null,
-    var end: Address? = null,
 ) : DiagnosticSink by sink {
+    private var end: Address? = null
+
+    /** The closing (empty-name) N_SO's `Ltext`, absent when it carries 0. */
+    fun endAt(addr: Address?) {
+        end = addr
+    }
+
     private val fileNumToHeader: MutableMap<Int, HeaderFile> = mutableMapOf()
 
     @Transient

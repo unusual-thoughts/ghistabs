@@ -85,11 +85,12 @@ class Renderer(
         program.sourceFileManager.let { m -> m.mappedSourceFiles.associateWith { m.getSourceMapEntries(it) } }
             // Reading the program means an import that never published leaves the render with no line
             // map at all, and every SLINE annotation would just quietly be missing.
-            .also {
-                if (it.isEmpty() && index.harvest.lineEntries.isNotEmpty()) {
+            .also { mapped ->
+                val withLines = index.harvest.sources.count { it.value.lineEntries.isNotEmpty() }
+                if (mapped.isEmpty() && withLines > 0) {
                     warn(
                         "render-line-map-empty",
-                        "${index.harvest.lineEntries.size} sources have N_SLINEs but the program's line map is empty",
+                        "$withLines sources have N_SLINEs but the program's line map is empty",
                     )
                 }
             }

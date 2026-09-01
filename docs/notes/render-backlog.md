@@ -3445,3 +3445,95 @@ fixtures and every recovery is unambiguous: `bad_alloc` → `std::bad_alloc`, `C
 uniqueness guard does *not* cover is a genuinely global method-less class sharing a leaf with a
 scoped one — it would now be filed under the scope. Nothing in the corpus exhibits it, and no
 counter would detect it if a fixture grew one.
+
+## 56. `Harvest` keyed by source file, and a CU's own two spellings — DONE
+
+`Harvest` carried five parallel collections (`staticsByCu`, `functions`, `lineEntries`, `constants`,
+`cuSpans`) keyed three different ways. It is now one `sources: Map<GhidraSourceFile, SourceHarvest>`,
+where `SourceHarvest` holds the per-file `lineEntries` and a nullable `cu: CompilationUnit?` for
+everything only a translation unit has (statics, functions, constants, span, language). A file
+reached only through `N_SOL` gets `cu == null` rather than five empty fields, so the shape states
+which of the two it is instead of leaving it to be inferred from emptiness.
+
+**Sources were being dropped in three places, all from keying off one collection.** `allSources` was
+`lineEntries.keys + staticsByCu.keys`, `compilationUnits` used "has statics" as its proxy for "is a
+CU", and the harvest join iterated `staticsByCu`. A CU that declared no file-scope statics — 12 of 55
+on locale_test — was invisible to all three. `harvest-cus` 43 → 55 is that fix; the new
+`harvest-sources` counter reports the full set (71 on locale_test).
+
+The join keys off the CU contexts alone. Statics and constants file themselves under `cursor.cu`,
+which `preSeedHeaders` built a `CuContext` for from the same `N_SO` record, so their keys cannot
+reach outside it — an earlier draft unioned all three defensively and removing the extra terms moved
+no counter. It matters beyond tidiness: CU-ness is now *observed* (a context exists) rather than
+*inferred* (something filed itself here), so `cu != null` means exactly "this file carried an `N_SO`".
+
+**The `.identity` half.** `SourceFile.identity` was `sourceFileOf(filename)`, dropping
+`CUSource.directory`, while `N_SOL`, `N_BINCL` and `N_EXCL` all go through `resolved()` first. So one
+CU held two `GhidraSourceFile` keys — its statics and span under the bare spelling, its own N_SLINEs
+under the resolved one. Measured 49 of 55 CUs on locale_test, 59 of 64 on xmltest_gcc421, and
+**0 of 56 on box2d**, whose ELF CU names are already absolute. `identity` now resolves `spelling` for
+a `CUSource`, which collapses the pair.
+
+That made `HarvestIndex.cuDirectories` dead — it had been the render-time reconciler for exactly this
+— and it is deleted; removing it moved no counter. It had also only covered CUs reachable via
+`harvest.functions` or `typeAsts`, so a CU with neither kept its bare identity and was registered in
+Ghidra's source manager as a phantom file that immediately had its entries transferred away.
+`sourcemap-files` 284 → 244 is those phantoms going; `sourcemap-entries` (9551) and
+`-duplicate-entries` (454) are unchanged, which is what says no line data was lost.
+
+**BINCL does not add a third spelling**, contrary to first suspicion: it goes through the same
+`resolved()` as `N_SOL`, so a BINCL restating the CU lands on the resolved key, not a new one.
+Measured `probe-cu-also-a-bincl-header = 0` and `probe-cu-3plus-key = 0` on gcc 3.4.5 PE, gcc 4.2.1
+PE, gcc 2.9.5 a.out and ELF.
+
+**`foldSourcePaths` is still load-bearing, and for a wider reason than its comment claims.** It is
+documented as the two-spellings-of-one-header case; on crypto_mi_gcc421 **9 of the 9** remaining folds
+are `.cc` CUs, not headers. Those are the CUs gcc emitted with no directory-`N_SO` at all (33 of 94 on
+that fixture): `spelling == filename` leaves them bare, so only the basename match reunites them. The
+identity fix narrowed the split from 49 CUs to ~8–9; it did not close it. Noted on `fold()`.
+
+**Why a CU has no directory: `-gstabs` vs `-gstabs+`.** The directory-`N_SO` is a GNU extension.
+`dbxout.c`'s `dbxout_init` puts the cwd behind `if (use_gnu_debug_info_extensions)`, and `toplev.c`'s
+format table sets that flag for `stabs+` and clears it for `stabs`. So plain `-gstabs` never emits one,
+whatever the file is. `build_corpus.sh` compiles the two halves differently — cryptopp/TinyXML at
+`-gstabs`, the rebuilt libstdc++ at `-gstabs+` — which is exactly what the records show: 249 `N_SO`
+on crypto_mi_gcc421, 61 of them directories naming only two paths, both in the libstdc++ build tree,
+against 33 bare cryptopp CUs. A binary built entirely one way has no split at all; the mixed case is
+what produces two spellings for one file, so the residual fold is a property of the corpus rather than
+a defect.
+
+**A header is never a CU.** Only an `N_SO` opens one and gcc emits none for an include — measured 0
+header-keyed CUs on every fixture. But `CompilationUnit` holds what a CU **emitted**, not what the file
+**declares**: an inline method or template instantiation is emitted into every CU that included it, so
+it is filed under a `.cpp` while its own `sourceFile` and line entries name the header. 208 of 366
+statics and 11540 of 15499 functions on crypto_mi_gcc421 read a header that way (168/471 and 1135/1736
+on locale_test). That gap is precisely what `SourceHints`/`EffectiveSource` exist to close, and the
+distinction is now stated on `CompilationUnit` so the field isn't misread as "this file's statics".
+
+**`language` is live, and it closes a standing diagnostic.** The *opening* `N_SO` and the
+directory-`N_SO` both carry it; only the closing empty-name one is 0. gcc **4.2.1 and 12.2 set it**
+(`Cpp` for the C++ CUs, `C` for the couple of C files linked alongside), gcc 3.4.5 / 2.95 / 2.6.3
+leave it 0 — so half the corpus exercises it. The arithmetic checks per fixture: crypto_mi_gcc421
+has 249 `N_SO` = 94 openings + 94 closings + 61 directories, and 155 = 94 + 61 carry a language.
+
+`checkDroppedFields` had been reporting exactly this as `desc-dropped-so` — a baselined counter
+(155 on crypto_mi_gcc421_fullstabs, 122 on locale_test_customlibstdcxx, 56 on box2d, 123 on
+xmltest_gcc421_fullstabs) whose whole meaning is "we parsed this record and threw a field away".
+Reading the language is what answers it, so `N_SO` joins the allowlist and the counter goes to 0 on
+all twelve fixtures that had it.
+
+(An earlier pass of this note claimed `desc == 0` corpus-wide. That was a measurement bug — the
+probe read `record.desc`, but `StabRecord` serialises the header under `raw`, so every value came
+back null and was counted as 0.)
+
+**Where the fold belongs: facts at harvest, heuristics at the index.** The CU-directory join moved to
+`identity` because gcc *stated* it — a directory-`N_SO` is a fact about the stream. `foldSourcePaths`
+stays in `HarvestIndex` because it is none of those things: it is a heuristic whose winner ("which
+spelling wins is ours"), it is defeatable by `--fold-sources`, and it needs sources the harvest does not
+own — `allSources` includes every type's `id.source`. Keeping `Harvest` keyed on raw spellings is also
+what lets the JSON dumps show what gcc actually said. The phantom-file bug argues the other way — it
+happened because a consumer had to remember to fold — but the fix for that is a total fold at the
+boundary, not relocating the heuristic.
+
+Baselines not regenerated — `harvest-cus`, `harvest-sources`, `sourcemap-files` and
+`sourcemap-folded-files` all move, and nothing else does.

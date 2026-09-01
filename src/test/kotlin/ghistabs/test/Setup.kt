@@ -54,12 +54,8 @@ fun indexOf(vararg asts: Type) = HarvestIndex(
     Harvest(
         types = asts.associateBy { it.id },
         rawCollisions = emptyMap(),
-        staticsByCu = emptyMap(),
-        functions = emptyList(),
-        lineEntries = emptyMap(),
-        constants = emptyList(),
+        sources = emptyMap(),
         textRanges = emptyMap(),
-        cuSpans = emptyMap(),
     ),
     foldSources = false,
 )
