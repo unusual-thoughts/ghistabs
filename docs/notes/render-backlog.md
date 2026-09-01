@@ -3537,3 +3537,62 @@ boundary, not relocating the heuristic.
 
 Baselines not regenerated — `harvest-cus`, `harvest-sources`, `sourcemap-files` and
 `sourcemap-folded-files` all move, and nothing else does.
+## 57. A method-less nested class has no key but its leaf, so instantiations collapse — open
+
+`CryptoPP::AbstractRing<CryptoPP::Integer>::MultiplicativeGroupT` and its `PolynomialMod2` sibling
+are one type in the DTM: `MultiplicativeGroupT: 11 ASTs collapsed (single body)`, filed at
+`/dll.cpp/multi/MultiplicativeGroupT` by header attribution. Both vtables exist
+(`_ZTVN8CryptoPP12AbstractRingINS_7IntegerEE20MultiplicativeGroupTE` and the other) and neither is
+claimed by the class path — the one that lands there is laid by `sweepUnclaimedVtables`, slots typed
+by reading the target addresses instead of from the declared virtuals.
+
+The cause is that `demangledClassPath()` reads `body.methods`, and these bodies have none:
+
+```
+MultiplicativeGroupT:T(0,637)=s8AbstractGroup<CryptoPP::Integer>:(0,636),0,256;m_pRing:…;;
+MultiplicativeGroupT:T(0,898)=s8AbstractGroup<CryptoPP::PolynomialMod2>:(0,897),0,256;…;;
+```
+
+so `TypeLocations.canonicalKey` falls through to header/CU attribution, which keys on the bare leaf
+and cannot tell two instantiations apart. §55's `vtableClassByLeaf` declines them for the same
+reason — the leaf is genuinely ambiguous — so this is the half §55 could not reach.
+
+**The out-of-line ctors bind the qualified name to an exact type id.** No template-arg spelling
+match, no heuristic:
+
+```
+_ZN8CryptoPP12AbstractRingINS_7IntegerEE20MultiplicativeGroupTC1Ev:F(0,20)
+this:p(0,2282)=*(0,637)
+_ZN8CryptoPP12AbstractRingINS_14PolynomialMod2EE20MultiplicativeGroupTC1Ev:F(0,20)
+this:p(0,2322)=*(0,898)
+```
+
+`Demangler.namespaces` on either mangled name gives the full chain with the class last. gcc345 uses
+the by-id pointer spelling (`this:p(53,5)`) rather than the inline one — already handled.
+
+`HarvestIndex.thisParamTypeId` already exists and already covers all three gcc pointer shapes; its
+own doc records that matching only the inline shape "left `std::ostream::sentry` with no
+reverse-demangle link", which is this bug one class over. It lives in `materialize/DataTypeRegistry`
+and feeds `byDemangledClass`, built after materialization — too late to influence keying.
+
+The work:
+
+1. Move `thisParamTypeId` to `harvest/` (already a `HarvestIndex` extension — a move).
+2. Index `harvest.functions` once: `thisParamTypeId(fn)` → `Demangler.namespaces(fn.mangled)`.
+3. One branch in `canonicalKey`, after `demangledClassPath()` and before the enclosing-name
+   fallback. The two bodies then key at `/CryptoPP/AbstractRing<CryptoPP::Integer>` and
+   `/CryptoPP/AbstractRing<CryptoPP::PolynomialMod2>`.
+
+Steps 1–3 are small. **The cost is the regrouping.** ASTs from CUs that emitted no out-of-line
+member get no binding and still key on the leaf, so the type splits three ways (two bound, one
+unbound) unless the unbound are content-matched into a bound group — `ContentIndex`/`contentClasses`
+can do it, and *which* policy to take is the actual design decision here. Re-keying is upstream of
+everything: `pickWinner`, `.conflict` renames, `conflictCount`, `empty-scope`, then the whole
+class/vtable chain. Expect most fixtures to move, and two or three regenerate-and-review cycles.
+
+The pass/fail signal is unusually sharp for a change this broad: `MultiplicativeGroupT` stops
+reporting collapsed ASTs, §55's three residual `vtable-failed` (`InputRejected`, `DivideByZero`,
+`InvalidKeyLength` — all leaf-ambiguous for exactly this reason) clear, and the four `X<…>::f`
+vtables move from the sweep to the class path. It also subsumes §55: `qualifiedClassName` would
+prefer the binding and `vtableClassByLeaf` shrinks to a last resort for classes with no out-of-line
+member at all.
