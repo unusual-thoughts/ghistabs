@@ -1,10 +1,5 @@
 name: Build and test Ghidra Extension
 
-env:
-  GHIDRA_VERSION: '12.1.2'
-  GHIDRA_RELEASE: PUBLIC
-  GHIDRA_DATE: '20260605'
-
 on:
   push:
     branches: [ "master" ]
@@ -20,22 +15,11 @@ jobs:
 
     steps:
     - uses: actions/checkout@v7
-    - name: Set up JDK 21
-      uses: actions/setup-java@v6
+
+    # The version the integration baselines were generated against; bumping it will shift counters.
+    - uses: ./.github/actions/setup-ghidra
       with:
-        java-version: '21'
-        distribution: 'temurin'
-
-    - name: Install ghidra
-      run: |
-        GHIDRA_ZIP="ghidra_${GHIDRA_VERSION}_${GHIDRA_RELEASE}_${GHIDRA_DATE}.zip" &&
-        wget "https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_${GHIDRA_VERSION}_build/${GHIDRA_ZIP}" &&
-        mkdir -p /opt/ &&
-        unzip ${GHIDRA_ZIP} &&
-        mv ghidra_${GHIDRA_VERSION}_${GHIDRA_RELEASE} /opt/ghidra
-
-    - name: Setup Gradle
-      uses: gradle/actions/setup-gradle@v6
+        ghidra-version: '12.1.2'
 
     - name: Check formatting
       run: ./gradlew ktlintCheck
@@ -97,7 +81,7 @@ jobs:
       uses: actions/upload-artifact@v7
       with:
         name: extension and CLI packages
-        path: dist/ghistabs-cli.zip
+        path: dist/ghistabs-cli_*.zip
         archive: false
 
     - name: Generate and submit dependency graph
