@@ -32,6 +32,10 @@
             "min": 4,
             "max": 4
         },
+        "class-scope-from-vtable": {
+            "min": 432,
+            "max": 432
+        },
         "data-no-coverage": {
             "min": 504,
             "max": 504
@@ -373,8 +377,8 @@
             "max": 800
         },
         "resolve-ambiguous": {
-            "min": 1425,
-            "max": 1425
+            "min": 1497,
+            "max": 1497
         },
         "rtti-pseudo-substituted": {
             "min": 150,
@@ -473,20 +477,20 @@
             "max": 48
         },
         "vtable-applied": {
-            "min": 68,
-            "max": 68
+            "min": 92,
+            "max": 92
         },
         "vtable-failed": {
-            "min": 27,
-            "max": 27
+            "min": 3,
+            "max": 3
         },
         "vtable-failed-truly-missing": {
-            "min": 27,
-            "max": 27
+            "min": 3,
+            "max": 3
         },
         "vtable-reconstructed": {
-            "min": 460,
-            "max": 460
+            "min": 436,
+            "max": 436
         },
         "vtable-secondary": {
             "min": 436,

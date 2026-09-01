@@ -3384,3 +3384,64 @@ Guarded by `noSubVtableInsideAGroupIsLeftUnlabelled`, which is independent of th
 sub-vtables by asking the symbol table which words point at a `_ZTI…`, bounds itself by the next
 Itanium-mangled symbol, and requires an `internal_vftable` one word later. That is what caught the
 `CryptoPP::Base` miss.
+
+## 55. A class with no mangled member has no scope, so its vtable is "truly missing" — DONE
+
+`vtable-failed-truly-missing` appeared at 27 on both gcc345 fixtures in the baseline shift recorded
+by `3a56269c`, alongside `vfptr-inherited-from-base` 63 → 90. Both came from `0f766d5a`, which
+widened `isClass()` to `hasCxxSurface = hasCxxMembers || bases.isNotEmpty()`.
+
+The new `bases` term admits records that inherit and declare nothing else. On gcc 3.4.5 that is the
+whole CryptoPP exception tree, because the bases arrive as pseudo-fields and
+`TypeStore.synthesizeXRefStubsForDanglingInheritanceRefs` promotes them:
+
+```
+InvalidArgument:T(53,6)=s12Exception:(53,8),0,768;;   # 12 bytes × 64 = 768 → promoted to bases[]
+```
+
+so the body ends up with one base and *zero* fields and methods. That is enough for
+`hasPolymorphicBaseSubobject` (the chain reaches `std::exception`), so all 27 take
+`SkipInheritedFromBase` — the +27 on `vfptr-inherited-from-base`, which is correct — and then run
+`buildAndApplyVtable`.
+
+**`truly-missing` was a mislabel.** `_ZTVN8CryptoPP15InvalidArgumentE` is in the binary; the
+candidates tried were unqualified (`_ZTV15InvalidArgument`). `qualifiedClassName` recovers the
+`CryptoPP::` chain by demangling a mangled name off a method or a static field, and a promoted-base
+body has neither — the one field *became* the base, and `Base` carries no mangled name — so it fell
+back to the bare leaf and the `vtableAddressByClass` lookup missed too. `ensureClassNamespace` has
+the same fallback, so these classes were also landing at the root instead of under `CryptoPP`.
+
+Fixed by asking the symbol table for the scope the stabs cannot supply: `vtableClassByLeaf` maps a
+leaf to the single qualified class that ends in it, and `qualifiedClassName` uses it as a last
+resort (`class-scope-from-vtable`). A leaf two namespaces both declare is dropped — attaching
+`std::Foo`'s vtable to a global `Foo` is worse than leaving it unannotated — and so is a leaf that
+*is* its own qualified name, or the fallback fires as a no-op on every global class (it logged 432
+on gcc345 and 11 on xmltest_gcc345 before that filter, where the real recoveries are 432 and 0).
+
+On `crypto_mi_test_gcc345`:
+
+| counter | before | after |
+| --- | --- | --- |
+| `vtable-failed` / `-truly-missing` | 27 | 3 |
+| `vtable-applied` | 68 | 92 |
+| `vtable-reconstructed` | 460 | 436 |
+
+The −24/+24 is the same 24 tables moving from `sweepUnclaimedVtables` (slots typed by reading the
+target addresses) to the class path (slots typed from the class's declared virtuals) — a strict
+upgrade, not a loss. The 3 that remain are exactly the ambiguous leaves the guard declines:
+`InvalidKeyLength` (`CryptoPP::` and `PK_SignatureScheme::`), `DivideByZero` (`Integer::` and
+`PolynomialMod2::`), `InputRejected` (two `InputRejecting<>` instantiations). Resolving those needs
+the base chain to disambiguate, which the promoted-base bodies do carry — left open.
+
+`resolve-ambiguous` 1425 → 1497 follows from the 24 newly applied tables resolving their virtuals'
+mangled names; it counts symbol-table name collisions, not failures.
+
+**The namespace half is the larger effect, and no counter had been watching it.** The vtable
+recovery moves 24 tables on one fixture; the same lookup through `ensureClassNamespace` re-files
+every method-less class that was landing at the root — `class-scope-from-vtable` is 432 on both
+gcc345 fixtures, 484/478 on gcc421, 60/54 on xmltest_gcc421, 12 on xmltest. Spot-checked across
+fixtures and every recovery is unambiguous: `bad_alloc` → `std::bad_alloc`, `CBC_Encryption` →
+`CryptoPP::CBC_Encryption`, `__timepunct<char>` → `std::__timepunct<char>`. The residual risk the
+uniqueness guard does *not* cover is a genuinely global method-less class sharing a leaf with a
+scoped one — it would now be filed under the scope. Nothing in the corpus exhibits it, and no
+counter would detect it if a fixture grew one.
