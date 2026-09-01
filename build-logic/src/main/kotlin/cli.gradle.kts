@@ -1,5 +1,6 @@
 import ghistabs.build.GHIDRA_JVM_ARGS
 import ghistabs.build.ghidraInstallDir
+import ghistabs.build.ghidraVersion
 import ghistabs.build.sourceSets
 import kotlin.io.path.Path
 import kotlin.io.path.relativeTo
@@ -87,11 +88,13 @@ val buildCli = tasks.register("buildCli") {
     }
 }.map { it.outputs.files.singleFile }
 
+// Version-stamped like the extension zip: the launcher hardcodes this install's jar layout, so a
+// CLI package is only good for the Ghidra it was built against.
 tasks.register<Zip>("packageCli") {
     description = "Build CLI distribution zip"
     inputs.file(cliJar)
     inputs.file(buildCli)
-    archiveFileName.set("ghistabs-cli.zip")
+    archiveFileName.set("ghistabs-cli_ghidra_$ghidraVersion.zip")
     destinationDirectory.set(layout.projectDirectory.dir("dist"))
     from(
         cliJar,
