@@ -216,8 +216,6 @@ class Parser(src: String) {
     private fun selfDefToVoid(id: LocalTypeId, body: LocalTypeDecl): LocalTypeDecl =
         if (body is TypeDecl.Ref && body.id == id) TypeDecl.Void else body
 
-    // ===== Type descriptor dispatch =====
-
     /**
      * Parse a type descriptor by lookahead character.
      * Dispatches to specific productions: Pointer (*), Reference (&), Const (k),
@@ -298,8 +296,6 @@ class Parser(src: String) {
 
         else -> throw StabsParseException(pos, src, "unexpected character '$ch' in type descriptor")
     }
-
-    // ===== Type productions =====
 
     /**
      * Parse a struct/union/class body.
@@ -798,8 +794,6 @@ class Parser(src: String) {
         }
     }.toString()
 
-    // ===== Helpers =====
-
     /**
      * Parse an access specifier: 0=private, 1=protected, 2=public.
      */
@@ -807,6 +801,6 @@ class Parser(src: String) {
         '0' -> Access.PRIVATE
         '1' -> Access.PROTECTED
         '2' -> Access.PUBLIC
-        else -> Access.PUBLIC // default
+        else -> Access.PUBLIC
     }
 }

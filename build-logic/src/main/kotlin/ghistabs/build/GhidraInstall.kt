@@ -58,12 +58,13 @@ val Project.ghidraVersion: String get() = extra.getOrCreate("GHIDRA_VERSION") {
  */
 val Project.ghidraJavaVersion: Int get() = ghidraProperty("application.java.compiler").toInt()
 
+private val Project.ghidraPropertyFile get() = ghidraInstallDir.resolve("Ghidra/application.properties")
+
+private val Project.ghidraProperties get() = Properties().apply { ghidraPropertyFile.inputStream().use(::load) }
+
 /** One key out of the install's `Ghidra/application.properties`. */
-private fun Project.ghidraProperty(key: String): String {
-    val file = ghidraInstallDir.resolve("Ghidra/application.properties")
-    return Properties().apply { file.inputStream().use(::load) }.getProperty(key)
-        ?: throw GradleException("no $key in $file")
-}
+private fun Project.ghidraProperty(key: String) = ghidraProperties.getProperty(key)
+    ?: throw GradleException("no $key in $ghidraPropertyFile")
 
 /** The install's version, typed. */
 val Project.ghidra: GhidraVersion get() = GhidraVersion.of(ghidraVersion)
