@@ -1,7 +1,7 @@
 [versions]
 # Floor is set by the oldest kotlin-stdlib among installed Ghidra extensions — see the
 # `compilerOptions.apiVersion` note in build.gradle.kts before bumping.
-kotlin = "2.3.21"
+kotlin = "2.4.10"
 ktlint = "14.2.0"
 kotlinxSerialization = "1.10.0"
 junitJupiter = "5.14.4"
