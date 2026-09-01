@@ -44,6 +44,10 @@
             "min": 22,
             "max": 22
         },
+        "class-scope-from-vtable": {
+            "min": 54,
+            "max": 54
+        },
         "data-no-coverage": {
             "min": 148,
             "max": 148

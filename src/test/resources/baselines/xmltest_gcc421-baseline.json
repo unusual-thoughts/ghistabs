@@ -32,6 +32,10 @@
             "min": 8,
             "max": 8
         },
+        "class-scope-from-vtable": {
+            "min": 60,
+            "max": 60
+        },
         "data-no-coverage": {
             "min": 154,
             "max": 154
@@ -369,5 +373,5 @@
             "max": 60
         }
     },
-    "source": "xmltest_gcc421.exe - shifted from committed"
+    "source": "xmltest_gcc421.exe - generated from snapshotCounters()"
 }

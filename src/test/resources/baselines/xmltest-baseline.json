@@ -16,6 +16,10 @@
             "min": 3,
             "max": 3
         },
+        "class-scope-from-vtable": {
+            "min": 12,
+            "max": 12
+        },
         "dangling-ref": {
             "min": 2,
             "max": 2
