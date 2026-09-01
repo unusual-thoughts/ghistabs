@@ -9,13 +9,13 @@ import ghidra.util.task.TaskMonitor
 import ghistabs.ImportOptions
 import ghistabs.ImportOptions.Companion.stabsTypedefsShortened
 import ghistabs.diagnose.DiagnosticSink
-import ghistabs.harvest.*
+import ghistabs.harvest.Func
 import ghistabs.harvest.GhidraSourceFile
 import ghistabs.harvest.Type
 import ghistabs.importer.AddressResolver
 import ghistabs.importer.LocalSources
-import ghistabs.index.*
 import ghistabs.index.EffectiveSource
+import ghistabs.index.SourceHints
 import ghistabs.materialize.TemplateNameShortener
 import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.TypeDecl
@@ -29,12 +29,9 @@ import java.io.File
 import java.util.*
 
 class Renderer(
-    val harvest: Harvest,
-    val types: TypeGraph,
-    val sourceIndex: SourceIndex,
+    val mode: Mode,
     val hints: SourceHints,
     val program: Program,
-    val mode: Mode,
     val resolver: AddressResolver,
     // Off for a render meant to be compiled or diffed against real source, where a trailing block of
     // declarations that have no line is noise.
@@ -56,6 +53,10 @@ class Renderer(
         // per-call-site index writes) from decompilation output. No-op on DWARF-EH (ELF) binaries.
         ELIDE_SJLJ,
     }
+
+    private val harvest = hints.harvest
+    val types = hints.types
+    val sourceIndex = hints.sources
 
     /**
      * Collapses long template spellings (`basic_string<char,…>` → `string`) across *everything* the
@@ -99,7 +100,7 @@ class Renderer(
             }
     }
 
-    val effectiveSource = EffectiveSource(harvest, types, sourceIndex, hints, sink, ::declarerOf)
+    val effectiveSource = EffectiveSource(hints, sink, ::declarerOf)
 
     /**
      * Every file the render emits: those with line entries, function bodies, or type declarations.
@@ -144,7 +145,7 @@ class Renderer(
      */
     private val units by lazy { mapped.map { it.second }.filter { it.extension in UNIT_EXTENSIONS } }
 
-    private val includePaths: List<File>by lazy {
+    private val includePaths: List<File> by lazy {
         val roots = ImportOptions(program).sourceRoots.map { File(it).canonicalFile.path }
         mapped.asSequence().map { it.second.canonicalFile }
             .flatMap { generateSequence(it.parentFile, File::getParentFile) }

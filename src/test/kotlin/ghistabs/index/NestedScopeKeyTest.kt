@@ -2,7 +2,7 @@ package ghistabs.index
 
 import ghidra.program.model.data.CategoryPath
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghistabs.harvest.*
+import ghistabs.harvest.Type
 import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Struct.Field
 import ghistabs.parse.TypeDecl.Struct.Method
@@ -57,6 +57,11 @@ class NestedScopeKeyTest : AbstractGhidraHeadlessIntegrationTest() {
     private val charString = "basic_string<char,std::char_traits<char>,std::allocator<char> >"
     private val wcharString = "basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t> >"
 
+    /** Folding off: a synthetic harvest has one spelling per file,
+     *  so there is nothing to fold and running it would only obscure what the test set up. */
+    fun locatedTypesOf(vararg asts: Type) = hintsOf(harvestOf(*asts), foldSources = false)
+        .let { hints -> hints.types.locateTypes(hints) }
+
     @Test fun methodlessNestedStructScopedByContainingField() {
         // A method-bearing basic_string<char> establishes /std/string as its member category; the bare,
         // method-less _Alloc_hider is reachable only as basic_string's by-value `_M_dataplus` field.
@@ -65,7 +70,7 @@ class NestedScopeKeyTest : AbstractGhidraHeadlessIntegrationTest() {
         val hider = ast(hiderId, "_Alloc_hider", struct(fields = listOf(field("_M_p", TypeDecl.Builtin(0)))))
         val reduced = ast(id(), charString, struct(fields = listOf(field("_M_dataplus", TypeDecl.Ref(hiderId)))))
 
-        val groups = indexOf(full, hider, reduced).let { (types, _, hints) -> types.locateTypes(hints) }
+        val groups = locatedTypesOf(full, hider, reduced)
         val key = TypeLocation(CategoryPath("/std/string"), "_Alloc_hider")
         groups.must("expected $key in ${groups.keys}") { contains(key) }
         hiderId mustBeIn groups.getValue(key).members
@@ -79,7 +84,7 @@ class NestedScopeKeyTest : AbstractGhidraHeadlessIntegrationTest() {
         val sentryId = id()
         val sentry = ast(sentryId, "$ostream::sentry", struct(fields = listOf(field("_M_ok", TypeDecl.Builtin(0)))))
 
-        val groups = indexOf(full, sentry).let { (types, _, hints) -> types.locateTypes(hints) }
+        val groups = locatedTypesOf(full, sentry)
         val key = TypeLocation(CategoryPath("/std/ostream"), "sentry")
         groups.must("expected $key in ${groups.keys}") { contains(key) }
         sentryId mustBeIn groups.getValue(key).members
@@ -92,7 +97,7 @@ class NestedScopeKeyTest : AbstractGhidraHeadlessIntegrationTest() {
             val hiderId = id()
             val hider = ast(hiderId, "_Alloc_hider", struct(fields = listOf(field("_M_p", TypeDecl.Pointer(pointee)))))
             val reduced = ast(id(), strName, struct(fields = listOf(field("_M_dataplus", TypeDecl.Ref(hiderId)))))
-            val located = indexOf(full, hider, reduced).let { (types, _, hints) -> types.locateTypes(hints) }
+            val located = locatedTypesOf(full, hider, reduced)
             return located.entries.first { hiderId in it.value.members }.key
         }
 

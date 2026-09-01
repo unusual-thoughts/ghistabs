@@ -1,6 +1,8 @@
 package ghistabs.index
 
-import ghistabs.harvest.*
+import ghistabs.harvest.GhidraSourceFile
+import ghistabs.harvest.Type
+import ghistabs.harvest.sourceFileOf
 import ghistabs.parse.AggrKind
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.SourceFile
@@ -48,7 +50,7 @@ class SourceRootAttributionTest {
         val harvest = harvestOf(*types)
         val graph = TypeGraph(harvest)
         val sources = SourceIndex(harvest, foldSources = false)
-        return EffectiveSource(harvest, graph, sources, SourceHints(harvest, graph, sources), declarers = declarers)
+        return EffectiveSource(SourceHints(harvest, graph, sources), declarers = declarers)
     }
 
     @Test

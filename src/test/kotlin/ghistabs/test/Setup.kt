@@ -8,10 +8,15 @@ import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
 import ghistabs.ImportOptions
 import ghistabs.diagnose.*
-import ghistabs.harvest.*
+import ghistabs.harvest.Harvest
+import ghistabs.harvest.Harvester
+import ghistabs.harvest.StabCursor
+import ghistabs.harvest.Type
 import ghistabs.importer.AddressResolver
 import ghistabs.importer.ImportContext
-import ghistabs.index.*
+import ghistabs.index.SourceHints
+import ghistabs.index.SourceIndex
+import ghistabs.index.TypeGraph
 import ghistabs.materialize.DataTypeRegistry
 import ghistabs.runTransaction
 
@@ -61,19 +66,8 @@ fun harvestOf(vararg asts: Type) = Harvest(
 fun typesOf(vararg asts: Type) = TypeGraph(harvestOf(*asts))
 
 /** The three indexes over [harvest], constructed together exactly as [StabsImporter] does. */
-fun indexesOf(
-    harvest: Harvest,
-    foldSources: Boolean = true,
-    sink: DiagnosticSink = DummySink,
-): Triple<TypeGraph, SourceIndex, SourceHints> {
-    val types = TypeGraph(harvest, sink)
-    val sources = SourceIndex(harvest, foldSources, sink)
-    return Triple(types, sources, SourceHints(harvest, types, sources, sink))
-}
-
-/** The same over a hand-built harvest. Folding off: a synthetic harvest has one spelling per file,
- *  so there is nothing to fold and running it would only obscure what the test set up. */
-fun indexOf(vararg asts: Type) = indexesOf(harvestOf(*asts), foldSources = false)
+fun hintsOf(harvest: Harvest, foldSources: Boolean = true, sink: DiagnosticSink = DummySink) =
+    SourceHints(harvest, TypeGraph(harvest, sink), SourceIndex(harvest, foldSources, sink), sink)
 
 fun ImportContext<*>.defaultTypeRegistry(): DataTypeRegistry {
     val harvest = harvestOf()

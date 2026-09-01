@@ -3,7 +3,8 @@ package ghistabs.index
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.DummySink
 import ghistabs.harvest.*
-import ghistabs.parse.*
+import ghistabs.parse.TypeDecl
+import ghistabs.parse.canonTemplateName
 
 /**
  * Where the stabs alone say each type lives — attribution before a source root has a say.
@@ -17,9 +18,9 @@ import ghistabs.parse.*
  * root has resolved files. Nothing here reads a file, so this is a pure function of the [Harvest].
  */
 class SourceHints(
-    private val harvest: Harvest,
-    private val types: TypeGraph,
-    private val sources: SourceIndex,
+    val harvest: Harvest,
+    val types: TypeGraph,
+    val sources: SourceIndex,
     sink: DiagnosticSink = DummySink,
 ) : DiagnosticSink by sink {
     // name → its defining source, keyed canonically so a demangled scope chain can match it (gcc
@@ -218,8 +219,6 @@ class SourceHints(
 
     private fun Type.recorded() =
         sourceFile?.takeIf { body !is TypeDecl.Struct && body !is TypeDecl.Enum } ?: id.source.identity
-
-    /** Attribution before a source root has a say. */
 
     /** [type]'s hint — the header its methods were compiled into — folded, or null if it has none. */
     fun hintedFor(type: Type) = type.hinted()?.let(sources::fold)

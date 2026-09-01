@@ -23,13 +23,13 @@ import ghistabs.parse.TypeDecl
  * making the fold depend on attribution.
  */
 class EffectiveSource(
-    private val harvest: Harvest,
-    private val types: TypeGraph,
-    private val sources: SourceIndex,
     private val hints: SourceHints,
     sink: DiagnosticSink = DummySink,
     val declarers: (Type.Decl) -> GhidraSourceFile?,
 ) : DiagnosticSink by sink {
+    private val harvest = hints.harvest
+    private val types = hints.types
+    private val sources = hints.sources
 
     private fun declarerOf(type: Type) = type.declKey()?.let { declarers(it) }
 
