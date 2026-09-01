@@ -13,28 +13,36 @@
             "max": 18
         },
         "base-empty-ebo": {
-            "min": 221,
-            "max": 221
+            "min": 239,
+            "max": 239
         },
         "base-empty-ebo-inferred": {
             "min": 4,
             "max": 4
         },
         "base-synthesized": {
-            "min": 9,
-            "max": 9
+            "min": 7,
+            "max": 7
+        },
+        "canonical-content-merged": {
+            "min": 2,
+            "max": 2
         },
         "canonical-key-merged": {
-            "min": 1891,
-            "max": 1891
+            "min": 1921,
+            "max": 1921
         },
         "canonical-key-multi-hash": {
-            "min": 215,
-            "max": 215
+            "min": 192,
+            "max": 192
         },
         "canonical-key-multi-kind": {
             "min": 20,
             "max": 20
+        },
+        "canonical-scope-collision": {
+            "min": 33,
+            "max": 33
         },
         "data-no-coverage": {
             "min": 1809,
@@ -56,33 +64,33 @@
             "min": 0,
             "max": 0
         },
+        "demangler-ambiguous": {
+            "min": 7,
+            "max": 7
+        },
         "demangler-exact-match": {
-            "min": 307,
-            "max": 307
+            "min": 10,
+            "max": 10
         },
         "demangler-retarget-bound": {
-            "min": 129,
-            "max": 129
+            "min": 134,
+            "max": 134
         },
         "demangler-retarget-no-type": {
-            "min": 73,
-            "max": 74
+            "min": 69,
+            "max": 69
         },
         "demangler-retargeted-stub-site": {
-            "min": 129,
-            "max": 129
-        },
-        "demangler-reverse-demangle-match": {
-            "min": 20,
-            "max": 20
+            "min": 134,
+            "max": 134
         },
         "demangler-skip-no-replacement": {
             "min": 42,
             "max": 43
         },
         "demangler-sole-instantiation-declined": {
-            "min": 28,
-            "max": 28
+            "min": 29,
+            "max": 29
         },
         "demangler-sole-instantiation-match": {
             "min": 2,
@@ -97,12 +105,12 @@
             "max": 7
         },
         "demangler-unbound-stub-signature-site": {
-            "min": 74,
-            "max": 76
+            "min": 71,
+            "max": 71
         },
         "demangler-unbound-stub-site-origin": {
-            "min": 74,
-            "max": 76
+            "min": 71,
+            "max": 71
         },
         "drop-record-opt": {
             "min": 33,
@@ -277,8 +285,8 @@
             "max": 1
         },
         "inheritance-applied": {
-            "min": 733,
-            "max": 733
+            "min": 761,
+            "max": 761
         },
         "inheritance-pseudo-fields-promoted": {
             "min": 1,
@@ -313,20 +321,24 @@
             "max": 728
         },
         "placeholder-created": {
-            "min": 12226,
-            "max": 12226
+            "min": 12284,
+            "max": 12284
         },
         "placeholder-undefined-fields": {
-            "min": 766,
-            "max": 766
+            "min": 761,
+            "max": 761
         },
         "reglocal-add-success": {
             "min": 3,
             "max": 3
         },
         "replaced-demangler": {
-            "min": 329,
-            "max": 329
+            "min": 12,
+            "max": 12
+        },
+        "scope-from-twin": {
+            "min": 3776,
+            "max": 3776
         },
         "sourcemap-duplicate-entries": {
             "min": 10927,
@@ -361,12 +373,12 @@
             "max": 98
         },
         "struct-mostly-undefined": {
-            "min": 30,
-            "max": 30
+            "min": 28,
+            "max": 28
         },
         "struct-truncated": {
-            "min": 13,
-            "max": 13
+            "min": 14,
+            "max": 14
         },
         "text-boundaries-out-of-order": {
             "min": 1,
