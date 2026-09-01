@@ -1,5 +1,6 @@
 package ghistabs.index
 
+import ghistabs.Demangler
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.DummySink
 import ghistabs.harvest.*
@@ -173,4 +174,44 @@ class TypeGraph(private val harvest: Harvest, sink: DiagnosticSink = DummySink) 
 
     /** The first [T] [decl] names, through the indirection [resolveWith] walks. */
     inline fun <reified T : GlobalTypeDecl> resolve(decl: GlobalTypeDecl): T? = resolveWith(decl) { it as? T }
+
+    /**
+     * Pointee type-id of [fn]'s leading `this` param, else null.
+     *
+     * Which shape gcc emits for the pointer is per-CU history, not meaning: inline
+     * (`InlineDef→Pointer→Ref`), by id (a plain `Ref` to a separately-numbered pointer type), and with a
+     * `Const` wrapper on a const method. Matching only the inline shape missed every by-id and every
+     * const `this` — which is what left `std::ostream::sentry` with no reverse-demangle link.
+     */
+    fun thisParamTypeId(fn: Func): GlobalTypeId? {
+        val p = fn.params.firstOrNull()?.body?.takeIf { it.name == "this" } ?: return null
+        return resolve<TypeDecl.Pointer<GlobalTypeId>>(p.type)?.inner?.let { namedId(it) }
+    }
+
+    /** The id [decl] names, through the same wrappers — without resolving it to a body. */
+    private fun namedId(decl: GlobalTypeDecl) = resolveWith(decl) {
+        when (it) {
+            is TypeDecl.Ref -> it.id
+            is TypeDecl.InlineDef -> it.id
+            else -> null
+        }
+    }
+
+    /**
+     * Type id → its own fully-qualified C++ path, root-first and class-last, read off an out-of-line
+     * member definition (§57). The `this` param pins a mangled name to an exact type id and the
+     * mangled name's namespace chain IS that class's path, so this is a *stated* scope, not a guess —
+     * the only one available for a body that declares no methods of its own. Two instantiations of a
+     * nested template class share a leaf and are otherwise indistinguishable
+     * (`AbstractRing<Integer>::MultiplicativeGroupT` vs the `PolynomialMod2` one); their out-of-line
+     * ctors tell them apart.
+     */
+    val classPathByThisParam: Map<GlobalTypeId, List<String>> by lazy {
+        buildMap {
+            for (fn in harvest.functions) {
+                val id = thisParamTypeId(fn) ?: continue
+                Demangler.namespaces(fn.name)?.takeIf { it.isNotEmpty() }?.let { putIfAbsent(id, it) }
+            }
+        }
+    }
 }

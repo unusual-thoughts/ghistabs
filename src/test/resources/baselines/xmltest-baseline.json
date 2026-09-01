@@ -16,9 +16,9 @@
             "min": 3,
             "max": 3
         },
-        "class-scope-from-vtable": {
-            "min": 12,
-            "max": 12
+        "canonical-scope-collision": {
+            "min": 1,
+            "max": 1
         },
         "dangling-ref": {
             "min": 2,
@@ -45,16 +45,16 @@
             "max": 451
         },
         "demangler-exact-match": {
-            "min": 22,
-            "max": 22
+            "min": 24,
+            "max": 24
         },
         "demangler-retarget-no-type": {
             "min": 67,
             "max": 67
         },
         "demangler-reverse-demangle-match": {
-            "min": 3,
-            "max": 3
+            "min": 1,
+            "max": 1
         },
         "demangler-skip-no-replacement": {
             "min": 9,
@@ -95,10 +95,6 @@
         "empty-scope": {
             "min": 7,
             "max": 7
-        },
-        "field-dropped": {
-            "min": 2,
-            "max": 2
         },
         "field-type": {
             "min": 5,
@@ -273,8 +269,8 @@
             "max": 101
         },
         "placeholder-created": {
-            "min": 217,
-            "max": 217
+            "min": 220,
+            "max": 220
         },
         "placeholder-undefined-fields": {
             "min": 2,
@@ -287,6 +283,10 @@
         "replaced-demangler": {
             "min": 25,
             "max": 25
+        },
+        "scope-from-twin": {
+            "min": 8,
+            "max": 8
         },
         "sourcemap-duplicate-entries": {
             "min": 2,
@@ -317,8 +317,8 @@
             "max": 91
         },
         "struct-mostly-undefined": {
-            "min": 3,
-            "max": 3
+            "min": 2,
+            "max": 2
         },
         "struct-truncated": {
             "min": 1,

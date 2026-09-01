@@ -3537,7 +3537,7 @@ boundary, not relocating the heuristic.
 
 Baselines not regenerated — `harvest-cus`, `harvest-sources`, `sourcemap-files` and
 `sourcemap-folded-files` all move, and nothing else does.
-## 57. A method-less nested class has no key but its leaf, so instantiations collapse — open
+## 57. A method-less nested class has no key but its leaf, so instantiations collapse — DONE
 
 `CryptoPP::AbstractRing<CryptoPP::Integer>::MultiplicativeGroupT` and its `PolynomialMod2` sibling
 are one type in the DTM: `MultiplicativeGroupT: 11 ASTs collapsed (single body)`, filed at
@@ -3596,6 +3596,40 @@ reporting collapsed ASTs, §55's three residual `vtable-failed` (`InputRejected`
 vtables move from the sweep to the class path. It also subsumes §55: `qualifiedClassName` would
 prefer the binding and `vtableClassByLeaf` shrinks to a last resort for classes with no out-of-line
 member at all.
+
+**Done, and the regrouping needed a second signal.** `thisParamTypeId` moved to `TypeGraph`
+(`ghistabs.index` after §58, not `harvest/`) and feeds `classPathByThisParam`; `scopeKey`'s first two
+branches are now one `statedLocation` — "the scope gcc stated", by inline method or by out-of-line
+member, which are the same fact. `qualifiedClassName` prefers it over `vtableClassByLeaf`, and
+`class-scope-from-vtable` — the §55 guess — goes 484 → 66 on crypto421 and **disappears entirely** on
+the gcc345 fixtures, where the three residual `vtable-failed` clear, `vtable-applied` goes 92 → 98 and
+`vtable-reconstructed` 436 → 430: exactly the promised six vtables moving off the sweep.
+
+The predicted cost — copies from CUs that emitted no out-of-line member — was real and *not*
+solvable by content: `content` drops names, so the two `MultiplicativeGroupT` instantiations are one
+`LayoutContent` (their bases are layout-equal too). Two consequences. §B had to learn that a stated
+scope outranks a layout match, or it folded straight back together what the key had just split. And
+the unbound copies needed a signal of their own: **spelled base names**. `ec2n.cpp`'s copy derives
+from `AbstractGroup<PolynomialMod2>` where `integer.cpp`'s derives from `AbstractGroup<Integer>` —
+the one thing that separates them, and invisible to layout. `statedLocationByShape` keys
+`(ghidraName, spelled bases, layout)` → the location a *stated* twin proved, dropping any shape two
+locations claim: it repeats a decision, never makes one. That is the last resort in `scopeKey`, and
+it fires far beyond the motivating case (3776 hits on crypto421, 4915 on the fullstabs fixture) —
+every per-CU method-less copy of a class some other CU spelled out now lands in its real namespace
+instead of a `/…/multi` header key. `canonical-key-multi-hash` 215 → 192, `canonical-content-merged`
+27 → 3, `demangler-exact-match` +49/+90, `demangler-reverse-demangle-match` 96 → 6 (the same
+matches, arriving by path instead of by reverse-demangle).
+
+**One trap, worth remembering.** Counting the bound-but-method-less copies as scope *owners* in the
+divergence vote broke `/std/type_info`: every CU's stub declaration of it became an owner, they
+diverge, the group demoted to header keys, and the slot Ghidra's demangler had already forged stayed
+empty (`typeInfoBaseClassesNotLeftAsStubs`). Ownership for keying and ownership for the divergence
+vote are not the same question — the vote stays with the method-bearing bodies, which are the ones
+whose content is worth comparing.
+
+On the stripped fixtures `replaced-demangler` collapses 329 → 12 and `demangler-exact-match` 307 → 10.
+That is not a loss: the stub is never injected because our type already occupies the path. The
+outcome tests (`demanglerStringReplaced`, `demanglerHasNoEmptyStubs`) pass.
 
 ## 58. Post-harvest indexing split out of `HarvestIndex` — DONE, behaviour-neutral
 

@@ -13,32 +13,40 @@
             "max": 18
         },
         "base-empty-ebo": {
-            "min": 221,
-            "max": 221
+            "min": 239,
+            "max": 239
         },
         "base-empty-ebo-inferred": {
             "min": 4,
             "max": 4
         },
         "base-synthesized": {
-            "min": 9,
-            "max": 9
+            "min": 7,
+            "max": 7
+        },
+        "canonical-content-merged": {
+            "min": 2,
+            "max": 2
         },
         "canonical-key-merged": {
-            "min": 1891,
-            "max": 1891
+            "min": 1921,
+            "max": 1921
         },
         "canonical-key-multi-hash": {
-            "min": 215,
-            "max": 215
+            "min": 192,
+            "max": 192
         },
         "canonical-key-multi-kind": {
             "min": 20,
             "max": 20
         },
+        "canonical-scope-collision": {
+            "min": 33,
+            "max": 33
+        },
         "class-scope-from-vtable": {
-            "min": 484,
-            "max": 484
+            "min": 66,
+            "max": 66
         },
         "data-no-coverage": {
             "min": 586,
@@ -61,32 +69,32 @@
             "max": 7586
         },
         "demangler-ambiguous": {
-            "min": 5,
-            "max": 5
+            "min": 12,
+            "max": 12
         },
         "demangler-exact-match": {
-            "min": 751,
-            "max": 751
+            "min": 800,
+            "max": 800
         },
         "demangler-retarget-bound": {
-            "min": 207,
-            "max": 207
+            "min": 212,
+            "max": 212
         },
         "demangler-retarget-no-namespace": {
             "min": 5,
             "max": 5
         },
         "demangler-retarget-no-type": {
-            "min": 237,
-            "max": 237
+            "min": 232,
+            "max": 232
         },
         "demangler-retargeted-stub-site": {
-            "min": 209,
-            "max": 209
+            "min": 214,
+            "max": 214
         },
         "demangler-reverse-demangle-match": {
-            "min": 50,
-            "max": 50
+            "min": 1,
+            "max": 1
         },
         "demangler-rtti-match": {
             "min": 3,
@@ -97,8 +105,8 @@
             "max": 109
         },
         "demangler-sole-instantiation-declined": {
-            "min": 26,
-            "max": 26
+            "min": 27,
+            "max": 27
         },
         "demangler-sole-instantiation-match": {
             "min": 1,
@@ -113,12 +121,12 @@
             "max": 51
         },
         "demangler-unbound-stub-signature-site": {
-            "min": 247,
-            "max": 247
+            "min": 242,
+            "max": 242
         },
         "demangler-unbound-stub-site-origin": {
-            "min": 247,
-            "max": 247
+            "min": 242,
+            "max": 242
         },
         "drop-record-opt": {
             "min": 33,
@@ -285,8 +293,8 @@
             "max": 1
         },
         "inheritance-applied": {
-            "min": 733,
-            "max": 733
+            "min": 761,
+            "max": 761
         },
         "inheritance-pseudo-fields-promoted": {
             "min": 1,
@@ -321,12 +329,12 @@
             "max": 728
         },
         "placeholder-created": {
-            "min": 12226,
-            "max": 12226
+            "min": 12284,
+            "max": 12284
         },
         "placeholder-undefined-fields": {
-            "min": 766,
-            "max": 766
+            "min": 761,
+            "max": 761
         },
         "reglocal-add-success": {
             "min": 3,
@@ -339,6 +347,10 @@
         "resolve-ambiguous": {
             "min": 57,
             "max": 57
+        },
+        "scope-from-twin": {
+            "min": 3776,
+            "max": 3776
         },
         "sourcemap-duplicate-entries": {
             "min": 10927,
@@ -369,12 +381,12 @@
             "max": 38
         },
         "struct-mostly-undefined": {
-            "min": 30,
-            "max": 30
+            "min": 28,
+            "max": 28
         },
         "struct-truncated": {
-            "min": 13,
-            "max": 13
+            "min": 14,
+            "max": 14
         },
         "text-boundaries-out-of-order": {
             "min": 1,
