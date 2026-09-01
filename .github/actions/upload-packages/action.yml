@@ -1,0 +1,20 @@
+name: Upload packages
+description: Upload the extension and CLI zips built into dist/ as artifacts.
+
+runs:
+  using: composite
+  steps:
+    # `archive: false` hands back the zip itself rather than a zip wrapping it. It takes one file per
+    # step, and names the artifact after that file — already version-stamped, so two builds of
+    # different Ghidra versions in one run don't collide.
+    - name: Upload extension zip
+      uses: actions/upload-artifact@v7
+      with:
+        path: dist/ghidra_*.zip
+        archive: false
+
+    - name: Upload CLI zip
+      uses: actions/upload-artifact@v7
+      with:
+        path: dist/ghistabs-cli_*.zip
+        archive: false
