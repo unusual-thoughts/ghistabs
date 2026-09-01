@@ -19,7 +19,7 @@ class Harvester(private val monitor: TaskMonitor, private val sink: DiagnosticSi
     private val store = TypeStore(sink = sink)
     private val cursor = StabCursor(resolver, sink)
     private val staticsByCu = mutableMapOf<GhidraSourceFile, MutableList<StaticSymbol>>()
-    private val constants = mutableListOf<SymbolDecl.Constant<GlobalTypeId>>()
+    private val constants = mutableMapOf<GhidraSourceFile, MutableList<SymbolDecl.Constant<GlobalTypeId>>>()
 
     /** Make sure we didn't drop `desc` or `value` fields */
     private fun StabRecord.checkDroppedFields() {
@@ -27,6 +27,7 @@ class Harvester(private val monitor: TaskMonitor, private val sink: DiagnosticSi
             when (type) {
                 StabType.N_UNDF, // symbol count
                 StabType.N_SLINE,
+                StabType.N_SO, // source language, read into CuContext.language
                 StabType.N_FUN, // desc available on -gstabs+
                 StabType.N_PSYM, StabType.N_LSYM, StabType.N_RSYM, // params / locals
                 StabType.N_GSYM, StabType.N_STSYM, StabType.N_LCSYM, StabType.N_ROSYM, // statics
@@ -115,7 +116,7 @@ class Harvester(private val monitor: TaskMonitor, private val sink: DiagnosticSi
 
                 // Addressless compile-time constant — no address, so it's applied as an
                 // equate + synthetic enum catalog rather than data (see SymbolApplier).
-                is SymbolDecl.Constant -> constants += decl
+                is SymbolDecl.Constant -> constants.getOrPut(cursor.cu.identity) { mutableListOf() } += decl
 
                 is SymbolDecl.Function, is SymbolDecl.Param, is SymbolDecl.Static ->
                     warn("unexpected-lsym", "$sym")
@@ -157,20 +158,31 @@ class Harvester(private val monitor: TaskMonitor, private val sink: DiagnosticSi
             rec.checkDroppedFields()
         }
 
-        val (openFunctions, lineEntries, textRanges, cuSpans) = cursor.toHarvest()
+        val (lineEntries, cus, textRanges) = cursor.toHarvest()
         val (typeAsts, rawCollisions) = store.toHarvest()
-        debug("harvest-constants", count = constants.size.toLong())
+        debug("harvest-constants", count = constants.values.sumOf { it.size }.toLong())
         debug("harvest-text-ranges", count = textRanges.size.toLong())
 
+        // `cus` alone decides CU-ness: statics and constants key off `cursor.cu`, which `preSeedHeaders`
+        // built a CuContext for from the same N_SO record, so their keys cannot reach outside it.
         return Harvest(
             typeAsts,
             rawCollisions,
-            staticsByCu,
-            openFunctions,
-            lineEntries,
-            constants,
+            (cus.keys + lineEntries.keys).associateWith { file ->
+                SourceHarvest(
+                    lineEntries[file].orEmpty(),
+                    cus[file]?.let {
+                        CompilationUnit(
+                            staticsByCu[file].orEmpty(),
+                            it.functions,
+                            constants[file].orEmpty(),
+                            it.range,
+                            it.language,
+                        )
+                    },
+                )
+            },
             textRanges,
-            cuSpans,
         )
     }
 

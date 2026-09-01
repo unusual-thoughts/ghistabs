@@ -322,7 +322,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             "tinyxml are array globals and land there",
     )
     fun arrayGlobalsGetTheirDeclaredLength() {
-        val declared = artifacts.harvest.staticsByCu.values.flatten()
+        val declared = artifacts.harvest.statics
             .mapNotNull { sym ->
                 val elements = (resolve(sym.body.type) as? TypeDecl.Array)?.declaredElements ?: return@mapNotNull null
                 val addr = context.resolver.buildAddress(sym.rawValue)
@@ -344,7 +344,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         val undefinedElements = declared.mapNotNull { (name, addr, _) ->
             val declaredElement = (
                 resolve(
-                    artifacts.harvest.staticsByCu.values.flatten()
+                    artifacts.harvest.statics
                         .first { it.body.name == name }.body.type,
                 ) as? TypeDecl.Array
                 )?.element
@@ -434,7 +434,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         )
 
         // Every published address, so the predecessor of the gap really is a predecessor.
-        val addresses = artifacts.harvest.lineEntries.values.asSequence().flatten()
+        val addresses = artifacts.harvest.sources.values.asSequence().flatMap { it.lineEntries }
             .map { it.addr }.filter { program.memory.getBlock(it) != null }.distinct().sorted().toList()
         val (statement, inside) = addresses.zipWithNext()
             .firstNotNullOfOrNull { (a, b) ->
@@ -1336,7 +1336,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     @Test
     fun functionLocalStaticsGetEnclosingFunctionComment() {
         assumeTrue(
-            artifacts.harvest.staticsByCu.values.flatten().any { it.body.scope == StaticScope.FUNCTION },
+            artifacts.harvest.statics.any { it.body.scope == StaticScope.FUNCTION },
             "Skipping: no function-local (V) statics in this fixture",
         )
         val plated = context.diagnostics.snapshotCounters()["static-local-plate"] ?: 0L

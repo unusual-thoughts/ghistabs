@@ -82,7 +82,7 @@ class HarvesterTest {
 
         val harvest = harvester.harvest(records)
 
-        val harvestedSymbols = harvest.staticsByCu.values.flatten()
+        val harvestedSymbols = harvest.statics
         harvestedSymbols.size.mustBe(1, "One global symbol should be harvested")
         val gsymRecord = harvestedSymbols[0]
         gsymRecord.body.name.mustBe("g", "Symbol name should be 'g'")
@@ -193,7 +193,7 @@ class HarvesterTest {
         val typeAst = harvest.types.values.first()
         typeAst.ghidraName.mustBe("MyStruct", "Tagged type name should be 'MyStruct'")
         // Tagged types should NOT be in symbolsByCu
-        harvest.staticsByCu.values.flatten().size.mustBe(0, "Tagged type should NOT be in harvested symbols")
+        harvest.statics.size.mustBe(0, "Tagged type should NOT be in harvested symbols")
     }
 
     /**
@@ -560,10 +560,8 @@ class HarvesterTest {
         val harvest = harvester.harvest(records)
 
         sink.parseErrors mustBe 0
-        harvest.staticsByCu.must("CU1 should be registered in symbolsByCu") { containsKey(sourceFileOf("cu1.c")) }
-        harvest.staticsByCu.must("CU2 should be registered in symbolsByCu") { containsKey(sourceFileOf("cu2.c")) }
-        harvest.staticsByCu[sourceFileOf("cu1.c")]!!.size.mustBe(1, "cu1.c should have exactly one symbol")
-        harvest.staticsByCu[sourceFileOf("cu2.c")]!!.size.mustBe(1, "cu2.c should have exactly one symbol")
+        harvest.sources[sourceFileOf("cu1.c")]?.cu?.statics?.size.mustBe(1, "cu1.c should have exactly one symbol")
+        harvest.sources[sourceFileOf("cu2.c")]?.cu?.statics?.size.mustBe(1, "cu2.c should have exactly one symbol")
     }
 
     /**
@@ -650,7 +648,7 @@ class HarvesterTest {
         val harvest = harvester.harvest(records)
 
         sink.parseErrors mustBe 0
-        harvest.staticsByCu.must("CU a.c should be registered in symbolsByCu") { containsKey(sourceFileOf("a.c")) }
-        harvest.staticsByCu.must("CU b.c should be registered in symbolsByCu") { containsKey(sourceFileOf("b.c")) }
+        harvest.sources[sourceFileOf("a.c")].must("a.c should be harvested as a CU") { this?.cu != null }
+        harvest.sources[sourceFileOf("b.c")].must("b.c should be harvested as a CU") { this?.cu != null }
     }
 }

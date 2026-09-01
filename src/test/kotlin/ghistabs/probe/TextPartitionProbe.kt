@@ -72,8 +72,8 @@ class TextPartitionProbe : AbstractGhidraHeadlessIntegrationTest() {
             }
 
             // Score each run by the line entries that land in it. Both sorted, walked in step.
-            val entries = harvest.lineEntries
-                .flatMap { (src, es) -> es.map { it.addr.offset to src.path } }
+            val entries = harvest.sources
+                .flatMap { (src, s) -> s.lineEntries.map { it.addr.offset to src.path } }
                 .sortedBy { it.first }
             var i = 0
             for (run in runs) {

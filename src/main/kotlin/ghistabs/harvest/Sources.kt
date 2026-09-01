@@ -45,7 +45,13 @@ fun sourceFileOrNull(spelling: String?) = spelling?.takeIf { it.isNotBlank() }?.
  * spelling. This is the one conversion from that to the physical file it names, rather than each
  * consumer reaching through `.filename` itself.
  */
-val SourceFile.identity get() = sourceFileOf(filename)
+val SourceFile.identity get() = when (this) {
+    // A CU's directory-N_SO is the only spelling gcc gives it. Resolving here rather than at render
+    // time via `HarvestIndex.cuDirectories` puts a CU on the same key its own N_SOL/N_BINCL already
+    // use — those go through `resolved()` — so one file is one row from the harvest onward.
+    is SourceFile.CUSource -> sourceFileOf(spelling)
+    is SourceFile.HeaderSource -> sourceFileOf(filename)
+}
 
 /** Path segments: `/c:/mingw/include/x.h` → `[c:, mingw, include, x.h]`. Normalisation has already
  *  settled separators, drive letters and `..`, so this is a split and nothing more. */

@@ -6,6 +6,7 @@ import ghidra.util.task.TaskMonitor
 import ghistabs.harvest.Func
 import ghistabs.harvest.Harvester
 import ghistabs.harvest.hasHeaderExtension
+import ghistabs.harvest.identity
 import ghistabs.parse.StabReader
 import ghistabs.test.defaultContext
 import ghistabs.withProgram
@@ -62,7 +63,9 @@ class ComdatProvenanceProbe : AbstractGhidraHeadlessIntegrationTest() {
             // in that CU's ordinary text. Broader than a multi-CU claim, which is the subset the
             // linker demonstrably folded, and the two should never contradict (§39).
             val bySpan = harvest.functions.groupingBy { f ->
-                harvest.cuSpans[f.cu]?.let { if (it.contains(f.addr)) "plain .text" else "outside its span" }
+                harvest.sources[f.cu.identity]?.cu?.span?.let {
+                    if (it.contains(f.addr)) "plain .text" else "outside its span"
+                }
                     ?: "CU declared no text"
             }.eachCount()
 
@@ -91,7 +94,7 @@ class ComdatProvenanceProbe : AbstractGhidraHeadlessIntegrationTest() {
                     w.write("  ${verdict.padEnd(20)} $n\n")
                 }
                 val contradictions = merged.count { m ->
-                    m.copies.any { harvest.cuSpans[it.cu]?.contains(it.addr) == true }
+                    m.copies.any { harvest.sources[it.cu.identity]?.cu?.span?.contains(it.addr) == true }
                 }
                 w.write("  merged bodies their own CU claims as plain .text: $contradictions\n")
                 w.write("CUs with no span, by why (CuContext.addressRange()):\n")

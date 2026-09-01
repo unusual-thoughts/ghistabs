@@ -158,8 +158,10 @@ class EffectiveSource(private val index: HarvestIndex, val declarers: (Type.Decl
 
     /** File-scope symbols per source — by CU, except where the symbol itself names a better one. */
     val staticsBySource: Map<GhidraSourceFile, List<StaticSymbol>> by lazy {
-        index.harvest.staticsByCu.entries.flatMap { (cu, syms) ->
-            syms.map { with(index) { (it.body.typeinfoSource() ?: fold(cu)) to it.folded() } }
+        index.harvest.sources.entries.flatMap { (cu, harvested) ->
+            harvested.cu?.statics.orEmpty().map {
+                with(index) { (it.body.typeinfoSource() ?: fold(cu)) to it.folded() }
+            }
         }.groupBy({ it.first }, { it.second })
     }
 }
