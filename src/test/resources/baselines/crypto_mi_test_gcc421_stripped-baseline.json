@@ -77,8 +77,8 @@
             "max": 134
         },
         "demangler-retarget-no-type": {
-            "min": 69,
-            "max": 69
+            "min": 68,
+            "max": 68
         },
         "demangler-retargeted-stub-site": {
             "min": 134,
@@ -105,12 +105,12 @@
             "max": 7
         },
         "demangler-unbound-stub-signature-site": {
-            "min": 71,
-            "max": 71
+            "min": 69,
+            "max": 69
         },
         "demangler-unbound-stub-site-origin": {
-            "min": 71,
-            "max": 71
+            "min": 69,
+            "max": 69
         },
         "drop-record-opt": {
             "min": 33,
