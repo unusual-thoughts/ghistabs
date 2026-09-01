@@ -6,13 +6,13 @@ import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Program
 import ghidra.program.model.sourcemap.SourceMapEntry
 import ghidra.util.task.TaskMonitor
-import ghistabs.ImportOptions
-import ghistabs.ImportOptions.Companion.stabsTypedefsShortened
 import ghistabs.diagnose.DiagnosticSink
+import ghistabs.harvest.AddressResolver
 import ghistabs.harvest.Func
 import ghistabs.harvest.GhidraSourceFile
 import ghistabs.harvest.Type
-import ghistabs.importer.AddressResolver
+import ghistabs.importer.ImportOptions
+import ghistabs.importer.ImportOptions.Companion.stabsTypedefsShortened
 import ghistabs.importer.LocalSources
 import ghistabs.index.EffectiveSource
 import ghistabs.index.SourceHints

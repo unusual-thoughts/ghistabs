@@ -1,4 +1,4 @@
-package ghistabs
+package ghistabs.entrypoints
 
 import ghidra.app.services.AbstractAnalyzer
 import ghidra.app.services.AnalysisPriority
@@ -8,16 +8,16 @@ import ghidra.framework.options.Options
 import ghidra.program.model.address.AddressSetView
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
-import ghistabs.ImportOptions.Companion.isOverlayDone
-import ghistabs.ImportOptions.Companion.isStabsDone
-import ghistabs.ImportOptions.Companion.markOverlayDone
-import ghistabs.ImportOptions.Companion.markStabsDone
-import ghistabs.ImportOptions.Companion.registerStabs
 import ghistabs.diagnose.BookmarkSink
 import ghistabs.diagnose.MessageLogSink
 import ghistabs.diagnose.StabsDiagnostics
 import ghistabs.diagnose.TeeSink
 import ghistabs.importer.*
+import ghistabs.importer.ImportOptions.Companion.isOverlayDone
+import ghistabs.importer.ImportOptions.Companion.isStabsDone
+import ghistabs.importer.ImportOptions.Companion.markOverlayDone
+import ghistabs.importer.ImportOptions.Companion.markStabsDone
+import ghistabs.importer.ImportOptions.Companion.registerStabs
 import ghistabs.parse.StabReader
 
 /**
@@ -26,12 +26,12 @@ import ghistabs.parse.StabReader
  * Unix and Cygwin targets, across ELF, PE/COFF and a.out (where the records live in the linker
  * symbol table rather than in debug sections).
  *
- * Auto-runs once per program (gated by [ImportOptions.STABS_DONE]); re-runnable via the
+ * Auto-runs once per program (gated by [ImportOptions.Companion.STABS_DONE]); re-runnable via the
  * `Tools > Stabs > Re-import` menu action.
  */
 class StabsAnalyzer :
     AbstractAnalyzer(
-        NAME,
+        STABS_ANALYZER_NAME,
         "Imports STABS debug info (.stab/.stabstr) — types, function signatures, locals, C++ classes, vtables.",
         AnalyzerType.BYTE_ANALYZER,
     ) {
@@ -79,8 +79,6 @@ class StabsAnalyzer :
     }
 
     companion object {
-        const val NAME = "Stabs Importer"
-
         @JvmStatic
         fun ImportContext<*>.import(): ImportResult {
             if (program.isStabsDone) return ImportResult()

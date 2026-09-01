@@ -1,4 +1,4 @@
-package ghistabs
+package ghistabs.entrypoints
 
 import ghidra.app.cmd.disassemble.DisassembleCommand
 import ghidra.app.services.AbstractAnalyzer
@@ -12,6 +12,8 @@ import ghidra.program.model.address.AddressSetView
 import ghidra.program.model.listing.BookmarkType
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
+import ghistabs.getFunctionWrapping
+import ghistabs.inHull
 
 /**
  * Recovers code Ghidra left undisassembled *inside* a function's extent — hot/cold split holes and

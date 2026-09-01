@@ -4,14 +4,17 @@ import ghidra.program.model.data.DataTypeManager
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.SymbolTable
 import ghidra.util.task.TaskMonitor
-import ghistabs.ImportOptions
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.StabsDiagnostics
 import ghistabs.diagnose.TeeSink
+import ghistabs.harvest.AddressResolver
 import ghistabs.harvest.Harvest
+import ghistabs.harvest.Harvester
+import ghistabs.harvest.ProgramAddressResolver
 import ghistabs.index.SourceHints
 import ghistabs.index.SourceIndex
 import ghistabs.index.TypeGraph
+import ghistabs.materialize.ClassBuilder
 import ghistabs.materialize.DataTypeRegistry
 import ghistabs.parse.StabReader
 import ghistabs.parse.StabRecord
@@ -68,6 +71,11 @@ class ImportContext<Terminal : DiagnosticSink>(
     val dtm: DataTypeManager = program.dataTypeManager
     val symtab: SymbolTable = program.symbolTable
     val resolver: AddressResolver = ProgramAddressResolver(program, this)
+    fun harvester() = Harvester(monitor, this, resolver)
+    fun classBuilder(registry: DataTypeRegistry, types: TypeGraph) =
+        ClassBuilder(registry, types, program, resolver, monitor, this)
+
+    fun demanglerReplacer(registry: DataTypeRegistry) = DemanglerReplacer(program, registry, monitor, this)
 }
 
 /**

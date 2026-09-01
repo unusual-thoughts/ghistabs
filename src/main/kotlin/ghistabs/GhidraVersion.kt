@@ -13,7 +13,7 @@ package ghistabs
  * shim, or it finds our own declaration and answers true on every release.
  */
 private fun hasClass(name: String) =
-    runCatching { Class.forName(name, false, StabsAnalyzer::class.java.classLoader) }.isSuccess
+    runCatching { Class.forName(name, false, Demangler::class.java.classLoader) }.isSuccess
 
 /**
  * Whether Ghidra's `PreProcessor` echoes the lines a conditional dropped — the `///-` marker its CPP

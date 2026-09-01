@@ -6,7 +6,7 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
-import ghistabs.Correction
+import ghistabs.entrypoints.Correction
 import ghistabs.functionsIterable
 import ghistabs.runTransaction
 import ghistabs.test.*
@@ -16,7 +16,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertAll
 
 /**
- * [ghistabs.StructReturnAnalyzer] against a real gcc 3.4.5 PE, through the ordinary analyzer pipeline — the
+ * [ghistabs.entrypoints.StructReturnAnalyzer] against a real gcc 3.4.5 PE, through the ordinary analyzer pipeline — the
  * Stabs Importer supplies the return types this reads, so the priority ordering is exercised for
  * real rather than simulated.
  *

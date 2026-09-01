@@ -1,4 +1,4 @@
-package ghistabs
+package ghistabs.entrypoints
 
 import ghidra.app.services.AbstractAnalyzer
 import ghidra.app.services.AnalysisPriority
@@ -12,6 +12,7 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
 import ghidra.program.model.pcode.XmlEncode
 import ghidra.util.task.TaskMonitor
+import ghistabs.collidesWithInjectedParameter
 import org.w3c.dom.Element
 import org.xml.sax.InputSource
 import java.io.StringReader
@@ -112,11 +113,16 @@ class StructReturnAnalyzer :
      */
     private fun correctionFor(program: Program, f: Function) = when {
         f.isThunk || f.hasCustomVariableStorage() -> null
+
         // Not `dataType`: on a forced-indirect return that is already the hidden *pointer*.
         f.`return`.formalDataType !is Composite -> null
+
         f.callingConventionName !in CORRECTABLE_CONVENTIONS -> null
+
         f.stackPurgeSize == program.defaultPointerSize && !f.`return`.isForcedIndirect -> Correction.TO_MEMORY
+
         f.stackPurgeSize == 0 && f.`return`.isForcedIndirect -> Correction.TO_REGISTER
+
         else -> null
     }
 

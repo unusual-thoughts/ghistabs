@@ -21,7 +21,6 @@ import ghidra.program.model.listing.Program
 import ghidra.program.model.listing.Variable
 import ghidra.program.model.mem.MemoryBlock
 import ghidra.util.task.TaskMonitor
-import ghistabs.compat.loadProgram
 import java.io.File
 
 operator fun Address.plus(rhs: Long): Address = addNoWrap(rhs)

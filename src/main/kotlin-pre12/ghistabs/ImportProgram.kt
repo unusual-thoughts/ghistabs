@@ -1,4 +1,4 @@
-package ghistabs.compat
+package ghistabs
 
 import ghidra.app.util.importer.*
 import ghidra.app.util.opinion.LoaderService

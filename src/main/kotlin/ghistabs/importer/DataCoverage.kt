@@ -1,10 +1,9 @@
-package ghistabs.diagnose
+package ghistabs.importer
 
 import ghidra.program.model.address.Address
 import ghidra.program.model.address.AddressRange
 import ghidra.program.model.listing.Program
 import ghidra.program.model.mem.MemoryBlock
-import ghistabs.importer.ImportContext
 import ghistabs.inHull
 import ghistabs.parse.StabReader
 import ghistabs.parse.StabType

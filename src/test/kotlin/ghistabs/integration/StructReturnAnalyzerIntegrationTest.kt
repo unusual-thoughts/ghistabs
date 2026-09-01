@@ -9,8 +9,8 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.symbol.SourceType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
-import ghistabs.STRUCT_RETURN_ANALYZER_NAME
-import ghistabs.StructReturnAnalyzer
+import ghistabs.entrypoints.STRUCT_RETURN_ANALYZER_NAME
+import ghistabs.entrypoints.StructReturnAnalyzer
 import ghistabs.runTransaction
 import ghistabs.test.must
 import ghistabs.test.mustBe

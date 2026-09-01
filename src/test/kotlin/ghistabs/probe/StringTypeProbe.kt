@@ -6,13 +6,13 @@ import ghidra.program.model.data.*
 import ghidra.program.model.listing.Program
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
-import ghistabs.ImportOptions
-import ghistabs.StabsAnalyzer
-import ghistabs.StabsAnalyzer.Companion.import
 import ghistabs.diagnose.CapturingSink
 import ghistabs.diagnose.Level
 import ghistabs.diagnose.StabsDiagnostics
+import ghistabs.entrypoints.StabsAnalyzer
+import ghistabs.entrypoints.StabsAnalyzer.Companion.import
 import ghistabs.importer.ImportContext
+import ghistabs.importer.ImportOptions
 import ghistabs.importer.ImportProbe
 import ghistabs.materialize.isUndefined
 import ghistabs.runTransaction

@@ -14,7 +14,7 @@ import javax.swing.event.DocumentEvent
 import javax.swing.event.DocumentListener
 
 /**
- * Editor for a `;`-separated list of directories, [ImportOptions.SOURCE_ROOTS] being the one that has
+ * Editor for a `;`-separated list of directories, [ghistabs.importer.ImportOptions.SOURCE_ROOTS] being the one that has
  * one: the plain text field such an option would get anyway, plus a browse button whose chooser takes
  * **directories only**, multi-selects, and *appends* what it picked instead of replacing the field —
  * entries accumulate, and the field stays typeable.
