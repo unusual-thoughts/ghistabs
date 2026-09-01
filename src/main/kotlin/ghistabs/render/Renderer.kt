@@ -9,13 +9,13 @@ import ghidra.util.task.TaskMonitor
 import ghistabs.ImportOptions
 import ghistabs.ImportOptions.Companion.stabsTypedefsShortened
 import ghistabs.diagnose.DiagnosticSink
-import ghistabs.harvest.Func
+import ghistabs.harvest.*
 import ghistabs.harvest.GhidraSourceFile
 import ghistabs.harvest.Type
 import ghistabs.importer.AddressResolver
 import ghistabs.importer.LocalSources
+import ghistabs.index.*
 import ghistabs.index.EffectiveSource
-import ghistabs.index.HarvestIndex
 import ghistabs.materialize.TemplateNameShortener
 import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.TypeDecl
@@ -29,7 +29,10 @@ import java.io.File
 import java.util.*
 
 class Renderer(
-    val index: HarvestIndex,
+    val harvest: Harvest,
+    val types: TypeGraph,
+    val sourceIndex: SourceIndex,
+    val hints: SourceHints,
     val program: Program,
     val mode: Mode,
     val resolver: AddressResolver,
@@ -86,7 +89,7 @@ class Renderer(
             // Reading the program means an import that never published leaves the render with no line
             // map at all, and every SLINE annotation would just quietly be missing.
             .also { mapped ->
-                val withLines = index.harvest.sources.count { it.value.lineEntries.isNotEmpty() }
+                val withLines = harvest.sources.count { it.value.lineEntries.isNotEmpty() }
                 if (mapped.isEmpty() && withLines > 0) {
                     warn(
                         "render-line-map-empty",
@@ -96,7 +99,7 @@ class Renderer(
             }
     }
 
-    val effectiveSource = EffectiveSource(index, ::declarerOf)
+    val effectiveSource = EffectiveSource(harvest, types, sourceIndex, hints, sink, ::declarerOf)
 
     /**
      * Every file the render emits: those with line entries, function bodies, or type declarations.
@@ -123,7 +126,7 @@ class Renderer(
      * Kotlin terms it is a lazy that forces itself.
      */
     val localSources: LocalSources by lazy {
-        LocalSources(program, index) { source ->
+        LocalSources(program, sink) { source ->
             effectiveSource.baseTypesBySource[source].orEmpty()
                 .mapNotNull { t -> t.declKey() }
                 // Declarations several files claim at one line are excluded: at most one of those
@@ -157,7 +160,7 @@ class Renderer(
      * a body that never opened — the one thing a header's raw text cannot say. Reads raw text where
      * the environment is too incomplete to be believed, saying so once per unit ([Preprocessed]).
      */
-    private val sourceIndexes by lazy { SourceIndexes(Preprocessed.lines(units, includePaths, index)) }
+    private val sourceIndexes by lazy { SourceIndexes(Preprocessed.lines(units, includePaths, sink)) }
 
     /**
      * The definition [line] of [source] sits in, read off the real file — null without a root, and
@@ -299,14 +302,14 @@ class Renderer(
      */
     fun harvestTemplateShortener(): TemplateNameShortener {
         fun targetName(decl: GlobalTypeDecl): String? = when (decl) {
-            is TypeDecl.Ref -> index.types.byId(decl.id)?.name
+            is TypeDecl.Ref -> types.byId(decl.id)?.name
             is TypeDecl.XRef -> decl.tagName
             is TypeDecl.InlineDef -> targetName(decl.inner)
             else -> null
         }
 
         return TemplateNameShortener(
-            index.types.allTypes.mapNotNull { ast ->
+            types.allTypes.mapNotNull { ast ->
                 ast.name?.let { name ->
                     targetName(ast.body)?.takeIf { '<' in it && it.length > name.length }?.let { name to it }
                 }

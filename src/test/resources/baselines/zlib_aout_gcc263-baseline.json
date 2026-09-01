@@ -89,8 +89,8 @@
             "max": 0
         },
         "harvest-cus": {
-            "min": 9,
-            "max": 9
+            "min": 14,
+            "max": 14
         },
         "harvest-functions": {
             "min": 95,
@@ -107,6 +107,10 @@
         "harvest-records-read": {
             "min": 4054,
             "max": 4054
+        },
+        "harvest-sources": {
+            "min": 17,
+            "max": 17
         },
         "harvest-statics": {
             "min": 25,
@@ -225,12 +229,12 @@
             "max": 2026
         },
         "sourcemap-files": {
-            "min": 29,
-            "max": 29
+            "min": 17,
+            "max": 17
         },
         "sourcemap-folded-files": {
-            "min": 14,
-            "max": 14
+            "min": 2,
+            "max": 2
         },
         "stab-value-absolute": {
             "min": 2039,

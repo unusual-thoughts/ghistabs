@@ -76,10 +76,6 @@
             "min": 67,
             "max": 67
         },
-        "desc-dropped-so": {
-            "min": 2,
-            "max": 2
-        },
         "drop-record-opt": {
             "min": 2,
             "max": 2
@@ -159,6 +155,10 @@
         "harvest-records-read": {
             "min": 10338,
             "max": 10338
+        },
+        "harvest-sources": {
+            "min": 4,
+            "max": 4
         },
         "harvest-statics": {
             "min": 102,

@@ -1,7 +1,6 @@
 package ghistabs.harvest
 
 import ghidra.util.SourceFileUtils
-import ghistabs.index.*
 import ghistabs.parse.SourceFile
 import ghistabs.parse.isDriveLetter
 import ghistabs.parse.segments
@@ -48,9 +47,10 @@ fun sourceFileOrNull(spelling: String?) = spelling?.takeIf { it.isNotBlank() }?.
  */
 val SourceFile.identity get() = when (this) {
     // A CU's directory-N_SO is the only spelling gcc gives it. Resolving here rather than at render
-    // time via `HarvestIndex.cuDirectories` puts a CU on the same key its own N_SOL/N_BINCL already
+    // time via the old `cuDirectories` map puts a CU on the same key its own N_SOL/N_BINCL already
     // use — those go through `resolved()` — so one file is one row from the harvest onward.
     is SourceFile.CUSource -> sourceFileOf(spelling)
+
     is SourceFile.HeaderSource -> sourceFileOf(filename)
 }
 

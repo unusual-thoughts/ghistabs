@@ -16,7 +16,8 @@ interface RenderContext {
 
     val program get() = renderer.program
     val resolver get() = renderer.resolver
-    val index get() = renderer.index
+    val types get() = renderer.types
+    val sourceIndex get() = renderer.sourceIndex
     val shortener: TemplateNameShortener? get() = renderer.shortener
 
     fun Int?.indentAt(): Int
@@ -40,7 +41,7 @@ interface RenderContext {
             // Named TypeAst → use the name. Anonymous → recurse into its body so the
             // user sees `int *` rather than a raw GlobalTypeId, unless this id is
             // already on the path (cycle). Unresolved (cross-CU dangling) → id string.
-            val ast = index.types.byId(id)
+            val ast = types.byId(id)
             val name = ast?.name
             when {
                 name != null -> shortener?.shortenedOrNull(name) ?: name
@@ -90,16 +91,15 @@ interface RenderContext {
     }
 
     /** True if this resolves to a pointer, seeing through refs, cv-qualifiers and typedefs. */
-    fun GlobalTypeDecl.isPointer(index: HarvestIndex) =
-        index.types.resolve<TypeDecl.Pointer<GlobalTypeId>>(this) != null
+    fun GlobalTypeDecl.isPointer(types: TypeGraph) = types.resolve<TypeDecl.Pointer<GlobalTypeId>>(this) != null
 
     /** True if this resolves to an array of char — a string literal — through cv-quals and typedefs. */
-    fun GlobalTypeDecl.isCharArray(index: HarvestIndex) =
-        index.types.resolve<TypeDecl.Array<GlobalTypeId>>(this)?.element?.isCharType(index) == true
+    fun GlobalTypeDecl.isCharArray(types: TypeGraph) =
+        types.resolve<TypeDecl.Array<GlobalTypeId>>(this)?.element?.isCharType(types) == true
 
     // Any 1-byte integer element: cygwin's named `char` resolves through its Range body to
     // Byte, not Char. The printable-run guard in stringLiteralAt keeps binary byte[] as hex.
-    private fun GlobalTypeDecl.isCharType(index: HarvestIndex) = index.types.resolveAny(this) { decl ->
+    private fun GlobalTypeDecl.isCharType(types: TypeGraph) = types.resolveAny(this) { decl ->
         decl.resolveBuiltin().let { it is CharDataType || it is ByteDataType || it is SignedByteDataType }
     }
 
@@ -113,7 +113,7 @@ interface RenderContext {
             val link = f.mangled?.let { "  /* $it */" }.orEmpty()
             f.access to "static ${f.type.renderDecl(f.name)};$link"
         } + methods.mapNotNull { m ->
-            m.mangled?.let { index.sources.functionsByMangledName[it] }
+            m.mangled?.let { sourceIndex.functionsByMangledName[it] }
                 ?.let { program.functionManager.getFunctionAt(it.addr) }
                 ?.let {
                     // Ghidra's model carries a return type on every function and `this` as a real
@@ -259,8 +259,8 @@ interface RenderContext {
         // literal; initializerAt would otherwise miss it or spread a per-byte list.
         val literal = addr?.let {
             when {
-                body.type.isPointer(index) -> program.pointerString(it)
-                body.type.isCharArray(index) -> program.stringLiteralAt(it)
+                body.type.isPointer(types) -> program.pointerString(it)
+                body.type.isCharArray(types) -> program.stringLiteralAt(it)
                 else -> null
             }
         }

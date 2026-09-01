@@ -5,7 +5,7 @@ import ghistabs.parse.AggrKind
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.SourceFile
 import ghistabs.parse.TypeDecl
-import ghistabs.test.indexOf
+import ghistabs.test.harvestOf
 import ghistabs.test.must
 import ghistabs.test.mustBe
 import org.junit.jupiter.api.Test
@@ -41,8 +41,15 @@ class SourceRootAttributionTest {
     )
 
     /** [EffectiveSource] over [types], with [declarers] as the source root's answer. */
-    private fun attribution(vararg types: Type, declarers: (Type.Decl) -> GhidraSourceFile? = { null }) =
-        EffectiveSource(indexOf(*types), declarers)
+    private fun attribution(
+        vararg types: Type,
+        declarers: (Type.Decl) -> GhidraSourceFile? = { null },
+    ): EffectiveSource {
+        val harvest = harvestOf(*types)
+        val graph = TypeGraph(harvest)
+        val sources = SourceIndex(harvest, foldSources = false)
+        return EffectiveSource(harvest, graph, sources, SourceHints(harvest, graph, sources), declarers = declarers)
+    }
 
     @Test
     fun `a unique declarer takes the declaration off the file gcc recorded`() {

@@ -5,7 +5,7 @@ import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.analyzeDataCoverage
 import ghistabs.harvest.Harvest
 import ghistabs.harvest.Harvester
-import ghistabs.index.HarvestIndex
+import ghistabs.index.*
 import ghistabs.materialize.*
 import ghistabs.parse.StabReader
 import ghistabs.parse.StaticScope
@@ -32,13 +32,15 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
     internal fun runOnRecords(stabs: StabReader.Result): ImportResult {
         // Pass A — parse + harvest
         val harvest = Harvester(ctx).harvest(stabs.records)
-        // Resolver: by-name/by-base-tag indices, source folding, divergent-collision
-        // filtering. Every cross-CU lookup downstream goes through this.
-        val index = HarvestIndex(harvest, ctx.options.foldSources, ctx)
-        recordHarvestCounters(harvest, index, stabs)
+        // The three indexes over it, constructed together and handed out by half: resolution to the
+        // passes that resolve, folding to the ones that render, the vote to the one that places.
+        val types = TypeGraph(harvest, ctx)
+        val sources = SourceIndex(harvest, ctx.options.foldSources, ctx)
+        val hints = SourceHints(harvest, types, sources, ctx)
+        recordHarvestCounters(harvest, types, stabs)
 
         // Pass B — materialize types
-        val registry = DataTypeRegistry(ctx.dtm, ctx, ctx.diagnostics, index, ctx.monitor)
+        val registry = DataTypeRegistry(ctx.dtm, ctx, ctx.diagnostics, harvest, types, hints, ctx.monitor)
         val materialized = ctx.program.runTransaction("Stabs: materialize types") {
             registry.materializeAll().also {
                 if (ctx.options.shortenTypedefs) TypedefShortener(ctx.dtm, ctx, ctx.monitor).apply()
@@ -57,7 +59,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
                     constants = applyAllConstants(),
                     staticMembers = applyAllStaticMembers(),
                     classes = when {
-                        ctx.options.buildClasses -> ClassBuilder(registry, index.types, ctx).buildAll()
+                        ctx.options.buildClasses -> ClassBuilder(registry, types, ctx).buildAll()
                         else -> 0
                     },
                 )
@@ -68,7 +70,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
 
         // Pass D — publish the line map, then point it at local sources if any root was given
         val sourceMapEntries = ctx.program.runTransaction("Stabs: publish source map") {
-            SourceMapApplier(ctx, index).apply()
+            SourceMapApplier(ctx, harvest, sources).apply()
         }
         ctx.program.applySourceRoots(ctx.options.sourceRoots.map(Path::of), ctx)
 
@@ -83,11 +85,11 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
             types = ImportResult.TypeResults(harvested = harvest.types.size, materialized = materialized),
             applied = applied,
             sourceMapEntries = sourceMapEntries,
-            artifacts = ImportArtifacts(registry, index, harvest, stabs.records),
+            artifacts = ImportArtifacts(registry, types, sources, hints, harvest, stabs.records),
         )
     }
 
-    private fun recordHarvestCounters(harvest: Harvest, index: HarvestIndex, stabs: StabReader.Result) {
+    private fun recordHarvestCounters(harvest: Harvest, types: TypeGraph, stabs: StabReader.Result) {
         val parseErrors = ctx.diagnostics["parse-error"].toInt()
         debug("harvest-records-read", count = stabs.totalRecordCount.toLong())
         debug("harvest-records-parsed", count = (stabs.records.size - parseErrors).toLong())
@@ -118,10 +120,10 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
             count = harvest.rawCollisions.values.flatMap { it.values }.flatten().count().toLong(),
         )
         // Post-filter: only genuinely divergent multi-body collisions.
-        debug("harvest-collisions-divergent", count = index.types.divergentCollisions.size.toLong())
+        debug("harvest-collisions-divergent", count = types.divergentCollisions.size.toLong())
         debug(
             "harvest-collisions-divergent-total",
-            count = index.types.divergentCollisions.values.flatMap { it.values }.flatten().count().toLong(),
+            count = types.divergentCollisions.values.flatMap { it.values }.flatten().count().toLong(),
         )
     }
 }

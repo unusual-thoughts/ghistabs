@@ -24,7 +24,6 @@ import ghistabs.diagnose.writeRegistryDump
 import ghistabs.harvest.Type
 import ghistabs.importer.*
 import ghistabs.index.ContentIndex
-import ghistabs.index.EffectiveSource
 import ghistabs.materialize.conflictCount
 import ghistabs.materialize.itanium.Itanium
 import ghistabs.materialize.itanium.hasPolymorphicBaseSubobject
@@ -384,7 +383,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
      */
     @Test
     fun programLineMapMatchesHarvest() {
-        val folds = artifacts.index.sources.renderIdentityBySource
+        val folds = artifacts.sources.renderIdentityBySource
         assumeTrue(folds.isNotEmpty(), "Skipping: no N_SLINE entries in this binary")
         val manager = program.sourceFileManager
         val counters = context.diagnostics.snapshotCounters()
@@ -421,7 +420,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     fun addressesResolveToTheirEntries() {
         val manager = program.sourceFileManager
         // Folded: that is the identity the entries were transferred onto.
-        val entries = artifacts.index.sources.functions.flatMap { it.lineEntries }
+        val entries = artifacts.sources.functions.flatMap { it.lineEntries }
             .filter { program.memory.getBlock(it.addr) != null }
         assumeTrue(entries.isNotEmpty(), "Skipping: no N_SLINE entries in this binary")
 
@@ -613,17 +612,16 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
      */
     @Test
     fun implicitMethodsAreFiledAtTheirClassDeclaration() {
-        val index = artifacts.index
-        val declaredClasses = index.types.allTypes
+        val declaredClasses = artifacts.types.allTypes
             .mapNotNull { it.name?.let(::canonTemplateName) }.toSet()
 
-        val implicit = index.sources.functions
+        val implicit = artifacts.sources.functions
             .filter { it.lineEntries.isEmpty() && !it.isSyntheticInit }
             .mapNotNull { f -> f.scopePath()?.last()?.let { f to it } }
             .filter { (_, cls) -> cls in declaredClasses }
         assumeTrue(implicit.isNotEmpty(), "Skipping: no line-less method with a declared class here")
 
-        val unfiled = implicit.filter { (f, _) -> with(EffectiveSource(index) { null }) { f.source() } == null }
+        val unfiled = implicit.filter { (f, _) -> with(artifacts.effectiveSource()) { f.source() } == null }
             .map { (f, cls) -> "${f.name} (class $cls)" }
         unfiled.sorted().take(10).mustBeEmpty(
             "${unfiled.size} of ${implicit.size} implicit methods have no source despite their " +
@@ -768,7 +766,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     }
 
     /**
-     * Every slot [ghistabs.harvest.HarvestIndex.byLocation] declares is filled, at the path it declared.
+     * Every slot `DataTypeRegistry.byLocation` declares is filled, at the path it declared.
      *
      * That map *is* the contract: `TypeRegistry` seeds and materializes each group at exactly
      * `(location.category, location.name)`, so it is the pipeline's own statement of what the DTM
@@ -1111,7 +1109,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     fun classesInheritingAVtableAreStillAnnotated() {
         val vftables = filledVftables().associateBy { it.name.removeSuffix("_vftable") }
         val inheriting = artifacts.harvest.types.values.mapNotNull { it.asStruct() }
-            .filter { (_, body) -> with(artifacts.index.types) { hasPolymorphicBaseSubobject(body) } }
+            .filter { (_, body) -> with(artifacts.types) { hasPolymorphicBaseSubobject(body) } }
             // Only classes that reached the DTM at all — a class with no type is [everyDeclaredSlot…]'s.
             .filter { (ast, _) -> artifacts.registry.dataTypeFor(ast.id) != null }
         assumeTrue(inheriting.isNotEmpty(), "Skipping: no class inherits a vtable in this fixture")
@@ -1368,24 +1366,25 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             .filter { (_, body) -> body.fields.isEmpty() && body.methods.isEmpty() }
             .toList()
 
-        val index = artifacts.index
         val baseTypes =
             harvest.types.values.filter { it.id.source is SourceFile.CUSource && !it.body.isXRefTarget }.toList()
         val different = baseTypes
-            .groupBy { index.types.content(it.body) }
+            .groupBy { artifacts.types.content(it.body) }
             .mapKeys { (k, v) -> k to v.map { it.name }.toSet() }
 
         // Never print a LayoutContent: the worst expands to ~11k nodes, and the old `println(different)`
         // stringified one per map key across every content class. hashCode is memoized and O(1);
         // identity is all this diagnostic needs.
-        println(layoutStats(index))
+        println(layoutStats(artifacts.types))
         println("base types: ${baseTypes.size} types in ${different.size} content classes")
         for ((k, asts) in different) {
             val (content, names) = k
             if (asts.size > 1 && names.contains(null)) {
                 println("- [${content.expandedNodes}]")
                 for (ast in asts.sortedBy { it.id.toString() }) {
-                    println("       =>  ${ast.id} ${ast.ghidraName} [${index.types.content(ast.body).expandedNodes}]")
+                    println(
+                        "       =>  ${ast.id} ${ast.ghidraName} [${artifacts.types.content(ast.body).expandedNodes}]",
+                    )
                 }
             }
         }
@@ -1407,8 +1406,8 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
      * are counted once. `expanded` is what a structural walk (e.g. the generated toString) would visit —
      * memoized per node, so the *count* is O(nodes) even when the count itself is astronomical.
      */
-    private fun layoutStats(index: ghistabs.index.HarvestIndex): String {
-        val roots = index.types.contentCache.values
+    private fun layoutStats(types: ghistabs.index.TypeGraph): String {
+        val roots = types.contentCache.values
         val seen = java.util.Collections.newSetFromMap(
             java.util.IdentityHashMap<ContentIndex.LayoutContent, Boolean>(),
         )

@@ -11,7 +11,6 @@ import ghidra.program.model.sourcemap.SourceMapEntry
 import ghidra.program.model.symbol.SymbolUtilities
 import ghistabs.Demangler
 import ghistabs.baseStackParamOffset
-import ghistabs.index.*
 import ghistabs.parse.*
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable

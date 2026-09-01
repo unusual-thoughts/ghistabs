@@ -56,10 +56,6 @@
             "min": 1,
             "max": 1
         },
-        "desc-dropped-so": {
-            "min": 5,
-            "max": 5
-        },
         "drop-record-opt": {
             "min": 5,
             "max": 5
@@ -121,8 +117,8 @@
             "max": 19
         },
         "harvest-cus": {
-            "min": 4,
-            "max": 4
+            "min": 5,
+            "max": 5
         },
         "harvest-functions": {
             "min": 349,
@@ -139,6 +135,10 @@
         "harvest-records-read": {
             "min": 6485,
             "max": 6485
+        },
+        "harvest-sources": {
+            "min": 11,
+            "max": 11
         },
         "harvest-statics": {
             "min": 6,

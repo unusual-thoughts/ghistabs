@@ -11,11 +11,11 @@ import ghistabs.parse.TypeDecl
 class FileRenderer(override val renderer: Renderer, override val source: GhidraSourceFile) :
     RenderContext,
     DiagnosticSink by renderer {
-    private val sources = renderer.effectiveSource
-    private val rawFuncs = sources.functionsBySource[source].orEmpty()
+    private val attribution = renderer.effectiveSource
+    private val rawFuncs = attribution.functionsBySource[source].orEmpty()
     private val lines = renderer.linesBySource[source].orEmpty()
-    private val typeDecls = sources.typesBySource[source].orEmpty().filter { it.name != null && it.line != null }
-    private val statics = sources.staticsBySource[source].orEmpty()
+    private val typeDecls = attribution.typesBySource[source].orEmpty().filter { it.name != null && it.line != null }
+    private val statics = attribution.staticsBySource[source].orEmpty()
 
     private val spans = FunctionSpans.of(rawFuncs, source)
     override fun Int?.indentAt() = if (this != null && spans.inFunction(this)) 4 else 0
@@ -48,7 +48,7 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
      * its *own* declarations gcc misfiled.
      */
     private val staleAfter = when {
-        source in index.sources.compilationUnits -> codeExtent
+        source in sourceIndex.compilationUnits -> codeExtent
         else -> sourceLength ?: extentOf(codeExtent, staticsExtent, typesExtent)
     }
 
@@ -57,8 +57,8 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
 
     /** A declaration several files claim at one line — at most one of them rightly. */
     private fun Type.disputed() = when (body) {
-        is TypeDecl.Struct, is TypeDecl.Enum -> sources.conflictedTemplateDecls
-        else -> sources.conflictedTypedefDecls
+        is TypeDecl.Struct, is TypeDecl.Enum -> attribution.conflictedTemplateDecls
+        else -> attribution.conflictedTypedefDecls
     }.let { declKey() in it }
 
     /**
@@ -175,7 +175,7 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
     // Anon_ id; decomp omits them entirely. Deduped by ghidraName (content-hashed, §20).
     private fun anonAggregateAppendix(): String {
         if (renderer.mode != Renderer.Mode.SKELETON) return ""
-        val anon = sources.anonAggregates[source]
+        val anon = attribution.anonAggregates[source]
 
         if (anon.isNullOrEmpty()) return ""
         val blocks = anon.joinToString("\n\n") { ast ->
@@ -612,7 +612,7 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
         // into every call site collapses to one copy tagged `×N`. Each function's stretches are
         // wrapped in that function's own definition — bare, they are statements at file scope, which
         // no C++ construct admits and nothing can brace-match.
-        val inlined = index.sources.functions
+        val inlined = sourceIndex.functions
             .asSequence()
             .filter { f -> f !in rawFuncs && f.lineEntries.any { it.source == source } }
             .flatMap { f -> f.ownRegions().map { f to it } }
@@ -649,8 +649,8 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
         val referenced = mutableSetOf<Type>()
         fun collect(decl: GlobalTypeDecl) {
             val ast = when (decl) {
-                is TypeDecl.Ref -> index.types.byId(decl.id)
-                is TypeDecl.XRef -> index.types.byXRef(decl, silent = true)
+                is TypeDecl.Ref -> types.byId(decl.id)
+                is TypeDecl.XRef -> types.byXRef(decl, silent = true)
                 else -> return decl.children.flatten().forEach { collect(it) }
             }
             if (ast != null && referenced.add(ast)) {
@@ -662,7 +662,7 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
             for (s in f.params + f.locals) collect(s.body.type)
         }
 
-        val fromTypes = referenced.asSequence().map { sources.effectiveSourceFor(it) }
+        val fromTypes = referenced.asSequence().map { attribution.effectiveSourceFor(it) }
         val fromInlined = rawFuncs.asSequence().flatMap { it.lineEntries.asSequence() }.map { it.source }
         val headers = (fromInlined + fromTypes)
             .filter { it != source && it.filename.hasHeaderExtension() }

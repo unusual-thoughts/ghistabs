@@ -16,18 +16,6 @@
             "min": 0,
             "max": 0
         },
-        "demangler-unbound-stub": {
-            "min": 0,
-            "max": 0
-        },
-        "demangler-unbound-stub-in-signature": {
-            "min": 0,
-            "max": 0
-        },
-        "demangler-unbound-stub-signature-site": {
-            "min": 0,
-            "max": 0
-        },
         "drop-record-opt": {
             "min": 1,
             "max": 1
@@ -87,6 +75,10 @@
         "harvest-records-read": {
             "min": 54,
             "max": 54
+        },
+        "harvest-sources": {
+            "min": 1,
+            "max": 1
         },
         "harvest-statics": {
             "min": 1,
@@ -169,12 +161,12 @@
             "max": 13
         },
         "sourcemap-files": {
-            "min": 2,
-            "max": 2
-        },
-        "sourcemap-folded-files": {
             "min": 1,
             "max": 1
+        },
+        "sourcemap-folded-files": {
+            "min": 0,
+            "max": 0
         },
         "stab-value-absolute": {
             "min": 10,

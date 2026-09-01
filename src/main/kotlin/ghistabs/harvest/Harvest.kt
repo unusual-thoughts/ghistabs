@@ -4,7 +4,6 @@
 package ghistabs.harvest
 
 import ghidra.program.model.address.AddressRange
-import ghistabs.index.*
 import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.Language
@@ -14,8 +13,13 @@ import kotlinx.serialization.UseSerializers
 
 /**
  * Passive parser output, keyed on raw source spellings. Source folding (§15), XRef resolution, and
- * content-hash queries are all derived views on [HarvestIndex]. [rawCollisions] includes
- * content-equivalent dupes; content-distinct survivors live on [HarvestIndex.divergentCollisions].
+ * content-hash queries all live in `ghistabs.index`, built over this. [rawCollisions] includes
+ * content-equivalent dupes; content-distinct survivors are `TypeGraph.divergentCollisions`.
+ *
+ * [functions]/[constants]/[statics] are cached flattenings of [sources] — arrangement, not
+ * interpretation, which is why they belong here and not on an index. Consumers that want the facts
+ * (`DataTypeRegistry.byDemangledClass`, [SourceHints]) read these; `SourceIndex.functions` is the
+ * folded counterpart for the render.
  */
 @Serializable
 data class Harvest(

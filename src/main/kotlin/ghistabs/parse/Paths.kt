@@ -1,7 +1,5 @@
 package ghistabs.parse
 
-import ghistabs.index.*
-
 /** Raw stabs path spellings, before any Ghidra normalisation — gcc mixes separators and drive letters. */
 
 /** Names its own root: a leading separator, or a drive letter (`c:/…`, `E:\…`). Nothing anchors it. */

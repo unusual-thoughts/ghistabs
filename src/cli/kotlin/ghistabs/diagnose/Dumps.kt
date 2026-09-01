@@ -126,7 +126,7 @@ private fun ImportArtifacts.registryDump(): RegistryDump {
                 g.type.id,
                 g.type.ghidraName,
                 g.members.size,
-                g.members.count { index.types.byId(it)?.name.isNullOrEmpty() },
+                g.members.count { types.byId(it)?.name.isNullOrEmpty() },
                 g.distinct,
             )
         }
@@ -135,7 +135,7 @@ private fun ImportArtifacts.registryDump(): RegistryDump {
     // Group by content hash (equality only — the raw value is a JVM-run-nondeterministic
     // `Objects.hash` of enum members, so it's used to bucket but never stored/sorted on).
     val hashCollisions = registry.byLocation.values
-        .groupBy { index.types.content(it.type.body) }
+        .groupBy { types.content(it.type.body) }
         .filterValues { it.size > 1 }
         .map { (_, gs) ->
             RegistryDump.HashCollision(
@@ -155,7 +155,7 @@ private fun ImportArtifacts.registryDump(): RegistryDump {
     // threw on duplicate-heavy fixtures and aborted the whole AFTER-mode dump).
     val allTypes = registry.allCreatedDataTypes.groupBy { TypeLocation(it.categoryPath, it.name) }
         .mapValues { RegistryDump.Type(it.value.first()) }
-    val divergent = index.types.divergentCollisions.entries
+    val divergent = types.divergentCollisions.entries
         .sortedBy { it.key.toString() }
         .map { (id, byName) ->
             RegistryDump.IdCollision(
@@ -163,6 +163,6 @@ private fun ImportArtifacts.registryDump(): RegistryDump {
                 byName.mapValues { (_, bodies) -> bodies.size },
             )
         }
-    val sourceFolds = index.sources.sourceFolds.toSortedMap().map { (k, v) -> k.path to v.path }.toMap()
+    val sourceFolds = sources.sourceFolds.toSortedMap().map { (k, v) -> k.path to v.path }.toMap()
     return RegistryDump(compromised, canonicalGroups, divergent, sourceFolds, hashCollisions, allTypes, duplicateNamed)
 }
