@@ -41,11 +41,20 @@ jobs:
     - name: Build zips
       run: ./gradlew buildExtension packageCli
 
-    - name: Upload packages
+    # One step per zip: `archive: false` uploads the file as-is rather than zipping the zip, and so
+    # takes a path matching exactly one file.
+    - name: Upload extension zip
       uses: actions/upload-artifact@v7
       with:
-        name: packages-ghidra-${{ matrix.ghidra }}
-        path: dist/*.zip
+        name: extension-ghidra-${{ matrix.ghidra }}
+        path: dist/ghidra_*.zip
+        archive: false
+
+    - name: Upload CLI zip
+      uses: actions/upload-artifact@v7
+      with:
+        name: cli-ghidra-${{ matrix.ghidra }}
+        path: dist/ghistabs-cli_*.zip
         archive: false
 
   release:
@@ -56,7 +65,7 @@ jobs:
     - name: Collect packages
       uses: actions/download-artifact@v8
       with:
-        pattern: packages-ghidra-*
+        pattern: '*-ghidra-*'
         merge-multiple: true
         path: dist
 
