@@ -19,7 +19,7 @@ This extension fills that gap.
 
 |                       | Supported                                                                                                                                                                                             |
 | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Ghidra**            | **12.x**                                                                                                                                                                                              |
+| **Ghidra**            | **10.4 - 12.1.3**                                                                                                                                                                                       |
 | **Binary containers** | **PE/COFF**, **ELF** and **a.out** (OMAGIC)                                                                                                                                                           |
 | **Instruction sets**  | `i386` / `x86-64`                                                                                                                                                                                     |
 | **Compiler**          | **gcc**, on both Unix and Cygwin/MinGW targets, up to gcc **12** (`-gstabs` was deprecated in 12 and removed outright in 13). Stabs produced by other compilers are out of scope but may mostly work. |
@@ -59,7 +59,8 @@ placeholder structs are replaced by the real definitions rather than competing w
 
 ## Install
 
-Grab the zip matching your Ghidra version from `dist/`, then either
+Grab a prebuilt zips on the [releases page](https://github.com/unusual-thoughts/ghistabs/releases)
+for one of the supported Ghidra versions. Or build your own, which lands in `dist/`. Then either
 
 - **Ghidra GUI:** `File > Install Extensions… > +`, pick the zip, restart Ghidra; or
 - **Gradle:** `./gradlew installExtension` (builds and unpacks straight into your Ghidra user
@@ -68,8 +69,10 @@ Grab the zip matching your Ghidra version from `dist/`, then either
 
 ## Building
 
-Requires Ghidra 12.x and a JDK 21 toolchain. An extension zip only loads into the Ghidra
-release it was built against.
+Requires a Ghidra install and a JDK toolchain >=21 from Ghidra 11, or >=17 for 10.x. The
+API differences between releases are absorbed by the `src/main/kotlin-pre*` / `kotlin-since*`
+compat source sets, selected by the version of the install you build against; releases are cut
+for Ghidra 10.4, 11.4.3, 12.0.4 and 12.1.3.
 
 ```bash
 export GHIDRA_INSTALL_DIR=/opt/ghidra   # or pass -PGHIDRA_INSTALL_DIR=...
