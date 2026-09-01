@@ -65,9 +65,14 @@ class ClassBuilder(
     // symbol's namespace chain. `className` (key.name) is only the leaf now that byCanonicalKey
     // files the scope into the category, so it can't match the demangler's full chain. Recover the
     // chain from a method-bearing member's mangled name — the exact form GnuDemangler emits.
+    // A body with no mangled member anywhere has no chain to recover: cryptopp's exception classes
+    // are `s12Exception:(53,8),0,768;;` and nothing else once the inheritance pseudo-field is
+    // promoted to a base, so the `_ZTV` symbol is the only thing left that spells the scope.
     private val LocatedType.qualifiedClassName: String
         get() = (sequenceOf(type) + members.mapNotNull { index.byId(it) })
-            .firstNotNullOfOrNull { it.demangledClassPath() }?.joinToString("::") ?: className
+            .firstNotNullOfOrNull { it.demangledClassPath() }?.joinToString("::")
+            ?: vtableClassByLeaf[className]?.also { debug("class-scope-from-vtable", "$className -> $it") }
+            ?: className
 
     /**
      * {vfptr} points at the function-pointer array at the vtable's address point
@@ -131,14 +136,15 @@ class ClassBuilder(
      * Derive the class's namespace chain by demangling any Itanium symbol the class owns (handles
      * templates), falling back to the source-form name, which carries only the leaf. A static
      * member's linkage name serves as well as a method's, and is all a pure-constants class like
-     * `std::ctype_base` has — without it those land at the root instead of under `std`.
+     * `std::ctype_base` has — without it those land at the root instead of under `std`. A class with
+     * no mangled member at all falls to [qualifiedClassName], which asks the `_ZTV` symbol.
      */
     private fun LocatedType.ensureClassNamespace(): GhidraClass {
         val parts = (
             classBody.methods.firstNotNullOfOrNull { it.mangled }
                 ?: classBody.fields.firstNotNullOfOrNull { it.mangled }
             )?.let { Demangler.namespaces(it) }
-            ?: splitQualified(className)
+            ?: splitQualified(qualifiedClassName)
         return buildNamespaceChain(parts.filter { it.isNotEmpty() })
     }
 
@@ -638,6 +644,17 @@ class ClassBuilder(
                 Itanium.vtableClassOf(sym.name)?.let { putIfAbsent(it, sym.address) }
             }
         }
+    }
+
+    /** Leaf name → the one *scoped* class that ends in it, for [qualifiedClassName]'s last resort.
+     *  A leaf two namespaces both declare is dropped: attaching `std::Foo`'s vtable to a global
+     *  `Foo` is worse than leaving it unannotated. A global class is dropped too — there the leaf
+     *  already is the qualified name, so the entry would only make the fallback fire as a no-op. */
+    private val vtableClassByLeaf: Map<String, String> by lazy {
+        vtableAddressByClass.keys
+            .groupBy { splitQualified(it).last() }
+            .mapNotNull { (leaf, qualified) -> qualified.singleOrNull()?.takeIf { it != leaf }?.let { leaf to it } }
+            .toMap()
     }
 
     /** Resolve _ZTV<class> address: try AddressResolver candidates, then the demangled-vtable index. */
