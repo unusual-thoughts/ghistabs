@@ -60,9 +60,27 @@ fun harvestOf(vararg asts: Type) = Harvest(
 
 fun typesOf(vararg asts: Type) = TypeGraph(harvestOf(*asts))
 
-fun indexOf(vararg asts: Type) = HarvestIndex(harvestOf(*asts), foldSources = false)
+/** The three indexes over [harvest], constructed together exactly as [StabsImporter] does. */
+fun indexesOf(
+    harvest: Harvest,
+    foldSources: Boolean = true,
+    sink: DiagnosticSink = DummySink,
+): Triple<TypeGraph, SourceIndex, SourceHints> {
+    val types = TypeGraph(harvest, sink)
+    val sources = SourceIndex(harvest, foldSources, sink)
+    return Triple(types, sources, SourceHints(harvest, types, sources, sink))
+}
 
-fun ImportContext<*>.defaultTypeRegistry() = DataTypeRegistry(dtm, this, diagnostics, indexOf())
+/** The same over a hand-built harvest. Folding off: a synthetic harvest has one spelling per file,
+ *  so there is nothing to fold and running it would only obscure what the test set up. */
+fun indexOf(vararg asts: Type) = indexesOf(harvestOf(*asts), foldSources = false)
+
+fun ImportContext<*>.defaultTypeRegistry(): DataTypeRegistry {
+    val harvest = harvestOf()
+    val types = TypeGraph(harvest)
+    val sources = SourceIndex(harvest, foldSources = false)
+    return DataTypeRegistry(dtm, this, diagnostics, harvest, types, SourceHints(harvest, types, sources))
+}
 
 /**
  * Disable WindowsResourceReferenceAnalyzer before autoanalysis. On PE binaries it runs a Ghidra script

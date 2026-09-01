@@ -44,7 +44,7 @@ class Scorecard(private val renderer: Renderer) {
     /** A place the render asked the source to name a stretch, and what came back. */
     data class Stretch(val source: GhidraSourceFile, val line: Int, val definition: Definition?, val mapped: Boolean)
 
-    private val index = renderer.index
+    private val types = renderer.types
 
     private val stretches by lazy {
         renderer.enclosings.map { (place, definition) ->
@@ -75,7 +75,7 @@ class Scorecard(private val renderer: Renderer) {
     }
 
     private fun gradeAll(sourceOf: (Type) -> GhidraSourceFile?): Grades {
-        val decls = index.types.allTypes
+        val decls = types.allTypes
             .mapNotNull { type ->
                 type.line?.let { line ->
                     type.name?.substringBefore('<')
@@ -91,7 +91,7 @@ class Scorecard(private val renderer: Renderer) {
      * — the one fact here the source is not asked for, attribution having already decided it.
      */
     val moved: List<Triple<String, GhidraSourceFile, GhidraSourceFile>> by lazy {
-        index.types.allTypes
+        types.allTypes
             .filter { it.name != null && it.line != null }
             .mapNotNull { type ->
                 val from = baseById[type.id] ?: return@mapNotNull null
@@ -125,20 +125,24 @@ class Scorecard(private val renderer: Renderer) {
     fun tally() {
         if (renderer.sources.none { renderer.localSources[it] != null }) return
         val gradedStretches = stretches.size - unmapped.size
-        index.log("inlines-named", "${named.size} of $gradedStretches mapped", count = named.size.toLong())
-        index.log("inlines-unnamed", count = unnamed.size.toLong())
-        index.log("inlines-unmapped", "the stretch's own header has no local file", count = unmapped.size.toLong())
+        renderer.log("inlines-named", "${named.size} of $gradedStretches mapped", count = named.size.toLong())
+        renderer.log("inlines-unnamed", count = unnamed.size.toLong())
+        renderer.log("inlines-unmapped", "the stretch's own header has no local file", count = unmapped.size.toLong())
         Verdict.entries.forEach { v ->
-            index.log(v.counter, "${v.label}, of ${declarations.graded.size} graded", count = declarations[v].toLong())
+            renderer.log(
+                v.counter,
+                "${v.label}, of ${declarations.graded.size} graded",
+                count = declarations[v].toLong(),
+            )
         }
-        index.log("decl-ungraded", count = (declarations.total - declarations.graded.size).toLong())
-        index.log("decl-reattributed", "${movedDecls.size} distinct", count = moved.size.toLong())
+        renderer.log("decl-ungraded", count = (declarations.total - declarations.graded.size).toLong())
+        renderer.log("decl-reattributed", "${movedDecls.size} distinct", count = moved.size.toLong())
 
-        unnamed.forEach { index.debug("inline-unnamed", "${it.source.filename}:${it.line}") }
+        unnamed.forEach { renderer.debug("inline-unnamed", "${it.source.filename}:${it.line}") }
         declarations.graded.filter { it.verdict != Verdict.LINE_EXACT }
-            .forEach { index.debug("decl-misplaced", "$it") }
+            .forEach { renderer.debug("decl-misplaced", "$it") }
         moved.distinct().forEach { (decl, from, to) ->
-            index.debug("decl-moved", "$decl: ${from.filename} → ${to.filename}")
+            renderer.debug("decl-moved", "$decl: ${from.filename} → ${to.filename}")
         }
     }
 

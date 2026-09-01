@@ -2,8 +2,9 @@ package ghistabs.importer
 
 import ghidra.program.model.address.AddressOutOfBoundsException
 import ghistabs.diagnose.DiagnosticSink
+import ghistabs.harvest.Harvest
 import ghistabs.harvest.LineEntry
-import ghistabs.index.HarvestIndex
+import ghistabs.index.SourceIndex
 import ghistabs.materialize.itanium.Itanium
 
 /**
@@ -23,14 +24,18 @@ import ghistabs.materialize.itanium.Itanium
  * Every source carries `SourceFileIdType.NONE` (what [ghistabs.harvest.sourceFileOf] builds): stabs
  * records no file hash, and hashing the local file would claim provenance we do not have.
  */
-class SourceMapApplier(private val ctx: ImportContext<*>, private val index: HarvestIndex) : DiagnosticSink by ctx {
+class SourceMapApplier(
+    private val ctx: ImportContext<*>,
+    private val harvest: Harvest,
+    private val sources: SourceIndex,
+) : DiagnosticSink by ctx {
     private val manager = ctx.program.sourceFileManager
 
     /** How many entries the program holds afterwards, counted from the harvest rather than read back:
      *  the two agreeing is what [ghistabs.integration.StabsImportRegressionBase] asserts. */
     fun apply(): Int {
         val startedAt = System.nanoTime()
-        val folds = index.sources.renderIdentityBySource
+        val folds = sources.renderIdentityBySource
         val files = folds.keys + folds.values
         for (file in files) manager.addSourceFile(file)
 
@@ -47,12 +52,12 @@ class SourceMapApplier(private val ctx: ImportContext<*>, private val index: Har
         // line 29 of four files, three of which never declared it. The `_ZTI` line does mean the
         // class's declaration, but only once paired with the class's own file, and that pairing is
         // the attribution this pass cannot ask for.
-        val staticEntries = index.harvest.sources.flatMap { (cu, harvested) ->
+        val staticEntries = harvest.sources.flatMap { (cu, harvested) ->
             harvested.cu?.statics.orEmpty().filterNot { Itanium.isGeneratedData(it.body.name) }.mapNotNull { s ->
                 s.line?.let { line -> ctx.resolver.forSymbol(s)?.let { LineEntry(line, it, cu) } }
             }
         }
-        val entries = index.harvest.sources.values.flatMap { it.lineEntries } + staticEntries
+        val entries = harvest.sources.values.flatMap { it.lineEntries } + staticEntries
         publishTextRanges()
 
         fun identity(entry: LineEntry) = folds[entry.source]?.let { entry.copy(source = it) } ?: entry
@@ -108,7 +113,7 @@ class SourceMapApplier(private val ctx: ImportContext<*>, private val index: Har
      * zero-length N_SLINE entries are explicitly allowed to sit inside them.
      */
     private fun publishTextRanges() {
-        val ranges = index.harvest.textRanges.ifEmpty { return }
+        val ranges = harvest.textRanges.ifEmpty { return }
         for (file in ranges.values.toSet()) manager.addSourceFile(file)
         val outcomes = ranges.entries.map { (range, source) ->
             runCatching { manager.addSourceMapEntry(source, 0, range.minAddress, range.length) }

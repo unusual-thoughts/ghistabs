@@ -29,11 +29,11 @@ class DataTypeRegistry(
     internal val dtm: DataTypeManager,
     sink: DiagnosticSink,
     internal val diagnostics: StabsDiagnostics,
-    internal val index: HarvestIndex,
+    internal val harvest: Harvest,
+    internal val types: TypeGraph,
+    internal val hints: SourceHints,
     internal val monitor: TaskMonitor = TaskMonitor.DUMMY,
 ) : DiagnosticSink by sink {
-    val types = index.types
-
     /**
      * Canonical (category, ghidraName) → group; drives TypeRegistry slot assignment. XRef-targets are
      * bucketed into `(category, ghidraName)` slots ([classifyGroup] picks each winner), then slots are
@@ -47,7 +47,7 @@ class DataTypeRegistry(
      * a DTM `CategoryPath` — materialize vocabulary. The algorithm stays in `index/`: grouping by
      * content and picking winners is indexing, memoizing the result for one pass is not.
      */
-    val byLocation: Map<TypeLocation, LocatedType> by lazy { types.locateTypes(index.hints) }
+    val byLocation: Map<TypeLocation, LocatedType> by lazy { types.locateTypes(hints) }
 
     private val byId = mutableMapOf<GlobalTypeId, DataType>()
     internal val placeholders = mutableMapOf<GlobalTypeId, DataType>()
@@ -205,7 +205,7 @@ class DataTypeRegistry(
             // spellings (§15), which is a render concern and nothing read here — thisParamTypeId walks
             // the param's SymbolDecl, and folding rewrites only Symbol.sourceFile. Forcing that lazy
             // would copy every function and its three lists on an import that never renders.
-            for (fn in index.harvest.functions) {
+            for (fn in harvest.functions) {
                 val dt = types.thisParamTypeId(fn)?.let { dataTypeFor(it) } ?: continue
                 Demangler.of(fn.name)?.namespace?.let { putIfAbsent(it.categoryPath.path, dt) }
             }

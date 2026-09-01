@@ -1,7 +1,7 @@
 package ghistabs.index
 
 import ghistabs.diagnose.DiagnosticSink
-import ghistabs.harvest.*
+import ghistabs.harvest.Type
 import ghistabs.materialize.ghidraClass
 import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.GlobalTypeId
