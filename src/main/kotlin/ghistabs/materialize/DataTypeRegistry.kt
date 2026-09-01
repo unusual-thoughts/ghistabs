@@ -7,10 +7,11 @@ import ghidra.program.model.data.DataTypeConflictHandler
 import ghidra.program.model.data.DataTypeManager
 import ghidra.util.task.TaskMonitor
 import ghistabs.Demangler
+import ghistabs.categoryPath
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.StabsDiagnostics
-import ghistabs.harvest.*
-import ghistabs.importer.DemanglerReplacer.Companion.DEMANGLER_CATEGORY
+import ghistabs.harvest.Harvest
+import ghistabs.harvest.Type
 import ghistabs.index.*
 import ghistabs.materialize.itanium.Rtti
 import ghistabs.parse.CATEGORY
@@ -224,7 +225,3 @@ class DataTypeRegistry(
         }
     }
 }
-
-/** Replicates the (protected) `DemangledDataType.getDemanglerCategoryPath` + leaf: `/Demangler/<ns…>/<name>`. */
-private val Demangled.categoryPath get(): CategoryPath =
-    (namespace?.categoryPath ?: DEMANGLER_CATEGORY).extend(name)

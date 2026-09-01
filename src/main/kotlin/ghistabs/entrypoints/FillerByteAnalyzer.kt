@@ -1,4 +1,4 @@
-package ghistabs
+package ghistabs.entrypoints
 
 import ghidra.app.services.AbstractAnalyzer
 import ghidra.app.services.AnalysisPriority
@@ -13,6 +13,7 @@ import ghidra.program.model.listing.BookmarkType
 import ghidra.program.model.listing.Instruction
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
+import ghistabs.forceCreateData
 
 /**
  * Marks compiler alignment padding in executable memory as [AlignmentDataType], so downstream passes

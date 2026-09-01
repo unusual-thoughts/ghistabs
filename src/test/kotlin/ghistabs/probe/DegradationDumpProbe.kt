@@ -3,11 +3,11 @@ package ghistabs.probe
 import ghidra.app.util.importer.MessageLog
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
-import ghistabs.ImportOptions
-import ghistabs.StabsAnalyzer.Companion.import
 import ghistabs.diagnose.CapturingSink
 import ghistabs.diagnose.StabsDiagnostics
+import ghistabs.entrypoints.StabsAnalyzer.Companion.import
 import ghistabs.importer.ImportContext
+import ghistabs.importer.ImportOptions
 import ghistabs.runTransaction
 import ghistabs.withProgram
 import org.junit.jupiter.api.Assumptions.assumeTrue

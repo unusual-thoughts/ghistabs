@@ -3,7 +3,7 @@ package ghistabs.integration
 import ghidra.app.util.exporter.Exporter
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.classfinder.ClassSearcher
-import ghistabs.StabsRenderExporter
+import ghistabs.entrypoints.StabsRenderExporter
 import ghistabs.test.mustBe
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test

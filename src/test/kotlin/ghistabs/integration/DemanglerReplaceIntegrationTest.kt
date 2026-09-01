@@ -3,7 +3,6 @@ package ghistabs.integration
 import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.data.*
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghistabs.importer.DemanglerReplacer
 import ghistabs.runTransaction
 import ghistabs.test.*
 import org.junit.jupiter.api.AfterEach
@@ -82,7 +81,7 @@ class DemanglerReplaceIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
         // Run DemanglerReplacer inside a transaction — `dtm.replaceDataType`
         // (used when a real replacement is found) requires one.
         program.runTransaction("demangler-replace") {
-            DemanglerReplacer(ctx, registry).replace()
+            ctx.demanglerReplacer(registry).replace()
         }
 
         // Verify that the stub is gone and the replacement remains.
@@ -127,7 +126,7 @@ class DemanglerReplaceIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
         // Run DemanglerReplPacer (should skip gracefully since stub is absent)
         val registry = ctx.defaultTypeRegistry()
         // Should not throw
-        DemanglerReplacer(ctx, registry).replace()
+        ctx.demanglerReplacer(registry).replace()
 
         // Assert /proj/Foo still exists
         val projPath = CategoryPath("/proj")
@@ -175,7 +174,7 @@ class DemanglerReplaceIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
         )
 
         program.runTransaction("demangler-replace") {
-            DemanglerReplacer(ctx, registry).replace()
+            ctx.demanglerReplacer(registry).replace()
         }
 
         dtm.getDataType(CategoryPath("/Demangler/std"), "string").mustBeNull(
@@ -208,7 +207,7 @@ class DemanglerReplaceIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
         }
 
         program.runTransaction("demangler-replace") {
-            DemanglerReplacer(ctx, registry).replace()
+            ctx.demanglerReplacer(registry).replace()
         }
 
         dtm.getDataType(CategoryPath("/Demangler/std"), "codecvt<char,char,int>").mustBeNull(

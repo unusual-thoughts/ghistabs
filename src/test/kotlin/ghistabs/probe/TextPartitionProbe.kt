@@ -3,7 +3,6 @@ package ghistabs.probe
 import ghidra.app.util.importer.MessageLog
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
-import ghistabs.harvest.Harvester
 import ghistabs.parse.StabReader
 import ghistabs.parse.StabType
 import ghistabs.test.defaultContext
@@ -52,7 +51,7 @@ class TextPartitionProbe : AbstractGhidraHeadlessIntegrationTest() {
             val ctx = program.defaultContext()
             val records = StabReader.fromProgram(program)?.readAll()?.records
             assumeTrue(records != null, "no .stab section")
-            val harvest = Harvester(ctx).harvest(records!!)
+            val harvest = ctx.harvester().harvest(records!!)
 
             // Boundaries sorted by address and closed by the next one — how `textPartition`
             // builds the runs, and the only reading under which they are disjoint at all.

@@ -3,7 +3,6 @@ package ghistabs.harvest
 import ghidra.program.model.address.Address
 import ghidra.program.model.address.AddressRange
 import ghistabs.diagnose.DiagnosticSink
-import ghistabs.importer.AddressResolver
 import ghistabs.parse.*
 import ghistabs.rangeUntil
 

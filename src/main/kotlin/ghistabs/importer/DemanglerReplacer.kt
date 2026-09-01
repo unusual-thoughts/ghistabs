@@ -1,23 +1,22 @@
 package ghistabs.importer
 
 import ghidra.app.util.demangler.DemanglerUtil
-import ghidra.program.database.data.*
+import ghidra.program.database.data.DataTypeManagerDB
+import ghidra.program.database.data.replaceDataTypesBatched
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.*
 import ghidra.program.model.data.Array
 import ghidra.program.model.listing.Function
+import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.SourceType
 import ghidra.program.model.symbol.SymbolType
 import ghidra.program.model.symbol.SymbolUtilities
-import ghistabs.Demangler
-import ghistabs.applyDemangling
-import ghistabs.conflictBase
+import ghidra.util.task.TaskMonitor
+import ghistabs.*
 import ghistabs.diagnose.DiagnosticSink
-import ghistabs.isConflict
 import ghistabs.materialize.DataTypeRegistry
 import ghistabs.materialize.itanium.Itanium.isProbablyMangled
 import ghistabs.materialize.itanium.Rtti
-import ghistabs.nameWithoutConflict
 import ghistabs.parse.CATEGORY
 import ghistabs.parse.canonTemplateName
 import ghistabs.parse.splitQualified
@@ -33,11 +32,13 @@ sealed class Skip(open val reason: String) {
  * [DataTypeRegistry.allCreatedDataTypes] only — no DTM-wide heuristics. The stub's path (sans `/Demangler`)
  * acts as the preferred-category hint when multiple candidates share a simple name.
  */
-class DemanglerReplacer(private val ctx: ImportContext<*>, private val registry: DataTypeRegistry) :
-    DiagnosticSink by ctx {
+class DemanglerReplacer(
+    private val program: Program,
+    private val registry: DataTypeRegistry,
+    private val monitor: TaskMonitor,
+    sink: DiagnosticSink,
+) : DiagnosticSink by sink {
     companion object {
-        val DEMANGLER_CATEGORY: CategoryPath = CategoryPath.ROOT.extend("Demangler")
-
         /**
          * Pure planner: which stubs can be safely replaced, and why the rest can't. Ghidra's
          * DataTypes are plain objects — no Application runtime — so this stays a unit test.
@@ -99,6 +100,8 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val registry:
         }
     }
 
+    private val dtm = program.dataTypeManager
+
     /**
      * Mangled name per address, captured during [demangleMangledLabels] because
      * [dropDisplacedMangledLabels] renames the symbol to its demangled leaf straight after — by the time
@@ -123,17 +126,17 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val registry:
      * Runs first in [replace] so the `/Demangler/...` stubs it creates are visible to the scan below.
      */
     private fun demangleMangledLabels() {
-        ctx.monitor.initialize(ctx.program.symbolTable.numSymbols.toLong(), "Stabs: demangling labels")
+        monitor.initialize(program.symbolTable.numSymbols.toLong(), "Stabs: demangling labels")
         var attempted = 0
         var demangled = 0
         val failures = mutableMapOf<String, MutableList<String>>()
-        for (sym in ctx.program.symbolTable.symbolIterator) {
-            ctx.monitor.increment()
+        for (sym in program.symbolTable.symbolIterator) {
+            monitor.increment()
             val name = sym.name
             if (!isProbablyMangled(name)) continue
             mangledByAddress.putIfAbsent(sym.address, name)
             attempted++
-            if (ctx.program.applyDemangling(sym.address, name, monitor = ctx.monitor)) {
+            if (program.applyDemangling(sym.address, name, monitor = monitor)) {
                 demangled++
             } else {
                 // Two separable questions behind one "didn't apply": whether the *name* defeats the
@@ -154,11 +157,11 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val registry:
      * beside it, which nothing later clears since the address then reads as already-demangled.
      *
      * Global-namespace mangled symbols stay — that is the loader's own (or ours on a stripped
-     * binary), and what [ProgramAddressResolver.resolve] looks methods up by. A displaced LABEL is
+     * binary), and what [ghistabs.harvest.ProgramAddressResolver.resolve] looks methods up by. A displaced LABEL is
      * deleted; a FUNCTION is renamed instead, since deleting takes its only symbol.
      */
     private fun dropDisplacedMangledLabels() {
-        val displaced = ctx.program.symbolTable.symbolIterator
+        val displaced = program.symbolTable.symbolIterator
             .filter { isProbablyMangled(it.name) && !it.parentNamespace.isGlobal }
             .toList()
         var dropped = 0
@@ -172,7 +175,7 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val registry:
                 }
 
                 leaf != null -> {
-                    ctx.program.symbolTable.getSymbols(sym.address)
+                    program.symbolTable.getSymbols(sym.address)
                         .filter { it != sym && it.name == leaf }
                         .forEach { it.delete() }
                     sym.setName(leaf, SourceType.IMPORTED)
@@ -200,7 +203,7 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val registry:
         return findByExactName(bareName, preferredCategory)?.also { debug("demangler-exact-match") }
             ?: registry.byDemangledClass[pathName]?.also { debug("demangler-reverse-demangle-match") }
             ?: soleInstantiation[bareName]?.also { debug("demangler-sole-instantiation-match", bareName) }
-            ?: rtti.typeInfoLayout(bareName)?.let { ctx.dtm.resolve(it, null) }
+            ?: rtti.typeInfoLayout(bareName)?.let { dtm.resolve(it, null) }
                 ?.also { debug("demangler-rtti-match") }
     }
 
@@ -209,7 +212,7 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val registry:
         dropDisplacedMangledLabels()
 
         // Only types WE registered qualify — swapping one Ghidra-bundled stub for another is meaningless.
-        val candidates = ctx.dtm.allDataTypes.asSequence()
+        val candidates = dtm.allDataTypes.asSequence()
             .filter { it.categoryPath.isAncestorOrSelf(DEMANGLER_CATEGORY) }
             .filterIsInstance<Structure>()
             .toList()
@@ -236,15 +239,15 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val registry:
         // and skipping leaves it behind empty — the gap demanglerHasNoEmptyStubs guards.
         val pairs = ops.mapNotNull { (stub, repl) ->
             when {
-                !ctx.dtm.contains(stub) -> null
-                !ctx.dtm.contains(repl) -> stub to ctx.dtm.resolve(repl, DataTypeConflictHandler.DEFAULT_HANDLER)
+                !dtm.contains(stub) -> null
+                !dtm.contains(repl) -> stub to dtm.resolve(repl, DataTypeConflictHandler.DEFAULT_HANDLER)
                 else -> stub to repl
             }
         }
         // Batched: one whole-program reference sweep for all replacements (updateCategoryPath=false keeps
         // each at its real category), instead of Ghidra's per-`replaceDataType` sweep — O(stubs × program).
         try {
-            (ctx.dtm as DataTypeManagerDB).replaceDataTypesBatched(pairs)
+            (dtm as DataTypeManagerDB).replaceDataTypesBatched(pairs)
             pairs.forEach { (stub, repl) -> debug("replaced-demangler", "${stub.pathName} -> ${repl.pathName}") }
         } catch (e: Exception) {
             debug("replaced-demangler-failed")
@@ -271,14 +274,14 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val registry:
      * harvested first — right for class identity, a coin flip for a retarget.
      */
     private fun retargetStubSites() {
-        val unbound = ctx.dtm.allDataTypes.asSequence()
+        val unbound = dtm.allDataTypes.asSequence()
             .filter { it.categoryPath.isAncestorOrSelf(DEMANGLER_CATEGORY) }
             .filterIsInstance<Structure>()
             .filter { it.isZeroLength || it.numComponents == 0 }
             .toSet()
         if (unbound.isEmpty()) return
 
-        for (f in ctx.program.functionManager.getFunctions(true)) {
+        for (f in program.functionManager.getFunctions(true)) {
             val hit = (f.parameters.map { it.dataType } + f.returnType)
                 .mapNotNull { undecorate(it) }.filter { it in unbound }.distinct()
             if (hit.isEmpty()) continue
@@ -338,7 +341,7 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val registry:
      */
     private fun mangledFor(f: Function): String? = mangledByAddress[f.entryPoint]
         ?: harvestedMangled[f.entryPoint]
-        ?: ctx.program.symbolTable.getSymbols(f.entryPoint).firstOrNull { isProbablyMangled(it.name) }?.name
+        ?: program.symbolTable.getSymbols(f.entryPoint).firstOrNull { isProbablyMangled(it.name) }?.name
 
     private fun ownerSpelling(f: Function): Owner {
         val mangled = mangledFor(f) ?: return Owner.NoMangledName
@@ -361,7 +364,7 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val registry:
 
     /** [dt] with its pointer/array/typedef decoration rebuilt over [replacement], if its base matches [isTarget]. */
     private fun redecorate(dt: DataType?, replacement: DataType, isTarget: (DataType?) -> Boolean): DataType? = when {
-        dt is Pointer -> redecorate(dt.dataType, replacement, isTarget)?.let { ctx.dtm.getPointer(it) }
+        dt is Pointer -> redecorate(dt.dataType, replacement, isTarget)?.let { dtm.getPointer(it) }
         dt is TypeDef -> redecorate(dt.baseDataType, replacement, isTarget)
         isTarget(dt) -> replacement
         else -> null
@@ -378,7 +381,7 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val registry:
      * Scan the FunctionManager instead, unwrapping pointer/array/typedef decoration.
      */
     private fun censusUnboundStubs() {
-        val unbound = ctx.dtm.allDataTypes.asSequence()
+        val unbound = dtm.allDataTypes.asSequence()
             .filter { it.categoryPath.isAncestorOrSelf(DEMANGLER_CATEGORY) }
             .filterIsInstance<Structure>()
             .filter { it.isZeroLength || it.numComponents == 0 }
@@ -395,7 +398,7 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val registry:
             sites.getOrPut(stub) { mutableListOf() }.add(where)
             byOrigin.merge(origin, 1, Int::plus)
         }
-        for (f in ctx.program.functionManager.getFunctions(true)) {
+        for (f in program.functionManager.getFunctions(true)) {
             note(f.returnType, "${f.name}:return", "return/${f.signatureSource}")
             f.parameters.forEach { note(it.dataType, "${f.name}:${it.name}", "param/${it.source}") }
             f.localVariables.forEach { note(it.dataType, "${f.name}:local ${it.name}", "local/${it.source}") }
@@ -427,17 +430,17 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val registry:
      * junk type for the decompiler; the twin keeps the name.
      */
     private fun dropEmptyConflictForks() {
-        val forks = ctx.dtm.allDataTypes.asSequence()
+        val forks = dtm.allDataTypes.asSequence()
             .filter { it.categoryPath.isAncestorOrSelf(DEMANGLER_CATEGORY) }
             .filterIsInstance<Structure>()
             .filter { (it.isZeroLength || it.numComponents == 0) && it.isConflict() }
-            .filter { ctx.dtm.conflictBase(it) != null }
+            .filter { dtm.conflictBase(it) != null }
             .toList()
-        val dropped = forks.count { ctx.dtm.remove(it, ctx.monitor) }
+        val dropped = forks.count { dtm.remove(it, monitor) }
         if (dropped > 0) debug("demangler-dropped-empty-conflict-fork", count = dropped.toLong())
     }
 
-    private val rtti by lazy { Rtti(ctx.dtm) }
+    private val rtti by lazy { Rtti(dtm) }
 
     /**
      * Every datatype the registry materialized, by name (checked first, so exact names never go

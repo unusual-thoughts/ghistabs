@@ -1,11 +1,13 @@
 package ghistabs
 
 import ghidra.app.cmd.label.DemanglerCmd
+import ghidra.app.util.demangler.Demangled
 import ghidra.app.util.demangler.DemangledObject
 import ghidra.app.util.demangler.MangledContext
 import ghidra.app.util.demangler.gnu.GnuDemangler
 import ghidra.app.util.demangler.gnu.GnuDemanglerOptions
 import ghidra.program.model.address.Address
+import ghidra.program.model.data.CategoryPath
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
 import java.util.concurrent.ConcurrentHashMap
@@ -87,3 +89,9 @@ fun Program.applyDemangling(
         setDoDisassembly(doDisassembly)
     },
 ).run { applyTo(this@applyDemangling, monitor) && result != null }
+
+/** Category created by the demangler analyzer */
+val DEMANGLER_CATEGORY: CategoryPath = CategoryPath.ROOT.extend("Demangler")
+
+/** Replicates the (protected) `DemangledDataType.getDemanglerCategoryPath` + leaf: `/Demangler/<ns…>/<name>`. */
+val Demangled.categoryPath get(): CategoryPath = (namespace?.categoryPath ?: DEMANGLER_CATEGORY).extend(name)

@@ -1,6 +1,5 @@
 package ghistabs.diagnose
 
-import ghistabs.index.*
 import java.nio.file.Files
 import java.nio.file.Path
 

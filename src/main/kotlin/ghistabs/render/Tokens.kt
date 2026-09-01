@@ -3,7 +3,7 @@ package ghistabs.render
 import ghidra.app.decompiler.*
 import ghidra.app.decompiler.component.DecompilerUtils
 import ghidra.program.model.address.Address
-import ghistabs.Correction
+import ghistabs.entrypoints.Correction
 import ghistabs.harvest.BlockScope
 import ghistabs.harvest.Func
 import ghistabs.harvest.GhidraSourceFile

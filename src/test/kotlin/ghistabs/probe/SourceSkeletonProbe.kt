@@ -5,15 +5,14 @@ import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.listing.Program
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
-import ghistabs.ImportOptions.Companion.LOG_LEVEL
-import ghistabs.ImportOptions.Companion.SHORTEN_TYPEDEFS
 import ghistabs.diagnose.Level
-import ghistabs.harvest.Harvester
+import ghistabs.importer.ImportOptions.Companion.LOG_LEVEL
+import ghistabs.importer.ImportOptions.Companion.SHORTEN_TYPEDEFS
+import ghistabs.importer.set
 import ghistabs.parse.StabReader
 import ghistabs.render.Renderer
 import ghistabs.render.Renderer.Mode
 import ghistabs.runTransaction
-import ghistabs.set
 import ghistabs.test.defaultContext
 import ghistabs.test.disableAnalyzersFromProperty
 import ghistabs.test.disableWindowsResourceAnalyzer
@@ -90,7 +89,7 @@ class SourceSkeletonProbe : AbstractGhidraHeadlessIntegrationTest() {
                 mgr.waitForAnalysis(null, monitor)
             }
             val reader = StabReader.fromProgram(program)!!.readAll()
-            val harvest = Harvester(ctx).harvest(reader.records)
+            val harvest = ctx.harvester().harvest(reader.records)
 
             val hints = hintsOf(harvest)
             val written = Mode.entries.sumOf { mode ->

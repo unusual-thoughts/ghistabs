@@ -1,4 +1,4 @@
-package ghistabs
+package ghistabs.importer
 
 import ghidra.framework.options.OptionType
 import ghidra.framework.options.Options

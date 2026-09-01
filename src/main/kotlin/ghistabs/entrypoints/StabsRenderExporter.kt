@@ -1,4 +1,4 @@
-package ghistabs
+package ghistabs.entrypoints
 
 import ghidra.app.util.DomainObjectService
 import ghidra.app.util.Option
@@ -8,11 +8,10 @@ import ghidra.program.model.address.AddressSetView
 import ghidra.program.model.listing.Program
 import ghidra.util.HelpLocation
 import ghidra.util.task.TaskMonitor
-import ghistabs.ImportOptions.Companion.isStabsDone
 import ghistabs.diagnose.MessageLogSink
 import ghistabs.diagnose.StabsDiagnostics
-import ghistabs.harvest.Harvester
-import ghistabs.importer.ImportContext
+import ghistabs.importer.*
+import ghistabs.importer.ImportOptions.Companion.isStabsDone
 import ghistabs.index.SourceHints
 import ghistabs.index.SourceIndex
 import ghistabs.index.TypeGraph
@@ -68,7 +67,7 @@ sealed class StabsRenderExporter(name: String, extension: String, val options: S
             ?: return err("No stabs found in this program.")
         val options = ImportOptions(program)
         val ctx = ImportContext(program, monitor, options, sink, StabsDiagnostics())
-        val harvest = Harvester(ctx).harvest(records)
+        val harvest = ctx.harvester().harvest(records)
 
         val dir = outputDir.takeIf { it.isNotEmpty() }?.let(::File) ?: file
         val written = Renderer(
