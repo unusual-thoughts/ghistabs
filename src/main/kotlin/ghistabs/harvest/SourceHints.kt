@@ -122,9 +122,9 @@ class SourceHints(private val index: HarvestIndex) : DiagnosticSink by index {
         // Header line-entries sorted by address once, so each method's [lo,hi) range is a binary-searched
         // slice instead of a full scan of every source's entries per method (was O(types × methods ×
         // entries)). Non-header sources never vote, so they're dropped up front.
-        val hdrEntries = index.harvest.lineEntries.entries
+        val hdrEntries = index.harvest.sources.entries
             .filter { it.key.filename.hasHeaderExtension() }
-            .flatMap { (src, entries) -> entries.map { it.addr.offset to src } }
+            .flatMap { (src, harvested) -> harvested.lineEntries.map { it.addr.offset to src } }
             .sortedBy { it.first }
         val hdrOffsets = LongArray(hdrEntries.size) { hdrEntries[it].first }
 

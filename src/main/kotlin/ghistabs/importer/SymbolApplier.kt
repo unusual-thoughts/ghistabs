@@ -188,12 +188,12 @@ class SymbolApplier(
     }
 
     internal fun applyAllGlobals(): Int {
-        ctx.monitor.initialize(harvest.staticsByCu.values.sumOf { it.size }.toLong(), "Stabs: applying globals")
+        ctx.monitor.initialize(harvest.statics.size.toLong(), "Stabs: applying globals")
         var globals = 0
 
         // Globals + file-statics.
-        for ((cu, syms) in harvest.staticsByCu) {
-            for (sym in syms) {
+        for ((cu, harvested) in harvest.sources) {
+            for (sym in harvested.cu?.statics.orEmpty()) {
                 ctx.monitor.increment()
                 try {
                     if (applyStatic(sym)) globals++

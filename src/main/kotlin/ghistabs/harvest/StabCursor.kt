@@ -75,7 +75,7 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
         }
     }
 
-    private val scopes = mutableListOf<FunctionScope>()
+    private val scopesByCu = mutableMapOf<SourceFile.CUSource, MutableList<FunctionScope>>()
     private var currentScope: FunctionScope? = null
 
     /** [currentCu] where a record can't legally appear outside a CU. */
@@ -102,13 +102,13 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
 
                 StabType.N_SO if rec.name.isNotEmpty() -> {
                     currentCu = SourceFile.CUSource(rec.name, pendingDirectory).also {
-                        cuContexts[it] = CuContext(it, this, sharedHeaderRegistry, rec.boundaryAddress)
+                        cuContexts[it] = CuContext(it, this, sharedHeaderRegistry, rec.language, rec.boundaryAddress)
                     }
                     pendingDirectory = null
                 }
 
                 StabType.N_SO -> {
-                    cuContext?.end = rec.boundaryAddress
+                    cuContext?.endAt(rec.boundaryAddress)
                     currentCu = null
                     pendingDirectory = null
                 }
@@ -179,6 +179,8 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
     private val StabRecord.boundaryAddress get() = value.takeIf { it != 0L }
         ?.let { resolver.stabAddress(it, currentScope?.addr, sink = this@StabCursor) }
 
+    private val StabRecord.language get() = Language.fromCode(desc)
+
     /** A `../`-relative spelling anchored to this CU's compilation directory. */
     private fun resolved(name: String) = name.resolveAgainstDirectory(currentCu?.directory)
 
@@ -194,7 +196,7 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
 
     /** Named N_FUN: `name` is `mangled:descriptor`, `value` entry address, `desc` declaration line (under -gstabs+) */
     fun openFunction(func: FunctionSymbol) {
-        currentScope = FunctionScope(func, cu).also { scopes += it }
+        currentScope = FunctionScope(func, cu).also { scopesByCu.getOrPut(cu) { mutableListOf() } += it }
     }
 
     /** N_PSYM / register-param N_RSYM: the function's own, so no block resolution needed. */
@@ -228,13 +230,37 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
         }
     }
 
-    /** Functions with their block trees resolved, and line entries grouped by source and sorted. */
-    fun toHarvest() = HarvestedStream(
-        scopes.map { it.toHarvested() },
-        lineEntriesByFile.mapValues { (_, v) -> v.sortedWith(compareBy({ it.line }, { it.addr.offset })) },
-        textRanges = textPartition(),
-        cuSpans = cuContexts.mapValues { it.value.addressRange() },
-    )
+    /**
+     * Line entries grouped by source and sorted, and — separately, because only a translation unit
+     * has them — each CU's functions with their block trees resolved, its span and its language.
+     *
+     * The two are kept apart rather than joined here: an N_SOL-only header has line entries and no CU,
+     * and a CU whose text all went to COMDAT has a span and no lines (59 of 61 on locale_test, §39).
+     * Grouped rather than `mapKeys`'d because two CUSources can share one [SourceFile.identity], and
+     * `mapKeys` would silently keep the last of them.
+     */
+    fun toHarvest(): HarvestedStream {
+        val contexts = cuContexts.values.groupBy { it.cu.identity }
+        // Every open function's CU came from an N_SO, so `preSeedHeaders` already gave it a context —
+        // measured 0 strays across the fixtures, hence no key of its own here.
+        val functions = scopesByCu.entries.groupBy({ it.key.identity }) { it.value }
+        // Eager, not `firstNotNullOfOrNull`: `addressRange()` files the verdict that explains a null
+        // one, and short-circuiting would leave every context after the first unexplained.
+        val spans = contexts.mapValues { (_, cs) -> cs.mapNotNull { it.addressRange() }.firstOrNull() }
+        return HarvestedStream(
+            lineEntries = lineEntriesByFile.mapValues { (_, es) ->
+                es.sortedWith(compareBy({ it.line }, { it.addr.offset }))
+            },
+            cus = contexts.mapValues { (file, cs) ->
+                CursorCu(
+                    functions[file].orEmpty().flatten().map { it.toHarvested() },
+                    spans[file],
+                    cs.firstNotNullOfOrNull { it.language },
+                )
+            },
+            textRanges = textPartition(),
+        )
+    }
 
     /**
      * The boundaries folded into disjoint ranges: each file's run of text ends where the next
@@ -261,8 +287,12 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
 
 /** What one pass over the stream accumulated, beyond the type store. */
 data class HarvestedStream(
-    val functions: List<Func>,
+    /** Per source file — an N_SOL is enough to earn an entry. */
     val lineEntries: Map<GhidraSourceFile, List<LineEntry>>,
+    /** Per translation unit, so its keys are exactly the files that carried an `N_SO`. */
+    val cus: Map<GhidraSourceFile, CursorCu>,
     val textRanges: Map<AddressRange, GhidraSourceFile>,
-    val cuSpans: Map<SourceFile.CUSource, AddressRange?>,
 )
+
+/** One CU's share of the stream, before the harvester joins its statics and constants on. */
+data class CursorCu(val functions: List<Func>, val range: AddressRange?, val language: Language?)

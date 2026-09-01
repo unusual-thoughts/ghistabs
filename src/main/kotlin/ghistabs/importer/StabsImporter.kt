@@ -92,7 +92,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
         debug("harvest-records-read", count = stabs.totalRecordCount.toLong())
         debug("harvest-records-parsed", count = (stabs.records.size - parseErrors).toLong())
         debug("harvest-functions", count = harvest.functions.size.toLong())
-        val allSyms = harvest.staticsByCu.values.flatten()
+        val allSyms = harvest.statics
         debug("harvest-symbols", count = allSyms.size.toLong())
         debug(
             "harvest-globals",
@@ -107,7 +107,8 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
         for ((kind, n) in byKind.toSortedMap()) {
             debug("harvest-typeAsts-$kind", count = n.toLong())
         }
-        debug("harvest-cus", count = harvest.staticsByCu.size.toLong())
+        debug("harvest-cus", count = harvest.sources.count { it.value.cu != null }.toLong())
+        debug("harvest-sources", count = harvest.sources.size.toLong())
         val uniqueTypeIds = harvest.types.keys.size
         debug("harvest-typeAsts-unique-by-id", count = uniqueTypeIds.toLong())
         debug("harvest-typeAsts-dup-by-id", count = (harvest.types.size - uniqueTypeIds).toLong())
