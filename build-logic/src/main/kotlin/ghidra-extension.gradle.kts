@@ -5,6 +5,15 @@ import kotlin.io.path.createDirectories
 
 apply(from = ghidraInstallDir.resolve("support/buildExtension.gradle").toFile())
 
+// zipSource assumes a Java layout, differently per version: 10.4 takes all of `src/**/*`, which drags
+// the test fixture binaries into the shipped zip, while 11+ takes `src/main/java/`, which doesn't
+// exist here — leaving the task NO-SOURCE so no source zip ships at all. Name the Kotlin sources
+// instead: `kotlin*` covers the main tree and the `kotlin-pre*`/`kotlin-since*` compat variants.
+tasks.named<Zip>("zipSource") {
+    includeEmptyDirs = false
+    setIncludes(setOf("src/main/kotlin*/**"))
+}
+
 // buildExtension zips the whole projectDir, so whitelist the content instead
 tasks.named<Zip>("buildExtension") {
     includeEmptyDirs = false
