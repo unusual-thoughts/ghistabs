@@ -18,7 +18,7 @@ import ghistabs.runTransaction
 import ghistabs.set
 import ghistabs.test.defaultContext
 import ghistabs.test.disableWindowsResourceAnalyzer
-import ghistabs.test.indexesOf
+import ghistabs.test.hintsOf
 import ghistabs.withProgram
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
@@ -77,18 +77,15 @@ class AttributionProbe : AbstractGhidraHeadlessIntegrationTest() {
             val reader = StabReader.fromProgram(program)!!.readAll()
             val harvest = program.runTransaction("attribution-harvest") { Harvester(ctx).harvest(reader.records) }
             // Through the run's sink, so the scorecard's counters land where this can read them back.
-            val (types, sources, hints) = indexesOf(harvest, sink = ctx)
+            val hints = hintsOf(harvest, sink = ctx)
 
             val out = File("build/test-output/attribution")
             out.mkdirs()
             val name = fixture.nameWithoutExtension
             Renderer(
-                harvest,
-                types,
-                sources,
+                Mode.DECOMPILE,
                 hints,
                 program,
-                Mode.DECOMPILE,
                 ctx.resolver,
                 sink = ctx,
             ).use { renderer ->

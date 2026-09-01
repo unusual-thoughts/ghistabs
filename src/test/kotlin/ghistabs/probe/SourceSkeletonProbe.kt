@@ -17,7 +17,7 @@ import ghistabs.set
 import ghistabs.test.defaultContext
 import ghistabs.test.disableAnalyzersFromProperty
 import ghistabs.test.disableWindowsResourceAnalyzer
-import ghistabs.test.indexesOf
+import ghistabs.test.hintsOf
 import ghistabs.withProgram
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
@@ -92,7 +92,7 @@ class SourceSkeletonProbe : AbstractGhidraHeadlessIntegrationTest() {
             val reader = StabReader.fromProgram(program)!!.readAll()
             val harvest = Harvester(ctx).harvest(reader.records)
 
-            val (types, sources, hints) = indexesOf(harvest)
+            val hints = hintsOf(harvest)
             val written = Mode.entries.sumOf { mode ->
                 val outDir = File("build/test-output/${mode.outDirName}/${fixture.nameWithoutExtension}")
                 if (outDir.exists()) {
@@ -100,7 +100,7 @@ class SourceSkeletonProbe : AbstractGhidraHeadlessIntegrationTest() {
                     oldDir.deleteRecursively()
                     outDir.renameTo(oldDir)
                 }
-                Renderer(harvest, types, sources, hints, program, mode, ctx.resolver, sink = ctx).use { renderer ->
+                Renderer(mode, hints, program, ctx.resolver, sink = ctx).use { renderer ->
                     renderer.renderAll(outDir).also {
                         println(
                             "Pipeline[$binaryName, ${mode.outDirName}]: " +

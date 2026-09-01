@@ -13,7 +13,9 @@ import ghistabs.diagnose.MessageLogSink
 import ghistabs.diagnose.StabsDiagnostics
 import ghistabs.harvest.Harvester
 import ghistabs.importer.ImportContext
-import ghistabs.index.*
+import ghistabs.index.SourceHints
+import ghistabs.index.SourceIndex
+import ghistabs.index.TypeGraph
 import ghistabs.parse.StabReader
 import ghistabs.render.Renderer
 import java.io.File
@@ -69,15 +71,10 @@ sealed class StabsRenderExporter(name: String, extension: String, val options: S
         val harvest = Harvester(ctx).harvest(records)
 
         val dir = outputDir.takeIf { it.isNotEmpty() }?.let(::File) ?: file
-        val types = TypeGraph(harvest, ctx)
-        val sources = SourceIndex(harvest, options.foldSources, ctx)
         val written = Renderer(
-            harvest,
-            types,
-            sources,
-            SourceHints(harvest, types, sources, ctx),
-            program,
             mode,
+            SourceHints(harvest, TypeGraph(harvest, ctx), SourceIndex(harvest, options.foldSources, ctx), ctx),
+            program,
             ctx.resolver,
             showStorage = showStorage,
             lineAligned = lineAligned,

@@ -331,12 +331,9 @@ private abstract class RenderCommand(name: String) : ImportingCommand(name = nam
     override fun ImportContext<*>.execute() {
         val artifacts = fullImport() ?: return
         Renderer(
-            artifacts.harvest,
-            artifacts.types,
-            artifacts.sources,
+            mode,
             artifacts.hints,
             program,
-            mode,
             resolver,
             showStorage = varStorage,
             lineAligned = lineAligned,
