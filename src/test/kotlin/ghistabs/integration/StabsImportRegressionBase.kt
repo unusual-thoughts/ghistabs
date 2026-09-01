@@ -24,6 +24,7 @@ import ghistabs.diagnose.writeRegistryDump
 import ghistabs.harvest.Type
 import ghistabs.importer.*
 import ghistabs.index.ContentIndex
+import ghistabs.index.EffectiveSource
 import ghistabs.materialize.conflictCount
 import ghistabs.materialize.itanium.Itanium
 import ghistabs.materialize.itanium.hasPolymorphicBaseSubobject
@@ -621,7 +622,10 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             .filter { (_, cls) -> cls in declaredClasses }
         assumeTrue(implicit.isNotEmpty(), "Skipping: no line-less method with a declared class here")
 
-        val unfiled = implicit.filter { (f, _) -> with(artifacts.effectiveSource()) { f.source() } == null }
+        /** Attribution without a source root — what the import itself used, before any `--source-root`. */
+        val unfiled = implicit.filter { (f, _) ->
+            with(EffectiveSource(artifacts.hints) { null }) { f.source() } == null
+        }
             .map { (f, cls) -> "${f.name} (class $cls)" }
         unfiled.sorted().take(10).mustBeEmpty(
             "${unfiled.size} of ${implicit.size} implicit methods have no source despite their " +
@@ -793,6 +797,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         val applied = slots.map { (location, located) ->
             Triple(location, located, artifacts.registry.dataTypeFor(located.type.id))
         }
+
         fun report(of: List<String>) = of.sorted().take(10)
 
         val absent = applied.filter { (_, _, dt) -> dt == null }

@@ -9,7 +9,9 @@ import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.StabsDiagnostics
 import ghistabs.diagnose.TeeSink
 import ghistabs.harvest.Harvest
-import ghistabs.index.*
+import ghistabs.index.SourceHints
+import ghistabs.index.SourceIndex
+import ghistabs.index.TypeGraph
 import ghistabs.materialize.DataTypeRegistry
 import ghistabs.parse.StabReader
 import ghistabs.parse.StabRecord
@@ -80,10 +82,7 @@ data class ImportArtifacts(
     val hints: SourceHints,
     val harvest: Harvest,
     val records: List<StabRecord>,
-) {
-    /** Attribution without a source root — what the import itself used, before any `--source-root`. */
-    fun effectiveSource() = EffectiveSource(harvest, types, sources, hints) { null }
-}
+)
 
 /**
  * Test↔analyzer rendezvous under `@Execution(CONCURRENT)`. The analyzer owns its own [ImportContext]
