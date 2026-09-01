@@ -4,6 +4,7 @@ import ghidra.program.model.data.ByteDataType
 import ghidra.program.model.data.CharDataType
 import ghidra.program.model.data.SignedByteDataType
 import ghistabs.harvest.*
+import ghistabs.index.*
 import ghistabs.materialize.TemplateNameShortener
 import ghistabs.materialize.itanium.Itanium
 import ghistabs.materialize.resolveBuiltin
@@ -39,7 +40,7 @@ interface RenderContext {
             // Named TypeAst → use the name. Anonymous → recurse into its body so the
             // user sees `int *` rather than a raw GlobalTypeId, unless this id is
             // already on the path (cycle). Unresolved (cross-CU dangling) → id string.
-            val ast = index.byId(id)
+            val ast = index.types.byId(id)
             val name = ast?.name
             when {
                 name != null -> shortener?.shortenedOrNull(name) ?: name
@@ -89,15 +90,16 @@ interface RenderContext {
     }
 
     /** True if this resolves to a pointer, seeing through refs, cv-qualifiers and typedefs. */
-    fun GlobalTypeDecl.isPointer(index: HarvestIndex) = index.resolve<TypeDecl.Pointer<GlobalTypeId>>(this) != null
+    fun GlobalTypeDecl.isPointer(index: HarvestIndex) =
+        index.types.resolve<TypeDecl.Pointer<GlobalTypeId>>(this) != null
 
     /** True if this resolves to an array of char — a string literal — through cv-quals and typedefs. */
     fun GlobalTypeDecl.isCharArray(index: HarvestIndex) =
-        index.resolve<TypeDecl.Array<GlobalTypeId>>(this)?.element?.isCharType(index) == true
+        index.types.resolve<TypeDecl.Array<GlobalTypeId>>(this)?.element?.isCharType(index) == true
 
     // Any 1-byte integer element: cygwin's named `char` resolves through its Range body to
     // Byte, not Char. The printable-run guard in stringLiteralAt keeps binary byte[] as hex.
-    private fun GlobalTypeDecl.isCharType(index: HarvestIndex) = index.resolveAny(this) { decl ->
+    private fun GlobalTypeDecl.isCharType(index: HarvestIndex) = index.types.resolveAny(this) { decl ->
         decl.resolveBuiltin().let { it is CharDataType || it is ByteDataType || it is SignedByteDataType }
     }
 
@@ -111,7 +113,7 @@ interface RenderContext {
             val link = f.mangled?.let { "  /* $it */" }.orEmpty()
             f.access to "static ${f.type.renderDecl(f.name)};$link"
         } + methods.mapNotNull { m ->
-            m.mangled?.let { index.functionsByMangledName[it] }
+            m.mangled?.let { index.sources.functionsByMangledName[it] }
                 ?.let { program.functionManager.getFunctionAt(it.addr) }
                 ?.let {
                     // Ghidra's model carries a return type on every function and `this` as a real

@@ -3596,3 +3596,44 @@ reporting collapsed ASTs, §55's three residual `vtable-failed` (`InputRejected`
 vtables move from the sweep to the class path. It also subsumes §55: `qualifiedClassName` would
 prefer the binding and `vtableClassByLeaf` shrinks to a last resort for classes with no out-of-line
 member at all.
+
+## 58. Post-harvest indexing split out of `HarvestIndex` — DONE, behaviour-neutral
+
+`HarvestIndex` was doing four jobs at once. It is now a package, `ghistabs.index`, and three objects:
+
+- **`TypeGraph`** — id/xref/content resolution over `Harvest.types`, plus `locateTypes`. Treats
+  `id.source` as an opaque key and knows nothing about files.
+- **`SourceIndex`** — §15 folding and the per-source folded views. Reads `Harvest` only: `allSources`
+  enumerates each type's `id.source`, which is a key rather than a query, so it never needs the graph.
+- **`SourceHints`/`EffectiveSource`** — attribution, which genuinely bridges both halves (`allSources`
+  and `fold` on one side, `astsByName`/`byId` on the other) and so belongs in neither.
+
+`HarvestIndex` survives only as a holder of the three, with no derived state of its own — that being
+the line that stops the drift which got it to 310 lines in the first place.
+
+**What the placement arguments actually turned on.** Materialize was the deciding evidence: it has
+*zero* dependency on the folding half, and the one grep hit inside `DataTypeRegistry` is a comment
+saying so outright — "Raw harvest functions, not index.functions… nothing read here". It reached
+folding only because it was handed a `HarvestIndex` that carried it.
+
+`byLocation` moved to `DataTypeRegistry`: every reader is that phase and a `TypeLocation` is a DTM
+`CategoryPath`. The algorithm stayed in `index/` — grouping by content and picking winners is
+indexing; memoizing the result for one pass is not. `TypeLocation`/`LocatedType` moved out of
+`harvest/Ast.kt` to join it, being `locateTypes` output rather than harvest facts.
+
+`Func.source()`, `declaringClassSource()` and `functionsBySource` moved to `EffectiveSource`. "Which
+file does this belong to" is that class's question whichever symbol asks it; they sat with the fold
+only because they *call* it, and they were the one thing making folding depend on attribution.
+
+**A test caught the missing abstraction.** `NestedScopeKeyTest` had a `// hack` re-implementing the
+`Attribution` assembly verbatim, because that assembly was inlined at its single production call site
+and had no name. It is now `TypeGraph.locateTypes(hints)`, so the registry and the test call the same
+thing and the hack is deleted.
+
+The `Harvest.functions`/`constants`/`statics` lazies stay on `Harvest`: they are arrangement, not
+interpretation, and `byDemangledClass`/`SourceHints`/`SymbolApplier` all want the raw ones — putting
+them on `SourceIndex` would force consumers to depend on folding to reach facts.
+
+Zero counters moved on locale_test / box2d / crypto_mi_gcc421 (identical to the run before it),
+which is the whole guarantee a refactor of this shape can offer.
+

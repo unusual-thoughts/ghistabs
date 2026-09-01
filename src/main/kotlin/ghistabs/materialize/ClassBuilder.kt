@@ -17,10 +17,10 @@ import ghistabs.Demangler
 import ghistabs.applyDemangling
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.Level
-import ghistabs.harvest.HarvestIndex
-import ghistabs.harvest.LocatedType
-import ghistabs.harvest.demangledClassPath
 import ghistabs.importer.ImportContext
+import ghistabs.index.LocatedType
+import ghistabs.index.TypeGraph
+import ghistabs.index.demangledClassPath
 import ghistabs.isInjected
 import ghistabs.isMethod
 import ghistabs.materialize.itanium.*
@@ -31,7 +31,7 @@ import ghistabs.parse.TypeDecl.Struct.Method
 
 class ClassBuilder(
     private val registry: DataTypeRegistry,
-    private val index: HarvestIndex,
+    private val types: TypeGraph,
     private val ctx: ImportContext<*>,
 ) : DiagnosticSink by ctx {
     private val program = ctx.program
@@ -69,7 +69,7 @@ class ClassBuilder(
     // are `s12Exception:(53,8),0,768;;` and nothing else once the inheritance pseudo-field is
     // promoted to a base, so the `_ZTV` symbol is the only thing left that spells the scope.
     private val LocatedType.qualifiedClassName: String
-        get() = (sequenceOf(type) + members.mapNotNull { index.byId(it) })
+        get() = (sequenceOf(type) + members.mapNotNull { types.byId(it) })
             .firstNotNullOfOrNull { it.demangledClassPath() }?.joinToString("::")
             ?: vtableClassByLeaf[className]?.also { debug("class-scope-from-vtable", "$className -> $it") }
             ?: className
@@ -89,7 +89,7 @@ class ClassBuilder(
      * once, off the most-detailed body. Returns the number of classes built.
      */
     fun buildAll(): Int {
-        val classes = index.byLocation.values.filter { it.isClass() }
+        val classes = registry.byLocation.values.filter { it.isClass() }
         ctx.monitor.initialize(classes.size.toLong(), "Stabs: building classes")
         var built = 0
         for (group in classes) {
@@ -124,7 +124,7 @@ class ClassBuilder(
         val isPoly = classBody.hasVTablePointerMarker ||
             classBody.methods.any { it.virt == VirtKind.VIRTUAL } ||
             classBody.fields.any { isVptrFieldName(it.name) } ||
-            index.hasPolymorphicBaseSubobject(classBody)
+            types.hasPolymorphicBaseSubobject(classBody)
         if (isPoly) ensureVfptrFirstField(structDt)
 
         val ns = ensureClassNamespace()
@@ -184,7 +184,7 @@ class ClassBuilder(
         }
 
         val action = Layout.chooseVfptrAction(
-            hasPolymorphicBaseSubobject = index.hasPolymorphicBaseSubobject(classBody),
+            hasPolymorphicBaseSubobject = types.hasPolymorphicBaseSubobject(classBody),
             parserVptrOffsetBytes = parserVptrOffset,
             componentAtTargetOffset = snapshot,
             canonicalVfptrFieldName = vfptrName,
@@ -426,7 +426,7 @@ class ClassBuilder(
         // One vbase offset per virtual base, so the two counts must agree. They are derived
         // independently — the stab's base graph vs. where vtableShape put offset_to_top — which makes
         // a disagreement the one cheap check that the address point was located correctly.
-        val virtualBases = index.virtualBases(classBody)
+        val virtualBases = types.virtualBases(classBody)
             .map { registry.resolveRef(it.type)?.name ?: "<unresolved base>" }
         if (shape.prefix.size < virtualBases.size) {
             degradation(
@@ -473,7 +473,7 @@ class ClassBuilder(
 
     /** Walk Ref/InlineDef wrappers to the underlying Method/FunctionT (gcc binds signatures to their own type id). */
     private fun unwrapSignature(sig: GlobalTypeDecl) =
-        index.resolveWith(sig) { it.takeIf { d -> d is TypeDecl.Method || d is TypeDecl.FunctionT } }
+        types.resolveWith(sig) { it.takeIf { d -> d is TypeDecl.Method || d is TypeDecl.FunctionT } }
 
     /**
      * Build the typed function-pointer slot for [m]: `Pointer→FunctionDefinition(<sig>)`.
@@ -679,5 +679,5 @@ class ClassBuilder(
         return null
     }
 
-    private fun LocatedType.collectAllVirtuals() = index.collectAllVirtuals(classBody)
+    private fun LocatedType.collectAllVirtuals() = types.collectAllVirtuals(classBody)
 }

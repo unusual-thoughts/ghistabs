@@ -169,7 +169,7 @@ class PolymorphicBaseTest {
             methods = emptyList(),
             vptrBasetype = null,
         )
-        indexOf().must { hasPolymorphicBaseSubobject(derived) }
+        typesOf().must { hasPolymorphicBaseSubobject(derived) }
     }
 
     @Test
@@ -183,7 +183,7 @@ class PolymorphicBaseTest {
             methods = emptyList(),
             vptrBasetype = null,
         )
-        indexOf().mustNot { hasPolymorphicBaseSubobject(derived) }
+        typesOf().mustNot { hasPolymorphicBaseSubobject(derived) }
     }
 
     @Test
@@ -205,7 +205,7 @@ class PolymorphicBaseTest {
             methods = emptyList(),
             vptrBasetype = null,
         )
-        indexOf().must { hasPolymorphicBaseSubobject(derived) }
+        typesOf().must { hasPolymorphicBaseSubobject(derived) }
     }
 
     /**
@@ -239,7 +239,7 @@ class PolymorphicBaseTest {
             methods = emptyList(),
             vptrBasetype = null,
         )
-        indexOf().virtualBases(derived).map { it.type }.mustBe(listOf(TypeDecl.InlineDef(gid(1), vbase)))
+        typesOf().virtualBases(derived).map { it.type }.mustBe(listOf(TypeDecl.InlineDef(gid(1), vbase)))
     }
 
     /** A virtual edge to a class already reached non-virtually still contributes its own vbase
@@ -263,13 +263,13 @@ class PolymorphicBaseTest {
             methods = emptyList(),
             vptrBasetype = null,
         )
-        indexOf().virtualBases(derived).size.mustBe(1)
+        typesOf().virtualBases(derived).size.mustBe(1)
     }
 
     @Test
     fun `noBases - empty bases list returns false`() {
         val derived = polyStruct(hasVtableMarker = false)
-        indexOf().mustNot { hasPolymorphicBaseSubobject(derived) }
+        typesOf().mustNot { hasPolymorphicBaseSubobject(derived) }
     }
 
     @Test
@@ -283,7 +283,7 @@ class PolymorphicBaseTest {
             methods = emptyList(),
             vptrBasetype = null,
         )
-        indexOf().must { hasPolymorphicBaseSubobject(derived) }
+        typesOf().must { hasPolymorphicBaseSubobject(derived) }
     }
 
     @Test
@@ -302,6 +302,6 @@ class PolymorphicBaseTest {
             methods = emptyList(),
             vptrBasetype = null,
         )
-        indexOf(baseAst).must { hasPolymorphicBaseSubobject(derived) }
+        typesOf(baseAst).must { hasPolymorphicBaseSubobject(derived) }
     }
 }
