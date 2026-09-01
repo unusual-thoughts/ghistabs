@@ -1,0 +1,52 @@
+name: Set up Ghidra
+description: Install a Ghidra release at /opt/ghidra, with a matching JDK and Gradle.
+
+inputs:
+  ghidra-version:
+    description: Ghidra release version, e.g. 12.1.3.
+    required: true
+  java-version:
+    description: >
+      JDK to build on. Must match the install's `application.java.compiler`: buildExtension.gradle
+      sets sourceCompatibility from it and Kotlin's toolchain is pinned to the same value.
+      17 through Ghidra 10.x, 21 from 11.
+    required: false
+    default: '21'
+  token:
+    description: Token used to resolve the release asset.
+    required: false
+    default: ${{ github.token }}
+
+runs:
+  using: composite
+  steps:
+    - name: Set up JDK ${{ inputs.java-version }}
+      uses: actions/setup-java@v6
+      with:
+        java-version: ${{ inputs.java-version }}
+        distribution: 'temurin'
+
+    - name: Cache Ghidra ${{ inputs.ghidra-version }}
+      id: cache
+      uses: actions/cache@v6
+      with:
+        path: /opt/ghidra
+        key: ghidra-${{ inputs.ghidra-version }}-PUBLIC
+
+    - name: Install Ghidra ${{ inputs.ghidra-version }}
+      # The asset carries a build date we don't want to pin, so resolve it by pattern.
+      if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        VERSION: ${{ inputs.ghidra-version }}
+      run: |
+        gh release download "Ghidra_${VERSION}_build" \
+          --repo NationalSecurityAgency/ghidra \
+          --pattern "ghidra_${VERSION}_PUBLIC_*.zip"
+        unzip -q "ghidra_${VERSION}_PUBLIC_"*.zip
+        mkdir -p /opt
+        mv "ghidra_${VERSION}_PUBLIC" /opt/ghidra
+
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v6

@@ -44,7 +44,7 @@ data class GhidraVersion(val maj: Int, val min: Int, val sub: Int) : Comparable<
 }
 
 /**
- * `GHIDRA_VERSION` (which `gradle.yml` already sets), else `-PGHIDRA_VERSION`, else the install's own
+ * `GHIDRA_VERSION`, else `-PGHIDRA_VERSION`, else the install's own
  * `application.version` — e.g. `12.1.2`. Read from the file rather than off the `ghidra_version` extra
  * `buildExtension.gradle` sets, so it is available before that script is applied.
  */
