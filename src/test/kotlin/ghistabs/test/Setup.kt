@@ -11,6 +11,7 @@ import ghistabs.diagnose.*
 import ghistabs.harvest.*
 import ghistabs.importer.AddressResolver
 import ghistabs.importer.ImportContext
+import ghistabs.index.*
 import ghistabs.materialize.DataTypeRegistry
 import ghistabs.runTransaction
 
@@ -50,15 +51,16 @@ fun Program.defaultContext() = ImportContext(
     StabsDiagnostics(),
 )
 
-fun indexOf(vararg asts: Type) = HarvestIndex(
-    Harvest(
-        types = asts.associateBy { it.id },
-        rawCollisions = emptyMap(),
-        sources = emptyMap(),
-        textRanges = emptyMap(),
-    ),
-    foldSources = false,
+fun harvestOf(vararg asts: Type) = Harvest(
+    types = asts.associateBy { it.id },
+    rawCollisions = emptyMap(),
+    sources = emptyMap(),
+    textRanges = emptyMap(),
 )
+
+fun typesOf(vararg asts: Type) = TypeGraph(harvestOf(*asts))
+
+fun indexOf(vararg asts: Type) = HarvestIndex(harvestOf(*asts), foldSources = false)
 
 fun ImportContext<*>.defaultTypeRegistry() = DataTypeRegistry(dtm, this, diagnostics, indexOf())
 

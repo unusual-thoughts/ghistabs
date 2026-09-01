@@ -208,7 +208,7 @@ fun FileRenderer.dropInlined(regions: List<Region>, func: Func): List<Region> = 
     // A pseudo-call only reads as one from the calling side. In the header's own view the dropped
     // regions are the *caller's* code around the stretch this file contributed — not something
     // this file inlined — so there it stays a note.
-    val calls = with(index) { func.source() } == source
+    val calls = with(renderer.effectiveSource) { func.source() } == source
     val slines = func.lineEntries.sortedBy { it.addr }
     val owner = mutableMapOf<Address, Address?>()
     fun entryAddrOf(a: Address) = owner.getOrPut(a) { slines.lastOrNull { it.addr <= a }?.addr }

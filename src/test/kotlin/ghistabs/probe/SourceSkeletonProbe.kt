@@ -8,8 +8,8 @@ import ghidra.util.task.TaskMonitor
 import ghistabs.ImportOptions.Companion.LOG_LEVEL
 import ghistabs.ImportOptions.Companion.SHORTEN_TYPEDEFS
 import ghistabs.diagnose.Level
-import ghistabs.harvest.HarvestIndex
 import ghistabs.harvest.Harvester
+import ghistabs.index.HarvestIndex
 import ghistabs.parse.StabReader
 import ghistabs.render.Renderer
 import ghistabs.render.Renderer.Mode

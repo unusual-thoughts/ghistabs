@@ -2,8 +2,8 @@ package ghistabs.importer
 
 import ghidra.program.model.address.AddressOutOfBoundsException
 import ghistabs.diagnose.DiagnosticSink
-import ghistabs.harvest.HarvestIndex
 import ghistabs.harvest.LineEntry
+import ghistabs.index.HarvestIndex
 import ghistabs.materialize.itanium.Itanium
 
 /**
@@ -30,7 +30,7 @@ class SourceMapApplier(private val ctx: ImportContext<*>, private val index: Har
      *  the two agreeing is what [ghistabs.integration.StabsImportRegressionBase] asserts. */
     fun apply(): Int {
         val startedAt = System.nanoTime()
-        val folds = index.renderIdentityBySource
+        val folds = index.sources.renderIdentityBySource
         val files = folds.keys + folds.values
         for (file in files) manager.addSourceFile(file)
 

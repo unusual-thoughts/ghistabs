@@ -516,8 +516,8 @@ class SymbolApplier(
         // One class is re-declared per including CU, so the same member arrives N times.
         val seen = mutableSetOf<String>()
         var applied = 0
-        ctx.monitor.initialize(registry.index.allTypes.size.toLong(), "Stabs: applying static members")
-        for (ast in registry.index.allTypes) {
+        ctx.monitor.initialize(registry.types.allTypes.size.toLong(), "Stabs: applying static members")
+        for (ast in registry.types.allTypes) {
             ctx.monitor.increment()
             val body = ast.body as? TypeDecl.Struct<GlobalTypeId> ?: continue
             for (field in body.fields) {

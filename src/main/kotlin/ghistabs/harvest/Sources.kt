@@ -1,6 +1,7 @@
 package ghistabs.harvest
 
 import ghidra.util.SourceFileUtils
+import ghistabs.index.*
 import ghistabs.parse.SourceFile
 import ghistabs.parse.isDriveLetter
 import ghistabs.parse.segments
