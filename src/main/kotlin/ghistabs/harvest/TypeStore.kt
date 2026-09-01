@@ -2,7 +2,6 @@ package ghistabs.harvest
 
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.DummySink
-import ghistabs.index.*
 import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Struct.Base
 import ghistabs.parse.TypeDecl.Struct.Field
@@ -208,7 +207,7 @@ class TypeStore(
     /**
      * `typedef struct {…} Name;` reaches us as an anonymous aggregate + a same-named typedef that
      * inline-defines it. C-semantically the aggregate's name *is* the typedef's, so adopt it, so the
-     * anonymous struct/enum carries the real name and [HarvestIndex.byLocation] can merge it with
+     * anonymous struct/enum carries the real name and `DataTypeRegistry.byLocation` can merge it with
      * the named copy from another header spelling (render-backlog §20).
      */
     private fun nameAnonymousTypedefTargets() {

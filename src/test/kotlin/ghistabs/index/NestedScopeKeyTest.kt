@@ -65,7 +65,7 @@ class NestedScopeKeyTest : AbstractGhidraHeadlessIntegrationTest() {
         val hider = ast(hiderId, "_Alloc_hider", struct(fields = listOf(field("_M_p", TypeDecl.Builtin(0)))))
         val reduced = ast(id(), charString, struct(fields = listOf(field("_M_dataplus", TypeDecl.Ref(hiderId)))))
 
-        val groups = indexOf(full, hider, reduced).let { it.types.locateTypes(it.hints) }
+        val groups = indexOf(full, hider, reduced).let { (types, _, hints) -> types.locateTypes(hints) }
         val key = TypeLocation(CategoryPath("/std/string"), "_Alloc_hider")
         groups.must("expected $key in ${groups.keys}") { contains(key) }
         hiderId mustBeIn groups.getValue(key).members
@@ -79,7 +79,7 @@ class NestedScopeKeyTest : AbstractGhidraHeadlessIntegrationTest() {
         val sentryId = id()
         val sentry = ast(sentryId, "$ostream::sentry", struct(fields = listOf(field("_M_ok", TypeDecl.Builtin(0)))))
 
-        val groups = indexOf(full, sentry).let { it.types.locateTypes(it.hints) }
+        val groups = indexOf(full, sentry).let { (types, _, hints) -> types.locateTypes(hints) }
         val key = TypeLocation(CategoryPath("/std/ostream"), "sentry")
         groups.must("expected $key in ${groups.keys}") { contains(key) }
         sentryId mustBeIn groups.getValue(key).members
@@ -92,7 +92,7 @@ class NestedScopeKeyTest : AbstractGhidraHeadlessIntegrationTest() {
             val hiderId = id()
             val hider = ast(hiderId, "_Alloc_hider", struct(fields = listOf(field("_M_p", TypeDecl.Pointer(pointee)))))
             val reduced = ast(id(), strName, struct(fields = listOf(field("_M_dataplus", TypeDecl.Ref(hiderId)))))
-            val located = indexOf(full, hider, reduced).let { it.types.locateTypes(it.hints) }
+            val located = indexOf(full, hider, reduced).let { (types, _, hints) -> types.locateTypes(hints) }
             return located.entries.first { hiderId in it.value.members }.key
         }
 

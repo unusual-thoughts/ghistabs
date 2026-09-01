@@ -108,10 +108,6 @@
             "min": 10,
             "max": 10
         },
-        "desc-dropped-so": {
-            "min": 122,
-            "max": 122
-        },
         "drop-record-bnsym": {
             "min": 2971,
             "max": 2971
@@ -181,8 +177,8 @@
             "max": 17
         },
         "harvest-cus": {
-            "min": 22,
-            "max": 22
+            "min": 61,
+            "max": 61
         },
         "harvest-functions": {
             "min": 3015,
@@ -199,6 +195,10 @@
         "harvest-records-read": {
             "min": 58624,
             "max": 58624
+        },
+        "harvest-sources": {
+            "min": 141,
+            "max": 141
         },
         "harvest-statics": {
             "min": 65,
@@ -373,12 +373,12 @@
             "max": 11
         },
         "sourcemap-files": {
-            "min": 198,
-            "max": 198
+            "min": 147,
+            "max": 147
         },
         "sourcemap-folded-files": {
-            "min": 62,
-            "max": 62
+            "min": 11,
+            "max": 11
         },
         "stab-value-absolute": {
             "min": 1155,

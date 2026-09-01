@@ -1,6 +1,7 @@
 package ghistabs.index
 
 import ghistabs.diagnose.DiagnosticSink
+import ghistabs.diagnose.DummySink
 import ghistabs.harvest.*
 import ghistabs.parse.*
 
@@ -15,7 +16,12 @@ import ghistabs.parse.*
  * A hint is inference about where code went; [EffectiveSource] layers real source text on top when a
  * root has resolved files. Nothing here reads a file, so this is a pure function of the [Harvest].
  */
-class SourceHints(private val index: HarvestIndex) : DiagnosticSink by index {
+class SourceHints(
+    private val harvest: Harvest,
+    private val types: TypeGraph,
+    private val sources: SourceIndex,
+    sink: DiagnosticSink = DummySink,
+) : DiagnosticSink by sink {
     // name → its defining source, keyed canonically so a demangled scope chain can match it (gcc
     // spells stab template args with the spaces the demangler also emits, inconsistently). Prefer
     // concrete Struct/Enum over forward-decl XRef stubs: gcc emits those for classes merely mentioned
@@ -24,7 +30,7 @@ class SourceHints(private val index: HarvestIndex) : DiagnosticSink by index {
     internal val classSourceByName: Map<String, GhidraSourceFile> by lazy {
         buildMap {
             val bestRank = mutableMapOf<String, Int>()
-            for ((_, id, name, body) in index.types.allTypes) {
+            for ((_, id, name, body) in types.allTypes) {
                 val n = name?.let(::canonTemplateName) ?: continue
                 val rank = when (body) {
                     is TypeDecl.Struct, is TypeDecl.Enum -> 2
@@ -58,7 +64,7 @@ class SourceHints(private val index: HarvestIndex) : DiagnosticSink by index {
         // only as some type's `id.source`, which is exactly the case this lookup exists to serve.
         // Spellings of one file collapse (§15 folds them later anyway); genuinely distinct files
         // sharing a stem are dropped rather than guessed between.
-        index.sources.allSources
+        sources.allSources
             .filter { it.filename.hasHeaderExtension() && !it.path.isStdMarkerPath() }
             .groupBy { it.filename.substringBeforeLast('.') }
             .filterValues { v -> v.distinctBy { it.filename }.size == 1 }
@@ -75,13 +81,13 @@ class SourceHints(private val index: HarvestIndex) : DiagnosticSink by index {
         // them in stl_alloc.h — and they are exactly what says where `allocator<unsigned short>`
         // belongs. Only stdlib homes seed, and `id.source` rather than the effective source, since
         // this map is what the effective source consults.
-        val settled = index.types.allTypes
+        val settled = types.allTypes
             .mapNotNull { ast -> ast.name?.takeIf { '<' in it }?.let { it to ast.id.source.identity } }
             .filter { (_, home) -> home.path.isStdMarkerPath() }
         val homeByTemplate = (voted.entries.filter { '<' in it.key }.map { it.key to it.value } + settled)
             .groupBy({ it.first.substringBefore('<') }, { it.second })
             .mapValues { (_, homes) -> homes.groupingBy { it }.eachCount().maxByOrNull { it.value }!!.key }
-        val bySibling = voted + index.types.astsByName.keys
+        val bySibling = voted + types.astsByName.keys
             .filter { '<' in it && it !in voted }
             .mapNotNull { name -> homeByTemplate[name.substringBefore('<')]?.let { name to it } }
         // Last resort, and it is structural rather than evidential: a base class inherits where its
@@ -93,11 +99,11 @@ class SourceHints(private val index: HarvestIndex) : DiagnosticSink by index {
         // `vector` → `_Vector_base` → `_Vector_alloc_base`, hence the rounds; templates only, so a
         // project class can never be dragged along by a base it shares with the standard library.
         (1..3).fold(bySibling) { homes, _ ->
-            homes + index.types.allTypes
+            homes + types.allTypes
                 .flatMap { ast ->
                     val home = ast.name?.let { homes[it] } ?: return@flatMap emptyList()
                     (ast.body as? TypeDecl.Struct)?.bases.orEmpty().mapNotNull { base ->
-                        (base.type as? TypeDecl.Ref)?.id?.let { index.types.byId(it) }?.name
+                        (base.type as? TypeDecl.Ref)?.id?.let { types.byId(it) }?.name
                             ?.takeIf { '<' in it && it !in homes }?.let { it to home }
                     }
                 }
@@ -109,28 +115,28 @@ class SourceHints(private val index: HarvestIndex) : DiagnosticSink by index {
      * definition all of them included. Grouped by mangled name, so the copies can be compared.
      */
     private val comdatCopiesByMangled: Map<String, List<Func>> by lazy {
-        index.harvest.functions.groupBy { it.addr }
+        harvest.functions.groupBy { it.addr }
             .values.filter { copies -> copies.mapTo(mutableSetOf()) { it.cu }.size > 1 }
             .flatten().groupBy { it.name }
     }
 
     private val votedHeaderHints: Map<String, GhidraSourceFile> by lazy {
-        val funcsByMangled = index.harvest.functions.filter { (it.sizeBytes ?: 0uL) > 0uL }.associateBy { it.name }
-        val defSourcesByName = index.types.allTypes
+        val funcsByMangled = harvest.functions.filter { (it.sizeBytes ?: 0uL) > 0uL }.associateBy { it.name }
+        val defSourcesByName = types.allTypes
             .filter { it.name != null }
             .groupBy({ it.name!! }, { it.id.source.identity })
             .mapValues { it.value.toSet() }
         // Header line-entries sorted by address once, so each method's [lo,hi) range is a binary-searched
         // slice instead of a full scan of every source's entries per method (was O(types × methods ×
         // entries)). Non-header sources never vote, so they're dropped up front.
-        val hdrEntries = index.harvest.sources.entries
+        val hdrEntries = harvest.sources.entries
             .filter { it.key.filename.hasHeaderExtension() }
             .flatMap { (src, harvested) -> harvested.lineEntries.map { it.addr.offset to src } }
             .sortedBy { it.first }
         val hdrOffsets = LongArray(hdrEntries.size) { hdrEntries[it].first }
 
         buildMap {
-            for ((name, asts) in index.types.astsByName) {
+            for ((name, asts) in types.astsByName) {
                 val defSources = defSourcesByName[name] ?: continue
                 // A template instantiation is the one thing gcc files by accident: it emits
                 // `vector<unsigned short>` inside whichever header first needed it, so image.h — a
@@ -216,10 +222,10 @@ class SourceHints(private val index: HarvestIndex) : DiagnosticSink by index {
     /** Attribution before a source root has a say. */
 
     /** [type]'s hint — the header its methods were compiled into — folded, or null if it has none. */
-    fun hintedFor(type: Type) = type.hinted()?.let(index.sources::fold)
+    fun hintedFor(type: Type) = type.hinted()?.let(sources::fold)
 
     /** What gcc recorded for [type], folded: its own `N_SOL` where it has one, else its CU. */
-    fun recordedFor(type: Type) = index.sources.fold(type.recorded())
+    fun recordedFor(type: Type) = sources.fold(type.recorded())
 
     /** Attribution before a source root has a say — what `baseTypesBySource` groups by. */
     fun baseSourceOf(type: Type) = hintedFor(type) ?: recordedFor(type)

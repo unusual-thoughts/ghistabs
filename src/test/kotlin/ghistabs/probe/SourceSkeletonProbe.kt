@@ -9,7 +9,6 @@ import ghistabs.ImportOptions.Companion.LOG_LEVEL
 import ghistabs.ImportOptions.Companion.SHORTEN_TYPEDEFS
 import ghistabs.diagnose.Level
 import ghistabs.harvest.Harvester
-import ghistabs.index.HarvestIndex
 import ghistabs.parse.StabReader
 import ghistabs.render.Renderer
 import ghistabs.render.Renderer.Mode
@@ -18,6 +17,7 @@ import ghistabs.set
 import ghistabs.test.defaultContext
 import ghistabs.test.disableAnalyzersFromProperty
 import ghistabs.test.disableWindowsResourceAnalyzer
+import ghistabs.test.indexesOf
 import ghistabs.withProgram
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
@@ -92,7 +92,7 @@ class SourceSkeletonProbe : AbstractGhidraHeadlessIntegrationTest() {
             val reader = StabReader.fromProgram(program)!!.readAll()
             val harvest = Harvester(ctx).harvest(reader.records)
 
-            val index = HarvestIndex(harvest)
+            val (types, sources, hints) = indexesOf(harvest)
             val written = Mode.entries.sumOf { mode ->
                 val outDir = File("build/test-output/${mode.outDirName}/${fixture.nameWithoutExtension}")
                 if (outDir.exists()) {
@@ -100,7 +100,7 @@ class SourceSkeletonProbe : AbstractGhidraHeadlessIntegrationTest() {
                     oldDir.deleteRecursively()
                     outDir.renameTo(oldDir)
                 }
-                Renderer(index, program, mode, ctx.resolver, sink = ctx).use { renderer ->
+                Renderer(harvest, types, sources, hints, program, mode, ctx.resolver, sink = ctx).use { renderer ->
                     renderer.renderAll(outDir).also {
                         println(
                             "Pipeline[$binaryName, ${mode.outDirName}]: " +

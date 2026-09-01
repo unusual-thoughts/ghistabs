@@ -10,7 +10,7 @@ import ghistabs.parse.*
  * that resolves one to another and the content hashing [ContentIndex] layers on top.
  *
  * It knows nothing about source files — `id.source` is an opaque key here. Which file a type belongs
- * to is [SourceHints]/[EffectiveSource], which spelling that file renders under is [HarvestIndex],
+ * to is [SourceHints]/[EffectiveSource], which spelling that file renders under is [SourceIndex],
  * and which Ghidra slot it materializes at is [locateTypes]. All three are built on this; none of
  * them is what the graph *is*.
  */

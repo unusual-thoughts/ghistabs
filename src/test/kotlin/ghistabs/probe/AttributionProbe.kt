@@ -10,7 +10,6 @@ import ghistabs.ImportOptions.Companion.SHORTEN_TYPEDEFS
 import ghistabs.ImportOptions.Companion.SOURCE_ROOTS
 import ghistabs.diagnose.Level
 import ghistabs.harvest.Harvester
-import ghistabs.index.HarvestIndex
 import ghistabs.parse.StabReader
 import ghistabs.render.Renderer
 import ghistabs.render.Renderer.Mode
@@ -19,6 +18,7 @@ import ghistabs.runTransaction
 import ghistabs.set
 import ghistabs.test.defaultContext
 import ghistabs.test.disableWindowsResourceAnalyzer
+import ghistabs.test.indexesOf
 import ghistabs.withProgram
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
@@ -77,12 +77,21 @@ class AttributionProbe : AbstractGhidraHeadlessIntegrationTest() {
             val reader = StabReader.fromProgram(program)!!.readAll()
             val harvest = program.runTransaction("attribution-harvest") { Harvester(ctx).harvest(reader.records) }
             // Through the run's sink, so the scorecard's counters land where this can read them back.
-            val index = HarvestIndex(harvest, sink = ctx)
+            val (types, sources, hints) = indexesOf(harvest, sink = ctx)
 
             val out = File("build/test-output/attribution")
             out.mkdirs()
             val name = fixture.nameWithoutExtension
-            Renderer(index, program, Mode.DECOMPILE, ctx.resolver, sink = ctx).use { renderer ->
+            Renderer(
+                harvest,
+                types,
+                sources,
+                hints,
+                program,
+                Mode.DECOMPILE,
+                ctx.resolver,
+                sink = ctx,
+            ).use { renderer ->
                 assumeTrue(renderer.renderAll(out.resolve(name)) > 0, "nothing rendered")
                 // After the render, never during one: the inline half is graded on the questions the
                 // render itself put to the source, and grading is this probe's job, not a render's.

@@ -112,7 +112,7 @@ class DemanglerReplacer(private val ctx: ImportContext<*>, private val registry:
      * [demangleMangledLabels] to capture — but the harvest kept one.
      */
     private val harvestedMangled by lazy {
-        registry.index.harvest.functions.filter { isProbablyMangled(it.name) }.associate { it.addr to it.name }
+        registry.harvest.functions.filter { isProbablyMangled(it.name) }.associate { it.addr to it.name }
     }
 
     /**

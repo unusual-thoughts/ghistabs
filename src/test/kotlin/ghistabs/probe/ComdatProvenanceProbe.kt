@@ -22,7 +22,7 @@ import java.io.File
  *
  * A body several CUs claim at one address was folded by the linker from a definition they all
  * included, so each copy's own N_SLINEs are the only statement about where that definition lives.
- * If the copies agree, that file is evidence for the owning header ([ghistabs.harvest.HarvestIndex]'s
+ * If the copies agree, that file is evidence for the owning header ([ghistabs.index.SourceHints]'s
  * header hints could use it); if they disagree, the stabs carry no provenance for merged bodies and
  * the N_SOL-burst vote is the ceiling. §39 of render-backlog.md found `XVImage`'s merged destructor
  * clones naming `iostream` / `appimage.h` / `basic_string.h` / `gthr-default.h` across four CUs —
