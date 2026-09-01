@@ -296,6 +296,10 @@
             "min": 117,
             "max": 117
         },
+        "scope-from-twin": {
+            "min": 29,
+            "max": 29
+        },
         "sourcemap-duplicate-entries": {
             "min": 114,
             "max": 114

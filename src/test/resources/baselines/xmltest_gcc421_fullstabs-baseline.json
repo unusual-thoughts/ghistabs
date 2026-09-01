@@ -13,8 +13,8 @@
             "max": 74
         },
         "base-empty-ebo": {
-            "min": 49,
-            "max": 49
+            "min": 47,
+            "max": 47
         },
         "base-empty-ebo-inferred": {
             "min": 16,
@@ -24,13 +24,9 @@
             "min": 30,
             "max": 30
         },
-        "canonical-content-merged": {
-            "min": 4,
-            "max": 4
-        },
         "canonical-key-merged": {
-            "min": 452,
-            "max": 452
+            "min": 426,
+            "max": 426
         },
         "canonical-key-multi-hash": {
             "min": 35,
@@ -69,16 +65,24 @@
             "max": 2630
         },
         "demangler-ambiguous": {
-            "min": 3,
-            "max": 3
+            "min": 2,
+            "max": 2
         },
         "demangler-exact-match": {
             "min": 167,
             "max": 167
         },
+        "demangler-retarget-bound": {
+            "min": 1,
+            "max": 1
+        },
         "demangler-retarget-no-type": {
-            "min": 7,
-            "max": 7
+            "min": 6,
+            "max": 6
+        },
+        "demangler-retargeted-stub-site": {
+            "min": 1,
+            "max": 1
         },
         "demangler-reverse-demangle-match": {
             "min": 2,
@@ -101,12 +105,12 @@
             "max": 2
         },
         "demangler-unbound-stub-signature-site": {
-            "min": 9,
-            "max": 9
+            "min": 8,
+            "max": 8
         },
         "demangler-unbound-stub-site-origin": {
-            "min": 9,
-            "max": 9
+            "min": 8,
+            "max": 8
         },
         "drop-record-bnsym": {
             "min": 2806,
@@ -337,8 +341,8 @@
             "max": 149
         },
         "placeholder-created": {
-            "min": 40876,
-            "max": 40876
+            "min": 40854,
+            "max": 40854
         },
         "placeholder-undefined-fields": {
             "min": 215,
@@ -363,6 +367,10 @@
         "rtti-pseudo-substituted": {
             "min": 36,
             "max": 36
+        },
+        "scope-from-twin": {
+            "min": 478,
+            "max": 478
         },
         "sourcemap-duplicate-entries": {
             "min": 959,

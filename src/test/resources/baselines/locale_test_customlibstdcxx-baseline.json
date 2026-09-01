@@ -360,6 +360,10 @@
             "min": 38,
             "max": 38
         },
+        "scope-from-twin": {
+            "min": 327,
+            "max": 327
+        },
         "sourcemap-duplicate-entries": {
             "min": 882,
             "max": 882

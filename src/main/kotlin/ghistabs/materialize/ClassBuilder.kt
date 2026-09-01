@@ -68,9 +68,12 @@ class ClassBuilder(
     // A body with no mangled member anywhere has no chain to recover: cryptopp's exception classes
     // are `s12Exception:(53,8),0,768;;` and nothing else once the inheritance pseudo-field is
     // promoted to a base, so the `_ZTV` symbol is the only thing left that spells the scope.
+    // An out-of-line member binds the chain just as exactly as an inline one (§57) and gets tried
+    // before the by-leaf guess, which can only ever be a guess.
     private val LocatedType.qualifiedClassName: String
         get() = (sequenceOf(type) + members.mapNotNull { types.byId(it) })
-            .firstNotNullOfOrNull { it.demangledClassPath() }?.joinToString("::")
+            .firstNotNullOfOrNull { it.demangledClassPath() ?: types.classPathByThisParam[it.id] }
+            ?.joinToString("::")
             ?: vtableClassByLeaf[className]?.also { debug("class-scope-from-vtable", "$className -> $it") }
             ?: className
 

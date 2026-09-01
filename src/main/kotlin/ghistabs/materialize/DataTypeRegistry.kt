@@ -14,7 +14,6 @@ import ghistabs.importer.DemanglerReplacer.Companion.DEMANGLER_CATEGORY
 import ghistabs.index.*
 import ghistabs.materialize.itanium.Rtti
 import ghistabs.parse.CATEGORY
-import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
 
@@ -229,25 +228,3 @@ class DataTypeRegistry(
 /** Replicates the (protected) `DemangledDataType.getDemanglerCategoryPath` + leaf: `/Demangler/<ns…>/<name>`. */
 private val Demangled.categoryPath get(): CategoryPath =
     (namespace?.categoryPath ?: DEMANGLER_CATEGORY).extend(name)
-
-/**
- * Pointee type-id of [fn]'s leading `this` param, else null.
- *
- * Which shape gcc emits for the pointer is per-CU history, not meaning: inline
- * (`InlineDef→Pointer→Ref`), by id (a plain `Ref` to a separately-numbered pointer type), and with a
- * `Const` wrapper on a const method. Matching only the inline shape missed every by-id and every
- * const `this` — which is what left `std::ostream::sentry` with no reverse-demangle link.
- */
-private fun TypeGraph.thisParamTypeId(fn: Func): GlobalTypeId? {
-    val p = fn.params.firstOrNull()?.body?.takeIf { it.name == "this" } ?: return null
-    return resolve<TypeDecl.Pointer<GlobalTypeId>>(p.type)?.inner?.let { namedId(it) }
-}
-
-/** The id [decl] names, through the same wrappers — without resolving it to a body. */
-private fun TypeGraph.namedId(decl: GlobalTypeDecl) = resolveWith(decl) {
-    when (it) {
-        is TypeDecl.Ref -> it.id
-        is TypeDecl.InlineDef -> it.id
-        else -> null
-    }
-}

@@ -94,25 +94,78 @@ class ScopeLocator(val index: TypeGraph) : DiagnosticSink by index {
         ambiguous.forEach(::remove)
     }
 
+    /**
+     * The scope gcc *stated* for [ast], not one recovered from its surroundings.
+     *
+     * Method-bearing: any member's mangled name demangles to the full chain — the exact
+     * `(category, name)` Ghidra's this-param class-struct creator uses (same GnuDemangler), so our
+     * filled slot IS the slot it would otherwise forge empty. REQUIRES [TypeRegistry.register] to
+     * replace Ghidra's empty namespace shadows (REPLACE_EMPTY_STRUCTS) — else `dtm.resolve` keeps the
+     * empty shadow at the colliding path and every reference resolves to it (all-undef).
+     *
+     * Method-less, but some CU emitted an out-of-line member: the `this` param names this exact id and
+     * the mangled name states the path (§57). Two instantiations of a nested template
+     * (`AbstractRing<Integer>::MultiplicativeGroupT` and the `PolynomialMod2` one) share a leaf and
+     * nothing else tells them apart, so without this they collapse onto one header key.
+     */
+    private fun statedLocation(ast: Type) = (ast.demangledClassPath() ?: index.classPathByThisParam[ast.id])
+        ?.let { TypeLocation(scopeCategory(it.dropLast(1)), it.last()) }
+
+    /**
+     * Name, spelled base list and layout — enough to recognise the same class emitted by another CU.
+     * The base *names* are the point: a CU that emitted no out-of-line member leaves its copy unbound,
+     * but it still spells what the copy inherits (`ec2n.cpp`'s `MultiplicativeGroupT` derives from
+     * `AbstractGroup<PolynomialMod2>`, `integer.cpp`'s from `AbstractGroup<Integer>`), and [content] is
+     * blind to exactly that — it drops names, and the two bases are themselves layout-equal.
+     */
+    private data class Shape(val name: String, val bases: List<String?>?, val layout: ContentIndex.LayoutContent)
+
+    private fun shapeOf(ast: Type) = Shape(ast.ghidraName, baseNames(ast), index.content(ast.body))
+
+    private fun baseNames(ast: Type) = (ast.body as? TypeDecl.Struct)?.bases?.map { base ->
+        index.resolveWith(base.type) {
+            when (it) {
+                is TypeDecl.XRef -> it.tagName
+                is TypeDecl.Ref -> index.byId(it.id)?.name
+                is TypeDecl.InlineDef -> index.byId(it.id)?.name
+                else -> null
+            }
+        }
+    }
+
+    // Where an unbound copy goes: the slot a stated sibling of the same shape already occupies. This
+    // only ever repeats a location, never picks one — a shape two stated locations claim is dropped,
+    // because there the copy genuinely could be either.
+    private val statedLocationByShape: Map<Shape, TypeLocation> = buildMap {
+        val ambiguous = mutableSetOf<Shape>()
+        for (ast in index.allTypes) {
+            val location = statedLocation(ast) ?: continue
+            val shape = shapeOf(ast)
+            if (putIfAbsent(shape, location)?.takeIf { it != location } != null) ambiguous += shape
+        }
+        ambiguous.forEach(::remove)
+    }
+
     fun scopeKey(ast: Type): TypeLocation? {
-        // Method-bearing: file under the demangler's namespace category, named by its own leaf — the
-        // exact (category, name) Ghidra's this-param class-struct creator uses (same GnuDemangler), so
-        // our filled slot IS the slot it would otherwise forge empty. [byLocation] demotes to header
-        // only on a genuine content collision within a (scope, leaf). REQUIRES [TypeRegistry.register]
-        // to replace Ghidra's empty namespace shadows (REPLACE_EMPTY_STRUCTS) — else `dtm.resolve`
-        // keeps the empty shadow at the colliding path and every reference resolves to it (all-undef).
-        ast.demangledClassPath()?.let { return TypeLocation(scopeCategory(it.dropLast(1)), it.last()) }
+        statedLocation(ast)?.let { return it }
 
         // Method-less nested member type (`_Alloc_hider`, `_Rep`, `sentry`) — no mangled method to
         // scope it, so it otherwise collides char-vs-wchar under one bare-name header key. Recover the
         // enclosing template from its own `Outer::Inner` stab name, else from the struct that holds it
         // by value, and file it under that template's member category — the slot its qualified,
         // method-bearing sibling already occupies, so the two unify instead of forking a `.conflict`.
-        val (enclosingName, leaf) = ast.name?.let(::splitQualified)?.takeIf { it.size > 1 }
-            ?.let { it.dropLast(1).joinToString("::") to it.last() }
-            ?: enclosingByNestedId[ast.id]?.name?.let { it to ast.ghidraName }
-            ?: return null
-        return memberCategoryByClass[canonTemplateName(enclosingName)]?.let { TypeLocation(it, leaf) }
+        val recovered = (
+            ast.name?.let(::splitQualified)?.takeIf { it.size > 1 }
+                ?.let { it.dropLast(1).joinToString("::") to it.last() }
+                ?: enclosingByNestedId[ast.id]?.name?.let { it to ast.ghidraName }
+            )?.let { (enclosingName, leaf) ->
+            memberCategoryByClass[canonTemplateName(enclosingName)]?.let { TypeLocation(it, leaf) }
+        }
+
+        // Last: the slot a stated twin from another CU occupies (§57).
+        return recovered ?: statedLocationByShape[shapeOf(ast)]?.also {
+            debug("scope-from-twin", "${ast.ghidraName} (${ast.id.source.filename}) -> $it")
+        }
     }
 
     fun classifyGroup(key: TypeLocation, members: List<Type>): LocatedType {
@@ -185,6 +238,11 @@ private fun TypeGraph.locateTypesWith(attribution: Attribution) = buildMap {
                 // sibling — layout-identical, differing only in emitted methods, which never enter the
                 // DTM struct — so it rides along and aliases onto the owners' winner instead of forking
                 // the group. Genuine divergence among the owners still demotes every member to header.
+                // Method-bearing only, even though an out-of-line member states a scope just as firmly
+                // (§57): a body that declares methods is the one whose *content* is worth comparing.
+                // Counting the bound-but-method-less copies as owners put every CU's stub declaration of
+                // `std::type_info` in the vote, they diverge, and the demotion emptied `/std/type_info` —
+                // the slot Ghidra's demangler had already forged and was waiting for us to fill.
                 val owners = members.filter { it.demangledClassPath() != null }.ifEmpty { members }
                 // Layout-only: owners diverge only in per-CU method flags/order (gcc VIRTUAL vs NORMAL,
                 // reordering), which never enter the DTM struct — don't let that noise demote the group.
@@ -202,9 +260,20 @@ private fun TypeGraph.locateTypesWith(attribution: Attribution) = buildMap {
     // scope-keyed method-bearing copy's layout (methods never enter the DTM struct), so they fold
     // onto it instead of forking a duplicate slot. The `ghidraName` guard keeps genuinely
     // different same-layout classes apart; the winner prefers the method-bearing copy.
+    // Layout is blind to template arguments: `AbstractRing<Integer>::MultiplicativeGroupT` and its
+    // `PolynomialMod2` sibling are one LayoutContent (same fields, and their bases are layout-equal
+    // too), so §B would fold straight back together what §57's scope key just separated. A stated
+    // scope outranks a layout match — two of them are two declared types. Their method-less copies
+    // then have two candidates and nothing to choose with, so they keep their own slot rather than
+    // being guessed onto one.
+    fun LocatedType.isScopeStated() = location == nesting.scopeKey(type)
+
     for (equivalent in slots.groupBy { content(it.type.body) }.values) {
         val named = equivalent.filter { !it.type.name.isNullOrEmpty() }
-        if (equivalent.size == 1 || named.map { it.type.ghidraName }.toSet().size != 1) {
+        if (equivalent.size == 1 ||
+            equivalent.count { it.isScopeStated() } > 1 ||
+            named.map { it.type.ghidraName }.toSet().size != 1
+        ) {
             for (g in equivalent) put(g.location, g)
             continue
         }
