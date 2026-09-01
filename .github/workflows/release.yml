@@ -38,27 +38,19 @@ jobs:
     - name: Build zips
       run: ./gradlew buildExtension packageCli
 
+    - name: Publish to the release
+      if: startsWith(github.ref, 'refs/tags/v')
+      env:
+        GH_TOKEN: ${{ github.token }}
+        TAG: ${{ github.ref_name }}
+      run: | # Whichever matrix job gets here first creates the release; the rest race and lose harmlessly.
+        gh release view "$TAG" >/dev/null 2>&1 ||
+          gh release create "$TAG" --verify-tag --generate-notes || true
+        gh release upload "$TAG" dist/*.zip --clobber
+
+    # workflow_dispatch creates artifacts even if there is no release tag
     - name: Upload packages
       uses: actions/upload-artifact@v7
       with:
         name: packages-ghidra-${{ matrix.ghidra }}
         path: dist/*.zip
-
-  release:
-    needs: build
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
-    steps:
-    - name: Collect packages
-      uses: actions/download-artifact@v8
-      with:
-        pattern: packages-ghidra-*
-        merge-multiple: true
-        path: dist
-
-    - name: Publish release
-      uses: softprops/action-gh-release@v3
-      with:
-        files: dist/*.zip
-        fail_on_unmatched_files: true
-        generate_release_notes: true
