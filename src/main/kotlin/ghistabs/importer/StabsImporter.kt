@@ -1,11 +1,12 @@
 package ghistabs.importer
 
-import ghistabs.ImportOptions.Companion.markStabsTypedefsShortened
 import ghistabs.diagnose.DiagnosticSink
-import ghistabs.diagnose.analyzeDataCoverage
 import ghistabs.harvest.Harvest
 import ghistabs.harvest.Harvester
-import ghistabs.index.*
+import ghistabs.importer.ImportOptions.Companion.markStabsTypedefsShortened
+import ghistabs.index.SourceHints
+import ghistabs.index.SourceIndex
+import ghistabs.index.TypeGraph
 import ghistabs.materialize.*
 import ghistabs.parse.StabReader
 import ghistabs.parse.StaticScope
@@ -31,7 +32,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
 
     internal fun runOnRecords(stabs: StabReader.Result): ImportResult {
         // Pass A — parse + harvest
-        val harvest = Harvester(ctx).harvest(stabs.records)
+        val harvest = ctx.harvester().harvest(stabs.records)
         // The three indexes over it, constructed together and handed out by half: resolution to the
         // passes that resolve, folding to the ones that render, the vote to the one that places.
         val types = TypeGraph(harvest, ctx)
@@ -59,12 +60,12 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
                     constants = applyAllConstants(),
                     staticMembers = applyAllStaticMembers(),
                     classes = when {
-                        ctx.options.buildClasses -> ClassBuilder(registry, types, ctx).buildAll()
+                        ctx.options.buildClasses -> ctx.classBuilder(registry, types).buildAll()
                         else -> 0
                     },
                 )
             }.also {
-                DemanglerReplacer(ctx, registry).replace()
+                ctx.demanglerReplacer(registry).replace()
             }
         }
 

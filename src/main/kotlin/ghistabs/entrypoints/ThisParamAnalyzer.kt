@@ -1,4 +1,4 @@
-package ghistabs
+package ghistabs.entrypoints
 
 import ghidra.app.services.AbstractAnalyzer
 import ghidra.app.services.AnalysisPriority
@@ -9,6 +9,8 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.ParameterImpl
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
+import ghistabs.isInjected
+import ghistabs.isMethod
 
 const val THIS_PARAM_ANALYZER_NAME = "Class-method this-pointer"
 

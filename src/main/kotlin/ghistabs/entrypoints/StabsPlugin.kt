@@ -1,4 +1,4 @@
-package ghistabs
+package ghistabs.entrypoints
 
 import docking.ActionContext
 import docking.action.DockingAction
@@ -12,7 +12,7 @@ import ghidra.framework.plugintool.PluginTool
 import ghidra.framework.plugintool.util.PluginStatus
 import ghidra.util.HelpLocation
 import ghidra.util.Msg
-import ghistabs.ImportOptions.Companion.markStabsDone
+import ghistabs.importer.ImportOptions.Companion.markStabsDone
 import ghistabs.parse.StabReader
 
 /**

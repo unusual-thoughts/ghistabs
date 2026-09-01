@@ -6,16 +6,12 @@ import ghidra.program.model.data.Structure
 import ghidra.program.model.listing.Program
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
-import ghistabs.ImportOptions
-import ghistabs.ImportOptions.Companion.SHORTEN_TYPEDEFS
-import ghistabs.StabsAnalyzer
 import ghistabs.diagnose.CapturingSink
 import ghistabs.diagnose.Level
 import ghistabs.diagnose.StabsDiagnostics
-import ghistabs.importer.ImportContext
-import ghistabs.importer.ImportProbe
+import ghistabs.importer.*
+import ghistabs.importer.ImportOptions.Companion.SHORTEN_TYPEDEFS
 import ghistabs.runTransaction
-import ghistabs.set
 import ghistabs.test.*
 import ghistabs.withProgram
 import org.junit.jupiter.api.Tag
@@ -61,13 +57,13 @@ class StringDedupIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
 
             // CONCURRENT: schedule our analyzer for the next pass so it runs at LOW_PRIORITY
             // alongside Ghidra's demangler (which creates the `/std/string` class struct).
-            val discovered = mgr.getAnalyzer(StabsAnalyzer.NAME)
+            val discovered = mgr.getAnalyzer(STABS_ANALYZER_NAME)
             discovered.mustNotBeNull("StabsAnalyzer not discovered by ClassSearcher")
             val options = program.getOptions(Program.ANALYSIS_PROPERTIES)
             program.runTransaction("configure-analysis") {
-                options.setBoolean(StabsAnalyzer.NAME, true)
+                options.setBoolean(STABS_ANALYZER_NAME, true)
                 // The analyzer reads its own options from the per-analyzer subgroup, not the top level.
-                options.getOptions(StabsAnalyzer.NAME)[SHORTEN_TYPEDEFS] = shorten
+                options.getOptions(STABS_ANALYZER_NAME)[SHORTEN_TYPEDEFS] = shorten
             }
             mgr.initializeOptions()
             program.disableWindowsResourceAnalyzer()

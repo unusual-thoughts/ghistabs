@@ -6,14 +6,19 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
-import ghistabs.*
+import ghistabs.entrypoints.NO_RETURN_ANALYZER_NAME
+import ghistabs.entrypoints.NoReturnAnalyzer
+import ghistabs.entrypoints.markNoReturn
+import ghistabs.functionsIterable
+import ghistabs.runTransaction
 import ghistabs.test.*
+import ghistabs.withProgram
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import java.io.File
 
 /**
- * [ghistabs.NoReturnAnalyzer] against one real binary, through the ordinary analyzer pipeline.
+ * [ghistabs.entrypoints.NoReturnAnalyzer] against one real binary, through the ordinary analyzer pipeline.
  *
  * **One configuration per invocation**, because each is a full load + autoanalysis. Both write
  * `build/test-output/noreturn/<fixture>.<on|off>.txt`, and `diff`ing the two files *is* the with/

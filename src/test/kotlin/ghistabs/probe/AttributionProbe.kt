@@ -5,17 +5,16 @@ import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.listing.Program
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
-import ghistabs.ImportOptions.Companion.LOG_LEVEL
-import ghistabs.ImportOptions.Companion.SHORTEN_TYPEDEFS
-import ghistabs.ImportOptions.Companion.SOURCE_ROOTS
 import ghistabs.diagnose.Level
-import ghistabs.harvest.Harvester
+import ghistabs.importer.ImportOptions.Companion.LOG_LEVEL
+import ghistabs.importer.ImportOptions.Companion.SHORTEN_TYPEDEFS
+import ghistabs.importer.ImportOptions.Companion.SOURCE_ROOTS
+import ghistabs.importer.set
 import ghistabs.parse.StabReader
 import ghistabs.render.Renderer
 import ghistabs.render.Renderer.Mode
 import ghistabs.render.Scorecard
 import ghistabs.runTransaction
-import ghistabs.set
 import ghistabs.test.defaultContext
 import ghistabs.test.disableWindowsResourceAnalyzer
 import ghistabs.test.hintsOf
@@ -75,7 +74,7 @@ class AttributionProbe : AbstractGhidraHeadlessIntegrationTest() {
                 mgr.waitForAnalysis(null, monitor)
             }
             val reader = StabReader.fromProgram(program)!!.readAll()
-            val harvest = program.runTransaction("attribution-harvest") { Harvester(ctx).harvest(reader.records) }
+            val harvest = program.runTransaction("attribution-harvest") { ctx.harvester().harvest(reader.records) }
             // Through the run's sink, so the scorecard's counters land where this can read them back.
             val hints = hintsOf(harvest, sink = ctx)
 

@@ -7,17 +7,16 @@ import ghidra.program.model.address.Address
 import ghidra.program.model.data.*
 import ghidra.program.model.gclass.ClassUtils
 import ghidra.program.model.lang.CompilerSpec
-import ghidra.program.model.listing.CommentType
+import ghidra.program.model.listing.*
 import ghidra.program.model.listing.Function
-import ghidra.program.model.listing.GhidraClass
-import ghidra.program.model.listing.ParameterImpl
 import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
+import ghidra.util.task.TaskMonitor
 import ghistabs.Demangler
 import ghistabs.applyDemangling
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.Level
-import ghistabs.importer.ImportContext
+import ghistabs.harvest.AddressResolver
 import ghistabs.index.LocatedType
 import ghistabs.index.TypeGraph
 import ghistabs.index.demangledClassPath
@@ -32,10 +31,11 @@ import ghistabs.parse.TypeDecl.Struct.Method
 class ClassBuilder(
     private val registry: DataTypeRegistry,
     private val types: TypeGraph,
-    private val ctx: ImportContext<*>,
-) : DiagnosticSink by ctx {
-    private val program = ctx.program
-    private val resolver = ctx.resolver
+    private val program: Program,
+    private val resolver: AddressResolver,
+    private val monitor: TaskMonitor,
+    private val sink: DiagnosticSink,
+) : DiagnosticSink by sink {
     private val symtab = program.symbolTable
     private val dtm = program.dataTypeManager
 
@@ -93,10 +93,10 @@ class ClassBuilder(
      */
     fun buildAll(): Int {
         val classes = registry.byLocation.values.filter { it.isClass() }
-        ctx.monitor.initialize(classes.size.toLong(), "Stabs: building classes")
+        monitor.initialize(classes.size.toLong(), "Stabs: building classes")
         var built = 0
         for (group in classes) {
-            ctx.monitor.increment()
+            monitor.increment()
             try {
                 group.build()
                 built++
@@ -535,9 +535,9 @@ class ClassBuilder(
             .distinctBy { (addr, _) -> addr }
             .toList()
 
-        ctx.monitor.initialize(unclaimed.size.toLong(), "Stabs: sweeping unclaimed vtables")
+        monitor.initialize(unclaimed.size.toLong(), "Stabs: sweeping unclaimed vtables")
         for ((addr, qualified) in unclaimed) {
-            ctx.monitor.increment()
+            monitor.increment()
             val shape = program.vtableShape(addr, resolver)
             val targets = program.vtableSlotTargets(shape.addressPoint, resolver)
             if (targets.isEmpty()) {

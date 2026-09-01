@@ -17,20 +17,19 @@ import ghidra.framework.HeadlessGhidraApplicationConfiguration
 import ghidra.framework.options.OptionType
 import ghidra.program.model.listing.Program
 import ghidra.util.Msg
-import ghistabs.ImportOptions
-import ghistabs.ImportOptions.Companion.CLASSES
-import ghistabs.ImportOptions.Companion.FOLD_SOURCES
-import ghistabs.ImportOptions.Companion.SHORTEN_TYPEDEFS
-import ghistabs.StabsAnalyzer
-import ghistabs.StabsAnalyzer.Companion.import
-import ghistabs.StabsRenderExporter.Companion.ELIDE_SJLJ
-import ghistabs.StabsRenderExporter.Companion.LINE_ALIGNED
-import ghistabs.StabsRenderExporter.Companion.SHOW_STORAGE
 import ghistabs.diagnose.*
+import ghistabs.entrypoints.StabsAnalyzer.Companion.import
+import ghistabs.entrypoints.StabsRenderExporter.Companion.ELIDE_SJLJ
+import ghistabs.entrypoints.StabsRenderExporter.Companion.LINE_ALIGNED
+import ghistabs.entrypoints.StabsRenderExporter.Companion.SHOW_STORAGE
 import ghistabs.harvest.Harvest
-import ghistabs.harvest.Harvester
 import ghistabs.importer.ImportArtifacts
 import ghistabs.importer.ImportContext
+import ghistabs.importer.ImportOptions
+import ghistabs.importer.ImportOptions.Companion.CLASSES
+import ghistabs.importer.ImportOptions.Companion.FOLD_SOURCES
+import ghistabs.importer.ImportOptions.Companion.SHORTEN_TYPEDEFS
+import ghistabs.importer.STABS_ANALYZER_NAME
 import ghistabs.parse.StabReader
 import ghistabs.parse.StabRecord
 import ghistabs.render.Renderer
@@ -156,7 +155,7 @@ private class HarvestCommand : StabsCommand(name = "harvest") {
     override fun ImportContext<*>.execute() {
         val stabs = readStabs() ?: return
         shared.dumpRecords(stabs.records)
-        val harvest = Harvester(this).harvest(stabs.records)
+        val harvest = harvester().harvest(stabs.records)
         shared.dumpHarvest(harvest)
         log("harvest", "harvested ${harvest.types.size} types, ${harvest.functions.size} functions")
     }
@@ -296,7 +295,7 @@ private abstract class ImportingCommand(name: String) : StabsCommand(name = name
         val mgr = AutoAnalysisManager.getAnalysisManager(program)
         program.runTransaction("cli-disable-stabs-analyzer") {
             val analysis = program.getOptions(Program.ANALYSIS_PROPERTIES)
-            analysis.setBoolean(StabsAnalyzer.NAME, false)
+            analysis.setBoolean(STABS_ANALYZER_NAME, false)
             disableAnalyzers.flatMap { needle ->
                 analysis.optionNames.filter {
                     it.contains(needle, ignoreCase = true) && analysis.getType(it) == OptionType.BOOLEAN_TYPE

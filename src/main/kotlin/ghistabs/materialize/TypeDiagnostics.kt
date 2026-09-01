@@ -5,10 +5,10 @@ import ghidra.program.model.data.Composite
 import ghidra.program.model.data.DataType
 import ghidra.program.model.data.DataTypeManager
 import ghidra.program.model.data.Undefined
+import ghistabs.DEMANGLER_CATEGORY
 import ghistabs.conflictBase
 import ghistabs.diagnose.GapRecord
 import ghistabs.harvest.Type
-import ghistabs.importer.DemanglerReplacer
 import ghistabs.isConflict
 import ghistabs.parse.TypeDecl
 
@@ -133,7 +133,7 @@ fun DataTypeRegistry.reportConflictDelta() {
  * incumbent so the next AFTER run identifies it rather than another round of log archaeology.
  */
 private fun DataTypeRegistry.reportDemanglerIncumbents(conflicts: List<DataType>) {
-    conflicts.filter { it.categoryPath.isAncestorOrSelf(DemanglerReplacer.DEMANGLER_CATEGORY) }
+    conflicts.filter { it.categoryPath.isAncestorOrSelf(DEMANGLER_CATEGORY) }
         .forEach { fork ->
             val incumbent = dtm.conflictBase(fork)
             degradation(

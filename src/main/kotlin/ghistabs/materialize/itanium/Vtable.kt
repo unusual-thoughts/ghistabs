@@ -8,7 +8,7 @@ import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
 import ghistabs.forceCreateData
-import ghistabs.importer.AddressResolver
+import ghistabs.harvest.AddressResolver
 
 /** Upper bound on vbase/vcall-offset words scanned before giving up on locating the rtti header. */
 private const val MAX_VTABLE_PREFIX_WORDS = 64

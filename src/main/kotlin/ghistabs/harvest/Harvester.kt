@@ -2,8 +2,6 @@ package ghistabs.harvest
 
 import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.DiagnosticSink
-import ghistabs.importer.AddressResolver
-import ghistabs.importer.ImportContext
 import ghistabs.parse.*
 
 /**
@@ -14,7 +12,6 @@ import ghistabs.parse.*
  */
 class Harvester(private val monitor: TaskMonitor, private val sink: DiagnosticSink, resolver: AddressResolver) :
     DiagnosticSink by sink {
-    constructor(ctx: ImportContext<*>) : this(ctx.monitor, ctx, ctx.resolver)
 
     private val store = TypeStore(sink = sink)
     private val cursor = StabCursor(resolver, sink)

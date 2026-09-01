@@ -1,4 +1,4 @@
-package ghistabs
+package ghistabs.importer
 
 import docking.widgets.filechooser.GhidraFileChooserMode
 import docking.widgets.filechooser.GhidraFileChooserPanel
@@ -7,12 +7,16 @@ import ghidra.app.util.OptionException
 import ghidra.framework.options.OptionType
 import ghidra.framework.options.Options
 import ghidra.program.model.listing.Program
+import ghistabs.DirectoryListEditor
 import ghistabs.diagnose.Level
+import ghistabs.runTransaction
 import java.awt.Component
 import java.beans.PropertyEditor
 import java.util.function.Supplier
 import kotlin.properties.PropertyDelegateProvider
 import kotlin.reflect.KProperty
+
+const val STABS_ANALYZER_NAME = "Stabs Importer"
 
 data class ImportOptions(
     val applyPlateComments: Boolean = PLATE_COMMENTS.default,
@@ -124,7 +128,7 @@ data class ImportOptions(
     )
 
     constructor(program: Program) : this(
-        program.getOptions(Program.ANALYSIS_PROPERTIES).getOptions(StabsAnalyzer.NAME),
+        program.getOptions(Program.ANALYSIS_PROPERTIES).getOptions(STABS_ANALYZER_NAME),
     )
 }
 
@@ -154,6 +158,7 @@ abstract class StabOption<T : Any>(val name: String, val desc: String, val defau
         fun import(edited: Option) {
             value = read(edited)
         }
+
         val option get() = this@StabOption
         operator fun getValue(thisRef: Any?, property: KProperty<*>) = value
     }

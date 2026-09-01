@@ -1,4 +1,4 @@
-package ghistabs.importer
+package ghistabs.harvest
 
 import ghidra.app.util.opinion.ElfLoader
 import ghidra.program.model.address.Address
@@ -6,7 +6,6 @@ import ghidra.program.model.listing.Program
 import ghistabs.baseStackParamOffset
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.DummySink
-import ghistabs.harvest.Symbol
 import ghistabs.parse.*
 import ghistabs.plus
 
@@ -84,7 +83,7 @@ class ProgramAddressResolver(private val program: Program, private val sink: Dia
     /**
      * Where gcc put this local, as an address the decompiler indexes storage by: the register itself, or
      * the frame slot at Ghidra's origin rather than gcc's frame-pointer-relative one. Null for anything
-     * that is neither — and for the dbx register numbers [dbxRegisterName] declines to map (the x87
+     * that is neither — and for the dbx register numbers [ghistabs.parse.dbxRegisterName] declines to map (the x87
      * stack), which is the same set the importer skips.
      */
     override fun forSymbol(sym: Symbol<*>) = when (sym.location) {

@@ -4,7 +4,6 @@ import ghidra.app.util.importer.MessageLog
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghistabs.harvest.Func
-import ghistabs.harvest.Harvester
 import ghistabs.harvest.identity
 import ghistabs.index.hasHeaderExtension
 import ghistabs.parse.StabReader
@@ -56,7 +55,7 @@ class ComdatProvenanceProbe : AbstractGhidraHeadlessIntegrationTest() {
             val ctx = program.defaultContext()
             val records = StabReader.fromProgram(program)?.readAll()?.records
             assumeTrue(records != null, "no .stab section")
-            val harvest = Harvester(ctx).harvest(records!!)
+            val harvest = ctx.harvester().harvest(records!!)
 
             // The other derivation, from what each CU declared: a body outside its own CU's span
             // — or in a CU that declared none, its code having gone to COMDAT sections — was not
