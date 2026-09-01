@@ -70,19 +70,7 @@ jobs:
     - name: Build zips
       run: ./gradlew buildExtension packageCli
 
-    - name: Upload extension zip
-      uses: actions/upload-artifact@v7
-      with:
-        name: extension and CLI packages
-        path: dist/ghidra_*.zip
-        archive: false
-
-    - name: Upload CLI zip
-      uses: actions/upload-artifact@v7
-      with:
-        name: extension and CLI packages
-        path: dist/ghistabs-cli_*.zip
-        archive: false
+    - uses: ./.github/actions/upload-packages
 
     - name: Generate and submit dependency graph
       uses: gradle/actions/dependency-submission@v6
