@@ -25,25 +25,25 @@ jobs:
             java: '21'
 
     steps:
-    - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
 
-    - uses: ./.github/actions/setup-ghidra
-      with:
-        ghidra-version: ${{ matrix.ghidra }}
-        java-version: ${{ matrix.java }}
+      - uses: ./.github/actions/setup-ghidra
+        with:
+          ghidra-version: ${{ matrix.ghidra }}
+          java-version: ${{ matrix.java }}
 
-    - name: Test and build zips
-      run: ./gradlew test buildExtension packageCli
+      - name: Test and build zips
+        run: ./gradlew test buildExtension packageCli
 
-    - name: Publish to the release
-      if: startsWith(github.ref, 'refs/tags/v')
-      env:
-        GH_TOKEN: ${{ github.token }}
-        TAG: ${{ github.ref_name }}
-      run: | # Whichever matrix job gets here first creates the release; the rest race and lose harmlessly.
-        gh release view "$TAG" >/dev/null 2>&1 ||
-          gh release create "$TAG" --verify-tag --generate-notes || true
-        gh release upload "$TAG" dist/*.zip --clobber
+      - name: Publish to the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: | # Whichever matrix job gets here first creates the release; the rest race and lose harmlessly.
+          gh release view "$TAG" >/dev/null 2>&1 ||
+            gh release create "$TAG" --verify-tag --generate-notes || true
+          gh release upload "$TAG" dist/*.zip --clobber
 
-    # workflow_dispatch creates artifacts even if there is no release tag
-    - uses: ./.github/actions/upload-packages
+      # workflow_dispatch creates artifacts even if there is no release tag
+      - uses: ./.github/actions/upload-packages
