@@ -5,7 +5,6 @@ import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.data.Composite
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
-import ghistabs.materialize.TypedefShortener
 import ghistabs.runTransaction
 import ghistabs.test.defaultContext
 import ghistabs.test.disableWindowsResourceAnalyzer
@@ -44,7 +43,7 @@ class TypedefShorteningProbe : AbstractGhidraHeadlessIntegrationTest() {
                 mgr.waitForAnalysis(null, monitor)
             }
 
-            val shortener = TypedefShortener(program.dataTypeManager, program.defaultContext())
+            val shortener = program.defaultContext().typedefShortener()
             val renames = shortener.renames().sortedByDescending { it.from.length - it.to.length }
 
             val outDir = File("build/test-output/typedef-renames").apply { mkdirs() }

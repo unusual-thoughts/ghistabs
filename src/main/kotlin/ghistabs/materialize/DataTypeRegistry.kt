@@ -60,6 +60,9 @@ class DataTypeRegistry(
     /** XRef stubs that fell through to placeholders. Use sites are flagged via [recordXRefStubAt]. */
     internal val xrefStubs = mutableSetOf<DataType>()
 
+    /** [xrefStubs] by name — the DTM holds resolved *copies* of these, so identity doesn't carry. */
+    internal val stubNames get() = xrefStubs.mapTo(mutableSetOf()) { it.name }
+
     /** Id-less DataType registrations (typedefs, vftable/vtable composites, FunctionDefinitions). */
     private val extrasByName = LinkedHashMap<String, LinkedHashSet<DataType>>()
 
