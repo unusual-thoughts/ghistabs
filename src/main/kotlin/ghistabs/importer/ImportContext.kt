@@ -16,6 +16,7 @@ import ghistabs.index.SourceIndex
 import ghistabs.index.TypeGraph
 import ghistabs.materialize.ClassBuilder
 import ghistabs.materialize.DataTypeRegistry
+import ghistabs.materialize.TypedefShortener
 import ghistabs.parse.StabReader
 import ghistabs.parse.StabRecord
 import org.jetbrains.annotations.TestOnly
@@ -72,10 +73,10 @@ class ImportContext<Terminal : DiagnosticSink>(
     val symtab: SymbolTable = program.symbolTable
     val resolver: AddressResolver = ProgramAddressResolver(program, this)
     fun harvester() = Harvester(monitor, this, resolver)
+    fun demanglerReplacer(registry: DataTypeRegistry) = DemanglerReplacer(program, registry, monitor, this)
+    fun typedefShortener(stubNames: Set<String> = emptySet()) = TypedefShortener(dtm, monitor, this, stubNames)
     fun classBuilder(registry: DataTypeRegistry, types: TypeGraph) =
         ClassBuilder(registry, types, program, resolver, monitor, this)
-
-    fun demanglerReplacer(registry: DataTypeRegistry) = DemanglerReplacer(program, registry, monitor, this)
 }
 
 /**

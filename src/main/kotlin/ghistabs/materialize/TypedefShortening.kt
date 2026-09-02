@@ -97,8 +97,9 @@ fun typedefShorteningRenames(aliases: Map<String, String>, typeNames: Set<String
  */
 class TypedefShortener(
     private val dtm: DataTypeManager,
+    private val monitor: TaskMonitor,
     sink: DiagnosticSink,
-    private val monitor: TaskMonitor = TaskMonitor.DUMMY,
+    private val stubNames: Set<String> = emptySet(),
 ) : DiagnosticSink by sink {
     private val allTypes by lazy { dtm.allDataTypes.asSequence().toList() }
 
@@ -111,15 +112,23 @@ class TypedefShortener(
     private fun DataType.isStabsOrigin(): Boolean =
         sourceArchive == null || sourceArchive.sourceArchiveID == dtm.localSourceArchive.sourceArchiveID
 
-    /** Typedef simple name → aliased type name, restricted to stabs typedefs that don't alias a base type. */
+    /**
+     * Typedef simple name → aliased type name, restricted to stabs typedefs that don't alias a base
+     * type ([typedefAliases]) or an XRef stub ([stubNames]).
+     *
+     * A typedef onto a stub names a class no CU defined — libstdc++'s `ostream` on a binary that only
+     * ever takes one by pointer. Renaming that empty placeholder onto the alias folds the typedef away
+     * (the fold path in [rename], since the typedef *is* the stub's only namer), and the registry's
+     * non-resident copy of the pair then re-enters the DTM through a later apply as `<alias>.conflict`
+     * beside an empty struct wearing the alias. Keeping the typedef is also the better render:
+     * `ostream -> basic_ostream<…>` says more than an empty `ostream`.
+     */
     private fun aliases(types: List<DataType>): Map<String, String> =
-        typedefAliases(types.filter { it.isStabsOrigin() })
+        typedefAliases(types.filter { it.isStabsOrigin() }).filterValues { it !in stubNames }
 
     fun renames(): List<TypedefRename> = typedefShorteningRenames(
         aliases(allTypes),
-        allTypes.mapTo(mutableSetOf()) {
-            it.name
-        },
+        allTypes.mapTo(mutableSetOf()) { it.name },
     )
 
     fun apply(): Int {

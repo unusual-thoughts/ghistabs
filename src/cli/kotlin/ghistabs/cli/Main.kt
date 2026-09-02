@@ -274,9 +274,6 @@ private abstract class ImportingCommand(name: String) : StabsCommand(name = name
     /** Full auto-analysis, then the whole import, then every dump. */
     protected fun ImportContext<*>.fullImport(): ImportArtifacts? {
         autoAnalyze()
-        // No transaction: every write inside opens its own — the materialize/apply/source-map
-        // passes, [StabSectionOverlay], and the done-flags through `Program.set` — which is what
-        // the analyzer path relies on already.
         return import().artifacts?.also {
             shared.dumpRecords(it.records)
             shared.dumpHarvest(it.harvest)
@@ -286,11 +283,7 @@ private abstract class ImportingCommand(name: String) : StabsCommand(name = name
     }
 
     // Import ourselves (StabsAnalyzer disabled) instead of scheduling it into autoanalysis, so we keep
-    // the ImportContext it populates — the record/harvest/registry dumps read its cached records,
-    // harvest, typeRegistry and typeResolver. Scheduling the analyzer (the CONCURRENT path) would match
-    // the GUI/plugin workflow more faithfully, but it builds its own private context, leaving those
-    // caches unreachable. Ordering holds either way: full autoanalysis runs the demangler (~897) before
-    // our import, exactly as StabsAnalyzer's LOW_PRIORITY guarantees in the analyzer path.
+    // the ImportContext it populates
     private fun ImportContext<*>.autoAnalyze() {
         val mgr = AutoAnalysisManager.getAnalysisManager(program)
         program.runTransaction("cli-disable-stabs-analyzer") {
