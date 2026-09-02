@@ -14,63 +14,63 @@ jobs:
       checks: write
 
     steps:
-    - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
 
-    # The version the integration baselines were generated against; bumping it will shift counters.
-    - uses: ./.github/actions/setup-ghidra
-      with:
-        ghidra-version: '12.1.2'
+      # The version the integration baselines were generated against; bumping it will shift counters.
+      - uses: ./.github/actions/setup-ghidra
+        with:
+          ghidra-version: '12.1.2'
 
-    - name: Check formatting
-      run: ./gradlew ktlintCheck
+      - name: Check formatting
+        run: ./gradlew ktlintCheck
 
-    - name: Run static analysis
-      id: detekt
-      if: success() || failure()
-      run: ./gradlew detekt
+      - name: Run static analysis
+        id: detekt
+        if: success() || failure()
+        run: ./gradlew detekt
 
-    - name: Upload detekt report
-      if: steps.detekt.conclusion == 'failure'
-      uses: actions/upload-artifact@v7
-      with:
-        name: detekt-report
-        path: build/reports/detekt/detekt.html
+      - name: Upload detekt report
+        if: steps.detekt.conclusion == 'failure'
+        uses: actions/upload-artifact@v7
+        with:
+          name: detekt-report
+          path: build/reports/detekt/detekt.html
 
-    - name: Run unit tests
-      run: ./gradlew test
+      - name: Run unit tests
+        run: ./gradlew test
 
-    - name: Run integration tests
-      run: ./gradlew integrationTest -Pmode=all -PignoreBaselines=true --fail-fast
+      - name: Run integration tests
+        run: ./gradlew integrationTest -Pmode=all -PignoreBaselines=true --fail-fast
 
-    - name: Publish Test Report
-      id: report
-      uses: mikepenz/action-junit-report@v6
-      if: success() || failure() # always run even if the previous step fails
-      with:
-        report_paths: '**/build/test-results/**/TEST-*.xml'
+      - name: Publish Test Report
+        id: report
+        uses: mikepenz/action-junit-report@v6
+        if: success() || failure() # always run even if the previous step fails
+        with:
+          report_paths: '**/build/test-results/**/TEST-*.xml'
 
-    - name: Upload integration logs
-      uses: actions/upload-artifact@v7
-      with:
-        name: integration-logs.zip
-        path: build/test-output/logs/
+      - name: Upload integration logs
+        uses: actions/upload-artifact@v7
+        with:
+          name: integration-logs.zip
+          path: build/test-output/logs/
 
-    - name: Check for shifted baselines
-      id: shifted
-      if: success() || failure()
-      run: if [ -n "$(ls -A build/test-output/shifted-baselines 2>/dev/null)" ]; then echo found=true >> "$GITHUB_OUTPUT"; fi
+      - name: Check for shifted baselines
+        id: shifted
+        if: success() || failure()
+        run: if [ -n "$(ls -A build/test-output/shifted-baselines 2>/dev/null)" ]; then echo found=true >> "$GITHUB_OUTPUT"; fi
 
-    - name: Upload shifted baselines
-      if: steps.shifted.outputs.found == 'true'
-      uses: actions/upload-artifact@v7
-      with:
-        name: shifted-baselines.zip
-        path: build/test-output/shifted-baselines/
+      - name: Upload shifted baselines
+        if: steps.shifted.outputs.found == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: shifted-baselines.zip
+          path: build/test-output/shifted-baselines/
 
-    - name: Build zips
-      run: ./gradlew buildExtension packageCli
+      - name: Build zips
+        run: ./gradlew buildExtension packageCli
 
-    - uses: ./.github/actions/upload-packages
+      - uses: ./.github/actions/upload-packages
 
-    - name: Generate and submit dependency graph
-      uses: gradle/actions/dependency-submission@v6
+      - name: Generate and submit dependency graph
+        uses: gradle/actions/dependency-submission@v6
