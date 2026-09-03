@@ -53,8 +53,8 @@
             "max": 8980
         },
         "demangler-exact-match": {
-            "min": 812,
-            "max": 812
+            "min": 706,
+            "max": 706
         },
         "demangler-retarget-bound": {
             "min": 25,
@@ -69,8 +69,12 @@
             "max": 25
         },
         "demangler-reverse-demangle-match": {
-            "min": 6,
-            "max": 6
+            "min": 112,
+            "max": 112
+        },
+        "demangler-shortened-name-match": {
+            "min": 2,
+            "max": 2
         },
         "demangler-skip-no-replacement": {
             "min": 81,
@@ -452,6 +456,10 @@
             "min": 121,
             "max": 121
         },
+        "typedef-shorten": {
+            "min": 1,
+            "max": 1
+        },
         "unfinished-cu": {
             "min": 1,
             "max": 1
@@ -509,5 +517,5 @@
             "max": 68
         }
     },
-    "source": "crypto_mi_test_gcc345_fullstabs.exe - generated from snapshotCounters()"
+    "source": "crypto_mi_test_gcc345_fullstabs.exe - shifted from committed"
 }

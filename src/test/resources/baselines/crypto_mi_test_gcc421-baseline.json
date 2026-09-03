@@ -73,8 +73,8 @@
             "max": 12
         },
         "demangler-exact-match": {
-            "min": 800,
-            "max": 800
+            "min": 679,
+            "max": 679
         },
         "demangler-retarget-bound": {
             "min": 212,
@@ -93,12 +93,16 @@
             "max": 214
         },
         "demangler-reverse-demangle-match": {
-            "min": 1,
-            "max": 1
+            "min": 122,
+            "max": 122
         },
         "demangler-rtti-match": {
             "min": 3,
             "max": 3
+        },
+        "demangler-shortened-name-match": {
+            "min": 20,
+            "max": 20
         },
         "demangler-skip-no-replacement": {
             "min": 109,
@@ -404,6 +408,10 @@
             "min": 3173,
             "max": 3173
         },
+        "typedef-shorten": {
+            "min": 1,
+            "max": 1
+        },
         "unresolved-xref": {
             "min": 392,
             "max": 392
@@ -437,5 +445,5 @@
             "max": 345
         }
     },
-    "source": "crypto_mi_test_gcc421.exe - generated from snapshotCounters()"
+    "source": "crypto_mi_test_gcc421.exe - shifted from committed"
 }
