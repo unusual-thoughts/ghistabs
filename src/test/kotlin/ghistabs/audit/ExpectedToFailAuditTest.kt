@@ -38,6 +38,14 @@ class ExpectedToFailAuditTest {
         val declared = StabsImportRegressionBase::class.java.declaredMethods
             .mapNotNull { m -> m.getAnnotation(ExpectedToFail::class.java)?.let { m.name to it.fixtures.toSet() } }
         assumeTrue(declared.isNotEmpty(), "no @ExpectedToFail entries to audit")
+        // BEFORE runs no auto-analysis, so every assertion gated on it skips — and a skip is
+        // indistinguishable here from an entry that has stopped failing. A BEFORE-only run therefore
+        // reads the whole list as dead; it cannot audit anything. Any run that includes another mode can.
+        assumeTrue(
+            !System.getProperty("modeFilter").orEmpty().split(',').map { it.trim().uppercase() }
+                .filter { it.isNotEmpty() }.let { it.isNotEmpty() && it.all { m -> m == "BEFORE" } },
+            "BEFORE-only run: mode-gated assertions all skip, so no entry can be observed failing",
+        )
         val reached = lines.groupBy({ it[0] }, { it[1] }).mapValues { it.value.toSet() }
         val corpus = Fixtures.ALL.toSet()
         val short = declared.mapNotNull { (method, _) ->
