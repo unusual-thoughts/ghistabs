@@ -269,7 +269,7 @@ private fun TypeGraph.locateTypesWith(attribution: Attribution) = buildMap {
     fun LocatedType.isScopeStated() = location == nesting.scopeKey(type)
 
     for (equivalent in slots.groupBy { content(it.type.body) }.values) {
-        val named = equivalent.filter { !it.type.name.isNullOrEmpty() }
+        val named = equivalent.filter { it.type.name != null }
         if (equivalent.size == 1 ||
             equivalent.count { it.isScopeStated() } > 1 ||
             named.map { it.type.ghidraName }.toSet().size != 1
@@ -283,7 +283,7 @@ private fun TypeGraph.locateTypesWith(attribution: Attribution) = buildMap {
         debug(
             "canonical-content-merged",
             "${winner.location}: ${equivalent.size} groups (${
-                equivalent.count { it.type.name.isNullOrEmpty() }
+                equivalent.count { it.type.name == null }
             } anon) across ${equivalent.map { it.location.category }.toSet()}",
         )
         put(
