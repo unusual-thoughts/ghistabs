@@ -20,7 +20,7 @@ class TypeStore(
      * Gather TypeAsts for every InlineDef in [sym]. The nested asts inherit the
      * enclosing declaration's source location.
      */
-    fun hoistSymbolDefs(sym: Symbol<*>, cu: SourceFile.CUSource) {
+    fun hoistInlineDefs(sym: Symbol<*>, cu: SourceFile.CUSource) {
         fun GlobalTypeDecl.walk(): List<Type> = when (this) {
             // Emit the InlineDef ast AND recurse — gcc nests them (e.g. Method whose
             // return is an inline-defined Pointer-to-X). Without recursion the inner
@@ -178,7 +178,6 @@ class TypeStore(
     }
 
     /**
-     * Pure core of the `typedef struct {…} Name;` naming (see [nameAnonymousTypedefTargets]).
      * Returns `anonymous-aggregate-id → name` for every anonymous Struct/Enum that a typedef targets,
      * when **exactly one** typedef name claims it (ambiguous multi-name targets are left anonymous).
      * Two stab encodings qualify: the inline form `t3=4=s…` (`InlineDef`, gcc's usual for `typedef
@@ -187,22 +186,20 @@ class TypeStore(
      * already-named type is skipped by the target-name guard, and a builtin/pointer target by the kind
      * guard.
      */
-    internal fun anonymousTypedefTargetNames(): Map<GlobalTypeId, String> {
-        val namesByTarget = mutableMapOf<GlobalTypeId, MutableSet<String>>()
+    internal fun anonymousTypedefTargetNames() = buildMap {
         for (td in byId.values) {
-            val name = td.name?.ifEmpty { null } ?: continue
+            val name = td.name ?: continue
             val targetId = when (val body = td.body) {
                 is TypeDecl.InlineDef -> body.id
                 is TypeDecl.Ref -> body.id
                 else -> continue
             }
             val target = byId[targetId] ?: continue
-            if (!target.name.isNullOrEmpty()) continue
+            if (target.name != null) continue
             if (target.body !is TypeDecl.Struct && target.body !is TypeDecl.Enum) continue
-            namesByTarget.getOrPut(targetId) { mutableSetOf() }.add(name)
+            getOrPut(targetId) { mutableSetOf() }.add(name)
         }
-        return namesByTarget.filterValues { it.size == 1 }.mapValues { it.value.single() }
-    }
+    }.filterValues { it.size == 1 }.mapValues { it.value.single() }
 
     /**
      * `typedef struct {…} Name;` reaches us as an anonymous aggregate + a same-named typedef that

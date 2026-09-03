@@ -88,7 +88,7 @@ class TypedefShorteningConflictIntegrationTest : AbstractGhidraHeadlessIntegrati
             // `ostream` typedef left to read them off — the rename had folded it away — so a DTM-derived
             // set would make this check vacuous exactly when it matters.
             val aliases = checkNotNull(probe.artifacts) { "artifacts not populated" }
-                .types.namedPrimitiveTypedefs.keys
+                .types.namedTypedefs.keys
             val stabs = program.dataTypeManager.allDataTypes.asSequence()
                 .filter { it.categoryPath.path == "/stabs" }.toList()
             // Only forks on a typedef *alias* are this bug. A fork on the target's own name

@@ -69,7 +69,7 @@ class Harvester(private val monitor: TaskMonitor, private val sink: DiagnosticSi
 
         StabType.N_FUN if name.isEmpty() -> cursor.closeFunction(this)
 
-        StabType.N_FUN -> parseSymbol()?.also { sym ->
+        StabType.N_FUN -> harvestSymbol()?.also { sym ->
             when (val decl = sym.body) {
                 is SymbolDecl.Function -> cursor.openFunction(sym.retype(decl))
                 is SymbolDecl.Static -> harvestStatic(sym.retype(decl))
@@ -79,7 +79,7 @@ class Harvester(private val monitor: TaskMonitor, private val sink: DiagnosticSi
 
         // N_STSYM=data, N_LCSYM=bss, N_ROSYM=rodata, N_FUN=text : n_value carries the address.
         // N_GSYM=globals: only refers by name
-        StabType.N_GSYM, StabType.N_STSYM, StabType.N_LCSYM, StabType.N_ROSYM -> parseSymbol()?.also { sym ->
+        StabType.N_GSYM, StabType.N_STSYM, StabType.N_LCSYM, StabType.N_ROSYM -> harvestSymbol()?.also { sym ->
             when (val decl = sym.body) {
                 is SymbolDecl.Static -> harvestStatic(sym.retype(decl))
                 else -> warn("unexpected-static", "$sym")
@@ -87,7 +87,7 @@ class Harvester(private val monitor: TaskMonitor, private val sink: DiagnosticSi
         }
 
         // Parameters and register locals
-        StabType.N_PSYM, StabType.N_RSYM -> parseSymbol()?.also { sym ->
+        StabType.N_PSYM, StabType.N_RSYM -> harvestSymbol()?.also { sym ->
             when (val decl = sym.body) {
                 is SymbolDecl.Param -> cursor.param(sym.retype(decl))
                 is SymbolDecl.Local -> cursor.local(sym.retype(decl))
@@ -96,7 +96,7 @@ class Harvester(private val monitor: TaskMonitor, private val sink: DiagnosticSi
         }
 
         // Stack locals, types and constants
-        StabType.N_LSYM -> parseSymbol()?.also { sym ->
+        StabType.N_LSYM -> harvestSymbol()?.also { sym ->
             when (val decl = sym.body) {
                 // Bare `name:t(cu,n)` forward-declarations (body = self-Ref) are stored
                 // unfiltered; AstStore lets a real definition at the same id supersede them.
@@ -189,7 +189,8 @@ class Harvester(private val monitor: TaskMonitor, private val sink: DiagnosticSi
         staticsByCu.getOrPut(cursor.cu.identity) { mutableListOf() } += sym
     }
 
-    private fun StabRecord.parseSymbol() = when (val res = cursor.parseSymbol(this)) {
+    /** Parses a symbol record then hoist any contained inline type definitions */
+    private fun StabRecord.harvestSymbol() = when (val res = cursor.parseSymbol(this)) {
         is ParseResult.Error -> {
             err("parse-error", "@$index '${name.take(80)}': ${res.ex.message}")
             null
@@ -197,7 +198,7 @@ class Harvester(private val monitor: TaskMonitor, private val sink: DiagnosticSi
 
         is ParseResult.Ok -> {
             res.trailing?.let { warn("unparsed-trailing", it) }
-            res.inner.also { store.hoistSymbolDefs(it, cursor.cu) }
+            res.inner.also { store.hoistInlineDefs(it, cursor.cu) }
         }
     }
 }
