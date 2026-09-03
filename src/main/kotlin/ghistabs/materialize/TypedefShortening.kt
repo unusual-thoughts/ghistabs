@@ -69,6 +69,19 @@ class TemplateNameShortener(aliases: Map<String, String>) {
 
     /** [shorten] but null unless the text actually shrank (below the canonical spelling of [name]). */
     fun shortenedOrNull(name: String): String? = shorten(name).takeIf { it.length < canonTemplateName(name).length }
+
+    /**
+     * [shortenedOrNull] restricted to rewrites that happen *inside* [name] — null when the whole of it
+     * is an alias target.
+     *
+     * `vector<basic_string<…>,…>` → `vector<string>` is only reachable by rewriting the name, since no
+     * typedef names that instantiation. `basic_string<…>` on its own is not: the `string` typedef
+     * already carries that spelling at every reference (see `registerNamedPrimitiveTypedefs`), and
+     * renaming the type would land on the name its own typedef holds — the collision the fold path
+     * existed to paper over. Renaming is for what substitution cannot reach.
+     */
+    fun shortenedNestedOrNull(name: String): String? =
+        shortenedOrNull(name)?.takeIf { canonTemplateName(name) !in aliasByTarget }
 }
 
 /**
@@ -108,11 +121,21 @@ internal fun DataTypeRegistry.typedefAliases(): Map<String, String> =
             ?.let { alias to it.name }
     }.toMap()
 
-/** Datatype renames [TemplateNameShortener] would make over [typeNames] — one per name whose canonical text shrinks. */
-fun typedefShorteningRenames(aliases: Map<String, String>, typeNames: Set<String>): List<TypedefRename> =
-    TemplateNameShortener(aliases).let { s ->
-        typeNames.mapNotNull { name -> s.shortenedOrNull(name)?.let { TypedefRename(name, it) } }
+/**
+ * Datatype renames [TemplateNameShortener] would make over [typeNames] — one per name whose canonical
+ * text shrinks. [nestedOnly] drops the whole-name rewrites, which the typedef carries at every
+ * reference instead (see [TemplateNameShortener.shortenedNestedOrNull]).
+ */
+fun typedefShorteningRenames(
+    aliases: Map<String, String>,
+    typeNames: Set<String>,
+    nestedOnly: Boolean = false,
+): List<TypedefRename> = TemplateNameShortener(aliases).let { s ->
+    typeNames.mapNotNull { name ->
+        (if (nestedOnly) s.shortenedNestedOrNull(name) else s.shortenedOrNull(name))
+            ?.let { TypedefRename(name, it) }
     }
+}
 
 /**
  * Opt-in pass that renames the long templated datatypes [registry] created onto their shorter typedef
@@ -134,6 +157,7 @@ class TypedefShortener(private val registry: DataTypeRegistry, private val monit
     fun renames(): List<TypedefRename> = typedefShorteningRenames(
         registry.typedefAliases(),
         byName.keys,
+        nestedOnly = true,
     )
 
     fun apply(): Int {
@@ -143,7 +167,8 @@ class TypedefShortener(private val registry: DataTypeRegistry, private val monit
         monitor.initialize((byName.size + composites.size).toLong(), "Stabs: shortening typedefs")
         val typeRenamed = byName.keys.sumOf { name ->
             monitor.increment()
-            shortener.shortenedOrNull(name)?.let { short -> byName.getValue(name).count { rename(it, short) } } ?: 0
+            shortener.shortenedNestedOrNull(name)
+                ?.let { short -> byName.getValue(name).count { rename(it, short) } } ?: 0
         }
         // Base-class subobject fields (`_base_<Name>`/`_vbase_<Name>`) embed the base type's name at
         // build time, so renaming the base datatype never reaches them — rewrite those field names too.

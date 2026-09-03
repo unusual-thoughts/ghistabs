@@ -490,12 +490,16 @@ fun DataTypeRegistry.materializeAll(): Int {
  * Named primitive typedefs ("unsigned int", "char", …) — not XRefTargets so absent from
  * byCanonicalKey, but stabs gives them names worth exposing as typedef aliases. Grouped by
  * ghidraName for one typedef per logical name.
+ *
+ * Each declaration's own id resolves to that typedef, not to its target: gcc emits `ofstream os` as
+ * `os:(28,23)` — the typedef's id — so resolving through to the target is what printed
+ * `basic_ofstream<char,…>` for a variable declared `ofstream`. Independent of `OPT_SHORTEN_TYPEDEFS`,
+ * which governs only the [TypedefShortener] rename pass; the declared type is the typedef either way.
  */
 private fun DataTypeRegistry.registerNamedPrimitiveTypedefs() {
     for ((ghidraName, asts) in types.namedPrimitiveTypedefs) {
-        // Per-ast resolution: one CU emits `bool:t=_Bool` (1B), another
-        // `bool:t=int` (4B). Sharing one typedef across all ids would
-        // produce wrong field sizes and `bool.conflict` in the DTM.
+        // Per-ast: gcc reuses one name for many types — `_ValueType:t(1,169)=(0,9)` in one CU,
+        // `=(0,11)` in the next — so a shared typedef would give the wrong size and a `.conflict`.
         val targets = asts.associate { it.id to (it.body.resolveBuiltin() ?: resolveRef(it.body)) }
         // One shared typedef under /stabs (or root for primitives) for
         // DemanglerReplacer to substitute into `/Demangler/*` stubs.
@@ -520,10 +524,11 @@ private fun DataTypeRegistry.registerNamedPrimitiveTypedefs() {
             CATEGORY
         }
         val typedef = register(TypedefDataType(category, ghidraName, typedefTarget, dtm))
-        // A local declared `ostream os` carries the *typedef's* id, so caching the target against it
-        // is what made the decompiler print `basic_ostream<char,…>` — the typedef was registered but
-        // never handed to anything. Give each id its typedef, except where this CU's target differs
-        // from the shared one (the `bool` case above), where only the raw target is right.
+        // A typedef has its own id (`ofstream:t(28,23)=(28,24)=xs…`), so `ofstream os` is emitted as
+        // `os:(28,23)` — resolving that to the target is what made the decompiler print
+        // `basic_ofstream<char,…>` for it. The declared type is the typedef, so this is unconditional.
+        // Ids whose own target isn't the one the shared typedef names keep it: `_ValueType` is a
+        // different type per instantiation, and only the first won the typedef.
         for ((id, target) in targets) cacheIfAbsent(id, if (target === typedefTarget) typedef else target)
     }
 }
