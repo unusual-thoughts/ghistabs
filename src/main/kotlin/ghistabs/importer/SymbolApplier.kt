@@ -10,7 +10,6 @@ import ghidra.program.model.data.DataTypeConflictHandler
 import ghidra.program.model.data.EnumDataType
 import ghidra.program.model.data.Undefined4DataType
 import ghidra.program.model.listing.*
-import ghidra.program.model.listing.CommentType
 import ghidra.program.model.listing.Function
 import ghidra.program.model.symbol.SourceType
 import ghidra.program.model.symbol.SymbolTable
@@ -120,9 +119,7 @@ class SymbolApplier(
                 // synthesises a typed `this` from the class struct, which is authoritative.
                 // Keeping the N_PSYM one produces duplicate-`this` signatures Ghidra can't evict.
                 val params = open.params
-                    .filterNot {
-                        it.body.name == "this"
-                    }
+                    .filterNot { it.body.name == "this" }
                     .map { p ->
                         val pdt = registry.resolveRef(p.body.type)
                         if (pdt == null) {
@@ -435,7 +432,7 @@ class SymbolApplier(
         val (stack, registers) = locals.partition { it.body.location == VariableLocation.STACK }
         val rows = (stack.sortedBy { it.rawValue } + registers.sortedBy { it.body.name }).map { loc ->
             val type = registry.resolveRef(loc.body.type)?.displayName ?: "?"
-            val origin = loc.line ?.let { "[${loc.sourceFile.filename}:$it]" } ?: "[${loc.sourceFile.filename}]"
+            val origin = loc.line?.let { "[${loc.sourceFile.filename}:$it]" } ?: "[${loc.sourceFile.filename}]"
             Triple("$type ${loc.body.name}", loc.storage(ctx.program).orEmpty(), origin)
         }
         val declWidth = rows.maxOf { it.first.length }
