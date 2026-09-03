@@ -47,7 +47,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
         val registry = DataTypeRegistry(ctx.dtm, ctx, ctx.diagnostics, harvest, types, hints, ctx.monitor)
         val materialized = ctx.program.runTransaction("Stabs: materialize types") {
             registry.materializeAll().also {
-                if (ctx.options.shortenTypedefs) ctx.typedefShortener(registry.stubNames).apply()
+                if (ctx.options.shortenTypedefs) ctx.typedefShortener(registry).apply()
                 // The render spells types to match the decompiler, and it may run much later from the GUI
                 // against analyzer options that have since been toggled — so record what actually happened.
                 ctx.program.markStabsTypedefsShortened(ctx.options.shortenTypedefs)

@@ -496,14 +496,13 @@ private fun DataTypeRegistry.registerNamedPrimitiveTypedefs() {
         // Per-ast resolution: one CU emits `bool:t=_Bool` (1B), another
         // `bool:t=int` (4B). Sharing one typedef across all ids would
         // produce wrong field sizes and `bool.conflict` in the DTM.
-        for ((_, id, _, body) in asts) {
-            cacheIfAbsent(id, body.resolveBuiltin() ?: resolveRef(body))
-        }
+        val targets = asts.associate { it.id to (it.body.resolveBuiltin() ?: resolveRef(it.body)) }
         // One shared typedef under /stabs (or root for primitives) for
         // DemanglerReplacer to substitute into `/Demangler/*` stubs.
         val firstBody = asts.first().body
         val typedefTarget = firstBody.resolveBuiltin() ?: resolveRef(firstBody) ?: run {
             warn("named-typedef-unresolved", "$ghidraName: no target type, typedef not registered")
+            for ((id, target) in targets) cacheIfAbsent(id, target)
             continue
         }
         // §20: when the target already carries this exact name (a `typedef struct {…}
@@ -511,13 +510,21 @@ private fun DataTypeRegistry.registerNamedPrimitiveTypedefs() {
         // the named copy), a same-named `/stabs` typedef is just a second DataType with
         // the identical name. Ghidra resolves a struct/enum's display name across all
         // same-named DataTypes, so the duplicate destabilizes it — the named type suffices.
-        if (typedefTarget.name == ghidraName) continue
+        if (typedefTarget.name == ghidraName) {
+            for ((id, target) in targets) cacheIfAbsent(id, target)
+            continue
+        }
         val category = if (firstBody.resolveBuiltin() != null) {
             CategoryPath.ROOT
         } else {
             CATEGORY
         }
-        register(TypedefDataType(category, ghidraName, typedefTarget, dtm))
+        val typedef = register(TypedefDataType(category, ghidraName, typedefTarget, dtm))
+        // A local declared `ostream os` carries the *typedef's* id, so caching the target against it
+        // is what made the decompiler print `basic_ostream<char,…>` — the typedef was registered but
+        // never handed to anything. Give each id its typedef, except where this CU's target differs
+        // from the shared one (the `bool` case above), where only the raw target is right.
+        for ((id, target) in targets) cacheIfAbsent(id, if (target === typedefTarget) typedef else target)
     }
 }
 

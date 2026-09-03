@@ -74,7 +74,7 @@ class ImportContext<Terminal : DiagnosticSink>(
     val resolver: AddressResolver = ProgramAddressResolver(program, this)
     fun harvester() = Harvester(monitor, this, resolver)
     fun demanglerReplacer(registry: DataTypeRegistry) = DemanglerReplacer(program, registry, monitor, this)
-    fun typedefShortener(stubNames: Set<String> = emptySet()) = TypedefShortener(dtm, monitor, this, stubNames)
+    fun typedefShortener(registry: DataTypeRegistry) = TypedefShortener(registry, monitor)
     fun classBuilder(registry: DataTypeRegistry, types: TypeGraph) =
         ClassBuilder(registry, types, program, resolver, monitor, this)
 }
