@@ -42,12 +42,12 @@ fun dummyHarvester() = CountingSink().let {
 fun dummyCursor() = StabCursor(GenericAddressResolver, DummySink)
 
 // Tests capture at max verbosity — DEBUG and up — so log assertions see every message.
-fun Program.defaultContext() = ImportContext(
+fun Program.defaultContext(shortenTypedefs: Boolean = false) = ImportContext(
     this,
     TaskMonitor.DUMMY,
     // overlaySection off: the decoded-struct .stab overlay is a diagnostic view, not needed to produce
     // types, and it's ~8% of the run. StabSectionOverlayIntegrationTest exercises it directly.
-    ImportOptions(minLogLevel = Level.DEBUG, overlaySection = false),
+    ImportOptions(minLogLevel = Level.DEBUG, overlaySection = false, shortenTypedefs = shortenTypedefs),
     CapturingSink(),
     StabsDiagnostics(),
 )
