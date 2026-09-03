@@ -122,20 +122,15 @@ internal fun DataTypeRegistry.typedefAliases(): Map<String, String> =
     }.toMap()
 
 /**
- * Datatype renames [TemplateNameShortener] would make over [typeNames] — one per name whose canonical
- * text shrinks. [nestedOnly] drops the whole-name rewrites, which the typedef carries at every
- * reference instead (see [TemplateNameShortener.shortenedNestedOrNull]).
+ * Datatype renames the pass would make over [typeNames] — one per name whose canonical text shrinks
+ * *inside* itself. A name that is wholly an alias target is not renamed: the typedef already carries
+ * that spelling at every reference (see `registerNamedPrimitiveTypedefs`), so renaming would collide
+ * with its own typedef and buy nothing — [TemplateNameShortener.shortenedNestedOrNull].
  */
-fun typedefShorteningRenames(
-    aliases: Map<String, String>,
-    typeNames: Set<String>,
-    nestedOnly: Boolean = false,
-): List<TypedefRename> = TemplateNameShortener(aliases).let { s ->
-    typeNames.mapNotNull { name ->
-        (if (nestedOnly) s.shortenedNestedOrNull(name) else s.shortenedOrNull(name))
-            ?.let { TypedefRename(name, it) }
+fun typedefShorteningRenames(aliases: Map<String, String>, typeNames: Set<String>): List<TypedefRename> =
+    TemplateNameShortener(aliases).let { s ->
+        typeNames.mapNotNull { name -> s.shortenedNestedOrNull(name)?.let { TypedefRename(name, it) } }
     }
-}
 
 /**
  * Opt-in pass that renames the long templated datatypes [registry] created onto their shorter typedef
@@ -157,7 +152,6 @@ class TypedefShortener(private val registry: DataTypeRegistry, private val monit
     fun renames(): List<TypedefRename> = typedefShorteningRenames(
         registry.typedefAliases(),
         byName.keys,
-        nestedOnly = true,
     )
 
     fun apply(): Int {
