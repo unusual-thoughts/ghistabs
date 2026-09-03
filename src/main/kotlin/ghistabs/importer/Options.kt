@@ -50,8 +50,10 @@ data class ImportOptions(
         )
         val SHORTEN_TYPEDEFS = BoolOption(
             "Shorten templated names via typedefs",
-            "Rename long templated datatypes onto their shorter typedef aliases " +
-                "(basic_string<char, …> → string), recursively inside other templates.",
+            "Rewrite template arguments onto their shorter typedef aliases " +
+                "(vector<basic_string<char, …>, …> → vector<string>), recursively. Renames the parent " +
+                "datatype itself, so is less faithful to the compiled/mangled type names. " +
+                "A type that is itself a typedef's target is left alone.",
             false,
         )
         val FOLD_SOURCES = BoolOption(
