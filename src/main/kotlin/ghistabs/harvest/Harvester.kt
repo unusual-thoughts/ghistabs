@@ -103,7 +103,9 @@ class Harvester(private val monitor: TaskMonitor, private val sink: DiagnosticSi
                 is SymbolDecl.NamedType -> store += Type(
                     cursor.cu,
                     decl.id,
-                    decl.name,
+                    // gcc gives a tagless, typedef-less `enum { A, B };` a single-space symbol name,
+                    // which the parser normalizes to ""
+                    decl.name.ifEmpty { null },
                     decl.type,
                     line = sym.line,
                     sourceFile = sym.sourceFile,

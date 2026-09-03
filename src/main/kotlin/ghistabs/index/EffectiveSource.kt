@@ -105,7 +105,7 @@ class EffectiveSource(
      *  already collapsed) and sorted by it — every CU emits its own copy of each anonymous type. */
     val anonAggregates by lazy {
         types.allTypes
-            .filter { it.name.isNullOrEmpty() && it.body.isXRefTarget }
+            .filter { it.name == null && it.body.isTagDefinition }
             .groupBy { effectiveSourceFor(it) }
             .mapValues { (_, asts) -> asts.distinctBy { it.ghidraName }.sortedBy { it.ghidraName } }
     }

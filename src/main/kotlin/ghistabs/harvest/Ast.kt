@@ -40,6 +40,9 @@ value class LineNumber(val inner: UInt) : Comparable<LineNumber> {
 data class Type(
     val cu: SourceFile.CUSource,
     val id: GlobalTypeId,
+    /** Null exactly when the type has no name of its own: born inside a descriptor tree, or a
+     *  tagless anonymous `enum { … }`. Never the empty string — [ghistabs.harvest.Harvester] folds
+     *  that in, so "anonymous" has one spelling. */
     val name: String?,
     val body: GlobalTypeDecl,
     /** Source line from N_LSYM `desc`, null when the emitter left it 0 (no -gstabs+). */
@@ -57,7 +60,7 @@ data class Type(
      * same tag — e.g. `__si_class_type_info_pseudo` — collapse to the same name and
      *  byHash dedup actually fires). Otherwise, fall back to the synthetic.
      */
-    val nameOrUnique = name?.ifEmpty { null } ?: (body as? TypeDecl.XRef)?.tagName?.ifEmpty { null } ?: uniqueName
+    val nameOrUnique = name ?: (body as? TypeDecl.XRef)?.tagName?.ifEmpty { null } ?: uniqueName
 
     // Reach the demangler's spelling of the same class: drop every space that is punctuation-adjacent,
     // then substitute `_` for the ones left inside a multiword builtin — which is what
