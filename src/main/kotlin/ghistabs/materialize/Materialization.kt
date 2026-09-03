@@ -476,7 +476,7 @@ fun DataTypeRegistry.materializeAll(): Int {
             located.materialize()
         }
 
-        registerNamedPrimitiveTypedefs()
+        materializeTypedefs()
 
         // Non-registerable top-level typeAsts (XRef body, FunctionT, Method, …)
         for (ast in types.allTypes) {
@@ -487,17 +487,17 @@ fun DataTypeRegistry.materializeAll(): Int {
 }
 
 /**
- * Named primitive typedefs ("unsigned int", "char", …) — not XRefTargets so absent from
- * byCanonicalKey, but stabs gives them names worth exposing as typedef aliases. Grouped by
- * ghidraName for one typedef per logical name.
+ * Every named typedef declaration ("unsigned int", "char", `ofstream`, …) — not XRefTargets, so
+ * absent from byCanonicalKey, but stabs gives them names worth exposing as typedef aliases. Grouped
+ * by ghidraName for one typedef per logical name.
  *
  * Each declaration's own id resolves to that typedef, not to its target: gcc emits `ofstream os` as
  * `os:(28,23)` — the typedef's id — so resolving through to the target is what printed
  * `basic_ofstream<char,…>` for a variable declared `ofstream`. Independent of `OPT_SHORTEN_TYPEDEFS`,
  * which governs only the [TypedefShortener] rename pass; the declared type is the typedef either way.
  */
-private fun DataTypeRegistry.registerNamedPrimitiveTypedefs() {
-    for ((ghidraName, asts) in types.namedPrimitiveTypedefs) {
+private fun DataTypeRegistry.materializeTypedefs() {
+    for ((ghidraName, asts) in types.namedTypedefs) {
         // Per-ast: gcc reuses one name for many types — `_ValueType:t(1,169)=(0,9)` in one CU,
         // `=(0,11)` in the next — so a shared typedef would give the wrong size and a `.conflict`.
         val targets = asts.associate { it.id to (it.body.resolveBuiltin() ?: resolveRef(it.body)) }

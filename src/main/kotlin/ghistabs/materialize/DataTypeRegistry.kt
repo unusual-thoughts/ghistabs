@@ -142,13 +142,11 @@ class DataTypeRegistry(
      * [resolveIntoDtm] + remember. Returns the DTM-resolved instance (may differ). With an [id],
      * caches it under [id] for [dataTypeFor]; id-less, buckets it by name in extrasByName.
      */
-    internal fun register(dt: DataType, id: GlobalTypeId? = null): DataType {
-        val resolved = dt.resolveIntoDtm()
+    internal fun register(dt: DataType, id: GlobalTypeId? = null) = dt.resolveIntoDtm().also { resolved ->
         when (id) {
             null -> extrasByName.getOrPut(resolved.name) { LinkedHashSet() }.add(resolved)
             else -> cache(id, resolved)
         }
-        return resolved
     }
 
     /** Get-or-create a DTM-resident DataType of type [T] at `(category, name)`. */

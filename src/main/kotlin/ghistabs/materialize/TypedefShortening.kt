@@ -76,7 +76,7 @@ class TemplateNameShortener(aliases: Map<String, String>) {
      *
      * `vector<basic_string<…>,…>` → `vector<string>` is only reachable by rewriting the name, since no
      * typedef names that instantiation. `basic_string<…>` on its own is not: the `string` typedef
-     * already carries that spelling at every reference (see `registerNamedPrimitiveTypedefs`), and
+     * already carries that spelling at every reference (see `materializeTypedefs`), and
      * renaming the type would land on the name its own typedef holds — the collision the fold path
      * existed to paper over. Renaming is for what substitution cannot reach.
      */
@@ -102,8 +102,8 @@ fun DataType.isGhidraBaseType(): Boolean = when (this) {
 
 /**
  * Typedef alias → the DTM name of the type it aliases, read off the stabs typedef declarations
- * (`namedPrimitiveTypedefs` — despite the name, every named non-XRef-target ast, which is exactly what
- * [registerNamedPrimitiveTypedefs] turns into DTM typedefs). Resolving the *declaration* rather than
+ * (`namedTypedefs`, which is exactly what [materializeTypedefs] turns into DTM typedefs). Resolving
+ * the *declaration* rather than
  * reading a registered `TypeDef` back out of the DTM is what makes the two refusals exact: [resolveRef]
  * hands back the `byId`-cached object registration itself used, so this is the very DataType the
  * registry classified.
@@ -114,17 +114,16 @@ fun DataType.isGhidraBaseType(): Boolean = when (this) {
  *    the pair re-enters the DTM through a later apply as `<alias>.conflict` beside an empty struct
  *    wearing the alias. `ostream -> basic_ostream<…>` reads better than an empty `ostream` anyway.
  */
-internal fun DataTypeRegistry.typedefAliases(): Map<String, String> =
-    types.namedPrimitiveTypedefs.mapNotNull { (alias, asts) ->
-        resolveRef(asts.first().body)
-            ?.takeUnless { it.isGhidraBaseType() || it in xrefStubs }
-            ?.let { alias to it.name }
-    }.toMap()
+internal fun DataTypeRegistry.typedefAliases(): Map<String, String> = types.namedTypedefs.mapNotNull { (alias, asts) ->
+    resolveRef(asts.first().body)
+        ?.takeUnless { it.isGhidraBaseType() || it in xrefStubs }
+        ?.let { alias to it.name }
+}.toMap()
 
 /**
  * Datatype renames the pass would make over [typeNames] — one per name whose canonical text shrinks
  * *inside* itself. A name that is wholly an alias target is not renamed: the typedef already carries
- * that spelling at every reference (see `registerNamedPrimitiveTypedefs`), so renaming would collide
+ * that spelling at every reference (see `materializeTypedefs`), so renaming would collide
  * with its own typedef and buy nothing — [TemplateNameShortener.shortenedNestedOrNull].
  */
 fun typedefShorteningRenames(aliases: Map<String, String>, typeNames: Set<String>): List<TypedefRename> =

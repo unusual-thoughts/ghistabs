@@ -33,11 +33,12 @@ class TypeGraph(private val harvest: Harvest, sink: DiagnosticSink = DummySink) 
     }
 
     /**
-     * Named primitive typedefs ("unsigned int", "char", …) — not XRefTargets so absent from
-     * byCanonicalKey, but stabs gives them names worth exposing as typedef aliases. Grouped by
-     * ghidraName for one typedef per logical name.
+     * The other half: named asts binding a name to a type defined elsewhere ("unsigned int", "char",
+     * `ofstream`, …). Their target may well materialize on its own — as a composite, a
+     * FunctionDefinition, a pointer — but nothing else would carry *this* name, so each becomes a
+     * typedef. Grouped by ghidraName for one per logical name.
      */
-    val namedPrimitiveTypedefs by lazy {
+    val namedTypedefs by lazy {
         typeAsts.values
             .filter { it.name != null && !it.body.isXRefTarget }
             .groupBy { it.ghidraName }
