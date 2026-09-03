@@ -41,19 +41,28 @@ import org.junit.jupiter.api.Test
  * fork none, so they are not witnesses.
  *
  * Runs CONCURRENT (analyzer scheduled into the analysis session, as the GUI does): with the import run
- * *after* a completed analysis nothing re-applies the stale pair and the bug does not appear.
+ * *after* a completed analysis nothing re-applies the stale pair and the bug does not appear — which is
+ * also why the CLI cannot reproduce it.
+ *
+ * Both modes, because typedef *resolution* is unconditional now: `ostream os` resolves to the typedef
+ * whether or not shortening is on, so the off case is no longer the trivially-empty configuration.
  */
 @Tag("integration")
 class TypedefShorteningConflictIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     @Test
-    fun shorteningForksNoConflicts() {
+    fun forksNoConflictsShorteningOn() = assertNoStabsConflicts(shorten = true)
+
+    @Test
+    fun forksNoConflictsShorteningOff() = assertNoStabsConflicts(shorten = false)
+
+    private fun assertNoStabsConflicts(shorten: Boolean) {
         val fixture = Fixtures.orDefault(DEFAULT_FIXTURE)
         val monitor = TaskMonitor.DUMMY
         withProgram(fixture, log = MessageLog(), monitor = monitor) { program ->
             val ctx = ImportContext(
                 program,
                 monitor,
-                ImportOptions(shortenTypedefs = true, minLogLevel = Level.DEBUG),
+                ImportOptions(shortenTypedefs = shorten, minLogLevel = Level.DEBUG),
                 CapturingSink(),
                 StabsDiagnostics(),
             )
@@ -64,7 +73,7 @@ class TypedefShorteningConflictIntegrationTest : AbstractGhidraHeadlessIntegrati
             val options = program.getOptions(Program.ANALYSIS_PROPERTIES)
             program.runTransaction("configure-analysis") {
                 options.setBoolean(STABS_ANALYZER_NAME, true)
-                options.getOptions(STABS_ANALYZER_NAME)[SHORTEN_TYPEDEFS] = true
+                options.getOptions(STABS_ANALYZER_NAME)[SHORTEN_TYPEDEFS] = shorten
             }
             mgr.initializeOptions()
             program.disableWindowsResourceAnalyzer()
@@ -97,7 +106,7 @@ class TypedefShorteningConflictIntegrationTest : AbstractGhidraHeadlessIntegrati
             // hands references the typedef rather than renaming anything, and the rename half only
             // rewrites template *arguments*, never a whole name a typedef already carries.
             stabs.single { it.name == "ostream" }
-                .must("/stabs/ostream should stay a typedef onto its stub") { this is TypeDef }
+                .must("/stabs/ostream should stay a typedef onto its target") { this is TypeDef }
         }
     }
 
