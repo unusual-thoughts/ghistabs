@@ -240,7 +240,7 @@ class StabCursorGlobalizeTest {
         )
 
         // walkDefinitions should extract the emitted TypeAst
-        store.hoistSymbolDefs(input, cu)
+        store.hoistInlineDefs(input, cu)
         val (asts, _) = store.toHarvest()
 
         asts.size.mustBe(1, "walkDefinitions should return exactly one TypeAst from InlineDef")
