@@ -120,7 +120,7 @@ fun foldSourcePaths(sources: Iterable<GhidraSourceFile>): Map<GhidraSourceFile, 
 }
 
 /** gcc emits anonymous types with CU-local sequential names; same name in different CUs is unrelated. */
-fun Type.isCuLocalName() = name != null && (name.isEmpty() || CU_LOCAL_NAME.matches(name))
+fun Type.isCuLocalName() = name != null && CU_LOCAL_NAME.matches(name)
 
 /**
  * The type's own demangled path, root-first (`std::string::_M_replace` → `["std", "string"]`), or null

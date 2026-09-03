@@ -28,7 +28,7 @@ class TypeGraph(private val harvest: Harvest, sink: DiagnosticSink = DummySink) 
     /** All named aggregate / enum ASTs, indexed by raw stabs name. */
     internal val astsByName: Map<String, List<Type>> by lazy {
         typeAsts.values
-            .filter { !it.name.isNullOrEmpty() && it.body.isXRefTarget }
+            .filter { it.name != null && it.body.isTagDefinition }
             .groupBy { it.name!! }
     }
 
@@ -46,7 +46,7 @@ class TypeGraph(private val harvest: Harvest, sink: DiagnosticSink = DummySink) 
     /** Base-tag (template args + namespace stripped) → complete definitions only. */
     private val astsByBaseTag: Map<String, List<Type>> by lazy {
         typeAsts.values
-            .filter { !it.name.isNullOrEmpty() && it.body.isXRefTarget && it.body.isComplete }
+            .filter { it.name != null && it.body.isXRefTarget && it.body.isComplete }
             .groupBy { baseTag(it.name!!) }
     }
 
