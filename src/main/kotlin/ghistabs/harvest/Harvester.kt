@@ -191,15 +191,5 @@ class Harvester(private val monitor: TaskMonitor, private val sink: DiagnosticSi
     }
 
     /** Parses a symbol record then hoist any contained inline type definitions */
-    private fun StabRecord.harvestSymbol() = when (val res = cursor.parseSymbol(this)) {
-        is ParseResult.Error -> {
-            err("parse-error", "@$index '${name.take(80)}': ${res.ex.message}")
-            null
-        }
-
-        is ParseResult.Ok -> {
-            res.trailing?.let { warn("unparsed-trailing", it) }
-            res.inner.also { store.hoistInlineDefs(it, cursor.cu) }
-        }
-    }
+    private fun StabRecord.harvestSymbol() = cursor.parseSymbol(this)?.also { store.hoistInlineDefs(it, cursor.cu) }
 }

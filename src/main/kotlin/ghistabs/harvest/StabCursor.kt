@@ -88,7 +88,16 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
 
     override fun globalIdFor(id: LocalTypeId) = GlobalTypeId(cuContext?.sourceFor(id) ?: cu, id.n)
 
-    fun parseSymbol(rec: StabRecord) = Symbol.parse(rec, this, lineSource, currentFunctionName)
+    fun parseSymbol(rec: StabRecord) = when (val res = Symbol.parse(rec, this, lineSource, currentFunctionName)) {
+        is ParseResult.Error -> {
+            err("parse-error", "@${rec.index} '${rec.name.take(80)}': ${res.ex.message}")
+            null
+        }
+        is ParseResult.Ok -> {
+            res.trailing?.let { warn("unparsed-trailing", it) }
+            res.inner
+        }
+    }
 
     /**
      * Build every CU's [CuContext] up front, so an N_BINCL file number is resolvable from the
@@ -119,6 +128,22 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
                 StabType.N_EXCL -> cuContext?.remount(resolved(rec.name), rec.value)
 
                 else -> {}
+            }
+        }
+    }
+
+    fun rawSymbols(records: Iterable<StabRecord>) = buildList {
+        for (record in records) {
+            when (record.type) {
+                StabType.N_UNDF, StabType.N_BINCL, StabType.N_EXCL, StabType.N_OPT -> {}
+                StabType.N_SO -> sourceUnit(record)
+                StabType.N_SOL -> switchSource(record)
+                StabType.N_FUN if record.name.isEmpty() -> closeFunction(record)
+                StabType.N_FUN -> parseSymbol(record)?.also {
+                    if (it.body is SymbolDecl.Function) openFunction(it.retype(it.body))
+                    add(it)
+                }
+                else -> if (record.name.isNotEmpty()) parseSymbol(record)?.let { add(it) }
             }
         }
     }
