@@ -23,6 +23,8 @@ import ghistabs.entrypoints.StabsRenderExporter.Companion.ELIDE_SJLJ
 import ghistabs.entrypoints.StabsRenderExporter.Companion.LINE_ALIGNED
 import ghistabs.entrypoints.StabsRenderExporter.Companion.SHOW_STORAGE
 import ghistabs.harvest.Harvest
+import ghistabs.harvest.StabCursor
+import ghistabs.harvest.Symbol
 import ghistabs.importer.ImportArtifacts
 import ghistabs.importer.ImportContext
 import ghistabs.importer.ImportOptions
@@ -30,15 +32,24 @@ import ghistabs.importer.ImportOptions.Companion.CLASSES
 import ghistabs.importer.ImportOptions.Companion.FOLD_SOURCES
 import ghistabs.importer.ImportOptions.Companion.SHORTEN_TYPEDEFS
 import ghistabs.importer.STABS_ANALYZER_NAME
+import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.StabReader
 import ghistabs.parse.StabRecord
+import ghistabs.parse.SymbolDecl
 import ghistabs.render.Renderer
 import ghistabs.runTransaction
 import ghistabs.withProgram
 import java.io.File
 
 fun main(args: Array<String>) = Ghistabs()
-    .subcommands(SkeletonCommand(), DecompCommand(), DumpCommand(), HarvestCommand(), ParseCommand())
+    .subcommands(
+        SkeletonCommand(),
+        DecompCommand(),
+        DumpCommand(),
+        HarvestCommand(),
+        SymbolsCommand(),
+        ParseCommand(),
+    )
     .main(args)
 
 /**
@@ -73,12 +84,17 @@ private class SharedOptions : OptionGroup(TITLE) {
     val recordsJson by option("--records", help = "Dump parsed StabRecords as JSON").file(canBeDir = false)
     val harvestJson by option("--harvest", help = "Dump the harvest as JSON").file(canBeDir = false)
     val registryJson by option("--registry", help = "Dump type registry as JSON").file(canBeDir = false)
+    val symbolsJson by option("--symbols", help = "Dump parsed symbol declarations as JSON").file(canBeDir = false)
     val degradationLog by option("--degradation-log", help = "Write grouped materialization degradations here")
         .file(canBeDir = false)
 
     fun dumpRecords(records: List<StabRecord>) = recordsJson?.writeDump { dumpJson.encodeToString(records) }
 
     fun dumpHarvest(harvest: Harvest) = harvestJson?.writeDump { dumpJson.encodeToString(harvest) }
+
+    fun dumpSymbols(symbols: List<Symbol<SymbolDecl<GlobalTypeId>>>) = symbolsJson?.writeDump {
+        dumpJson.encodeToString(symbols)
+    }
 
     fun dumpRegistry(artifacts: ImportArtifacts) = registryJson?.let(artifacts::writeRegistryDump)
 
@@ -158,6 +174,36 @@ private class HarvestCommand : StabsCommand(name = "harvest") {
         val harvest = harvester().harvest(stabs.records)
         shared.dumpHarvest(harvest)
         log("harvest", "harvested ${harvest.types.size} types, ${harvest.functions.size} functions")
+    }
+}
+
+/**
+ * The symbol layer: each record's `name:descriptor…` parsed into a [SymbolDecl], with the cursor's
+ * source/function context resolved, but nothing merged into types yet. Between [ParseCommand] (bytes)
+ * and [HarvestCommand] (types) — the level at which `:T` vs `:t`, record type and declaration kind are
+ * still separate facts, so it answers questions the harvest has already folded away.
+ */
+private class SymbolsCommand : StabsCommand(name = "symbols") {
+    override fun help(context: Context) =
+        "Dump parsed symbol declarations, without harvesting them into types. Requires --symbols FILE."
+
+    override fun validate() {
+        if (shared.harvestJson != null || shared.registryJson != null) {
+            throw UsageError("symbols stops below the harvest; use harvest or dump")
+        }
+        if (shared.symbolsJson == null) throw UsageError("--symbols FILE is required")
+    }
+
+    override fun ImportContext<*>.execute() {
+        val stabs = readStabs() ?: return
+        shared.dumpRecords(stabs.records)
+        // preSeed first: N_BINCL/N_EXCL header ids have to be mounted before any symbol referencing
+        // them parses, exactly as the harvester does it.
+        val cursor = StabCursor(resolver, this)
+        cursor.preSeedHeaders(stabs.records)
+        val symbols = cursor.rawSymbols(stabs.records)
+        shared.dumpSymbols(symbols)
+        log("symbols", "parsed ${symbols.size} symbols from ${stabs.records.size} records")
     }
 }
 

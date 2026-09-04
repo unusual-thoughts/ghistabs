@@ -188,6 +188,7 @@ build/libs/ghistabs skeleton myprogram.exe -d out/skeletons
 build/libs/ghistabs decomp   myprogram.exe -d out/decomps --shorten-typedefs
 build/libs/ghistabs dump     myprogram.exe --harvest h.json --registry r.json
 build/libs/ghistabs harvest  myprogram.exe --harvest h.json
+build/libs/ghistabs symbols  myprogram.exe --symbols s.json
 build/libs/ghistabs parse    myprogram.exe --records r.json
 ```
 
@@ -196,23 +197,26 @@ decompiler, no rendered files, so no `-d`. Use it to inspect what the stabs yiel
 paying for the render. It needs at least one dump option to be worth running, and says so
 before Ghidra boots.
 
-`harvest` and `parse` stop earlier still, and **skip auto-analysis entirely**: neither pass
-reads anything Ghidra's analyzers produce, so they finish in seconds where the others take
-minutes, and neither writes anything to the program. `harvest` runs the byte decode plus the
-harvest and requires `--harvest FILE` (`--records` optional); `parse` runs the byte decode
-alone and requires `--records FILE`. Use them when iterating on the parser or the harvest.
+`harvest`, `symbols` and `parse` stop earlier still, and **skip auto-analysis entirely**.
+They are three stages of the same pipeline:
+
+| Command   | Requires    | Stops at                                                                               |
+| --------- | ----------- | -------------------------------------------------------------------------------------- |
+| `parse`   | `--records` | binary record decoding.                                                                |
+| `symbols` | `--symbols` | parsed Stabs symbol declarations with global IDs and source/function context resolved. |
+| `harvest` | `--harvest` | harvested type graph, with function, global etc. symbols per compilation unit.         |
 
 Common options — logging and dumps, the only two things every command does the same way. Every
 command takes them after its own name, and `ghistabs --help` lists them as well as each
 `ghistabs <command> --help`:
 
-| Option                                      | Default | Effect                                                                                       |
-| ------------------------------------------- | ------- | -------------------------------------------------------------------------------------------- |
-| `-v`, `--log-level`                         | `INFO`  | `DEBUG`/`INFO`/`WARN`/`ERROR`; the log streams live to stderr.                               |
-| `--log FILE`                                |         | Also write the import log to a file.                                                         |
-| `--log-ghidra`                              | off     | Include Ghidra's own log messages in the stream.                                             |
-| `--records`, `--harvest`, `--registry` FILE |         | Dump the parsed stab records / harvest / materialized type registry as JSON.                 |
-| `--degradation-log FILE`                    |         | Grouped report of every type that materialized to something weaker than the stabs described. |
+| Option                                                   | Default | Effect                                                                                             |
+| -------------------------------------------------------- | ------- | -------------------------------------------------------------------------------------------------- |
+| `-v`, `--log-level`                                      | `INFO`  | `DEBUG`/`INFO`/`WARN`/`ERROR`; the log streams live to stderr.                                     |
+| `--log FILE`                                             |         | Also write the import log to a file.                                                               |
+| `--log-ghidra`                                           | off     | Include Ghidra's own log messages in the stream.                                                   |
+| `--records`, `--symbols`, `--harvest`, `--registry` FILE |         | Dump the parsed stab records / symbol declarations / harvest / materialized type registry as JSON. |
+| `--degradation-log FILE`                                 |         | Grouped report of every type that materialized to something weaker than the stabs described.       |
 
 `--registry` and `--degradation-log` are products of materialization, so only `dump`, `skeleton` and `decomp` write them.
 
