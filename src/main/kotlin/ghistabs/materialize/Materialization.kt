@@ -58,9 +58,9 @@ internal fun DataTypeRegistry.materializeBody(ast: Type, category: CategoryPath,
         is TypeDecl.Range, is TypeDecl.Complex, is TypeDecl.Float, is TypeDecl.WithSizeAttr, is TypeDecl.Builtin ->
             resolveRef(body) ?: stub(ast, placeholder, body)
 
-        is TypeDecl.Struct -> fillComposite(body, placeholder as Composite, "$category/${ast.ghidraName}")
+        is TypeDecl.Aggregate -> fillComposite(body, placeholder as Composite, "$category/${ast.ghidraName}")
 
-        is TypeDecl.FunctionT -> buildFunctionDefinition(
+        is TypeDecl.FreeFunction -> buildFunctionDefinition(
             category = category,
             name = ast.ghidraName,
             ret = body.ret,
@@ -108,7 +108,7 @@ internal fun DataTypeRegistry.materializeBody(ast: Type, category: CategoryPath,
     }
 
 internal fun DataTypeRegistry.fillStructBases(
-    body: TypeDecl.Struct<GlobalTypeId>,
+    body: TypeDecl.Aggregate<GlobalTypeId>,
     placeholder: Structure,
     qualifiedName: String,
 ) {
@@ -188,7 +188,7 @@ internal fun DataTypeRegistry.fillStructBases(
 }
 
 internal fun DataTypeRegistry.fillComposite(
-    body: TypeDecl.Struct<GlobalTypeId>,
+    body: TypeDecl.Aggregate<GlobalTypeId>,
     placeholder: Composite,
     qualifiedName: String,
 ): DataType {
@@ -357,7 +357,7 @@ fun DataTypeRegistry.resolveRef(decl: GlobalTypeDecl): DataType? = when (decl) {
         "(anon)",
     )
 
-    is TypeDecl.FunctionT -> buildFunctionDefinition(
+    is TypeDecl.FreeFunction -> buildFunctionDefinition(
         category = CategoryPath("/stabs/unnamed"),
         name = "FUNCTION_${decl.hashCode()}",
         ret = decl.ret,
@@ -370,7 +370,7 @@ fun DataTypeRegistry.resolveRef(decl: GlobalTypeDecl): DataType? = when (decl) {
     is TypeDecl.XRef -> types.byXRef(decl)?.let { getOrMaterialize(it.id) }
 
     // Aggregate bodies — meaningful only via owning TypeId; see KDoc.
-    is TypeDecl.Struct, is TypeDecl.Enum, is TypeDecl.Method -> {
+    is TypeDecl.Aggregate, is TypeDecl.Enum, is TypeDecl.Method -> {
         debug("referenced-aggregate", "asked for ref to $decl")
         null
     }

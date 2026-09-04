@@ -12,6 +12,7 @@ import ghidra.program.model.symbol.SymbolUtilities
 import ghistabs.Demangler
 import ghistabs.baseStackParamOffset
 import ghistabs.parse.*
+import ghistabs.parse.TypeNameKind
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.UseSerializers
@@ -36,20 +37,36 @@ value class LineNumber(val inner: UInt) : Comparable<LineNumber> {
     }
 }
 
+/**
+ * The `:T` tag or `:t` typedef symbol that bound a name to a type — the two halves kept together, so
+ * a name without the kind that introduced it (or the reverse) is unrepresentable.
+ *
+ * gcc emits `Tt` for `typedef struct foo {} foo`, where tag and typedef are one name for one id; the
+ * parser records that as [TypeNameKind.TAG], since a struct that already wears the name needs no
+ * typedef wrapping it.
+ */
+@Serializable
+data class NameBinding(val name: String, val kind: TypeNameKind)
+
 @Serializable
 data class Type(
     val cu: SourceFile.CUSource,
     val id: GlobalTypeId,
-    /** Null exactly when the type has no name of its own: born inside a descriptor tree, or a
-     *  tagless anonymous `enum { … }`. Never the empty string — [ghistabs.harvest.Harvester] folds
-     *  that in, so "anonymous" has one spelling. */
-    val name: String?,
+    /** The `T`/`t` symbol that named this type. Null exactly when it has none of its own: born inside
+     *  a descriptor tree, or a tagless anonymous `enum { … }`. Never an empty name —
+     *  [ghistabs.harvest.Harvester] folds that in, so "anonymous" has one spelling. */
+    val named: NameBinding?,
     val body: GlobalTypeDecl,
     /** Source line from N_LSYM `desc`, null when the emitter left it 0 (no -gstabs+). */
     val line: Int? = null,
     /** N_SOL-effective source at definition time (header for stdlib, CU for app-local). */
     val sourceFile: GhidraSourceFile? = null,
 ) {
+    val name: String? get() = named?.name
+
+    /** How the source introduced [name]: a `:T` tag or a `:t` typedef. Null iff [name] is. */
+    val kind: TypeNameKind? get() = named?.kind
+
     val source get() = id.source
 
     @OptIn(ExperimentalStdlibApi::class)
@@ -77,15 +94,12 @@ data class Type(
         null
     }
 
-    fun asStruct() = asType<TypeDecl.Struct<GlobalTypeId>>()
+    fun asStruct() = asType<TypeDecl.Aggregate<GlobalTypeId>>()
 
     /** A declaration the harvest attributes to a file at a line — what a local file is checked against. */
     data class Decl(val line: Int, val name: String)
 
-    fun declKey() = when {
-        line == null || name == null -> null
-        else -> Decl(line, name.substringBefore('<'))
-    }
+    fun declKey() = named?.name?.let { n -> line?.let { Decl(it, n.substringBefore('<')) } }
 }
 
 /**

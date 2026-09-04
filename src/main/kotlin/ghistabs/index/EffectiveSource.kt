@@ -105,7 +105,7 @@ class EffectiveSource(
      *  already collapsed) and sorted by it — every CU emits its own copy of each anonymous type. */
     val anonAggregates by lazy {
         types.allTypes
-            .filter { it.name == null && it.body.isTagDefinition }
+            .filter { it.name == null && it.body.canBeXRefTarget }
             .groupBy { effectiveSourceFor(it) }
             .mapValues { (_, asts) -> asts.distinctBy { it.ghidraName }.sortedBy { it.ghidraName } }
     }
@@ -119,7 +119,7 @@ class EffectiveSource(
      */
     internal val classRenderSourceByName: Map<String, GhidraSourceFile> by lazy {
         types.allTypes
-            .filter { it.body is TypeDecl.Struct || it.body is TypeDecl.Enum }
+            .filter { it.body is TypeDecl.Aggregate || it.body is TypeDecl.Enum }
             .mapNotNull { t -> t.name?.let { it to effectiveSourceFor(t) } }
             .toMap()
     }
@@ -139,7 +139,7 @@ class EffectiveSource(
     private val templateDecls get() = types.allTypes.filter { it.name?.contains('<') == true }
 
     private val typedefDecls get() = types.allTypes.filter {
-        it.body !is TypeDecl.Struct &&
+        it.body !is TypeDecl.Aggregate &&
             it.body !is TypeDecl.Enum
     }
 

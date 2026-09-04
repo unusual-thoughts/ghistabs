@@ -3,8 +3,8 @@ package ghistabs.harvest
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.DummySink
 import ghistabs.parse.*
-import ghistabs.parse.TypeDecl.Struct.Base
-import ghistabs.parse.TypeDecl.Struct.Field
+import ghistabs.parse.TypeDecl.Aggregate.Base
+import ghistabs.parse.TypeDecl.Aggregate.Field
 
 typealias CollisionBucket = MutableSet<GlobalTypeDecl>
 typealias NameBuckets = MutableMap<String, CollisionBucket>
@@ -68,8 +68,8 @@ class TypeStore(
             // Name-promotion: an anonymous InlineDef ast can be superseded by an explicit
             // named Typedef at the same id. Range's `of` self-ref differs between forms so
             // we don't require body equality — both non-XRefTarget + existing unnamed.
-            val namedIncoming = incoming.firstOrNull { it.name != null && !it.body.isXRefTarget }
-            if (namedIncoming != null && existing.name == null && !existing.body.isXRefTarget) {
+            val namedIncoming = incoming.firstOrNull { it.name != null && !it.body.canBeXRefTarget }
+            if (namedIncoming != null && existing.name == null && !existing.body.canBeXRefTarget) {
                 byId[id] = namedIncoming
                 continue
             }
@@ -108,7 +108,7 @@ class TypeStore(
         val outerRewrites =
             mutableMapOf<GlobalTypeId, MutableList<Field<GlobalTypeId>>>()
         for (ast in byId.values) {
-            val struct = ast.body as? TypeDecl.Struct ?: continue
+            val struct = ast.body as? TypeDecl.Aggregate ?: continue
             val structBits = struct.sizeBytes * 8
             for (field in struct.fields) {
                 // Either spelling of "the base is over there": a plain `(0,333)` Ref, or the
@@ -130,7 +130,9 @@ class TypeStore(
                 synthetic.add(
                     ast.copy(
                         id = refId,
-                        name = field.name,
+                        // An XRef body names a type defined elsewhere — a typedef binding in this
+                        // model, and where body-shape already filed it.
+                        named = NameBinding(field.name, TypeNameKind.TYPEDEF),
                         body = TypeDecl.XRef(AggrKind.STRUCT, field.name),
                     ),
                 )
@@ -145,7 +147,7 @@ class TypeStore(
         }
         for ((outerId, pseudoFields) in outerRewrites) {
             val outer = byId[outerId] ?: continue
-            val struct = outer.body as? TypeDecl.Struct ?: continue
+            val struct = outer.body as? TypeDecl.Aggregate ?: continue
             val pseudoSet = pseudoFields.toSet()
             val newBases = struct.bases + pseudoFields.map { f ->
                 Base(type = f.type, isVirtual = false, access = Access.PUBLIC, offsetBits = f.offsetBits)
@@ -173,7 +175,7 @@ class TypeStore(
      * comparison stays the fallback for a Ref this CU never defines.
      */
     private fun isInheritancePseudoField(field: Field<GlobalTypeId>, refId: GlobalTypeId, structBits: Long): Boolean {
-        val base = byId[refId]?.body as? TypeDecl.Struct ?: return field.sizeBits > structBits
+        val base = byId[refId]?.body as? TypeDecl.Aggregate ?: return field.sizeBits > structBits
         return field.sizeBits > structBits || (base.sizeBytes > 0 && field.sizeBits == base.sizeBytes * 64)
     }
 
@@ -196,7 +198,7 @@ class TypeStore(
             }
             val target = byId[targetId] ?: continue
             if (target.name != null) continue
-            if (target.body !is TypeDecl.Struct && target.body !is TypeDecl.Enum) continue
+            if (target.body !is TypeDecl.Aggregate && target.body !is TypeDecl.Enum) continue
             getOrPut(targetId) { mutableSetOf() }.add(name)
         }
     }.filterValues { it.size == 1 }.mapValues { it.value.single() }
@@ -210,7 +212,9 @@ class TypeStore(
     private fun nameAnonymousTypedefTargets() {
         val renames = anonymousTypedefTargetNames()
         for ((id, name) in renames) {
-            byId[id] = byId.getValue(id).copy(name = name)
+            // Adopting the typedef's name means adopting its binding: the source wrote
+            // `typedef struct {…} Name;`, and [Type.kind] is what lets the render say so.
+            byId[id] = byId.getValue(id).copy(named = NameBinding(name, TypeNameKind.TYPEDEF))
             debug("typedef-named-anon-aggregate", "$id → $name")
         }
     }

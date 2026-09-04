@@ -4,6 +4,7 @@ package ghistabs.parse
 
 import kotlinx.serialization.Contextual
 import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonClassDiscriminator
 import java.lang.Long.compareUnsigned
@@ -20,7 +21,7 @@ enum class TypeNameKind { TAG, TYPEDEF }
  * The three record kinds stabs can name, as body descriptors (`s`/`u`/`e`) and as forward-reference
  * kinds (`xs`/`xu`/`xe`). There is deliberately no CLASS: gcc spells every class `s`, and the Sun
  * manual's forward-reference grammar (p125) glosses `s` as "class/structure" outright — so class-ness
- * is never read, only guessed, by [TypeDecl.Struct.isCxxClass].
+ * is never read, only guessed, by [TypeDecl.Aggregate.isCxxClass].
  */
 enum class AggrKind { STRUCT, UNION, ENUM, }
 
@@ -170,7 +171,7 @@ sealed interface TypeDecl<out Id : IdInterface> {
     }
 
     @Serializable
-    data class Struct<Id : IdInterface>(
+    data class Aggregate<Id : IdInterface>(
         val kind: AggrKind,
         override val sizeBytes: Long,
         val bases: List<Base<Id>>,
@@ -271,7 +272,7 @@ sealed interface TypeDecl<out Id : IdInterface> {
     }
 
     @Serializable
-    data class FunctionT<Id : IdInterface>(val ret: TypeDecl<Id>, val params: List<TypeDecl<Id>>) : TypeDecl<Id> {
+    data class FreeFunction<Id : IdInterface>(val ret: TypeDecl<Id>, val params: List<TypeDecl<Id>>) : TypeDecl<Id> {
         override val children get() = listOf(listOf(ret) + params)
     }
 
@@ -318,20 +319,30 @@ sealed interface TypeDecl<out Id : IdInterface> {
         override val wrapped get() = inner
     }
 
-    val isXRefTarget get() = this is Struct || this is Enum
+    /**
+     * The body kinds an `xs`/`xu`/`xe` cross-reference is able to name: the definition is here, rather
+     * than the body pointing at one elsewhere. A capability of the kind — not a claim that anything
+     * actually references this one.
+     *
+     * Independent of how the name was bound, in both directions (measured over the corpus): 18,803 `:t`
+     * typedefs carry an Aggregate or Enum body — enums are mostly typedef-bound — while 126 `:T` tags
+     * carry a self-`Ref`, a forward declaration with no definition to resolve to. So neither implies
+     * the other, and an index of what an xref can reach has to ask this rather than [TypeNameKind].
+     */
+    val canBeXRefTarget get() = this is Aggregate || this is Enum
 
     /** Bodies that materialize their own named DataType (own their ghidraName), as opposed to
      *  wrappers/refs/aliases whose byId entry points at another type's dt. Only these are classified. */
-    val ownsMaterializedType get() = isXRefTarget || this is FunctionT || this is Method
+    val ownsMaterializedType get() = canBeXRefTarget || this is FreeFunction || this is Method
 
     val isComplete get() = when (this) {
-        is Struct -> sizeBytes > 0
+        is Aggregate -> sizeBytes > 0
         is Enum -> members.isNotEmpty()
         else -> false
     }
 
     fun matchesXRefKind(xref: AggrKind) = when (this) {
-        is Struct -> kind == xref
+        is Aggregate -> kind == xref
         is Enum -> xref == AggrKind.ENUM
         else -> false
     }
@@ -387,7 +398,7 @@ sealed interface SymbolDecl<Id : IdInterface> {
     @Serializable
     data class NamedType<Id : IdInterface>(
         override val name: String,
-        val kind: TypeNameKind,
+        @SerialName("tagOrTypedef") val kind: TypeNameKind,
         @Contextual val id: Id,
         override val type: TypeDecl<Id>,
     ) : SymbolDecl<Id>

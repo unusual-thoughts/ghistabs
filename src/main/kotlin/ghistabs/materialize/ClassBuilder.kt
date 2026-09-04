@@ -26,7 +26,7 @@ import ghistabs.materialize.itanium.*
 import ghistabs.materialize.itanium.Itanium.isImplicitTrivialSpecialMember
 import ghistabs.materialize.itanium.Itanium.isInlineStdMember
 import ghistabs.parse.*
-import ghistabs.parse.TypeDecl.Struct.Method
+import ghistabs.parse.TypeDecl.Aggregate.Method
 
 class ClassBuilder(
     private val registry: DataTypeRegistry,
@@ -42,9 +42,9 @@ class ClassBuilder(
     companion object {
         private val source = SourceType.IMPORTED
 
-        fun LocatedType.isClass() = (type.body as? TypeDecl.Struct)?.hasCxxSurface == true
+        fun LocatedType.isClass() = (type.body as? TypeDecl.Aggregate)?.hasCxxSurface == true
 
-        private val LocatedType.classBody get() = type.body as TypeDecl.Struct<GlobalTypeId>
+        private val LocatedType.classBody get() = type.body as TypeDecl.Aggregate<GlobalTypeId>
         private val LocatedType.className get() = location.name
 
         // <Class>_vftable under /ClassDataTypes/<Class>/ — the function-pointer array {vfptr}
@@ -279,7 +279,7 @@ class ClassBuilder(
         val sig = unwrapSignature(m.signature)
         val retDecl = when (sig) {
             is TypeDecl.Method -> sig.ret
-            is TypeDecl.FunctionT -> sig.ret
+            is TypeDecl.FreeFunction -> sig.ret
             else -> return degradation(
                 "method-signature-unwrap-failed",
                 "$className::${m.name}",
@@ -329,7 +329,7 @@ class ClassBuilder(
 
         val paramDecls = when (sig) {
             is TypeDecl.Method -> if (ghidraInjectsThis) sig.params.drop(1) else sig.params
-            is TypeDecl.FunctionT -> sig.params
+            is TypeDecl.FreeFunction -> sig.params
         }
 
         // Always replace the formal-param list, falling back to Undefined4 for
@@ -476,7 +476,7 @@ class ClassBuilder(
 
     /** Walk Ref/InlineDef wrappers to the underlying Method/FunctionT (gcc binds signatures to their own type id). */
     private fun unwrapSignature(sig: GlobalTypeDecl) =
-        types.resolveWith(sig) { it.takeIf { d -> d is TypeDecl.Method || d is TypeDecl.FunctionT } }
+        types.resolveWith(sig) { it.takeIf { d -> d is TypeDecl.Method || d is TypeDecl.FreeFunction } }
 
     /**
      * Build the typed function-pointer slot for [m]: `Pointer→FunctionDefinition(<sig>)`.

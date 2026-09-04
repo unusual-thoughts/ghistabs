@@ -1,7 +1,7 @@
 package ghistabs.harvest
 
 import ghistabs.parse.*
-import ghistabs.parse.TypeDecl.Struct.Field
+import ghistabs.parse.TypeDecl.Aggregate.Field
 import ghistabs.test.*
 import org.junit.jupiter.api.Test
 
@@ -32,10 +32,10 @@ class TypeStoreTest {
         val xrefAst = Type(
             cu = SourceFile.CUSource(cuName),
             id = globalId,
-            name = "Foo",
+            named = binding("Foo", TypeDecl.XRef(AggrKind.STRUCT, "Foo")),
             body = TypeDecl.XRef(kind = AggrKind.STRUCT, tagName = "Foo"),
         )
-        val concreteStruct = TypeDecl.Struct(
+        val concreteStruct = TypeDecl.Aggregate(
             kind = AggrKind.STRUCT,
             sizeBytes = 16L,
             bases = emptyList(),
@@ -56,7 +56,7 @@ class TypeStoreTest {
         val concreteAst = Type(
             cu = SourceFile.CUSource(cuName),
             id = globalId,
-            name = "Foo",
+            named = binding("Foo", concreteStruct),
             body = concreteStruct,
         )
 
@@ -68,7 +68,7 @@ class TypeStoreTest {
         val (typeAsts, rawCollisions) = store.toHarvest()
         typeAsts.must("Type should be in typeAsts") { containsKey(globalId) }
         val body = typeAsts[globalId]!!.body
-        body.mustBeA<TypeDecl.Struct<*>>("Body should be Struct, not XRef")
+        body.mustBeA<TypeDecl.Aggregate<*>>("Body should be Struct, not XRef")
         // Verify: collidingAsts should NOT contain entry
         rawCollisions.mustNot("XRef replacement should not create collision entry") { containsKey(globalId) }
     }
@@ -89,7 +89,7 @@ class TypeStoreTest {
         val cuName = "cu.c"
 
         val globalId = GlobalTypeId(SourceFile.CUSource(cuName), 20)
-        val body = TypeDecl.Struct<GlobalTypeId>(
+        val body = TypeDecl.Aggregate<GlobalTypeId>(
             kind = AggrKind.STRUCT,
             sizeBytes = 8L,
             bases = emptyList(),
@@ -101,13 +101,13 @@ class TypeStoreTest {
         val ast1 = Type(
             cu = SourceFile.CUSource(cuName),
             id = globalId,
-            name = "Bar",
+            named = binding("Bar", body),
             body = body,
         )
         val ast2 = Type(
             cu = SourceFile.CUSource(cuName),
             id = globalId,
-            name = "Bar",
+            named = binding("Bar", body),
             body = body,
         )
 
@@ -141,7 +141,7 @@ class TypeStoreTest {
 
         val globalId = GlobalTypeId(SourceFile.CUSource(cuName), 30)
 
-        val firstBody = TypeDecl.Struct(
+        val firstBody = TypeDecl.Aggregate(
             kind = AggrKind.STRUCT,
             sizeBytes = 8L,
             bases = emptyList(),
@@ -160,7 +160,7 @@ class TypeStoreTest {
             vptrBasetype = null,
         )
 
-        val secondBody = TypeDecl.Struct(
+        val secondBody = TypeDecl.Aggregate(
             kind = AggrKind.STRUCT,
             sizeBytes = 16L,
             bases = emptyList(),
@@ -191,13 +191,13 @@ class TypeStoreTest {
         val firstAst = Type(
             cu = SourceFile.CUSource(cuName),
             id = globalId,
-            name = "Baz",
+            named = binding("Baz", firstBody),
             body = firstBody,
         )
         val secondAst = Type(
             cu = SourceFile.CUSource(cuName),
             id = globalId,
-            name = "Baz",
+            named = binding("Baz", secondBody),
             body = secondBody,
         )
 
@@ -222,7 +222,13 @@ class TypeStoreTest {
         val store = TypeStore()
         val cuName = "cu.c"
         val id = GlobalTypeId(SourceFile.CUSource(cuName), 20)
-        store += Type(cu = SourceFile.CUSource(cuName), id = id, name = "void", body = TypeDecl.Ref(id))
+        store +=
+            Type(
+                cu = SourceFile.CUSource(cuName),
+                id = id,
+                named = binding("void", TypeDecl.Ref(id)),
+                body = TypeDecl.Ref(id),
+            )
 
         val (typeAsts, _) = store.toHarvest()
         val body = typeAsts[id]?.body
@@ -237,8 +243,14 @@ class TypeStoreTest {
     fun testConcreteBodySupersedesSelfRef() {
         val cuName = "cu.c"
         val id = GlobalTypeId(SourceFile.CUSource(cuName), 20)
-        val selfRef = Type(cu = SourceFile.CUSource(cuName), id = id, name = "Foo", body = TypeDecl.Ref(id))
-        val struct = TypeDecl.Struct(
+        val selfRef =
+            Type(
+                cu = SourceFile.CUSource(cuName),
+                id = id,
+                named = binding("Foo", TypeDecl.Ref(id)),
+                body = TypeDecl.Ref(id),
+            )
+        val struct = TypeDecl.Aggregate(
             kind = AggrKind.STRUCT,
             sizeBytes = 8L,
             bases = emptyList(),
@@ -256,7 +268,7 @@ class TypeStoreTest {
             methods = emptyList(),
             vptrBasetype = null,
         )
-        val concrete = Type(cu = SourceFile.CUSource(cuName), id = id, name = "Foo", body = struct)
+        val concrete = Type(cu = SourceFile.CUSource(cuName), id = id, named = binding("Foo", struct), body = struct)
 
         val selfRefFirst = TypeStore().apply {
             this += selfRef
@@ -291,7 +303,7 @@ class TypeStoreTest {
         val ast = Type(
             cu = SourceFile.CUSource(cuName),
             id = globalId,
-            name = "EnumType",
+            named = binding("EnumType", body),
             body = body,
         )
 
@@ -306,3 +318,8 @@ class TypeStoreTest {
         rawCollisions.mustNot("Duplicate should not create collision entry") { containsKey(globalId) }
     }
 }
+
+/** Pre-refactor semantics: the kind a `Type`'s name would have had, derived from its body shape —
+ *  a tag definition is a `:T`, anything else names a type defined elsewhere, i.e. a `:t`. */
+internal fun binding(name: String?, body: GlobalTypeDecl) =
+    name?.let { NameBinding(it, if (body.canBeXRefTarget) TypeNameKind.TAG else TypeNameKind.TYPEDEF) }

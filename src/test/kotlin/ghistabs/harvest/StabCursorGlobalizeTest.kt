@@ -1,7 +1,7 @@
 package ghistabs.harvest
 
 import ghistabs.parse.*
-import ghistabs.parse.TypeDecl.Struct.Field
+import ghistabs.parse.TypeDecl.Aggregate.Field
 import ghistabs.test.dummyCursor
 import ghistabs.test.mustBe
 import ghistabs.test.mustBeA
@@ -133,7 +133,7 @@ class StabCursorGlobalizeTest {
         )
         val cursor = createTestCursor(records = records)
 
-        val input = TypeDecl.Struct(
+        val input = TypeDecl.Aggregate(
             kind = AggrKind.STRUCT,
             sizeBytes = 8L,
             bases = emptyList(),
@@ -163,7 +163,7 @@ class StabCursorGlobalizeTest {
         val result = input.globalize(cursor)
 
         val globalCuSource = SourceFile.CUSource(cuName)
-        val expected = TypeDecl.Struct(
+        val expected = TypeDecl.Aggregate(
             kind = AggrKind.STRUCT,
             sizeBytes = 8L,
             bases = emptyList(),
@@ -214,7 +214,7 @@ class StabCursorGlobalizeTest {
                 "local",
                 TypeDecl.InlineDef(
                     id = GlobalTypeId(cu, 7),
-                    inner = TypeDecl.Struct(
+                    inner = TypeDecl.Aggregate(
                         kind = AggrKind.STRUCT,
                         sizeBytes = 4L,
                         bases = emptyList(),

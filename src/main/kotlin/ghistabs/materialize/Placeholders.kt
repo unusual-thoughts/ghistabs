@@ -21,9 +21,9 @@ internal fun DataTypeRegistry.makePlaceholder(
     name: String = ast.ghidraName,
 ): DataType {
     val dt = when (ast.body) {
-        is TypeDecl.Struct if (ast.body.kind == AggrKind.UNION) -> UnionDataType(category, name, dtm)
+        is TypeDecl.Aggregate if (ast.body.kind == AggrKind.UNION) -> UnionDataType(category, name, dtm)
 
-        is TypeDecl.Struct -> {
+        is TypeDecl.Aggregate -> {
             val sz = ast.body.usefulStructSize()
             recordTruncation(ast, ast.body.sizeBytes, sz)
             StructureDataType(category, name, sz.toInt(), dtm)
@@ -58,7 +58,7 @@ internal fun DataTypeRegistry.makePlaceholder(
  * canonical-but-oversized winner is selected. Trim only when the gap > maxFieldSize
  * (upper bound on legitimate tail padding without knowing the struct's alignment).
  */
-private fun TypeDecl.Struct<GlobalTypeId>.usefulStructSize(): Long {
+private fun TypeDecl.Aggregate<GlobalTypeId>.usefulStructSize(): Long {
     val nonStatic = fields.filter { !it.isStatic }
     if (nonStatic.isEmpty()) return sizeBytes
     val fieldEnd = nonStatic.maxOf { ((it.offsetBits + it.sizeBits + 7) / 8) }

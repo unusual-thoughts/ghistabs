@@ -6,8 +6,8 @@ import ghistabs.materialize.ghidraClass
 import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
-import ghistabs.parse.TypeDecl.Struct.Base
-import ghistabs.parse.TypeDecl.Struct.Field
+import ghistabs.parse.TypeDecl.Aggregate.Base
+import ghistabs.parse.TypeDecl.Aggregate.Field
 import java.util.*
 
 /**
@@ -44,7 +44,7 @@ abstract class ContentIndex(val contentCache: MutableMap<GlobalTypeId, LayoutCon
 
         TypeDecl.Void, is TypeDecl.Float, is TypeDecl.Complex, is TypeDecl.Enum, // no children
         is TypeDecl.Pointer, is TypeDecl.Reference, is TypeDecl.Const, is TypeDecl.Volatile, // one child
-        is TypeDecl.Array, is TypeDecl.FunctionT, // two children
+        is TypeDecl.Array, is TypeDecl.FreeFunction, // two children
         is TypeDecl.Method, // three children
         -> layoutContent(visited)
 
@@ -61,7 +61,7 @@ abstract class ContentIndex(val contentCache: MutableMap<GlobalTypeId, LayoutCon
         // `.conflict` on layout-identical types. gcc also emits a virtual as VIRTUAL (vtoff set) in its
         // defining CU and NORMAL elsewhere, reordering methods per CU. So static fields and methods are
         // dropped: a layout-identical class is one value everywhere.
-        is TypeDecl.Struct -> LayoutContent(
+        is TypeDecl.Aggregate -> LayoutContent(
             javaClass,
             layoutData,
             listOf(

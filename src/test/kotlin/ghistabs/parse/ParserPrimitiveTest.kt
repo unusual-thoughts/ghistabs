@@ -216,7 +216,7 @@ class ParserPrimitiveTest {
             kind = TypeNameKind.TYPEDEF,
             name = "fn_type",
             id = LocalTypeId(0, 35),
-            type = TypeDecl.FunctionT(ret = TypeDecl.Ref(LocalTypeId(0, 1)), params = emptyList()),
+            type = TypeDecl.FreeFunction(ret = TypeDecl.Ref(LocalTypeId(0, 1)), params = emptyList()),
         )
         Parser(input).parseSymbol() mustBe ParseResult.Ok(expected)
     }

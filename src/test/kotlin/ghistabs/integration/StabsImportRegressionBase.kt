@@ -360,7 +360,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
                         .first { it.body.name == name }.body.type,
                 ) as? TypeDecl.Array
                 )?.element
-            val named = (resolve(declaredElement ?: return@mapNotNull null) as? TypeDecl.Struct) != null ||
+            val named = (resolve(declaredElement ?: return@mapNotNull null) as? TypeDecl.Aggregate) != null ||
                 (resolve(declaredElement) as? TypeDecl.Enum) != null
             val applied = program.listing.getDataAt(addr)?.dataType as? Array ?: return@mapNotNull null
             "$name: elements are ${applied.dataType.name}".takeIf { named && applied.dataType is Undefined }
@@ -602,7 +602,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         // 37 times in its _fullstabs twin. There is then nothing to reconcile *from*, so this is a
         // property of the debug info, not of the importer: gate on the link actually being present.
         val declared = artifacts.harvest.types.values
-            .mapNotNull { it.body as? TypeDecl.Struct }
+            .mapNotNull { it.body as? TypeDecl.Aggregate }
             .flatMap { it.fields }
             .any { it.name == "npos" && it.mangled != null }
         assumeTrue(declared, "Skipping: this build's stabs carry no linkage name for npos")
@@ -821,7 +821,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             .filterValues { it.size > 1 }
             .map { (dt, locations) -> "${dt?.pathName} claimed by ${locations.sortedBy { l -> l.toString() }}" }
         val hollow = applied.mapNotNull { (location, located, dt) ->
-            val declared = (located.type.body as? TypeDecl.Struct)?.hasMembers == true
+            val declared = (located.type.body as? TypeDecl.Aggregate)?.hasMembers == true
             "$location is an empty ${dt?.javaClass?.simpleName}"
                 .takeIf { declared && (dt as? Composite)?.numComponents == 0 }
         }
@@ -1383,7 +1383,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             .toList()
 
         val baseTypes =
-            harvest.types.values.filter { it.id.source is SourceFile.CUSource && !it.body.isXRefTarget }.toList()
+            harvest.types.values.filter { it.id.source is SourceFile.CUSource && !it.body.canBeXRefTarget }.toList()
         val different = baseTypes
             .groupBy { artifacts.types.content(it.body) }
             .mapKeys { (k, v) -> k to v.map { it.name }.toSet() }
@@ -1662,7 +1662,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     @Test
     fun fieldsSitAtTheirDeclaredOffsets() {
         val checked = artifacts.registry.byLocation.values.flatMap { located ->
-            val body = located.type.body as? TypeDecl.Struct ?: return@flatMap emptyList()
+            val body = located.type.body as? TypeDecl.Aggregate ?: return@flatMap emptyList()
             if (body.kind == AggrKind.UNION) return@flatMap emptyList()
             val dt = artifacts.registry.dataTypeFor(located.type.id) as? Structure ?: return@flatMap emptyList()
             val components = dt.components.associateBy { it.fieldName }
@@ -1789,9 +1789,9 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
      * six) and `tagMONITORINFOEXA` both flat and derived, so a layout assertion driven that way
      * reports gcc's inconsistency as our defect.
      */
-    private fun builtClasses(): List<Pair<TypeDecl.Struct<GlobalTypeId>, Structure>> =
+    private fun builtClasses(): List<Pair<TypeDecl.Aggregate<GlobalTypeId>, Structure>> =
         artifacts.registry.byLocation.values.mapNotNull { located ->
-            val body = located.type.body as? TypeDecl.Struct ?: return@mapNotNull null
+            val body = located.type.body as? TypeDecl.Aggregate ?: return@mapNotNull null
             (artifacts.registry.dataTypeFor(located.type.id) as? Structure)?.let { body to it }
         }
 
@@ -1827,9 +1827,9 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
 
     /** Whether a base contributes bytes. An empty class is `sizeof == 1` and the empty-base
      *  optimization drops it from the layout entirely; member *functions* do not make it occupy
-     *  space, so [TypeDecl.Struct.hasMembers] is the wrong question here. */
+     *  space, so [TypeDecl.Aggregate.hasMembers] is the wrong question here. */
     private fun occupiesSpace(base: GlobalTypeDecl) =
-        (resolve(base) as? TypeDecl.Struct)?.let { it.sizeBytes > 1 } == true
+        (resolve(base) as? TypeDecl.Aggregate)?.let { it.sizeBytes > 1 } == true
 
     /** A [TypeDecl.Ref] followed to the harvest body it names; anything else unchanged. */
     private fun resolve(type: GlobalTypeDecl): GlobalTypeDecl =

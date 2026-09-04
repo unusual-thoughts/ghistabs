@@ -128,6 +128,10 @@
             "min": 694,
             "max": 694
         },
+        "harvest-typeAsts-Aggregate": {
+            "min": 137,
+            "max": 137
+        },
         "harvest-typeAsts-Array": {
             "min": 59,
             "max": 59
@@ -140,7 +144,7 @@
             "min": 84,
             "max": 84
         },
-        "harvest-typeAsts-FunctionT": {
+        "harvest-typeAsts-FreeFunction": {
             "min": 49,
             "max": 49
         },
@@ -151,10 +155,6 @@
         "harvest-typeAsts-Range": {
             "min": 154,
             "max": 154
-        },
-        "harvest-typeAsts-Struct": {
-            "min": 137,
-            "max": 137
         },
         "harvest-typeAsts-Void": {
             "min": 14,
@@ -183,6 +183,10 @@
         "local-dropped": {
             "min": 42,
             "max": 42
+        },
+        "local-typed-anonymous": {
+            "min": 1,
+            "max": 1
         },
         "local-var-add-success": {
             "min": 115,
@@ -259,6 +263,10 @@
         "textrange-entries": {
             "min": 29,
             "max": 29
+        },
+        "typedef-shorten": {
+            "min": 1,
+            "max": 1
         },
         "unfinished-cu": {
             "min": 13,

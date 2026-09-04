@@ -43,6 +43,10 @@ class DataTypeRegistry(
      * anonymous ones included — collapses onto that name's largest slot. Content, not path, is the signal,
      * so it reaches headers that don't fold by basename; distinct-named or unnamed classes stay separate.
      *
+     * Slots are for tag definitions only ([TypeGraph.definitionsByTag]). Everything else materializes
+     * without one — [materializeTopLevel] for function types and the like, [materializeTypedefs] for
+     * the names that bind to a type defined elsewhere.
+     *
      * Lives here rather than on the index because every reader is this phase and a [TypeLocation] is
      * a DTM `CategoryPath` — materialize vocabulary. The algorithm stays in `index/`: grouping by
      * content and picking winners is indexing, memoizing the result for one pass is not.
@@ -168,7 +172,7 @@ class DataTypeRegistry(
     internal fun getOrMaterialize(id: GlobalTypeId): DataType? =
         byId[id] ?: placeholders[id] ?: types.byId(id)?.let { ast ->
             ast.substitute()?.let { cache(id, it) }
-                ?: if (ast.body is TypeDecl.Struct) {
+                ?: if (ast.body is TypeDecl.Aggregate) {
                     ast.seedPlaceholder("cycle-break")
                 } else {
                     materializeTopLevel(ast)
@@ -213,7 +217,7 @@ class DataTypeRegistry(
             // functions at all, so the loop above can never reach them and their stub had no
             // candidate. Here the owning AST supplies the type directly — no `this` param needed.
             for (ast in types.allTypes) {
-                val body = ast.body as? TypeDecl.Struct<GlobalTypeId> ?: continue
+                val body = ast.body as? TypeDecl.Aggregate<GlobalTypeId> ?: continue
                 val dt = dataTypeFor(ast.id) ?: continue
                 for (field in body.fields) {
                     val mangled = field.mangled?.takeIf { field.isStatic } ?: continue

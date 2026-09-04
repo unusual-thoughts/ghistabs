@@ -1,7 +1,7 @@
 package ghistabs.materialize
 
 import ghistabs.parse.*
-import ghistabs.parse.TypeDecl.Struct.Method
+import ghistabs.parse.TypeDecl.Aggregate.Method
 import ghistabs.test.*
 import org.junit.jupiter.api.Test
 
@@ -73,7 +73,7 @@ class ClassBuilderTest {
 
     @Test
     fun testClassStructWithMethods() {
-        val methodSig = TypeDecl.FunctionT<GlobalTypeId>(TypeDecl.Complex(0, 4), emptyList())
+        val methodSig = TypeDecl.FreeFunction<GlobalTypeId>(TypeDecl.Complex(0, 4), emptyList())
         val method = Method(
             name = "bar",
             mangled = "_ZN3Foo3barEv",
@@ -85,7 +85,7 @@ class ClassBuilderTest {
             vtableOffsetBits = null,
         )
 
-        val classStruct = TypeDecl.Struct(
+        val classStruct = TypeDecl.Aggregate(
             kind = AggrKind.STRUCT,
             sizeBytes = 4,
             bases = emptyList(),
@@ -105,7 +105,7 @@ class ClassBuilderTest {
         val virtualMethod = Method<GlobalTypeId>(
             name = "draw",
             mangled = "_ZN3Foo4drawEv",
-            signature = TypeDecl.FunctionT(TypeDecl.Complex(0, 4), emptyList()),
+            signature = TypeDecl.FreeFunction(TypeDecl.Complex(0, 4), emptyList()),
             access = Access.PUBLIC,
             virt = VirtKind.VIRTUAL,
             isConst = false,
@@ -121,7 +121,7 @@ class ClassBuilderTest {
             Method<GlobalTypeId>(
                 name = "draw",
                 mangled = "_ZN7Derived4drawEv",
-                signature = TypeDecl.FunctionT(TypeDecl.Complex(0, 4), emptyList()),
+                signature = TypeDecl.FreeFunction(TypeDecl.Complex(0, 4), emptyList()),
                 access = Access.PUBLIC,
                 virt = VirtKind.VIRTUAL,
                 isConst = false,
