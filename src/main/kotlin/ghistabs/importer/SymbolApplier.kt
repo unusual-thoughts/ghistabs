@@ -157,6 +157,7 @@ class SymbolApplier(
                     true,
                     source,
                 )
+                applyRegisterParams(func, open, source)
 
                 // Apply locals. Dedupe against the stabs parameter list, not a re-read of
                 // func.parameters: in CONCURRENT mode another analyzer can mutate the function
@@ -323,6 +324,53 @@ class SymbolApplier(
         if (existing.any { sameBase.matches(it.name) && isSameSlot(it) }) return null
         val taken = existing.mapTo(mutableSetOf()) { it.name }
         return if (base !in taken) base else generateSequence(1, Int::inc).map { "${base}_$it" }.first { it !in taken }
+    }
+
+    /**
+     * Honour `:P`/`:R` parameters — the stabs saying a parameter was *passed* in a register, which the
+     * calling convention Ghidra just applied does not know about.
+     *
+     * Runs *after* the dynamic-storage update rather than instead of it, and re-applies what that
+     * produced: the convention still decides the return slot (load-bearing for by-value struct
+     * returns >8 bytes, see above, and for [ghistabs.entrypoints.StructReturnAnalyzer]) and the stack
+     * params, and only the parameters the stabs explicitly contradict are overridden. Custom storage
+     * is all-or-nothing per function, so a function with no register parameter never enters it.
+     *
+     * `:r` locals are not this: they claim a register *variable*, not how anything was passed, and
+     * `applyLocal` handles them.
+     */
+    private fun applyRegisterParams(func: Function, open: Func, source: SourceType) {
+        val byName = open.params
+            .filter { it.body.location == VariableLocation.REGISTER }
+            .associate { it.body.name to it.rawValue.toInt() }
+        if (byName.isEmpty()) return
+
+        val params = func.parameters.map { p ->
+            val storage = byName[p.name]
+                ?.let { dbxRegisterName(pointerSize, it) }
+                ?.let { ctx.program.getRegister(it) }
+                ?.let { VariableStorage(ctx.program, it) }
+            ParameterImpl(p.name, p.dataType, storage ?: p.variableStorage, ctx.program, source)
+        }
+        val applied = params.mapTo(mutableSetOf()) { it.name }
+        for (name in byName.keys - applied) {
+            degradation("param-register-unmapped", "${func.name}.$name", address = func.entryPoint)
+        }
+
+        runCatching {
+            func.updateFunction(
+                null,
+                ReturnParameterImpl(func.getReturn().dataType, func.getReturn().variableStorage, ctx.program),
+                params,
+                Function.FunctionUpdateType.CUSTOM_STORAGE,
+                true,
+                source,
+            )
+        }.onFailure {
+            degradation("param-register-storage-failed", func.name, it.message, func.entryPoint)
+        }.onSuccess {
+            debug("param-register-applied", "${func.name}: ${byName.keys.sorted()}")
+        }
     }
 
     private fun applyLocal(func: Function, loc: LocalSymbol, paramNames: Set<String>, firstUse: Int) {
