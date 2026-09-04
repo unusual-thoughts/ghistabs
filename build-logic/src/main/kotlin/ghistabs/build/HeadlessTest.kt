@@ -85,6 +85,9 @@ fun Test.headlessGhidraConfig(reportName: String, narrowGeneratedClasses: Boolea
     }
     // -Pmode=CONCURRENT|AFTER narrows the analyzer execution mode similarly (blank = both).
     systemProperty("modeFilter", props.gradleProperty("mode").getOrElse(""))
+    // -Pshorten=true turns OPT_SHORTEN_TYPEDEFS on for the fixture matrix. Off by default, as the
+    // option is: pair it with -Pmode=CONCURRENT to A/B the `.conflict` census the GUI actually sees.
+    systemProperty("shortenTypedefs", props.gradleProperty("shorten").getOrElse(""))
     // -PregenerateBaselines=true rewrites baseline JSONs from observed counters instead of asserting.
     systemProperty("regenerateBaselines", props.gradleProperty("regenerateBaselines").getOrElse(""))
     // -PignoreBaselines=true reports drift without failing; drifted fixtures still write their counters.

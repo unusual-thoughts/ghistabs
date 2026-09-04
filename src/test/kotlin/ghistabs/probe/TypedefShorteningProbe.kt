@@ -2,15 +2,16 @@ package ghistabs.probe
 
 import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.app.util.importer.MessageLog
-import ghidra.program.model.data.Composite
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
-import ghistabs.materialize.TypedefShortener
+import ghistabs.importer.ImportProbe
+import ghistabs.isConflict
+import ghistabs.nameWithoutConflict
 import ghistabs.runTransaction
 import ghistabs.test.defaultContext
 import ghistabs.test.disableWindowsResourceAnalyzer
 import ghistabs.test.must
-import ghistabs.test.mustBe
+import ghistabs.test.mustBeEmpty
 import ghistabs.withProgram
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
@@ -35,6 +36,7 @@ class TypedefShorteningProbe : AbstractGhidraHeadlessIntegrationTest() {
 
         val monitor = TaskMonitor.DUMMY
         withProgram(fixture, log = MessageLog(), monitor = monitor) { program ->
+            val probe = ImportProbe.install(program.defaultContext())
             val mgr = AutoAnalysisManager.getAnalysisManager(program)
             mgr.initializeOptions()
             program.disableWindowsResourceAnalyzer()
@@ -44,7 +46,10 @@ class TypedefShorteningProbe : AbstractGhidraHeadlessIntegrationTest() {
                 mgr.waitForAnalysis(null, monitor)
             }
 
-            val shortener = TypedefShortener(program.dataTypeManager, program.defaultContext())
+            // The analyzer runs its own import inside the analysis above (shortening off by default);
+            // the shortener is registry-scoped, so take the registry it built rather than the DTM.
+            val registry = checkNotNull(probe.artifacts) { "analyzer produced no artifacts" }.registry
+            val shortener = program.defaultContext().typedefShortener(registry)
             val renames = shortener.renames().sortedByDescending { it.from.length - it.to.length }
 
             val outDir = File("build/test-output/typedef-renames").apply { mkdirs() }
@@ -55,14 +60,16 @@ class TypedefShorteningProbe : AbstractGhidraHeadlessIntegrationTest() {
             renames.take(8).forEach { println("  ${it.from}\n    -> ${it.to}") }
 
             assumeTrue(renames.isNotEmpty(), "no shortenable typedefs in this binary")
-            // The std::string collapse is the canonical case; verify it applies on the real DTM
-            // — including folding the pre-existing `string` typedef out of the way (name collision).
-            assumeTrue(renames.any { it.to == "string" }, "no std::string typedef in this binary")
             val renamed = program.runTransaction("probe-apply") { shortener.apply() }
             renamed.must("apply renamed nothing") { this > 0 }
-            val stringStruct = program.dataTypeManager.allDataTypes.asSequence()
-                .any { it.name == "string" && it is Composite }
-            stringStruct.mustBe(true, "basic_string should now be a Composite named 'string'")
+            // The alias usually sits in the target's own category as the typedef naming it, and folding
+            // that typedef away is what frees the name — so a rename that lost the collision leaves a
+            // `<alias>.conflict` behind (§21). None may survive, on any fixture.
+            val aliases = renames.mapTo(mutableSetOf()) { it.to }
+            program.dataTypeManager.allDataTypes.asSequence()
+                .filter { it.isConflict() && it.nameWithoutConflict in aliases }
+                .map { it.pathName }.toList()
+                .mustBeEmpty("shortening forked conflicts on its own aliases")
         }
     }
 }

@@ -69,8 +69,8 @@
             "max": 2
         },
         "demangler-exact-match": {
-            "min": 167,
-            "max": 167
+            "min": 152,
+            "max": 152
         },
         "demangler-retarget-bound": {
             "min": 1,
@@ -85,8 +85,8 @@
             "max": 1
         },
         "demangler-reverse-demangle-match": {
-            "min": 2,
-            "max": 2
+            "min": 17,
+            "max": 17
         },
         "demangler-skip-no-replacement": {
             "min": 23,
@@ -440,6 +440,10 @@
             "min": 3,
             "max": 3
         },
+        "typedef-shorten": {
+            "min": 1,
+            "max": 1
+        },
         "unresolved-symbol": {
             "min": 987,
             "max": 987
@@ -501,5 +505,5 @@
             "max": 12
         }
     },
-    "source": "xmltest_gcc421_fullstabs.exe - generated from snapshotCounters()"
+    "source": "xmltest_gcc421_fullstabs.exe - shifted from committed"
 }

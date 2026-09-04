@@ -6,9 +6,13 @@ import ghistabs.test.mustBeEmpty
 import org.junit.jupiter.api.Test
 
 /**
- * Pins [typedefShorteningRenames]: the pass that collapses long templated datatype names onto
- * shorter typedef aliases, recursively inside other templates, longest target first. Uses the
- * a real std-string spelling (gcc's `<char, …, … >` spacing) as fixtures.
+ * Pins [typedefShorteningRenames]: the pass that rewrites long templated datatype names onto shorter
+ * typedef aliases, recursively inside other templates, longest target first. Uses a real std-string
+ * spelling (gcc's `<char, …, … >` spacing) as fixtures.
+ *
+ * A name that is *wholly* an alias target is deliberately not renamed — the typedef carries that
+ * spelling at every reference instead, so renaming it would collide with its own typedef. Each test
+ * therefore asserts the nested rewrite and a null for the whole-name case.
  */
 class TypedefShorteningTest {
     // gcc's DTM spelling — note spaces after commas and before the closing `>`.
@@ -26,7 +30,7 @@ class TypedefShorteningTest {
     }
 
     @Test
-    fun `pass renames target types and rewrites them inside other templates`() {
+    fun `pass rewrites targets inside other templates and leaves whole-name matches alone`() {
         val names = setOf(
             basicString,
             stringVec,
@@ -38,13 +42,16 @@ class TypedefShorteningTest {
         val renames = typedefShorteningRenames(aliases, names).associate { it.from to it.to }
         renames.forEach { (from, to) -> println("$from\n  -> $to") }
 
-        // Target itself collapses to its alias.
-        renames[basicString] mustBe "string"
+        // The target itself is left alone — `string` is a typedef onto it, and references resolve
+        // through that typedef rather than through a renamed struct.
+        renames[basicString] mustBe null
         // Substring rewrite inside another template, with std:: prefix preserved.
         renames["list<std::basic_string<char, std::char_traits<char>, std::allocator<char> > >"] mustBe
             "list<std::string>"
-        // Longest target wins: the whole vector matches StringVec, not vector<std::string,…>.
-        renames[stringVec] mustBe "StringVec"
+        // `stringVec` is wholly StringVec's target, so it too is left to its typedef…
+        renames[stringVec] mustBe null
+        // …but longest-target-first still applies where it is nested: the map's argument matches
+        // StringVec, not the inner vector<std::string,…>.
         renames["map<int, $stringVec >"] mustBe "map<int,StringVec>"
         // Non-templated / multi-word names are left alone (no whitespace-only renames).
         renames["int"] mustBe null
@@ -58,7 +65,6 @@ class TypedefShorteningTest {
             mapOf("_Value_type" to basicString, "string" to basicString, "_ValueType" to basicString),
             setOf(basicString, "list<std::basic_string<char, std::char_traits<char>, std::allocator<char> > >"),
         ).associate { it.from to it.to }
-        renames[basicString] mustBe "string"
         renames["list<std::basic_string<char, std::char_traits<char>, std::allocator<char> > >"] mustBe
             "list<std::string>"
     }
@@ -69,17 +75,17 @@ class TypedefShorteningTest {
         // shortest-name rule would pick `S`. `string` must win over both.
         val renames = typedefShorteningRenames(
             mapOf("S" to basicString, "__string_type" to basicString, "string" to basicString),
-            setOf(basicString),
+            setOf("list<std::$basicString >"),
         ).associate { it.from to it.to }
-        renames[basicString] mustBe "string"
+        renames["list<std::$basicString >"] mustBe "list<std::string>"
     }
 
     @Test
     fun `a single-letter alias is still used when it is the only one`() {
         // The internal-name filter must fall back rather than skip the rename entirely.
-        val renames = typedefShorteningRenames(mapOf("N" to "Node"), setOf("Node"))
+        val renames = typedefShorteningRenames(mapOf("N" to "Node"), setOf("vector<Node>"))
             .associate { it.from to it.to }
-        renames["Node"] mustBe "N"
+        renames["vector<Node>"] mustBe "vector<N>"
     }
 
     @Test
@@ -89,7 +95,7 @@ class TypedefShorteningTest {
             mapOf("N" to "Node"),
             setOf("Node", "NodeList", "TreeNode", "vector<Node>", "vector<NodeList>"),
         ).associate { it.from to it.to }
-        renames["Node"] mustBe "N"
+        renames["Node"] mustBe null
         renames["vector<Node>"] mustBe "vector<N>"
         renames["NodeList"] mustBe null
         renames["TreeNode"] mustBe null

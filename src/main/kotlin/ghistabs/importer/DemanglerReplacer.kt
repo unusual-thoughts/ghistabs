@@ -14,9 +14,12 @@ import ghidra.program.model.symbol.SymbolUtilities
 import ghidra.util.task.TaskMonitor
 import ghistabs.*
 import ghistabs.diagnose.DiagnosticSink
+import ghistabs.importer.ImportOptions.Companion.stabsTypedefsShortened
 import ghistabs.materialize.DataTypeRegistry
+import ghistabs.materialize.TemplateNameShortener
 import ghistabs.materialize.itanium.Itanium.isProbablyMangled
 import ghistabs.materialize.itanium.Rtti
+import ghistabs.materialize.typedefAliases
 import ghistabs.parse.CATEGORY
 import ghistabs.parse.canonTemplateName
 import ghistabs.parse.splitQualified
@@ -304,7 +307,7 @@ class DemanglerReplacer(
 
                 is Owner.Spelled -> o.name
             }
-            val owner = findByExactName(spelling) ?: soleInstantiation[spelling]
+            val owner = findByExactName(spelling) ?: findByShortenedName(spelling) ?: soleInstantiation[spelling]
             if (owner == null) {
                 val n = instantiationsByBase[spelling.substringBefore('<')].orEmpty().size
                 debug("demangler-retarget-no-type", "$spelling ($n instantiations) <- $at")
@@ -448,9 +451,30 @@ class DemanglerReplacer(
      */
     private val byExactName = registry.allCreatedDataTypes.groupBy { it.name }.mapValues { it.value.toSet() }
 
+    /**
+     * Shortening renames a datatype off the spelling the demangler produces — we call it
+     * `vector<string>`, the mangled name still says `vector<std::basic_string<char,…>,…>` — so retry a
+     * miss against the rewritten name.
+     */
+    private val shortener by lazy {
+        if (program.stabsTypedefsShortened) TemplateNameShortener(registry.typedefAliases()) else null
+    }
+
     /** Exact DTM-name match for a demangler stub — no spelling normalization. */
     fun findByExactName(simpleName: String, preferredCategory: CategoryPath? = null): DataType? =
         disambiguate(byExactName[simpleName].orEmpty(), simpleName, preferredCategory)
+
+    /**
+     * [findByExactName], retried under [shortener]'s rewrite. Deliberately *not* folded into
+     * [findByExactName]: on the stub-replacement path a shortened-name hit resolves a type into the
+     * `/Demangler` category and forks it (+7 `.conflict` on crypto_mi_test_gcc421_fullstabs), and that
+     * path already recovers via `byDemangledClass`. The retarget site below has no such fallback.
+     */
+    private fun findByShortenedName(simpleName: String): DataType? =
+        shortener?.shortenedNestedOrNull(simpleName)?.let { short ->
+            disambiguate(byExactName[short].orEmpty(), short, null)
+                ?.also { debug("demangler-shortened-name-match", simpleName) }
+        }
 
     /** Every instantiation we materialized, by the bare template name Ghidra's class-owner stub carries. */
     private val instantiationsByBase: Map<String, List<DataType>> by lazy {

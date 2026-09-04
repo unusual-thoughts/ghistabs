@@ -23,6 +23,7 @@ import ghistabs.entrypoints.StabsAnalyzer.Companion.import
 import ghistabs.harvest.Type
 import ghistabs.importer.*
 import ghistabs.importer.ImportOptions.Companion.OVERLAY_SECTION
+import ghistabs.importer.ImportOptions.Companion.SHORTEN_TYPEDEFS
 import ghistabs.index.ContentIndex
 import ghistabs.index.EffectiveSource
 import ghistabs.materialize.conflictCount
@@ -91,6 +92,13 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     // user-placed — and baselines — tracked); test-generated dumps go to
     // build/test-output/ so `./gradlew clean` regenerates them. See README
     // / build.gradle.kts for the split rationale.
+    /**
+     * `-Pshorten=true`. The pref is default-off, so the matrix never exercised it — which is how §21's
+     * `.conflict` forks reached the GUI without a single test noticing. Only the *rename* half rides on
+     * it; typedef resolution is unconditional (§7).
+     */
+    private val shortenTypedefs = System.getProperty("shortenTypedefs") == "true"
+
     private fun outputFile(kind: String) = File("$OUTPUT_ROOT/${kind}s/${fixture.nameWithoutExtension}-$kind.json")
     private val fixture get() = File("src/test/resources/binaries/$binaryName")
     private val baselineFile get() = File("src/test/resources/baselines/${fixture.nameWithoutExtension}-baseline.json")
@@ -138,7 +146,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
                 abort("Skipping $binaryName: the importer could not load the fixture: $e")
             }
 
-            context = loaded.program.defaultContext()
+            context = loaded.program.defaultContext(shortenTypedefs)
 
             val mgr = AutoAnalysisManager.getAnalysisManager(program)
             val options = program.getOptions(Program.ANALYSIS_PROPERTIES)
@@ -170,6 +178,9 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
                     program.runTransaction("enable-stabs-analyzer") {
                         options.setBoolean(STABS_ANALYZER_NAME, true)
                         options.getOptions(STABS_ANALYZER_NAME)[OVERLAY_SECTION] = false
+                        // CONCURRENT's import is the analyzer's own, built from the program options —
+                        // [context]'s copy of the flag never reaches it.
+                        options.getOptions(STABS_ANALYZER_NAME)[SHORTEN_TYPEDEFS] = shortenTypedefs
                     }
                     mgr.scheduleOneTimeAnalysis(discovered, program.memory)
                     runAutoAnalysis(mgr, monitor)

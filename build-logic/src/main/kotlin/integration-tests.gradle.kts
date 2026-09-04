@@ -39,6 +39,9 @@ registerHeadlessTest(
 val auditTests = tasks.register<Test>("auditTests") {
     description = "Corpus-level audits over the dumps integrationTest wrote"
     useJUnitPlatform { includeTags("audit") }
+    // Which modes the run it audits covered — an audit over mode-gated assertions can only read a
+    // run that exercised them (see ExpectedToFailAuditTest).
+    systemProperty("modeFilter", providers.gradleProperty("mode").getOrElse(""))
     testClassesDirs = sourceSets["test"].output.classesDirs
     classpath = sourceSets["test"].runtimeClasspath
     outputs.upToDateWhen { false }

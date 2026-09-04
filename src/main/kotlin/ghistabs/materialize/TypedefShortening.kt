@@ -69,68 +69,100 @@ class TemplateNameShortener(aliases: Map<String, String>) {
 
     /** [shorten] but null unless the text actually shrank (below the canonical spelling of [name]). */
     fun shortenedOrNull(name: String): String? = shorten(name).takeIf { it.length < canonTemplateName(name).length }
+
+    /**
+     * [shortenedOrNull] restricted to rewrites that happen *inside* [name] — null when the whole of it
+     * is an alias target.
+     *
+     * `vector<basic_string<…>,…>` → `vector<string>` is only reachable by rewriting the name, since no
+     * typedef names that instantiation. `basic_string<…>` on its own is not: the `string` typedef
+     * already carries that spelling at every reference (see `registerNamedPrimitiveTypedefs`), and
+     * renaming the type would land on the name its own typedef holds — the collision the fold path
+     * existed to paper over. Renaming is for what substitution cannot reach.
+     */
+    fun shortenedNestedOrNull(name: String): String? =
+        shortenedOrNull(name)?.takeIf { canonTemplateName(name) !in aliasByTarget }
 }
 
 /**
  * Ghidra base type — a built-in (`int`, `longlong`, `char *`) or an undefined placeholder. Never an
  * alias target: a `typedef long long fpos_t` must not rename `longlong` to `fpos_t`, and such short
  * names corrupt siblings by substring (`longlong` in `longlongint`, `undefined` in `undefined4`).
+ *
+ * A pointer inherits the answer from its pointee, rather than from its own class: `char *` / `void *`
+ * are base types (`PVOID`, `LPSTR` must not claim them), but `_ACL *` is not — `PACL` is a name worth
+ * having. Ghidra alone can't tell you this, because `PointerDataType extends BuiltIn` while `PointerDB
+ * extends DataTypeDB`, so the bare `is BuiltInDataType` test answers differently for the same logical
+ * type depending on whether it has been resolved yet. A pointee-less pointer counts as a base type.
  */
-fun DataType.isGhidraBaseType(): Boolean = this is BuiltInDataType || Undefined.isUndefined(this)
+fun DataType.isGhidraBaseType(): Boolean = when (this) {
+    is Pointer -> dataType?.isGhidraBaseType() != false
+    else -> this is BuiltInDataType || Undefined.isUndefined(this)
+}
 
-/** Typedef simple name → aliased type name, over [types], excluding typedefs onto a base type. */
-fun typedefAliases(types: Iterable<DataType>): Map<String, String> = types.filterIsInstance<TypeDef>()
-    .filter { !it.dataType.isGhidraBaseType() }
-    .associate { it.name to it.dataType.name }
+/**
+ * Typedef alias → the DTM name of the type it aliases, read off the stabs typedef declarations
+ * (`namedPrimitiveTypedefs` — despite the name, every named non-XRef-target ast, which is exactly what
+ * [registerNamedPrimitiveTypedefs] turns into DTM typedefs). Resolving the *declaration* rather than
+ * reading a registered `TypeDef` back out of the DTM is what makes the two refusals exact: [resolveRef]
+ * hands back the `byId`-cached object registration itself used, so this is the very DataType the
+ * registry classified.
+ *
+ *  - A Ghidra base type is never an alias target ([isGhidraBaseType]).
+ *  - Nor is an XRef stub (§21): a class no CU defined, so the alias is the only informative half.
+ *    Folding the typedef into the empty placeholder loses it, and the registry's non-resident copy of
+ *    the pair re-enters the DTM through a later apply as `<alias>.conflict` beside an empty struct
+ *    wearing the alias. `ostream -> basic_ostream<…>` reads better than an empty `ostream` anyway.
+ */
+internal fun DataTypeRegistry.typedefAliases(): Map<String, String> =
+    types.namedPrimitiveTypedefs.mapNotNull { (alias, asts) ->
+        resolveRef(asts.first().body)
+            ?.takeUnless { it.isGhidraBaseType() || it in xrefStubs }
+            ?.let { alias to it.name }
+    }.toMap()
 
-/** Datatype renames [TemplateNameShortener] would make over [typeNames] — one per name whose canonical text shrinks. */
+/**
+ * Datatype renames the pass would make over [typeNames] — one per name whose canonical text shrinks
+ * *inside* itself. A name that is wholly an alias target is not renamed: the typedef already carries
+ * that spelling at every reference (see `registerNamedPrimitiveTypedefs`), so renaming would collide
+ * with its own typedef and buy nothing — [TemplateNameShortener.shortenedNestedOrNull].
+ */
 fun typedefShorteningRenames(aliases: Map<String, String>, typeNames: Set<String>): List<TypedefRename> =
     TemplateNameShortener(aliases).let { s ->
-        typeNames.mapNotNull { name -> s.shortenedOrNull(name)?.let { TypedefRename(name, it) } }
+        typeNames.mapNotNull { name -> s.shortenedNestedOrNull(name)?.let { TypedefRename(name, it) } }
     }
 
 /**
- * Opt-in DTM pass that renames long templated datatypes onto their shorter typedef aliases, so the
- * listing and decompiler show `string` / `vector<string>` rather than the full
+ * Opt-in pass that renames the long templated datatypes [registry] created onto their shorter typedef
+ * aliases, so the listing and decompiler show `string` / `vector<string>` rather than the full
  * `basic_string<char, std::char_traits<char>, …>` spelling. Pure rename computation lives in
- * [typedefShorteningRenames]; this reads the aliases and names out of the DTM and applies them.
+ * [typedefShorteningRenames]; this reads the aliases and names off the registry and applies them.
+ *
+ * Scoped to [DataTypeRegistry.allCreatedDataTypes] rather than the whole DTM: shortening
+ * `unsigned char` to `BYTE` because Ghidra's PE loader applied `windows_vs12_32`, or renaming a
+ * `/Demangler` stub out from under [ghistabs.importer.DemanglerReplacer], is not our business.
  */
-class TypedefShortener(
-    private val dtm: DataTypeManager,
-    sink: DiagnosticSink,
-    private val monitor: TaskMonitor = TaskMonitor.DUMMY,
-) : DiagnosticSink by sink {
-    private val allTypes by lazy { dtm.allDataTypes.asSequence().toList() }
+class TypedefShortener(private val registry: DataTypeRegistry, private val monitor: TaskMonitor) :
+    DiagnosticSink by registry {
+    private val dtm = registry.dtm
 
-    /**
-     * A typedef the stabs importer created, as opposed to one Ghidra's PE loader applied from a
-     * data-type archive (PVOID, BYTE, DWORD, CONTEXT, …). Only stabs typedefs should drive renames —
-     * shortening `unsigned char` to `BYTE` because a Windows archive is loaded is not our business.
-     * Stabs types live in the program-local source archive; applied archive types don't.
-     */
-    private fun DataType.isStabsOrigin(): Boolean =
-        sourceArchive == null || sourceArchive.sourceArchiveID == dtm.localSourceArchive.sourceArchiveID
-
-    /** Typedef simple name → aliased type name, restricted to stabs typedefs that don't alias a base type. */
-    private fun aliases(types: List<DataType>): Map<String, String> =
-        typedefAliases(types.filter { it.isStabsOrigin() })
+    // Recomputed per read on the registry (pass C keeps registering) — snapshot once for this pass.
+    private val byName by lazy { registry.allCreatedDataTypes.groupBy { it.name } }
 
     fun renames(): List<TypedefRename> = typedefShorteningRenames(
-        aliases(allTypes),
-        allTypes.mapTo(mutableSetOf()) {
-            it.name
-        },
+        registry.typedefAliases(),
+        byName.keys,
     )
 
     fun apply(): Int {
-        val shortener = TemplateNameShortener(aliases(allTypes))
+        val shortener = TemplateNameShortener(registry.typedefAliases())
         if (shortener.isEmpty) return 0
-        val byName = allTypes.groupBy { it.name }
-        val composites = allTypes.filterIsInstance<Composite>()
+        val composites = byName.values.flatten().filterIsInstance<Composite>()
         monitor.initialize((byName.size + composites.size).toLong(), "Stabs: shortening typedefs")
         val typeRenamed = byName.keys.sumOf { name ->
             monitor.increment()
-            shortener.shortenedOrNull(name)?.let { short -> byName.getValue(name).count { rename(it, short) } } ?: 0
+            shortener.shortenedNestedOrNull(name)
+                ?.let { short -> byName.getValue(name).count { rename(it, short) } } ?: 0
         }
         // Base-class subobject fields (`_base_<Name>`/`_vbase_<Name>`) embed the base type's name at
         // build time, so renaming the base datatype never reaches them — rewrite those field names too.
