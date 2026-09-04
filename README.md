@@ -188,6 +188,7 @@ build/libs/ghistabs skeleton myprogram.exe -d out/skeletons
 build/libs/ghistabs decomp   myprogram.exe -d out/decomps --shorten-typedefs
 build/libs/ghistabs dump     myprogram.exe --harvest h.json --registry r.json
 build/libs/ghistabs harvest  myprogram.exe --harvest h.json
+build/libs/ghistabs symbols  myprogram.exe --symbols s.json
 build/libs/ghistabs parse    myprogram.exe --records r.json
 ```
 
@@ -196,11 +197,26 @@ decompiler, no rendered files, so no `-d`. Use it to inspect what the stabs yiel
 paying for the render. It needs at least one dump option to be worth running, and says so
 before Ghidra boots.
 
-`harvest` and `parse` stop earlier still, and **skip auto-analysis entirely**: neither pass
-reads anything Ghidra's analyzers produce, so they finish in seconds where the others take
-minutes, and neither writes anything to the program. `harvest` runs the byte decode plus the
-harvest and requires `--harvest FILE` (`--records` optional); `parse` runs the byte decode
-alone and requires `--records FILE`. Use them when iterating on the parser or the harvest.
+`harvest`, `symbols` and `parse` stop earlier still, and **skip auto-analysis entirely**: none of
+them reads anything Ghidra's analyzers produce, so they finish in seconds where the others take
+minutes, and none writes anything to the program. They are three cuts through the same pipeline,
+each requiring its own dump option:
+
+| Command   | Requires     | Stops at                                                                              |
+| --------- | ------------ | ------------------------------------------------------------------------------------- |
+| `parse`   | `--records`  | the byte decode — records as read, before any of them mean anything.                   |
+| `symbols` | `--symbols`  | each record's `name:descriptor…` parsed into a declaration, with source/function context resolved. |
+| `harvest` | `--harvest`  | declarations merged into types, ids globalized across compilation units.              |
+
+Use them when iterating on the parser or the harvest. `symbols` is the level at which the record
+type, the `:T`-tag-vs-`:t`-typedef binding and the declaration kind are still three separate facts
+— the harvest folds all three away — so it answers questions the later dumps cannot:
+
+```bash
+# which body kinds does each binding actually carry?
+jq -r '.[]|select(.body.kind|endswith("NamedType"))|"\(.body.tagOrTypedef) \(.body.type.type)"' s.json |
+  sort | uniq -c | sort -rn
+```
 
 Common options — logging and dumps, the only two things every command does the same way. Every
 command takes them after its own name, and `ghistabs --help` lists them as well as each
@@ -211,7 +227,7 @@ command takes them after its own name, and `ghistabs --help` lists them as well 
 | `-v`, `--log-level`                         | `INFO`  | `DEBUG`/`INFO`/`WARN`/`ERROR`; the log streams live to stderr.                               |
 | `--log FILE`                                |         | Also write the import log to a file.                                                         |
 | `--log-ghidra`                              | off     | Include Ghidra's own log messages in the stream.                                             |
-| `--records`, `--harvest`, `--registry` FILE |         | Dump the parsed stab records / harvest / materialized type registry as JSON.                 |
+| `--records`, `--symbols`, `--harvest`, `--registry` FILE |     | Dump the parsed stab records / symbol declarations / harvest / materialized type registry as JSON. |
 | `--degradation-log FILE`                    |         | Grouped report of every type that materialized to something weaker than the stabs described. |
 
 `--registry` and `--degradation-log` are products of materialization, so only `dump`, `skeleton` and `decomp` write them.
