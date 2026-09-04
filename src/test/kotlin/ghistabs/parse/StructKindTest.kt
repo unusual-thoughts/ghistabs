@@ -8,13 +8,13 @@ import org.junit.jupiter.api.Test
 
 /**
  * The two class-ness questions asked of a `s` body, which differ at exactly one term and used to be
- * answered by two hand-rolled predicates that disagreed: [TypeDecl.Struct.hasCxxSurface] (is this C++
- * at all — drives class materialization) and [TypeDecl.Struct.isCxxClass] (was the keyword `class` —
+ * answered by two hand-rolled predicates that disagreed: [TypeDecl.Aggregate.hasCxxSurface] (is this C++
+ * at all — drives class materialization) and [TypeDecl.Aggregate.isCxxClass] (was the keyword `class` —
  * drives the rendered keyword and its default access).
  */
 class StructKindTest {
     private fun struct(stab: String) =
-        Parser(stab).parseSymbol().mustBeOk().let { (it as SymbolDecl.NamedType).type as TypeDecl.Struct }
+        Parser(stab).parseSymbol().mustBeOk().let { (it as SymbolDecl.NamedType).type as TypeDecl.Aggregate }
 
     @Test
     fun `a public base is C++ but not evidence of the class keyword`() {

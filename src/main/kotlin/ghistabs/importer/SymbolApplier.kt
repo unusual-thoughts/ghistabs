@@ -516,7 +516,7 @@ class SymbolApplier(
         ctx.monitor.initialize(registry.types.allTypes.size.toLong(), "Stabs: applying static members")
         for (ast in registry.types.allTypes) {
             ctx.monitor.increment()
-            val body = ast.body as? TypeDecl.Struct<GlobalTypeId> ?: continue
+            val body = ast.body as? TypeDecl.Aggregate<GlobalTypeId> ?: continue
             for (field in body.fields) {
                 val mangled = field.mangled ?: continue
                 if (!field.isStatic || !seen.add(mangled)) continue

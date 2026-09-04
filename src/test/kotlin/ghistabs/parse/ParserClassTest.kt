@@ -1,6 +1,6 @@
 package ghistabs.parse
 
-import ghistabs.parse.TypeDecl.Struct.*
+import ghistabs.parse.TypeDecl.Aggregate.*
 import ghistabs.test.mustBe
 import org.junit.jupiter.api.Test
 
@@ -17,7 +17,7 @@ class ParserClassTest {
             kind = TypeNameKind.TAG,
             name = "Foo",
             id = LocalTypeId(0, 5),
-            type = TypeDecl.Struct(
+            type = TypeDecl.Aggregate(
                 kind = AggrKind.STRUCT,
                 sizeBytes = 8,
                 bases = emptyList(),
@@ -55,7 +55,7 @@ class ParserClassTest {
             kind = TypeNameKind.TAG,
             name = "Bar",
             id = LocalTypeId(0, 6),
-            type = TypeDecl.Struct(
+            type = TypeDecl.Aggregate(
                 kind = AggrKind.STRUCT,
                 sizeBytes = 4,
                 bases =
@@ -83,7 +83,7 @@ class ParserClassTest {
             kind = TypeNameKind.TAG,
             name = "Baz",
             id = LocalTypeId(0, 7),
-            type = TypeDecl.Struct(
+            type = TypeDecl.Aggregate(
                 kind = AggrKind.STRUCT,
                 sizeBytes = 8,
                 bases = emptyList(),
@@ -101,7 +101,7 @@ class ParserClassTest {
         // The space must not survive into the name, or the vtable field and its FD type diverge.
         val input = "Q:T(0,9)=s4__comp_dtor ::(0,10):_ZN1QD1Ev;2A*0;(0,9);;;"
         val method = (Parser(input).parseSymbol().mustBeOk() as SymbolDecl.NamedType).type
-            .let { it as TypeDecl.Struct }.methods.single()
+            .let { it as TypeDecl.Aggregate }.methods.single()
         method.name mustBe "__comp_dtor"
     }
 
@@ -112,7 +112,7 @@ class ParserClassTest {
             kind = TypeNameKind.TAG,
             name = "Qux",
             id = LocalTypeId(0, 9),
-            type = TypeDecl.Struct(
+            type = TypeDecl.Aggregate(
                 kind = AggrKind.STRUCT,
                 sizeBytes = 4,
                 bases = emptyList(),
@@ -152,7 +152,7 @@ class ParserClassTest {
             kind = TypeNameKind.TAG,
             name = "AllocatorWithCleanup<CryptoPP::word16>",
             id = LocalTypeId(55, 4),
-            type = TypeDecl.Struct(
+            type = TypeDecl.Aggregate(
                 kind = AggrKind.STRUCT,
                 sizeBytes = 1,
                 bases = emptyList(),
@@ -180,7 +180,7 @@ class ParserClassTest {
         // template depth (which would swallow the `::` method marker).
         val input = "Str:T(0,9)=s1operator<<::(0,10)=#(0,9),(0,1),(0,2);:_ZN3StrlsEi;2A.;;"
         val parsed = Parser(input).parseSymbol().mustBeOk() as SymbolDecl.NamedType
-        val struct = parsed.type as TypeDecl.Struct
+        val struct = parsed.type as TypeDecl.Aggregate
         struct.methods.size mustBe 1
         struct.methods.single().name mustBe "operator<<"
     }
@@ -192,7 +192,7 @@ class ParserClassTest {
             kind = TypeNameKind.TAG,
             name = "Qux",
             id = LocalTypeId(0, 9),
-            type = TypeDecl.Struct(
+            type = TypeDecl.Aggregate(
                 kind = AggrKind.STRUCT,
                 sizeBytes = 4,
                 bases = emptyList(),
@@ -229,7 +229,7 @@ class ParserClassTest {
             kind = TypeNameKind.TAG,
             name = "Quux",
             id = LocalTypeId(0, 11),
-            type = TypeDecl.Struct(
+            type = TypeDecl.Aggregate(
                 kind = AggrKind.STRUCT,
                 sizeBytes = 4,
                 bases = emptyList(),
@@ -264,7 +264,7 @@ class ParserClassTest {
             kind = TypeNameKind.TAG,
             name = "Quux",
             id = LocalTypeId(0, 11),
-            type = TypeDecl.Struct(
+            type = TypeDecl.Aggregate(
                 kind = AggrKind.STRUCT,
                 sizeBytes = 4,
                 bases = emptyList(),
@@ -296,7 +296,7 @@ class ParserClassTest {
             kind = TypeNameKind.TAG,
             name = "Base",
             id = LocalTypeId(0, 20),
-            type = TypeDecl.Struct(
+            type = TypeDecl.Aggregate(
                 kind = AggrKind.STRUCT,
                 sizeBytes = 4,
                 bases = emptyList(),
@@ -340,7 +340,7 @@ class ParserClassTest {
             kind = TypeNameKind.TAG,
             name = "Derived",
             id = LocalTypeId(0, 30),
-            type = TypeDecl.Struct(
+            type = TypeDecl.Aggregate(
                 kind = AggrKind.STRUCT,
                 sizeBytes = 8,
                 bases = emptyList(),
@@ -375,7 +375,7 @@ class ParserClassTest {
         // `~%` is the LAST section — after member functions, not after size. Corpus shape:
         // `<method>;;~%<owner>;`. Regression for the years-long misparse that read it after size.
         val input = "P:T(0,5)=s8vmethod::(0,31)=#(0,5),(0,1),(0,2);:_ZN1P7vmethodEi;2A*0;(0,5);;;~%(0,9);"
-        val struct = (Parser(input).parseSymbol().mustBeOk() as SymbolDecl.NamedType).type as TypeDecl.Struct
+        val struct = (Parser(input).parseSymbol().mustBeOk() as SymbolDecl.NamedType).type as TypeDecl.Aggregate
         struct.vptrBasetype mustBe TypeDecl.Ref(LocalTypeId(0, 9))
         struct.methods.size mustBe 1
     }
@@ -385,7 +385,7 @@ class ParserClassTest {
         // The `~%` target is a full read_type, not just an id: RTTI/exception classes emit an inline
         // forward-xref `(cu,n)=xsName:`. Regression for the guard dropping the whole class on `=`.
         val input = "underflow_error:T(0,5)=s8;~%(0,6)=xstype_info:;"
-        val struct = (Parser(input).parseSymbol().mustBeOk() as SymbolDecl.NamedType).type as TypeDecl.Struct
+        val struct = (Parser(input).parseSymbol().mustBeOk() as SymbolDecl.NamedType).type as TypeDecl.Aggregate
         struct.vptrBasetype mustBe TypeDecl.InlineDef(LocalTypeId(0, 6), TypeDecl.XRef(AggrKind.STRUCT, "type_info"))
     }
 
@@ -398,12 +398,12 @@ class ParserClassTest {
     fun testStaticMemberFunction() {
         val input = "FileSystemImage:T(0,5)=s40" +
             "isValidMagic::(0,21)=f(0,9):_ZN15FileSystemImage12isValidMagicEm;0A?;;;"
-        val struct = (Parser(input).parseSymbol().mustBeOk() as SymbolDecl.NamedType).type as TypeDecl.Struct
+        val struct = (Parser(input).parseSymbol().mustBeOk() as SymbolDecl.NamedType).type as TypeDecl.Aggregate
         val m = struct.methods.single()
         m.virt mustBe VirtKind.STATIC
         m.access mustBe Access.PRIVATE
         m.signature mustBe
-            TypeDecl.InlineDef(LocalTypeId(0, 21), TypeDecl.FunctionT(TypeDecl.Ref(LocalTypeId(0, 9)), emptyList()))
+            TypeDecl.InlineDef(LocalTypeId(0, 21), TypeDecl.FreeFunction(TypeDecl.Ref(LocalTypeId(0, 9)), emptyList()))
         m.isConst mustBe false
         m.vtableOffsetBits mustBe null
     }
@@ -414,7 +414,7 @@ class ParserClassTest {
         fun virtOf(letter: Char): Method<LocalTypeId> {
             val input = "S:T(0,5)=s4f::(0,10)=#(0,5),(0,1);:_ZNK1S1fEv;2$letter.;;;"
             return (
-                (Parser(input).parseSymbol().mustBeOk() as SymbolDecl.NamedType).type as TypeDecl.Struct
+                (Parser(input).parseSymbol().mustBeOk() as SymbolDecl.NamedType).type as TypeDecl.Aggregate
                 ).methods.single()
         }
         virtOf('A').let { it.isConst to it.isVolatile } mustBe (false to false)

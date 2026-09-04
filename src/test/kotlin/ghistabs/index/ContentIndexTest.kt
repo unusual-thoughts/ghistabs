@@ -4,8 +4,8 @@ import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.DummySink
 import ghistabs.harvest.*
 import ghistabs.parse.*
-import ghistabs.parse.TypeDecl.Struct.Field
-import ghistabs.parse.TypeDecl.Struct.Method
+import ghistabs.parse.TypeDecl.Aggregate.Field
+import ghistabs.parse.TypeDecl.Aggregate.Method
 import ghistabs.test.mustBe
 import ghistabs.test.mustNotBe
 import org.junit.jupiter.api.Test
@@ -31,21 +31,27 @@ class ContentIndexTest {
     private val intInCU1 = Type(
         cu = SourceFile.CUSource("a.cpp"),
         id = GlobalTypeId(SourceFile.CUSource("a.cpp"), 1),
-        name = "int",
+        named = binding(
+            "int",
+            TypeDecl.Range(GlobalTypeId(SourceFile.CUSource("a.cpp"), 1), -2147483648L, 2147483647L),
+        ),
         body = TypeDecl.Range(GlobalTypeId(SourceFile.CUSource("a.cpp"), 1), -2147483648L, 2147483647L),
     )
 
     private val intInCU2 = Type(
         cu = SourceFile.CUSource("b.cpp"),
         id = GlobalTypeId(SourceFile.CUSource("b.cpp"), 1),
-        name = "int",
+        named = binding(
+            "int",
+            TypeDecl.Range(GlobalTypeId(SourceFile.CUSource("b.cpp"), 1), -2147483648L, 2147483647L),
+        ),
         body = TypeDecl.Range(GlobalTypeId(SourceFile.CUSource("b.cpp"), 1), -2147483648L, 2147483647L),
     )
 
     private val charInCU1 = Type(
         cu = SourceFile.CUSource("a.cpp"),
         id = GlobalTypeId(SourceFile.CUSource("a.cpp"), 2),
-        name = "char",
+        named = binding("char", TypeDecl.Range(GlobalTypeId(SourceFile.CUSource("a.cpp"), 2), 0L, 127L)),
         body = TypeDecl.Range(GlobalTypeId(SourceFile.CUSource("a.cpp"), 2), 0L, 127L),
     )
 
@@ -91,13 +97,13 @@ class ContentIndexTest {
         val boolInCU1 = Type(
             cu = SourceFile.CUSource("a.cpp"),
             id = GlobalTypeId(SourceFile.CUSource("a.cpp"), 21),
-            name = "bool",
+            named = binding("bool", TypeDecl.WithSizeAttr(8, TypeDecl.Builtin(-16))),
             body = TypeDecl.WithSizeAttr(8, TypeDecl.Builtin(-16)),
         )
         val boolInCU2 = Type(
             cu = SourceFile.CUSource("b.cpp"),
             id = GlobalTypeId(SourceFile.CUSource("b.cpp"), 21),
-            name = "bool",
+            named = binding("bool", TypeDecl.WithSizeAttr(8, TypeDecl.Builtin(-16))),
             body = TypeDecl.WithSizeAttr(8, TypeDecl.Builtin(-16)),
         )
         val store = mapOf(boolInCU1.id to boolInCU1, boolInCU2.id to boolInCU2)
@@ -125,7 +131,7 @@ class ContentIndexTest {
      */
     @Test
     fun perCuTemplateClonesHashIdentically() {
-        val clone1Body = TypeDecl.Struct(
+        val clone1Body = TypeDecl.Aggregate(
             kind = AggrKind.STRUCT,
             sizeBytes = 8L,
             bases = emptyList(),
@@ -151,7 +157,7 @@ class ContentIndexTest {
 
     @Test
     fun structurallyDifferentStructsHashDifferently() {
-        val s1 = TypeDecl.Struct(
+        val s1 = TypeDecl.Aggregate(
             kind = AggrKind.STRUCT,
             sizeBytes = 4L,
             bases = emptyList(),
@@ -180,7 +186,7 @@ class ContentIndexTest {
      */
     @Test
     fun staticMembersExcludedFromLayoutHash() {
-        val base = TypeDecl.Struct(
+        val base = TypeDecl.Aggregate(
             kind = AggrKind.STRUCT,
             sizeBytes = 4L,
             bases = emptyList(),
@@ -229,7 +235,7 @@ class ContentIndexTest {
         val pointerToInt = Type(
             cu = SourceFile.CUSource("c.cpp"),
             id = GlobalTypeId(SourceFile.CUSource("c.cpp"), 7),
-            name = "[c.cpp,7]",
+            named = binding("[c.cpp,7]", TypeDecl.Pointer(TypeDecl.Ref(intInCU1.id))),
             body = TypeDecl.Pointer(TypeDecl.Ref(intInCU1.id)),
         )
         val asts2 = asts + (pointerToInt.id to pointerToInt)
@@ -261,8 +267,14 @@ class ContentIndexTest {
         // id 98: the actual _IO_FILE struct definition
         val id98 = GlobalTypeId(cu, 98)
         val intId = GlobalTypeId(cu, 2)
-        val intAst = Type(cu, intId, "int", TypeDecl.Range(intId, -2147483648L, 2147483647L))
-        val ioFileBody = TypeDecl.Struct(
+        val intAst =
+            Type(
+                cu,
+                intId,
+                binding("int", TypeDecl.Range(intId, -2147483648L, 2147483647L)),
+                TypeDecl.Range(intId, -2147483648L, 2147483647L),
+            )
+        val ioFileBody = TypeDecl.Aggregate(
             kind = AggrKind.STRUCT,
             sizeBytes = 216,
             bases = emptyList(),
@@ -272,7 +284,7 @@ class ContentIndexTest {
             methods = emptyList(),
             vptrBasetype = null,
         )
-        val ioFileAst = Type(cu, id98, "_IO_FILE", ioFileBody)
+        val ioFileAst = Type(cu, id98, binding("_IO_FILE", ioFileBody), ioFileBody)
         // id 97: InlineDef(id=98, body=XRef(STRUCT, _IO_FILE)) — the forward-ref alias
         val id97 = GlobalTypeId(cu, 97)
         val forwardAlias = Type(
@@ -338,7 +350,7 @@ class ContentIndexTest {
         val methodBindAId = GlobalTypeId(SourceFile.CUSource("Keywords.cpp"), 440)
         val methodBindBId = GlobalTypeId(SourceFile.CUSource("assemble.cpp"), 228)
 
-        fun makePairBody(param0: GlobalTypeDecl): TypeDecl.Struct<GlobalTypeId> = TypeDecl.Struct(
+        fun makePairBody(param0: GlobalTypeDecl): TypeDecl.Aggregate<GlobalTypeId> = TypeDecl.Aggregate(
             kind = AggrKind.STRUCT,
             sizeBytes = 8L,
             bases = emptyList(),
@@ -374,21 +386,26 @@ class ContentIndexTest {
 
         val keywordsCu = SourceFile.CUSource("Keywords.cpp")
         val assembleCu = SourceFile.CUSource("assemble.cpp")
-        val pairCanonical = Type(cu = keywordsCu, id = pairId, name = "pair", body = variant0)
+        val pairCanonical = Type(cu = keywordsCu, id = pairId, named = binding("pair", variant0), body = variant0)
         val ptrA = Type(
             cu = keywordsCu,
             id = ptrAId,
-            name = "[Keywords.cpp,180]",
+            named = binding("[Keywords.cpp,180]", TypeDecl.Pointer(TypeDecl.Ref(pairId))),
             body = TypeDecl.Pointer(TypeDecl.Ref(pairId)),
         )
         val ptrB = Type(
             cu = assembleCu,
             id = ptrBId,
-            name = "[assemble.cpp,229]",
+            named = binding("[assemble.cpp,229]", TypeDecl.Pointer(TypeDecl.Ref(pairId))),
             body = TypeDecl.Pointer(TypeDecl.Ref(pairId)),
         )
         val intAst =
-            Type(cu = keywordsCu, id = intId, name = "int", body = TypeDecl.Range(intId, -2147483648L, 2147483647L))
+            Type(
+                cu = keywordsCu,
+                id = intId,
+                named = binding("int", TypeDecl.Range(intId, -2147483648L, 2147483647L)),
+                body = TypeDecl.Range(intId, -2147483648L, 2147483647L),
+            )
         val store = mapOf(pairId to pairCanonical, ptrAId to ptrA, ptrBId to ptrB, intId to intAst)
         val storeOracle = TestContentIndex(store)
 
@@ -448,14 +465,14 @@ class ContentIndexTest {
         val ptrInA = Type(
             cu = SourceFile.CUSource("a.cpp"),
             id = GlobalTypeId(SourceFile.CUSource("a.cpp"), 180),
-            name = "[a.cpp,180]",
+            named = binding("[a.cpp,180]", TypeDecl.Pointer(TypeDecl.Ref(pairId))),
             body = TypeDecl.Pointer(TypeDecl.Ref(pairId)),
         )
         // CU2's inline form would emit a TypeAst from walkDefinitions too.
         val ptrInB = Type(
             cu = SourceFile.CUSource("b.cpp"),
             id = GlobalTypeId(SourceFile.CUSource("b.cpp"), 229),
-            name = "[b.cpp,229]",
+            named = binding("[b.cpp,229]", TypeDecl.Pointer(TypeDecl.Ref(pairId))),
             body = TypeDecl.Pointer(TypeDecl.Ref(pairId)),
         )
         val store = mapOf(ptrInA.id to ptrInA, ptrInB.id to ptrInB)
@@ -492,7 +509,7 @@ class ContentIndexTest {
             vtableOffsetBits = vtoff,
         )
 
-        fun cls(method: Method<GlobalTypeId>) = TypeDecl.Struct(
+        fun cls(method: Method<GlobalTypeId>) = TypeDecl.Aggregate(
             kind = AggrKind.STRUCT,
             sizeBytes = 4,
             bases = emptyList(),
@@ -523,7 +540,7 @@ class ContentIndexTest {
 
     @Test
     fun contentDistinguishesFieldLayout() {
-        fun cls(fieldType: GlobalTypeDecl) = TypeDecl.Struct(
+        fun cls(fieldType: GlobalTypeDecl) = TypeDecl.Aggregate(
             kind = AggrKind.STRUCT,
             sizeBytes = 4,
             bases = emptyList(),

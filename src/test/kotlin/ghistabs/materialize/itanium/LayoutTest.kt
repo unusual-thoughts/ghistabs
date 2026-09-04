@@ -1,9 +1,10 @@
 package ghistabs.materialize.itanium
 
 import ghistabs.harvest.Type
+import ghistabs.harvest.binding
 import ghistabs.parse.*
-import ghistabs.parse.TypeDecl.Struct.Base
-import ghistabs.parse.TypeDecl.Struct.Method
+import ghistabs.parse.TypeDecl.Aggregate.Base
+import ghistabs.parse.TypeDecl.Aggregate.Method
 import ghistabs.test.*
 import org.junit.jupiter.api.Test
 
@@ -131,7 +132,7 @@ class PolymorphicBaseTest {
     private fun gid(n: Int) = GlobalTypeId(cu, n)
 
     private fun polyStruct(hasVtableMarker: Boolean = false, methods: List<Method<GlobalTypeId>> = emptyList()) =
-        TypeDecl.Struct(
+        TypeDecl.Aggregate(
             kind = AggrKind.STRUCT,
             sizeBytes = 8L,
             bases = emptyList(),
@@ -143,7 +144,7 @@ class PolymorphicBaseTest {
     private fun virtualMethod(name: String) = Method<GlobalTypeId>(
         name = name,
         mangled = null,
-        signature = TypeDecl.FunctionT(TypeDecl.Complex(0, 4), emptyList()),
+        signature = TypeDecl.FreeFunction(TypeDecl.Complex(0, 4), emptyList()),
         access = Access.PUBLIC,
         virt = VirtKind.VIRTUAL,
         isConst = false,
@@ -151,7 +152,7 @@ class PolymorphicBaseTest {
         vtableOffsetBits = 0L,
     )
 
-    private fun inlineBase(n: Int, body: TypeDecl.Struct<GlobalTypeId>) = Base(
+    private fun inlineBase(n: Int, body: TypeDecl.Aggregate<GlobalTypeId>) = Base(
         type = TypeDecl.InlineDef(gid(n), body),
         isVirtual = false,
         access = Access.PUBLIC,
@@ -161,7 +162,7 @@ class PolymorphicBaseTest {
     @Test
     fun `polyBase - direct polymorphic base detected`() {
         val base = polyStruct(hasVtableMarker = true)
-        val derived = TypeDecl.Struct(
+        val derived = TypeDecl.Aggregate(
             kind = AggrKind.STRUCT,
             sizeBytes = 12L,
             bases = listOf(inlineBase(1, base)),
@@ -175,7 +176,7 @@ class PolymorphicBaseTest {
     @Test
     fun `nonPolyBase - no virtual methods or markers detected`() {
         val base = polyStruct(hasVtableMarker = false)
-        val derived = TypeDecl.Struct(
+        val derived = TypeDecl.Aggregate(
             kind = AggrKind.STRUCT,
             sizeBytes = 12L,
             bases = listOf(inlineBase(1, base)),
@@ -189,7 +190,7 @@ class PolymorphicBaseTest {
     @Test
     fun `transitive - polymorphism inherited through intermediate class`() {
         val base = polyStruct(hasVtableMarker = true)
-        val middle = TypeDecl.Struct(
+        val middle = TypeDecl.Aggregate(
             kind = AggrKind.STRUCT,
             sizeBytes = 12L,
             bases = listOf(inlineBase(1, base)),
@@ -197,7 +198,7 @@ class PolymorphicBaseTest {
             methods = emptyList(),
             vptrBasetype = null,
         )
-        val derived = TypeDecl.Struct(
+        val derived = TypeDecl.Aggregate(
             kind = AggrKind.STRUCT,
             sizeBytes = 16L,
             bases = listOf(inlineBase(2, middle)),
@@ -223,7 +224,7 @@ class PolymorphicBaseTest {
     @Test
     fun `virtualBases - virtual base reached through a non-virtual edge still counts`() {
         val vbase = polyStruct(hasVtableMarker = true)
-        val middle = TypeDecl.Struct(
+        val middle = TypeDecl.Aggregate(
             kind = AggrKind.STRUCT,
             sizeBytes = 12L,
             bases = listOf(inlineBase(1, vbase).copy(isVirtual = true)),
@@ -231,7 +232,7 @@ class PolymorphicBaseTest {
             methods = emptyList(),
             vptrBasetype = null,
         )
-        val derived = TypeDecl.Struct(
+        val derived = TypeDecl.Aggregate(
             kind = AggrKind.STRUCT,
             sizeBytes = 16L,
             bases = listOf(inlineBase(2, middle)),
@@ -247,7 +248,7 @@ class PolymorphicBaseTest {
     @Test
     fun `virtualBases - virtual edge to an already-visited class is still collected`() {
         val shared = polyStruct(hasVtableMarker = true)
-        val middle = TypeDecl.Struct(
+        val middle = TypeDecl.Aggregate(
             kind = AggrKind.STRUCT,
             sizeBytes = 12L,
             bases = listOf(inlineBase(1, shared)),
@@ -255,7 +256,7 @@ class PolymorphicBaseTest {
             methods = emptyList(),
             vptrBasetype = null,
         )
-        val derived = TypeDecl.Struct(
+        val derived = TypeDecl.Aggregate(
             kind = AggrKind.STRUCT,
             sizeBytes = 16L,
             bases = listOf(inlineBase(2, middle), inlineBase(1, shared).copy(isVirtual = true)),
@@ -275,7 +276,7 @@ class PolymorphicBaseTest {
     @Test
     fun `virtual method in base - detected as polymorphic`() {
         val base = polyStruct(methods = listOf(virtualMethod("foo")))
-        val derived = TypeDecl.Struct(
+        val derived = TypeDecl.Aggregate(
             kind = AggrKind.STRUCT,
             sizeBytes = 12L,
             bases = listOf(inlineBase(1, base)),
@@ -290,9 +291,9 @@ class PolymorphicBaseTest {
     fun `TypeDecl_Ref base - resolved via TypeResolver map`() {
         val baseId = gid(99)
         val base = polyStruct(methods = listOf(virtualMethod("virtualMethod")))
-        val baseAst = Type(cu, baseId, "Base", base)
+        val baseAst = Type(cu, baseId, binding("Base", base), base)
 
-        val derived = TypeDecl.Struct(
+        val derived = TypeDecl.Aggregate(
             kind = AggrKind.STRUCT,
             sizeBytes = 12L,
             bases = listOf(

@@ -104,8 +104,9 @@ class Harvester(private val monitor: TaskMonitor, private val sink: DiagnosticSi
                     cursor.cu,
                     decl.id,
                     // gcc gives a tagless, typedef-less `enum { A, B };` a single-space symbol name,
-                    // which the parser normalizes to ""
-                    decl.name.ifEmpty { null },
+                    // which the parser normalizes to "". At this layer that is simply anonymous, and
+                    // one representation of it (null) is enough — see [Type.named].
+                    decl.name.ifEmpty { null }?.let { NameBinding(it, decl.kind) },
                     decl.type,
                     line = sym.line,
                     sourceFile = sym.sourceFile,
@@ -190,15 +191,5 @@ class Harvester(private val monitor: TaskMonitor, private val sink: DiagnosticSi
     }
 
     /** Parses a symbol record then hoist any contained inline type definitions */
-    private fun StabRecord.harvestSymbol() = when (val res = cursor.parseSymbol(this)) {
-        is ParseResult.Error -> {
-            err("parse-error", "@$index '${name.take(80)}': ${res.ex.message}")
-            null
-        }
-
-        is ParseResult.Ok -> {
-            res.trailing?.let { warn("unparsed-trailing", it) }
-            res.inner.also { store.hoistInlineDefs(it, cursor.cu) }
-        }
-    }
+    private fun StabRecord.harvestSymbol() = cursor.parseSymbol(this)?.also { store.hoistInlineDefs(it, cursor.cu) }
 }

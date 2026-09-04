@@ -2,7 +2,7 @@
 
 package ghistabs.parse
 
-import ghistabs.parse.TypeDecl.Struct.*
+import ghistabs.parse.TypeDecl.Aggregate.*
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.descriptors.PrimitiveKind
@@ -100,7 +100,7 @@ fun LocalTypeDecl.globalize(g: Globalizer): GlobalTypeDecl = when (this) {
 
     is TypeDecl.Array -> TypeDecl.Array(element.globalize(g), length, indexType?.globalize(g))
 
-    is TypeDecl.FunctionT -> TypeDecl.FunctionT(ret.globalize(g), params.map { it.globalize(g) })
+    is TypeDecl.FreeFunction -> TypeDecl.FreeFunction(ret.globalize(g), params.map { it.globalize(g) })
 
     is TypeDecl.Method -> TypeDecl.Method(
         cls.globalize(g),
@@ -108,7 +108,7 @@ fun LocalTypeDecl.globalize(g: Globalizer): GlobalTypeDecl = when (this) {
         this.params.map { it.globalize(g) },
     )
 
-    is TypeDecl.Struct -> TypeDecl.Struct(
+    is TypeDecl.Aggregate -> TypeDecl.Aggregate(
         kind,
         sizeBytes,
         bases.map { Base(it.type.globalize(g), it.isVirtual, it.access, it.offsetBits) },

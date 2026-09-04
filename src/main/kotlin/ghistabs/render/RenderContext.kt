@@ -70,11 +70,11 @@ interface RenderContext {
 
         is TypeDecl.XRef -> "${kind.cxxKeyword()} ${shortener?.shortenedOrNull(tagName) ?: tagName}"
 
-        is TypeDecl.Struct -> cxxKeyword
+        is TypeDecl.Aggregate -> cxxKeyword
 
         is TypeDecl.Enum -> "enum"
 
-        is TypeDecl.FunctionT -> {
+        is TypeDecl.FreeFunction -> {
             val ret = ret.render(seen)
             val params = params.joinToString(", ") { it.render(seen) }
             "$ret($params)"
@@ -104,7 +104,7 @@ interface RenderContext {
     }
 
     /** Render a Struct's body members for in-skeleton expansion: one bare C-style decl per entry. */
-    fun TypeDecl.Struct<GlobalTypeId>.renderFull(owner: String? = null): List<String> {
+    fun TypeDecl.Aggregate<GlobalTypeId>.renderFull(owner: String? = null): List<String> {
         val members = fields.filter { !it.isStatic }.sortedBy { it.offsetBits }.map { f ->
             f.access to "${f.type.renderDecl(f.name)};  /* +${f.offsetBits / 8}B */"
         } + fields.filter { it.isStatic }.map { f ->
@@ -170,7 +170,7 @@ interface RenderContext {
 
     /** A type body on one line — the appendix form, where alignment to a source line is meaningless. */
     fun Type.oneLineBody(): String = when (val b = body) {
-        is TypeDecl.Struct -> {
+        is TypeDecl.Aggregate -> {
             // Bases too — they are where the instantiations differ most visibly, and dropping them
             // was the one thing the appendix still lost against the pre-rewrite render.
             val bases = b.bases.takeIf { it.isNotEmpty() }
@@ -195,26 +195,32 @@ interface RenderContext {
             return null
         }
 
+        val name = name ?: return null
         val shortName = shortener?.shortenedOrNull(name) ?: name
 
         // Struct fields/methods are self-terminated statements; enum members carry a
         // trailing comma so the space-join in layoutBraceBlock reads as a member list.
         val members = when (body) {
-            is TypeDecl.Struct -> body.renderFull(name.simpleTypeName())
+            is TypeDecl.Aggregate -> body.renderFull(name.simpleTypeName())
             is TypeDecl.Enum -> body.members.map { (mn, mv) -> "$mn = $mv," }
             else -> return null
         }
+        // `:t` bound the name, so the source wrote `typedef struct {…} Name;` — render that form,
+        // with the name after the closing brace rather than after the keyword.
+        val isTypedef = kind == TypeNameKind.TYPEDEF
+        val tag = if (isTypedef) "typedef " else ""
+        val declName = if (isTypedef) "" else " $shortName"
         val openText = when (body) {
-            is TypeDecl.Struct -> body.bases.takeIf { it.isNotEmpty() }?.joinToString(", ", prefix = " : ") {
+            is TypeDecl.Aggregate -> body.bases.takeIf { it.isNotEmpty() }?.joinToString(", ", prefix = " : ") {
                 "${it.access.name.lowercase()} ${it.type.render()}"
             }.orEmpty().let { bases ->
-                "${body.cxxKeyword} $shortName$bases {".asSpecialization(shortName)
+                "$tag${body.cxxKeyword}$declName$bases {".asSpecialization(shortName)
             }
 
-            is TypeDecl.Enum -> "enum $shortName {"
+            is TypeDecl.Enum -> tag + "enum$declName {"
         }
         val extent = when (body) {
-            is TypeDecl.Struct -> "${body.sizeBytes} bytes"
+            is TypeDecl.Aggregate -> "${body.sizeBytes} bytes"
             is TypeDecl.Enum -> "${body.members.size} members"
         }
         val sizeNote = "/* $extent" + (if (instantiations > 1) ", $instantiations instantiations" else "") + " */"
@@ -223,12 +229,20 @@ interface RenderContext {
             Claim(
                 Owner.TYPE_BODY,
                 line,
-                FileRenderer.braceRows(openText, members, "}; $sizeNote", line.indentAt(), ""),
+                FileRenderer.braceRows(
+                    openText,
+                    members,
+                    (if (isTypedef) "} $shortName; " else "}; ") + sizeNote,
+                    line.indentAt(),
+                    "",
+                ),
                 Fit.ELASTIC,
                 stale,
             )
         } else {
-            val keyword = if (body is TypeDecl.Struct) body.cxxKeyword else "enum"
+            // No members to wrap, so there is nothing to typedef *around*: the bare tag form is the
+            // only spelling that parses.
+            val keyword = if (body is TypeDecl.Aggregate) body.cxxKeyword else "enum"
             val row = Row("$keyword $shortName; $sizeNote", line.indentAt(), "")
             Claim(Owner.TYPE_BODY, line, listOf(row), stale = stale)
         }

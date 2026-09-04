@@ -4,8 +4,8 @@ import ghistabs.index.TypeGraph
 import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
-import ghistabs.parse.TypeDecl.Struct.Base
-import ghistabs.parse.TypeDecl.Struct.Method
+import ghistabs.parse.TypeDecl.Aggregate.Base
+import ghistabs.parse.TypeDecl.Aggregate.Method
 import ghistabs.parse.VirtKind
 import ghistabs.parse.isVptrFieldName
 
@@ -69,11 +69,11 @@ object Layout {
 }
 
 /** Does [typeDecl] inherit a vfptr from a polymorphic base subobject (vs. introducing its own)? */
-fun TypeGraph.hasPolymorphicBaseSubobject(typeDecl: TypeDecl.Struct<GlobalTypeId>) =
+fun TypeGraph.hasPolymorphicBaseSubobject(typeDecl: TypeDecl.Aggregate<GlobalTypeId>) =
     firstPolymorphicBase(typeDecl) != null
 
 /** Lowest-offset polymorphic base, or null. Determines whether to insert a vfptr or inherit. */
-fun TypeGraph.firstPolymorphicBase(typeDecl: TypeDecl.Struct<GlobalTypeId>): Base<GlobalTypeId>? = typeDecl.bases
+fun TypeGraph.firstPolymorphicBase(typeDecl: TypeDecl.Aggregate<GlobalTypeId>): Base<GlobalTypeId>? = typeDecl.bases
     .sortedBy { it.offsetBits }
     .firstOrNull { base ->
         resolveStruct(base.type)?.run {
@@ -94,9 +94,9 @@ fun TypeGraph.firstPolymorphicBase(typeDecl: TypeDecl.Struct<GlobalTypeId>): Bas
  * through a non-virtual one still contributes a vbase offset. One traversal serving both only reads as
  * a traversal with two modes.
  */
-fun TypeGraph.virtualBases(typeDecl: TypeDecl.Struct<GlobalTypeId>) = buildList {
-    val seen = mutableSetOf<TypeDecl.Struct<GlobalTypeId>>()
-    fun walk(cls: TypeDecl.Struct<GlobalTypeId>) {
+fun TypeGraph.virtualBases(typeDecl: TypeDecl.Aggregate<GlobalTypeId>) = buildList {
+    val seen = mutableSetOf<TypeDecl.Aggregate<GlobalTypeId>>()
+    fun walk(cls: TypeDecl.Aggregate<GlobalTypeId>) {
         if (!seen.add(cls)) return
         for (base in cls.bases) {
             if (base.isVirtual) add(base)
@@ -106,7 +106,7 @@ fun TypeGraph.virtualBases(typeDecl: TypeDecl.Struct<GlobalTypeId>) = buildList 
     walk(typeDecl)
 }
 
-fun TypeGraph.resolveStruct(typeDecl: GlobalTypeDecl) = resolve<TypeDecl.Struct<GlobalTypeId>>(typeDecl)
+fun TypeGraph.resolveStruct(typeDecl: GlobalTypeDecl) = resolve<TypeDecl.Aggregate<GlobalTypeId>>(typeDecl)
 
 /**
  * Collects a class's full vtable slot list from its inheritance chain and orders it by the
@@ -114,17 +114,17 @@ fun TypeGraph.resolveStruct(typeDecl: GlobalTypeDecl) = resolve<TypeDecl.Struct<
  * by name) replaces the inherited slot and its offset wins; output order is set by the final sort,
  * not the walk. Override matching is by name only — fine for the non-overloaded gcc 3.4.4 corpus.
  */
-fun TypeGraph.collectAllVirtuals(struct: TypeDecl.Struct<GlobalTypeId>) = object {
+fun TypeGraph.collectAllVirtuals(struct: TypeDecl.Aggregate<GlobalTypeId>) = object {
     val table: MutableList<Method<GlobalTypeId>> = mutableListOf()
-    private val visited: MutableSet<TypeDecl.Struct<GlobalTypeId>> = mutableSetOf()
+    private val visited: MutableSet<TypeDecl.Aggregate<GlobalTypeId>> = mutableSetOf()
 
-    private fun walkBases(cls: TypeDecl.Struct<GlobalTypeId>) {
+    private fun walkBases(cls: TypeDecl.Aggregate<GlobalTypeId>) {
         for (base in cls.bases) {
             resolveStruct(base.type)?.takeIf { visited.add(it) }?.let { collectAll(it) }
         }
     }
 
-    fun collectAll(cls: TypeDecl.Struct<GlobalTypeId>) {
+    fun collectAll(cls: TypeDecl.Aggregate<GlobalTypeId>) {
         walkBases(cls)
         for (m in cls.methods.filter { it.virt == VirtKind.VIRTUAL }) {
             val idx = table.indexOfFirst { it.name == m.name }
