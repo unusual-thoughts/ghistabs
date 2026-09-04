@@ -84,6 +84,10 @@
             "min": 134,
             "max": 134
         },
+        "demangler-shortened-name-match": {
+            "min": 19,
+            "max": 19
+        },
         "demangler-skip-no-replacement": {
             "min": 42,
             "max": 43
@@ -220,6 +224,10 @@
             "min": 36903,
             "max": 36903
         },
+        "harvest-typeAsts-Aggregate": {
+            "min": 13787,
+            "max": 13787
+        },
         "harvest-typeAsts-Array": {
             "min": 560,
             "max": 560
@@ -236,7 +244,7 @@
             "min": 99,
             "max": 99
         },
-        "harvest-typeAsts-FunctionT": {
+        "harvest-typeAsts-FreeFunction": {
             "min": 530,
             "max": 530
         },
@@ -255,10 +263,6 @@
         "harvest-typeAsts-Ref": {
             "min": 7092,
             "max": 7092
-        },
-        "harvest-typeAsts-Struct": {
-            "min": 13787,
-            "max": 13787
         },
         "harvest-typeAsts-Void": {
             "min": 33,
@@ -395,6 +399,10 @@
         "textrange-entries": {
             "min": 3173,
             "max": 3173
+        },
+        "typedef-shorten": {
+            "min": 1,
+            "max": 1
         },
         "unresolved-symbol": {
             "min": 98,

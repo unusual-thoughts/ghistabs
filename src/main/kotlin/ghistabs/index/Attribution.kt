@@ -120,7 +120,7 @@ fun foldSourcePaths(sources: Iterable<GhidraSourceFile>): Map<GhidraSourceFile, 
 }
 
 /** gcc emits anonymous types with CU-local sequential names; same name in different CUs is unrelated. */
-fun Type.isCuLocalName() = name != null && CU_LOCAL_NAME.matches(name)
+fun Type.isCuLocalName() = name?.let { CU_LOCAL_NAME.matches(it) } == true
 
 /**
  * The type's own demangled path, root-first (`std::string::_M_replace` → `["std", "string"]`), or null
@@ -131,7 +131,7 @@ fun Type.isCuLocalName() = name != null && CU_LOCAL_NAME.matches(name)
  * `std::basic_string<char,…>`) — so it's what our type must be named to be reused rather than shadowed.
  */
 fun Type.demangledClassPath(): List<String>? {
-    val methods = (body as? TypeDecl.Struct<GlobalTypeId>)?.methods ?: return null
+    val methods = (body as? TypeDecl.Aggregate<GlobalTypeId>)?.methods ?: return null
     return methods.firstNotNullOfOrNull { it.mangled?.let(Demangler::namespaces) }
 }
 

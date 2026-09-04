@@ -73,7 +73,7 @@ internal fun DataTypeRegistry.recordXRefStubAt(useSite: String, at: String, dt: 
 fun DataTypeRegistry.reportSurvivingPlaceholders() {
     for ((id, placeholder) in placeholders) {
         val ast = types.byId(id) ?: continue
-        if (ast.body !is TypeDecl.Struct) continue
+        if (ast.body !is TypeDecl.Aggregate) continue
         val composite = placeholder as? Composite ?: continue
         // Empty C++ trait/tag types: sizeBytes=1, no source members. Ghidra fills
         // with Undefined1; that's correct, not a degradation.

@@ -25,10 +25,27 @@ class TypeGraph(private val harvest: Harvest, sink: DiagnosticSink = DummySink) 
      *  handle. Per-id lookup is [byId]; per-source is [typesBySource]. */
     val allTypes: Collection<Type> get() = typeAsts.values
 
-    /** All named aggregate / enum ASTs, indexed by raw stabs name. */
-    internal val astsByName: Map<String, List<Type>> by lazy {
+    // ── Two indexes over *named* asts, split on whether the body *is* the definition
+    // ([TypeDecl.canBeXRefTarget]). Not a materializes / doesn't split — function types, pointers and
+    // the typedefs themselves all become DataTypes too. The split is about the *name*: a body that
+    // defines the type already wears the name and is what an `xs`/`xu`/`xe` can resolve to; anything
+    // else names a type defined elsewhere, so it needs a typedef DataType to carry that name.
+    //
+    // Deliberately *not* [Type.kind], though that is the binding gcc actually emitted. Measured: on
+    // box2d_tests, keying on `T` vs `t` costs 70 xref resolutions (`unresolved-xref` 40 → 110) and 24
+    // `named-typedef-unresolved`. C is full of `typedef struct {…} Foo;` — a `t` whose body is the
+    // definition — and gcc still points `xs Foo` at it, so a tag index that excludes `t` loses those;
+    // meanwhile the typedef half then tries to alias a body that has no separate target. The binding
+    // kind is the source's intent; what these two indexes need is where the definition lives. ──
+
+    /** [NamedType] symbols name either "tags" (named `struct`/`union`/`enum`) or typedefs (anything)
+     * this is recorded in [Type.kind]
+     */
+
+    /** Named type definitions — `struct`/`union`/`enum` bodies — by raw stabs tag name. */
+    internal val definitionsByTag: Map<String, List<Type>> by lazy {
         typeAsts.values
-            .filter { it.name != null && it.body.isTagDefinition }
+            .filter { it.name != null && it.body.canBeXRefTarget }
             .groupBy { it.name!! }
     }
 
@@ -40,19 +57,19 @@ class TypeGraph(private val harvest: Harvest, sink: DiagnosticSink = DummySink) 
      */
     val namedTypedefs by lazy {
         typeAsts.values
-            .filter { it.name != null && !it.body.isXRefTarget }
+            .filter { it.name != null && !it.body.canBeXRefTarget }
             .groupBy { it.ghidraName }
     }
 
     /** Base-tag (template args + namespace stripped) → complete definitions only. */
-    private val astsByBaseTag: Map<String, List<Type>> by lazy {
+    private val definitionsByBaseTag: Map<String, List<Type>> by lazy {
         typeAsts.values
-            .filter { it.name != null && it.body.isXRefTarget && it.body.isComplete }
+            .filter { it.name != null && it.body.canBeXRefTarget && it.body.isComplete }
             .groupBy { baseTag(it.name!!) }
     }
 
     // Pre-warm with empty `visited` so collision classification isn't biased by traversal order.
-    // Must stay below astsByName/astsByBaseTag: contentHash resolves xrefs through them, and a `by
+    // Must stay below definitionsByTag/definitionsByBaseTag: contentHash resolves xrefs through them, and a `by
     // lazy` delegate field is only assigned when construction reaches its declaration — an init block
     // placed above them reads a still-null delegate (NPE, silently swallowed under CONCURRENT analysis).
     init {
@@ -68,12 +85,12 @@ class TypeGraph(private val harvest: Harvest, sink: DiagnosticSink = DummySink) 
      * contentHash oracle path which expects misses.
      */
     override fun byXRef(xref: TypeDecl.XRef<GlobalTypeId>, silent: Boolean): Type? {
-        astsByName[xref.tagName]
+        definitionsByTag[xref.tagName]
             ?.firstOrNull { it.body.matchesXRefKind(xref.kind) }
             ?.let { return it }
 
         val tag = baseTag(xref.tagName)
-        val sameTagAnyKind = if (tag.isNotEmpty()) astsByBaseTag[tag].orEmpty() else emptyList()
+        val sameTagAnyKind = if (tag.isNotEmpty()) definitionsByBaseTag[tag].orEmpty() else emptyList()
         val sameKind = sameTagAnyKind.filter { it.body.matchesXRefKind(xref.kind) }
         val distinctSizes = sameKind.map { it.body.sizeBytes }.toSet()
 
@@ -88,7 +105,7 @@ class TypeGraph(private val harvest: Harvest, sink: DiagnosticSink = DummySink) 
 
         if (silent) return null
 
-        val exactAnyKind = astsByName[xref.tagName].orEmpty()
+        val exactAnyKind = definitionsByTag[xref.tagName].orEmpty()
         when {
             sameKind.isNotEmpty() -> {
                 debug(
@@ -116,13 +133,13 @@ class TypeGraph(private val harvest: Harvest, sink: DiagnosticSink = DummySink) 
     /** One-line snapshot of harvest contents under [xref]'s exact tag and base tag. */
     private fun xrefDiagnosis(xref: TypeDecl.XRef<GlobalTypeId>): String {
         val tag = baseTag(xref.tagName)
-        val exact = astsByName[xref.tagName].orEmpty()
-        val byBase = astsByBaseTag[tag].orEmpty()
+        val exact = definitionsByTag[xref.tagName].orEmpty()
+        val byBase = definitionsByBaseTag[tag].orEmpty()
         fun summarise(asts: List<Type>): String {
             if (asts.isEmpty()) return "0"
             val parts = asts.groupBy { it.body::class.simpleName }
                 .map { (k, v) ->
-                    val sizes = v.mapNotNull { (it.body as? TypeDecl.Struct)?.sizeBytes }.toSortedSet()
+                    val sizes = v.mapNotNull { (it.body as? TypeDecl.Aggregate)?.sizeBytes }.toSortedSet()
                     val names = v.map { it.name }.toSet().joinToString("|").take(120)
                     "$k×${v.size} sizes=$sizes names=[$names]"
                 }

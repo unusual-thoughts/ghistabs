@@ -196,6 +196,10 @@
             "min": 32340,
             "max": 32340
         },
+        "harvest-typeAsts-Aggregate": {
+            "min": 4321,
+            "max": 4321
+        },
         "harvest-typeAsts-Array": {
             "min": 616,
             "max": 616
@@ -216,7 +220,7 @@
             "min": 162,
             "max": 162
         },
-        "harvest-typeAsts-FunctionT": {
+        "harvest-typeAsts-FreeFunction": {
             "min": 2711,
             "max": 2711
         },
@@ -243,10 +247,6 @@
         "harvest-typeAsts-Reference": {
             "min": 1083,
             "max": 1083
-        },
-        "harvest-typeAsts-Struct": {
-            "min": 4321,
-            "max": 4321
         },
         "harvest-typeAsts-Void": {
             "min": 59,

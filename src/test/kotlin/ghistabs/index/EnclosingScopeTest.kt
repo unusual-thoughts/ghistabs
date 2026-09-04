@@ -4,7 +4,7 @@ import ghidra.program.model.data.CategoryPath
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghistabs.harvest.*
 import ghistabs.parse.*
-import ghistabs.parse.TypeDecl.Struct.Method
+import ghistabs.parse.TypeDecl.Aggregate.Method
 import ghistabs.test.mustBe
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
@@ -30,7 +30,7 @@ class EnclosingScopeTest : AbstractGhidraHeadlessIntegrationTest() {
         vtableOffsetBits = null,
     )
 
-    private fun struct(vararg methods: Method<GlobalTypeId>) = TypeDecl.Struct(
+    private fun struct(vararg methods: Method<GlobalTypeId>) = TypeDecl.Aggregate(
         kind = AggrKind.STRUCT,
         sizeBytes = 4L,
         bases = emptyList(),
@@ -40,7 +40,7 @@ class EnclosingScopeTest : AbstractGhidraHeadlessIntegrationTest() {
     )
 
     private fun ast(name: String?, body: GlobalTypeDecl) =
-        Type(cu = cu, id = GlobalTypeId(cu, 1), name = name, body = body)
+        Type(cu = cu, id = GlobalTypeId(cu, 1), named = binding(name, body), body = body)
 
     @Test fun namespacedClassDropsOwnLeaf() {
         // _ZNSs5clearEv → std::string::clear(); `Ss` expands to the short `string`, not basic_string<…>.

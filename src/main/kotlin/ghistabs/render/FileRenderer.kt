@@ -57,7 +57,7 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
 
     /** A declaration several files claim at one line — at most one of them rightly. */
     private fun Type.disputed() = when (body) {
-        is TypeDecl.Struct, is TypeDecl.Enum -> attribution.conflictedTemplateDecls
+        is TypeDecl.Aggregate, is TypeDecl.Enum -> attribution.conflictedTemplateDecls
         else -> attribution.conflictedTypedefDecls
     }.let { declKey() in it }
 
@@ -180,7 +180,7 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
         if (anon.isNullOrEmpty()) return ""
         val blocks = anon.joinToString("\n\n") { ast ->
             when (val body = ast.body) {
-                is TypeDecl.Struct -> {
+                is TypeDecl.Aggregate -> {
                     val members = body.renderFull(ast.ghidraName.simpleTypeName())
                         .joinToString("\n    ", prefix = "\n    ", postfix = "\n")
                     "${body.cxxKeyword} ${ast.ghidraName} {$members}; /* ${body.sizeBytes} bytes */"
@@ -274,7 +274,7 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
         }
 
         val typedefs = typeDecls
-            .filter { it.body !is TypeDecl.Struct && it.body !is TypeDecl.Enum }
+            .filter { it.body !is TypeDecl.Aggregate && it.body !is TypeDecl.Enum }
             .mapNotNull { ast ->
                 ast.name?.let { Td(ast, it, ast.body.render()) }
             }
@@ -468,7 +468,7 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
         // answer the allocator already gives inlined copies — rather than letting one instantiation's
         // members render under another's opener, which is a class that does not exist.
         val byDecl = typeDecls
-            .filter { it.body is TypeDecl.Struct || it.body is TypeDecl.Enum }
+            .filter { it.body is TypeDecl.Aggregate || it.body is TypeDecl.Enum }
             .groupBy { it.declKey() }
             .filterKeys { it != null }
             .entries
@@ -493,7 +493,7 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
 
     /** How many members a body declares — the tiebreak when instantiations of one template differ. */
     private fun GlobalTypeDecl.memberCount() = when (this) {
-        is TypeDecl.Struct -> fields.size
+        is TypeDecl.Aggregate -> fields.size
         is TypeDecl.Enum -> members.size
         else -> 0
     }
@@ -654,7 +654,7 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
                 else -> return decl.children.flatten().forEach { collect(it) }
             }
             if (ast != null && referenced.add(ast)) {
-                (ast.body as? TypeDecl.Struct)?.bases?.forEach { collect(it.type) }
+                (ast.body as? TypeDecl.Aggregate)?.bases?.forEach { collect(it.type) }
             }
         }
         for (f in rawFuncs) {

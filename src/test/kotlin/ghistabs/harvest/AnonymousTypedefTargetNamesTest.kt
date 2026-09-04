@@ -7,7 +7,7 @@ import org.junit.jupiter.api.Test
 class AnonymousTypedefTargetNamesTest {
     private val cu = SourceFile.CUSource("file.c")
     private fun id(n: Int) = GlobalTypeId(cu, n)
-    private fun struct(size: Long = 4L) = TypeDecl.Struct<GlobalTypeId>(
+    private fun struct(size: Long = 4L) = TypeDecl.Aggregate<GlobalTypeId>(
         kind = AggrKind.STRUCT,
         sizeBytes = size,
         bases = emptyList(),
@@ -15,7 +15,8 @@ class AnonymousTypedefTargetNamesTest {
         methods = emptyList(),
         vptrBasetype = null,
     )
-    private fun ast(n: Int, name: String?, body: GlobalTypeDecl) = Type(cu = cu, id = id(n), name = name, body = body)
+    private fun ast(n: Int, name: String?, body: GlobalTypeDecl) =
+        Type(cu = cu, id = id(n), named = binding(name, body), body = body)
     private fun map(vararg asts: Type) = TypeStore(asts.associateBy { it.id }.toMutableMap())
 
     @Test fun namesAnonymousInlineStruct() {

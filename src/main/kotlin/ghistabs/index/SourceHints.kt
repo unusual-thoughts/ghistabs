@@ -31,10 +31,11 @@ class SourceHints(
     internal val classSourceByName: Map<String, GhidraSourceFile> by lazy {
         buildMap {
             val bestRank = mutableMapOf<String, Int>()
-            for ((_, id, name, body) in types.allTypes) {
-                val n = name?.let(::canonTemplateName) ?: continue
+            for (ast in types.allTypes) {
+                val (id, body) = ast.id to ast.body
+                val n = ast.name?.let(::canonTemplateName) ?: continue
                 val rank = when (body) {
-                    is TypeDecl.Struct, is TypeDecl.Enum -> 2
+                    is TypeDecl.Aggregate, is TypeDecl.Enum -> 2
                     is TypeDecl.XRef -> 0
                     else -> 1
                 }
@@ -88,7 +89,7 @@ class SourceHints(
         val homeByTemplate = (voted.entries.filter { '<' in it.key }.map { it.key to it.value } + settled)
             .groupBy({ it.first.substringBefore('<') }, { it.second })
             .mapValues { (_, homes) -> homes.groupingBy { it }.eachCount().maxByOrNull { it.value }!!.key }
-        val bySibling = voted + types.astsByName.keys
+        val bySibling = voted + types.definitionsByTag.keys
             .filter { '<' in it && it !in voted }
             .mapNotNull { name -> homeByTemplate[name.substringBefore('<')]?.let { name to it } }
         // Last resort, and it is structural rather than evidential: a base class inherits where its
@@ -103,7 +104,7 @@ class SourceHints(
             homes + types.allTypes
                 .flatMap { ast ->
                     val home = ast.name?.let { homes[it] } ?: return@flatMap emptyList()
-                    (ast.body as? TypeDecl.Struct)?.bases.orEmpty().mapNotNull { base ->
+                    (ast.body as? TypeDecl.Aggregate)?.bases.orEmpty().mapNotNull { base ->
                         (base.type as? TypeDecl.Ref)?.id?.let { types.byId(it) }?.name
                             ?.takeIf { '<' in it && it !in homes }?.let { it to home }
                     }
@@ -137,7 +138,7 @@ class SourceHints(
         val hdrOffsets = LongArray(hdrEntries.size) { hdrEntries[it].first }
 
         buildMap {
-            for ((name, asts) in types.astsByName) {
+            for ((name, asts) in types.definitionsByTag) {
                 val defSources = defSourcesByName[name] ?: continue
                 // A template instantiation is the one thing gcc files by accident: it emits
                 // `vector<unsigned short>` inside whichever header first needed it, so image.h — a
@@ -145,7 +146,7 @@ class SourceHints(
                 // else declared only in headers is left alone, which also bounds what this loop costs.
                 val templated = '<' in name
                 if (!templated && defSources.all { it.filename.hasHeaderExtension() }) continue
-                val methods = asts.flatMap { (it.body as? TypeDecl.Struct<*>)?.methods.orEmpty() }
+                val methods = asts.flatMap { (it.body as? TypeDecl.Aggregate<*>)?.methods.orEmpty() }
                 if (methods.isEmpty()) continue
                 // A type's own def sources win by body size, so exclude them from the vote.
                 //
@@ -218,7 +219,7 @@ class SourceHints(
     private fun Type.hinted() = name?.let { multiSourceHeaderHints[it] }
 
     private fun Type.recorded() =
-        sourceFile?.takeIf { body !is TypeDecl.Struct && body !is TypeDecl.Enum } ?: id.source.identity
+        sourceFile?.takeIf { body !is TypeDecl.Aggregate && body !is TypeDecl.Enum } ?: id.source.identity
 
     /** [type]'s hint — the header its methods were compiled into — folded, or null if it has none. */
     fun hintedFor(type: Type) = type.hinted()?.let(sources::fold)

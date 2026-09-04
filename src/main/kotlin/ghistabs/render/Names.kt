@@ -90,7 +90,7 @@ fun AggrKind.cxxKeyword() = when (this) {
     AggrKind.ENUM -> "enum"
 }
 
-val TypeDecl.Struct<*>.cxxKeyword get() = when (kind) {
+val TypeDecl.Aggregate<*>.cxxKeyword get() = when (kind) {
     AggrKind.STRUCT if isCxxClass -> "class"
     else -> kind.cxxKeyword()
 }

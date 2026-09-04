@@ -1,6 +1,6 @@
 package ghistabs.parse
 
-import ghistabs.parse.TypeDecl.Struct.Field
+import ghistabs.parse.TypeDecl.Aggregate.Field
 import ghistabs.test.*
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
@@ -119,7 +119,7 @@ class ParserBugfixTest {
             symbol.mustNotBeNull("Parse result should not be null")
             if (symbol is SymbolDecl.NamedType) {
                 val struct = symbol.type
-                if (struct is TypeDecl.Struct) {
+                if (struct is TypeDecl.Aggregate) {
                     // Should have 2 fields
                     struct.fields.size.mustBe(2, "Struct should have 2 fields")
 
@@ -259,7 +259,7 @@ class ParserBugfixTest {
             id = LocalTypeId(0, 60),
             type = TypeDecl.InlineDef(
                 id = LocalTypeId(0, 61),
-                inner = TypeDecl.Struct(
+                inner = TypeDecl.Aggregate(
                     kind = AggrKind.STRUCT,
                     sizeBytes = 8,
                     bases = emptyList(),
@@ -270,7 +270,7 @@ class ParserBugfixTest {
                                 id = LocalTypeId(0, 62),
                                 inner = TypeDecl.InlineDef(
                                     id = LocalTypeId(0, 63),
-                                    inner = TypeDecl.Struct(
+                                    inner = TypeDecl.Aggregate(
                                         kind = AggrKind.STRUCT,
                                         sizeBytes = 4,
                                         bases = emptyList(),

@@ -14,7 +14,7 @@ private fun TypeGraph.walksToUnresolvedRef(t: GlobalTypeDecl): Boolean = when (t
 }
 
 private fun TypeGraph.countUnresolvedRefs(body: GlobalTypeDecl): Int {
-    if (body !is TypeDecl.Struct) return 0
+    if (body !is TypeDecl.Aggregate) return 0
     return body.fields.count { f -> walksToUnresolvedRef(f.type) }
 }
 
@@ -22,8 +22,8 @@ private fun TypeGraph.countUnresolvedRefs(body: GlobalTypeDecl): Int {
  *  pointer/array), or null — the containment edge that scopes a method-less nested member type. */
 private fun TypeGraph.byValueStructId(t: GlobalTypeDecl) = resolveWith(t) { d ->
     when (d) {
-        is TypeDecl.Ref -> d.id.takeIf { byId(it)?.body is TypeDecl.Struct }
-        is TypeDecl.InlineDef -> d.id.takeIf { d.inner is TypeDecl.Struct }
+        is TypeDecl.Ref -> d.id.takeIf { byId(it)?.body is TypeDecl.Aggregate }
+        is TypeDecl.InlineDef -> d.id.takeIf { d.inner is TypeDecl.Aggregate }
         else -> null
     }
 }
@@ -45,7 +45,7 @@ private fun TypeGraph.byValueStructId(t: GlobalTypeDecl) = resolveWith(t) { d ->
  */
 private fun <T> List<T>.pickWinner(index: TypeGraph, bodyOf: (T) -> GlobalTypeDecl, tiebreak: (T) -> String) = maxWith(
     compareBy<T> { bodyOf(it).sizeBytes }
-        .thenBy { (bodyOf(it) as? TypeDecl.Struct)?.methods?.size ?: 0 }
+        .thenBy { (bodyOf(it) as? TypeDecl.Aggregate)?.methods?.size ?: 0 }
         .thenByDescending { index.countUnresolvedRefs(bodyOf(it)) }
         .thenBy(tiebreak),
 )
@@ -83,7 +83,7 @@ class ScopeLocator(val index: TypeGraph) : DiagnosticSink by index {
     private val enclosingByNestedId: Map<GlobalTypeId, Type> = buildMap {
         val ambiguous = mutableSetOf<GlobalTypeId>()
         for (ast in index.allTypes) {
-            val struct = ast.body as? TypeDecl.Struct ?: continue
+            val struct = ast.body as? TypeDecl.Aggregate ?: continue
             for (field in struct.fields) {
                 if (field.isStatic) continue
                 val nestedId = index.byValueStructId(field.type) ?: continue
@@ -122,7 +122,7 @@ class ScopeLocator(val index: TypeGraph) : DiagnosticSink by index {
 
     private fun shapeOf(ast: Type) = Shape(ast.ghidraName, baseNames(ast), index.content(ast.body))
 
-    private fun baseNames(ast: Type) = (ast.body as? TypeDecl.Struct)?.bases?.map { base ->
+    private fun baseNames(ast: Type) = (ast.body as? TypeDecl.Aggregate)?.bases?.map { base ->
         index.resolveWith(base.type) {
             when (it) {
                 is TypeDecl.XRef -> it.tagName
@@ -227,7 +227,7 @@ private fun TypeGraph.locateTypesWith(attribution: Attribution) = buildMap {
     // aggregates, gcc anonymous copies) AND the collision-breaker: a scope key holding genuinely
     // divergent content (same (scope,name), several bodies) demotes each body to its header key.
     val slots = allTypes
-        .filter { it.body.isXRefTarget }
+        .filter { it.body.canBeXRefTarget }
         .groupBy(nesting::scopeKey)
         .flatMap { (scopeKey, members) ->
             if (scopeKey == null) {

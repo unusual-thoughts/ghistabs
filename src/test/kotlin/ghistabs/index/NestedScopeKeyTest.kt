@@ -3,9 +3,10 @@ package ghistabs.index
 import ghidra.program.model.data.CategoryPath
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghistabs.harvest.Type
+import ghistabs.harvest.binding
 import ghistabs.parse.*
-import ghistabs.parse.TypeDecl.Struct.Field
-import ghistabs.parse.TypeDecl.Struct.Method
+import ghistabs.parse.TypeDecl.Aggregate.Field
+import ghistabs.parse.TypeDecl.Aggregate.Method
 import ghistabs.test.*
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
@@ -42,7 +43,7 @@ class NestedScopeKeyTest : AbstractGhidraHeadlessIntegrationTest() {
     private fun struct(
         methods: List<Method<GlobalTypeId>> = emptyList(),
         fields: List<Field<GlobalTypeId>> = emptyList(),
-    ) = TypeDecl.Struct(
+    ) = TypeDecl.Aggregate(
         kind = AggrKind.STRUCT,
         sizeBytes = 4L,
         bases = emptyList(),
@@ -52,7 +53,7 @@ class NestedScopeKeyTest : AbstractGhidraHeadlessIntegrationTest() {
     )
 
     private fun ast(id: GlobalTypeId, name: String?, body: GlobalTypeDecl) =
-        Type(cu = cu, id = id, name = name, body = body)
+        Type(cu = cu, id = id, named = binding(name, body), body = body)
 
     private val charString = "basic_string<char,std::char_traits<char>,std::allocator<char> >"
     private val wcharString = "basic_string<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t> >"

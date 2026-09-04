@@ -1,6 +1,6 @@
 package ghistabs.parse
 
-import ghistabs.parse.TypeDecl.Struct.*
+import ghistabs.parse.TypeDecl.Aggregate.*
 
 /** Parse outcome. [Ok.trailing] carries the unconsumed-tail message; reporting is the caller's job. */
 sealed interface ParseResult<out T> {
@@ -92,10 +92,10 @@ class Parser(src: String) {
     val remaining get() = c.remaining
 
     private fun Cursor.parseSymbol(): SymbolDecl<LocalTypeId> {
-        // gcc emits anonymous aggregates/enums with a *blank* (whitespace) tag name, not an empty
-        // one. Normalize blank → "" here so "anonymous" is uniformly `name.isNullOrEmpty()` for every
-        // downstream consumer (ghidraName, the §20 content merge, nameAnonymousTypedefTargets) — a
-        // stray " " otherwise reads as a distinct named type and silently blocks unification.
+        // gcc gives a tagless `enum { A, B };` a *blank* (single-space) symbol name, not an empty one
+        // — `" :T59=eneed_more:0,…"` in zlib/gcc-2.6.3. Normalize blank → "" here, which the harvest
+        // then folds to null: a stray " " otherwise reads as a distinct named type and silently blocks
+        // unification.
         val name = readSymbolName().ifBlank { "" }
         consume(':')
         return when (val descriptor = peekOrNull()) {
@@ -304,7 +304,7 @@ class Parser(src: String) {
      * Mirror of gdb/stabsread.c:read_struct_type. The `~%` tilde field is the LAST section,
      * after member functions — not after inheritance (read_tilde_fields runs last).
      */
-    private fun Cursor.parseStruct(kind: AggrKind): TypeDecl.Struct<LocalTypeId> {
+    private fun Cursor.parseStruct(kind: AggrKind): TypeDecl.Aggregate<LocalTypeId> {
         val sizeBytes = readInt()
 
         // Parse optional inheritance section
@@ -413,7 +413,7 @@ class Parser(src: String) {
             throw StabsParseException(pos, src, "unconsumed struct section")
         }
 
-        return TypeDecl.Struct(
+        return TypeDecl.Aggregate(
             kind = kind,
             sizeBytes = sizeBytes,
             bases = bases,
@@ -668,10 +668,10 @@ class Parser(src: String) {
      *
      * Mirror of gdb/stabsread.c:read_type (f case).
      */
-    private fun Cursor.parseFunctionT(): TypeDecl.FunctionT<LocalTypeId> {
+    private fun Cursor.parseFunctionT(): TypeDecl.FreeFunction<LocalTypeId> {
         consume('f')
         val retType = parseType()
-        return TypeDecl.FunctionT(retType, emptyList())
+        return TypeDecl.FreeFunction(retType, emptyList())
     }
 
     /**
