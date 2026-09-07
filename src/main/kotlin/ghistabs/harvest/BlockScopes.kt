@@ -3,6 +3,8 @@
 package ghistabs.harvest
 
 import ghidra.program.model.address.Address
+import ghistabs.diagnose.DiagnosticSink
+import ghistabs.diagnose.DummySink
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.UseSerializers
 
@@ -38,8 +40,8 @@ data class BlockScope(
  * bracket, but one function in 23283 across the corpus emits a later one). [finish] does that in a
  * single top-down walk and hands back the completed function-scope records.
  */
-internal class BlockTreeBuilder {
-    private class Frame(val start: Address, val locals: List<LocalSymbol>) {
+internal class BlockTreeBuilder(sink: DiagnosticSink = DummySink) : DiagnosticSink by sink {
+    private class Frame(val start: Address, val locals: List<LocalSymbol>, val level: Int?) {
         val children = mutableListOf<BlockScope>()
     }
 
@@ -55,16 +57,28 @@ internal class BlockTreeBuilder {
         pending += record
     }
 
-    /** N_LBRAC: opens a scope owning the run of locals since the last bracket. */
-    fun open(addr: Address) {
-        frames += Frame(addr, claim())
+    /**
+     * N_LBRAC: opens a scope owning the run of locals since the last bracket. [level] is the bracket's
+     * `n_desc` where the emitter fills it in — Sun's C compiler numbers lexical depth there (2 for a
+     * function's outermost block), gcc leaves it 0 and so passes null.
+     */
+    fun open(addr: Address, level: Int?) {
+        // Start at function's own first bracket, not zero (Sun opens a function's outermost block at 2)
+        val base = if (frames.isEmpty()) level else frames.first().level
+        if (level != null && base != null && level - base != frames.size) {
+            debug("bracket-level-depth", "N_LBRAC level $level at depth ${frames.size}", addr)
+        }
+        frames += Frame(addr, claim(), level)
     }
 
     /** N_RBRAC: closes the innermost scope into its parent. */
-    fun close(addr: Address) {
+    fun close(addr: Address, level: Int?) {
         lastClose = addr
         // An unbalanced close can't own anything; leave its run pending to end up an orphan.
         val frame = frames.removeLastOrNull() ?: return
+        if (frame.level != level) {
+            warn("bracket-level-mismatch", "N_RBRAC level $level closes N_LBRAC level ${frame.level}", addr)
+        }
         val block = BlockScope(frame.start, addr, frame.locals + claim(), frame.children)
         (frames.lastOrNull()?.children ?: roots) += block
     }
