@@ -201,8 +201,8 @@
             "max": 5
         },
         "local-untyped": {
-            "min": 288,
-            "max": 288
+            "min": 88,
+            "max": 88
         },
         "local-var-add-success": {
             "min": 100,

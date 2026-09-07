@@ -9,6 +9,7 @@ import ghidra.program.model.data.CategoryPath
 import ghidra.program.model.data.DataTypeConflictHandler
 import ghidra.program.model.data.EnumDataType
 import ghidra.program.model.data.Undefined4DataType
+import ghidra.program.model.lang.Register
 import ghidra.program.model.listing.*
 import ghidra.program.model.listing.Function
 import ghidra.program.model.symbol.SourceType
@@ -174,7 +175,7 @@ class SymbolApplier(
                 val paramNames = open.params.mapTo(mutableSetOf()) { it.body.name }
                 val firstUse = open.firstUseOffsets(func.entryPoint)
                 for (loc in open.locals) {
-                    applyLocal(func, loc, paramNames, firstUse[loc.recordIndex] ?: 0)
+                    loc.applyLocal(func, paramNames, firstUse[loc.recordIndex] ?: 0)
                 }
 
                 // Apply scope plate comments.
@@ -366,26 +367,35 @@ class SymbolApplier(
         }
     }
 
-    private fun applyLocal(func: Function, loc: LocalSymbol, paramNames: Set<String>, firstUse: Int) {
-        val decl = loc.body
-        val dt = registry.resolveRef(decl.type)?.also {
-            registry.reasonFor(it)?.let { reason ->
-                degradation(
-                    "local-typed-$reason",
-                    "${func.name}.${decl.name}",
-                    "type=${it.pathName}",
-                    func.entryPoint,
-                )
-            }
-        } ?: run {
-            degradation("local-untyped", "${func.name}.${decl.name}", address = func.entryPoint)
-            Undefined4DataType.dataType
+    private fun LocalSymbol.resolvedDataType(func: Function) = registry.resolveRef(body.type)?.also {
+        registry.reasonFor(it)?.let { reason ->
+            degradation(
+                "local-typed-$reason",
+                "${func.name}.${body.name}",
+                "type=${it.pathName}",
+                func.entryPoint,
+            )
         }
+    } ?: run {
+        degradation("local-untyped", "${func.name}.${body.name}", address = func.entryPoint)
+        Undefined4DataType.dataType
+    }
 
+    private fun Function.addRegister(sym: LocalSymbol, name: String, firstUse: Int, reg: Register) = addLocalVariable(
+        LocalVariableImpl(name, firstUse, sym.resolvedDataType(this), reg, ctx.program, source),
+        source,
+    )
+
+    private fun Function.addStack(sym: LocalSymbol, offset: Int) = addLocalVariable(
+        LocalVariableImpl(sym.body.name, sym.resolvedDataType(this), offset, ctx.program, source),
+        source,
+    )
+
+    private fun LocalSymbol.applyLocal(func: Function, paramNames: Set<String>, firstUse: Int) {
         try {
-            when (decl.location) {
+            when (body.location) {
                 VariableLocation.STACK -> {
-                    if (decl.name in paramNames) {
+                    if (body.name in paramNames) {
                         debug("local-var-skipped-dup-param")
                         return
                     }
@@ -394,29 +404,26 @@ class SymbolApplier(
                     // have firstUseOffset of 0") — and suffixing them by slot instead is destructive:
                     // the extra copies land at offsets inside a real variable's footprint and Ghidra
                     // silently evicts it (one fixture's `main` lost a whole struct local outright).
-                    if (decl.name in func.localVariables.map { it.name }) {
+                    if (body.name in func.localVariables.map { it.name }) {
                         debug("local-var-skipped-dup-local")
                         return
                     }
                     // gcc's frame-pointer-relative offset → Ghidra's SP-at-entry offset via the
                     // convention-derived [frameBias] (NSA/ghidra#223, #5485).
-                    val stackOffset = loc.rawValue.toInt() - ctx.program.baseStackParamOffset
-                    val lv = LocalVariableImpl(decl.name, dt, stackOffset, ctx.program, source)
-                    func.addLocalVariable(lv, source)
+                    func.addStack(this, rawValue.toInt() - ctx.program.baseStackParamOffset)
                     debug("local-var-add-success")
                 }
 
                 VariableLocation.REGISTER -> {
                     // The dbx register number is the stab's n_value, not part of the descriptor
                     // (`w:r(0,5)` ends at the type) — same field the stack offset above comes from.
-                    val dbxNum = loc.rawValue.toInt()
+                    val dbxNum = rawValue.toInt()
                     val regName = dbxRegisterName(pointerSize, dbxNum)
-                    val reg = regName?.let { ctx.program.getRegister(it) }
-                    if (reg == null) {
+                    val reg = regName?.let { ctx.program.getRegister(it) } ?: run {
                         degradation(
                             "reglocal-unmapped-regnum",
-                            "${func.name}.${decl.name}",
-                            "dbx-reg=$dbxNum arch-ptr-size=$pointerSize",
+                            "${func.name}.${body.name}",
+                            "dbx-reg=$dbxNum",
                             func.entryPoint,
                         )
                         return
@@ -427,13 +434,15 @@ class SymbolApplier(
                     // `this` that really does shadow a parameter — ClassBuilder synthesises a typed one
                     // already. A plain function whose own local is called `this` has no such N_PSYM,
                     // and keeps its local.
-                    val reglocalName = when (decl.name) {
-                        !in paramNames -> decl.name
+                    val reglocalName = when (body.name) {
+                        !in paramNames -> body.name
+
                         "this" -> {
                             debug("reglocal-skipped-dup-param")
                             return
                         }
-                        else -> "${decl.name}$REGISTER_HOME_SUFFIX"
+
+                        else -> "${body.name}$REGISTER_HOME_SUFFIX"
                     }
 
                     val name = scopedName(func, reglocalName) {
@@ -444,16 +453,15 @@ class SymbolApplier(
                     }
                     // [firstUse] is the local's block, i.e. the range it is actually live over — a
                     // register local declared from entry claims the register for the whole function.
-                    val lv = LocalVariableImpl(name, firstUse, dt, reg, ctx.program, source)
-                    func.addLocalVariable(lv, source)
+                    func.addRegister(this, name, firstUse, reg)
                     debug("reglocal-add-success", "firstUse=$firstUse")
                     // Which of the two renames happened, if either — the `:p`/`:r` shadow, or scope disambiguation.
-                    if (reglocalName != decl.name) debug("reglocal-param-home", "${decl.name} → $reglocalName")
+                    if (reglocalName != body.name) debug("reglocal-param-home", "${body.name} → $reglocalName")
                     if (name != reglocalName) debug("reglocal-renamed-scope", "$reglocalName → $name")
                 }
             }
         } catch (e: Exception) {
-            degradation("local-dropped", "${func.name}.${decl.name}", e.message, func.entryPoint)
+            degradation("local-dropped", "${func.name}.${body.name}", e.message, func.entryPoint)
         }
     }
 

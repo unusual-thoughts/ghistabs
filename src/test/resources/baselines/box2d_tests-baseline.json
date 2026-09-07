@@ -185,8 +185,8 @@
             "max": 142
         },
         "local-typed-anonymous": {
-            "min": 284,
-            "max": 284
+            "min": 139,
+            "max": 139
         },
         "local-var-add-success": {
             "min": 6346,
