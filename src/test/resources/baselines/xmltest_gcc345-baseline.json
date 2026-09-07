@@ -265,20 +265,20 @@
             "max": 7781
         },
         "local-dropped": {
-            "min": 23,
-            "max": 23
+            "min": 32,
+            "max": 32
         },
         "local-typed-all-undefined": {
             "min": 48,
             "max": 48
         },
         "local-var-add-success": {
-            "min": 974,
-            "max": 974
+            "min": 978,
+            "max": 978
         },
         "local-var-skipped-dup-local": {
-            "min": 1719,
-            "max": 1719
+            "min": 1715,
+            "max": 1715
         },
         "local-var-skipped-dup-param": {
             "min": 909,
@@ -291,6 +291,10 @@
         "method-static-no-this": {
             "min": 36,
             "max": 36
+        },
+        "param-register-home": {
+            "min": 13,
+            "max": 13
         },
         "param-unnamed-padded": {
             "min": 89,
@@ -309,20 +313,24 @@
             "max": 30
         },
         "reglocal-add-success": {
-            "min": 2978,
-            "max": 2978
+            "min": 3377,
+            "max": 3377
+        },
+        "reglocal-param-home": {
+            "min": 485,
+            "max": 485
         },
         "reglocal-renamed-scope": {
-            "min": 2164,
-            "max": 2164
+            "min": 2098,
+            "max": 2098
         },
         "reglocal-skipped-dup-local": {
-            "min": 209,
-            "max": 209
+            "min": 211,
+            "max": 211
         },
         "reglocal-skipped-dup-param": {
-            "min": 1499,
-            "max": 1499
+            "min": 1089,
+            "max": 1089
         },
         "reglocal-unmapped-regnum": {
             "min": 4,

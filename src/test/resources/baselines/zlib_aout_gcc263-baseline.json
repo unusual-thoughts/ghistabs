@@ -181,8 +181,12 @@
             "max": 16
         },
         "local-dropped": {
-            "min": 42,
-            "max": 42
+            "min": 63,
+            "max": 63
+        },
+        "local-typed-anonymous": {
+            "min": 1,
+            "max": 1
         },
         "local-typed-anonymous": {
             "min": 1,
@@ -209,16 +213,16 @@
             "max": 2
         },
         "reglocal-add-success": {
-            "min": 105,
-            "max": 105
+            "min": 232,
+            "max": 232
+        },
+        "reglocal-param-home": {
+            "min": 127,
+            "max": 127
         },
         "reglocal-renamed-scope": {
             "min": 19,
             "max": 19
-        },
-        "reglocal-skipped-dup-param": {
-            "min": 148,
-            "max": 148
         },
         "resolve-ambiguous": {
             "min": 6,
