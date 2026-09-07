@@ -12,17 +12,23 @@ import java.io.File
  * [close][ghistabs.LoadedProgram.close] it — prefer [ghistabs.withProgram] when the program's life
  * is a single scope.
  */
-fun Any.loadProgram(binary: File, compiler: String? = "gcc", log: MessageLog? = null, monitor: TaskMonitor? = null) =
-    ProgramLoader.builder()
-        .source(binary)
-        .apply {
-            if (compiler != null && binary.offersCompilerSpec(compiler)) compiler(compiler)
-            if (monitor != null) monitor(monitor)
-            if (log != null) log(log)
+fun Any.loadProgram(
+    binary: File,
+    compiler: String? = "gcc",
+    log: MessageLog? = null,
+    monitor: TaskMonitor? = null,
+    baseAddress: Long? = null,
+) = ProgramLoader.builder()
+    .source(binary)
+    .apply {
+        if (compiler != null && binary.offersCompilerSpec(compiler)) compiler(compiler)
+        if (monitor != null) monitor(monitor)
+        if (log != null) log(log)
+        if (baseAddress != null) addLoaderArg(BASE_ADDR_LOADER_ARG, "0x${baseAddress.toString(16)}")
+    }
+    .let { builder ->
+        builder.load().primary.getDomainObject(this).let { program ->
+            program.release(builder)
+            LoadedProgram(program, this)
         }
-        .let { builder ->
-            builder.load().primary.getDomainObject(this).let { program ->
-                program.release(builder)
-                LoadedProgram(program, this)
-            }
-        }
+    }

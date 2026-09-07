@@ -225,8 +225,15 @@ command takes them after its own name, and `ghistabs --help` lists them as well 
 | `--log-ghidra`                                           | off     | Include Ghidra's own log messages in the stream.                                                   |
 | `--records`, `--symbols`, `--harvest`, `--registry` FILE |         | Dump the parsed stab records / symbol declarations / harvest / materialized type registry as JSON. |
 | `--degradation-log FILE`                                 |         | Grouped report of every type that materialized to something weaker than the stabs described.       |
+| `--base-address HEX`                                     |         | Image base to load at, for the loaders that take one (a.out).                                      |
 
 `--registry` and `--degradation-log` are products of materialization, so only `dump`, `skeleton` and `decomp` write them.
+
+`--base-address` exists because Ghidra's `UnixAoutLoader` gets the base wrong for a linked SunOS
+SPARC executable: ZMAGIC maps from `0x2000` with the exec header inside `.text`, but
+`UnixAoutHeader.determineTextAddr` hands out `pageSize` only to SPARC NMAGIC, so `.text` lands at 0
+while the stabs stay absolute and every symbol is a segment off. `--base-address 0x2000` puts the
+blocks back under the addresses the stabs name.
 
 Import options, on the commands that actually import (`dump`, `skeleton`, `decomp`):
 
