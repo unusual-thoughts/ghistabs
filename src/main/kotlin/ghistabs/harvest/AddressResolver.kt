@@ -64,12 +64,15 @@ class ProgramAddressResolver(private val program: Program, private val sink: Dia
     private val linkSymbols: Map<String, Long> by lazy { StabReader.linkSymbolsOf(program) }
 
     /**
-     * Resolve [name]: symbol table → `_<name>` (MinGW/PE cdecl underscore prefix —
-     * `Foo`→`_Foo`, `_ZTI4Foo`→`__ZTI4Foo`). Several symbols carrying one name is common — 169 on
-     * one PE fixture, 1991 on locale_test — and nothing here can tell them apart, so the first stands.
+     * Resolve [name]: link table → symbol table, each tried bare then `_`-prefixed (MinGW/PE cdecl and
+     * SunOS both prefix — `Foo`→`_Foo`, `_ZTI4Foo`→`__ZTI4Foo`). The link table has to try both as
+     * well, or an underscoring a.out drops through to Ghidra's symbols — the very ones [linkSymbols]
+     * exists to overrule (1084 globals on `graphcnv.SUN4`, every one landing outside the image).
+     * Several symbols carrying one name is common — 169 on one PE fixture, 1991 on locale_test — and
+     * nothing here can tell them apart, so the first stands.
      */
     override fun resolve(name: String): Address? {
-        linkSymbols[name]?.let { return buildAddress(it) }
+        (linkSymbols[name] ?: linkSymbols["_$name"])?.let { return buildAddress(it) }
         val candidates = (
             program.symbolTable.getSymbols(name).map { it.address } +
                 program.symbolTable.getSymbols("_$name").map { it.address }
