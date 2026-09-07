@@ -314,11 +314,26 @@ class SymbolApplier(
     /** Distinguishes the `:r` register home of a `:p` parameter from the parameter itself. */
     private val registerHomeSuffix = "_reg"
 
-    /** Which of the two renames happened, if either — the `:p`/`:r` shadow, or scope disambiguation. */
-    private fun reportRenamedLocal(declared: String, wanted: String, applied: String) = when {
-        wanted != declared -> debug("reglocal-param-home", "$declared → $applied")
-        applied != declared -> debug("reglocal-renamed-scope", "$declared → $applied")
-        else -> Unit
+    /**
+     * What to call the `:r` register home of a parameter, or null to drop it. Suffixed when it
+     * shadows a parameter, since Ghidra will not hold two variables of one name — except a `this`
+     * that shadows one, which ClassBuilder synthesises typed already and which would otherwise put a
+     * `this_reg` on every method for no gain (measured: 467 extra declarations, artifact count
+     * unmoved). A plain function whose own local is called `this` has no such parameter, and keeps it.
+     */
+    private fun registerLocalName(declared: String, paramNames: Set<String>): String? = when {
+        declared !in paramNames -> declared
+        declared == "this" -> null
+        else -> "$declared$registerHomeSuffix"
+    }
+
+    private fun reportRenamedLocal(declared: String, wanted: String, applied: String) {
+        // Two independent renames, so two independent counters. `wanted` is the `_reg` shadow of a
+        // parameter; `applied` is that name after scope disambiguation. Reporting them as exclusive
+        // branches made every shadow that also needed disambiguating count as a param-home only,
+        // taking 66 off `reglocal-renamed-scope` on two fixtures.
+        if (wanted != declared) debug("reglocal-param-home", "$declared → $wanted")
+        if (applied != wanted) debug("reglocal-renamed-scope", "$wanted → $applied")
     }
 
     /**
@@ -428,13 +443,14 @@ class SymbolApplier(
                     }
                     // A `:p` + `:r` pair: the argument came in on the stack and was then loaded into
                     // this register. The parameter owns the name and the stack slot, so the register
-                    // home can only be a second variable (suffixed to avoid collision). Except `this`
-                    // which ClassBuilder synthesises already, and to avoid noise.
-                    if (decl.name == "this") {
+                    // home can only be a second variable (suffixed to avoid collision). Except a
+                    // `this` that really does shadow a parameter — ClassBuilder synthesises a typed one
+                    // already. A plain function whose own local is called `this` has no such N_PSYM,
+                    // and keeps its local.
+                    val reglocalName = registerLocalName(decl.name, paramNames) ?: run {
                         debug("reglocal-skipped-dup-param")
                         return
                     }
-                    val reglocalName = if (decl.name in paramNames) "${decl.name}$registerHomeSuffix" else decl.name
                     val name = scopedName(func, reglocalName) {
                         it.firstUseOffset == firstUse && it.register == reg
                     } ?: run {
