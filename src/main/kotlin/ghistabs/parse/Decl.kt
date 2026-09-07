@@ -1,13 +1,11 @@
 @file:Suppress("SERIALIZER_TYPE_INCOMPATIBLE")
+@file:UseSerializers(BigIntegerSerializer::class)
 
 package ghistabs.parse
 
-import kotlinx.serialization.Contextual
-import kotlinx.serialization.ExperimentalSerializationApi
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
+import kotlinx.serialization.*
 import kotlinx.serialization.json.JsonClassDiscriminator
-import java.lang.Long.compareUnsigned
+import java.math.BigInteger
 
 enum class Access { PRIVATE, PROTECTED, PUBLIC }
 
@@ -69,7 +67,7 @@ sealed interface TypeDecl<out Id : IdInterface> {
     val wrapped: TypeDecl<Id>? get() = null
 
     /** Directly nested TypeDecls, in declaration order */
-    val children: List<List<TypeDecl<Id>>> get() = wrapped?. let { listOf(listOf(it)) } ?: emptyList()
+    val children: List<List<TypeDecl<Id>>> get() = wrapped?.let { listOf(listOf(it)) } ?: emptyList()
 
     val layoutData: List<Any> get() = emptyList<Nothing>()
 
@@ -89,33 +87,56 @@ sealed interface TypeDecl<out Id : IdInterface> {
 
     /** Sun range descriptor: `r<id>;<min>;<max>;` — encodes integer/char widths. */
     @Serializable
-    data class Range<Id : IdInterface>(@Contextual val of: Id, val min: Long, val max: Long) : TypeDecl<Id> {
-        // Unsigned max is 2^n-1, which [Cursor.readRangeBound] truncates to the low 64 bits —
-        // `unsigned long long`'s 01777777777777777777777 arrives as -1L. Compare unsigned.
+    data class Range<Id : IdInterface>(@Contextual val of: Id, val lower: BigInteger, val upper: BigInteger) :
+        TypeDecl<Id> {
+        /**
+         * The bounds as the low 64 bits every consumer wants — gcc means the wrap (`unsigned long
+         * long`'s max *is* -1L to it), and the exact value stays in [lower]/[upper] for the one
+         * question the wrap can't answer: how wide the type is.
+         */
+        val min get() = lower.toLong()
+        val max get() = upper.toLong()
+
+        /**
+         * A literal `0;-1`: unsigned, with a max the emitter didn't state
+         * - gcc means 64 bits and says so by having [of] point to itself
+         * - Sun's C compiler writes the same for 32-bit `unsigned int`/`unsigned long` against `int`
+         * - gcc 2.6.3 writes it for `unsigned int` while spelling `long long unsigned int` out as 2^64-1.
+         */
+        val boundsUnfit get() = lower == BigInteger.ZERO && upper == BigInteger.valueOf(-1)
+
         override val sizeBytes = when {
-            min == 0L && max == 0L -> 0L
+            // Must resolve [of] with [DataTypeRegistry.resolveBuiltin] to know the upper bound
+            boundsUnfit -> null
 
-            min == 0L -> when {
-                compareUnsigned(max, 0xFFL) <= 0 -> 1L
-                compareUnsigned(max, 0xFFFFL) <= 0 -> 2L
-                compareUnsigned(max, 0xFFFFFFFFL) <= 0 -> 4L
-                else -> 8L
-            }
+            lower == BigInteger.ZERO && upper == BigInteger.ZERO -> 0L
 
-            min < 0 -> when {
-                min >= -0x80L -> 1L
-                min >= -0x8000L -> 2L
-                min >= -0x80000000L -> 4L
-                else -> 8L
-            }
+            // Unsigned: the lower bound spans the type.
+            lower == BigInteger.ZERO -> widthHolding(upper.bitLength())
 
+            // Signed: the upper bound spans the type, plus its sign bit.
+            lower.signum() < 0 -> widthHolding(lower.bitLength() + 1)
+
+            // A true subrange (`1;10`) states an interval, not a width; gcc gives it an int.
             else -> 4L
         }
 
-        // Not `of`: every Range resolves to a builtin (sizeBytes is always 0/1/2/4/8, all of which
-        // BuiltinTable maps), so the structural path is unreachable — and `of` is a GlobalTypeId, whose
-        // `source` would make the same range diverge per CU if it ever were reached.
-        override val layoutData get() = listOf(min, max)
+        // Not `of`: every Range resolves to a builtin, so the structural path is unreachable — and
+        // `of` is a GlobalTypeId, whose `source` would make the same range diverge per CU if it ever
+        // were reached. The exact bounds, not [min]/[max]: wrapped, gcc 2.6.3's `unsigned int` and
+        // `long long unsigned int` are both (0, -1) and would hash as one type.
+        override val layoutData get() = listOf(lower, upper)
+
+        private companion object {
+            /**
+             * Smallest integer width holding [bits]. A bound fixes the width only from below — gcc
+             * 3.4.5 writes `__int128`'s max as 2^95-1 — and integer widths are powers of two bytes,
+             * so round up to one.
+             */
+            fun widthHolding(bits: Int) = ((bits + 7) / 8).coerceAtLeast(1)
+                .let { if (it.takeHighestOneBit() == it) it else it.takeHighestOneBit() * 2 }
+                .toLong()
+        }
     }
 
     /**

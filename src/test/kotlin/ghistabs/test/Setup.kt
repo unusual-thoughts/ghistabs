@@ -14,7 +14,10 @@ import ghistabs.index.SourceHints
 import ghistabs.index.SourceIndex
 import ghistabs.index.TypeGraph
 import ghistabs.materialize.DataTypeRegistry
+import ghistabs.parse.IdInterface
+import ghistabs.parse.TypeDecl
 import ghistabs.runTransaction
+import java.math.BigInteger
 
 /**
  * Program-less [AddressResolver] for harvest unit tests: builds addresses in a standalone generic space
@@ -40,6 +43,14 @@ fun dummyHarvester() = CountingSink().let {
 }
 
 fun dummyCursor() = StabCursor(GenericAddressResolver, DummySink)
+
+/**
+ * A [TypeDecl.Range] from bounds that fit a Long, which is every bound a test writes as a literal.
+ * Keeping the convenience here rather than as a constructor means production code that rebuilds a Range
+ * cannot narrow by accident and still compile.
+ */
+fun <Id : IdInterface> longRange(of: Id, min: Long, max: Long) =
+    TypeDecl.Range(of, BigInteger.valueOf(min), BigInteger.valueOf(max))
 
 // Tests capture at max verbosity — DEBUG and up — so log assertions see every message.
 fun Program.defaultContext(shortenTypedefs: Boolean = false) = ImportContext(

@@ -6,6 +6,7 @@ import ghistabs.test.dummyCursor
 import ghistabs.test.mustBe
 import ghistabs.test.mustBeA
 import org.junit.jupiter.api.Test
+import java.math.BigInteger
 
 /**
  * Unit tests for StabCursor.globalIdFor() — the Globalizer behind globalize().
@@ -322,5 +323,27 @@ class StabCursorGlobalizeTest {
         val resultId = resultRef.id
         resultId.source.mustBeA<SourceFile.HeaderSource>("Expected HeaderSource, got ${resultId.source}")
         resultId.n mustBe 3
+    }
+
+    /**
+     * Globalizing a Range rebuilds it, and must carry the bounds *as written*. Narrowing them here —
+     * the `min`/`max` accessors are right there, and read naturally — is silent: gcc 2.6.3's `unsigned
+     * int` and `long long unsigned int` both wrap to (0, -1), so the two collapse into one four-byte
+     * type and [TypeDecl.Range.sizeBytes] goes null rather than wrong, which no width assertion sees.
+     */
+    @Test
+    fun testGlobalizeKeepsExactRangeBounds() {
+        val cursor = createTestCursor(
+            records = listOf(
+                StabRecord(index = 0, type = StabType.N_SO, other = 0, desc = 0, value = 0L, name = "cu.c"),
+            ),
+        )
+        val ull = BigInteger.TWO.pow(64) - BigInteger.ONE
+
+        val globalized = TypeDecl.Range(LocalTypeId(0, 1), BigInteger.ZERO, ull).globalize(cursor)
+
+        (globalized as TypeDecl.Range<GlobalTypeId>).upper mustBe ull
+        globalized.sizeBytes mustBe 8L
+        globalized.boundsUnfit mustBe false
     }
 }

@@ -6,6 +6,7 @@ import ghistabs.harvest.*
 import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Aggregate.Field
 import ghistabs.parse.TypeDecl.Aggregate.Method
+import ghistabs.test.longRange
 import ghistabs.test.mustBe
 import ghistabs.test.mustNotBe
 import org.junit.jupiter.api.Test
@@ -33,9 +34,9 @@ class ContentIndexTest {
         id = GlobalTypeId(SourceFile.CUSource("a.cpp"), 1),
         named = binding(
             "int",
-            TypeDecl.Range(GlobalTypeId(SourceFile.CUSource("a.cpp"), 1), -2147483648L, 2147483647L),
+            longRange(GlobalTypeId(SourceFile.CUSource("a.cpp"), 1), -2147483648L, 2147483647L),
         ),
-        body = TypeDecl.Range(GlobalTypeId(SourceFile.CUSource("a.cpp"), 1), -2147483648L, 2147483647L),
+        body = longRange(GlobalTypeId(SourceFile.CUSource("a.cpp"), 1), -2147483648L, 2147483647L),
     )
 
     private val intInCU2 = Type(
@@ -43,16 +44,16 @@ class ContentIndexTest {
         id = GlobalTypeId(SourceFile.CUSource("b.cpp"), 1),
         named = binding(
             "int",
-            TypeDecl.Range(GlobalTypeId(SourceFile.CUSource("b.cpp"), 1), -2147483648L, 2147483647L),
+            longRange(GlobalTypeId(SourceFile.CUSource("b.cpp"), 1), -2147483648L, 2147483647L),
         ),
-        body = TypeDecl.Range(GlobalTypeId(SourceFile.CUSource("b.cpp"), 1), -2147483648L, 2147483647L),
+        body = longRange(GlobalTypeId(SourceFile.CUSource("b.cpp"), 1), -2147483648L, 2147483647L),
     )
 
     private val charInCU1 = Type(
         cu = SourceFile.CUSource("a.cpp"),
         id = GlobalTypeId(SourceFile.CUSource("a.cpp"), 2),
-        named = binding("char", TypeDecl.Range(GlobalTypeId(SourceFile.CUSource("a.cpp"), 2), 0L, 127L)),
-        body = TypeDecl.Range(GlobalTypeId(SourceFile.CUSource("a.cpp"), 2), 0L, 127L),
+        named = binding("char", longRange(GlobalTypeId(SourceFile.CUSource("a.cpp"), 2), 0L, 127L)),
+        body = longRange(GlobalTypeId(SourceFile.CUSource("a.cpp"), 2), 0L, 127L),
     )
 
     private val asts = mapOf(
@@ -271,8 +272,8 @@ class ContentIndexTest {
             Type(
                 cu,
                 intId,
-                binding("int", TypeDecl.Range(intId, -2147483648L, 2147483647L)),
-                TypeDecl.Range(intId, -2147483648L, 2147483647L),
+                binding("int", longRange(intId, -2147483648L, 2147483647L)),
+                longRange(intId, -2147483648L, 2147483647L),
             )
         val ioFileBody = TypeDecl.Aggregate(
             kind = AggrKind.STRUCT,
@@ -403,8 +404,8 @@ class ContentIndexTest {
             Type(
                 cu = keywordsCu,
                 id = intId,
-                named = binding("int", TypeDecl.Range(intId, -2147483648L, 2147483647L)),
-                body = TypeDecl.Range(intId, -2147483648L, 2147483647L),
+                named = binding("int", longRange(intId, -2147483648L, 2147483647L)),
+                body = longRange(intId, -2147483648L, 2147483647L),
             )
         val store = mapOf(pairId to pairCanonical, ptrAId to ptrA, ptrBId to ptrB, intId to intAst)
         val storeOracle = TestContentIndex(store)
@@ -430,10 +431,10 @@ class ContentIndexTest {
      */
     @Test
     fun charBuiltinSpellingsHashEqual() {
-        val range = TypeDecl.Range(GlobalTypeId(SourceFile.CUSource("a.cpp"), 2), 0L, 127L)
+        val range = longRange(GlobalTypeId(SourceFile.CUSource("a.cpp"), 2), 0L, 127L)
         val sized = TypeDecl.WithSizeAttr(8, range)
         val slot = TypeDecl.Builtin<GlobalTypeId>(-2)
-        val signedCharRange = TypeDecl.Range(GlobalTypeId(SourceFile.CUSource("a.cpp"), 14), -128L, 127L)
+        val signedCharRange = longRange(GlobalTypeId(SourceFile.CUSource("a.cpp"), 14), -128L, 127L)
         oracle.content(sized) mustBe oracle.content(range)
         oracle.content(slot) mustBe oracle.content(range)
         oracle.content(signedCharRange) mustBe oracle.content(range)
@@ -446,9 +447,9 @@ class ContentIndexTest {
      */
     @Test
     fun distinctPrimitivesStayDistinct() {
-        val char = TypeDecl.Range(GlobalTypeId(SourceFile.CUSource("a.cpp"), 2), 0L, 127L)
-        val unsignedChar = TypeDecl.Range(GlobalTypeId(SourceFile.CUSource("a.cpp"), 11), 0L, 255L)
-        val wcharRange = TypeDecl.Range(GlobalTypeId(SourceFile.CUSource("a.cpp"), 30), 0L, 65535L)
+        val char = longRange(GlobalTypeId(SourceFile.CUSource("a.cpp"), 2), 0L, 127L)
+        val unsignedChar = longRange(GlobalTypeId(SourceFile.CUSource("a.cpp"), 11), 0L, 255L)
+        val wcharRange = longRange(GlobalTypeId(SourceFile.CUSource("a.cpp"), 30), 0L, 65535L)
         oracle.content(unsignedChar).mustNotBe(oracle.content(char))
         oracle.content(wcharRange).mustNotBe(oracle.content(char))
         oracle.content(wcharRange).mustNotBe(oracle.content(unsignedChar))

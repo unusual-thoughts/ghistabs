@@ -338,7 +338,7 @@ fun DataTypeRegistry.resolveRef(decl: GlobalTypeDecl): DataType? = when (decl) {
     is TypeDecl.InlineDef -> getOrMaterialize(decl.id) ?: resolveRef(decl.inner)?.let { cache(decl.id, it) }
 
     is TypeDecl.Range, is TypeDecl.Complex, is TypeDecl.Float, is TypeDecl.WithSizeAttr, is TypeDecl.Builtin ->
-        decl.resolveBuiltin()
+        resolveBuiltin(decl)
 
     is TypeDecl.Pointer -> pointerTo(decl.inner, "pointer-pointee", "(anon)")
 
@@ -500,11 +500,11 @@ private fun DataTypeRegistry.materializeTypedefs() {
     for ((ghidraName, asts) in types.namedTypedefs) {
         // Per-ast: gcc reuses one name for many types — `_ValueType:t(1,169)=(0,9)` in one CU,
         // `=(0,11)` in the next — so a shared typedef would give the wrong size and a `.conflict`.
-        val targets = asts.associate { it.id to (it.body.resolveBuiltin() ?: resolveRef(it.body)) }
+        val targets = asts.associate { it.id to (resolveBuiltin(it.body) ?: resolveRef(it.body)) }
         // One shared typedef under /stabs (or root for primitives) for
         // DemanglerReplacer to substitute into `/Demangler/*` stubs.
         val firstBody = asts.first().body
-        val typedefTarget = firstBody.resolveBuiltin() ?: resolveRef(firstBody) ?: run {
+        val typedefTarget = resolveBuiltin(firstBody) ?: resolveRef(firstBody) ?: run {
             warn("named-typedef-unresolved", "$ghidraName: no target type, typedef not registered")
             for ((id, target) in targets) cacheIfAbsent(id, target)
             continue
@@ -518,7 +518,7 @@ private fun DataTypeRegistry.materializeTypedefs() {
             for ((id, target) in targets) cacheIfAbsent(id, target)
             continue
         }
-        val category = if (firstBody.resolveBuiltin() != null) {
+        val category = if (resolveBuiltin(firstBody) != null) {
             CategoryPath.ROOT
         } else {
             CATEGORY

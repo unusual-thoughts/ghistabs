@@ -48,10 +48,6 @@
             "min": 24,
             "max": 24
         },
-        "field-dropped": {
-            "min": 3,
-            "max": 3
-        },
         "file-start": {
             "min": 13,
             "max": 13
@@ -63,10 +59,6 @@
         "global-applied": {
             "min": 30,
             "max": 30
-        },
-        "global-offcut-in-larger-data": {
-            "min": 3,
-            "max": 3
         },
         "harvest-collisions-divergent": {
             "min": 0,
@@ -181,20 +173,20 @@
             "max": 16
         },
         "local-dropped": {
-            "min": 63,
-            "max": 63
+            "min": 1,
+            "max": 1
         },
         "local-typed-anonymous": {
             "min": 1,
             "max": 1
         },
         "local-var-add-success": {
-            "min": 115,
-            "max": 115
+            "min": 114,
+            "max": 114
         },
         "local-var-skipped-dup-local": {
-            "min": 13,
-            "max": 13
+            "min": 15,
+            "max": 15
         },
         "local-var-skipped-dup-param": {
             "min": 2,
@@ -209,16 +201,16 @@
             "max": 4
         },
         "reglocal-add-success": {
-            "min": 232,
-            "max": 232
+            "min": 293,
+            "max": 293
         },
         "reglocal-param-home": {
-            "min": 127,
-            "max": 127
+            "min": 148,
+            "max": 148
         },
         "reglocal-renamed-scope": {
-            "min": 19,
-            "max": 19
+            "min": 20,
+            "max": 20
         },
         "sourcemap-duplicate-entries": {
             "min": 0,
@@ -249,8 +241,8 @@
             "max": 2
         },
         "struct-mostly-undefined": {
-            "min": 12,
-            "max": 12
+            "min": 2,
+            "max": 2
         },
         "text-data-no-coverage": {
             "min": 9,

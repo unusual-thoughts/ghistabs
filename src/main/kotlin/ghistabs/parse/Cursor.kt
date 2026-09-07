@@ -57,17 +57,18 @@ internal class Cursor(val src: String) {
     }
 
     /**
-     * Range bound: decimal or octal (leading `0` followed by another digit = octal).
-     * Parsed via [BigInteger] then truncated to the low 64 bits, so `unsigned long long`'s
-     * max (`01777777777777777777777` = -1L reinterpreted) and gcc 3.4.5's 128-bit `@s128`
-     * bounds (`037777777777777777777777777777777`, 96+ bits) both fold to Long without
-     * overflowing — the true width is carried by the size attribute, not the bound.
+     * Range bound: decimal or octal (leading `0` followed by another digit = octal), exactly as
+     * written. Not narrowed here — `unsigned long long`'s max (`01777777777777777777777`) is -1L in
+     * 64 bits, indistinguishable from the literal `-1` an emitter writes when it declines to state
+     * the bound. gcc 2.6.3 writes both in one CU: `unsigned int:t4=r1;0;-1;` is four bytes and
+     * `long long unsigned int:t7=r1;0;01777…;` is eight. [TypeDecl.Range] narrows for the consumers
+     * that want the wrap, and keeps these for the width.
      */
-    fun readRangeBound(): Long {
+    fun readRangeBound(): BigInteger {
         val start = pos
-        var sign = 1L
+        var sign = BigInteger.ONE
         if (!eof && (src[pos] == '-' || src[pos] == '+')) {
-            if (src[pos] == '-') sign = -1L
+            if (src[pos] == '-') sign = sign.negate()
             pos++
         }
         val numStart = pos
@@ -75,8 +76,7 @@ internal class Cursor(val src: String) {
         if (pos == numStart) throw StabsParseException(start, src, "expected range bound")
         val raw = src.substring(numStart, pos)
         val radix = if (raw.length >= 2 && raw[0] == '0') 8 else 10
-        // For the gcc unsigned-overflow form sign=+1 and 0xFFFF... reinterprets as -1L.
-        return sign * BigInteger(raw, radix).toLong()
+        return sign * BigInteger(raw, radix)
     }
 
     /** Read up to (but not including) any of the terminator chars. Consumed terminator is left in place. */
