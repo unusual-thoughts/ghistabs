@@ -3,7 +3,11 @@ package ghistabs.materialize
 import ghidra.program.model.data.*
 import ghistabs.parse.TypeDecl
 
-/** Resolves gcc XCOFF builtin slots / primitive ranges / floats / complex to Ghidra [DataType]s. */
+/**
+ * Resolves gcc XCOFF builtin slots / primitive ranges / floats / complex to Ghidra [DataType]s.
+ * The node is the whole input: a caller holding width the node can't state says so by wrapping it
+ * in [TypeDecl.WithSizeAttr], the same way the stab itself would (see `DataTypeRegistry.resolveBuiltin`).
+ */
 fun TypeDecl<*>.resolveBuiltin(): DataType? = when (this) {
     is TypeDecl.Builtin -> resolveSlot(slot)
 
@@ -24,8 +28,13 @@ fun TypeDecl<*>.resolveBuiltin(): DataType? = when (this) {
         else -> inner.resolveBuiltin()
     }
 
-    is TypeDecl.Range ->
-        if (sizeBytes == 0L) VoidDataType() else asChar() ?: resolveSizedRange(sizeBits, min < 0)
+    // `0;-1` states no width at all; unwrapped, it means gcc's 64 bits — the reading its
+    // self-referential base encodes. A narrower base arrives here as a WithSizeAttr above.
+    is TypeDecl.Range -> if (sizeBytes == 0L) {
+        VoidDataType()
+    } else {
+        asChar() ?: resolveSizedRange(sizeBits ?: 64L, min < 0)
+    }
 
     is TypeDecl.Float -> when (sizeBytes) {
         4L -> FloatDataType()

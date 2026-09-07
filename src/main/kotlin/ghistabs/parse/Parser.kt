@@ -583,14 +583,14 @@ class Parser(src: String) {
             parseType() // parse and discard the inline base-type definition
         }
         consume(';')
-        val min = readRangeBound()
+        val lower = readRangeBound()
         consume(';')
-        val max = readRangeBound()
+        val upper = readRangeBound()
         consume(';')
-        if (max == 0L && min > 0L) {
-            return TypeDecl.Float(min)
+        if (upper.signum() == 0 && lower.signum() > 0) {
+            return TypeDecl.Float(lower.toLong())
         }
-        return TypeDecl.Range(typeId, min, max)
+        return TypeDecl.Range(typeId, lower, upper)
     }
 
     /**

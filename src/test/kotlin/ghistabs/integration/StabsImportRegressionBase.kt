@@ -328,10 +328,11 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
      */
     @Test
     @ExpectedToFail(
-        fixtures = ["zlib_aout_gcc263.o", "tinyxml_aout_gcc295.o"],
-        reason = "relocatable object (ld -r): sections sit at 0 unrelocated, so a global's stab value " +
-            "resolves into a block with nothing applied at it — gcc 2.95's `__vt_<class>` vtables on " +
-            "tinyxml are array globals and land there",
+        fixtures = ["tinyxml_aout_gcc295.o"],
+        reason = "relocatable object (.o): sections sit at 0 unrelocated, so a global's stab value " +
+            "resolves into a block with nothing applied at it — gcc 2.95's `__vt_<class>` vtables are " +
+            "array globals and land there. zlib is the same shape and passed once its `unsigned int` " +
+            "stopped materializing 8 bytes wide, so the addresses were never the whole story",
     )
     fun arrayGlobalsGetTheirDeclaredLength() {
         val declared = artifacts.harvest.statics

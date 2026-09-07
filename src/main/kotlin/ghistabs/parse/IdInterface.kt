@@ -3,12 +3,16 @@
 package ghistabs.parse
 
 import ghistabs.parse.TypeDecl.Aggregate.*
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.descriptors.PrimitiveKind
 import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.JsonEncoder
+import kotlinx.serialization.json.JsonUnquotedLiteral
+import java.math.BigInteger
 
 @Serializable(with = ToStringSerializer::class)
 sealed interface IdInterface {
@@ -62,6 +66,24 @@ sealed class SourceFile : Comparable<SourceFile> {
     }
 }
 
+/**
+ * A [BigInteger] as a JSON *number*, not a string — it is one, and a dump reader shouldn't have to
+ * unquote it. Written as an unquoted literal because the values that need BigInteger at all are the
+ * ones `encodeLong` would wrap (a `0;01777777777777777777777;` range bound is 2^64-1).
+ */
+@OptIn(ExperimentalSerializationApi::class)
+object BigIntegerSerializer : KSerializer<BigInteger> {
+    override val descriptor = PrimitiveSerialDescriptor("BigInteger", PrimitiveKind.LONG)
+
+    override fun serialize(encoder: Encoder, value: BigInteger) = when (encoder) {
+        is JsonEncoder -> encoder.encodeJsonElement(JsonUnquotedLiteral(value.toString()))
+        else -> encoder.encodeLong(value.toLong())
+    }
+
+    override fun deserialize(decoder: Decoder): BigInteger =
+        throw UnsupportedOperationException("BigIntegerSerializer is serialize-only")
+}
+
 class ToStringSerializer<T> : KSerializer<T> {
     override val descriptor = PrimitiveSerialDescriptor("ToString", PrimitiveKind.STRING)
     override fun serialize(encoder: Encoder, value: T) = encoder.encodeString(value.toString())
@@ -83,7 +105,7 @@ fun LocalTypeDecl.globalize(g: Globalizer): GlobalTypeDecl = when (this) {
     is TypeDecl.Complex, is TypeDecl.Float, is TypeDecl.Enum, is TypeDecl.XRef, is TypeDecl.Builtin, TypeDecl.Void ->
         this as GlobalTypeDecl
 
-    is TypeDecl.Range -> TypeDecl.Range(g.globalIdFor(of), min, max)
+    is TypeDecl.Range -> TypeDecl.Range(g.globalIdFor(of), lower, upper)
 
     // Negative-id Refs never reach here — parser emits [TypeDecl.Builtin] for those.
     is TypeDecl.Ref -> TypeDecl.Ref(g.globalIdFor(id))

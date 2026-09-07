@@ -279,7 +279,7 @@ class ParserBugfixTest {
                                                 name = "value",
                                                 type = TypeDecl.InlineDef(
                                                     id = LocalTypeId(0, 64),
-                                                    inner = TypeDecl.Range(LocalTypeId(0, 1), 0, 32),
+                                                    inner = longRange(LocalTypeId(0, 1), 0, 32),
                                                 ),
                                                 offsetBits = 0,
                                                 sizeBits = 32,

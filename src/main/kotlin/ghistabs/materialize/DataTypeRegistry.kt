@@ -15,6 +15,7 @@ import ghistabs.harvest.Type
 import ghistabs.index.*
 import ghistabs.materialize.itanium.Rtti
 import ghistabs.parse.CATEGORY
+import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
 
@@ -184,10 +185,27 @@ class DataTypeRegistry(
      * [resolveBuiltin], or a `__*_type_info_pseudo` RTTI record via [Rtti]. These are final types,
      * not cycle-break stubs — callers cache them in [byId] and must never file them under [xrefStubs].
      */
-    internal fun Type.substitute(): DataType? = body.resolveBuiltin()
+    internal fun Type.substitute(): DataType? = resolveBuiltin(body)
         ?: rttiStructs.typeInfoLayout(ghidraName)?.also {
             debug("rtti-pseudo-substituted", "name=$ghidraName")
         }
+
+    internal fun resolveBuiltin(decl: GlobalTypeDecl): DataType? = decl.atBaseWidth().resolveBuiltin()
+
+    /**
+     * A `0;-1` range restated as the `@s<n>` the emitter didn't write, its width taken from the base
+     * type — read off the harvested ast, never materialized: the base of gcc's `long long unsigned
+     * int` is the range itself, which would recurse, and whose own `0;-1` bounds say nothing anyway.
+     * That self-reference *is* gcc's way of saying 64-bit, so leaving such a range alone keeps the
+     * 64-bit reading. Anything else already carries its own width and is returned untouched.
+     */
+    private fun GlobalTypeDecl.atBaseWidth(): GlobalTypeDecl = (this as? TypeDecl.Range)?.takeIf { it.boundsUnfit }
+        ?.let { range ->
+            types.byId(range.of)?.body
+                ?.takeUnless { it is TypeDecl.Range && it.boundsUnfit }
+                ?.sizeBits
+                ?.let { TypeDecl.WithSizeAttr(it, range) }
+        } ?: this
 
     /** Materialized DataType for [id], authoritative for `(category, name)`. Prefer over `dtm.getDataType`. */
     fun dataTypeFor(id: GlobalTypeId): DataType? = byId[id]
