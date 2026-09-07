@@ -157,7 +157,7 @@ class SymbolApplier(
                     true,
                     source,
                 )
-                applyRegisterParams(func, open, source)
+                if (ctx.options.applyPlateComments) commentRegisterParamHomes(func, open)
 
                 // Apply locals. Dedupe against the stabs parameter list, not a re-read of
                 // func.parameters: in CONCURRENT mode another analyzer can mutate the function
@@ -311,6 +311,16 @@ class SymbolApplier(
         return funMgr.getFunctionAt(addr)
     }
 
+    /** Distinguishes the `:r` register home of a `:p` parameter from the parameter itself. */
+    private val registerHomeSuffix = "_reg"
+
+    /** Which of the two renames happened, if either — the `:p`/`:r` shadow, or scope disambiguation. */
+    private fun reportRenamedLocal(declared: String, wanted: String, applied: String) = when {
+        wanted != declared -> debug("reglocal-param-home", "$declared → $applied")
+        applied != declared -> debug("reglocal-renamed-scope", "$declared → $applied")
+        else -> Unit
+    }
+
     /**
      * The name to give a local, or null when it is not a variable of its own. gcc names every inline
      * expansion's locals identically (`this` six times over in one function) and Ghidra's variable
@@ -327,49 +337,37 @@ class SymbolApplier(
     }
 
     /**
-     * Honour `:P`/`:R` parameters — the stabs saying a parameter was *passed* in a register, which the
-     * calling convention Ghidra just applied does not know about.
+     * Record where gcc kept a `:P`/`:R` parameter, as a plate comment on the function entry.
      *
-     * Runs *after* the dynamic-storage update rather than instead of it, and re-applies what that
-     * produced: the convention still decides the return slot (load-bearing for by-value struct
-     * returns >8 bytes, see above, and for [ghistabs.entrypoints.StructReturnAnalyzer]) and the stack
-     * params, and only the parameters the stabs explicitly contradict are overridden. Custom storage
-     * is all-or-nothing per function, so a function with no register parameter never enters it.
+     * stabs has two encodings for a parameter that lives in a register, and they mean opposite things
+     * about how it arrived (stabs.texinfo, "Passing Parameters in Registers"):
      *
-     * `:r` locals are not this: they claim a register *variable*, not how anything was passed, and
-     * `applyLocal` handles them.
+     *  - `:P`/`:R`, passed in a register, single symbol, rarer. This comment is the only record of the home.
+     *  - `:p` + `:r`, two symbols, "passed in the argument list and then loaded into a register".
+     *    the more common one, passed through the stack, which is why [applyLocal] drops the `:r` half
+     *    (`reglocal-skipped-dup-param`) rather than fighting the parameter for the name.
+     *    Their register home is discarded the same way, and could be recorded here too.
+     *
+     * However, neither `:P`/`:R` or `:r` 's value encodes which register the parameter was passed through.
+     * The register *number* is `DECL_RTL`, the home it lives in, as dbxout.c says:
+     * "pretend the parm was passed there ... in practice that register usually holds something else".
      */
-    private fun applyRegisterParams(func: Function, open: Func, source: SourceType) {
-        val registerParams = open.params
+    private fun commentRegisterParamHomes(func: Function, open: Func) {
+        val homes = open.params
             .filter { it.body.location == VariableLocation.REGISTER }
-            .associate { it.body.name to it.rawValue.toInt() }
-        if (registerParams.isEmpty()) return
-
-        val params = func.parameters.map { p ->
-            val storage = registerParams[p.name]
-                ?.let { dbxRegisterName(pointerSize, it) }
-                ?.let { ctx.program.getRegister(it) }
-                ?.let { VariableStorage(ctx.program, it) }
-                ?: p.variableStorage
-            ParameterImpl(p.name, p.dataType, storage, ctx.program, source)
-        }
-        val applied = params.map { it.name }.toSet()
-        for (name in registerParams.keys - applied) {
-            degradation("param-register-unmapped", "${func.name}.$name", address = func.entryPoint)
-        }
-
+            .mapNotNull { p -> p.storage(ctx.program)?.let { "  ${p.body.name}  $it" } }
+        if (homes.isEmpty()) return
+        val text = homes.joinToString("\n", "Stabs register parameters (gcc's home, not the passing slot):\n")
         try {
-            func.updateFunction(
-                null,
-                ReturnParameterImpl(func.getReturn().dataType, func.getReturn().variableStorage, ctx.program),
-                params,
-                Function.FunctionUpdateType.CUSTOM_STORAGE,
-                true,
-                source,
+            val existing = ctx.program.listing.getComment(CommentType.PLATE, func.entryPoint)
+            ctx.program.listing.setComment(
+                func.entryPoint,
+                CommentType.PLATE,
+                existing?.let { "$it\n$text" } ?: text,
             )
-            debug("param-register-applied", "${func.name}: ${registerParams.keys.sorted()}")
+            debug("param-register-home", "${func.name}: ${homes.size}")
         } catch (e: Exception) {
-            degradation("param-register-storage-failed", func.name, e.message, func.entryPoint)
+            degradation("param-register-comment-dropped", func.name, e.message, func.entryPoint)
         }
     }
 
@@ -428,11 +426,16 @@ class SymbolApplier(
                         )
                         return
                     }
-                    if (decl.name in paramNames) {
+                    // A `:p` + `:r` pair: the argument came in on the stack and was then loaded into
+                    // this register. The parameter owns the name and the stack slot, so the register
+                    // home can only be a second variable (suffixed to avoid collision). Except `this`
+                    // which ClassBuilder synthesises already, and to avoid noise.
+                    if (decl.name == "this") {
                         debug("reglocal-skipped-dup-param")
                         return
                     }
-                    val name = scopedName(func, decl.name) {
+                    val reglocalName = if (decl.name in paramNames) "${decl.name}$registerHomeSuffix" else decl.name
+                    val name = scopedName(func, reglocalName) {
                         it.firstUseOffset == firstUse && it.register == reg
                     } ?: run {
                         debug("reglocal-skipped-dup-local")
@@ -443,7 +446,7 @@ class SymbolApplier(
                     val lv = LocalVariableImpl(name, firstUse, dt, reg, ctx.program, source)
                     func.addLocalVariable(lv, source)
                     debug("reglocal-add-success", "firstUse=$firstUse")
-                    if (name != decl.name) debug("reglocal-renamed-scope", "${decl.name} → $name")
+                    reportRenamedLocal(decl.name, reglocalName, name)
                 }
             }
         } catch (e: Exception) {

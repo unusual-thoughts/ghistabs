@@ -305,8 +305,8 @@
             "max": 3027
         },
         "local-dropped": {
-            "min": 10,
-            "max": 10
+            "min": 14,
+            "max": 14
         },
         "local-typed-all-undefined": {
             "min": 24,
@@ -331,6 +331,10 @@
         "method-static-no-this": {
             "min": 66,
             "max": 66
+        },
+        "param-register-home": {
+            "min": 3,
+            "max": 3
         },
         "param-typed-all-undefined": {
             "min": 26,
@@ -357,16 +361,20 @@
             "max": 16
         },
         "reglocal-add-success": {
-            "min": 152,
-            "max": 152
+            "min": 287,
+            "max": 287
+        },
+        "reglocal-param-home": {
+            "min": 135,
+            "max": 135
         },
         "reglocal-renamed-scope": {
             "min": 70,
             "max": 70
         },
-        "reglocal-skipped-dup-param": {
-            "min": 141,
-            "max": 141
+        "reglocal-skipped-dup-local": {
+            "min": 2,
+            "max": 2
         },
         "replaced-demangler": {
             "min": 820,
