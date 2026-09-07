@@ -735,7 +735,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             val once = func.locals.filter { it.body.location == VariableLocation.REGISTER }
                 .groupBy { it.body.name }.filterValues { it.size == 1 }.values.map { it.single() }
             once.mapNotNull { local ->
-                val want = dbxRegisterName(program.defaultPointerSize, local.rawValue.toInt())
+                val want = program.dbxRegisterName(local.rawValue.toInt())
                     ?: return@mapNotNull null
                 Triple(func, local.body.name, want)
             }
