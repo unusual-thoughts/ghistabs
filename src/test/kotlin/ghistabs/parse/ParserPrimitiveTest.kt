@@ -1,7 +1,9 @@
 package ghistabs.parse
 
+import ghistabs.test.longRange
 import ghistabs.test.mustBe
 import org.junit.jupiter.api.Test
+import java.math.BigInteger
 
 /**
  * ParserPrimitiveTest: Tests for primitive type forms.
@@ -34,10 +36,10 @@ class ParserPrimitiveTest {
             kind = TypeNameKind.TYPEDEF,
             name = "int",
             id = LocalTypeId(0, 1),
-            type = TypeDecl.Range(
-                of = LocalTypeId(0, 1),
-                min = -2147483648L,
-                max = 2147483647L,
+            type = longRange(
+                LocalTypeId(0, 1),
+                -2147483648L,
+                2147483647L,
             ),
         )
         Parser(input).parseSymbol() mustBe ParseResult.Ok(expected)
@@ -52,10 +54,12 @@ class ParserPrimitiveTest {
             id = LocalTypeId(0, 6),
             type = TypeDecl.WithSizeAttr(
                 sizeBits = 64,
+                // 2^64-1 as written, which `min`/`max` narrow to (0, -1L) for consumers. Keeping
+                // the exact value is the whole point: a literal `-1` narrows to the same pair.
                 inner = TypeDecl.Range(
                     of = LocalTypeId(0, 6),
-                    min = 0L,
-                    max = -1L, // octal 01777777777777777777777 = 2^64-1 = -1L when signed
+                    lower = BigInteger.ZERO,
+                    upper = BigInteger.TWO.pow(64) - BigInteger.ONE,
                 ),
             ),
         )
@@ -65,7 +69,7 @@ class ParserPrimitiveTest {
     @Test
     fun testInt128WithSizeAttrOctal() {
         // gcc 3.4.5 emits 128-bit types with a 96+-bit octal upper bound that overflows a
-        // 64-bit parse; it must fold to the low 64 bits (all ones = -1L) rather than throw.
+        // 64-bit parse; it must survive as written rather than throw or saturate.
         val input = "__int128:t(0,25)=@s128;r(0,25);000000000000000000000000;037777777777777777777777777777777;"
         val expected = SymbolDecl.NamedType(
             kind = TypeNameKind.TYPEDEF,
@@ -73,10 +77,12 @@ class ParserPrimitiveTest {
             id = LocalTypeId(0, 25),
             type = TypeDecl.WithSizeAttr(
                 sizeBits = 128,
+                // The literal is 2^95-1, not 2^128-1: it bounds the width from below, and only the
+                // `@s128` above states it. Rounded up, it holds in 16 bytes either way.
                 inner = TypeDecl.Range(
                     of = LocalTypeId(0, 25),
-                    min = 0L,
-                    max = -1L, // octal 037777777777777777777777777777777 truncated to low 64 bits
+                    lower = BigInteger.ZERO,
+                    upper = BigInteger.TWO.pow(95) - BigInteger.ONE,
                 ),
             ),
         )
@@ -169,10 +175,10 @@ class ParserPrimitiveTest {
             type = TypeDecl.Array(
                 element = TypeDecl.Ref(LocalTypeId(0, 1)),
                 length = null,
-                indexType = TypeDecl.Range(
-                    of = LocalTypeId(0, 1),
-                    min = 0L,
-                    max = 9L,
+                indexType = longRange(
+                    LocalTypeId(0, 1),
+                    0L,
+                    9L,
                 ),
             ),
         )
