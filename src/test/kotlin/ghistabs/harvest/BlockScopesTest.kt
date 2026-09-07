@@ -1,5 +1,7 @@
 package ghistabs.harvest
 
+import ghistabs.diagnose.CapturingSink
+import ghistabs.diagnose.Level
 import ghistabs.parse.StabType
 import ghistabs.parse.SymbolDecl
 import ghistabs.parse.TypeDecl
@@ -32,9 +34,12 @@ class BlockScopesTest {
         ),
     )
 
-    private fun BlockTreeBuilder.openAt(offset: Long) = open(addr(offset)).also { nextIndex++ }
+    // gcc leaves the bracket's `n_desc` at 0, so `main` below passes no level anywhere.
+    private fun BlockTreeBuilder.openAt(offset: Long, level: Int? = null) =
+        open(addr(offset), level).also { nextIndex++ }
 
-    private fun BlockTreeBuilder.closeAt(offset: Long) = close(addr(offset)).also { nextIndex++ }
+    private fun BlockTreeBuilder.closeAt(offset: Long, level: Int? = null) =
+        close(addr(offset), level).also { nextIndex++ }
 
     /** main's records, in stream order. */
     private fun mainBuilder() = BlockTreeBuilder().apply {
@@ -104,6 +109,62 @@ class BlockScopesTest {
 
         locals.first { it.line == 664 }.sourceFile.filename mustBe "stl_alloc.h"
         locals.first { it.body.name == "fs" }.sourceFile.filename mustBe "main.cpp"
+    }
+
+    /**
+     * Sun's C compiler numbers lexical depth in each bracket's `n_desc` — 2 for a function's outermost
+     * block, and it counts scopes that emitted no brackets, so the number runs ahead of the pairing
+     * depth (sibling blocks at level 5 where pairing says 3, in `graphcnv.SUN4`'s `wpsio.c`). The
+     * emitter knowing more than us is worth a note, not a correction: the tree comes from pairing and
+     * the level must not perturb it.
+     *
+     * Levels are read relative to the function's first bracket. Absolutely, Sun's base of 2 differs
+     * from our depth of 0 at *every* bracket — 513 of 513 on that binary, which reports nothing.
+     */
+    @Test
+    fun `a level running ahead of the pairing depth is noted, not corrected`() {
+        val sink = CapturingSink()
+        val (_, blocks) = BlockTreeBuilder(sink).apply {
+            local("path", 4)
+            openAt(0x14, level = 2)
+            local("i", 7)
+            openAt(0x30, level = 5)
+            closeAt(0x44, level = 5)
+            closeAt(0x48, level = 2)
+        }.finish(emptyList(), sourceFileOf("otpth.c"))
+
+        val root = blocks.single()
+        names(root.children) mustBe listOf(listOf("i"))
+        // The outer bracket sets the base and is silent; only the level-5 jump is reported.
+        sink.lines.map { it.tag to it.level } mustBe listOf("bracket-level-depth" to Level.DEBUG)
+    }
+
+    /** The base is per function, so a nesting that tracks it is silent whatever the emitter counts from. */
+    @Test
+    fun `levels that track the pairing depth report nothing`() {
+        val sink = CapturingSink()
+        BlockTreeBuilder(sink).apply {
+            openAt(0x14, level = 2)
+            openAt(0x30, level = 3)
+            closeAt(0x44, level = 3)
+            closeAt(0x48, level = 2)
+        }.finish(emptyList(), sourceFileOf("otpth.c"))
+
+        sink.lines.map { it.tag } mustBe emptyList()
+    }
+
+    /** Levels that cross mean this N_RBRAC closes a scope its author didn't think was innermost. */
+    @Test
+    fun `an RBRAC closing a level it did not open is reported`() {
+        val sink = CapturingSink()
+        BlockTreeBuilder(sink).apply {
+            openAt(0x14, level = 2)
+            openAt(0x30, level = 3)
+            closeAt(0x44, level = 2)
+        }.finish(emptyList(), sourceFileOf("otpth.c"))
+
+        // Both opens track the depth, so nothing is noted there — only the crossed pair is.
+        sink.lines.map { it.tag to it.level } mustBe listOf("bracket-level-mismatch" to Level.WARN)
     }
 
     /**

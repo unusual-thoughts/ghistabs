@@ -28,6 +28,7 @@ class Harvester(private val monitor: TaskMonitor, private val sink: DiagnosticSi
                 StabType.N_FUN, // desc available on -gstabs+
                 StabType.N_PSYM, StabType.N_LSYM, StabType.N_RSYM, // params / locals
                 StabType.N_GSYM, StabType.N_STSYM, StabType.N_LCSYM, StabType.N_ROSYM, // statics
+                StabType.N_RBRAC, StabType.N_LBRAC, // nesting level (SunOS 4)
                 -> {}
 
                 // Other record types with non-zero desc are dropping a line number.

@@ -47,7 +47,7 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
      * A function being accumulated: its record-order params and its block tree
      */
     private inner class FunctionScope(func: FunctionSymbol, val cu: SourceFile.CUSource) {
-        val blocks = BlockTreeBuilder()
+        val blocks = BlockTreeBuilder(this@StabCursor)
         val params = mutableListOf<ParamSymbol>()
         val lineEntries = mutableListOf<LineEntry>()
         var sizeBytes: ULong? = null
@@ -242,12 +242,13 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
     fun bracket(rec: StabRecord) {
         currentScope?.apply {
             val addr = resolver.stabAddress(rec.value, addr, this@StabCursor)
+            val level = rec.desc.takeIf { it > 0 }
             when (rec.type) {
                 // open a lexical scope, which owns the locals emitted just before it.
-                StabType.N_LBRAC -> blocks.open(addr)
+                StabType.N_LBRAC -> blocks.open(addr, level)
 
                 // close the innermost lexical scope.
-                StabType.N_RBRAC -> blocks.close(addr)
+                StabType.N_RBRAC -> blocks.close(addr, level)
 
                 else -> {}
             }
