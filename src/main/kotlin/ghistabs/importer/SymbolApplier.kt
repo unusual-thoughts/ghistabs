@@ -41,6 +41,11 @@ class SymbolApplier(
     val funMgr: FunctionManager get() = ctx.program.functionManager
     val pointerSize = ctx.program.defaultPointerSize
 
+    companion object {
+        /** Distinguishes the `:r` register home of a `:p` parameter from the parameter itself. */
+        private const val REGISTER_HOME_SUFFIX = "_reg"
+    }
+
     /**
      * The N_PSYM list extended to the arity the mangled name declares. gcc emits no N_PSYM for an
      * *unnamed* parameter, so `void f(const NameValuePairs &)` leaves a stab list one short — and
@@ -311,16 +316,6 @@ class SymbolApplier(
         return funMgr.getFunctionAt(addr)
     }
 
-    /** Distinguishes the `:r` register home of a `:p` parameter from the parameter itself. */
-    private val registerHomeSuffix = "_reg"
-
-    /** Which of the two renames happened, if either — the `:p`/`:r` shadow, or scope disambiguation. */
-    private fun reportRenamedLocal(declared: String, wanted: String, applied: String) = when {
-        wanted != declared -> debug("reglocal-param-home", "$declared → $applied")
-        applied != declared -> debug("reglocal-renamed-scope", "$declared → $applied")
-        else -> Unit
-    }
-
     /**
      * The name to give a local, or null when it is not a variable of its own. gcc names every inline
      * expansion's locals identically (`this` six times over in one function) and Ghidra's variable
@@ -428,13 +423,19 @@ class SymbolApplier(
                     }
                     // A `:p` + `:r` pair: the argument came in on the stack and was then loaded into
                     // this register. The parameter owns the name and the stack slot, so the register
-                    // home can only be a second variable (suffixed to avoid collision). Except `this`
-                    // which ClassBuilder synthesises already, and to avoid noise.
-                    if (decl.name == "this") {
-                        debug("reglocal-skipped-dup-param")
-                        return
+                    // home can only be a second variable (suffixed to avoid collision). Except a
+                    // `this` that really does shadow a parameter — ClassBuilder synthesises a typed one
+                    // already. A plain function whose own local is called `this` has no such N_PSYM,
+                    // and keeps its local.
+                    val reglocalName = when (decl.name) {
+                        !in paramNames -> decl.name
+                        "this" -> {
+                            debug("reglocal-skipped-dup-param")
+                            return
+                        }
+                        else -> "${decl.name}$REGISTER_HOME_SUFFIX"
                     }
-                    val reglocalName = if (decl.name in paramNames) "${decl.name}$registerHomeSuffix" else decl.name
+
                     val name = scopedName(func, reglocalName) {
                         it.firstUseOffset == firstUse && it.register == reg
                     } ?: run {
@@ -446,7 +447,9 @@ class SymbolApplier(
                     val lv = LocalVariableImpl(name, firstUse, dt, reg, ctx.program, source)
                     func.addLocalVariable(lv, source)
                     debug("reglocal-add-success", "firstUse=$firstUse")
-                    reportRenamedLocal(decl.name, reglocalName, name)
+                    // Which of the two renames happened, if either — the `:p`/`:r` shadow, or scope disambiguation.
+                    if (reglocalName != decl.name) debug("reglocal-param-home", "${decl.name} → $reglocalName")
+                    if (name != reglocalName) debug("reglocal-renamed-scope", "$reglocalName → $name")
                 }
             }
         } catch (e: Exception) {

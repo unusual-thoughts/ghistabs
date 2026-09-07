@@ -341,8 +341,8 @@
             "max": 29
         },
         "reglocal-renamed-scope": {
-            "min": 70,
-            "max": 70
+            "min": 73,
+            "max": 73
         },
         "replaced-demangler": {
             "min": 116,

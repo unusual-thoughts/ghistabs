@@ -369,8 +369,8 @@
             "max": 135
         },
         "reglocal-renamed-scope": {
-            "min": 70,
-            "max": 70
+            "min": 73,
+            "max": 73
         },
         "reglocal-skipped-dup-local": {
             "min": 2,

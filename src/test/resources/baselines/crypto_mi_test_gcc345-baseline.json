@@ -313,12 +313,12 @@
             "max": 48
         },
         "local-var-add-success": {
-            "min": 2987,
-            "max": 2987
+            "min": 2983,
+            "max": 2983
         },
         "local-var-skipped-dup-local": {
-            "min": 2013,
-            "max": 2013
+            "min": 2017,
+            "max": 2017
         },
         "local-var-skipped-dup-param": {
             "min": 1570,
@@ -361,24 +361,24 @@
             "max": 28
         },
         "reglocal-add-success": {
-            "min": 3492,
-            "max": 3492
+            "min": 3578,
+            "max": 3578
         },
         "reglocal-param-home": {
             "min": 598,
             "max": 598
         },
         "reglocal-renamed-scope": {
-            "min": 2098,
-            "max": 2098
+            "min": 2177,
+            "max": 2177
         },
         "reglocal-skipped-dup-local": {
             "min": 213,
             "max": 213
         },
         "reglocal-skipped-dup-param": {
-            "min": 1117,
-            "max": 1117
+            "min": 1031,
+            "max": 1031
         },
         "reglocal-unmapped-regnum": {
             "min": 4,
