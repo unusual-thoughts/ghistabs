@@ -40,7 +40,6 @@ class SymbolApplier(
     val source = SourceType.IMPORTED
     val symtab: SymbolTable get() = ctx.program.symbolTable
     val funMgr: FunctionManager get() = ctx.program.functionManager
-    val pointerSize = ctx.program.defaultPointerSize
 
     companion object {
         /** Distinguishes the `:r` register home of a `:p` parameter from the parameter itself. */
@@ -354,6 +353,7 @@ class SymbolApplier(
             .mapNotNull { p -> p.storage(ctx.program)?.let { "  ${p.body.name}  $it" } }
         if (homes.isEmpty()) return
         val text = homes.joinToString("\n", "Stabs register parameters (gcc's home, not the passing slot):\n")
+
         try {
             val existing = ctx.program.listing.getComment(CommentType.PLATE, func.entryPoint)
             ctx.program.listing.setComment(
@@ -418,7 +418,7 @@ class SymbolApplier(
                     // The dbx register number is the stab's n_value, not part of the descriptor
                     // (`w:r(0,5)` ends at the type) — same field the stack offset above comes from.
                     val dbxNum = rawValue.toInt()
-                    val regName = dbxRegisterName(pointerSize, dbxNum)
+                    val regName = ctx.program.dbxRegisterName(dbxNum)
                     val reg = regName?.let { ctx.program.getRegister(it) } ?: run {
                         degradation(
                             "reglocal-unmapped-regnum",

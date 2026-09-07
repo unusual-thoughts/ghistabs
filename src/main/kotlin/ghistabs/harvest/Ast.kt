@@ -149,8 +149,7 @@ data class Symbol<S : SymbolDecl<GlobalTypeId>>(
     }
 
     fun storage(program: Program) = location?.let {
-        dbxStorageName(
-            program.defaultPointerSize,
+        program.dbxArch?.storagename(
             rawValue.toInt(),
             it == VariableLocation.REGISTER,
             program.baseStackParamOffset,

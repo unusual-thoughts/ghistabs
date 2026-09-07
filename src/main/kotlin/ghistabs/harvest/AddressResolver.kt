@@ -90,7 +90,7 @@ class ProgramAddressResolver(private val program: Program, private val sink: Dia
      * stack), which is the same set the importer skips.
      */
     override fun forSymbol(sym: Symbol<*>) = when (sym.location) {
-        VariableLocation.REGISTER -> dbxRegisterName(program.defaultPointerSize, sym.rawValue.toInt())
+        VariableLocation.REGISTER -> program.dbxRegisterName(sym.rawValue.toInt())
             ?.let { program.getRegister(it)?.address }
 
         VariableLocation.STACK -> program.addressFactory.stackSpace.getAddress(
