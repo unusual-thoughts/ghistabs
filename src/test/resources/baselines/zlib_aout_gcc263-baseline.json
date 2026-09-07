@@ -188,10 +188,6 @@
             "min": 1,
             "max": 1
         },
-        "local-typed-anonymous": {
-            "min": 1,
-            "max": 1
-        },
         "local-var-add-success": {
             "min": 115,
             "max": 115
@@ -209,8 +205,8 @@
             "max": 283
         },
         "pointee-typed": {
-            "min": 2,
-            "max": 2
+            "min": 4,
+            "max": 4
         },
         "reglocal-add-success": {
             "min": 232,
@@ -223,10 +219,6 @@
         "reglocal-renamed-scope": {
             "min": 19,
             "max": 19
-        },
-        "resolve-ambiguous": {
-            "min": 6,
-            "max": 6
         },
         "sourcemap-duplicate-entries": {
             "min": 0,
