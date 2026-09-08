@@ -70,13 +70,19 @@ class ProgramAddressResolver(private val program: Program, private val sink: Dia
      * exists to overrule (1084 globals on `graphcnv.SUN4`, every one landing outside the image).
      * Several symbols carrying one name is common — 169 on one PE fixture, 1991 on locale_test — and
      * nothing here can tell them apart, so the first stands.
+     *
+     * Memory addresses only: `getSymbols(String)` answers with symbols of every kind, and a function's
+     * locals and parameters live in Ghidra's `VARIABLE` space rather than the image. A name the binary
+     * genuinely lacks otherwise resolves onto some unrelated variable that happens to share it — four
+     * CUs on `graphcnv.SUN4` declare `ax:G(0,6)`, nothing links it, and `wowed.c`'s own stack local
+     * `ax` answered for it at `VARIABLE:00000100`.
      */
     override fun resolve(name: String): Address? {
         (linkSymbols[name] ?: linkSymbols["_$name"])?.let { return buildAddress(it) }
         val candidates = (
             program.symbolTable.getSymbols(name).map { it.address } +
                 program.symbolTable.getSymbols("_$name").map { it.address }
-            )
+            ).filter { it.isMemoryAddress }
         if (candidates.size > 1) sink.debug("resolve-ambiguous", name)
         return candidates.firstOrNull()
     }
