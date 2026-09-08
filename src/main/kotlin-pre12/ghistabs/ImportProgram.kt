@@ -22,7 +22,8 @@ fun Any.loadProgram(binary: File, compiler: String? = "gcc", log: MessageLog? = 
             log ?: MessageLog(),
             monitor ?: TaskMonitor.DUMMY,
             LoaderService.ACCEPT_ALL,
-            compiler?.let { CsHintLoadSpecChooser(it) } ?: LoadSpecChooser.CHOOSE_THE_FIRST_PREFERRED,
+            compiler?.takeIf { binary.offersCompilerSpec(it) }
+                ?.let { CsHintLoadSpecChooser(it) } ?: LoadSpecChooser.CHOOSE_THE_FIRST_PREFERRED,
             null,
             OptionChooser.DEFAULT_OPTIONS,
         ).primaryDomainObject,
