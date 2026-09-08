@@ -3,8 +3,13 @@ package ghistabs.index
 import ghistabs.Demangler
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.DummySink
-import ghistabs.harvest.*
-import ghistabs.parse.*
+import ghistabs.harvest.Func
+import ghistabs.harvest.Harvest
+import ghistabs.harvest.Type
+import ghistabs.parse.GlobalTypeDecl
+import ghistabs.parse.GlobalTypeId
+import ghistabs.parse.TypeDecl
+import ghistabs.parse.baseTag
 
 /**
  * The type graph: every harvested [Type] indexed by id, by name and by base tag, plus the xref oracle
@@ -37,10 +42,6 @@ class TypeGraph(private val harvest: Harvest, sink: DiagnosticSink = DummySink) 
     // definition — and gcc still points `xs Foo` at it, so a tag index that excludes `t` loses those;
     // meanwhile the typedef half then tries to alias a body that has no separate target. The binding
     // kind is the source's intent; what these two indexes need is where the definition lives. ──
-
-    /** [NamedType] symbols name either "tags" (named `struct`/`union`/`enum`) or typedefs (anything)
-     * this is recorded in [Type.kind]
-     */
 
     /** Named type definitions — `struct`/`union`/`enum` bodies — by raw stabs tag name. */
     internal val definitionsByTag: Map<String, List<Type>> by lazy {

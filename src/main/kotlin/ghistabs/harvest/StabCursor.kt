@@ -93,6 +93,7 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
             err("parse-error", "@${rec.index} '${rec.name.take(80)}': ${res.ex.message}")
             null
         }
+
         is ParseResult.Ok -> {
             res.trailing?.let { warn("unparsed-trailing", it) }
             res.inner
@@ -136,13 +137,18 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
         for (record in records) {
             when (record.type) {
                 StabType.N_UNDF, StabType.N_BINCL, StabType.N_EXCL, StabType.N_OPT -> {}
+
                 StabType.N_SO -> sourceUnit(record)
+
                 StabType.N_SOL -> switchSource(record)
+
                 StabType.N_FUN if record.name.isEmpty() -> closeFunction(record)
+
                 StabType.N_FUN -> parseSymbol(record)?.also {
                     if (it.body is SymbolDecl.Function) openFunction(it.retype(it.body))
                     add(it)
                 }
+
                 else -> if (record.name.isNotEmpty()) parseSymbol(record)?.let { add(it) }
             }
         }

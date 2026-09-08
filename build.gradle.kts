@@ -41,6 +41,10 @@ kotlin {
     compilerOptions { apiVersion.set(KotlinVersion.KOTLIN_1_9) }
 }
 
+ktlint {
+    version = libs.versions.ktlint
+}
+
 // The baseline freezes the size/complexity findings that predate the config so the rules act as a
 // ratchet: new violations fail, the known-big functions don't. Shrink it as those get split; don't
 // regenerate it wholesale to bury a new hit (`./gradlew detektBaseline` if you must).

@@ -1,14 +1,12 @@
 package ghistabs.render
 
-/**
- * Space allocation for the line-aligned canvas: passes declare what they want, one allocator decides
- * who gets which rows. See `docs/design-plans/layout-rewrite.md`.
- *
- * The split this enforces is that **the allocator assigns space and the renderer fits content into
- * it**. Cramming, wrapping and spreading are the renderer's business; all that happens here is
- * answering "which rows does this claim get". Conflating the two is what produced a placement routine
- * that had to know about brace formatting and a sweep that had to un-place what an earlier pass wrote.
- */
+// Space allocation for the line-aligned canvas: passes declare what they want, one allocator decides
+// who gets which rows. See `docs/design-plans/layout-rewrite.md`.
+//
+// The split this enforces is that **the allocator assigns space and the renderer fits content into
+// it**. Cramming, wrapping and spreading are the renderer's business; all that happens here is
+// answering "which rows does this claim get". Conflating the two is what produced a placement routine
+// that had to know about brace formatting and a sweep that had to un-place what an earlier pass wrote.
 
 /** How much room a claim can use beyond the rows it brings. */
 enum class Fit {
@@ -250,7 +248,9 @@ fun allocate(claims: List<Claim>, range: ClosedRange<Int>): Allocation {
             // by owner alone — a misattributed local shares its line with a real one, as it always
             // has; `stale` decides who reserves *first*, which is what stops it taking the row.
             held[line] == claim.owner.group -> shared.add(Triple(claim, copies, line)).let { null }
+
             line in held -> dropped.add(Dropped(claim, ROW_TAKEN)).let { null }
+
             else -> {
                 held[line] = claim.owner.group
                 Triple(claim, copies, line)

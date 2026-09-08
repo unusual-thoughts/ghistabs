@@ -2,7 +2,8 @@
 # Floor is set by the oldest kotlin-stdlib among installed Ghidra extensions — see the
 # `compilerOptions.apiVersion` note in build.gradle.kts before bumping.
 kotlin = "2.3.21"
-ktlint = "14.2.0"
+ktlint = "1.8.0"
+ktlintPlugin = "14.2.0"
 kotlinxSerialization = "1.10.0"
 junitJupiter = "5.14.4"
 junit4 = "4.13.2"
@@ -24,5 +25,5 @@ junit = ["junit-jupiter", "junit4"]
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
-ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlint" }
+ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlintPlugin" }
 detekt = { id = "dev.detekt", version.ref = "detekt" }
