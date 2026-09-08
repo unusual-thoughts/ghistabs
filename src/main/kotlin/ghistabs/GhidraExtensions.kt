@@ -2,8 +2,11 @@
 
 package ghistabs
 
+import ghidra.app.util.bin.FileByteProvider
 import ghidra.app.util.bin.InputStreamByteProvider
 import ghidra.app.util.importer.MessageLog
+import ghidra.app.util.opinion.LoaderService
+import ghidra.app.util.opinion.LoaderTier
 import ghidra.program.database.data.DataTypeUtilities
 import ghidra.program.model.address.*
 import ghidra.program.model.data.Composite
@@ -22,6 +25,7 @@ import ghidra.program.model.listing.Variable
 import ghidra.program.model.mem.MemoryBlock
 import ghidra.util.task.TaskMonitor
 import java.io.File
+import java.nio.file.AccessMode
 
 operator fun Address.plus(rhs: Long): Address = addNoWrap(rhs)
 operator fun Address.plus(rhs: Int): Address = addNoWrap(rhs.toLong())
@@ -175,6 +179,14 @@ val Program.baseStackParamOffset get() = compilerSpec.defaultCallingConvention.r
 class LoadedProgram internal constructor(val program: Program, private val consumer: Any) : AutoCloseable {
     override fun close() {
         program.release(consumer)
+    }
+}
+
+/** Whether some loader that actually targets this file offers a spec carrying [compiler].  */
+internal fun File.offersCompilerSpec(compiler: String) = FileByteProvider(this, null, AccessMode.READ).use { provider ->
+    LoaderService.getAllSupportedLoadSpecs(provider).any { (loader, specs) ->
+        loader.tier != LoaderTier.UNTARGETED_LOADER &&
+            specs.any { it.languageCompilerSpec?.compilerSpecID?.idAsString == compiler }
     }
 }
 
