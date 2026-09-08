@@ -114,6 +114,7 @@ class Preprocessed private constructor(private val dropped: Map<String, Set<Int>
             for (line in stream.lineSequence().map { it.trim() }) {
                 when {
                     line.startsWith(DROPPED) -> run += line.removePrefix(DROPPED).trim()
+
                     else -> {
                         flush()
                         MARKER.matchEntire(line)?.let { marker ->

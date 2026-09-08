@@ -1,11 +1,9 @@
 package ghistabs.parse
 
-/**
- * Pure C++ name-string operations for stabs (gcc writes names demangled) — no Ghidra dependency.
- * Source-form namespace/template splitting, template-whitespace canonicalisation, and Itanium
- * mangled-name classification. Ghidra's demangler proper lives in `ghistabs.Demangler`; prefer it
- * when a mangled token is available, these are the string-only fallbacks and predicates.
- */
+// Pure C++ name-string operations for stabs (gcc writes names demangled) — no Ghidra dependency.
+// Source-form namespace/template splitting, template-whitespace canonicalisation, and Itanium
+// mangled-name classification. Ghidra's demangler proper lives in `ghistabs.Demangler`; prefer it
+// when a mangled token is available, these are the string-only fallbacks and predicates.
 
 /**
  * gcc's vtable-pointer member: `_vptr$<Class>` through gcc 4.x, `_vptr.<Class>` from gcc 12, bare
@@ -27,22 +25,27 @@ fun splitQualified(name: String): List<String> {
                 angle++
                 cur.append(c)
             }
+
             '>' -> {
                 angle--
                 cur.append(c)
             }
+
             '(' -> {
                 paren++
                 cur.append(c)
             }
+
             ')' -> {
                 paren--
                 cur.append(c)
             }
+
             ':' if angle == 0 && paren == 0 && name.getOrNull(i + 1) == ':' -> {
                 if (cur.isNotEmpty()) parts.add(cur.toString().also { cur.clear() })
                 i++
             }
+
             else -> cur.append(c)
         }
         i++

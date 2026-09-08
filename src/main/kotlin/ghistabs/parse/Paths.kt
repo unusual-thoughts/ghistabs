@@ -1,6 +1,6 @@
 package ghistabs.parse
 
-/** Raw stabs path spellings, before any Ghidra normalisation — gcc mixes separators and drive letters. */
+// Raw stabs path spellings, before any Ghidra normalisation — gcc mixes separators and drive letters.
 
 /** Names its own root: a leading separator, or a drive letter (`c:/…`, `E:\…`). Nothing anchors it. */
 val String.isRootedPath get() = startsWith('/') || startsWith('\\') || segments.firstOrNull()?.isDriveLetter == true

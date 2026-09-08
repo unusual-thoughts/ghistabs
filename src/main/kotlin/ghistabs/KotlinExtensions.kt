@@ -59,6 +59,7 @@ fun Double.formatSi(maxWidth: Int? = null): String {
     val decimals = (maxWidth - sign.length - prefix.length - whole.toString().length - 1).coerceAtLeast(0)
     val fraction = when (decimals) {
         0 -> ""
+
         else -> {
             val scale = generateSequence(1L) { it * 10 }.elementAt(decimals)
             ".${((value - whole) * scale).toLong().toString().padStart(decimals, '0')}"

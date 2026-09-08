@@ -279,7 +279,9 @@ class ClassBuilder(
         val sig = unwrapSignature(m.signature)
         val retDecl = when (sig) {
             is TypeDecl.Method -> sig.ret
+
             is TypeDecl.FreeFunction -> sig.ret
+
             else -> return degradation(
                 "method-signature-unwrap-failed",
                 "$className::${m.name}",
