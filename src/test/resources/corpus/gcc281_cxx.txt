@@ -1,0 +1,39 @@
+# GCC 2.8.1 C++ class stabs — the 21 descriptors that failed before the two productions below
+# existed. Sources: WordPerfect 8 for Unix `archfltr/cv_mscom`, i386 ELF (LE) and SPARC ELF (BE);
+# the binaries are not redistributable, so only these lines are checked in.
+#
+# Two shapes, both mirrored from gdb/stabsread.c and both absent from the gcc 3.x/4.x corpus:
+#
+#   `##<ret>;`  a *stub* method type (read_type case '#', allocate_stub_method). No class, no
+#               parameters — those come from the mangled name that follows. gcc 2.8 writes every
+#               member function this way; gcc 3.x writes the full `#<cls>,<ret>,<args>;`.
+#
+#   `.vf<ctx>:<type>,<bitpos>;`  a C++ *abbreviation* field (read_cpp_abbrev). Terminates on the
+#               bitpos with no size field at all, and the member name is synthesized from <ctx>
+#               rather than spelled. gcc 3.x spells it `_vptr$Class` as an ordinary field.
+#               The marker is `$` or `.` (gdb cplus_markers); these use `.`.
+#
+# Also exercised here and rare elsewhere: `&(x,y)` reference types in a method return position,
+# `!<n>,<attr>,<base>;` base lists, `2A.`/`2B*2;` visibility+virt trailers, `~%(x,y);` vtable-holder
+# markers, `/1` field protection prefixes, and `Q2`-qualified mangled names.
+exception:T(2,1)=s4.vf(2,1):(2,2)=*(2,3)=ar(0,0);0;2;(0,22),0;__as::(2,4)=##(2,5)=&(2,1);:RC9exception;2A.;exception::(2,6)=##(2,7)=*(2,1);:RC9exception;2A.(2,8)=##(2,7);:;2A.(2,9)=#(2,1),(0,20),(2,7),(0,1),(0,20);:_._9exception;2A*1;(2,1);;what::(2,10)=##(2,11)=*(0,2);:;2B*2;(2,1);;;~%(2,1);
+bad_exception:Tt(2,12)=s4!1,020,(2,1);__as::(2,13)=##(2,14)=&(2,12);:RC13bad_exception;2A.;bad_exception::(2,15)=##(2,16)=*(2,12);:RC13bad_exception;2A.(2,17)=##(2,16);:;2A.(2,18)=#(2,12),(0,20),(2,16),(0,1),(0,20);:_._13bad_exception;2A*1;(2,1);;;~%(2,1);
+type_info:Tt(1,1)=s8_name:/1(2,11),0,32;.vf(1,1):(1,2)=*(1,3)=ar(0,0);0;1;(0,22),32;__as::(1,4)=##(1,5)=&(1,1);:RC9type_info;0A.;type_info::(1,6)=##(1,7)=*(1,1);:RC9type_info;0A.(1,8)=##(1,7);:PCc;1A.(1,9)=#(1,1),(0,20),(1,7),(0,1),(0,20);:_._9type_info;2A*1;(1,1);;before::(1,10)=##(0,19);:RC9type_info;2B.;name::(1,11)=##(2,11);:;2B.;__eq::(1,10):RC9type_info;2B.;__ne::(1,10):RC9type_info;2B.;;~%(1,1);
+bad_cast:Tt(1,12)=s4!1,020,(2,1);__as::(1,13)=##(1,14)=&(1,12);:RC8bad_cast;2A.;bad_cast::(1,15)=##(1,16)=*(1,12);:RC8bad_cast;2A.(1,17)=##(1,16);:;2A.(1,18)=#(1,12),(0,20),(1,16),(0,1),(0,20);:_._8bad_cast;2A*1;(2,1);;;~%(2,1);
+bad_typeid:Tt(1,19)=s4!1,020,(2,1);__as::(1,20)=##(1,21)=&(1,19);:RC10bad_typeid;2A.;bad_typeid::(1,22)=##(1,23)=*(1,19);:RC10bad_typeid;2A.(1,24)=##(1,23);:;2A.(1,25)=#(1,19),(0,20),(1,23),(0,1),(0,20);:_._10bad_typeid;2A*1;(2,1);;;~%(2,1);
+cp_eh_info:Tt(0,24)=s24value:(0,23),0,32;type:(0,23),32,32;cleanup:(0,25)=*(0,26)=f(0,20),64,32;caught:(0,19),96,8;next:(0,27)=*(0,24),128,32;handlers:(0,3),160,32;__as::(0,28)=##(0,29)=&(0,24);:RC10cp_eh_info;2A.;cp_eh_info::(0,30)=##(0,27);:RC10cp_eh_info;2A.(0,31)=##(0,27);:;2A.;;
+type_info:T(3,1)=s8_name:/1(3,2)=*(0,2),0,32;.vf(3,1):(3,3)=*(3,4)=ar(0,0);0;1;(0,22),32;__as::(3,5)=##(3,6)=&(3,1);:RC9type_info;0A.;type_info::(3,7)=##(3,8)=*(3,1);:RC9type_info;0A.(3,9)=##(3,8);:PCc;1A.(3,10)=#(3,1),(0,20),(3,8),(0,1),(0,20);:_._9type_info;2A*1;(3,1);;before::(3,11)=##(0,19);:RC9type_info;2B.;name::(3,12)=##(3,2);:;2B.;__eq::(3,11):RC9type_info;2B.;__ne::(3,11):RC9type_info;2B.;;~%(3,1);
+bad_cast:Tt(3,13)=s4!1,020,(3,14)=xsexception:;__as::(3,15)=##(3,16)=&(3,13);:RC8bad_cast;2A.;bad_cast::(3,17)=##(3,18)=*(3,13);:RC8bad_cast;2A.(3,19)=##(3,18);:;2A.(3,20)=#(3,13),(0,20),(3,18),(0,1),(0,20);:_._8bad_cast;2A*1;(3,14);;;~%(3,14);
+bad_typeid:Tt(3,21)=s4!1,020,(3,14);__as::(3,22)=##(3,23)=&(3,21);:RC10bad_typeid;2A.;bad_typeid::(3,24)=##(3,25)=*(3,21);:RC10bad_typeid;2A.(3,26)=##(3,25);:;2A.(3,27)=#(3,21),(0,20),(3,25),(0,1),(0,20);:_._10bad_typeid;2A*1;(3,14);;;~%(3,14);
+__user_type_info:Tt(2,1)=s8!1,020,(3,1);__as::(2,2)=##(2,3)=&(2,1);:RC16__user_type_info;2A.;__user_type_info::(2,4)=##(2,5)=*(2,1);:RC16__user_type_info;2A.(2,6)=#(2,1),(0,20),(2,5),(0,1),(0,20);:_._16__user_type_info;2A*1;(3,1);(2,7)=##(2,5);:PCc;2A.;dcast::(2,8)=##(0,23);:RC9type_infoiPvPC9type_infoT3;2B*2;(2,1);;;~%(3,1);
+__si_type_info:Tt(2,9)=s12!1,020,(2,1);base:/0(2,10)=&(2,1),64,32;__as::(2,11)=##(2,12)=&(2,9);:RC14__si_type_info;2A.;__si_type_info::(2,13)=##(2,14)=*(2,9);:RC14__si_type_info;2A.(2,15)=#(2,9),(0,20),(2,14),(0,1),(0,20);:_._14__si_type_info;2A*1;(3,1);(2,16)=##(2,14);:PCcRC16__user_type_info;2A.;dcast::(2,17)=##(0,23);:RC9type_infoiPvPC9type_infoT3;2B*2;(2,1);;;~%(3,1);
+base_info:Tt(2,19)=s8base:(2,20)=*(2,1),0,32;offset:(0,4),32,29;is_virtual:(0,19),61,1;access:(2,18),62,2;__as::(2,21)=##(2,22)=&(2,19);:Q217__class_type_info9base_infoRCQ217__class_type_info9base_info;2A.;base_info::(2,23)=##(2,24)=*(2,19);:__Q217__class_type_info9base_infoRCQ217__class_type_info9base_info;2A.(2,25)=##(2,24);:__Q217__class_type_info9base_info;2A.;;
+__class_type_info:Tt(2,26)=s16!1,020,(2,1);base_list:(2,27)=*(2,19),64,32;n_bases:(0,4),96,32;__as::(2,28)=##(2,29)=&(2,26);:RC17__class_type_info;2A.;__class_type_info::(2,30)=##(2,31)=*(2,26);:RC17__class_type_info;2A.(2,32)=#(2,26),(0,20),(2,31),(0,1),(0,20);:_._17__class_type_info;2A*1;(3,1);(2,33)=##(2,31);:PCcPCQ217__class_type_info9base_infoUi;2A.;dcast::(2,34)=##(0,23);:RC9type_infoiPvPC9type_infoT3;2B*2;(2,1);;;~%(3,1);
+__pointer_type_info:Tt(0,26)=s12!1,020,(3,1);type:(0,25),64,32;__as::(0,27)=##(0,28)=&(0,26);:RC19__pointer_type_info;2A.;__pointer_type_info::(0,29)=##(0,30)=*(0,26);:RC19__pointer_type_info;2A.(0,31)=#(0,26),(0,20),(0,30),(0,1),(0,20);:_._19__pointer_type_info;2A*1;(3,1);(0,32)=##(0,30);:PCcRC9type_info;2A.;;~%(3,1);
+__attr_type_info:Tt(0,34)=s16!1,020,(3,1);type:(0,25),64,32;attr:(0,33),96,32;__as::(0,35)=##(0,36)=&(0,34);:RC16__attr_type_info;2A.;__attr_type_info::(0,37)=##(0,38)=*(0,34);:RC16__attr_type_info;2A.(0,39)=#(0,34),(0,20),(0,38),(0,1),(0,20);:_._16__attr_type_info;2A*1;(3,1);(0,40)=##(0,38);:PCcQ216__attr_type_info2cvRC9type_info;2A.;;~%(3,1);
+__builtin_type_info:Tt(0,41)=s8!1,020,(3,1);__as::(0,42)=##(0,43)=&(0,41);:RC19__builtin_type_info;2A.;__builtin_type_info::(0,44)=##(0,45)=*(0,41);:RC19__builtin_type_info;2A.(0,46)=#(0,41),(0,20),(0,45),(0,1),(0,20);:_._19__builtin_type_info;2A*1;(3,1);(0,47)=##(0,45);:PCc;2A.;;~%(3,1);
+__func_type_info:Tt(0,48)=s8!1,020,(3,1);__as::(0,49)=##(0,50)=&(0,48);:RC16__func_type_info;2A.;__func_type_info::(0,51)=##(0,52)=*(0,48);:RC16__func_type_info;2A.(0,53)=#(0,48),(0,20),(0,52),(0,1),(0,20);:_._16__func_type_info;2A*1;(3,1);(0,54)=##(0,52);:PCc;2A.;;~%(3,1);
+__ptmf_type_info:Tt(0,55)=s8!1,020,(3,1);__as::(0,56)=##(0,57)=&(0,55);:RC16__ptmf_type_info;2A.;__ptmf_type_info::(0,58)=##(0,59)=*(0,55);:RC16__ptmf_type_info;2A.(0,60)=#(0,55),(0,20),(0,59),(0,1),(0,20);:_._16__ptmf_type_info;2A*1;(3,1);(0,61)=##(0,59);:PCc;2A.;;~%(3,1);
+__ptmd_type_info:Tt(0,62)=s8!1,020,(3,1);__as::(0,63)=##(0,64)=&(0,62);:RC16__ptmd_type_info;2A.;__ptmd_type_info::(0,65)=##(0,66)=*(0,62);:RC16__ptmd_type_info;2A.(0,67)=#(0,62),(0,20),(0,66),(0,1),(0,20);:_._16__ptmd_type_info;2A*1;(3,1);(0,68)=##(0,66);:PCc;2A.;;~%(3,1);
+__array_type_info:Tt(0,69)=s8!1,020,(3,1);__as::(0,70)=##(0,71)=&(0,69);:RC17__array_type_info;2A.;__array_type_info::(0,72)=##(0,73)=*(0,69);:RC17__array_type_info;2A.(0,74)=#(0,69),(0,20),(0,73),(0,1),(0,20);:_._17__array_type_info;2A*1;(3,1);(0,75)=##(0,73);:PCc;2A.;;~%(3,1);
+cp_eh_info:Tt(0,24)=s24value:(0,23),0,32;type:(0,23),32,32;cleanup:(0,25)=*(0,26)=f(0,20),64,32;caught:(0,19),96,32;next:(0,27)=*(0,24),128,32;handlers:(0,3),160,32;__as::(0,28)=##(0,29)=&(0,24);:RC10cp_eh_info;2A.;cp_eh_info::(0,30)=##(0,27);:RC10cp_eh_info;2A.(0,31)=##(0,27);:;2A.;;

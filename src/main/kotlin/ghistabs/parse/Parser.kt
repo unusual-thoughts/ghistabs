@@ -50,6 +50,10 @@ class Parser(src: String) {
         // Chars that may legitimately follow a fully-parsed struct body: field/base/symbol
         // terminator or an inline-def field separator.
         val BOUNDARY_CHARS = setOf(';', ',')
+
+        // gdb's `cplus_markers` — `$` normally, `.` where the assembler forbids it — each followed by
+        // the `v` that starts a C++ abbreviation field (see parseCppAbbrevField).
+        val CPP_ABBREV_PREFIXES = listOf("\$v", ".v")
     }
 
     private val c = Cursor(src)
@@ -323,6 +327,11 @@ class Parser(src: String) {
         val methods = mutableListOf<Method<LocalTypeId>>()
 
         while (peekOrNull() != ';' && !eof) {
+            val abbrev = parseCppAbbrevField()
+            if (abbrev != null) {
+                fields.add(abbrev)
+                continue
+            }
             val name = readMemberName()
 
             when {
@@ -421,6 +430,39 @@ class Parser(src: String) {
             methods = methods,
             vptrBasetype = vptrBasetype,
         )
+    }
+
+    /**
+     * A C++ *abbreviation* field, `<marker>v<abbrev><context>:<type>,<bitpos>;` — how gcc 2.x spells
+     * the pointers gcc 3.x names outright (`_vptr$Class:(0,22),32,32;`). Note the shape: a bitpos
+     * terminated by `;` and no size at all, which is why it cannot go through the ordinary field
+     * production. Null when the cursor is not on one, so an honest member called `.foo` still parses
+     * as a field — that also covers gdb's `p[1] != '_'` guard against anonymous type names.
+     *
+     * gdb builds the name from the *context* type's own name; here the context is a bare type ref and
+     * resolving it belongs to harvest, so this names the field the way gdb does when that lookup
+     * fails — `_vptr$`, which [isVptrFieldName] still recognises. The context is read only to advance
+     * the cursor.
+     *
+     * Mirror of gdb/stabsread.c:read_cpp_abbrev; the marker set is gdb's `cplus_markers`.
+     */
+    private fun Cursor.parseCppAbbrevField(): Field<LocalTypeId>? {
+        if (CPP_ABBREV_PREFIXES.none { peekFollows(it) }) return null
+        advance() // cplus marker
+        advance() // 'v'
+        val name = when (val abbrev = advance()) {
+            'f' -> "_vptr$"
+            'b' -> "_vb$"
+            else -> throw StabsParseException(pos, src, "unknown C++ abbreviation field `$abbrev`")
+        }
+        parseType() // context: names the field in gdb, nothing here
+        consume(':')
+        val type = parseType()
+        consume(',')
+        val offsetBits = readInt()
+        consume(';')
+        // gdb: "this field is unpacked" — size 0, and private regardless of the enclosing section.
+        return Field(name, type, offsetBits, sizeBits = 0, isStatic = false, Access.PRIVATE, mangled = null)
     }
 
     /**
@@ -675,13 +717,18 @@ class Parser(src: String) {
     }
 
     /**
-     * Parse a pointer-to-member-function: `#<cls>,<ret>;<params>;`
-     * Method (#) descriptors carry parameter types inline.
+     * Parse a pointer-to-member-function: `#<cls>,<ret>[,<param>…];`, or the *stub* form `##<ret>;`.
+     *
+     * The stub names neither class nor parameters — gdb's `allocate_stub_method`, and how gcc 2.8
+     * writes every member function (`__as::(2,4)=##(2,5)=&(2,1);:RC9exception;2A.`). It becomes a
+     * [TypeDecl.FreeFunction] for the same reason a static member function's signature does: the
+     * return type is known and the parameters are recovered from the mangled name that follows.
      *
      * Mirror of gdb/stabsread.c:read_type (# case) and gdb/stabsread.c:read_member_functions.
      */
-    private fun Cursor.parseMethod(): TypeDecl.Method<LocalTypeId> {
+    private fun Cursor.parseMethod(): TypeDecl<LocalTypeId> {
         consume('#')
+        if (consumeIf('#')) return TypeDecl.Method(null, parseType(), emptyList()).also { consume(';') }
         val clsType = parseType()
         consume(',')
         val retType = parseType()

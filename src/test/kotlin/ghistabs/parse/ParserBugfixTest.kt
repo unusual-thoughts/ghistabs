@@ -177,9 +177,58 @@ class ParserBugfixTest {
             .filterNot { it.endsWith("/") } // Unix directory N_SO paths
         lines.mustNotBeEmpty("${corpus.name} has no descriptor lines")
 
-        for ((lineNum, line) in lines.withIndex()) {
-            Parser(line).parseSymbol().mustBeOk("${corpus.name}:${lineNum + 1} (${line.take(100)})")
-        }
+        // Every failure, not just the first: a dialect lands as a *set* of unhandled shapes, and
+        // stopping at line one turns one import into one bisect per shape.
+        lines.withIndex().mapNotNull { (i, line) ->
+            (Parser(line).parseSymbol() as? ParseResult.Error)?.let { "${corpus.name}:${i + 1} ${it.ex.message}" }
+        }.mustBeEmpty()
+    }
+
+    /**
+     * gcc 2.x writes the vtable pointer as a C++ *abbreviation* field: no size after the bitpos, and
+     * the member name implied by the context type rather than spelled. The two things that must hold
+     * are that the field is recognised as the vptr downstream and that its zero size is a
+     * "no claim", not a zero-width field — `usefulStructSize` trims the class to nothing otherwise.
+     */
+    @Test
+    fun `a gcc 2 x abbreviation field is the vptr and claims no size`() {
+        val body = Parser("exception:T(2,1)=s4.vf(2,1):(2,2)=*(0,22),0;;")
+            .parseSymbol().mustBeOk() as SymbolDecl.NamedType
+        val field = (body.type as TypeDecl.Aggregate).fields.single()
+
+        isVptrFieldName(field.name) mustBe true
+        field.offsetBits mustBe 0L
+        field.sizeBits mustBe 0L
+        // Not the `,0,0` static-member shape: that inference belongs to the ordinary field production.
+        field.isStatic mustBe false
+        field.access mustBe Access.PRIVATE
+    }
+
+    /** A member called `.foo` is a member, not a malformed abbreviation — the guard is `<marker>v`. */
+    @Test
+    fun `a dotted member name is still an ordinary field`() {
+        val body = Parser("s:T(0,1)=s4.foo:(0,2),0,32;;").parseSymbol().mustBeOk() as SymbolDecl.NamedType
+        (body.type as TypeDecl.Aggregate).fields.single().name mustBe ".foo"
+    }
+
+    /**
+     * `##<ret>;` — gdb's stub method type, which is how gcc 2.8 writes every member function. It stays
+     * a [TypeDecl.Method]: it *is* one, and demoting it to a FreeFunction costs the typed vtable slot,
+     * which `buildVirtualSlotType` builds only for a Method. What the stab omits is the domain — gdb
+     * fills that in later from the mangled name — so `cls` is null and `this` falls back downstream.
+     */
+    @Test
+    fun `a stub method is a method with no domain`() {
+        val body = Parser("e:T(2,1)=s4f::(2,4)=##(2,5)=&(2,1);:RC9exception;2A.;;")
+            .parseSymbol().mustBeOk() as SymbolDecl.NamedType
+        val method = (body.type as TypeDecl.Aggregate).methods.single()
+
+        method.mangled mustBe "RC9exception"
+        val sig = (method.signature as TypeDecl.InlineDef).inner as TypeDecl.Method
+        sig.cls mustBe null
+        sig.params.mustBeEmpty()
+        // The return type is the whole point of the stub form — a reference here, `&(2,1)`.
+        sig.ret.must("stub return type is read") { this is TypeDecl.InlineDef }
     }
 
     /**
