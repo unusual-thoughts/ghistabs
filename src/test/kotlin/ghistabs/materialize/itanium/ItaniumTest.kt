@@ -11,11 +11,16 @@ import org.junit.jupiter.api.Test
 class ItaniumTest {
     @Test
     fun testZtvCandidatesSimpleName() {
+        // The gcc 2.x forms are length-prefixed like Itanium's and carry no trailing marker: the
+        // libstdc++-2.8.1 binaries spell them `_vt.9exception`, and a second marker there is the
+        // separator before a base (`_vt.14CExposedStream.11PRevertable` = that base's own vtable).
         val candidates = Itanium.ztvCandidates("ThisStream")
         candidates mustBe listOf(
             "_ZTV10ThisStream",
             "__ZTV10ThisStream",
-            $$"_vt$ThisStream$",
+            "_vt.10ThisStream",
+            $$"_vt$10ThisStream",
+            "__vt_10ThisStream",
             "ThisStream::vtable",
         )
     }
