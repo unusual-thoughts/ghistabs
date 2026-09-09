@@ -95,13 +95,27 @@ object Itanium {
         }
     }
 
-    /** Closed-form `_ZTV` candidates for [className]. Templates have no closed form — use [vtableClassOf]. */
+    /**
+     * Closed-form `_ZTV` candidates for [className]. Templates have no closed form — use [vtableClassOf].
+     *
+     * The gcc 2.x forms are `_vt<marker><mangled>`, marker being gdb's cplus_markers (`$`, or `.` where
+     * the assembler forbids `$` — the WordPerfect/libstdc++-2.8.1 binaries use `.`), plus the
+     * `-fvtable-thunks` spelling `__vt_<mangled>`. gcc 2.x length-prefixes a simple class name exactly
+     * as Itanium does, so [mangleClassName] serves both; a *nested* name does not agree (`Q2…` there,
+     * `N…E` here) and only the Itanium candidates are right for those.
+     *
+     * A trailing marker is not a form: `_vt.14CExposedStream.11PRevertable` shows the second marker is
+     * the separator before a base class, naming that base's secondary vtable — a different object from
+     * this class's own, and not what a lookup by class name wants.
+     */
     fun ztvCandidates(className: String): List<String> {
         val mangled = mangleClassName(className)
         return listOf(
             "$VTABLE_PREFIX$mangled", // Itanium canonical
             "_$VTABLE_PREFIX$mangled", // Cygwin/PE leading-underscore variant
-            $$"_vt$$${className}$", // gcc2 fallback
+            "_vt.$mangled", // gcc 2.x, `.` marker
+            $$"_vt$$$mangled", // gcc 2.x, `$` marker
+            "__vt_$mangled", // gcc 2.x -fvtable-thunks
             "$className::$DEMANGLED_VTABLE", // some compilers emit this
         )
     }
