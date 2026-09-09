@@ -10,6 +10,16 @@ typealias CollisionBucket = MutableSet<GlobalTypeDecl>
 typealias NameBuckets = MutableMap<String, CollisionBucket>
 typealias Collisions = MutableMap<GlobalTypeId, NameBuckets>
 
+/**
+ * Accumulator for harvested [Type]s keyed by [GlobalTypeId]: first writer wins, except where a later
+ * record is strictly better: a concrete body supersedes an XRef placeholder or a self-ref forward
+ * declaration, a named typedef supersedes an anonymous InlineDef at the same id. What still
+ * disagrees after that is parked in [collisions] for `Harvest.classifyCollisions` to classify in one
+ * pass at the end.
+ *
+ * [toHarvest] closes the store, running the two repairs that need every CU seen first:
+ * [synthesizeXRefStubsForDanglingInheritanceRefs] and [nameAnonymousTypedefTargets].
+ */
 class TypeStore(
     private val byId: MutableMap<GlobalTypeId, Type> = mutableMapOf(),
     private val collisions: Collisions = mutableMapOf(),

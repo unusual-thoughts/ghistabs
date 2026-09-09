@@ -8,6 +8,14 @@ import ghistabs.index.*
 import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.TypeDecl
 
+/**
+ * One source file's render. Each pass (decomp, typedefs, locals, globals, braces, type bodies,
+ * includes) declares [Claim]s and writes nothing; [allocate] settles all contention at once, and
+ * only [write] draws onto the [Canvas].
+ *
+ * A claim that loses its row, and one whose line is known to be wrong, still appear in the output:
+ * they go to the appendices, with the line they wanted and why they did not get it.
+ */
 class FileRenderer(override val renderer: Renderer, override val source: GhidraSourceFile) :
     RenderContext,
     DiagnosticSink by renderer {
@@ -97,6 +105,11 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
         ),
     )
 
+    /**
+     * The file's text: every pass's claims allocated onto the canvas in one go, then the appendices
+     * for whatever never reached it. A claim whose line is known to be wrong is not laid out at all,
+     * and a file where nothing has a usable line is all appendix.
+     */
     fun render(): String {
         // Nothing sits on a usable line, but the file can still hold anonymous aggregates and
         // declarations whose line is unusable — which is what the appendix is for. libstdc++'s

@@ -9,6 +9,15 @@ import ghistabs.diagnose.DummySink
 import ghistabs.parse.*
 import ghistabs.plus
 
+/**
+ * Turns the numbers a stab carries into program addresses. One resolver serves the whole run, so the
+ * harvest, the materializer and the render place things identically.
+ *
+ * A stab's `n_value` is a bare integer whose meaning belongs to the record holding it: an absolute
+ * address, an offset from the enclosing function ([stabAddress]), or no address at all for a local
+ * living in a register or a frame slot. A global static is the exception that is not a number at
+ * all: its address comes from the linker symbol of that name ([resolve]).
+ */
 interface AddressResolver {
     fun buildAddress(offset: Long): Address
 

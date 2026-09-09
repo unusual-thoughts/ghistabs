@@ -10,6 +10,12 @@ import ghistabs.materialize.itanium.Itanium
 import ghistabs.materialize.resolveBuiltin
 import ghistabs.parse.*
 
+/**
+ * Renders one declaration, symbol or type at a time: its text, the spelling of the types in it, and
+ * the [Claim] it makes. Everything here works on a single declaration and needs nothing from the
+ * file being assembled around it. Implemented by [FileRenderer]; [Region] holds one to spell its
+ * decompiled rows the same way.
+ */
 interface RenderContext {
     val source: GhidraSourceFile
     val renderer: Renderer

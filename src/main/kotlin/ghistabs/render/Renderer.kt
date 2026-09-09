@@ -28,6 +28,13 @@ import java.io.Closeable
 import java.io.File
 import java.util.*
 
+/**
+ * The decompilation and render state shared by every file of one render, and the owner of the
+ * [DecompInterface], hence [Closeable]. A [FileRenderer] per source does the drawing.
+ *
+ * A function is decompiled once for the whole render and memoised here, however many files inline
+ * it. Decompilation is ~all of the runtime.
+ */
 class Renderer(
     val mode: Mode,
     val hints: SourceHints,

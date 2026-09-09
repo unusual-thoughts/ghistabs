@@ -48,6 +48,14 @@ value class LineNumber(val inner: UInt) : Comparable<LineNumber> {
 @Serializable
 data class NameBinding(val name: String, val kind: TypeNameKind)
 
+/**
+ * One type as the harvest holds it: the body parsed out of a `:T`/`:t` stab, under the id the
+ * [Globalizer] gave it, plus where the source declared it.
+ *
+ * There is one of these per (CU, id), so a class header included by N CUs harvests N of them, with
+ * distinct ids and the same [ghidraName]. Collapsing those onto one DTM slot is
+ * [ghistabs.index.TypeLocations]' job, which [nameOrUnique]/[ghidraName] are shaped to let fire.
+ */
 @Serializable
 data class Type(
     val cu: SourceFile.CUSource,
@@ -214,6 +222,11 @@ class AddressSerializer : KSerializer<Address> {
         throw UnsupportedOperationException("AddressSerializer is serialize-only")
 }
 
+/**
+ * One function as the harvest holds it: its N_FUN, and everything the stream attributed to it before
+ * the next one. [name] is the linkage name, mangled for C++, which [demangledName] and [scopePath]
+ * read the source spelling back out of.
+ */
 @Serializable
 data class Func(
     val name: String,
