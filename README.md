@@ -189,15 +189,15 @@ compiler scaffolding as missing.
 Ghidra, loads a binary and runs full auto-analysis plus the stabs import - no GUI, no Ghidra
 project. (`./gradlew runCli -Pargs="…"` runs the same entry point in-process.)
 
-Five subcommands share that pipeline and differ in how far down it they go:
+Six subcommands share that pipeline and differ in how far down it they go:
 
 ```bash
 build/libs/ghistabs skeleton myprogram.exe -d out/skeletons
 build/libs/ghistabs decomp   myprogram.exe -d out/decomps --shorten-typedefs
 build/libs/ghistabs dump     myprogram.exe --harvest h.json --registry r.json
 build/libs/ghistabs harvest  myprogram.exe --harvest h.json
-build/libs/ghistabs symbols  myprogram.exe --symbols s.json
-build/libs/ghistabs parse    myprogram.exe --records r.json
+build/libs/ghistabs parse    myprogram.exe --symbols s.json
+build/libs/ghistabs decode   myprogram.exe --records r.json
 ```
 
 `dump` is the import on its own: it writes the JSON/degradation dumps and stops - no
@@ -205,13 +205,13 @@ decompiler, no rendered files, so no `-d`. Use it to inspect what the stabs yiel
 paying for the render. It needs at least one dump option to be worth running, and says so
 before Ghidra boots.
 
-`harvest`, `symbols` and `parse` stop earlier still, and **skip auto-analysis entirely**.
+`harvest`, `parse` and `decode` stop earlier still, and **skip auto-analysis entirely**.
 They are three stages of the same pipeline:
 
 | Command   | Requires    | Stops at                                                                               |
 | --------- | ----------- | -------------------------------------------------------------------------------------- |
-| `parse`   | `--records` | binary record decoding.                                                                |
-| `symbols` | `--symbols` | parsed Stabs symbol declarations with global IDs and source/function context resolved. |
+| `decode`  | `--records` | binary record decoding.                                                                |
+| `parse`   | `--symbols` | parsed Stabs symbol declarations with global IDs and source/function context resolved. |
 | `harvest` | `--harvest` | harvested type graph, with function, global etc. symbols per compilation unit.         |
 
 Common options - logging and dumps, the only two things every command does the same way. Every

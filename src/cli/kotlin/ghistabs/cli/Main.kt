@@ -47,8 +47,8 @@ fun main(args: Array<String>) = Ghistabs()
         DecompCommand(),
         DumpCommand(),
         HarvestCommand(),
-        SymbolsCommand(),
         ParseCommand(),
+        DecodeCommand(),
     )
     .main(args)
 
@@ -60,7 +60,7 @@ fun main(args: Array<String>) = Ghistabs()
  */
 private class Ghistabs : NoOpCliktCommand(name = "ghistabs") {
     override fun help(context: Context) =
-        "Headless driver for the stabs importer: parse, harvest, import and render gcc STABS debug info."
+        "Headless driver for the stabs importer: decode, parse, harvest, import and render STABS."
 
     override fun allHelpParams() = super.allHelpParams() +
         registeredSubcommands().first().allHelpParams()
@@ -179,17 +179,17 @@ private class HarvestCommand : StabsCommand(name = "harvest") {
 
 /**
  * The symbol layer: each record's `name:descriptor…` parsed into a [SymbolDecl], with the cursor's
- * source/function context resolved, but nothing merged into types yet. Between [ParseCommand] (bytes)
- * and [HarvestCommand] (types) — the level at which `:T` vs `:t`, record type and declaration kind are
- * still separate facts, so it answers questions the harvest has already folded away.
+ * source/function context resolved, but nothing merged into types yet. Between [DecodeCommand]
+ * (bytes) and [HarvestCommand] (types) — the level at which `:T` vs `:t`, record type and declaration
+ * kind are still separate facts, so it answers questions the harvest has already folded away.
  */
-private class SymbolsCommand : StabsCommand(name = "symbols") {
+private class ParseCommand : StabsCommand(name = "parse") {
     override fun help(context: Context) =
         "Dump parsed symbol declarations, without harvesting them into types. Requires --symbols FILE."
 
     override fun validate() {
         if (shared.harvestJson != null || shared.registryJson != null) {
-            throw UsageError("symbols stops below the harvest; use harvest or dump")
+            throw UsageError("parse stops below the harvest; use harvest or dump")
         }
         if (shared.symbolsJson == null) throw UsageError("--symbols FILE is required")
     }
@@ -203,18 +203,18 @@ private class SymbolsCommand : StabsCommand(name = "symbols") {
         cursor.preSeedHeaders(stabs.records)
         val symbols = cursor.rawSymbols(stabs.records)
         shared.dumpSymbols(symbols)
-        log("symbols", "parsed ${symbols.size} symbols from ${stabs.records.size} records")
+        log("parse", "parsed ${symbols.size} symbols from ${stabs.records.size} records")
     }
 }
 
-/** Byte decode only: the records as parsed, before any of them mean anything. */
-private class ParseCommand : StabsCommand(name = "parse") {
+/** Byte decode only: the records as read, before any of them mean anything. */
+private class DecodeCommand : StabsCommand(name = "decode") {
     override fun help(context: Context) =
-        "Parse the .stab section only, without harvesting it. Requires --records FILE."
+        "Decode the .stab section only, without parsing the descriptors. Requires --records FILE."
 
     override fun validate() {
         if (shared.harvestJson != null || shared.registryJson != null) {
-            throw UsageError("parse dumps records only; use harvest or dump")
+            throw UsageError("decode dumps records only; use harvest or dump")
         }
         if (shared.recordsJson == null) throw UsageError("--records FILE is required")
     }
@@ -222,7 +222,7 @@ private class ParseCommand : StabsCommand(name = "parse") {
     override fun ImportContext<*>.execute() {
         val stabs = readStabs() ?: return
         shared.dumpRecords(stabs.records)
-        log("parse", "parsed ${stabs.records.size} of ${stabs.totalRecordCount} records")
+        log("decode", "decoded ${stabs.records.size} of ${stabs.totalRecordCount} records")
     }
 }
 
