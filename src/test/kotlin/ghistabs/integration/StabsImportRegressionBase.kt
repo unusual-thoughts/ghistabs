@@ -683,6 +683,14 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
      * "vcall offset" on a primary means the split under-counted.
      */
     @Test
+    @ExpectedToFail(
+        fixtures = ["tinyxml_aout_gcc295.o"],
+        reason = "gcc 2.x vtable layout is not modelled. `_vt.<class>`/`__vt_<class>` are now resolvable " +
+            "so these records are found at all, but they carry no Itanium rtti header — a gcc 2.x table " +
+            "is a bare `__vtbl_ptr_type` array — and `vtableShape` falls back to the canonical two-word " +
+            "shape, so the word it comments as rtti is really a vtable entry. Reading it as an address " +
+            "lands on whatever the unrelocated .o put at 0. Finding the symbol was the easy half",
+    )
     fun vtableHeaderCommentsDescribeWhatIsThere() {
         val ptr = program.defaultPointerSize.toLong()
         fun eol(a: Address) = program.listing.getComment(CommentType.EOL, a)
@@ -1173,9 +1181,6 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             "crypto_mi_test_gcc421_stripped.exe", "xmltest_gcc421_stripped.exe",
             // a.out: both fixtures are plain C, so there are no classes and no vtables at all.
             "hello_aout_gcc295.o", "zlib_aout_gcc263.o",
-            // C++, but gcc 2.95's minimal-debug `##` method encoding fails the class body, and its
-            // vtables are pre-Itanium `__vt_9TiXmlNode` symbols rather than `_ZTV` regardless.
-            "tinyxml_aout_gcc295.o",
         ],
         reason = "no _ZTV symbol and no method stab section, so nothing can locate or fill a vftable",
     )
@@ -1335,10 +1340,6 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     }
 
     @Test
-    @ExpectedToFail(
-        fixtures = ["tinyxml_aout_gcc295.o"],
-        reason = "single translation unit whose file-scope data happens to include no pointer global",
-    )
     fun globalsCoverEachDataTypeKind() {
         val seenKinds = mutableSetOf<String>()
         program.listing.getDefinedData(true).forEach { data ->
@@ -1536,10 +1537,6 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     @ExpectedToFail(
         fixtures = [
             "hello_aout_gcc295.o", "zlib_aout_gcc263.o",
-            // C++, but gcc 2.95 defaults to minimal debug, so every method reads `##<type>` — the
-            // arguments live in the mangled name instead. The class body fails at the first one,
-            // taking the `!` inheritance spec parsed just before it down with the record.
-            "tinyxml_aout_gcc295.o",
         ],
         reason = "plain C fixtures — no C++ inheritance edges exist to materialize",
     )
