@@ -14,17 +14,27 @@ import kotlinx.serialization.json.JsonEncoder
 import kotlinx.serialization.json.JsonUnquotedLiteral
 import java.math.BigInteger
 
+/**
+ * A stabs type number in either of its two spellings: [LocalTypeId] as the stab writes it, and
+ * [GlobalTypeId] after the [Globalizer] resolves its file-number, which indexes the emitting CU's
+ * own include sequence and so identifies nothing on its own.
+ */
 @Serializable(with = ToStringSerializer::class)
 sealed interface IdInterface {
     val n: Int
 }
 
-/** Identifies a type within a CU: (file-number, type-number). */
+/**
+ * Identifies a type within a CU: (file-number, type-number). The older bare `n` form, which names no
+ * file because the CU is the only one there is, parses to file 0, which is the same number the
+ * `(cu,n)` form gives the CU's own file.
+ */
 @Serializable(with = ToStringSerializer::class)
 data class LocalTypeId(val file: Int, override val n: Int) : IdInterface {
     override fun toString() = "($file,$n)"
 }
 
+/** Identifies a type program-wide: the [SourceFile] the file-number resolved to, and the number in it. */
 @Serializable(with = ToStringSerializer::class)
 data class GlobalTypeId(val source: SourceFile, override val n: Int) : IdInterface {
     override fun toString() = "[$source,$n]"
@@ -91,6 +101,12 @@ class ToStringSerializer<T> : KSerializer<T> {
         throw UnsupportedOperationException("ToStringSerializer is serialize-only")
 }
 
+/**
+ * Resolves a [LocalTypeId]'s file-number, which indexes the emitting CU's own N_SOL/BINCL sequence
+ * and means nothing outside it, so two CUs including one header agree on its types only once both
+ * ids have been through here. Implemented by [ghistabs.harvest.StabCursor], which is what holds that
+ * sequence; [globalize] applies it to a whole descriptor tree.
+ */
 interface Globalizer {
     fun globalIdFor(id: LocalTypeId): GlobalTypeId
 }

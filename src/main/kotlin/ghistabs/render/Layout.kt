@@ -58,13 +58,12 @@ enum class NoteShape {
 
 // Pure layout model: Canvas ⊃ TargetLine ⊃ Fragment.
 
-// One piece of a line, fully semantic: [code] is the C text (null for a bare comment), [note] the
-// comment payload (a role, an address run, a delimiter phrase — null for a pure-code line) and
-// [shape] how that payload is spelled. The line number the tag restates is the fragment's grid
-// position, so the comment is derived at render time via [commentAt], not stored.
-//
-// Carries no `stale` flag: a misattributed claim is partitioned into `displaced` before anything is
-// written, so no fragment on the canvas was ever stale and both tests that read it were dead.
+/**
+ * One piece of a line, fully semantic: [code] is the C text (null for a bare comment), [note] the
+ * comment payload (a role, an address run, a delimiter phrase — null for a pure-code line) and
+ * [shape] how that payload is spelled. The line number the tag restates is the fragment's grid
+ * position, so the comment is derived at render time via [commentAt], not stored.
+ */
 data class Fragment(
     val indent: Int = 0,
     val code: String? = null,
@@ -103,9 +102,11 @@ private val EMPTY_BLOCK_MARKERS =
  */
 private fun spliceInlineMarkers(code: String) = EMPTY_BLOCK_MARKERS.replace(code) { "{ ${it.groupValues[1].trim()} }" }
 
-// The fragments sharing source [line]. Renders all code first, all comments last, so a
-// `//` never swallows a following fragment's code — the line stays valid C however many
-// fragments collide. Each fragment's tag is derived from [line], its grid position.
+/**
+ * The fragments sharing source [line]. Renders all code first, all comments last, so a
+ * `//` never swallows a following fragment's code — the line stays valid C however many
+ * fragments collide. Each fragment's tag is derived from [line], its grid position.
+ */
 class TargetLine(val line: Int) {
     val fragments = mutableListOf<Fragment>()
 
@@ -148,7 +149,7 @@ class TargetLine(val line: Int) {
     }
 }
 
-// One [TargetLine] per 1-based source line, so `canvas[n]` is where source line n renders.
+/** One [TargetLine] per 1-based source line, so `canvas[n]` is where source line n renders. */
 class Canvas(maxLine: Int?) : ClosedRange<Int> {
     override val start = 1
     override val endInclusive = maxLine ?: 0

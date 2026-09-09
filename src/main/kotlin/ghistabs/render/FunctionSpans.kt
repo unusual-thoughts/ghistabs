@@ -5,8 +5,10 @@ import ghistabs.harvest.Func
 import ghistabs.harvest.GhidraSourceFile
 import org.jetbrains.annotations.TestOnly
 
-// gcc emits N_SLINEs out of address order (SjLj landing pads map back near the decl), so min/max
-// source line over the same-source entries — not first/last by address — bounds the body.
+/**
+ * gcc emits N_SLINEs out of address order (SjLj landing pads map back near the decl), so min/max
+ * source line over the same-source entries — not first/last by address — bounds the body.
+ */
 private data class RawSpan(val func: Func, val addr: Address, val entryLine: Int, val openLine: Int?, val end: Int) {
     // An opener above the previous function's end is gcc cross-attribution, not a real line.
     fun validStartline(after: Int) = when {

@@ -28,6 +28,18 @@ import ghistabs.materialize.itanium.Itanium.isInlineStdMember
 import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Aggregate.Method
 
+/**
+ * The C++ pass over the structs [DataTypeRegistry] has already materialized: a class gets its Ghidra
+ * identity: a [GhidraClass] namespace with its methods reparented under it, `{vfptr}` as first
+ * field, and a `<Class>_vftable` applied at `_ZTV`'s address point so virtual calls resolve.
+ *
+ * That vftable is named and filed the way Ghidra's own RTTI scripts expect
+ * (`/ClassDataTypes/<Class>/<Class>_vftable`), so `RecoveredClassHelper` and shift-S round-trip
+ * over what the stabs produced instead of only over what the RTTI analyzer recovered itself.
+ *
+ * Works in [LocatedType] groups, each the canonical collapse of the N harvested asts a class header
+ * included by N CUs produces. One group builds one class, off its most-detailed body.
+ */
 class ClassBuilder(
     private val registry: DataTypeRegistry,
     private val types: TypeGraph,
