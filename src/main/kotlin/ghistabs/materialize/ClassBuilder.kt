@@ -518,9 +518,14 @@ class ClassBuilder(
             name = m.name,
             ret = method.ret,
             params = method.params,
-            thisType = registry.resolveRef(method.cls) ?: PointerDataType(VoidDataType(), dtm).also {
-                degradation("vftable-slot-this-untyped", "$className::${m.name}", "${method.cls}; used void*")
-            },
+            // A stub method (gcc 2.8's `##`) states no domain — but a vtable slot belongs to a known
+            // class, and that class *is* the domain gdb would recover from the mangled name. Only a
+            // stated-but-unresolvable `cls` is a real loss.
+            thisType = method.cls?.let { registry.resolveRef(it) }
+                ?: registry.dataTypeFor(type.id)?.let { PointerDataType(it, dtm) }
+                ?: PointerDataType(VoidDataType(), dtm).also {
+                    degradation("vftable-slot-this-untyped", "$className::${m.name}", "${method.cls}; used void*")
+                },
             callingConvention = CompilerSpec.CALLING_CONVENTION_thiscall,
             at = "$className::${m.name}",
         )
