@@ -299,9 +299,13 @@ sealed interface TypeDecl<out Id : IdInterface> {
 
     /** Pointer-to-member-function (the `#` descriptor body). */
     @Serializable
-    data class Method<Id : IdInterface>(val cls: TypeDecl<Id>, val ret: TypeDecl<Id>, val params: List<TypeDecl<Id>>) :
-        TypeDecl<Id> {
-        override val children get() = listOf(listOf(cls, ret), params)
+    data class Method<Id : IdInterface>(
+        /** Null for gdb's *stub* method (`##<ret>;`), which states no domain — see `Parser.parseMethod`. */
+        val cls: TypeDecl<Id>?,
+        val ret: TypeDecl<Id>,
+        val params: List<TypeDecl<Id>>,
+    ) : TypeDecl<Id> {
+        override val children get() = listOf(listOfNotNull(cls) + ret, params)
     }
 
     /** GCC complex/floating: `R<n>;<size>;0;`. n encodes 3=cfloat, 4=cdouble, 5=cldouble per gcc/dbxout. */
