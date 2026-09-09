@@ -16,35 +16,31 @@ internal class Cursor(val src: String) {
     /** Unconsumed tail after the last production returned. */
     val remaining get() = src.substring(pos)
 
-    fun peek(): Char = if (eof) {
-        throw StabsParseException(pos, src, "unexpected end of input")
-    } else {
-        src[pos]
-    }
-
-    fun peekOrNull(i: Int = 0): Char? = if (pos + i >= src.length) null else src[pos + i]
+    fun peek(i: Int = 0): Char? = src.getOrNull(pos + i)
 
     fun peekFollows(prefix: String): Boolean = src.startsWith(prefix, pos)
 
-    fun advance() = peek().apply { pos++ }
+    fun nextNot(c: Char): Boolean = !eof && src[pos] != c
+
+    fun advance() = if (eof) {
+        throw StabsParseException(pos, src, "unexpected end of input")
+    } else {
+        src[pos++]
+    }
+
+    fun advanceOrNull() = peek()?.apply { pos++ }
 
     /** Append the next [n] chars to the receiver builder. */
     fun StringBuilder.feed(n: Int = 1) = repeat(n) { append(advance()) }
 
     fun consume(c: Char) {
         if (eof || src[pos] != c) {
-            throw StabsParseException(pos, src, "expected '$c' but got '${peekOrNull() ?: "<eof>"}'")
+            throw StabsParseException(pos, src, "expected '$c' but got '${peek() ?: "<eof>"}'")
         }
         pos++
     }
 
-    fun consumeIf(c: Char): Boolean {
-        if (!eof && src[pos] == c) {
-            pos++
-            return true
-        }
-        return false
-    }
+    fun consumeIf(prefix: String) = peekFollows(prefix).also { if (it) pos += prefix.length }
 
     /** Read a (possibly negative) decimal integer terminated by a non-digit. */
     fun readInt(): Long {

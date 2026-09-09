@@ -53,7 +53,7 @@ class Parser(src: String) {
 
         // gdb's `cplus_markers` — `$` normally, `.` where the assembler forbids it — each followed by
         // the `v` that starts a C++ abbreviation field (see parseCppAbbrevField).
-        val CPP_ABBREV_PREFIXES = listOf("\$v", ".v")
+        val CPP_ABBREV_PREFIXES = listOf($$"$v", ".v")
     }
 
     private val c = Cursor(src)
@@ -102,7 +102,7 @@ class Parser(src: String) {
         // unification.
         val name = readSymbolName().ifBlank { "" }
         consume(':')
-        return when (val descriptor = peekOrNull()) {
+        return when (val descriptor = peek()) {
             'F' -> {
                 advance()
                 SymbolDecl.Function(name, FunctionScope.GLOBAL, type = parseType()).also { skipScopeSpecifier() }
@@ -166,7 +166,7 @@ class Parser(src: String) {
      * (not left trailing) to keep the unparsed-trailing guard reserved for genuinely-unmodeled input.
      */
     private fun Cursor.skipScopeSpecifier() {
-        if (consumeIf(',')) readUntilAny(charArrayOf(';'))
+        if (consumeIf(",")) readUntilAny(charArrayOf(';'))
     }
 
     // ===== Symbol-level productions =====
@@ -180,9 +180,9 @@ class Parser(src: String) {
     private fun Cursor.parseNamedType(name: String, kind: TypeNameKind): SymbolDecl.NamedType<LocalTypeId> {
         advance()
         // GCC emits Tt for combined tag+typedef (e.g. typedef struct foo {} foo).
-        if (kind == TypeNameKind.TAG) consumeIf('t')
+        if (kind == TypeNameKind.TAG) consumeIf("t")
         val id = readTypeId()
-        val body = if (consumeIf('=')) selfDefToVoid(id, parseType()) else TypeDecl.Ref(id)
+        val body = if (consumeIf("=")) selfDefToVoid(id, parseType()) else TypeDecl.Ref(id)
         return SymbolDecl.NamedType(name, kind, id, body)
     }
 
@@ -228,7 +228,7 @@ class Parser(src: String) {
      *
      * Mirror of gdb/stabsread.c:read_type.
      */
-    private fun Cursor.parseType(): LocalTypeDecl = when (val ch = peekOrNull()) {
+    private fun Cursor.parseType(): LocalTypeDecl = when (val ch = peek()) {
         'a' -> parseArray()
 
         'e' -> parseEnum()
@@ -283,7 +283,7 @@ class Parser(src: String) {
             val id = readTypeId()
             when {
                 // Inline definition: parse the body recursively and wrap in InlineDef
-                consumeIf('=') -> TypeDecl.InlineDef(id, selfDefToVoid(id, parseType()))
+                consumeIf("=") -> TypeDecl.InlineDef(id, selfDefToVoid(id, parseType()))
 
                 // Negative type number = gcc XCOFF builtin slot. Per the
                 // stabs spec: "the idea of negative type numbers is simply
@@ -312,7 +312,7 @@ class Parser(src: String) {
         val sizeBytes = readInt()
 
         // Parse optional inheritance section
-        val bases = if (consumeIf('!')) {
+        val bases = if (consumeIf("!")) {
             parseInheritanceList()
         } else {
             emptyList()
@@ -326,7 +326,7 @@ class Parser(src: String) {
         val fields = mutableListOf<Field<LocalTypeId>>()
         val methods = mutableListOf<Method<LocalTypeId>>()
 
-        while (peekOrNull() != ';' && !eof) {
+        while (nextNot(';')) {
             val abbrev = parseCppAbbrevField()
             if (abbrev != null) {
                 fields.add(abbrev)
@@ -335,27 +335,23 @@ class Parser(src: String) {
             val name = readMemberName()
 
             when {
-                peekFollows("::") -> {
+                consumeIf("::") -> {
                     // Method: name::<overload1>[<overload2>...];
                     // GCC emits multiple overloads consecutively: after each overload's virt
                     // char (without a trailing ';'), the next overload TypeId follows immediately.
-                    advance()
-                    advance()
                     methods.add(parseMethodBlock(name))
                     while (peekStartsTypeId()) {
                         methods.add(parseMethodBlock(name))
                     }
                 }
 
-                peekFollows(":/") -> {
+                consumeIf(":/") -> {
                     // Field with access specifier: name:/<access><type>...
                     // Static:     name:/<access><type>:<mangled>;
                     // Non-static: name:/<access><type>,<offset>,<size>;
-                    advance()
-                    advance()
-                    val access = accessOf(if (!eof) advance() else '2')
+                    val access = accessOf(advanceOrNull() ?: '2')
                     val type = parseType()
-                    if (peekOrNull() == ',') {
+                    if (peek() == ',') {
                         consume(',')
                         val offsetBits = readInt()
                         consume(',')
@@ -372,9 +368,8 @@ class Parser(src: String) {
                     }
                 }
 
-                peekFollows(":") -> {
+                consumeIf(":") -> {
                     // Normal field: name:<type>,<offset>,<size>;
-                    advance()
                     val type = parseType()
                     consume(',')
                     val offsetBits = readInt()
@@ -388,10 +383,9 @@ class Parser(src: String) {
                     fields.add(Field(name, type, offsetBits, sizeBits, isStatic, Access.PUBLIC, mangled = null))
                 }
 
-                peekFollows("/") -> {
+                consumeIf("/") -> {
                     // Static field starting with /
-                    advance()
-                    val access = accessOf(if (!eof) advance() else '2')
+                    val access = accessOf(advanceOrNull() ?: '2')
                     val type = parseType()
                     consume(':')
                     val mangled = readUntilAny(charArrayOf(';'))
@@ -409,7 +403,7 @@ class Parser(src: String) {
 
         // Trailing tilde field `~%<type>;` — vptr-owning base of a polymorphic class. The target is a
         // full read_type (gdb read_tilde_fields): a bare ref, or an inline forward-xref for RTTI classes.
-        val vptrBasetype = if (consumeIf('~')) {
+        val vptrBasetype = if (consumeIf("~")) {
             consume('%')
             parseType().also { consume(';') }
         } else {
@@ -418,7 +412,7 @@ class Parser(src: String) {
 
         // A fully-consumed struct is followed only by a boundary: symbol/field/base terminator
         // or eof. Anything else is an unparsed section (the bug that hid `~%` for years).
-        if (peekOrNull()?.let { it !in BOUNDARY_CHARS } == true) {
+        if (peek()?.let { it !in BOUNDARY_CHARS } == true) {
             throw StabsParseException(pos, src, "unconsumed struct section")
         }
 
@@ -501,7 +495,7 @@ class Parser(src: String) {
     private fun Cursor.parseMethodBlock(name: String): Method<LocalTypeId> {
         val signature = parseType()
 
-        val mangled = if (!eof && peekOrNull() == ':') {
+        val mangled = if (peek() == ':') {
             advance()
             val mangledName = readUntilAny(charArrayOf(';'))
             consume(';')
@@ -510,15 +504,15 @@ class Parser(src: String) {
             null
         }
 
-        val access = accessOf(if (!eof && peekOrNull()?.isDigit() == true) advance() else '2')
+        val access = accessOf(if (peek()?.isDigit() == true) advance() else '2')
         // cv-qualifier letter: A none, B const, C volatile, D const volatile.
-        val modifier = if (!eof) advance() else 'A'
+        val modifier = advanceOrNull() ?: 'A'
         val isConst = modifier == 'B' || modifier == 'D'
         val isVolatile = modifier == 'C' || modifier == 'D'
 
         var vtableOffsetBits: Long? = null
         val virt = when {
-            peekOrNull() == '*' -> {
+            peek() == '*' -> {
                 advance()
                 vtableOffsetBits = readInt()
                 consume(';')
@@ -527,7 +521,7 @@ class Parser(src: String) {
                 VirtKind.VIRTUAL
             }
 
-            peekOrNull() == '.' -> {
+            peek() == '.' -> {
                 advance()
                 VirtKind.NORMAL
             }
@@ -535,7 +529,7 @@ class Parser(src: String) {
             // `?` is a *static* member function (stabsread.c `case '?'`), not a pure virtual —
             // its signature is a plain `f(ret)` rather than a `#(cls,…)` method type, and it
             // takes no `this`. gcc has no distinct marker for pure virtuals; they ride `*`.
-            peekOrNull() == '?' -> {
+            peek() == '?' -> {
                 advance()
                 VirtKind.STATIC
             }
@@ -543,7 +537,7 @@ class Parser(src: String) {
             else -> VirtKind.NORMAL
         }
 
-        consumeIf(';')
+        consumeIf(";")
 
         return Method(
             name = name,
@@ -595,11 +589,11 @@ class Parser(src: String) {
         buildList {
             consume('e')
 
-            while (!peekFollows(";") && !eof) {
+            while (nextNot(';')) {
                 val name = readUntilAny(charArrayOf(':'))
                 consume(':')
                 val value = readInt()
-                consumeIf(',')
+                consumeIf(",")
                 add(Pair(name, value))
             }
 
@@ -621,7 +615,7 @@ class Parser(src: String) {
         consume('r')
         val typeId = readTypeId()
         // GCC may define the base type inline: r(cu,n)=<inner-type>;lo;hi;
-        if (consumeIf('=')) {
+        if (consumeIf("=")) {
             parseType() // parse and discard the inline base-type definition
         }
         consume(';')
@@ -728,13 +722,13 @@ class Parser(src: String) {
      */
     private fun Cursor.parseMethod(): TypeDecl<LocalTypeId> {
         consume('#')
-        if (consumeIf('#')) return TypeDecl.Method(null, parseType(), emptyList()).also { consume(';') }
+        if (consumeIf("#")) return TypeDecl.Method(null, parseType(), emptyList()).also { consume(';') }
         val clsType = parseType()
         consume(',')
         val retType = parseType()
 
         val params = mutableListOf<LocalTypeDecl>()
-        while (consumeIf(',')) {
+        while (consumeIf(",")) {
             params.add(parseType())
         }
 
@@ -746,7 +740,7 @@ class Parser(src: String) {
 
     /** Read `(cu,n)` or bare `n`. */
     private fun Cursor.readTypeId(): LocalTypeId {
-        if (consumeIf('(')) {
+        if (consumeIf("(")) {
             val cu = readInt().toInt()
             consume(',')
             val n = readInt().toInt()
@@ -758,14 +752,13 @@ class Parser(src: String) {
     }
 
     /** True at the start of a type-id: `(cu,n)`, a bare `n`, or a negative builtin `-n`. */
-    private fun Cursor.peekStartsTypeId(): Boolean =
-        peekOrNull()?.let { it == '(' || it == '-' || it.isDigit() } == true
+    private fun Cursor.peekStartsTypeId(): Boolean = peek()?.let { it == '(' || it == '-' || it.isDigit() } == true
 
     /** Read up to the descriptor `:`. `::` (C++ scope) is preserved; only a single `:` terminates. */
     private fun Cursor.readSymbolName() = StringBuilder().apply {
         while (!eof) {
             if (src[pos] == ':') {
-                if (peekOrNull(1) == ':') feed(2) else break
+                if (peek(1) == ':') feed(2) else break
             } else {
                 feed()
             }
@@ -795,7 +788,7 @@ class Parser(src: String) {
                     if (depth > 0) depth--
                 }
 
-                ':' if depth > 0 && peekOrNull(1) == ':' -> feed(2)
+                ':' if depth > 0 && peek(1) == ':' -> feed(2)
 
                 ':' -> break
 
@@ -803,7 +796,7 @@ class Parser(src: String) {
 
                 else if depth == 0 &&
                     peekFollows("operator") &&
-                    peekOrNull(8)?.let { it in OPERATOR_SYMBOLS } == true -> {
+                    peek(8)?.let { it in OPERATOR_SYMBOLS } == true -> {
                     feed(8)
                     while (!eof && src[pos] in OPERATOR_SYMBOLS) feed()
                 }
@@ -831,7 +824,7 @@ class Parser(src: String) {
                     if (depth > 0) depth--
                 }
 
-                ':' if peekOrNull(1) == ':' && depth > 0 -> feed(2)
+                ':' if peek(1) == ':' && depth > 0 -> feed(2)
 
                 // single `:` or `::` at depth 0
                 ':' -> break
