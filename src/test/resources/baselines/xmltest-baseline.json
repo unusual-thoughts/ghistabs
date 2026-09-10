@@ -2,7 +2,33 @@
     "counters": {
         "body-pointer-pointee": {
             "min": 24,
-            "max": 24
+            "max": 24,
+            "degrades": [
+                "Anon_tinyxml2_164_e227833b",
+                "Anon_tinyxml2_173_e2278344",
+                "Anon_tinyxml2_174_e2278345",
+                "Anon_tinyxml2_175_e2278346",
+                "Anon_tinyxml2_176_e2278347",
+                "Anon_tinyxml2_178_e2278349",
+                "Anon_tinyxml2_179_e227834a",
+                "Anon_tinyxml2_180_e227834b",
+                "Anon_tinyxml2_181_e227834c",
+                "Anon_tinyxml2_182_e227834d",
+                "Anon_tinyxml2_183_e227834e",
+                "Anon_tinyxml2_184_e227834f",
+                "Anon_tinyxml2_185_e2278350",
+                "Anon_tinyxml2_186_e2278351",
+                "Anon_tinyxml2_187_e2278352",
+                "Anon_tinyxml2_192_e2278357",
+                "Anon_tinyxml2_193_e2278358",
+                "Anon_tinyxml2_194_e2278359",
+                "Anon_tinyxml2_195_e227835a",
+                "Anon_tinyxml2_196_e227835b",
+                "Anon_tinyxml2_197_e227835c",
+                "Anon_tinyxml2_198_e227835d",
+                "Anon_tinyxml2_199_e227835e",
+                "Anon_tinyxml2_92_e22782f3"
+            ]
         },
         "canonical-content-merged": {
             "min": 1,
@@ -22,7 +48,11 @@
         },
         "dangling-ref": {
             "min": 2,
-            "max": 2
+            "max": 2,
+            "degrades": [
+                "Anon_tinyxml2_147_e227832a",
+                "Anon_tinyxml2_148_e227832b"
+            ]
         },
         "data-no-coverage": {
             "min": 59,
@@ -98,7 +128,14 @@
         },
         "field-type": {
             "min": 5,
-            "max": 5
+            "max": 5,
+            "degrades": [
+                "/tinyxml2.cpp/__va_list_tag.fp_offset",
+                "/tinyxml2.cpp/__va_list_tag.gp_offset",
+                "/tinyxml2.cpp/__va_list_tag.overflow_arg_area",
+                "/tinyxml2.cpp/__va_list_tag.reg_save_area",
+                "/tinyxml2/XMLDocument/DepthTracker._document"
+            ]
         },
         "file-start": {
             "min": 4,
@@ -110,7 +147,10 @@
         },
         "global-untyped": {
             "min": 1,
-            "max": 1
+            "max": 1,
+            "degrades": [
+                "_ZN8tinyxml211XMLDocument11_errorNamesE"
+            ]
         },
         "harvest-collisions-divergent": {
             "min": 0,
@@ -246,11 +286,69 @@
         },
         "local-typed-all-undefined": {
             "min": 1,
-            "max": 1
+            "max": 1,
+            "degrades": [
+                "_ZN8tinyxml27XMLNode9ParseDeepEPcPNS_7StrPairEPi.tracker"
+            ]
         },
         "local-untyped": {
             "min": 53,
-            "max": 53
+            "max": 53,
+            "degrades": [
+                "_ZN8tinyxml211XMLDocument8IdentifyEPcPPNS_7XMLNodeEb.returnNode",
+                "_ZN8tinyxml211XMLDocument8LoadFileEPKc.fp",
+                "_ZN8tinyxml211XMLDocument8SaveFileEP8_IO_FILEb.stream",
+                "_ZN8tinyxml211XMLDocument8SaveFileEPKcb.fp",
+                "_ZN8tinyxml27XMLNode9ParseDeepEPcPNS_7StrPairEPi.node",
+                "_ZN8tinyxml27XMLNodeD2Ev.currentChild",
+                "_ZN8tinyxml27XMLNodeD2Ev.next",
+                "_ZN8tinyxml27XMLUtil15GetCharacterRefEPKcPcPi.digitScaled",
+                "_ZN8tinyxml27XMLUtil5ToIntEPKcPi.v",
+                "_ZN8tinyxml28DynArrayIPKcLm10EE14EnsureCapacityEm.newMem",
+                "_ZN8tinyxml28DynArrayIPNS_7XMLNodeELm10EE14EnsureCapacityEm.newMem",
+                "_ZN8tinyxml28DynArrayIPNS_8MemPoolTILm104EE5BlockELm10EE14EnsureCapacityEm.newMem",
+                "_ZN8tinyxml28DynArrayIPNS_8MemPoolTILm112EE5BlockELm10EE14EnsureCapacityEm.newMem",
+                "_ZN8tinyxml28DynArrayIPNS_8MemPoolTILm120EE5BlockELm10EE14EnsureCapacityEm.newMem",
+                "_ZN8tinyxml28DynArrayIPNS_8MemPoolTILm80EE5BlockELm10EE14EnsureCapacityEm.newMem",
+                "_ZN8tinyxml28MemPoolTILm104EE4FreeEPv.item",
+                "_ZN8tinyxml28MemPoolTILm104EE5AllocEv.block",
+                "_ZN8tinyxml28MemPoolTILm104EE5AllocEv.blockItems",
+                "_ZN8tinyxml28MemPoolTILm104EE5AllocEv.result",
+                "_ZN8tinyxml28MemPoolTILm104EE5ClearEv.lastBlock",
+                "_ZN8tinyxml28MemPoolTILm112EE4FreeEPv.item",
+                "_ZN8tinyxml28MemPoolTILm112EE5AllocEv.block",
+                "_ZN8tinyxml28MemPoolTILm112EE5AllocEv.blockItems",
+                "_ZN8tinyxml28MemPoolTILm112EE5AllocEv.result",
+                "_ZN8tinyxml28MemPoolTILm112EE5ClearEv.lastBlock",
+                "_ZN8tinyxml28MemPoolTILm120EE4FreeEPv.item",
+                "_ZN8tinyxml28MemPoolTILm120EE5AllocEv.block",
+                "_ZN8tinyxml28MemPoolTILm120EE5AllocEv.blockItems",
+                "_ZN8tinyxml28MemPoolTILm120EE5AllocEv.result",
+                "_ZN8tinyxml28MemPoolTILm120EE5ClearEv.lastBlock",
+                "_ZN8tinyxml28MemPoolTILm80EE4FreeEPv.item",
+                "_ZN8tinyxml28MemPoolTILm80EE5AllocEv.block",
+                "_ZN8tinyxml28MemPoolTILm80EE5AllocEv.blockItems",
+                "_ZN8tinyxml28MemPoolTILm80EE5AllocEv.result",
+                "_ZN8tinyxml28MemPoolTILm80EE5ClearEv.lastBlock",
+                "_ZN8tinyxml2L9callfopenEPKcS1_.fp",
+                "_ZNK8tinyxml210XMLElement10DoubleTextEd.d",
+                "_ZNK8tinyxml210XMLElement12ShallowCloneEPNS_11XMLDocumentE.a",
+                "_ZNK8tinyxml210XMLElement12ShallowEqualEPKNS_7XMLNodeE.a",
+                "_ZNK8tinyxml210XMLElement12ShallowEqualEPKNS_7XMLNodeE.b",
+                "_ZNK8tinyxml210XMLElement12UnsignedTextEj.i",
+                "_ZNK8tinyxml210XMLElement14FloatAttributeEPKcf.f",
+                "_ZNK8tinyxml210XMLElement14Int64AttributeEPKcl.i",
+                "_ZNK8tinyxml210XMLElement14Unsigned64TextEm.i",
+                "_ZNK8tinyxml210XMLElement15DoubleAttributeEPKcd.d",
+                "_ZNK8tinyxml210XMLElement17UnsignedAttributeEPKcj.i",
+                "_ZNK8tinyxml210XMLElement19Unsigned64AttributeEPKcm.i",
+                "_ZNK8tinyxml210XMLElement9AttributeEPKcS2_.a",
+                "_ZNK8tinyxml210XMLElement9FloatTextEf.f",
+                "_ZNK8tinyxml210XMLElement9Int64TextEl.i",
+                "_ZNK8tinyxml211XMLDocument5PrintEPNS_10XMLPrinterE.stdoutStreamer",
+                "_ZNK8tinyxml27XMLNode9DeepCloneEPNS_11XMLDocumentE.childClone",
+                "_ZNK8tinyxml27XMLNode9DeepCloneEPNS_11XMLDocumentE.clone"
+            ]
         },
         "local-var-add-success": {
             "min": 498,
@@ -262,11 +360,136 @@
         },
         "param-unnamed-padded": {
             "min": 20,
-            "max": 20
+            "max": 20,
+            "degrades": [
+                "_ZN8tinyxml210XMLComment9ParseDeepEPcPNS_7StrPairEPi",
+                "_ZN8tinyxml210XMLPrinter11CompactModeERKNS_10XMLElementE",
+                "_ZN8tinyxml210XMLPrinter5PrintEPKcz",
+                "_ZN8tinyxml210XMLPrinter9VisitExitERKNS_11XMLDocumentE",
+                "_ZN8tinyxml210XMLUnknown9ParseDeepEPcPNS_7StrPairEPi",
+                "_ZN8tinyxml210XMLVisitor10VisitEnterERKNS_10XMLElementEPKNS_12XMLAttributeE",
+                "_ZN8tinyxml210XMLVisitor10VisitEnterERKNS_11XMLDocumentE",
+                "_ZN8tinyxml210XMLVisitor5VisitERKNS_10XMLCommentE",
+                "_ZN8tinyxml210XMLVisitor5VisitERKNS_10XMLUnknownE",
+                "_ZN8tinyxml210XMLVisitor5VisitERKNS_14XMLDeclarationE",
+                "_ZN8tinyxml210XMLVisitor5VisitERKNS_7XMLTextE",
+                "_ZN8tinyxml210XMLVisitor9VisitExitERKNS_10XMLElementE",
+                "_ZN8tinyxml210XMLVisitor9VisitExitERKNS_11XMLDocumentE",
+                "_ZN8tinyxml211XMLDocument8SetErrorENS_8XMLErrorEiPKcz",
+                "_ZN8tinyxml214XMLDeclaration9ParseDeepEPcPNS_7StrPairEPi",
+                "_ZN8tinyxml27XMLText9ParseDeepEPcPNS_7StrPairEPi",
+                "_ZNK8tinyxml211XMLDocument12ShallowCloneEPS0_",
+                "_ZNK8tinyxml211XMLDocument12ShallowEqualEPKNS_7XMLNodeE",
+                "_ZdlPvS_",
+                "_ZnwmPv"
+            ]
         },
         "param-untyped": {
             "min": 101,
-            "max": 101
+            "max": 101,
+            "degrades": [
+                "_ZN8tinyxml210XMLCommentC2EPNS_11XMLDocumentE.doc",
+                "_ZN8tinyxml210XMLElement7SetTextEd.v",
+                "_ZN8tinyxml210XMLElement7SetTextEf.v",
+                "_ZN8tinyxml210XMLElement7SetTextEj.v",
+                "_ZN8tinyxml210XMLElement7SetTextEl.v",
+                "_ZN8tinyxml210XMLElement7SetTextEm.v",
+                "_ZN8tinyxml210XMLElementC2EPNS_11XMLDocumentE.doc",
+                "_ZN8tinyxml210XMLPrinter10VisitEnterERKNS_10XMLElementEPKNS_12XMLAttributeE.attribute",
+                "_ZN8tinyxml210XMLPrinter13PushAttributeEPKcd.v",
+                "_ZN8tinyxml210XMLPrinter13PushAttributeEPKcj.v",
+                "_ZN8tinyxml210XMLPrinter13PushAttributeEPKcl.v",
+                "_ZN8tinyxml210XMLPrinter13PushAttributeEPKcm.v",
+                "_ZN8tinyxml210XMLPrinter8PushTextEd.value",
+                "_ZN8tinyxml210XMLPrinter8PushTextEf.value",
+                "_ZN8tinyxml210XMLPrinter8PushTextEj.value",
+                "_ZN8tinyxml210XMLPrinter8PushTextEl.value",
+                "_ZN8tinyxml210XMLPrinter8PushTextEm.value",
+                "_ZN8tinyxml210XMLPrinterC2EP8_IO_FILEbiNS0_27EscapeAposCharsInAttributesE.file",
+                "_ZN8tinyxml210XMLUnknownC2EPNS_11XMLDocumentE.doc",
+                "_ZN8tinyxml211XMLDocument10DeleteNodeEPNS_7XMLNodeE.node",
+                "_ZN8tinyxml211XMLDocument12DepthTrackerC2EPS0_.document",
+                "_ZN8tinyxml211XMLDocument13ErrorIDToNameENS_8XMLErrorE.errorID",
+                "_ZN8tinyxml211XMLDocument8IdentifyEPcPPNS_7XMLNodeEb.node",
+                "_ZN8tinyxml211XMLDocument8LoadFileEP8_IO_FILE.fp",
+                "_ZN8tinyxml211XMLDocument8SaveFileEP8_IO_FILEb.fp",
+                "_ZN8tinyxml211XMLDocument8SetErrorENS_8XMLErrorEiPKcz.error",
+                "_ZN8tinyxml211XMLDocumentC2EbNS_10WhitespaceE.whitespaceMode",
+                "_ZN8tinyxml212XMLAttribute12SetAttributeEd.v",
+                "_ZN8tinyxml212XMLAttribute12SetAttributeEf.v",
+                "_ZN8tinyxml212XMLAttribute12SetAttributeEj.v",
+                "_ZN8tinyxml212XMLAttribute12SetAttributeEl.v",
+                "_ZN8tinyxml212XMLAttribute12SetAttributeEm.v",
+                "_ZN8tinyxml214XMLDeclarationC2EPNS_11XMLDocumentE.doc",
+                "_ZN8tinyxml27XMLNode10DeleteNodeEPS0_.node",
+                "_ZN8tinyxml27XMLNode11DeleteChildEPS0_.node",
+                "_ZN8tinyxml27XMLNode14InsertEndChildEPS0_.addThis",
+                "_ZN8tinyxml27XMLNode16InsertAfterChildEPS0_S1_.addThis",
+                "_ZN8tinyxml27XMLNode16InsertAfterChildEPS0_S1_.afterThis",
+                "_ZN8tinyxml27XMLNode16InsertFirstChildEPS0_.addThis",
+                "_ZN8tinyxml27XMLNode6UnlinkEPS0_.child",
+                "_ZN8tinyxml27XMLNodeC2EPNS_11XMLDocumentE.doc",
+                "_ZN8tinyxml27XMLTextC2EPNS_11XMLDocumentE.doc",
+                "_ZN8tinyxml27XMLUtil10ToUnsignedEPKcPj.value",
+                "_ZN8tinyxml27XMLUtil12ToUnsigned64EPKcPm.value",
+                "_ZN8tinyxml27XMLUtil5ToStrEdPci.v",
+                "_ZN8tinyxml27XMLUtil5ToStrEfPci.v",
+                "_ZN8tinyxml27XMLUtil5ToStrEjPci.v",
+                "_ZN8tinyxml27XMLUtil5ToStrElPci.v",
+                "_ZN8tinyxml27XMLUtil5ToStrEmPci.v",
+                "_ZN8tinyxml27XMLUtil6ToBoolEPKcPb.value",
+                "_ZN8tinyxml27XMLUtil7ReadBOMEPKcPb.bom",
+                "_ZN8tinyxml27XMLUtil7ToFloatEPKcPf.value",
+                "_ZN8tinyxml27XMLUtil7ToInt64EPKcPl.value",
+                "_ZN8tinyxml27XMLUtil8ToDoubleEPKcPd.value",
+                "_ZN8tinyxml28DynArrayIPNS_7XMLNodeELm10EE4PushES2_.t",
+                "_ZN8tinyxml28DynArrayIPNS_8MemPoolTILm104EE5BlockELm10EE4PushES4_.t",
+                "_ZN8tinyxml28DynArrayIPNS_8MemPoolTILm112EE5BlockELm10EE4PushES4_.t",
+                "_ZN8tinyxml28DynArrayIPNS_8MemPoolTILm120EE5BlockELm10EE4PushES4_.t",
+                "_ZN8tinyxml28DynArrayIPNS_8MemPoolTILm80EE5BlockELm10EE4PushES4_.t",
+                "_ZN8tinyxml28MemPoolTILm104EE4FreeEPv.mem",
+                "_ZN8tinyxml28MemPoolTILm112EE4FreeEPv.mem",
+                "_ZN8tinyxml28MemPoolTILm120EE4FreeEPv.mem",
+                "_ZN8tinyxml28MemPoolTILm80EE4FreeEPv.mem",
+                "_ZNK8tinyxml210XMLComment12ShallowCloneEPNS_11XMLDocumentE.doc",
+                "_ZNK8tinyxml210XMLComment6AcceptEPNS_10XMLVisitorE.visitor",
+                "_ZNK8tinyxml210XMLElement10DoubleTextEd.defaultValue",
+                "_ZNK8tinyxml210XMLElement12ShallowCloneEPNS_11XMLDocumentE.doc",
+                "_ZNK8tinyxml210XMLElement12UnsignedTextEj.defaultValue",
+                "_ZNK8tinyxml210XMLElement13QueryBoolTextEPb.bval",
+                "_ZNK8tinyxml210XMLElement14FloatAttributeEPKcf.defaultValue",
+                "_ZNK8tinyxml210XMLElement14Int64AttributeEPKcl.defaultValue",
+                "_ZNK8tinyxml210XMLElement14QueryFloatTextEPf.fval",
+                "_ZNK8tinyxml210XMLElement14QueryInt64TextEPl.ival",
+                "_ZNK8tinyxml210XMLElement14Unsigned64TextEm.defaultValue",
+                "_ZNK8tinyxml210XMLElement15DoubleAttributeEPKcd.defaultValue",
+                "_ZNK8tinyxml210XMLElement15QueryDoubleTextEPd.dval",
+                "_ZNK8tinyxml210XMLElement17QueryUnsignedTextEPj.uval",
+                "_ZNK8tinyxml210XMLElement17UnsignedAttributeEPKcj.defaultValue",
+                "_ZNK8tinyxml210XMLElement19QueryUnsigned64TextEPm.uval",
+                "_ZNK8tinyxml210XMLElement19Unsigned64AttributeEPKcm.defaultValue",
+                "_ZNK8tinyxml210XMLElement6AcceptEPNS_10XMLVisitorE.visitor",
+                "_ZNK8tinyxml210XMLElement9FloatTextEf.defaultValue",
+                "_ZNK8tinyxml210XMLElement9Int64TextEl.defaultValue",
+                "_ZNK8tinyxml210XMLUnknown12ShallowCloneEPNS_11XMLDocumentE.doc",
+                "_ZNK8tinyxml210XMLUnknown6AcceptEPNS_10XMLVisitorE.visitor",
+                "_ZNK8tinyxml211XMLDocument5PrintEPNS_10XMLPrinterE.streamer",
+                "_ZNK8tinyxml211XMLDocument6AcceptEPNS_10XMLVisitorE.visitor",
+                "_ZNK8tinyxml211XMLDocument8DeepCopyEPS0_.target",
+                "_ZNK8tinyxml212XMLAttribute14QueryBoolValueEPb.value",
+                "_ZNK8tinyxml212XMLAttribute15QueryFloatValueEPf.value",
+                "_ZNK8tinyxml212XMLAttribute15QueryInt64ValueEPl.value",
+                "_ZNK8tinyxml212XMLAttribute16QueryDoubleValueEPd.value",
+                "_ZNK8tinyxml212XMLAttribute18QueryUnsignedValueEPj.value",
+                "_ZNK8tinyxml212XMLAttribute20QueryUnsigned64ValueEPm.value",
+                "_ZNK8tinyxml214XMLDeclaration12ShallowCloneEPNS_11XMLDocumentE.doc",
+                "_ZNK8tinyxml214XMLDeclaration6AcceptEPNS_10XMLVisitorE.visitor",
+                "_ZNK8tinyxml27XMLNode19InsertChildPreambleEPS0_.insertThis",
+                "_ZNK8tinyxml27XMLNode9DeepCloneEPNS_11XMLDocumentE.target",
+                "_ZNK8tinyxml27XMLText12ShallowCloneEPNS_11XMLDocumentE.doc",
+                "_ZNK8tinyxml27XMLText6AcceptEPNS_10XMLVisitorE.visitor",
+                "_ZnwmPv.__p"
+            ]
         },
         "placeholder-created": {
             "min": 220,
@@ -274,7 +497,11 @@
         },
         "placeholder-undefined-fields": {
             "min": 2,
-            "max": 2
+            "max": 2,
+            "degrades": [
+                "DepthTracker",
+                "__va_list_tag"
+            ]
         },
         "pointee-typed": {
             "min": 18,
@@ -318,11 +545,18 @@
         },
         "struct-mostly-undefined": {
             "min": 2,
-            "max": 2
+            "max": 2,
+            "degrades": [
+                "/tinyxml2.cpp/__va_list_tag",
+                "/tinyxml2/XMLDocument/DepthTracker"
+            ]
         },
         "struct-truncated": {
             "min": 1,
-            "max": 1
+            "max": 1,
+            "degrades": [
+                "XMLText"
+            ]
         },
         "text-boundaries-out-of-order": {
             "min": 1,
@@ -346,7 +580,27 @@
         },
         "vtable-swept-empty": {
             "min": 18,
-            "max": 18
+            "max": 18,
+            "degrades": [
+                "__cxxabiv1::__class_type_info",
+                "__cxxabiv1::__si_class_type_info",
+                "main::TestUtil",
+                "tinyxml2::MemPool",
+                "tinyxml2::MemPoolT<104ul>",
+                "tinyxml2::MemPoolT<112ul>",
+                "tinyxml2::MemPoolT<120ul>",
+                "tinyxml2::MemPoolT<80ul>",
+                "tinyxml2::XMLAttribute",
+                "tinyxml2::XMLComment",
+                "tinyxml2::XMLDeclaration",
+                "tinyxml2::XMLDocument",
+                "tinyxml2::XMLElement",
+                "tinyxml2::XMLNode",
+                "tinyxml2::XMLPrinter",
+                "tinyxml2::XMLText",
+                "tinyxml2::XMLUnknown",
+                "tinyxml2::XMLVisitor"
+            ]
         },
         "xref-stubs-synthesized": {
             "min": 1,
