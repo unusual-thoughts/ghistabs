@@ -277,13 +277,19 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         // that reach the sink (record*/direct-inc bypass it) and ignores `count = n` tallies, which
         // made assertions on those categories (e.g. empty-scope) silently vacuous.
         val counters = context.diagnostics.snapshotCounters()
+        val targets = context.diagnostics.degradationTargets()
 
         // -PregenerateBaselines=true rewrites the baseline from the observed counts (deterministic
         // import). The resulting git diff is the record of exactly which counters moved. This has to
         // precede the exists() check below, or a newly added fixture can never get a first baseline:
         // the assumption skips the test before it can write one.
         if (System.getProperty("regenerateBaselines") == "true") {
-            BaselineWriter.write(baselineFile, counters, "$binaryName - generated from snapshotCounters()")
+            BaselineWriter.write(
+                baselineFile,
+                counters,
+                "$binaryName - generated from snapshotCounters()",
+                degradationTargets = targets,
+            )
             return
         }
 
@@ -302,12 +308,25 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         for ((counterName, range) in baseline.counters) {
             val actual = counters.getOrDefault(counterName, 0L)
             if (actual !in range.min..range.max) {
-                drift += "Counter '$counterName' = $actual outside baseline range [${range.min}..${range.max}]"
+                // Name what moved, not just how far
+                val was = range.degrades.toSet()
+                val now = targets[counterName].orEmpty().toSet()
+                val delta = ((now - was).map { "+$it" } + (was - now).map { "-$it" }).sorted()
+                drift += "Counter '$counterName' = $actual outside baseline range " +
+                    "[${range.min}..${range.max}]" +
+                    delta.takeIf { it.isNotEmpty() }?.let { " ${it.take(6)}${if (it.size > 6) " …" else ""}" }
+                        .orEmpty()
             }
         }
         if (drift.isNotEmpty()) {
             shiftedBaselineFile.parentFile.mkdirs()
-            BaselineWriter.write(shiftedBaselineFile, counters, "$binaryName - shifted from committed", baselineFile)
+            BaselineWriter.write(
+                shiftedBaselineFile,
+                counters,
+                "$binaryName - shifted from committed",
+                baselineFile,
+                targets,
+            )
 
             if (System.getProperty("ignoreBaselines") != "true") {
                 drift.mustBeEmpty("Baseline drift detected")

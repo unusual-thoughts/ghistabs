@@ -6,7 +6,12 @@
         },
         "array-count-substituted": {
             "min": 3,
-            "max": 3
+            "max": 3,
+            "degrades": [
+                "Anon_infblock_54_37eaffe2",
+                "Anon_inftrees_56_06ddf7ec",
+                "Anon_inftrees_57_06ddf7ed"
+            ]
         },
         "canonical-key-merged": {
             "min": 8,
@@ -174,11 +179,17 @@
         },
         "local-dropped": {
             "min": 1,
-            "max": 1
+            "max": 1,
+            "degrades": [
+                "huft_build.r"
+            ]
         },
         "local-typed-anonymous": {
             "min": 1,
-            "max": 1
+            "max": 1,
+            "degrades": [
+                "deflate.bstate"
+            ]
         },
         "local-var-add-success": {
             "min": 114,
@@ -242,7 +253,11 @@
         },
         "struct-mostly-undefined": {
             "min": 2,
-            "max": 2
+            "max": 2,
+            "degrades": [
+                "/infblock.c/multi/inflate_blocks_state",
+                "/infblock.c/multi/inflate_codes_state"
+            ]
         },
         "text-data-no-coverage": {
             "min": 9,

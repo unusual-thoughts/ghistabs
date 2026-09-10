@@ -6,7 +6,16 @@ import kotlinx.serialization.json.JsonElement
 import java.io.File
 
 @Serializable
-data class CounterRange(val min: Long, val max: Long)
+data class CounterRange(
+    val min: Long,
+    val max: Long,
+    /**
+     * For a counter that degrades something, the distinct things it degraded, sorted. A count says a
+     * fixture got worse; this says *what* got worse, which is the question a drifted baseline raises.
+     * Empty for counters that only tally.
+     */
+    val degrades: List<String> = emptyList(),
+)
 
 /**
  * Acceptable counter ranges loaded from a baseline JSON file.
@@ -16,7 +25,7 @@ data class CounterRange(val min: Long, val max: Long)
  * ```
  * {
  *   "counters": {
- *     "counter-name": {"min": 0, "max": 100},
+ *     "counter-name": {"min": 0, "max": 100, "degrades": ["Foo::bar", "Baz"]},
  *     ...
  *   }
  * }
@@ -59,7 +68,13 @@ object BaselineWriter {
      * range in the file; regen preserves that range as long as the newly-observed value still falls
      * inside it, so a single-mode regen doesn't pin it back to a point and break the other mode.
      */
-    fun write(file: File, counters: Map<String, Long>, source: String, priorFile: File = file) {
+    fun write(
+        file: File,
+        counters: Map<String, Long>,
+        source: String,
+        priorFile: File = file,
+        degradationTargets: Map<String, List<String>> = emptyMap(),
+    ) {
         val prior = if (priorFile.exists()) {
             runCatching { BaselineLoader.load(priorFile).counters }.getOrDefault(emptyMap())
         } else {
@@ -68,7 +83,8 @@ object BaselineWriter {
         val baseline = Baseline(
             source = source,
             counters = counters.toSortedMap().mapValues { (name, v) ->
-                prior[name]?.takeIf { it.min < it.max && v in it.min..it.max } ?: CounterRange(v, v)
+                val range = prior[name]?.takeIf { it.min < it.max && v in it.min..it.max } ?: CounterRange(v, v)
+                range.copy(degrades = degradationTargets[name].orEmpty())
             },
         )
         file.writeText(json.encodeToString(Baseline.serializer(), baseline) + "\n")

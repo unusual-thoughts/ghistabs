@@ -69,6 +69,15 @@ class StabsDiagnostics : DiagnosticSink {
 
     fun snapshotCounters(): Map<String, Long> = counters.mapValues { it.value.values.sum() }
 
+    /**
+     * Every category that degraded something, against the sorted distinct things it degraded. Uncapped,
+     * unlike [recordExample]: a count tells you a fixture got worse, this tells you *what* got worse,
+     * which is the question a drifted baseline actually raises.
+     */
+    fun degradationTargets(): Map<String, List<String>> = degradations.groupBy { it.category }
+        .toSortedMap()
+        .mapValues { (_, records) -> records.map { it.degrades }.distinct().sorted() }
+
     /** Backing store for [log]'s example capture — capped at 10/category. */
     private fun recordExample(category: String, msg: String) {
         val bucket = examples.getOrPut(category) { mutableListOf() }

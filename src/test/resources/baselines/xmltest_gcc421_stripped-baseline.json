@@ -10,7 +10,17 @@
         },
         "array-count-substituted": {
             "min": 8,
-            "max": 8
+            "max": 8,
+            "degrades": [
+                "Anon_tinyxml_305_0c72c27d",
+                "Anon_tinyxml_307_0c72c27f",
+                "Anon_tinyxmlerror_305_b492dd37",
+                "Anon_tinyxmlerror_307_b492dd39",
+                "Anon_tinyxmlparser_305_0bdeae1c",
+                "Anon_tinyxmlparser_307_0bdeae1e",
+                "Anon_xmltest_min_305_94bf3fe2",
+                "Anon_xmltest_min_307_94bf3fe4"
+            ]
         },
         "base-empty-ebo": {
             "min": 18,
@@ -22,7 +32,11 @@
         },
         "base-synthesized": {
             "min": 2,
-            "max": 2
+            "max": 2,
+            "degrades": [
+                "/tinyxml.cpp/multi/basic_stringstream<char,std::char_traits<char>,std::allocator<char>>@+0",
+                "/tinyxml.cpp/multi/basic_stringstream<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>@+0"
+            ]
         },
         "canonical-key-merged": {
             "min": 240,
@@ -66,7 +80,10 @@
         },
         "dtm-conflicts-created": {
             "min": 1,
-            "max": 1
+            "max": 1,
+            "degrades": [
+                "/wchar_t.conflict"
+            ]
         },
         "dtm-conflicts-post": {
             "min": 1,
@@ -94,7 +111,10 @@
         },
         "global-typed-all-undefined": {
             "min": 4,
-            "max": 4
+            "max": 4,
+            "degrades": [
+                "_ZSt8__ioinit"
+            ]
         },
         "harvest-collisions-divergent": {
             "min": 0,
@@ -246,7 +266,23 @@
         },
         "param-unnamed-padded": {
             "min": 22,
-            "max": 22
+            "max": 22,
+            "degrades": [
+                "_ZN12TiXmlPrinter10VisitEnterERK13TiXmlDocument",
+                "_ZN12TiXmlPrinter9VisitExitERK13TiXmlDocument",
+                "_ZN12TiXmlVisitor10VisitEnterERK12TiXmlElementPK14TiXmlAttribute",
+                "_ZN12TiXmlVisitor10VisitEnterERK13TiXmlDocument",
+                "_ZN12TiXmlVisitor5VisitERK12TiXmlComment",
+                "_ZN12TiXmlVisitor5VisitERK12TiXmlUnknown",
+                "_ZN12TiXmlVisitor5VisitERK16TiXmlDeclaration",
+                "_ZN12TiXmlVisitor5VisitERK9TiXmlText",
+                "_ZN12TiXmlVisitor9VisitExitERK12TiXmlElement",
+                "_ZN12TiXmlVisitor9VisitExitERK13TiXmlDocument",
+                "_ZN9TiXmlBase10IsAlphaNumEh13TiXmlEncoding",
+                "_ZN9TiXmlBase7IsAlphaEh13TiXmlEncoding",
+                "_ZNK14TiXmlAttribute5PrintEP6_iobufiPSs",
+                "_ZNK16TiXmlDeclaration5PrintEP6_iobufiPSs"
+            ]
         },
         "placeholder-created": {
             "min": 667,
@@ -254,7 +290,14 @@
         },
         "placeholder-undefined-fields": {
             "min": 20,
-            "max": 20
+            "max": 20,
+            "degrades": [
+                "allocator<char>",
+                "allocator<wchar_t>",
+                "bidirectional_iterator_tag",
+                "forward_iterator_tag",
+                "random_access_iterator_tag"
+            ]
         },
         "replaced-demangler": {
             "min": 1,
@@ -298,11 +341,30 @@
         },
         "struct-mostly-undefined": {
             "min": 4,
-            "max": 4
+            "max": 4,
+            "degrades": [
+                "/tinyxml.cpp/multi/$_2",
+                "/tinyxml.cpp/multi/_stati64",
+                "/tinyxml.cpp/multi/basic_iostream<char,std::char_traits<char>>",
+                "/tinyxml.cpp/multi/basic_iostream<wchar_t,std::char_traits<wchar_t>>"
+            ]
         },
         "struct-truncated": {
             "min": 11,
-            "max": 11
+            "max": 11,
+            "degrades": [
+                "TiXmlText",
+                "basic_istream<char,std::char_traits<char>>",
+                "basic_istream<wchar_t,std::char_traits<wchar_t>>",
+                "basic_istringstream<char,std::char_traits<char>,std::allocator<char>>",
+                "basic_istringstream<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>",
+                "basic_ostream<char,std::char_traits<char>>",
+                "basic_ostream<wchar_t,std::char_traits<wchar_t>>",
+                "basic_ostringstream<char,std::char_traits<char>,std::allocator<char>>",
+                "basic_ostringstream<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>",
+                "basic_stringstream<char,std::char_traits<char>,std::allocator<char>>",
+                "basic_stringstream<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>"
+            ]
         },
         "text-boundaries-out-of-order": {
             "min": 1,
