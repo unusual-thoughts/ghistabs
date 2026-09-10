@@ -79,7 +79,8 @@ class Harvester(private val monitor: TaskMonitor, private val sink: DiagnosticSi
         }
 
         // N_STSYM=data, N_LCSYM=bss, N_ROSYM=rodata, N_FUN=text : n_value carries the address.
-        // N_GSYM=globals: only refers by name
+        // N_GSYM=globals: only refers by name. All but N_ROSYM read off [StabHeader.section] —
+        // a.out has no rodata, so Solaris' 0x2c masks to none.
         StabType.N_GSYM, StabType.N_STSYM, StabType.N_LCSYM, StabType.N_ROSYM -> harvestSymbol()?.also { sym ->
             when (val decl = sym.body) {
                 is SymbolDecl.Static -> harvestStatic(sym.retype(decl))
