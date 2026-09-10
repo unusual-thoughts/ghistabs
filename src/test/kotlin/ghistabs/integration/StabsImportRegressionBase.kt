@@ -683,14 +683,6 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
      * "vcall offset" on a primary means the split under-counted.
      */
     @Test
-    @ExpectedToFail(
-        fixtures = ["tinyxml_aout_gcc295.o"],
-        reason = "gcc 2.x vtable layout is not modelled. `_vt.<class>`/`__vt_<class>` are now resolvable " +
-            "so these records are found at all, but they carry no Itanium rtti header — a gcc 2.x table " +
-            "is a bare `__vtbl_ptr_type` array — and `vtableShape` falls back to the canonical two-word " +
-            "shape, so the word it comments as rtti is really a vtable entry. Reading it as an address " +
-            "lands on whatever the unrelocated .o put at 0. Finding the symbol was the easy half",
-    )
     fun vtableHeaderCommentsDescribeWhatIsThere() {
         val ptr = program.defaultPointerSize.toLong()
         fun eol(a: Address) = program.listing.getComment(CommentType.EOL, a)
