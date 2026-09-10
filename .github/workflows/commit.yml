@@ -42,6 +42,11 @@ jobs:
       - name: Run integration tests
         run: ./gradlew integrationTest -Pmode=all -PignoreBaselines=true -Pshorten=true --fail-fast
 
+      - name: Resolve commit under test
+        id: commit_id
+        if: success() || failure()
+        run: echo "sha=$(echo '${{ github.event.pull_request.head.sha || github.sha }}' | cut -c1-12)" >> "$GITHUB_OUTPUT"
+
       - name: Publish Test Report
         id: report
         uses: mikepenz/action-junit-report@v6
@@ -50,9 +55,10 @@ jobs:
           report_paths: '**/build/test-results/**/TEST-*.xml'
 
       - name: Upload integration logs
+        if: success() || failure()
         uses: actions/upload-artifact@v7
         with:
-          name: integration-logs.zip
+          name: integration-logs-${{ steps.commit_id.outputs.sha }}.zip
           path: build/test-output/logs/
 
       - name: Check for shifted baselines
@@ -61,10 +67,10 @@ jobs:
         run: if [ -n "$(ls -A build/test-output/shifted-baselines 2>/dev/null)" ]; then echo found=true >> "$GITHUB_OUTPUT"; fi
 
       - name: Upload shifted baselines
-        if: steps.shifted.outputs.found == 'true'
+        if: (success() || failure()) && steps.shifted.outputs.found == 'true'
         uses: actions/upload-artifact@v7
         with:
-          name: shifted-baselines.zip
+          name: shifted-baselines-${{ steps.commit_id.outputs.sha }}.zip
           path: build/test-output/shifted-baselines/
 
       - name: Build zips
