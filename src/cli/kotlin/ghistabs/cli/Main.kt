@@ -81,6 +81,18 @@ private class SharedOptions : OptionGroup(TITLE) {
     val logFile by option("--log", help = "Redirect the import log to this file as well as stdout")
         .file(canBeDir = false)
 
+    val compiler by option("--compiler", help = "Compiler").default("gcc")
+    val defaultCompiler by option("--default-compiler", help = "Default compiler").flag(default = false)
+
+    // SunOS SPARC ZMAGIC is the case in hand: it maps from 0x2000 (header included in .text), but
+    // UnixAoutHeader.determineTextAddr gives pageSize only to SPARC NMAGIC, so Ghidra bases .text at 0
+    // while the stabs stay absolute — every symbol lands a segment off.
+    val baseAddress by option(
+        "--base-address",
+        metavar = "HEX",
+        help = "Load at this image base, for loaders that take one (a.out). Hex, e.g. 0x2000",
+    ).convert { it.removePrefix("0x").toLongOrNull(16) ?: fail("expected a hex address, got \"$it\"") }
+
     val recordsJson by option("--records", help = "Dump parsed StabRecords as JSON").file(canBeDir = false)
     val harvestJson by option("--harvest", help = "Dump the harvest as JSON").file(canBeDir = false)
     val registryJson by option("--registry", help = "Dump type registry as JSON").file(canBeDir = false)
@@ -272,8 +284,15 @@ private abstract class StabsCommand(name: String) : CliktCommand(name = name) {
         GhidraScriptUtil.acquireBundleHostReference()
         Msg.setErrorLogger(monitor)
         val msgLog = MessageLog()
+        val compiler = if (shared.defaultCompiler) null else shared.compiler
         try {
-            withProgram(binary, log = msgLog, monitor = monitor) { program ->
+            withProgram(
+                binary,
+                log = msgLog,
+                monitor = monitor,
+                compiler = compiler,
+                baseAddress = shared.baseAddress,
+            ) { program ->
                 val ctx = ImportContext(program, monitor, options, TeeSink(monitor, fileSink), StabsDiagnostics())
                 ctx.execute()
                 fileWriter?.apply {

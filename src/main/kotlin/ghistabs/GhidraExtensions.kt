@@ -5,6 +5,7 @@ package ghistabs
 import ghidra.app.util.bin.FileByteProvider
 import ghidra.app.util.bin.InputStreamByteProvider
 import ghidra.app.util.importer.MessageLog
+import ghidra.app.util.opinion.Loader
 import ghidra.app.util.opinion.LoaderService
 import ghidra.app.util.opinion.LoaderTier
 import ghidra.program.database.data.DataTypeUtilities
@@ -190,11 +191,19 @@ internal fun File.offersCompilerSpec(compiler: String) = FileByteProvider(this, 
     }
 }
 
+/**
+ * `UnixAoutLoader`'s "Base Address" option, as its command-line argument. Spelled rather than
+ * imported: Ghidra below 11.4 has no such loader (see [LOADS_AOUT]), and an unmatched loader argument
+ * only warns.
+ */
+const val BASE_ADDR_LOADER_ARG = Loader.COMMAND_LINE_ARG_PREFIX + "-baseAddr"
+
 /** [loadProgram] scoped to [func], released even when it throws. */
 fun <R> Any.withProgram(
     binary: File,
     compiler: String? = "gcc",
     log: MessageLog? = null,
     monitor: TaskMonitor? = null,
+    baseAddress: Long? = null,
     func: (Program) -> R,
-): R = loadProgram(binary, compiler, log, monitor).use { func(it.program) }
+): R = loadProgram(binary, compiler, log, monitor, baseAddress).use { func(it.program) }
