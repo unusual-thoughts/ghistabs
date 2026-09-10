@@ -1,3 +1,4 @@
+# GhiStabs 🐉🗡️
 [![GitHub Release](https://img.shields.io/github/v/release/unusual-thoughts/ghistabs?sort=date&color=blue)](https://github.com/unusual-thoughts/ghistabs/releases)
 [![Ghidra 12.1.3](https://img.shields.io/badge/Ghidra-12.1.3-green?logo=redragon)](https://github.com/unusual-thoughts/ghistabs/releases)
 [![Ghidra 12.0.4](https://img.shields.io/badge/Ghidra-12.0.4-orange?logo=redragon)](https://github.com/unusual-thoughts/ghistabs/releases)
