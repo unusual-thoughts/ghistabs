@@ -679,12 +679,20 @@ class ClassBuilder(
             .toMap()
     }
 
+    /**
+     * A vtable has to be *here*, not merely named here. A symbol resolving into uninitialized memory is
+     * Ghidra's EXTERNAL placeholder for a reference another object satisfies — `tinyxml_aout_gcc295.o`
+     * names `__vt_13TiXmlDocument` without defining it — and laying a vftable there stamps a record over
+     * a block with no bytes to read.
+     */
+    private fun Address.isDefined() = program.memory.getBlock(this)?.isInitialized == true
+
     /** Resolve _ZTV<class> address: try AddressResolver candidates, then the demangled-vtable index. */
     private fun LocatedType.resolveVtableAddress(): Address? {
         val candidates = Itanium.ztvCandidates(className)
-        candidates.firstNotNullOfOrNull { resolver.resolve(it) }?.let { return it }
+        candidates.firstNotNullOfOrNull { resolver.resolve(it)?.takeIf { a -> a.isDefined() } }?.let { return it }
 
-        vtableAddressByClass[qualifiedClassName]?.let { return it }
+        vtableAddressByClass[qualifiedClassName]?.takeIf { it.isDefined() }?.let { return it }
 
         val failureBucket = when {
             classBody.hasVTablePointerMarker && classBody.methods.none { it.virt == VirtKind.VIRTUAL } ->
