@@ -975,7 +975,7 @@
             "min": 2,
             "max": 2,
             "degrades": [
-                "//lldiv_t",
+                "/std/stdlib/lldiv_t",
                 "/std/types/_G_fpos64_t"
             ]
         },
