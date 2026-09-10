@@ -6,13 +6,6 @@ import kotlinx.serialization.Serializable
 const val STAB_RECORD_SIZE: Int = 12
 
 /**
- * `N_STAB` from `<a.out.h>` (0340): the mask marking an entry in an a.out symbol table as a
- * *debugging* symbol. Any bit set means the entry is a stab; clear means it is a link-time symbol
- * (`N_UNDF`/`N_ABS`/`N_TEXT`/`N_DATA`/`N_BSS`/`N_INDR`/`N_FN`, the low bit being `N_EXT`).
- */
-const val N_STAB_MASK: Int = 0xE0
-
-/**
  * Stab record type codes, mirrored from `binutils/include/aout/stab.def`.
  * Includes Apple ld / Sun cross-toolchain codes so the parser doesn't fall into UNKNOWN on them.
  */
@@ -22,6 +15,11 @@ enum class StabType(val code: UByte) {
     /**
      * CU header (Solaris2 / ELF stabs-in-sections). `n_value`=stabstr size for this CU,
      * `n_strx`=source filename, `n_desc`=count of upcoming symbols.
+     *
+     * The one code here with [StabHeader.N_STAB_MASK] clear, so [StabHeader.isLinkSymbol] reports it
+     * a link-time symbol and [StabHeader.section] reads [StabSection.Undefined] — both correct under
+     * [StabReader.Layout.SYMTAB], where 0x00 genuinely *is* an undefined symbol. Only the layout
+     * separates the two readings, which is why `stab.def` carries this entry commented out.
      */
     N_UNDF(0x00u),
 
@@ -231,6 +229,45 @@ enum class StabType(val code: UByte) {
 }
 
 /**
+ * The `N_TYPE` field of an a.out `n_type`: what the entry's `n_value` is measured against. Decoded
+ * from stabs and link-time symbols alike — [StabHeader.N_STAB_MASK] covers why both carry one.
+ *
+ * Three of the seven name no section. [Undefined], [Indirect] and [Common] are what the field says
+ * when `n_value` is not an address at all, so anything reaching for a *definition* has to test for
+ * them rather than assume a placement — which is the whole of [StabReader.linkSymbols]' filter.
+ *
+ * Constants are the masked codes, so the weak/set/warning family is deliberately absent: those
+ * collide in pairs under [StabHeader.N_TYPE_MASK] and have to be matched raw, as noted there.
+ */
+enum class StabSection(val code: UByte) {
+    /** Defined nowhere here — a reference for the linker to satisfy. `n_value` is 0, or a size. */
+    Undefined(0x00U),
+
+    /** Absolute symbol - defined at a particular address */
+    Absolute(0x02U),
+
+    /** Text symbol - defined at offset in text segment */
+    Text(0x04U),
+
+    /** Data symbol - defined at offset in data segment */
+    Data(0x06U),
+
+    /** BSS symbol - defined at offset in zero'd segment  */
+    Bss(0x08U),
+
+    /** Indirect: `n_value` is a string-table index naming the real symbol, not an address. */
+    Indirect(0x0AU),
+
+    /** Common: `n_value` is the size to reserve, not an address. */
+    Common(0x12U),
+    ;
+
+    companion object {
+        fun fromCode(b: UByte): StabSection? = entries.find { it.code == b }
+    }
+}
+
+/**
  * The `N_SO_*` source language a CU's opening `N_SO` names in its `desc` — binutils'
  * `include/aout/stab.def`.
  *
@@ -262,7 +299,70 @@ enum class Language(val code: Int) {
 
 /** Raw stab header, before type interpretation — the on-disk 12 bytes, faithfully unsigned. */
 @Serializable
-data class StabHeader(val strx: UInt, val type: UByte, val other: UByte, val desc: UShort, val value: UInt)
+data class StabHeader(val strx: UInt, val type: UByte, val other: UByte, val desc: UShort, val value: UInt) {
+    companion object {
+        /**
+         * An a.out `n_type` is a *discriminated union*, not three parallel fields:
+         * ```
+         *   bit  7  6  5   4  3  2  1   0
+         *      └────────┘ └──────────┘ └─┘
+         *        N_STAB     N_TYPE    N_EXT
+         *         0xE0       0x1E      0x01
+         *      └─────────────────────────┘
+         *          StabType (whole byte)
+         * ```
+         * `N_STAB` bits clear — a *link-time* symbol: [N_TYPE_MASK] names the section defining it and
+         * [N_EXT_MASK] the linkage. Any set — a *stab*, and the whole byte is one [StabType] code.
+         *
+         * [N_TYPE_MASK] keeps its meaning on both sides: a stab's section is what its `n_value` is
+         * relative to, which is how bfd relocates one (`aoutx.h:translate_from_native_sym_flags`
+         * switches on `type & N_TYPE` for debugging symbols too). The codes are assigned to suit —
+         * `N_FUN`/`N_STSYM`/`N_LCSYM` read TEXT/DATA/BSS, so do `N_SLINE`/`N_DSLINE`/`N_BSLINE`, and
+         * those holding no address (`N_GSYM`, `N_RSYM`, `N_LSYM`, `N_PSYM`) read [StabSection.Undefined].
+         *
+         * Only [N_EXT_MASK] goes unused by stabs — nothing links against one — which is why every
+         * [StabType] code is even.
+         */
+        const val N_STAB_MASK: UByte = 0xE0U
+
+        /** The section field of an `n_type` — of a stab as much as a link-time symbol; read via [section]. */
+        const val N_TYPE_MASK: UByte = 0x1EU
+
+        /** External (visible outside this object) rather than local to it. */
+        const val N_EXT_MASK: UByte = 0x01U
+
+        // Raw `n_type` codes, NOT section codes: consecutive integers rather than the even
+        // section|ext layout above, so [N_TYPE_MASK] collapses them in pairs (N_WEAKA/N_WEAKT both
+        // read 0x0e, N_WEAKD/N_WEAKB both 0x10, N_WARNING/N_FN both 0x1e) onto values [StabSection]
+        // deliberately does not model — [section] is null for every one. Match them on [type] itself.
+
+        /** Weak undefined — like [StabSection.Undefined], carries no address. */
+        const val N_WEAKU: UByte = 0x0DU
+        const val N_WEAKA: UByte = 0x0EU
+
+        /** Weak text. gcc 2.x emits inline/template C++ members this way — 83 of them in tinyxml. */
+        const val N_WEAKT: UByte = 0x0FU
+        const val N_WEAKD: UByte = 0x10U
+        const val N_WEAKB: UByte = 0x11U
+
+        /** File name of the `.o`. `N_WARNING or N_EXT_MASK`, so [section] never reports it. */
+        const val N_FN: UByte = 0x1FU
+        const val N_WARNING: UByte = 0x1EU
+    }
+
+    /**
+     * Which section this symbol's `n_value` is relative to, [N_EXT_MASK] masked off — a stab has one
+     * too, and [N_STAB_MASK] says why. [StabSection.Undefined] is the honest answer for the entries
+     * carrying no address at all, so a caller after a *definition* wants [isLinkSymbol] as well.
+     *
+     * Null where the masked code names no section this models — the weak/set/warning family, whose
+     * raw codes are listed above.
+     */
+    val section get() = StabSection.fromCode(type and N_TYPE_MASK)
+
+    /** No [N_STAB_MASK] bit set: a link-time symbol rather than a debugging one. */
+    val isLinkSymbol get() = type and N_STAB_MASK == 0U.toUByte()
+}
 
 /**
  * One assembled stab record — `name` has been resolved through `.stabstr` (per-CU offset applied)

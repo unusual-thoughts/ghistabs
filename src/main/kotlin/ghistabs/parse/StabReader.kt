@@ -85,7 +85,7 @@ class StabReader(
             val record = StabRecord(index++, readHeader())
 
             // Under SYMTAB the table also holds the link-time symbols; only debugging symbols are ours.
-            if (layout == Layout.SYMTAB && (record.raw.type.toInt() and N_STAB_MASK) == 0) continue
+            if (layout == Layout.SYMTAB && record.raw.isLinkSymbol) continue
 
             if (layout == Layout.SECTION && record.type == StabType.N_UNDF) {
                 cuOff += cuSize
@@ -115,7 +115,7 @@ class StabReader(
         return buildMap {
             while (stab.hasNext(STAB_RECORD_SIZE)) {
                 val raw = readHeader()
-                if (raw.type.toInt() and N_STAB_MASK == 0 && raw.strx != 0u) {
+                if (raw.isLinkSymbol && raw.strx != 0u) {
                     putIfAbsent(stabStr(raw.strx.toLong()), raw.value.toLong())
                 }
             }
