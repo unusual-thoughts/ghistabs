@@ -10,7 +10,17 @@
         },
         "array-count-substituted": {
             "min": 8,
-            "max": 8
+            "max": 8,
+            "degrades": [
+                "Anon_tinyxml_305_0c72c27d",
+                "Anon_tinyxml_307_0c72c27f",
+                "Anon_tinyxmlerror_305_b492dd37",
+                "Anon_tinyxmlerror_307_b492dd39",
+                "Anon_tinyxmlparser_305_0bdeae1c",
+                "Anon_tinyxmlparser_307_0bdeae1e",
+                "Anon_xmltest_min_305_94bf3fe2",
+                "Anon_xmltest_min_307_94bf3fe4"
+            ]
         },
         "base-empty-ebo": {
             "min": 18,
@@ -22,7 +32,11 @@
         },
         "base-synthesized": {
             "min": 2,
-            "max": 2
+            "max": 2,
+            "degrades": [
+                "/tinyxml.cpp/multi/basic_stringstream<char,std::char_traits<char>,std::allocator<char>>@+0",
+                "/tinyxml.cpp/multi/basic_stringstream<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>@+0"
+            ]
         },
         "canonical-key-merged": {
             "min": 240,
@@ -102,7 +116,10 @@
         },
         "dtm-conflicts-created": {
             "min": 1,
-            "max": 1
+            "max": 1,
+            "degrades": [
+                "/wchar_t.conflict"
+            ]
         },
         "dtm-conflicts-post": {
             "min": 1,
@@ -126,7 +143,10 @@
         },
         "global-typed-all-undefined": {
             "min": 4,
-            "max": 4
+            "max": 4,
+            "degrades": [
+                "_ZSt8__ioinit"
+            ]
         },
         "harvest-collisions-divergent": {
             "min": 0,
@@ -278,7 +298,23 @@
         },
         "param-unnamed-padded": {
             "min": 22,
-            "max": 22
+            "max": 22,
+            "degrades": [
+                "_ZN12TiXmlPrinter10VisitEnterERK13TiXmlDocument",
+                "_ZN12TiXmlPrinter9VisitExitERK13TiXmlDocument",
+                "_ZN12TiXmlVisitor10VisitEnterERK12TiXmlElementPK14TiXmlAttribute",
+                "_ZN12TiXmlVisitor10VisitEnterERK13TiXmlDocument",
+                "_ZN12TiXmlVisitor5VisitERK12TiXmlComment",
+                "_ZN12TiXmlVisitor5VisitERK12TiXmlUnknown",
+                "_ZN12TiXmlVisitor5VisitERK16TiXmlDeclaration",
+                "_ZN12TiXmlVisitor5VisitERK9TiXmlText",
+                "_ZN12TiXmlVisitor9VisitExitERK12TiXmlElement",
+                "_ZN12TiXmlVisitor9VisitExitERK13TiXmlDocument",
+                "_ZN9TiXmlBase10IsAlphaNumEh13TiXmlEncoding",
+                "_ZN9TiXmlBase7IsAlphaEh13TiXmlEncoding",
+                "_ZNK14TiXmlAttribute5PrintEP6_iobufiPSs",
+                "_ZNK16TiXmlDeclaration5PrintEP6_iobufiPSs"
+            ]
         },
         "placeholder-created": {
             "min": 667,
@@ -286,7 +322,14 @@
         },
         "placeholder-undefined-fields": {
             "min": 20,
-            "max": 20
+            "max": 20,
+            "degrades": [
+                "allocator<char>",
+                "allocator<wchar_t>",
+                "bidirectional_iterator_tag",
+                "forward_iterator_tag",
+                "random_access_iterator_tag"
+            ]
         },
         "pointee-typed": {
             "min": 2,
@@ -330,11 +373,30 @@
         },
         "struct-mostly-undefined": {
             "min": 4,
-            "max": 4
+            "max": 4,
+            "degrades": [
+                "/tinyxml.cpp/multi/$_2",
+                "/tinyxml.cpp/multi/_stati64",
+                "/tinyxml.cpp/multi/basic_iostream<char,std::char_traits<char>>",
+                "/tinyxml.cpp/multi/basic_iostream<wchar_t,std::char_traits<wchar_t>>"
+            ]
         },
         "struct-truncated": {
             "min": 11,
-            "max": 11
+            "max": 11,
+            "degrades": [
+                "TiXmlText",
+                "basic_istream<char,std::char_traits<char>>",
+                "basic_istream<wchar_t,std::char_traits<wchar_t>>",
+                "basic_istringstream<char,std::char_traits<char>,std::allocator<char>>",
+                "basic_istringstream<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>",
+                "basic_ostream<char,std::char_traits<char>>",
+                "basic_ostream<wchar_t,std::char_traits<wchar_t>>",
+                "basic_ostringstream<char,std::char_traits<char>,std::allocator<char>>",
+                "basic_ostringstream<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>",
+                "basic_stringstream<char,std::char_traits<char>,std::allocator<char>>",
+                "basic_stringstream<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>"
+            ]
         },
         "text-boundaries-out-of-order": {
             "min": 1,
@@ -366,7 +428,124 @@
         },
         "vtable-reconstructed": {
             "min": 115,
-            "max": 115
+            "max": 115,
+            "degrades": [
+                "TiXmlAttribute",
+                "TiXmlBase",
+                "TiXmlComment",
+                "TiXmlDeclaration",
+                "TiXmlDocument",
+                "TiXmlElement",
+                "TiXmlNode",
+                "TiXmlPrinter",
+                "TiXmlText",
+                "TiXmlUnknown",
+                "TiXmlVisitor",
+                "__cxxabiv1::__class_type_info",
+                "__cxxabiv1::__si_class_type_info",
+                "__cxxabiv1::__vmi_class_type_info",
+                "__gnu_cxx::__concurrence_lock_error",
+                "__gnu_cxx::__concurrence_unlock_error",
+                "__gnu_cxx::recursive_init_error",
+                "__gnu_cxx::stdio_filebuf<char,std::char_traits<char>>",
+                "__gnu_cxx::stdio_filebuf<wchar_t,std::char_traits<wchar_t>>",
+                "__gnu_cxx::stdio_sync_filebuf<char,std::char_traits<char>>",
+                "__gnu_cxx::stdio_sync_filebuf<wchar_t,std::char_traits<wchar_t>>",
+                "std::__codecvt_abstract_base<char,char,int>",
+                "std::__codecvt_abstract_base<wchar_t,char,int>",
+                "std::__ctype_abstract_base<char>",
+                "std::__ctype_abstract_base<wchar_t>",
+                "std::__moneypunct_cache<char,false>",
+                "std::__moneypunct_cache<char,true>",
+                "std::__moneypunct_cache<wchar_t,false>",
+                "std::__moneypunct_cache<wchar_t,true>",
+                "std::__numpunct_cache<char>",
+                "std::__numpunct_cache<wchar_t>",
+                "std::__timepunct<char>",
+                "std::__timepunct<wchar_t>",
+                "std::__timepunct_cache<char>",
+                "std::__timepunct_cache<wchar_t>",
+                "std::bad_alloc",
+                "std::bad_cast",
+                "std::bad_exception",
+                "std::bad_typeid",
+                "std::codecvt<char,char,int>",
+                "std::codecvt<wchar_t,char,int>",
+                "std::codecvt_byname<char,char,int>",
+                "std::codecvt_byname<wchar_t,char,int>",
+                "std::collate<char>",
+                "std::collate<wchar_t>",
+                "std::collate_byname<char>",
+                "std::collate_byname<wchar_t>",
+                "std::ctype<char>",
+                "std::ctype<wchar_t>",
+                "std::ctype_byname<char>",
+                "std::ctype_byname<wchar_t>",
+                "std::domain_error",
+                "std::exception",
+                "std::filebuf",
+                "std::fstream",
+                "std::ifstream",
+                "std::invalid_argument",
+                "std::ios",
+                "std::ios_base",
+                "std::ios_base::failure",
+                "std::iostream",
+                "std::istream",
+                "std::length_error",
+                "std::locale::facet",
+                "std::logic_error",
+                "std::messages<char>",
+                "std::messages<wchar_t>",
+                "std::messages_byname<char>",
+                "std::messages_byname<wchar_t>",
+                "std::money_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>",
+                "std::money_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>",
+                "std::money_put<char,std::ostreambuf_iterator<char,std::char_traits<char>>>",
+                "std::money_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>",
+                "std::moneypunct<char,false>",
+                "std::moneypunct<char,true>",
+                "std::moneypunct<wchar_t,false>",
+                "std::moneypunct<wchar_t,true>",
+                "std::moneypunct_byname<char,false>",
+                "std::moneypunct_byname<char,true>",
+                "std::moneypunct_byname<wchar_t,false>",
+                "std::moneypunct_byname<wchar_t,true>",
+                "std::num_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>",
+                "std::num_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>",
+                "std::num_put<char,std::ostreambuf_iterator<char,std::char_traits<char>>>",
+                "std::num_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>",
+                "std::numpunct<char>",
+                "std::numpunct<wchar_t>",
+                "std::numpunct_byname<char>",
+                "std::numpunct_byname<wchar_t>",
+                "std::ofstream",
+                "std::ostream",
+                "std::out_of_range",
+                "std::overflow_error",
+                "std::range_error",
+                "std::runtime_error",
+                "std::streambuf",
+                "std::time_get<char,std::istreambuf_iterator<char,std::char_traits<char>>>",
+                "std::time_get<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>",
+                "std::time_get_byname<char,std::istreambuf_iterator<char,std::char_traits<char>>>",
+                "std::time_get_byname<wchar_t,std::istreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>",
+                "std::time_put<char,std::ostreambuf_iterator<char,std::char_traits<char>>>",
+                "std::time_put<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>",
+                "std::time_put_byname<char,std::ostreambuf_iterator<char,std::char_traits<char>>>",
+                "std::time_put_byname<wchar_t,std::ostreambuf_iterator<wchar_t,std::char_traits<wchar_t>>>",
+                "std::type_info",
+                "std::underflow_error",
+                "std::wfilebuf",
+                "std::wfstream",
+                "std::wifstream",
+                "std::wios",
+                "std::wiostream",
+                "std::wistream",
+                "std::wofstream",
+                "std::wostream",
+                "std::wstreambuf"
+            ]
         },
         "vtable-secondary": {
             "min": 16,

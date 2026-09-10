@@ -2,7 +2,30 @@
     "counters": {
         "array-count-substituted": {
             "min": 21,
-            "max": 21
+            "max": 21,
+            "degrades": [
+                "Anon_locale_classes_36_32bf87b5",
+                "Anon_locale_classes_36_aa149e8e",
+                "Anon_locale_classes_36_ac06a6b6",
+                "Anon_locale_classes_38_32bf87b7",
+                "Anon_locale_classes_38_aa149e90",
+                "Anon_locale_classes_38_ac06a6b8",
+                "Anon_locale_classes_39_32bf87b8",
+                "Anon_locale_classes_39_aa149e91",
+                "Anon_locale_classes_39_ac06a6b9",
+                "Anon_locale_classes_40_32bf87b9",
+                "Anon_locale_classes_40_aa149e92",
+                "Anon_locale_classes_40_ac06a6ba",
+                "Anon_locale_classes_41_32bf87ba",
+                "Anon_locale_classes_41_aa149e93",
+                "Anon_locale_classes_41_ac06a6bb",
+                "Anon_locale_classes_42_32bf87bb",
+                "Anon_locale_classes_42_aa149e94",
+                "Anon_locale_classes_42_ac06a6bc",
+                "Anon_locale_classes_43_32bf87bc",
+                "Anon_locale_classes_43_aa149e95",
+                "Anon_locale_classes_43_ac06a6bd"
+            ]
         },
         "base-empty-ebo": {
             "min": 29,
@@ -10,7 +33,14 @@
         },
         "base-synthesized": {
             "min": 5,
-            "max": 5
+            "max": 5,
+            "degrades": [
+                "/stabs/basic_ostream<char,std::char_traits<char>>@+-12",
+                "/std/basic_fstream<char,std::char_traits<char>>@+0",
+                "/std/basic_istream<char,std::char_traits<char>>@+-12",
+                "/std/basic_ostream<char,std::char_traits<char>>@+-12",
+                "/std/basic_stringstream<char,std::char_traits<char>,std::allocator<char>>@+0"
+            ]
         },
         "canonical-content-merged": {
             "min": 1,
@@ -118,7 +148,10 @@
         },
         "field-dropped": {
             "min": 1,
-            "max": 1
+            "max": 1,
+            "degrades": [
+                "/std/winbase/_LDT_ENTRY.HighWord"
+            ]
         },
         "file-start": {
             "min": 115,
@@ -134,7 +167,11 @@
         },
         "global-typed-all-undefined": {
             "min": 2,
-            "max": 2
+            "max": 2,
+            "degrades": [
+                "_ZSt7nothrow",
+                "_ZSt8__ioinit"
+            ]
         },
         "harvest-collisions-divergent": {
             "min": 1,
@@ -286,11 +323,48 @@
         },
         "local-dropped": {
             "min": 14,
-            "max": 14
+            "max": 14,
+            "degrades": [
+                "__divdi3.uu",
+                "__divdi3.vv",
+                "__divdi3.w",
+                "__divdi3.ww",
+                "__udivdi3.d",
+                "__udivdi3.n",
+                "__udivdi3.ww",
+                "__umoddi3.u",
+                "__umoddi3.v"
+            ]
         },
         "local-typed-all-undefined": {
             "min": 24,
-            "max": 24
+            "max": 24,
+            "degrades": [
+                "_ZNKSt7num_getIcSt19istreambuf_iteratorIcSt11char_traitsIcEEE14_M_extract_intIjEES3_S3_S3_RSt8ios_baseRSt12_Ios_IostateRT_.__uc",
+                "_ZNKSt7num_getIcSt19istreambuf_iteratorIcSt11char_traitsIcEEE14_M_extract_intIlEES3_S3_S3_RSt8ios_baseRSt12_Ios_IostateRT_.__uc",
+                "_ZNKSt7num_getIcSt19istreambuf_iteratorIcSt11char_traitsIcEEE14_M_extract_intImEES3_S3_S3_RSt8ios_baseRSt12_Ios_IostateRT_.__uc",
+                "_ZNKSt7num_getIcSt19istreambuf_iteratorIcSt11char_traitsIcEEE14_M_extract_intItEES3_S3_S3_RSt8ios_baseRSt12_Ios_IostateRT_.__uc",
+                "_ZNKSt7num_getIcSt19istreambuf_iteratorIcSt11char_traitsIcEEE14_M_extract_intIxEES3_S3_S3_RSt8ios_baseRSt12_Ios_IostateRT_.__uc",
+                "_ZNKSt7num_getIcSt19istreambuf_iteratorIcSt11char_traitsIcEEE14_M_extract_intIyEES3_S3_S3_RSt8ios_baseRSt12_Ios_IostateRT_.__uc",
+                "_ZNKSt7num_getIcSt19istreambuf_iteratorIcSt11char_traitsIcEEE16_M_extract_floatES3_S3_RSt8ios_baseRSt12_Ios_IostateRSs.__uc",
+                "_ZNKSt7num_getIcSt19istreambuf_iteratorIcSt11char_traitsIcEEE6do_getES3_S3_RSt8ios_baseRSt12_Ios_IostateRb.__uc",
+                "_ZNKSt7num_putIcSt19ostreambuf_iteratorIcSt11char_traitsIcEEE13_M_insert_intIlEES3_S3_RSt8ios_basecT_.__uc",
+                "_ZNKSt7num_putIcSt19ostreambuf_iteratorIcSt11char_traitsIcEEE13_M_insert_intImEES3_S3_RSt8ios_basecT_.__uc",
+                "_ZNKSt7num_putIcSt19ostreambuf_iteratorIcSt11char_traitsIcEEE13_M_insert_intIxEES3_S3_RSt8ios_basecT_.__uc",
+                "_ZNKSt7num_putIcSt19ostreambuf_iteratorIcSt11char_traitsIcEEE13_M_insert_intIyEES3_S3_RSt8ios_basecT_.__uc",
+                "_ZNKSt7num_putIcSt19ostreambuf_iteratorIcSt11char_traitsIcEEE15_M_insert_floatIdEES3_S3_RSt8ios_baseccT_.__uc",
+                "_ZNKSt7num_putIcSt19ostreambuf_iteratorIcSt11char_traitsIcEEE15_M_insert_floatIeEES3_S3_RSt8ios_baseccT_.__uc",
+                "_ZNKSt7num_putIcSt19ostreambuf_iteratorIcSt11char_traitsIcEEE6do_putES3_RSt8ios_basecb.__uc",
+                "_ZNKSt9money_getIcSt19istreambuf_iteratorIcSt11char_traitsIcEEE10_M_extractILb0EEES3_S3_S3_RSt8ios_baseRSt12_Ios_IostateRSs.__uc",
+                "_ZNKSt9money_getIcSt19istreambuf_iteratorIcSt11char_traitsIcEEE10_M_extractILb1EEES3_S3_S3_RSt8ios_baseRSt12_Ios_IostateRSs.__uc",
+                "_ZNKSt9money_putIcSt19ostreambuf_iteratorIcSt11char_traitsIcEEE9_M_insertILb0EEES3_S3_RSt8ios_basecRKSs.__uc",
+                "_ZNKSt9money_putIcSt19ostreambuf_iteratorIcSt11char_traitsIcEEE9_M_insertILb1EEES3_S3_RSt8ios_basecRKSs.__uc",
+                "_ZNSs6assignERKSs.__a",
+                "_ZNSs7reserveEj.__a",
+                "_ZNSs9_M_mutateEjjj.__a",
+                "_ZNSt8ios_base15sync_with_stdioEb.__init",
+                "__cxa_call_unexpected.end_catch_protect_obj"
+            ]
         },
         "local-var-add-success": {
             "min": 1367,
@@ -318,7 +392,97 @@
         },
         "param-unnamed-padded": {
             "min": 97,
-            "max": 97
+            "max": 97,
+            "degrades": [
+                "_ZN9__gnu_cxx10__mt_allocIcE8allocateEjPKv",
+                "_ZN9__gnu_cxx10__mt_allocIcEC1ERKS1_",
+                "_ZN9__gnu_cxx10__mt_allocIcEC2ERKS1_",
+                "_ZN9__gnu_cxx10__mt_allocIwE8allocateEjPKv",
+                "_ZN9__gnu_cxx10__mt_allocIwEC1ERKS1_",
+                "_ZN9__gnu_cxx10__mt_allocIwEC2ERKS1_",
+                "_ZN9__gnu_cxx12__pool_allocIcE8allocateEjPKv",
+                "_ZN9__gnu_cxx12__pool_allocIcEC1ERKS1_",
+                "_ZN9__gnu_cxx12__pool_allocIcEC2ERKS1_",
+                "_ZN9__gnu_cxx12__pool_allocIwE8allocateEjPKv",
+                "_ZN9__gnu_cxx12__pool_allocIwEC1ERKS1_",
+                "_ZN9__gnu_cxx12__pool_allocIwEC2ERKS1_",
+                "_ZN9__gnu_cxx13new_allocatorIcE10deallocateEPcj",
+                "_ZN9__gnu_cxx13new_allocatorIcE8allocateEjPKv",
+                "_ZN9__gnu_cxx13new_allocatorIcEC2ERKS1_",
+                "_ZN9__gnu_cxx13new_allocatorItE10deallocateEPtj",
+                "_ZN9__gnu_cxx13new_allocatorItE8allocateEjPKv",
+                "_ZN9__gnu_cxx13new_allocatorItEC2ERKS1_",
+                "_ZN9__gnu_cxx13new_allocatorIwEC2ERKS1_",
+                "_ZN9__gnu_cxx18stdio_sync_filebufIcSt11char_traitsIcEE7seekoffExSt12_Ios_SeekdirSt13_Ios_Openmode",
+                "_ZNK10__cxxabiv117__class_type_info12__do_dyncastEiNS0_10__sub_kindEPKS0_PKvS3_S5_RNS0_16__dyncast_resultE",
+                "_ZNK10__cxxabiv117__class_type_info20__do_find_public_srcEiPKvPKS0_S2_",
+                "_ZNKSt5ctypeIcE9do_narrowEPKcS2_cPc",
+                "_ZNKSt5ctypeIcE9do_narrowEcc",
+                "_ZNKSt7codecvtIcciE10do_unshiftERiPcS2_RS2_",
+                "_ZNKSt7codecvtIcciE5do_inERiPKcS3_RS3_PcS5_RS5_",
+                "_ZNKSt7codecvtIcciE6do_outERiPKcS3_RS3_PcS5_RS5_",
+                "_ZNKSt7codecvtIcciE9do_lengthERiPKcS3_j",
+                "_ZNKSt8messagesIcE20_M_convert_from_charEPc",
+                "_ZNKSt8messagesIcE4openERKSsRKSt6localePKc",
+                "_ZNKSt8messagesIcE6do_getEiiiRKSs",
+                "_ZNKSt8messagesIcE7do_openERKSsRKSt6locale",
+                "_ZNKSt8messagesIcE8do_closeEi",
+                "_ZNKSt8time_putIcSt19ostreambuf_iteratorIcSt11char_traitsIcEEE6do_putES3_RSt8ios_basecPK2tmcc",
+                "_ZNKSt9type_info10__do_catchEPKS_PPvj",
+                "_ZNKSt9type_info11__do_upcastEPKN10__cxxabiv117__class_type_infoEPPv",
+                "_ZNSs12_S_constructIN9__gnu_cxx17__normal_iteratorIPcSsEEEES2_T_S4_RKSaIcESt20forward_iterator_tag",
+                "_ZNSs12_S_constructIPKcEEPcT_S3_RKSaIcESt20forward_iterator_tag",
+                "_ZNSs12_S_constructIPcEES0_T_S1_RKSaIcESt20forward_iterator_tag",
+                "_ZNSs16_S_construct_auxIN9__gnu_cxx17__normal_iteratorIPcSsEEEES2_T_S4_RKSaIcE12__false_type",
+                "_ZNSs16_S_construct_auxIPKcEEPcT_S3_RKSaIcE12__false_type",
+                "_ZNSs16_S_construct_auxIPcEES0_T_S1_RKSaIcE12__false_type",
+                "_ZNSt10money_base20_S_construct_patternEccc",
+                "_ZNSt10moneypunctIcLb0EE24_M_initialize_moneypunctEPiPKc",
+                "_ZNSt10moneypunctIcLb1EE24_M_initialize_moneypunctEPiPKc",
+                "_ZNSt11__timepunctIcE23_M_initialize_timepunctEPi",
+                "_ZNSt12__basic_fileIcE4openEPKcSt13_Ios_Openmodei",
+                "_ZNSt12__basic_fileIcE8sys_openEP6_iobufSt13_Ios_Openmode",
+                "_ZNSt12__basic_fileIcEC1EP17__gthread_mutex_t",
+                "_ZNSt12__basic_fileIcEC2EP17__gthread_mutex_t",
+                "_ZNSt13basic_filebufIcSt11char_traitsIcEE7seekoffExSt12_Ios_SeekdirSt13_Ios_Openmode",
+                "_ZNSt13basic_filebufIcSt11char_traitsIcEE7seekposESt4fposIiESt13_Ios_Openmode",
+                "_ZNSt15basic_streambufIcSt11char_traitsIcEE5imbueERKSt6locale",
+                "_ZNSt15basic_streambufIcSt11char_traitsIcEE6setbufEPci",
+                "_ZNSt15basic_streambufIcSt11char_traitsIcEE7seekoffExSt12_Ios_SeekdirSt13_Ios_Openmode",
+                "_ZNSt15basic_streambufIcSt11char_traitsIcEE7seekposESt4fposIiESt13_Ios_Openmode",
+                "_ZNSt15basic_streambufIcSt11char_traitsIcEE8overflowEi",
+                "_ZNSt15basic_streambufIcSt11char_traitsIcEE9pbackfailEi",
+                "_ZNSt15basic_streambufIcSt11char_traitsIcEEaSERKS2_",
+                "_ZNSt15time_get_bynameIcSt19istreambuf_iteratorIcSt11char_traitsIcEEEC1EPKcj",
+                "_ZNSt15time_get_bynameIcSt19istreambuf_iteratorIcSt11char_traitsIcEEEC2EPKcj",
+                "_ZNSt15time_put_bynameIcSt19ostreambuf_iteratorIcSt11char_traitsIcEEEC1EPKcj",
+                "_ZNSt15time_put_bynameIcSt19ostreambuf_iteratorIcSt11char_traitsIcEEEC2EPKcj",
+                "_ZNSt5ctypeIcEC1EPiPKtbj",
+                "_ZNSt5ctypeIcEC2EPiPKtbj",
+                "_ZNSt6locale5facet17_S_clone_c_localeERPi",
+                "_ZNSt6locale5facet18_S_create_c_localeERPiPKcS1_",
+                "_ZNSt8messagesIcEC1EPiPKcj",
+                "_ZNSt8messagesIcEC2EPiPKcj",
+                "_ZNSt8numpunctIcE22_M_initialize_numpunctEPi",
+                "_ZSt10__distanceIN9__gnu_cxx17__normal_iteratorIPcSsEEENSt15iterator_traitsIT_E15difference_typeES5_S5_St26random_access_iterator_tag",
+                "_ZSt10__distanceIPKcENSt15iterator_traitsIT_E15difference_typeES3_S3_St26random_access_iterator_tag",
+                "_ZSt10__distanceIPcENSt15iterator_traitsIT_E15difference_typeES2_S2_St26random_access_iterator_tag",
+                "_ZSt13__destroy_auxIPtEvT_S1_11__true_type",
+                "_ZSt14__convert_to_vIdEvPKcRT_RSt12_Ios_IostateRKPi",
+                "_ZSt14__convert_to_vIeEvPKcRT_RSt12_Ios_IostateRKPi",
+                "_ZSt14__convert_to_vIfEvPKcRT_RSt12_Ios_IostateRKPi",
+                "_ZSt16__convert_from_vIdEiPciPKcT_RKPii",
+                "_ZSt16__convert_from_vIeEiPciPKcT_RKPii",
+                "_ZSt17__is_null_pointerIN9__gnu_cxx17__normal_iteratorIPcSsEEEbT_",
+                "_ZSt19__iterator_categoryIN9__gnu_cxx17__normal_iteratorIPcSsEEENSt15iterator_traitsIT_E17iterator_categoryERKS5_",
+                "_ZSt19__iterator_categoryIPKcENSt15iterator_traitsIT_E17iterator_categoryERKS3_",
+                "_ZSt19__iterator_categoryIPcENSt15iterator_traitsIT_E17iterator_categoryERKS2_",
+                "_ZSt26__uninitialized_fill_n_auxIPtjtET_S1_T0_RKT1_11__true_type",
+                "_ZSteqIccEbRKSaIT_ERKSaIT0_E",
+                "_ZdlPvS_",
+                "_ZnajPv",
+                "_ZnwjPv"
+            ]
         },
         "placeholder-created": {
             "min": 17802,
@@ -326,7 +490,18 @@
         },
         "placeholder-undefined-fields": {
             "min": 16,
-            "max": 16
+            "max": 16,
+            "degrades": [
+                "__pool_alloc<char>",
+                "__pool_alloc<wchar_t>",
+                "allocator<char>",
+                "allocator<unsigned_short>",
+                "allocator<wchar_t>",
+                "bidirectional_iterator_tag",
+                "forward_iterator_tag",
+                "less<char_const*>",
+                "random_access_iterator_tag"
+            ]
         },
         "pointee-typed": {
             "min": 16,
@@ -402,11 +577,38 @@
         },
         "struct-mostly-undefined": {
             "min": 14,
-            "max": 14
+            "max": 14,
+            "degrades": [
+                "/build/buildd/mingw32-runtime-3.12/build_dir/src/w32api/include/winnt.h/Anon_winnt_474_bed1a7c2",
+                "/std/basic_iostream<char,std::char_traits<char>>",
+                "/std/fpos<mbstate_t>",
+                "/std/oaidl/Anon_oaidl_98_533edd29",
+                "/std/oaidl/Anon_oaidl_98_83bed669",
+                "/std/oaidl/Anon_oaidl_98_ed489352",
+                "/std/oaidl/_wireVARIANT",
+                "/std/objidl/tagPROPVARIANT",
+                "/std/winbase/_LDT_ENTRY",
+                "/std/winnt/Anon_winnt_461_bbacae17",
+                "/std/winnt/Anon_winnt_463_21ea8ac1",
+                "/std/winnt/Anon_winnt_464_527503ce",
+                "/std/winnt/_IMAGE_RESOURCE_DIRECTORY_ENTRY",
+                "/std/winnt/_TAPE_SET_POSITION"
+            ]
         },
         "struct-truncated": {
             "min": 9,
-            "max": 9
+            "max": 9,
+            "degrades": [
+                "_Unwind_Exception",
+                "basic_fstream<char,std::char_traits<char>>",
+                "basic_ifstream<char,std::char_traits<char>>",
+                "basic_istream<char,std::char_traits<char>>",
+                "basic_istringstream<char,std::char_traits<char>,std::allocator<char>>",
+                "basic_ofstream<char,std::char_traits<char>>",
+                "basic_ostream<char,std::char_traits<char>>",
+                "basic_ostringstream<char,std::char_traits<char>,std::allocator<char>>",
+                "basic_stringstream<char,std::char_traits<char>,std::allocator<char>>"
+            ]
         },
         "text-boundaries-out-of-order": {
             "min": 1,
@@ -462,7 +664,12 @@
         },
         "vtable-vbase-count-mismatch": {
             "min": 3,
-            "max": 3
+            "max": 3,
+            "degrades": [
+                "fstream",
+                "iostream",
+                "stringstream"
+            ]
         },
         "vtable-virtual-no-impl": {
             "min": 14,

@@ -2,11 +2,25 @@
     "counters": {
         "body-pointer-pointee": {
             "min": 3,
-            "max": 3
+            "max": 3,
+            "degrades": [
+                "Anon_tinyxml_36_80f5dee4",
+                "Anon_tinyxml_37_80f5dee5",
+                "Anon_tinyxml_43_80f5deeb"
+            ]
         },
         "body-reference-referent": {
             "min": 7,
-            "max": 7
+            "max": 7,
+            "degrades": [
+                "Anon_tinyxml_25_80f5ded9",
+                "Anon_tinyxml_26_80f5deda",
+                "Anon_tinyxml_31_80f5dedf",
+                "Anon_tinyxml_34_80f5dee2",
+                "Anon_tinyxml_35_80f5dee3",
+                "Anon_tinyxml_38_80f5dee6",
+                "Anon_tinyxml_39_80f5dee7"
+            ]
         },
         "class-not-struct": {
             "min": 10,
@@ -14,7 +28,15 @@
         },
         "dangling-ref": {
             "min": 6,
-            "max": 6
+            "max": 6,
+            "degrades": [
+                "__fpos64_t",
+                "__fpos_t",
+                "__locale_t",
+                "__pthread_list_t",
+                "__pthread_slist_t",
+                "cookie_io_functions_t"
+            ]
         },
         "data-no-coverage": {
             "min": 15,
@@ -42,7 +64,10 @@
         },
         "dtm-conflicts-created": {
             "min": 1,
-            "max": 1
+            "max": 1,
+            "degrades": [
+                "/int.conflict"
+            ]
         },
         "dtm-conflicts-post": {
             "min": 1,
@@ -58,7 +83,12 @@
         },
         "field-type": {
             "min": 3,
-            "max": 3
+            "max": 3,
+            "degrades": [
+                "/std/pthreadtypes/pthread_cond_t.__data",
+                "/std/pthreadtypes/pthread_mutex_t.__data",
+                "/std/pthreadtypes/pthread_rwlock_t.__data"
+            ]
         },
         "file-start": {
             "min": 1,
@@ -202,7 +232,97 @@
         },
         "local-untyped": {
             "min": 88,
-            "max": 88
+            "max": 88,
+            "degrades": [
+                "Accept__C12TiXmlElementP12TiXmlVisitor.node",
+                "Accept__C13TiXmlDocumentP12TiXmlVisitor.node",
+                "Attribute__C12TiXmlElementPCc.node",
+                "Attribute__C12TiXmlElementPCcPd.attrib",
+                "Attribute__C12TiXmlElementPCcPd.result",
+                "Attribute__C12TiXmlElementPCcPi.attrib",
+                "Attribute__C12TiXmlElementPCcPi.result",
+                "ChildElement__C11TiXmlHandlePCci.child",
+                "ChildElement__C11TiXmlHandlei.child",
+                "Child__C11TiXmlHandlePCci.child",
+                "Child__C11TiXmlHandlei.child",
+                "ClearThis__12TiXmlElement.node",
+                "Clear__9TiXmlNode.node",
+                "Clear__9TiXmlNode.temp",
+                "Clone__C12TiXmlComment.clone",
+                "Clone__C12TiXmlElement.clone",
+                "Clone__C12TiXmlUnknown.clone",
+                "Clone__C13TiXmlDocument.clone",
+                "Clone__C16TiXmlDeclaration.clone",
+                "Clone__C9TiXmlText.clone",
+                "CopyTo__C12TiXmlElementP12TiXmlElement.attribute",
+                "CopyTo__C12TiXmlElementP12TiXmlElement.node",
+                "CopyTo__C13TiXmlDocumentP13TiXmlDocument.node",
+                "FindOrCreate__17TiXmlAttributeSetPCc.attrib",
+                "Find__C17TiXmlAttributeSetPCc.node",
+                "FirstChildElement__9TiXmlNodePCc._value",
+                "FirstChildElement__C11TiXmlHandle.child",
+                "FirstChildElement__C11TiXmlHandlePCc.child",
+                "FirstChildElement__C9TiXmlNode.node",
+                "FirstChildElement__C9TiXmlNodePCc.node",
+                "FirstChild__9TiXmlNodePCc._value",
+                "FirstChild__C11TiXmlHandle.child",
+                "FirstChild__C11TiXmlHandlePCc.child",
+                "FirstChild__C9TiXmlNodePCc.node",
+                "GetDocument__C9TiXmlNode.node",
+                "GetText__C12TiXmlElement.child",
+                "GetText__C12TiXmlElement.childText",
+                "InsertAfterChild__9TiXmlNodeP9TiXmlNodeRC9TiXmlNode.node",
+                "InsertBeforeChild__9TiXmlNodeP9TiXmlNodeRC9TiXmlNode.node",
+                "InsertEndChild__9TiXmlNodeRC9TiXmlNode.node",
+                "IterateChildren__9TiXmlNodePC9TiXmlNode.previous",
+                "IterateChildren__9TiXmlNodePCcPC9TiXmlNode._value",
+                "IterateChildren__9TiXmlNodePCcPC9TiXmlNode.previous",
+                "LastChild__9TiXmlNodePCc._value",
+                "LastChild__C9TiXmlNodePCc.node",
+                "LoadFile__13TiXmlDocumentP8_IO_FILE13TiXmlEncoding.p",
+                "LoadFile__13TiXmlDocumentPCc13TiXmlEncoding.filename",
+                "NextSiblingElement__9TiXmlNodePCc._next",
+                "NextSiblingElement__C9TiXmlNode.node",
+                "NextSiblingElement__C9TiXmlNodePCc.node",
+                "NextSibling__9TiXmlNodePCc._next",
+                "NextSibling__C9TiXmlNodePCc.node",
+                "PreviousSibling__9TiXmlNodePCc._prev",
+                "PreviousSibling__C9TiXmlNodePCc.node",
+                "Print__C12TiXmlElementP8_IO_FILEi.attrib",
+                "Print__C12TiXmlElementP8_IO_FILEi.node",
+                "Print__C13TiXmlDocumentP8_IO_FILEi.node",
+                "Print__C14TiXmlAttributeP8_IO_FILEiP11TiXmlString.n",
+                "Print__C14TiXmlAttributeP8_IO_FILEiP11TiXmlString.v",
+                "Print__C9TiXmlTextP8_IO_FILEi.buffer",
+                "QueryBoolAttribute__C12TiXmlElementPCcPb.node",
+                "QueryDoubleAttribute__C12TiXmlElementPCcPd.attrib",
+                "QueryFloatAttribute__C12TiXmlElementPCcPf.name",
+                "QueryIntAttribute__C12TiXmlElementPCcPi.attrib",
+                "QueryUnsignedAttribute__C12TiXmlElementPCcPUi.node",
+                "RemoveAttribute__12TiXmlElementPCc.node",
+                "Remove__17TiXmlAttributeSetP14TiXmlAttribute.node",
+                "ReplaceChild__9TiXmlNodeP9TiXmlNodeRC9TiXmlNode.document",
+                "ReplaceChild__9TiXmlNodeP9TiXmlNodeRC9TiXmlNode.node",
+                "SetAttribute__12TiXmlElementPCcT1.attrib",
+                "SetAttribute__12TiXmlElementPCci.attrib",
+                "SetDoubleAttribute__12TiXmlElementPCcd.attrib",
+                "SetIndent__12TiXmlPrinterPCc._indent",
+                "SetLineBreak__12TiXmlPrinterPCc._lineBreak",
+                "SetValue__9TiXmlNodePCc._value",
+                "VisitEnter__12TiXmlPrinterRC12TiXmlElementPC14TiXmlAttribute.attrib",
+                "Visit__12TiXmlPrinterRC9TiXmlText.str",
+                "_._9TiXmlNode.node",
+                "_._9TiXmlNode.temp",
+                "__11TiXmlHandleP9TiXmlNode._node",
+                "__11TiXmlStringPCc.copy",
+                "__12TiXmlCommentPCc._value",
+                "__9TiXmlTextPCc.initValue",
+                "__apl__11TiXmlStringPCc.suffix",
+                "__apl__11TiXmlStringRC11TiXmlString.suffix",
+                "__as__11TiXmlStringPCc.copy",
+                "__as__11TiXmlStringRC11TiXmlString.copy",
+                "find__C11TiXmlStringcUi.p"
+            ]
         },
         "local-var-add-success": {
             "min": 100,
@@ -222,7 +342,91 @@
         },
         "param-untyped": {
             "min": 82,
-            "max": 82
+            "max": 82,
+            "degrades": [
+                "Accept__C12TiXmlCommentP12TiXmlVisitor.visitor",
+                "Accept__C12TiXmlElementP12TiXmlVisitor.visitor",
+                "Accept__C12TiXmlUnknownP12TiXmlVisitor.visitor",
+                "Accept__C13TiXmlDocumentP12TiXmlVisitor.visitor",
+                "Accept__C16TiXmlDeclarationP12TiXmlVisitor.visitor",
+                "Accept__C9TiXmlTextP12TiXmlVisitor.visitor",
+                "Add__17TiXmlAttributeSetP14TiXmlAttribute.addMe",
+                "Attribute__C12TiXmlElementPCc.name",
+                "Attribute__C12TiXmlElementPCcPd.name",
+                "Attribute__C12TiXmlElementPCcPi.name",
+                "ChildElement__C11TiXmlHandlePCci.value",
+                "Child__C11TiXmlHandlePCci.value",
+                "CopyTo__C12TiXmlCommentP12TiXmlComment.target",
+                "CopyTo__C12TiXmlElementP12TiXmlElement.target",
+                "CopyTo__C12TiXmlUnknownP12TiXmlUnknown.target",
+                "CopyTo__C13TiXmlDocumentP13TiXmlDocument.target",
+                "CopyTo__C16TiXmlDeclarationP16TiXmlDeclaration.target",
+                "CopyTo__C9TiXmlNodeP9TiXmlNode.target",
+                "CopyTo__C9TiXmlTextP9TiXmlText.target",
+                "EncodeString__9TiXmlBaseRC11TiXmlStringP11TiXmlString.outString",
+                "EncodeString__9TiXmlBaseRC11TiXmlStringP11TiXmlString.str",
+                "FindOrCreate__17TiXmlAttributeSetPCc._name",
+                "Find__C17TiXmlAttributeSetPCc.name",
+                "FirstChildElement__9TiXmlNodePCc._value",
+                "FirstChildElement__C11TiXmlHandlePCc.value",
+                "FirstChildElement__C9TiXmlNodePCc._value",
+                "FirstChild__9TiXmlNodePCc._value",
+                "FirstChild__C11TiXmlHandlePCc.value",
+                "FirstChild__C9TiXmlNodePCc._value",
+                "InsertAfterChild__9TiXmlNodeP9TiXmlNodeRC9TiXmlNode.afterThis",
+                "InsertBeforeChild__9TiXmlNodeP9TiXmlNodeRC9TiXmlNode.beforeThis",
+                "IterateChildren__9TiXmlNodePC9TiXmlNode.previous",
+                "IterateChildren__9TiXmlNodePCcPC9TiXmlNode._value",
+                "IterateChildren__9TiXmlNodePCcPC9TiXmlNode.previous",
+                "IterateChildren__C9TiXmlNodePC9TiXmlNode.previous",
+                "IterateChildren__C9TiXmlNodePCcPC9TiXmlNode.previous",
+                "IterateChildren__C9TiXmlNodePCcPC9TiXmlNode.val",
+                "LastChild__9TiXmlNodePCc._value",
+                "LastChild__C9TiXmlNodePCc._value",
+                "LinkEndChild__9TiXmlNodeP9TiXmlNode.node",
+                "LoadFile__13TiXmlDocumentPCc13TiXmlEncoding._filename",
+                "NextSiblingElement__9TiXmlNodePCc._next",
+                "NextSiblingElement__C9TiXmlNodePCc._value",
+                "NextSibling__9TiXmlNodePCc._next",
+                "NextSibling__C9TiXmlNodePCc._value",
+                "PreviousSibling__9TiXmlNodePCc._prev",
+                "PreviousSibling__C9TiXmlNodePCc._value",
+                "Print__C14TiXmlAttributeP8_IO_FILEiP11TiXmlString.str",
+                "Print__C16TiXmlDeclarationP8_IO_FILEiP11TiXmlString.str",
+                "QueryBoolAttribute__C12TiXmlElementPCcPb.name",
+                "QueryDoubleAttribute__C12TiXmlElementPCcPd.name",
+                "QueryFloatAttribute__C12TiXmlElementPCcPf.name",
+                "QueryIntAttribute__C12TiXmlElementPCcPi.name",
+                "QueryUnsignedAttribute__C12TiXmlElementPCcPUi.name",
+                "RemoveAttribute__12TiXmlElementPCc.name",
+                "RemoveChild__9TiXmlNodeP9TiXmlNode.removeThis",
+                "Remove__17TiXmlAttributeSetP14TiXmlAttribute.removeMe",
+                "ReplaceChild__9TiXmlNodeP9TiXmlNodeRC9TiXmlNode.replaceThis",
+                "SaveFile__C13TiXmlDocumentPCc.filename",
+                "SetAttribute__12TiXmlElementPCcT1.cname",
+                "SetAttribute__12TiXmlElementPCcT1.cvalue",
+                "SetAttribute__12TiXmlElementPCci.name",
+                "SetDoubleAttribute__12TiXmlElementPCcd.name",
+                "SetIndent__12TiXmlPrinterPCc._indent",
+                "SetLineBreak__12TiXmlPrinterPCc._lineBreak",
+                "SetValue__9TiXmlNodePCc._value",
+                "TiXmlFOpen__FPCcT0.filename",
+                "TiXmlFOpen__FPCcT0.mode",
+                "VisitEnter__12TiXmlPrinterRC12TiXmlElementPC14TiXmlAttribute.firstAttribute",
+                "__11TiXmlHandleP9TiXmlNode._node",
+                "__11TiXmlStringPCc.copy",
+                "__12TiXmlCommentPCc._value",
+                "__12TiXmlElementPCc._value",
+                "__13TiXmlDocumentPCc.documentName",
+                "__16TiXmlDeclarationPCcN21._encoding",
+                "__16TiXmlDeclarationPCcN21._standalone",
+                "__16TiXmlDeclarationPCcN21._version",
+                "__9TiXmlTextPCc.initValue",
+                "__apl__11TiXmlStringPCc.suffix",
+                "__apl__11TiXmlStringRC11TiXmlString.suffix",
+                "__as__11TiXmlStringPCc.copy",
+                "__as__11TiXmlStringRC11TiXmlString.copy"
+            ]
         },
         "parse-error": {
             "min": 33,
@@ -271,6 +475,13 @@
         "stab-value-func-relative": {
             "min": 1983,
             "max": 1983
+        },
+        "struct-mostly-undefined": {
+            "min": 1,
+            "max": 1,
+            "degrades": [
+                "/std/stdlib/lldiv_t"
+            ]
         },
         "textrange-entries": {
             "min": 5,
