@@ -1,27 +1,5 @@
 {
     "counters": {
-        "body-pointer-pointee": {
-            "min": 3,
-            "max": 3,
-            "degrades": [
-                "Anon_tinyxml_36_80f5dee4",
-                "Anon_tinyxml_37_80f5dee5",
-                "Anon_tinyxml_43_80f5deeb"
-            ]
-        },
-        "body-reference-referent": {
-            "min": 7,
-            "max": 7,
-            "degrades": [
-                "Anon_tinyxml_25_80f5ded9",
-                "Anon_tinyxml_26_80f5deda",
-                "Anon_tinyxml_31_80f5dedf",
-                "Anon_tinyxml_34_80f5dee2",
-                "Anon_tinyxml_35_80f5dee3",
-                "Anon_tinyxml_38_80f5dee6",
-                "Anon_tinyxml_39_80f5dee7"
-            ]
-        },
         "class-not-struct": {
             "min": 11,
             "max": 11
@@ -592,21 +570,15 @@
             "max": 3
         },
         "method-demangle-fallback": {
-            "min": 43,
-            "max": 43,
+            "min": 32,
+            "max": 32,
             "degrades": [
-                "TiXmlAttributeSet::TiXmlAttributeSet",
                 "TiXmlBase::IsWhiteSpaceCondensed",
                 "TiXmlBase::Row",
                 "TiXmlBase::TiXmlBase",
-                "TiXmlComment::TiXmlComment",
                 "TiXmlCursor::Clear",
                 "TiXmlCursor::TiXmlCursor",
-                "TiXmlDeclaration::TiXmlDeclaration",
-                "TiXmlElement::TiXmlElement",
-                "TiXmlNode::TiXmlNode",
                 "TiXmlOutStream::TiXmlOutStream",
-                "TiXmlPrinter::TiXmlPrinter",
                 "TiXmlString::TiXmlString",
                 "TiXmlString::c_str",
                 "TiXmlString::capacity",
@@ -618,8 +590,6 @@
                 "TiXmlString::quit",
                 "TiXmlString::size",
                 "TiXmlString::start",
-                "TiXmlText::TiXmlText",
-                "TiXmlUnknown::TiXmlUnknown",
                 "TiXmlVisitor::TiXmlVisitor",
                 "_G_fpos64_t::_G_fpos64_t",
                 "_G_fpos_t::_G_fpos_t",
@@ -927,6 +897,24 @@
                 "Anon_tinyxml_98_0dc05831"
             ]
         },
+        "param-unnamed-padded": {
+            "min": 12,
+            "max": 12,
+            "degrades": [
+                "Print__C14TiXmlAttributeP8_IO_FILEiP11TiXmlString",
+                "Print__C16TiXmlDeclarationP8_IO_FILEiP11TiXmlString",
+                "VisitEnter__12TiXmlPrinterRC13TiXmlDocument",
+                "VisitEnter__12TiXmlVisitorRC12TiXmlElementPC14TiXmlAttribute",
+                "VisitEnter__12TiXmlVisitorRC13TiXmlDocument",
+                "VisitExit__12TiXmlPrinterRC13TiXmlDocument",
+                "VisitExit__12TiXmlVisitorRC12TiXmlElement",
+                "VisitExit__12TiXmlVisitorRC13TiXmlDocument",
+                "Visit__12TiXmlVisitorRC12TiXmlComment",
+                "Visit__12TiXmlVisitorRC12TiXmlUnknown",
+                "Visit__12TiXmlVisitorRC16TiXmlDeclaration",
+                "Visit__12TiXmlVisitorRC9TiXmlText"
+            ]
+        },
         "placeholder-created": {
             "min": 644,
             "max": 644
@@ -987,7 +975,7 @@
             "min": 2,
             "max": 2,
             "degrades": [
-                "/std/stdlib/lldiv_t",
+                "//lldiv_t",
                 "/std/types/_G_fpos64_t"
             ]
         },
