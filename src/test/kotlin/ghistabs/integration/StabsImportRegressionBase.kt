@@ -357,7 +357,10 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         val declared = artifacts.harvest.statics
             .mapNotNull { sym ->
                 val elements = (resolve(sym.body.type) as? TypeDecl.Array)?.declaredElements ?: return@mapNotNull null
-                val addr = context.resolver.buildAddress(sym.rawValue)
+                // Ask the resolver rather than re-deriving: an a.out `N_GSYM` carries no address of
+                // its own — it lives in the companion link-time symbol — so `rawValue` is 0 for every
+                // global on graphcnv.SUN4 and this measured the importer at address 0.
+                val addr = context.resolver.forSymbol(sym) ?: return@mapNotNull null
                 Triple(sym.body.name, addr, elements).takeIf { program.memory.getBlock(addr) != null }
             }
         assumeTrue(declared.isNotEmpty(), "Skipping: no array globals with a declared extent")
