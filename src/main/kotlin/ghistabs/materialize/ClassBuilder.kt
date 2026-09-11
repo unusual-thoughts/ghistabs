@@ -484,7 +484,8 @@ class ClassBuilder(
                     program.listing.setComment(
                         func.entryPoint,
                         CommentType.PLATE,
-                        "virtual ${m.name}; ${className}_vftable offset ${vftable.getComponent(slot).offset}",
+                        "virtual ${m.name}; ${className}_vftable offset " +
+                            "${resolved.abi.slotOffset(slot, program.defaultPointerSize)}",
                     )
                 } else {
                     debug(
