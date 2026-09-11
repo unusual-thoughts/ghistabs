@@ -75,7 +75,9 @@ class ExpectedToFailExtension : InvocationInterceptor {
             record("failed")
             TestAbortedException(
                 "@ExpectedToFail: '$binaryName' failed ${method.name}() as expected — " +
-                    failure.message?.lineSequence()?.firstOrNull()?.take(160),
+                    // Not the first line: an assertAll failure opens with a bare "Multiple Failures
+                    // (1 failure)" and puts every detail on the lines under it.
+                    failure.message?.lineSequence()?.joinToString(" ") { it.trim() }?.take(400),
             )
         }
     }
