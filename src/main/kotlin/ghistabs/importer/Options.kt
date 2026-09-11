@@ -9,6 +9,7 @@ import ghidra.framework.options.Options
 import ghidra.program.model.listing.Program
 import ghistabs.DirectoryListEditor
 import ghistabs.diagnose.Level
+import ghistabs.materialize.itanium.VfptrModel
 import ghistabs.runTransaction
 import java.awt.Component
 import java.beans.PropertyEditor
@@ -25,6 +26,7 @@ data class ImportOptions(
     val foldSources: Boolean = FOLD_SOURCES.default,
     val minLogLevel: Level = LOG_LEVEL.default,
     val overlaySection: Boolean = OVERLAY_SECTION.default,
+    val vfptrModel: VfptrModel = VFPTR_MODEL.default,
     val sourceRoots: List<String> = SOURCE_ROOTS.default,
 ) {
     companion object {
@@ -62,6 +64,15 @@ data class ImportOptions(
                 "#include \"x.h\") onto one rendered output file, by unique basename.",
             true,
         )
+        val VFPTR_MODEL = EnumOption(
+            "Virtual function pointer model",
+            "Where a polymorphic class's {vfptr} comes from. INHERITED keeps one on the root of each " +
+                "hierarchy, shared through the base subobject — derived slots then sit past the end of " +
+                "the root's vftable and virtual calls render as vfptr[N].field. SPLIT_BASE gives every " +
+                "polymorphic class its own {vfptr} typed to its own vftable, embedding the primary base " +
+                "as that base's fields without the vptr, so virtual calls resolve to named slots.",
+            VfptrModel.SPLIT_BASE,
+        )
         val LOG_LEVEL = EnumOption(
             "Minimum log level",
             "Minimum level for MessageLog diagnostic output (bookmarks and counters are unaffected).",
@@ -86,7 +97,16 @@ data class ImportOptions(
         ) { DirectoryListEditor("Choose source root(s)") }
 
         val IMPORT_OPTIONS =
-            listOf(PLATE_COMMENTS, CLASSES, SHORTEN_TYPEDEFS, FOLD_SOURCES, LOG_LEVEL, OVERLAY_SECTION, SOURCE_ROOTS)
+            listOf(
+                PLATE_COMMENTS,
+                CLASSES,
+                SHORTEN_TYPEDEFS,
+                FOLD_SOURCES,
+                LOG_LEVEL,
+                OVERLAY_SECTION,
+                VFPTR_MODEL,
+                SOURCE_ROOTS,
+            )
 
         val Program.isStabsDone get() = this[STABS_DONE]
 
@@ -122,6 +142,7 @@ data class ImportOptions(
     constructor(opts: Options) : this(
         applyPlateComments = opts[PLATE_COMMENTS],
         buildClasses = opts[CLASSES],
+        vfptrModel = opts[VFPTR_MODEL],
         shortenTypedefs = opts[SHORTEN_TYPEDEFS],
         foldSources = opts[FOLD_SOURCES],
         minLogLevel = opts[LOG_LEVEL],

@@ -48,9 +48,11 @@ class ClassBuilder(
     private val resolver: AddressResolver,
     private val monitor: TaskMonitor,
     private val sink: DiagnosticSink,
+    private val vfptrModel: VfptrModel = VfptrModel.SPLIT_BASE,
 ) : DiagnosticSink by sink {
     private val symtab = program.symbolTable
     private val dtm = program.dataTypeManager
+    private val vfptrPlacement = VfptrPlacement(registry, types, program, vfptrModel, sink)
 
     companion object {
         private val source = SourceType.IMPORTED
@@ -111,7 +113,11 @@ class ClassBuilder(
      * once, off the most-detailed body. Returns the number of classes built.
      */
     fun buildAll(): Int {
-        val classes = registry.byLocation.values.filter { it.isClass() }
+        // Bases first: SPLIT_BASE reads a base's materialized layout to build its vptr-less
+        // `<Base>_fields`, which is only correct once the base has had its own vfptr placed.
+        val classes = registry.byLocation.values
+            .filter { it.isClass() }
+            .sortedBy { types.inheritanceDepth(it.classBody) }
         monitor.initialize(classes.size.toLong(), "Stabs: building classes")
         var built = 0
         for (group in classes) {
@@ -147,7 +153,7 @@ class ClassBuilder(
             classBody.methods.any { it.virt == VirtKind.VIRTUAL } ||
             classBody.fields.any { isVptrFieldName(it.name) } ||
             types.hasPolymorphicBaseSubobject(classBody)
-        if (isPoly) ensureVfptrFirstField(structDt)
+        if (isPoly) vfptrPlacement.place(structDt, className, classBody) { ensureVtableTypeAndPointer() }
 
         val ns = ensureClassNamespace()
         for (m in classBody.methods) reparentMethod(m, ns, structDt)
@@ -187,66 +193,6 @@ class ClassBuilder(
             }
         }
         return parent as GhidraClass
-    }
-
-    private fun LocatedType.ensureVfptrFirstField(structDt: Structure) {
-        val vfptrName = ClassUtils.VFPTR
-        val parserVptrOffset = classBody.fields
-            .firstOrNull { isVptrFieldName(it.name) }
-            ?.let { (it.offsetBits / 8).toInt() }
-
-        val targetOffset = parserVptrOffset ?: 0
-        val existingComp = runCatching { structDt.getComponentAt(targetOffset) }.getOrNull()
-        val snapshot = existingComp?.let {
-            FirstComponentSnapshot(
-                fieldName = it.fieldName,
-                offsetBytes = it.offset,
-                isUndefined = it.dataType is Undefined1DataType,
-            )
-        }
-
-        val action = Layout.chooseVfptrAction(
-            hasPolymorphicBaseSubobject = types.hasPolymorphicBaseSubobject(classBody),
-            parserVptrOffsetBytes = parserVptrOffset,
-            componentAtTargetOffset = snapshot,
-            canonicalVfptrFieldName = vfptrName,
-        )
-
-        when (action) {
-            is VfptrAction.SkipInheritedFromBase -> debug("vfptr-inherited-from-base")
-
-            is VfptrAction.AlreadyCanonical -> return
-
-            is VfptrAction.Insert -> {
-                val ptrToVtable = ensureVtableTypeAndPointer()
-                structDt.insertAtOffset(
-                    action.offsetBytes,
-                    ptrToVtable,
-                    ptrToVtable.length,
-                    vfptrName,
-                    "vtable pointer",
-                )
-                debug("vfptr-inserted")
-            }
-
-            is VfptrAction.Replace -> {
-                val ptrToVtable = ensureVtableTypeAndPointer()
-                structDt.replaceAtOffset(
-                    action.offsetBytes,
-                    ptrToVtable,
-                    ptrToVtable.length,
-                    vfptrName,
-                    "vtable pointer (was: ${action.wasFieldName})",
-                )
-                debug("vfptr-normalized")
-            }
-
-            is VfptrAction.CollisionAt -> degradation(
-                "vfptr-collision",
-                className,
-                "cannot place {vfptr} at +${action.offsetBytes} (occupied by ${action.occupantFieldName})",
-            )
-        }
     }
 
     private fun LocatedType.reparentMethod(m: Method<GlobalTypeId>, ns: GhidraClass, structDt: Structure) {

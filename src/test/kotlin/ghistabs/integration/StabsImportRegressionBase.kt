@@ -1778,8 +1778,20 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
                 ?: return@mapNotNull null
             val field = dt.components.firstOrNull { Itanium.isBaseField(it.fieldName.orEmpty()) }
                 ?: return@mapNotNull null
-            "${dt.name}: base field is ${field.dataType.pathName}, base class is ${baseType.pathName}"
-                .takeUnless { field.offset == 0 && field.dataType === baseType }
+            // Two legal shapes, per VfptrModel. INHERITED embeds the base Structure itself at +0.
+            // SPLIT_BASE hoists the vptr into this class so it can be typed with *this* class's
+            // vftable, and embeds `<Base>_fields` — the same base, minus that pointer — right after
+            // it. Either way the subobject has to name the base the stab does, which is what an
+            // ancestor or a same-sized synthetic standing in for it would fail.
+            val ptr = program.defaultPointerSize
+            val ok = (field.offset == 0 && field.dataType === baseType) ||
+                (field.offset == ptr && field.dataType.name == "${baseType.name}_fields")
+            if (ok) {
+                null
+            } else {
+                "${dt.name}: base field is ${field.dataType.pathName} at +${field.offset}, " +
+                    "base class is ${baseType.pathName}"
+            }
         }
         synthetic.take(10).mustBeEmpty(
             "${synthetic.size} single-base classes hold a stand-in rather than the base Structure itself",
