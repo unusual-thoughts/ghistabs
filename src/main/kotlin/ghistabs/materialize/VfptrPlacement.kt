@@ -1,5 +1,6 @@
 package ghistabs.materialize
 
+import ghidra.program.model.data.DataTypeComponent
 import ghidra.program.model.data.Pointer
 import ghidra.program.model.data.Structure
 import ghidra.program.model.data.StructureDataType
@@ -66,7 +67,7 @@ internal class VfptrPlacement(
         when (action) {
             is VfptrAction.SkipInheritedFromBase ->
                 if (model == VfptrModel.SPLIT_BASE &&
-                    splitBase(structDt, className, targetOffset, existingComp, ownVfptr)
+                    splitBase(structDt, className, existingComp, ownVfptr)
                 ) {
                     debug("vfptr-split-from-base")
                 } else {
@@ -126,36 +127,62 @@ internal class VfptrPlacement(
     private fun splitBase(
         structDt: Structure,
         className: String,
-        vptrOffset: Int,
-        baseComp: ghidra.program.model.data.DataTypeComponent?,
+        baseComp: DataTypeComponent?,
         ownVfptr: () -> Pointer,
     ): Boolean {
         val baseDt = baseComp?.dataType as? Structure ?: return false
-        if (baseComp.offset != vptrOffset) return false
         val ptr = program.defaultPointerSize
-        if (baseDt.length <= ptr) return false
+        // Where the vptr sits *within* the base, read off the base itself rather than assumed: the
+        // Itanium ABI puts it at 0, gcc 2.x appends it after the class's own fields. Classes are
+        // built bases-first, so the base already carries its own placed {vfptr} by now.
+        val vptrInBase = baseDt.definedComponents.firstOrNull { it.fieldName == ClassUtils.VFPTR }?.offset
+            ?: return false
+        val baseOff = baseComp.offset
+        val tailFrom = vptrInBase + ptr
 
-        val fieldsName = "${baseDt.name}_fields"
-        val fields = registry.getOrRegister<Structure>(baseDt.categoryPath, fieldsName) {
-            StructureDataType(baseDt.categoryPath, fieldsName, baseDt.length - ptr, program.dataTypeManager).apply {
-                description = "${baseDt.name} as a base subobject: its fields without the vptr the " +
-                    "deriving class now owns"
+        // The vptr splits the inherited data into up to two runs. One of them is empty whenever the
+        // vptr is at the start (Itanium) or the end (gcc 2.x at depth 1), which is the common case
+        // and keeps the subobject a single `_base_` component. Deeper in a gcc 2.x chain both runs
+        // are real — `TiXmlElement` inherits `location`/`userData` before the vptr and `value`
+        // after — so the subobject is spliced as a head and a tail rather than dropped.
+        val head = baseFieldsRun(baseDt, 0, vptrInBase, "")
+        val tail = baseFieldsRun(baseDt, tailFrom, baseDt.length, if (head != null) "_tail" else "")
+        if (head == null && tail == null) return false
+
+        val vfptr = ownVfptr()
+        return runCatching {
+            head?.let { structDt.replaceAtOffset(baseOff, it, it.length, baseComp.fieldName, baseComp.comment) }
+            structDt.replaceAtOffset(baseOff + vptrInBase, vfptr, vfptr.length, ClassUtils.VFPTR, "vtable pointer")
+            tail?.let {
+                val name = if (head == null) baseComp.fieldName else "${baseComp.fieldName}_tail"
+                structDt.replaceAtOffset(baseOff + tailFrom, it, it.length, name, baseComp.comment)
+            }
+        }.onFailure {
+            degradation("vfptr-split-failed", className, "${baseDt.name} at +$baseOff: ${it.message}")
+        }.isSuccess
+    }
+
+    /**
+     * One contiguous run of [baseDt]'s bytes, `[from, until)`, as a struct of its own — the base
+     * subobject's fields with the vptr word taken out. Null when the run is empty. Shared across
+     * every class deriving from that base, which is what keeps this one extra type per polymorphic
+     * class instead of one per inheritance edge.
+     */
+    private fun baseFieldsRun(baseDt: Structure, from: Int, until: Int, suffix: String): Structure? {
+        if (until <= from) return null
+        val name = "${baseDt.name}_fields$suffix"
+        return registry.getOrRegister<Structure>(baseDt.categoryPath, name) {
+            StructureDataType(baseDt.categoryPath, name, until - from, program.dataTypeManager).apply {
+                description = "${baseDt.name} as a base subobject (+$from..$until): its fields " +
+                    "without the vptr the deriving class now owns"
                 baseDt.definedComponents
-                    .filter { it.offset >= ptr }
+                    .filter { it.offset >= from && it.offset + it.length <= until }
                     .forEach {
                         runCatching {
-                            replaceAtOffset(it.offset - ptr, it.dataType, it.length, it.fieldName, it.comment)
+                            replaceAtOffset(it.offset - from, it.dataType, it.length, it.fieldName, it.comment)
                         }
                     }
             }
         }
-
-        val vfptr = ownVfptr()
-        return runCatching {
-            structDt.replaceAtOffset(vptrOffset, vfptr, vfptr.length, ClassUtils.VFPTR, "vtable pointer")
-            structDt.replaceAtOffset(vptrOffset + ptr, fields, fields.length, baseComp.fieldName, baseComp.comment)
-        }.onFailure {
-            degradation("vfptr-split-failed", className, "${baseDt.name} at +$vptrOffset: ${it.message}")
-        }.isSuccess
     }
 }
