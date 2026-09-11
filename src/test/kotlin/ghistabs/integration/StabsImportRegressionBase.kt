@@ -346,13 +346,6 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
      * which `applyGlobalOrStatic` evicts via `DataUtilities.CLEAR_ALL_CONFLICT_DATA`.
      */
     @Test
-    @ExpectedToFail(
-        fixtures = ["tinyxml_aout_gcc295.o"],
-        reason = "relocatable object (.o): sections sit at 0 unrelocated, so a global's stab value " +
-            "resolves into a block with nothing applied at it — gcc 2.95's `__vt_<class>` vtables are " +
-            "array globals and land there. zlib is the same shape and passed once its `unsigned int` " +
-            "stopped materializing 8 bytes wide, so the addresses were never the whole story",
-    )
     fun arrayGlobalsGetTheirDeclaredLength() {
         val declared = artifacts.harvest.statics
             .mapNotNull { sym ->
@@ -1335,6 +1328,12 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     }
 
     @Test
+    @ExpectedToFail(
+        fixtures = ["tinyxml_aout_gcc295.o"],
+        reason = "single translation unit whose file-scope data happens to include no pointer global. " +
+            "It briefly had one: the `<Class>_vftable` laid over each `__vt_<class>` supplied the kind, " +
+            "until those stopped being laid at an Itanium address point a gcc 2.x record has no room for",
+    )
     fun globalsCoverEachDataTypeKind() {
         val seenKinds = mutableSetOf<String>()
         program.listing.getDefinedData(true).forEach { data ->

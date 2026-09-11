@@ -108,6 +108,7 @@ object Itanium {
      * the separator before a base class, naming that base's secondary vtable — a different object from
      * this class's own, and not what a lookup by class name wants.
      */
+
     fun ztvCandidates(className: String): List<String> {
         val mangled = mangleClassName(className)
         return listOf(
@@ -119,6 +120,13 @@ object Itanium {
             "$className::$DEMANGLED_VTABLE", // some compilers emit this
         )
     }
+
+    /**
+     * A pre-Itanium gcc 2.x vtable symbol. Such a record carries none of the Itanium fixed words, so
+     * nothing in this file describes its layout — see [ztvCandidates] for the spellings.
+     */
+    fun isGcc2VtableSymbol(name: String) = name.startsWith("_vt.") || name.startsWith($$"_vt$") ||
+        name.startsWith("__vt_")
 
     /** The qualified class name a `_ZTV<class>` [symbolName] names (e.g. `std::basic_ios<char,…>`), or
      *  null if it isn't a vtable. Lets a caller demangle the symbol table once into a class→address index
