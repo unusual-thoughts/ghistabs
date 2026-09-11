@@ -11,6 +11,7 @@ import ghidra.program.model.listing.*
 import ghidra.program.model.listing.Function
 import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
+import ghidra.program.model.symbol.SymbolUtilities
 import ghidra.util.task.TaskMonitor
 import ghistabs.Demangler
 import ghistabs.applyDemangling
@@ -58,9 +59,6 @@ class ClassBuilder(
 
         /** Prefix for the non-slot fields of a gcc 2.x vftable — its reserved header entry. */
         private const val RESERVED = "__reserved"
-
-        /** Anything a Ghidra field/DataType name can't carry, in the overload tag [slotName] builds. */
-        private val NON_IDENTIFIER = Regex("[^A-Za-z0-9_]")
 
         fun LocatedType.isClass() = (type.body as? TypeDecl.Aggregate)?.hasCxxSurface == true
 
@@ -580,7 +578,7 @@ class ClassBuilder(
         val overload = (m.mangled?.let(Demangler::of) as? DemangledFunction)
             ?.parameters.orEmpty()
             .joinToString("_") { it.type.name.orEmpty() }
-            .replace(NON_IDENTIFIER, "_")
+            .let { SymbolUtilities.replaceInvalidChars(it, true) }
             .takeIf { it.isNotEmpty() }
         return (
             sequenceOf(m.name, overload?.let { "${m.name}_$it" }).filterNotNull() +
