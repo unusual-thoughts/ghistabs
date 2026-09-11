@@ -27,7 +27,6 @@ import ghistabs.materialize.itanium.Itanium.isImplicitTrivialSpecialMember
 import ghistabs.materialize.itanium.Itanium.isInlineStdMember
 import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Aggregate.Method
-import java.util.TreeSet
 
 /**
  * The C++ pass over the structs [DataTypeRegistry] has already materialized: a class gets its Ghidra
@@ -196,21 +195,22 @@ class ClassBuilder(
     }
 
     private fun LocatedType.reparentMethod(m: Method<GlobalTypeId>, ns: GhidraClass, structDt: Structure) {
-        val mangled = m.mangled?.takeIf { it.isNotBlank() } ?: reconstructPhysname(m) ?: run {
-            degradation("method-no-mangled", "$className::${m.name}", "stab has no mangled symbol")
-            return
-        }
-        val addr = resolver.resolve(mangled) ?: run {
-            // Trivial implicit special members (default ctor, copy/move ctor/assignment, dtor)
-            // appear in every class's stab list but get no emitted symbol. Bucket separately
-            // so the unresolved-symbol log surfaces real problems.
-            if (isImplicitTrivialSpecialMember(mangled)) {
-                debug("method-implicit-not-emitted")
-            } else {
-                debug("unresolved-symbol", "method $mangled (in $className)")
+        val stated = m.mangled?.takeIf { it.isNotBlank() }
+        val (mangled, addr) = physnameCandidates(m, stated)
+            .firstNotNullOfOrNull { name -> resolver.resolve(name)?.let { name to it } }
+            ?: run {
+                // Nothing was emitted for this member. Trivial implicit special members — default
+                // ctor, copy ctor/assignment, dtor — are declared in every class's stab list and
+                // never get a symbol, so they are bucketed apart to keep unresolved-symbol about
+                // real problems. gcc 2.x spells them by the class's own name rather than by an
+                // Itanium tail, which is why a plain C struct's `timeval::timeval` lands here.
+                if (stated?.let(::isImplicitTrivialSpecialMember) == true || isImplicitGcc2Member(m)) {
+                    debug("method-implicit-not-emitted")
+                } else {
+                    debug("unresolved-symbol", "method ${stated ?: m.name} (in $className)")
+                }
+                return
             }
-            return
-        }
         val func = program.functionManager.getFunctionAt(addr) ?: run {
             val (tag, level) = if (isInlineStdMember(mangled)) {
                 "unresolved-symbol-inlined-std" to Level.DEBUG
@@ -398,44 +398,38 @@ class ClassBuilder(
         .orEmpty()
         .also { if (it.isNotEmpty()) debug("method-stub-params-recovered", "$at: ${it.size} from $mangled") }
 
-    /** Every symbol name, ordered, for the prefix lookup [reconstructPhysname] needs. */
-    private val symbolNames: TreeSet<String> by lazy {
-        TreeSet<String>().apply { symtab.symbolIterator.forEach { add(it.name) } }
-    }
+    /**
+     * The symbols this member could be, most specific first.
+     *
+     * A gcc 2.x stab does not put a symbol in its physname field — it puts the mangled *argument
+     * list*, which is what gdb's `gdb_mangle_name` concatenates onto `<name>__<cv><class>`.
+     * `tinyxml_aout_gcc295.o` states `""` and `"PCc"` for FirstChild's two overloads and carries
+     * `FirstChild__C9TiXmlNode` and `FirstChild__C9TiXmlNodePCc`, so the fragment is exactly what
+     * tells them apart: composing it gives one candidate, not a prefix to search under.
+     *
+     * The stated name is tried first and unchanged, which is all gcc 3.x needs — there the field
+     * really is the whole mangled symbol. The composed form is only worth trying when it isn't
+     * Itanium-mangled, so a COMDAT-dropped `_ZN…` doesn't get a bogus second lookup.
+     */
+    private fun LocatedType.physnameCandidates(m: Method<GlobalTypeId>, stated: String?): List<String> = listOfNotNull(
+        stated,
+        if (stated == null || !Itanium.isProbablyMangled(stated)) {
+            Gcc2.physnamePrefix(m.name, className, m.isConst, m.isVolatile) + stated.orEmpty()
+        } else {
+            null
+        },
+    )
 
     /**
-     * The symbol a member with no physname belongs to, rebuilt the way gdb's `gdb_mangle_name` does
-     * — see [Gcc2.physnamePrefix] for why the stab so often leaves it blank. Without this the member
-     * resolves to nothing, so its Function is never reparented and never typed, and every use of the
-     * receiver decompiles as an untyped stack slot.
-     *
-     * Only ever binds an unambiguous match. A stub states the member's name and cv-qualifier and
-     * nothing else, so two overloads differing only in parameters are indistinguishable here —
-     * `FirstChild__C9TiXmlNode` and `FirstChild__C9TiXmlNodePCc` are both live in tinyxml. Binding
-     * both declarations to whichever symbol sorts first would be worse than leaving them alone.
+     * A member gcc 2.x would only emit if it were used: the class's own ctor or dtor, or the
+     * implicit `operator=`. gcc declares them for every aggregate the CU sees — plain C structs
+     * from system headers included as `timeval` or `_IO_FILE` among them — so an absent symbol is
+     * the norm rather than a loss. The Itanium counterpart is [isImplicitTrivialSpecialMember],
+     * which reads the mangled tail; there is no tail to read here.
      */
-    private fun LocatedType.reconstructPhysname(m: Method<GlobalTypeId>): String? {
-        val prefix = Gcc2.physnamePrefix(m.name, className, m.isConst, m.isVolatile)
-        val declared = classBody.methods.count {
-            it.name == m.name && it.isConst == m.isConst && it.isVolatile == m.isVolatile
-        }
-        val matches = symbolNames.tailSet(prefix).asSequence().takeWhile { it.startsWith(prefix) }.take(2).toList()
-        return when {
-            // The exact prefix is the nil-ary member's whole symbol, so it wins over a longer one.
-            prefix in matches -> prefix
-
-            declared == 1 && matches.size == 1 -> matches.single()
-
-            matches.isEmpty() -> null
-
-            else -> null.also {
-                degradation(
-                    "method-physname-ambiguous",
-                    "$className::${m.name}",
-                    "$declared stab declaration(s), ${matches.size}+ symbols under '$prefix'",
-                )
-            }
-        }
+    private fun LocatedType.isImplicitGcc2Member(m: Method<GlobalTypeId>): Boolean {
+        val leaf = className.substringAfterLast("::")
+        return m.name == leaf || m.name == "~$leaf" || m.name == "__as"
     }
 
     private fun LocatedType.buildAndApplyVtable(ns: GhidraClass) {
