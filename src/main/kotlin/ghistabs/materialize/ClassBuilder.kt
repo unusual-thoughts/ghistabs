@@ -54,6 +54,9 @@ class ClassBuilder(
     companion object {
         private val source = SourceType.IMPORTED
 
+        /** Anything a Ghidra field/DataType name can't carry, in the overload tag [slotName] builds. */
+        private val NON_IDENTIFIER = Regex("[^A-Za-z0-9_]")
+
         fun LocatedType.isClass() = (type.body as? TypeDecl.Aggregate)?.hasCxxSurface == true
 
         private val LocatedType.classBody get() = type.body as TypeDecl.Aggregate<GlobalTypeId>
@@ -424,28 +427,29 @@ class ClassBuilder(
     }
 
     private fun LocatedType.buildAndApplyVtable(ns: GhidraClass) {
-        // Itanium 32-bit: derived vtable = base entries first (in declaration order), with
-        // overridden slots replaced. Override matching uses method name only — sufficient
-        // for non-overloaded virtuals in the Cygwin gcc 3.4.4 corpus.
         val virtuals = collectAllVirtuals()
         if (virtuals.isEmpty()) {
             debug("vtable-skipped", "class=$className reason=no-virtuals")
             return
         }
 
-        while (vftable.numComponents > 0) vftable.delete(0)
-        for (m in virtuals) vftable.add(buildVirtualSlotType(m), m.name, "virtual ${m.name}")
+        // Resolve before building: the record in memory is what fills the slots the stabs skip.
+        val resolved = resolveVtableAddress()
+        val shape = resolved?.let { program.vtableShape(it.address, resolver, it.abi) }
+        val targets = shape?.let { program.vtableSlotTargets(it.addressPoint, resolver, resolved.abi) }.orEmpty()
+        fillVftable(virtuals, targets)
 
-        val addr = resolveVtableAddress() ?: return
-        claimedVtables += addr
-        val shape = program.vtableShape(addr, resolver)
+        if (resolved == null || shape == null) return
+        claimedVtables += resolved.address
 
         // One vbase offset per virtual base, so the two counts must agree. They are derived
         // independently — the stab's base graph vs. where vtableShape put offset_to_top — which makes
         // a disagreement the one cheap check that the address point was located correctly.
+        // gcc 2.x puts no vbase/vcall words in front of the record at all, so the prefix is empty by
+        // construction there and the comparison would only ever manufacture a mismatch.
         val virtualBases = types.virtualBases(classBody)
             .map { registry.resolveRef(it.type)?.name ?: "<unresolved base>" }
-        if (shape.prefix.size < virtualBases.size) {
+        if (resolved.abi.hasRttiHeader && shape.prefix.size < virtualBases.size) {
             degradation(
                 "vtable-vbase-count-mismatch",
                 className,
@@ -454,14 +458,15 @@ class ClassBuilder(
             )
         }
 
-        val addressPoint = program.layVtable(shape, vftable, className, ns, resolver, virtualBases)
-        debug("vtable-applied", "class=$className", address = addressPoint)
-        laySecondaryVtables(shape, className, ns)
+        val addressPoint =
+            program.layVtable(shape, vftable, className, ns, resolver, virtualBases, abi = resolved.abi)
+        debug("vtable-applied", "class=$className abi=${resolved.abi}", address = addressPoint)
+        if (resolved.abi.hasRttiHeader) laySecondaryVtables(shape, className, ns)
 
         // Plate-comment each virtual. An unresolved mangled name here is expected for
         // pure virtuals (slot points at __cxa_pure_virtual, no symbol emitted) or
         // DLL-imported impls. Slot type was already typed from the signature.
-        virtuals.forEachIndexed { i, m ->
+        virtuals.forEach { (slot, m) ->
             val mAddr = m.mangled?.let(resolver::resolve)
             if (mAddr != null) {
                 val func = program.functionManager.getFunctionAt(mAddr)
@@ -469,7 +474,7 @@ class ClassBuilder(
                     program.listing.setComment(
                         func.entryPoint,
                         CommentType.PLATE,
-                        "virtual ${m.name}; ${className}_vftable offset ${vftable.getComponent(i).offset}",
+                        "virtual ${m.name}; ${className}_vftable offset ${vftable.getComponent(slot).offset}",
                     )
                 } else {
                     debug(
@@ -488,17 +493,65 @@ class ClassBuilder(
         }
     }
 
+    /**
+     * (Re)build the class's vftable struct, one component per slot. Neither source describes the
+     * whole table: [virtuals] is sparse and stops at the last slot this CU declared, while [targets]
+     * knows an entry only by whatever symbol sits at the address it holds. So a declared slot takes
+     * the stab's signature, the record in memory fills what is left, and the table runs as long as
+     * the longer of the two.
+     */
+    private fun LocatedType.fillVftable(virtuals: Map<Int, Method<GlobalTypeId>>, targets: List<Address>) {
+        while (vftable.numComponents > 0) vftable.delete(0)
+        val used = mutableSetOf<String>()
+        for (slot in 0 until maxOf(targets.size, virtuals.keys.max() + 1)) {
+            val m = virtuals[slot]
+            when {
+                m != null -> slotName(m, used)
+                    .let { vftable.add(buildVirtualSlotType(m, it), it, "virtual ${m.name}") }
+
+                slot < targets.size -> vftable.addSweptSlot(vftableCategory, targets[slot], used)
+
+                // Inherited from a base that links without stabs, with no record to read it off
+                // either. Still a pointer to a definition named for its own field: a bare `void*`
+                // here reads as a failure to type a slot rather than as a slot we never saw.
+                else -> "slot_$slot".let { name ->
+                    used += name
+                    val fd = registry.register(FunctionDefinitionDataType(vftableCategory, name, dtm))
+                    vftable.add(PointerDataType(fd, dtm), name, "inherited virtual, not declared here")
+                }
+            }
+        }
+    }
+
+    /**
+     * Field name for [m]'s slot, unique within the table. The field and its FunctionDefinition share
+     * one name (`atLeastOneVtableStructApplied` requires it), so two virtual *overloads* — which the
+     * slot index now keeps apart where matching on name did not — would otherwise fork a `.conflict`
+     * per slot. Disambiguated by the parameter list the mangled name carries, leaf types only: an
+     * enclosing namespace is the same for both and so tells them apart no better than a counter.
+     */
+    private fun slotName(m: Method<GlobalTypeId>, used: MutableSet<String>): String {
+        val overload = (m.mangled?.let(Demangler::of) as? DemangledFunction)
+            ?.parameters.orEmpty()
+            .joinToString("_") { it.type.name.orEmpty() }
+            .replace(NON_IDENTIFIER, "_")
+            .takeIf { it.isNotEmpty() }
+        return (
+            sequenceOf(m.name, overload?.let { "${m.name}_$it" }).filterNotNull() +
+                generateSequence(1) { it + 1 }.map { "${m.name}_$it" }
+            ).first(used::add)
+    }
+
     /** Walk Ref/InlineDef wrappers to the underlying Method/FunctionT (gcc binds signatures to their own type id). */
     private fun unwrapSignature(sig: GlobalTypeDecl) =
         types.resolveWith(sig) { it.takeIf { d -> d is TypeDecl.Method || d is TypeDecl.FreeFunction } }
 
     /**
-     * Build the typed function-pointer slot for [m]: `Pointer→FunctionDefinition(<sig>)`.
-     * Slot field and pointee FD share the method's name to satisfy the
-     * `atLeastOneVtableStructApplied` regression invariant. `this` resolves to the
-     * declaring class's pointer or void*; __thiscall is dropped on platforms that lack it.
+     * Build the typed function-pointer slot for [m]: `Pointer→FunctionDefinition(<sig>)`, under the
+     * [slotName]-assigned [name] the field will also carry. `this` resolves to the declaring class's
+     * pointer or void*; __thiscall is dropped on platforms that lack it.
      */
-    private fun LocatedType.buildVirtualSlotType(m: Method<GlobalTypeId>): PointerDataType {
+    private fun LocatedType.buildVirtualSlotType(m: Method<GlobalTypeId>, name: String): PointerDataType {
         val unwrapped = unwrapSignature(m.signature)
         val method = unwrapped as? TypeDecl.Method<GlobalTypeId> ?: run {
             degradation(
@@ -515,7 +568,7 @@ class ClassBuilder(
         }
         val funcDef = registry.buildFunctionDefinition(
             category = vftableCategory,
-            name = m.name,
+            name = name,
             ret = method.ret,
             params = method.params,
             // A stub method (gcc 2.8's `##`) states no domain — but a vtable slot belongs to a known
@@ -536,6 +589,9 @@ class ClassBuilder(
     /** Vtable records a harvested class claimed, so [sweepUnclaimedVtables] can tell what is left. */
     private val claimedVtables = mutableSetOf<Address>()
 
+    /** Where a class's vtable record sits, and which ABI lays it out past the header. */
+    private data class ResolvedVtable(val address: Address, val abi: VtableAbi)
+
     /**
      * Lay every `_ZTV…` symbol no harvested class claimed. `buildAndApplyVtable` runs per group, i.e.
      * only for a class we have a `T`-stab body for; libsupc++ and libstdc++ link without stabs, so
@@ -550,15 +606,17 @@ class ClassBuilder(
     private fun sweepUnclaimedVtables() {
         val unclaimed = symtab.symbolIterator
             .filter { it.address !in claimedVtables }
-            .mapNotNull { sym -> Itanium.vtableClassOf(sym.name)?.let { sym.address to it } }
-            .distinctBy { (addr, _) -> addr }
+            .mapNotNull { sym ->
+                Itanium.vtableClassOf(sym.name)?.let { Triple(sym.address, it, VtableAbi.of(sym.name)) }
+            }
+            .distinctBy { (addr, _, _) -> addr }
             .toList()
 
         monitor.initialize(unclaimed.size.toLong(), "Stabs: sweeping unclaimed vtables")
-        for ((addr, qualified) in unclaimed) {
+        for ((addr, qualified, abi) in unclaimed) {
             monitor.increment()
-            val shape = program.vtableShape(addr, resolver)
-            val targets = program.vtableSlotTargets(shape.addressPoint, resolver)
+            val shape = program.vtableShape(addr, resolver, abi)
+            val targets = program.vtableSlotTargets(shape.addressPoint, resolver, abi)
             if (targets.isEmpty()) {
                 degradation("vtable-swept-empty", qualified, "no function pointers", shape.addressPoint)
                 continue
@@ -576,9 +634,13 @@ class ClassBuilder(
             }
 
             val ns = buildNamespaceChain(splitQualified(qualified))
-            val addressPoint = program.layVtable(shape, vftable, qualified, ns, resolver)
+            val addressPoint = program.layVtable(shape, vftable, qualified, ns, resolver, abi = abi)
             debug("vtable-reconstructed", "${targets.size} slot(s) typed from targets", addressPoint, qualified)
-            laySecondaryVtables(shape, leaf, ns)
+            // Itanium packs a class's secondaries into the same record, walkable from the primary's
+            // end by their shared rtti word. gcc 2.x gives each its own `_vt.<derived>.<base>`
+            // symbol instead, so there is nothing contiguous to walk — and nothing claims them yet
+            // either, since vtableClassOf screens the two-segment names out.
+            if (abi.hasRttiHeader) laySecondaryVtables(shape, leaf, ns)
         }
     }
 
@@ -660,10 +722,11 @@ class ClassBuilder(
     /** `_ZTV<class>` demangled qualified-class-name → address, built once. Replaces the per-class
      *  `O(classes × symbols)` demangle scan that made [resolveVtableAddress] pathological on CryptoPP
      *  (thousands of classes × thousands of symbols). First symbol per class wins (iteration order). */
-    private val vtableAddressByClass: Map<String, Address> by lazy {
+    private val vtableAddressByClass: Map<String, ResolvedVtable> by lazy {
         buildMap {
             for (sym in symtab.symbolIterator) {
-                Itanium.vtableClassOf(sym.name)?.let { putIfAbsent(it, sym.address) }
+                Itanium.vtableClassOf(sym.name)
+                    ?.let { putIfAbsent(it, ResolvedVtable(sym.address, VtableAbi.of(sym.name))) }
             }
         }
     }
@@ -688,28 +751,13 @@ class ClassBuilder(
     private fun Address.isDefined() = program.memory.getBlock(this)?.isInitialized == true
 
     /** Resolve _ZTV<class> address: try AddressResolver candidates, then the demangled-vtable index. */
-    private fun LocatedType.resolveVtableAddress(): Address? {
+    private fun LocatedType.resolveVtableAddress(): ResolvedVtable? {
         val candidates = Itanium.ztvCandidates(className)
         candidates.firstNotNullOfOrNull { name ->
-            resolver.resolve(name)?.takeIf { it.isDefined() }?.let { name to it }
-        }?.let { (name, addr) ->
-            // A `-fvtable-thunks` table is laid out exactly as the Itanium path assumes — two reserved
-            // header slots of one pointer each, then bare function pointers — so it needs no special
-            // case. Without thunks the entries are the 8-byte `{delta, index, pfn}` of gcc 2.95
-            // `cp/class.c:build_vtable_entry`, which the pointer-wide slots built here cannot describe.
-            if (Itanium.isGcc2VtableSymbol(name) && !Itanium.isGcc2ThunkVtableSymbol(name)) {
-                degradation(
-                    "vtable-gcc2-layout",
-                    className,
-                    "$name has 8-byte {delta, index, pfn} entries; left unannotated",
-                    addr,
-                )
-                return null
-            }
-            return addr
-        }
+            resolver.resolve(name)?.takeIf { it.isDefined() }?.let { ResolvedVtable(it, VtableAbi.of(name)) }
+        }?.let { return it }
 
-        vtableAddressByClass[qualifiedClassName]?.takeIf { it.isDefined() }?.let { return it }
+        vtableAddressByClass[qualifiedClassName]?.takeIf { it.address.isDefined() }?.let { return it }
 
         val failureBucket = when {
             classBody.hasVTablePointerMarker && classBody.methods.none { it.virt == VirtKind.VIRTUAL } ->

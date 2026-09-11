@@ -1,0 +1,75 @@
+package ghistabs.materialize.itanium
+
+import ghidra.app.util.demangler.DemangledObject
+
+/**
+ * Pre-Itanium gcc 2.x C++ ABI facts: the vtable symbol spellings and what the deprecated demangler
+ * back end makes of them. The counterpart to [Itanium] for the WordPerfect/libstdc++-2.8.1 corpus,
+ * and separate from it because none of it *is* Itanium — different names, no typeinfo, and the
+ * record geometry in [VtableAbi].
+ */
+object Gcc2 {
+    // The marker between `_vt` and the mangled class is one of gdb's cplus_markers — `$`, or `.`
+    // where the assembler forbids `$`, which is what the corpus binaries use. `-fvtable-thunks`
+    // spells the whole prefix `__vt_` instead, with no marker.
+    const val VTABLE_PREFIX = "_vt"
+    const val THUNK_VTABLE_PREFIX = "__vt_"
+    const val CPLUS_MARKERS = "\$."
+
+    // cplus-dem.c spells a gcc 2.x vtable "<class> virtual table"; DemangledObject.setName replaces
+    // the spaces, so the leaf arrives as "<class>_virtual_table" with the scope in the namespace.
+    private const val DEMANGLED_VTABLE_SUFFIX = "_virtual_table"
+
+    /**
+     * String-level pre-filter for a gcc 2.x vtable symbol — the gcc 2.x parallel to
+     * [Itanium.looksLikeZtv], and just as cheap. Such a record carries none of the Itanium fixed
+     * words; see [VtableAbi] for what it carries instead.
+     */
+    fun looksLikeVtable(symbolName: String) = vtableTail(symbolName) != null
+
+    /**
+     * The `-fvtable-thunks` spelling, which decides the *entry width*. gcc 2.95.3 `cp/decl.c`: with
+     * thunks an entry is a bare function pointer, the `this` adjustment having moved into a thunk;
+     * without them it is the record `{short delta; short index; void *pfn;}`, twice as wide. The
+     * header is 8 bytes either way — `cp/class.c:skip_rtti_stuff` reserves two *entries* with thunks
+     * and one without — which on 32-bit is what [Itanium.vtablePrefixBytes] already computes.
+     */
+    fun looksLikeThunkVtable(symbolName: String) = symbolName.startsWith(THUNK_VTABLE_PREFIX)
+
+    /**
+     * A gcc 2.x vtable symbol naming a class's *own* table, which is the only kind a lookup by class
+     * name wants. A second marker in the tail separates a **base**, naming that base's secondary
+     * table inside the first class: `cv_mscom_elf_i386_gcc281` has `_vt.14CExposedStream` alongside
+     * `_vt.14CExposedStream.11PRevertable`, and carries `_vt.11PRevertable` separately as
+     * PRevertable's own — so the two-segment name is a third object, distinct from either.
+     *
+     * The screen has to be on the mangled form, because the demangled one cannot tell: a genuinely
+     * nested class gives the same `Outer::Inner_virtual_table`. gcc 2.x spells a nested class with
+     * the `Q` form (`Q2_6Outer5Inner`), never marker-separated, so the mangled name is unambiguous.
+     */
+    fun looksLikePrimaryVtable(symbolName: String) = vtableTail(symbolName)?.none { it in CPLUS_MARKERS } == true
+
+    /**
+     * Qualified class name of a demangled gcc 2.x vtable object, which is not an address table at
+     * all: the leaf carries [DEMANGLED_VTABLE_SUFFIX] and any enclosing scope is in the namespace
+     * chain. Null if [obj] is not one.
+     */
+    fun demangledVtableClass(obj: DemangledObject): String? {
+        val leaf = obj.name?.removeSuffix(DEMANGLED_VTABLE_SUFFIX)?.takeIf { it != obj.name } ?: return null
+        return (namespaceChain(obj) + leaf).joinToString("::")
+    }
+
+    /** The mangled class name a gcc 2.x vtable symbol carries, or null if [symbolName] isn't one. */
+    private fun vtableTail(symbolName: String): String? = when {
+        symbolName.startsWith(THUNK_VTABLE_PREFIX) -> symbolName.removePrefix(THUNK_VTABLE_PREFIX)
+
+        symbolName.startsWith(VTABLE_PREFIX) && symbolName.getOrNull(VTABLE_PREFIX.length) in CPLUS_MARKERS.toSet() ->
+            symbolName.substring(VTABLE_PREFIX.length + 1)
+
+        else -> null
+    }
+}
+
+/** [obj]'s enclosing scopes, outermost first. */
+internal fun namespaceChain(obj: DemangledObject) =
+    generateSequence(obj.namespace) { it.namespace }.map { it.name }.toList().asReversed()
