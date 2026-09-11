@@ -1,9 +1,11 @@
 package ghistabs.harvest
 
+import ghidra.app.util.bin.BinaryReader
 import ghidra.app.util.opinion.ElfLoader
 import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Program
 import ghistabs.baseStackParamOffset
+import ghistabs.byteProvider
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.DummySink
 import ghistabs.parse.*
@@ -58,10 +60,56 @@ class ProgramAddressResolver(private val program: Program, private val sink: Dia
     // (loadBase - originalBase). PE has no such property → null → no fixup. Mirrors
     // Ghidra's own DWARF address fixup (DIEContainer.setProgramBaseAddressFixup).
     private val baseFixup: Long =
-        ElfLoader.getElfOriginalImageBase(program)?.let { program.imageBase.offset - it } ?: 0L
+        ElfLoader.getElfOriginalImageBase(program)?.let { program.imageBase.offset - it }
+            ?: aoutTextBaseFixup(program)
 
-    override fun buildAddress(offset: Long): Address =
-        program.addressFactory.defaultAddressSpace.getAddress(offset) + baseFixup
+    /**
+     * The same correction for a paged a.out, where the shortfall is the loader's rather than the
+     * format's. SunOS maps a ZMAGIC text segment one page up — location 0 must stay unreachable —
+     * but `UnixAoutHeader.determineTextAddr` applies that to SPARC NMAGIC and not to SPARC ZMAGIC,
+     * so `graphcnv.SUN4` loads a page below every address its stabs and its symbol table name. The
+     * file says so itself: ZMAGIC maps the 32-byte exec header as the start of the text segment, so
+     * it is readable at `.text`, and `a_entry` (0x2020) sits one header past the page.
+     *
+     * Zero once Ghidra bases the segment correctly, so this retires itself rather than double-count.
+     */
+    private companion object {
+        /** `struct exec` words read to reach `a_entry`. */
+        const val EXEC_WORDS = 6
+
+        /** 0413. */
+        const val ZMAGIC = 0x10BL
+
+        /** binutils `include/aout/aout64.h`. */
+        const val M_SPARC = 3L
+
+        /** sun4's `TARGET_PAGE_SIZE`, which is also its `TEXT_START_ADDR`. */
+        const val SUN4_PAGE = 0x2000L
+    }
+
+    private fun aoutTextBaseFixup(program: Program): Long {
+        val text = program.memory.getBlock(".text")?.takeIf { it.isInitialized } ?: return 0L
+        // struct exec: a_info, a_text, a_data, a_bss, a_syms, a_entry, ...
+        val exec = runCatching {
+            val reader = BinaryReader(text.byteProvider, !program.memory.isBigEndian)
+            List(EXEC_WORDS) { reader.readNextUnsignedInt() }
+        }.getOrNull() ?: return 0L
+        val info = exec.first()
+        val entry = exec.last()
+        val magic = info and 0xFFFFL
+        val machine = (info shr 16) and 0xFFL
+        // binutils include/aout/sun4.h: ZMAGIC on sun4 starts at one page, except the shared-library
+        // kludge where `a_entry` falls below it.
+        if (magic != ZMAGIC || machine != M_SPARC || entry < SUN4_PAGE) return 0L
+        return text.start.offset - SUN4_PAGE
+    }
+
+    override fun buildAddress(offset: Long): Address = program.addressFactory.defaultAddressSpace.getAddress(offset) +
+        // A negative fixup only applies to values large enough to be vaddrs: callers also pass
+        // frame offsets and register numbers through here, and those would underflow the space.
+        baseFixup.takeIf { offset + it >= 0 }.orEmptyFixup()
+
+    private fun Long?.orEmptyFixup() = this ?: 0L
 
     /**
      * a.out link-time symbols straight from the file, which outrank Ghidra's for this format:
