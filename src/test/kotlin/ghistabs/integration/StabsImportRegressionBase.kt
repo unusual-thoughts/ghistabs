@@ -703,17 +703,22 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
 
         for (point in addressPoints) {
             val rttiHeader = runCatching { point.subtract(ptr) }.getOrNull() ?: continue
-            eol(rttiHeader)?.removePrefix("${Itanium.RTTI}: ")?.substringBefore(" typeinfo")?.let { named ->
-                // Only a *contradiction* counts: with no symbol at the target there is nothing to
-                // name and the closed form is the honest fallback.
-                val present = wordAt(rttiHeader)
-                    ?.let { program.addressFactory.defaultAddressSpace.getAddress(it) }
-                    ?.let { program.symbolTable.getSymbols(it).map { s -> s.name } }
-                    .orEmpty()
-                if (present.isNotEmpty() && named !in present) {
-                    misnamedRtti += "$rttiHeader: comment says '$named', symbols there are $present"
+            // Guarded, not `removePrefix` alone: that is a no-op when the prefix is absent, and a
+            // gcc 2.x record has no rtti word at all — its second header word is a reserved entry,
+            // whose comment would otherwise be read as if it named a symbol.
+            eol(rttiHeader)
+                ?.takeIf { it.startsWith("${Itanium.RTTI}: ") }
+                ?.removePrefix("${Itanium.RTTI}: ")?.substringBefore(" typeinfo")?.let { named ->
+                    // Only a *contradiction* counts: with no symbol at the target there is nothing to
+                    // name and the closed form is the honest fallback.
+                    val present = wordAt(rttiHeader)
+                        ?.let { program.addressFactory.defaultAddressSpace.getAddress(it) }
+                        ?.let { program.symbolTable.getSymbols(it).map { s -> s.name } }
+                        .orEmpty()
+                    if (present.isNotEmpty() && named !in present) {
+                        misnamedRtti += "$rttiHeader: comment says '$named', symbols there are $present"
+                    }
                 }
-            }
 
             // offset_to_top sits one word before rtti; the prefix runs backwards from there.
             var word = runCatching { rttiHeader.subtract(ptr) }.getOrNull() ?: continue
@@ -1317,23 +1322,35 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     }
 
     /**
-     * Every virtual the stabs declare for a class has a slot in its `<Class>_vftable` — inherited
-     * ones included, which is what the four-deep inheritance chain in the original report exposed.
+     * Every virtual the stabs declare for a class has a slot in its `<Class>_vftable`, *at the index
+     * the stab declares it at*. The `*<n>` a virtual's stab carries is `DECL_VINDEX` — the slot
+     * counted from the address point, verified against `_ZTVSt9type_info` whose declared 0/1/5 are
+     * its dtor, deleting dtor and `__is_function_p` — so one check covers both presence and
+     * placement. Inherited virtuals are covered through the base, which declares them and whose own
+     * table is checked the same way.
+     *
+     * A slot may carry the method's name with an overload tag appended (`Visit_TiXmlText`): two
+     * same-named virtuals hold different indices but cannot share one field name.
      */
     @Test
     fun declaredVirtualsAllGetAVftableSlot() {
-        val slotsByClass = filledVftables().associate { vft ->
-            vft.name.removeSuffix("_vftable") to vft.components.mapNotNull { it.fieldName }.toSet()
-        }
-        assumeTrue(slotsByClass.isNotEmpty(), "Skipping: no populated vftable in this fixture")
+        val vftables = filledVftables().associateBy { it.name.removeSuffix("_vftable") }
+        assumeTrue(vftables.isNotEmpty(), "Skipping: no populated vftable in this fixture")
 
-        val missing = artifacts.harvest.types.values.mapNotNull { it.asStruct() }
-            .mapNotNull { (ast, body) ->
-                val slots = slotsByClass[ast.ghidraName] ?: return@mapNotNull null
-                val virtuals = body.methods.filter { it.virt == VirtKind.VIRTUAL }.map { it.name }.toSet()
-                (virtuals - slots).takeIf { it.isNotEmpty() }?.let { "${ast.ghidraName} missing $it" }
+        val misplaced = artifacts.harvest.types.values.mapNotNull { it.asStruct() }
+            .flatMap { (ast, body) ->
+                val vft = vftables[ast.ghidraName] ?: return@flatMap emptyList()
+                body.methods
+                    .filter { it.virt == VirtKind.VIRTUAL }
+                    .mapNotNull { m ->
+                        val slot = m.vtableOffsetBits?.toInt() ?: return@mapNotNull null
+                        val at = vft.components.getOrNull(slot)?.fieldName
+                        "${ast.ghidraName}::${m.name} declared at slot $slot, found '$at'"
+                            .takeIf { at != m.name && at?.startsWith("${m.name}_") != true }
+                    }
             }
-        missing.sorted().take(10).mustBeEmpty("${missing.size} classes have declared virtuals with no vftable slot")
+        misplaced.sorted().take(10)
+            .mustBeEmpty("${misplaced.size} declared virtuals are not in their declared vftable slot")
     }
 
     @Test

@@ -114,36 +114,21 @@ object Itanium {
         return listOf(
             "$VTABLE_PREFIX$mangled", // Itanium canonical
             "_$VTABLE_PREFIX$mangled", // Cygwin/PE leading-underscore variant
-            "_vt.$mangled", // gcc 2.x, `.` marker
-            $$"_vt$$$mangled", // gcc 2.x, `$` marker
-            "__vt_$mangled", // gcc 2.x -fvtable-thunks
+            "${Gcc2.VTABLE_PREFIX}.$mangled", // gcc 2.x, `.` marker
+            $$"$${Gcc2.VTABLE_PREFIX}$$$mangled", // gcc 2.x, `$` marker
+            "${Gcc2.THUNK_VTABLE_PREFIX}$mangled", // gcc 2.x -fvtable-thunks
             "$className::$DEMANGLED_VTABLE", // some compilers emit this
         )
     }
-
-    /**
-     * A pre-Itanium gcc 2.x vtable symbol. Such a record carries none of the Itanium fixed words, so
-     * nothing in this file describes its layout — see [ztvCandidates] for the spellings.
-     */
-    fun isGcc2VtableSymbol(name: String) = name.startsWith("_vt.") || name.startsWith($$"_vt$") ||
-        isGcc2ThunkVtableSymbol(name)
-
-    /**
-     * The `-fvtable-thunks` spelling, which decides the *entry width*. gcc 2.95 `cp/class.c`,
-     * `build_vtable_entry`: with thunks an entry is the bare `pfn`, the `this` adjustment having moved
-     * into a thunk; without them it is `{delta, index, pfn}`, twice as wide, and the same file's
-     * slot-reserving code takes two header slots in the first case and one in the second — 8 bytes
-     * either way, which on 32-bit is what [vtablePrefixBytes] already computes.
-     */
-    fun isGcc2ThunkVtableSymbol(name: String) = name.startsWith("__vt_")
 
     /** The qualified class name a `_ZTV<class>` [symbolName] names (e.g. `std::basic_ios<char,…>`), or
      *  null if it isn't a vtable. Lets a caller demangle the symbol table once into a class→address index
      *  instead of re-scanning + re-demangling every symbol per class
      *  ([ghistabs.materialize.ClassBuilder.resolveVtableAddress]). */
-    fun vtableClassOf(symbolName: String): String? {
-        if (!looksLikeZtv(symbolName)) return null
-        return Demangler.of(symbolName)?.let(::demangledVtableClass)
+    fun vtableClassOf(symbolName: String): String? = when {
+        looksLikeZtv(symbolName) -> Demangler.of(symbolName)?.let(::demangledVtableClass)
+        Gcc2.looksLikePrimaryVtable(symbolName) -> Demangler.of(symbolName)?.let(Gcc2::demangledVtableClass)
+        else -> null
     }
 
     /** The qualified class a `_ZTI<class>` typeinfo object belongs to, or null if [symbolName] isn't
@@ -181,11 +166,7 @@ object Itanium {
      *  not one of [kind]. */
     private fun addressTableClass(obj: DemangledObject, kind: String): String? {
         if (obj !is DemangledAddressTable || obj.name != kind) return null
-        return generateSequence(obj.namespace) { it.namespace }
-            .map { it.name }
-            .toList()
-            .asReversed()
-            .joinToString("::")
+        return namespaceChain(obj).joinToString("::")
     }
 
     fun isInlineStdMember(name: String): Boolean = INLINE_STD_MEMBER.containsMatchIn(name)

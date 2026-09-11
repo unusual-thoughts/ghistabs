@@ -109,29 +109,27 @@ fun TypeGraph.virtualBases(typeDecl: TypeDecl.Aggregate<GlobalTypeId>) = buildLi
 fun TypeGraph.resolveStruct(typeDecl: GlobalTypeDecl) = resolve<TypeDecl.Aggregate<GlobalTypeId>>(typeDecl)
 
 /**
- * Collects a class's full vtable slot list from its inheritance chain and orders it by the
- * stab-declared slot offset. The walk gathers virtuals bases-first so a derived override (matched
- * by name) replaces the inherited slot and its offset wins; output order is set by the final sort,
- * not the walk. Override matching is by name only — fine for the non-overloaded gcc 3.4.4 corpus.
+ * A class's virtuals from its whole inheritance chain, keyed by the slot index gcc declares — the
+ * `*<n>` a method's stab carries after its cv-qualifier, which `dbxout.c` emits straight from
+ * `DECL_VINDEX`. Measured against `_ZTVSt9type_info` in `crypto_mi_test_gcc421_fullstabs`, whose
+ * stabs declare 0, 1 and 5: those are the record's dtor, deleting dtor and `__is_function_p` slots
+ * exactly, counted from the address point with no bias for the header words.
+ *
+ * The index is the slot's identity, which settles both overriding (a derived method reuses its
+ * base's index, so the bases-first walk lets the override win) and overloading (two same-named
+ * virtuals hold different ones) without matching on names.
+ *
+ * Sparse by nature, hence a map and not a list: a class only declares the slots its own CU saw, and
+ * libstdc++/libsupc++ link without stabs, so an inherited half of the table simply isn't here. The
+ * holes are real slots and the caller fills them from the record in memory.
  */
-fun TypeGraph.collectAllVirtuals(struct: TypeDecl.Aggregate<GlobalTypeId>) = object {
-    val table: MutableList<Method<GlobalTypeId>> = mutableListOf()
-    private val visited: MutableSet<TypeDecl.Aggregate<GlobalTypeId>> = mutableSetOf()
-
-    private fun walkBases(cls: TypeDecl.Aggregate<GlobalTypeId>) {
-        for (base in cls.bases) {
-            resolveStruct(base.type)?.takeIf { visited.add(it) }?.let { collectAll(it) }
-        }
+fun TypeGraph.collectAllVirtuals(struct: TypeDecl.Aggregate<GlobalTypeId>): Map<Int, Method<GlobalTypeId>> = buildMap {
+    val visited = mutableSetOf<TypeDecl.Aggregate<GlobalTypeId>>()
+    fun walk(cls: TypeDecl.Aggregate<GlobalTypeId>) {
+        for (base in cls.bases) resolveStruct(base.type)?.takeIf(visited::add)?.let(::walk)
+        cls.methods
+            .filter { it.virt == VirtKind.VIRTUAL }
+            .forEach { m -> m.vtableOffsetBits?.let { put(it.toInt(), m) } }
     }
-
-    fun collectAll(cls: TypeDecl.Aggregate<GlobalTypeId>) {
-        walkBases(cls)
-        for (m in cls.methods.filter { it.virt == VirtKind.VIRTUAL }) {
-            val idx = table.indexOfFirst { it.name == m.name }
-            if (idx >= 0) table[idx] = m else table += m
-        }
-    }
-}.run {
-    collectAll(struct)
-    table.sortedBy { it.vtableOffsetBits!! }
+    walk(struct)
 }
