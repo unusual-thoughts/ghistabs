@@ -712,12 +712,16 @@
             "max": 2971
         },
         "vfptr-inherited-from-base": {
-            "min": 114,
-            "max": 114
+            "min": 22,
+            "max": 22
         },
         "vfptr-normalized": {
             "min": 8,
             "max": 8
+        },
+        "vfptr-split-from-base": {
+            "min": 92,
+            "max": 92
         },
         "vtable-failed": {
             "min": 122,

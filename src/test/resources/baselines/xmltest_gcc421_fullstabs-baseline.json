@@ -657,8 +657,8 @@
             "max": 169
         },
         "resolve-ambiguous": {
-            "min": 2400,
-            "max": 2400
+            "min": 2459,
+            "max": 2459
         },
         "rtti-pseudo-substituted": {
             "min": 36,
@@ -786,12 +786,16 @@
             "max": 2806
         },
         "vfptr-inherited-from-base": {
-            "min": 113,
-            "max": 113
+            "min": 34,
+            "max": 34
         },
         "vfptr-normalized": {
             "min": 16,
             "max": 16
+        },
+        "vfptr-split-from-base": {
+            "min": 146,
+            "max": 146
         },
         "vtable-applied": {
             "min": 104,
@@ -846,8 +850,8 @@
             "max": 16
         },
         "vtable-skipped": {
-            "min": 8,
-            "max": 8
+            "min": 75,
+            "max": 75
         },
         "vtable-vbase-count-mismatch": {
             "min": 4,
@@ -860,8 +864,8 @@
             ]
         },
         "vtable-virtual-no-impl": {
-            "min": 28,
-            "max": 28
+            "min": 38,
+            "max": 38
         },
         "xref-undefined": {
             "min": 12,
