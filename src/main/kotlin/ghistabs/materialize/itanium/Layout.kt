@@ -68,6 +68,15 @@ object Layout {
     }
 }
 
+/**
+ * Byte offset of the vptr [typeDecl] declares, or null if it declares none. The single answer to
+ * "where does this class say its vptr is": the Itanium ABI puts it at 0, gcc 2.x appends it after
+ * the class's own fields, and only the stab says which.
+ */
+fun vptrOffsetBytesOf(typeDecl: TypeDecl.Aggregate<GlobalTypeId>): Int? = typeDecl.fields
+    .firstOrNull { isVptrFieldName(it.name) }
+    ?.let { (it.offsetBits / 8).toInt() }
+
 /** Does [typeDecl] inherit a vfptr from a polymorphic base subobject (vs. introducing its own)? */
 fun TypeGraph.hasPolymorphicBaseSubobject(typeDecl: TypeDecl.Aggregate<GlobalTypeId>) =
     firstPolymorphicBase(typeDecl) != null
