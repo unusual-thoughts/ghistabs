@@ -126,7 +126,16 @@ object Itanium {
      * nothing in this file describes its layout — see [ztvCandidates] for the spellings.
      */
     fun isGcc2VtableSymbol(name: String) = name.startsWith("_vt.") || name.startsWith($$"_vt$") ||
-        name.startsWith("__vt_")
+        isGcc2ThunkVtableSymbol(name)
+
+    /**
+     * The `-fvtable-thunks` spelling, which decides the *entry width*. gcc 2.95 `cp/class.c`,
+     * `build_vtable_entry`: with thunks an entry is the bare `pfn`, the `this` adjustment having moved
+     * into a thunk; without them it is `{delta, index, pfn}`, twice as wide, and the same file's
+     * slot-reserving code takes two header slots in the first case and one in the second — 8 bytes
+     * either way, which on 32-bit is what [vtablePrefixBytes] already computes.
+     */
+    fun isGcc2ThunkVtableSymbol(name: String) = name.startsWith("__vt_")
 
     /** The qualified class name a `_ZTV<class>` [symbolName] names (e.g. `std::basic_ios<char,…>`), or
      *  null if it isn't a vtable. Lets a caller demangle the symbol table once into a class→address index
