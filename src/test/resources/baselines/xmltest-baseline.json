@@ -570,13 +570,21 @@
             "min": 5,
             "max": 5
         },
+        "vfptr-inherited-from-base": {
+            "min": 3,
+            "max": 3
+        },
         "vfptr-normalized": {
             "min": 4,
             "max": 4
         },
+        "vfptr-split-from-base": {
+            "min": 6,
+            "max": 6
+        },
         "vtable-skipped": {
-            "min": 4,
-            "max": 4
+            "min": 13,
+            "max": 13
         },
         "vtable-swept-empty": {
             "min": 18,

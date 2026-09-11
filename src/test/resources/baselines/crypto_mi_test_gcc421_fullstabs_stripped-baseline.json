@@ -184,36 +184,32 @@
             "max": 10
         },
         "demangler-retarget-bound": {
-            "min": 135,
-            "max": 135
+            "min": 137,
+            "max": 137
         },
         "demangler-retarget-no-type": {
             "min": 70,
             "max": 70
         },
         "demangler-retargeted-stub-site": {
-            "min": 135,
-            "max": 135
+            "min": 137,
+            "max": 137
         },
         "demangler-shortened-name-match": {
-            "min": 19,
-            "max": 19
+            "min": 20,
+            "max": 20
         },
         "demangler-skip-no-replacement": {
-            "min": 43,
-            "max": 43
+            "min": 45,
+            "max": 45
         },
         "demangler-sole-instantiation-declined": {
             "min": 23,
             "max": 23
         },
-        "demangler-sole-instantiation-match": {
-            "min": 2,
-            "max": 2
-        },
         "demangler-unbound-stub": {
-            "min": 43,
-            "max": 43
+            "min": 45,
+            "max": 45
         },
         "demangler-unbound-stub-in-signature": {
             "min": 6,
@@ -1329,8 +1325,8 @@
             "max": 4
         },
         "replaced-demangler": {
-            "min": 12,
-            "max": 12
+            "min": 10,
+            "max": 10
         },
         "rtti-pseudo-substituted": {
             "min": 37,
@@ -1482,12 +1478,16 @@
             "max": 2841
         },
         "vfptr-inherited-from-base": {
-            "min": 113,
-            "max": 113
+            "min": 219,
+            "max": 219
         },
         "vfptr-normalized": {
             "min": 58,
             "max": 58
+        },
+        "vfptr-split-from-base": {
+            "min": 532,
+            "max": 532
         },
         "vtable-failed": {
             "min": 121,
@@ -1621,8 +1621,8 @@
             "max": 121
         },
         "vtable-skipped": {
-            "min": 50,
-            "max": 50
+            "min": 688,
+            "max": 688
         },
         "xref-ambiguous": {
             "min": 51,
