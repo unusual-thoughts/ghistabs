@@ -20,8 +20,7 @@ import ghistabs.parse.TypeDecl
 
 /**
  * Where a polymorphic class's `{vfptr}` goes, and what happens to the base subobject that would
- * otherwise own it. Split out of `ClassBuilder` because it is one decision with two shapes — see
- * [VfptrModel] for why the choice matters to whether a virtual call resolves at all.
+ * otherwise own it. See [VfptrModel] for what the choice costs a virtual call.
  */
 internal class VfptrPlacement(
     private val registry: DataTypeRegistry,
@@ -111,16 +110,12 @@ internal class VfptrPlacement(
      * the pointer goes at the vptr offset and the base is re-embedded as its *fields*, the same
      * bytes minus the vptr it no longer holds ([VfptrModel.SPLIT_BASE]).
      *
-     * The point is the pointer's static type. A shared `{vfptr}` is typed with whichever class
+     * What matters is the pointer's static type. A shared `{vfptr}` is typed with whichever class
      * declares it, so every derived slot indexes past the end of that class's vftable and the
-     * decompiler falls back to `vfptr[4].~TiXmlBase`. One `<Base>_fields` struct serves every class
-     * deriving from that base, so this costs one extra type per polymorphic class rather than one
-     * per inheritance edge, and the `_base_` component survives to model the inheritance.
+     * decompiler falls back to `vfptr[4].~TiXmlBase`. The `_base_` component survives, so the
+     * subobject still models the inheritance.
      *
-     * Declines — leaving the caller to report the inherited case — unless the vptr sits at the very
-     * start of the base subobject. gcc 2.x appends the vptr *after* a class's own fields instead
-     * (`tinyxml_aout_gcc295.o` dispatches through `this + 0xc`), which would need the base split
-     * into a prefix and a suffix around the pointer rather than simply shortened at the front.
+     * False when the base cannot be split, leaving the caller to report the inherited case.
      */
     private fun splitBase(
         structDt: Structure,
