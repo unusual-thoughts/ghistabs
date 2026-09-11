@@ -363,6 +363,15 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         }
         val untyped = declared
             .filterNot { (_, addr, _) -> program.listing.getDataAt(addr)?.dataType is Array }
+            // A gcc 2.x vtable is declared an array — `__vt_12TiXmlPrinter:G(0,40)=ar(0,1);0;11;(0,22)`
+            // — and the `<Class>_vftable` laid over the same bytes supersedes it, only one type being
+            // able to own an address. The structure is what makes a virtual call decompile to the
+            // method (`(*visitor->vfptr->VisitEnter)(…)`) instead of an indirect call through an
+            // untyped element, which is the whole reason for laying one.
+            .filterNot { (_, addr, _) ->
+                val addressPoint = addr.add(Itanium.vtablePrefixBytes(program.defaultPointerSize))
+                program.listing.getDataAt(addressPoint)?.dataType?.name?.endsWith("_vftable") == true
+            }
             .map { (n, a, _) -> "$n @ $a is ${program.listing.getDataAt(a)?.dataType?.name}" }
         val wrong = applied.filter { (_, arr, elements) -> arr.numElements.toLong() != elements }
             .map { (name, arr, elements) -> "$name: ${arr.numElements} elements, stab says $elements" }
@@ -1328,12 +1337,6 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     }
 
     @Test
-    @ExpectedToFail(
-        fixtures = ["tinyxml_aout_gcc295.o"],
-        reason = "single translation unit whose file-scope data happens to include no pointer global. " +
-            "It briefly had one: the `<Class>_vftable` laid over each `__vt_<class>` supplied the kind, " +
-            "until those stopped being laid at an Itanium address point a gcc 2.x record has no room for",
-    )
     fun globalsCoverEachDataTypeKind() {
         val seenKinds = mutableSetOf<String>()
         program.listing.getDefinedData(true).forEach { data ->
