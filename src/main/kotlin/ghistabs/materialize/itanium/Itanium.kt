@@ -7,6 +7,7 @@ import ghidra.program.model.data.DataType
 import ghidra.program.model.data.IntegerDataType
 import ghidra.program.model.data.LongLongDataType
 import ghistabs.Demangler
+import ghistabs.materialize.abi.namespaceChain
 import ghistabs.parse.splitQualified
 
 /**
@@ -96,27 +97,15 @@ object Itanium {
     }
 
     /**
-     * Closed-form `_ZTV` candidates for [className]. Templates have no closed form — use [vtableClassOf].
-     *
-     * The gcc 2.x forms are `_vt<marker><mangled>`, marker being gdb's cplus_markers (`$`, or `.` where
-     * the assembler forbids `$` — the WordPerfect/libstdc++-2.8.1 binaries use `.`), plus the
-     * `-fvtable-thunks` spelling `__vt_<mangled>`. gcc 2.x length-prefixes a simple class name exactly
-     * as Itanium does, so [mangleClassName] serves both; a *nested* name does not agree (`Q2…` there,
-     * `N…E` here) and only the Itanium candidates are right for those.
-     *
-     * A trailing marker is not a form: `_vt.14CExposedStream.11PRevertable` shows the second marker is
-     * the separator before a base class, naming that base's secondary vtable — a different object from
-     * this class's own, and not what a lookup by class name wants.
+     * Closed-form `_ZTV` candidates for [className]. Templates have no closed form, so a lookup by
+     * name misses those: use [vtableClassOf] over the symbol table instead. Other ABIs' spellings
+     * are their own; [ghistabs.materialize.abi.CxxAbi.vtableCandidates] gathers all of them.
      */
-
     fun ztvCandidates(className: String): List<String> {
         val mangled = mangleClassName(className)
         return listOf(
             "$VTABLE_PREFIX$mangled", // Itanium canonical
             "_$VTABLE_PREFIX$mangled", // Cygwin/PE leading-underscore variant
-            "${Gcc2.VTABLE_PREFIX}.$mangled", // gcc 2.x, `.` marker
-            $$"$${Gcc2.VTABLE_PREFIX}$$$mangled", // gcc 2.x, `$` marker
-            "${Gcc2.THUNK_VTABLE_PREFIX}$mangled", // gcc 2.x -fvtable-thunks
             "$className::$DEMANGLED_VTABLE", // some compilers emit this
         )
     }
@@ -125,11 +114,8 @@ object Itanium {
      *  null if it isn't a vtable. Lets a caller demangle the symbol table once into a class→address index
      *  instead of re-scanning + re-demangling every symbol per class
      *  ([ghistabs.materialize.ClassBuilder.resolveVtableAddress]). */
-    fun vtableClassOf(symbolName: String): String? = when {
-        looksLikeZtv(symbolName) -> Demangler.of(symbolName)?.let(::demangledVtableClass)
-        Gcc2.looksLikePrimaryVtable(symbolName) -> Demangler.of(symbolName)?.let(Gcc2::demangledVtableClass)
-        else -> null
-    }
+    fun vtableClassOf(symbolName: String): String? =
+        if (looksLikeZtv(symbolName)) Demangler.of(symbolName)?.let(::demangledVtableClass) else null
 
     /** The qualified class a `_ZTI<class>` typeinfo object belongs to, or null if [symbolName] isn't
      *  one. Unlike its sibling `_ZTS` string, a typeinfo object carries the *class's* own declaration

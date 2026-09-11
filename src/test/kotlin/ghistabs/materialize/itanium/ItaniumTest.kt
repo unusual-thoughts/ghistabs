@@ -3,6 +3,7 @@ package ghistabs.materialize.itanium
 import ghidra.app.util.demangler.DemangledAddressTable
 import ghidra.app.util.demangler.DemangledFunction
 import ghidra.app.util.demangler.DemangledType
+import ghistabs.materialize.abi.CxxAbi
 import ghistabs.test.must
 import ghistabs.test.mustBe
 import ghistabs.test.mustNot
@@ -11,17 +12,25 @@ import org.junit.jupiter.api.Test
 class ItaniumTest {
     @Test
     fun testZtvCandidatesSimpleName() {
+        Itanium.ztvCandidates("ThisStream") mustBe listOf(
+            "_ZTV10ThisStream",
+            "__ZTV10ThisStream",
+            "ThisStream::vtable",
+        )
+    }
+
+    @Test
+    fun testEveryAbiContributesItsOwnCandidates() {
         // The gcc 2.x forms are length-prefixed like Itanium's and carry no trailing marker: the
         // libstdc++-2.8.1 binaries spell them `_vt.9exception`, and a second marker there is the
         // separator before a base (`_vt.14CExposedStream.11PRevertable` = that base's own vtable).
-        val candidates = Itanium.ztvCandidates("ThisStream")
-        candidates mustBe listOf(
+        CxxAbi.vtableCandidates("ThisStream") mustBe listOf(
             "_ZTV10ThisStream",
             "__ZTV10ThisStream",
-            "_vt.10ThisStream",
-            $$"_vt$10ThisStream",
-            "__vt_10ThisStream",
             "ThisStream::vtable",
+            $$"_vt$10ThisStream",
+            "_vt.10ThisStream",
+            "__vt_10ThisStream",
         )
     }
 
