@@ -54,6 +54,9 @@ class ClassBuilder(
     companion object {
         private val source = SourceType.IMPORTED
 
+        /** Prefix for the non-slot fields of a gcc 2.x vftable — its reserved header entry. */
+        private const val RESERVED = "__reserved"
+
         /** Anything a Ghidra field/DataType name can't carry, in the overload tag [slotName] builds. */
         private val NON_IDENTIFIER = Regex("[^A-Za-z0-9_]")
 
@@ -437,7 +440,7 @@ class ClassBuilder(
         val resolved = resolveVtableAddress()
         val shape = resolved?.let { program.vtableShape(it.address, resolver, it.abi) }
         val targets = shape?.let { program.vtableSlotTargets(it.addressPoint, resolver, resolved.abi) }.orEmpty()
-        fillVftable(virtuals, targets)
+        fillVftable(virtuals, targets, resolved?.abi ?: VtableAbi.ITANIUM)
 
         if (resolved == null || shape == null) return
         claimedVtables += resolved.address
@@ -500,10 +503,16 @@ class ClassBuilder(
      * the stab's signature, the record in memory fills what is left, and the table runs as long as
      * the longer of the two.
      */
-    private fun LocatedType.fillVftable(virtuals: Map<Int, Method<GlobalTypeId>>, targets: List<Address>) {
+    private fun LocatedType.fillVftable(
+        virtuals: Map<Int, Method<GlobalTypeId>>,
+        targets: List<Address>,
+        abi: VtableAbi,
+    ) {
         while (vftable.numComponents > 0) vftable.delete(0)
         val used = mutableSetOf<String>()
+        vftable.addReservedHeader(abi)
         for (slot in 0 until maxOf(targets.size, virtuals.keys.max() + 1)) {
+            vftable.addEntryAdjustment(abi, slot)
             val m = virtuals[slot]
             when {
                 m != null -> slotName(m, used)
@@ -521,6 +530,40 @@ class ClassBuilder(
                 }
             }
         }
+    }
+
+    /**
+     * The reserved entry gcc 2.x puts at the front of a record, as struct fields — the `{vfptr}`
+     * points here, so the slots only land on their real byte offsets if the header occupies its own.
+     * `cp/class.c:skip_rtti_stuff` reserves two pointer-wide entries with thunks and one 8-byte
+     * `{delta, index, pfn}` without; 8 bytes either way on 32-bit. Nothing here is a Pointer, which
+     * is what keeps the header out of the slot list everything else counts.
+     */
+    private fun Structure.addReservedHeader(abi: VtableAbi) = when (abi) {
+        VtableAbi.ITANIUM -> Unit
+
+        // laid as loose words in front of the struct — see layVtable
+        VtableAbi.GCC2_THUNKS -> {
+            add(IntegerDataType.dataType, RESERVED + "_offset", "reserved: offset/tdesc entry")
+            add(IntegerDataType.dataType, RESERVED + "_tdesc", "reserved: tdesc pointer")
+        }
+
+        VtableAbi.GCC2_PLAIN -> {
+            add(ShortDataType.dataType, RESERVED + "__delta", "reserved entry: delta")
+            add(ShortDataType.dataType, RESERVED + "__index", "reserved entry: index")
+            add(IntegerDataType.dataType, RESERVED + "__pfn", "reserved entry: pfn")
+        }
+    }
+
+    /**
+     * The `{delta, index}` half of a gcc 2.x no-thunk entry, which precedes its `pfn` and is what
+     * makes the entry 8 bytes wide. `delta` is live at every call site — the dispatch reads it with
+     * `movswl` and adds it to `this` before the call — so it is a signed short and worth naming.
+     */
+    private fun Structure.addEntryAdjustment(abi: VtableAbi, slot: Int) {
+        if (abi != VtableAbi.GCC2_PLAIN) return
+        add(ShortDataType.dataType, "slot${slot}__delta", "this-adjustment for slot $slot")
+        add(ShortDataType.dataType, "slot${slot}__index", "unused; gcc 2.x always emits 0")
     }
 
     /**
@@ -630,7 +673,11 @@ class ClassBuilder(
             // those beat anything read back off the target addresses.
             if (vftable.numComponents == 0) {
                 val used = mutableSetOf<String>()
-                for (target in targets) vftable.addSweptSlot(category, target, used)
+                vftable.addReservedHeader(abi)
+                targets.forEachIndexed { slot, target ->
+                    vftable.addEntryAdjustment(abi, slot)
+                    vftable.addSweptSlot(category, target, used)
+                }
             }
 
             val ns = buildNamespaceChain(splitQualified(qualified))
