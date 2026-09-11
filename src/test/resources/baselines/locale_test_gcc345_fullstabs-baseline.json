@@ -524,8 +524,8 @@
             "max": 116
         },
         "resolve-ambiguous": {
-            "min": 1526,
-            "max": 1526
+            "min": 1560,
+            "max": 1560
         },
         "rtti-pseudo-substituted": {
             "min": 50,
@@ -647,12 +647,16 @@
             "max": 34
         },
         "vfptr-inherited-from-base": {
-            "min": 61,
-            "max": 61
+            "min": 13,
+            "max": 13
         },
         "vfptr-normalized": {
             "min": 5,
             "max": 5
+        },
+        "vfptr-split-from-base": {
+            "min": 48,
+            "max": 48
         },
         "vtable-applied": {
             "min": 66,
@@ -672,8 +676,8 @@
             ]
         },
         "vtable-virtual-no-impl": {
-            "min": 14,
-            "max": 14
+            "min": 19,
+            "max": 19
         },
         "xref-ambiguous": {
             "min": 2,

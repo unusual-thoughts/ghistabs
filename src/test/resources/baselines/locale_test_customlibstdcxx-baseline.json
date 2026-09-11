@@ -629,8 +629,8 @@
             "max": 168
         },
         "resolve-ambiguous": {
-            "min": 2570,
-            "max": 2570
+            "min": 2633,
+            "max": 2633
         },
         "rtti-pseudo-substituted": {
             "min": 38,
@@ -753,12 +753,16 @@
             "max": 2971
         },
         "vfptr-inherited-from-base": {
-            "min": 114,
-            "max": 114
+            "min": 22,
+            "max": 22
         },
         "vfptr-normalized": {
             "min": 8,
             "max": 8
+        },
+        "vfptr-split-from-base": {
+            "min": 92,
+            "max": 92
         },
         "vtable-applied": {
             "min": 113,
@@ -800,8 +804,8 @@
             ]
         },
         "vtable-virtual-no-impl": {
-            "min": 28,
-            "max": 28
+            "min": 38,
+            "max": 38
         },
         "xref-ambiguous": {
             "min": 6,
