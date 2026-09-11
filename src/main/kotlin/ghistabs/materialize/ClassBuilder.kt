@@ -693,13 +693,17 @@ class ClassBuilder(
         candidates.firstNotNullOfOrNull { name ->
             resolver.resolve(name)?.takeIf { it.isDefined() }?.let { name to it }
         }?.let { (name, addr) ->
-            // Everything downstream reads the record as Itanium — two fixed words, then the address
-            // point at `+2*ptrSize`. A gcc 2.x table has neither, so laying one there starts the slot
-            // array two entries in and every slot names the wrong function; it also claims bytes the
-            // stabs already describe as an array global, which is then left as a bare `int`. Finding
-            // the symbol is not the same as being able to read what is at it.
-            if (Itanium.isGcc2VtableSymbol(name)) {
-                degradation("vtable-gcc2-layout", className, "$name is pre-Itanium; left unannotated", addr)
+            // A `-fvtable-thunks` table is laid out exactly as the Itanium path assumes — two reserved
+            // header slots of one pointer each, then bare function pointers — so it needs no special
+            // case. Without thunks the entries are the 8-byte `{delta, index, pfn}` of gcc 2.95
+            // `cp/class.c:build_vtable_entry`, which the pointer-wide slots built here cannot describe.
+            if (Itanium.isGcc2VtableSymbol(name) && !Itanium.isGcc2ThunkVtableSymbol(name)) {
+                degradation(
+                    "vtable-gcc2-layout",
+                    className,
+                    "$name has 8-byte {delta, index, pfn} entries; left unannotated",
+                    addr,
+                )
                 return null
             }
             return addr
