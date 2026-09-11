@@ -14,9 +14,9 @@ import ghistabs.materialize.itanium.Layout
 import ghistabs.materialize.itanium.VfptrAction
 import ghistabs.materialize.itanium.VfptrModel
 import ghistabs.materialize.itanium.hasPolymorphicBaseSubobject
+import ghistabs.materialize.itanium.vptrOffsetBytesOf
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
-import ghistabs.parse.isVptrFieldName
 
 /**
  * Where a polymorphic class's `{vfptr}` goes, and what happens to the base subobject that would
@@ -43,9 +43,7 @@ internal class VfptrPlacement(
         ownVfptr: () -> Pointer,
     ) {
         val vfptrName = ClassUtils.VFPTR
-        val parserVptrOffset = classBody.fields
-            .firstOrNull { isVptrFieldName(it.name) }
-            ?.let { (it.offsetBits / 8).toInt() }
+        val parserVptrOffset = vptrOffsetBytesOf(classBody)
 
         val targetOffset = parserVptrOffset ?: 0
         val existingComp = runCatching { structDt.getComponentAt(targetOffset) }.getOrNull()
