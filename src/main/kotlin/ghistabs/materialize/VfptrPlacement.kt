@@ -67,7 +67,7 @@ internal class VfptrPlacement(
         when (action) {
             is VfptrAction.SkipInheritedFromBase ->
                 if (model == VfptrModel.SPLIT_BASE &&
-                    splitBase(structDt, className, existingComp, ownVfptr)
+                    splitBase(structDt, className, targetOffset, existingComp, ownVfptr)
                 ) {
                     debug("vfptr-split-from-base")
                 } else {
@@ -127,6 +127,7 @@ internal class VfptrPlacement(
     private fun splitBase(
         structDt: Structure,
         className: String,
+        vptrOffset: Int,
         baseComp: DataTypeComponent?,
         ownVfptr: () -> Pointer,
     ): Boolean {
@@ -134,8 +135,11 @@ internal class VfptrPlacement(
         val ptr = program.defaultPointerSize
         // Where the vptr sits *within* the base, read off the base itself rather than assumed: the
         // Itanium ABI puts it at 0, gcc 2.x appends it after the class's own fields. Classes are
-        // built bases-first, so the base already carries its own placed {vfptr} by now.
+        // built bases-first, so a polymorphic base already carries its own placed {vfptr}. A base
+        // that carries none — reached through the base-field branch of chooseVfptrAction, where
+        // polymorphism was never proven — falls back to where this class says its vptr is.
         val vptrInBase = baseDt.definedComponents.firstOrNull { it.fieldName == ClassUtils.VFPTR }?.offset
+            ?: (vptrOffset - baseComp.offset).takeIf { it >= 0 && it + ptr <= baseDt.length }
             ?: return false
         val baseOff = baseComp.offset
         val tailFrom = vptrInBase + ptr
