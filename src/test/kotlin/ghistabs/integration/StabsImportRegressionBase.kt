@@ -913,31 +913,44 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     }
 
     /**
-     * A `vftable` label names a function-pointer array, so the word it sits on must point into
-     * executable memory — and the word one pointer earlier must not, being the `rtti` header.
+     * A `vftable` label marks the address a `{vfptr}` holds, and the struct laid there has to
+     * describe the bytes that follow — so every field it declares a function pointer must actually
+     * hold a code address, at the offset the struct puts it.
      *
-     * That is the Itanium address point, and finding it is the whole job: `_ZTV+2*ptr` for an
-     * ordinary class but `_ZTV+3*ptr` where a virtual base pushes a vbase-offset word in front of
-     * the header (`basic_ifstream` → `basic_istream` → virtual `basic_ios`, and anything deriving from it). Reading
-     * the words rather than recomputing the offset is what makes this independent of the layout
-     * decision under test.
+     * Reading the struct's own field offsets rather than recomputing them is what keeps this
+     * independent of the layout decision under test, and is what makes it ABI-agnostic: the label
+     * sits on the Itanium address point (`_ZTV+2*ptr`, or `+3*ptr` where a virtual base pushes a
+     * vbase-offset word in front of the header) but on the *record start* for gcc 2.x, whose vptr
+     * points there and whose reserved header is a field of the struct. A misbased struct fails here
+     * either way, because its pointer fields then land on header or `{delta, index}` words.
      */
     @Test
     fun vftableLabelsSitOnTheAddressPoint() {
-        val ptr = program.defaultPointerSize.toLong()
         val labels = program.symbolTable.symbolIterator.iterator().asSequence()
             .filter { Itanium.VFTABLE in it.name && program.memory.getBlock(it.address) != null }
             .map { it.parentSymbol.name to it.address }.distinct().toList()
         assumeTrue(labels.isNotEmpty(), "Skipping: no vftable labels in this fixture")
 
-        val bad = labels
-            .filterNot { pointsIntoCode(it.second) && !pointsIntoCode(it.second - ptr) }
-            .map { (ns, addr) ->
-                "vftable for $ns@$addr → [${wordAt(addr - ptr)?.toString(16)};${wordAt(addr)?.toString(16)}] "
+        // Slot 0's offset within the struct, which is 0 for Itanium (the label is the address point)
+        // and the header width for gcc 2.x (the label is the record start). Taken from the struct
+        // rather than recomputed, so this stays a check of the layout rather than a restatement of it.
+        val bad = labels.mapNotNull { (ns, addr) ->
+            val vft = program.dataTypeManager.allDataTypes.asSequence()
+                .filterIsInstance<Structure>()
+                .firstOrNull { it.name == "${ns}_vftable" && it.numComponents > 0 }
+                ?: return@mapNotNull null
+            val slot0 = vft.components.firstOrNull { it.dataType is Pointer } ?: return@mapNotNull null
+            val at = addr.add(slot0.offset.toLong())
+            if (pointsIntoCode(at)) {
+                null
+            } else {
+                "vftable for $ns@$addr: slot '${slot0.fieldName}' at +${slot0.offset} " +
+                    "holds ${wordAt(at)?.toString(16)}, not a code address"
             }
+        }
         bad.take(10).mustBeEmpty(
-            "${bad.size} of ${labels.size} vftable labels are not on the address point " +
-                "(mislaid on the rtti or vbase-offset word)",
+            "${bad.size} of ${labels.size} vftables put their first slot somewhere that holds no " +
+                "function pointer (struct misbased against the record it describes?)",
         )
     }
 
@@ -1214,9 +1227,12 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         backEdges.must(
             "Expected ≥ 1 *_vftable to have a back-edge {vfptr} from its class; got $backEdges / ${vftables.size}",
         ) { this >= 1 }
-        // Every slot is a pointer to the function definition its own field is named for.
+        // Every slot is a pointer to the function definition its own field is named for. Only the
+        // pointer fields are slots — a gcc 2.x struct also carries its reserved header and each
+        // entry's `{delta, index}` words, which are integers and name no definition.
         val badSlots = vftables.flatMap { it.components.asIterable() }
-            .filter { (it.dataType as? Pointer)?.dataType?.name != it.fieldName }
+            .filter { it.dataType is Pointer }
+            .filter { (it.dataType as Pointer).dataType?.name != it.fieldName }
         badSlots.mustBeEmpty(
             "${badSlots.map { it.parent.name }.toSet()} have fields that aren't proper function " +
                 "pointers: ${badSlots.map { it.dataType.name }.toSet()}",
@@ -1344,7 +1360,8 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
                     .filter { it.virt == VirtKind.VIRTUAL }
                     .mapNotNull { m ->
                         val slot = m.vtableOffsetBits?.toInt() ?: return@mapNotNull null
-                        val at = vft.components.getOrNull(slot)?.fieldName
+                        val at = vft.components.filter { c -> c.dataType is Pointer }
+                            .getOrNull(slot)?.fieldName
                         "${ast.ghidraName}::${m.name} declared at slot $slot, found '$at'"
                             .takeIf { at != m.name && at?.startsWith("${m.name}_") != true }
                     }
@@ -1355,18 +1372,24 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
 
     @Test
     fun globalsCoverEachDataTypeKind() {
+        fun kindOf(dt: DataType?): String = when (dt) {
+            is Structure -> "Structure"
+            is Array -> "Array"
+            is Union -> "Union"
+            is Pointer -> "Pointer"
+            is Enum -> "Enum"
+            is TypeDef -> "TypeDef"
+            is FunctionDefinition -> "FunctionDefinition"
+            else -> "Primitive"
+        }
+
         val seenKinds = mutableSetOf<String>()
         program.listing.getDefinedData(true).forEach { data ->
-            seenKinds += when (data.dataType) {
-                is Structure -> "Structure"
-                is Array -> "Array"
-                is Union -> "Union"
-                is Pointer -> "Pointer"
-                is Enum -> "Enum"
-                is TypeDef -> "TypeDef"
-                is FunctionDefinition -> "FunctionDefinition"
-                else -> "Primitive"
-            }
+            seenKinds += kindOf(data.dataType)
+            // An array's elements are applied types too — `__vtbl_ptr_type __vt_9TiXmlNode[20]` is
+            // how a gcc 2.x fixture holds its only pointer-typed data, and counting only the
+            // outermost type would call that no pointer coverage at all.
+            (data.dataType as? Array)?.let { seenKinds += kindOf(it.dataType) }
         }
         // Enum is not required: a fixture may have no enum-typed globals at all.
         // The other kinds reflect basic global-application coverage.
