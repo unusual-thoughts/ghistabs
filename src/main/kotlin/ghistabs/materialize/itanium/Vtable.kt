@@ -59,6 +59,26 @@ enum class VtableAbi {
     /** gcc 2.x emits no typeinfo pointer, so there is no rtti word to find the address point by. */
     val hasRttiHeader get() = this == ITANIUM
 
+    /**
+     * Whether a `{vfptr}` holds the record *start* rather than the address point, which decides where
+     * the `_vftable` struct has to begin for a virtual call to resolve against its fields.
+     *
+     * Itanium points at the address point, past the header. gcc 2.x points at the record start and
+     * the call site skips the header itself — `cv_mscom_elf_i386_gcc281` stores `_vt.9CMapBytes`
+     * verbatim into the object (`movl $0x807639c,(%ebx)`), and `tinyxml_aout_gcc295.o` dispatches
+     * through `add eax,0x8` after loading the vptr. So a gcc 2.x struct based at the address point
+     * describes memory 8 bytes along from what the object actually points at, and the decompiler
+     * can only fall back to `(**(code **)(*(int *)(this + 0xc) + 0x44))()`.
+     */
+    val vptrAtRecordStart get() = this != ITANIUM
+
+    /** Bytes of reserved header before the first virtual's entry (`cp/class.c:skip_rtti_stuff`). */
+    fun headerBytes(ptrSize: Int) = Itanium.vtablePrefixBytes(ptrSize)
+
+    /** Byte offset of slot [index]'s `pfn` from wherever the struct begins. */
+    fun slotOffset(index: Int, ptrSize: Int) =
+        (if (vptrAtRecordStart) headerBytes(ptrSize) else 0L) + index * stride(ptrSize) + pfnOffset(ptrSize)
+
     companion object {
         fun of(symbolName: String) = when {
             Gcc2.looksLikeThunkVtable(symbolName) -> GCC2_THUNKS
@@ -212,11 +232,15 @@ private fun Program.rttiComment(rttiHeader: Address, className: String, resolver
 }
 
 /**
- * Lay the Itanium vtable record whose geometry is [shape], and return its address point. The header is
- * `[vbase/vcall offsets…] offset_to_top rtti` and the [vftable] function-pointer array + a [label]
- * symbol go at the address point — the value a `{vfptr}` holds — so a constructor's
- * `this->vfptr = &<Class>::vftable` resolves to a symbol, not a raw address.
- * The rtti pointee stays an untyped `void*` until backlog §24 wires it.
+ * Lay the vtable record whose geometry is [shape], and return the address its `{vfptr}` holds — where
+ * the [vftable] struct and the [label] symbol go, so a constructor's `this->vfptr = &<Class>::vftable`
+ * resolves to a symbol and a virtual call resolves to one of its fields.
+ *
+ * Which address that is comes from [VtableAbi.vptrAtRecordStart]. Itanium points at the address point
+ * and the `[vbase/vcall offsets…] offset_to_top rtti` header is laid in front of it as loose words;
+ * the rtti pointee stays an untyped `void*` until backlog §24 wires it. gcc 2.x points at the record
+ * start, so its reserved header is *inside* the struct — laid as fields by the caller rather than as
+ * words here, because a loose Data item there would collide with the struct covering the same bytes.
  */
 fun Program.layVtable(
     shape: VtableShape,
@@ -230,25 +254,24 @@ fun Program.layVtable(
 ): Address {
     val (prefix, topSlot, rttiHeader, addressPoint) = shape
 
+    // gcc 2.x labels the record start, because that is what a `{vfptr}` holds. The struct is *not*
+    // stamped over the bytes: gcc declares the record itself (`__vtbl_ptr_type __vt_9TiXmlNode[20]`),
+    // which is authoritative on length in a way nothing here is, and a virtual call resolves off the
+    // vfptr's pointee type rather than off whatever data is applied at the target.
+    if (abi.vptrAtRecordStart) {
+        listing.setComment(topSlot, CommentType.EOL, "gcc 2.x vtable: reserved entry, then the slots")
+        symbolTable.createLabel(topSlot, label, ns, SourceType.IMPORTED)
+        return topSlot
+    }
+
     prefix.forEachIndexed { i, slot ->
         forceCreateData(slot, Itanium.offsetToTopType(defaultPointerSize))
         listing.setComment(slot, CommentType.EOL, prefixKind(i, prefix.size, virtualBases))
     }
-    // The two header words. gcc 2.x fills them with its reserved entry instead of Itanium's
-    // offset_to_top + rtti (see VtableAbi), so each ABI names its own.
-    val (firstWord, secondWord) = when (abi) {
-        VtableAbi.ITANIUM ->
-            "${Itanium.OFFSET_TO_TOP} (to top of complete object)" to
-                rttiComment(rttiHeader, className, resolver)
-
-        VtableAbi.GCC2_THUNKS -> "reserved: offset/tdesc entry" to "reserved: tdesc pointer"
-
-        VtableAbi.GCC2_PLAIN -> "reserved entry: delta, index" to "reserved entry: pfn"
-    }
     forceCreateData(topSlot, Itanium.offsetToTopType(defaultPointerSize))
-    listing.setComment(topSlot, CommentType.EOL, firstWord)
+    listing.setComment(topSlot, CommentType.EOL, "${Itanium.OFFSET_TO_TOP} (to top of complete object)")
     forceCreateData(rttiHeader, PointerDataType(dataTypeManager))
-    listing.setComment(rttiHeader, CommentType.EOL, secondWord)
+    listing.setComment(rttiHeader, CommentType.EOL, rttiComment(rttiHeader, className, resolver))
     forceCreateData(addressPoint, vftable)
     symbolTable.createLabel(addressPoint, label, ns, SourceType.IMPORTED)
     return addressPoint
