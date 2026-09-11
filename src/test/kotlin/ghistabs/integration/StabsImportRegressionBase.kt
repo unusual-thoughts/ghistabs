@@ -1488,7 +1488,10 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         val lost = declared.filterNot { (func, applied) ->
             declaredNames(func).all { name -> applied.parameters.any { it.name == name } }
         }.map { (func, applied) ->
-            "${func.name}: stabs name ${declaredNames(func)}, applied ${applied.parameters.map { it.name }}"
+            // Name the function the address resolved to, not just the stab's: a mismatch is as likely
+            // to be the wrong function as the wrong parameters, and the two read identically without it.
+            "${func.name}@${func.addr} -> ${applied.name}@${applied.entryPoint}: " +
+                "stabs ${declaredNames(func)}, applied ${applied.parameters.map { it.name }}"
         }
         lost.take(10).mustBeEmpty("${lost.size} of ${declared.size} functions lost stab parameters")
     }
