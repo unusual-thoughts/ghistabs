@@ -31,7 +31,9 @@ import ghistabs.importer.ImportOptions
 import ghistabs.importer.ImportOptions.Companion.CLASSES
 import ghistabs.importer.ImportOptions.Companion.FOLD_SOURCES
 import ghistabs.importer.ImportOptions.Companion.SHORTEN_TYPEDEFS
+import ghistabs.importer.ImportOptions.Companion.VFPTR_MODEL
 import ghistabs.importer.STABS_ANALYZER_NAME
+import ghistabs.materialize.itanium.VfptrModel
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.StabReader
 import ghistabs.parse.StabRecord
@@ -301,6 +303,8 @@ private abstract class ImportingCommand(name: String) : StabsCommand(name = name
         .flag("--no-shorten-typedefs", default = SHORTEN_TYPEDEFS.default)
     private val foldSources by option("--fold-sources", help = FOLD_SOURCES.desc)
         .flag("--no-fold-sources", default = FOLD_SOURCES.default)
+    private val vfptrModel by option("--vfptr-model", help = VFPTR_MODEL.desc)
+        .enum<VfptrModel>().default(VFPTR_MODEL.default)
     private val disableAnalyzers by option(
         "--disable-analyzer",
         help = "turn off every analyzer whose name contains this, case-insensitively (repeatable). " +
@@ -314,6 +318,7 @@ private abstract class ImportingCommand(name: String) : StabsCommand(name = name
         foldSources,
         shared.logLevel,
         false,
+        vfptrModel,
         sourceRoots = sourceRoots.map { it.path },
     )
 
