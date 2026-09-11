@@ -59,6 +59,38 @@ object Gcc2 {
         return (namespaceChain(obj) + leaf).joinToString("::")
     }
 
+    /**
+     * The physname gcc 2.x *would* have emitted for a member — gdb's `gdb_mangle_name`, and needed
+     * for the same reason: the stab's physname field is routinely empty (98 of tinyxml's 274 method
+     * entries are `name::type;:;<vis><cv><virt>`), leaving the mangled name to be reconstructed from
+     * the class, the member name and the cv-qualifier the stab *does* state.
+     *
+     * Returned as a **prefix**, because the parameter mangling that follows is exactly what a stub
+     * method does not carry: `Accept__C12TiXmlComment` + `P12TiXmlVisitor`. A nil-ary member's
+     * prefix is its whole symbol. All three forms are as `tinyxml_aout_gcc295.o` spells them —
+     * `__11TiXmlStringPCc`, `_._9TiXmlNode`, `FirstChild__C9TiXmlNodePCc`.
+     */
+    fun physnamePrefix(memberName: String, className: String, isConst: Boolean, isVolatile: Boolean): String {
+        val mangledClass = mangleClassName(className)
+        val leaf = className.substringAfterLast("::")
+        return when {
+            memberName == leaf -> "__$mangledClass"
+            memberName == "~$leaf" -> "_._$mangledClass"
+            else -> memberName + "__" + (if (isConst) "C" else "") + (if (isVolatile) "V" else "") + mangledClass
+        }
+    }
+
+    /**
+     * gcc 2.x class-name mangling: `TiXmlNode` → `9TiXmlNode`, nesting → `Q<n>_` then each part
+     * length-prefixed (`Outer::Inner` → `Q2_5Outer5Inner`). The simple case agrees with Itanium's,
+     * the nested one does not — see [Itanium.ztvCandidates].
+     */
+    fun mangleClassName(name: String): String {
+        val parts = name.split("::")
+        val joined = parts.joinToString("") { "${it.length}$it" }
+        return if (parts.size == 1) joined else "Q${parts.size}_$joined"
+    }
+
     /** The mangled class name a gcc 2.x vtable symbol carries, or null if [symbolName] isn't one. */
     private fun vtableTail(symbolName: String): String? = when {
         symbolName.startsWith(THUNK_VTABLE_PREFIX) -> symbolName.removePrefix(THUNK_VTABLE_PREFIX)

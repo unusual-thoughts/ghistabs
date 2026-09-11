@@ -27,6 +27,7 @@ import ghistabs.materialize.itanium.Itanium.isImplicitTrivialSpecialMember
 import ghistabs.materialize.itanium.Itanium.isInlineStdMember
 import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Aggregate.Method
+import java.util.TreeSet
 
 /**
  * The C++ pass over the structs [DataTypeRegistry] has already materialized: a class gets its Ghidra
@@ -249,7 +250,7 @@ class ClassBuilder(
     }
 
     private fun LocatedType.reparentMethod(m: Method<GlobalTypeId>, ns: GhidraClass, structDt: Structure) {
-        val mangled = m.mangled ?: run {
+        val mangled = m.mangled?.takeIf { it.isNotBlank() } ?: reconstructPhysname(m) ?: run {
             degradation("method-no-mangled", "$className::${m.name}", "stab has no mangled symbol")
             return
         }
@@ -413,20 +414,82 @@ class ClassBuilder(
         val priorNames = func.parameters
             .filterNot { it.isInjected }
             .map { it.name }
-        val formals = paramTypes.mapIndexed { i, pdt ->
-            ParameterImpl(
-                priorNames.getOrNull(i) ?: "arg$i",
-                pdt ?: Undefined4DataType.dataType,
-                program,
-                source,
-            )
-        }
+        // gdb's `check_stub_method`: a gcc 2.x stub (`##<ret>;`) states a return type and nothing
+        // else, so its parameters survive only in the mangled name. Demangling recovers them.
+        // Guarded on emptiness rather than on stub-ness, which costs nothing — a genuinely nil-ary
+        // member demangles to no parameters either.
+        val formals = paramTypes.ifEmpty { stubParams(mangled, "$className::${m.name}") }
+            .mapIndexed { i, pdt ->
+                ParameterImpl(
+                    priorNames.getOrNull(i) ?: "arg$i",
+                    pdt ?: Undefined4DataType.dataType,
+                    program,
+                    source,
+                )
+            }
         func.replaceParameters(
             explicitThis + formals,
             Function.FunctionUpdateType.DYNAMIC_STORAGE_ALL_PARAMS,
             true,
             source,
         )
+    }
+
+    /**
+     * The parameter types [mangled] carries, for a stub method whose stab states none. `this` is not
+     * among them — the demangler reports a member's formals only, and Ghidra injects the receiver
+     * from the class under `__thiscall` anyway.
+     */
+    private fun stubParams(mangled: String, at: String): List<DataType?> = (Demangler.of(mangled) as? DemangledFunction)
+        ?.parameters
+        ?.filterNot { it.type.isVoid && it.type.pointerLevels == 0 && !it.type.isReference }
+        ?.map { p ->
+            runCatching { p.type.getDataType(dtm) }.getOrNull()
+                ?: Undefined4DataType.dataType.also {
+                    degradation("method-stub-param-untyped", at, "demangler gave no type for ${p.type}")
+                }
+        }
+        .orEmpty()
+        .also { if (it.isNotEmpty()) debug("method-stub-params-recovered", "$at: ${it.size} from $mangled") }
+
+    /** Every symbol name, ordered, for the prefix lookup [reconstructPhysname] needs. */
+    private val symbolNames: TreeSet<String> by lazy {
+        TreeSet<String>().apply { symtab.symbolIterator.forEach { add(it.name) } }
+    }
+
+    /**
+     * The symbol a member with no physname belongs to, rebuilt the way gdb's `gdb_mangle_name` does
+     * — see [Gcc2.physnamePrefix] for why the stab so often leaves it blank. Without this the member
+     * resolves to nothing, so its Function is never reparented and never typed, and every use of the
+     * receiver decompiles as an untyped stack slot.
+     *
+     * Only ever binds an unambiguous match. A stub states the member's name and cv-qualifier and
+     * nothing else, so two overloads differing only in parameters are indistinguishable here —
+     * `FirstChild__C9TiXmlNode` and `FirstChild__C9TiXmlNodePCc` are both live in tinyxml. Binding
+     * both declarations to whichever symbol sorts first would be worse than leaving them alone.
+     */
+    private fun LocatedType.reconstructPhysname(m: Method<GlobalTypeId>): String? {
+        val prefix = Gcc2.physnamePrefix(m.name, className, m.isConst, m.isVolatile)
+        val declared = classBody.methods.count {
+            it.name == m.name && it.isConst == m.isConst && it.isVolatile == m.isVolatile
+        }
+        val matches = symbolNames.tailSet(prefix).asSequence().takeWhile { it.startsWith(prefix) }.take(2).toList()
+        return when {
+            // The exact prefix is the nil-ary member's whole symbol, so it wins over a longer one.
+            prefix in matches -> prefix
+
+            declared == 1 && matches.size == 1 -> matches.single()
+
+            matches.isEmpty() -> null
+
+            else -> null.also {
+                degradation(
+                    "method-physname-ambiguous",
+                    "$className::${m.name}",
+                    "$declared stab declaration(s), ${matches.size}+ symbols under '$prefix'",
+                )
+            }
+        }
     }
 
     private fun LocatedType.buildAndApplyVtable(ns: GhidraClass) {
