@@ -1781,5 +1781,5 @@
             "max": 68
         }
     },
-    "source": "crypto_mi_test_gcc345.exe - shifted from committed"
+    "source": "crypto_mi_test_gcc345.exe - generated from snapshotCounters()"
 }

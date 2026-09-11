@@ -692,5 +692,5 @@
             "max": 32
         }
     },
-    "source": "locale_test_gcc345_fullstabs.exe - shifted from committed"
+    "source": "locale_test_gcc345_fullstabs.exe - generated from snapshotCounters()"
 }

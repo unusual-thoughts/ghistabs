@@ -118,16 +118,16 @@
             "max": 20
         },
         "demangler-skip-no-replacement": {
-            "min": 44,
-            "max": 44
+            "min": 45,
+            "max": 45
         },
         "demangler-sole-instantiation-declined": {
             "min": 28,
             "max": 28
         },
         "demangler-unbound-stub": {
-            "min": 44,
-            "max": 44
+            "min": 45,
+            "max": 45
         },
         "demangler-unbound-stub-in-signature": {
             "min": 6,

@@ -727,5 +727,5 @@
             "max": 40
         }
     },
-    "source": "xmltest_gcc345_fullstabs.exe - shifted from committed"
+    "source": "xmltest_gcc345_fullstabs.exe - generated from snapshotCounters()"
 }
