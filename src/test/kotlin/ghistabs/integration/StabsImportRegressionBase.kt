@@ -917,12 +917,15 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
      * describe the bytes that follow — so every field it declares a function pointer must actually
      * hold a code address, at the offset the struct puts it.
      *
-     * Reading the struct's own field offsets rather than recomputing them is what keeps this
-     * independent of the layout decision under test, and is what makes it ABI-agnostic: the label
-     * sits on the Itanium address point (`_ZTV+2*ptr`, or `+3*ptr` where a virtual base pushes a
-     * vbase-offset word in front of the header) but on the *record start* for gcc 2.x, whose vptr
-     * points there and whose reserved header is a field of the struct. A misbased struct fails here
-     * either way, because its pointer fields then land on header or `{delta, index}` words.
+     * The label sits on the Itanium address point (`_ZTV+2*ptr`, or `+3*ptr` where a virtual base
+     * pushes a vbase-offset word in front of the header) but on the *record start* for gcc 2.x,
+     * whose vptr points there and whose reserved header is a field of the struct.
+     *
+     * Slot 0 holding a code address is only half of it: a struct based one word late, and a label
+     * laid one word early on the rtti or vbase-offset word, both still put *a* code address at slot
+     * 0 — they just borrow the previous record's last entry. The word before slot 0 is a header or
+     * `{delta, index}` word under every ABI here, so requiring that it is *not* code is what tells
+     * the two apart.
      */
     @Test
     fun vftableLabelsSitOnTheAddressPoint() {
@@ -932,25 +935,32 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         assumeTrue(labels.isNotEmpty(), "Skipping: no vftable labels in this fixture")
 
         // Slot 0's offset within the struct, which is 0 for Itanium (the label is the address point)
-        // and the header width for gcc 2.x (the label is the record start). Taken from the struct
-        // rather than recomputed, so this stays a check of the layout rather than a restatement of it.
+        // and the header width for gcc 2.x (the label is the record start).
+        val ptr = program.defaultPointerSize.toLong()
         val bad = labels.mapNotNull { (ns, addr) ->
             val vft = program.dataTypeManager.allDataTypes.asSequence()
                 .filterIsInstance<Structure>()
                 .firstOrNull { it.name == "${ns}_vftable" && it.numComponents > 0 }
-                ?: return@mapNotNull null
-            val slot0 = vft.components.firstOrNull { it.dataType is Pointer } ?: return@mapNotNull null
+                ?: return@mapNotNull "vftable for $ns@$addr: no ${ns}_vftable struct with components"
+            val slot0 = vft.components.firstOrNull { it.dataType is Pointer }
+                ?: return@mapNotNull "vftable for $ns@$addr: ${vft.name} declares no function-pointer slot"
             val at = addr.add(slot0.offset.toLong())
-            if (pointsIntoCode(at)) {
-                null
-            } else {
-                "vftable for $ns@$addr: slot '${slot0.fieldName}' at +${slot0.offset} " +
-                    "holds ${wordAt(at)?.toString(16)}, not a code address"
+            val before = runCatching { at.subtract(ptr) }.getOrNull()
+            when {
+                !pointsIntoCode(at) ->
+                    "vftable for $ns@$addr: slot '${slot0.fieldName}' at +${slot0.offset} " +
+                        "holds ${wordAt(at)?.toString(16)}, not a code address"
+
+                before != null && pointsIntoCode(before) ->
+                    "vftable for $ns@$addr: the word before slot '${slot0.fieldName}' at " +
+                        "+${slot0.offset} holds ${wordAt(before)?.toString(16)}, a code address too " +
+                        "(mislaid on the rtti or vbase-offset word?)"
+
+                else -> null
             }
         }
         bad.take(10).mustBeEmpty(
-            "${bad.size} of ${labels.size} vftables put their first slot somewhere that holds no " +
-                "function pointer (struct misbased against the record it describes?)",
+            "${bad.size} of ${labels.size} vftables are misbased against the record they describe",
         )
     }
 
