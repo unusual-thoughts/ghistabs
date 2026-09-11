@@ -26,6 +26,7 @@ import ghistabs.importer.ImportOptions.Companion.OVERLAY_SECTION
 import ghistabs.importer.ImportOptions.Companion.SHORTEN_TYPEDEFS
 import ghistabs.index.ContentIndex
 import ghistabs.index.EffectiveSource
+import ghistabs.materialize.abi.CxxAbi
 import ghistabs.materialize.conflictCount
 import ghistabs.materialize.itanium.Itanium
 import ghistabs.materialize.itanium.hasPolymorphicBaseSubobject
@@ -1190,7 +1191,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         // 2092 on locale_test are exactly that (`basic_ios`, `__codecvt_abstract_base`, the abstract
         // bases). A `_ZTV<class>` symbol is the binary saying this class has a distinct one.
         val withOwnVtable = inheriting.filter { (ast, _) ->
-            Itanium.ztvCandidates(ast.ghidraName).any { program.symbolTable.getSymbols(it).firstOrNull() != null }
+            CxxAbi.vtableCandidates(ast.ghidraName).any { program.symbolTable.getSymbols(it).firstOrNull() != null }
         }
         assumeTrue(withOwnVtable.isNotEmpty(), "Skipping: no inheriting class has its own vtable symbol")
         val bare = withOwnVtable.filter { (ast, _) -> ast.ghidraName !in vftables }.map { (ast, _) -> ast.ghidraName }

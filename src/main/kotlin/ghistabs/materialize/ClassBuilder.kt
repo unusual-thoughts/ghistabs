@@ -23,6 +23,7 @@ import ghistabs.index.TypeGraph
 import ghistabs.index.demangledClassPath
 import ghistabs.isInjected
 import ghistabs.isMethod
+import ghistabs.materialize.abi.*
 import ghistabs.materialize.itanium.*
 import ghistabs.materialize.itanium.Itanium.isImplicitTrivialSpecialMember
 import ghistabs.materialize.itanium.Itanium.isInlineStdMember
@@ -443,7 +444,7 @@ class ClassBuilder(
         val targets = shape?.let { program.vtableSlotTargets(it.addressPoint, resolver, resolved.abi) }.orEmpty()
         // The symbol's spelling is the only thing that states the ABI, so without one the geometry is
         // a guess: a gcc 2.x record read as Itanium loses its reserved header and half its stride.
-        val abi = resolved?.abi ?: VtableAbi.ITANIUM
+        val abi = resolved?.abi ?: CxxAbi.Itanium
         if (resolved == null) {
             degradation("vtable-abi-assumed", className, "no vtable symbol resolved; slots laid as $abi")
         }
@@ -514,7 +515,7 @@ class ClassBuilder(
     private fun LocatedType.fillVftable(
         virtuals: Map<Int, Method<GlobalTypeId>>,
         targets: List<Address>,
-        abi: VtableAbi,
+        abi: CxxAbi,
     ) {
         while (vftable.numComponents > 0) vftable.delete(0)
         val used = mutableSetOf<String>()
@@ -547,16 +548,16 @@ class ClassBuilder(
      * `{delta, index, pfn}` without; 8 bytes either way on 32-bit. Nothing here is a Pointer, which
      * is what keeps the header out of the slot list everything else counts.
      */
-    private fun Structure.addReservedHeader(abi: VtableAbi) = when (abi) {
-        VtableAbi.ITANIUM -> Unit
+    private fun Structure.addReservedHeader(abi: CxxAbi) = when (abi) {
+        CxxAbi.Itanium -> Unit
 
         // laid as loose words in front of the struct — see layVtable
-        VtableAbi.GCC2_THUNKS -> {
+        CxxAbi.Gcc2Thunks -> {
             add(IntegerDataType.dataType, RESERVED + "_offset", "reserved: offset/tdesc entry")
             add(IntegerDataType.dataType, RESERVED + "_tdesc", "reserved: tdesc pointer")
         }
 
-        VtableAbi.GCC2_PLAIN -> {
+        CxxAbi.Gcc2Plain -> {
             add(ShortDataType.dataType, RESERVED + "__delta", "reserved entry: delta")
             add(ShortDataType.dataType, RESERVED + "__index", "reserved entry: index")
             add(IntegerDataType.dataType, RESERVED + "__pfn", "reserved entry: pfn")
@@ -568,8 +569,8 @@ class ClassBuilder(
      * makes the entry 8 bytes wide. `delta` is live at every call site — the dispatch reads it with
      * `movswl` and adds it to `this` before the call — so it is a signed short and worth naming.
      */
-    private fun Structure.addEntryAdjustment(abi: VtableAbi, slot: Int) {
-        if (abi != VtableAbi.GCC2_PLAIN) return
+    private fun Structure.addEntryAdjustment(abi: CxxAbi, slot: Int) {
+        if (abi != CxxAbi.Gcc2Plain) return
         add(ShortDataType.dataType, "slot${slot}__delta", "this-adjustment for slot $slot")
         add(ShortDataType.dataType, "slot${slot}__index", "unused; gcc 2.x always emits 0")
     }
@@ -641,7 +642,7 @@ class ClassBuilder(
     private val claimedVtables = mutableSetOf<Address>()
 
     /** Where a class's vtable record sits, and which ABI lays it out past the header. */
-    private data class ResolvedVtable(val address: Address, val abi: VtableAbi)
+    private data class ResolvedVtable(val address: Address, val abi: CxxAbi)
 
     /**
      * Lay every `_ZTV…` symbol no harvested class claimed. `buildAndApplyVtable` runs per group, i.e.
@@ -658,7 +659,7 @@ class ClassBuilder(
         val unclaimed = symtab.symbolIterator
             .filter { it.address !in claimedVtables }
             .mapNotNull { sym ->
-                Itanium.vtableClassOf(sym.name)?.let { Triple(sym.address, it, VtableAbi.of(sym.name)) }
+                CxxAbi.vtableClassOf(sym.name)?.let { Triple(sym.address, it, CxxAbi.of(sym.name)) }
             }
             .distinctBy { (addr, _, _) -> addr }
             .toList()
@@ -780,8 +781,8 @@ class ClassBuilder(
     private val vtableAddressByClass: Map<String, ResolvedVtable> by lazy {
         buildMap {
             for (sym in symtab.symbolIterator) {
-                Itanium.vtableClassOf(sym.name)
-                    ?.let { putIfAbsent(it, ResolvedVtable(sym.address, VtableAbi.of(sym.name))) }
+                CxxAbi.vtableClassOf(sym.name)
+                    ?.let { putIfAbsent(it, ResolvedVtable(sym.address, CxxAbi.of(sym.name))) }
             }
         }
     }
@@ -807,9 +808,9 @@ class ClassBuilder(
 
     /** Resolve _ZTV<class> address: try AddressResolver candidates, then the demangled-vtable index. */
     private fun LocatedType.resolveVtableAddress(): ResolvedVtable? {
-        val candidates = Itanium.ztvCandidates(className)
+        val candidates = CxxAbi.vtableCandidates(className)
         candidates.firstNotNullOfOrNull { name ->
-            resolver.resolve(name)?.takeIf { it.isDefined() }?.let { ResolvedVtable(it, VtableAbi.of(name)) }
+            resolver.resolve(name)?.takeIf { it.isDefined() }?.let { ResolvedVtable(it, CxxAbi.of(name)) }
         }?.let { return it }
 
         vtableAddressByClass[qualifiedClassName]?.takeIf { it.address.isDefined() }?.let { return it }
