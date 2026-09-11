@@ -72,13 +72,21 @@ object Layout {
 fun TypeGraph.hasPolymorphicBaseSubobject(typeDecl: TypeDecl.Aggregate<GlobalTypeId>) =
     firstPolymorphicBase(typeDecl) != null
 
-/** Lowest-offset polymorphic base, or null. Determines whether to insert a vfptr or inherit. */
+/**
+ * Lowest-offset polymorphic base, or null. Determines whether to insert a vfptr or inherit.
+ *
+ * A declared `_vptr$X` field counts, and has to: under plain `-gstabs` gcc emits no member functions
+ * at all, so `xmltest_gcc421`'s `TiXmlVisitor:T(0,436)=s4_vptr$TiXmlVisitor:(0,166),0,32;;` is the
+ * *only* evidence its bases are polymorphic. Without it every derived class looked non-polymorphic,
+ * so nothing ever asked where its vfptr should come from.
+ */
 fun TypeGraph.firstPolymorphicBase(typeDecl: TypeDecl.Aggregate<GlobalTypeId>): Base<GlobalTypeId>? = typeDecl.bases
     .sortedBy { it.offsetBits }
     .firstOrNull { base ->
         resolveStruct(base.type)?.run {
             hasVTablePointerMarker ||
                 methods.any { it.virt == VirtKind.VIRTUAL } ||
+                fields.any { isVptrFieldName(it.name) } ||
                 firstPolymorphicBase(this) != null
         } ?: false
     }
@@ -109,6 +117,22 @@ fun TypeGraph.virtualBases(typeDecl: TypeDecl.Aggregate<GlobalTypeId>) = buildLi
 fun TypeGraph.resolveStruct(typeDecl: GlobalTypeDecl) = resolve<TypeDecl.Aggregate<GlobalTypeId>>(typeDecl)
 
 /**
+ * How deep [typeDecl] sits in its inheritance graph, so a caller can process bases before the
+ * classes that embed them. [VfptrModel.SPLIT_BASE] needs that order: it derives a base's
+ * `<Base>_fields` from the base's *materialized* layout, which is only vptr-less once the base has
+ * had its own vfptr placed. Cycles can't arise from well-formed stabs but [seen] makes that true
+ * regardless of what the binary declares.
+ */
+fun TypeGraph.inheritanceDepth(
+    typeDecl: TypeDecl.Aggregate<GlobalTypeId>,
+    seen: MutableSet<TypeDecl.Aggregate<GlobalTypeId>> = mutableSetOf(),
+): Int = if (!seen.add(typeDecl)) {
+    0
+} else {
+    1 + (typeDecl.bases.mapNotNull { resolveStruct(it.type) }.maxOfOrNull { inheritanceDepth(it, seen) } ?: -1)
+}
+
+/**
  * A class's virtuals from its whole inheritance chain, keyed by the slot index gcc declares — the
  * `*<n>` a method's stab carries after its cv-qualifier, which `dbxout.c` emits straight from
  * `DECL_VINDEX`. Measured against `_ZTVSt9type_info` in `crypto_mi_test_gcc421_fullstabs`, whose
@@ -132,4 +156,32 @@ fun TypeGraph.collectAllVirtuals(struct: TypeDecl.Aggregate<GlobalTypeId>): Map<
             .forEach { m -> m.vtableOffsetBits?.let { put(it.toInt(), m) } }
     }
     walk(struct)
+}
+
+/**
+ * Where a polymorphic class's `{vfptr}` comes from, which decides whether a virtual call resolves to
+ * a named slot or overruns into `vfptr[N]`.
+ *
+ * The vptr physically sits at offset 0 *inside* the primary base subobject, so a derived class can
+ * only carry a pointer to its **own** vftable if something gives way — and it has to, because the
+ * static type of the field is what the decompiler indexes. With one shared field typed
+ * `<Root>_vftable *`, every derived slot lands past the end of the root's table: `xmltest_gcc421`
+ * renders 31 of its 40 virtual calls as `vfptr[4].~TiXmlBase` and never mentions a derived vftable
+ * type at all.
+ *
+ * An enum rather than a flag because there is an obvious third way: Ghidra's own
+ * `RecoveredClassHelper` expands the base subobject away entirely and puts `vftablePtr` at offset 0,
+ * trading the `_base_` component for the pointer.
+ */
+enum class VfptrModel {
+    /** One `{vfptr}` on the root of each hierarchy, inherited through `_base_`. Derived slots overrun. */
+    INHERITED,
+
+    /**
+     * Each polymorphic class owns a `{vfptr}` typed to its own vftable, and embeds its primary base
+     * as that base's fields *without* the vptr — one extra struct per polymorphic class, shared by
+     * every class that derives from it. Keeps the `_base_` subobject component that
+     * [ghistabs.materialize.Layout] models inheritance with.
+     */
+    SPLIT_BASE,
 }

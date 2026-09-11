@@ -76,7 +76,7 @@ class ImportContext<Terminal : DiagnosticSink>(
     fun demanglerReplacer(registry: DataTypeRegistry) = DemanglerReplacer(program, registry, monitor, this)
     fun typedefShortener(registry: DataTypeRegistry) = TypedefShortener(registry, monitor)
     fun classBuilder(registry: DataTypeRegistry, types: TypeGraph) =
-        ClassBuilder(registry, types, program, resolver, monitor, this)
+        ClassBuilder(registry, types, program, resolver, monitor, this, options.vfptrModel)
 }
 
 /**
