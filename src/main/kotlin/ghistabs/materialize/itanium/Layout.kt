@@ -171,16 +171,14 @@ fun TypeGraph.collectAllVirtuals(struct: TypeDecl.Aggregate<GlobalTypeId>): Map<
  * Where a polymorphic class's `{vfptr}` comes from, which decides whether a virtual call resolves to
  * a named slot or overruns into `vfptr[N]`.
  *
- * The vptr physically sits at offset 0 *inside* the primary base subobject, so a derived class can
- * only carry a pointer to its **own** vftable if something gives way — and it has to, because the
- * static type of the field is what the decompiler indexes. With one shared field typed
- * `<Root>_vftable *`, every derived slot lands past the end of the root's table: `xmltest_gcc421`
- * renders 31 of its 40 virtual calls as `vfptr[4].~TiXmlBase` and never mentions a derived vftable
- * type at all.
+ * The vptr sits inside the primary base subobject, so a derived class can only carry a pointer to
+ * its **own** vftable if something gives way, and the static type of that field is what the
+ * decompiler indexes. With one shared field typed `<Root>_vftable *`, every derived slot lands past
+ * the end of the root's table: `xmltest_gcc421` renders 31 of its 40 virtual calls as
+ * `vfptr[4].~TiXmlBase` and never mentions a derived vftable type at all.
  *
- * An enum rather than a flag because there is an obvious third way: Ghidra's own
- * `RecoveredClassHelper` expands the base subobject away entirely and puts `vftablePtr` at offset 0,
- * trading the `_base_` component for the pointer.
+ * A third shape exists: Ghidra's own `RecoveredClassHelper` expands the base subobject away
+ * entirely and puts `vftablePtr` at offset 0, trading the `_base_` component for the pointer.
  */
 enum class VfptrModel {
     /** One `{vfptr}` on the root of each hierarchy, inherited through `_base_`. Derived slots overrun. */
