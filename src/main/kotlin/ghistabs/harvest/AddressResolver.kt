@@ -107,9 +107,7 @@ class ProgramAddressResolver(private val program: Program, private val sink: Dia
     override fun buildAddress(offset: Long): Address = program.addressFactory.defaultAddressSpace.getAddress(offset) +
         // A negative fixup only applies to values large enough to be vaddrs: callers also pass
         // frame offsets and register numbers through here, and those would underflow the space.
-        baseFixup.takeIf { offset + it >= 0 }.orEmptyFixup()
-
-    private fun Long?.orEmptyFixup() = this ?: 0L
+        (baseFixup.takeIf { offset + it >= 0 } ?: 0L)
 
     /**
      * a.out link-time symbols straight from the file, which outrank Ghidra's for this format:
