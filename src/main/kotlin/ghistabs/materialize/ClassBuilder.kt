@@ -441,7 +441,13 @@ class ClassBuilder(
         val resolved = resolveVtableAddress()
         val shape = resolved?.let { program.vtableShape(it.address, resolver, it.abi) }
         val targets = shape?.let { program.vtableSlotTargets(it.addressPoint, resolver, resolved.abi) }.orEmpty()
-        fillVftable(virtuals, targets, resolved?.abi ?: VtableAbi.ITANIUM)
+        // The symbol's spelling is the only thing that states the ABI, so without one the geometry is
+        // a guess: a gcc 2.x record read as Itanium loses its reserved header and half its stride.
+        val abi = resolved?.abi ?: VtableAbi.ITANIUM
+        if (resolved == null) {
+            degradation("vtable-abi-assumed", className, "no vtable symbol resolved; slots laid as $abi")
+        }
+        fillVftable(virtuals, targets, abi)
 
         if (resolved == null || shape == null) return
         claimedVtables += resolved.address
