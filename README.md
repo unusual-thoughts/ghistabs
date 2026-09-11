@@ -35,7 +35,7 @@ bodies.
 | **Binary containers** | **PE/COFF**, **ELF** and **a.out** (OMAGIC)                                                                                                                                                           |
 | **Instruction sets**  | `i386` / `x86-64`                                                                                                                                                                                     |
 | **Compiler**          | **gcc**, on both Unix and Cygwin/MinGW targets, up to gcc **12** (`-gstabs` was deprecated in 12 and removed outright in 13). Stabs produced by other compilers are out of scope but may mostly work. |
-| **Languages**         | **C** from at least gcc **2.6.3** <br> **C++** from gcc **3.2**                                                                                                                                       |
+| **Languages**         | **C** from at least gcc **2.6.3** <br> **C++** from gcc **2.8** — see [gcc 2.x C++](#gcc-2x-c) for what that dialect costs                                                                             |
 | **Formats**           | `-gstabs` and `-gstabs+` alike                                                                                                                                                                        |
 | **Also**              | object files and linked images alike, and images whose  symbol table has been stripped, provided the stabs themselves survive.                                                                        |
 
