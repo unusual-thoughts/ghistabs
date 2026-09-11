@@ -147,8 +147,8 @@ internal class VfptrPlacement(
         // and keeps the subobject a single `_base_` component. Deeper in a gcc 2.x chain both runs
         // are real — `TiXmlElement` inherits `location`/`userData` before the vptr and `value`
         // after — so the subobject is spliced as a head and a tail rather than dropped.
-        val head = baseFieldsRun(baseDt, 0, vptrInBase, "")
-        val tail = baseFieldsRun(baseDt, tailFrom, baseDt.length, if (head != null) "_tail" else "")
+        val head = baseFieldsRun(baseDt, 0, vptrInBase)
+        val tail = baseFieldsRun(baseDt, tailFrom, baseDt.length)
         if (head == null && tail == null) return false
 
         val vfptr = ownVfptr()
@@ -165,14 +165,18 @@ internal class VfptrPlacement(
     }
 
     /**
-     * One contiguous run of [baseDt]'s bytes, `[from, until)`, as a struct of its own — the base
+     * One contiguous run of [baseDt]'s bytes, `[from, until)`, as a struct of its own: the base
      * subobject's fields with the vptr word taken out. Null when the run is empty. Shared across
      * every class deriving from that base, which is what keeps this one extra type per polymorphic
      * class instead of one per inheritance edge.
+     *
+     * The bounds are in the name because they are what the type *is*: the registry caches on
+     * (category, name) alone, so two runs of one base that differ only in extent would otherwise
+     * collide and the second class would silently receive the first's struct.
      */
-    private fun baseFieldsRun(baseDt: Structure, from: Int, until: Int, suffix: String): Structure? {
+    private fun baseFieldsRun(baseDt: Structure, from: Int, until: Int): Structure? {
         if (until <= from) return null
-        val name = "${baseDt.name}_fields$suffix"
+        val name = "${baseDt.name}_fields_${from}_$until"
         return registry.getOrRegister<Structure>(baseDt.categoryPath, name) {
             StructureDataType(baseDt.categoryPath, name, until - from, program.dataTypeManager).apply {
                 description = "${baseDt.name} as a base subobject (+$from..$until): its fields " +
