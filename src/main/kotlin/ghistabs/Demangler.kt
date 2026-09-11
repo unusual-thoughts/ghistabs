@@ -43,11 +43,9 @@ object Demangler {
     val options get() = GnuDemanglerOptions().apply { setDemangleOnlyKnownPatterns(false) }
 
     /**
-     * gcc 2.x names, which [options]' back end cannot read at all — it answers
-     * `unknown demangling style 'gnu'`. The two are disjoint rather than ordered: this one decodes
-     * 1199 of cv_mscom_elf_i386_gcc281's 1835 symbols and *none* of xmltest_gcc421's 5630 Itanium
-     * ones, where the modern back end gets 5618 and none of the gcc 2.x. So it is a fallback for
-     * what [options] declines, never a replacement.
+     * gcc 2.x names, which [options]' back end cannot read at all: it answers `unknown demangling
+     * style 'gnu'`. The two back ends are disjoint, neither decoding anything the other does, so
+     * this is a fallback for what [options] declines and never a replacement.
      */
     internal val v2Options get() =
         GnuDemanglerOptions(GnuDemanglerFormat.GNU).apply { setDemangleOnlyKnownPatterns(false) }
@@ -72,9 +70,8 @@ object Demangler {
 
     /**
      * [v2Options] applied, but only where it actually decoded something. That back end accepts names
-     * that were never mangled and hands back the input less its punctuation — `.bss` to `bss` — which
-     * on the Sun-compiler fixtures is 2052 such answers and not one real decode. A `::` or a `(` is
-     * the difference: every genuine gcc 2.x form has one (`TiXmlFOpen__FPCcT0` to
+     * that were never mangled and hands back the input less its punctuation (`.bss` to `bss`). A
+     * `::` or a `(` is the difference: every genuine gcc 2.x form has one (`TiXmlFOpen__FPCcT0` to
      * `TiXmlFOpen(char const *,char const *)`, `_9TiXmlBase.entity` to `TiXmlBase::entity`).
      */
     private fun gnu2(mangled: String): DemangledObject? = attempt(v2Options, mangled)
