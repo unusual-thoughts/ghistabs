@@ -9,6 +9,7 @@ import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
 import ghistabs.forceCreateData
 import ghistabs.harvest.AddressResolver
+import ghistabs.materialize.abi.CxxAbi
 
 /** Upper bound on vbase/vcall-offset words scanned before giving up on locating the rtti header. */
 private const val MAX_VTABLE_PREFIX_WORDS = 64
@@ -24,69 +25,6 @@ internal fun Program.readWord(a: Address): Long? = runCatching {
  *  labels across. */
 private fun Program.codeTargetAt(a: Address, resolver: AddressResolver): Address? =
     readWord(a)?.let(resolver::buildAddress)?.takeIf { memory.getBlock(it)?.isExecute == true }
-
-/**
- * How a vtable record is laid out past its header, which the symbol's spelling decides.
- *
- * The gcc 2.x geometry is gcc 2.95.3's: `cp/decl.c` makes an entry a bare function pointer under
- * `-fvtable-thunks` and the record `{short delta; short index; void *pfn;}` without, while
- * `cp/class.c:skip_rtti_stuff` always reserves one entry for the offset/tdesc entry and a second,
- * for the tdesc pointer, only with thunks. Two pointers or one 8-byte record: the header is 8 bytes
- * on 32-bit either way, so [Itanium.vtablePrefixBytes] locates every address point here and only
- * the stride past it differs.
- */
-enum class VtableAbi {
-    /** `_ZTV`: pointer-sized entries after the offset_to_top + rtti header. */
-    ITANIUM,
-
-    /** `__vt_`: `-fvtable-thunks`, the `this` adjustment moved into a thunk, so an entry is the pfn. */
-    GCC2_THUNKS,
-
-    /** `_vt.`/`_vt$`: `{delta, index, pfn}` entries, twice as wide, with pfn in the second word. */
-    GCC2_PLAIN,
-    ;
-
-    /** Bytes between consecutive entries. */
-    fun stride(ptrSize: Int) = if (this == GCC2_PLAIN) 2L * ptrSize else ptrSize.toLong()
-
-    /**
-     * Where `pfn` sits inside an entry. `delta` and `index` are a `short` each, so together they
-     * make exactly one 32-bit word — the only width gcc 2.x ever targeted. (`-fhuge-objects` widens
-     * both to `long` and would make this `2 * ptrSize`; no corpus binary uses it.)
-     */
-    fun pfnOffset(ptrSize: Int) = if (this == GCC2_PLAIN) ptrSize.toLong() else 0L
-
-    /** gcc 2.x emits no typeinfo pointer, so there is no rtti word to find the address point by. */
-    val hasRttiHeader get() = this == ITANIUM
-
-    /**
-     * Whether a `{vfptr}` holds the record *start* rather than the address point, which decides where
-     * the `_vftable` struct has to begin for a virtual call to resolve against its fields.
-     *
-     * Itanium points at the address point, past the header. gcc 2.x points at the record start and
-     * the call site skips the header itself — `cv_mscom_elf_i386_gcc281` stores `_vt.9CMapBytes`
-     * verbatim into the object (`movl $0x807639c,(%ebx)`), and `tinyxml_aout_gcc295.o` dispatches
-     * through `add eax,0x8` after loading the vptr. So a gcc 2.x struct based at the address point
-     * describes memory 8 bytes along from what the object actually points at, and the decompiler
-     * can only fall back to `(**(code **)(*(int *)(this + 0xc) + 0x44))()`.
-     */
-    val vptrAtRecordStart get() = this != ITANIUM
-
-    /** Bytes of reserved header before the first virtual's entry (`cp/class.c:skip_rtti_stuff`). */
-    fun headerBytes(ptrSize: Int) = Itanium.vtablePrefixBytes(ptrSize)
-
-    /** Byte offset of slot [index]'s `pfn` from wherever the struct begins. */
-    fun slotOffset(index: Int, ptrSize: Int) =
-        (if (vptrAtRecordStart) headerBytes(ptrSize) else 0L) + index * stride(ptrSize) + pfnOffset(ptrSize)
-
-    companion object {
-        fun of(symbolName: String) = when {
-            Gcc2.looksLikeThunkVtable(symbolName) -> GCC2_THUNKS
-            Gcc2.looksLikeVtable(symbolName) -> GCC2_PLAIN
-            else -> ITANIUM
-        }
-    }
-}
 
 /**
  * An Itanium vtable record, decomposed: the [prefix] of vbase/vcall-offset words, then the two fixed
@@ -149,10 +87,10 @@ private fun prefixKind(i: Int, total: Int, virtualBases: List<String>): String {
  * of "vbase offset" comments inside the wrong object. `MAX_VTABLE_PREFIX_WORDS` alone never bounded
  * that, it only capped how far the damage spread.
  *
- * A gcc 2.x record has no typeinfo pointer to search for ([VtableAbi.hasRttiHeader]) and no
+ * A gcc 2.x record has no typeinfo pointer to search for ([CxxAbi.hasRttiHeader]) and no
  * vbase/vcall prefix either, so its address point is the canonical shape outright.
  */
-fun Program.vtableShape(ztv: Address, resolver: AddressResolver, abi: VtableAbi = VtableAbi.ITANIUM): VtableShape {
+fun Program.vtableShape(ztv: Address, resolver: AddressResolver, abi: CxxAbi = CxxAbi.Itanium): VtableShape {
     if (!abi.hasRttiHeader) return shapeOf(ztv, null)
     val ptr = defaultPointerSize.toLong()
     val rttiSlot = generateSequence(ztv) { it.add(ptr) }
@@ -209,7 +147,7 @@ private fun Program.subVtableAt(start: Address, rtti: Long, resolver: AddressRes
 fun Program.vtableSlotTargets(
     addressPoint: Address,
     resolver: AddressResolver,
-    abi: VtableAbi = VtableAbi.ITANIUM,
+    abi: CxxAbi = CxxAbi.Itanium,
 ): List<Address> = generateSequence(addressPoint) { it.add(abi.stride(defaultPointerSize)) }
     .map { codeTargetAt(it.add(abi.pfnOffset(defaultPointerSize)), resolver) }
     .takeWhile { it != null }
@@ -236,7 +174,7 @@ private fun Program.rttiComment(rttiHeader: Address, className: String, resolver
  * the [vftable] struct and the [label] symbol go, so a constructor's `this->vfptr = &<Class>::vftable`
  * resolves to a symbol and a virtual call resolves to one of its fields.
  *
- * Which address that is comes from [VtableAbi.vptrAtRecordStart]. Itanium points at the address point
+ * Which address that is comes from [CxxAbi.vptrAtRecordStart]. Itanium points at the address point
  * and the `[vbase/vcall offsets…] offset_to_top rtti` header is laid in front of it as loose words;
  * the rtti pointee stays an untyped `void*` until backlog §24 wires it. gcc 2.x points at the record
  * start, so its reserved header is *inside* the struct — laid as fields by the caller rather than as
@@ -250,7 +188,7 @@ fun Program.layVtable(
     resolver: AddressResolver,
     virtualBases: List<String> = emptyList(),
     label: String = Itanium.VFTABLE,
-    abi: VtableAbi = VtableAbi.ITANIUM,
+    abi: CxxAbi = CxxAbi.Itanium,
 ): Address {
     val (prefix, topSlot, rttiHeader, addressPoint) = shape
 

@@ -1,4 +1,4 @@
-package ghistabs.materialize.itanium
+package ghistabs.materialize.abi
 
 import ghidra.app.util.demangler.DemangledObject
 
@@ -6,7 +6,7 @@ import ghidra.app.util.demangler.DemangledObject
  * Pre-Itanium gcc 2.x C++ ABI facts: the vtable symbol spellings and what the deprecated demangler
  * back end makes of them. The counterpart to [Itanium] for the WordPerfect/libstdc++-2.8.1 corpus,
  * and separate from it because none of it *is* Itanium — different names, no typeinfo, and the
- * record geometry in [VtableAbi].
+ * record geometry in [CxxAbi].
  */
 object Gcc2 {
     // The marker between `_vt` and the mangled class is one of gdb's cplus_markers — `$`, or `.`
@@ -23,7 +23,7 @@ object Gcc2 {
     /**
      * String-level pre-filter for a gcc 2.x vtable symbol — the gcc 2.x parallel to
      * [Itanium.looksLikeZtv], and just as cheap. Such a record carries none of the Itanium fixed
-     * words; see [VtableAbi] for what it carries instead.
+     * words; see [CxxAbi] for what it carries instead.
      */
     fun looksLikeVtable(symbolName: String) = vtableTail(symbolName) != null
 
