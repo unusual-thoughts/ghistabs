@@ -277,6 +277,13 @@ sealed interface TypeDecl<out Id : IdInterface> {
             /** Vtable offset in bits when `virt == VIRTUAL`, else null. */
             val vtableOffsetBits: Long?,
         ) {
+            /**
+             * [mangled] as a symbol to look up, or null. gcc 2.x leaves the physname field blank far
+             * more often than it fills it (98 of tinyxml's 274 method entries), and `""` is not a
+             * symbol: resolving one matches whatever happens to sit first in the symbol table.
+             */
+            val physname get() = mangled?.takeIf { it.isNotBlank() }
+
             /** `virtual `/`static ` — Ghidra's prototypeString models neither, so the stab is the only source. */
             val declPrefix get() = when (virt) {
                 VirtKind.VIRTUAL -> "virtual "

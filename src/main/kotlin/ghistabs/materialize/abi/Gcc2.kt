@@ -5,6 +5,7 @@ import ghidra.program.model.data.IntegerDataType
 import ghidra.program.model.data.ShortDataType
 import ghidra.program.model.data.Structure
 import ghistabs.materialize.abi.Gcc2.DEMANGLED_VTABLE_SUFFIX
+import ghistabs.parse.TypeDecl.Aggregate.Method
 
 /**
  * Pre-Itanium gcc 2.x C++ ABI facts: the vtable symbol spellings and what the deprecated demangler
@@ -170,22 +171,12 @@ sealed interface Gcc2Abi : CxxAbi {
      * `FirstChild__C9TiXmlNode` and `FirstChild__C9TiXmlNodePCc`, so the fragment is exactly what
      * tells them apart: composing it gives one candidate, not a prefix to search under.
      *
-     * The composed form is skipped for an Itanium-mangled physname, so a COMDAT-dropped `_ZN…`
-     * appearing in a gcc 2.x link does not get a bogus second lookup.
+     * Composed unconditionally: the caller tries the stated name first and stops at the first hit,
+     * so a physname that is already a whole symbol resolves before this one is ever looked up.
      */
-    override fun physnameCandidates(
-        memberName: String,
-        className: String,
-        isConst: Boolean,
-        isVolatile: Boolean,
-        stated: String?,
-    ) = listOfNotNull(
-        stated,
-        if (stated == null || !Itanium.isProbablyMangled(stated)) {
-            Gcc2.physnamePrefix(memberName, className, isConst, isVolatile) + stated.orEmpty()
-        } else {
-            null
-        },
+    override fun physnameCandidates(m: Method<*>, className: String) = listOfNotNull(
+        m.physname,
+        Gcc2.physnamePrefix(m.name, className, m.isConst, m.isVolatile) + m.physname.orEmpty(),
     )
 
     /** The inverse of [Gcc2.physnamePrefix]'s ctor/dtor forms — `__9TiXmlNode`, `_._9TiXmlNode`. */

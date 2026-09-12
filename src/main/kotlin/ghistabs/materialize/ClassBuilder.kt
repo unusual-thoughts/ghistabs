@@ -191,13 +191,12 @@ class ClassBuilder(
     }
 
     private fun LocatedType.reparentMethod(m: Method<GlobalTypeId>, ns: GhidraClass, structDt: Structure) {
-        val stated = m.mangled?.takeIf { it.isNotBlank() }
         val (mangled, addr) = resolveMember(m)
             ?: run {
-                if (abi.isImplicitMember(m.name, className, stated)) {
+                if (abi.isImplicitMember(m, className)) {
                     debug("method-implicit-not-emitted")
                 } else {
-                    debug("unresolved-symbol", "method ${stated ?: m.name} (in $className)")
+                    debug("unresolved-symbol", "method ${m.physname ?: m.name} (in $className)")
                 }
                 return
             }
@@ -770,7 +769,7 @@ class ClassBuilder(
      * rather than reaching for [Method.mangled].
      */
     private fun LocatedType.resolveMember(m: Method<GlobalTypeId>): Pair<String, Address>? =
-        abi.physnameCandidates(m.name, className, m.isConst, m.isVolatile, m.mangled?.takeIf { it.isNotBlank() })
+        abi.physnameCandidates(m, className)
             .firstNotNullOfOrNull { name -> resolver.resolve(name)?.let { name to it } }
 
     /** What every ABI question falls back to for a class whose own vtable symbol never resolved. */
