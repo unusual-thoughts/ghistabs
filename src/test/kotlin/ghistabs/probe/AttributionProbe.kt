@@ -9,12 +9,12 @@ import ghistabs.diagnose.Level
 import ghistabs.importer.ImportOptions.Companion.LOG_LEVEL
 import ghistabs.importer.ImportOptions.Companion.SHORTEN_TYPEDEFS
 import ghistabs.importer.ImportOptions.Companion.SOURCE_ROOTS
-import ghistabs.importer.set
 import ghistabs.parse.StabReader
 import ghistabs.render.Renderer
 import ghistabs.render.Renderer.Mode
 import ghistabs.render.Scorecard
 import ghistabs.runTransaction
+import ghistabs.set
 import ghistabs.test.defaultContext
 import ghistabs.test.disableWindowsResourceAnalyzer
 import ghistabs.test.hintsOf

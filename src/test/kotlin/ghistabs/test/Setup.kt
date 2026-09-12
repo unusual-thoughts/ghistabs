@@ -62,12 +62,12 @@ fun Program.defaultContext(
     TaskMonitor.DUMMY,
     // overlaySection off: the decoded-struct .stab overlay is a diagnostic view, not needed to produce
     // types, and it's ~8% of the run. StabSectionOverlayIntegrationTest exercises it directly.
-    ImportOptions(
-        minLogLevel = Level.DEBUG,
-        overlaySection = false,
-        shortenTypedefs = shortenTypedefs,
-        vfptrModel = vfptrModel,
-    ),
+    ImportOptions {
+        minLogLevel = Level.DEBUG
+        overlaySection = false
+        this.shortenTypedefs = shortenTypedefs
+        this.vfptrModel = vfptrModel
+    },
     CapturingSink(),
     StabsDiagnostics(),
 )

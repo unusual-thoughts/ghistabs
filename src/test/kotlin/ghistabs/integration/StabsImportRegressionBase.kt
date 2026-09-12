@@ -8,7 +8,6 @@ import ghidra.program.model.data.Array
 import ghidra.program.model.data.Enum
 import ghidra.program.model.listing.CommentType
 import ghidra.program.model.listing.Function
-import ghidra.program.model.listing.Program
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghistabs.*
@@ -19,11 +18,11 @@ import ghistabs.diagnose.CapturingSink
 import ghistabs.diagnose.dumpJson
 import ghistabs.diagnose.writeRegistryDump
 import ghistabs.entrypoints.StabsAnalyzer
+import ghistabs.entrypoints.StabsAnalyzer.Companion.disableStabsAnalyzer
+import ghistabs.entrypoints.StabsAnalyzer.Companion.enableStabsAnalyzer
 import ghistabs.entrypoints.StabsAnalyzer.Companion.import
 import ghistabs.harvest.Type
 import ghistabs.importer.*
-import ghistabs.importer.ImportOptions.Companion.OVERLAY_SECTION
-import ghistabs.importer.ImportOptions.Companion.SHORTEN_TYPEDEFS
 import ghistabs.importer.ImportOptions.Companion.VFPTR_MODEL
 import ghistabs.index.ContentIndex
 import ghistabs.index.EffectiveSource
@@ -164,14 +163,13 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             context = loaded.program.defaultContext(shortenTypedefs, vfptrModel)
 
             val mgr = AutoAnalysisManager.getAnalysisManager(program)
-            val options = program.getOptions(Program.ANALYSIS_PROPERTIES)
 
             when (mode) {
                 Mode.CONCURRENT -> {
                     // Confirm Ghidra's ClassSearcher actually discovered our analyzer
                     // (build/classes/kotlin/main is on the test classpath). If this
                     // assertion ever fails the test would be silently meaningless.
-                    val discovered = mgr.getAnalyzer(STABS_ANALYZER_NAME)
+                    val discovered = mgr.getAnalyzer(StabsAnalyzer.NAME)
                     discovered.mustNotBeNull("StabsAnalyzer not discovered by ClassSearcher")
                     discovered.mustBeA<StabsAnalyzer>()
 
@@ -190,14 +188,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
                     // Sub-options writes hit the program options DB and need a transaction (as the
                     // AFTER branch's analyzer-disable does); the .stab overlay is a diagnostic view,
                     // not needed to produce types (~8% of the run), so skip it here too.
-                    program.runTransaction("enable-stabs-analyzer") {
-                        options.setBoolean(STABS_ANALYZER_NAME, true)
-                        options.getOptions(STABS_ANALYZER_NAME)[OVERLAY_SECTION] = false
-                        // CONCURRENT's import is the analyzer's own, built from the program options —
-                        // [context]'s copy of the flag never reaches it.
-                        options.getOptions(STABS_ANALYZER_NAME)[SHORTEN_TYPEDEFS] = shortenTypedefs
-                        options.getOptions(STABS_ANALYZER_NAME)[VFPTR_MODEL] = vfptrModel
-                    }
+                    program.enableStabsAnalyzer(context.options)
                     mgr.scheduleOneTimeAnalysis(discovered, program.memory)
                     runAutoAnalysis(mgr, monitor)
                     artifacts = checkNotNull(probe.artifacts) { "artifacts not populated by CONCURRENT" }
@@ -215,9 +206,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
                     // without us, then re-run it manually with our CapturingSink.
                     // `Options.setBoolean` mutates the program options DB and needs
                     // a transaction.
-                    program.runTransaction("disable-stabs-analyzer") {
-                        options.setBoolean(STABS_ANALYZER_NAME, false)
-                    }
+                    program.disableStabsAnalyzer()
                     mgr.initializeOptions()
                     runAutoAnalysis(mgr, monitor)
                     program.runTransaction("stabs-analyze") {

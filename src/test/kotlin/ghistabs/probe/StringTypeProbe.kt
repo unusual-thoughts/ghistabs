@@ -54,7 +54,10 @@ class StringTypeProbe : AbstractGhidraHeadlessIntegrationTest() {
             val ctx = ImportContext(
                 program,
                 TaskMonitor.DUMMY,
-                ImportOptions(shortenTypedefs = true, minLogLevel = Level.DEBUG),
+                ImportOptions {
+                    shortenTypedefs = true
+                    minLogLevel = Level.DEBUG
+                },
                 CapturingSink(),
                 StabsDiagnostics(),
             )

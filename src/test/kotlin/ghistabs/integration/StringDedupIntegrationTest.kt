@@ -3,14 +3,15 @@ package ghistabs.integration
 import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.data.Structure
-import ghidra.program.model.listing.Program
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.CapturingSink
 import ghistabs.diagnose.Level
-import ghistabs.diagnose.StabsDiagnostics
-import ghistabs.importer.*
-import ghistabs.importer.ImportOptions.Companion.SHORTEN_TYPEDEFS
+import ghistabs.entrypoints.StabsAnalyzer
+import ghistabs.entrypoints.StabsAnalyzer.Companion.enableStabsAnalyzer
+import ghistabs.importer.ImportContext
+import ghistabs.importer.ImportOptions
+import ghistabs.importer.ImportProbe
 import ghistabs.runTransaction
 import ghistabs.test.*
 import ghistabs.withProgram
@@ -49,7 +50,10 @@ class StringDedupIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             val ctx = ImportContext(
                 program,
                 TaskMonitor.DUMMY,
-                ImportOptions(shortenTypedefs = shorten, minLogLevel = Level.DEBUG),
+                ImportOptions {
+                    shortenTypedefs = shorten
+                    minLogLevel = Level.DEBUG
+                },
                 CapturingSink(),
                 StabsDiagnostics(),
             )
@@ -57,14 +61,9 @@ class StringDedupIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
 
             // CONCURRENT: schedule our analyzer for the next pass so it runs at LOW_PRIORITY
             // alongside Ghidra's demangler (which creates the `/std/string` class struct).
-            val discovered = mgr.getAnalyzer(STABS_ANALYZER_NAME)
+            val discovered = mgr.getAnalyzer(StabsAnalyzer.NAME)
             discovered.mustNotBeNull("StabsAnalyzer not discovered by ClassSearcher")
-            val options = program.getOptions(Program.ANALYSIS_PROPERTIES)
-            program.runTransaction("configure-analysis") {
-                options.setBoolean(STABS_ANALYZER_NAME, true)
-                // The analyzer reads its own options from the per-analyzer subgroup, not the top level.
-                options.getOptions(STABS_ANALYZER_NAME)[SHORTEN_TYPEDEFS] = shorten
-            }
+            program.enableStabsAnalyzer { shortenTypedefs = shorten }
             mgr.initializeOptions()
             program.disableWindowsResourceAnalyzer()
             mgr.scheduleOneTimeAnalysis(discovered, program.memory)
