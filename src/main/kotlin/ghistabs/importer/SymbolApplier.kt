@@ -25,6 +25,7 @@ import ghistabs.materialize.DataTypeRegistry
 import ghistabs.materialize.abi.Itanium.isInlineStdMember
 import ghistabs.materialize.reasonFor
 import ghistabs.materialize.resolveRef
+import ghistabs.namespaces
 import ghistabs.parse.*
 
 /**
@@ -228,8 +229,9 @@ class SymbolApplier(
             ctx.monitor.increment()
             // demangledName() is the unqualified leaf; rebuild the qualified name from the
             // namespace chain so the equate reads `CryptoPP::INFINITE_TIME`, not `INFINITE_TIME`.
-            val ns = Demangler.namespaces(name)
-            val leaf = Demangler.of(name)?.name ?: name
+            val demangled = Demangler.of(name)
+            val ns = demangled?.namespaces.orEmpty()
+            val leaf = demangled?.name ?: name
             val qualified = (ns + leaf).joinToString("::")
 
             when (val existing = equates.getEquate(qualified)) {
