@@ -5,7 +5,6 @@ import ghidra.app.util.demangler.DemangledDataType
 import ghidra.app.util.demangler.DemangledFunction
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.*
-import ghidra.program.model.gclass.ClassUtils
 import ghidra.program.model.lang.CompilerSpec
 import ghidra.program.model.listing.*
 import ghidra.program.model.listing.Function
@@ -56,9 +55,6 @@ class ClassBuilder(
 
     companion object {
         private val source = SourceType.IMPORTED
-
-        /** Prefix for the non-slot fields of a gcc 2.x vftable — its reserved header entry. */
-        private const val RESERVED = "__reserved"
 
         fun LocatedType.isClass() = (type.body as? TypeDecl.Aggregate)?.hasCxxSurface == true
 
@@ -521,9 +517,9 @@ class ClassBuilder(
     ) {
         while (vftable.numComponents > 0) vftable.delete(0)
         val used = mutableSetOf<String>()
-        vftable.addReservedHeader(abi)
+        with(abi) { vftable.addReservedHeader() }
         for (slot in 0 until maxOf(targets.size, virtuals.keys.max() + 1)) {
-            vftable.addEntryAdjustment(abi, slot)
+            with(abi) { vftable.addEntryAdjustment(slot) }
             val m = virtuals[slot]
             when {
                 m != null -> slotName(m, used)
@@ -541,40 +537,6 @@ class ClassBuilder(
                 }
             }
         }
-    }
-
-    /**
-     * The reserved entry gcc 2.x puts at the front of a record, as struct fields — the `{vfptr}`
-     * points here, so the slots only land on their real byte offsets if the header occupies its own.
-     * `cp/class.c:skip_rtti_stuff` reserves two pointer-wide entries with thunks and one 8-byte
-     * `{delta, index, pfn}` without; 8 bytes either way on 32-bit. Nothing here is a Pointer, which
-     * is what keeps the header out of the slot list everything else counts.
-     */
-    private fun Structure.addReservedHeader(abi: CxxAbi) = when (abi) {
-        Itanium -> Unit
-
-        // laid as loose words in front of the struct — see layVtable
-        Gcc2Thunks -> {
-            add(IntegerDataType.dataType, RESERVED + "_offset", "reserved: offset/tdesc entry")
-            add(IntegerDataType.dataType, RESERVED + "_tdesc", "reserved: tdesc pointer")
-        }
-
-        Gcc2Plain -> {
-            add(ShortDataType.dataType, RESERVED + "__delta", "reserved entry: delta")
-            add(ShortDataType.dataType, RESERVED + "__index", "reserved entry: index")
-            add(IntegerDataType.dataType, RESERVED + "__pfn", "reserved entry: pfn")
-        }
-    }
-
-    /**
-     * The `{delta, index}` half of a gcc 2.x no-thunk entry, which precedes its `pfn` and is what
-     * makes the entry 8 bytes wide. `delta` is live at every call site — the dispatch reads it with
-     * `movswl` and adds it to `this` before the call — so it is a signed short and worth naming.
-     */
-    private fun Structure.addEntryAdjustment(abi: CxxAbi, slot: Int) {
-        if (abi != Gcc2Plain) return
-        add(ShortDataType.dataType, "slot${slot}__delta", "this-adjustment for slot $slot")
-        add(ShortDataType.dataType, "slot${slot}__index", "unused; gcc 2.x always emits 0")
     }
 
     /**
@@ -643,9 +605,6 @@ class ClassBuilder(
     /** Vtable records a harvested class claimed, so [sweepUnclaimedVtables] can tell what is left. */
     private val claimedVtables = mutableSetOf<Address>()
 
-    /** Where a class's vtable record sits, and which ABI lays it out past the header. */
-    private data class ResolvedVtable(val address: Address, val abi: CxxAbi)
-
     /**
      * Lay every `_ZTV…` symbol no harvested class claimed. `buildAndApplyVtable` runs per group, i.e.
      * only for a class we have a `T`-stab body for; libsupc++ and libstdc++ link without stabs, so
@@ -660,14 +619,12 @@ class ClassBuilder(
     private fun sweepUnclaimedVtables() {
         val unclaimed = symtab.symbolIterator
             .filter { it.address !in claimedVtables }
-            .mapNotNull { sym ->
-                CxxAbi.vtableClassOf(sym.name)?.let { Triple(sym.address, it, CxxAbi.of(sym.name)) }
-            }
-            .distinctBy { (addr, _, _) -> addr }
+            .mapNotNull { sym -> ResolvedVtable.fromSymbol(sym) }
+            .distinctBy { it.address }
             .toList()
 
         monitor.initialize(unclaimed.size.toLong(), "Stabs: sweeping unclaimed vtables")
-        for ((addr, qualified, abi) in unclaimed) {
+        for ((qualified, addr, abi) in unclaimed) {
             monitor.increment()
             val shape = program.vtableShape(addr, resolver, abi)
             val targets = program.vtableSlotTargets(shape.addressPoint, resolver, abi)
@@ -684,10 +641,12 @@ class ClassBuilder(
             // those beat anything read back off the target addresses.
             if (vftable.numComponents == 0) {
                 val used = mutableSetOf<String>()
-                vftable.addReservedHeader(abi)
-                targets.forEachIndexed { slot, target ->
-                    vftable.addEntryAdjustment(abi, slot)
-                    vftable.addSweptSlot(category, target, used)
+                with(abi) {
+                    vftable.addReservedHeader()
+                    targets.forEachIndexed { slot, target ->
+                        vftable.addEntryAdjustment(slot)
+                        vftable.addSweptSlot(category, target, used)
+                    }
                 }
             }
 
@@ -697,7 +656,7 @@ class ClassBuilder(
             // Itanium packs a class's secondaries into the same record, walkable from the primary's
             // end by their shared rtti word. gcc 2.x gives each its own `_vt.<derived>.<base>`
             // symbol instead, so there is nothing contiguous to walk — and nothing claims them yet
-            // either, since vtableClassOf screens the two-segment names out.
+            // either, since ResolvedVtable.fromSymbol screens the two-segment names out.
             if (abi.hasRttiHeader) laySecondaryVtables(shape, leaf, ns)
         }
     }
@@ -783,8 +742,7 @@ class ClassBuilder(
     private val vtableAddressByClass: Map<String, ResolvedVtable> by lazy {
         buildMap {
             for (sym in symtab.symbolIterator) {
-                CxxAbi.vtableClassOf(sym.name)
-                    ?.let { putIfAbsent(it, ResolvedVtable(sym.address, CxxAbi.of(sym.name))) }
+                ResolvedVtable.fromSymbol(sym)?.let { putIfAbsent(it.className, it) }
             }
         }
     }
@@ -812,7 +770,7 @@ class ClassBuilder(
     private fun LocatedType.resolveVtableAddress(): ResolvedVtable? {
         val candidates = CxxAbi.vtableCandidates(className)
         candidates.firstNotNullOfOrNull { name ->
-            resolver.resolve(name)?.takeIf { it.isDefined() }?.let { ResolvedVtable(it, CxxAbi.of(name)) }
+            resolver.resolve(name)?.takeIf { it.isDefined() }?.let { ResolvedVtable.of(qualifiedClassName, name, it) }
         }?.let { return it }
 
         vtableAddressByClass[qualifiedClassName]?.takeIf { it.address.isDefined() }?.let { return it }

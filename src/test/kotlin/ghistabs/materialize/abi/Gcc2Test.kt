@@ -46,6 +46,15 @@ class Gcc2Test {
         CxxAbi.of("_ZTV10ThisStream") mustBe Itanium
         CxxAbi.of("__vt_9TiXmlNode") mustBe Gcc2Thunks
         CxxAbi.of("_vt.9exception") mustBe Gcc2Plain
+        CxxAbi.of("TiXmlNode::Parse") mustBe null
+    }
+
+    /** Only gcc 2.x separates a secondary out; Itanium must not inherit a "no" from the default. */
+    @Test
+    fun onlyGcc2HasSecondariesToScreenOut() {
+        Itanium.must { isPrimaryVtable("_ZTV10ThisStream") }
+        Gcc2Plain.must { isPrimaryVtable("_vt.14CExposedStream") }
+        Gcc2Plain.mustNot { isPrimaryVtable("_vt.14CExposedStream.11PRevertable") }
     }
 
     /**
