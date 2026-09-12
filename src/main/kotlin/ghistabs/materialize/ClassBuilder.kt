@@ -52,7 +52,7 @@ class ClassBuilder(
 ) : DiagnosticSink by sink {
     private val symtab = program.symbolTable
     private val dtm = program.dataTypeManager
-    private val vfptrPlacement = VfptrPlacement(registry, types, program, vfptrModel, sink)
+    private val vfptrPlacement = VfptrPlacement(registry, program, vfptrModel, sink)
 
     companion object {
         private val source = SourceType.IMPORTED
@@ -146,11 +146,14 @@ class ClassBuilder(
         // (gcc 3.4.4: CPackedSegList's GetSeg/AddSeg are `virt=NORMAL`), so a polymorphic base
         // subobject is itself the signal — without it buildAndApplyVtable never runs and _ZTV<class>
         // is left unannotated. Virtuals.process walks bases, so the slots still resolve.
-        val isPoly = classBody.hasVTablePointerMarker ||
+        val hasPolyBase = types.hasPolymorphicBaseSubobject(classBody)
+        val isPoly = hasPolyBase ||
+            classBody.hasVTablePointerMarker ||
             classBody.methods.any { it.virt == VirtKind.VIRTUAL } ||
-            classBody.fields.any { isVptrFieldName(it.name) } ||
-            types.hasPolymorphicBaseSubobject(classBody)
-        if (isPoly) vfptrPlacement.place(structDt, className, classBody) { ensureVtableTypeAndPointer() }
+            classBody.fields.any { isVptrFieldName(it.name) }
+        if (isPoly) {
+            vfptrPlacement.place(structDt, className, classBody, hasPolyBase) { ensureVtableTypeAndPointer() }
+        }
 
         val ns = ensureClassNamespace()
         for (m in classBody.methods) reparentMethod(m, ns, structDt)

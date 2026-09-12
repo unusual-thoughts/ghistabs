@@ -24,8 +24,10 @@ import ghistabs.harvest.Type
 import ghistabs.importer.*
 import ghistabs.importer.ImportOptions.Companion.OVERLAY_SECTION
 import ghistabs.importer.ImportOptions.Companion.SHORTEN_TYPEDEFS
+import ghistabs.importer.ImportOptions.Companion.VFPTR_MODEL
 import ghistabs.index.ContentIndex
 import ghistabs.index.EffectiveSource
+import ghistabs.materialize.VfptrModel
 import ghistabs.materialize.abi.CxxAbi
 import ghistabs.materialize.abi.Itanium
 import ghistabs.materialize.conflictCount
@@ -100,6 +102,16 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
      */
     private val shortenTypedefs = System.getProperty("shortenTypedefs") == "true"
 
+    /**
+     * `-Pvfptr=INHERITED`. The default is SPLIT_BASE, so without this the other model never ran at
+     * all. Counter baselines are recorded under the default, so [countersWithinBaseline] stands down
+     * for a non-default run and the structural assertions carry it.
+     */
+    private val vfptrModel = System.getProperty("vfptrModel").orEmpty().trim()
+        .ifEmpty { null }?.let { VfptrModel.valueOf(it.uppercase()) } ?: VFPTR_MODEL.default
+
+    private val defaultVfptrModel get() = vfptrModel == VFPTR_MODEL.default
+
     private fun outputFile(kind: String) = File("$OUTPUT_ROOT/${kind}s/${fixture.nameWithoutExtension}-$kind.json")
     private val fixture get() = File("src/test/resources/binaries/$binaryName")
     private val baselineFile get() = File("src/test/resources/baselines/${fixture.nameWithoutExtension}-baseline.json")
@@ -147,7 +159,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
                 abort("Skipping $binaryName: the importer could not load the fixture: $e")
             }
 
-            context = loaded.program.defaultContext(shortenTypedefs)
+            context = loaded.program.defaultContext(shortenTypedefs, vfptrModel)
 
             val mgr = AutoAnalysisManager.getAnalysisManager(program)
             val options = program.getOptions(Program.ANALYSIS_PROPERTIES)
@@ -182,6 +194,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
                         // CONCURRENT's import is the analyzer's own, built from the program options —
                         // [context]'s copy of the flag never reaches it.
                         options.getOptions(STABS_ANALYZER_NAME)[SHORTEN_TYPEDEFS] = shortenTypedefs
+                        options.getOptions(STABS_ANALYZER_NAME)[VFPTR_MODEL] = vfptrModel
                     }
                     mgr.scheduleOneTimeAnalysis(discovered, program.memory)
                     runAutoAnalysis(mgr, monitor)
@@ -274,6 +287,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     @Test
     fun countersWithinBaseline() {
         assumeTrue { mode == Mode.AFTER || mode == Mode.CONCURRENT }
+        assumeTrue(defaultVfptrModel, "Skipping: baselines are recorded under ${VFPTR_MODEL.default}")
         // Authoritative per-category counts. Not `log.tagFrequencies()`: that only sees categories
         // that reach the sink (record*/direct-inc bypass it) and ignores `count = n` tallies, which
         // made assertions on those categories (e.g. empty-scope) silently vacuous.
