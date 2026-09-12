@@ -43,24 +43,28 @@ class Gcc2Test {
 
     @Test
     fun abiFollowsTheSpelling() {
-        CxxAbi.of("_ZTV10ThisStream") mustBe Itanium
-        CxxAbi.of("__vt_9TiXmlNode") mustBe Gcc2Thunks
-        CxxAbi.of("_vt.9exception") mustBe Gcc2Plain
-        CxxAbi.of("TiXmlNode::Parse") mustBe null
+        CxxAbi.ofVtableSymbol("_ZTV10ThisStream") mustBe Itanium
+        CxxAbi.ofVtableSymbol("__vt_9TiXmlNode") mustBe Gcc2Thunks
+        CxxAbi.ofVtableSymbol("_vt.9exception") mustBe Gcc2Plain
+        CxxAbi.ofVtableSymbol("TiXmlNode::Parse") mustBe null
     }
 
     /**
-     * A vtable spelling outranks a member spelling wherever the two disagree, and a binary with no
+     * A vtable spelling outranks the member vote wherever the two disagree, and a binary with no
      * vtable at all is still settled by its members — a gcc 2.x C++ binary with no polymorphic class
-     * would otherwise fall to Itanium and stop composing physnames.
+     * would otherwise stop composing physnames, which is the only reason its members resolve.
+     *
+     * The vote is what keeps a lone false positive from carrying a binary, so it is worth stating
+     * that a majority of one is still a majority: [prevailing] is only as good as its detectors.
      */
     @Test
-    fun prevailingPrefersAVtableButSettlesForAMember() {
+    fun prevailingPrefersAVtableButSettlesForTheMemberVote() {
         val gcc2Members = sequenceOf("append__11TiXmlStringPCcUi", "_._9TiXmlNode")
         CxxAbi.prevailing(gcc2Members) mustBe Gcc2Thunks
         CxxAbi.prevailing(sequenceOf("_ZN9TiXmlNode5ParseEPKc")) mustBe Itanium
         CxxAbi.prevailing(gcc2Members + "_ZTV10ThisStream") mustBe Itanium
-        CxxAbi.prevailing(sequenceOf("main", "memcpy", "_IO_stdout")) mustBe Itanium
+        CxxAbi.prevailing(gcc2Members + "_ZN9TiXmlNode5ParseEPKc") mustBe Gcc2Thunks
+        CxxAbi.prevailing(sequenceOf("main", "memcpy", "_IO_stdout")) mustBe null
     }
 
     /**

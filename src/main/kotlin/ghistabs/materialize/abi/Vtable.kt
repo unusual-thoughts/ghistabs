@@ -231,14 +231,14 @@ data class ResolvedVtable(val className: String, val address: Address, val abi: 
     companion object {
         /** For a caller that already knows the class and is only checking a spelling of it. */
         fun of(className: String, symName: String, addr: Address) =
-            CxxAbi.of(symName)?.let { ResolvedVtable(className, addr, it) }
+            CxxAbi.ofVtableSymbol(symName)?.let { ResolvedVtable(className, addr, it) }
 
         /**
          * For a caller holding only the symbol, which has to demangle to learn the class. gcc 2.x
-         * needs the primary screen on top of [CxxAbi.of]: a second cplus-marker separates a base,
+         * needs the primary screen on top of [CxxAbi.ofVtableSymbol]: a second cplus-marker separates a base,
          * naming that base's secondary table rather than the class's own.
          */
-        fun fromSymbol(sym: Symbol) = CxxAbi.of(sym.name)
+        fun fromSymbol(sym: Symbol) = CxxAbi.ofVtableSymbol(sym.name)
             ?.takeIf { it.isPrimaryVtable(sym.name) }
             ?.let { abi ->
                 Demangler.of(sym.name)

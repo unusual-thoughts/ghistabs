@@ -30,6 +30,7 @@ import ghistabs.index.ContentIndex
 import ghistabs.index.EffectiveSource
 import ghistabs.materialize.VfptrModel
 import ghistabs.materialize.abi.CxxAbi
+import ghistabs.materialize.abi.CxxAbi.Companion.prevailingAbi
 import ghistabs.materialize.abi.GhidraClassNaming
 import ghistabs.materialize.abi.Itanium
 import ghistabs.materialize.conflictCount
@@ -1908,11 +1909,9 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         .groupBy { it.name }.values.map { copies -> copies.maxBy { it.numComponents } }
         .filter { it.numComponents > 0 }
 
-    /** The ABI that spelled this fixture's vtables — one producer per binary, so the first states it. */
-    private fun fixtureAbi(): CxxAbi {
-        val symbols: Iterator<Symbol> = program.symbolTable.symbolIterator
-        return CxxAbi.prevailing(symbols.asSequence().map { it.name })
-    }
+    /** The ABI that spelled this fixture's vtables. Itanium where nothing in the binary says — a
+     *  fixture with no C++ has no vftable either, so the slot bias it feeds is unused there. */
+    private fun fixtureAbi(): CxxAbi = program.symbolTable.prevailingAbi() ?: Itanium
 
     /** The Ghidra function for each `STATIC`-flagged method the stabs name, keyed by linkage name.
      *  The Cygwin PE loader prefixes symbols with `_`, so both spellings are tried. */
