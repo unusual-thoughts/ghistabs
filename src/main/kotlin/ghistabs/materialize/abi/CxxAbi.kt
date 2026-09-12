@@ -145,14 +145,33 @@ sealed interface CxxAbi : CxxMemberNaming {
         /**
          * The ABI a whole binary was built with, for every question no individual symbol settles —
          * how a physname is spelled, how an implicit member is recognised, what a mangled name looks
-         * like. One producer per binary, so the first primary vtable spelling states it, and an
-         * *undefined* symbol states it just as well as a defined one: `tinyxml_aout_gcc295.o` names
-         * `__vt_13TiXmlDocument` without defining it.
+         * like. One producer per binary, so any one symbol that could only have come from a given
+         * ABI states it for all of them.
          *
-         * A C++ binary with no polymorphic class anywhere has no vtable symbol to read at all.
-         * Itanium is the modern default, and the only guess left.
+         * A vtable spelling is the decisive evidence and is taken wherever it appears, including
+         * from an *undefined* symbol: `tinyxml_aout_gcc295.o` names `__vt_13TiXmlDocument` without
+         * defining it, which states the ABI as well as a definition would. Failing that, any mangled
+         * member name settles it — a C++ binary with no polymorphic class anywhere has no vtable to
+         * read, but it still has members. Only a binary with neither is left to the Itanium default.
          */
-        fun prevailing(symbolNames: Sequence<String>): CxxAbi =
-            symbolNames.firstNotNullOfOrNull { n -> of(n)?.takeIf { it.isPrimaryVtable(n) } } ?: Itanium
+        fun prevailing(symbolNames: Sequence<String>): CxxAbi {
+            var byMember: CxxAbi? = null
+            for (name in symbolNames) {
+                of(name)?.takeIf { it.isPrimaryVtable(name) }?.let { return it }
+                if (byMember == null) byMember = mangledBy(name)
+            }
+            return byMember ?: Itanium
+        }
+
+        /**
+         * Which ABI mangled [name], as a member. Nothing here tells the two gcc 2.x ABIs apart —
+         * they mangle members identically and differ only in vtable geometry, which a binary with no
+         * vtable symbol has no record of — so [Gcc2Thunks] stands for gcc 2.x.
+         */
+        private fun mangledBy(name: String): CxxAbi? = when {
+            Itanium.isProbablyMangled(name) -> Itanium
+            Gcc2.isProbablyMangled(name) -> Gcc2Thunks
+            else -> null
+        }
     }
 }
