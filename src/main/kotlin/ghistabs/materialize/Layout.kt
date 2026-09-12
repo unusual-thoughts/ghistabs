@@ -1,6 +1,7 @@
-package ghistabs.materialize.abi
+package ghistabs.materialize
 
 import ghistabs.index.TypeGraph
+import ghistabs.materialize.abi.Itanium
 import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
