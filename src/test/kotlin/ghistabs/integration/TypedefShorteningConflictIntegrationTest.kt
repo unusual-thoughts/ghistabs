@@ -3,18 +3,15 @@ package ghistabs.integration
 import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.data.TypeDef
-import ghidra.program.model.listing.Program
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.CapturingSink
 import ghistabs.diagnose.Level
-import ghistabs.diagnose.StabsDiagnostics
+import ghistabs.entrypoints.StabsAnalyzer
+import ghistabs.entrypoints.StabsAnalyzer.Companion.enableStabsAnalyzer
 import ghistabs.importer.ImportContext
 import ghistabs.importer.ImportOptions
-import ghistabs.importer.ImportOptions.Companion.SHORTEN_TYPEDEFS
 import ghistabs.importer.ImportProbe
-import ghistabs.importer.STABS_ANALYZER_NAME
-import ghistabs.importer.set
 import ghistabs.isConflict
 import ghistabs.nameWithoutConflict
 import ghistabs.runTransaction
@@ -62,19 +59,18 @@ class TypedefShorteningConflictIntegrationTest : AbstractGhidraHeadlessIntegrati
             val ctx = ImportContext(
                 program,
                 monitor,
-                ImportOptions(shortenTypedefs = shorten, minLogLevel = Level.DEBUG),
+                ImportOptions {
+                    shortenTypedefs = shorten
+                    minLogLevel = Level.DEBUG
+                },
                 CapturingSink(),
                 StabsDiagnostics(),
             )
             val probe = ImportProbe.install(ctx)
             val mgr = AutoAnalysisManager.getAnalysisManager(program)
-            val discovered = mgr.getAnalyzer(STABS_ANALYZER_NAME)
+            val discovered = mgr.getAnalyzer(StabsAnalyzer.NAME)
             discovered.mustNotBeNull("StabsAnalyzer not discovered by ClassSearcher")
-            val options = program.getOptions(Program.ANALYSIS_PROPERTIES)
-            program.runTransaction("configure-analysis") {
-                options.setBoolean(STABS_ANALYZER_NAME, true)
-                options.getOptions(STABS_ANALYZER_NAME)[SHORTEN_TYPEDEFS] = shorten
-            }
+            program.enableStabsAnalyzer { shortenTypedefs = shorten }
             mgr.initializeOptions()
             program.disableWindowsResourceAnalyzer()
             mgr.scheduleOneTimeAnalysis(discovered, program.memory)

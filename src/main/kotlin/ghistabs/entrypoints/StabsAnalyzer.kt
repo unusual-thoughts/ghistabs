@@ -19,6 +19,7 @@ import ghistabs.importer.ImportOptions.Companion.markOverlayDone
 import ghistabs.importer.ImportOptions.Companion.markStabsDone
 import ghistabs.importer.ImportOptions.Companion.registerStabs
 import ghistabs.parse.StabReader
+import ghistabs.runTransaction
 
 /**
  * Imports STABS debug info (.stab/.stabstr) into Ghidra: types, function signatures,
@@ -31,7 +32,7 @@ import ghistabs.parse.StabReader
  */
 class StabsAnalyzer :
     AbstractAnalyzer(
-        STABS_ANALYZER_NAME,
+        NAME,
         "Imports STABS debug info (.stab/.stabstr) — types, function signatures, locals, C++ classes, vtables.",
         AnalyzerType.BYTE_ANALYZER,
     ) {
@@ -57,7 +58,7 @@ class StabsAnalyzer :
         program ?: return false
         msg ?: return false
         monitor ?: return false
-        val options = ImportOptions(program)
+        val options = program.stabsOptions()
         val probe = ImportProbe.get(program)
 
         val ctx = ImportContext(
@@ -79,6 +80,38 @@ class StabsAnalyzer :
     }
 
     companion object {
+        const val NAME = "Stabs Importer"
+
+        private fun optionsIn(program: Program): Options =
+            program.getOptions(Program.ANALYSIS_PROPERTIES).getOptions(NAME)
+
+        fun Program.stabsOptions() = ImportOptions(optionsIn(this))
+
+        private fun Program.setStabsOptions(options: ImportOptions) = options.exportTo(optionsIn(this))
+
+        private fun setEnabled(program: Program, value: Boolean = true) {
+            program.getOptions(Program.ANALYSIS_PROPERTIES).setBoolean(NAME, value)
+        }
+
+        private fun Program.updateOptions(mod: ImportOptions.() -> Unit) = optionsIn(this).apply {
+            ImportOptions(this).also { mod(it) }.exportTo(this)
+        }
+
+        fun Program.enableStabsAnalyzer(options: ImportOptions) = runTransaction("Enable Stabs analyzer") {
+            setStabsOptions(options)
+            setEnabled(this, true)
+        }
+
+        fun Program.enableStabsAnalyzer(config: ImportOptions.() -> Unit = { }) =
+            runTransaction("Configure Stabs analyzer") {
+                updateOptions(config)
+                setEnabled(this, true)
+            }
+
+        fun Program.disableStabsAnalyzer() = runTransaction("Disable Stabs analyzer") {
+            setEnabled(this, false)
+        }
+
         @JvmStatic
         fun ImportContext<*>.import(): ImportResult {
             if (program.isStabsDone) return ImportResult()

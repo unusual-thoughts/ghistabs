@@ -8,9 +8,14 @@ import ghidra.program.model.address.AddressSetView
 import ghidra.program.model.listing.Program
 import ghidra.util.HelpLocation
 import ghidra.util.task.TaskMonitor
+import ghistabs.BoolOption
+import ghistabs.DirectoryOption
+import ghistabs.OptionContainer
+import ghistabs.OptionDescriptor
 import ghistabs.diagnose.MessageLogSink
 import ghistabs.diagnose.StabsDiagnostics
-import ghistabs.importer.*
+import ghistabs.importer.ImportContext
+import ghistabs.importer.ImportOptions
 import ghistabs.importer.ImportOptions.Companion.isStabsDone
 import ghistabs.index.SourceHints
 import ghistabs.index.SourceIndex
@@ -32,9 +37,9 @@ import java.io.File
  * directory chooser; left empty, the chosen path is used as the output directory instead — which is
  * what the extension the dialog appends to it is for.
  */
-sealed class StabsRenderExporter(name: String, extension: String, val options: StabOptions = StabOptions()) :
+sealed class StabsRenderExporter(name: String, extension: String, val options: OptionContainer = OptionContainer()) :
     Exporter(name, extension, HelpLocation("Stabs", "Stabs_Export_Decompilation")),
-    StabOption.Set by options {
+    OptionDescriptor.Container by options {
     protected abstract val mode: Renderer.Mode
 
     // Declaring the property is what enrols the option, here and in any subclass — see [OptionSet].
