@@ -38,7 +38,7 @@ class Gcc2Test {
         Gcc2.must { looksLikePrimaryVtable("_vt.11PRevertable") }
         Gcc2.mustNot { looksLikePrimaryVtable("_vt.14CExposedStream.11PRevertable") }
         // A genuinely nested class takes the `Q` form, so it stays a primary.
-        Gcc2.must { looksLikePrimaryVtable("_vt.Q2_6Outer5Inner") }
+        Gcc2.must { looksLikePrimaryVtable("_vt.Q26Outer5Inner") }
     }
 
     @Test
@@ -88,6 +88,26 @@ class Gcc2Test {
         Gcc2.must { isProbablyMangled("__Q217__class_type_info9base_info") }
         Itanium.mustNot { isProbablyMangled("__as__11TiXmlStringPCc") }
         Itanium.mustNot { isProbablyMangled("_._9TiXmlNode") }
+    }
+
+    /**
+     * A nested class's mangled name, against the spelling `cv_mscom_elf_i386_gcc281` carries: its
+     * stabs state `__class_type_info::base_info`'s ctor as `__Q217__class_type_info9base_info`, and
+     * that symbol is in the binary while the leaf-only `__9base_info` and the underscored
+     * `Q2_17__class_type_info…` are not. [Gcc2.mangleClassName] says why the wrong form still
+     * demangles, which is what kept it from being noticed. The third case is the same path with an
+     * ordinary member name in front of it.
+     */
+    @Test
+    fun aNestedClassManglesItsWholePath() {
+        Gcc2.mangleClassName("__class_type_info::base_info") mustBe "Q217__class_type_info9base_info"
+        Gcc2.mangleClassName("TiXmlNode") mustBe "9TiXmlNode"
+        Gcc2.physnamePrefix("base_info", "__class_type_info::base_info", false, false) mustBe
+            "__Q217__class_type_info9base_info"
+        Gcc2.physnamePrefix("dcast", "__class_type_info::base_info", false, false) mustBe
+            "dcast__Q217__class_type_info9base_info"
+        Gcc2.physnamePrefix("~base_info", "__class_type_info::base_info", false, false) mustBe
+            "_._Q217__class_type_info9base_info"
     }
 
     /** Only gcc 2.x separates a secondary out; Itanium must not inherit a "no" from the default. */

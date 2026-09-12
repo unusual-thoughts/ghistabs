@@ -5,8 +5,8 @@ import ghidra.program.model.data.IntegerDataType
 import ghidra.program.model.data.ShortDataType
 import ghidra.program.model.data.Structure
 import ghistabs.materialize.abi.Gcc2.DEMANGLED_VTABLE_SUFFIX
-import ghistabs.namespaceChain
 import ghistabs.parse.TypeDecl.Aggregate.Method
+import ghistabs.scopes
 
 /**
  * Pre-Itanium gcc 2.x C++ ABI facts: the vtable symbol spellings and what the deprecated demangler
@@ -65,7 +65,7 @@ object Gcc2 {
      */
     fun demangledVtableClass(obj: DemangledObject): String? {
         val leaf = obj.name?.removeSuffix(DEMANGLED_VTABLE_SUFFIX)?.takeIf { it != obj.name } ?: return null
-        return (obj.namespaceChain() + leaf).joinToString("::")
+        return (obj.scopes() + leaf).joinToString("::")
     }
 
     /**
@@ -90,14 +90,25 @@ object Gcc2 {
     }
 
     /**
-     * gcc 2.x class-name mangling: `TiXmlNode` → `9TiXmlNode`, nesting → `Q<n>_` then each part
-     * length-prefixed (`Outer::Inner` → `Q2_5Outer5Inner`). The simple case agrees with Itanium's,
-     * the nested one does not — see [Itanium.ztvCandidates].
+     * gcc 2.x class-name mangling: `TiXmlNode` → `9TiXmlNode`, nesting → the component count then
+     * each part length-prefixed (`Outer::Inner` → `Q25Outer5Inner`). The simple case agrees with
+     * Itanium's, the nested one does not — see [Itanium.ztvCandidates].
+     *
+     * No underscore after a single-digit count. `libiberty/cplus-dem.c:demangle_qualified` *accepts*
+     * one — "said to be for ARM-qualified names… perhaps cfront uses one" — which is why the wrong
+     * form still demangles, and why it has to be got right here instead: these names are composed to
+     * be looked up, and `Q2_17__class_type_info9base_info` is not the symbol gcc emitted.
+     * `cv_mscom_elf_i386_gcc281` spells it `Q217__class_type_info9base_info`. Above nine components
+     * the count is bracketed instead (`Q_10_`), which is the same source's `case '_'`.
      */
     fun mangleClassName(name: String): String {
         val parts = name.split("::")
         val joined = parts.joinToString("") { "${it.length}$it" }
-        return if (parts.size == 1) joined else "Q${parts.size}_$joined"
+        return when {
+            parts.size == 1 -> joined
+            parts.size <= 9 -> "Q${parts.size}$joined"
+            else -> "Q_${parts.size}_$joined"
+        }
     }
 
     /**
