@@ -9,14 +9,12 @@ import ghidra.program.model.gclass.ClassUtils
 import ghidra.program.model.listing.Program
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.index.TypeGraph
-import ghistabs.materialize.abi.VfptrModel
-import ghistabs.materialize.itanium.FirstComponentSnapshot
-import ghistabs.materialize.itanium.Layout
-import ghistabs.materialize.itanium.VfptrAction
+import ghistabs.materialize.itanium.Itanium
 import ghistabs.materialize.itanium.hasPolymorphicBaseSubobject
 import ghistabs.materialize.itanium.vptrOffsetBytesOf
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
+import ghistabs.parse.isVptrFieldName
 
 /**
  * Where a polymorphic class's `{vfptr}` goes, and what happens to the base subobject that would
@@ -54,7 +52,7 @@ internal class VfptrPlacement(
             )
         }
 
-        val action = Layout.chooseVfptrAction(
+        val action = chooseVfptrAction(
             hasPolymorphicBaseSubobject = types.hasPolymorphicBaseSubobject(classBody),
             parserVptrOffsetBytes = parserVptrOffset,
             componentAtTargetOffset = snapshot,
@@ -160,14 +158,12 @@ internal class VfptrPlacement(
     }
 
     /**
-     * One contiguous run of [baseDt]'s bytes, `[from, until)`, as a struct of its own: the base
-     * subobject's fields with the vptr word taken out. Null when the run is empty. Shared across
-     * every class deriving from that base, which is what keeps this one extra type per polymorphic
-     * class instead of one per inheritance edge.
+     * One contiguous run of [baseDt]'s bytes, `[from, until)`, as a struct: the base subobject's
+     * fields with the vptr word taken out. Null when empty. Shared by every class deriving from
+     * that base, so one extra type per polymorphic class rather than one per inheritance edge.
      *
-     * The bounds are in the name because they are what the type *is*: the registry caches on
-     * (category, name) alone, so two runs of one base that differ only in extent would otherwise
-     * collide and the second class would silently receive the first's struct.
+     * The bounds are in the name: the registry caches on (category, name) alone, so two runs of one
+     * base differing only in extent would collide.
      */
     private fun baseFieldsRun(baseDt: Structure, from: Int, until: Int): Structure? {
         if (until <= from) return null
@@ -186,4 +182,77 @@ internal class VfptrPlacement(
             }
         }
     }
+}
+
+/** Component snapshot at a target offset, fed into [chooseVfptrAction]. */
+data class FirstComponentSnapshot(val fieldName: String?, val offsetBytes: Int, val isUndefined: Boolean)
+
+sealed class VfptrAction {
+    object SkipInheritedFromBase : VfptrAction()
+    data class Insert(val offsetBytes: Int) : VfptrAction()
+    data class Replace(val offsetBytes: Int, val wasFieldName: String) : VfptrAction()
+    object AlreadyCanonical : VfptrAction()
+    data class CollisionAt(val offsetBytes: Int, val occupantFieldName: String) : VfptrAction()
+}
+
+/** What to do with the component already sitting where the vptr belongs. Pure, so it unit-tests. */
+fun chooseVfptrAction(
+    hasPolymorphicBaseSubobject: Boolean,
+    parserVptrOffsetBytes: Int?,
+    componentAtTargetOffset: FirstComponentSnapshot?,
+    canonicalVfptrFieldName: String,
+): VfptrAction {
+    if (hasPolymorphicBaseSubobject) return VfptrAction.SkipInheritedFromBase
+
+    val targetOffset = parserVptrOffsetBytes ?: 0
+
+    if (
+        componentAtTargetOffset != null &&
+        componentAtTargetOffset.offsetBytes == targetOffset &&
+        componentAtTargetOffset.fieldName == canonicalVfptrFieldName
+    ) {
+        return VfptrAction.AlreadyCanonical
+    }
+
+    if (componentAtTargetOffset == null || componentAtTargetOffset.isUndefined) {
+        return VfptrAction.Insert(targetOffset)
+    }
+
+    // An unresolved or synthesized base at the vptr offset: polymorphism was never proven, but the
+    // stab layout still says a base owns the word.
+    if (componentAtTargetOffset.fieldName?.let(Itanium::isBaseField) == true) {
+        return VfptrAction.SkipInheritedFromBase
+    }
+
+    return if (componentAtTargetOffset.fieldName?.let(::isVptrFieldName) == true) {
+        VfptrAction.Replace(targetOffset, componentAtTargetOffset.fieldName)
+    } else {
+        VfptrAction.CollisionAt(targetOffset, componentAtTargetOffset.fieldName ?: "<anon>")
+    }
+}
+
+/**
+ * Where a polymorphic class's `{vfptr}` comes from, which decides whether a virtual call resolves to
+ * a named slot or overruns into `vfptr[N]`.
+ *
+ * The vptr sits inside the primary base subobject, so a derived class can only carry a pointer to
+ * its **own** vftable if something gives way, and the static type of that field is what the
+ * decompiler indexes. With one shared field typed `<Root>_vftable *`, every derived slot lands past
+ * the end of the root's table: `xmltest_gcc421` renders 31 of its 40 virtual calls as
+ * `vfptr[4].~TiXmlBase` and never mentions a derived vftable type at all.
+ *
+ * A third shape exists: Ghidra's own `RecoveredClassHelper` expands the base subobject away
+ * entirely and puts `vftablePtr` at offset 0, trading the `_base_` component for the pointer.
+ */
+enum class VfptrModel {
+    /** One `{vfptr}` on the root of each hierarchy, inherited through `_base_`. Derived slots overrun. */
+    INHERITED,
+
+    /**
+     * Each polymorphic class owns a `{vfptr}` typed to its own vftable, and embeds its primary base
+     * as that base's fields *without* the vptr — one extra struct per polymorphic class, shared by
+     * every class that derives from it. Keeps the `_base_` subobject component that
+     * [ghistabs.materialize.Layout] models inheritance with.
+     */
+    SPLIT_BASE,
 }

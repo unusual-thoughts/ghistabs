@@ -5,13 +5,9 @@ import ghistabs.Demangler
 import ghistabs.materialize.itanium.Itanium as ItaniumFacts
 
 /**
- * A C++ ABI's answers about vtables: how a record is laid out, how its symbol is spelled, and which
- * class that symbol names. One implementation per ABI the corpus carries, so a site that needs one
- * of these facts asks the ABI rather than branching on it.
- *
- * Physname composition is deliberately absent: it is asked per *member*, long before any vtable
- * symbol has classified the class, and nothing yet records a producer per compilation unit. It
- * stays on [Gcc2] until something can state which ABI a member belongs to.
+ * A C++ ABI's answers about vtables: record geometry, symbol spelling, and which class a symbol
+ * names. Physname composition stays on [Gcc2]: it is asked per member, before any vtable symbol has
+ * classified the class, and nothing records a producer per compilation unit.
  */
 sealed interface CxxAbi {
     /** Bytes between consecutive entries. */
@@ -26,10 +22,7 @@ sealed interface CxxAbi {
     /** Whether a typeinfo pointer sits in the header, which is what locates an address point. */
     val hasRttiHeader: Boolean
 
-    /**
-     * Whether a `{vfptr}` holds the record *start* rather than the address point, which decides
-     * where the `_vftable` struct begins for a virtual call to resolve against its fields.
-     */
+    /** Whether a `{vfptr}` holds the record *start*, which is where the `_vftable` struct begins. */
     val vptrAtRecordStart: Boolean
 
     /** Byte offset of slot [index]'s `pfn` from wherever the struct begins. */
@@ -50,33 +43,39 @@ sealed interface CxxAbi {
         override fun pfnOffset(ptrSize: Int) = 0L
 
         /** `offset_to_top` then the typeinfo pointer (ABI §2.5.2). */
-        override fun headerBytes(ptrSize: Int) = ItaniumFacts.vtablePrefixBytes(ptrSize)
+        override fun headerBytes(ptrSize: Int) = 2L * ptrSize
 
         override val hasRttiHeader get() = true
         override val vptrAtRecordStart get() = false
 
-        override fun looksLikeVtable(symbolName: String) = ItaniumFacts.looksLikeZtv(symbolName)
-        override fun vtableCandidates(className: String) = ItaniumFacts.ztvCandidates(className)
-        override fun demangledVtableClass(obj: DemangledObject) = ItaniumFacts.demangledVtableClass(obj)
+        override fun looksLikeVtable(symbolName: String) = with(ItaniumFacts) {
+            symbolName.trimDoubleUnderscore().startsWith(ItaniumFacts.VTABLE_PREFIX)
+        }
+
+        /** Templates have no closed form; [vtableClassOf] finds those. */
+        override fun vtableCandidates(className: String) = ItaniumFacts.mangleClassName(className).let {
+            listOf(
+                "${ItaniumFacts.VTABLE_PREFIX}$it",
+                "_${ItaniumFacts.VTABLE_PREFIX}$it", // Cygwin/PE leading underscore
+                "$className::${ItaniumFacts.DEMANGLED_VTABLE}",
+            )
+        }
+
+        override fun demangledVtableClass(obj: DemangledObject) =
+            ItaniumFacts.addressTableClass(obj, ItaniumFacts.DEMANGLED_VTABLE)
     }
 
     /**
-     * gcc 2.95.3's geometry, per `-fvtable-thunks`. `cp/decl.c` makes an entry a bare function
-     * pointer with thunks and the record `{short delta; short index; void *pfn;}` without, while
-     * `cp/class.c:skip_rtti_stuff` reserves one entry for offset/tdesc and a second, for the tdesc
-     * pointer, only with thunks: 8 bytes of header either way on 32-bit.
-     *
-     * A gcc 2.x `{vfptr}` points at the record start and the call site skips the header itself.
-     * `cv_mscom_elf_i386_gcc281` stores `_vt.9CMapBytes` verbatim into the object
-     * (`movl $0x807639c,(%ebx)`), and `tinyxml_aout_gcc295.o` dispatches through `add eax,0x8`
-     * after loading the vptr.
+     * gcc 2.95.3, `cp/class.c:skip_rtti_stuff`: two pointer header entries with thunks, one 8-byte
+     * record without, so 8 bytes either way on 32-bit. The vptr holds the record start and the call
+     * site skips the header (`tinyxml_aout_gcc295.o` dispatches through `add eax,0x8`).
      */
     sealed interface Gcc2Abi : CxxAbi {
         override fun stride(ptrSize: Int) = ptrSize.toLong()
         override fun pfnOffset(ptrSize: Int) = 0L
         override fun headerBytes(ptrSize: Int) = 2L * ptrSize
 
-        /** gcc 2.x emits no typeinfo pointer, so there is no rtti word to find the address point by. */
+        /** gcc 2.x emits no typeinfo pointer, so no rtti word locates the address point. */
         override val hasRttiHeader get() = false
         override val vptrAtRecordStart get() = true
 
@@ -95,11 +94,8 @@ sealed interface CxxAbi {
     data object Gcc2Plain : Gcc2Abi {
         override fun stride(ptrSize: Int) = 2L * ptrSize
 
-        /**
-         * `delta` and `index` are a `short` each, so together they make exactly one 32-bit word, the
-         * only width gcc 2.x ever targeted. (`-fhuge-objects` widens both to `long` and would make
-         * this `2 * ptrSize`; no corpus binary uses it.)
-         */
+        /** `delta` and `index` are a `short` each: one 32-bit word. (`-fhuge-objects` would widen
+         *  both to `long`; no corpus binary uses it.) */
         override fun pfnOffset(ptrSize: Int) = ptrSize.toLong()
 
         override fun looksLikeVtable(symbolName: String) =
@@ -123,16 +119,13 @@ sealed interface CxxAbi {
             Gcc2Thunks.vtableCandidates(className)
 
         /**
-         * The qualified class a vtable [symbolName] names, whichever ABI spelled it, or null if it
-         * is not one. Lets a caller demangle the symbol table once into a class to address index
-         * rather than re-scanning it per class.
-         *
-         * A gcc 2.x name needs the primary screen rather than [looksLikeVtable]: a second marker
-         * separates a base, naming that base's secondary table inside the first class, which is a
-         * different object from the class's own.
+         * The qualified class a vtable [symbolName] names, whichever ABI spelled it. gcc 2.x needs
+         * the primary screen, not [looksLikeVtable]: a second marker separates a base, naming that
+         * base's secondary table rather than the class's own.
          */
         fun vtableClassOf(symbolName: String): String? = when {
-            ItaniumFacts.looksLikeZtv(symbolName) -> ItaniumFacts.vtableClassOf(symbolName)
+            Itanium.looksLikeVtable(symbolName) ->
+                Demangler.of(symbolName)?.let(Itanium::demangledVtableClass)
 
             Gcc2.looksLikePrimaryVtable(symbolName) ->
                 Demangler.of(symbolName)?.let(Gcc2::demangledVtableClass)

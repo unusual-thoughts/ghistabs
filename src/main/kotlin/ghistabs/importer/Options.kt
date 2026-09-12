@@ -9,7 +9,7 @@ import ghidra.framework.options.Options
 import ghidra.program.model.listing.Program
 import ghistabs.DirectoryListEditor
 import ghistabs.diagnose.Level
-import ghistabs.materialize.abi.VfptrModel
+import ghistabs.materialize.VfptrModel
 import ghistabs.runTransaction
 import java.awt.Component
 import java.beans.PropertyEditor
