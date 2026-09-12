@@ -49,6 +49,40 @@ class Gcc2Test {
         CxxAbi.of("TiXmlNode::Parse") mustBe null
     }
 
+    /**
+     * A vtable spelling outranks a member spelling wherever the two disagree, and a binary with no
+     * vtable at all is still settled by its members — a gcc 2.x C++ binary with no polymorphic class
+     * would otherwise fall to Itanium and stop composing physnames.
+     */
+    @Test
+    fun prevailingPrefersAVtableButSettlesForAMember() {
+        val gcc2Members = sequenceOf("append__11TiXmlStringPCcUi", "_._9TiXmlNode")
+        CxxAbi.prevailing(gcc2Members) mustBe Gcc2Thunks
+        CxxAbi.prevailing(sequenceOf("_ZN9TiXmlNode5ParseEPKc")) mustBe Itanium
+        CxxAbi.prevailing(gcc2Members + "_ZTV10ThisStream") mustBe Itanium
+        CxxAbi.prevailing(sequenceOf("main", "memcpy", "_IO_stdout")) mustBe Itanium
+    }
+
+    /**
+     * The two member detectors have to stay disjoint: one hit of the wrong one re-classifies a whole
+     * binary. Measured over the fixtures — 32,574 real `_Z…` names match the gcc 2.x rule zero times,
+     * and tinyxml's 215 gcc 2.x member names match the Itanium rule zero times — so these stand for
+     * the shapes that came closest.
+     */
+    @Test
+    fun theTwoMemberDetectorsDoNotOverlap() {
+        Gcc2.mustNot { isProbablyMangled("_ZN9__gnu_cxx13new_allocatorE") }
+        Gcc2.mustNot { isProbablyMangled("__ZNSt8__detail6_ScaleE") }
+        Gcc2.mustNot { isProbablyMangled("__errno_location") }
+        Gcc2.mustNot { isProbablyMangled("__vt_9TiXmlNode") }
+        Gcc2.must { isProbablyMangled("Accept__C12TiXmlElementP12TiXmlVisitor") }
+        Gcc2.must { isProbablyMangled("__as__11TiXmlStringPCc") }
+        Gcc2.must { isProbablyMangled("_._9TiXmlNode") }
+        Gcc2.must { isProbablyMangled("__Q217__class_type_info9base_info") }
+        Itanium.mustNot { isProbablyMangled("__as__11TiXmlStringPCc") }
+        Itanium.mustNot { isProbablyMangled("_._9TiXmlNode") }
+    }
+
     /** Only gcc 2.x separates a secondary out; Itanium must not inherit a "no" from the default. */
     @Test
     fun onlyGcc2HasSecondariesToScreenOut() {
