@@ -7,7 +7,6 @@ import ghidra.program.model.data.DataTypeConflictHandler
 import ghidra.program.model.data.DataTypeManager
 import ghidra.util.task.TaskMonitor
 import ghistabs.Demangler
-import ghistabs.categoryPath
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.StabsDiagnostics
 import ghistabs.harvest.Harvest
@@ -18,6 +17,7 @@ import ghistabs.parse.CATEGORY
 import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
+import ghistabs.path
 
 /**
  * DataType cache and DTM facade: owns the id→DataType map, resolves types into the DTM under a
@@ -227,7 +227,7 @@ class DataTypeRegistry(
             // would copy every function and its three lists on an import that never renders.
             for (fn in harvest.functions) {
                 val dt = types.thisParamTypeId(fn)?.let { dataTypeFor(it) } ?: continue
-                Demangler.of(fn.name)?.namespace?.let { putIfAbsent(it.categoryPath.path, dt) }
+                Demangler.of(fn.name)?.namespace?.let { putIfAbsent(it.path.path, dt) }
             }
             // A member function is not the only symbol that ties a class to its demangled path: a
             // static data member's linkage name carries the same chain, and is the *only* one a
@@ -239,7 +239,7 @@ class DataTypeRegistry(
                 val dt = dataTypeFor(ast.id) ?: continue
                 for (field in body.fields) {
                     val mangled = field.mangled?.takeIf { field.isStatic } ?: continue
-                    Demangler.of(mangled)?.namespace?.let { putIfAbsent(it.categoryPath.path, dt) }
+                    Demangler.of(mangled)?.namespace?.let { putIfAbsent(it.path.path, dt) }
                 }
             }
         }

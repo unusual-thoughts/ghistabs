@@ -2,12 +2,11 @@ package ghistabs.materialize.abi
 
 import ghidra.app.util.demangler.DemangledAddressTable
 import ghidra.app.util.demangler.DemangledObject
-import ghidra.program.model.data.CategoryPath
 import ghidra.program.model.data.DataType
 import ghidra.program.model.data.IntegerDataType
 import ghidra.program.model.data.LongLongDataType
 import ghistabs.Demangler
-import ghistabs.namespaceChain
+import ghistabs.namespaces
 import ghistabs.parse.splitQualified
 
 /**
@@ -143,7 +142,7 @@ object Itanium : CxxAbi {
      *  not one of [kind]. */
     private fun addressTableClass(obj: DemangledObject, kind: String): String? {
         if (obj !is DemangledAddressTable || obj.name != kind) return null
-        return obj.namespaceChain().joinToString("::")
+        return obj.namespaces.joinToString("::")
     }
 
     override fun isInlineStdMember(name: String): Boolean = INLINE_STD_MEMBER.containsMatchIn(name)
