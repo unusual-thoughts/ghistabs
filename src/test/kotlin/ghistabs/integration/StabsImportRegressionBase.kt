@@ -671,7 +671,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
 
         val implicit = artifacts.sources.functions
             .filter { it.lineEntries.isEmpty() && !it.isSyntheticInit }
-            .mapNotNull { f -> f.scopePath()?.last()?.let { f to it } }
+            .mapNotNull { f -> f.scopePath().lastOrNull()?.let { f to it } }
             .filter { (_, cls) -> cls in declaredClasses }
         assumeTrue(implicit.isNotEmpty(), "Skipping: no line-less method with a declared class here")
 

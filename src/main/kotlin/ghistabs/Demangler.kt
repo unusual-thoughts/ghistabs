@@ -85,11 +85,11 @@ object Demangler {
     fun name(mangled: String): String = of(mangled)?.demangledName ?: mangled
 
     /**
-     * Parent-namespace chain, root-first, for [mangled] — or null if it has no enclosing namespace.
-     * Null and empty are not the same answer here: a caller that falls back when the demangler says
-     * nothing has to be able to tell "no scope" from "scope is the root".
+     * Parent-namespace chain, root-first, for [mangled]. Empty when the name has no enclosing
+     * namespace *or* does not demangle at all — those were separate returns once, and no caller ever
+     * told them apart, so they are one answer: nothing is known about this name's scope.
      */
-    fun namespaces(mangled: String): List<String>? = of(mangled)?.namespaceChain()?.takeIf { it.isNotEmpty() }
+    fun namespaces(mangled: String): List<String> = of(mangled)?.namespaceChain().orEmpty()
 }
 
 /**

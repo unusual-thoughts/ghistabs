@@ -163,12 +163,14 @@ class ClassBuilder(
      * no mangled member at all falls to [qualifiedClassName], which asks the `_ZTV` symbol.
      */
     private fun LocatedType.ensureClassNamespace(): GhidraClass {
-        val parts = (
-            classBody.methods.firstNotNullOfOrNull { it.physname }
-                ?: classBody.fields.firstNotNullOfOrNull { it.mangled }
-            )?.let { Demangler.namespaces(it) }
-            ?: splitQualified(qualifiedClassName)
-        return buildNamespaceChain(parts.filter { it.isNotEmpty() })
+        val mangled = classBody.methods.firstNotNullOfOrNull { it.physname }
+            ?: classBody.fields.firstNotNullOfOrNull { it.mangled }
+        // Filter before the fallback, not after: a chain that is all-empty names is no more usable
+        // than an absent one, and buildNamespaceChain has nothing to return for an empty list.
+        val parts = mangled?.let { Demangler.namespaces(it) }.orEmpty()
+            .filter { it.isNotEmpty() }
+            .ifEmpty { splitQualified(qualifiedClassName) }
+        return buildNamespaceChain(parts)
     }
 
     private fun buildNamespaceChain(parts: List<String>): GhidraClass {
