@@ -14,6 +14,7 @@ import ghistabs.index.SourceHints
 import ghistabs.index.SourceIndex
 import ghistabs.index.TypeGraph
 import ghistabs.materialize.DataTypeRegistry
+import ghistabs.materialize.VfptrModel
 import ghistabs.parse.IdInterface
 import ghistabs.parse.TypeDecl
 import ghistabs.runTransaction
@@ -53,12 +54,20 @@ fun <Id : IdInterface> longRange(of: Id, min: Long, max: Long) =
     TypeDecl.Range(of, BigInteger.valueOf(min), BigInteger.valueOf(max))
 
 // Tests capture at max verbosity — DEBUG and up — so log assertions see every message.
-fun Program.defaultContext(shortenTypedefs: Boolean = false) = ImportContext(
+fun Program.defaultContext(
+    shortenTypedefs: Boolean = false,
+    vfptrModel: VfptrModel = ImportOptions.VFPTR_MODEL.default,
+) = ImportContext(
     this,
     TaskMonitor.DUMMY,
     // overlaySection off: the decoded-struct .stab overlay is a diagnostic view, not needed to produce
     // types, and it's ~8% of the run. StabSectionOverlayIntegrationTest exercises it directly.
-    ImportOptions(minLogLevel = Level.DEBUG, overlaySection = false, shortenTypedefs = shortenTypedefs),
+    ImportOptions(
+        minLogLevel = Level.DEBUG,
+        overlaySection = false,
+        shortenTypedefs = shortenTypedefs,
+        vfptrModel = vfptrModel,
+    ),
     CapturingSink(),
     StabsDiagnostics(),
 )
