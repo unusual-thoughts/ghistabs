@@ -132,9 +132,12 @@ fun Type.isCuLocalName() = name?.let { CU_LOCAL_NAME.matches(it) } == true
  * `std::basic_string<char,…>`) — so it's what our type must be named to be reused rather than shadowed.
  */
 fun Type.demangledClassPath(): List<String>? {
+    // An empty chain is "no scope stated", not "scope is the root": a global function's name
+    // demangles to one, it would satisfy `none {}` vacuously, and callers take its `last()`.
     val methods = (body as? TypeDecl.Aggregate<GlobalTypeId>)?.methods ?: return null
     return methods.firstNotNullOfOrNull { m ->
-        m.mangled?.let(Demangler::namespaces)?.takeIf { it.none(Gcc2::isCompilerGeneratedName) }
+        m.physname?.let(Demangler::namespaces)
+            ?.takeIf { it.isNotEmpty() && it.none(Gcc2::isCompilerGeneratedName) }
     }
 }
 

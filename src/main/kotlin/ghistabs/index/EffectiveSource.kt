@@ -47,7 +47,7 @@ class EffectiveSource(
      * the demangled scope chain is the key: try progressively shorter suffixes, longest first —
      * `std::locale::facet` → `locale::facet` → `facet`.
      */
-    private fun Func.declaringClassSource(): GhidraSourceFile? = scopePath()?.let { path ->
+    private fun Func.declaringClassSource(): GhidraSourceFile? = scopePath().let { path ->
         path.indices.firstNotNullOfOrNull { i -> hints.classSourceByName[path.drop(i).joinToString("::")] }
     }
 

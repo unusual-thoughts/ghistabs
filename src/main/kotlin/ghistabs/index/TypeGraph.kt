@@ -229,7 +229,7 @@ class TypeGraph(private val harvest: Harvest, sink: DiagnosticSink = DummySink) 
         buildMap {
             for (fn in harvest.functions) {
                 val id = thisParamTypeId(fn) ?: continue
-                Demangler.namespaces(fn.name)?.takeIf { it.isNotEmpty() }?.let { putIfAbsent(id, it) }
+                Demangler.namespaces(fn.name).takeIf { it.isNotEmpty() }?.let { putIfAbsent(id, it) }
             }
         }
     }

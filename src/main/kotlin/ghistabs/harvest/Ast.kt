@@ -284,7 +284,7 @@ data class Func(
      * whichever CU first needed it (the implicit `EquExpression` copy ctor materializes inside
      * `std::pair<…, EquExpression>` and would land at `stl_pair.h:84`).
      */
-    fun scopePath(): List<String>? = Demangler.namespaces(name)?.map(::canonTemplateName)
+    fun scopePath(): List<String> = Demangler.namespaces(name).map(::canonTemplateName)
 
     /**
      * gcc emits file-scope synthetic init/destruct wrappers
