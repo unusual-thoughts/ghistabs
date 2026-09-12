@@ -192,8 +192,7 @@ class ClassBuilder(
 
     private fun LocatedType.reparentMethod(m: Method<GlobalTypeId>, ns: GhidraClass, structDt: Structure) {
         val stated = m.mangled?.takeIf { it.isNotBlank() }
-        val (mangled, addr) = abi.physnameCandidates(m.name, className, m.isConst, m.isVolatile, stated)
-            .firstNotNullOfOrNull { name -> resolver.resolve(name)?.let { name to it } }
+        val (mangled, addr) = resolveMember(m)
             ?: run {
                 if (abi.isImplicitMember(m.name, className, stated)) {
                     debug("method-implicit-not-emitted")
@@ -436,8 +435,11 @@ class ClassBuilder(
         // Plate-comment each virtual. An unresolved mangled name here is expected for
         // pure virtuals (slot points at __cxa_pure_virtual, no symbol emitted) or
         // DLL-imported impls. Slot type was already typed from the signature.
-        virtuals.forEach { (slot, m) ->
-            val mAddr = m.mangled?.let(resolver::resolve)
+        // Only this class's own virtuals. [collectAllVirtuals] walks the bases too, and a base's
+        // method composes its symbol from the base's name — spelling it with the derived class's
+        // invents a symbol that was never emitted. Each base plates its own on its own pass.
+        virtuals.filterValues { m -> classBody.methods.any { it === m } }.forEach { (slot, m) ->
+            val mAddr = resolveMember(m)?.second
             if (mAddr != null) {
                 val func = program.functionManager.getFunctionAt(mAddr)
                 if (func != null) {
@@ -759,6 +761,17 @@ class ClassBuilder(
     }
 
     private fun LocatedType.collectAllVirtuals() = types.collectAllVirtuals(classBody)
+
+    /**
+     * The symbol [m] was emitted as and where it landed, or null if none of the ABI's spellings
+     * resolve. Not the same question as "what does the stab state": under gcc 2.x the physname field
+     * holds only the mangled argument list, so the symbol has to be composed before it can be looked
+     * up — which is why both the reparenting pass and the vtable plate comments come through here
+     * rather than reaching for [Method.mangled].
+     */
+    private fun LocatedType.resolveMember(m: Method<GlobalTypeId>): Pair<String, Address>? =
+        abi.physnameCandidates(m.name, className, m.isConst, m.isVolatile, m.mangled?.takeIf { it.isNotBlank() })
+            .firstNotNullOfOrNull { name -> resolver.resolve(name)?.let { name to it } }
 
     /** What every ABI question falls back to for a class whose own vtable symbol never resolved. */
     private val abi: CxxAbi by lazy {
