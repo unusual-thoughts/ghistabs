@@ -54,7 +54,7 @@ data class NameBinding(val name: String, val kind: TypeNameKind)
  *
  * There is one of these per (CU, id), so a class header included by N CUs harvests N of them, with
  * distinct ids and the same [ghidraName]. Collapsing those onto one DTM slot is
- * [ghistabs.index.TypeLocations]' job, which [nameOrUnique]/[ghidraName] are shaped to let fire.
+ * [ghistabs.index.ScopeLocator]' job, which [nameOrUnique]/[ghidraName] are shaped to let fire.
  */
 @Serializable
 data class Type(
@@ -305,7 +305,7 @@ data class Func(
 
 /**
  * N_SLINE record: line → text address, tagged with its active N_SOL source. Held both in
- * [Harvest.lineEntries] (grouped by source) and on the owning [Func.lineEntries].
+ * [SourceHarvest.lineEntries] and on the owning [Func.lineEntries].
  *
  * A [SourceMapEntry] of length 0, which is what an N_SLINE is — a point, not a range. So one type
  * flows parse → render → program, and the program's own DB-backed entries are an alternative

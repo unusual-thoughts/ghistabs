@@ -14,15 +14,8 @@ import ghidra.program.model.data.Composite
 import ghidra.program.model.data.DataType
 import ghidra.program.model.data.DataTypeManager
 import ghidra.program.model.data.DataUtilities
-import ghidra.program.model.listing.CodeUnit
-import ghidra.program.model.listing.Data
+import ghidra.program.model.listing.*
 import ghidra.program.model.listing.Function
-import ghidra.program.model.listing.FunctionManager
-import ghidra.program.model.listing.GhidraClass
-import ghidra.program.model.listing.Listing
-import ghidra.program.model.listing.Parameter
-import ghidra.program.model.listing.Program
-import ghidra.program.model.listing.Variable
 import ghidra.program.model.mem.MemoryBlock
 import ghidra.util.task.TaskMonitor
 import java.io.File
@@ -168,10 +161,10 @@ val MemoryBlock.byteProvider get() = InputStreamByteProvider(data, size)
  * Where the program's default calling convention starts its stack parameters — the bias between a
  * gcc frame offset and a Ghidra one.
  *
- * The *default* convention, not [VariableUtilities.getBaseStackParamOffset]'s per-function answer:
- * x86gcc gives `processEntry` `stackshift="0"` against `__cdecl`'s 4, so asking whichever function a
- * caller had first could shift every stack slot in the program by a pointer. Fallback as Ghidra's,
- * for a convention with no stack ParamEntry to derive an offset from.
+ * The *default* convention, not [ghidra.program.model.listing.VariableUtilities.getBaseStackParamOffset]'s
+ * per-function answer: x86gcc gives `processEntry` `stackshift="0"` against `__cdecl`'s 4,
+ * so asking whichever function a caller had first could shift every stack slot in the program by a pointer.
+ * Fallback as Ghidra's, for a convention with no stack ParamEntry to derive an offset from.
  */
 val Program.baseStackParamOffset get() = compilerSpec.defaultCallingConvention.run {
     stackParameterOffset?.toInt() ?: stackshift

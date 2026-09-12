@@ -151,7 +151,7 @@ sealed interface CxxAbi : CxxMemberNaming {
          * member names vote — a C++ binary with no polymorphic class anywhere has no vtable to read,
          * but it still has members, and counting them means no lone false positive can carry the
          * whole binary. Null when nothing votes at all: a C binary, or a C++ one from a compiler
-         * whose mangling is neither of these (the WordPerfect corpus has SunPro, XLC and DEC ones).
+         * whose mangling is neither of these.
          */
         fun prevailing(symbolNames: Sequence<String>): CxxAbi? {
             val byMember = mutableMapOf<CxxAbi, Int>()

@@ -81,7 +81,7 @@ object Itanium : CxxAbi {
 
     override fun looksLikeVtable(symbolName: String) = symbolName.trimDoubleUnderscore().startsWith(VTABLE_PREFIX)
 
-    /** Templates have no closed form; [CxxAbi.vtableClassOf] finds those. */
+    /** Templates have no closed form; [ResolvedVtable.fromSymbol] finds those. */
     override fun vtableCandidates(className: String) = mangleClassName(className).let {
         listOf(
             "$VTABLE_PREFIX$it",

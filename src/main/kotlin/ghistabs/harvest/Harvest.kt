@@ -18,7 +18,7 @@ import kotlinx.serialization.UseSerializers
  *
  * [functions]/[constants]/[statics] are cached flattenings of [sources] — arrangement, not
  * interpretation, which is why they belong here and not on an index. Consumers that want the facts
- * (`DataTypeRegistry.byDemangledClass`, [SourceHints]) read these; `SourceIndex.functions` is the
+ * (`DataTypeRegistry.byDemangledClass`, [ghistabs.index.SourceHints]) read these; `SourceIndex.functions` is the
  * folded counterpart for the render.
  */
 @Serializable
@@ -62,9 +62,9 @@ data class SourceHarvest(
  * everything that lives in a header. An inline method or template instantiation is emitted into every
  * CU that included it, so it is filed here while its own `sourceFile` and line entries name the
  * header: 208 of 366 statics and 11540 of 15499 functions on crypto_mi_gcc421 read a header that way.
- * Reconstructing the declaring file from that is [SourceHints]' and [EffectiveSource]'s job, not this
- * type's. A header is never a key of its own — only an `N_SO` opens a CU, and gcc emits none for an
- * include (measured 0 header-keyed CUs corpus-wide).
+ * Reconstructing the declaring file from that is [ghistabs.index.SourceHints]'
+ * and [ghistabs.index.EffectiveSource]'s job, not this type's. A header is never a key of its own -
+ * only an `N_SO` opens a CU, and gcc emits none for an include (measured 0 header-keyed CUs corpus-wide).
  */
 @Serializable
 data class CompilationUnit(

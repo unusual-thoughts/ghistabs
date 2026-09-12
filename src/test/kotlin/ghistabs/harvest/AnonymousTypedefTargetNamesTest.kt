@@ -2,6 +2,7 @@ package ghistabs.harvest
 
 import ghistabs.parse.*
 import ghistabs.test.mustBe
+import ghistabs.test.mustBeEmpty
 import org.junit.jupiter.api.Test
 
 class AnonymousTypedefTargetNamesTest {
@@ -15,8 +16,10 @@ class AnonymousTypedefTargetNamesTest {
         methods = emptyList(),
         vptrBasetype = null,
     )
+
     private fun ast(n: Int, name: String?, body: GlobalTypeDecl) =
         Type(cu = cu, id = id(n), named = binding(name, body), body = body)
+
     private fun map(vararg asts: Type) = TypeStore(asts.associateBy { it.id }.toMutableMap())
 
     @Test fun namesAnonymousInlineStruct() {
@@ -28,19 +31,19 @@ class AnonymousTypedefTargetNamesTest {
     @Test fun leavesTaggedStructAlone() {
         val typedef = ast(3, "Name", TypeDecl.InlineDef(id(4), struct()))
         val tagged = ast(4, "Tag", struct())
-        map(typedef, tagged).anonymousTypedefTargetNames() mustBe emptyMap<GlobalTypeId, String>()
+        map(typedef, tagged).anonymousTypedefTargetNames().mustBeEmpty()
     }
 
     @Test fun ignoresNonAggregateInlineDef() {
         val arr = TypeDecl.Array<GlobalTypeId>(TypeDecl.Builtin(0), 5L, null)
         val typedef = ast(3, "Name", TypeDecl.InlineDef(id(4), arr))
-        map(typedef, ast(4, null, arr)).anonymousTypedefTargetNames() mustBe emptyMap<GlobalTypeId, String>()
+        map(typedef, ast(4, null, arr)).anonymousTypedefTargetNames().mustBeEmpty()
     }
 
     @Test fun ambiguousNamesAreSkipped() {
         val td1 = ast(3, "Alpha", TypeDecl.InlineDef(id(5), struct()))
         val td2 = ast(4, "Beta", TypeDecl.InlineDef(id(5), struct()))
-        map(td1, td2, ast(5, null, struct())).anonymousTypedefTargetNames() mustBe emptyMap<GlobalTypeId, String>()
+        map(td1, td2, ast(5, null, struct())).anonymousTypedefTargetNames().mustBeEmpty()
     }
 
     @Test fun refToAnonAggregateNames() {
@@ -53,6 +56,6 @@ class AnonymousTypedefTargetNamesTest {
     @Test fun refToNamedTypeDoesNotRename() {
         // `typedef Existing Alias;` — target already named; a plain alias, leave it.
         val typedef = ast(3, "Alias", TypeDecl.Ref(id(4)))
-        map(typedef, ast(4, "Existing", struct())).anonymousTypedefTargetNames() mustBe emptyMap<GlobalTypeId, String>()
+        map(typedef, ast(4, "Existing", struct())).anonymousTypedefTargetNames().mustBeEmpty()
     }
 }

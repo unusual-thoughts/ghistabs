@@ -1,7 +1,7 @@
 package ghistabs.materialize
 
-import ghidra.program.model.gclass.ClassUtils
-import ghistabs.test.*
+import ghistabs.test.mustBe
+import ghistabs.test.mustBeA
 import org.junit.jupiter.api.Test
 
 class VfptrDecisionTest {

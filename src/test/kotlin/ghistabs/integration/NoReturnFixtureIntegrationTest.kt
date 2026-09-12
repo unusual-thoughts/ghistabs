@@ -63,7 +63,7 @@ class NoReturnFixtureIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
 
             // libstdc++'s locale and iostream functions are switch-table-heavy, which is what the
             // reverted instruction walk mistook for proof that they cannot return.
-            marked.filter(::isLibraryCxx).map { "${it.entryPoint} ${it.name}" } mustBe emptyList<String>()
+            marked.filter(::isLibraryCxx).map { "${it.entryPoint} ${it.name}" }.mustBeEmpty()
 
             if (!on) return@withAnalyzed // the baseline roster is the whole product of an off run
 

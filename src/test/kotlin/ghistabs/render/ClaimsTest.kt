@@ -1,6 +1,7 @@
 package ghistabs.render
 
 import ghistabs.test.mustBe
+import ghistabs.test.mustBeEmpty
 import org.junit.jupiter.api.Test
 
 /**
@@ -65,7 +66,7 @@ class ClaimsTest {
         val out = allocate(copies, range = 1..40)
         out.placed.size mustBe 1
         out.at(38).copies mustBe 4
-        out.dropped mustBe emptyList<Dropped>()
+        out.dropped.mustBeEmpty()
     }
 
     @Test
@@ -75,7 +76,7 @@ class ClaimsTest {
         val a = Claim(Owner.TYPEDEF, 7, listOf(Row("typedef int A;")))
         val b = Claim(Owner.TYPEDEF, 7, listOf(Row("typedef long B;")))
         val out = allocate(listOf(a, b), range = 1..40)
-        out.dropped mustBe emptyList<Dropped>()
+        out.dropped.mustBeEmpty()
         // Both placed, both on row 7, each keeping its own rows — the renderer joins them.
         val onSeven = out.placed.filter { it.range == 7..7 }
         onSeven.flatMap { it.claim.rows }.map { it.text } mustBe listOf("typedef int A;", "typedef long B;")
@@ -139,7 +140,7 @@ class ClaimsTest {
         val real = claim(Owner.TYPEDEF, 20)
         val alsoBogus = Claim(Owner.GLOBAL, 20, listOf(Row("int splayed;")), stale = true)
         val shared = allocate(listOf(alsoBogus, real), range = 1..40)
-        shared.dropped mustBe emptyList<Dropped>()
+        shared.dropped.mustBeEmpty()
     }
 
     @Test
@@ -149,7 +150,7 @@ class ClaimsTest {
         val b = Claim(Owner.FUNCTION_BODY, 10, listOf(Row("second")), anchoring = Anchoring.AFTER)
         val out = allocate(listOf(a, b), range = 1..40)
         out.placed.map { it.range }.sortedBy { it.first } mustBe listOf(10..10, 11..11)
-        out.dropped mustBe emptyList<Dropped>()
+        out.dropped.mustBeEmpty()
     }
 
     @Test
@@ -178,7 +179,7 @@ class ClaimsTest {
             Claim(Owner.FUNCTION_BODY, 10, listOf(Row("stmt$it")), anchoring = Anchoring.AFTER, limit = 12)
         }
         val out = allocate(claims, range = 1..40)
-        out.dropped mustBe emptyList<Dropped>()
+        out.dropped.mustBeEmpty()
         // Three rows for five claims: 10, 11, 12, then the rest pile onto 12.
         out.placed.map { it.range.first }.sorted() mustBe listOf(10, 11, 12, 12, 12)
     }

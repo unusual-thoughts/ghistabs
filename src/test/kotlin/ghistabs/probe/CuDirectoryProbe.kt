@@ -46,10 +46,10 @@ class CuDirectoryProbe : AbstractGhidraHeadlessIntegrationTest() {
         }
 
         /** Concatenation, the rule before [SourceFile.CUSource.spelling] existed. */
-        val joined = sourceFileOf(directory.orEmpty() + filename).path
+        val joined: String = sourceFileOf(directory.orEmpty() + filename).path
 
         /** What the pair names, as the harvest now reads it. */
-        val named = sourceFileOf(SourceFile.CUSource(filename, directory).spelling).path
+        val named: String = sourceFileOf(SourceFile.CUSource(filename, directory).spelling).path
     }
 
     @ParameterizedTest

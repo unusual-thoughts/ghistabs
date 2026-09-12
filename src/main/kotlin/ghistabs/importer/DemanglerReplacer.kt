@@ -338,9 +338,9 @@ class DemanglerReplacer(
 
     /**
      * The type spelling of the class owning [f], from its own mangled name: `getNamespaceString()` renders
-     * the namespace *with* its template args, and [Type.ghidraName]'s sanitizer carries that onto our stab
-     * spelling. A free function demangles fine but has no namespace — distinct from having no mangled name
-     * at all, and conflating the two hid which half was failing.
+     * the namespace *with* its template args, and [ghistabs.harvest.Type.ghidraName]'s sanitizer carries
+     * that onto our stab spelling. A free function demangles fine but has no namespace -
+     * distinct from having no mangled name at all, and conflating the two hid which half was failing.
      */
     private fun mangledFor(f: Function): String? = mangledByAddress[f.entryPoint]
         ?: harvestedMangled[f.entryPoint]
@@ -355,10 +355,10 @@ class DemanglerReplacer(
     }
 
     /**
-     * A demangled name in *our* spelling — the pipeline [Type.ghidraName] runs. Both the site lookup and
-     * the instantiation census go through it, so "distinct instantiation" is measured in the same spelling
-     * space we resolve in: three renderings of one class collapse to one, instead of declining a bind that
-     * was only ever ambiguous as a string.
+     * A demangled name in *our* spelling — the pipeline [ghistabs.harvest.Type.ghidraName] runs. Both the
+     * site lookup and the instantiation census go through it, so "distinct instantiation" is measured in
+     * the same spelling space we resolve in: three renderings of one class collapse to one, instead of
+     * declining a bind that was only ever ambiguous as a string.
      */
     private fun ourSpelling(leaf: String): String = SymbolUtilities.replaceInvalidChars(
         DemanglerUtil.stripSuperfluousSignatureSpaces(canonTemplateName(leaf)),
