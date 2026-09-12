@@ -164,7 +164,7 @@ class ClassBuilder(
      */
     private fun LocatedType.ensureClassNamespace(): GhidraClass {
         val parts = (
-            classBody.methods.firstNotNullOfOrNull { it.mangled }
+            classBody.methods.firstNotNullOfOrNull { it.physname }
                 ?: classBody.fields.firstNotNullOfOrNull { it.mangled }
             )?.let { Demangler.namespaces(it) }
             ?: splitQualified(qualifiedClassName)
