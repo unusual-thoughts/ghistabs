@@ -37,7 +37,7 @@ class DataTypeRegistry(
 ) : DiagnosticSink by sink {
     /**
      * Canonical (category, ghidraName) → group; drives TypeRegistry slot assignment. XRef-targets are
-     * bucketed into `(category, ghidraName)` slots ([classifyGroup] picks each winner), then slots are
+     * bucketed into `(category, ghidraName)` slots ([ScopeLocator.classifyGroup] picks each winner), then slots are
      * unified by **content hash** (§20): gcc spells one header two ways, so one logical type lands in
      * several slots (named, anonymous copy, typedef aliases) → several DataTypes → the decompiler picks
      * the wrong same-named one. Within a content class holding exactly one named ghidraName, every slot —

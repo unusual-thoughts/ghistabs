@@ -27,7 +27,7 @@ val String.isExplicitlyRelative get() = startsWith("./") ||
  * segments) or [directory]-less spellings are returned unchanged.
  *
  * Only a spelling that *says* it is relative — opens with `./` or `../` — is resolved. gcc writes a
- * bare filename relative to the CU too, but resolving those would break [ghistabs.harvest.foldSourcePaths]: one
+ * bare filename relative to the CU too, but resolving those would break [ghistabs.index.foldSourcePaths]: one
  * physical header staged into two places is spelled bare by the CU that owns it and by full path
  * everywhere else, and resolving the bare one gives the two spellings different parent directories.
  * `header.h` would split into `include/directory/header.h` and `projects/someproject/dir/header.h`.

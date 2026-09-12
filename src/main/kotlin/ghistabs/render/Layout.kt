@@ -71,7 +71,7 @@ data class Fragment(
     val shape: NoteShape = NoteShape.DECLARATION,
 ) {
     /**
-     * The trailing comment for a fragment carrying [note] at [line], shaped by [shape]. A [DECLARATION]
+     * The trailing comment for a fragment carrying [note] at [line], shaped by [shape]. A [NoteShape.DECLARATION]
      * tag's [note] is the role: empty for a typedef or type body, "(param)" and the like for a decl.
      */
     fun commentAt(line: Int) = when (shape) {

@@ -10,7 +10,7 @@ import ghistabs.parse.TypeDecl.Aggregate.Method
 
 /**
  * Pre-Itanium gcc 2.x C++ ABI facts: the vtable symbol spellings and what the deprecated demangler
- * back end makes of them. The counterpart to [Itanium] for the WordPerfect/libstdc++-2.8.1 corpus,
+ * back end makes of them. The counterpart to [Itanium] for the libstdc++-2.8.1 corpus,
  * and separate from it because none of it *is* Itanium — different names, no typeinfo, and the
  * record geometry in [CxxAbi].
  */
@@ -20,7 +20,7 @@ object Gcc2 {
     // spells the whole prefix `__vt_` instead, with no marker.
     const val VTABLE_PREFIX = "_vt"
     const val THUNK_VTABLE_PREFIX = "__vt_"
-    const val CPLUS_MARKERS = "\$."
+    const val CPLUS_MARKERS = "$."
 
     // cplus-dem.c spells a gcc 2.x vtable "<class> virtual table"; DemangledObject.setName replaces
     // the spaces, so the leaf arrives as "<class>_virtual_table" with the scope in the namespace.
@@ -31,7 +31,7 @@ object Gcc2 {
 
     /**
      * String-level pre-filter for a gcc 2.x vtable symbol — the gcc 2.x parallel to
-     * [Itanium.looksLikeZtv], and just as cheap. Such a record carries none of the Itanium fixed
+     * [Itanium.looksLikeVtable], and just as cheap. Such a record carries none of the Itanium fixed
      * words; see [CxxAbi] for what it carries instead.
      */
     fun looksLikeVtable(symbolName: String) = vtableTail(symbolName) != null
@@ -82,9 +82,9 @@ object Gcc2 {
     fun physnamePrefix(memberName: String, className: String, isConst: Boolean, isVolatile: Boolean): String {
         val mangledClass = mangleClassName(className)
         val leaf = className.substringAfterLast("::")
-        return when {
-            memberName == leaf -> "__$mangledClass"
-            memberName == "~$leaf" -> "_._$mangledClass"
+        return when (memberName) {
+            leaf -> "__$mangledClass"
+            "~$leaf" -> "_._$mangledClass"
             else -> memberName + "__" + (if (isConst) "C" else "") + (if (isVolatile) "V" else "") + mangledClass
         }
     }
@@ -92,7 +92,7 @@ object Gcc2 {
     /**
      * gcc 2.x class-name mangling: `TiXmlNode` → `9TiXmlNode`, nesting → the component count then
      * each part length-prefixed (`Outer::Inner` → `Q25Outer5Inner`). The simple case agrees with
-     * Itanium's, the nested one does not — see [Itanium.ztvCandidates].
+     * Itanium's, the nested one does not — see [Itanium.vtableCandidates].
      *
      * No underscore after a single-digit count. `libiberty/cplus-dem.c:demangle_qualified` *accepts*
      * one — "said to be for ARM-qualified names… perhaps cfront uses one" — which is why the wrong
@@ -125,8 +125,7 @@ object Gcc2 {
      * The length has to be *satisfied*, not merely present. One symbol is enough to settle a whole
      * binary's ABI (see [CxxAbi.prevailing]), and the shape alone is not rare enough for that:
      * `fxwpf_som_parisc_gcc` holds no C++ at all, yet its static-local `initialized___6` matches the
-     * shape while claiming six characters that are not there. Counting them costs one comparison and
-     * takes the false positives over the WordPerfect corpus's 38,542 C symbols to zero.
+     * shape while claiming six characters that are not there.
      */
     fun isProbablyMangled(name: String) = MANGLED_MEMBER_TAIL.findAll(name).any { m ->
         m.range.last + 1 + m.groupValues[1].toInt() <= name.length

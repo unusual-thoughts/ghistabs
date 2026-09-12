@@ -133,7 +133,7 @@ class BarLoggerMonitorSink(
                 }
                 cell(
                     listOfNotNull(
-                        address?.let { green($"@$it") },
+                        address?.let { green("@$it") },
                         degrades?.let { magenta(italic(it)) },
                         body(message),
                     ).joinToString(" "),

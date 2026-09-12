@@ -1,6 +1,7 @@
 package ghistabs.importer
 
 import ghistabs.test.mustBe
+import ghistabs.test.mustBeEmpty
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Path
@@ -44,7 +45,7 @@ class SourceRootTest {
         )
         val derived = derive("/c:/mingw/include/c++/3.2.3/mingw32/bits/", "atomicity.h")
 
-        derived.transforms mustBe emptyList<DirectoryTransform>()
+        derived.transforms.mustBeEmpty()
         derived.ambiguous.getValue("/c:/mingw/include/c++/3.2.3/mingw32/bits/") mustBe
             listOf("$root/config/cpu/arm/bits", "$root/config/cpu/i486/bits")
     }
@@ -71,7 +72,7 @@ class SourceRootTest {
         )
         val derived = derive("/c:/mingw/include/c++/3.2.3/mingw32/bits/", "atomicity.h")
 
-        derived.transforms mustBe emptyList<DirectoryTransform>()
+        derived.transforms.mustBeEmpty()
         derived.ambiguous.getValue("/c:/mingw/include/c++/3.2.3/mingw32/bits/") mustBe
             listOf("$root/config/cpu/arm/bits", "$root/config/cpu/i486/bits")
     }
@@ -81,7 +82,7 @@ class SourceRootTest {
         tree("include/bits/stl_vector.h")
         val derived = derive("/c:/mingw/include/c++/3.2.3/bits/", "unrelated.h")
 
-        derived.transforms mustBe emptyList<DirectoryTransform>()
+        derived.transforms.mustBeEmpty()
         derived.unmatched mustBe listOf("/c:/mingw/include/c++/3.2.3/bits/")
     }
 

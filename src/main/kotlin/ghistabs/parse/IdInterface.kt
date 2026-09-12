@@ -3,7 +3,6 @@
 package ghistabs.parse
 
 import ghistabs.parse.TypeDecl.Aggregate.*
-import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.descriptors.PrimitiveKind
@@ -81,7 +80,6 @@ sealed class SourceFile : Comparable<SourceFile> {
  * unquote it. Written as an unquoted literal because the values that need BigInteger at all are the
  * ones `encodeLong` would wrap (a `0;01777777777777777777777;` range bound is 2^64-1).
  */
-@OptIn(ExperimentalSerializationApi::class)
 object BigIntegerSerializer : KSerializer<BigInteger> {
     override val descriptor = PrimitiveSerialDescriptor("BigInteger", PrimitiveKind.LONG)
 

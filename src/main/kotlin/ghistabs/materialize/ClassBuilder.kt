@@ -46,7 +46,7 @@ class ClassBuilder(
     private val resolver: AddressResolver,
     private val monitor: TaskMonitor,
     private val sink: DiagnosticSink,
-    private val vfptrModel: VfptrModel = VfptrModel.SPLIT_BASE,
+    vfptrModel: VfptrModel = VfptrModel.SPLIT_BASE,
 ) : DiagnosticSink by sink {
     private val symtab = program.symbolTable
     private val dtm = program.dataTypeManager

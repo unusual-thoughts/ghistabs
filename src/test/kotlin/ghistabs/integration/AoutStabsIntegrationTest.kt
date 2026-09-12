@@ -27,7 +27,7 @@ import java.io.File
  * a.out has no debug *sections* — each stab is an entry in the symbol table itself (`n_type >= 0x20`),
  * interleaved with the link-time symbols and sharing one flat string table, so `n_strx` is absolute with no
  * `N_UNDF` header rebasing it per compilation unit. Ghidra's `UnixAoutLoader` discards the records but
- * exposes both tables as `.symtab`/`.strtab`, which is what [ghistabs.parse.Layout.SYMTAB] reads.
+ * exposes both tables as `.symtab`/`.strtab`, which is what [ghistabs.parse.StabReader.Layout.SYMTAB] reads.
  *
  * Three committed fixtures, all expensive to reproduce — a 1990s toolchain is required. gcc 2.6.3
  * cannot run on a modern kernel at all (libc5's `sbrk` needs `brk()` to return the exact unaligned

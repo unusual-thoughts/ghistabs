@@ -133,7 +133,7 @@ class StabsDiagnostics : DiagnosticSink {
             buildString {
                 appendLine("=== Summary of diagnostic categories ===")
                 for ((name, levels) in counters) {
-                    for ((level, value) in levels) {
+                    for ((_, value) in levels) {
                         appendLine("$name = $value") // level)
                     }
                 }

@@ -11,6 +11,7 @@ import ghistabs.parse.TypeDecl
 import ghistabs.test.harvestOf
 import ghistabs.test.must
 import ghistabs.test.mustBe
+import ghistabs.test.mustBeEmpty
 import org.junit.jupiter.api.Test
 
 /**
@@ -83,7 +84,7 @@ class SourceRootAttributionTest {
         }
 
         val settled = attribution(here, there) { (line, name) -> right.takeIf { name == "_Trivial" && line == 426 } }
-        settled.conflictedTypedefDecls mustBe emptySet<Type.Decl>()
+        settled.conflictedTypedefDecls.mustBeEmpty()
         listOf(here, there).map(settled::effectiveSourceFor) mustBe listOf(right, right)
     }
 

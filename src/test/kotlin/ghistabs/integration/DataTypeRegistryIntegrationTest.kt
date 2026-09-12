@@ -5,7 +5,6 @@ import ghidra.program.model.data.TypeDef
 import ghidra.program.model.data.UnsignedIntegerDataType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghistabs.importer.StabsImporter
-import ghistabs.index.*
 import ghistabs.parse.StabReader
 import ghistabs.parse.StabRecord
 import ghistabs.parse.StabType

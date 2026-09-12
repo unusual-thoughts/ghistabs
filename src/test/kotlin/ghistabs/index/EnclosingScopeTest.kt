@@ -2,7 +2,8 @@ package ghistabs.index
 
 import ghidra.program.model.data.CategoryPath
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghistabs.harvest.*
+import ghistabs.harvest.Type
+import ghistabs.harvest.binding
 import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Aggregate.Method
 import ghistabs.test.mustBe
@@ -52,7 +53,7 @@ class EnclosingScopeTest : AbstractGhidraHeadlessIntegrationTest() {
     @Test fun globalClassScopeIsRoot() {
         // _ZN10ThisStream5ParseEv → bouniaf::Parse(); a global class has the empty enclosing scope.
         val scope = ast("ThisStream", struct(method("_ZN10ThisStream5ParseEv"))).enclosingScope()
-        scope mustBe emptyList<String>()
+        scope mustBe emptyList()
         scopeCategory(scope!!) mustBe CategoryPath.ROOT
     }
 
