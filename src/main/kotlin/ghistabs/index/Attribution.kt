@@ -4,6 +4,7 @@ import ghidra.program.model.data.CategoryPath
 import ghistabs.Demangler
 import ghistabs.diagnose.StabsDiagnostics
 import ghistabs.harvest.*
+import ghistabs.materialize.abi.Gcc2
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.SourceFile
 import ghistabs.parse.TypeDecl
@@ -133,18 +134,9 @@ fun Type.isCuLocalName() = name?.let { CU_LOCAL_NAME.matches(it) } == true
 fun Type.demangledClassPath(): List<String>? {
     val methods = (body as? TypeDecl.Aggregate<GlobalTypeId>)?.methods ?: return null
     return methods.firstNotNullOfOrNull { m ->
-        m.mangled?.let(Demangler::namespaces)?.takeIf { it.none(::isCompilerGeneratedName) }
+        m.mangled?.let(Demangler::namespaces)?.takeIf { it.none(Gcc2::isCompilerGeneratedName) }
     }
 }
-
-/**
- * A name gcc made up rather than one the source wrote: it opens with a gdb *cplus_marker* (`$`, or `.`
- * where the assembler forbids `$`). gcc 2.x names the struct behind a `typedef struct {…} T;` that way
- * and mangles its members with it — `lldiv_t`'s ctor is `__3._6` — so the scope such a name states is
- * an internal label, not a namespace, and its empty parent chain would file the type at ROOT instead
- * of leaving it to header attribution.
- */
-private fun isCompilerGeneratedName(name: String) = name.firstOrNull() in setOf('$', '.')
 
 /** The type's enclosing C++ scope, root-first — the category a namespace-organised DTM files it under
  *  (`std::string` → `["std"]` → `/std`; a global class → `[]` → ROOT). Null falls back to header

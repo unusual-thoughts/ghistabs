@@ -3,6 +3,7 @@ package ghistabs.harvest
 import ghidra.app.util.opinion.ElfLoader
 import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Program
+import ghistabs.aoutTextBaseFixup
 import ghistabs.baseStackParamOffset
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.DummySink
