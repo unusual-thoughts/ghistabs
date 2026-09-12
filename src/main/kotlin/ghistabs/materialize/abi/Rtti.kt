@@ -41,7 +41,7 @@ class Rtti(private val dtm: DataTypeManager) {
         dtm.getDataType(categoryPath, name) ?: dtm.resolve(this, DataTypeConflictHandler.KEEP_HANDLER)
 
     val classTypeInfoStructure by lazy {
-        StructureDataType(Itanium.classDataTypesRoot, "ClassTypeInfoStructure", 0, dtm).apply {
+        StructureDataType(GhidraClassNaming.classDataTypesRoot, "ClassTypeInfoStructure", 0, dtm).apply {
             add(PointerTypedef(null, PointerDataType.dataType, -1, dtm, componentOffset), "classTypeinfoPtr", null)
             add(dtm.getPointer(CharDataType()), "typeinfoName", null)
             isPackingEnabled = true
@@ -49,7 +49,7 @@ class Rtti(private val dtm: DataTypeManager) {
     }
 
     val siClassTypeInfoStructure by lazy {
-        StructureDataType(Itanium.classDataTypesRoot, "SiClassTypeInfoStructure", 0, dtm).apply {
+        StructureDataType(GhidraClassNaming.classDataTypesRoot, "SiClassTypeInfoStructure", 0, dtm).apply {
             add(PointerTypedef(null, null, -1, dtm, componentOffset), "classTypeinfoPtr", null)
             add(dtm.getPointer(CharDataType()), "typeinfoName", null)
             add(dtm.getPointer(classTypeInfoStructure), "baseClassTypeInfoPtr", null)
@@ -58,7 +58,7 @@ class Rtti(private val dtm: DataTypeManager) {
     }
 
     val baseClassTypeInfoStructure by lazy {
-        StructureDataType(Itanium.classDataTypesRoot, "BaseClassTypeInfoStructure", 0, dtm).apply {
+        StructureDataType(GhidraClassNaming.classDataTypesRoot, "BaseClassTypeInfoStructure", 0, dtm).apply {
             add(dtm.getPointer(classTypeInfoStructure), "classTypeinfoPtr", null)
 
             val (offsetBitSize, dataType) = when (pointerSize) {
@@ -82,17 +82,21 @@ class Rtti(private val dtm: DataTypeManager) {
         }.intoDtm()
     }
 
-    fun vmiClassTypeInfoStructure(numBaseClasses: Int) =
-        StructureDataType(Itanium.classDataTypesRoot, "VmiClassTypeInfoStructure$numBaseClasses", 0, dtm).apply {
-            add(PointerTypedef(null, null, -1, dtm, componentOffset), "classTypeinfoPtr", null)
-            add(dtm.getPointer(CharDataType()), "typeinfoName", null)
-            add(UnsignedIntegerDataType(), "flags", null)
-            add(UnsignedIntegerDataType(), "numBaseClasses", null)
-            add(
-                ArrayDataType(baseClassTypeInfoStructure, numBaseClasses, baseClassTypeInfoStructure.length),
-                "baseClassPtrArray",
-                null,
-            )
-            isPackingEnabled = true
-        }.intoDtm()
+    fun vmiClassTypeInfoStructure(numBaseClasses: Int) = StructureDataType(
+        GhidraClassNaming.classDataTypesRoot,
+        "VmiClassTypeInfoStructure$numBaseClasses",
+        0,
+        dtm,
+    ).apply {
+        add(PointerTypedef(null, null, -1, dtm, componentOffset), "classTypeinfoPtr", null)
+        add(dtm.getPointer(CharDataType()), "typeinfoName", null)
+        add(UnsignedIntegerDataType(), "flags", null)
+        add(UnsignedIntegerDataType(), "numBaseClasses", null)
+        add(
+            ArrayDataType(baseClassTypeInfoStructure, numBaseClasses, baseClassTypeInfoStructure.length),
+            "baseClassPtrArray",
+            null,
+        )
+        isPackingEnabled = true
+    }.intoDtm()
 }

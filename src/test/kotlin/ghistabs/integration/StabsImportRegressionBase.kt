@@ -9,6 +9,7 @@ import ghidra.program.model.data.Enum
 import ghidra.program.model.listing.CommentType
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
+import ghidra.program.model.symbol.Symbol
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghistabs.*
@@ -29,6 +30,7 @@ import ghistabs.index.ContentIndex
 import ghistabs.index.EffectiveSource
 import ghistabs.materialize.VfptrModel
 import ghistabs.materialize.abi.CxxAbi
+import ghistabs.materialize.abi.GhidraClassNaming
 import ghistabs.materialize.abi.Itanium
 import ghistabs.materialize.conflictCount
 import ghistabs.materialize.hasPolymorphicBaseSubobject
@@ -708,7 +710,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         fun eol(a: Address) = program.listing.getComment(CommentType.EOL, a)
 
         val addressPoints = program.symbolTable.symbolIterator.iterator().asSequence()
-            .filter { it.name == Itanium.VFTABLE && program.memory.getBlock(it.address) != null }
+            .filter { it.name == GhidraClassNaming.VFTABLE && program.memory.getBlock(it.address) != null }
             .map { it.address }.distinct().toList()
         assumeTrue(addressPoints.isNotEmpty(), "Skipping: no vftable laid in this fixture")
 
@@ -945,7 +947,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     @Test
     fun vftableLabelsSitOnTheAddressPoint() {
         val labels = program.symbolTable.symbolIterator.iterator().asSequence()
-            .filter { Itanium.VFTABLE in it.name && program.memory.getBlock(it.address) != null }
+            .filter { GhidraClassNaming.VFTABLE in it.name && program.memory.getBlock(it.address) != null }
             .map { it.parentSymbol.name to it.address }.distinct().toList()
         assumeTrue(labels.isNotEmpty(), "Skipping: no vftable labels in this fixture")
 
@@ -999,7 +1001,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             ?.let { target -> labelsAt(target).any(Itanium::looksLikeZti) } == true
 
         val primaries = program.symbolTable.symbolIterator.iterator().asSequence()
-            .filter { it.name == Itanium.VFTABLE && program.memory.getBlock(it.address) != null }
+            .filter { it.name == GhidraClassNaming.VFTABLE && program.memory.getBlock(it.address) != null }
             .map { it.parentSymbol.name to it.address }.distinct().toList()
         assumeTrue(primaries.isNotEmpty(), "Skipping: no vftable laid in this fixture")
 
@@ -1010,8 +1012,10 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
                 .takeWhile { nextObject == null || it < nextObject }
                 .take(MAX_GROUP_WORDS)
                 .filter { isRttiHeader(it) }
-                .filterNot { Itanium.INTERNAL_VFTABLE in labelsAt(it.add(ptr)) }
-                .map { "$cls@$point: sub-vtable rtti at $it, no ${Itanium.INTERNAL_VFTABLE} at ${it.add(ptr)}" }
+                .filterNot { GhidraClassNaming.INTERNAL_VFTABLE in labelsAt(it.add(ptr)) }
+                .map {
+                    "$cls@$point: sub-vtable rtti at $it, no ${GhidraClassNaming.INTERNAL_VFTABLE} at ${it.add(ptr)}"
+                }
         }
         unlabelled.take(10).mustBeEmpty("${unlabelled.size} sub-vtables inside a _ZTV group are unannotated")
     }
@@ -1905,9 +1909,10 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         .filter { it.numComponents > 0 }
 
     /** The ABI that spelled this fixture's vtables — one producer per binary, so the first states it. */
-    private fun fixtureAbi(): CxxAbi = program.symbolTable.symbolIterator
-        .firstNotNullOfOrNull { CxxAbi.of(it.name)?.takeIf { abi -> abi.isPrimaryVtable(it.name) } }
-        ?: Itanium
+    private fun fixtureAbi(): CxxAbi {
+        val symbols: Iterator<Symbol> = program.symbolTable.symbolIterator
+        return CxxAbi.prevailing(symbols.asSequence().map { it.name })
+    }
 
     /** The Ghidra function for each `STATIC`-flagged method the stabs name, keyed by linkage name.
      *  The Cygwin PE loader prefixes symbols with `_`, so both spellings are tried. */

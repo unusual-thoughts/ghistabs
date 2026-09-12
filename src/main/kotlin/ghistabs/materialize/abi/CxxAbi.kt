@@ -4,11 +4,65 @@ import ghidra.app.util.demangler.DemangledObject
 import ghidra.program.model.data.Structure
 
 /**
- * A C++ ABI's answers about vtables: record geometry, symbol spelling, and which class a symbol
- * names. Physname composition stays on [Gcc2]: it is asked per member, before any vtable symbol has
- * classified the class, and nothing records a producer per compilation unit.
+ * How a C++ ABI spells a *member* — the half of [CxxAbi] that never touches a vtable record. Split
+ * out because the two are asked at different times: a member's symbol is wanted while reparenting
+ * methods, long before any vtable symbol has classified a class.
  */
-sealed interface CxxAbi {
+interface CxxMemberNaming {
+    /** A name this ABI mangled, as opposed to a plain C symbol or a compiler label. */
+    fun isProbablyMangled(name: String): Boolean
+
+    /**
+     * The symbols a member could have been emitted as, most specific first. The stated physname is
+     * always tried first and unchanged; an ABI whose stabs put something less than a whole symbol in
+     * that field composes the rest from what the stab does state.
+     */
+    fun physnameCandidates(
+        memberName: String,
+        className: String,
+        isConst: Boolean,
+        isVolatile: Boolean,
+        stated: String?,
+    ): List<String> = listOfNotNull(stated)
+
+    /** How this ABI's stabs spell the implicit assignment operator. */
+    val assignmentOperatorName: String
+
+    /** Whether [stated] is *itself* the linkage name of an implicit special member. */
+    fun statedIsImplicitMember(stated: String) = false
+
+    /**
+     * A member the compiler emits only if it is used: the class's own ctor or dtor, or the implicit
+     * assignment operator. gcc declares these for every aggregate a CU sees — plain C structs from
+     * system headers, `timeval` and `_IO_FILE` among them — so an absent symbol is the norm rather
+     * than a loss, and bucketing them apart is what keeps unresolved-symbol about real problems.
+     *
+     * Two independent tests, because either half can be the only one available: a member with no
+     * physname at all is recognisable by name alone, and one whose physname *is* a whole symbol is
+     * recognisable by [statedIsImplicitMember] even when its source name is spelled unusually.
+     */
+    fun isImplicitMember(memberName: String, className: String, stated: String?): Boolean {
+        val leaf = className.substringAfterLast("::")
+        return memberName == leaf || memberName == "~$leaf" || memberName == assignmentOperatorName ||
+            stated?.let(::statedIsImplicitMember) == true
+    }
+
+    /** In-class display form of a ctor/dtor linkage name, or null for anything else. */
+    fun specialMemberDisplayName(mangled: String, className: String): String?
+
+    /**
+     * A member whose definition the compiler may legitimately have dropped, so a missing Function at
+     * its asserted address is expected rather than a failure worth warning about.
+     */
+    fun isInlineStdMember(name: String) = false
+}
+
+/**
+ * A C++ ABI's answers about vtables — record geometry, symbol spelling, and which class a symbol
+ * names — on top of [CxxMemberNaming]'s answers about members. Sealed, because [of] enumerates the
+ * spellings: a symbol either matches one of these ABIs or names no vtable at all.
+ */
+sealed interface CxxAbi : CxxMemberNaming {
     /** Bytes between consecutive entries. */
     fun stride(ptrSize: Int): Long
 
@@ -87,5 +141,18 @@ sealed interface CxxAbi {
         fun vtableCandidates(className: String) = Itanium.vtableCandidates(className) +
             Gcc2Plain.vtableCandidates(className) +
             Gcc2Thunks.vtableCandidates(className)
+
+        /**
+         * The ABI a whole binary was built with, for every question no individual symbol settles —
+         * how a physname is spelled, how an implicit member is recognised, what a mangled name looks
+         * like. One producer per binary, so the first primary vtable spelling states it, and an
+         * *undefined* symbol states it just as well as a defined one: `tinyxml_aout_gcc295.o` names
+         * `__vt_13TiXmlDocument` without defining it.
+         *
+         * A C++ binary with no polymorphic class anywhere has no vtable symbol to read at all.
+         * Itanium is the modern default, and the only guess left.
+         */
+        fun prevailing(symbolNames: Sequence<String>): CxxAbi =
+            symbolNames.firstNotNullOfOrNull { n -> of(n)?.takeIf { it.isPrimaryVtable(n) } } ?: Itanium
     }
 }

@@ -1,6 +1,7 @@
 package ghistabs.materialize.abi
 
 import ghidra.program.model.address.Address
+import ghidra.program.model.data.CategoryPath
 import ghidra.program.model.data.PointerDataType
 import ghidra.program.model.data.Structure
 import ghidra.program.model.listing.CommentType
@@ -14,6 +15,18 @@ import ghistabs.harvest.AddressResolver
 
 /** Upper bound on vbase/vcall-offset words scanned before giving up on locating the rtti header. */
 private const val MAX_VTABLE_PREFIX_WORDS = 64
+
+/**
+ * Names Ghidra's own class-recovery machinery round-trips on. None of it is an ABI's decision:
+ * `RecoveredClassHelper` and shift-S look for `<Class>_vftable` under `/ClassDataTypes/<Class>/`
+ * whatever compiler produced the record, and `RTTIGccClassRecoverer` spells a non-primary table
+ * `internal_vftable`.
+ */
+object GhidraClassNaming {
+    val classDataTypesRoot by lazy { CategoryPath(CategoryPath.ROOT, "ClassDataTypes") }
+    const val VFTABLE = "vftable"
+    const val INTERNAL_VFTABLE = "internal_vftable"
+}
 
 /** Pointer-sized word at [a] from initialized memory (endianness-aware), or null if unmapped. */
 internal fun Program.readWord(a: Address): Long? = runCatching {
@@ -185,7 +198,7 @@ fun Program.layVtable(
     ns: Namespace,
     resolver: AddressResolver,
     virtualBases: List<String> = emptyList(),
-    label: String = Itanium.VFTABLE,
+    label: String = GhidraClassNaming.VFTABLE,
     abi: CxxAbi = Itanium,
 ): Address {
     val (prefix, topSlot, rttiHeader, addressPoint) = shape
