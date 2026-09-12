@@ -42,11 +42,6 @@ object Itanium : CxxAbi {
     const val SI_CLASS_TYPE_INFO_PSEUDO = "__si_class_type_info_pseudo"
     const val VMI_CLASS_TYPE_INFO_PSEUDO = "__vmi_class_type_info_pseudo"
 
-    // Conventional field/label names RecoveredClassHelper / shift-S round-trip on.
-    const val VFTABLE = "vftable"
-
-    // RTTIGccClassRecoverer's spelling for a non-primary vftable.
-    const val INTERNAL_VFTABLE = "internal_vftable"
     const val OFFSET_TO_TOP = "offset_to_top"
     const val RTTI = "rtti"
     const val BASE_PREFIX = "_base_"
@@ -70,13 +65,14 @@ object Itanium : CxxAbi {
     private val CTOR_TAIL = Regex("""C[123]E[a-zA-Z_0-9$]*$""")
     private val DTOR_TAIL = Regex("""D[012]E[a-zA-Z_0-9$]*$""")
 
-    val classDataTypesRoot by lazy { CategoryPath(CategoryPath.ROOT, "ClassDataTypes") }
-
     /** Vtable header before the function-pointer array: offset_to_top + rtti = 2 pointers. */
     fun vtablePrefixBytes(ptrSize: Int) = 2L * ptrSize.toLong()
 
     override fun stride(ptrSize: Int) = ptrSize.toLong()
     override fun pfnOffset(ptrSize: Int) = 0L
+
+    /** gcc 3.x spells a member's stab name the way the source does. */
+    override val assignmentOperatorName = "operator="
 
     /** `offset_to_top` then the typeinfo pointer (ABI §2.5.2). */
     override fun headerBytes(ptrSize: Int) = vtablePrefixBytes(ptrSize)
@@ -129,7 +125,7 @@ object Itanium : CxxAbi {
     private fun String.trimDoubleUnderscore() = if (startsWith("__")) substring(1) else this
 
     /** An Itanium-mangled name. The Cygwin PE/COFF loader prepends `_`, so they also appear as `__Z…`. */
-    fun isProbablyMangled(name: String): Boolean = name.trimDoubleUnderscore().startsWith("_Z")
+    override fun isProbablyMangled(name: String): Boolean = name.trimDoubleUnderscore().startsWith("_Z")
 
     /** Data gcc generated for a class rather than anything the source declares — typeinfo objects,
      *  their name strings, vtables. None of it has a source line of its own. */
@@ -150,15 +146,15 @@ object Itanium : CxxAbi {
         return namespaceChain(obj).joinToString("::")
     }
 
-    fun isInlineStdMember(name: String): Boolean = INLINE_STD_MEMBER.containsMatchIn(name)
+    override fun isInlineStdMember(name: String): Boolean = INLINE_STD_MEMBER.containsMatchIn(name)
 
-    fun isImplicitTrivialSpecialMember(mangled: String): Boolean =
-        mangled.startsWith("_ZN") && IMPLICIT_SPECIAL_MEMBER_TAIL.containsMatchIn(mangled)
+    override fun statedIsImplicitMember(stated: String): Boolean =
+        stated.startsWith("_ZN") && IMPLICIT_SPECIAL_MEMBER_TAIL.containsMatchIn(stated)
 
     /** In-class display form of a ctor/dtor linkage name — `_ZN3FooC[123]E…` → `Foo`,
      *  `_ZN3FooD[012]E…` → `~Foo`. Itanium emits up to three symbols per ctor/dtor, all carrying one
      *  source-level name; Ghidra tells them apart by address. Null for anything else. */
-    fun specialMemberDisplayName(mangled: String, className: String): String? = when {
+    override fun specialMemberDisplayName(mangled: String, className: String): String? = when {
         CTOR_TAIL.containsMatchIn(mangled) -> className
         DTOR_TAIL.containsMatchIn(mangled) -> "~$className"
         else -> null
