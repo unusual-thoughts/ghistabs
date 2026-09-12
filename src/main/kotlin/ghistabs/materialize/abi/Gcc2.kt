@@ -91,15 +91,23 @@ object Gcc2 {
         return if (parts.size == 1) joined else "Q${parts.size}_$joined"
     }
 
+    /**
+     * A name gcc invented for an anonymous type: `$_0`/`._0`, whose members mangle with it
+     * (`lldiv_t`'s ctor is `__3._6`). The scope such a name states is a label, not a namespace.
+     */
+    fun isCompilerGeneratedName(name: String) = name.firstOrNull() in MARKERS
+
     /** The mangled class name a gcc 2.x vtable symbol carries, or null if [symbolName] isn't one. */
     private fun vtableTail(symbolName: String): String? = when {
         symbolName.startsWith(THUNK_VTABLE_PREFIX) -> symbolName.removePrefix(THUNK_VTABLE_PREFIX)
 
-        symbolName.startsWith(VTABLE_PREFIX) && symbolName.getOrNull(VTABLE_PREFIX.length) in CPLUS_MARKERS.toSet() ->
+        symbolName.startsWith(VTABLE_PREFIX) && symbolName.getOrNull(VTABLE_PREFIX.length) in MARKERS ->
             symbolName.substring(VTABLE_PREFIX.length + 1)
 
         else -> null
     }
+
+    private val MARKERS = CPLUS_MARKERS.toSet()
 }
 
 /** [obj]'s enclosing scopes, outermost first. */

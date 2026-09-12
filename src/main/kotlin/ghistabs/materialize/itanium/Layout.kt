@@ -9,54 +9,8 @@ import ghistabs.parse.TypeDecl.Aggregate.Method
 import ghistabs.parse.VirtKind
 import ghistabs.parse.isVptrFieldName
 
-/** Component snapshot at a target offset, fed into vfptr placement decisions. */
-data class FirstComponentSnapshot(val fieldName: String?, val offsetBytes: Int, val isUndefined: Boolean)
-
-sealed class VfptrAction {
-    object SkipInheritedFromBase : VfptrAction()
-    data class Insert(val offsetBytes: Int) : VfptrAction()
-    data class Replace(val offsetBytes: Int, val wasFieldName: String) : VfptrAction()
-    object AlreadyCanonical : VfptrAction()
-    data class CollisionAt(val offsetBytes: Int, val occupantFieldName: String) : VfptrAction()
-}
-
 /** Pure C++ record-layout decisions: where the vfptr goes and how base subobjects are spliced in. */
 object Layout {
-    /** Extracted from `ClassBuilder.ensureVfptrFirstField` for pure unit testing. */
-    fun chooseVfptrAction(
-        hasPolymorphicBaseSubobject: Boolean,
-        parserVptrOffsetBytes: Int?,
-        componentAtTargetOffset: FirstComponentSnapshot?,
-        canonicalVfptrFieldName: String,
-    ): VfptrAction {
-        if (hasPolymorphicBaseSubobject) return VfptrAction.SkipInheritedFromBase
-
-        val targetOffset = parserVptrOffsetBytes ?: 0
-
-        if (
-            componentAtTargetOffset != null &&
-            componentAtTargetOffset.offsetBytes == targetOffset &&
-            componentAtTargetOffset.fieldName == canonicalVfptrFieldName
-        ) {
-            return VfptrAction.AlreadyCanonical
-        }
-
-        if (componentAtTargetOffset == null || componentAtTargetOffset.isUndefined) {
-            return VfptrAction.Insert(targetOffset)
-        }
-
-        // Catches the unresolved/synthesized-base case where polymorphism couldn't be proven
-        // but the stab layout still puts a base at the vptr offset — base owns the vfptr.
-        if (componentAtTargetOffset.fieldName?.let(Itanium::isBaseField) == true) {
-            return VfptrAction.SkipInheritedFromBase
-        }
-
-        return if (componentAtTargetOffset.fieldName?.let(::isVptrFieldName) == true) {
-            VfptrAction.Replace(targetOffset, componentAtTargetOffset.fieldName)
-        } else {
-            VfptrAction.CollisionAt(targetOffset, componentAtTargetOffset.fieldName ?: "<anon>")
-        }
-    }
 
     fun baseFieldName(isVirtual: Boolean, simpleName: String, baseCount: Int) =
         (if (isVirtual) Itanium.VBASE_PREFIX else Itanium.BASE_PREFIX) + simpleName.takeIf { baseCount > 1 }.orEmpty()

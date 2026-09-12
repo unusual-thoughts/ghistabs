@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test
 class ItaniumTest {
     @Test
     fun testZtvCandidatesSimpleName() {
-        Itanium.ztvCandidates("ThisStream") mustBe listOf(
+        CxxAbi.Itanium.vtableCandidates("ThisStream") mustBe listOf(
             "_ZTV10ThisStream",
             "__ZTV10ThisStream",
             "ThisStream::vtable",
@@ -36,7 +36,7 @@ class ItaniumTest {
 
     @Test
     fun testZtvCandidatesNestedName() {
-        val candidates = Itanium.ztvCandidates("Foo::Bar")
+        val candidates = CxxAbi.Itanium.vtableCandidates("Foo::Bar")
         candidates[0] mustBe "_ZTVN3Foo3BarE"
         candidates[1] mustBe "__ZTVN3Foo3BarE"
     }
@@ -63,11 +63,11 @@ class ItaniumTest {
 
     @Test
     fun testLooksLikeZtv() {
-        Itanium.must { looksLikeZtv("_ZTV10ThisStream") }
-        Itanium.must { looksLikeZtv("__ZTV10ThisStream") }
-        Itanium.mustNot { looksLikeZtv("ZTVbare") }
-        Itanium.mustNot { looksLikeZtv("XYZ_ZTV9ThisStream") }
-        Itanium.mustNot { looksLikeZtv("_ZN3FooC1Ev") }
+        Itanium.must { CxxAbi.Itanium.looksLikeVtable("_ZTV10ThisStream") }
+        Itanium.must { CxxAbi.Itanium.looksLikeVtable("__ZTV10ThisStream") }
+        Itanium.mustNot { CxxAbi.Itanium.looksLikeVtable("ZTVbare") }
+        Itanium.mustNot { CxxAbi.Itanium.looksLikeVtable("XYZ_ZTV9ThisStream") }
+        Itanium.mustNot { CxxAbi.Itanium.looksLikeVtable("_ZN3FooC1Ev") }
     }
 
     @Test

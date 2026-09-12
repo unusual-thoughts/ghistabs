@@ -96,27 +96,6 @@ object Itanium {
         }
     }
 
-    /**
-     * Closed-form `_ZTV` candidates for [className]. Templates have no closed form, so a lookup by
-     * name misses those: use [vtableClassOf] over the symbol table instead. Other ABIs' spellings
-     * are their own; [ghistabs.materialize.abi.CxxAbi.vtableCandidates] gathers all of them.
-     */
-    fun ztvCandidates(className: String): List<String> {
-        val mangled = mangleClassName(className)
-        return listOf(
-            "$VTABLE_PREFIX$mangled", // Itanium canonical
-            "_$VTABLE_PREFIX$mangled", // Cygwin/PE leading-underscore variant
-            "$className::$DEMANGLED_VTABLE", // some compilers emit this
-        )
-    }
-
-    /** The qualified class name a `_ZTV<class>` [symbolName] names (e.g. `std::basic_ios<char,…>`), or
-     *  null if it isn't a vtable. Lets a caller demangle the symbol table once into a class→address index
-     *  instead of re-scanning + re-demangling every symbol per class
-     *  ([ghistabs.materialize.ClassBuilder.resolveVtableAddress]). */
-    fun vtableClassOf(symbolName: String): String? =
-        if (looksLikeZtv(symbolName)) Demangler.of(symbolName)?.let(::demangledVtableClass) else null
-
     /** The qualified class a `_ZTI<class>` typeinfo object belongs to, or null if [symbolName] isn't
      *  one. Unlike its sibling `_ZTS` string, a typeinfo object carries the *class's* own declaration
      *  line, so knowing the class is enough to file it where the class is declared — see §38. */
@@ -125,7 +104,7 @@ object Itanium {
         return Demangler.of(symbolName)?.let { addressTableClass(it, DEMANGLED_TYPEINFO) }
     }
 
-    private fun String.trimDoubleUnderscore() = if (startsWith("__")) substring(1) else this
+    internal fun String.trimDoubleUnderscore() = if (startsWith("__")) substring(1) else this
 
     /** An Itanium-mangled name. The Cygwin PE/COFF loader prepends `_`, so they also appear as `__Z…`. */
     fun isProbablyMangled(name: String): Boolean = name.trimDoubleUnderscore().startsWith("_Z")
@@ -137,20 +116,15 @@ object Itanium {
     }
 
     /** String-level pre-filter so we don't pay the demangler cost on every label. */
-    internal fun looksLikeZtv(symbolName: String) = symbolName.trimDoubleUnderscore().startsWith(VTABLE_PREFIX)
-
     internal fun looksLikeZti(symbolName: String) = symbolName.trimDoubleUnderscore().startsWith(TYPEINFO_PREFIX)
 
-    /** Pure inspection of a demangled object — extracted for unit testing without a real `Program`. */
-    internal fun demangledMatchesClass(obj: DemangledObject, className: String) = demangledVtableClass(obj) == className
-
-    /** Qualified class name of a demangled vtable object (`::`-joined namespace chain), or null if [obj]
-     *  isn't a vtable address-table. */
-    internal fun demangledVtableClass(obj: DemangledObject) = addressTableClass(obj, DEMANGLED_VTABLE)
+    /** Pure inspection of a demangled object, so it unit-tests without a `Program`. */
+    internal fun demangledMatchesClass(obj: DemangledObject, className: String) =
+        addressTableClass(obj, DEMANGLED_VTABLE) == className
 
     /** The class an `<kind> for <class>` address table belongs to, `::`-joined, or null if [obj] is
      *  not one of [kind]. */
-    private fun addressTableClass(obj: DemangledObject, kind: String): String? {
+    internal fun addressTableClass(obj: DemangledObject, kind: String): String? {
         if (obj !is DemangledAddressTable || obj.name != kind) return null
         return namespaceChain(obj).joinToString("::")
     }
