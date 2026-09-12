@@ -84,11 +84,17 @@ class ClassBuilder(
     // An out-of-line member binds the chain just as exactly as an inline one (§57) and gets tried
     // before the by-leaf guess, which can only ever be a guess.
     private val LocatedType.qualifiedClassName: String
-        get() = (sequenceOf(type) + members.mapNotNull { types.byId(it) })
-            .firstNotNullOfOrNull { it.demangledClassPath() ?: types.classPathByThisParam[it.id] }
-            ?.joinToString("::")
-            ?: vtableClassByLeaf[className]?.also { debug("class-scope-from-vtable", "$className -> $it") }
-            ?: className
+        get() = qualifiedByType.getOrPut(type.id) {
+            (sequenceOf(type) + members.mapNotNull { types.byId(it) })
+                .firstNotNullOfOrNull { it.demangledClassPath() ?: types.classPathByThisParam[it.id] }
+                ?.joinToString("::")
+                ?: vtableClassByLeaf[className]?.also { debug("class-scope-from-vtable", "$className -> $it") }
+                ?: className
+        }
+
+    // Memoized because the walk above is O(members) and every member now asks for it — composing a
+    // gcc 2.x physname needs the whole path, not the leaf.
+    private val qualifiedByType = mutableMapOf<GlobalTypeId, String>()
 
     /**
      * {vfptr} points at the function-pointer array at the vtable's address point
@@ -195,7 +201,7 @@ class ClassBuilder(
     private fun LocatedType.reparentMethod(m: Method<GlobalTypeId>, ns: GhidraClass, structDt: Structure) {
         val (mangled, addr) = resolveMember(m)
             ?: run {
-                if (abi.isImplicitMember(m, className)) {
+                if (abi.isImplicitMember(m, qualifiedClassName)) {
                     debug("method-implicit-not-emitted")
                 } else {
                     debug("unresolved-symbol", "method ${m.physname ?: m.name} (in $className)")
@@ -771,7 +777,7 @@ class ClassBuilder(
      * rather than reaching for [Method.mangled].
      */
     private fun LocatedType.resolveMember(m: Method<GlobalTypeId>): Pair<String, Address>? =
-        abi.physnameCandidates(m, className)
+        abi.physnameCandidates(m, qualifiedClassName)
             .firstNotNullOfOrNull { name -> resolver.resolve(name)?.let { name to it } }
 
     /** What every ABI question falls back to for a class whose own vtable symbol never resolved. */
