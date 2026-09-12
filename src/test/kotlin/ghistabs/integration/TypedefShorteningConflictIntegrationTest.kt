@@ -6,6 +6,7 @@ import ghidra.program.model.data.TypeDef
 import ghidra.program.model.listing.Program
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
+import ghistabs.*
 import ghistabs.diagnose.CapturingSink
 import ghistabs.diagnose.Level
 import ghistabs.diagnose.StabsDiagnostics
@@ -14,15 +15,10 @@ import ghistabs.importer.ImportOptions
 import ghistabs.importer.ImportOptions.Companion.SHORTEN_TYPEDEFS
 import ghistabs.importer.ImportProbe
 import ghistabs.importer.STABS_ANALYZER_NAME
-import ghistabs.importer.set
-import ghistabs.isConflict
-import ghistabs.nameWithoutConflict
-import ghistabs.runTransaction
 import ghistabs.test.disableWindowsResourceAnalyzer
 import ghistabs.test.must
 import ghistabs.test.mustBeEmpty
 import ghistabs.test.mustNotBeNull
-import ghistabs.withProgram
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 
@@ -62,7 +58,10 @@ class TypedefShorteningConflictIntegrationTest : AbstractGhidraHeadlessIntegrati
             val ctx = ImportContext(
                 program,
                 monitor,
-                ImportOptions(shortenTypedefs = shorten, minLogLevel = Level.DEBUG),
+                ImportOptions {
+                    shortenTypedefs = shorten
+                    minLogLevel = Level.DEBUG
+                },
                 CapturingSink(),
                 StabsDiagnostics(),
             )

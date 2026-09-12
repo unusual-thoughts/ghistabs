@@ -3,6 +3,7 @@ package ghistabs.harvest
 import ghidra.app.util.opinion.ElfLoader
 import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Program
+import ghistabs.aoutTextBaseFixup
 import ghistabs.baseStackParamOffset
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.DummySink
@@ -58,10 +59,13 @@ class ProgramAddressResolver(private val program: Program, private val sink: Dia
     // (loadBase - originalBase). PE has no such property → null → no fixup. Mirrors
     // Ghidra's own DWARF address fixup (DIEContainer.setProgramBaseAddressFixup).
     private val baseFixup: Long =
-        ElfLoader.getElfOriginalImageBase(program)?.let { program.imageBase.offset - it } ?: 0L
+        ElfLoader.getElfOriginalImageBase(program)?.let { program.imageBase.offset - it }
+            ?: aoutTextBaseFixup(program)
 
-    override fun buildAddress(offset: Long): Address =
-        program.addressFactory.defaultAddressSpace.getAddress(offset) + baseFixup
+    override fun buildAddress(offset: Long): Address = program.addressFactory.defaultAddressSpace.getAddress(offset) +
+        // A negative fixup only applies to values large enough to be vaddrs: callers also pass
+        // frame offsets and register numbers through here, and those would underflow the space.
+        (baseFixup.takeIf { offset + it >= 0 } ?: 0L)
 
     /**
      * a.out link-time symbols straight from the file, which outrank Ghidra's for this format:

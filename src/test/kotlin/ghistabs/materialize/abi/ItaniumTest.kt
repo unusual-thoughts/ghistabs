@@ -1,4 +1,4 @@
-package ghistabs.materialize.itanium
+package ghistabs.materialize.abi
 
 import ghidra.app.util.demangler.DemangledAddressTable
 import ghidra.app.util.demangler.DemangledFunction
@@ -11,18 +11,31 @@ import org.junit.jupiter.api.Test
 class ItaniumTest {
     @Test
     fun testZtvCandidatesSimpleName() {
-        val candidates = Itanium.ztvCandidates("ThisStream")
-        candidates mustBe listOf(
+        Itanium.vtableCandidates("ThisStream") mustBe listOf(
             "_ZTV10ThisStream",
             "__ZTV10ThisStream",
-            $$"_vt$ThisStream$",
             "ThisStream::vtable",
         )
     }
 
     @Test
+    fun testEveryAbiContributesItsOwnCandidates() {
+        // The gcc 2.x forms are length-prefixed like Itanium's and carry no trailing marker: the
+        // libstdc++-2.8.1 binaries spell them `_vt.9exception`, and a second marker there is the
+        // separator before a base (`_vt.14CExposedStream.11PRevertable` = that base's own vtable).
+        CxxAbi.vtableCandidates("ThisStream") mustBe listOf(
+            "_ZTV10ThisStream",
+            "__ZTV10ThisStream",
+            "ThisStream::vtable",
+            $$"_vt$10ThisStream",
+            "_vt.10ThisStream",
+            "__vt_10ThisStream",
+        )
+    }
+
+    @Test
     fun testZtvCandidatesNestedName() {
-        val candidates = Itanium.ztvCandidates("Foo::Bar")
+        val candidates = Itanium.vtableCandidates("Foo::Bar")
         candidates[0] mustBe "_ZTVN3Foo3BarE"
         candidates[1] mustBe "__ZTVN3Foo3BarE"
     }
@@ -49,11 +62,11 @@ class ItaniumTest {
 
     @Test
     fun testLooksLikeZtv() {
-        Itanium.must { looksLikeZtv("_ZTV10ThisStream") }
-        Itanium.must { looksLikeZtv("__ZTV10ThisStream") }
-        Itanium.mustNot { looksLikeZtv("ZTVbare") }
-        Itanium.mustNot { looksLikeZtv("XYZ_ZTV9ThisStream") }
-        Itanium.mustNot { looksLikeZtv("_ZN3FooC1Ev") }
+        Itanium.must { Itanium.looksLikeVtable("_ZTV10ThisStream") }
+        Itanium.must { Itanium.looksLikeVtable("__ZTV10ThisStream") }
+        Itanium.mustNot { Itanium.looksLikeVtable("ZTVbare") }
+        Itanium.mustNot { Itanium.looksLikeVtable("XYZ_ZTV9ThisStream") }
+        Itanium.mustNot { Itanium.looksLikeVtable("_ZN3FooC1Ev") }
     }
 
     @Test

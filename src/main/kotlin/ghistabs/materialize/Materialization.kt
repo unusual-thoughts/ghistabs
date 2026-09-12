@@ -3,9 +3,6 @@ package ghistabs.materialize
 import ghidra.program.model.data.*
 import ghidra.program.model.lang.CompilerSpec
 import ghistabs.harvest.Type
-import ghistabs.materialize.itanium.Layout
-import ghistabs.materialize.itanium.firstPolymorphicBase
-import ghistabs.materialize.itanium.resolveStruct
 import ghistabs.parse.CATEGORY
 import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.GlobalTypeId
@@ -75,7 +72,7 @@ internal fun DataTypeRegistry.materializeBody(ast: Type, category: CategoryPath,
             name = ast.ghidraName,
             ret = body.ret,
             params = body.params,
-            thisType = resolveRef(body.cls) ?: undef("method-this-cls", ast.ghidraName, body.cls),
+            thisType = body.cls?.let { resolveRef(it) } ?: undef("method-this-cls", ast.ghidraName, body.cls),
             callingConvention = CompilerSpec.CALLING_CONVENTION_thiscall,
             at = ast.ghidraName,
         )
@@ -301,10 +298,10 @@ internal fun DataTypeRegistry.fillComposite(
 private fun DataTypeRegistry.undef(
     category: String,
     at: String,
-    decl: GlobalTypeDecl,
+    decl: GlobalTypeDecl?,
     fallback: DataType = Undefined4DataType.dataType,
 ): DataType {
-    degradation(category, at, decl.toString())
+    degradation(category, at, decl?.toString() ?: "no domain stated")
     return fallback
 }
 

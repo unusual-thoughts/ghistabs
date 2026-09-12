@@ -4,6 +4,7 @@ package ghistabs
 
 import ghidra.app.util.bin.FileByteProvider
 import ghidra.app.util.bin.InputStreamByteProvider
+import ghidra.app.util.bin.format.unixaout.UnixAoutHeader
 import ghidra.app.util.importer.MessageLog
 import ghidra.app.util.opinion.LoaderService
 import ghidra.app.util.opinion.LoaderTier
@@ -13,15 +14,8 @@ import ghidra.program.model.data.Composite
 import ghidra.program.model.data.DataType
 import ghidra.program.model.data.DataTypeManager
 import ghidra.program.model.data.DataUtilities
-import ghidra.program.model.listing.CodeUnit
-import ghidra.program.model.listing.Data
+import ghidra.program.model.listing.*
 import ghidra.program.model.listing.Function
-import ghidra.program.model.listing.FunctionManager
-import ghidra.program.model.listing.GhidraClass
-import ghidra.program.model.listing.Listing
-import ghidra.program.model.listing.Parameter
-import ghidra.program.model.listing.Program
-import ghidra.program.model.listing.Variable
 import ghidra.program.model.mem.MemoryBlock
 import ghidra.util.task.TaskMonitor
 import java.io.File
@@ -167,10 +161,10 @@ val MemoryBlock.byteProvider get() = InputStreamByteProvider(data, size)
  * Where the program's default calling convention starts its stack parameters — the bias between a
  * gcc frame offset and a Ghidra one.
  *
- * The *default* convention, not [VariableUtilities.getBaseStackParamOffset]'s per-function answer:
- * x86gcc gives `processEntry` `stackshift="0"` against `__cdecl`'s 4, so asking whichever function a
- * caller had first could shift every stack slot in the program by a pointer. Fallback as Ghidra's,
- * for a convention with no stack ParamEntry to derive an offset from.
+ * The *default* convention, not [ghidra.program.model.listing.VariableUtilities.getBaseStackParamOffset]'s
+ * per-function answer: x86gcc gives `processEntry` `stackshift="0"` against `__cdecl`'s 4,
+ * so asking whichever function a caller had first could shift every stack slot in the program by a pointer.
+ * Fallback as Ghidra's, for a convention with no stack ParamEntry to derive an offset from.
  */
 val Program.baseStackParamOffset get() = compilerSpec.defaultCallingConvention.run {
     stackParameterOffset?.toInt() ?: stackshift
@@ -198,3 +192,25 @@ fun <R> Any.withProgram(
     monitor: TaskMonitor? = null,
     func: (Program) -> R,
 ): R = loadProgram(binary, compiler, log, monitor).use { func(it.program) }
+
+/** sun4's `TARGET_PAGE_SIZE`, which is also its `TEXT_START_ADDR` (binutils `include/aout/sun4.h`). */
+private const val SUN4_PAGE = 0x2000L
+
+/**
+ * How far below its link-time addresses a paged SPARC a.out was loaded, or 0.
+ *
+ * SunOS maps a ZMAGIC text one page up so location 0 stays unreachable, mapping the header as the
+ * start of that segment; a ZMAGIC entry below the page is the shared-library kludge and does start
+ * at 0. Ghidra 12.1.2 applies this to SPARC NMAGIC only, so `graphcnv.SUN4` loads a page low.
+ * Reads the header rather than [UnixAoutHeader.getTextAddr], which is the value in question.
+ */
+fun aoutTextBaseFixup(program: Program): Long {
+    val text = program.memory.getBlock(".text")?.takeIf { it.isInitialized } ?: return 0L
+    val header = runCatching { UnixAoutHeader(text.byteProvider, !program.memory.isBigEndian) }
+        .getOrNull()
+        ?.takeIf { it.isValid } ?: return 0L
+    val paged = header.executableType == UnixAoutHeader.AoutType.ZMAGIC &&
+        header.languageSpec.startsWith("sparc") &&
+        header.entryPoint >= SUN4_PAGE
+    return if (paged) text.start.offset - SUN4_PAGE else 0L
+}

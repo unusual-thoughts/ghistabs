@@ -7,17 +7,17 @@ import ghidra.program.model.data.DataTypeConflictHandler
 import ghidra.program.model.data.DataTypeManager
 import ghidra.util.task.TaskMonitor
 import ghistabs.Demangler
-import ghistabs.categoryPath
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.StabsDiagnostics
 import ghistabs.harvest.Harvest
 import ghistabs.harvest.Type
 import ghistabs.index.*
-import ghistabs.materialize.itanium.Rtti
+import ghistabs.materialize.abi.Rtti
 import ghistabs.parse.CATEGORY
 import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
+import ghistabs.path
 
 /**
  * DataType cache and DTM facade: owns the id→DataType map, resolves types into the DTM under a
@@ -37,7 +37,7 @@ class DataTypeRegistry(
 ) : DiagnosticSink by sink {
     /**
      * Canonical (category, ghidraName) → group; drives TypeRegistry slot assignment. XRef-targets are
-     * bucketed into `(category, ghidraName)` slots ([classifyGroup] picks each winner), then slots are
+     * bucketed into `(category, ghidraName)` slots ([ScopeLocator.classifyGroup] picks each winner), then slots are
      * unified by **content hash** (§20): gcc spells one header two ways, so one logical type lands in
      * several slots (named, anonymous copy, typedef aliases) → several DataTypes → the decompiler picks
      * the wrong same-named one. Within a content class holding exactly one named ghidraName, every slot —
@@ -227,7 +227,7 @@ class DataTypeRegistry(
             // would copy every function and its three lists on an import that never renders.
             for (fn in harvest.functions) {
                 val dt = types.thisParamTypeId(fn)?.let { dataTypeFor(it) } ?: continue
-                Demangler.of(fn.name)?.namespace?.let { putIfAbsent(it.categoryPath.path, dt) }
+                Demangler.of(fn.name)?.namespace?.let { putIfAbsent(it.path.path, dt) }
             }
             // A member function is not the only symbol that ties a class to its demangled path: a
             // static data member's linkage name carries the same chain, and is the *only* one a
@@ -239,7 +239,7 @@ class DataTypeRegistry(
                 val dt = dataTypeFor(ast.id) ?: continue
                 for (field in body.fields) {
                     val mangled = field.mangled?.takeIf { field.isStatic } ?: continue
-                    Demangler.of(mangled)?.namespace?.let { putIfAbsent(it.categoryPath.path, dt) }
+                    Demangler.of(mangled)?.namespace?.let { putIfAbsent(it.path.path, dt) }
                 }
             }
         }

@@ -6,7 +6,7 @@ import ghidra.program.model.data.SignedByteDataType
 import ghistabs.harvest.*
 import ghistabs.index.*
 import ghistabs.materialize.TemplateNameShortener
-import ghistabs.materialize.itanium.Itanium
+import ghistabs.materialize.abi.Itanium
 import ghistabs.materialize.resolveBuiltin
 import ghistabs.parse.*
 
@@ -87,7 +87,7 @@ interface RenderContext {
         }
 
         is TypeDecl.Method -> {
-            val cls = cls.render(seen)
+            val cls = cls?.render(seen).orEmpty()
             val ret = ret.render(seen)
             val params = params.joinToString(", ") { it.render(seen) }
             "$ret($cls::*)($params)"

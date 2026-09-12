@@ -12,7 +12,6 @@ import ghidra.program.model.symbol.SymbolUtilities
 import ghistabs.Demangler
 import ghistabs.baseStackParamOffset
 import ghistabs.parse.*
-import ghistabs.parse.TypeNameKind
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.UseSerializers
@@ -32,6 +31,7 @@ value class LineNumber(val inner: UInt) : Comparable<LineNumber> {
     init {
         require(inner != 0U)
     }
+
     companion object {
         fun fromInt(x: Int) = x.takeIf { it > 0 }?.let { LineNumber(it.toUInt()) }
     }
@@ -54,7 +54,7 @@ data class NameBinding(val name: String, val kind: TypeNameKind)
  *
  * There is one of these per (CU, id), so a class header included by N CUs harvests N of them, with
  * distinct ids and the same [ghidraName]. Collapsing those onto one DTM slot is
- * [ghistabs.index.TypeLocations]' job, which [nameOrUnique]/[ghidraName] are shaped to let fire.
+ * [ghistabs.index.ScopeLocator]' job, which [nameOrUnique]/[ghidraName] are shaped to let fire.
  */
 @Serializable
 data class Type(
@@ -213,8 +213,10 @@ class AddressSerializer : KSerializer<Address> {
     private data class AddressSurrogate(val space: String, val offset: Long) {
         constructor(addr: Address) : this(addr.addressSpace.name, addr.offset)
     }
+
     override val descriptor =
         SerialDescriptor("ghidra.program.model.address.Address", AddressSurrogate.serializer().descriptor)
+
     override fun serialize(encoder: Encoder, value: Address) =
         encoder.encodeSerializableValue(AddressSurrogate.serializer(), AddressSurrogate(value))
 
@@ -284,7 +286,7 @@ data class Func(
      * whichever CU first needed it (the implicit `EquExpression` copy ctor materializes inside
      * `std::pair<…, EquExpression>` and would land at `stl_pair.h:84`).
      */
-    fun scopePath(): List<String>? = Demangler.namespaces(name)?.map(::canonTemplateName)
+    fun scopePath(): List<String> = Demangler.namespaces(name).map(::canonTemplateName)
 
     /**
      * gcc emits file-scope synthetic init/destruct wrappers
@@ -303,7 +305,7 @@ data class Func(
 
 /**
  * N_SLINE record: line → text address, tagged with its active N_SOL source. Held both in
- * [Harvest.lineEntries] (grouped by source) and on the owning [Func.lineEntries].
+ * [SourceHarvest.lineEntries] and on the owning [Func.lineEntries].
  *
  * A [SourceMapEntry] of length 0, which is what an N_SLINE is — a point, not a range. So one type
  * flows parse → render → program, and the program's own DB-backed entries are an alternative

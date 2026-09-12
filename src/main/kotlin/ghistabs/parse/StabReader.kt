@@ -85,7 +85,7 @@ class StabReader(
             val record = StabRecord(index++, readHeader())
 
             // Under SYMTAB the table also holds the link-time symbols; only debugging symbols are ours.
-            if (layout == Layout.SYMTAB && (record.raw.type.toInt() and N_STAB_MASK) == 0) continue
+            if (layout == Layout.SYMTAB && record.raw.isLinkSymbol) continue
 
             if (layout == Layout.SECTION && record.type == StabType.N_UNDF) {
                 cuOff += cuSize
@@ -103,9 +103,10 @@ class StabReader(
     data class Source(val records: MemoryBlock, val strings: MemoryBlock, val layout: Layout)
 
     /**
-     * Link-time symbols as name → `n_value`: the half of an a.out symbol table [physicalRecords] skips.
-     * An `N_GSYM` carries no address of its own — the format keeps it in the companion link-time symbol
-     * — so this is how an a.out global gets placed. Empty under [Layout.SECTION].
+     * *Defined* link-time symbols as name → `n_value`: the half of an a.out symbol table
+     * [physicalRecords] skips. An `N_GSYM` carries no address of its own — the format keeps it in
+     * the companion link-time symbol — so this is how an a.out global gets placed. Empty under
+     * [Layout.SECTION].
      *
      * Consumes the reader (the backing provider cannot seek backwards), so call it on its own instance.
      */
@@ -115,7 +116,7 @@ class StabReader(
         return buildMap {
             while (stab.hasNext(STAB_RECORD_SIZE)) {
                 val raw = readHeader()
-                if (raw.type.toInt() and N_STAB_MASK == 0 && raw.strx != 0u) {
+                if (raw.isLinkSymbol && raw.section != StabSection.Undefined && raw.strx != 0u) {
                     putIfAbsent(stabStr(raw.strx.toLong()), raw.value.toLong())
                 }
             }

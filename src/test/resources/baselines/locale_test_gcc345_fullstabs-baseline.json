@@ -379,8 +379,8 @@
             "max": 140
         },
         "method-implicit-not-emitted": {
-            "min": 621,
-            "max": 621
+            "min": 836,
+            "max": 836
         },
         "method-static-no-this": {
             "min": 67,
@@ -524,8 +524,8 @@
             "max": 116
         },
         "resolve-ambiguous": {
-            "min": 1526,
-            "max": 1526
+            "min": 1458,
+            "max": 1458
         },
         "rtti-pseudo-substituted": {
             "min": 50,
@@ -639,20 +639,24 @@
             "max": 1
         },
         "unresolved-symbol": {
-            "min": 1440,
-            "max": 1440
+            "min": 1225,
+            "max": 1225
         },
         "unresolved-xref": {
             "min": 34,
             "max": 34
         },
         "vfptr-inherited-from-base": {
-            "min": 61,
-            "max": 61
+            "min": 13,
+            "max": 13
         },
         "vfptr-normalized": {
             "min": 5,
             "max": 5
+        },
+        "vfptr-split-from-base": {
+            "min": 48,
+            "max": 48
         },
         "vtable-applied": {
             "min": 66,
@@ -672,8 +676,8 @@
             ]
         },
         "vtable-virtual-no-impl": {
-            "min": 14,
-            "max": 14
+            "min": 19,
+            "max": 19
         },
         "xref-ambiguous": {
             "min": 2,
@@ -688,5 +692,5 @@
             "max": 32
         }
     },
-    "source": "locale_test_gcc345_fullstabs.exe - shifted from committed"
+    "source": "locale_test_gcc345_fullstabs.exe - generated from snapshotCounters()"
 }

@@ -4,6 +4,7 @@ import ghidra.program.model.data.CategoryPath
 import ghistabs.Demangler
 import ghistabs.diagnose.StabsDiagnostics
 import ghistabs.harvest.*
+import ghistabs.materialize.abi.Gcc2
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.SourceFile
 import ghistabs.parse.TypeDecl
@@ -131,8 +132,13 @@ fun Type.isCuLocalName() = name?.let { CU_LOCAL_NAME.matches(it) } == true
  * `std::basic_string<char,…>`) — so it's what our type must be named to be reused rather than shadowed.
  */
 fun Type.demangledClassPath(): List<String>? {
+    // An empty chain is "no scope stated", not "scope is the root": a global function's name
+    // demangles to one, it would satisfy `none {}` vacuously, and callers take its `last()`.
     val methods = (body as? TypeDecl.Aggregate<GlobalTypeId>)?.methods ?: return null
-    return methods.firstNotNullOfOrNull { it.mangled?.let(Demangler::namespaces) }
+    return methods.firstNotNullOfOrNull { m ->
+        m.physname?.let(Demangler::namespaces)
+            ?.takeIf { it.isNotEmpty() && it.none(Gcc2::isCompilerGeneratedName) }
+    }
 }
 
 /** The type's enclosing C++ scope, root-first — the category a namespace-organised DTM files it under

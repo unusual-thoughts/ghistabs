@@ -5,6 +5,7 @@ import ghidra.app.util.demangler.Demangled
 import ghidra.app.util.demangler.DemangledObject
 import ghidra.app.util.demangler.MangledContext
 import ghidra.app.util.demangler.gnu.GnuDemangler
+import ghidra.app.util.demangler.gnu.GnuDemanglerFormat
 import ghidra.app.util.demangler.gnu.GnuDemanglerOptions
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.CategoryPath
@@ -42,11 +43,19 @@ object Demangler {
     val options get() = GnuDemanglerOptions().apply { setDemangleOnlyKnownPatterns(false) }
 
     /**
+     * gcc 2.x names, which [options]' back end cannot read at all: it answers `unknown demangling
+     * style 'gnu'`. The two back ends are disjoint, neither decoding anything the other does, so
+     * this is a fallback for what [options] declines and never a replacement.
+     */
+    internal val v2Options get() =
+        GnuDemanglerOptions(GnuDemanglerFormat.GNU).apply { setDemangleOnlyKnownPatterns(false) }
+
+    /**
      * Capped rather than tied to an import: memoizing a pure function has no correctness lifetime, so the
      * only thing to bound is memory in a long-lived Ghidra session. Dropping the lot costs a re-demangle.
      */
     private const val MAX_ENTRIES = 1 shl 16
-    private val cache = ConcurrentHashMap<String, Result<DemangledObject>>()
+    private val cache = ConcurrentHashMap<String, Result<DemangledObject?>>()
 
     /** Demangle [mangled] to a [DemangledObject], or null if it isn't a mangled name / demangling fails.
      * [ghidra.app.util.demangler.gnu.GnuDemanglerNativeProcess.demangle] is itself synchronized,
@@ -55,17 +64,29 @@ object Demangler {
     fun of(mangled: String): DemangledObject? {
         if (cache.size > MAX_ENTRIES) cache.clear()
         return cache.computeIfAbsent(mangled) { name ->
-            runCatching { demangler.demangle(MangledContext(null, options, name, null)) }
+            runCatching { attempt(options, name) ?: gnu2(name) }
         }.getOrNull()
     }
+
+    /**
+     * [v2Options] applied, but only where it actually decoded something. That back end accepts names
+     * that were never mangled and hands back the input less its punctuation (`.bss` to `bss`). A
+     * `::` or a `(` is the difference: every genuine gcc 2.x form has one (`TiXmlFOpen__FPCcT0` to
+     * `TiXmlFOpen(char const *,char const *)`, `_9TiXmlBase.entity` to `TiXmlBase::entity`).
+     */
+    private fun gnu2(mangled: String): DemangledObject? = attempt(v2Options, mangled)
+        ?.takeIf { it.signature?.let { sig -> "::" in sig || "(" in sig } == true }
+
+    /** One back end's answer. It *throws* on a name it cannot read as often as it returns null. */
+    private fun attempt(o: GnuDemanglerOptions, mangled: String): DemangledObject? =
+        runCatching { demangler.demangle(MangledContext(null, o, mangled, null)) }.getOrNull()
 
     /** Human-readable name for [mangled], falling back to [mangled] */
     fun name(mangled: String): String = of(mangled)?.demangledName ?: mangled
 
-    /** Parent-namespace chain, root-first, for [mangled] — or null if it has no enclosing namespace. */
-    fun namespaces(mangled: String): List<String>? = of(mangled)?.namespace?.let { parent ->
-        generateSequence(parent) { it.namespace }.map { it.name }.toList().asReversed()
-    }
+    /** Parent-namespace chain, root-first, for [mangled]. Empty for a name that does not demangle
+     *  *and* for one with no enclosing namespace — callers have never told those apart. */
+    fun namespaces(mangled: String): List<String> = of(mangled)?.namespaces.orEmpty()
 }
 
 /**
@@ -80,18 +101,34 @@ fun Program.applyDemangling(
     applyCallingConvention: Boolean = false,
     doDisassembly: Boolean = false,
     monitor: TaskMonitor = TaskMonitor.DUMMY,
-) = DemanglerCmd(
-    addr,
-    mangled,
-    Demangler.options.apply {
-        setApplySignature(applySignature)
-        setApplyCallingConvention(applyCallingConvention)
-        setDoDisassembly(doDisassembly)
-    },
-).run { applyTo(this@applyDemangling, monitor) && result != null }
+): Boolean {
+    fun run(options: GnuDemanglerOptions) = DemanglerCmd(
+        addr,
+        mangled,
+        options.apply {
+            setApplySignature(applySignature)
+            setApplyCallingConvention(applyCallingConvention)
+            setDoDisassembly(doDisassembly)
+        },
+    ).run { applyTo(this@applyDemangling, monitor) && result != null }
+
+    // The gcc 2.x back end only after the modern one declines, and only for a name [Demangler.of]
+    // already decoded — the command applies whatever it gets, and that back end will happily rename
+    // a symbol to its own punctuation-stripped input.
+    return run(Demangler.options) ||
+        (Demangler.of(mangled) != null && run(Demangler.v2Options))
+}
 
 /** Category created by the demangler analyzer */
 val DEMANGLER_CATEGORY: CategoryPath = CategoryPath.ROOT.extend("Demangler")
 
-/** Replicates the (protected) `DemangledDataType.getDemanglerCategoryPath` + leaf: `/Demangler/<ns…>/<name>`. */
-val Demangled.categoryPath get(): CategoryPath = (namespace?.categoryPath ?: DEMANGLER_CATEGORY).extend(name)
+/** Replicates the (protected) `DemangledDataType.getDemanglerCategoryPath` + leaf: `/Demangler/<ns…>/<name>`.
+ *  Includes name
+ **/
+val Demangled.path get(): CategoryPath = (namespace?.path ?: DEMANGLER_CATEGORY).extend(name)
+
+/** [this]'s namespaces followed by name */
+val Demangled.fullName get() = generateSequence(this) { it.namespace }.map { it.name }.toList().asReversed()
+
+/** [this]'s enclosing scopes, outermost first. Doesn't include name */
+val DemangledObject.namespaces get() = namespace?.fullName.orEmpty()

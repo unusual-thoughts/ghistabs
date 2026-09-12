@@ -31,7 +31,9 @@ import ghistabs.importer.ImportOptions
 import ghistabs.importer.ImportOptions.Companion.CLASSES
 import ghistabs.importer.ImportOptions.Companion.FOLD_SOURCES
 import ghistabs.importer.ImportOptions.Companion.SHORTEN_TYPEDEFS
+import ghistabs.importer.ImportOptions.Companion.VFPTR_MODEL
 import ghistabs.importer.STABS_ANALYZER_NAME
+import ghistabs.materialize.VfptrModel
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.StabReader
 import ghistabs.parse.StabRecord
@@ -254,7 +256,7 @@ private abstract class StabsCommand(name: String) : CliktCommand(name = name) {
     protected open fun validate() = Unit
 
     /** Only the log level matters until something imports; [ImportingCommand] fills in the rest. */
-    protected open val options get() = ImportOptions(minLogLevel = shared.logLevel)
+    protected open val options get() = ImportOptions { minLogLevel = shared.logLevel }
 
     override fun run() {
         validate()
@@ -301,21 +303,24 @@ private abstract class ImportingCommand(name: String) : StabsCommand(name = name
         .flag("--no-shorten-typedefs", default = SHORTEN_TYPEDEFS.default)
     private val foldSources by option("--fold-sources", help = FOLD_SOURCES.desc)
         .flag("--no-fold-sources", default = FOLD_SOURCES.default)
+    private val vfptrModel by option("--vfptr-model", help = VFPTR_MODEL.desc)
+        .enum<VfptrModel>().default(VFPTR_MODEL.default)
     private val disableAnalyzers by option(
         "--disable-analyzer",
         help = "turn off every analyzer whose name contains this, case-insensitively (repeatable). " +
             "Render the same binary with and without one to A/B what it actually changes.",
     ).multiple()
 
-    override val options get() = ImportOptions(
-        false,
-        buildClasses,
-        shortenTypedefs,
-        foldSources,
-        shared.logLevel,
-        false,
-        sourceRoots = sourceRoots.map { it.path },
-    )
+    override val options get() = ImportOptions().also { o ->
+        o.applyPlateComments = false
+        o.buildClasses = buildClasses
+        o.shortenTypedefs = shortenTypedefs
+        o.foldSources = foldSources
+        o.minLogLevel = shared.logLevel
+        o.overlaySection = false
+        o.vfptrModel = vfptrModel
+        o.sourceRoots = sourceRoots.map { it.path }
+    }
 
     /** Full auto-analysis, then the whole import, then every dump. */
     protected fun ImportContext<*>.fullImport(): ImportArtifacts? {

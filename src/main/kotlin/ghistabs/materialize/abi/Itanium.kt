@@ -1,12 +1,12 @@
-package ghistabs.materialize.itanium
+package ghistabs.materialize.abi
 
 import ghidra.app.util.demangler.DemangledAddressTable
 import ghidra.app.util.demangler.DemangledObject
-import ghidra.program.model.data.CategoryPath
 import ghidra.program.model.data.DataType
 import ghidra.program.model.data.IntegerDataType
 import ghidra.program.model.data.LongLongDataType
 import ghistabs.Demangler
+import ghistabs.namespaces
 import ghistabs.parse.splitQualified
 
 /**
@@ -14,7 +14,7 @@ import ghistabs.parse.splitQualified
  * conventional field names, category layout, and vtable geometry. Every ABI-specific site
  * references the constants here rather than re-spelling literals.
  */
-object Itanium {
+object Itanium : CxxAbi {
     // Itanium mangling prefixes (ABI §5.1.4). Cygwin's PE loader prepends '_' → "__ZT*".
     const val VTABLE_PREFIX = "_ZTV"
     const val TYPEINFO_PREFIX = "_ZTI"
@@ -41,11 +41,6 @@ object Itanium {
     const val SI_CLASS_TYPE_INFO_PSEUDO = "__si_class_type_info_pseudo"
     const val VMI_CLASS_TYPE_INFO_PSEUDO = "__vmi_class_type_info_pseudo"
 
-    // Conventional field/label names RecoveredClassHelper / shift-S round-trip on.
-    const val VFTABLE = "vftable"
-
-    // RTTIGccClassRecoverer's spelling for a non-primary vftable.
-    const val INTERNAL_VFTABLE = "internal_vftable"
     const val OFFSET_TO_TOP = "offset_to_top"
     const val RTTI = "rtti"
     const val BASE_PREFIX = "_base_"
@@ -69,10 +64,33 @@ object Itanium {
     private val CTOR_TAIL = Regex("""C[123]E[a-zA-Z_0-9$]*$""")
     private val DTOR_TAIL = Regex("""D[012]E[a-zA-Z_0-9$]*$""")
 
-    val classDataTypesRoot by lazy { CategoryPath(CategoryPath.ROOT, "ClassDataTypes") }
-
     /** Vtable header before the function-pointer array: offset_to_top + rtti = 2 pointers. */
     fun vtablePrefixBytes(ptrSize: Int) = 2L * ptrSize.toLong()
+
+    override fun stride(ptrSize: Int) = ptrSize.toLong()
+    override fun pfnOffset(ptrSize: Int) = 0L
+
+    /** gcc 3.x spells a member's stab name the way the source does. */
+    override val assignmentOperatorName = "operator="
+
+    /** `offset_to_top` then the typeinfo pointer (ABI §2.5.2). */
+    override fun headerBytes(ptrSize: Int) = vtablePrefixBytes(ptrSize)
+
+    override val hasRttiHeader get() = true
+    override val vptrAtRecordStart get() = false
+
+    override fun looksLikeVtable(symbolName: String) = symbolName.trimDoubleUnderscore().startsWith(VTABLE_PREFIX)
+
+    /** Templates have no closed form; [ResolvedVtable.fromSymbol] finds those. */
+    override fun vtableCandidates(className: String) = mangleClassName(className).let {
+        listOf(
+            "$VTABLE_PREFIX$it",
+            "_$VTABLE_PREFIX$it", // Cygwin/PE leading underscore
+            "$className::$DEMANGLED_VTABLE",
+        )
+    }
+
+    override fun demangledVtableClass(obj: DemangledObject) = addressTableClass(obj, DEMANGLED_VTABLE)
 
     /** Type of the `offset_to_top` header word (a signed pointer-sized integer). */
     fun offsetToTopType(ptrSize: Int): DataType =
@@ -95,26 +113,6 @@ object Itanium {
         }
     }
 
-    /** Closed-form `_ZTV` candidates for [className]. Templates have no closed form — use [vtableClassOf]. */
-    fun ztvCandidates(className: String): List<String> {
-        val mangled = mangleClassName(className)
-        return listOf(
-            "$VTABLE_PREFIX$mangled", // Itanium canonical
-            "_$VTABLE_PREFIX$mangled", // Cygwin/PE leading-underscore variant
-            $$"_vt$$${className}$", // gcc2 fallback
-            "$className::$DEMANGLED_VTABLE", // some compilers emit this
-        )
-    }
-
-    /** The qualified class name a `_ZTV<class>` [symbolName] names (e.g. `std::basic_ios<char,…>`), or
-     *  null if it isn't a vtable. Lets a caller demangle the symbol table once into a class→address index
-     *  instead of re-scanning + re-demangling every symbol per class
-     *  ([ghistabs.materialize.ClassBuilder.resolveVtableAddress]). */
-    fun vtableClassOf(symbolName: String): String? {
-        if (!looksLikeZtv(symbolName)) return null
-        return Demangler.of(symbolName)?.let(::demangledVtableClass)
-    }
-
     /** The qualified class a `_ZTI<class>` typeinfo object belongs to, or null if [symbolName] isn't
      *  one. Unlike its sibling `_ZTS` string, a typeinfo object carries the *class's* own declaration
      *  line, so knowing the class is enough to file it where the class is declared — see §38. */
@@ -126,7 +124,7 @@ object Itanium {
     private fun String.trimDoubleUnderscore() = if (startsWith("__")) substring(1) else this
 
     /** An Itanium-mangled name. The Cygwin PE/COFF loader prepends `_`, so they also appear as `__Z…`. */
-    fun isProbablyMangled(name: String): Boolean = name.trimDoubleUnderscore().startsWith("_Z")
+    override fun isProbablyMangled(name: String): Boolean = name.trimDoubleUnderscore().startsWith("_Z")
 
     /** Data gcc generated for a class rather than anything the source declares — typeinfo objects,
      *  their name strings, vtables. None of it has a source line of its own. */
@@ -135,37 +133,27 @@ object Itanium {
     }
 
     /** String-level pre-filter so we don't pay the demangler cost on every label. */
-    internal fun looksLikeZtv(symbolName: String) = symbolName.trimDoubleUnderscore().startsWith(VTABLE_PREFIX)
-
     internal fun looksLikeZti(symbolName: String) = symbolName.trimDoubleUnderscore().startsWith(TYPEINFO_PREFIX)
 
-    /** Pure inspection of a demangled object — extracted for unit testing without a real `Program`. */
+    /** Pure inspection of a demangled object, so it unit-tests without a `Program`. */
     internal fun demangledMatchesClass(obj: DemangledObject, className: String) = demangledVtableClass(obj) == className
-
-    /** Qualified class name of a demangled vtable object (`::`-joined namespace chain), or null if [obj]
-     *  isn't a vtable address-table. */
-    internal fun demangledVtableClass(obj: DemangledObject) = addressTableClass(obj, DEMANGLED_VTABLE)
 
     /** The class an `<kind> for <class>` address table belongs to, `::`-joined, or null if [obj] is
      *  not one of [kind]. */
     private fun addressTableClass(obj: DemangledObject, kind: String): String? {
         if (obj !is DemangledAddressTable || obj.name != kind) return null
-        return generateSequence(obj.namespace) { it.namespace }
-            .map { it.name }
-            .toList()
-            .asReversed()
-            .joinToString("::")
+        return obj.namespaces.joinToString("::")
     }
 
-    fun isInlineStdMember(name: String): Boolean = INLINE_STD_MEMBER.containsMatchIn(name)
+    override fun isInlineStdMember(name: String): Boolean = INLINE_STD_MEMBER.containsMatchIn(name)
 
-    fun isImplicitTrivialSpecialMember(mangled: String): Boolean =
-        mangled.startsWith("_ZN") && IMPLICIT_SPECIAL_MEMBER_TAIL.containsMatchIn(mangled)
+    override fun physnameIsImplicit(physname: String): Boolean =
+        physname.startsWith("_ZN") && IMPLICIT_SPECIAL_MEMBER_TAIL.containsMatchIn(physname)
 
     /** In-class display form of a ctor/dtor linkage name — `_ZN3FooC[123]E…` → `Foo`,
      *  `_ZN3FooD[012]E…` → `~Foo`. Itanium emits up to three symbols per ctor/dtor, all carrying one
      *  source-level name; Ghidra tells them apart by address. Null for anything else. */
-    fun specialMemberDisplayName(mangled: String, className: String): String? = when {
+    override fun specialMemberDisplayName(mangled: String, className: String): String? = when {
         CTOR_TAIL.containsMatchIn(mangled) -> className
         DTOR_TAIL.containsMatchIn(mangled) -> "~$className"
         else -> null

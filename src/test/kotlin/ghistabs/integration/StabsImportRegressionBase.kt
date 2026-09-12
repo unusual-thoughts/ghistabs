@@ -24,11 +24,16 @@ import ghistabs.harvest.Type
 import ghistabs.importer.*
 import ghistabs.importer.ImportOptions.Companion.OVERLAY_SECTION
 import ghistabs.importer.ImportOptions.Companion.SHORTEN_TYPEDEFS
+import ghistabs.importer.ImportOptions.Companion.VFPTR_MODEL
 import ghistabs.index.ContentIndex
 import ghistabs.index.EffectiveSource
+import ghistabs.materialize.VfptrModel
+import ghistabs.materialize.abi.CxxAbi
+import ghistabs.materialize.abi.CxxAbi.Companion.prevailingAbi
+import ghistabs.materialize.abi.GhidraClassNaming
+import ghistabs.materialize.abi.Itanium
 import ghistabs.materialize.conflictCount
-import ghistabs.materialize.itanium.Itanium
-import ghistabs.materialize.itanium.hasPolymorphicBaseSubobject
+import ghistabs.materialize.hasPolymorphicBaseSubobject
 import ghistabs.parse.*
 import ghistabs.test.*
 import kotlinx.serialization.ExperimentalSerializationApi
@@ -99,6 +104,16 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
      */
     private val shortenTypedefs = System.getProperty("shortenTypedefs") == "true"
 
+    /**
+     * `-Pvfptr=INHERITED`. The default is SPLIT_BASE, so without this the other model never ran at
+     * all. Counter baselines are recorded under the default, so [countersWithinBaseline] stands down
+     * for a non-default run and the structural assertions carry it.
+     */
+    private val vfptrModel = System.getProperty("vfptrModel").orEmpty().trim()
+        .ifEmpty { null }?.let { VfptrModel.valueOf(it.uppercase()) } ?: VFPTR_MODEL.default
+
+    private val defaultVfptrModel get() = vfptrModel == VFPTR_MODEL.default
+
     private fun outputFile(kind: String) = File("$OUTPUT_ROOT/${kind}s/${fixture.nameWithoutExtension}-$kind.json")
     private val fixture get() = File("src/test/resources/binaries/$binaryName")
     private val baselineFile get() = File("src/test/resources/baselines/${fixture.nameWithoutExtension}-baseline.json")
@@ -146,7 +161,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
                 abort("Skipping $binaryName: the importer could not load the fixture: $e")
             }
 
-            context = loaded.program.defaultContext(shortenTypedefs)
+            context = loaded.program.defaultContext(shortenTypedefs, vfptrModel)
 
             val mgr = AutoAnalysisManager.getAnalysisManager(program)
             val options = program.getOptions(Program.ANALYSIS_PROPERTIES)
@@ -181,6 +196,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
                         // CONCURRENT's import is the analyzer's own, built from the program options —
                         // [context]'s copy of the flag never reaches it.
                         options.getOptions(STABS_ANALYZER_NAME)[SHORTEN_TYPEDEFS] = shortenTypedefs
+                        options.getOptions(STABS_ANALYZER_NAME)[VFPTR_MODEL] = vfptrModel
                     }
                     mgr.scheduleOneTimeAnalysis(discovered, program.memory)
                     runAutoAnalysis(mgr, monitor)
@@ -273,6 +289,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     @Test
     fun countersWithinBaseline() {
         assumeTrue { mode == Mode.AFTER || mode == Mode.CONCURRENT }
+        assumeTrue(defaultVfptrModel, "Skipping: baselines are recorded under ${VFPTR_MODEL.default}")
         // Authoritative per-category counts. Not `log.tagFrequencies()`: that only sees categories
         // that reach the sink (record*/direct-inc bypass it) and ignores `count = n` tallies, which
         // made assertions on those categories (e.g. empty-scope) silently vacuous.
@@ -346,18 +363,14 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
      * which `applyGlobalOrStatic` evicts via `DataUtilities.CLEAR_ALL_CONFLICT_DATA`.
      */
     @Test
-    @ExpectedToFail(
-        fixtures = ["tinyxml_aout_gcc295.o"],
-        reason = "relocatable object (.o): sections sit at 0 unrelocated, so a global's stab value " +
-            "resolves into a block with nothing applied at it — gcc 2.95's `__vt_<class>` vtables are " +
-            "array globals and land there. zlib is the same shape and passed once its `unsigned int` " +
-            "stopped materializing 8 bytes wide, so the addresses were never the whole story",
-    )
     fun arrayGlobalsGetTheirDeclaredLength() {
         val declared = artifacts.harvest.statics
             .mapNotNull { sym ->
                 val elements = (resolve(sym.body.type) as? TypeDecl.Array)?.declaredElements ?: return@mapNotNull null
-                val addr = context.resolver.buildAddress(sym.rawValue)
+                // Ask the resolver rather than re-deriving: an a.out `N_GSYM` carries no address of
+                // its own — it lives in the companion link-time symbol — so `rawValue` is 0 for every
+                // global on graphcnv.SUN4 and this measured the importer at address 0.
+                val addr = context.resolver.forSymbol(sym) ?: return@mapNotNull null
                 Triple(sym.body.name, addr, elements).takeIf { program.memory.getBlock(addr) != null }
             }
         assumeTrue(declared.isNotEmpty(), "Skipping: no array globals with a declared extent")
@@ -367,6 +380,15 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         }
         val untyped = declared
             .filterNot { (_, addr, _) -> program.listing.getDataAt(addr)?.dataType is Array }
+            // A gcc 2.x vtable is declared an array — `__vt_12TiXmlPrinter:G(0,40)=ar(0,1);0;11;(0,22)`
+            // — and the `<Class>_vftable` laid over the same bytes supersedes it, only one type being
+            // able to own an address. The structure is what makes a virtual call decompile to the
+            // method (`(*visitor->vfptr->VisitEnter)(…)`) instead of an indirect call through an
+            // untyped element, which is the whole reason for laying one.
+            .filterNot { (_, addr, _) ->
+                val addressPoint = addr.add(Itanium.vtablePrefixBytes(program.defaultPointerSize))
+                program.listing.getDataAt(addressPoint)?.dataType?.name?.endsWith("_vftable") == true
+            }
             .map { (n, a, _) -> "$n @ $a is ${program.listing.getDataAt(a)?.dataType?.name}" }
         val wrong = applied.filter { (_, arr, elements) -> arr.numElements.toLong() != elements }
             .map { (name, arr, elements) -> "$name: ${arr.numElements} elements, stab says $elements" }
@@ -649,7 +671,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
 
         val implicit = artifacts.sources.functions
             .filter { it.lineEntries.isEmpty() && !it.isSyntheticInit }
-            .mapNotNull { f -> f.scopePath()?.last()?.let { f to it } }
+            .mapNotNull { f -> f.scopePath().lastOrNull()?.let { f to it } }
             .filter { (_, cls) -> cls in declaredClasses }
         assumeTrue(implicit.isNotEmpty(), "Skipping: no line-less method with a declared class here")
 
@@ -688,7 +710,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         fun eol(a: Address) = program.listing.getComment(CommentType.EOL, a)
 
         val addressPoints = program.symbolTable.symbolIterator.iterator().asSequence()
-            .filter { it.name == Itanium.VFTABLE && program.memory.getBlock(it.address) != null }
+            .filter { it.name == GhidraClassNaming.VFTABLE && program.memory.getBlock(it.address) != null }
             .map { it.address }.distinct().toList()
         assumeTrue(addressPoints.isNotEmpty(), "Skipping: no vftable laid in this fixture")
 
@@ -698,17 +720,22 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
 
         for (point in addressPoints) {
             val rttiHeader = runCatching { point.subtract(ptr) }.getOrNull() ?: continue
-            eol(rttiHeader)?.removePrefix("${Itanium.RTTI}: ")?.substringBefore(" typeinfo")?.let { named ->
-                // Only a *contradiction* counts: with no symbol at the target there is nothing to
-                // name and the closed form is the honest fallback.
-                val present = wordAt(rttiHeader)
-                    ?.let { program.addressFactory.defaultAddressSpace.getAddress(it) }
-                    ?.let { program.symbolTable.getSymbols(it).map { s -> s.name } }
-                    .orEmpty()
-                if (present.isNotEmpty() && named !in present) {
-                    misnamedRtti += "$rttiHeader: comment says '$named', symbols there are $present"
+            // Guarded, not `removePrefix` alone: that is a no-op when the prefix is absent, and a
+            // gcc 2.x record has no rtti word at all — its second header word is a reserved entry,
+            // whose comment would otherwise be read as if it named a symbol.
+            eol(rttiHeader)
+                ?.takeIf { it.startsWith("${Itanium.RTTI}: ") }
+                ?.removePrefix("${Itanium.RTTI}: ")?.substringBefore(" typeinfo")?.let { named ->
+                    // Only a *contradiction* counts: with no symbol at the target there is nothing to
+                    // name and the closed form is the honest fallback.
+                    val present = wordAt(rttiHeader)
+                        ?.let { program.addressFactory.defaultAddressSpace.getAddress(it) }
+                        ?.let { program.symbolTable.getSymbols(it).map { s -> s.name } }
+                        .orEmpty()
+                    if (present.isNotEmpty() && named !in present) {
+                        misnamedRtti += "$rttiHeader: comment says '$named', symbols there are $present"
+                    }
                 }
-            }
 
             // offset_to_top sits one word before rtti; the prefix runs backwards from there.
             var word = runCatching { rttiHeader.subtract(ptr) }.getOrNull() ?: continue
@@ -903,31 +930,56 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     }
 
     /**
-     * A `vftable` label names a function-pointer array, so the word it sits on must point into
-     * executable memory — and the word one pointer earlier must not, being the `rtti` header.
+     * A `vftable` label marks the address a `{vfptr}` holds, and the struct laid there has to
+     * describe the bytes that follow — so every field it declares a function pointer must actually
+     * hold a code address, at the offset the struct puts it.
      *
-     * That is the Itanium address point, and finding it is the whole job: `_ZTV+2*ptr` for an
-     * ordinary class but `_ZTV+3*ptr` where a virtual base pushes a vbase-offset word in front of
-     * the header (`basic_ifstream` → `basic_istream` → virtual `basic_ios`, and anything deriving from it). Reading
-     * the words rather than recomputing the offset is what makes this independent of the layout
-     * decision under test.
+     * The label sits on the Itanium address point (`_ZTV+2*ptr`, or `+3*ptr` where a virtual base
+     * pushes a vbase-offset word in front of the header) but on the *record start* for gcc 2.x,
+     * whose vptr points there and whose reserved header is a field of the struct.
+     *
+     * Slot 0 holding a code address is only half of it: a struct based one word late, and a label
+     * laid one word early on the rtti or vbase-offset word, both still put *a* code address at slot
+     * 0 — they just borrow the previous record's last entry. The word before slot 0 is a header or
+     * `{delta, index}` word under every ABI here, so requiring that it is *not* code is what tells
+     * the two apart.
      */
     @Test
     fun vftableLabelsSitOnTheAddressPoint() {
-        val ptr = program.defaultPointerSize.toLong()
         val labels = program.symbolTable.symbolIterator.iterator().asSequence()
-            .filter { Itanium.VFTABLE in it.name && program.memory.getBlock(it.address) != null }
+            .filter { GhidraClassNaming.VFTABLE in it.name && program.memory.getBlock(it.address) != null }
             .map { it.parentSymbol.name to it.address }.distinct().toList()
         assumeTrue(labels.isNotEmpty(), "Skipping: no vftable labels in this fixture")
 
-        val bad = labels
-            .filterNot { pointsIntoCode(it.second) && !pointsIntoCode(it.second - ptr) }
-            .map { (ns, addr) ->
-                "vftable for $ns@$addr → [${wordAt(addr - ptr)?.toString(16)};${wordAt(addr)?.toString(16)}] "
+        // Slot 0's offset within the struct, which is 0 for Itanium (the label is the address point)
+        // and the header width for gcc 2.x (the label is the record start).
+        val ptr = program.defaultPointerSize.toLong()
+        val bad = labels.mapNotNull { (ns, addr) ->
+            val vft = program.dataTypeManager.allDataTypes.asSequence()
+                .filterIsInstance<Structure>()
+                .firstOrNull { it.name == "${ns}_vftable" && it.numComponents > 0 }
+                // libstdc++ links without stabs, so its classes carry a label and no struct. There is
+                // no declared slot 0 to measure a basing against, which is this test's whole
+                // mechanism; whether every label gets a struct is a separate question.
+                ?: return@mapNotNull null
+            val slot0 = vft.components.firstOrNull { it.dataType is Pointer } ?: return@mapNotNull null
+            val at = addr.add(slot0.offset.toLong())
+            val before = runCatching { at.subtract(ptr) }.getOrNull()
+            when {
+                !pointsIntoCode(at) ->
+                    "vftable for $ns@$addr: slot '${slot0.fieldName}' at +${slot0.offset} " +
+                        "holds ${wordAt(at)?.toString(16)}, not a code address"
+
+                before != null && pointsIntoCode(before) ->
+                    "vftable for $ns@$addr: the word before slot '${slot0.fieldName}' at " +
+                        "+${slot0.offset} holds ${wordAt(before)?.toString(16)}, a code address too " +
+                        "(mislaid on the rtti or vbase-offset word?)"
+
+                else -> null
             }
+        }
         bad.take(10).mustBeEmpty(
-            "${bad.size} of ${labels.size} vftable labels are not on the address point " +
-                "(mislaid on the rtti or vbase-offset word)",
+            "${bad.size} of ${labels.size} vftables are misbased against the record they describe",
         )
     }
 
@@ -949,7 +1001,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             ?.let { target -> labelsAt(target).any(Itanium::looksLikeZti) } == true
 
         val primaries = program.symbolTable.symbolIterator.iterator().asSequence()
-            .filter { it.name == Itanium.VFTABLE && program.memory.getBlock(it.address) != null }
+            .filter { it.name == GhidraClassNaming.VFTABLE && program.memory.getBlock(it.address) != null }
             .map { it.parentSymbol.name to it.address }.distinct().toList()
         assumeTrue(primaries.isNotEmpty(), "Skipping: no vftable laid in this fixture")
 
@@ -960,8 +1012,10 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
                 .takeWhile { nextObject == null || it < nextObject }
                 .take(MAX_GROUP_WORDS)
                 .filter { isRttiHeader(it) }
-                .filterNot { Itanium.INTERNAL_VFTABLE in labelsAt(it.add(ptr)) }
-                .map { "$cls@$point: sub-vtable rtti at $it, no ${Itanium.INTERNAL_VFTABLE} at ${it.add(ptr)}" }
+                .filterNot { GhidraClassNaming.INTERNAL_VFTABLE in labelsAt(it.add(ptr)) }
+                .map {
+                    "$cls@$point: sub-vtable rtti at $it, no ${GhidraClassNaming.INTERNAL_VFTABLE} at ${it.add(ptr)}"
+                }
         }
         unlabelled.take(10).mustBeEmpty("${unlabelled.size} sub-vtables inside a _ZTV group are unannotated")
     }
@@ -1155,7 +1209,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         // 2092 on locale_test are exactly that (`basic_ios`, `__codecvt_abstract_base`, the abstract
         // bases). A `_ZTV<class>` symbol is the binary saying this class has a distinct one.
         val withOwnVtable = inheriting.filter { (ast, _) ->
-            Itanium.ztvCandidates(ast.ghidraName).any { program.symbolTable.getSymbols(it).firstOrNull() != null }
+            CxxAbi.vtableCandidates(ast.ghidraName).any { program.symbolTable.getSymbols(it).firstOrNull() != null }
         }
         assumeTrue(withOwnVtable.isNotEmpty(), "Skipping: no inheriting class has its own vtable symbol")
         val bare = withOwnVtable.filter { (ast, _) -> ast.ghidraName !in vftables }.map { (ast, _) -> ast.ghidraName }
@@ -1173,9 +1227,6 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             "crypto_mi_test_gcc421_stripped.exe", "xmltest_gcc421_stripped.exe",
             // a.out: both fixtures are plain C, so there are no classes and no vtables at all.
             "hello_aout_gcc295.o", "zlib_aout_gcc263.o",
-            // C++, but gcc 2.95's minimal-debug `##` method encoding fails the class body, and its
-            // vtables are pre-Itanium `__vt_9TiXmlNode` symbols rather than `_ZTV` regardless.
-            "tinyxml_aout_gcc295.o",
         ],
         reason = "no _ZTV symbol and no method stab section, so nothing can locate or fill a vftable",
     )
@@ -1207,9 +1258,12 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         backEdges.must(
             "Expected ≥ 1 *_vftable to have a back-edge {vfptr} from its class; got $backEdges / ${vftables.size}",
         ) { this >= 1 }
-        // Every slot is a pointer to the function definition its own field is named for.
+        // Every slot is a pointer to the function definition its own field is named for. Only the
+        // pointer fields are slots — a gcc 2.x struct also carries its reserved header and each
+        // entry's `{delta, index}` words, which are integers and name no definition.
         val badSlots = vftables.flatMap { it.components.asIterable() }
-            .filter { (it.dataType as? Pointer)?.dataType?.name != it.fieldName }
+            .filter { it.dataType is Pointer }
+            .filter { (it.dataType as Pointer).dataType?.name != it.fieldName }
         badSlots.mustBeEmpty(
             "${badSlots.map { it.parent.name }.toSet()} have fields that aren't proper function " +
                 "pointers: ${badSlots.map { it.dataType.name }.toSet()}",
@@ -1315,43 +1369,65 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     }
 
     /**
-     * Every virtual the stabs declare for a class has a slot in its `<Class>_vftable` — inherited
-     * ones included, which is what the four-deep inheritance chain in the original report exposed.
+     * Every virtual the stabs declare for a class has a slot in its `<Class>_vftable`, *at the index
+     * the stab declares it at*. The `*<n>` a virtual's stab carries is `DECL_VINDEX`, counted from
+     * wherever the `{vfptr}` points: past the header under Itanium (`_ZTVSt9type_info`'s declared
+     * 0/1/5 are its dtor, deleting dtor and `__is_function_p`), from the record start under gcc 2.x,
+     * where the reserved entries are numbered too — `cv_mscom_elf_i386_gcc281` starts its dtors at
+     * `*1` over one reserved entry, `tinyxml_aout_gcc295.o` at `*2` over two. So one check covers
+     * presence and placement both. Inherited virtuals are covered through the base, which declares
+     * them and whose own table is checked the same way.
+     *
+     * The header fields are deliberately not Pointers, so filtering to Pointers is what turns the
+     * component list into the slot list — and what makes [CxxAbi.reservedEntries] the whole
+     * difference between the declared index and the position looked up here.
+     *
+     * A slot may carry the method's name with an overload tag appended (`Visit_TiXmlText`): two
+     * same-named virtuals hold different indices but cannot share one field name.
      */
     @Test
     fun declaredVirtualsAllGetAVftableSlot() {
-        val slotsByClass = filledVftables().associate { vft ->
-            vft.name.removeSuffix("_vftable") to vft.components.mapNotNull { it.fieldName }.toSet()
-        }
-        assumeTrue(slotsByClass.isNotEmpty(), "Skipping: no populated vftable in this fixture")
+        val vftables = filledVftables().associateBy { it.name.removeSuffix("_vftable") }
+        assumeTrue(vftables.isNotEmpty(), "Skipping: no populated vftable in this fixture")
+        val bias = program.symbolTable.prevailingAbi()!!.reservedEntries(program.defaultPointerSize)
 
-        val missing = artifacts.harvest.types.values.mapNotNull { it.asStruct() }
-            .mapNotNull { (ast, body) ->
-                val slots = slotsByClass[ast.ghidraName] ?: return@mapNotNull null
-                val virtuals = body.methods.filter { it.virt == VirtKind.VIRTUAL }.map { it.name }.toSet()
-                (virtuals - slots).takeIf { it.isNotEmpty() }?.let { "${ast.ghidraName} missing $it" }
+        val misplaced = artifacts.harvest.types.values.mapNotNull { it.asStruct() }
+            .flatMap { (ast, body) ->
+                val vft = vftables[ast.ghidraName] ?: return@flatMap emptyList()
+                body.methods
+                    .filter { it.virt == VirtKind.VIRTUAL }
+                    .mapNotNull { m ->
+                        val slot = m.vtableOffsetBits?.toInt()?.minus(bias) ?: return@mapNotNull null
+                        val at = vft.components.filter { c -> c.dataType is Pointer }
+                            .getOrNull(slot)?.fieldName
+                        "${ast.ghidraName}::${m.name} declared at slot $slot, found '$at'"
+                            .takeIf { at != m.name && at?.startsWith("${m.name}_") != true }
+                    }
             }
-        missing.sorted().take(10).mustBeEmpty("${missing.size} classes have declared virtuals with no vftable slot")
+        misplaced.sorted().take(10)
+            .mustBeEmpty("${misplaced.size} declared virtuals are not in their declared vftable slot")
     }
 
     @Test
-    @ExpectedToFail(
-        fixtures = ["tinyxml_aout_gcc295.o"],
-        reason = "single translation unit whose file-scope data happens to include no pointer global",
-    )
     fun globalsCoverEachDataTypeKind() {
+        fun kindOf(dt: DataType?): String = when (dt) {
+            is Structure -> "Structure"
+            is Array -> "Array"
+            is Union -> "Union"
+            is Pointer -> "Pointer"
+            is Enum -> "Enum"
+            is TypeDef -> "TypeDef"
+            is FunctionDefinition -> "FunctionDefinition"
+            else -> "Primitive"
+        }
+
         val seenKinds = mutableSetOf<String>()
         program.listing.getDefinedData(true).forEach { data ->
-            seenKinds += when (data.dataType) {
-                is Structure -> "Structure"
-                is Array -> "Array"
-                is Union -> "Union"
-                is Pointer -> "Pointer"
-                is Enum -> "Enum"
-                is TypeDef -> "TypeDef"
-                is FunctionDefinition -> "FunctionDefinition"
-                else -> "Primitive"
-            }
+            seenKinds += kindOf(data.dataType)
+            // An array's elements are applied types too — `__vtbl_ptr_type __vt_9TiXmlNode[20]` is
+            // how a gcc 2.x fixture holds its only pointer-typed data, and counting only the
+            // outermost type would call that no pointer coverage at all.
+            (data.dataType as? Array)?.let { seenKinds += kindOf(it.dataType) }
         }
         // Enum is not required: a fixture may have no enum-typed globals at all.
         // The other kinds reflect basic global-application coverage.
@@ -1495,7 +1571,10 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         val lost = declared.filterNot { (func, applied) ->
             declaredNames(func).all { name -> applied.parameters.any { it.name == name } }
         }.map { (func, applied) ->
-            "${func.name}: stabs name ${declaredNames(func)}, applied ${applied.parameters.map { it.name }}"
+            // Name the function the address resolved to, not just the stab's: a mismatch is as likely
+            // to be the wrong function as the wrong parameters, and the two read identically without it.
+            "${func.name}@${func.addr} -> ${applied.name}@${applied.entryPoint}: " +
+                "stabs ${declaredNames(func)}, applied ${applied.parameters.map { it.name }}"
         }
         lost.take(10).mustBeEmpty("${lost.size} of ${declared.size} functions lost stab parameters")
     }
@@ -1536,10 +1615,6 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     @ExpectedToFail(
         fixtures = [
             "hello_aout_gcc295.o", "zlib_aout_gcc263.o",
-            // C++, but gcc 2.95 defaults to minimal debug, so every method reads `##<type>` — the
-            // arguments live in the mangled name instead. The class body fails at the first one,
-            // taking the `!` inheritance spec parsed just before it down with the record.
-            "tinyxml_aout_gcc295.o",
         ],
         reason = "plain C fixtures — no C++ inheritance edges exist to materialize",
     )
@@ -1741,8 +1816,20 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
                 ?: return@mapNotNull null
             val field = dt.components.firstOrNull { Itanium.isBaseField(it.fieldName.orEmpty()) }
                 ?: return@mapNotNull null
-            "${dt.name}: base field is ${field.dataType.pathName}, base class is ${baseType.pathName}"
-                .takeUnless { field.offset == 0 && field.dataType === baseType }
+            // Two legal shapes, per VfptrModel. INHERITED embeds the base Structure itself at +0.
+            // SPLIT_BASE hoists the vptr into this class so it can be typed with *this* class's
+            // vftable, and embeds the base's fields around it as `<Base>_fields_<from>_<until>` — at
+            // +0 where the vptr follows them (gcc 2.x appends it) or after the pointer where it
+            // precedes them (Itanium). Either way the subobject has to name the base the stab does,
+            // which is what an ancestor or a same-sized synthetic standing in for it would fail.
+            val ok = field.dataType === baseType ||
+                field.dataType.name.startsWith("${baseType.name}_fields_")
+            if (ok) {
+                null
+            } else {
+                "${dt.name}: base field is ${field.dataType.pathName} at +${field.offset}, " +
+                    "base class is ${baseType.pathName}"
+            }
         }
         synthetic.take(10).mustBeEmpty(
             "${synthetic.size} single-base classes hold a stand-in rather than the base Structure itself",

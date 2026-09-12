@@ -482,8 +482,8 @@
             "max": 345
         },
         "method-implicit-not-emitted": {
-            "min": 126,
-            "max": 126
+            "min": 160,
+            "max": 160
         },
         "method-static-no-this": {
             "min": 85,
@@ -657,8 +657,8 @@
             "max": 169
         },
         "resolve-ambiguous": {
-            "min": 2400,
-            "max": 2400
+            "min": 2303,
+            "max": 2303
         },
         "rtti-pseudo-substituted": {
             "min": 36,
@@ -770,8 +770,8 @@
             "max": 1
         },
         "unresolved-symbol": {
-            "min": 987,
-            "max": 987
+            "min": 953,
+            "max": 953
         },
         "unresolved-xref": {
             "min": 12,
@@ -786,12 +786,39 @@
             "max": 2806
         },
         "vfptr-inherited-from-base": {
-            "min": 113,
-            "max": 113
+            "min": 34,
+            "max": 34
         },
         "vfptr-normalized": {
             "min": 16,
             "max": 16
+        },
+        "vfptr-split-from-base": {
+            "min": 146,
+            "max": 146
+        },
+        "vtable-abi-assumed": {
+            "min": 17,
+            "max": 17,
+            "degrades": [
+                "__array_type_info",
+                "__enum_type_info",
+                "__function_type_info",
+                "__fundamental_type_info",
+                "__pbase_type_info",
+                "__pointer_to_member_type_info",
+                "__pointer_type_info",
+                "char_producer<char>",
+                "char_producer<wchar_t>",
+                "istringstream",
+                "ostringstream",
+                "stringbuf",
+                "stringstream",
+                "wistringstream",
+                "wostringstream",
+                "wstringbuf",
+                "wstringstream"
+            ]
         },
         "vtable-applied": {
             "min": 104,
@@ -846,8 +873,8 @@
             "max": 16
         },
         "vtable-skipped": {
-            "min": 8,
-            "max": 8
+            "min": 75,
+            "max": 75
         },
         "vtable-vbase-count-mismatch": {
             "min": 4,
@@ -860,13 +887,13 @@
             ]
         },
         "vtable-virtual-no-impl": {
-            "min": 28,
-            "max": 28
+            "min": 38,
+            "max": 38
         },
         "xref-undefined": {
             "min": 12,
             "max": 12
         }
     },
-    "source": "xmltest_gcc421_fullstabs.exe - shifted from committed"
+    "source": "xmltest_gcc421_fullstabs.exe - generated from snapshotCounters()"
 }

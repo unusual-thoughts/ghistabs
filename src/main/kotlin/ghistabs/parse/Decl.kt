@@ -277,6 +277,13 @@ sealed interface TypeDecl<out Id : IdInterface> {
             /** Vtable offset in bits when `virt == VIRTUAL`, else null. */
             val vtableOffsetBits: Long?,
         ) {
+            /**
+             * [mangled] as a symbol to look up, or null. gcc 2.x leaves the physname field blank far
+             * more often than it fills it (98 of tinyxml's 274 method entries), and `""` is not a
+             * symbol: resolving one matches whatever happens to sit first in the symbol table.
+             */
+            val physname get() = mangled?.takeIf { it.isNotBlank() }
+
             /** `virtual `/`static ` — Ghidra's prototypeString models neither, so the stab is the only source. */
             val declPrefix get() = when (virt) {
                 VirtKind.VIRTUAL -> "virtual "
@@ -299,9 +306,13 @@ sealed interface TypeDecl<out Id : IdInterface> {
 
     /** Pointer-to-member-function (the `#` descriptor body). */
     @Serializable
-    data class Method<Id : IdInterface>(val cls: TypeDecl<Id>, val ret: TypeDecl<Id>, val params: List<TypeDecl<Id>>) :
-        TypeDecl<Id> {
-        override val children get() = listOf(listOf(cls, ret), params)
+    data class Method<Id : IdInterface>(
+        /** Null for gdb's *stub* method (`##<ret>;`), which states no domain — see `Parser.parseMethod`. */
+        val cls: TypeDecl<Id>?,
+        val ret: TypeDecl<Id>,
+        val params: List<TypeDecl<Id>>,
+    ) : TypeDecl<Id> {
+        override val children get() = listOf(listOfNotNull(cls) + ret, params)
     }
 
     /** GCC complex/floating: `R<n>;<size>;0;`. n encodes 3=cfloat, 4=cdouble, 5=cldouble per gcc/dbxout. */

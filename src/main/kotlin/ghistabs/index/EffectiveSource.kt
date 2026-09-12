@@ -3,7 +3,7 @@ package ghistabs.index
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.DummySink
 import ghistabs.harvest.*
-import ghistabs.materialize.itanium.Itanium
+import ghistabs.materialize.abi.Itanium
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.SymbolDecl
 import ghistabs.parse.TypeDecl
@@ -47,7 +47,7 @@ class EffectiveSource(
      * the demangled scope chain is the key: try progressively shorter suffixes, longest first —
      * `std::locale::facet` → `locale::facet` → `facet`.
      */
-    private fun Func.declaringClassSource(): GhidraSourceFile? = scopePath()?.let { path ->
+    private fun Func.declaringClassSource(): GhidraSourceFile? = scopePath().let { path ->
         path.indices.firstNotNullOfOrNull { i -> hints.classSourceByName[path.drop(i).joinToString("::")] }
     }
 
@@ -112,7 +112,7 @@ class EffectiveSource(
 
     /**
      * Class name → the file its declaration *renders* in, which is where anything gcc dated by that
-     * declaration belongs. Not [classSourceByName], which answers the neighbouring question — the file
+     * declaration belongs. Not [SourceHints.classSourceByName], which answers the neighbouring question — the file
      * the type id itself belongs to — and puts `Image` in main.cpp, the first CU that defined it,
      * while the render draws `class Image` in image.h. Concrete bodies only: an `XRef` forward-decl
      * stub names whichever unrelated header mentioned the class by pointer.

@@ -1155,9 +1155,17 @@
             "min": 392,
             "max": 392
         },
+        "vfptr-inherited-from-base": {
+            "min": 206,
+            "max": 206
+        },
         "vfptr-normalized": {
-            "min": 57,
-            "max": 57
+            "min": 53,
+            "max": 53
+        },
+        "vfptr-split-from-base": {
+            "min": 453,
+            "max": 453
         },
         "vtable-reconstructed": {
             "min": 571,
@@ -1741,8 +1749,8 @@
             "max": 444
         },
         "vtable-skipped": {
-            "min": 57,
-            "max": 57
+            "min": 712,
+            "max": 712
         },
         "xref-ambiguous": {
             "min": 47,
@@ -1757,5 +1765,5 @@
             "max": 345
         }
     },
-    "source": "crypto_mi_test_gcc421.exe - shifted from committed"
+    "source": "crypto_mi_test_gcc421.exe - generated from snapshotCounters()"
 }

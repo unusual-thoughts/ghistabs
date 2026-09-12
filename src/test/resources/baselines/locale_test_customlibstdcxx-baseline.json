@@ -458,8 +458,8 @@
             "max": 344
         },
         "method-implicit-not-emitted": {
-            "min": 121,
-            "max": 121
+            "min": 157,
+            "max": 157
         },
         "method-static-no-this": {
             "min": 86,
@@ -629,8 +629,8 @@
             "max": 168
         },
         "resolve-ambiguous": {
-            "min": 2570,
-            "max": 2570
+            "min": 2459,
+            "max": 2459
         },
         "rtti-pseudo-substituted": {
             "min": 38,
@@ -737,8 +737,8 @@
             "max": 1
         },
         "unresolved-symbol": {
-            "min": 1044,
-            "max": 1044
+            "min": 1008,
+            "max": 1008
         },
         "unresolved-xref": {
             "min": 18,
@@ -753,12 +753,31 @@
             "max": 2971
         },
         "vfptr-inherited-from-base": {
-            "min": 114,
-            "max": 114
+            "min": 22,
+            "max": 22
         },
         "vfptr-normalized": {
             "min": 8,
             "max": 8
+        },
+        "vfptr-split-from-base": {
+            "min": 92,
+            "max": 92
+        },
+        "vtable-abi-assumed": {
+            "min": 9,
+            "max": 9,
+            "degrades": [
+                "__array_type_info",
+                "__enum_type_info",
+                "__function_type_info",
+                "__fundamental_type_info",
+                "__pbase_type_info",
+                "__pointer_to_member_type_info",
+                "__pointer_type_info",
+                "char_producer<char>",
+                "char_producer<wchar_t>"
+            ]
         },
         "vtable-applied": {
             "min": 113,
@@ -800,8 +819,8 @@
             ]
         },
         "vtable-virtual-no-impl": {
-            "min": 28,
-            "max": 28
+            "min": 38,
+            "max": 38
         },
         "xref-ambiguous": {
             "min": 6,
@@ -816,5 +835,5 @@
             "max": 12
         }
     },
-    "source": "locale_test_customlibstdcxx.exe - shifted from committed"
+    "source": "locale_test_customlibstdcxx.exe - generated from snapshotCounters()"
 }

@@ -11,8 +11,9 @@ import java.lang.reflect.Method
 
 /**
  * Marks a test as a known, deterministic failure on the listed [fixtures]: for those binaries a thrown
- * assertion is the expected outcome (swallowed), while an *unexpected pass* is turned into a failure so
- * a since-fixed case can't silently rot in the list. Every other fixture runs normally.
+ * assertion is the expected outcome — reported as *skipped*, carrying the assertion message — while an
+ * *unexpected pass* is turned into a failure so a since-fixed case can't silently rot in the list. Every
+ * other fixture runs normally.
  *
  * Not interchangeable with an `assumeTrue` gate, and the two answer different questions. `assumeTrue`
  * says *this fixture does not have the shape the invariant is about* — a plain C binary has no
@@ -55,20 +56,30 @@ class ExpectedToFailExtension : InvocationInterceptor {
             return
         }
 
-        try {
+        // Every outcome ends in a throw, so build it and throw once. The expected failure is *aborted*
+        // rather than swallowed: returning marks the invocation successful, so a still-failing entry
+        // prints PASSED and reads — in the console and the JUnit XML alike — exactly like the fixture
+        // having been fixed, which is the one thing this annotation exists to make visible. Aborting
+        // says what happened, carries the assertion message along, and still keeps it from counting.
+        throw try {
             invocation.proceed()
+            record("passed")
+            AssertionError(
+                "@ExpectedToFail: '$binaryName' now passes ${method.name}() " +
+                    "(${expected.reason}) — drop it from the fixtures list.",
+            )
         } catch (skip: TestAbortedException) {
             record("skipped")
-            throw skip
-        } catch (_: Throwable) {
+            skip
+        } catch (failure: Throwable) {
             record("failed")
-            return // the expected failure for this fixture
+            TestAbortedException(
+                "@ExpectedToFail: '$binaryName' failed ${method.name}() as expected — " +
+                    // Not the first line: an assertAll failure opens with a bare "Multiple Failures
+                    // (1 failure)" and puts every detail on the lines under it.
+                    failure.message?.lineSequence()?.joinToString(" ") { it.trim() }?.take(400),
+            )
         }
-        record("passed")
-        throw AssertionError(
-            "@ExpectedToFail: '$binaryName' now passes ${method.name}() " +
-                "(${expected.reason}) — drop it from the fixtures list.",
-        )
     }
 
     private companion object {

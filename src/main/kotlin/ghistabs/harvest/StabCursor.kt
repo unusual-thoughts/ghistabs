@@ -277,7 +277,7 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
         val functions = scopesByCu.entries.groupBy({ it.key.identity }) { it.value }
         // Eager, not `firstNotNullOfOrNull`: `addressRange()` files the verdict that explains a null
         // one, and short-circuiting would leave every context after the first unexplained.
-        val spans = contexts.mapValues { (_, cs) -> cs.mapNotNull { it.addressRange() }.firstOrNull() }
+        val spans = contexts.mapValues { (_, cs) -> cs.firstNotNullOfOrNull { it.addressRange() } }
         return HarvestedStream(
             lineEntries = lineEntriesByFile.mapValues { (_, es) ->
                 es.sortedWith(compareBy({ it.line }, { it.addr.offset }))

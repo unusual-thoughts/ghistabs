@@ -382,10 +382,6 @@
             "min": 74,
             "max": 74
         },
-        "typedef-shorten": {
-            "min": 1,
-            "max": 1
-        },
         "unresolved-symbol": {
             "min": 4,
             "max": 4
@@ -394,13 +390,21 @@
             "min": 60,
             "max": 60
         },
+        "vfptr-inherited-from-base": {
+            "min": 14,
+            "max": 14
+        },
         "vfptr-normalized": {
-            "min": 12,
-            "max": 12
+            "min": 8,
+            "max": 8
+        },
+        "vfptr-split-from-base": {
+            "min": 67,
+            "max": 67
         },
         "vtable-skipped": {
-            "min": 12,
-            "max": 12
+            "min": 89,
+            "max": 89
         },
         "xref-undefined": {
             "min": 60,

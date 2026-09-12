@@ -534,8 +534,8 @@
             "max": 1043
         },
         "method-implicit-not-emitted": {
-            "min": 105,
-            "max": 105
+            "min": 139,
+            "max": 139
         },
         "method-static-no-this": {
             "min": 85,
@@ -1337,8 +1337,8 @@
             "max": 861
         },
         "resolve-ambiguous": {
-            "min": 2531,
-            "max": 2531
+            "min": 2409,
+            "max": 2409
         },
         "rtti-pseudo-substituted": {
             "min": 37,
@@ -1474,8 +1474,8 @@
             "max": 1
         },
         "unresolved-symbol": {
-            "min": 979,
-            "max": 979
+            "min": 945,
+            "max": 945
         },
         "unresolved-xref": {
             "min": 81,
@@ -1490,12 +1490,32 @@
             "max": 2841
         },
         "vfptr-inherited-from-base": {
-            "min": 113,
-            "max": 113
+            "min": 219,
+            "max": 219
         },
         "vfptr-normalized": {
             "min": 58,
             "max": 58
+        },
+        "vfptr-split-from-base": {
+            "min": 532,
+            "max": 532
+        },
+        "vtable-abi-assumed": {
+            "min": 10,
+            "max": 10,
+            "degrades": [
+                "char_producer<char>",
+                "char_producer<wchar_t>",
+                "istringstream",
+                "ostringstream",
+                "stringbuf",
+                "stringstream",
+                "wistringstream",
+                "wostringstream",
+                "wstringbuf",
+                "wstringstream"
+            ]
         },
         "vtable-applied": {
             "min": 111,
@@ -1992,8 +2012,8 @@
             "max": 444
         },
         "vtable-skipped": {
-            "min": 50,
-            "max": 50
+            "min": 688,
+            "max": 688
         },
         "vtable-vbase-count-mismatch": {
             "min": 4,
@@ -2006,8 +2026,8 @@
             ]
         },
         "vtable-virtual-no-impl": {
-            "min": 28,
-            "max": 28
+            "min": 38,
+            "max": 38
         },
         "xref-ambiguous": {
             "min": 51,
@@ -2022,5 +2042,5 @@
             "max": 30
         }
     },
-    "source": "crypto_mi_test_gcc421_fullstabs.exe - shifted from committed"
+    "source": "crypto_mi_test_gcc421_fullstabs.exe - generated from snapshotCounters()"
 }

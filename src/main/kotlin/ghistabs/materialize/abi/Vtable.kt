@@ -1,17 +1,32 @@
-package ghistabs.materialize.itanium
+package ghistabs.materialize.abi
 
 import ghidra.program.model.address.Address
+import ghidra.program.model.data.CategoryPath
 import ghidra.program.model.data.PointerDataType
 import ghidra.program.model.data.Structure
 import ghidra.program.model.listing.CommentType
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
+import ghidra.program.model.symbol.Symbol
+import ghistabs.Demangler
 import ghistabs.forceCreateData
 import ghistabs.harvest.AddressResolver
 
 /** Upper bound on vbase/vcall-offset words scanned before giving up on locating the rtti header. */
 private const val MAX_VTABLE_PREFIX_WORDS = 64
+
+/**
+ * Names Ghidra's own class-recovery machinery round-trips on. None of it is an ABI's decision:
+ * `RecoveredClassHelper` and shift-S look for `<Class>_vftable` under `/ClassDataTypes/<Class>/`
+ * whatever compiler produced the record, and `RTTIGccClassRecoverer` spells a non-primary table
+ * `internal_vftable`.
+ */
+object GhidraClassNaming {
+    val classDataTypesRoot by lazy { CategoryPath(CategoryPath.ROOT, "ClassDataTypes") }
+    const val VFTABLE = "vftable"
+    const val INTERNAL_VFTABLE = "internal_vftable"
+}
 
 /** Pointer-sized word at [a] from initialized memory (endianness-aware), or null if unmapped. */
 internal fun Program.readWord(a: Address): Long? = runCatching {
@@ -85,8 +100,12 @@ private fun prefixKind(i: Int, total: Int, virtualBases: List<String>): String {
  * on into the *next* record and adopt its rtti — laying offset_to_top, the address point and a run
  * of "vbase offset" comments inside the wrong object. `MAX_VTABLE_PREFIX_WORDS` alone never bounded
  * that, it only capped how far the damage spread.
+ *
+ * A gcc 2.x record has no typeinfo pointer to search for ([CxxAbi.hasRttiHeader]) and no
+ * vbase/vcall prefix either, so its address point is the canonical shape outright.
  */
-fun Program.vtableShape(ztv: Address, resolver: AddressResolver): VtableShape {
+fun Program.vtableShape(ztv: Address, resolver: AddressResolver, abi: CxxAbi = Itanium): VtableShape {
+    if (!abi.hasRttiHeader) return shapeOf(ztv, null)
     val ptr = defaultPointerSize.toLong()
     val rttiSlot = generateSequence(ztv) { it.add(ptr) }
         .take(MAX_VTABLE_PREFIX_WORDS)
@@ -135,23 +154,42 @@ private fun Program.subVtableAt(start: Address, rtti: Long, resolver: AddressRes
 
 /**
  * Addresses the function-pointer array at [addressPoint] holds, in slot order. Nothing records its
- * length, so it ends where the words stop pointing into executable memory — at the next record's
- * `offset_to_top` (0) or rtti pointer (into .data). Only used where no stab method list gives the
- * count; a harvested class takes its slots from its own virtuals.
+ * length, so it ends where the entries stop pointing into executable memory — at the next record's
+ * `offset_to_top` (0) or rtti pointer (into .data). Walks by [abi]'s entry stride and reads `pfn` at
+ * its offset within the entry, which is what separates a gcc 2.x table without thunks from one with.
  */
-fun Program.vtableSlotTargets(addressPoint: Address, resolver: AddressResolver): List<Address> =
-    generateSequence(addressPoint) { it.add(defaultPointerSize.toLong()) }
-        .map { codeTargetAt(it, resolver) }
+fun Program.vtableSlotTargets(addressPoint: Address, resolver: AddressResolver, abi: CxxAbi = Itanium): List<Address> =
+    generateSequence(addressPoint) { it.add(abi.stride(defaultPointerSize)) }
+        .map { codeTargetAt(it.add(abi.pfnOffset(defaultPointerSize)), resolver) }
         .takeWhile { it != null }
         .filterNotNull()
         .toList()
 
 /**
- * Lay the Itanium vtable record whose geometry is [shape], and return its address point. The header is
- * `[vbase/vcall offsets…] offset_to_top rtti` and the [vftable] function-pointer array + a [label]
- * symbol go at the address point — the value a `{vfptr}` holds — so a constructor's
- * `this->vfptr = &<Class>::vftable` resolves to a symbol, not a raw address.
- * The rtti pointee stays an untyped `void*` until backlog §24 wires it.
+ * The `rtti:` header comment, reporting the typeinfo symbol that is actually there. [Itanium.zti]
+ * builds a closed-form name, and for anything the shorthand or a template spells differently that
+ * name does not exist: `std::istream`'s record is `_ZTISi`, not `_ZTIN3std7istreamE`. Prefers the
+ * linkage name over Ghidra's own demangled label, which is also a symbol at that address and would
+ * render as "rtti: typeinfo typeinfo".
+ */
+private fun Program.rttiComment(rttiHeader: Address, className: String, resolver: AddressResolver): String {
+    val name = readWord(rttiHeader)
+        ?.let { symbolTable.getSymbols(resolver.buildAddress(it)).map { s -> s.name } }
+        ?.let { names -> names.firstOrNull(Itanium::looksLikeZti) ?: names.firstOrNull() }
+        ?: Itanium.zti(className)
+    return "${Itanium.RTTI}: $name typeinfo"
+}
+
+/**
+ * Lay the vtable record whose geometry is [shape], and return the address its `{vfptr}` holds — where
+ * the [vftable] struct and the [label] symbol go, so a constructor's `this->vfptr = &<Class>::vftable`
+ * resolves to a symbol and a virtual call resolves to one of its fields.
+ *
+ * Which address that is comes from [CxxAbi.vptrAtRecordStart]. Itanium points at the address point
+ * and the `[vbase/vcall offsets…] offset_to_top rtti` header is laid in front of it as loose words;
+ * the rtti pointee stays an untyped `void*` until backlog §24 wires it. gcc 2.x points at the record
+ * start, so its reserved header is *inside* the struct — laid as fields by the caller rather than as
+ * words here, because a loose Data item there would collide with the struct covering the same bytes.
  */
 fun Program.layVtable(
     shape: VtableShape,
@@ -160,9 +198,20 @@ fun Program.layVtable(
     ns: Namespace,
     resolver: AddressResolver,
     virtualBases: List<String> = emptyList(),
-    label: String = Itanium.VFTABLE,
+    label: String = GhidraClassNaming.VFTABLE,
+    abi: CxxAbi = Itanium,
 ): Address {
     val (prefix, topSlot, rttiHeader, addressPoint) = shape
+
+    // gcc 2.x labels the record start, because that is what a `{vfptr}` holds. The struct is *not*
+    // stamped over the bytes: gcc declares the record itself (`__vtbl_ptr_type __vt_9TiXmlNode[20]`),
+    // which is authoritative on length in a way nothing here is, and a virtual call resolves off the
+    // vfptr's pointee type rather than off whatever data is applied at the target.
+    if (abi.vptrAtRecordStart) {
+        listing.setComment(topSlot, CommentType.EOL, "gcc 2.x vtable: reserved entry, then the slots")
+        symbolTable.createLabel(topSlot, label, ns, SourceType.IMPORTED)
+        return topSlot
+    }
 
     prefix.forEachIndexed { i, slot ->
         forceCreateData(slot, Itanium.offsetToTopType(defaultPointerSize))
@@ -171,17 +220,30 @@ fun Program.layVtable(
     forceCreateData(topSlot, Itanium.offsetToTopType(defaultPointerSize))
     listing.setComment(topSlot, CommentType.EOL, "${Itanium.OFFSET_TO_TOP} (to top of complete object)")
     forceCreateData(rttiHeader, PointerDataType(dataTypeManager))
-    // Report the typeinfo symbol that is actually there. `Itanium.zti` builds a closed-form name,
-    // and for anything the shorthand or a template spells differently that name does not exist:
-    // `std::istream`'s record is `_ZTISi`, not the `_ZTIN3std7istreamE` the builder produces.
-    // Prefer the linkage name over Ghidra's own demangled label, which is also a symbol at that
-    // address and would render as "rtti: typeinfo typeinfo".
-    val rttiName = readWord(rttiHeader)
-        ?.let { symbolTable.getSymbols(resolver.buildAddress(it)).map { s -> s.name } }
-        ?.let { names -> names.firstOrNull(Itanium::looksLikeZti) ?: names.firstOrNull() }
-        ?: Itanium.zti(className)
-    listing.setComment(rttiHeader, CommentType.EOL, "${Itanium.RTTI}: $rttiName typeinfo")
+    listing.setComment(rttiHeader, CommentType.EOL, rttiComment(rttiHeader, className, resolver))
     forceCreateData(addressPoint, vftable)
     symbolTable.createLabel(addressPoint, label, ns, SourceType.IMPORTED)
     return addressPoint
+}
+
+/** Where a class's vtable record sits, and which ABI lays it out past the header. */
+data class ResolvedVtable(val className: String, val address: Address, val abi: CxxAbi) {
+    companion object {
+        /** For a caller that already knows the class and is only checking a spelling of it. */
+        fun of(className: String, symName: String, addr: Address) =
+            CxxAbi.ofVtableSymbol(symName)?.let { ResolvedVtable(className, addr, it) }
+
+        /**
+         * For a caller holding only the symbol, which has to demangle to learn the class. gcc 2.x
+         * needs the primary screen on top of [CxxAbi.ofVtableSymbol]: a second cplus-marker separates a base,
+         * naming that base's secondary table rather than the class's own.
+         */
+        fun fromSymbol(sym: Symbol) = CxxAbi.ofVtableSymbol(sym.name)
+            ?.takeIf { it.isPrimaryVtable(sym.name) }
+            ?.let { abi ->
+                Demangler.of(sym.name)
+                    ?.let(abi::demangledVtableClass)
+                    ?.let { ResolvedVtable(it, sym.address, abi) }
+            }
+    }
 }

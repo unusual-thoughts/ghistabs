@@ -59,7 +59,10 @@ internal fun DataTypeRegistry.makePlaceholder(
  * (upper bound on legitimate tail padding without knowing the struct's alignment).
  */
 private fun TypeDecl.Aggregate<GlobalTypeId>.usefulStructSize(): Long {
-    val nonStatic = fields.filter { !it.isStatic }
+    // Sized fields only: gdb's "unpacked" bitsize-0 field — gcc 2.x's C++ abbreviation vptr, whose
+    // extent is its type's, not the stab's — claims no bytes, so it can neither end the struct nor
+    // bound its legitimate tail padding. Counting it trims every gcc 2.x polymorphic class to 0.
+    val nonStatic = fields.filter { !it.isStatic && it.sizeBits > 0 }
     if (nonStatic.isEmpty()) return sizeBytes
     val fieldEnd = nonStatic.maxOf { ((it.offsetBits + it.sizeBits + 7) / 8) }
     val maxFieldSize = nonStatic.maxOf { ((it.sizeBits + 7) / 8) }

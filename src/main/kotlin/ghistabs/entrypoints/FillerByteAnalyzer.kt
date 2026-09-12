@@ -24,7 +24,7 @@ import ghistabs.forceCreateData
  * the classic `lea r,[r]` forms — `8d 76 00`, `8d bc 27 …`). For a wider gap it uses the jump-over-fill
  * idiom instead (`eb 0d 90…`): an unconditional forward JMP to the aligned boundary, NOPs behind it.
  * Rather than chase the byte tables, each undefined run is pseudo-disassembled and its *leading*
- * effect-free padding (see [leadingFillerLength]) is collapsed into one Alignment; real data after the
+ * effect-free padding is collapsed into one Alignment; real data after the
  * padding is left alone (e.g. a keyword string table sitting between the padding and its loader function).
  */
 class FillerByteAnalyzer :

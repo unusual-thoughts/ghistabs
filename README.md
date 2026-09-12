@@ -35,9 +35,30 @@ bodies.
 | **Binary containers** | **PE/COFF**, **ELF** and **a.out** (OMAGIC)                                                                                                                                                           |
 | **Instruction sets**  | `i386` / `x86-64`                                                                                                                                                                                     |
 | **Compiler**          | **gcc**, on both Unix and Cygwin/MinGW targets, up to gcc **12** (`-gstabs` was deprecated in 12 and removed outright in 13). Stabs produced by other compilers are out of scope but may mostly work. |
-| **Languages**         | **C** from at least gcc **2.6.3** <br> **C++** from gcc **3.2**                                                                                                                                       |
+| **Languages**         | **C** from at least gcc **2.6.3** <br> **C++** from gcc **2.8** — see [gcc 2.x C++](#gcc-2x-c) for what that dialect costs                                                                             |
 | **Formats**           | `-gstabs` and `-gstabs+` alike                                                                                                                                                                        |
 | **Also**              | object files and linked images alike, and images whose  symbol table has been stripped, provided the stabs themselves survive.                                                                        |
+
+### gcc 2.x C++
+
+gcc 2.8 through 2.95 predate the Itanium C++ ABI, and stabs from that era describe a different
+object model. What differs, and what it costs:
+
+- **Vtables are not `_ZTV`.** They are spelled `_vt.<mangled>` (or `_vt$<mangled>`, or `__vt_<mangled>`
+  under `-fvtable-thunks`), carry no typeinfo pointer, and a `{vfptr}` points at the *record start*
+  rather than an address point. Without thunks each entry is a `{short delta; short index; void *pfn}`
+  record, twice a pointer wide. A class whose vtable symbol is absent from the binary cannot have its
+  record shape determined and is reported as `vtable-abi-assumed`.
+- **The vptr is not at offset 0.** gcc 2.x appends it *after* a class's own fields, so a base
+  subobject is split around it rather than simply shortened at the front.
+- **Method stubs.** Under plain `-gstabs` the physname field is routinely empty, and the mangled name
+  is reconstructed from the class, member name and cv-qualifier. Templated classes are out of scope
+  for that reconstruction, so their members may stay unresolved.
+- **Demangling** falls back to the deprecated GNU v2 back end, which the modern one cannot read.
+
+`INHERITED` reproduces the pre-`SPLIT_BASE` layout if a comparison is needed; note that
+`SPLIT_BASE` is the default and reshapes polymorphic classes on **Itanium** binaries too, not only
+gcc 2.x ones.
 
 ## Outputs
 Every stage of the pipeline can be exported as JSON: the records decoded from the section bytes,
@@ -124,6 +145,7 @@ Options (`Analysis > Auto Analyze… > Stabs Importer`):
 | **Shorten templated names via typedefs** | off     | Rewrite template *arguments* onto their shorter typedef aliases (`vector<basic_string<char, …>, …>` → `vector<string>`), recursively. Renames the parent datatype itself, so is less faithful to the compiled/mangled type names. A type that is itself a typedef's target is left alone.                                                    |
 | **Fold source-file spellings**           | on      | Collapse gcc's two spellings of one physical header (full include path vs bare `#include "x.h"`) onto one rendered output file, by unique basename.                                                                                                                                                                                          |
 | **Overlay `.stab` section structs**      | on      | Decode every `.stab` entry into a `StabRecord` struct with references into `.stabstr` and back to the code/data it describes.                                                                                                                                                                                                                |
+| **Virtual function pointer model**       | `SPLIT_BASE` | Where a polymorphic class's `{vfptr}` comes from. `SPLIT_BASE` gives every polymorphic class its own, typed to its own vftable, embedding the primary base as that base's fields without the vptr, so virtual calls resolve to named slots. `INHERITED` keeps one on the root of each hierarchy, shared through the base subobject - derived slots then sit past the end of the root's vftable and virtual calls render as `vfptr[N].field`. See [gcc 2.x C++](#gcc-2x-c).      |
 | **Minimum log level**                    | `INFO`  | Floor for diagnostics written to the analysis log. Bookmarks and counters are emitted regardless.                                                                                                                                                                                                                                            |
 | **Source roots**                         | none    | `;`-separated local checkouts of the sources this binary was built from; each recorded source directory found under a root becomes a directory transform, so paths resolve to real files. The **Browse** button picks directories only, multi-selects, and appends to the list. Read at import time - adding a root later needs a re-import. |
 
@@ -236,6 +258,7 @@ Import options, on the commands that actually import (`dump`, `skeleton`, `decom
 | `--classes`               | on      | See "Reconstruct C++ classes" above                                                                                                  |
 | `--shorten-typedefs`      | off     | See "Shorten templated names via typedefs" above                                                                                     |
 | `--fold-sources`          | on      | See "Fold source-file spellings" above                                                                                               |
+| `--vfptr-model MODEL`     | `SPLIT_BASE` | `SPLIT_BASE` or `INHERITED`; see "Virtual function pointer model" above                                                         |
 | `--source-root DIR`       |         | Local checkout of sources the binary was built from, to correlate against (repeatable).                                              |
 | `--disable-analyzer NAME` |         | Turn off every analyzer whose name contains `NAME` (repeatable). Render the same binary with and without one to A/B what it changes. |
 
