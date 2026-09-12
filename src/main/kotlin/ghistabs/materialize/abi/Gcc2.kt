@@ -5,8 +5,8 @@ import ghidra.program.model.data.IntegerDataType
 import ghidra.program.model.data.ShortDataType
 import ghidra.program.model.data.Structure
 import ghistabs.materialize.abi.Gcc2.DEMANGLED_VTABLE_SUFFIX
+import ghistabs.namespaces
 import ghistabs.parse.TypeDecl.Aggregate.Method
-import ghistabs.scopes
 
 /**
  * Pre-Itanium gcc 2.x C++ ABI facts: the vtable symbol spellings and what the deprecated demangler
@@ -65,7 +65,7 @@ object Gcc2 {
      */
     fun demangledVtableClass(obj: DemangledObject): String? {
         val leaf = obj.name?.removeSuffix(DEMANGLED_VTABLE_SUFFIX)?.takeIf { it != obj.name } ?: return null
-        return (obj.scopes() + leaf).joinToString("::")
+        return (obj.namespaces + leaf).joinToString("::")
     }
 
     /**

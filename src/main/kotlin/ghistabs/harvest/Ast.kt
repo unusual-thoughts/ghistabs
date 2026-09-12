@@ -12,7 +12,6 @@ import ghidra.program.model.symbol.SymbolUtilities
 import ghistabs.Demangler
 import ghistabs.baseStackParamOffset
 import ghistabs.parse.*
-import ghistabs.parse.TypeNameKind
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.UseSerializers
@@ -32,6 +31,7 @@ value class LineNumber(val inner: UInt) : Comparable<LineNumber> {
     init {
         require(inner != 0U)
     }
+
     companion object {
         fun fromInt(x: Int) = x.takeIf { it > 0 }?.let { LineNumber(it.toUInt()) }
     }
@@ -213,8 +213,10 @@ class AddressSerializer : KSerializer<Address> {
     private data class AddressSurrogate(val space: String, val offset: Long) {
         constructor(addr: Address) : this(addr.addressSpace.name, addr.offset)
     }
+
     override val descriptor =
         SerialDescriptor("ghidra.program.model.address.Address", AddressSurrogate.serializer().descriptor)
+
     override fun serialize(encoder: Encoder, value: Address) =
         encoder.encodeSerializableValue(AddressSurrogate.serializer(), AddressSurrogate(value))
 

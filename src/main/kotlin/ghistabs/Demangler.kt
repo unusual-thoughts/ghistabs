@@ -84,12 +84,9 @@ object Demangler {
     /** Human-readable name for [mangled], falling back to [mangled] */
     fun name(mangled: String): String = of(mangled)?.demangledName ?: mangled
 
-    /**
-     * Parent-namespace chain, root-first, for [mangled]. Empty when the name has no enclosing
-     * namespace *or* does not demangle at all — those were separate returns once, and no caller ever
-     * told them apart, so they are one answer: nothing is known about this name's scope.
-     */
-    fun namespaces(mangled: String): List<String> = of(mangled)?.namespaceChain().orEmpty()
+    /** Parent-namespace chain, root-first, for [mangled]. Empty for a name that does not demangle
+     *  *and* for one with no enclosing namespace — callers have never told those apart. */
+    fun namespaces(mangled: String): List<String> = of(mangled)?.namespaces.orEmpty()
 }
 
 /**
@@ -125,9 +122,13 @@ fun Program.applyDemangling(
 /** Category created by the demangler analyzer */
 val DEMANGLER_CATEGORY: CategoryPath = CategoryPath.ROOT.extend("Demangler")
 
-/** Replicates the (protected) `DemangledDataType.getDemanglerCategoryPath` + leaf: `/Demangler/<ns…>/<name>`. */
-val Demangled.categoryPath get(): CategoryPath = (namespace?.categoryPath ?: DEMANGLER_CATEGORY).extend(name)
+/** Replicates the (protected) `DemangledDataType.getDemanglerCategoryPath` + leaf: `/Demangler/<ns…>/<name>`.
+ *  Includes name
+ **/
+val Demangled.path get(): CategoryPath = (namespace?.path ?: DEMANGLER_CATEGORY).extend(name)
 
-/** [obj]'s enclosing scopes, outermost first. */
-fun DemangledObject.namespaceChain() = generateSequence(namespace) { it.namespace }
-    .map { it.name }.toList().asReversed()
+/** [this]'s namespaces followed by name */
+val Demangled.fullName get() = generateSequence(this) { it.namespace }.map { it.name }.toList().asReversed()
+
+/** [this]'s enclosing scopes, outermost first. Doesn't include name */
+val DemangledObject.namespaces get() = namespace?.fullName.orEmpty()
