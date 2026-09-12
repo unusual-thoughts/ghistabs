@@ -4,6 +4,7 @@ import ghidra.app.util.demangler.DemangledObject
 import ghidra.program.model.data.Structure
 import ghidra.program.model.symbol.Symbol
 import ghidra.program.model.symbol.SymbolTable
+import ghistabs.parse.TypeDecl.Aggregate.Method
 
 /**
  * How a C++ ABI spells a *member* — the half of [CxxAbi] that never touches a vtable record. Split
@@ -15,23 +16,17 @@ interface CxxMemberNaming {
     fun isProbablyMangled(name: String): Boolean
 
     /**
-     * The symbols a member could have been emitted as, most specific first. The stated physname is
-     * always tried first and unchanged; an ABI whose stabs put something less than a whole symbol in
-     * that field composes the rest from what the stab does state.
+     * The symbols [m] could have been emitted as, most specific first. The stated physname is always
+     * tried first and unchanged; an ABI whose stabs put something less than a whole symbol in that
+     * field composes the rest from what the stab does state.
      */
-    fun physnameCandidates(
-        memberName: String,
-        className: String,
-        isConst: Boolean,
-        isVolatile: Boolean,
-        stated: String?,
-    ): List<String> = listOfNotNull(stated)
+    fun physnameCandidates(m: Method<*>, className: String): List<String> = listOfNotNull(m.physname)
 
     /** How this ABI's stabs spell the implicit assignment operator. */
     val assignmentOperatorName: String
 
-    /** Whether [stated] is *itself* the linkage name of an implicit special member. */
-    fun statedIsImplicitMember(stated: String) = false
+    /** Whether a physname is *itself* the linkage name of an implicit special member. */
+    fun physnameIsImplicit(physname: String) = false
 
     /**
      * A member the compiler emits only if it is used: the class's own ctor or dtor, or the implicit
@@ -41,12 +36,12 @@ interface CxxMemberNaming {
      *
      * Two independent tests, because either half can be the only one available: a member with no
      * physname at all is recognisable by name alone, and one whose physname *is* a whole symbol is
-     * recognisable by [statedIsImplicitMember] even when its source name is spelled unusually.
+     * recognisable by [physnameIsImplicit] even when its source name is spelled unusually.
      */
-    fun isImplicitMember(memberName: String, className: String, stated: String?): Boolean {
+    fun isImplicitMember(m: Method<*>, className: String): Boolean {
         val leaf = className.substringAfterLast("::")
-        return memberName == leaf || memberName == "~$leaf" || memberName == assignmentOperatorName ||
-            stated?.let(::statedIsImplicitMember) == true
+        return m.name == leaf || m.name == "~$leaf" || m.name == assignmentOperatorName ||
+            m.physname?.let(::physnameIsImplicit) == true
     }
 
     /** In-class display form of a ctor/dtor linkage name, or null for anything else. */

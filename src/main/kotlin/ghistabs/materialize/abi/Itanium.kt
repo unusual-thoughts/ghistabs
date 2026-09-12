@@ -148,8 +148,8 @@ object Itanium : CxxAbi {
 
     override fun isInlineStdMember(name: String): Boolean = INLINE_STD_MEMBER.containsMatchIn(name)
 
-    override fun statedIsImplicitMember(stated: String): Boolean =
-        stated.startsWith("_ZN") && IMPLICIT_SPECIAL_MEMBER_TAIL.containsMatchIn(stated)
+    override fun physnameIsImplicit(physname: String): Boolean =
+        physname.startsWith("_ZN") && IMPLICIT_SPECIAL_MEMBER_TAIL.containsMatchIn(physname)
 
     /** In-class display form of a ctor/dtor linkage name — `_ZN3FooC[123]E…` → `Foo`,
      *  `_ZN3FooD[012]E…` → `~Foo`. Itanium emits up to three symbols per ctor/dtor, all carrying one
