@@ -1,4 +1,4 @@
-package ghistabs.materialize.abi
+package ghistabs.materialize
 
 import ghistabs.harvest.Type
 import ghistabs.harvest.binding
