@@ -1,6 +1,10 @@
 package ghistabs.materialize.abi
 
 import ghidra.app.util.demangler.DemangledObject
+import ghidra.program.model.data.IntegerDataType
+import ghidra.program.model.data.ShortDataType
+import ghidra.program.model.data.Structure
+import ghistabs.materialize.abi.Gcc2.DEMANGLED_VTABLE_SUFFIX
 
 /**
  * Pre-Itanium gcc 2.x C++ ABI facts: the vtable symbol spellings and what the deprecated demangler
@@ -19,6 +23,9 @@ object Gcc2 {
     // cplus-dem.c spells a gcc 2.x vtable "<class> virtual table"; DemangledObject.setName replaces
     // the spaces, so the leaf arrives as "<class>_virtual_table" with the scope in the namespace.
     private const val DEMANGLED_VTABLE_SUFFIX = "_virtual_table"
+
+    /** Prefix for the non-slot fields of a gcc 2.x vftable — its reserved header entry. */
+    const val RESERVED = "__reserved"
 
     /**
      * String-level pre-filter for a gcc 2.x vtable symbol — the gcc 2.x parallel to
@@ -128,6 +135,8 @@ sealed interface Gcc2Abi : CxxAbi {
     override val hasRttiHeader get() = false
     override val vptrAtRecordStart get() = true
 
+    override fun isPrimaryVtable(symbolName: String) = Gcc2.looksLikePrimaryVtable(symbolName)
+
     override fun demangledVtableClass(obj: DemangledObject) = Gcc2.demangledVtableClass(obj)
 }
 
@@ -137,6 +146,11 @@ data object Gcc2Thunks : Gcc2Abi {
 
     override fun vtableCandidates(className: String) =
         listOf("${Gcc2.THUNK_VTABLE_PREFIX}${Gcc2.mangleClassName(className)}")
+
+    override fun Structure.addReservedHeader() {
+        add(IntegerDataType.dataType, Gcc2.RESERVED + "_offset", "reserved: offset/tdesc entry")
+        add(IntegerDataType.dataType, Gcc2.RESERVED + "_tdesc", "reserved: tdesc pointer")
+    }
 }
 
 /** `_vt.`/`_vt$`: `{delta, index, pfn}` entries, twice as wide, with pfn in the second word. */
@@ -152,4 +166,15 @@ data object Gcc2Plain : Gcc2Abi {
 
     override fun vtableCandidates(className: String) = Gcc2.mangleClassName(className)
         .let { m -> Gcc2.CPLUS_MARKERS.map { "${Gcc2.VTABLE_PREFIX}$it$m" } }
+
+    override fun Structure.addReservedHeader() {
+        add(ShortDataType.dataType, Gcc2.RESERVED + "__delta", "reserved entry: delta")
+        add(ShortDataType.dataType, Gcc2.RESERVED + "__index", "reserved entry: index")
+        add(IntegerDataType.dataType, Gcc2.RESERVED + "__pfn", "reserved entry: pfn")
+    }
+
+    override fun Structure.addEntryAdjustment(slot: Int) {
+        add(ShortDataType.dataType, "slot${slot}__delta", "this-adjustment for slot $slot")
+        add(ShortDataType.dataType, "slot${slot}__index", "unused; gcc 2.x always emits 0")
+    }
 }

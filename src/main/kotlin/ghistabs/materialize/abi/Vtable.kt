@@ -7,9 +7,10 @@ import ghidra.program.model.listing.CommentType
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
+import ghidra.program.model.symbol.Symbol
+import ghistabs.Demangler
 import ghistabs.forceCreateData
 import ghistabs.harvest.AddressResolver
-import ghistabs.materialize.abi.CxxAbi
 
 /** Upper bound on vbase/vcall-offset words scanned before giving up on locating the rtti header. */
 private const val MAX_VTABLE_PREFIX_WORDS = 64
@@ -210,4 +211,26 @@ fun Program.layVtable(
     forceCreateData(addressPoint, vftable)
     symbolTable.createLabel(addressPoint, label, ns, SourceType.IMPORTED)
     return addressPoint
+}
+
+/** Where a class's vtable record sits, and which ABI lays it out past the header. */
+data class ResolvedVtable(val className: String, val address: Address, val abi: CxxAbi) {
+    companion object {
+        /** For a caller that already knows the class and is only checking a spelling of it. */
+        fun of(className: String, symName: String, addr: Address) =
+            CxxAbi.of(symName)?.let { ResolvedVtable(className, addr, it) }
+
+        /**
+         * For a caller holding only the symbol, which has to demangle to learn the class. gcc 2.x
+         * needs the primary screen on top of [CxxAbi.of]: a second cplus-marker separates a base,
+         * naming that base's secondary table rather than the class's own.
+         */
+        fun fromSymbol(sym: Symbol) = CxxAbi.of(sym.name)
+            ?.takeIf { it.isPrimaryVtable(sym.name) }
+            ?.let { abi ->
+                Demangler.of(sym.name)
+                    ?.let(abi::demangledVtableClass)
+                    ?.let { ResolvedVtable(it, sym.address, abi) }
+            }
+    }
 }

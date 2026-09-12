@@ -1,7 +1,7 @@
 package ghistabs.materialize.abi
 
 import ghidra.app.util.demangler.DemangledObject
-import ghistabs.Demangler
+import ghidra.program.model.data.Structure
 
 /**
  * A C++ ABI's answers about vtables: record geometry, symbol spelling, and which class a symbol
@@ -31,38 +31,51 @@ sealed interface CxxAbi {
     /** Does [symbolName] look like a vtable symbol of this ABI? */
     fun looksLikeVtable(symbolName: String): Boolean
 
+    /**
+     * Does [symbolName] name a class's *own* table, rather than a base's secondary? Itanium packs a
+     * class's secondaries into the primary record, so every `_ZTV` is one and the default holds;
+     * gcc 2.x gives each secondary its own symbol, which only the mangled spelling distinguishes.
+     */
+    fun isPrimaryVtable(symbolName: String) = looksLikeVtable(symbolName)
+
     /** Closed-form vtable symbol spellings for [className], most canonical first. */
     fun vtableCandidates(className: String): List<String>
 
     /** Qualified class name [obj] names, if it is this ABI's demangled vtable object. */
     fun demangledVtableClass(obj: DemangledObject): String?
 
+    /**
+     * The reserved entry gcc 2.x puts at the front of a record, as struct fields — the `{vfptr}`
+     * points here, so the slots only land on their real byte offsets if the header occupies its own.
+     * `cp/class.c:skip_rtti_stuff` reserves two pointer-wide entries with thunks and one 8-byte
+     * `{delta, index, pfn}` without; 8 bytes either way on 32-bit. Nothing here is a Pointer, which
+     * is what keeps the header out of the slot list everything else counts.
+     */
+    fun Structure.addReservedHeader() = Unit
+
+    /**
+     * The `{delta, index}` half of a gcc 2.x no-thunk entry, which precedes its `pfn` and is what
+     * makes the entry 8 bytes wide. `delta` is live at every call site — the dispatch reads it with
+     * `movswl` and adds it to `this` before the call — so it is a signed short and worth naming.
+     */
+    fun Structure.addEntryAdjustment(slot: Int) = Unit
+
     companion object {
-        /** Which ABI a vtable symbol's spelling states. Itanium is the shape of everything else. */
-        fun of(symbolName: String): CxxAbi = when {
+        /**
+         * Which ABI a vtable symbol's spelling states, or null if it spells no vtable at all. A
+         * gcc 2.x *secondary* table answers here too — it is still that ABI's geometry; screening
+         * it out is the job of whoever wants a class's own table.
+         */
+        fun of(symbolName: String): CxxAbi? = when {
             Gcc2Thunks.looksLikeVtable(symbolName) -> Gcc2Thunks
             Gcc2Plain.looksLikeVtable(symbolName) -> Gcc2Plain
-            else -> Itanium
+            Itanium.looksLikeVtable(symbolName) -> Itanium
+            else -> null
         }
 
         /** Every ABI's spelling for [className]'s vtable, Itanium first. */
         fun vtableCandidates(className: String) = Itanium.vtableCandidates(className) +
             Gcc2Plain.vtableCandidates(className) +
             Gcc2Thunks.vtableCandidates(className)
-
-        /**
-         * The qualified class a vtable [symbolName] names, whichever ABI spelled it. gcc 2.x needs
-         * the primary screen, not [looksLikeVtable]: a second marker separates a base, naming that
-         * base's secondary table rather than the class's own.
-         */
-        fun vtableClassOf(symbolName: String): String? = when {
-            Itanium.looksLikeVtable(symbolName) ->
-                Demangler.of(symbolName)?.let(Itanium::demangledVtableClass)
-
-            Gcc2.looksLikePrimaryVtable(symbolName) ->
-                Demangler.of(symbolName)?.let(Gcc2::demangledVtableClass)
-
-            else -> null
-        }
     }
 }
