@@ -408,13 +408,9 @@
             "min": 27,
             "max": 27
         },
-        "typedef-shorten": {
-            "min": 1,
-            "max": 1
-        },
         "unresolved-xref": {
-            "min": 40,
-            "max": 40
+            "min": 39,
+            "max": 39
         },
         "xref-stub-in-array-element": {
             "min": 1,
@@ -424,8 +420,8 @@
             ]
         },
         "xref-undefined": {
-            "min": 40,
-            "max": 40
+            "min": 39,
+            "max": 39
         }
     },
     "source": "box2d_tests - generated from snapshotCounters()"
