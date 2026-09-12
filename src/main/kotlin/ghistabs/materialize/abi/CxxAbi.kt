@@ -28,6 +28,16 @@ sealed interface CxxAbi {
     fun slotOffset(index: Int, ptrSize: Int): Long =
         (if (vptrAtRecordStart) headerBytes(ptrSize) else 0L) + index * stride(ptrSize) + pfnOffset(ptrSize)
 
+    /**
+     * Entries the header occupies, which is the bias a stab's `*<n>` carries: `DECL_VINDEX` counts
+     * from wherever the `{vfptr}` points, and [vptrAtRecordStart] is that difference. Measured both
+     * ways — `_ZTVSt9type_info`'s stabs declare 0/1/5 for a record whose vptr is already past the
+     * header, while every gcc 2.x first virtual starts at the entry after the reserved ones
+     * (`cv_mscom_elf_i386_gcc281`'s dtors are `*1` with one 8-byte entry reserved,
+     * `tinyxml_aout_gcc295.o`'s are `*2` with two pointer-wide ones).
+     */
+    fun reservedEntries(ptrSize: Int) = if (vptrAtRecordStart) (headerBytes(ptrSize) / stride(ptrSize)).toInt() else 0
+
     /** Does [symbolName] look like a vtable symbol of this ABI? */
     fun looksLikeVtable(symbolName: String): Boolean
 
