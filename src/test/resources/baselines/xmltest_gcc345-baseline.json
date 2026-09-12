@@ -367,8 +367,8 @@
             "max": 909
         },
         "method-implicit-not-emitted": {
-            "min": 630,
-            "max": 630
+            "min": 836,
+            "max": 836
         },
         "method-static-no-this": {
             "min": 36,
@@ -519,8 +519,8 @@
             "max": 100
         },
         "resolve-ambiguous": {
-            "min": 1318,
-            "max": 1318
+            "min": 1230,
+            "max": 1230
         },
         "rtti-pseudo-substituted": {
             "min": 49,
@@ -623,17 +623,13 @@
             "min": 121,
             "max": 121
         },
-        "typedef-shorten": {
-            "min": 1,
-            "max": 1
-        },
         "unfinished-cu": {
             "min": 1,
             "max": 1
         },
         "unresolved-symbol": {
-            "min": 1461,
-            "max": 1461
+            "min": 1255,
+            "max": 1255
         },
         "unresolved-xref": {
             "min": 42,

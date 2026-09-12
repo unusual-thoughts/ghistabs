@@ -147,8 +147,8 @@
             "max": 2
         },
         "demangler-exact-match": {
-            "min": 151,
-            "max": 151
+            "min": 166,
+            "max": 166
         },
         "demangler-retarget-bound": {
             "min": 1,
@@ -163,8 +163,8 @@
             "max": 1
         },
         "demangler-reverse-demangle-match": {
-            "min": 17,
-            "max": 17
+            "min": 2,
+            "max": 2
         },
         "demangler-skip-no-replacement": {
             "min": 23,
@@ -458,8 +458,8 @@
             "max": 344
         },
         "method-implicit-not-emitted": {
-            "min": 121,
-            "max": 121
+            "min": 157,
+            "max": 157
         },
         "method-static-no-this": {
             "min": 86,
@@ -629,8 +629,8 @@
             "max": 168
         },
         "resolve-ambiguous": {
-            "min": 2633,
-            "max": 2633
+            "min": 2459,
+            "max": 2459
         },
         "rtti-pseudo-substituted": {
             "min": 38,
@@ -732,13 +732,9 @@
             "min": 3,
             "max": 3
         },
-        "typedef-shorten": {
-            "min": 1,
-            "max": 1
-        },
         "unresolved-symbol": {
-            "min": 1044,
-            "max": 1044
+            "min": 1008,
+            "max": 1008
         },
         "unresolved-xref": {
             "min": 18,
@@ -763,6 +759,21 @@
         "vfptr-split-from-base": {
             "min": 92,
             "max": 92
+        },
+        "vtable-abi-assumed": {
+            "min": 9,
+            "max": 9,
+            "degrades": [
+                "__array_type_info",
+                "__enum_type_info",
+                "__function_type_info",
+                "__fundamental_type_info",
+                "__pbase_type_info",
+                "__pointer_to_member_type_info",
+                "__pointer_type_info",
+                "char_producer<char>",
+                "char_producer<wchar_t>"
+            ]
         },
         "vtable-applied": {
             "min": 113,

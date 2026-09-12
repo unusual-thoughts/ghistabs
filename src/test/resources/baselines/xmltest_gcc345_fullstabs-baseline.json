@@ -88,16 +88,12 @@
             "max": 1611
         },
         "demangler-exact-match": {
-            "min": 118,
-            "max": 118
+            "min": 119,
+            "max": 119
         },
         "demangler-retarget-no-type": {
             "min": 3,
             "max": 3
-        },
-        "demangler-reverse-demangle-match": {
-            "min": 1,
-            "max": 1
         },
         "demangler-skip-no-replacement": {
             "min": 23,
@@ -388,8 +384,8 @@
             "max": 145
         },
         "method-implicit-not-emitted": {
-            "min": 604,
-            "max": 604
+            "min": 809,
+            "max": 809
         },
         "method-static-no-this": {
             "min": 66,
@@ -541,8 +537,8 @@
             "max": 120
         },
         "resolve-ambiguous": {
-            "min": 1455,
-            "max": 1455
+            "min": 1367,
+            "max": 1367
         },
         "rtti-pseudo-substituted": {
             "min": 51,
@@ -645,17 +641,13 @@
             "min": 121,
             "max": 121
         },
-        "typedef-shorten": {
-            "min": 1,
-            "max": 1
-        },
         "unfinished-cu": {
             "min": 1,
             "max": 1
         },
         "unresolved-symbol": {
-            "min": 1350,
-            "max": 1350
+            "min": 1145,
+            "max": 1145
         },
         "unresolved-xref": {
             "min": 42,
