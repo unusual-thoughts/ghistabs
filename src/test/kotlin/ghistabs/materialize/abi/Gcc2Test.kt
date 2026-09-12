@@ -75,6 +75,9 @@ class Gcc2Test {
         Gcc2.mustNot { isProbablyMangled("__ZNSt8__detail6_ScaleE") }
         Gcc2.mustNot { isProbablyMangled("__errno_location") }
         Gcc2.mustNot { isProbablyMangled("__vt_9TiXmlNode") }
+        // A C static-local from fxwpf_som_parisc_gcc, a binary with no C++ in it: the shape is there
+        // but the six characters it claims are not, and one hit would have settled the whole file.
+        Gcc2.mustNot { isProbablyMangled("initialized___6") }
         Gcc2.must { isProbablyMangled("Accept__C12TiXmlElementP12TiXmlVisitor") }
         Gcc2.must { isProbablyMangled("__as__11TiXmlStringPCc") }
         Gcc2.must { isProbablyMangled("_._9TiXmlNode") }

@@ -107,11 +107,17 @@ object Gcc2 {
     /**
      * A name gcc 2.x mangled, recognised by mirroring what [physnamePrefix] composes: `__` then the
      * cv-qualifier then the length-prefixed class (`Accept__C12TiXmlElement`, `__as__11TiXmlString`,
-     * `__11TiXmlStringPCc`), or the `_._` dtor form. A plain C symbol has no such run — the `__` has
-     * to be followed by the length digit or a `Q`, which is what keeps `__vt_9TiXmlNode` and
-     * `__errno_location` out.
+     * `__11TiXmlStringPCc`), or the `_._` dtor form.
+     *
+     * The length has to be *satisfied*, not merely present. One symbol is enough to settle a whole
+     * binary's ABI (see [CxxAbi.prevailing]), and the shape alone is not rare enough for that:
+     * `fxwpf_som_parisc_gcc` holds no C++ at all, yet its static-local `initialized___6` matches the
+     * shape while claiming six characters that are not there. Counting them costs one comparison and
+     * takes the false positives over the WordPerfect corpus's 38,542 C symbols to zero.
      */
-    fun isProbablyMangled(name: String) = name.startsWith("_._") || MANGLED_MEMBER_TAIL.containsMatchIn(name)
+    fun isProbablyMangled(name: String) = MANGLED_MEMBER_TAIL.findAll(name).any { m ->
+        m.range.last + 1 + m.groupValues[1].toInt() <= name.length
+    }
 
     /** The mangled class name a gcc 2.x vtable symbol carries, or null if [symbolName] isn't one. */
     private fun vtableTail(symbolName: String): String? = when {
@@ -125,7 +131,9 @@ object Gcc2 {
 
     private val MARKERS = CPLUS_MARKERS.toSet()
 
-    private val MANGLED_MEMBER_TAIL = Regex("""__[CV]*(?:[0-9]|Q[0-9])""")
+    // `Q<n>` counts the nesting components and is not itself length-prefixed — `__Q217__class_type_info…`
+    // is Q2 then the 17-character `__class_type_info`, so only the length run after it is checked.
+    private val MANGLED_MEMBER_TAIL = Regex("""(?:_\._|__[CV]*)(?:Q[0-9]_?)?([0-9]+)""")
 }
 
 /** [obj]'s enclosing scopes, outermost first. */
