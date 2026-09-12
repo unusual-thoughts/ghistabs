@@ -17,8 +17,8 @@ import ghistabs.diagnose.DiagnosticSink
 import ghistabs.importer.ImportOptions.Companion.stabsTypedefsShortened
 import ghistabs.materialize.DataTypeRegistry
 import ghistabs.materialize.TemplateNameShortener
-import ghistabs.materialize.itanium.Itanium.isProbablyMangled
-import ghistabs.materialize.itanium.Rtti
+import ghistabs.materialize.abi.Itanium.isProbablyMangled
+import ghistabs.materialize.abi.Rtti
 import ghistabs.materialize.typedefAliases
 import ghistabs.parse.CATEGORY
 import ghistabs.parse.canonTemplateName

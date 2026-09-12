@@ -1,4 +1,4 @@
-package ghistabs.materialize.itanium
+package ghistabs.materialize.abi
 
 import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.data.DataUtilities

@@ -1,4 +1,4 @@
-package ghistabs.materialize.itanium
+package ghistabs.materialize.abi
 
 import ghidra.app.util.demangler.DemangledAddressTable
 import ghidra.app.util.demangler.DemangledObject
@@ -15,7 +15,7 @@ import ghistabs.parse.splitQualified
  * conventional field names, category layout, and vtable geometry. Every ABI-specific site
  * references the constants here rather than re-spelling literals.
  */
-object Itanium {
+object Itanium : CxxAbi {
     // Itanium mangling prefixes (ABI §5.1.4). Cygwin's PE loader prepends '_' → "__ZT*".
     const val VTABLE_PREFIX = "_ZTV"
     const val TYPEINFO_PREFIX = "_ZTI"
@@ -75,6 +75,28 @@ object Itanium {
     /** Vtable header before the function-pointer array: offset_to_top + rtti = 2 pointers. */
     fun vtablePrefixBytes(ptrSize: Int) = 2L * ptrSize.toLong()
 
+    override fun stride(ptrSize: Int) = ptrSize.toLong()
+    override fun pfnOffset(ptrSize: Int) = 0L
+
+    /** `offset_to_top` then the typeinfo pointer (ABI §2.5.2). */
+    override fun headerBytes(ptrSize: Int) = vtablePrefixBytes(ptrSize)
+
+    override val hasRttiHeader get() = true
+    override val vptrAtRecordStart get() = false
+
+    override fun looksLikeVtable(symbolName: String) = symbolName.trimDoubleUnderscore().startsWith(VTABLE_PREFIX)
+
+    /** Templates have no closed form; [CxxAbi.vtableClassOf] finds those. */
+    override fun vtableCandidates(className: String) = mangleClassName(className).let {
+        listOf(
+            "$VTABLE_PREFIX$it",
+            "_$VTABLE_PREFIX$it", // Cygwin/PE leading underscore
+            "$className::$DEMANGLED_VTABLE",
+        )
+    }
+
+    override fun demangledVtableClass(obj: DemangledObject) = addressTableClass(obj, DEMANGLED_VTABLE)
+
     /** Type of the `offset_to_top` header word (a signed pointer-sized integer). */
     fun offsetToTopType(ptrSize: Int): DataType =
         if (ptrSize == 8) LongLongDataType.dataType else IntegerDataType.dataType
@@ -104,7 +126,7 @@ object Itanium {
         return Demangler.of(symbolName)?.let { addressTableClass(it, DEMANGLED_TYPEINFO) }
     }
 
-    internal fun String.trimDoubleUnderscore() = if (startsWith("__")) substring(1) else this
+    private fun String.trimDoubleUnderscore() = if (startsWith("__")) substring(1) else this
 
     /** An Itanium-mangled name. The Cygwin PE/COFF loader prepends `_`, so they also appear as `__Z…`. */
     fun isProbablyMangled(name: String): Boolean = name.trimDoubleUnderscore().startsWith("_Z")
@@ -119,12 +141,11 @@ object Itanium {
     internal fun looksLikeZti(symbolName: String) = symbolName.trimDoubleUnderscore().startsWith(TYPEINFO_PREFIX)
 
     /** Pure inspection of a demangled object, so it unit-tests without a `Program`. */
-    internal fun demangledMatchesClass(obj: DemangledObject, className: String) =
-        addressTableClass(obj, DEMANGLED_VTABLE) == className
+    internal fun demangledMatchesClass(obj: DemangledObject, className: String) = demangledVtableClass(obj) == className
 
     /** The class an `<kind> for <class>` address table belongs to, `::`-joined, or null if [obj] is
      *  not one of [kind]. */
-    internal fun addressTableClass(obj: DemangledObject, kind: String): String? {
+    private fun addressTableClass(obj: DemangledObject, kind: String): String? {
         if (obj !is DemangledAddressTable || obj.name != kind) return null
         return namespaceChain(obj).joinToString("::")
     }

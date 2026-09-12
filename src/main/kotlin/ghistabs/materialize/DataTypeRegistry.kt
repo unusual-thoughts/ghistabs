@@ -13,7 +13,7 @@ import ghistabs.diagnose.StabsDiagnostics
 import ghistabs.harvest.Harvest
 import ghistabs.harvest.Type
 import ghistabs.index.*
-import ghistabs.materialize.itanium.Rtti
+import ghistabs.materialize.abi.Rtti
 import ghistabs.parse.CATEGORY
 import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.GlobalTypeId

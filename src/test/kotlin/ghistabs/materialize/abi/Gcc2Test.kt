@@ -43,9 +43,9 @@ class Gcc2Test {
 
     @Test
     fun abiFollowsTheSpelling() {
-        CxxAbi.of("_ZTV10ThisStream") mustBe CxxAbi.Itanium
-        CxxAbi.of("__vt_9TiXmlNode") mustBe CxxAbi.Gcc2Thunks
-        CxxAbi.of("_vt.9exception") mustBe CxxAbi.Gcc2Plain
+        CxxAbi.of("_ZTV10ThisStream") mustBe Itanium
+        CxxAbi.of("__vt_9TiXmlNode") mustBe Gcc2Thunks
+        CxxAbi.of("_vt.9exception") mustBe Gcc2Plain
     }
 
     /**
@@ -55,19 +55,19 @@ class Gcc2Test {
      */
     @Test
     fun onlyTheNoThunkFormHasWideEntriesWithAnOffsetPfn() {
-        CxxAbi.Itanium.stride(4) mustBe 4L
-        CxxAbi.Gcc2Thunks.stride(4) mustBe 4L
-        CxxAbi.Gcc2Plain.stride(4) mustBe 8L
+        Itanium.stride(4) mustBe 4L
+        Gcc2Thunks.stride(4) mustBe 4L
+        Gcc2Plain.stride(4) mustBe 8L
 
-        CxxAbi.Itanium.pfnOffset(4) mustBe 0L
-        CxxAbi.Gcc2Thunks.pfnOffset(4) mustBe 0L
-        CxxAbi.Gcc2Plain.pfnOffset(4) mustBe 4L
+        Itanium.pfnOffset(4) mustBe 0L
+        Gcc2Thunks.pfnOffset(4) mustBe 0L
+        Gcc2Plain.pfnOffset(4) mustBe 4L
     }
 
     @Test
     fun onlyItaniumHasAnRttiHeaderToLocateTheAddressPointBy() {
-        CxxAbi.Itanium.hasRttiHeader mustBe true
-        CxxAbi.Gcc2Thunks.hasRttiHeader mustBe false
-        CxxAbi.Gcc2Plain.hasRttiHeader mustBe false
+        Itanium.hasRttiHeader mustBe true
+        Gcc2Thunks.hasRttiHeader mustBe false
+        Gcc2Plain.hasRttiHeader mustBe false
     }
 }

@@ -9,9 +9,9 @@ import ghidra.program.model.gclass.ClassUtils
 import ghidra.program.model.listing.Program
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.index.TypeGraph
-import ghistabs.materialize.itanium.Itanium
-import ghistabs.materialize.itanium.hasPolymorphicBaseSubobject
-import ghistabs.materialize.itanium.vptrOffsetBytesOf
+import ghistabs.materialize.abi.Itanium
+import ghistabs.materialize.abi.hasPolymorphicBaseSubobject
+import ghistabs.materialize.abi.vptrOffsetBytesOf
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
 import ghistabs.parse.isVptrFieldName
