@@ -113,3 +113,43 @@ object Gcc2 {
 /** [obj]'s enclosing scopes, outermost first. */
 internal fun namespaceChain(obj: DemangledObject) =
     generateSequence(obj.namespace) { it.namespace }.map { it.name }.toList().asReversed()
+
+/**
+ * gcc 2.95.3, `cp/class.c:skip_rtti_stuff`: two pointer header entries with thunks, one 8-byte
+ * record without, so 8 bytes either way on 32-bit. The vptr holds the record start and the call
+ * site skips the header (`tinyxml_aout_gcc295.o` dispatches through `add eax,0x8`).
+ */
+sealed interface Gcc2Abi : CxxAbi {
+    override fun stride(ptrSize: Int) = ptrSize.toLong()
+    override fun pfnOffset(ptrSize: Int) = 0L
+    override fun headerBytes(ptrSize: Int) = 2L * ptrSize
+
+    /** gcc 2.x emits no typeinfo pointer, so no rtti word locates the address point. */
+    override val hasRttiHeader get() = false
+    override val vptrAtRecordStart get() = true
+
+    override fun demangledVtableClass(obj: DemangledObject) = Gcc2.demangledVtableClass(obj)
+}
+
+/** `__vt_`: the `this` adjustment moved into a thunk, so an entry is the pfn. */
+data object Gcc2Thunks : Gcc2Abi {
+    override fun looksLikeVtable(symbolName: String) = Gcc2.looksLikeThunkVtable(symbolName)
+
+    override fun vtableCandidates(className: String) =
+        listOf("${Gcc2.THUNK_VTABLE_PREFIX}${Gcc2.mangleClassName(className)}")
+}
+
+/** `_vt.`/`_vt$`: `{delta, index, pfn}` entries, twice as wide, with pfn in the second word. */
+data object Gcc2Plain : Gcc2Abi {
+    override fun stride(ptrSize: Int) = 2L * ptrSize
+
+    /** `delta` and `index` are a `short` each: one 32-bit word. (`-fhuge-objects` would widen
+     *  both to `long`; no corpus binary uses it.) */
+    override fun pfnOffset(ptrSize: Int) = ptrSize.toLong()
+
+    override fun looksLikeVtable(symbolName: String) =
+        Gcc2.looksLikeVtable(symbolName) && !Gcc2.looksLikeThunkVtable(symbolName)
+
+    override fun vtableCandidates(className: String) = Gcc2.mangleClassName(className)
+        .let { m -> Gcc2.CPLUS_MARKERS.map { "${Gcc2.VTABLE_PREFIX}$it$m" } }
+}

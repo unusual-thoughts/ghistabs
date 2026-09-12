@@ -1,4 +1,4 @@
-package ghistabs.materialize.itanium
+package ghistabs.materialize.abi
 
 import ghidra.program.model.data.*
 import ghistabs.removePrefixOrNull
