@@ -84,10 +84,12 @@ object Demangler {
     /** Human-readable name for [mangled], falling back to [mangled] */
     fun name(mangled: String): String = of(mangled)?.demangledName ?: mangled
 
-    /** Parent-namespace chain, root-first, for [mangled] — or null if it has no enclosing namespace. */
-    fun namespaces(mangled: String): List<String>? = of(mangled)?.namespace?.let { parent ->
-        generateSequence(parent) { it.namespace }.map { it.name }.toList().asReversed()
-    }
+    /**
+     * Parent-namespace chain, root-first, for [mangled] — or null if it has no enclosing namespace.
+     * Null and empty are not the same answer here: a caller that falls back when the demangler says
+     * nothing has to be able to tell "no scope" from "scope is the root".
+     */
+    fun namespaces(mangled: String): List<String>? = of(mangled)?.namespaceChain()?.takeIf { it.isNotEmpty() }
 }
 
 /**
@@ -125,3 +127,7 @@ val DEMANGLER_CATEGORY: CategoryPath = CategoryPath.ROOT.extend("Demangler")
 
 /** Replicates the (protected) `DemangledDataType.getDemanglerCategoryPath` + leaf: `/Demangler/<ns…>/<name>`. */
 val Demangled.categoryPath get(): CategoryPath = (namespace?.categoryPath ?: DEMANGLER_CATEGORY).extend(name)
+
+/** [obj]'s enclosing scopes, outermost first. */
+fun DemangledObject.namespaceChain() = generateSequence(namespace) { it.namespace }
+    .map { it.name }.toList().asReversed()
