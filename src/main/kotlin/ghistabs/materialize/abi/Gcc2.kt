@@ -5,6 +5,7 @@ import ghidra.program.model.data.IntegerDataType
 import ghidra.program.model.data.ShortDataType
 import ghidra.program.model.data.Structure
 import ghistabs.materialize.abi.Gcc2.DEMANGLED_VTABLE_SUFFIX
+import ghistabs.namespaceChain
 import ghistabs.parse.TypeDecl.Aggregate.Method
 
 /**
@@ -64,7 +65,7 @@ object Gcc2 {
      */
     fun demangledVtableClass(obj: DemangledObject): String? {
         val leaf = obj.name?.removeSuffix(DEMANGLED_VTABLE_SUFFIX)?.takeIf { it != obj.name } ?: return null
-        return (namespaceChain(obj) + leaf).joinToString("::")
+        return (obj.namespaceChain() + leaf).joinToString("::")
     }
 
     /**
@@ -136,10 +137,6 @@ object Gcc2 {
     // is Q2 then the 17-character `__class_type_info`, so only the length run after it is checked.
     private val MANGLED_MEMBER_TAIL = Regex("""(?:_\._|__[CV]*)(?:Q[0-9]_?)?([0-9]+)""")
 }
-
-/** [obj]'s enclosing scopes, outermost first. */
-internal fun namespaceChain(obj: DemangledObject) =
-    generateSequence(obj.namespace) { it.namespace }.map { it.name }.toList().asReversed()
 
 /**
  * gcc 2.95.3, `cp/class.c:skip_rtti_stuff`: two pointer header entries with thunks, one 8-byte
