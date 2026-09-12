@@ -184,8 +184,8 @@
             "max": 9
         },
         "demangler-exact-match": {
-            "min": 721,
-            "max": 721
+            "min": 857,
+            "max": 857
         },
         "demangler-retarget-bound": {
             "min": 137,
@@ -200,12 +200,8 @@
             "max": 137
         },
         "demangler-reverse-demangle-match": {
-            "min": 139,
-            "max": 139
-        },
-        "demangler-shortened-name-match": {
-            "min": 20,
-            "max": 20
+            "min": 3,
+            "max": 3
         },
         "demangler-skip-no-replacement": {
             "min": 80,
@@ -534,8 +530,8 @@
             "max": 1043
         },
         "method-implicit-not-emitted": {
-            "min": 105,
-            "max": 105
+            "min": 139,
+            "max": 139
         },
         "method-static-no-this": {
             "min": 85,
@@ -1157,8 +1153,8 @@
                 "AllocatorWithCleanup<unsigned_long_long,false>",
                 "AllocatorWithCleanup<unsigned_short,false>",
                 "CBC_CTS_Mode_ExternalCipher",
-                "CBC_Mode<CryptoPP::AES>",
                 "CBC_Mode<CryptoPP::DES>",
+                "CBC_Mode<CryptoPP::Rijndael>",
                 "CBC_Mode_ExternalCipher",
                 "CFB_FIPS_Mode_ExternalCipher",
                 "CFB_Mode<CryptoPP::DES>",
@@ -1174,36 +1170,36 @@
                 "DES_Info",
                 "DES_XEX3",
                 "DES_XEX3_Info",
-                "DLIES<CryptoPP::NoCofactorMultiplication,true>",
-                "DL_CryptoSchemeOptions<CryptoPP::DLIES<CryptoPP::NoCofactorMultiplication,true>,CryptoPP::DL_CryptoKeys_GFP,CryptoPP::DL_KeyAgreementAlgorithm_DH<CryptoPP::Integer,CryptoPP::NoCofactorMultiplication>,CryptoPP::DL_KeyDerivationAlgorithm_P1363<CryptoPP::Integer,true,CryptoPP::P1363_KDF2<CryptoPP::SHA>>,CryptoPP::DL_EncryptionAlgorithm_Xor<CryptoPP::HMAC<CryptoPP::SHA>,true>>",
-                "DL_ES<CryptoPP::DL_CryptoKeys_GFP,CryptoPP::DL_KeyAgreementAlgorithm_DH<CryptoPP::Integer,CryptoPP::NoCofactorMultiplication>,CryptoPP::DL_KeyDerivationAlgorithm_P1363<CryptoPP::Integer,true,CryptoPP::P1363_KDF2<CryptoPP::SHA>>,CryptoPP::DL_EncryptionAlgorithm_Xor<CryptoPP::HMAC<CryptoPP::SHA>,true>,CryptoPP::DLIES<CryptoPP::NoCofactorMultiplication,true>>",
-                "DL_KeyedSchemeOptions<CryptoPP::DLIES<CryptoPP::NoCofactorMultiplication,true>,CryptoPP::DL_CryptoKeys_GFP>",
-                "DL_KeyedSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_Keys_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::H,int>,CryptoPP::DL_Keys_ECDSA<CryptoPP::EC2N>>",
-                "DL_KeyedSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_Keys_ECDSA<CryptoPP::ECP>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::ECP>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::H,int>,CryptoPP::DL_Keys_ECDSA<CryptoPP::ECP>>",
-                "DL_KeyedSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA,int>,CryptoPP::DL_SignatureKeys_GFP>",
-                "DL_KeyedSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_NR<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_NR,CryptoPP::SHA,int>,CryptoPP::DL_SignatureKeys_GFP>",
-                "DL_KeyedSchemeOptions<CryptoPP::DSA,CryptoPP::DL_Keys_DSA>",
-                "DL_SS<CryptoPP::DL_Keys_DSA,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA,CryptoPP::DSA>",
-                "DL_SS<CryptoPP::DL_Keys_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::H,CryptoPP::DL_SS<CryptoPP::DL_Keys_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::H,int>>",
-                "DL_SS<CryptoPP::DL_Keys_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::H,int>",
-                "DL_SS<CryptoPP::DL_Keys_ECDSA<CryptoPP::ECP>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::ECP>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::H,CryptoPP::DL_SS<CryptoPP::DL_Keys_ECDSA<CryptoPP::ECP>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::ECP>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::H,int>>",
-                "DL_SS<CryptoPP::DL_Keys_ECDSA<CryptoPP::ECP>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::ECP>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::H,int>",
-                "DL_SS<CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA,CryptoPP::DL_SS<CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA,int>>",
-                "DL_SS<CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA,int>",
-                "DL_SS<CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_NR<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_NR,CryptoPP::SHA,CryptoPP::DL_SS<CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_NR<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_NR,CryptoPP::SHA,int>>",
-                "DL_SS<CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_NR<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_NR,CryptoPP::SHA,int>",
-                "DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_Keys_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::H,int>,CryptoPP::DL_Keys_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::H>",
-                "DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_Keys_ECDSA<CryptoPP::ECP>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::ECP>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::H,int>,CryptoPP::DL_Keys_ECDSA<CryptoPP::ECP>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::ECP>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::H>",
-                "DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA,int>,CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA>",
-                "DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_NR<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_NR,CryptoPP::SHA,int>,CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_NR<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_NR,CryptoPP::SHA>",
-                "DL_SignatureSchemeOptions<CryptoPP::DSA,CryptoPP::DL_Keys_DSA,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA>",
+                "DLIES<CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>,true>",
+                "DL_CryptoSchemeOptions<CryptoPP::DLIES<CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>,true>,CryptoPP::DL_CryptoKeys_GFP,CryptoPP::DL_KeyAgreementAlgorithm_DH<CryptoPP::Integer,CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>>,CryptoPP::DL_KeyDerivationAlgorithm_P1363<CryptoPP::Integer,true,CryptoPP::P1363_KDF2<CryptoPP::SHA1>>,CryptoPP::DL_EncryptionAlgorithm_Xor<CryptoPP::HMAC<CryptoPP::SHA1>,true>>",
+                "DL_ES<CryptoPP::DL_CryptoKeys_GFP,CryptoPP::DL_KeyAgreementAlgorithm_DH<CryptoPP::Integer,CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>>,CryptoPP::DL_KeyDerivationAlgorithm_P1363<CryptoPP::Integer,true,CryptoPP::P1363_KDF2<CryptoPP::SHA1>>,CryptoPP::DL_EncryptionAlgorithm_Xor<CryptoPP::HMAC<CryptoPP::SHA1>,true>,CryptoPP::DLIES<CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>,true>>",
+                "DL_KeyedSchemeOptions<CryptoPP::DLIES<CryptoPP::EnumToType<CryptoPP::CofactorMultiplicationOption,0>,true>,CryptoPP::DL_CryptoKeys_GFP>",
+                "DL_KeyedSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_Keys_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256,int>,CryptoPP::DL_Keys_ECDSA<CryptoPP::EC2N>>",
+                "DL_KeyedSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_Keys_ECDSA<CryptoPP::ECP>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::ECP>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256,int>,CryptoPP::DL_Keys_ECDSA<CryptoPP::ECP>>",
+                "DL_KeyedSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA1,int>,CryptoPP::DL_SignatureKeys_GFP>",
+                "DL_KeyedSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_NR<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_NR,CryptoPP::SHA1,int>,CryptoPP::DL_SignatureKeys_GFP>",
+                "DL_KeyedSchemeOptions<CryptoPP::DSA2<CryptoPP::SHA1>,CryptoPP::DL_Keys_DSA>",
+                "DL_SS<CryptoPP::DL_Keys_DSA,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA1,CryptoPP::DSA2<CryptoPP::SHA1>>",
+                "DL_SS<CryptoPP::DL_Keys_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256,CryptoPP::DL_SS<CryptoPP::DL_Keys_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256,int>>",
+                "DL_SS<CryptoPP::DL_Keys_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256,int>",
+                "DL_SS<CryptoPP::DL_Keys_ECDSA<CryptoPP::ECP>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::ECP>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256,CryptoPP::DL_SS<CryptoPP::DL_Keys_ECDSA<CryptoPP::ECP>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::ECP>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256,int>>",
+                "DL_SS<CryptoPP::DL_Keys_ECDSA<CryptoPP::ECP>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::ECP>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256,int>",
+                "DL_SS<CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA1,CryptoPP::DL_SS<CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA1,int>>",
+                "DL_SS<CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA1,int>",
+                "DL_SS<CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_NR<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_NR,CryptoPP::SHA1,CryptoPP::DL_SS<CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_NR<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_NR,CryptoPP::SHA1,int>>",
+                "DL_SS<CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_NR<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_NR,CryptoPP::SHA1,int>",
+                "DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_Keys_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256,int>,CryptoPP::DL_Keys_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::EC2N>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256>",
+                "DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_Keys_ECDSA<CryptoPP::ECP>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::ECP>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256,int>,CryptoPP::DL_Keys_ECDSA<CryptoPP::ECP>,CryptoPP::DL_Algorithm_ECDSA<CryptoPP::ECP>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA256>",
+                "DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA1,int>,CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA1>",
+                "DL_SignatureSchemeOptions<CryptoPP::DL_SS<CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_NR<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_NR,CryptoPP::SHA1,int>,CryptoPP::DL_SignatureKeys_GFP,CryptoPP::DL_Algorithm_NR<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_NR,CryptoPP::SHA1>",
+                "DL_SignatureSchemeOptions<CryptoPP::DSA2<CryptoPP::SHA1>,CryptoPP::DL_Keys_DSA,CryptoPP::DL_Algorithm_GDSA<CryptoPP::Integer>,CryptoPP::DL_SignatureMessageEncodingMethod_DSA,CryptoPP::SHA1>",
                 "DSA2<CryptoPP::SHA1>",
                 "ECB_Mode<CryptoPP::DES>",
                 "ECB_Mode_ExternalCipher",
-                "ECDSA<CryptoPP::EC2N,CryptoPP::H>",
-                "ECDSA<CryptoPP::ECP,CryptoPP::H>",
-                "GDSA<CryptoPP::SHA>",
-                "NR<CryptoPP::SHA>",
+                "ECDSA<CryptoPP::EC2N,CryptoPP::SHA256>",
+                "ECDSA<CryptoPP::ECP,CryptoPP::SHA256>",
+                "GDSA<CryptoPP::SHA1>",
+                "NR<CryptoPP::SHA1>",
                 "NullAllocator<long_long_unsigned_int>",
                 "NullAllocator<unsigned_char>",
                 "NullAllocator<unsigned_int>",
@@ -1214,9 +1210,9 @@
                 "PKCS1v15",
                 "PSS",
                 "PSSR",
-                "RSAES<CryptoPP::OAEP<CryptoPP::SHA,CryptoPP::P1363_MGF1>>",
+                "RSAES<CryptoPP::OAEP<CryptoPP::SHA1,CryptoPP::P1363_MGF1>>",
                 "RSAES<CryptoPP::PKCS1v15>",
-                "RSASS<CryptoPP::PKCS1v15,CryptoPP::SHA>",
+                "RSASS<CryptoPP::PKCS1v15,CryptoPP::SHA1>",
                 "RSASS<CryptoPP::PKCS1v15,CryptoPP::Weak1::MD2>",
                 "RSASS<CryptoPP::PKCS1v15,CryptoPP::Weak1::MD5>",
                 "ReadErr",
@@ -1224,9 +1220,9 @@
                 "Rijndael_Info",
                 "SKIPJACK",
                 "SKIPJACK_Info",
-                "TF_ES<CryptoPP::OAEP<CryptoPP::SHA,CryptoPP::P1363_MGF1>,CryptoPP::RSA,CryptoPP::TF_ES<CryptoPP::OAEP<CryptoPP::SHA,CryptoPP::P1363_MGF1>,CryptoPP::RSA,int>>",
+                "TF_ES<CryptoPP::OAEP<CryptoPP::SHA1,CryptoPP::P1363_MGF1>,CryptoPP::RSA,CryptoPP::TF_ES<CryptoPP::OAEP<CryptoPP::SHA1,CryptoPP::P1363_MGF1>,CryptoPP::RSA,int>>",
                 "TF_ES<CryptoPP::PKCS1v15,CryptoPP::RSA,CryptoPP::TF_ES<CryptoPP::PKCS1v15,CryptoPP::RSA,int>>",
-                "TF_SS<CryptoPP::PKCS1v15,CryptoPP::SHA,CryptoPP::RSA,CryptoPP::TF_SS<CryptoPP::PKCS1v15,CryptoPP::SHA,CryptoPP::RSA,int>>",
+                "TF_SS<CryptoPP::PKCS1v15,CryptoPP::SHA1,CryptoPP::RSA,CryptoPP::TF_SS<CryptoPP::PKCS1v15,CryptoPP::SHA1,CryptoPP::RSA,int>>",
                 "TF_SS<CryptoPP::PKCS1v15,CryptoPP::Weak1::MD2,CryptoPP::RSA,CryptoPP::TF_SS<CryptoPP::PKCS1v15,CryptoPP::Weak1::MD2,CryptoPP::RSA,int>>",
                 "TF_SS<CryptoPP::PKCS1v15,CryptoPP::Weak1::MD5,CryptoPP::RSA,CryptoPP::TF_SS<CryptoPP::PKCS1v15,CryptoPP::Weak1::MD5,CryptoPP::RSA,int>>",
                 "WriteErr",
@@ -1236,8 +1232,8 @@
                 "__is_arithmetic<CryptoPP::EC2NPoint>",
                 "__is_arithmetic<CryptoPP::ECPPoint>",
                 "__is_arithmetic<CryptoPP::Integer>",
-                "__is_arithmetic<CryptoPP::MeterFilter::_ValueType*>",
-                "__is_arithmetic<CryptoPP::MeterFilter::_ValueType>",
+                "__is_arithmetic<CryptoPP::MeterFilter::MessageRange*>",
+                "__is_arithmetic<CryptoPP::MeterFilter::MessageRange>",
                 "__is_arithmetic<CryptoPP::PolynomialMod2>",
                 "__is_arithmetic<CryptoPP::ProjectivePoint>",
                 "__is_arithmetic<CryptoPP::WindowSlider>",
@@ -1261,8 +1257,8 @@
                 "__is_scalar<CryptoPP::EC2NPoint>",
                 "__is_scalar<CryptoPP::ECPPoint>",
                 "__is_scalar<CryptoPP::Integer>",
-                "__is_scalar<CryptoPP::MeterFilter::_ValueType*>",
-                "__is_scalar<CryptoPP::MeterFilter::_ValueType>",
+                "__is_scalar<CryptoPP::MeterFilter::MessageRange*>",
+                "__is_scalar<CryptoPP::MeterFilter::MessageRange>",
                 "__is_scalar<CryptoPP::PolynomialMod2>",
                 "__is_scalar<CryptoPP::ProjectivePoint>",
                 "__is_scalar<CryptoPP::WindowSlider>",
@@ -1287,17 +1283,17 @@
                 "allocator<CryptoPP::EC2NPoint>",
                 "allocator<CryptoPP::ECPPoint>",
                 "allocator<CryptoPP::Integer>",
-                "allocator<CryptoPP::MeterFilter::_ValueType*>",
-                "allocator<CryptoPP::MeterFilter::_ValueType>",
+                "allocator<CryptoPP::MeterFilter::MessageRange*>",
+                "allocator<CryptoPP::MeterFilter::MessageRange>",
                 "allocator<CryptoPP::PolynomialMod2>",
                 "allocator<CryptoPP::ProjectivePoint>",
                 "allocator<CryptoPP::WindowSlider>",
                 "allocator<bool>",
                 "allocator<char>",
-                "allocator<std::_Node>",
-                "allocator<std::_Rb_tree_node<std::pair<const_std::basic_string<char,std::traits_type,std::allocator<char>>,std::pair<CryptoPP::BufferedTransformation*,std::basic_string<char,std::traits_type,std::allocator<char>>>>>>",
-                "allocator<std::pair<CryptoPP::BufferedTransformation*,CryptoPP::value_ptr<std::basic_string<char,std::traits_type,std::allocator<char>>>>>",
-                "allocator<std::pair<const_std::basic_string<char,std::traits_type,std::allocator<char>>,std::pair<CryptoPP::BufferedTransformation*,std::basic_string<char,std::traits_type,std::allocator<char>>>>>",
+                "allocator<std::_List_node<std::pair<CryptoPP::BufferedTransformation*,CryptoPP::value_ptr<std::basic_string<char,std::char_traits<char>,std::allocator<char>>>>>>",
+                "allocator<std::_Rb_tree_node<std::pair<const_std::basic_string<char,std::char_traits<char>,std::allocator<char>>,std::pair<CryptoPP::BufferedTransformation*,std::basic_string<char,std::char_traits<char>,std::allocator<char>>>>>>",
+                "allocator<std::pair<CryptoPP::BufferedTransformation*,CryptoPP::value_ptr<std::basic_string<char,std::char_traits<char>,std::allocator<char>>>>>",
+                "allocator<std::pair<const_std::basic_string<char,std::char_traits<char>,std::allocator<char>>,std::pair<CryptoPP::BufferedTransformation*,std::basic_string<char,std::char_traits<char>,std::allocator<char>>>>>",
                 "allocator<std::vector<CryptoPP::EC2NPoint,std::allocator<CryptoPP::EC2NPoint>>>",
                 "allocator<std::vector<CryptoPP::ECPPoint,std::allocator<CryptoPP::ECPPoint>>>",
                 "allocator<std::vector<CryptoPP::Integer,std::allocator<CryptoPP::Integer>>>",
@@ -1318,7 +1314,7 @@
                 "bidirectional_iterator_tag",
                 "forward_iterator_tag",
                 "less<char_const*>",
-                "less<std::basic_string<char,std::traits_type,std::allocator<char>>>",
+                "less<std::basic_string<char,std::char_traits<char>,std::allocator<char>>>",
                 "less<wchar_t_const*>",
                 "not_equal_to<unsigned_char>",
                 "random_access_iterator_tag"
@@ -1337,8 +1333,8 @@
             "max": 861
         },
         "resolve-ambiguous": {
-            "min": 2590,
-            "max": 2590
+            "min": 2409,
+            "max": 2409
         },
         "rtti-pseudo-substituted": {
             "min": 37,
@@ -1469,13 +1465,9 @@
             "min": 3,
             "max": 3
         },
-        "typedef-shorten": {
-            "min": 1,
-            "max": 1
-        },
         "unresolved-symbol": {
-            "min": 979,
-            "max": 979
+            "min": 945,
+            "max": 945
         },
         "unresolved-xref": {
             "min": 81,
@@ -1500,6 +1492,22 @@
         "vfptr-split-from-base": {
             "min": 532,
             "max": 532
+        },
+        "vtable-abi-assumed": {
+            "min": 10,
+            "max": 10,
+            "degrades": [
+                "char_producer<char>",
+                "char_producer<wchar_t>",
+                "istringstream",
+                "ostringstream",
+                "stringbuf",
+                "stringstream",
+                "wistringstream",
+                "wostringstream",
+                "wstringbuf",
+                "wstringstream"
+            ]
         },
         "vtable-applied": {
             "min": 111,
