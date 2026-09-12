@@ -104,6 +104,15 @@ object Gcc2 {
      */
     fun isCompilerGeneratedName(name: String) = name.firstOrNull() in MARKERS
 
+    /**
+     * A name gcc 2.x mangled, recognised by mirroring what [physnamePrefix] composes: `__` then the
+     * cv-qualifier then the length-prefixed class (`Accept__C12TiXmlElement`, `__as__11TiXmlString`,
+     * `__11TiXmlStringPCc`), or the `_._` dtor form. A plain C symbol has no such run — the `__` has
+     * to be followed by the length digit or a `Q`, which is what keeps `__vt_9TiXmlNode` and
+     * `__errno_location` out.
+     */
+    fun isProbablyMangled(name: String) = name.startsWith("_._") || MANGLED_MEMBER_TAIL.containsMatchIn(name)
+
     /** The mangled class name a gcc 2.x vtable symbol carries, or null if [symbolName] isn't one. */
     private fun vtableTail(symbolName: String): String? = when {
         symbolName.startsWith(THUNK_VTABLE_PREFIX) -> symbolName.removePrefix(THUNK_VTABLE_PREFIX)
@@ -115,6 +124,8 @@ object Gcc2 {
     }
 
     private val MARKERS = CPLUS_MARKERS.toSet()
+
+    private val MANGLED_MEMBER_TAIL = Regex("""__[CV]*(?:[0-9]|Q[0-9])""")
 }
 
 /** [obj]'s enclosing scopes, outermost first. */
@@ -138,6 +149,46 @@ sealed interface Gcc2Abi : CxxAbi {
     override fun isPrimaryVtable(symbolName: String) = Gcc2.looksLikePrimaryVtable(symbolName)
 
     override fun demangledVtableClass(obj: DemangledObject) = Gcc2.demangledVtableClass(obj)
+
+    /** `__as` is how gcc 2.x spells `operator=` in a stab, and in the symbol it composes from it. */
+    override val assignmentOperatorName get() = "__as"
+
+    override fun isProbablyMangled(name: String) = Gcc2.isProbablyMangled(name)
+
+    /**
+     * A gcc 2.x stab does not put a symbol in its physname field — it puts the mangled *argument
+     * list*, which is what gdb's `gdb_mangle_name` concatenates onto `<name>__<cv><class>`.
+     * `tinyxml_aout_gcc295.o` states `""` and `"PCc"` for FirstChild's two overloads and carries
+     * `FirstChild__C9TiXmlNode` and `FirstChild__C9TiXmlNodePCc`, so the fragment is exactly what
+     * tells them apart: composing it gives one candidate, not a prefix to search under.
+     *
+     * The composed form is skipped for an Itanium-mangled physname, so a COMDAT-dropped `_ZN…`
+     * appearing in a gcc 2.x link does not get a bogus second lookup.
+     */
+    override fun physnameCandidates(
+        memberName: String,
+        className: String,
+        isConst: Boolean,
+        isVolatile: Boolean,
+        stated: String?,
+    ) = listOfNotNull(
+        stated,
+        if (stated == null || !Itanium.isProbablyMangled(stated)) {
+            Gcc2.physnamePrefix(memberName, className, isConst, isVolatile) + stated.orEmpty()
+        } else {
+            null
+        },
+    )
+
+    /** The inverse of [Gcc2.physnamePrefix]'s ctor/dtor forms — `__9TiXmlNode`, `_._9TiXmlNode`. */
+    override fun specialMemberDisplayName(mangled: String, className: String): String? {
+        val mangledClass = Gcc2.mangleClassName(className)
+        return when {
+            mangled.startsWith("_._$mangledClass") -> "~$className"
+            mangled.startsWith("__$mangledClass") -> className
+            else -> null
+        }
+    }
 }
 
 /** `__vt_`: the `this` adjustment moved into a thunk, so an entry is the pfn. */

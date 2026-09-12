@@ -10,6 +10,7 @@ import ghidra.program.model.listing.*
 import ghidra.program.model.listing.Function
 import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
+import ghidra.program.model.symbol.Symbol
 import ghidra.program.model.symbol.SymbolUtilities
 import ghidra.util.task.TaskMonitor
 import ghistabs.Demangler
@@ -23,8 +24,6 @@ import ghistabs.index.demangledClassPath
 import ghistabs.isInjected
 import ghistabs.isMethod
 import ghistabs.materialize.abi.*
-import ghistabs.materialize.abi.Itanium.isImplicitTrivialSpecialMember
-import ghistabs.materialize.abi.Itanium.isInlineStdMember
 import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Aggregate.Method
 
@@ -66,7 +65,7 @@ class ClassBuilder(
         // Pointer→FunctionDefinition(<sig>) so the decompiler resolves virtual calls and
         // RecoveredClassHelper / shift-S round-trip. The offset_to_top + rtti header words sit
         // before the address point as plain Data (no enclosing struct — see buildAndApplyVtable).
-        private val LocatedType.vftableCategory get() = CategoryPath(Itanium.classDataTypesRoot, className)
+        private val LocatedType.vftableCategory get() = CategoryPath(GhidraClassNaming.classDataTypesRoot, className)
         private val LocatedType.vftableName get() = "${className}_vftable"
     }
 
@@ -193,15 +192,10 @@ class ClassBuilder(
 
     private fun LocatedType.reparentMethod(m: Method<GlobalTypeId>, ns: GhidraClass, structDt: Structure) {
         val stated = m.mangled?.takeIf { it.isNotBlank() }
-        val (mangled, addr) = physnameCandidates(m, stated)
+        val (mangled, addr) = abi.physnameCandidates(m.name, className, m.isConst, m.isVolatile, stated)
             .firstNotNullOfOrNull { name -> resolver.resolve(name)?.let { name to it } }
             ?: run {
-                // Nothing was emitted for this member. Trivial implicit special members — default
-                // ctor, copy ctor/assignment, dtor — are declared in every class's stab list and
-                // never get a symbol, so they are bucketed apart to keep unresolved-symbol about
-                // real problems. gcc 2.x spells them by the class's own name rather than by an
-                // Itanium tail, which is why a plain C struct's `timeval::timeval` lands here.
-                if (stated?.let(::isImplicitTrivialSpecialMember) == true || isImplicitGcc2Member(m)) {
+                if (abi.isImplicitMember(m.name, className, stated)) {
                     debug("method-implicit-not-emitted")
                 } else {
                     debug("unresolved-symbol", "method ${stated ?: m.name} (in $className)")
@@ -209,7 +203,7 @@ class ClassBuilder(
                 return
             }
         val func = program.functionManager.getFunctionAt(addr) ?: run {
-            val (tag, level) = if (isInlineStdMember(mangled)) {
+            val (tag, level) = if (abi.isInlineStdMember(mangled)) {
                 "unresolved-symbol-inlined-std" to Level.DEBUG
             } else {
                 "unresolved-symbol" to Level.WARN
@@ -225,7 +219,7 @@ class ClassBuilder(
         if (!program.applyDemangling(addr, mangled)) {
             // Fall back to manual namespace + display-name handling.
             func.parentNamespace = ns
-            val fallbackName = Itanium.specialMemberDisplayName(mangled, className) ?: m.name
+            val fallbackName = abi.specialMemberDisplayName(mangled, className) ?: m.name
             if (func.name != fallbackName) func.setName(fallbackName, source)
             degradation(
                 "method-demangle-fallback",
@@ -395,40 +389,6 @@ class ClassBuilder(
         .orEmpty()
         .also { if (it.isNotEmpty()) debug("method-stub-params-recovered", "$at: ${it.size} from $mangled") }
 
-    /**
-     * The symbols this member could be, most specific first.
-     *
-     * A gcc 2.x stab does not put a symbol in its physname field — it puts the mangled *argument
-     * list*, which is what gdb's `gdb_mangle_name` concatenates onto `<name>__<cv><class>`.
-     * `tinyxml_aout_gcc295.o` states `""` and `"PCc"` for FirstChild's two overloads and carries
-     * `FirstChild__C9TiXmlNode` and `FirstChild__C9TiXmlNodePCc`, so the fragment is exactly what
-     * tells them apart: composing it gives one candidate, not a prefix to search under.
-     *
-     * The stated name is tried first and unchanged, which is all gcc 3.x needs — there the field
-     * really is the whole mangled symbol. The composed form is only worth trying when it isn't
-     * Itanium-mangled, so a COMDAT-dropped `_ZN…` doesn't get a bogus second lookup.
-     */
-    private fun LocatedType.physnameCandidates(m: Method<GlobalTypeId>, stated: String?): List<String> = listOfNotNull(
-        stated,
-        if (stated == null || !Itanium.isProbablyMangled(stated)) {
-            Gcc2.physnamePrefix(m.name, className, m.isConst, m.isVolatile) + stated.orEmpty()
-        } else {
-            null
-        },
-    )
-
-    /**
-     * A member gcc 2.x would only emit if it were used: the class's own ctor or dtor, or the
-     * implicit `operator=`. gcc declares them for every aggregate the CU sees — plain C structs
-     * from system headers included as `timeval` or `_IO_FILE` among them — so an absent symbol is
-     * the norm rather than a loss. The Itanium counterpart is [isImplicitTrivialSpecialMember],
-     * which reads the mangled tail; there is no tail to read here.
-     */
-    private fun LocatedType.isImplicitGcc2Member(m: Method<GlobalTypeId>): Boolean {
-        val leaf = className.substringAfterLast("::")
-        return m.name == leaf || m.name == "~$leaf" || m.name == "__as"
-    }
-
     private fun LocatedType.buildAndApplyVtable(ns: GhidraClass) {
         val declared = collectAllVirtuals()
         if (declared.isEmpty()) {
@@ -442,7 +402,7 @@ class ClassBuilder(
         val targets = shape?.let { program.vtableSlotTargets(it.addressPoint, resolver, resolved.abi) }.orEmpty()
         // The symbol's spelling is the only thing that states the ABI, so without one the geometry is
         // a guess: a gcc 2.x record read as Itanium loses its reserved header and half its stride.
-        val abi = resolved?.abi ?: prevailingAbi
+        val abi = resolved?.abi ?: this@ClassBuilder.abi
         if (resolved == null) {
             degradation("vtable-abi-assumed", className, "no vtable symbol resolved; slots laid as $abi")
         }
@@ -634,7 +594,7 @@ class ClassBuilder(
                 continue
             }
             val leaf = canonTemplateName(splitQualified(qualified).last())
-            val category = CategoryPath(Itanium.classDataTypesRoot, leaf)
+            val category = CategoryPath(GhidraClassNaming.classDataTypesRoot, leaf)
             val vftable = registry.getOrRegister<Structure>(category, "${leaf}_vftable") {
                 StructureDataType(category, "${leaf}_vftable", 0, dtm)
             }
@@ -678,7 +638,7 @@ class ClassBuilder(
         val slots = program.vtableSlotTargets(primary.addressPoint, resolver).size
         val subs = program.secondaryVtables(primary.addressPoint.add(slots * ptr), rtti, resolver)
         subs.forEachIndexed { i, sub ->
-            val category = CategoryPath(CategoryPath(Itanium.classDataTypesRoot, leaf), "internal_$i")
+            val category = CategoryPath(CategoryPath(GhidraClassNaming.classDataTypesRoot, leaf), "internal_$i")
             val name = "${leaf}_vftable_internal_$i"
             val vftable = registry.getOrRegister<Structure>(category, name) {
                 StructureDataType(category, name, 0, dtm)
@@ -687,7 +647,14 @@ class ClassBuilder(
                 val used = mutableSetOf<String>()
                 for (target in sub.targets) vftable.addSweptSlot(category, target, used)
             }
-            val at = program.layVtable(sub.shape, vftable, leaf, ns, resolver, label = Itanium.INTERNAL_VFTABLE)
+            val at = program.layVtable(
+                sub.shape,
+                vftable,
+                leaf,
+                ns,
+                resolver,
+                label = GhidraClassNaming.INTERNAL_VFTABLE,
+            )
             debug("vtable-secondary", "class=$leaf index=$i slots=${sub.targets.size}", address = at)
         }
     }
@@ -704,7 +671,7 @@ class ClassBuilder(
      * [used] carries the names already spent on this table.
      */
     private fun Structure.addSweptSlot(category: CategoryPath, target: Address, used: MutableSet<String>) {
-        val linkage = symtab.getSymbols(target).map { it.name }.firstOrNull(Itanium::isProbablyMangled)
+        val linkage = symtab.getSymbols(target).map { it.name }.firstOrNull(abi::isProbablyMangled)
             ?: symtab.getPrimarySymbol(target)?.name
             ?: "slot"
         val leaf = Demangler.of(linkage)?.name ?: linkage
@@ -793,17 +760,11 @@ class ClassBuilder(
 
     private fun LocatedType.collectAllVirtuals() = types.collectAllVirtuals(classBody)
 
-    /**
-     * The ABI this binary's vtable symbols spell, for a class whose own symbol never resolved to an
-     * address. One producer per binary, so the first primary spelling states it — and an *undefined*
-     * symbol spells it just as well, which is what makes this better than assuming Itanium:
-     * `tinyxml_aout_gcc295.o` names `__vt_13TiXmlDocument` without defining it, and every class in
-     * that position was being laid with Itanium's stride and no reserved header.
-     */
-    private val prevailingAbi: CxxAbi by lazy {
-        symtab.symbolIterator
-            .firstNotNullOfOrNull { s -> CxxAbi.of(s.name)?.takeIf { it.isPrimaryVtable(s.name) } }
-            ?: Itanium
+    /** What every ABI question falls back to for a class whose own vtable symbol never resolved. */
+    private val abi: CxxAbi by lazy {
+        // Typed, because SymbolIterator is both an Iterator and an Iterable and asSequence is on both.
+        val symbols: Iterator<Symbol> = symtab.symbolIterator
+        CxxAbi.prevailing(symbols.asSequence().map { it.name })
     }
 
     /**
