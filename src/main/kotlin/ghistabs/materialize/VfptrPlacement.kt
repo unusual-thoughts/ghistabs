@@ -8,7 +8,6 @@ import ghidra.program.model.data.Undefined1DataType
 import ghidra.program.model.gclass.ClassUtils
 import ghidra.program.model.listing.Program
 import ghistabs.diagnose.DiagnosticSink
-import ghistabs.index.TypeGraph
 import ghistabs.materialize.abi.Itanium
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
@@ -20,7 +19,6 @@ import ghistabs.parse.isVptrFieldName
  */
 internal class VfptrPlacement(
     private val registry: DataTypeRegistry,
-    private val types: TypeGraph,
     private val program: Program,
     private val model: VfptrModel,
     private val sink: DiagnosticSink,
@@ -28,13 +26,15 @@ internal class VfptrPlacement(
 
     /**
      * Put `{vfptr}` where the stab says the vptr is, as [ownVfptr] — a pointer to *this* class's
-     * vftable. [className] and [classBody] are the class being built; [structDt] is its materialized
-     * Structure.
+     * vftable. [className] and [classBody] are the class being built, [structDt] its materialized
+     * Structure, and [hasPolymorphicBaseSubobject] the caller's answer, so the base graph is walked
+     * once per class rather than once here and again there.
      */
     fun place(
         structDt: Structure,
         className: String,
         classBody: TypeDecl.Aggregate<GlobalTypeId>,
+        hasPolymorphicBaseSubobject: Boolean,
         ownVfptr: () -> Pointer,
     ) {
         val vfptrName = ClassUtils.VFPTR
@@ -51,7 +51,7 @@ internal class VfptrPlacement(
         }
 
         val action = chooseVfptrAction(
-            hasPolymorphicBaseSubobject = types.hasPolymorphicBaseSubobject(classBody),
+            hasPolymorphicBaseSubobject = hasPolymorphicBaseSubobject,
             parserVptrOffsetBytes = parserVptrOffset,
             componentAtTargetOffset = snapshot,
             canonicalVfptrFieldName = vfptrName,
@@ -128,18 +128,13 @@ internal class VfptrPlacement(
         // that carries none — reached through the base-field branch of chooseVfptrAction, where
         // polymorphism was never proven — falls back to where this class says its vptr is.
         val vptrInBase = baseDt.definedComponents.firstOrNull { it.fieldName == ClassUtils.VFPTR }?.offset
-            ?: (vptrOffset - baseComp.offset).takeIf { it >= 0 && it + ptr <= baseDt.length }
-            ?: return false
+            ?: (vptrOffset - baseComp.offset)
+        val split = splitAround(baseDt.length, vptrInBase, ptr) ?: return false
         val baseOff = baseComp.offset
         val tailFrom = vptrInBase + ptr
 
-        // The vptr splits the inherited data into up to two runs. One of them is empty whenever the
-        // vptr is at the start (Itanium) or the end (gcc 2.x at depth 1), which is the common case
-        // and keeps the subobject a single `_base_` component. Deeper in a gcc 2.x chain both runs
-        // are real — `TiXmlElement` inherits `location`/`userData` before the vptr and `value`
-        // after — so the subobject is spliced as a head and a tail rather than dropped.
-        val head = baseFieldsRun(baseDt, 0, vptrInBase)
-        val tail = baseFieldsRun(baseDt, tailFrom, baseDt.length)
+        val head = split.head?.let { baseFieldsRun(baseDt, it.from, it.until) }
+        val tail = split.tail?.let { baseFieldsRun(baseDt, it.from, it.until) }
         if (head == null && tail == null) return false
 
         val vfptr = ownVfptr()
@@ -180,6 +175,29 @@ internal class VfptrPlacement(
             }
         }
     }
+}
+
+/** A half-open byte range `[from, until)` of a base subobject. */
+data class Run(val from: Int, val until: Int) {
+    val length get() = until - from
+}
+
+/** What a vptr leaves of a base subobject: the fields before it and the fields after it. */
+data class BaseSplit(val head: Run?, val tail: Run?)
+
+/**
+ * The runs a vptr at [vptrInBase] leaves of a [baseLength]-byte base. Null when the pointer does not
+ * fit inside the base, or when it covers the base whole and there is nothing left to embed.
+ *
+ * One run is empty whenever the vptr is at the start (Itanium) or the end (gcc 2.x at depth 1),
+ * which keeps the subobject a single `_base_` component. Deeper in a gcc 2.x chain both are real:
+ * `TiXmlElement` inherits `location`/`userData` before the vptr and `value` after.
+ */
+fun splitAround(baseLength: Int, vptrInBase: Int, ptrSize: Int): BaseSplit? {
+    if (vptrInBase < 0 || vptrInBase + ptrSize > baseLength) return null
+    val head = Run(0, vptrInBase).takeIf { it.length > 0 }
+    val tail = Run(vptrInBase + ptrSize, baseLength).takeIf { it.length > 0 }
+    return if (head == null && tail == null) null else BaseSplit(head, tail)
 }
 
 /** Component snapshot at a target offset, fed into [chooseVfptrAction]. */

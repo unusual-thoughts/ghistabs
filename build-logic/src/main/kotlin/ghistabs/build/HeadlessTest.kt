@@ -88,6 +88,10 @@ fun Test.headlessGhidraConfig(reportName: String, narrowGeneratedClasses: Boolea
     // -Pshorten=true turns OPT_SHORTEN_TYPEDEFS on for the fixture matrix. Off by default, as the
     // option is: pair it with -Pmode=CONCURRENT to A/B the `.conflict` census the GUI actually sees.
     systemProperty("shortenTypedefs", props.gradleProperty("shorten").getOrElse(""))
+
+    // -Pvfptr=INHERITED runs the matrix under the other vfptr model. Counter baselines are recorded
+    // under the default, so that run checks the structural assertions only.
+    systemProperty("vfptrModel", props.gradleProperty("vfptr").getOrElse(""))
     // -PregenerateBaselines=true rewrites baseline JSONs from observed counters instead of asserting.
     systemProperty("regenerateBaselines", props.gradleProperty("regenerateBaselines").getOrElse(""))
     // -PignoreBaselines=true reports drift without failing; drifted fixtures still write their counters.
