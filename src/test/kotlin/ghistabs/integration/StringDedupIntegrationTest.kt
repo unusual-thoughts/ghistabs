@@ -9,9 +9,13 @@ import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.CapturingSink
 import ghistabs.diagnose.Level
 import ghistabs.diagnose.StabsDiagnostics
-import ghistabs.importer.*
+import ghistabs.importer.ImportContext
+import ghistabs.importer.ImportOptions
 import ghistabs.importer.ImportOptions.Companion.SHORTEN_TYPEDEFS
+import ghistabs.importer.ImportProbe
+import ghistabs.importer.STABS_ANALYZER_NAME
 import ghistabs.runTransaction
+import ghistabs.set
 import ghistabs.test.*
 import ghistabs.withProgram
 import org.junit.jupiter.api.Tag
@@ -49,7 +53,10 @@ class StringDedupIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             val ctx = ImportContext(
                 program,
                 TaskMonitor.DUMMY,
-                ImportOptions(shortenTypedefs = shorten, minLogLevel = Level.DEBUG),
+                ImportOptions {
+                    shortenTypedefs = shorten
+                    minLogLevel = Level.DEBUG
+                },
                 CapturingSink(),
                 StabsDiagnostics(),
             )

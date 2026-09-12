@@ -103,7 +103,7 @@ class AoutStabsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         val ctx = ImportContext(
             program,
             TaskMonitor.DUMMY,
-            ImportOptions(minLogLevel = Level.DEBUG),
+            ImportOptions { minLogLevel = Level.DEBUG },
             CapturingSink(),
             StabsDiagnostics(),
         )
