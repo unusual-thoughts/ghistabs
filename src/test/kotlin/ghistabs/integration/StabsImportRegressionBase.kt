@@ -9,7 +9,6 @@ import ghidra.program.model.data.Enum
 import ghidra.program.model.listing.CommentType
 import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.Program
-import ghidra.program.model.symbol.Symbol
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghistabs.*
@@ -1390,7 +1389,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     fun declaredVirtualsAllGetAVftableSlot() {
         val vftables = filledVftables().associateBy { it.name.removeSuffix("_vftable") }
         assumeTrue(vftables.isNotEmpty(), "Skipping: no populated vftable in this fixture")
-        val bias = fixtureAbi().reservedEntries(program.defaultPointerSize)
+        val bias = program.symbolTable.prevailingAbi()!!.reservedEntries(program.defaultPointerSize)
 
         val misplaced = artifacts.harvest.types.values.mapNotNull { it.asStruct() }
             .flatMap { (ast, body) ->
@@ -1908,10 +1907,6 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         .filterIsInstance<Structure>().filter { it.name.endsWith("_vftable") }
         .groupBy { it.name }.values.map { copies -> copies.maxBy { it.numComponents } }
         .filter { it.numComponents > 0 }
-
-    /** The ABI that spelled this fixture's vtables. Itanium where nothing in the binary says — a
-     *  fixture with no C++ has no vftable either, so the slot bias it feeds is unused there. */
-    private fun fixtureAbi(): CxxAbi = program.symbolTable.prevailingAbi() ?: Itanium
 
     /** The Ghidra function for each `STATIC`-flagged method the stabs name, keyed by linkage name.
      *  The Cygwin PE loader prefixes symbols with `_`, so both spellings are tried. */
