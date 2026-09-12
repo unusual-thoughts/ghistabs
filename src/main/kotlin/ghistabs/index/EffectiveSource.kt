@@ -3,7 +3,7 @@ package ghistabs.index
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.DummySink
 import ghistabs.harvest.*
-import ghistabs.materialize.itanium.Itanium
+import ghistabs.materialize.abi.Itanium
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.SymbolDecl
 import ghistabs.parse.TypeDecl

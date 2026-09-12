@@ -24,9 +24,8 @@ import ghistabs.index.demangledClassPath
 import ghistabs.isInjected
 import ghistabs.isMethod
 import ghistabs.materialize.abi.*
-import ghistabs.materialize.itanium.*
-import ghistabs.materialize.itanium.Itanium.isImplicitTrivialSpecialMember
-import ghistabs.materialize.itanium.Itanium.isInlineStdMember
+import ghistabs.materialize.abi.Itanium.isImplicitTrivialSpecialMember
+import ghistabs.materialize.abi.Itanium.isInlineStdMember
 import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Aggregate.Method
 
@@ -444,7 +443,7 @@ class ClassBuilder(
         val targets = shape?.let { program.vtableSlotTargets(it.addressPoint, resolver, resolved.abi) }.orEmpty()
         // The symbol's spelling is the only thing that states the ABI, so without one the geometry is
         // a guess: a gcc 2.x record read as Itanium loses its reserved header and half its stride.
-        val abi = resolved?.abi ?: CxxAbi.Itanium
+        val abi = resolved?.abi ?: Itanium
         if (resolved == null) {
             degradation("vtable-abi-assumed", className, "no vtable symbol resolved; slots laid as $abi")
         }
@@ -549,15 +548,15 @@ class ClassBuilder(
      * is what keeps the header out of the slot list everything else counts.
      */
     private fun Structure.addReservedHeader(abi: CxxAbi) = when (abi) {
-        CxxAbi.Itanium -> Unit
+        Itanium -> Unit
 
         // laid as loose words in front of the struct — see layVtable
-        CxxAbi.Gcc2Thunks -> {
+        Gcc2Thunks -> {
             add(IntegerDataType.dataType, RESERVED + "_offset", "reserved: offset/tdesc entry")
             add(IntegerDataType.dataType, RESERVED + "_tdesc", "reserved: tdesc pointer")
         }
 
-        CxxAbi.Gcc2Plain -> {
+        Gcc2Plain -> {
             add(ShortDataType.dataType, RESERVED + "__delta", "reserved entry: delta")
             add(ShortDataType.dataType, RESERVED + "__index", "reserved entry: index")
             add(IntegerDataType.dataType, RESERVED + "__pfn", "reserved entry: pfn")
@@ -570,7 +569,7 @@ class ClassBuilder(
      * `movswl` and adds it to `this` before the call — so it is a signed short and worth naming.
      */
     private fun Structure.addEntryAdjustment(abi: CxxAbi, slot: Int) {
-        if (abi != CxxAbi.Gcc2Plain) return
+        if (abi != Gcc2Plain) return
         add(ShortDataType.dataType, "slot${slot}__delta", "this-adjustment for slot $slot")
         add(ShortDataType.dataType, "slot${slot}__index", "unused; gcc 2.x always emits 0")
     }

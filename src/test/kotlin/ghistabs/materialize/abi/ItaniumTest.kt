@@ -1,4 +1,4 @@
-package ghistabs.materialize.itanium
+package ghistabs.materialize.abi
 
 import ghidra.app.util.demangler.DemangledAddressTable
 import ghidra.app.util.demangler.DemangledFunction
@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test
 class ItaniumTest {
     @Test
     fun testZtvCandidatesSimpleName() {
-        CxxAbi.Itanium.vtableCandidates("ThisStream") mustBe listOf(
+        Itanium.vtableCandidates("ThisStream") mustBe listOf(
             "_ZTV10ThisStream",
             "__ZTV10ThisStream",
             "ThisStream::vtable",
@@ -36,7 +36,7 @@ class ItaniumTest {
 
     @Test
     fun testZtvCandidatesNestedName() {
-        val candidates = CxxAbi.Itanium.vtableCandidates("Foo::Bar")
+        val candidates = Itanium.vtableCandidates("Foo::Bar")
         candidates[0] mustBe "_ZTVN3Foo3BarE"
         candidates[1] mustBe "__ZTVN3Foo3BarE"
     }
@@ -63,11 +63,11 @@ class ItaniumTest {
 
     @Test
     fun testLooksLikeZtv() {
-        Itanium.must { CxxAbi.Itanium.looksLikeVtable("_ZTV10ThisStream") }
-        Itanium.must { CxxAbi.Itanium.looksLikeVtable("__ZTV10ThisStream") }
-        Itanium.mustNot { CxxAbi.Itanium.looksLikeVtable("ZTVbare") }
-        Itanium.mustNot { CxxAbi.Itanium.looksLikeVtable("XYZ_ZTV9ThisStream") }
-        Itanium.mustNot { CxxAbi.Itanium.looksLikeVtable("_ZN3FooC1Ev") }
+        Itanium.must { Itanium.looksLikeVtable("_ZTV10ThisStream") }
+        Itanium.must { Itanium.looksLikeVtable("__ZTV10ThisStream") }
+        Itanium.mustNot { Itanium.looksLikeVtable("ZTVbare") }
+        Itanium.mustNot { Itanium.looksLikeVtable("XYZ_ZTV9ThisStream") }
+        Itanium.mustNot { Itanium.looksLikeVtable("_ZN3FooC1Ev") }
     }
 
     @Test

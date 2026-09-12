@@ -27,9 +27,9 @@ import ghistabs.importer.ImportOptions.Companion.SHORTEN_TYPEDEFS
 import ghistabs.index.ContentIndex
 import ghistabs.index.EffectiveSource
 import ghistabs.materialize.abi.CxxAbi
+import ghistabs.materialize.abi.Itanium
+import ghistabs.materialize.abi.hasPolymorphicBaseSubobject
 import ghistabs.materialize.conflictCount
-import ghistabs.materialize.itanium.Itanium
-import ghistabs.materialize.itanium.hasPolymorphicBaseSubobject
 import ghistabs.parse.*
 import ghistabs.test.*
 import kotlinx.serialization.ExperimentalSerializationApi

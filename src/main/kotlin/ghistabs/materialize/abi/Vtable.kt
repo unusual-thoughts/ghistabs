@@ -1,4 +1,4 @@
-package ghistabs.materialize.itanium
+package ghistabs.materialize.abi
 
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.PointerDataType
@@ -90,7 +90,7 @@ private fun prefixKind(i: Int, total: Int, virtualBases: List<String>): String {
  * A gcc 2.x record has no typeinfo pointer to search for ([CxxAbi.hasRttiHeader]) and no
  * vbase/vcall prefix either, so its address point is the canonical shape outright.
  */
-fun Program.vtableShape(ztv: Address, resolver: AddressResolver, abi: CxxAbi = CxxAbi.Itanium): VtableShape {
+fun Program.vtableShape(ztv: Address, resolver: AddressResolver, abi: CxxAbi = Itanium): VtableShape {
     if (!abi.hasRttiHeader) return shapeOf(ztv, null)
     val ptr = defaultPointerSize.toLong()
     val rttiSlot = generateSequence(ztv) { it.add(ptr) }
@@ -144,15 +144,12 @@ private fun Program.subVtableAt(start: Address, rtti: Long, resolver: AddressRes
  * `offset_to_top` (0) or rtti pointer (into .data). Walks by [abi]'s entry stride and reads `pfn` at
  * its offset within the entry, which is what separates a gcc 2.x table without thunks from one with.
  */
-fun Program.vtableSlotTargets(
-    addressPoint: Address,
-    resolver: AddressResolver,
-    abi: CxxAbi = CxxAbi.Itanium,
-): List<Address> = generateSequence(addressPoint) { it.add(abi.stride(defaultPointerSize)) }
-    .map { codeTargetAt(it.add(abi.pfnOffset(defaultPointerSize)), resolver) }
-    .takeWhile { it != null }
-    .filterNotNull()
-    .toList()
+fun Program.vtableSlotTargets(addressPoint: Address, resolver: AddressResolver, abi: CxxAbi = Itanium): List<Address> =
+    generateSequence(addressPoint) { it.add(abi.stride(defaultPointerSize)) }
+        .map { codeTargetAt(it.add(abi.pfnOffset(defaultPointerSize)), resolver) }
+        .takeWhile { it != null }
+        .filterNotNull()
+        .toList()
 
 /**
  * The `rtti:` header comment, reporting the typeinfo symbol that is actually there. [Itanium.zti]
@@ -188,7 +185,7 @@ fun Program.layVtable(
     resolver: AddressResolver,
     virtualBases: List<String> = emptyList(),
     label: String = Itanium.VFTABLE,
-    abi: CxxAbi = CxxAbi.Itanium,
+    abi: CxxAbi = Itanium,
 ): Address {
     val (prefix, topSlot, rttiHeader, addressPoint) = shape
 

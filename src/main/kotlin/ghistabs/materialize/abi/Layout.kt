@@ -1,4 +1,4 @@
-package ghistabs.materialize.itanium
+package ghistabs.materialize.abi
 
 import ghistabs.index.TypeGraph
 import ghistabs.parse.GlobalTypeDecl

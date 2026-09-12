@@ -3,7 +3,7 @@ package ghistabs.materialize
 import ghidra.program.model.data.*
 import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.DiagnosticSink
-import ghistabs.materialize.itanium.Itanium
+import ghistabs.materialize.abi.Itanium
 import ghistabs.parse.canonTemplateName
 
 /** A rename the shortening pass performs: datatype simple name [from] → [to]. */
