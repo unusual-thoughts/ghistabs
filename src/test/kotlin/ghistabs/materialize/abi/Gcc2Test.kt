@@ -55,7 +55,7 @@ class Gcc2Test {
      * would otherwise stop composing physnames, which is the only reason its members resolve.
      *
      * The vote is what keeps a lone false positive from carrying a binary, so it is worth stating
-     * that a majority of one is still a majority: [prevailing] is only as good as its detectors.
+     * that a majority of one is still a majority: [CxxAbi.prevailing] is only as good as its detectors.
      */
     @Test
     fun prevailingPrefersAVtableButSettlesForTheMemberVote() {

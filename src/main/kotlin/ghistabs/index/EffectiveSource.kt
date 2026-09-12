@@ -112,7 +112,7 @@ class EffectiveSource(
 
     /**
      * Class name → the file its declaration *renders* in, which is where anything gcc dated by that
-     * declaration belongs. Not [classSourceByName], which answers the neighbouring question — the file
+     * declaration belongs. Not [SourceHints.classSourceByName], which answers the neighbouring question — the file
      * the type id itself belongs to — and puts `Image` in main.cpp, the first CU that defined it,
      * while the render draws `class Image` in image.h. Concrete bodies only: an `XRef` forward-decl
      * stub names whichever unrelated header mentioned the class by pointer.

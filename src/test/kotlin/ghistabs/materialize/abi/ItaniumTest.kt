@@ -3,7 +3,6 @@ package ghistabs.materialize.abi
 import ghidra.app.util.demangler.DemangledAddressTable
 import ghidra.app.util.demangler.DemangledFunction
 import ghidra.app.util.demangler.DemangledType
-import ghistabs.materialize.abi.CxxAbi
 import ghistabs.test.must
 import ghistabs.test.mustBe
 import ghistabs.test.mustNot
