@@ -10,7 +10,6 @@ import ghidra.program.model.listing.*
 import ghidra.program.model.listing.Function
 import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
-import ghidra.program.model.symbol.Symbol
 import ghidra.program.model.symbol.SymbolUtilities
 import ghidra.util.task.TaskMonitor
 import ghistabs.Demangler
@@ -24,6 +23,7 @@ import ghistabs.index.demangledClassPath
 import ghistabs.isInjected
 import ghistabs.isMethod
 import ghistabs.materialize.abi.*
+import ghistabs.materialize.abi.CxxAbi.Companion.prevailingAbi
 import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Aggregate.Method
 
@@ -762,9 +762,7 @@ class ClassBuilder(
 
     /** What every ABI question falls back to for a class whose own vtable symbol never resolved. */
     private val abi: CxxAbi by lazy {
-        // Typed, because SymbolIterator is both an Iterator and an Iterable and asSequence is on both.
-        val symbols: Iterator<Symbol> = symtab.symbolIterator
-        CxxAbi.prevailing(symbols.asSequence().map { it.name })
+        requireNotNull(symtab.prevailingAbi()) { "No mangled symbols, cannot determine ABI for this program" }
     }
 
     /**

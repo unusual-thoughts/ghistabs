@@ -2,6 +2,8 @@ package ghistabs.materialize.abi
 
 import ghidra.app.util.demangler.DemangledObject
 import ghidra.program.model.data.Structure
+import ghidra.program.model.symbol.Symbol
+import ghidra.program.model.symbol.SymbolTable
 
 /**
  * How a C++ ABI spells a *member* — the half of [CxxAbi] that never touches a vtable record. Split
@@ -59,8 +61,8 @@ interface CxxMemberNaming {
 
 /**
  * A C++ ABI's answers about vtables — record geometry, symbol spelling, and which class a symbol
- * names — on top of [CxxMemberNaming]'s answers about members. Sealed, because [of] enumerates the
- * spellings: a symbol either matches one of these ABIs or names no vtable at all.
+ * names — on top of [CxxMemberNaming]'s answers about members. Sealed, because [ofVtableSymbol]
+ * enumerates the spellings: a symbol either matches one of these ABIs or names no vtable at all.
  */
 sealed interface CxxAbi : CxxMemberNaming {
     /** Bytes between consecutive entries. */
@@ -130,7 +132,7 @@ sealed interface CxxAbi : CxxMemberNaming {
          * gcc 2.x *secondary* table answers here too — it is still that ABI's geometry; screening
          * it out is the job of whoever wants a class's own table.
          */
-        fun of(symbolName: String): CxxAbi? = when {
+        fun ofVtableSymbol(symbolName: String): CxxAbi? = when {
             Gcc2Thunks.looksLikeVtable(symbolName) -> Gcc2Thunks
             Gcc2Plain.looksLikeVtable(symbolName) -> Gcc2Plain
             Itanium.looksLikeVtable(symbolName) -> Itanium
@@ -150,17 +152,26 @@ sealed interface CxxAbi : CxxMemberNaming {
          *
          * A vtable spelling is the decisive evidence and is taken wherever it appears, including
          * from an *undefined* symbol: `tinyxml_aout_gcc295.o` names `__vt_13TiXmlDocument` without
-         * defining it, which states the ABI as well as a definition would. Failing that, any mangled
-         * member name settles it — a C++ binary with no polymorphic class anywhere has no vtable to
-         * read, but it still has members. Only a binary with neither is left to the Itanium default.
+         * defining it, which states the ABI as well as a definition would. Failing that the mangled
+         * member names vote — a C++ binary with no polymorphic class anywhere has no vtable to read,
+         * but it still has members, and counting them means no lone false positive can carry the
+         * whole binary. Null when nothing votes at all: a C binary, or a C++ one from a compiler
+         * whose mangling is neither of these (the WordPerfect corpus has SunPro, XLC and DEC ones).
          */
-        fun prevailing(symbolNames: Sequence<String>): CxxAbi {
-            var byMember: CxxAbi? = null
+        fun prevailing(symbolNames: Sequence<String>): CxxAbi? {
+            val byMember = mutableMapOf<CxxAbi, Int>()
             for (name in symbolNames) {
-                of(name)?.takeIf { it.isPrimaryVtable(name) }?.let { return it }
-                if (byMember == null) byMember = mangledBy(name)
+                ofVtableSymbol(name)?.takeIf { it.isPrimaryVtable(name) }?.let { return it }
+                mangledBy(name)?.let { byMember[it] = byMember.getOrDefault(it, 0) + 1 }
             }
-            return byMember ?: Itanium
+            return byMember.maxByOrNull { it.value }?.key
+        }
+
+        /** [prevailing] over a program's symbols. Typed, because SymbolIterator is both an Iterator
+         *  and an Iterable, and `asSequence` is on both. */
+        fun SymbolTable.prevailingAbi(): CxxAbi? {
+            val symbols: Iterator<Symbol> = symbolIterator
+            return prevailing(symbols.asSequence().map { it.name })
         }
 
         /**
