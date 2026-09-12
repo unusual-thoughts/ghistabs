@@ -1366,11 +1366,17 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
 
     /**
      * Every virtual the stabs declare for a class has a slot in its `<Class>_vftable`, *at the index
-     * the stab declares it at*. The `*<n>` a virtual's stab carries is `DECL_VINDEX` — the slot
-     * counted from the address point, verified against `_ZTVSt9type_info` whose declared 0/1/5 are
-     * its dtor, deleting dtor and `__is_function_p` — so one check covers both presence and
-     * placement. Inherited virtuals are covered through the base, which declares them and whose own
-     * table is checked the same way.
+     * the stab declares it at*. The `*<n>` a virtual's stab carries is `DECL_VINDEX`, counted from
+     * wherever the `{vfptr}` points: past the header under Itanium (`_ZTVSt9type_info`'s declared
+     * 0/1/5 are its dtor, deleting dtor and `__is_function_p`), from the record start under gcc 2.x,
+     * where the reserved entries are numbered too — `cv_mscom_elf_i386_gcc281` starts its dtors at
+     * `*1` over one reserved entry, `tinyxml_aout_gcc295.o` at `*2` over two. So one check covers
+     * presence and placement both. Inherited virtuals are covered through the base, which declares
+     * them and whose own table is checked the same way.
+     *
+     * The header fields are deliberately not Pointers, so filtering to Pointers is what turns the
+     * component list into the slot list — and what makes [CxxAbi.reservedEntries] the whole
+     * difference between the declared index and the position looked up here.
      *
      * A slot may carry the method's name with an overload tag appended (`Visit_TiXmlText`): two
      * same-named virtuals hold different indices but cannot share one field name.
@@ -1379,6 +1385,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     fun declaredVirtualsAllGetAVftableSlot() {
         val vftables = filledVftables().associateBy { it.name.removeSuffix("_vftable") }
         assumeTrue(vftables.isNotEmpty(), "Skipping: no populated vftable in this fixture")
+        val bias = fixtureAbi().reservedEntries(program.defaultPointerSize)
 
         val misplaced = artifacts.harvest.types.values.mapNotNull { it.asStruct() }
             .flatMap { (ast, body) ->
@@ -1386,7 +1393,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
                 body.methods
                     .filter { it.virt == VirtKind.VIRTUAL }
                     .mapNotNull { m ->
-                        val slot = m.vtableOffsetBits?.toInt() ?: return@mapNotNull null
+                        val slot = m.vtableOffsetBits?.toInt()?.minus(bias) ?: return@mapNotNull null
                         val at = vft.components.filter { c -> c.dataType is Pointer }
                             .getOrNull(slot)?.fieldName
                         "${ast.ghidraName}::${m.name} declared at slot $slot, found '$at'"
@@ -1896,6 +1903,11 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         .filterIsInstance<Structure>().filter { it.name.endsWith("_vftable") }
         .groupBy { it.name }.values.map { copies -> copies.maxBy { it.numComponents } }
         .filter { it.numComponents > 0 }
+
+    /** The ABI that spelled this fixture's vtables — one producer per binary, so the first states it. */
+    private fun fixtureAbi(): CxxAbi = program.symbolTable.symbolIterator
+        .firstNotNullOfOrNull { CxxAbi.of(it.name)?.takeIf { abi -> abi.isPrimaryVtable(it.name) } }
+        ?: Itanium
 
     /** The Ghidra function for each `STATIC`-flagged method the stabs name, keyed by linkage name.
      *  The Cygwin PE loader prefixes symbols with `_`, so both spellings are tried. */
