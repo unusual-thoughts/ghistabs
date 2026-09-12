@@ -430,8 +430,8 @@ class ClassBuilder(
     }
 
     private fun LocatedType.buildAndApplyVtable(ns: GhidraClass) {
-        val virtuals = collectAllVirtuals()
-        if (virtuals.isEmpty()) {
+        val declared = collectAllVirtuals()
+        if (declared.isEmpty()) {
             debug("vtable-skipped", "class=$className reason=no-virtuals")
             return
         }
@@ -442,10 +442,11 @@ class ClassBuilder(
         val targets = shape?.let { program.vtableSlotTargets(it.addressPoint, resolver, resolved.abi) }.orEmpty()
         // The symbol's spelling is the only thing that states the ABI, so without one the geometry is
         // a guess: a gcc 2.x record read as Itanium loses its reserved header and half its stride.
-        val abi = resolved?.abi ?: Itanium
+        val abi = resolved?.abi ?: prevailingAbi
         if (resolved == null) {
             degradation("vtable-abi-assumed", className, "no vtable symbol resolved; slots laid as $abi")
         }
+        val virtuals = rebaseOffHeader(declared, abi)
         fillVftable(virtuals, targets, abi)
 
         if (resolved == null || shape == null) return
@@ -518,7 +519,7 @@ class ClassBuilder(
         while (vftable.numComponents > 0) vftable.delete(0)
         val used = mutableSetOf<String>()
         with(abi) { vftable.addReservedHeader() }
-        for (slot in 0 until maxOf(targets.size, virtuals.keys.max() + 1)) {
+        for (slot in 0 until maxOf(targets.size, (virtuals.keys.maxOrNull() ?: -1) + 1)) {
             with(abi) { vftable.addEntryAdjustment(slot) }
             val m = virtuals[slot]
             when {
@@ -791,4 +792,42 @@ class ClassBuilder(
     }
 
     private fun LocatedType.collectAllVirtuals() = types.collectAllVirtuals(classBody)
+
+    /**
+     * The ABI this binary's vtable symbols spell, for a class whose own symbol never resolved to an
+     * address. One producer per binary, so the first primary spelling states it — and an *undefined*
+     * symbol spells it just as well, which is what makes this better than assuming Itanium:
+     * `tinyxml_aout_gcc295.o` names `__vt_13TiXmlDocument` without defining it, and every class in
+     * that position was being laid with Itanium's stride and no reserved header.
+     */
+    private val prevailingAbi: CxxAbi by lazy {
+        symtab.symbolIterator
+            .firstNotNullOfOrNull { s -> CxxAbi.of(s.name)?.takeIf { it.isPrimaryVtable(s.name) } }
+            ?: Itanium
+    }
+
+    /**
+     * Re-key gcc's `*<n>` onto the address point, which is what every consumer past here counts from:
+     * the slot targets read out of memory, the `<Class>_vftable` component list, and [CxxAbi.slotOffset].
+     * A no-op under Itanium, whose vptr already points past the header.
+     *
+     * An index landing *inside* the header contradicts [CxxAbi.reservedEntries], so the table is laid
+     * without it rather than at a negative slot — one method lost, not the whole record misaligned.
+     */
+    private fun LocatedType.rebaseOffHeader(
+        declared: Map<Int, Method<GlobalTypeId>>,
+        abi: CxxAbi,
+    ): Map<Int, Method<GlobalTypeId>> {
+        val bias = abi.reservedEntries(program.defaultPointerSize)
+        if (bias == 0) return declared
+        val (slots, inHeader) = declared.entries.partition { it.key >= bias }
+        inHeader.forEach {
+            degradation(
+                "vtable-slot-inside-header",
+                className,
+                "${it.value.name} declares slot ${it.key}, inside the $bias-entry $abi header",
+            )
+        }
+        return slots.associate { it.key - bias to it.value }
+    }
 }

@@ -99,9 +99,11 @@ fun TypeGraph.inheritanceDepth(
 /**
  * A class's virtuals from its whole inheritance chain, keyed by the slot index gcc declares — the
  * `*<n>` a method's stab carries after its cv-qualifier, which `dbxout.c` emits straight from
- * `DECL_VINDEX`. Measured against `_ZTVSt9type_info` in `crypto_mi_test_gcc421_fullstabs`, whose
- * stabs declare 0, 1 and 5: those are the record's dtor, deleting dtor and `__is_function_p` slots
- * exactly, counted from the address point with no bias for the header words.
+ * `DECL_VINDEX`. Counted from wherever the `{vfptr}` points, so the keys are address-point-based
+ * under Itanium (`_ZTVSt9type_info` in `crypto_mi_test_gcc421_fullstabs` declares 0, 1 and 5 — its
+ * dtor, deleting dtor and `__is_function_p` exactly) but record-start-based under gcc 2.x, where the
+ * reserved entries are numbered too. [CxxAbi.reservedEntries] is that difference; rebasing by it is
+ * the caller's job, since only the vtable symbol states which ABI spelled the record.
  *
  * The index is the slot's identity, which settles both overriding (a derived method reuses its
  * base's index, so the bases-first walk lets the override win) and overloading (two same-named
