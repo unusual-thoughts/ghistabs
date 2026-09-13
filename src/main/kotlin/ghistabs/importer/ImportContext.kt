@@ -7,6 +7,7 @@ import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.StabsDiagnostics
 import ghistabs.diagnose.TeeSink
+import ghistabs.entrypoints.StabsAnalyzer.Companion.stabsOptions
 import ghistabs.harvest.AddressResolver
 import ghistabs.harvest.Harvest
 import ghistabs.harvest.Harvester
@@ -65,18 +66,21 @@ data class ImportResult(
 class ImportContext<Terminal : DiagnosticSink>(
     val program: Program,
     val monitor: TaskMonitor,
-    val options: ImportOptions,
     @get:TestOnly val terminal: Terminal,
-    val diagnostics: StabsDiagnostics,
+    val options: ImportOptions = program.stabsOptions(),
+    val diagnostics: StabsDiagnostics = StabsDiagnostics(),
 ) : DiagnosticSink by TeeSink(diagnostics, terminal) {
     val dtm: DataTypeManager = program.dataTypeManager
     val symtab: SymbolTable = program.symbolTable
     val resolver: AddressResolver = ProgramAddressResolver(program, this)
     fun harvester() = Harvester(monitor, this, resolver)
+    fun types(harvest: Harvest) = TypeGraph(harvest, this)
+    fun sources(harvest: Harvest) = SourceIndex(harvest, options.foldSources, this)
+    fun hints(harvest: Harvest) = SourceHints(harvest, types(harvest), sources(harvest), this)
     fun demanglerReplacer(registry: DataTypeRegistry) = DemanglerReplacer(program, registry, monitor, this)
     fun typedefShortener(registry: DataTypeRegistry) = TypedefShortener(registry, monitor)
-    fun classBuilder(registry: DataTypeRegistry, types: TypeGraph) =
-        ClassBuilder(registry, types, program, resolver, monitor, this, options.vfptrModel)
+    fun classBuilder(registry: DataTypeRegistry) =
+        ClassBuilder(registry, program, resolver, monitor, this, options.vfptrModel)
 }
 
 /**
@@ -84,14 +88,12 @@ class ImportContext<Terminal : DiagnosticSink>(
  * harvest dumps, and re-running [ghistabs.importer.DemanglerReplacer] against the analyzer's own
  * `byCanonicalKey` indices. Produced by [StabsImporter]; absent when the program carried no stabs.
  */
-data class ImportArtifacts(
-    val registry: DataTypeRegistry,
-    val types: TypeGraph,
-    val sources: SourceIndex,
-    val hints: SourceHints,
-    val harvest: Harvest,
-    val records: List<StabRecord>,
-)
+data class ImportArtifacts(val registry: DataTypeRegistry, val records: List<StabRecord>) {
+    val hints get() = registry.hints
+    val sources get() = hints.sources
+    val types get() = hints.types
+    val harvest get() = hints.harvest
+}
 
 /**
  * Test↔analyzer rendezvous under `@Execution(CONCURRENT)`. The analyzer owns its own [ImportContext]

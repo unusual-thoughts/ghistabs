@@ -50,12 +50,11 @@ class StringDedupIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             val ctx = ImportContext(
                 program,
                 TaskMonitor.DUMMY,
+                CapturingSink(),
                 ImportOptions {
                     shortenTypedefs = shorten
                     minLogLevel = Level.DEBUG
                 },
-                CapturingSink(),
-                StabsDiagnostics(),
             )
             ImportProbe.install(ctx)
 

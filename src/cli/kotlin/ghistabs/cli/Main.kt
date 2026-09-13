@@ -276,7 +276,7 @@ private abstract class StabsCommand(name: String) : CliktCommand(name = name) {
         val msgLog = MessageLog()
         try {
             withProgram(binary, log = msgLog, monitor = monitor) { program ->
-                val ctx = ImportContext(program, monitor, options, TeeSink(monitor, fileSink), StabsDiagnostics())
+                val ctx = ImportContext(program, monitor, TeeSink(monitor, fileSink), options)
                 ctx.execute()
                 fileWriter?.apply {
                     msgLog.toString().takeIf { it.isNotBlank() }?.let { append("--- loader MessageLog ---\n$it\n") }
@@ -373,15 +373,7 @@ private abstract class RenderCommand(name: String) : ImportingCommand(name = nam
 
     override fun ImportContext<*>.execute() {
         val artifacts = fullImport() ?: return
-        Renderer(
-            mode,
-            artifacts.hints,
-            program,
-            resolver,
-            showStorage = varStorage,
-            lineAligned = lineAligned,
-            sink = this,
-        ).use { renderer ->
+        Renderer(mode, this, artifacts.hints, showStorage = varStorage, lineAligned = lineAligned).use { renderer ->
             val written = renderer.renderAll(outDir, monitor)
             log("render", "rendered ${renderer.sources.size} sources -> $written files in $outDir")
         }

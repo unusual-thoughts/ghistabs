@@ -60,6 +60,7 @@ fun Program.defaultContext(
 ) = ImportContext(
     this,
     TaskMonitor.DUMMY,
+    CapturingSink(),
     // overlaySection off: the decoded-struct .stab overlay is a diagnostic view, not needed to produce
     // types, and it's ~8% of the run. StabSectionOverlayIntegrationTest exercises it directly.
     ImportOptions {
@@ -68,8 +69,6 @@ fun Program.defaultContext(
         this.shortenTypedefs = shortenTypedefs
         this.vfptrModel = vfptrModel
     },
-    CapturingSink(),
-    StabsDiagnostics(),
 )
 
 fun harvestOf(vararg asts: Type) = Harvest(
@@ -89,7 +88,7 @@ fun ImportContext<*>.defaultTypeRegistry(): DataTypeRegistry {
     val harvest = harvestOf()
     val types = TypeGraph(harvest)
     val sources = SourceIndex(harvest, foldSources = false)
-    return DataTypeRegistry(dtm, this, diagnostics, harvest, types, SourceHints(harvest, types, sources))
+    return DataTypeRegistry(dtm, this, diagnostics, SourceHints(harvest, types, sources))
 }
 
 /**

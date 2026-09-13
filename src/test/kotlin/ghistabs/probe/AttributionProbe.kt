@@ -81,13 +81,7 @@ class AttributionProbe : AbstractGhidraHeadlessIntegrationTest() {
             val out = File("build/test-output/attribution")
             out.mkdirs()
             val name = fixture.nameWithoutExtension
-            Renderer(
-                Mode.DECOMPILE,
-                hints,
-                program,
-                ctx.resolver,
-                sink = ctx,
-            ).use { renderer ->
+            Renderer(Mode.DECOMPILE, ctx, hints).use { renderer ->
                 assumeTrue(renderer.renderAll(out.resolve(name)) > 0, "nothing rendered")
                 // After the render, never during one: the inline half is graded on the questions the
                 // render itself put to the source, and grading is this probe's job, not a render's.

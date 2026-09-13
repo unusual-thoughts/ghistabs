@@ -3,7 +3,8 @@ package ghistabs.index
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.DummySink
 import ghistabs.harvest.*
-import ghistabs.parse.*
+import ghistabs.parse.GlobalTypeId
+import ghistabs.parse.SymbolDecl
 
 /**
  * Which physical file each raw gcc spelling means, and the per-source views the render iterates.
@@ -17,11 +18,8 @@ import ghistabs.parse.*
  * not a query, so this never needs [TypeGraph]. Attribution — *which* file a type or function belongs
  * to — is [SourceHints]/[EffectiveSource] and needs both halves; it is deliberately not here.
  */
-class SourceIndex(
-    private val harvest: Harvest,
-    private val foldSources: Boolean = true,
-    sink: DiagnosticSink = DummySink,
-) : DiagnosticSink by sink {
+class SourceIndex(val harvest: Harvest, private val foldSources: Boolean = true, sink: DiagnosticSink = DummySink) :
+    DiagnosticSink by sink {
     /**
      * Every source spelling the stabs mention, however they mention it: a file that was inlined from,
      * a file that holds statics, and a type's own `N_SOL` or CU. `image.h` is in none of the first

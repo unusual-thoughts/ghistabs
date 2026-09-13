@@ -2,7 +2,6 @@ package ghistabs.importer
 
 import ghidra.program.model.address.AddressOutOfBoundsException
 import ghistabs.diagnose.DiagnosticSink
-import ghistabs.harvest.Harvest
 import ghistabs.harvest.LineEntry
 import ghistabs.index.SourceIndex
 import ghistabs.materialize.abi.Itanium
@@ -24,11 +23,8 @@ import ghistabs.materialize.abi.Itanium
  * Every source carries `SourceFileIdType.NONE` (what [ghistabs.harvest.sourceFileOf] builds): stabs
  * records no file hash, and hashing the local file would claim provenance we do not have.
  */
-class SourceMapApplier(
-    private val ctx: ImportContext<*>,
-    private val harvest: Harvest,
-    private val sources: SourceIndex,
-) : DiagnosticSink by ctx {
+class SourceMapApplier(private val ctx: ImportContext<*>, private val sources: SourceIndex) : DiagnosticSink by ctx {
+    private val harvest = sources.harvest
     private val manager = ctx.program.sourceFileManager
 
     /** How many entries the program holds afterwards, counted from the harvest rather than read back:

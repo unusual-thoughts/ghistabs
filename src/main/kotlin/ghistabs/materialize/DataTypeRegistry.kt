@@ -9,7 +9,6 @@ import ghidra.util.task.TaskMonitor
 import ghistabs.Demangler
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.StabsDiagnostics
-import ghistabs.harvest.Harvest
 import ghistabs.harvest.Type
 import ghistabs.index.*
 import ghistabs.materialize.abi.Rtti
@@ -30,11 +29,12 @@ class DataTypeRegistry(
     internal val dtm: DataTypeManager,
     sink: DiagnosticSink,
     internal val diagnostics: StabsDiagnostics,
-    internal val harvest: Harvest,
-    internal val types: TypeGraph,
     internal val hints: SourceHints,
     internal val monitor: TaskMonitor = TaskMonitor.DUMMY,
 ) : DiagnosticSink by sink {
+    internal val harvest = hints.harvest
+    internal val types = hints.types
+
     /**
      * Canonical (category, ghidraName) → group; drives TypeRegistry slot assignment. XRef-targets are
      * bucketed into `(category, ghidraName)` slots ([ScopeLocator.classifyGroup] picks each winner), then slots are

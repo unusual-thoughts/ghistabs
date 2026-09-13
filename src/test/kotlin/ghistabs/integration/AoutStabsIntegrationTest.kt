@@ -9,7 +9,6 @@ import ghistabs.LOADS_AOUT
 import ghistabs.LoadedProgram
 import ghistabs.diagnose.CapturingSink
 import ghistabs.diagnose.Level
-import ghistabs.diagnose.StabsDiagnostics
 import ghistabs.entrypoints.StabsAnalyzer.Companion.import
 import ghistabs.importer.ImportContext
 import ghistabs.importer.ImportOptions
@@ -103,9 +102,8 @@ class AoutStabsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         val ctx = ImportContext(
             program,
             TaskMonitor.DUMMY,
-            ImportOptions { minLogLevel = Level.DEBUG },
             CapturingSink(),
-            StabsDiagnostics(),
+            ImportOptions { minLogLevel = Level.DEBUG },
         )
         ctx.options.must("this test is meaningless unless the overlay is on") { overlaySection }
         ctx.import()
