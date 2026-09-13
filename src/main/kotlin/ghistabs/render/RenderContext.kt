@@ -3,8 +3,11 @@ package ghistabs.render
 import ghidra.program.model.data.ByteDataType
 import ghidra.program.model.data.CharDataType
 import ghidra.program.model.data.SignedByteDataType
-import ghistabs.harvest.*
-import ghistabs.index.*
+import ghistabs.harvest.GhidraSourceFile
+import ghistabs.harvest.StaticSymbol
+import ghistabs.harvest.Symbol
+import ghistabs.harvest.Type
+import ghistabs.index.TypeGraph
 import ghistabs.materialize.TemplateNameShortener
 import ghistabs.materialize.abi.Itanium
 import ghistabs.materialize.resolveBuiltin
@@ -20,8 +23,8 @@ interface RenderContext {
     val source: GhidraSourceFile
     val renderer: Renderer
 
-    val program get() = renderer.program
-    val resolver get() = renderer.resolver
+    val program get() = renderer.ctx.program
+    val resolver get() = renderer.ctx.resolver
     val types get() = renderer.types
     val sourceIndex get() = renderer.sourceIndex
     val shortener: TemplateNameShortener? get() = renderer.shortener

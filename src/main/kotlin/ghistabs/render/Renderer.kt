@@ -3,15 +3,13 @@ package ghistabs.render
 import ghidra.app.decompiler.ClangToken
 import ghidra.app.decompiler.DecompInterface
 import ghidra.program.model.address.Address
-import ghidra.program.model.listing.Program
 import ghidra.program.model.sourcemap.SourceMapEntry
 import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.DiagnosticSink
-import ghistabs.harvest.AddressResolver
 import ghistabs.harvest.Func
 import ghistabs.harvest.GhidraSourceFile
 import ghistabs.harvest.Type
-import ghistabs.importer.ImportOptions
+import ghistabs.importer.ImportContext
 import ghistabs.importer.ImportOptions.Companion.stabsTypedefsShortened
 import ghistabs.importer.LocalSources
 import ghistabs.index.EffectiveSource
@@ -37,9 +35,8 @@ import java.util.*
  */
 class Renderer(
     val mode: Mode,
+    val ctx: ImportContext<*>,
     val hints: SourceHints,
-    val program: Program,
-    val resolver: AddressResolver,
     // Off for a render meant to be compiled or diffed against real source, where a trailing block of
     // declarations that have no line is noise.
     val showDisplaced: Boolean = true,
@@ -49,9 +46,8 @@ class Renderer(
     // Render source line n at output line n, blank rows and all. Off by default — see [Canvas.render]
     // — but it is what a diff against the real source needs, so it stays one flag away.
     val lineAligned: Boolean = false,
-    val sink: DiagnosticSink,
 ) : Closeable,
-    DiagnosticSink by sink {
+    DiagnosticSink by ctx {
     enum class Mode {
         SKELETON,
         DECOMPILE,
@@ -61,6 +57,7 @@ class Renderer(
         ELIDE_SJLJ,
     }
 
+    private val program = ctx.program
     private val harvest = hints.harvest
     val types = hints.types
     val sourceIndex = hints.sources
@@ -107,7 +104,7 @@ class Renderer(
             }
     }
 
-    val effectiveSource = EffectiveSource(hints, sink, ::declarerOf)
+    val effectiveSource = EffectiveSource(hints, ctx, ::declarerOf)
 
     /**
      * Every file the render emits: those with line entries, function bodies, or type declarations.
@@ -134,7 +131,7 @@ class Renderer(
      * Kotlin terms it is a lazy that forces itself.
      */
     val localSources: LocalSources by lazy {
-        LocalSources(program, sink) { source ->
+        LocalSources(program, ctx) { source ->
             effectiveSource.baseTypesBySource[source].orEmpty()
                 .mapNotNull { t -> t.declKey() }
                 // Declarations several files claim at one line are excluded: at most one of those
@@ -153,7 +150,7 @@ class Renderer(
     private val units by lazy { mapped.map { it.second }.filter { it.extension in UNIT_EXTENSIONS } }
 
     private val includePaths: List<File> by lazy {
-        val roots = ImportOptions(program).sourceRoots.map { File(it).canonicalFile.path }
+        val roots = ctx.options.sourceRoots.map { File(it).canonicalFile.path }
         mapped.asSequence().map { it.second.canonicalFile }
             .flatMap { generateSequence(it.parentFile, File::getParentFile) }
             .filter { dir -> roots.any(dir.path::startsWith) }
@@ -168,7 +165,7 @@ class Renderer(
      * a body that never opened — the one thing a header's raw text cannot say. Reads raw text where
      * the environment is too incomplete to be believed, saying so once per unit ([Preprocessed]).
      */
-    private val sourceIndexes by lazy { SourceIndexes(Preprocessed.lines(units, includePaths, sink)) }
+    private val sourceIndexes by lazy { SourceIndexes(Preprocessed.lines(units, includePaths, ctx)) }
 
     /**
      * The definition [line] of [source] sits in, read off the real file — null without a root, and

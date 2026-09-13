@@ -64,11 +64,11 @@ class StabsAnalyzer :
         val ctx = ImportContext(
             program,
             monitor,
-            options,
             // Bookmark every addressed diagnostic (unconditional); MessageLog gets output at/above minLevel.
             // Tee the emitting terminal onto the probe's raw CapturingSink so tests can inspect output;
             // counting is the shared probe.diagnostics accumulator, tee'd in ImportContext.
             terminal = TeeSink(BookmarkSink(program), MessageLogSink(msg, options.minLogLevel), probe?.terminal),
+            options,
             diagnostics = probe?.diagnostics ?: StabsDiagnostics(),
         )
         // A test installed `probe` to read what the analyzer built (registry dump, DemanglerReplacer);

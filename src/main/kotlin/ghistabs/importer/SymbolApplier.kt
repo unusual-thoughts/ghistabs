@@ -33,11 +33,9 @@ import ghistabs.parse.*
  * comments into the Ghidra program, then demangles and materializes classes/vtables. Caller holds
  * the transaction.
  */
-class SymbolApplier(
-    private val ctx: ImportContext<*>,
-    private val harvest: Harvest,
-    private val registry: DataTypeRegistry,
-) : DiagnosticSink by ctx {
+class SymbolApplier(private val ctx: ImportContext<*>, private val registry: DataTypeRegistry) :
+    DiagnosticSink by ctx {
+    val harvest = registry.harvest
     val source = SourceType.IMPORTED
     val symtab: SymbolTable get() = ctx.program.symbolTable
     val funMgr: FunctionManager get() = ctx.program.functionManager

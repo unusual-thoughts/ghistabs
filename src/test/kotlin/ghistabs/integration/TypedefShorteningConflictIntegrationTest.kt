@@ -59,12 +59,11 @@ class TypedefShorteningConflictIntegrationTest : AbstractGhidraHeadlessIntegrati
             val ctx = ImportContext(
                 program,
                 monitor,
+                CapturingSink(),
                 ImportOptions {
                     shortenTypedefs = shorten
                     minLogLevel = Level.DEBUG
                 },
-                CapturingSink(),
-                StabsDiagnostics(),
             )
             val probe = ImportProbe.install(ctx)
             val mgr = AutoAnalysisManager.getAnalysisManager(program)

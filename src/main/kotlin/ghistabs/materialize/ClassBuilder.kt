@@ -18,7 +18,6 @@ import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.Level
 import ghistabs.harvest.AddressResolver
 import ghistabs.index.LocatedType
-import ghistabs.index.TypeGraph
 import ghistabs.index.demangledClassPath
 import ghistabs.isInjected
 import ghistabs.isMethod
@@ -41,13 +40,13 @@ import ghistabs.parse.TypeDecl.Aggregate.Method
  */
 class ClassBuilder(
     private val registry: DataTypeRegistry,
-    private val types: TypeGraph,
     private val program: Program,
     private val resolver: AddressResolver,
     private val monitor: TaskMonitor,
     private val sink: DiagnosticSink,
     vfptrModel: VfptrModel = VfptrModel.SPLIT_BASE,
 ) : DiagnosticSink by sink {
+    private val types = registry.hints.types
     private val symtab = program.symbolTable
     private val dtm = program.dataTypeManager
     private val vfptrPlacement = VfptrPlacement(registry, program, vfptrModel, sink)

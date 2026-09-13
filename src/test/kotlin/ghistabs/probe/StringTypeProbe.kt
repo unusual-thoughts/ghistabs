@@ -8,7 +8,6 @@ import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.CapturingSink
 import ghistabs.diagnose.Level
-import ghistabs.diagnose.StabsDiagnostics
 import ghistabs.entrypoints.StabsAnalyzer
 import ghistabs.entrypoints.StabsAnalyzer.Companion.import
 import ghistabs.importer.ImportContext
@@ -54,12 +53,11 @@ class StringTypeProbe : AbstractGhidraHeadlessIntegrationTest() {
             val ctx = ImportContext(
                 program,
                 TaskMonitor.DUMMY,
+                CapturingSink(),
                 ImportOptions {
                     shortenTypedefs = true
                     minLogLevel = Level.DEBUG
                 },
-                CapturingSink(),
-                StabsDiagnostics(),
             )
             ImportProbe.install(ctx)
             val options = program.getOptions(Program.ANALYSIS_PROPERTIES)

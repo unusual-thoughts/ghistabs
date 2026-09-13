@@ -13,9 +13,7 @@ import ghistabs.DirectoryOption
 import ghistabs.OptionContainer
 import ghistabs.OptionDescriptor
 import ghistabs.diagnose.MessageLogSink
-import ghistabs.diagnose.StabsDiagnostics
 import ghistabs.importer.ImportContext
-import ghistabs.importer.ImportOptions
 import ghistabs.importer.ImportOptions.Companion.isStabsDone
 import ghistabs.index.SourceHints
 import ghistabs.index.SourceIndex
@@ -70,19 +68,16 @@ sealed class StabsRenderExporter(name: String, extension: String, val options: O
         }
         val records = StabReader.fromProgram(program)?.readAll()?.records
             ?: return err("No stabs found in this program.")
-        val options = ImportOptions(program)
-        val ctx = ImportContext(program, monitor, options, sink, StabsDiagnostics())
+        val ctx = ImportContext(program, monitor, sink)
         val harvest = ctx.harvester().harvest(records)
 
         val dir = outputDir.takeIf { it.isNotEmpty() }?.let(::File) ?: file
         val written = Renderer(
             mode,
-            SourceHints(harvest, TypeGraph(harvest, ctx), SourceIndex(harvest, options.foldSources, ctx), ctx),
-            program,
-            ctx.resolver,
+            ctx,
+            SourceHints(harvest, TypeGraph(harvest, ctx), SourceIndex(harvest, ctx.options.foldSources, ctx), ctx),
             showStorage = showStorage,
             lineAligned = lineAligned,
-            sink = ctx,
         ).use { it.renderAll(dir, monitor) }
         sink.log("export", "Wrote $written files to $dir")
         return true
