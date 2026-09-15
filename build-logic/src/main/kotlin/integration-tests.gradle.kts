@@ -26,7 +26,7 @@ registerHeadlessTest(
     "noReturnTest",
     "Non-returning roster for one fixture (-Pfixture=<file>; add -PdisableAnalyzers=reachability for before)",
     tag = "integration",
-) { filter { includeTestsMatching("ghistabs.NoReturnFixtureIntegrationTest") } }
+) { filter { includeTestsMatching("ghistabs.integration.NoReturnFixtureIntegrationTest") } }
 
 // Diagnostic generators, split out of integrationTest so they don't run in CI.
 registerHeadlessTest(
