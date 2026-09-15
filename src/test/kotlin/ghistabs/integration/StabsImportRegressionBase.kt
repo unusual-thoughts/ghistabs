@@ -1224,7 +1224,11 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             // sweep has anything to read. Their unstripped twins pass on the sweep alone.
             "crypto_mi_test_gcc421_stripped.exe", "xmltest_gcc421_stripped.exe",
             // a.out: these fixtures are plain C, so there are no classes and no vtables at all.
-            "hello_aout_gcc295.o", "zlib_aout_gcc263.o", "zlib_aout_gcc258.o",
+            "hello_aout_gcc295.o", "zlib_aout_gcc263.o",
+            // Own-code-only libg++ driver: its two classes derive from streambuf and iostream,
+            // which reach the CU as `xs` cross-references, so the {vfptr} stays in the base and
+            // neither vftable gets a back-edge. The _fullstabs twin is the contrast.
+            "iostream_test_aout_gcc263.o",
         ],
         reason = "no _ZTV symbol and no method stab section, so nothing can locate or fill a vftable",
     )
@@ -1407,6 +1411,18 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     }
 
     @Test
+    @ExpectedToFail(
+        fixtures = [
+            // Single translation units that declare no pointer-typed global, so there is nothing to
+            // materialize rather than something missed. `tinyxml_aout_gcc263.o`'s only global is
+            // `TiXmlBase::condenseWhiteSpace:G15` — a bool at 2.6.3. The control is its own linked
+            // build: `xmltest_aout_gcc263` is the same source through the same compiler, has nine
+            // globals including the pointer `_exit_dummy_ref:G27=*1`, and passes.
+            "tinyxml_aout_gcc263.o", "tinyxml_aout_gcc258.o", "iostream_test_aout_gcc263.o",
+        ],
+        reason = "single-CU objects with no pointer-typed global — fixture content; their linked " +
+            "siblings carry one and pass",
+    )
     fun globalsCoverEachDataTypeKind() {
         fun kindOf(dt: DataType?): String = when (dt) {
             is Structure -> "Structure"
@@ -1612,9 +1628,11 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     @Test
     @ExpectedToFail(
         fixtures = [
-            "hello_aout_gcc295.o", "zlib_aout_gcc263.o", "zlib_aout_gcc258.o",
+            "hello_aout_gcc295.o", "zlib_aout_gcc263.o",
+            // C++, but every base it names is a libg++ class the CU only cross-references.
+            "iostream_test_aout_gcc263.o",
         ],
-        reason = "plain C fixtures — no C++ inheritance edges exist to materialize",
+        reason = "no inheritance edge is materializable: plain C, or bases that are `xs` cross-refs",
     )
     fun inheritanceWasApplied() {
         val applied = context.diagnostics.snapshotCounters()["inheritance-applied"] ?: 0L
@@ -1985,7 +2003,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
      */
     @Test
     @ExpectedToFail(
-        fixtures = ["zlib_aout_gcc263.o", "zlib_aout_gcc258.o"],
+        fixtures = ["zlib_aout_gcc263.o"],
         reason = "relocatable object (ld -r): sections all sit at 0 unrelocated, so stab values " +
             "cannot resolve into executable code",
     )
