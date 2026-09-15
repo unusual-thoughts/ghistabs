@@ -23,12 +23,17 @@ class ItaniumTest {
         // The gcc 2.x forms are length-prefixed like Itanium's and carry no trailing marker: the
         // libstdc++-2.8.1 binaries spell them `_vt.9exception`, and a second marker there is the
         // separator before a base (`_vt.14CExposedStream.11PRevertable` = that base's own vtable).
+        // Each plain form appears twice for the same reason `_ZTV` does: a.out prepends the user
+        // label prefix, so `tinyxml_aout_gcc263.o` carries `__vt$9TiXmlNode` where the ELF build of
+        // the same source (`tinyxml_elf_gcc272.o`) carries `_vt.9TiXmlNode`.
         CxxAbi.vtableCandidates("ThisStream") mustBe listOf(
             "_ZTV10ThisStream",
             "__ZTV10ThisStream",
             "ThisStream::vtable",
             $$"_vt$10ThisStream",
+            $$"__vt$10ThisStream",
             "_vt.10ThisStream",
+            "__vt.10ThisStream",
             "__vt_10ThisStream",
         )
     }

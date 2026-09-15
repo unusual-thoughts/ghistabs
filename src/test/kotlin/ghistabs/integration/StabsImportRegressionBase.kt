@@ -29,6 +29,7 @@ import ghistabs.index.EffectiveSource
 import ghistabs.materialize.VfptrModel
 import ghistabs.materialize.abi.CxxAbi
 import ghistabs.materialize.abi.CxxAbi.Companion.prevailingAbi
+import ghistabs.materialize.abi.Gcc2
 import ghistabs.materialize.abi.GhidraClassNaming
 import ghistabs.materialize.abi.Itanium
 import ghistabs.materialize.conflictCount
@@ -1222,8 +1223,8 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             // Stripped: no symbol table at all, so neither the stab method list nor §25's `_ZTV`
             // sweep has anything to read. Their unstripped twins pass on the sweep alone.
             "crypto_mi_test_gcc421_stripped.exe", "xmltest_gcc421_stripped.exe",
-            // a.out: both fixtures are plain C, so there are no classes and no vtables at all.
-            "hello_aout_gcc295.o", "zlib_aout_gcc263.o",
+            // a.out: these fixtures are plain C, so there are no classes and no vtables at all.
+            "hello_aout_gcc295.o", "zlib_aout_gcc263.o", "zlib_aout_gcc258.o",
         ],
         reason = "no _ZTV symbol and no method stab section, so nothing can locate or fill a vftable",
     )
@@ -1356,11 +1357,11 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             10,
         ).mustBeEmpty("${misfiled.size} vftables sit outside ClassDataTypes (RecoveredClassHelper convention)")
         val untyped = vftables.filterNot { vft ->
-            val typed = vft.components.count { (it.dataType as? Pointer)?.dataType is FunctionDefinition }
-            typed > 0 && typed >= vft.numComponents / 2
+            val (typed, slots) = vft.slotTyping()
+            typed > 0 && typed >= slots / 2
         }.map { vft ->
-            "${vft.name}: ${vft.components.count { (it.dataType as? Pointer)?.dataType is FunctionDefinition }}" +
-                "/${vft.numComponents} slots typed"
+            val (typed, slots) = vft.slotTyping()
+            "${vft.name}: $typed/$slots slots typed"
         }
         untyped.take(10).mustBeEmpty("${untyped.size} of ${vftables.size} vftables are mostly untyped slots")
     }
@@ -1611,7 +1612,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     @Test
     @ExpectedToFail(
         fixtures = [
-            "hello_aout_gcc295.o", "zlib_aout_gcc263.o",
+            "hello_aout_gcc295.o", "zlib_aout_gcc263.o", "zlib_aout_gcc258.o",
         ],
         reason = "plain C fixtures — no C++ inheritance edges exist to materialize",
     )
@@ -1899,6 +1900,26 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             (artifacts.registry.dataTypeFor(located.type.id) as? Structure)?.let { body to it }
         }
 
+    /**
+     * Typed slots and total slots — *slots*, not components, because a slot is not always one
+     * component. Without `-fvtable-thunks` a gcc 2.x entry is `{short delta; short index; void
+     * *pfn;}`, so [Gcc2Plain] emits three components per slot of which only `pfn` is ever a
+     * pointer: counting raw components put the ceiling at one third and made `typed >= total / 2`
+     * unsatisfiable by construction for every no-thunk binary (`tinyxml_aout_gcc263.o` reported
+     * 17/54, which is 17 slots × 3 + a 3-component header).
+     *
+     * A slot is therefore a pointer-sized component outside the reserved header: the `delta`/`index`
+     * adjustments are shorts and drop out on width, and an untyped slot is still pointer-sized so it
+     * still counts against us. Itanium lays one component per slot and has no header components, so
+     * this is the old count there.
+     */
+    private fun Structure.slotTyping(): Pair<Int, Int> {
+        val slots = components
+            .filterNot { it.fieldName?.startsWith(Gcc2.RESERVED) == true }
+            .filter { it.length == program.defaultPointerSize }
+        return slots.count { (it.dataType as? Pointer)?.dataType is FunctionDefinition } to slots.size
+    }
+
     /** Every `<Class>_vftable` that got slots, one copy per name (the fullest). */
     private fun filledVftables() = program.dataTypeManager.allDataTypes.asSequence()
         .filterIsInstance<Structure>().filter { it.name.endsWith("_vftable") }
@@ -1964,7 +1985,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
      */
     @Test
     @ExpectedToFail(
-        fixtures = ["zlib_aout_gcc263.o"],
+        fixtures = ["zlib_aout_gcc263.o", "zlib_aout_gcc258.o"],
         reason = "relocatable object (ld -r): sections all sit at 0 unrelocated, so stab values " +
             "cannot resolve into executable code",
     )
