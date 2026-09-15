@@ -27,6 +27,11 @@ object DemanglerWhitelist {
         "time_get", "time_put", "istreambuf_iterator", "__normal_iterator",
         "__moneypunct_cache", "__numpunct_cache", "__timepunct", "__timepunct_cache",
         "_Rope_RopeRep", "signed", "__gthread_mutex_t",
+        // libg++ 2.6.2 <iomanip.h>. The stabs define only the instantiations — `smanip<int>:Tt51=s8`
+        // and `smanip<long unsigned int>:Tt59=s8` — while the demangler names the template bare off
+        // gcc 2.x manglings like `__ls__FR7ostreamRCt6smanip1ZUl`, so the unparameterised stub has
+        // nothing to bind to.
+        "smanip",
         // std exception / EH hierarchy (forward-declared for RTTI, never fully defined)
         "logic_error", "runtime_error", "domain_error", "invalid_argument", "length_error",
         "out_of_range", "overflow_error", "range_error", "underflow_error",
