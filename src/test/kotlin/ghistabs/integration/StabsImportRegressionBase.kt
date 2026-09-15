@@ -6,6 +6,7 @@ import ghidra.program.model.address.Address
 import ghidra.program.model.data.*
 import ghidra.program.model.data.Array
 import ghidra.program.model.data.Enum
+import ghidra.program.model.gclass.ClassUtils
 import ghidra.program.model.listing.CommentType
 import ghidra.program.model.listing.Function
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
@@ -26,6 +27,7 @@ import ghistabs.importer.*
 import ghistabs.importer.ImportOptions.Companion.VFPTR_MODEL
 import ghistabs.index.ContentIndex
 import ghistabs.index.EffectiveSource
+import ghistabs.materialize.Layout
 import ghistabs.materialize.VfptrModel
 import ghistabs.materialize.abi.CxxAbi
 import ghistabs.materialize.abi.CxxAbi.Companion.prevailingAbi
@@ -49,6 +51,10 @@ import kotlin.io.path.writeText
 
 /** Cap on the words scanned inside one `_ZTV` group, for the fixture whose next symbol is far off. */
 private const val MAX_GROUP_WORDS = 512
+
+/** `_ZThn<adjustment>_<encoding of the method it forwards to>`, under the Cygwin loader's extra `_`.
+ *  The encoding is spliced in bare, so the method's own symbol is `_Z` + that. */
+private val NON_VIRTUAL_THUNK = Regex("_?_ZThn(\\d+)_(N.*)")
 
 /**
  * Execution-order mode for the regression harness.
@@ -924,6 +930,145 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         }.take(10).mustBeEmpty(
             "${flat.size} of ${derived.size} derived classes reflect no inheritance at all: " +
                 "no base subobject component and their own first field at offset 0",
+        )
+    }
+
+    /**
+     * Multiple inheritance: each base lands in its own span, under a name that says which base it is.
+     *
+     * Single inheritance hides both failures, because with one base the subobject at +0 is the whole
+     * layout and any name identifies it. With two, the subobject's extent is guesswork — gcc's
+     * inheritance line carries no size, so [ghistabs.materialize.fillStructBases] derives one from the
+     * *next* base's offset, a step that only exists here — and the name only tells the two apart
+     * because [ghistabs.materialize.Layout.baseFieldName] appends the base's own name when
+     * `baseCount > 1`. An un-suffixed `_base_` in an MI class means both edges raced for one component.
+     *
+     * The placement check runs name-first, over the components that exist, since an unresolved base is
+     * deliberately left as Undefined1 fill with nothing naming it. A `_base_X` says where `X` is, so
+     * it has to sit inside the span the stab gives `X` and not the other base's.
+     */
+    @Test
+    fun multipleInheritanceGivesEachBaseItsOwnSlot() {
+        val multiple = builtClasses()
+            .map { (body, dt) -> Triple(body, dt, body.bases.filter { occupiesSpace(it.type) }) }
+            .filter { (_, dt, bases) -> bases.size > 1 && dt.numComponents > 0 }
+        assumeTrue(multiple.isNotEmpty(), "Skipping: no class with two space-occupying bases in this fixture")
+
+        // Each declared base paired with the component naming it, keyed on the name materialization
+        // minted — `_base_X`, or `_base_X_tail` where SPLIT_BASE cut the vptr out of the middle.
+        val placed = multiple.flatMap { (body, dt, bases) ->
+            bases.mapNotNull { base ->
+                val baseDt = (base.type as? TypeDecl.Ref)?.id?.let { artifacts.registry.dataTypeFor(it) }
+                    ?: return@mapNotNull null
+                val name = Layout.baseFieldName(base.isVirtual, baseDt.name, body.bases.size)
+                val span = (base.offsetBits / 8).toInt().let { it until it + baseDt.length }
+                dt.definedComponents
+                    .filter { it.fieldName?.removeSuffix("_tail") == name }
+                    .map { Triple(dt, span, it) }
+            }.flatten()
+        }
+        placed.mustNot("No base component in any multiply-inheriting class could be matched to its base") {
+            isEmpty()
+        }
+
+        val misplaced = placed.filter { (_, span, comp) -> comp.offset !in span }
+            .map { (dt, span, comp) -> "${dt.pathName} puts '${comp.fieldName}' at +${comp.offset}, not in +$span" }
+        val collapsed = multiple.flatMap { (_, dt, _) ->
+            dt.definedComponents
+                .filter { it.fieldName in setOf(Itanium.BASE_PREFIX, Itanium.VBASE_PREFIX) }
+                .map { "${dt.pathName} names a base subobject '${it.fieldName}' at +${it.offset}" }
+        }
+        assertAll(
+            {
+                misplaced.sorted().take(10).mustBeEmpty(
+                    "${misplaced.size} of ${placed.size} base subobjects of multiply-inheriting classes " +
+                        "sit outside the span their stab declares for that base",
+                )
+            },
+            {
+                collapsed.sorted().take(10).mustBeEmpty(
+                    "${collapsed.size} base components in multiply-inheriting classes carry the " +
+                        "un-suffixed name, so two bases cannot both be named",
+                )
+            },
+        )
+    }
+
+    /**
+     * The linker's own account of where a base subobject sits, checked against the stab's.
+     *
+     * `_ZThn<N>_<method of C>` is the thunk a call through a secondary interface enters: it subtracts
+     * N from `this` to get from that base subobject back to the C it is embedded in. N is therefore an
+     * offset in C's layout, arrived at by the compiler through the ABI rather than by us through
+     * `!N,` inheritance lines — the only reading of a base offset in the binary that does not come
+     * from the code under test.
+     *
+     * Transitive, not direct: C's vtable thunks for a base its *own* base introduces carry that
+     * subobject's accumulated offset, which is no direct base of C. Virtual thunks (`_ZTv0_n…`) are
+     * excluded — their adjustment is read out of the vtable at runtime, not baked into the name.
+     *
+     * Few samples, sharp ones: 2-4 (class, adjustment) pairs survive resolution per fixture, each
+     * checked against a set of 2-5 declared offsets. Shifting every parsed base offset by one byte
+     * fails all 11 fixtures that have the shape.
+     *
+     * [ghistabs.materialize.DataTypeRegistry.byDemangledClass] is deliberately *not* how the class is
+     * found, though it maps exactly this key. That index exists to bridge spellings the demangler and
+     * our stabs disagree on, so its value is the best candidate rather than the right one; an earlier
+     * draft driven off it reported 252 strays on the gcc 3.4.5 crypto fixtures, every one a method
+     * attributed to a sibling template instantiation. It answers "which stub should this name adopt",
+     * not "which class declares this method".
+     */
+    @Test
+    fun thunkAdjustmentsLandOnADeclaredBaseOffset() {
+        val thunks = program.symbolTable.symbolIterator.iterator().asSequence()
+            .mapNotNull { NON_VIRTUAL_THUNK.matchEntire(it.name) }
+            .mapNotNull { m ->
+                classOfMethod("_Z${m.groupValues[2]}")?.let { Triple(it, m.groupValues[1].toLong(), m.value) }
+            }.distinctBy { (owner, adjustment, _) -> owner.first to adjustment }
+            .toList()
+        assumeTrue(thunks.isNotEmpty(), "Skipping: no non-virtual thunk names a class this fixture declares")
+
+        val stray = thunks.filterNot { (owner, adjustment, _) -> adjustment in subobjectOffsets(owner.second) }
+            .map { (owner, adjustment, name) ->
+                "$name adjusts by $adjustment, but ${owner.first} declares base subobjects at " +
+                    subobjectOffsets(owner.second).sorted()
+            }
+        stray.sorted().take(10).mustBeEmpty(
+            "${stray.size} of ${thunks.size} thunk adjustments match no base subobject offset the stabs declare",
+        )
+    }
+
+    /**
+     * A polymorphic secondary base keeps its own vptr, at its own offset.
+     *
+     * The primary base shares the derived class's vptr — that is what makes it primary — so a class's
+     * *second* polymorphic base is the only place a second vptr has to exist. It is the field a call
+     * through that interface dereferences: lose it and every virtual call made on a pointer to the
+     * second base reads whatever field the bytes were given instead.
+     *
+     * Asserted over the subobject as embedded, since the vptr's offset inside it is the base's own
+     * business: +0 under Itanium, after the fields under gcc 2.x, and one level further down again
+     * when the secondary base inherited it from a base of its own.
+     */
+    @Test
+    fun polymorphicSecondaryBasesKeepTheirVptr() {
+        val secondary = builtClasses().flatMap { (body, dt) ->
+            body.bases
+                .filter { it.offsetBits > 0 && !it.isVirtual && occupiesSpace(it.type) }
+                .filter { (resolve(it.type) as? TypeDecl.Aggregate)?.let(::isPolymorphic) == true }
+                .mapNotNull { base ->
+                    dt.definedComponents
+                        .firstOrNull { it.offset.toLong() == base.offsetBits / 8 && isBaseComponent(it) }
+                        ?.let { dt to it }
+                }
+        }
+        assumeTrue(secondary.isNotEmpty(), "Skipping: no polymorphic secondary base materialized in this fixture")
+
+        val vptrless = secondary.filterNot { (_, comp) -> (comp.dataType as? Structure)?.let(::holdsVptr) == true }
+            .map { (dt, comp) -> "${dt.pathName} embeds '${comp.fieldName}' at +${comp.offset} with no vptr in it" }
+        vptrless.sorted().take(10).mustBeEmpty(
+            "${vptrless.size} of ${secondary.size} polymorphic secondary base subobjects carry no vptr, " +
+                "so a virtual call through that interface has nothing to dereference",
         )
     }
 
@@ -1968,9 +2113,71 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             (at + 2 until end).all { bytes[it] == 0x90.toByte() }
     }
 
+    /**
+     * The class declaring [mangled], as a display name and the body whose bases can be read, or null
+     * where nothing in the harvest claims the name.
+     *
+     * Two routes, because the stab's own linkage names only reach so far: a method stab carries one
+     * (`-gstabs` emits it for out-of-line definitions), and where it doesn't, the demangled namespace
+     * path is matched against the path each built class spells for *itself*. Both are exact — a class
+     * that two locations claim under one path is dropped rather than guessed at, which is the whole
+     * difference from the registry's demangler bridge.
+     */
+    private fun classOfMethod(mangled: String): Pair<String, TypeDecl.Aggregate<GlobalTypeId>>? =
+        methodOwners[mangled] ?: Demangler.of(mangled)?.namespace?.path?.path?.let { bodiesByPath[it] }
+
+    private val methodOwners by lazy {
+        artifacts.harvest.types.values.mapNotNull { it.asStruct() }
+            .flatMap { (ast, body) -> body.methods.mapNotNull { it.mangled }.map { it to (ast.ghidraName to body) } }
+            .toMap()
+    }
+
+    private val bodiesByPath by lazy {
+        builtClasses()
+            .groupBy { (_, dt) -> (dt.categoryPath.pathElements.toList() + dt.name).joinToString("::") }
+            .filterValues { it.size == 1 }
+            .mapValues { (path, only) -> path to only.single().first }
+    }
+
+    /**
+     * Every base subobject offset in [body]'s graph, accumulated — the set a thunk's adjustment is one
+     * of. Non-virtual edges only: a virtual base's `!` entry is a vbase-table index rather than a byte
+     * offset, and gcc writes some of them negative (`basic_iostream` declares -10 and -2), so folding
+     * them in only loosens the set with values no `_ZThn` can mean.
+     */
+    private fun subobjectOffsets(
+        body: TypeDecl.Aggregate<GlobalTypeId>,
+        at: Long = 0,
+        seen: MutableSet<TypeDecl.Aggregate<GlobalTypeId>> = mutableSetOf(),
+    ): Set<Long> = if (!seen.add(body)) {
+        emptySet()
+    } else {
+        body.bases.filterNot { it.isVirtual }.flatMapTo(mutableSetOf()) { base ->
+            val off = at + base.offsetBits / 8
+            setOf(off) +
+                ((resolve(base.type) as? TypeDecl.Aggregate)?.let { subobjectOffsets(it, off, seen) }.orEmpty())
+        }
+    }
+
+    /** The predicate [ghistabs.materialize.firstPolymorphicBase] applies to a base, asked of the class itself. */
+    private fun isPolymorphic(body: TypeDecl.Aggregate<GlobalTypeId>): Boolean = body.hasVTablePointerMarker ||
+        body.methods.any { it.virt == VirtKind.VIRTUAL } ||
+        body.fields.any { isVptrFieldName(it.name) } ||
+        with(artifacts.types) { hasPolymorphicBaseSubobject(body) }
+
+    private fun isBaseComponent(comp: DataTypeComponent) = Itanium.isBaseField(comp.fieldName.orEmpty())
+
+    /** A vptr anywhere in [dt], including one the subobject inherited from a base of its own. */
+    private fun holdsVptr(dt: Structure): Boolean = dt.definedComponents.any {
+        it.fieldName == ClassUtils.VFPTR ||
+            isVptrFieldName(it.fieldName.orEmpty()) ||
+            (it.dataType as? Structure)?.let(::holdsVptr) == true
+    }
+
     /** Whether a base contributes bytes. An empty class is `sizeof == 1` and the empty-base
      *  optimization drops it from the layout entirely; member *functions* do not make it occupy
      *  space, so [TypeDecl.Aggregate.hasMembers] is the wrong question here. */
+
     private fun occupiesSpace(base: GlobalTypeDecl) =
         (resolve(base) as? TypeDecl.Aggregate)?.let { it.sizeBytes > 1 } == true
 
