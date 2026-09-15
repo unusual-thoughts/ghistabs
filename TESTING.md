@@ -56,6 +56,17 @@ Two axes, deliberately separate. **`-Pregression`** picks the *suite*; **`-Pfixt
   ```
 - **`-PregenerateBaselines=true`** — rewrite the baseline JSONs from observed counters instead of
   asserting against them (`countersWithinBaseline`). Review the diff.
+- **`-PanalysisCache=auto|off|refresh`**, `auto` by default. In `AFTER` mode the matrix snapshots each
+  fixture as auto-analysis left it, to `build/analysis-cache/<binary>.gzf`, and restores it next time
+  instead of re-analyzing: the first run over a binary costs the usual 90-500s, every later one a
+  second or two. Written and read automatically, never committed, and safe to delete. A snapshot also
+  carries *our* non-stabs analyzers (`HullDisassemblyAnalyzer`, `NoReturnAnalyzer`, `ThisParamAnalyzer`,
+  `StructReturnAnalyzer`, `FillerByteAnalyzer`), which run inside the same pass, and nothing keys it to
+  the code that produced it — **a change to one of those is only seen under `-Pmode=CONCURRENT`, or after
+  `-PanalysisCache=refresh`**, which re-analyzes and overwrites. `off` bypasses the cache in both
+  directions. `-PanalysisCacheDir=<dir>` puts the databases somewhere `clean` does not reach.
+  A restored fixture runs no analyzers, so it writes no `analysis-times/` entry; the one from the run
+  that created the snapshot stays put, to compare the two paths against.
 
 The mode axis subtracts where the suite axis selects: unwanted modes are *excluded* by class name, so
 defaulting to `AFTER` cannot take the hand-written integration classes out of an ordinary run with

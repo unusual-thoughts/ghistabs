@@ -150,10 +150,14 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         harvestFile.parentFile.mkdirs()
 
         try {
+            // An AFTER-mode fixture Ghidra has already analyzed once comes back from the cache
+            // analyzed; the first run over it, and every other mode, loads the binary.
+            val restored = if (mode == Mode.AFTER) AnalysisCache.restore(fixture, this) else null
+
             // Loading the raw binary is the ONLY legitimately-skippable step: a corrupt or
             // format-unsupported fixture is an environment problem, not a bug in our analyzer.
             // Everything after it is code under test and must fail loudly (see the catch below).
-            loaded = try {
+            loaded = restored ?: try {
                 loadProgram(fixture, log = log, monitor = monitor)
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -206,9 +210,12 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
                     // without us, then re-run it manually with our CapturingSink.
                     // `Options.setBoolean` mutates the program options DB and needs
                     // a transaction.
-                    program.disableStabsAnalyzer()
-                    mgr.initializeOptions()
-                    runAutoAnalysis(mgr, monitor)
+                    if (restored == null) {
+                        program.disableStabsAnalyzer()
+                        mgr.initializeOptions()
+                        runAutoAnalysis(mgr, monitor)
+                        AnalysisCache.store(fixture, program)
+                    }
                     program.runTransaction("stabs-analyze") {
                         artifacts = checkNotNull(context.import().artifacts) { "artifacts not populated by AFTER" }
                     }
