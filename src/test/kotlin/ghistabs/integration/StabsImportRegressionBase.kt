@@ -32,6 +32,7 @@ import ghistabs.materialize.VfptrModel
 import ghistabs.materialize.abi.CxxAbi
 import ghistabs.materialize.abi.CxxAbi.Companion.prevailingAbi
 import ghistabs.materialize.abi.Gcc2
+import ghistabs.materialize.abi.Gcc2Abi
 import ghistabs.materialize.abi.GhidraClassNaming
 import ghistabs.materialize.abi.Itanium
 import ghistabs.materialize.conflictCount
@@ -1048,14 +1049,18 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
      *
      * Asserted over the subobject as embedded, since the vptr's offset inside it is the base's own
      * business: +0 under Itanium, after the fields under gcc 2.x, and one level further down again
-     * when the secondary base inherited it from a base of its own.
+     * when the secondary base inherited it from a base of its own — except when it is not embedded
+     * at all, which is [vptrLivesInAVirtualBase].
      */
     @Test
     fun polymorphicSecondaryBasesKeepTheirVptr() {
         val secondary = builtClasses().flatMap { (body, dt) ->
             body.bases
                 .filter { it.offsetBits > 0 && !it.isVirtual && occupiesSpace(it.type) }
-                .filter { (resolve(it.type) as? TypeDecl.Aggregate)?.let(::isPolymorphic) == true }
+                .filter {
+                    (resolve(it.type) as? TypeDecl.Aggregate)
+                        ?.let { base -> isPolymorphic(base) && !vptrLivesInAVirtualBase(base) } == true
+                }
                 .mapNotNull { base ->
                     dt.definedComponents
                         .firstOrNull { it.offset.toLong() == base.offsetBits / 8 && isBaseComponent(it) }
@@ -2166,6 +2171,19 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         with(artifacts.types) { hasPolymorphicBaseSubobject(body) }
 
     private fun isBaseComponent(comp: DataTypeComponent) = Itanium.isBaseField(comp.fieldName.orEmpty())
+
+    /**
+     * Whether [body] can only reach a vptr outside its own bytes.
+     *
+     * Pre-2.8 gcc reaches a virtual base through a stored pointer rather than an offset read out of
+     * the vtable, so a class whose polymorphism comes from a virtual base holds that base — and the
+     * vptr in it — by reference. libg++ 2.6.2's `ostream` is the case: `!1,120,44;$vb44:...` is one
+     * base, virtual, plus a `$vb` pointer to it, and no `$vf` field anywhere; the single vptr lives
+     * in the shared `ios`. Itanium gives such a class its own primary vptr at +0 instead, so this
+     * exempts nothing there.
+     */
+    private fun vptrLivesInAVirtualBase(body: TypeDecl.Aggregate<GlobalTypeId>) =
+        program.symbolTable.prevailingAbi() is Gcc2Abi && body.bases.any { it.isVirtual }
 
     /** A vptr anywhere in [dt], including one the subobject inherited from a base of its own. */
     private fun holdsVptr(dt: Structure): Boolean = dt.definedComponents.any {
