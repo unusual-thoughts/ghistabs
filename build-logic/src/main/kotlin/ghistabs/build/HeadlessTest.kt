@@ -63,6 +63,10 @@ fun Test.headlessGhidraConfig(reportName: String, narrowGeneratedClasses: Boolea
     systemProperty("fixtureFilter", props.gradleProperty("fixture").getOrElse(""))
     // -PdisableAnalyzers=<name substring>[,…] turns those analyzers off, for A/B probe runs.
     systemProperty("disableAnalyzers", props.gradleProperty("disableAnalyzers").getOrElse(""))
+    // -PanalysisCache=auto|off|refresh, and -PanalysisCacheDir=<dir> to keep the databases somewhere
+    // `clean` does not reach. AFTER mode only; see ghistabs.test.AnalysisCache.
+    systemProperty("analysisCache", props.gradleProperty("analysisCache").getOrElse(""))
+    systemProperty("analysisCacheDir", props.gradleProperty("analysisCacheDir").getOrElse(""))
     // -PsourceRoot=<dir>[;<dir>] — checkouts of the sources a fixture was built from. Absent, the
     // probes needing ground truth skip.
     systemProperty(

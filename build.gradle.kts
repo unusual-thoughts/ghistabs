@@ -72,15 +72,17 @@ tasks.test {
 kotlin.sourceSets.test { kotlin.srcDir(tasks.named("generateFixtureTests")) }
 
 // Ghidra backwards-compatibility shims
-for (variant in projectDir.resolve("src").resolve("main").listFiles().orEmpty().filter {
-    when {
-        it.name.startsWith("kotlin-since") -> ghidraAtLeast(it.name.substring(12))
-        it.name.startsWith("kotlin-pre") -> !ghidraAtLeast(it.name.substring(10))
-        else -> false
+for (set in listOf("main", "test")) {
+    for (variant in projectDir.resolve("src").resolve(set).listFiles().orEmpty().filter {
+        when {
+            it.name.startsWith("kotlin-since") -> ghidraAtLeast(it.name.substring(12))
+            it.name.startsWith("kotlin-pre") -> !ghidraAtLeast(it.name.substring(10))
+            else -> false
+        }
+    }) {
+        kotlin.sourceSets.named(set) { kotlin.srcDir(variant) }
+        sourceSets.named(set) { java.srcDir(variant) }
     }
-}) {
-    kotlin.sourceSets.main { kotlin.srcDir(variant) }
-    sourceSets.main { java.srcDir(variant) }
 }
 
 // CLI target configuration
