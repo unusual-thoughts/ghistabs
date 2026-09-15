@@ -22,6 +22,9 @@ object Gcc2 {
     const val THUNK_VTABLE_PREFIX = "__vt_"
     const val CPLUS_MARKERS = "$."
 
+    /** What a.out prepends to every symbol, so `_vt$C` is stored as `__vt$C`. ELF prepends nothing. */
+    const val USER_LABEL_PREFIX = "_"
+
     // cplus-dem.c spells a gcc 2.x vtable "<class> virtual table"; DemangledObject.setName replaces
     // the spaces, so the leaf arrives as "<class>_virtual_table" with the scope in the namespace.
     private const val DEMANGLED_VTABLE_SUFFIX = "_virtual_table"
@@ -42,6 +45,20 @@ object Gcc2 {
      * without them it is the record `{short delta; short index; void *pfn;}`, twice as wide. The
      * header is 8 bytes either way — `cp/class.c:skip_rtti_stuff` reserves two *entries* with thunks
      * and one without — which on 32-bit is what [Itanium.vtablePrefixBytes] already computes.
+     *
+     * The choice is a *flag*, never a version, which is why it has to be read off the binary. In
+     * `cp/decl.c` the thunk branch builds `build_pointer_type` of a FUNCTION_TYPE returning int, and
+     * the other builds the RECORD_TYPE — so the stabs state it outright: `__vtbl_ptr_type` is
+     * `*(0,23)=f(0,1)` with thunks and `s8{__delta,__index,__pfn,__delta2}` without (the last field
+     * an invisible union over `__pfn`, which is why both sit at bit 32).
+     *
+     * gcc 2.7.2.3's `cp/decl2.c` has `int flag_vtable_thunks;` — unconditionally off, with the
+     * comment "The default is off now, but will be on later" — and its `config/i386/unix.h` defines
+     * no `ASM_OUTPUT_MI_THUNK` at all, so every i386 build up to and including 2.7.2.3 is the record
+     * form. Mainline then made it a target default (`#ifdef ASM_OUTPUT_MI_THUNK` in 1996, then
+     * `DEFAULT_VTABLE_THUNKS`, which `config/linux.h` set to 1 for non-libc5 Linux on 1997-08-27);
+     * the 2.7.2.x maintenance branch never took those, which is why 2.7.2.3 post-dates the switch
+     * and still emits the old shape.
      */
     fun looksLikeThunkVtable(symbolName: String) = symbolName.startsWith(THUNK_VTABLE_PREFIX)
 
@@ -134,12 +151,19 @@ object Gcc2 {
     /** The mangled class name a gcc 2.x vtable symbol carries, or null if [symbolName] isn't one. */
     private fun vtableTail(symbolName: String): String? = when {
         symbolName.startsWith(THUNK_VTABLE_PREFIX) -> symbolName.removePrefix(THUNK_VTABLE_PREFIX)
-
-        symbolName.startsWith(VTABLE_PREFIX) && symbolName.getOrNull(VTABLE_PREFIX.length) in MARKERS ->
-            symbolName.substring(VTABLE_PREFIX.length + 1)
-
-        else -> null
+        else -> plainVtableTail(symbolName) ?: plainVtableTail(symbolName.removePrefix(USER_LABEL_PREFIX))
     }
+
+    /**
+     * [VTABLE_PREFIX] plus a cplus_marker, or null. Tried both as-is and with one leading underscore
+     * removed, because a.out prepends the user label prefix to every symbol: the same class arrives
+     * as `_vt.TiXmlNode` on ELF (`tinyxml_elf_gcc272.o`) and `__vt$TiXmlNode` on a.out
+     * (`tinyxml_aout_gcc263.o`). Stripping cannot swallow a thunk table — that spelling is matched
+     * first, and `_` is not a cplus_marker, so `__vt_9TiXmlNode` never reaches here.
+     */
+    private fun plainVtableTail(symbolName: String): String? = symbolName
+        .takeIf { it.startsWith(VTABLE_PREFIX) && it.getOrNull(VTABLE_PREFIX.length) in MARKERS }
+        ?.substring(VTABLE_PREFIX.length + 1)
 
     private val MARKERS = CPLUS_MARKERS.toSet()
 
@@ -210,7 +234,10 @@ data object Gcc2Thunks : Gcc2Abi {
     }
 }
 
-/** `_vt.`/`_vt$`: `{delta, index, pfn}` entries, twice as wide, with pfn in the second word. */
+/**
+ * `_vt.`/`_vt$` — and `__vt.`/`__vt$` once a.out has prefixed them: `{delta, index, pfn}` entries,
+ * twice as wide, with pfn in the second word.
+ */
 data object Gcc2Plain : Gcc2Abi {
     override fun stride(ptrSize: Int) = 2L * ptrSize
 
@@ -221,8 +248,11 @@ data object Gcc2Plain : Gcc2Abi {
     override fun looksLikeVtable(symbolName: String) =
         Gcc2.looksLikeVtable(symbolName) && !Gcc2.looksLikeThunkVtable(symbolName)
 
-    override fun vtableCandidates(className: String) = Gcc2.mangleClassName(className)
-        .let { m -> Gcc2.CPLUS_MARKERS.map { "${Gcc2.VTABLE_PREFIX}$it$m" } }
+    override fun vtableCandidates(className: String) = Gcc2.mangleClassName(className).let { m ->
+        Gcc2.CPLUS_MARKERS.flatMap { marker ->
+            listOf("", Gcc2.USER_LABEL_PREFIX).map { "$it${Gcc2.VTABLE_PREFIX}$marker$m" }
+        }
+    }
 
     override fun Structure.addReservedHeader() {
         add(ShortDataType.dataType, Gcc2.RESERVED + "__delta", "reserved entry: delta")

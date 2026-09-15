@@ -29,6 +29,21 @@ class Gcc2Test {
     }
 
     /**
+     * a.out prepends the user label prefix, so the no-thunk spelling reaches the symbol table as
+     * `__vt$C` where the ELF build of the same source has `_vt.C`. Getting this wrong is not a
+     * missed vtable but the *wrong geometry*: with no vtable symbol recognised, the binary-wide
+     * vote falls through to the member-name path, which answers [Gcc2Thunks], and the 4-byte
+     * thunk stride is then applied to 8-byte `{delta, index, pfn}` entries.
+     */
+    @Test
+    fun aOutPrefixedPlainSpellingIsPlain() {
+        CxxAbi.ofVtableSymbol($$"__vt$9TiXmlNode") mustBe Gcc2Plain
+        CxxAbi.ofVtableSymbol("__vt.9TiXmlNode") mustBe Gcc2Plain
+        // The thunk form still wins, and one strip cannot turn it into a marker form.
+        CxxAbi.ofVtableSymbol("__vt_9TiXmlNode") mustBe Gcc2Thunks
+    }
+
+    /**
      * The distinction the sweep turns on: a second marker names a *base's* secondary table inside
      * the first class, which is a different object from that class's own and from the base's own.
      */
