@@ -36,7 +36,7 @@ class StabReader(
         val truncatedTail: Long = 0,
     )
 
-    constructor(stab: ByteArray, stabStr: ByteArray) : this(
+    constructor(stab: ByteArray, stabStr: ByteArray, layout: Layout = Layout.SECTION) : this(
         BinaryReader(
             ByteArrayProvider(stab),
             true,
@@ -44,6 +44,7 @@ class StabReader(
         { n ->
             stabStr.asIterable().drop(n.toInt()).takeWhile { it != 0.toByte() }.toByteArray().toString(Charsets.UTF_8)
         },
+        layout,
     )
 
     fun readAll(monitor: TaskMonitor = TaskMonitor.DUMMY): Result {
@@ -116,7 +117,7 @@ class StabReader(
         return buildMap {
             while (stab.hasNext(STAB_RECORD_SIZE)) {
                 val raw = readHeader()
-                if (raw.isLinkSymbol && raw.section != StabSection.Undefined && raw.strx != 0u) {
+                if (raw.isLinkSymbol && raw.isPlaced && raw.strx != 0u) {
                     putIfAbsent(stabStr(raw.strx.toLong()), raw.value.toLong())
                 }
             }
