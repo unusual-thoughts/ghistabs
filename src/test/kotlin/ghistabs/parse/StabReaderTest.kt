@@ -257,6 +257,46 @@ class StabReaderTest {
     }
 
     /**
+     * `linkSymbols` admits exactly the `n_type`s whose `n_value` is an address. The weak family is
+     * what forces [StabHeader.isPlaced] to look past [StabHeader.section]: all five mask onto codes
+     * [StabSection] does not model, so `section` is null for a `weakt` definition and a `weaku`
+     * reference alike, and only the raw code separates them.
+     */
+    @Test
+    fun testLinkSymbolsAdmitsOnlyPlacedSections() {
+        val placed = listOf(
+            "text_" to (StabSection.Text.code or StabHeader.N_EXT_MASK),
+            "data_" to (StabSection.Data.code or StabHeader.N_EXT_MASK),
+            "bss__" to (StabSection.Bss.code or StabHeader.N_EXT_MASK),
+            "abs__" to (StabSection.Absolute.code or StabHeader.N_EXT_MASK),
+            "weakt" to StabHeader.N_WEAKT,
+            "weakd" to StabHeader.N_WEAKD,
+            "weakb" to StabHeader.N_WEAKB,
+            "weaka" to StabHeader.N_WEAKA,
+        )
+        val unplaced = listOf(
+            "undef" to (StabSection.Undefined.code or StabHeader.N_EXT_MASK),
+            "commn" to (StabSection.Common.code or StabHeader.N_EXT_MASK),
+            "indir" to (StabSection.Indirect.code or StabHeader.N_EXT_MASK),
+            "weaku" to StabHeader.N_WEAKU,
+            "sett_" to 0x17u.toUByte(), // N_SETT|N_EXT — a set element, not a symbol a stab names
+            "fname" to StabHeader.N_FN,
+        )
+        // Names are a uniform 5 chars, so n_strx strides by 6 from 1, past the leading NUL.
+        val kinds = placed + unplaced
+        val stabstr = byteArrayOf(0) + Fixture.stabstrSection(kinds.map { it.first })
+        val stab = Fixture.stabSection(
+            kinds.mapIndexed { i, (_, type) ->
+                Fixture.stabRecord(strx = 1 + i * 6, type = type.toInt(), other = 0, desc = 0, value = 0x1000 + i)
+            },
+        )
+
+        val found = StabReader(stab, stabstr, StabReader.Layout.SYMTAB).linkSymbols()
+
+        found mustBe placed.mapIndexed { i, (name, _) -> name to 0x1000L + i }.toMap()
+    }
+
+    /**
      * Empty .stab (zero-length input).
      */
     @Test

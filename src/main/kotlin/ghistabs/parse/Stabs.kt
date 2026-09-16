@@ -233,8 +233,8 @@ enum class StabType(val code: UByte) {
  * from stabs and link-time symbols alike — [StabHeader.N_STAB_MASK] covers why both carry one.
  *
  * Three of the seven name no section. [Undefined], [Indirect] and [Common] are what the field says
- * when `n_value` is not an address at all, so anything reaching for a *definition* has to test for
- * them rather than assume a placement — which is the whole of [StabReader.linkSymbols]' filter.
+ * when `n_value` is not an address at all, so anything reaching for a *definition* tests
+ * [StabHeader.isPlaced] rather than assume a placement — the whole of [StabReader.linkSymbols]' filter.
  *
  * Constants are the masked codes, so the weak/set/warning family is deliberately absent: those
  * collide in pairs under [StabHeader.N_TYPE_MASK] and have to be matched raw, as noted there.
@@ -264,6 +264,9 @@ enum class StabSection(val code: UByte) {
 
     companion object {
         fun fromCode(b: UByte): StabSection? = entries.find { it.code == b }
+
+        /** The four whose `n_value` is an address. See [StabHeader.isPlaced]. */
+        val PLACED = setOf(Absolute, Text, Data, Bss)
     }
 }
 
@@ -348,6 +351,13 @@ data class StabHeader(val strx: UInt, val type: UByte, val other: UByte, val des
         /** File name of the `.o`. `N_WARNING or N_EXT_MASK`, so [section] never reports it. */
         const val N_FN: UByte = 0x1FU
         const val N_WARNING: UByte = 0x1EU
+
+        /**
+         * The codes above that still define a symbol somewhere. `N_WEAKU` is absent — weak or not,
+         * an undefined symbol's `n_value` is a size, not an address — and so are `N_WARNING`/`N_FN`,
+         * which name a message and a `.o` rather than anything a stab refers to.
+         */
+        val PLACED_RAW = setOf(N_WEAKA, N_WEAKT, N_WEAKD, N_WEAKB)
     }
 
     /**
@@ -362,6 +372,13 @@ data class StabHeader(val strx: UInt, val type: UByte, val other: UByte, val des
 
     /** No [N_STAB_MASK] bit set: a link-time symbol rather than a debugging one. */
     val isLinkSymbol get() = type and N_STAB_MASK == 0U.toUByte()
+
+    /**
+     * Whether `n_value` is an address — what a caller after a *definition* wants, alongside
+     * [isLinkSymbol]. Two tests, because [section] answers null for the whole weak family and so
+     * cannot tell a `N_WEAKT` definition from a `N_WEAKU` reference; [PLACED_RAW] decides those.
+     */
+    val isPlaced get() = section in StabSection.PLACED || type in PLACED_RAW
 }
 
 /**
