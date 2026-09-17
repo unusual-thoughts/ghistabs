@@ -439,7 +439,7 @@ class DemanglerReplacer(
             .filter { (it.isZeroLength || it.numComponents == 0) && it.isConflict() }
             .filter { dtm.conflictBase(it) != null }
             .toList()
-        val dropped = forks.count { dtm.remove(it, monitor) }
+        val dropped = forks.count { dtm.remove(it) }
         if (dropped > 0) debug("demangler-dropped-empty-conflict-fork", count = dropped.toLong())
     }
 
