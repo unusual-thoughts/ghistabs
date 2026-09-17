@@ -131,11 +131,14 @@ class DirectoryOption(name: String, desc: String) : OptionDescriptor<String>(nam
      * The [Option] behind [DirectoryOption]: the component holds the value and [getValue] reads it
      * back out, the shape [ghidra.app.util.exporter.IntelHexExporter]'s record-size option uses. Built on
      * first display rather than in the constructor, so a headless export never touches Swing.
+     *
+     * Through [CustomEditorOption] rather than [Option] directly: 12.2 changed what the editor hook is
+     * handed, and only one signature can be overridden per build.
      */
-    inner class Opt(private val initial: String) : Option(name, initial) {
+    inner class Opt(private val initial: String) : CustomEditorOption(name, initial) {
         private var panel: GhidraFileChooserPanel? = null
 
-        override fun getCustomEditorComponent(): Component = panel ?: GhidraFileChooserPanel(
+        override fun editorComponent(): Component = panel ?: GhidraFileChooserPanel(
             name,
             "Stabs.LastExportDirectory",
             initial,
