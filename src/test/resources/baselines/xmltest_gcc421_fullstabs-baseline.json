@@ -221,8 +221,8 @@
             "max": 64
         },
         "drop-record-undf-empty": {
-            "min": 15,
-            "max": 15
+            "min": 143,
+            "max": 143
         },
         "dtm-conflicts-created": {
             "min": 1,
@@ -298,12 +298,12 @@
             "max": 148
         },
         "harvest-records-parsed": {
-            "min": 62336,
-            "max": 62336
+            "min": 62464,
+            "max": 62464
         },
         "harvest-records-read": {
-            "min": 62336,
-            "max": 62336
+            "min": 62464,
+            "max": 62464
         },
         "harvest-sources": {
             "min": 132,

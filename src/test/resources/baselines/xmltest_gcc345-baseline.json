@@ -108,8 +108,8 @@
             "max": 60
         },
         "drop-record-undf-empty": {
-            "min": 27,
-            "max": 27
+            "min": 112,
+            "max": 112
         },
         "dtm-conflicts-post": {
             "min": 0,
@@ -187,12 +187,12 @@
             "max": 463
         },
         "harvest-records-parsed": {
-            "min": 73301,
-            "max": 73301
+            "min": 73386,
+            "max": 73386
         },
         "harvest-records-read": {
-            "min": 73301,
-            "max": 73301
+            "min": 73386,
+            "max": 73386
         },
         "harvest-sources": {
             "min": 120,
@@ -622,6 +622,10 @@
         "typedef-named-anon-aggregate": {
             "min": 121,
             "max": 121
+        },
+        "typedef-shorten": {
+            "min": 1,
+            "max": 1
         },
         "unfinished-cu": {
             "min": 1,
