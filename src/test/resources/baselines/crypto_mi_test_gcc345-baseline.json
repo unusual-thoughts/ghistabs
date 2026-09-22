@@ -147,8 +147,8 @@
             "max": 90
         },
         "drop-record-undf-empty": {
-            "min": 4,
-            "max": 4
+            "min": 175,
+            "max": 175
         },
         "dtm-conflicts-post": {
             "min": 0,
@@ -322,12 +322,12 @@
             "max": 2948
         },
         "harvest-records-parsed": {
-            "min": 162645,
-            "max": 162645
+            "min": 162816,
+            "max": 162816
         },
         "harvest-records-read": {
-            "min": 162645,
-            "max": 162645
+            "min": 162816,
+            "max": 162816
         },
         "harvest-sources": {
             "min": 222,
@@ -1269,12 +1269,8 @@
             "max": 3336
         },
         "textrange-entries": {
-            "min": 10304,
-            "max": 10304
-        },
-        "textrange-rejected": {
-            "min": 1,
-            "max": 1
+            "min": 10305,
+            "max": 10305
         },
         "typedef-named-anon-aggregate": {
             "min": 121,

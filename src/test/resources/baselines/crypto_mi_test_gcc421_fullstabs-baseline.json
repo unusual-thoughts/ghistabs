@@ -164,12 +164,12 @@
             "max": 571
         },
         "demangle-applied": {
-            "min": 30657,
-            "max": 30657
+            "min": 30659,
+            "max": 30659
         },
         "demangle-attempted": {
-            "min": 30657,
-            "max": 30657
+            "min": 30659,
+            "max": 30659
         },
         "demangle-displaced-function-renamed": {
             "min": 0,
@@ -248,8 +248,8 @@
             "max": 94
         },
         "drop-record-undf-empty": {
-            "min": 14,
-            "max": 14
+            "min": 313,
+            "max": 313
         },
         "dtm-conflicts-created": {
             "min": 1,
@@ -350,12 +350,12 @@
             "max": 242
         },
         "harvest-records-parsed": {
-            "min": 177877,
-            "max": 177877
+            "min": 178176,
+            "max": 178176
         },
         "harvest-records-read": {
-            "min": 177877,
-            "max": 177877
+            "min": 178176,
+            "max": 178176
         },
         "harvest-sources": {
             "min": 231,
