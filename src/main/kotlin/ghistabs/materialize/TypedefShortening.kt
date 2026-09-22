@@ -4,7 +4,12 @@ import ghidra.program.model.data.*
 import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.materialize.abi.Itanium
+import ghistabs.parse.TypeDecl
 import ghistabs.parse.canonTemplateName
+
+/** `__x` and `_X` are reserved to the implementation — a name the program never chose. */
+private fun String.isReservedToImplementation() =
+    startsWith("__") || (length > 1 && this[0] == '_' && this[1].isUpperCase())
 
 /** A rename the shortening pass performs: datatype simple name [from] → [to]. */
 data class TypedefRename(val from: String, val to: String)
@@ -26,9 +31,11 @@ class TemplateNameShortener(aliases: Map<String, String>) {
         .mapNotNull { (target, names) ->
             // Prefer a readable alias over compiler-internal shorthands: libstdc++'s explicit-
             // instantiation TUs emit `typedef basic_string<…> S;` and `__string_type`, and the raw
-            // shortest-name rule picks `S` over `string`. Drop single-letter and `__`-reserved
-            // names unless they're the only alias for this target.
-            val readable = names.filterNot { it.length == 1 || it.startsWith("__") }
+            // shortest-name rule picks `S` over `string`. Drop single-letter names and the two
+            // spellings C++ reserves to the implementation — `__x` and `_X` — unless they're the only
+            // alias for this target: `_Node`, `_Self` and `_ValueType` are a container's names for its
+            // own parts and say nothing about the type once lifted out of it.
+            val readable = names.filterNot { it.length == 1 || it.isReservedToImplementation() }
             readable.ifEmpty { names }.minBy { it.length }.takeIf { it.length < target.length }?.let { target to it }
         }
         .sortedByDescending { it.first.length }
@@ -101,10 +108,10 @@ fun DataType.isGhidraBaseType(): Boolean = when (this) {
 }
 
 /**
- * Typedef alias → the DTM name of the type it aliases, read off the stabs typedef declarations
+ * Typedef alias → the spelling of the type it aliases, read off the stabs typedef declarations
  * (`namedTypedefs`, which is exactly what [materializeTypedefs] turns into DTM typedefs). Resolving
  * the *declaration* rather than
- * reading a registered `TypeDef` back out of the DTM is what makes the two refusals exact: [resolveRef]
+ * reading a registered `TypeDef` back out of the DTM is what makes the refusals exact: [resolveRef]
  * hands back the `byId`-cached object registration itself used, so this is the very DataType the
  * registry classified.
  *
@@ -113,11 +120,30 @@ fun DataType.isGhidraBaseType(): Boolean = when (this) {
  *    Folding the typedef into the empty placeholder loses it, and the registry's non-resident copy of
  *    the pair re-enters the DTM through a later apply as `<alias>.conflict` beside an empty struct
  *    wearing the alias. `ostream -> basic_ostream<…>` reads better than an empty `ostream` anyway.
+ *  - Nor is a name that means **different types in different CUs**. gcc emits a class's member
+ *    typedefs unqualified, so `traits_type` is `char_traits<char>` in one CU and `char_traits<wchar_t>`
+ *    in the next, and `_ValueType` names 21 different types in `crypto_mi_test_gcc421`. Taking the
+ *    first declaration picked one arbitrarily and rewrote every occurrence of it — 137 of the 140
+ *    renames that spelled a global type with a name only meaningful inside some template.
+ *
+ * The *spelling*, not the resolved DataType's name, because the two differ exactly where this matters.
+ * A typedef whose target is a cross-reference no CU defines gets the target named after the alias
+ * itself (`materializeTypedefs` §20), so `string` resolved to a DataType already called `string` and
+ * the entry said `string → string` — nothing to shorten, while 34 composite names went on spelling
+ * `basic_string<char,std::char_traits<char>,std::allocator<char>>` inside themselves. Those names are
+ * built from the AST, so the AST's own cross-reference tag is what they contain and what has to be
+ * keyed on.
  */
 internal fun DataTypeRegistry.typedefAliases(): Map<String, String> = types.namedTypedefs.mapNotNull { (alias, asts) ->
-    resolveRef(asts.first().body)
+    val targets = asts.mapNotNull { resolveRef(it.body) }
+    val target = targets.firstOrNull()
+        ?.takeIf { first -> targets.all { it.name == first.name } }
         ?.takeUnless { it.isGhidraBaseType() || it in xrefStubs }
-        ?.let { alias to it.name }
+        ?: return@mapNotNull null
+    val spelling = target.name.takeUnless { it == alias }
+        ?: types.targetSpelling(asts.first().body)?.let(::canonTemplateName)
+        ?: return@mapNotNull null
+    alias to spelling
 }.toMap()
 
 /**

@@ -21,6 +21,24 @@ abstract class ContentIndex(val contentCache: MutableMap<GlobalTypeId, LayoutCon
     abstract fun byXRef(xref: TypeDecl.XRef<GlobalTypeId>, silent: Boolean = false): Type?
 
     /**
+     * The name [decl] spells its target with — an id's own name, or a cross-reference's tag — through
+     * the wrappers that keep it the same type. Null where the declaration names nothing (a primitive,
+     * a pointer, an inline aggregate body).
+     *
+     * The *spelling*, which is not always the materialized DataType's name: a cross-reference no CU
+     * defines gets its target named after the alias itself (`materializeTypedefs` §20), while every
+     * composite name built from the AST goes on carrying the tag. Both readers of typedef aliases —
+     * the DTM rename pass and the skeleton renderer, which never sees a DataType — need the tag.
+     */
+    fun targetSpelling(decl: GlobalTypeDecl): String? = when (decl) {
+        is TypeDecl.Ref -> byId(decl.id)?.name
+        is TypeDecl.XRef -> decl.tagName
+        is TypeDecl.InlineDef -> targetSpelling(decl.inner)
+        is TypeDecl.WithSizeAttr -> targetSpelling(decl.inner)
+        else -> null
+    }
+
+    /**
      * Canonical layout of a [TypeDecl] tree, as a value: equal [LayoutContent] ⇔ layout-equivalent
      * types. One traversal serves both grouping and equality, so the two cannot drift apart.
      *

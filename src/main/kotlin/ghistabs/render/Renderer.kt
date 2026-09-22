@@ -305,22 +305,13 @@ class Renderer(
      * shortening pass doesn't reach it). Only typedefs whose target is a template instantiation (has a
      * `<`) are used — that excludes base-type aliases (`fpos_t`→`longlong`) without DataType lookups.
      */
-    fun harvestTemplateShortener(): TemplateNameShortener {
-        fun targetName(decl: GlobalTypeDecl): String? = when (decl) {
-            is TypeDecl.Ref -> types.byId(decl.id)?.name
-            is TypeDecl.XRef -> decl.tagName
-            is TypeDecl.InlineDef -> targetName(decl.inner)
-            else -> null
-        }
-
-        return TemplateNameShortener(
-            types.allTypes.mapNotNull { ast ->
-                ast.name?.let { name ->
-                    targetName(ast.body)?.takeIf { '<' in it && it.length > name.length }?.let { name to it }
-                }
-            }.toMap(),
-        )
-    }
+    fun harvestTemplateShortener(): TemplateNameShortener = TemplateNameShortener(
+        types.allTypes.mapNotNull { ast ->
+            ast.name?.let { name ->
+                types.targetSpelling(ast.body)?.takeIf { '<' in it && it.length > name.length }?.let { name to it }
+            }
+        }.toMap(),
+    )
 
     // We own the DecompInterface, so terminate its process rather than just detaching the program.
     override fun close() {
