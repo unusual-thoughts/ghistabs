@@ -13,20 +13,20 @@ import java.awt.Component
  *
  * The text-field editor 12.2's own [StringOption] supplies is not backported: below 12.2 a plain
  * string option had none either, and every string option published to a dialog here overrides the
- * hook anyway.
+ * hook anyway. `stateKey` and `hidden` are carried but not passed down — see [BooleanOption].
  */
 open class StringOption(
     name: String,
     value: String,
     arg: String?,
     group: String?,
-    stateKey: String?,
-    hidden: Boolean,
+    private val stateKey: String?,
+    private val hidden: Boolean,
     val description: String?,
-) : Option(name, String::class.java, value, arg, group, stateKey, hidden) {
+) : Option(name, String::class.java, value, arg, group) {
     override fun getValue() = super.getValue() as String
 
-    override fun copy() = StringOption(name, value, arg, group, stateKey, isHidden, description)
+    override fun copy() = StringOption(name, value, arg, group, stateKey, hidden, description)
 
     open fun getCustomEditorComponent(addressFactoryService: AddressFactoryService?): Component? = null
 
