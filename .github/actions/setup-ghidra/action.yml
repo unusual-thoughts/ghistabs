@@ -42,7 +42,7 @@ runs:
         VERSION: ${{ inputs.ghidra-version }}
       run: |
         gh release download "Ghidra_${VERSION}_build" \
-          --repo NationalSecurityAgency/ghidra \
+          --repo unusual-thoughts/ghidra \
           --pattern "ghidra_${VERSION}_PUBLIC_*.zip"
         unzip -q "ghidra_${VERSION}_PUBLIC_"*.zip
         mkdir -p /opt
