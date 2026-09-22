@@ -19,7 +19,7 @@ jobs:
       # The version the integration baselines were generated against; bumping it will shift counters.
       - uses: ./.github/actions/setup-ghidra
         with:
-          ghidra-version: '12.1.2'
+          ghidra-version: '12.3'
 
       - name: Check formatting
         run: ./gradlew ktlintCheck
