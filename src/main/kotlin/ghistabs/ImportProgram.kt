@@ -6,10 +6,12 @@ import ghidra.util.task.TaskMonitor
 import java.io.File
 
 /**
- * 12.0+: `ProgramLoader`. Imports [binary], hinting the [compiler] spec where the file's own loaders
- * offer one (see [ghistabs.offersCompilerSpec]; null leaves the loader its own preference).
- * The caller owns the result and must [close][ghistabs.LoadedProgram.close] it -
- * prefer [ghistabs.withProgram] when the program's life is a single scope.
+ * Imports [binary], hinting the [compiler] spec where the file's own loaders offer one (see
+ * [offersCompilerSpec]; null leaves the loader its own preference). The caller owns the result and
+ * must [close][LoadedProgram.close] it - prefer [withProgram] when the program's life is a single scope.
+ *
+ * `load()` holds what it loads with the builder as consumer, so the program is taken over with a
+ * reference of our own and the builder's is dropped.
  */
 fun Any.loadProgram(binary: File, compiler: String? = "gcc", log: MessageLog? = null, monitor: TaskMonitor? = null) =
     ProgramLoader.builder()
