@@ -26,9 +26,13 @@ import org.junit.jupiter.api.assertAll
  * Nothing may be corrected where purge and the cspec already agree, which is the `FileSystemImage::root`
  * regression that motivated the purge check.
  *
- * `locale_test`, and it exercises both directions:
- * `std::locale::global` / `collate<char>::transform` return a non-trivial 4-byte class through memory,
- * while `num_get::_M_extract_int` returns a trivial 4-byte iterator in EAX.
+ * `locale_test`. Which directions appear is the cspec's business: through 12.1 it corrected both —
+ * `std::locale::global` / `collate<char>::transform` returning a non-trivial 4-byte class through
+ * memory, `num_get::_M_extract_int` returning a trivial 4-byte iterator in EAX — while from 12.2
+ * (47c7b910, all models hidden-return a struct) the sret half is what the cspec already does, leaving
+ * only the register direction to correct here. So the roster this pins is "some correction, every one
+ * of them justified", and the sret *correction* is covered by the union fixture in
+ * [StructReturnAnalyzerIntegrationTest], which no cspec rule places indirectly.
  */
 @Tag("integration")
 class StructReturnFixtureIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
@@ -42,7 +46,7 @@ class StructReturnFixtureIntegrationTest : AbstractGhidraHeadlessIntegrationTest
         val pointer = program.defaultPointerSize
 
         assertAll(
-            { toMemory.mustNotBeEmpty("expected non-trivial small class returns to be corrected to sret") },
+            { corrected.mustNotBeEmpty("nothing was corrected, so nothing below asserts anything") },
             { toRegister.mustNotBeEmpty("expected trivial POD returns to be corrected to register") },
             // Every correction is justified by the epilogue, in the direction it claims.
             { toMemory.forEach { it.stackPurgeSize.mustBe(pointer, "${it.name} @ ${it.entryPoint} purge") } },
