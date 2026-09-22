@@ -6,7 +6,6 @@ import ghidra.app.util.bin.FileByteProvider
 import ghidra.app.util.bin.InputStreamByteProvider
 import ghidra.app.util.bin.format.unixaout.UnixAoutHeader
 import ghidra.app.util.importer.MessageLog
-import ghidra.app.util.opinion.LoaderService
 import ghidra.app.util.opinion.LoaderTier
 import ghidra.program.database.data.DataTypeUtilities
 import ghidra.program.model.address.*
@@ -188,7 +187,7 @@ class LoadedProgram internal constructor(val program: Program, private val consu
 
 /** Whether some loader that actually targets this file offers a spec carrying [compiler].  */
 internal fun File.offersCompilerSpec(compiler: String) = FileByteProvider(this, null, AccessMode.READ).use { provider ->
-    LoaderService.getAllSupportedLoadSpecs(provider).any { (loader, specs) ->
+    allSupportedLoadSpecs(provider, TaskMonitor.DUMMY).any { (loader, specs) ->
         loader.tier != LoaderTier.UNTARGETED_LOADER &&
             specs.any { it.languageCompilerSpec?.compilerSpecID?.idAsString == compiler }
     }

@@ -2,8 +2,11 @@ package ghistabs
 
 import docking.widgets.filechooser.GhidraFileChooserMode
 import docking.widgets.filechooser.GhidraFileChooserPanel
+import ghidra.app.util.AddressFactoryService
 import ghidra.app.util.Option
 import ghidra.app.util.OptionException
+import ghidra.app.util.importer.options.BooleanOption
+import ghidra.app.util.importer.options.StringOption
 import ghidra.framework.options.OptionType
 import ghidra.framework.options.Options
 import ghidra.program.model.listing.Program
@@ -57,8 +60,12 @@ abstract class OptionDescriptor<T : Any>(val name: String, val desc: String, val
         fun <T : Any> bind(option: OptionDescriptor<T>): OptionDescriptor<T>.Holder
     }
 
-    /** This option carrying [this], in the form an exporter hands the dialog. */
-    open fun T.asOption(): Option = Option(name, this)
+    /**
+     * This option carrying [this], in the form an exporter hands the dialog. Per subclass rather
+     * than one untyped default: since 12.2 an [Option] is built as the subclass matching its value
+     * type, and there is none for an arbitrary value.
+     */
+    abstract fun T.asOption(): Option
     override operator fun provideDelegate(thisRef: Container, property: KProperty<*>) = thisRef.bind(this)
 }
 
@@ -84,14 +91,23 @@ class BoolOption(name: String, desc: String, default: Boolean) : OptionDescripto
     override fun get(options: Options) = options.getBoolean(name, default)
     override fun set(options: Options, value: Boolean) = options.setBoolean(name, value)
     override fun read(option: Option) = option.value as? Boolean ?: throw invalid(option)
+    override fun Boolean.asOption(): Option = BooleanOption(name, this, null, null, null, false, desc)
 }
 
 class EnumOption<T : Enum<T>>(name: String, desc: String, default: T) : OptionDescriptor<T>(name, desc, default) {
     override fun get(options: Options): T = options.getEnum(name, default)
     override fun set(options: Options, value: T) = options.setEnum(name, value)
 
-    // The enum's own class, taken off the default: the type parameter is erased by now.
-    override fun read(option: Option): T = default.javaClass.cast(option.value) ?: throw invalid(option)
+    /**
+     * By constant name: 12.2 builds an [Option] as the subclass matching its value type and has none
+     * for an enum, so a string is what the exporter dialog can carry either way. The enum's own
+     * class comes off the default — the type parameter is erased by now, and `javaClass` would be the
+     * anonymous subclass for a constant with a body.
+     */
+    override fun read(option: Option): T =
+        default.declaringJavaClass.enumConstants.firstOrNull { it.name == option.value } ?: throw invalid(option)
+
+    override fun T.asOption(): Option = StringOption(this@EnumOption.name, name, null, null, null, false, desc)
 }
 
 class SerializedOption<T : Any>(
@@ -106,7 +122,7 @@ class SerializedOption<T : Any>(
     override fun get(options: Options): T = fromString(options.getString(name, defaultString))
     override fun set(options: Options, value: T) = options.setString(name, serialize(value))
     override fun read(option: Option): T = fromString(option.value as? String ?: throw invalid(option))
-    override fun T.asOption(): Option = Option(name, serialize(this))
+    override fun T.asOption(): Option = StringOption(name, serialize(this), null, null, null, false, desc)
     override fun register(options: Options) = options.registerOption(
         name,
         OptionType.STRING_TYPE,
@@ -131,24 +147,21 @@ class DirectoryOption(name: String, desc: String) : OptionDescriptor<String>(nam
      * The [Option] behind [DirectoryOption]: the component holds the value and [getValue] reads it
      * back out, the shape [ghidra.app.util.exporter.IntelHexExporter]'s record-size option uses. Built on
      * first display rather than in the constructor, so a headless export never touches Swing.
-     *
-     * Through [CustomEditorOption] rather than [Option] directly: 12.2 changed what the editor hook is
-     * handed, and only one signature can be overridden per build.
      */
-    inner class Opt(private val initial: String) : CustomEditorOption(name, initial) {
+    inner class Opt(private val initial: String) : StringOption(name, initial, null, null, null, false, desc) {
         private var panel: GhidraFileChooserPanel? = null
 
-        override fun editorComponent(): Component = panel ?: GhidraFileChooserPanel(
-            name,
-            "Stabs.LastExportDirectory",
-            initial,
-            false,
-            GhidraFileChooserPanel.OUTPUT_MODE,
-        ).apply { setFileSelectionMode(GhidraFileChooserMode.DIRECTORIES_ONLY) }.also { panel = it }
+        override fun getCustomEditorComponent(addressFactoryService: AddressFactoryService?): Component =
+            panel ?: GhidraFileChooserPanel(
+                name,
+                "Stabs.LastExportDirectory",
+                initial,
+                false,
+                GhidraFileChooserPanel.OUTPUT_MODE,
+            ).apply { setFileSelectionMode(GhidraFileChooserMode.DIRECTORIES_ONLY) }.also { panel = it }
 
-        override fun getValue(): Any = panel?.fileName?.trim() ?: initial
-        override fun getValueClass(): Class<*> = String::class.java
-        override fun copy(): Option = Opt(value as String)
+        override fun getValue(): String = panel?.fileName?.trim() ?: initial
+        override fun copy(): StringOption = Opt(value)
     }
 }
 
