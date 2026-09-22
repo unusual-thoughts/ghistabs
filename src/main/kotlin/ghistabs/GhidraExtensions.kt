@@ -128,10 +128,20 @@ fun DataTypeManager.conflictBase(dt: DataType): DataType? = getDataType(dt.categ
 
 val CodeUnit.range get() = minAddress..maxAddress
 
-/** Clear any instructions covering [range]; true if there were any. An empty [range]
- *  (a `Dynamic` type that would not resolve) clears nothing rather than guess a span. */
+/**
+ * Clear any instructions covering [range]; true if there were any. An empty [range]
+ * (a `Dynamic` type that would not resolve) clears nothing rather than guess a span.
+ *
+ * *Anywhere* in the range, not just at its first byte: `createData` refuses the whole span if one
+ * instruction sits in it, wherever that is, so testing only the start left the caller's create to
+ * throw — which is how a single stray NOP at the end of an alignment run cost the run its Alignment.
+ */
 fun Listing.clearAnyDisassembly(range: AddressRange): Boolean {
-    if (range.length == 0L || getInstructionContaining(range.minAddress) == null) return false
+    val covered = range.length != 0L && (
+        getInstructionContaining(range.minAddress) != null ||
+            getInstructions(AddressSet(range.minAddress, range.maxAddress), true).hasNext()
+        )
+    if (!covered) return false
     clearCodeUnits(range.minAddress, range.maxAddress, false)
     return true
 }

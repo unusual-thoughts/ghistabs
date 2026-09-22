@@ -7,13 +7,13 @@ import ghidra.app.util.PseudoDisassembler
 import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.address.Address
 import ghidra.program.model.address.AddressRange
+import ghidra.program.model.address.AddressSet
 import ghidra.program.model.address.AddressSetView
 import ghidra.program.model.data.AlignmentDataType
 import ghidra.program.model.listing.BookmarkType
-import ghidra.program.model.listing.Instruction
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
-import ghistabs.forceCreateData
+import ghistabs.*
 
 /**
  * Marks compiler alignment padding in executable memory as [AlignmentDataType], so downstream passes
@@ -47,12 +47,12 @@ class FillerByteAnalyzer :
         val listing = program.listing
         val bookmarks = program.bookmarkManager
         val target = program.memory.executeSet.intersect(set ?: program.memory.executeSet)
-        val pdis = PseudoDisassembler(program)
+        val code = PseudoDisassembler(program).instructions
 
         var marked = 0
         for (range in listing.getUndefinedRanges(target, false, monitor)) {
             monitor.checkCancelled()
-            for ((at, len) in fillSpans(pdis, range)) {
+            for ((at, len) in program.fillSpans(code, range)) {
                 if (runCatching { program.forceCreateData(at, AlignmentDataType(), len.toInt()) }.isSuccess) {
                     bookmarks.setBookmark(at, BookmarkType.ANALYSIS, NAME, "collapsed $len filler bytes")
                     marked++
@@ -79,67 +79,40 @@ class FillerByteAnalyzer :
      * The jump target is just the boundary — the next function, or a constant block gcc parked in
      * `.text` — so the whole `[jmp, target)` span collapses regardless of what follows it.
      *
+     * That span may finish *past* the undefined range: a stray reference into fill gets a byte of it
+     * disassembled, which ends the range early without making the byte anything but fill (a `.data`
+     * word equal to `0000ffff` costs `0000fff0` its Alignment on `iostream_test_aout_gcc263_fullstabs`
+     * — Ghidra's Data Reference analyzer resolves it against `.text` and disassembles one NOP). The
+     * bound is therefore the idiom's own [MAX_FILL], read off the bytes rather than the listing, and
+     * [forceCreateData] clears whatever was decoded there. What it may not cross is a function: fill
+     * inside a live body is that body's `-falign-loops` padding, and collapsing it would punch a hole
+     * through the instruction stream.
+     *
      * Every offset is tried for the JMP, not the instruction starts a linear walk would produce:
      * the bytes ahead of the padding are dead, so "instruction start" is not defined for them, and
      * a dead tail that happens to decode across the `eb` hides the padding behind it (one site per
      * binary on some, none on cryptopp — where the junk decodes
      * to exactly the right length by luck).
      */
-    private fun fillSpans(pdis: PseudoDisassembler, range: AddressRange): List<Pair<Address, Long>> = buildList {
+    private fun Program.fillSpans(code: Instructions, range: AddressRange): List<Pair<Address, Long>> = buildList {
+        val limit = range.maxAddress.next() ?: return@buildList
         var addr = range.minAddress
-        nopRunLength(pdis, addr, range.maxAddress).takeIf { it > 0 }?.let {
-            add(addr to it)
-            addr = addr.add(it)
+        code.nopRunEnd(addr, limit).takeIf { it > addr }?.let {
+            add(addr to it.subtract(addr))
+            addr = it
         }
-        while (addr <= range.maxAddress) {
-            val fill = runCatching { pdis.disassemble(addr) }.getOrNull()
-                ?.let { jumpOverFillLength(pdis, it, range.maxAddress) }
+        while (addr < limit) {
+            val fill = code.at(addr)
+                ?.let { code.fillJumpLength(it, addr.add(MAX_FILL)) }
+                ?.takeIf { noFunctionIn(addr, it) }
             if (fill != null) add(addr to fill)
             addr = addr.add(fill ?: 1L)
         }
     }
 
-    /** Length of the jump-over-fill idiom led by [jmp], or null if [jmp] doesn't lead one. */
-    private fun jumpOverFillLength(pdis: PseudoDisassembler, jmp: Instruction, last: Address): Long? {
-        if (!jmp.flowType.isJump || jmp.flowType.isConditional) return null
-        val target = jmp.flows.singleOrNull()?.takeIf { it > jmp.address } ?: return null
-        return target.subtract(jmp.address).takeIf {
-            it <= last.subtract(jmp.address) + 1 &&
-                nopRunFillsGap(pdis, jmp.address.add(jmp.length.toLong()), target)
-        }
-    }
-
-    /** Bytes of NOP-equivalent instructions starting at [from], not running past [last]. */
-    private fun nopRunLength(pdis: PseudoDisassembler, from: Address, last: Address): Long {
-        var addr = from
-        while (addr <= last) {
-            val insn = runCatching { pdis.disassemble(addr) }.getOrNull() ?: break
-            if (insn.length == 0 || !insn.isNopEquivalent() || addr.add(insn.length - 1L) > last) break
-            addr = addr.add(insn.length.toLong())
-        }
-        return addr.subtract(from)
-    }
-
-    /** True when every instruction in `[from, to)` is NOP-equivalent and the run lands exactly on [to]. */
-    private fun nopRunFillsGap(pdis: PseudoDisassembler, from: Address, to: Address): Boolean {
-        var addr = from
-        while (addr < to) {
-            val insn = runCatching { pdis.disassemble(addr) }.getOrNull() ?: return false
-            if (insn.length == 0 || !insn.isNopEquivalent()) return false
-            addr = addr.add(insn.length.toLong())
-        }
-        return addr == to
-    }
-
-    /**
-     * NOP, or a self-referential `lea r,[r(+0)]` / `mov r,r` / `xchg r,r` — GAS's alignment fillers
-     * (`8d 76 00`, `89 f6`, `87 …`), all state-preserving.
-     */
-    private fun Instruction.isNopEquivalent() = when (mnemonicString) {
-        "NOP" -> true
-        "LEA", "MOV", "XCHG" -> resultObjects.singleOrNull()?.let { it == inputObjects.singleOrNull() } == true
-        else -> false
-    }
+    /** No function claims any of `[at, at + len)` — fill inside a live body is that body's own. */
+    private fun Program.noFunctionIn(at: Address, len: Long) =
+        !functionManager.getFunctionsOverlapping(AddressSet(at, at.add(len - 1))).hasNext()
 
     companion object {
         const val NAME = "Filler Byte Condenser"
