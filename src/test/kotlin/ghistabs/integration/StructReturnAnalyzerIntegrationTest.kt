@@ -4,11 +4,14 @@ import ghidra.app.cmd.function.FunctionPurgeAnalysisCmd
 import ghidra.app.util.importer.MessageLog
 import ghidra.program.database.ProgramBuilder
 import ghidra.program.database.SpecExtension
+import ghidra.program.model.data.DWordDataType
 import ghidra.program.model.data.StructureDataType
+import ghidra.program.model.data.UnionDataType
 import ghidra.program.model.listing.Function
 import ghidra.program.model.symbol.SourceType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
+import ghistabs.entrypoints.Correction
 import ghistabs.entrypoints.STRUCT_RETURN_ANALYZER_NAME
 import ghistabs.entrypoints.StructReturnAnalyzer
 import ghistabs.runTransaction
@@ -31,6 +34,9 @@ import org.junit.jupiter.api.Test
  *    Modelled on `FileSystemEntry::name` returning a 4-byte `std::string`.
  *  - [CDECL_POD]     `__cdecl`, 8-byte aggregate, bare `RET` — mingw returns a trivial POD in EDX:EAX
  *    against a model that force-indirects.
+ *  - [UNION_RETURN]  `__thiscall`, 4-byte *union*, `RET 0x4`. The cspec rules name `struct`, so a
+ *    union is register-placed in every release — which is the only thing still keeping the sret
+ *    direction reachable from 12.2, where structs are all hidden-returned already.
  *
  * The sizes are deliberately the wrong way round — the *bigger* aggregate is the register return — so
  * nothing here can pass by keying on size.
@@ -58,7 +64,7 @@ class StructReturnAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTes
             program.runTransaction("signature") {
                 function(at).apply {
                     setCallingConvention(convention)
-                    setReturnType(StructureDataType("Agg$at", size), SourceType.IMPORTED)
+                    setReturnType(returnTypeFor(at, size), SourceType.IMPORTED)
                 }
             }
         }
@@ -151,6 +157,15 @@ class StructReturnAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTes
             .map { SpecExtension.getFormalName(it.first) }.sorted() mustBe used.sorted()
     }
 
+    /** Both corrections must stay reachable — the union is what keeps sret alive from 12.2 on. */
+    @Test
+    fun bothDirectionsAreExercised() {
+        runAnalyzer()
+        val used = FIXTURES.keys.map { function(it).callingConventionName }
+        used.must("expected an sret correction, got $used") { any { it.endsWith(Correction.TO_MEMORY.suffix) } }
+        used.must("expected a register correction, got $used") { any { it.endsWith(Correction.TO_REGISTER.suffix) } }
+    }
+
     /** Re-running must not disturb already-corrected functions, in either direction. */
     @Test
     fun rerunIsIdempotent() {
@@ -171,6 +186,13 @@ class StructReturnAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTes
 
     private fun function(at: String): Function = program.functionManager.getFunctionAt(builder.addr(at))
 
+    /** A union for [UNION_RETURN], a struct for the rest — see the class doc for why one is a union. */
+    private fun returnTypeFor(at: String, size: Int) = if (at == UNION_RETURN) {
+        UnionDataType("Uni$at").apply { add(DWordDataType.dataType, "word", null) }
+    } else {
+        StructureDataType("Agg$at", size)
+    }
+
     /**
      * Does the cspec's placement already match the epilogue? `RET 0x4` is the callee popping a hidden
      * pointer — these fixtures purge nothing else — so a purge of 4 is sret and 0 is a register return.
@@ -181,6 +203,7 @@ class StructReturnAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTes
         const val REG_RETURN = "0x400000"
         const val HIDDEN_RETURN = "0x400010"
         const val CDECL_POD = "0x400020"
+        const val UNION_RETURN = "0x400030"
         const val RETURN_STORAGE_PTR = "__return_storage_ptr__"
 
         // mov eax,[esp+0x4] then either a bare RET (caller cleans) or RET 0x4 (callee pops the slot).
@@ -188,6 +211,7 @@ class StructReturnAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTes
             REG_RETURN to Triple("8b 44 24 04 c3", "__thiscall", 8),
             HIDDEN_RETURN to Triple("8b 44 24 04 c2 04 00", "__thiscall", 4),
             CDECL_POD to Triple("8b 44 24 04 c3", "__cdecl", 8),
+            UNION_RETURN to Triple("8b 44 24 04 c2 04 00", "__thiscall", 4),
         )
     }
 }
