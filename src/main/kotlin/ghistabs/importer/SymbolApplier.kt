@@ -5,6 +5,7 @@ import ghidra.app.cmd.function.CreateFunctionCmd
 import ghidra.app.cmd.label.SetLabelPrimaryCmd
 import ghidra.app.util.demangler.DemangledFunction
 import ghidra.program.model.address.Address
+import ghidra.program.model.address.AddressSet
 import ghidra.program.model.data.CategoryPath
 import ghidra.program.model.data.DataTypeConflictHandler
 import ghidra.program.model.data.EnumDataType
@@ -81,20 +82,18 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
         for (open in harvest.functions) {
             ctx.monitor.increment()
             try {
-                val func = funMgr.run {
-                    getFunctionAt(open.addr) ?: getFunctionContaining(open.addr)?.also {
-                        debug("entrypoint-snapped")
+                val func = funMgr.getFunctionAt(open.addr)
+                    ?: tryCreateFunctionFromStab(open)
+                    ?: run {
+                        val (tag, level) = if (isInlineStdMember(open.name)) {
+                            "apply-error-inlined-std" to Level.DEBUG
+                        } else {
+                            "apply-error-no-function" to Level.INFO
+                        }
+                        // log() counts via the tee'd accumulator; BookmarkSink only emits/bookmarks.
+                        log(tag, "no Function at or containing ${open.addr} for ${open.name}", level, open.addr)
+                        continue
                     }
-                } ?: tryCreateFunctionFromStab(open) ?: run {
-                    val (tag, level) = if (isInlineStdMember(open.name)) {
-                        "apply-error-inlined-std" to Level.DEBUG
-                    } else {
-                        "apply-error-no-function" to Level.INFO
-                    }
-                    // log() counts via the tee'd accumulator; BookmarkSink only emits/bookmarks.
-                    log(tag, "no Function at or containing ${open.addr} for ${open.name}", level, open.addr)
-                    continue
-                }
 
                 // The stabs are the authoritative, underscore-free source, so name every function
                 // from them rather than riding Ghidra's PE symbol (which leaves C names as `_main`
@@ -285,6 +284,25 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
             }
             log(tag, "no executable block at $addr for ${open.name} (block=${block?.name})", level, addr)
             return null
+        }
+
+        // A function already covering this address does not start here, or getFunctionAt would have
+        // found it: it is a neighbour Ghidra ran together with this one, so trim it back to its own
+        // code. a.out is where this happens — its symbols carry no `n_other` aux kind (0 for all 2134
+        // of them on `iostream_test_aout_gcc263_fullstabs`), so the loader creates no functions at all
+        // and every body is flow-derived, straight through an unmapped `call abort` and the string
+        // behind it into the next two functions. The stabs are the only record of the boundary.
+        funMgr.getFunctionContaining(addr)?.let { holder ->
+            runCatching { holder.body = holder.body.subtract(AddressSet(addr, holder.body.maxAddress)) }
+                .onSuccess { debug("function-body-trimmed") }
+                .onFailure {
+                    warn(
+                        "function-body-trim-failed",
+                        "cannot trim ${holder.name}@${holder.entryPoint} back to $addr for ${open.name}: $it",
+                        addr,
+                    )
+                    return null
+                }
         }
 
         // CreateFunctionCmd refuses uninitialised code. MinGW COMDAT chunks that
