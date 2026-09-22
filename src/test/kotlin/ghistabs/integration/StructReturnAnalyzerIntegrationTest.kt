@@ -25,15 +25,22 @@ import org.junit.jupiter.api.Test
  * Three functions covering the ways x86gcc.cspec and the epilogue can disagree, all with aggregate
  * returns the cspec is willing to place:
  *
- *  - [REG_RETURN]    `__thiscall`, 8-byte aggregate, bare `RET` — cspec agrees (EDX:EAX). Leave alone.
- *    Modelled on `FileSystemImage::root`, which keying on `Composite` alone used to corrupt.
- *  - [HIDDEN_RETURN] `__thiscall`, 4-byte aggregate, `RET 0x4` — cspec says EAX, epilogue says sret.
+ *  - [REG_RETURN]    `__thiscall`, 8-byte aggregate, bare `RET`. Modelled on `FileSystemImage::root`,
+ *    which keying on `Composite` alone used to corrupt.
+ *  - [HIDDEN_RETURN] `__thiscall`, 4-byte aggregate, `RET 0x4` — the callee popped a hidden pointer.
  *    Modelled on `FileSystemEntry::name` returning a 4-byte `std::string`.
- *  - [CDECL_POD]     `__cdecl`, 8-byte aggregate, bare `RET` — cspec force-indirects every struct
- *    (GP-5183), but mingw returns a trivial POD in EDX:EAX. The mirror case.
+ *  - [CDECL_POD]     `__cdecl`, 8-byte aggregate, bare `RET` — mingw returns a trivial POD in EDX:EAX
+ *    against a model that force-indirects.
  *
  * The sizes are deliberately the wrong way round — the *bigger* aggregate is the register return — so
  * nothing here can pass by keying on size.
+ *
+ * **Which way each one disagrees is the cspec's business, and it has changed.** GP-5183 gave `__cdecl`
+ * a `<datatype name="struct"/><hidden_return/>` rule; 47c7b910 ("All models return structures via
+ * input pointer", in the 12.2 cycle) gave it to every model, so `__thiscall` flipped from EDX:EAX to
+ * sret and [REG_RETURN] went from the agreeing fixture to a disagreeing one. Nothing below may name a
+ * model or a direction it did not read off this program first: [agreesWithEpilogue] asks the cspec,
+ * the purge answers for the epilogue, and the analyzer's job is to make the two meet.
  */
 @Tag("integration")
 class StructReturnAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
@@ -74,30 +81,37 @@ class StructReturnAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTes
     @AfterEach
     fun tearDown() = builder.dispose()
 
-    /** The premise: the cspec cannot separate these, Ghidra's own purge pass can. */
+    /** The premise: the cspec places both `__thiscall` returns the same way, Ghidra's purge pass doesn't. */
     @Test
     fun onlyPurgeSeparatesTheAbis() {
-        function(REG_RETURN).`return`.mustNot { isForcedIndirect }
-        function(HIDDEN_RETURN).`return`.mustNot { isForcedIndirect }
-        function(CDECL_POD).`return`.must("__cdecl force-indirects every struct") { isForcedIndirect }
+        function(REG_RETURN).`return`.isForcedIndirect
+            .mustBe(function(HIDDEN_RETURN).`return`.isForcedIndirect, "the cspec cannot tell these apart")
         function(REG_RETURN).stackPurgeSize mustBe 0
         function(HIDDEN_RETURN).stackPurgeSize mustBe 4
         function(CDECL_POD).stackPurgeSize mustBe 0
+        FIXTURES.keys.partition { function(it).agreesWithEpilogue }
+            .must("the fixtures must exercise both directions") { first.isNotEmpty() && second.isNotEmpty() }
     }
 
+    /** Whatever the cspec already gets right keeps its model — no extension, no rename. */
     @Test
-    fun agreedRegisterReturnIsLeftAlone() {
+    fun agreedReturnsAreLeftAlone() {
+        val agreeing = FIXTURES.keys.filter { function(it).agreesWithEpilogue }
+            .associateWith { function(it).callingConventionName }
         runAnalyzer()
-        val f = function(REG_RETURN)
-        f.callingConventionName.mustBe("__thiscall", "an 8-byte EDX:EAX return must keep the cspec convention")
-        f.parameters.must("no hidden pointer should be injected") { none { it.name == RETURN_STORAGE_PTR } }
+        agreeing.forEach { (at, convention) ->
+            function(at).callingConventionName.mustBe(convention, "$at agreed with the cspec already")
+            function(at).mustNot("storage should come from the convention, not be frozen") {
+                hasCustomVariableStorage()
+            }
+        }
     }
 
+    /** The sret direction: a callee that popped the slot must end up taking the hidden pointer. */
     @Test
     fun purgingCalleeGetsHiddenPointer() {
         runAnalyzer()
         val f = function(HIDDEN_RETURN)
-        f.callingConventionName mustBe "__thiscall_memret"
         f.`return`.must { isForcedIndirect }
         f.parameters.first().name mustBe RETURN_STORAGE_PTR
         f.parameters[1].name.mustBe("this", "hasthis must survive the rename")
@@ -119,21 +133,22 @@ class StructReturnAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTes
     @Test
     fun conventionsAreNotInstalledWhenUnused() {
         program.runTransaction("drop the disagreeing functions") {
-            listOf(HIDDEN_RETURN, CDECL_POD).forEach { program.functionManager.removeFunction(builder.addr(it)) }
+            FIXTURES.keys.filterNot { function(it).agreesWithEpilogue }
+                .forEach { program.functionManager.removeFunction(builder.addr(it)) }
         }
         runAnalyzer()
         SpecExtension.getCompilerSpecExtensions(program).mustBeEmpty()
     }
 
-    /** Only the models actually used get installed — a memret-only program gains no regret model. */
+    /** Only the models actually used get installed: the set is exactly the corrections that landed. */
     @Test
     fun onlyUsedConventionsAreInstalled() {
-        program.runTransaction("drop the __cdecl function") {
-            program.functionManager.removeFunction(builder.addr(CDECL_POD))
-        }
+        val stock = program.compilerSpec.callingConventions.map { it.name }.toSet()
         runAnalyzer()
-        SpecExtension.getCompilerSpecExtensions(program).map { SpecExtension.getFormalName(it.first) } mustBe
-            listOf("__thiscall_memret")
+        val used = FIXTURES.keys.map { function(it).callingConventionName }.filterNot { it in stock }.distinct()
+        used.mustNot("nothing was corrected, so this asserts nothing") { isEmpty() }
+        SpecExtension.getCompilerSpecExtensions(program)
+            .map { SpecExtension.getFormalName(it.first) }.sorted() mustBe used.sorted()
     }
 
     /** Re-running must not disturb already-corrected functions, in either direction. */
@@ -155,6 +170,12 @@ class StructReturnAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTes
     }
 
     private fun function(at: String): Function = program.functionManager.getFunctionAt(builder.addr(at))
+
+    /**
+     * Does the cspec's placement already match the epilogue? `RET 0x4` is the callee popping a hidden
+     * pointer — these fixtures purge nothing else — so a purge of 4 is sret and 0 is a register return.
+     */
+    private val Function.agreesWithEpilogue get() = `return`.isForcedIndirect == (stackPurgeSize == 4)
 
     private companion object {
         const val REG_RETURN = "0x400000"
