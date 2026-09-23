@@ -318,7 +318,8 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
                         .orEmpty()
             }
         }
-        if (drift.isNotEmpty()) {
+        val new = counters.keys - baseline.counters.keys
+        if (drift.isNotEmpty() || new.isNotEmpty()) {
             shiftedBaselineFile.parentFile.mkdirs()
             BaselineWriter.write(
                 shiftedBaselineFile,
