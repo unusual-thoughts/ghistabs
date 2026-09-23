@@ -135,7 +135,7 @@ fun DataType.isGhidraBaseType(): Boolean = when (this) {
  * keyed on.
  */
 internal fun DataTypeRegistry.typedefAliases(): Map<String, String> = types.namedTypedefs.mapNotNull { (alias, asts) ->
-    val targets = asts.mapNotNull { resolveRef(it.body) }
+    val targets = asts.distinctBy { it.body }.mapNotNull { resolveRef(it.body) }
     val target = targets.firstOrNull()
         ?.takeIf { first -> targets.all { it.name == first.name } }
         ?.takeUnless { it.isGhidraBaseType() || it in xrefStubs }
