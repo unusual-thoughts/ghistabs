@@ -20,6 +20,7 @@ jobs:
       - uses: ./.github/actions/setup-ghidra
         with:
           ghidra-version: '12.3'
+          repo: unusual-thoughts/ghidra
 
       - name: Check formatting
         run: ./gradlew ktlintCheck

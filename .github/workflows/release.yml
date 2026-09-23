@@ -23,6 +23,10 @@ jobs:
             java: '21'
           - ghidra: '12.1.3'
             java: '21'
+          # Custom build with a.out fixes
+          - ghidra: '12.3'
+            java: '21'
+            repo: unusual-thoughts/ghidra
 
     steps:
       - uses: actions/checkout@v7
@@ -31,6 +35,7 @@ jobs:
         with:
           ghidra-version: ${{ matrix.ghidra }}
           java-version: ${{ matrix.java }}
+          repo: ${{ matrix.repo }}
 
       - name: Test and build zips
         run: ./gradlew test buildExtension packageCli

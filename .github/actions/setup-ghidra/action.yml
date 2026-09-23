@@ -5,6 +5,9 @@ inputs:
   ghidra-version:
     description: Ghidra release version, e.g. 12.1.3.
     required: true
+  repo:
+    description: GitHub repo to download the Ghidra release from.
+    required: false
   java-version:
     description: >
       JDK to build on. Must match the install's `application.java.compiler`: buildExtension.gradle
@@ -40,9 +43,10 @@ runs:
       env:
         GH_TOKEN: ${{ inputs.token }}
         VERSION: ${{ inputs.ghidra-version }}
+        REPO: ${{ inputs.repo }}
       run: |
         gh release download "Ghidra_${VERSION}_build" \
-          --repo unusual-thoughts/ghidra \
+          --repo "${REPO:-NationalSecurityAgency/ghidra}" \
           --pattern "ghidra_${VERSION}_PUBLIC_*.zip"
         unzip -q "ghidra_${VERSION}_PUBLIC_"*.zip
         mkdir -p /opt
