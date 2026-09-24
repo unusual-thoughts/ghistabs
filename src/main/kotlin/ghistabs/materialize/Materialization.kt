@@ -72,7 +72,11 @@ internal fun DataTypeRegistry.materializeBody(ast: Type, category: CategoryPath,
             name = ast.ghidraName,
             ret = body.ret,
             params = body.params,
-            thisType = body.cls?.let { resolveRef(it) } ?: undef("method-this-cls", ast.ghidraName, body.cls),
+            // Null cls is gdb's stub method (`##<ret>;`) stating no domain — the normal gcc 2.x
+            // encoding, not a failure (see TypeDecl.Method.cls); only a stated-but-unresolvable
+            // cls is a real loss.
+            thisType = body.cls?.let { resolveRef(it) ?: undef("method-this-cls", ast.ghidraName, it) }
+                ?: Undefined4DataType.dataType,
             callingConvention = CompilerSpec.CALLING_CONVENTION_thiscall,
             at = ast.ghidraName,
         )
