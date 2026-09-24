@@ -96,6 +96,10 @@ class ClassBuilder(
     // gcc 2.x physname needs the whole path, not the leaf.
     private val qualifiedByType = mutableMapOf<GlobalTypeId, String>()
 
+    // Filled by reparentMethod, read back by the vtable plate-comment pass so a virtual's address
+    // isn't resolved twice.
+    private val resolvedMemberAddresses = IdentityHashMap<Method<GlobalTypeId>, Address>()
+
     /**
      * {vfptr} points at the function-pointer array at the vtable's address point
      * (`_ZTV<class> + 2*ptrSize`), not at the record start. Modelled as `<Class>_vftable*`
@@ -209,6 +213,7 @@ class ClassBuilder(
                 }
                 return
             }
+        resolvedMemberAddresses[m] = addr
         val func = program.functionManager.getFunctionAt(addr) ?: run {
             val (tag, level) = if (abi.isInlineStdMember(mangled)) {
                 "unresolved-symbol-inlined-std" to Level.DEBUG
@@ -447,7 +452,7 @@ class ClassBuilder(
         // method composes its symbol from the base's name — spelling it with the derived class's
         // invents a symbol that was never emitted. Each base plates its own on its own pass.
         virtuals.filterValues { m -> classBody.methods.any { it === m } }.forEach { (slot, m) ->
-            val mAddr = resolveMember(m)?.second
+            val mAddr = resolvedMemberAddresses[m] ?: resolveMember(m)?.second
             if (mAddr != null) {
                 val func = program.functionManager.getFunctionAt(mAddr)
                 if (func != null) {
