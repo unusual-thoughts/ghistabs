@@ -2130,7 +2130,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
      * difference from the registry's demangler bridge.
      */
     private fun classOfMethod(mangled: String): Pair<String, TypeDecl.Aggregate<GlobalTypeId>>? =
-        methodOwners[mangled] ?: Demangler.of(mangled)?.namespace?.path?.path?.let { bodiesByPath[it] }
+        methodOwners[mangled] ?: Demangler.of(mangled)?.namespace?.demanglerPath?.path?.let { bodiesByPath[it] }
 
     private val methodOwners by lazy {
         artifacts.harvest.types.values.mapNotNull { it.asStruct() }
