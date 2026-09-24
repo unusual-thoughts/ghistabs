@@ -1,7 +1,7 @@
 package ghistabs.materialize
 
 import ghistabs.index.TypeGraph
-import ghistabs.materialize.abi.Itanium
+import ghistabs.materialize.abi.GhidraClassNaming
 import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Aggregate.Base
 import ghistabs.parse.TypeDecl.Aggregate.Method
@@ -10,7 +10,8 @@ import ghistabs.parse.TypeDecl.Aggregate.Method
 object Layout {
 
     fun baseFieldName(isVirtual: Boolean, simpleName: String, baseCount: Int) =
-        (if (isVirtual) Itanium.VBASE_PREFIX else Itanium.BASE_PREFIX) + simpleName.takeIf { baseCount > 1 }.orEmpty()
+        (if (isVirtual) GhidraClassNaming.VBASE_PREFIX else GhidraClassNaming.BASE_PREFIX) +
+            simpleName.takeIf { baseCount > 1 }.orEmpty()
 
     fun baseComment(base: Base<GlobalTypeId>) = buildString {
         append(base.access.name.lowercase())

@@ -43,8 +43,6 @@ object Itanium : CxxAbi {
 
     const val OFFSET_TO_TOP = "offset_to_top"
     const val RTTI = "rtti"
-    const val BASE_PREFIX = "_base_"
-    const val VBASE_PREFIX = "_vbase_"
 
     /**
      * Itanium-mangled `_ZN…` whose first scope is `std::`, `__gnu_cxx::`, or an STL shortcut
@@ -99,8 +97,6 @@ object Itanium : CxxAbi {
     fun zti(className: String) = "$TYPEINFO_PREFIX${mangleClassName(className)}"
 
     fun isTemplated(name: String) = '<' in name
-
-    fun isBaseField(name: String) = name.startsWith(BASE_PREFIX) || name.startsWith(VBASE_PREFIX)
 
     /** Itanium-mangle a nested class name: `Foo`→`3Foo`, `Foo::Bar`→`N3Foo3BarE`. Templates unchanged. */
     fun mangleClassName(name: String): String {
