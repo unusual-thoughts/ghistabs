@@ -436,7 +436,7 @@ class ClassBuilder(
         val addressPoint =
             program.layVtable(shape, vftable, className, ns, resolver, virtualBases, abi = resolved.abi)
         debug("vtable-applied", "class=$className abi=${resolved.abi}", address = addressPoint)
-        if (resolved.abi.hasRttiHeader) laySecondaryVtables(shape, className, ns)
+        if (resolved.abi.hasRttiHeader) laySecondaryVtables(shape, className, ns, resolved.abi)
 
         // Plate-comment each virtual. An unresolved mangled name here is expected for
         // pure virtuals (slot points at __cxa_pure_virtual, no symbol emitted) or
@@ -494,7 +494,7 @@ class ClassBuilder(
                 m != null -> slotName(m, used)
                     .let { vftable.add(buildVirtualSlotType(m, it), it, "virtual ${m.name}") }
 
-                slot < targets.size -> vftable.addSweptSlot(vftableCategory, targets[slot], used)
+                slot < targets.size -> vftable.addSweptSlot(vftableCategory, targets[slot], used, abi)
 
                 // Inherited from a base that links without stabs, with no record to read it off
                 // either. Still a pointer to a definition named for its own field: a bare `void*`
@@ -614,7 +614,7 @@ class ClassBuilder(
                     vftable.addReservedHeader()
                     targets.forEachIndexed { slot, target ->
                         vftable.addEntryAdjustment(slot)
-                        vftable.addSweptSlot(category, target, used)
+                        vftable.addSweptSlot(category, target, used, abi)
                     }
                 }
             }
@@ -626,7 +626,7 @@ class ClassBuilder(
             // end by their shared rtti word. gcc 2.x gives each its own `_vt.<derived>.<base>`
             // symbol instead, so there is nothing contiguous to walk — and nothing claims them yet
             // either, since ResolvedVtable.fromSymbol screens the two-segment names out.
-            if (abi.hasRttiHeader) laySecondaryVtables(shape, leaf, ns)
+            if (abi.hasRttiHeader) laySecondaryVtables(shape, leaf, ns, abi)
         }
     }
 
@@ -640,7 +640,7 @@ class ClassBuilder(
      * Each sub-vtable gets its own `internal_<i>` category, or a thunk sharing its target's leaf name
      * forks a `.conflict` per slot (1874 on crypto_mi).
      */
-    private fun laySecondaryVtables(primary: VtableShape, leaf: String, ns: Namespace) {
+    private fun laySecondaryVtables(primary: VtableShape, leaf: String, ns: Namespace, abi: CxxAbi) {
         val rtti = program.readWord(primary.rttiHeader) ?: return
         val ptr = program.defaultPointerSize.toLong()
         val slots = program.vtableSlotTargets(primary.addressPoint, resolver).size
@@ -653,7 +653,7 @@ class ClassBuilder(
             }
             if (vftable.numComponents == 0) {
                 val used = mutableSetOf<String>()
-                for (target in sub.targets) vftable.addSweptSlot(category, target, used)
+                for (target in sub.targets) vftable.addSweptSlot(category, target, used, abi)
             }
             val at = program.layVtable(
                 sub.shape,
@@ -678,7 +678,7 @@ class ClassBuilder(
      * `do_widen`/…, and one name across all of them forks a `.conflict` per slot (32 on unbouniaf).
      * [used] carries the names already spent on this table.
      */
-    private fun Structure.addSweptSlot(category: CategoryPath, target: Address, used: MutableSet<String>) {
+    private fun Structure.addSweptSlot(category: CategoryPath, target: Address, used: MutableSet<String>, abi: CxxAbi) {
         val linkage = symtab.getSymbols(target).map { it.name }.firstOrNull(abi::isProbablyMangled)
             ?: symtab.getPrimarySymbol(target)?.name
             ?: "slot"
