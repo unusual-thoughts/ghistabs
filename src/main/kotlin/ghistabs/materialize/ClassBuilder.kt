@@ -528,10 +528,11 @@ class ClassBuilder(
             .joinToString("_") { it.type.name.orEmpty() }
             .let { SymbolUtilities.replaceInvalidChars(it, true) }
             .takeIf { it.isNotEmpty() }
-        return (
-            sequenceOf(m.name, overload?.let { "${m.name}_$it" }).filterNotNull() +
-                generateSequence(1) { it + 1 }.map { "${m.name}_$it" }
-            ).first(used::add)
+        val candidates = listOfNotNull(m.name, overload?.let { "${m.name}_$it" })
+        return candidates.firstOrNull(used::add) ?: "${m.name}_${used.size}".also {
+            degradation("vftable-slot-name-collision", it, "no unique name from $candidates")
+            used.add(it)
+        }
     }
 
     /** Walk Ref/InlineDef wrappers to the underlying Method/FunctionT (gcc binds signatures to their own type id). */
