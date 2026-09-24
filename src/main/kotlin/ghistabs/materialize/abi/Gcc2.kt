@@ -7,6 +7,7 @@ import ghidra.program.model.data.Structure
 import ghistabs.materialize.abi.Gcc2.DEMANGLED_VTABLE_SUFFIX
 import ghistabs.namespaces
 import ghistabs.parse.TypeDecl.Aggregate.Method
+import ghistabs.parse.splitQualified
 
 /**
  * Pre-Itanium gcc 2.x C++ ABI facts: the vtable symbol spellings and what the deprecated demangler
@@ -98,7 +99,7 @@ object Gcc2 {
      */
     fun physnamePrefix(memberName: String, className: String, isConst: Boolean, isVolatile: Boolean): String {
         val mangledClass = mangleClassName(className)
-        val leaf = className.substringAfterLast("::")
+        val leaf = splitQualified(className).last()
         return when (memberName) {
             leaf -> "__$mangledClass"
             "~$leaf" -> "_._$mangledClass"
@@ -119,7 +120,7 @@ object Gcc2 {
      * the count is bracketed instead (`Q_10_`), which is the same source's `case '_'`.
      */
     fun mangleClassName(name: String): String {
-        val parts = name.split("::")
+        val parts = splitQualified(name)
         val joined = parts.joinToString("") { "${it.length}$it" }
         return when {
             parts.size == 1 -> joined
