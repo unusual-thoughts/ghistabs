@@ -3,7 +3,6 @@ package ghistabs.harvest
 import ghidra.app.util.opinion.ElfLoader
 import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Program
-import ghistabs.aoutTextBaseFixup
 import ghistabs.baseStackParamOffset
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.DummySink
@@ -58,9 +57,11 @@ class ProgramAddressResolver(private val program: Program, private val sink: Dia
     // base (default 0x100000) without rewriting the stabs, so every address is off by
     // (loadBase - originalBase). PE has no such property → null → no fixup. Mirrors
     // Ghidra's own DWARF address fixup (DIEContainer.setProgramBaseAddressFixup).
+    //
+    // a.out gets none below Ghidra 12.3: a paged SPARC ZMAGIC (`graphcnv.SUN4`) loads its text a
+    // page low there, fixed upstream by "Align a.out text base determination with binutils".
     private val baseFixup: Long =
-        ElfLoader.getElfOriginalImageBase(program)?.let { program.imageBase.offset - it }
-            ?: aoutTextBaseFixup(program)
+        ElfLoader.getElfOriginalImageBase(program)?.let { program.imageBase.offset - it } ?: 0L
 
     override fun buildAddress(offset: Long): Address = program.addressFactory.defaultAddressSpace.getAddress(offset) +
         // A negative fixup only applies to values large enough to be vaddrs: callers also pass
