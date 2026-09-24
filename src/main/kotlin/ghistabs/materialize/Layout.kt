@@ -5,6 +5,7 @@ import ghistabs.materialize.abi.GhidraClassNaming
 import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Aggregate.Base
 import ghistabs.parse.TypeDecl.Aggregate.Method
+import java.util.IdentityHashMap
 
 /** Pure C++ record-layout decisions: where the vfptr goes and how base subobjects are spliced in. */
 object Layout {
@@ -81,16 +82,22 @@ fun TypeGraph.resolveStruct(typeDecl: GlobalTypeDecl) = resolve<TypeDecl.Aggrega
  * How deep [typeDecl] sits in its inheritance graph, so a caller can process bases before the
  * classes that embed them. [VfptrModel.SPLIT_BASE] needs that order: it derives a base's
  * `<Base>_fields` from the base's *materialized* layout, which is only vptr-less once the base has
- * had its own vfptr placed. Cycles can't arise from well-formed stabs but [seen] makes that true
- * regardless of what the binary declares.
+ * had its own vfptr placed. Cycles can't arise from well-formed stabs but [memo] makes that true
+ * regardless of what the binary declares (a re-entrant lookup mid-walk sees the depth-0 placeholder).
+ *
+ * [memo] is identity-keyed and safe to share across an entire corpus of classes: bases common to
+ * several siblings (a wide multi-inheritance lattice) are then walked once, not once per sibling.
  */
 fun TypeGraph.inheritanceDepth(
     typeDecl: TypeDecl.Aggregate<GlobalTypeId>,
-    seen: MutableSet<TypeDecl.Aggregate<GlobalTypeId>> = mutableSetOf(),
-): Int = if (!seen.add(typeDecl)) {
-    0
-} else {
-    1 + (typeDecl.bases.mapNotNull { resolveStruct(it.type) }.maxOfOrNull { inheritanceDepth(it, seen) } ?: -1)
+    memo: MutableMap<TypeDecl.Aggregate<GlobalTypeId>, Int> = IdentityHashMap(),
+): Int {
+    memo[typeDecl]?.let { return it }
+    memo[typeDecl] = 0
+    val depth =
+        1 + (typeDecl.bases.mapNotNull { resolveStruct(it.type) }.maxOfOrNull { inheritanceDepth(it, memo) } ?: -1)
+    memo[typeDecl] = depth
+    return depth
 }
 
 /**

@@ -25,6 +25,7 @@ import ghistabs.materialize.abi.*
 import ghistabs.materialize.abi.CxxAbi.Companion.prevailingAbi
 import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Aggregate.Method
+import java.util.IdentityHashMap
 
 /**
  * The C++ pass over the structs [DataTypeRegistry] has already materialized: a class gets its Ghidra
@@ -112,9 +113,10 @@ class ClassBuilder(
     fun buildAll(): Int {
         // Bases first: SPLIT_BASE reads a base's materialized layout to build its vptr-less
         // `<Base>_fields`, which is only correct once the base has had its own vfptr placed.
+        val inheritanceDepthMemo = IdentityHashMap<TypeDecl.Aggregate<GlobalTypeId>, Int>()
         val classes = registry.byLocation.values
             .filter { it.isClass() }
-            .sortedBy { types.inheritanceDepth(it.classBody) }
+            .sortedBy { types.inheritanceDepth(it.classBody, inheritanceDepthMemo) }
         monitor.initialize(classes.size.toLong(), "Stabs: building classes")
         var built = 0
         for (group in classes) {
