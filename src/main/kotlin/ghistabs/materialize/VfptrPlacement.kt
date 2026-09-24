@@ -8,7 +8,7 @@ import ghidra.program.model.data.Undefined1DataType
 import ghidra.program.model.gclass.ClassUtils
 import ghidra.program.model.listing.Program
 import ghistabs.diagnose.DiagnosticSink
-import ghistabs.materialize.abi.Itanium
+import ghistabs.materialize.abi.GhidraClassNaming
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
 import ghistabs.parse.isVptrFieldName
@@ -236,7 +236,7 @@ fun chooseVfptrAction(
 
     // An unresolved or synthesized base at the vptr offset: polymorphism was never proven, but the
     // stab layout still says a base owns the word.
-    if (componentAtTargetOffset.fieldName?.let(Itanium::isBaseField) == true) {
+    if (componentAtTargetOffset.fieldName?.let(GhidraClassNaming::isBaseField) == true) {
         return VfptrAction.SkipInheritedFromBase
     }
 

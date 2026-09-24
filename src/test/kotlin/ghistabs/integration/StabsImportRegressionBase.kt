@@ -923,7 +923,8 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         // base, and Ghidra's autofill would otherwise present those bare bytes as own fields at 0.
         val flat = derived.filterNot { cls ->
             cls.definedComponents.let { own ->
-                own.any { Itanium.isBaseField(it.fieldName.orEmpty()) } || (own.firstOrNull()?.offset ?: 1) > 0
+                own.any { GhidraClassNaming.isBaseField(it.fieldName.orEmpty()) } ||
+                    (own.firstOrNull()?.offset ?: 1) > 0
             }
         }
         flat.map {
@@ -976,7 +977,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             .map { (dt, span, comp) -> "${dt.pathName} puts '${comp.fieldName}' at +${comp.offset}, not in +$span" }
         val collapsed = multiple.flatMap { (_, dt, _) ->
             dt.definedComponents
-                .filter { it.fieldName in setOf(Itanium.BASE_PREFIX, Itanium.VBASE_PREFIX) }
+                .filter { it.fieldName in setOf(GhidraClassNaming.BASE_PREFIX, GhidraClassNaming.VBASE_PREFIX) }
                 .map { "${dt.pathName} names a base subobject '${it.fieldName}' at +${it.offset}" }
         }
         assertAll(
@@ -1980,7 +1981,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
                 ?: return@mapNotNull null
             val baseType = (base.type as? TypeDecl.Ref)?.id?.let { artifacts.registry.dataTypeFor(it) }
                 ?: return@mapNotNull null
-            val field = dt.components.firstOrNull { Itanium.isBaseField(it.fieldName.orEmpty()) }
+            val field = dt.components.firstOrNull { GhidraClassNaming.isBaseField(it.fieldName.orEmpty()) }
                 ?: return@mapNotNull null
             // Two legal shapes, per VfptrModel. INHERITED embeds the base Structure itself at +0.
             // SPLIT_BASE hoists the vptr into this class so it can be typed with *this* class's
@@ -2170,7 +2171,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         body.fields.any { isVptrFieldName(it.name) } ||
         with(artifacts.types) { hasPolymorphicBaseSubobject(body) }
 
-    private fun isBaseComponent(comp: DataTypeComponent) = Itanium.isBaseField(comp.fieldName.orEmpty())
+    private fun isBaseComponent(comp: DataTypeComponent) = GhidraClassNaming.isBaseField(comp.fieldName.orEmpty())
 
     /**
      * Whether [body] can only reach a vptr outside its own bytes.
