@@ -122,10 +122,8 @@ fun Program.applyDemangling(
 /** Category created by the demangler analyzer */
 val DEMANGLER_CATEGORY: CategoryPath = CategoryPath.ROOT.extend("Demangler")
 
-/** Replicates the (protected) `DemangledDataType.getDemanglerCategoryPath` + leaf: `/Demangler/<ns…>/<name>`.
- *  Includes name
- **/
-val Demangled.path get(): CategoryPath = (namespace?.path ?: DEMANGLER_CATEGORY).extend(name)
+/** Replicates the (protected) `DemangledDataType.getDemanglerCategoryPath` + leaf: `/Demangler/<ns…>/<name>`. */
+val Demangled.demanglerPath get(): CategoryPath = (namespace?.demanglerPath ?: DEMANGLER_CATEGORY).extend(name)
 
 /** [this]'s namespaces followed by name */
 val Demangled.fullName get() = generateSequence(this) { it.namespace }.map { it.name }.toList().asReversed()
