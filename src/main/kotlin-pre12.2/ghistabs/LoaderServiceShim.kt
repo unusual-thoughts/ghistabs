@@ -11,5 +11,5 @@ import ghidra.util.task.TaskMonitor
  * backported onto Ghidra's own class, so this is one of the few places where the call site goes
  * through a name of ours rather than the real API.
  */
-internal fun allSupportedLoadSpecs(provider: ByteProvider, monitor: TaskMonitor): LoaderMap =
-    LoaderService.getAllSupportedLoadSpecs(provider)
+internal fun ByteProvider.allSupportedLoadSpecs(monitor: TaskMonitor = TaskMonitor.DUMMY): LoaderMap =
+    LoaderService.getAllSupportedLoadSpecs(this)

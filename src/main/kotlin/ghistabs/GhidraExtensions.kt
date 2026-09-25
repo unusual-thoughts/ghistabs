@@ -186,7 +186,7 @@ class LoadedProgram internal constructor(val program: Program, private val consu
 
 /** Whether some loader that actually targets this file offers a spec carrying [compiler].  */
 internal fun File.offersCompilerSpec(compiler: String) = FileByteProvider(this, null, AccessMode.READ).use { provider ->
-    allSupportedLoadSpecs(provider, TaskMonitor.DUMMY).any { (loader, specs) ->
+    provider.allSupportedLoadSpecs().any { (loader, specs) ->
         loader.tier != LoaderTier.UNTARGETED_LOADER &&
             specs.any { it.languageCompilerSpec?.compilerSpecID?.idAsString == compiler }
     }
