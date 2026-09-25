@@ -3,9 +3,8 @@ package ghistabs.materialize
 import ghidra.program.model.data.*
 import ghidra.program.model.lang.CompilerSpec
 import ghistabs.harvest.Type
-import ghistabs.materialize.cpp.abi.GhidraClassNaming
+import ghistabs.materialize.cpp.ClassNaming
 import ghistabs.materialize.cpp.firstPolymorphicBase
-import ghistabs.materialize.cpp.resolveStruct
 import ghistabs.parse.CATEGORY
 import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.GlobalTypeId
@@ -166,8 +165,8 @@ internal fun DataTypeRegistry.fillStructBases(
                 offsetBytes,
                 dt,
                 dt.length,
-                GhidraClassNaming.baseFieldName(base.isVirtual, dt.name, body.bases.size),
-                GhidraClassNaming.baseComment(base),
+                ClassNaming.baseFieldName(base.isVirtual, dt.name, body.bases.size),
+                ClassNaming.baseComment(base),
             )
         }.onSuccess { debug("inheritance-applied") }
             .onFailure {

@@ -28,15 +28,15 @@ import ghistabs.importer.ImportOptions.Companion.VFPTR_MODEL
 import ghistabs.index.ContentIndex
 import ghistabs.index.EffectiveSource
 import ghistabs.materialize.conflictCount
+import ghistabs.materialize.cpp.ClassNaming
 import ghistabs.materialize.cpp.VfptrModel
 import ghistabs.materialize.cpp.abi.CxxAbi
 import ghistabs.materialize.cpp.abi.CxxAbi.Companion.prevailingAbi
 import ghistabs.materialize.cpp.abi.Gcc2
 import ghistabs.materialize.cpp.abi.Gcc2Abi
-import ghistabs.materialize.cpp.abi.GhidraClassNaming
 import ghistabs.materialize.cpp.abi.Itanium
-import ghistabs.materialize.cpp.abi.isBaseField
 import ghistabs.materialize.cpp.hasPolymorphicBaseSubobject
+import ghistabs.materialize.cpp.isBaseField
 import ghistabs.parse.*
 import ghistabs.test.*
 import kotlinx.serialization.ExperimentalSerializationApi
@@ -942,7 +942,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
      * layout and any name identifies it. With two, the subobject's extent is guesswork — gcc's
      * inheritance line carries no size, so [ghistabs.materialize.fillStructBases] derives one from the
      * *next* base's offset, a step that only exists here — and the name only tells the two apart
-     * because [ghistabs.materialize.cpp.abi.GhidraClassNaming.baseFieldName] appends the base's own name when
+     * because [ghistabs.materialize.cpp.ClassNaming.baseFieldName] appends the base's own name when
      * `baseCount > 1`. An un-suffixed `_base_` in an MI class means both edges raced for one component.
      *
      * The placement check runs name-first, over the components that exist, since an unresolved base is
@@ -962,7 +962,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             bases.mapNotNull { base ->
                 val baseDt = (base.type as? TypeDecl.Ref)?.id?.let { artifacts.registry.dataTypeFor(it) }
                     ?: return@mapNotNull null
-                val name = GhidraClassNaming.baseFieldName(base.isVirtual, baseDt.name, body.bases.size)
+                val name = ClassNaming.baseFieldName(base.isVirtual, baseDt.name, body.bases.size)
                 val span = (base.offsetBits / 8).toInt().let { it until it + baseDt.length }
                 dt.definedComponents
                     .filter { it.fieldName?.removeSuffix("_tail") == name }
@@ -977,7 +977,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             .map { (dt, span, comp) -> "${dt.pathName} puts '${comp.fieldName}' at +${comp.offset}, not in +$span" }
         val collapsed = multiple.flatMap { (_, dt, _) ->
             dt.definedComponents
-                .filter { it.fieldName in setOf(GhidraClassNaming.BASE_PREFIX, GhidraClassNaming.VBASE_PREFIX) }
+                .filter { it.fieldName in setOf(ClassNaming.BASE_PREFIX, ClassNaming.VBASE_PREFIX) }
                 .map { "${dt.pathName} names a base subobject '${it.fieldName}' at +${it.offset}" }
         }
         assertAll(
@@ -1161,9 +1161,9 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
                 .takeWhile { nextObject == null || it < nextObject }
                 .take(MAX_GROUP_WORDS)
                 .filter { isRttiHeader(it) }
-                .filterNot { GhidraClassNaming.INTERNAL_VFTABLE in labelsAt(it.add(ptr)) }
+                .filterNot { ClassNaming.INTERNAL_VFTABLE in labelsAt(it.add(ptr)) }
                 .map {
-                    "$cls@$point: sub-vtable rtti at $it, no ${GhidraClassNaming.INTERNAL_VFTABLE} at ${it.add(ptr)}"
+                    "$cls@$point: sub-vtable rtti at $it, no ${ClassNaming.INTERNAL_VFTABLE} at ${it.add(ptr)}"
                 }
         }
         unlabelled.take(10).mustBeEmpty("${unlabelled.size} sub-vtables inside a _ZTV group are unannotated")
