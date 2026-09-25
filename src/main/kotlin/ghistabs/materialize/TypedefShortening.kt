@@ -3,7 +3,7 @@ package ghistabs.materialize
 import ghidra.program.model.data.*
 import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.DiagnosticSink
-import ghistabs.materialize.abi.GhidraClassNaming
+import ghistabs.materialize.abi.isBaseField
 import ghistabs.parse.TypeDecl
 import ghistabs.parse.canonTemplateName
 
@@ -201,7 +201,7 @@ class TypedefShortener(private val registry: DataTypeRegistry, private val monit
 
     private fun DataTypeComponent.shortenBaseField(shortener: TemplateNameShortener): Boolean {
         val name = fieldName ?: return false
-        if (!GhidraClassNaming.isBaseField(name)) return false
+        if (!isBaseField()) return false
         val short = shortener.shortenedOrNull(name) ?: return false
         return runCatching { fieldName = short }.isSuccess
     }

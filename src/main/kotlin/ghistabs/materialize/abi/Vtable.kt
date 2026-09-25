@@ -2,6 +2,7 @@ package ghistabs.materialize.abi
 
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.CategoryPath
+import ghidra.program.model.data.DataTypeComponent
 import ghidra.program.model.data.PointerDataType
 import ghidra.program.model.data.Structure
 import ghidra.program.model.listing.CommentType
@@ -33,6 +34,9 @@ object GhidraClassNaming {
 
     fun isBaseField(name: String) = name.startsWith(BASE_PREFIX) || name.startsWith(VBASE_PREFIX)
 }
+
+/** [GhidraClassNaming.isBaseField], off a live component instead of a bare field name. */
+fun DataTypeComponent.isBaseField() = GhidraClassNaming.isBaseField(fieldName.orEmpty())
 
 /** Pointer-sized word at [a] from initialized memory (endianness-aware), or null if unmapped. */
 internal fun Program.readWord(a: Address): Long? = runCatching {
