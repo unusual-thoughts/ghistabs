@@ -3,6 +3,7 @@ package ghistabs.materialize
 import ghidra.program.model.data.*
 import ghidra.program.model.lang.CompilerSpec
 import ghistabs.harvest.Type
+import ghistabs.materialize.abi.GhidraClassNaming
 import ghistabs.parse.CATEGORY
 import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.GlobalTypeId
@@ -104,6 +105,7 @@ internal fun DataTypeRegistry.materializeBody(ast: Type, category: CategoryPath,
             }
     }
 
+/** Splices each base's fields into [placeholder] at the offset the stab's inheritance line gives it. */
 internal fun DataTypeRegistry.fillStructBases(
     body: TypeDecl.Aggregate<GlobalTypeId>,
     placeholder: Structure,
@@ -162,8 +164,8 @@ internal fun DataTypeRegistry.fillStructBases(
                 offsetBytes,
                 dt,
                 dt.length,
-                Layout.baseFieldName(base.isVirtual, dt.name, body.bases.size),
-                Layout.baseComment(base),
+                GhidraClassNaming.baseFieldName(base.isVirtual, dt.name, body.bases.size),
+                GhidraClassNaming.baseComment(base),
             )
         }.onSuccess { debug("inheritance-applied") }
             .onFailure {

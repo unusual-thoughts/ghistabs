@@ -5,6 +5,7 @@ import ghidra.program.model.data.CategoryPath
 import ghidra.program.model.data.DataTypeComponent
 import ghidra.program.model.data.PointerDataType
 import ghidra.program.model.data.Structure
+import ghidra.program.model.gclass.ClassUtils
 import ghidra.program.model.listing.CommentType
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Namespace
@@ -13,6 +14,8 @@ import ghidra.program.model.symbol.Symbol
 import ghistabs.Demangler
 import ghistabs.forceCreateData
 import ghistabs.harvest.AddressResolver
+import ghistabs.parse.GlobalTypeId
+import ghistabs.parse.TypeDecl
 
 /** Upper bound on vbase/vcall-offset words scanned before giving up on locating the rtti header. */
 private const val MAX_VTABLE_PREFIX_WORDS = 64
@@ -25,14 +28,25 @@ private const val MAX_VTABLE_PREFIX_WORDS = 64
  */
 object GhidraClassNaming {
     val classDataTypesRoot by lazy { CategoryPath(CategoryPath.ROOT, "ClassDataTypes") }
-    const val VFTABLE = "vftable"
-    const val INTERNAL_VFTABLE = "internal_vftable"
+
+    // RTTIGccClassRecoverer#createVfunctionSymbol prefixes "internal_" onto VFTABLE_LABEL for any
+    // non-primary vtable; nothing exposes that prefix as a constant, so it is spelled out here.
+    const val INTERNAL_VFTABLE = "internal_${ClassUtils.VFTABLE}"
 
     // ghistabs' own base-subobject field naming, applied uniformly regardless of the class's ABI.
     const val BASE_PREFIX = "_base_"
     const val VBASE_PREFIX = "_vbase_"
 
     fun isBaseField(name: String) = name.startsWith(BASE_PREFIX) || name.startsWith(VBASE_PREFIX)
+
+    fun baseFieldName(isVirtual: Boolean, simpleName: String, baseCount: Int) =
+        (if (isVirtual) VBASE_PREFIX else BASE_PREFIX) + simpleName.takeIf { baseCount > 1 }.orEmpty()
+
+    fun baseComment(base: TypeDecl.Aggregate.Base<GlobalTypeId>) = buildString {
+        append(base.access.name.lowercase())
+        if (base.isVirtual) append(" virtual")
+        append(" base")
+    }
 }
 
 /** [GhidraClassNaming.isBaseField], off a live component instead of a bare field name. */
@@ -208,7 +222,7 @@ fun Program.layVtable(
     ns: Namespace,
     resolver: AddressResolver,
     virtualBases: List<String> = emptyList(),
-    label: String = GhidraClassNaming.VFTABLE,
+    label: String = ClassUtils.VFTABLE,
     abi: CxxAbi = Itanium,
 ): Address {
     val (prefix, topSlot, rttiHeader, addressPoint) = shape

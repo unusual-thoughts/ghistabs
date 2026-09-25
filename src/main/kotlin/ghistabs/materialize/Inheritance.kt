@@ -1,25 +1,10 @@
 package ghistabs.materialize
 
 import ghistabs.index.TypeGraph
-import ghistabs.materialize.abi.GhidraClassNaming
 import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Aggregate.Base
 import ghistabs.parse.TypeDecl.Aggregate.Method
 import java.util.IdentityHashMap
-
-/** Pure C++ record-layout decisions: where the vfptr goes and how base subobjects are spliced in. */
-object Layout {
-
-    fun baseFieldName(isVirtual: Boolean, simpleName: String, baseCount: Int) =
-        (if (isVirtual) GhidraClassNaming.VBASE_PREFIX else GhidraClassNaming.BASE_PREFIX) +
-            simpleName.takeIf { baseCount > 1 }.orEmpty()
-
-    fun baseComment(base: Base<GlobalTypeId>) = buildString {
-        append(base.access.name.lowercase())
-        if (base.isVirtual) append(" virtual")
-        append(" base")
-    }
-}
 
 /**
  * Byte offset of the vptr [typeDecl] declares, or null if it declares none. The single answer to
