@@ -72,11 +72,7 @@ internal fun DataTypeRegistry.materializeBody(ast: Type, category: CategoryPath,
             name = ast.ghidraName,
             ret = body.ret,
             params = body.params,
-            // Null cls is gdb's stub method (`##<ret>;`) stating no domain — the normal gcc 2.x
-            // encoding, not a failure (see TypeDecl.Method.cls); only a stated-but-unresolvable
-            // cls is a real loss.
-            thisType = body.cls?.let { resolveRef(it) ?: undef("method-this-cls", ast.ghidraName, it) }
-                ?: Undefined4DataType.dataType,
+            thisType = thisTypeFor(body, ast.ghidraName),
             callingConvention = CompilerSpec.CALLING_CONVENTION_thiscall,
             at = ast.ghidraName,
         )
@@ -296,6 +292,11 @@ internal fun DataTypeRegistry.fillComposite(
 
     return placeholder
 }
+
+/** Null [TypeDecl.Method.cls] is gdb's stub method (`##<ret>;`) stating no domain — the normal gcc
+ *  2.x encoding, not a failure; only a stated-but-unresolvable cls is a real loss. */
+private fun DataTypeRegistry.thisTypeFor(body: TypeDecl.Method<GlobalTypeId>, at: String): DataType =
+    body.cls?.let { resolveRef(it) ?: undef("method-this-cls", at, it) } ?: Undefined4DataType.dataType
 
 /** [fallback] is overridden where an Undefined-family substitute would be re-read by Ghidra — see
  *  the array sites, which pass [ByteDataType]. */
