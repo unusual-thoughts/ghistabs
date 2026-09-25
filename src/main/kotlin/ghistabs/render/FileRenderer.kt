@@ -296,7 +296,7 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
         val typedefs = typeDecls
             .filter { it.body !is TypeDecl.Aggregate && it.body !is TypeDecl.Enum }
             .mapNotNull { ast ->
-                ast.name?.let { Td(ast, it, ast.body.render()) }
+                ast.name?.let { Td(ast, it, ast.body.renderDecl(it)) }
             }
 
         // A genuine typedef has one definition site. The same alias+target recurring across a .cpp
@@ -323,7 +323,7 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
                 Claim(
                     Owner.TYPEDEF,
                     line,
-                    listOf(Row("typedef $rendered $name;", line.indentAt(), note = "")),
+                    listOf(Row("typedef $rendered;", line.indentAt(), note = "")),
                     stale = line.isStale() || key in splayed || ast.misfiled(),
                 )
             }
