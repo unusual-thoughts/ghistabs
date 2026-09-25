@@ -3,7 +3,6 @@ package ghistabs.materialize.cpp.abi
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.PointerDataType
 import ghidra.program.model.data.Structure
-import ghidra.program.model.gclass.ClassUtils
 import ghidra.program.model.listing.CommentType
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Namespace
@@ -12,6 +11,7 @@ import ghidra.program.model.symbol.Symbol
 import ghistabs.Demangler
 import ghistabs.forceCreateData
 import ghistabs.harvest.AddressResolver
+import ghistabs.materialize.cpp.ClassNaming
 
 /** Upper bound on vbase/vcall-offset words scanned before giving up on locating the rtti header. */
 private const val MAX_VTABLE_PREFIX_WORDS = 64
@@ -186,7 +186,7 @@ fun Program.layVtable(
     ns: Namespace,
     resolver: AddressResolver,
     virtualBases: List<String> = emptyList(),
-    label: String = ClassUtils.VFTABLE,
+    label: String = ClassNaming.VFTABLE,
     abi: CxxAbi = Itanium,
 ): Address {
     val (prefix, topSlot, rttiHeader, addressPoint) = shape

@@ -2,7 +2,6 @@ package ghistabs.materialize.cpp
 
 import ghidra.program.model.data.CategoryPath
 import ghidra.program.model.data.DataTypeComponent
-import ghidra.program.model.gclass.ClassUtils
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
 
@@ -15,9 +14,12 @@ import ghistabs.parse.TypeDecl
 object ClassNaming {
     val classDataTypesRoot by lazy { CategoryPath(CategoryPath.ROOT, "ClassDataTypes") }
 
+    // Spelled out rather than taken from ClassUtils.VFTABLE, which only arrives in 12.1.
+    const val VFTABLE = "vftable"
+
     // RTTIGccClassRecoverer#createVfunctionSymbol prefixes "internal_" onto VFTABLE_LABEL for any
     // non-primary vtable; nothing exposes that prefix as a constant, so it is spelled out here.
-    const val INTERNAL_VFTABLE = "internal_${ClassUtils.VFTABLE}"
+    const val INTERNAL_VFTABLE = "internal_$VFTABLE"
 
     // ghistabs' own base-subobject field naming, applied uniformly regardless of the class's ABI.
     const val BASE_PREFIX = "_base_"
