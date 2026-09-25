@@ -32,8 +32,8 @@ bodies.
 |                       | Supported                                                                                                                                                                                             |
 | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Ghidra**            | **10.4 - 12.1.3**                                                                                                                                                                                     |
-| **Binary containers** | **PE/COFF**, **ELF** and **a.out** (OMAGIC)                                                                                                                                                           |
-| **Instruction sets**  | `i386` / `x86-64`                                                                                                                                                                                     |
+| **Binary containers** | **PE/COFF**, **ELF** and **a.out**                                                                                                                                                                    |
+| **Instruction sets**  | `i386` / `x86-64` / 32-bit `sparc`                                                                                                                                                                    |
 | **Compiler**          | **gcc**, on both Unix and Cygwin/MinGW targets, up to gcc **12** (`-gstabs` was deprecated in 12 and removed outright in 13). Stabs produced by other compilers are out of scope but may mostly work. |
 | **Languages**         | **C** and **C++** from at least gcc **2.5.8** (1994). Both the old GNU v2 and Itanium (introduced in GCC 3.0) ABIs                                                                                    |
 | **Formats**           | `-gstabs` and `-gstabs+` alike                                                                                                                                                                        |
@@ -256,10 +256,11 @@ There is no standard: stabs is a semi-documented convention, and the two manuals
 
 - *STABS Debug Format*, Menapace, Kingdon & MacKenzie (Cygnus Support): Not official documentation of GNU's conventions,
   but is distributed with binutils
-  [HTML](https://sourceware.org/gdb/onlinedocs/stabs.html/) ·
   [PDF](https://sourceware.org/gdb/onlinedocs/stabs.pdf)
 - *Stabs Interface*, Sun Microsystems (Sun Studio 11) -
   [PDF](https://web.archive.org/web/20061115071332/http://dsc.sun.com/sunstudio/documentation/ss11/stabs.pdf) - Sun's conventions for STABS
+- *AIX Version 7.1: Files Reference*, IBM, §"dbx Stabstrings" (pp. 854–865) -
+  [PDF](https://www.ibm.com/docs/en/ssw_aix_71/pdf/filesreference_pdf.pdf) [HTML](https://www.ibm.com/docs/en/aix/7.3.0?topic=formats-xcoff-object-file-format#XCOFF__jtsci131jbau) - IBM's XCOFF/xlC dialect as a formal grammar
 - [Stabs](https://en.wikipedia.org/wiki/Stabs) on Wikipedia
 
 ### Implementations
