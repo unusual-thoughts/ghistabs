@@ -74,16 +74,6 @@ private val GhidraSourceFile.sanitizedSegments get() =
  */
 val GhidraSourceFile.outputPath get() = Path("", *sanitizedSegments.toTypedArray())
 
-/**
- * C is declarator-based: an array's extent goes *after* the  * name, so `char const[18] ABC`
- * has to be `char const ABC[18]`.
- */
-private val ARRAY_SUFFIX = Regex("""((?:\[[^\]]*\])+)$""")
-
-fun declarator(type: String, name: String) = ARRAY_SUFFIX.find(type)
-    ?.let { "${type.removeSuffix(it.value).trimEnd()} $name${it.value}" }
-    ?: "$type $name"
-
 fun AggrKind.cxxKeyword() = when (this) {
     AggrKind.STRUCT -> "struct"
     AggrKind.UNION -> "union"
