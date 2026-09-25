@@ -88,26 +88,24 @@ class ClassBuilder(
     private val resolvedMemberAddresses = IdentityHashMap<Method<GlobalTypeId>, Address>()
 
     /**
-     * One class's build state: its [located] group, Ghidra namespace, and struct. Everything derived
-     * from [located] is lazy, so a non-polymorphic class (most of them) never pays for a vtable
-     * resolution it will never use.
+     * One class's build state: its [located] group, Ghidra namespace, and struct.
      *
      * [abi] is this class's own vtable-stated ABI when [vtable] found one, [fallbackAbi] otherwise.
-     * Every method sees the same answer, in [reparentMethod] as much as [buildAndApplyVtable].
+     * Every method sees the same answer, in [reparentMethod] as much as [buildAndApplyVtable]. [vtable]
+     * only resolves an address when [isPoly] says there's one to find, so a non-polymorphic class
+     * (most of them) never pays for that lookup.
      */
     private inner class LocatedClass(val located: LocatedType, val ns: GhidraClass, val structDt: Structure) {
         // A derived class inherits its base's vtable without re-marking the overrides virtual
         // (gcc 3.4.4: CPackedSegList's GetSeg/AddSeg are `virt=NORMAL`), so a polymorphic base
         // subobject is itself the signal — without it buildAndApplyVtable never runs and _ZTV<class>
         // is left unannotated. Virtuals.process walks bases, so the slots still resolve.
-        val hasPolyBase by lazy { types.hasPolymorphicBaseSubobject(body) }
-        val isPoly by lazy {
-            hasPolyBase ||
-                body.hasVTablePointerMarker ||
-                body.methods.any { it.virt == VirtKind.VIRTUAL } ||
-                body.fields.any { isVptrFieldName(it.name) }
-        }
-        val vtable: ResolvedVtable? by lazy { if (isPoly) resolveVtableAddress() else null }
+        val hasPolyBase = types.hasPolymorphicBaseSubobject(body)
+        val isPoly = hasPolyBase ||
+            body.hasVTablePointerMarker ||
+            body.methods.any { it.virt == VirtKind.VIRTUAL } ||
+            body.fields.any { isVptrFieldName(it.name) }
+        val vtable: ResolvedVtable? = if (isPoly) resolveVtableAddress() else null
         val abi: CxxAbi get() = vtable?.abi ?: fallbackAbi
 
         val name get() = located.className
@@ -427,21 +425,18 @@ class ClassBuilder(
             return
         }
 
-        // Captured once so it smart-casts below: vtable is lazy, and abi is resolved.abi whenever
-        // this is non-null, so abi is the one spelling for every ABI question past this point.
-        val resolved = vtable
-        val shape = resolved?.let { program.vtableShape(it.address, resolver, abi) }
+        val shape = vtable?.let { program.vtableShape(it.address, resolver, abi) }
         val targets = shape?.let { program.vtableSlotTargets(it.addressPoint, resolver, abi) }.orEmpty()
         // The symbol's spelling is the only thing that states the ABI, so without one the geometry is
         // a guess: a gcc 2.x record read as Itanium loses its reserved header and half its stride.
-        if (resolved == null) {
+        if (vtable == null) {
             degradation("vtable-abi-assumed", name, "no vtable symbol resolved; slots laid as $abi")
         }
         val virtuals = rebaseOffHeader(declared)
         fillVftable(virtuals, targets)
 
-        if (resolved == null || shape == null) return
-        claimedVtables += resolved.address
+        if (vtable == null || shape == null) return
+        claimedVtables += vtable.address
 
         // One vbase offset per virtual base, so the two counts must agree. They are derived
         // independently — the stab's base graph vs. where vtableShape put offset_to_top — which makes
