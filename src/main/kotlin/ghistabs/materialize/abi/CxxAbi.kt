@@ -20,7 +20,7 @@ interface CxxMemberNaming {
      * tried first and unchanged; an ABI whose stabs put something less than a whole symbol in that
      * field composes the rest from what the stab does state.
      */
-    fun physnameCandidates(m: Method<*>, className: String): List<String> = listOfNotNull(m.physname)
+    fun physnameCandidates(m: Method<*>, className: String): List<String> = listOfNotNull(m.mangled)
 
     /** How this ABI's stabs spell the implicit assignment operator. */
     val assignmentOperatorName: String
@@ -41,7 +41,7 @@ interface CxxMemberNaming {
     fun isImplicitMember(m: Method<*>, className: String): Boolean {
         val leaf = className.substringAfterLast("::")
         return m.name == leaf || m.name == "~$leaf" || m.name == assignmentOperatorName ||
-            m.physname?.let(::physnameIsImplicit) == true
+            m.mangled?.let(::physnameIsImplicit) == true
     }
 
     /** In-class display form of a ctor/dtor linkage name, or null for anything else. */

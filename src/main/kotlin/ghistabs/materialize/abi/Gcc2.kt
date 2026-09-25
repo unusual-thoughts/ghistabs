@@ -207,8 +207,8 @@ sealed interface Gcc2Abi : CxxAbi {
      * so a physname that is already a whole symbol resolves before this one is ever looked up.
      */
     override fun physnameCandidates(m: Method<*>, className: String) = listOfNotNull(
-        m.physname,
-        Gcc2.physnamePrefix(m.name, className, m.isConst, m.isVolatile) + m.physname.orEmpty(),
+        m.mangled,
+        Gcc2.physnamePrefix(m.name, className, m.isConst, m.isVolatile) + m.mangled.orEmpty(),
     )
 
     /** The inverse of [Gcc2.physnamePrefix]'s ctor/dtor forms — `__9TiXmlNode`, `_._9TiXmlNode`. */
