@@ -15,7 +15,7 @@ open class TestContentIndex(val asts: Map<GlobalTypeId, Type>) :
     ContentIndex(),
     DiagnosticSink by DummySink {
     override fun byId(id: GlobalTypeId): Type? = asts[id]
-    override fun byXRef(xref: TypeDecl.XRef<GlobalTypeId>, silent: Boolean): Type? = null
+    override fun byXRef(xref: TypeDecl.XRef<GlobalTypeId>): Type? = null
 }
 
 /**
@@ -297,7 +297,7 @@ class ContentIndexTest {
 
         val store = mapOf(id97 to forwardAlias, id98 to ioFileAst, intId to intAst)
         val o = object : TestContentIndex(store) {
-            override fun byXRef(xref: TypeDecl.XRef<GlobalTypeId>, silent: Boolean): Type? =
+            override fun byXRef(xref: TypeDecl.XRef<GlobalTypeId>): Type? =
                 store.values.firstOrNull { it.name == xref.tagName }
         }
 

@@ -570,6 +570,10 @@
             "min": 5,
             "max": 5
         },
+        "unresolved-xref": {
+            "min": 5,
+            "max": 5
+        },
         "vfptr-inherited-from-base": {
             "min": 3,
             "max": 3
@@ -613,6 +617,10 @@
         "xref-stubs-synthesized": {
             "min": 1,
             "max": 1
+        },
+        "xref-undefined": {
+            "min": 5,
+            "max": 5
         }
     },
     "source": "xmltest - generated from snapshotCounters()"

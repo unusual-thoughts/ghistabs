@@ -391,8 +391,8 @@
             "max": 4
         },
         "unresolved-xref": {
-            "min": 60,
-            "max": 60
+            "min": 15,
+            "max": 15
         },
         "vfptr-inherited-from-base": {
             "min": 14,
@@ -411,8 +411,8 @@
             "max": 89
         },
         "xref-undefined": {
-            "min": 60,
-            "max": 60
+            "min": 15,
+            "max": 15
         }
     },
     "source": "xmltest_gcc421_stripped.exe - generated from snapshotCounters()"

@@ -663,7 +663,7 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
         fun collect(decl: GlobalTypeDecl) {
             val ast = when (decl) {
                 is TypeDecl.Ref -> types.byId(decl.id)
-                is TypeDecl.XRef -> types.byXRef(decl, silent = true)
+                is TypeDecl.XRef -> types.byXRef(decl)
                 else -> return decl.children.flatten().forEach { collect(it) }
             }
             if (ast != null && referenced.add(ast)) {

@@ -636,8 +636,8 @@
             "max": 1255
         },
         "unresolved-xref": {
-            "min": 42,
-            "max": 42
+            "min": 31,
+            "max": 31
         },
         "vfptr-inherited-from-base": {
             "min": 12,
@@ -703,16 +703,20 @@
             "max": 19
         },
         "xref-ambiguous": {
-            "min": 2,
-            "max": 2
+            "min": 1,
+            "max": 1
         },
         "xref-base-tag-ambiguous": {
-            "min": 2,
-            "max": 2
+            "min": 1,
+            "max": 1
+        },
+        "xref-base-tag-resolved": {
+            "min": 8,
+            "max": 8
         },
         "xref-undefined": {
-            "min": 40,
-            "max": 40
+            "min": 30,
+            "max": 30
         }
     },
     "source": "xmltest_gcc345.exe - generated from snapshotCounters()"
