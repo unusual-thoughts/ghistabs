@@ -2,6 +2,7 @@ package ghistabs.harvest
 
 import ghidra.app.util.opinion.ElfLoader
 import ghidra.program.model.address.Address
+import ghidra.program.model.address.AddressSet
 import ghidra.program.model.listing.Program
 import ghistabs.baseStackParamOffset
 import ghistabs.diagnose.DiagnosticSink
@@ -60,8 +61,17 @@ class ProgramAddressResolver(private val program: Program, private val sink: Dia
     //
     // a.out gets none below Ghidra 12.3: a paged SPARC ZMAGIC (`graphcnv.SUN4`) loads its text a
     // page low there, fixed upstream by "Align a.out text base determination with binutils".
-    private val baseFixup: Long =
-        ElfLoader.getElfOriginalImageBase(program)?.let { program.imageBase.offset - it } ?: 0L
+    //
+    // Nor does a `.stab` the loader relocated: an ET_REL's `N_FUN`/`N_STSYM` values are 0 plus a
+    // `.rel.stab` entry, which Ghidra applies against the load address (and reports an original base
+    // of 0 for), so they already are addresses. Same test as DWARF's (DIEContainer.hasRelocations).
+    private val baseFixup: Long = ElfLoader.getElfOriginalImageBase(program)
+        ?.takeUnless {
+            StabReader.sourceOf(program)?.records?.let { stab ->
+                program.relocationTable.getRelocations(AddressSet(stab.start, stab.end)).hasNext()
+            } == true
+        }
+        ?.let { program.imageBase.offset - it } ?: 0L
 
     override fun buildAddress(offset: Long): Address = program.addressFactory.defaultAddressSpace.getAddress(offset) +
         // A negative fixup only applies to values large enough to be vaddrs: callers also pass
