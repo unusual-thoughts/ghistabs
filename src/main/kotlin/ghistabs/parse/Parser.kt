@@ -123,6 +123,19 @@ class Parser(src: String) {
                 SymbolDecl.Param(name, parseType(), VariableLocation.REGISTER)
             }
 
+            // By-value parameter passed by invisible reference: the slot holds its address, so the
+            // stated value type is really a reference (gcc/dbxout.c:dbxout_parms, `a` in a register,
+            // `v` on the stack).
+            'a' -> {
+                advance()
+                SymbolDecl.Param(name, TypeDecl.Reference(parseType()), VariableLocation.REGISTER)
+            }
+
+            'v' -> {
+                advance()
+                SymbolDecl.Param(name, TypeDecl.Reference(parseType()), VariableLocation.STACK)
+            }
+
             'r' -> {
                 advance()
                 SymbolDecl.Local(name, parseType(), VariableLocation.REGISTER)
@@ -224,7 +237,7 @@ class Parser(src: String) {
      * Parse a type descriptor by lookahead character.
      * Dispatches to specific productions: Pointer (*), Reference (&), Const (k),
      * Volatile (B), Array (a), Enum (e), Struct (s/u/Y), FunctionT (f), Method (#),
-     * Range (r), Complex (R), XRef (x), WithSizeAttr (@), or forward reference.
+     * Range (r), Complex (R), XRef (x), WithSizeAttr/Member (@), or forward reference.
      *
      * Mirror of gdb/stabsread.c:read_type.
      */
@@ -243,7 +256,7 @@ class Parser(src: String) {
 
         'x' -> parseXRef()
 
-        '@' -> parseSizeAttr()
+        '@' -> parseAt()
 
         '*' -> {
             advance()
@@ -670,18 +683,27 @@ class Parser(src: String) {
     }
 
     /**
-     * Parse a size attribute: `@s<n>;<inner>`
-     * The `n` is in bits; the inner type is parsed recursively.
+     * `@` introduces either gcc's OFFSET_TYPE `@<class>,<member>` — `int A::*`, spelled `*@A,int` up to
+     * gcc 3.3 and `@A,int` since — or a type attribute `@<letter><payload>;` qualifying the
+     * type that follows. gdb tells them apart the same way, by whether a type id follows. Attributes
+     * chain (`@a32;@s8;…`) and unknown ones are skipped (IBM *AIX Files Reference*, "TypeAttrs");
+     * only `s<bits>` carries anything we use.
      *
-     * Mirror of gcc/dbxout.c:dbxout_type (size-attribute emission).
+     * Mirror of gdb/stabsread.c:read_type (`@` case).
      */
-    private fun Cursor.parseSizeAttr(): TypeDecl.WithSizeAttr<LocalTypeId> {
+    private fun Cursor.parseAt(): LocalTypeDecl {
         consume('@')
-        consume('s')
-        val sizeBits = readInt()
+        if (peekStartsTypeId()) {
+            val cls = parseType()
+            consume(',')
+            return TypeDecl.Member(cls, parseType())
+        }
+        val attr = readUntilAny(charArrayOf(';'))
         consume(';')
         val inner = parseType()
-        return TypeDecl.WithSizeAttr(sizeBits, inner)
+        return attr.takeIf { it.startsWith('s') }?.drop(1)?.toLongOrNull()
+            ?.let { TypeDecl.WithSizeAttr(it, inner) }
+            ?: inner
     }
 
     /**

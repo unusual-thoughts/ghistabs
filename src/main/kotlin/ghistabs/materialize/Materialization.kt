@@ -16,13 +16,9 @@ import ghidra.program.model.data.Enum as GhidraEnum
 
 internal fun DataTypeRegistry.materializeBody(ast: Type, category: CategoryPath, placeholder: DataType): DataType =
     when (val body = ast.body) {
-        is TypeDecl.Pointer -> pointerTo(body.inner, "body-pointer-pointee", ast.ghidraName)
+        is TypeDecl.Pointer -> pointerOrOffset(body.inner, "body-pointer-pointee", ast.ghidraName)
 
         is TypeDecl.Reference -> pointerTo(body.inner, "body-reference-referent", ast.ghidraName)
-
-        // Transparent wrappers/primitives resolve through resolveRef (which unwraps const/volatile
-        // and routes the builtin-family via BuiltinTable), falling back to the placeholder.
-        is TypeDecl.Const, is TypeDecl.Volatile -> resolveRef(body) ?: stub(ast, placeholder, body)
 
         // gcc emits anonymous nested aggregates as InlineDef(id, <aggregate body>);
         // resolveRef(body) picks up the harvested ast via getOrMaterialize(body.id)
@@ -55,8 +51,11 @@ internal fun DataTypeRegistry.materializeBody(ast: Type, category: CategoryPath,
         // applied to the placeholder in makePlaceholder.
         is TypeDecl.WithSizeAttr if body.inner is TypeDecl.Enum -> body.inner.fillEnum(placeholder as GhidraEnum)
 
-        is TypeDecl.Range, is TypeDecl.Complex, is TypeDecl.Float, is TypeDecl.WithSizeAttr, is TypeDecl.Builtin ->
-            resolveRef(body) ?: stub(ast, placeholder, body)
+        // Transparent wrappers/primitives resolve through resolveRef (which unwraps const/volatile
+        // and routes the builtin-family via BuiltinTable), falling back to the placeholder.
+        is TypeDecl.Const, is TypeDecl.Volatile, is TypeDecl.Member,
+        is TypeDecl.Range, is TypeDecl.Complex, is TypeDecl.Float, is TypeDecl.WithSizeAttr, is TypeDecl.Builtin,
+        -> resolveRef(body) ?: stub(ast, placeholder, body)
 
         is TypeDecl.Aggregate -> fillComposite(body, placeholder as Composite, "$category/${ast.ghidraName}")
 
@@ -333,6 +332,20 @@ private fun DataTypeRegistry.pointerTo(pointee: GlobalTypeDecl, label: String, a
     PointerDataType(resolveRef(pointee) ?: undef(label, at, pointee), dtm.dataOrganization.pointerSize, dtm)
 
 /**
+ * `int A::*`: an Itanium data-member pointer is a byte offset, one ptrdiff_t wide, and Ghidra has no
+ * pointer-to-member type. gcc ≤ 3.3 spells it as a pointer to the [TypeDecl.Member], ≥ 3.4 as
+ * the Member alone (`build_ptrmem_type` stopped wrapping OFFSET_TYPE in POINTER_TYPE), so both
+ * land here. The stab can't say which gcc wrote it, so ≥ 3.4's `int A::**` comes out one level
+ * short — same width, so no layout moves.
+ */
+private fun DataTypeRegistry.memberPointer(): DataType =
+    // Unbound, like BuiltinTable's primitives: a program-bound `int` would fork `int.conflict`.
+    AbstractIntegerDataType.getSignedDataType(dtm.dataOrganization.pointerSize, null)
+
+private fun DataTypeRegistry.pointerOrOffset(pointee: GlobalTypeDecl, label: String, at: String): DataType =
+    if (types.isMember(pointee)) memberPointer() else pointerTo(pointee, label, at)
+
+/**
  * Resolve a TypeDecl reference site to a DataType. Struct/Enum/Method/XRef return null (they
  * only have identity through their owning TypeAst id; use [DataTypeRegistry.getOrMaterialize] for those).
  */
@@ -346,13 +359,15 @@ fun DataTypeRegistry.resolveRef(decl: GlobalTypeDecl): DataType? = when (decl) {
     is TypeDecl.Range, is TypeDecl.Complex, is TypeDecl.Float, is TypeDecl.WithSizeAttr, is TypeDecl.Builtin ->
         resolveBuiltin(decl)
 
-    is TypeDecl.Pointer -> pointerTo(decl.inner, "pointer-pointee", "(anon)")
+    is TypeDecl.Pointer -> pointerOrOffset(decl.inner, "pointer-pointee", "(anon)")
 
     is TypeDecl.Reference -> pointerTo(decl.inner, "reference-referent", "(anon)")
 
     is TypeDecl.Const -> resolveRef(decl.inner)
 
     is TypeDecl.Volatile -> resolveRef(decl.inner)
+
+    is TypeDecl.Member -> memberPointer()
 
     // ByteDataType (not Undefined1) for unresolved elements: Undefined1 is
     // type-equivalent to Ghidra's auto-analysis "undefined" bytes, so a downstream

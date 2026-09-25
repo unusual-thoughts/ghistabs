@@ -190,6 +190,8 @@ class TypeGraph(private val harvest: Harvest, sink: DiagnosticSink = DummySink) 
         }
     }
 
+    fun isMember(decl: GlobalTypeDecl) = resolve<TypeDecl.Member<GlobalTypeId>>(decl) != null
+
     inline fun resolveAny(decl: GlobalTypeDecl, crossinline predicate: (GlobalTypeDecl) -> Boolean) =
         resolveWith(decl) { decl -> predicate(decl).takeIf { it } } == true
 
