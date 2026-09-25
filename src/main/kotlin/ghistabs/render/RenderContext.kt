@@ -62,7 +62,7 @@ interface RenderContext {
 
         // gcc ≤ 3.3's `int A::*` is a pointer to the member offset that ≥ 3.4 spells alone.
         is TypeDecl.Pointer -> {
-            inner.render(seen) + if (types.isMember(inner)) "" else " *"
+            inner.render(seen) + if (types.isMemberPointee(inner)) "" else " *"
         }
 
         is TypeDecl.Reference -> "${inner.render(seen)} &"
