@@ -268,7 +268,7 @@ enum class VfptrModel {
      * Each polymorphic class owns a `{vfptr}` typed to its own vftable, and embeds its primary base
      * as that base's fields *without* the vptr — one extra struct per polymorphic class, shared by
      * every class that derives from it. Keeps the `_base_` subobject component that
-     * [ghistabs.materialize.Layout] models inheritance with.
+     * [ghistabs.materialize.abi.GhidraClassNaming.baseFieldName] models inheritance with.
      */
     SPLIT_BASE,
 }

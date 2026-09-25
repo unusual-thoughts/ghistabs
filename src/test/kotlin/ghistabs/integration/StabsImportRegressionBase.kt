@@ -27,7 +27,6 @@ import ghistabs.importer.*
 import ghistabs.importer.ImportOptions.Companion.VFPTR_MODEL
 import ghistabs.index.ContentIndex
 import ghistabs.index.EffectiveSource
-import ghistabs.materialize.Layout
 import ghistabs.materialize.VfptrModel
 import ghistabs.materialize.abi.CxxAbi
 import ghistabs.materialize.abi.CxxAbi.Companion.prevailingAbi
@@ -716,7 +715,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         fun eol(a: Address) = program.listing.getComment(CommentType.EOL, a)
 
         val addressPoints = program.symbolTable.symbolIterator.iterator().asSequence()
-            .filter { it.name == GhidraClassNaming.VFTABLE && program.memory.getBlock(it.address) != null }
+            .filter { it.name == ClassUtils.VFTABLE && program.memory.getBlock(it.address) != null }
             .map { it.address }.distinct().toList()
         assumeTrue(addressPoints.isNotEmpty(), "Skipping: no vftable laid in this fixture")
 
@@ -943,7 +942,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
      * layout and any name identifies it. With two, the subobject's extent is guesswork — gcc's
      * inheritance line carries no size, so [ghistabs.materialize.fillStructBases] derives one from the
      * *next* base's offset, a step that only exists here — and the name only tells the two apart
-     * because [ghistabs.materialize.Layout.baseFieldName] appends the base's own name when
+     * because [ghistabs.materialize.abi.GhidraClassNaming.baseFieldName] appends the base's own name when
      * `baseCount > 1`. An un-suffixed `_base_` in an MI class means both edges raced for one component.
      *
      * The placement check runs name-first, over the components that exist, since an unresolved base is
@@ -963,7 +962,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             bases.mapNotNull { base ->
                 val baseDt = (base.type as? TypeDecl.Ref)?.id?.let { artifacts.registry.dataTypeFor(it) }
                     ?: return@mapNotNull null
-                val name = Layout.baseFieldName(base.isVirtual, baseDt.name, body.bases.size)
+                val name = GhidraClassNaming.baseFieldName(base.isVirtual, baseDt.name, body.bases.size)
                 val span = (base.offsetBits / 8).toInt().let { it until it + baseDt.length }
                 dt.definedComponents
                     .filter { it.fieldName?.removeSuffix("_tail") == name }
@@ -1097,7 +1096,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     @Test
     fun vftableLabelsSitOnTheAddressPoint() {
         val labels = program.symbolTable.symbolIterator.iterator().asSequence()
-            .filter { GhidraClassNaming.VFTABLE in it.name && program.memory.getBlock(it.address) != null }
+            .filter { ClassUtils.VFTABLE in it.name && program.memory.getBlock(it.address) != null }
             .map { it.parentSymbol.name to it.address }.distinct().toList()
         assumeTrue(labels.isNotEmpty(), "Skipping: no vftable labels in this fixture")
 
@@ -1151,7 +1150,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             ?.let { target -> labelsAt(target).any(Itanium::looksLikeZti) } == true
 
         val primaries = program.symbolTable.symbolIterator.iterator().asSequence()
-            .filter { it.name == GhidraClassNaming.VFTABLE && program.memory.getBlock(it.address) != null }
+            .filter { it.name == ClassUtils.VFTABLE && program.memory.getBlock(it.address) != null }
             .map { it.parentSymbol.name to it.address }.distinct().toList()
         assumeTrue(primaries.isNotEmpty(), "Skipping: no vftable laid in this fixture")
 
