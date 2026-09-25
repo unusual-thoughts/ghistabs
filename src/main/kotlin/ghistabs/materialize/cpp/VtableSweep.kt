@@ -1,4 +1,4 @@
-package ghistabs.materialize
+package ghistabs.materialize.cpp
 
 import ghidra.app.util.demangler.DemangledDataType
 import ghidra.app.util.demangler.DemangledFunction
@@ -12,15 +12,15 @@ import ghidra.program.model.data.StructureDataType
 import ghidra.program.model.data.Undefined4DataType
 import ghidra.program.model.symbol.Namespace
 import ghistabs.Demangler
-import ghistabs.materialize.abi.CxxAbi
-import ghistabs.materialize.abi.GhidraClassNaming
-import ghistabs.materialize.abi.ResolvedVtable
-import ghistabs.materialize.abi.VtableShape
-import ghistabs.materialize.abi.layVtable
-import ghistabs.materialize.abi.readWord
-import ghistabs.materialize.abi.secondaryVtables
-import ghistabs.materialize.abi.vtableShape
-import ghistabs.materialize.abi.vtableSlotTargets
+import ghistabs.materialize.cpp.abi.CxxAbi
+import ghistabs.materialize.cpp.abi.GhidraClassNaming
+import ghistabs.materialize.cpp.abi.ResolvedVtable
+import ghistabs.materialize.cpp.abi.VtableShape
+import ghistabs.materialize.cpp.abi.layVtable
+import ghistabs.materialize.cpp.abi.readWord
+import ghistabs.materialize.cpp.abi.secondaryVtables
+import ghistabs.materialize.cpp.abi.vtableShape
+import ghistabs.materialize.cpp.abi.vtableSlotTargets
 import ghistabs.parse.canonTemplateName
 import ghistabs.parse.splitQualified
 

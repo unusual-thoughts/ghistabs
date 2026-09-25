@@ -9,7 +9,7 @@ import ghistabs.harvest.Symbol
 import ghistabs.harvest.Type
 import ghistabs.index.TypeGraph
 import ghistabs.materialize.TemplateNameShortener
-import ghistabs.materialize.abi.Itanium
+import ghistabs.materialize.cpp.abi.Itanium
 import ghistabs.materialize.resolveBuiltin
 import ghistabs.parse.*
 

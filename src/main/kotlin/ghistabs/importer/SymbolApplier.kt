@@ -23,7 +23,7 @@ import ghistabs.diagnose.Level
 import ghistabs.forceCreateData
 import ghistabs.harvest.*
 import ghistabs.materialize.DataTypeRegistry
-import ghistabs.materialize.abi.Itanium.isInlineStdMember
+import ghistabs.materialize.cpp.abi.Itanium.isInlineStdMember
 import ghistabs.materialize.reasonFor
 import ghistabs.materialize.resolveRef
 import ghistabs.namespaces

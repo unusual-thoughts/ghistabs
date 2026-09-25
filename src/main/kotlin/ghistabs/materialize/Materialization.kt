@@ -3,7 +3,9 @@ package ghistabs.materialize
 import ghidra.program.model.data.*
 import ghidra.program.model.lang.CompilerSpec
 import ghistabs.harvest.Type
-import ghistabs.materialize.abi.GhidraClassNaming
+import ghistabs.materialize.cpp.abi.GhidraClassNaming
+import ghistabs.materialize.cpp.firstPolymorphicBase
+import ghistabs.materialize.cpp.resolveStruct
 import ghistabs.parse.CATEGORY
 import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.GlobalTypeId

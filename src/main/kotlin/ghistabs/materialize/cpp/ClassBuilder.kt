@@ -1,4 +1,4 @@
-package ghistabs.materialize
+package ghistabs.materialize.cpp
 
 import ghidra.app.util.NamespaceUtils
 import ghidra.app.util.demangler.DemangledDataType
@@ -21,8 +21,9 @@ import ghistabs.index.LocatedType
 import ghistabs.index.demangledClassPath
 import ghistabs.isInjected
 import ghistabs.isMethod
-import ghistabs.materialize.abi.*
-import ghistabs.materialize.abi.CxxAbi.Companion.prevailingAbi
+import ghistabs.materialize.*
+import ghistabs.materialize.cpp.abi.*
+import ghistabs.materialize.cpp.abi.CxxAbi.Companion.prevailingAbi
 import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Aggregate.Method
 import java.util.IdentityHashMap
@@ -222,15 +223,14 @@ class ClassBuilder(
     }
 
     private fun LocatedClass.reparentMethod(m: Method<GlobalTypeId>) {
-        val (mangled, addr) = resolveMember(m)
-            ?: run {
-                if (abi.isImplicitMember(m, qualifiedClassName)) {
-                    debug("method-implicit-not-emitted")
-                } else {
-                    debug("unresolved-symbol", "method ${m.mangled ?: m.name} (in $name)")
-                }
-                return
+        val (mangled, addr) = resolveMember(m) ?: run {
+            if (abi.isImplicitMember(m, qualifiedClassName)) {
+                debug("method-implicit-not-emitted")
+            } else {
+                debug("unresolved-symbol", "method ${m.mangled ?: m.name} (in $name)")
             }
+            return
+        }
         resolvedMemberAddresses[m] = addr
         val func = program.functionManager.getFunctionAt(addr) ?: run {
             val (tag, level) = if (abi.isInlineStdMember(mangled)) {

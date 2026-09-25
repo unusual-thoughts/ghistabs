@@ -15,9 +15,9 @@ import ghistabs.harvest.ProgramAddressResolver
 import ghistabs.index.SourceHints
 import ghistabs.index.SourceIndex
 import ghistabs.index.TypeGraph
-import ghistabs.materialize.ClassBuilder
 import ghistabs.materialize.DataTypeRegistry
 import ghistabs.materialize.TypedefShortener
+import ghistabs.materialize.cpp.ClassBuilder
 import ghistabs.parse.StabReader
 import ghistabs.parse.StabRecord
 import org.jetbrains.annotations.TestOnly
