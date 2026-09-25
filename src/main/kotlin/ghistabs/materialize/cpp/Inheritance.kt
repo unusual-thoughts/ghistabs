@@ -61,8 +61,6 @@ fun TypeGraph.virtualBases(typeDecl: TypeDecl.Aggregate<GlobalTypeId>) = buildLi
     walk(typeDecl)
 }
 
-fun TypeGraph.resolveStruct(typeDecl: GlobalTypeDecl) = resolve<TypeDecl.Aggregate<GlobalTypeId>>(typeDecl)
-
 /**
  * How deep [typeDecl] sits in its inheritance graph, so a caller can process bases before the
  * classes that embed them. [VfptrModel.SPLIT_BASE] needs that order: it derives a base's
