@@ -715,7 +715,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         fun eol(a: Address) = program.listing.getComment(CommentType.EOL, a)
 
         val addressPoints = program.symbolTable.symbolIterator.iterator().asSequence()
-            .filter { it.name == ClassUtils.VFTABLE && program.memory.getBlock(it.address) != null }
+            .filter { it.name == ClassNaming.VFTABLE && program.memory.getBlock(it.address) != null }
             .map { it.address }.distinct().toList()
         assumeTrue(addressPoints.isNotEmpty(), "Skipping: no vftable laid in this fixture")
 
@@ -1096,7 +1096,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     @Test
     fun vftableLabelsSitOnTheAddressPoint() {
         val labels = program.symbolTable.symbolIterator.iterator().asSequence()
-            .filter { ClassUtils.VFTABLE in it.name && program.memory.getBlock(it.address) != null }
+            .filter { ClassNaming.VFTABLE in it.name && program.memory.getBlock(it.address) != null }
             .map { it.parentSymbol.name to it.address }.distinct().toList()
         assumeTrue(labels.isNotEmpty(), "Skipping: no vftable labels in this fixture")
 
@@ -1150,7 +1150,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             ?.let { target -> labelsAt(target).any(Itanium::looksLikeZti) } == true
 
         val primaries = program.symbolTable.symbolIterator.iterator().asSequence()
-            .filter { it.name == ClassUtils.VFTABLE && program.memory.getBlock(it.address) != null }
+            .filter { it.name == ClassNaming.VFTABLE && program.memory.getBlock(it.address) != null }
             .map { it.parentSymbol.name to it.address }.distinct().toList()
         assumeTrue(primaries.isNotEmpty(), "Skipping: no vftable laid in this fixture")
 
