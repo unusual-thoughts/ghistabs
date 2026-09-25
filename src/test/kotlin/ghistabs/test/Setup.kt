@@ -80,7 +80,7 @@ fun harvestOf(vararg asts: Type) = Harvest(
 
 fun typesOf(vararg asts: Type) = TypeGraph(harvestOf(*asts))
 
-/** The three indexes over [harvest], constructed together exactly as [StabsImporter] does. */
+/** The three indexes over [harvest], constructed together exactly as [ghistabs.importer.StabsImporter] does. */
 fun hintsOf(harvest: Harvest, foldSources: Boolean = true, sink: DiagnosticSink = DummySink) =
     SourceHints(harvest, TypeGraph(harvest, sink), SourceIndex(harvest, foldSources, sink), sink)
 

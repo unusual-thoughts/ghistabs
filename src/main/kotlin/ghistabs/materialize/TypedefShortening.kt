@@ -4,7 +4,6 @@ import ghidra.program.model.data.*
 import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.materialize.cpp.isBaseField
-import ghistabs.parse.TypeDecl
 import ghistabs.parse.canonTemplateName
 
 /** `__x` and `_X` are reserved to the implementation — a name the program never chose. */

@@ -24,7 +24,8 @@ class StabReader(
 
         /**
          * a.out: the symbol table *is* the stab table. One flat string table, so `n_strx` is absolute,
-         * and the debugging symbols ([N_STAB_MASK]) are interleaved with the link-time symbols.
+         * and the debugging symbols ([ghistabs.parse.StabHeader.Companion.N_STAB_MASK]) are interleaved
+         * with the link-time symbols.
          */
         SYMTAB,
     }
