@@ -538,10 +538,10 @@ class ClassBuilder(
             .let { SymbolUtilities.replaceInvalidChars(it, true) }
             .takeIf { it.isNotEmpty() }
         val candidates = listOfNotNull(m.name, overload?.let { "${m.name}_$it" })
-        return candidates.firstOrNull(used::add) ?: "${m.name}_${used.size}".also {
-            degradation("vftable-slot-name-collision", it, "no unique name from $candidates")
-            used.add(it)
-        }
+        return candidates.firstOrNull(used::add)
+            ?: generateSequence(1) { it + 1 }.map { "${m.name}_$it" }.first(used::add).also {
+                degradation("vftable-slot-name-collision", it, "no unique name from $candidates")
+            }
     }
 
     /** Walk Ref/InlineDef wrappers to the underlying Method/FunctionT (gcc binds signatures to their own type id). */
