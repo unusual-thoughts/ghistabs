@@ -59,20 +59,7 @@ class ClassBuilder(
 
         private val LocatedType.classBody get() = type.body as TypeDecl.Aggregate<GlobalTypeId>
         private val LocatedType.className get() = location.name
-
-        // <Class>_vftable under /ClassDataTypes/<Class>/ — the function-pointer array {vfptr}
-        // points at, laid at the vtable's address point (_ZTV + 2*ptrSize). Each slot is
-        // Pointer→FunctionDefinition(<sig>) so the decompiler resolves virtual calls and
-        // RecoveredClassHelper / shift-S round-trip. The offset_to_top + rtti header words sit
-        // before the address point as plain Data (no enclosing struct — see buildAndApplyVtable).
-        private val LocatedType.vftableCategory get() = CategoryPath(GhidraClassNaming.classDataTypesRoot, className)
-        private val LocatedType.vftableName get() = "${className}_vftable"
     }
-
-    private val LocatedType.vftable
-        get() = registry.getOrRegister<Structure>(vftableCategory, vftableName) {
-            StructureDataType(vftableCategory, vftableName, 0, dtm)
-        }
 
     // Fully-qualified C++ name (`std::basic_ostream<char,…>`), for matching a demangled `_ZTV`
     // symbol's namespace chain. `className` (key.name) is only the leaf now that byCanonicalKey
@@ -101,12 +88,51 @@ class ClassBuilder(
     private val resolvedMemberAddresses = IdentityHashMap<Method<GlobalTypeId>, Address>()
 
     /**
-     * {vfptr} points at the function-pointer array at the vtable's address point
-     * (`_ZTV<class> + 2*ptrSize`), not at the record start. Modelled as `<Class>_vftable*`
-     * under `/ClassDataTypes/<Class>/` so `RecoveredClassHelper` / shift-S round-trip
-     * can find it.
+     * One class's build state: its [located] group, Ghidra namespace, and struct. Everything derived
+     * from [located] is lazy, so a non-polymorphic class (most of them) never pays for a vtable
+     * resolution it will never use.
+     *
+     * [abi] is this class's own vtable-stated ABI when [vtable] found one, [fallbackAbi] otherwise.
+     * Every method sees the same answer, in [reparentMethod] as much as [buildAndApplyVtable].
      */
-    private fun LocatedType.ensureVtableTypeAndPointer(): Pointer = PointerDataType.getPointer(vftable, dtm)
+    private inner class LocatedClass(val located: LocatedType, val ns: GhidraClass, val structDt: Structure) {
+        // A derived class inherits its base's vtable without re-marking the overrides virtual
+        // (gcc 3.4.4: CPackedSegList's GetSeg/AddSeg are `virt=NORMAL`), so a polymorphic base
+        // subobject is itself the signal — without it buildAndApplyVtable never runs and _ZTV<class>
+        // is left unannotated. Virtuals.process walks bases, so the slots still resolve.
+        val hasPolyBase by lazy { types.hasPolymorphicBaseSubobject(body) }
+        val isPoly by lazy {
+            hasPolyBase ||
+                body.hasVTablePointerMarker ||
+                body.methods.any { it.virt == VirtKind.VIRTUAL } ||
+                body.fields.any { isVptrFieldName(it.name) }
+        }
+        val vtable: ResolvedVtable? by lazy { if (isPoly) resolveVtableAddress() else null }
+        val abi: CxxAbi get() = vtable?.abi ?: fallbackAbi
+
+        val name get() = located.className
+        val body get() = located.classBody
+        val qualifiedClassName get() = located.qualifiedClassName
+
+        // <Class>_vftable under /ClassDataTypes/<Class>/ — the function-pointer array {vfptr}
+        // points at, laid at the vtable's address point (_ZTV + 2*ptrSize). Each slot is
+        // Pointer→FunctionDefinition(<sig>) so the decompiler resolves virtual calls and
+        // RecoveredClassHelper / shift-S round-trip. The offset_to_top + rtti header words sit
+        // before the address point as plain Data (no enclosing struct — see buildAndApplyVtable).
+        val vftableCategory get() = CategoryPath(GhidraClassNaming.classDataTypesRoot, name)
+        val vftableName get() = "${name}_vftable"
+        val vftable get() = registry.getOrRegister<Structure>(vftableCategory, vftableName) {
+            StructureDataType(vftableCategory, vftableName, 0, dtm)
+        }
+
+        /**
+         * {vfptr} points at the function-pointer array at the vtable's address point
+         * (`_ZTV<class> + 2*ptrSize`), not at the record start. Modelled as `<Class>_vftable*`
+         * under `/ClassDataTypes/<Class>/` so `RecoveredClassHelper` / shift-S round-trip
+         * can find it.
+         */
+        fun ensureVtableTypeAndPointer(): Pointer = PointerDataType.getPointer(vftable, dtm)
+    }
 
     /**
      * Build every class/vtable group once. Each class header included by N CUs produces N TypeAsts
@@ -117,17 +143,19 @@ class ClassBuilder(
     fun buildAll(): Int {
         // Bases first: SPLIT_BASE reads a base's materialized layout to build its vptr-less
         // `<Base>_fields`, which is only correct once the base has had its own vfptr placed.
-        val inheritanceDepthMemo = IdentityHashMap<TypeDecl.Aggregate<GlobalTypeId>, Int>()
+        val depthMemo = IdentityHashMap<TypeDecl.Aggregate<GlobalTypeId>, Int>()
         val classes = registry.byLocation.values
             .filter { it.isClass() }
-            .sortedBy { types.inheritanceDepth(it.classBody, inheritanceDepthMemo) }
+            .sortedBy { types.inheritanceDepth(it.classBody, depthMemo) }
         monitor.initialize(classes.size.toLong(), "Stabs: building classes")
         var built = 0
         for (group in classes) {
             monitor.increment()
             try {
-                group.build()
-                built++
+                group.resolve()?.apply {
+                    build()
+                    built++
+                }
             } catch (t: Throwable) {
                 err("class-apply-error", "${group.location}: ${t.message}")
             }
@@ -136,34 +164,16 @@ class ClassBuilder(
         return built
     }
 
-    /** Materialize class struct + namespace + (optional) vtable struct, apply at _ZTV. */
-    fun LocatedType.build() {
-        val category = location.category
-        val structDt = registry.dataTypeFor(type.id)
-        if (structDt !is Structure) {
+    private fun LocatedType.resolve(): LocatedClass? = when (val structDt = registry.dataTypeFor(type.id)) {
+        is Structure -> LocatedClass(this, ensureClassNamespace(), structDt)
+
+        else -> {
             warn(
                 "class-not-struct",
-                "skipping ${structDt?.let { it::class.simpleName }} class '$className' at $category",
+                "skipping ${structDt?.let { it::class.simpleName }} class '$className' at ${location.category}",
             )
-            return
+            null
         }
-
-        // A derived class inherits its base's vtable without re-marking the overrides virtual
-        // (gcc 3.4.4: CPackedSegList's GetSeg/AddSeg are `virt=NORMAL`), so a polymorphic base
-        // subobject is itself the signal — without it buildAndApplyVtable never runs and _ZTV<class>
-        // is left unannotated. Virtuals.process walks bases, so the slots still resolve.
-        val hasPolyBase = types.hasPolymorphicBaseSubobject(classBody)
-        val isPoly = hasPolyBase ||
-            classBody.hasVTablePointerMarker ||
-            classBody.methods.any { it.virt == VirtKind.VIRTUAL } ||
-            classBody.fields.any { isVptrFieldName(it.name) }
-        if (isPoly) {
-            vfptrPlacement.place(structDt, className, classBody, hasPolyBase) { ensureVtableTypeAndPointer() }
-        }
-
-        val ns = ensureClassNamespace()
-        for (m in classBody.methods) reparentMethod(m, ns, structDt)
-        if (isPoly) buildAndApplyVtable(ns)
     }
 
     /**
@@ -203,13 +213,23 @@ class ClassBuilder(
         return parent as GhidraClass
     }
 
-    private fun LocatedType.reparentMethod(m: Method<GlobalTypeId>, ns: GhidraClass, structDt: Structure) {
+    /** Materialize class struct + namespace + (optional) vtable struct, apply at _ZTV. */
+    private fun LocatedClass.build() {
+        if (isPoly) vfptrPlacement.place(structDt, name, body, hasPolyBase) { ensureVtableTypeAndPointer() }
+
+        // gcc 2.x composes a method's physname from its own class's ABI, so reparenting always
+        // resolves through this class's own abi, once its vtable resolves.
+        for (m in body.methods) reparentMethod(m)
+        if (isPoly) buildAndApplyVtable()
+    }
+
+    private fun LocatedClass.reparentMethod(m: Method<GlobalTypeId>) {
         val (mangled, addr) = resolveMember(m)
             ?: run {
                 if (abi.isImplicitMember(m, qualifiedClassName)) {
                     debug("method-implicit-not-emitted")
                 } else {
-                    debug("unresolved-symbol", "method ${m.physname ?: m.name} (in $className)")
+                    debug("unresolved-symbol", "method ${m.physname ?: m.name} (in $name)")
                 }
                 return
             }
@@ -229,13 +249,12 @@ class ClassBuilder(
         // off (Demangler's defaults): the stab has richer types than the mangled name, and our
         // __thiscall choice below must win.
         if (!program.applyDemangling(addr, mangled)) {
-            // Fall back to manual namespace + display-name handling.
             func.parentNamespace = ns
-            val fallbackName = abi.specialMemberDisplayName(mangled, className) ?: m.name
+            val fallbackName = abi.specialMemberDisplayName(mangled, name) ?: m.name
             if (func.name != fallbackName) func.setName(fallbackName, source)
             degradation(
                 "method-demangle-fallback",
-                "$className::${m.name}",
+                "$name::${m.name}",
                 "demangler did not apply to $mangled",
                 func.entryPoint,
             )
@@ -252,7 +271,7 @@ class ClassBuilder(
 
             else -> return degradation(
                 "method-signature-unwrap-failed",
-                "$className::${m.name}",
+                "$name::${m.name}",
                 "${m.signature}",
                 func.entryPoint,
             )
@@ -261,7 +280,7 @@ class ClassBuilder(
         registry.resolveRef(retDecl)?.let { func.setReturnType(it, source) }
             ?: degradation(
                 "method-ret-unresolved",
-                "$className::${m.name}",
+                "$name::${m.name}",
                 retDecl.toString(),
                 func.entryPoint,
             )
@@ -279,7 +298,7 @@ class ClassBuilder(
                 runCatching {
                     func.setCallingConvention(program.compilerSpec.defaultCallingConvention.name)
                 }.onFailure {
-                    degradation("method-calling-convention", "$className::${m.name}", it.message, func.entryPoint)
+                    degradation("method-calling-convention", "$name::${m.name}", it.message, func.entryPoint)
                 }
             }
             return
@@ -292,7 +311,7 @@ class ClassBuilder(
         // isn't populated yet.
         val thiscallAccepted = runCatching { func.setCallingConvention(CompilerSpec.CALLING_CONVENTION_thiscall) }
             .onFailure {
-                degradation("method-calling-convention", "$className::${m.name}", it.message, func.entryPoint)
+                degradation("method-calling-convention", "$name::${m.name}", it.message, func.entryPoint)
             }
             .isSuccess
         val ghidraInjectsThis = thiscallAccepted && func.isMethod
@@ -311,7 +330,7 @@ class ClassBuilder(
             if (dt == null) {
                 degradation(
                     "method-param-unresolved",
-                    "$className::${m.name}",
+                    "$name::${m.name}",
                     decl.toString(),
                     func.entryPoint,
                 )
@@ -327,7 +346,7 @@ class ClassBuilder(
             if (dt is VoidDataType) {
                 degradation(
                     "method-param-void",
-                    "$className::${m.name}",
+                    "$name::${m.name}",
                     "void at [$i]; substituted Undefined4 to keep arity",
                     func.entryPoint,
                 )
@@ -367,7 +386,7 @@ class ClassBuilder(
         // else, so its parameters survive only in the mangled name. Demangling recovers them.
         // Guarded on emptiness rather than on stub-ness, which costs nothing — a genuinely nil-ary
         // member demangles to no parameters either.
-        val formals = paramTypes.ifEmpty { stubParams(mangled, "$className::${m.name}") }
+        val formals = paramTypes.ifEmpty { stubParams(mangled, "$name::${m.name}") }
             .mapIndexed { i, pdt ->
                 ParameterImpl(
                     priorNames.getOrNull(i) ?: "arg$i",
@@ -401,25 +420,25 @@ class ClassBuilder(
         .orEmpty()
         .also { if (it.isNotEmpty()) debug("method-stub-params-recovered", "$at: ${it.size} from $mangled") }
 
-    private fun LocatedType.buildAndApplyVtable(ns: GhidraClass) {
+    private fun LocatedClass.buildAndApplyVtable() {
         val declared = collectAllVirtuals()
         if (declared.isEmpty()) {
-            debug("vtable-skipped", "class=$className reason=no-virtuals")
+            debug("vtable-skipped", "class=$name reason=no-virtuals")
             return
         }
 
-        // Resolve before building: the record in memory is what fills the slots the stabs skip.
-        val resolved = resolveVtableAddress()
-        val shape = resolved?.let { program.vtableShape(it.address, resolver, it.abi) }
-        val targets = shape?.let { program.vtableSlotTargets(it.addressPoint, resolver, resolved.abi) }.orEmpty()
+        // Captured once so it smart-casts below: vtable is lazy, and abi is resolved.abi whenever
+        // this is non-null, so abi is the one spelling for every ABI question past this point.
+        val resolved = vtable
+        val shape = resolved?.let { program.vtableShape(it.address, resolver, abi) }
+        val targets = shape?.let { program.vtableSlotTargets(it.addressPoint, resolver, abi) }.orEmpty()
         // The symbol's spelling is the only thing that states the ABI, so without one the geometry is
         // a guess: a gcc 2.x record read as Itanium loses its reserved header and half its stride.
-        val abi = resolved?.abi ?: this@ClassBuilder.abi
         if (resolved == null) {
-            degradation("vtable-abi-assumed", className, "no vtable symbol resolved; slots laid as $abi")
+            degradation("vtable-abi-assumed", name, "no vtable symbol resolved; slots laid as $abi")
         }
-        val virtuals = rebaseOffHeader(declared, abi)
-        fillVftable(virtuals, targets, abi)
+        val virtuals = rebaseOffHeader(declared)
+        fillVftable(virtuals, targets)
 
         if (resolved == null || shape == null) return
         claimedVtables += resolved.address
@@ -429,21 +448,20 @@ class ClassBuilder(
         // a disagreement the one cheap check that the address point was located correctly.
         // gcc 2.x puts no vbase/vcall words in front of the record at all, so the prefix is empty by
         // construction there and the comparison would only ever manufacture a mismatch.
-        val virtualBases = types.virtualBases(classBody)
+        val virtualBases = types.virtualBases(body)
             .map { registry.resolveRef(it.type)?.name ?: "<unresolved base>" }
-        if (resolved.abi.hasRttiHeader && shape.prefix.size < virtualBases.size) {
+        if (abi.hasRttiHeader && shape.prefix.size < virtualBases.size) {
             degradation(
                 "vtable-vbase-count-mismatch",
-                className,
+                name,
                 "${shape.prefix.size} prefix word(s) before offset_to_top, " +
                     "${virtualBases.size} virtual base(s) declared",
             )
         }
 
-        val addressPoint =
-            program.layVtable(shape, vftable, className, ns, resolver, virtualBases, abi = resolved.abi)
-        debug("vtable-applied", "class=$className abi=${resolved.abi}", address = addressPoint)
-        if (resolved.abi.hasRttiHeader) laySecondaryVtables(shape, className, ns, resolved.abi)
+        val addressPoint = program.layVtable(shape, vftable, name, ns, resolver, virtualBases, abi = abi)
+        debug("vtable-applied", "class=$name abi=$abi", address = addressPoint)
+        if (abi.hasRttiHeader) laySecondaryVtables(shape, name, ns, abi)
 
         // Plate-comment each virtual. An unresolved mangled name here is expected for
         // pure virtuals (slot points at __cxa_pure_virtual, no symbol emitted) or
@@ -451,7 +469,7 @@ class ClassBuilder(
         // Only this class's own virtuals. [collectAllVirtuals] walks the bases too, and a base's
         // method composes its symbol from the base's name — spelling it with the derived class's
         // invents a symbol that was never emitted. Each base plates its own on its own pass.
-        virtuals.filterValues { m -> classBody.methods.any { it === m } }.forEach { (slot, m) ->
+        virtuals.filterValues { m -> body.methods.any { it === m } }.forEach { (slot, m) ->
             val mAddr = resolvedMemberAddresses[m] ?: resolveMember(m)?.second
             if (mAddr != null) {
                 val func = program.functionManager.getFunctionAt(mAddr)
@@ -459,20 +477,20 @@ class ClassBuilder(
                     program.listing.setComment(
                         func.entryPoint,
                         CommentType.PLATE,
-                        "virtual ${m.name}; ${className}_vftable offset " +
-                            "${resolved.abi.slotOffset(slot, program.defaultPointerSize)}",
+                        "virtual ${m.name}; ${name}_vftable offset " +
+                            "${abi.slotOffset(slot, program.defaultPointerSize)}",
                     )
                 } else {
                     debug(
                         "vtable-virtual-no-function",
-                        "virtual method ${m.name} in $className not found",
+                        "virtual method ${m.name} in $name not found",
                         mAddr,
                     )
                 }
             } else {
                 debug(
                     "vtable-virtual-no-impl",
-                    "virtual method '${m.name}' in $className has no resolvable implementation " +
+                    "virtual method '${m.name}' in $name has no resolvable implementation " +
                         "(pure virtual or DLL import); slot type still applied",
                 )
             }
@@ -486,11 +504,7 @@ class ClassBuilder(
      * the stab's signature, the record in memory fills what is left, and the table runs as long as
      * the longer of the two.
      */
-    private fun LocatedType.fillVftable(
-        virtuals: Map<Int, Method<GlobalTypeId>>,
-        targets: List<Address>,
-        abi: CxxAbi,
-    ) {
+    private fun LocatedClass.fillVftable(virtuals: Map<Int, Method<GlobalTypeId>>, targets: List<Address>) {
         while (vftable.numComponents > 0) vftable.delete(0)
         val used = mutableSetOf<String>()
         with(abi) { vftable.addReservedHeader() }
@@ -541,15 +555,15 @@ class ClassBuilder(
 
     /**
      * Build the typed function-pointer slot for [m]: `Pointer→FunctionDefinition(<sig>)`, under the
-     * [slotName]-assigned [name] the field will also carry. `this` resolves to the declaring class's
-     * pointer or void*; __thiscall is dropped on platforms that lack it.
+     * [slotName]-assigned [fieldName] the field will also carry. `this` resolves to the declaring
+     * class's pointer or void*; __thiscall is dropped on platforms that lack it.
      */
-    private fun LocatedType.buildVirtualSlotType(m: Method<GlobalTypeId>, name: String): PointerDataType {
+    private fun LocatedClass.buildVirtualSlotType(m: Method<GlobalTypeId>, fieldName: String): PointerDataType {
         val unwrapped = unwrapSignature(m.signature)
         val method = unwrapped as? TypeDecl.Method<GlobalTypeId> ?: run {
             degradation(
                 "vftable-slot-untyped",
-                "$className::${m.name}",
+                "$name::${m.name}",
                 "signature did not unwrap to a method: unwrapped=${
                     unwrapped?.let {
                         it::class.simpleName
@@ -561,19 +575,19 @@ class ClassBuilder(
         }
         val funcDef = registry.buildFunctionDefinition(
             category = vftableCategory,
-            name = name,
+            name = fieldName,
             ret = method.ret,
             params = method.params,
             // A stub method (gcc 2.8's `##`) states no domain — but a vtable slot belongs to a known
             // class, and that class *is* the domain gdb would recover from the mangled name. Only a
             // stated-but-unresolvable `cls` is a real loss.
             thisType = method.cls?.let { registry.resolveRef(it) }
-                ?: registry.dataTypeFor(type.id)?.let { PointerDataType(it, dtm) }
+                ?: registry.dataTypeFor(located.type.id)?.let { PointerDataType(it, dtm) }
                 ?: PointerDataType(VoidDataType(), dtm).also {
-                    degradation("vftable-slot-this-untyped", "$className::${m.name}", "${method.cls}; used void*")
+                    degradation("vftable-slot-this-untyped", "$name::${m.name}", "${method.cls}; used void*")
                 },
             callingConvention = CompilerSpec.CALLING_CONVENTION_thiscall,
-            at = "$className::${m.name}",
+            at = "$name::${m.name}",
         )
         val resolved = registry.register(funcDef) as FunctionDefinition
         return PointerDataType(resolved, dtm)
@@ -751,8 +765,8 @@ class ClassBuilder(
     private fun Address.isDefined() = program.memory.getBlock(this)?.isInitialized == true
 
     /** Resolve _ZTV<class> address: try AddressResolver candidates, then the demangled-vtable index. */
-    private fun LocatedType.resolveVtableAddress(): ResolvedVtable? {
-        val candidates = CxxAbi.vtableCandidates(className)
+    private fun LocatedClass.resolveVtableAddress(): ResolvedVtable? {
+        val candidates = CxxAbi.vtableCandidates(name)
         candidates.firstNotNullOfOrNull { name ->
             resolver.resolve(name)?.takeIf { it.isDefined() }?.let { ResolvedVtable.of(qualifiedClassName, name, it) }
         }?.let { return it }
@@ -760,21 +774,21 @@ class ClassBuilder(
         vtableAddressByClass[qualifiedClassName]?.takeIf { it.address.isDefined() }?.let { return it }
 
         val failureBucket = when {
-            classBody.hasVTablePointerMarker && classBody.methods.none { it.virt == VirtKind.VIRTUAL } ->
+            body.hasVTablePointerMarker && body.methods.none { it.virt == VirtKind.VIRTUAL } ->
                 "no-virtual-methods-flagged-but-marker-set"
 
             else -> "truly-missing"
         }
-        degradation("vtable-failed", className, "$failureBucket (tried ${candidates.joinToString()})")
+        degradation("vtable-failed", name, "$failureBucket (tried ${candidates.joinToString()})")
         debug(
             "vtable-failed-$failureBucket",
-            "class '$className': vtable not found (tried ${candidates.joinToString()})",
+            "class '$name': vtable not found (tried ${candidates.joinToString()})",
         )
 
         return null
     }
 
-    private fun LocatedType.collectAllVirtuals() = types.collectAllVirtuals(classBody)
+    private fun LocatedClass.collectAllVirtuals() = types.collectAllVirtuals(body)
 
     /**
      * The symbol [m] was emitted as and where it landed, or null if none of the ABI's spellings
@@ -783,12 +797,12 @@ class ClassBuilder(
      * up — which is why both the reparenting pass and the vtable plate comments come through here
      * rather than reaching for [Method.mangled].
      */
-    private fun LocatedType.resolveMember(m: Method<GlobalTypeId>): Pair<String, Address>? =
+    private fun LocatedClass.resolveMember(m: Method<GlobalTypeId>): Pair<String, Address>? =
         abi.physnameCandidates(m, qualifiedClassName)
             .firstNotNullOfOrNull { name -> resolver.resolve(name)?.let { name to it } }
 
     /** What every ABI question falls back to for a class whose own vtable symbol never resolved. */
-    private val abi: CxxAbi by lazy {
+    private val fallbackAbi: CxxAbi by lazy {
         requireNotNull(symtab.prevailingAbi()) { "No mangled symbols, cannot determine ABI for this program" }
     }
 
@@ -800,17 +814,14 @@ class ClassBuilder(
      * An index landing *inside* the header contradicts [CxxAbi.reservedEntries], so the table is laid
      * without it rather than at a negative slot — one method lost, not the whole record misaligned.
      */
-    private fun LocatedType.rebaseOffHeader(
-        declared: Map<Int, Method<GlobalTypeId>>,
-        abi: CxxAbi,
-    ): Map<Int, Method<GlobalTypeId>> {
+    private fun LocatedClass.rebaseOffHeader(declared: Map<Int, Method<GlobalTypeId>>): Map<Int, Method<GlobalTypeId>> {
         val bias = abi.reservedEntries(program.defaultPointerSize)
         if (bias == 0) return declared
         val (slots, inHeader) = declared.entries.partition { it.key >= bias }
         inHeader.forEach {
             degradation(
                 "vtable-slot-inside-header",
-                className,
+                name,
                 "${it.value.name} declares slot ${it.key}, inside the $bias-entry $abi header",
             )
         }

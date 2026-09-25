@@ -90,7 +90,7 @@ fun TypeGraph.resolveStruct(typeDecl: GlobalTypeDecl) = resolve<TypeDecl.Aggrega
  */
 fun TypeGraph.inheritanceDepth(
     typeDecl: TypeDecl.Aggregate<GlobalTypeId>,
-    memo: MutableMap<TypeDecl.Aggregate<GlobalTypeId>, Int> = IdentityHashMap(),
+    memo: IdentityHashMap<TypeDecl.Aggregate<GlobalTypeId>, Int> = IdentityHashMap(),
 ): Int {
     memo[typeDecl]?.let { return it }
     memo[typeDecl] = 0
