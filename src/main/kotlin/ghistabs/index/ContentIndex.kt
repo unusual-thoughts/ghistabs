@@ -18,7 +18,7 @@ import java.util.*
 abstract class ContentIndex(val contentCache: MutableMap<GlobalTypeId, LayoutContent> = mutableMapOf()) :
     DiagnosticSink {
     abstract fun byId(id: GlobalTypeId): Type?
-    abstract fun byXRef(xref: TypeDecl.XRef<GlobalTypeId>, silent: Boolean = false): Type?
+    abstract fun byXRef(xref: TypeDecl.XRef<GlobalTypeId>): Type?
 
     /**
      * The name [decl] spells its target with — an id's own name, or a cross-reference's tag — through
@@ -92,7 +92,7 @@ abstract class ContentIndex(val contentCache: MutableMap<GlobalTypeId, LayoutCon
         // Resolve XRef to its struct definition so a forward-declaration-only CU yields the same content
         // for any surrounding type as a full-definition CU. Falls back to (kind, tagName) — its own
         // layoutData — when truly unresolved.
-        is TypeDecl.XRef -> byXRef(this, silent = true)?.id?.let { refKey(it, visited) } ?: layoutContent(visited)
+        is TypeDecl.XRef -> byXRef(this)?.id?.let { refKey(it, visited) } ?: layoutContent(visited)
 
         // Skip the visited guard when body is an XRef: byXRef resolution must still be able to
         // add the resolved id to `visited` naturally. Without this, the pattern

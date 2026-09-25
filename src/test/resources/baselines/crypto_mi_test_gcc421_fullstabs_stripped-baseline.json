@@ -1466,8 +1466,8 @@
             "max": 1191
         },
         "unresolved-xref": {
-            "min": 81,
-            "max": 81
+            "min": 45,
+            "max": 45
         },
         "value-dropped-bnsym": {
             "min": 2490,
@@ -1635,16 +1635,20 @@
             "max": 688
         },
         "xref-ambiguous": {
-            "min": 51,
-            "max": 51
+            "min": 24,
+            "max": 24
         },
         "xref-base-tag-ambiguous": {
-            "min": 51,
-            "max": 51
+            "min": 24,
+            "max": 24
+        },
+        "xref-base-tag-resolved": {
+            "min": 4,
+            "max": 4
         },
         "xref-undefined": {
-            "min": 30,
-            "max": 30
+            "min": 21,
+            "max": 21
         }
     },
     "source": "crypto_mi_test_gcc421_fullstabs_stripped.exe - generated from snapshotCounters()"

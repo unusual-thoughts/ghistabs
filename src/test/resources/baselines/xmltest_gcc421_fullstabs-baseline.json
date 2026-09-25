@@ -774,8 +774,8 @@
             "max": 953
         },
         "unresolved-xref": {
-            "min": 12,
-            "max": 12
+            "min": 11,
+            "max": 11
         },
         "value-dropped-bnsym": {
             "min": 2475,
@@ -877,9 +877,13 @@
             "min": 38,
             "max": 38
         },
+        "xref-base-tag-resolved": {
+            "min": 6,
+            "max": 6
+        },
         "xref-undefined": {
-            "min": 12,
-            "max": 12
+            "min": 11,
+            "max": 11
         }
     },
     "source": "xmltest_gcc421_fullstabs.exe - generated from snapshotCounters()"

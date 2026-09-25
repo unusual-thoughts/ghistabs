@@ -69,6 +69,9 @@ class TypeGraph(private val harvest: Harvest, sink: DiagnosticSink = DummySink) 
             .groupBy { baseTag(it.name!!) }
     }
 
+    /** [byXRef]'s answers, misses included: it reports as it resolves, so each xref must resolve once. */
+    private val xrefs = HashMap<TypeDecl.XRef<GlobalTypeId>, Type?>()
+
     // Pre-warm with empty `visited` so collision classification isn't biased by traversal order.
     // Must stay below definitionsByTag/definitionsByBaseTag: contentHash resolves xrefs through them, and a `by
     // lazy` delegate field is only assigned when construction reaches its declaration — an init block
@@ -82,10 +85,13 @@ class TypeGraph(private val harvest: Harvest, sink: DiagnosticSink = DummySink) 
     /**
      * Resolve [xref] to its canonical [Type]. Tries exact-name, then base-tag fallback
      * (commits only when all same-kind candidates agree on size). On miss bumps
-     * `xref-undefined` / `xref-kind-mismatch` / `xref-ambiguous`. [silent] is for the
-     * contentHash oracle path which expects misses.
+     * `xref-undefined` / `xref-kind-mismatch` / `xref-ambiguous` — once per distinct xref, so the
+     * counts describe the program rather than how often anything asked.
      */
-    override fun byXRef(xref: TypeDecl.XRef<GlobalTypeId>, silent: Boolean): Type? {
+    override fun byXRef(xref: TypeDecl.XRef<GlobalTypeId>): Type? =
+        if (xref in xrefs) xrefs[xref] else lookupXRef(xref).also { xrefs[xref] = it }
+
+    private fun lookupXRef(xref: TypeDecl.XRef<GlobalTypeId>): Type? {
         definitionsByTag[xref.tagName]
             ?.firstOrNull { it.body.matchesXRefKind(xref.kind) }
             ?.let { return it }
@@ -97,14 +103,9 @@ class TypeGraph(private val harvest: Harvest, sink: DiagnosticSink = DummySink) 
 
         if (sameKind.isNotEmpty() && distinctSizes.size == 1) {
             val resolved = sameKind.first()
-            // Counted on the reporting path only. [silent] is the contentHash oracle, which probes the
-            // same xrefs repeatedly; counting probes would make this move with any caching change
-            // instead of with the program.
-            if (!silent) debug("xref-base-tag-resolved", "'${xref.tagName}' → '${resolved.ghidraName}'")
+            debug("xref-base-tag-resolved", "'${xref.tagName}' → '${resolved.ghidraName}'")
             return resolved
         }
-
-        if (silent) return null
 
         val exactAnyKind = definitionsByTag[xref.tagName].orEmpty()
         when {
@@ -124,12 +125,7 @@ class TypeGraph(private val harvest: Harvest, sink: DiagnosticSink = DummySink) 
         return null
     }
 
-    // Silent: this is materializeTopLevel's routing probe. On a miss it falls through to
-    // materializeBody's XRef case, which is the authoritative counter — counting here too would
-    // tally the same unresolved xref twice.
-    fun byXRef(ast: Type): Type? = (ast.body as? TypeDecl.XRef)?.let { xref ->
-        byXRef(xref, silent = true)
-    }
+    fun byXRef(ast: Type): Type? = (ast.body as? TypeDecl.XRef)?.let(::byXRef)
 
     /** One-line snapshot of harvest contents under [xref]'s exact tag and base tag. */
     private fun xrefDiagnosis(xref: TypeDecl.XRef<GlobalTypeId>): String {
