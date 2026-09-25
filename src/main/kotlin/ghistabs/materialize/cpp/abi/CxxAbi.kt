@@ -135,9 +135,11 @@ sealed interface CxxAbi : CxxMemberNaming {
         }
 
         /** Every ABI's spelling for [className]'s vtable, Itanium first. */
-        fun vtableCandidates(className: String) = Itanium.vtableCandidates(className) +
-            Gcc2Plain.vtableCandidates(className) +
-            Gcc2Thunks.vtableCandidates(className)
+        fun vtableCandidates(className: String) = buildList {
+            addAll(Itanium.vtableCandidates(className))
+            addAll(Gcc2Plain.vtableCandidates(className))
+            addAll(Gcc2Thunks.vtableCandidates(className))
+        }
 
         /**
          * The ABI a whole binary was built with, for every question no individual symbol settles —

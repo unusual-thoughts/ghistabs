@@ -194,6 +194,8 @@ class TypeGraph(private val harvest: Harvest, sink: DiagnosticSink = DummySink) 
     /** The first [T] [decl] names, through the indirection [resolveWith] walks. */
     inline fun <reified T : GlobalTypeDecl> resolve(decl: GlobalTypeDecl): T? = resolveWith(decl) { it as? T }
 
+    fun resolveStruct(typeDecl: GlobalTypeDecl) = resolve<TypeDecl.Aggregate<GlobalTypeId>>(typeDecl)
+
     /**
      * Pointee type-id of [fn]'s leading `this` param, else null.
      *
