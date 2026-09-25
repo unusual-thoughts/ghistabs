@@ -53,4 +53,12 @@ class NamesTest {
     fun `empty string returns empty list`() {
         splitQualified("") mustBe emptyList()
     }
+
+    @Test
+    fun `recognizes all three vptr field spellings gcc emits`() {
+        isVptrFieldName($$"_vptr$Foo") mustBe true
+        isVptrFieldName("_vptr.Bar") mustBe true
+        isVptrFieldName("_vptr") mustBe true
+        isVptrFieldName("m_member") mustBe false
+    }
 }
