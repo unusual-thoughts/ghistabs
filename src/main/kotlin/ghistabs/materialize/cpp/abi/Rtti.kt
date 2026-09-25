@@ -1,6 +1,7 @@
 package ghistabs.materialize.cpp.abi
 
 import ghidra.program.model.data.*
+import ghistabs.materialize.cpp.ClassNaming
 import ghistabs.removePrefixOrNull
 
 /**
@@ -41,7 +42,7 @@ class Rtti(private val dtm: DataTypeManager) {
         dtm.getDataType(categoryPath, name) ?: dtm.resolve(this, DataTypeConflictHandler.KEEP_HANDLER)
 
     val classTypeInfoStructure by lazy {
-        StructureDataType(GhidraClassNaming.classDataTypesRoot, "ClassTypeInfoStructure", 0, dtm).apply {
+        StructureDataType(ClassNaming.classDataTypesRoot, "ClassTypeInfoStructure", 0, dtm).apply {
             add(PointerTypedef(null, PointerDataType.dataType, -1, dtm, componentOffset), "classTypeinfoPtr", null)
             add(dtm.getPointer(CharDataType()), "typeinfoName", null)
             isPackingEnabled = true
@@ -49,7 +50,7 @@ class Rtti(private val dtm: DataTypeManager) {
     }
 
     val siClassTypeInfoStructure by lazy {
-        StructureDataType(GhidraClassNaming.classDataTypesRoot, "SiClassTypeInfoStructure", 0, dtm).apply {
+        StructureDataType(ClassNaming.classDataTypesRoot, "SiClassTypeInfoStructure", 0, dtm).apply {
             add(PointerTypedef(null, null, -1, dtm, componentOffset), "classTypeinfoPtr", null)
             add(dtm.getPointer(CharDataType()), "typeinfoName", null)
             add(dtm.getPointer(classTypeInfoStructure), "baseClassTypeInfoPtr", null)
@@ -58,7 +59,7 @@ class Rtti(private val dtm: DataTypeManager) {
     }
 
     val baseClassTypeInfoStructure by lazy {
-        StructureDataType(GhidraClassNaming.classDataTypesRoot, "BaseClassTypeInfoStructure", 0, dtm).apply {
+        StructureDataType(ClassNaming.classDataTypesRoot, "BaseClassTypeInfoStructure", 0, dtm).apply {
             add(dtm.getPointer(classTypeInfoStructure), "classTypeinfoPtr", null)
 
             val (offsetBitSize, dataType) = when (pointerSize) {
@@ -83,7 +84,7 @@ class Rtti(private val dtm: DataTypeManager) {
     }
 
     fun vmiClassTypeInfoStructure(numBaseClasses: Int) = StructureDataType(
-        GhidraClassNaming.classDataTypesRoot,
+        ClassNaming.classDataTypesRoot,
         "VmiClassTypeInfoStructure$numBaseClasses",
         0,
         dtm,

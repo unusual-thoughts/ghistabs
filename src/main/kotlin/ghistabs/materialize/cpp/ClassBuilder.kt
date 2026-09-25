@@ -118,7 +118,7 @@ class ClassBuilder(
         // Pointer→FunctionDefinition(<sig>) so the decompiler resolves virtual calls and
         // RecoveredClassHelper / shift-S round-trip. The offset_to_top + rtti header words sit
         // before the address point as plain Data (no enclosing struct — see buildAndApplyVtable).
-        val vftableCategory get() = CategoryPath(GhidraClassNaming.classDataTypesRoot, name)
+        val vftableCategory get() = CategoryPath(ClassNaming.classDataTypesRoot, name)
         val vftableName get() = "${name}_vftable"
         val vftable get() = registry.getOrRegister<Structure>(vftableCategory, vftableName) {
             StructureDataType(vftableCategory, vftableName, 0, dtm)
@@ -419,7 +419,7 @@ class ClassBuilder(
         .also { if (it.isNotEmpty()) debug("method-stub-params-recovered", "$at: ${it.size} from $mangled") }
 
     private fun LocatedClass.buildAndApplyVtable() {
-        val declared = collectAllVirtuals()
+        val declared = types.collectAllVirtuals(body)
         if (declared.isEmpty()) {
             debug("vtable-skipped", "class=$name reason=no-virtuals")
             return
@@ -644,8 +644,6 @@ class ClassBuilder(
 
         return null
     }
-
-    private fun LocatedClass.collectAllVirtuals() = types.collectAllVirtuals(body)
 
     /**
      * The symbol [m] was emitted as and where it landed, or null if none of the ABI's spellings

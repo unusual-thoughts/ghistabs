@@ -9,7 +9,6 @@ import ghidra.program.model.gclass.ClassUtils
 import ghidra.program.model.listing.Program
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.materialize.*
-import ghistabs.materialize.cpp.abi.GhidraClassNaming
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
 import ghistabs.parse.isVptrFieldName
@@ -237,7 +236,7 @@ fun chooseVfptrAction(
 
     // An unresolved or synthesized base at the vptr offset: polymorphism was never proven, but the
     // stab layout still says a base owns the word.
-    if (componentAtTargetOffset.fieldName?.let(GhidraClassNaming::isBaseField) == true) {
+    if (componentAtTargetOffset.fieldName?.let(ClassNaming::isBaseField) == true) {
         return VfptrAction.SkipInheritedFromBase
     }
 
@@ -269,7 +268,7 @@ enum class VfptrModel {
      * Each polymorphic class owns a `{vfptr}` typed to its own vftable, and embeds its primary base
      * as that base's fields *without* the vptr — one extra struct per polymorphic class, shared by
      * every class that derives from it. Keeps the `_base_` subobject component that
-     * [ghistabs.materialize.cpp.abi.GhidraClassNaming.baseFieldName] models inheritance with.
+     * [ClassNaming.baseFieldName] models inheritance with.
      */
     SPLIT_BASE,
 }

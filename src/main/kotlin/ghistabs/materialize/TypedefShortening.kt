@@ -3,7 +3,7 @@ package ghistabs.materialize
 import ghidra.program.model.data.*
 import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.DiagnosticSink
-import ghistabs.materialize.cpp.abi.isBaseField
+import ghistabs.materialize.cpp.isBaseField
 import ghistabs.parse.TypeDecl
 import ghistabs.parse.canonTemplateName
 

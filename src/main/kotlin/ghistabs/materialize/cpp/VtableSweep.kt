@@ -13,7 +13,6 @@ import ghidra.program.model.data.Undefined4DataType
 import ghidra.program.model.symbol.Namespace
 import ghistabs.Demangler
 import ghistabs.materialize.cpp.abi.CxxAbi
-import ghistabs.materialize.cpp.abi.GhidraClassNaming
 import ghistabs.materialize.cpp.abi.ResolvedVtable
 import ghistabs.materialize.cpp.abi.VtableShape
 import ghistabs.materialize.cpp.abi.layVtable
@@ -52,7 +51,7 @@ internal fun ClassBuilder.sweepUnclaimedVtables() {
             continue
         }
         val leaf = canonTemplateName(splitQualified(qualified).last())
-        val category = CategoryPath(GhidraClassNaming.classDataTypesRoot, leaf)
+        val category = CategoryPath(ClassNaming.classDataTypesRoot, leaf)
         val vftable = registry.getOrRegister<Structure>(category, "${leaf}_vftable") {
             StructureDataType(category, "${leaf}_vftable", 0, dtm)
         }
@@ -96,7 +95,7 @@ internal fun ClassBuilder.laySecondaryVtables(primary: VtableShape, leaf: String
     val slots = program.vtableSlotTargets(primary.addressPoint, resolver).size
     val subs = program.secondaryVtables(primary.addressPoint.add(slots * ptr), rtti, resolver)
     subs.forEachIndexed { i, sub ->
-        val category = CategoryPath(CategoryPath(GhidraClassNaming.classDataTypesRoot, leaf), "internal_$i")
+        val category = CategoryPath(CategoryPath(ClassNaming.classDataTypesRoot, leaf), "internal_$i")
         val name = "${leaf}_vftable_internal_$i"
         val vftable = registry.getOrRegister<Structure>(category, name) {
             StructureDataType(category, name, 0, dtm)
@@ -111,7 +110,7 @@ internal fun ClassBuilder.laySecondaryVtables(primary: VtableShape, leaf: String
             leaf,
             ns,
             resolver,
-            label = GhidraClassNaming.INTERNAL_VFTABLE,
+            label = ClassNaming.INTERNAL_VFTABLE,
         )
         debug("vtable-secondary", "class=$leaf index=$i slots=${sub.targets.size}", address = at)
     }
