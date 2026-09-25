@@ -83,21 +83,17 @@ class Rtti(private val dtm: DataTypeManager) {
         }.intoDtm()
     }
 
-    fun vmiClassTypeInfoStructure(numBaseClasses: Int) = StructureDataType(
-        ClassNaming.classDataTypesRoot,
-        "VmiClassTypeInfoStructure$numBaseClasses",
-        0,
-        dtm,
-    ).apply {
-        add(PointerTypedef(null, null, -1, dtm, componentOffset), "classTypeinfoPtr", null)
-        add(dtm.getPointer(CharDataType()), "typeinfoName", null)
-        add(UnsignedIntegerDataType(), "flags", null)
-        add(UnsignedIntegerDataType(), "numBaseClasses", null)
-        add(
-            ArrayDataType(baseClassTypeInfoStructure, numBaseClasses, baseClassTypeInfoStructure.length),
-            "baseClassPtrArray",
-            null,
-        )
-        isPackingEnabled = true
-    }.intoDtm()
+    fun vmiClassTypeInfoStructure(numBaseClasses: Int) =
+        StructureDataType(ClassNaming.classDataTypesRoot, "VmiClassTypeInfoStructure$numBaseClasses", 0, dtm).apply {
+            add(PointerTypedef(null, null, -1, dtm, componentOffset), "classTypeinfoPtr", null)
+            add(dtm.getPointer(CharDataType()), "typeinfoName", null)
+            add(UnsignedIntegerDataType(), "flags", null)
+            add(UnsignedIntegerDataType(), "numBaseClasses", null)
+            add(
+                ArrayDataType(baseClassTypeInfoStructure, numBaseClasses, baseClassTypeInfoStructure.length),
+                "baseClassPtrArray",
+                null,
+            )
+            isPackingEnabled = true
+        }.intoDtm()
 }
