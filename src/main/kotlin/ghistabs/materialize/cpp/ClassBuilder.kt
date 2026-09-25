@@ -106,7 +106,7 @@ class ClassBuilder(
             body.hasVTablePointerMarker ||
             body.methods.any { it.virt == VirtKind.VIRTUAL } ||
             body.fields.any { isVptrFieldName(it.name) }
-        val vtable: ResolvedVtable? = if (isPoly) resolveVtableAddress() else null
+        val vtable: ResolvedVtable? by lazy { if (isPoly) resolveVtableAddress() else null }
         val abi: CxxAbi get() = vtable?.abi ?: fallbackAbi
 
         val name get() = located.className
@@ -425,18 +425,15 @@ class ClassBuilder(
             return
         }
 
-        val shape = vtable?.let { program.vtableShape(it.address, resolver, abi) }
-        val targets = shape?.let { program.vtableSlotTargets(it.addressPoint, resolver, abi) }.orEmpty()
-        // The symbol's spelling is the only thing that states the ABI, so without one the geometry is
-        // a guess: a gcc 2.x record read as Itanium loses its reserved header and half its stride.
-        if (vtable == null) {
-            degradation("vtable-abi-assumed", name, "no vtable symbol resolved; slots laid as $abi")
+        val shape = vtable?.let {
+            claimedVtables += it.address
+            program.vtableShape(it.address, resolver, abi)
         }
+        val targets = shape?.let { program.vtableSlotTargets(it.addressPoint, resolver, abi) }.orEmpty()
         val virtuals = rebaseOffHeader(declared)
         fillVftable(virtuals, targets)
 
-        if (vtable == null || shape == null) return
-        claimedVtables += vtable.address
+        if (shape == null) return
 
         // One vbase offset per virtual base, so the two counts must agree. They are derived
         // independently — the stab's base graph vs. where vtableShape put offset_to_top — which makes
@@ -636,7 +633,13 @@ class ClassBuilder(
 
             else -> "truly-missing"
         }
-        degradation("vtable-failed", name, "$failureBucket (tried ${candidates.joinToString()})")
+        // The symbol's spelling is the only thing that states the ABI, so without one the geometry is
+        // a guess: a gcc 2.x record read as Itanium loses its reserved header and half its stride.
+        degradation(
+            "vtable-failed",
+            name,
+            "$failureBucket (tried ${candidates.joinToString()}); slots laid as $fallbackAbi",
+        )
         debug(
             "vtable-failed-$failureBucket",
             "class '$name': vtable not found (tried ${candidates.joinToString()})",
