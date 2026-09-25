@@ -35,6 +35,7 @@ import ghistabs.materialize.abi.Gcc2
 import ghistabs.materialize.abi.Gcc2Abi
 import ghistabs.materialize.abi.GhidraClassNaming
 import ghistabs.materialize.abi.Itanium
+import ghistabs.materialize.abi.isBaseField
 import ghistabs.materialize.conflictCount
 import ghistabs.materialize.hasPolymorphicBaseSubobject
 import ghistabs.parse.*
@@ -923,7 +924,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         // base, and Ghidra's autofill would otherwise present those bare bytes as own fields at 0.
         val flat = derived.filterNot { cls ->
             cls.definedComponents.let { own ->
-                own.any { GhidraClassNaming.isBaseField(it.fieldName.orEmpty()) } ||
+                own.any { it.isBaseField() } ||
                     (own.firstOrNull()?.offset ?: 1) > 0
             }
         }
@@ -1064,7 +1065,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
                 }
                 .mapNotNull { base ->
                     dt.definedComponents
-                        .firstOrNull { it.offset.toLong() == base.offsetBits / 8 && isBaseComponent(it) }
+                        .firstOrNull { it.offset.toLong() == base.offsetBits / 8 && it.isBaseField() }
                         ?.let { dt to it }
                 }
         }
@@ -1981,7 +1982,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
                 ?: return@mapNotNull null
             val baseType = (base.type as? TypeDecl.Ref)?.id?.let { artifacts.registry.dataTypeFor(it) }
                 ?: return@mapNotNull null
-            val field = dt.components.firstOrNull { GhidraClassNaming.isBaseField(it.fieldName.orEmpty()) }
+            val field = dt.components.firstOrNull { it.isBaseField() }
                 ?: return@mapNotNull null
             // Two legal shapes, per VfptrModel. INHERITED embeds the base Structure itself at +0.
             // SPLIT_BASE hoists the vptr into this class so it can be typed with *this* class's
@@ -2170,8 +2171,6 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         body.methods.any { it.virt == VirtKind.VIRTUAL } ||
         body.fields.any { isVptrFieldName(it.name) } ||
         with(artifacts.types) { hasPolymorphicBaseSubobject(body) }
-
-    private fun isBaseComponent(comp: DataTypeComponent) = GhidraClassNaming.isBaseField(comp.fieldName.orEmpty())
 
     /**
      * Whether [body] can only reach a vptr outside its own bytes.
