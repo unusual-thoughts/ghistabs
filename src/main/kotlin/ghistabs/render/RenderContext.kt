@@ -60,7 +60,10 @@ interface RenderContext {
             }
         }
 
-        is TypeDecl.Pointer -> "${inner.render(seen)} *"
+        // gcc ≤ 3.3's `int A::*` is a pointer to the member offset that ≥ 3.4 spells alone.
+        is TypeDecl.Pointer -> {
+            inner.render(seen) + if (types.isMember(inner)) "" else " *"
+        }
 
         is TypeDecl.Reference -> "${inner.render(seen)} &"
 
@@ -69,6 +72,8 @@ interface RenderContext {
         is TypeDecl.Volatile -> "${inner.render(seen)} volatile"
 
         is TypeDecl.Array -> "${element.render(seen)}[${declaredElements ?: ""}]"
+
+        is TypeDecl.Member -> "${type.render(seen)} ${cls.render(seen)}::*"
 
         is TypeDecl.Builtin,
         is TypeDecl.Range,

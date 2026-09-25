@@ -7,8 +7,10 @@ import ghidra.app.util.demangler.DemangledFunction
 import ghidra.program.model.address.Address
 import ghidra.program.model.address.AddressSet
 import ghidra.program.model.data.CategoryPath
+import ghidra.program.model.data.DataType
 import ghidra.program.model.data.DataTypeConflictHandler
 import ghidra.program.model.data.EnumDataType
+import ghidra.program.model.data.Pointer
 import ghidra.program.model.data.Undefined4DataType
 import ghidra.program.model.lang.Register
 import ghidra.program.model.listing.*
@@ -124,7 +126,7 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
                 val params = open.params
                     .filterNot { it.body.name == "this" }
                     .map { p ->
-                        val pdt = registry.resolveRef(p.body.type)
+                        val pdt = registry.resolveRef(p.body.type)?.let { open.passedByAddress(p, it) ?: it }
                         if (pdt == null) {
                             degradation(
                                 "param-untyped",
@@ -348,6 +350,17 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
         val taken = existing.mapTo(mutableSetOf()) { it.name }
         return if (base !in taken) base else generateSequence(1, Int::inc).map { "${base}_$it" }.first { it !in taken }
     }
+
+    /**
+     * A same-named register home typed as a pointer to the stack parameter's own type: gcc reached the
+     * argument only through that register — passed by invisible reference — and `dbxout_symbol_location`
+     * can say so only by emitting "the variable as a pointer". The slot holds that pointer, not the
+     * value. gcc 12 spells the reference out instead.
+     */
+    private fun Func.passedByAddress(param: ParamSymbol, type: DataType): DataType? =
+        locals.firstOrNull { it.body.name == param.body.name && it.body.location == VariableLocation.REGISTER }
+            ?.let { registry.resolveRef(it.body.type) as? Pointer }
+            ?.takeIf { param.body.location == VariableLocation.STACK && it.dataType.isEquivalent(type) }
 
     /**
      * Record where gcc kept a `:P`/`:R` parameter, as a plate comment on the function entry.
