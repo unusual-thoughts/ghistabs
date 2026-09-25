@@ -13,6 +13,7 @@ import ghistabs.test.*
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
+import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 import java.io.File
@@ -82,18 +83,21 @@ class MemberPointerIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         b.length mustBe 2 * pointerSize
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = ["ptrmem_elf_gcc295", "ptrmem_elf64_gcc12"])
-    fun `a class passed by invisible reference is a pointer parameter`(fixture: String) {
-        load(fixture)
+    /**
+     * gcc 2.95 only: gcc 12 writes the same parameter as an explicit `&`, which parsed as a reference
+     * before invisible references were understood, so it would pass either way.
+     */
+    @Test
+    fun `a class passed by invisible reference is a pointer parameter`() {
+        load("ptrmem_elf_gcc295")
 
-        // byval: gcc 2.95's `c:p` stack slot + `c:r` home typed `C *`; byreg: its `c:a`.
+        // byval: the `c:p` stack slot + `c:r` home typed `C *`; byreg: `c:a`.
         for (fn in listOf("byval", "byreg")) {
             val func = checkNotNull(program.functionManager.getFunctions(true).firstOrNull { fn in it.name }) {
                 "$fn not found"
             }
-            func.getParameter(0).must("$fn's `c` should be typed as the address it holds, got ${func.signature}") {
-                name == "c" && dataType is Pointer
+            func.getParameter(0).must("$fn's `c` should be the `C *` it holds, got ${func.signature}") {
+                name == "c" && (dataType as? Pointer)?.dataType?.stripTypedefs()?.name == "C"
             }
         }
     }
