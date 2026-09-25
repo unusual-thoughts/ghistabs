@@ -33,7 +33,7 @@ import ghistabs.importer.ImportOptions.Companion.CLASSES
 import ghistabs.importer.ImportOptions.Companion.FOLD_SOURCES
 import ghistabs.importer.ImportOptions.Companion.SHORTEN_TYPEDEFS
 import ghistabs.importer.ImportOptions.Companion.VFPTR_MODEL
-import ghistabs.materialize.VfptrModel
+import ghistabs.materialize.cpp.VfptrModel
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.StabReader
 import ghistabs.parse.StabRecord

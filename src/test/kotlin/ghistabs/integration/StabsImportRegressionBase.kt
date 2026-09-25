@@ -27,16 +27,16 @@ import ghistabs.importer.*
 import ghistabs.importer.ImportOptions.Companion.VFPTR_MODEL
 import ghistabs.index.ContentIndex
 import ghistabs.index.EffectiveSource
-import ghistabs.materialize.VfptrModel
-import ghistabs.materialize.abi.CxxAbi
-import ghistabs.materialize.abi.CxxAbi.Companion.prevailingAbi
-import ghistabs.materialize.abi.Gcc2
-import ghistabs.materialize.abi.Gcc2Abi
-import ghistabs.materialize.abi.GhidraClassNaming
-import ghistabs.materialize.abi.Itanium
-import ghistabs.materialize.abi.isBaseField
 import ghistabs.materialize.conflictCount
-import ghistabs.materialize.hasPolymorphicBaseSubobject
+import ghistabs.materialize.cpp.VfptrModel
+import ghistabs.materialize.cpp.abi.CxxAbi
+import ghistabs.materialize.cpp.abi.CxxAbi.Companion.prevailingAbi
+import ghistabs.materialize.cpp.abi.Gcc2
+import ghistabs.materialize.cpp.abi.Gcc2Abi
+import ghistabs.materialize.cpp.abi.GhidraClassNaming
+import ghistabs.materialize.cpp.abi.Itanium
+import ghistabs.materialize.cpp.abi.isBaseField
+import ghistabs.materialize.cpp.hasPolymorphicBaseSubobject
 import ghistabs.parse.*
 import ghistabs.test.*
 import kotlinx.serialization.ExperimentalSerializationApi
@@ -942,7 +942,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
      * layout and any name identifies it. With two, the subobject's extent is guesswork — gcc's
      * inheritance line carries no size, so [ghistabs.materialize.fillStructBases] derives one from the
      * *next* base's offset, a step that only exists here — and the name only tells the two apart
-     * because [ghistabs.materialize.abi.GhidraClassNaming.baseFieldName] appends the base's own name when
+     * because [ghistabs.materialize.cpp.abi.GhidraClassNaming.baseFieldName] appends the base's own name when
      * `baseCount > 1`. An un-suffixed `_base_` in an MI class means both edges raced for one component.
      *
      * The placement check runs name-first, over the components that exist, since an unresolved base is
@@ -2165,7 +2165,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         }
     }
 
-    /** The predicate [ghistabs.materialize.firstPolymorphicBase] applies to a base, asked of the class itself. */
+    /** The predicate [ghistabs.materialize.cpp.firstPolymorphicBase] applies to a base, asked of the class itself. */
     private fun isPolymorphic(body: TypeDecl.Aggregate<GlobalTypeId>): Boolean = body.hasVTablePointerMarker ||
         body.methods.any { it.virt == VirtKind.VIRTUAL } ||
         body.fields.any { isVptrFieldName(it.name) } ||

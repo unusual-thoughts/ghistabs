@@ -1,4 +1,4 @@
-package ghistabs.materialize
+package ghistabs.materialize.cpp
 
 import ghistabs.test.mustBe
 import ghistabs.test.mustBeA

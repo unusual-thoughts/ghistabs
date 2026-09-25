@@ -1,4 +1,4 @@
-package ghistabs.materialize
+package ghistabs.materialize.cpp
 
 import ghidra.program.model.data.DataTypeComponent
 import ghidra.program.model.data.Pointer
@@ -8,7 +8,8 @@ import ghidra.program.model.data.Undefined1DataType
 import ghidra.program.model.gclass.ClassUtils
 import ghidra.program.model.listing.Program
 import ghistabs.diagnose.DiagnosticSink
-import ghistabs.materialize.abi.GhidraClassNaming
+import ghistabs.materialize.*
+import ghistabs.materialize.cpp.abi.GhidraClassNaming
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
 import ghistabs.parse.isVptrFieldName
@@ -268,7 +269,7 @@ enum class VfptrModel {
      * Each polymorphic class owns a `{vfptr}` typed to its own vftable, and embeds its primary base
      * as that base's fields *without* the vptr — one extra struct per polymorphic class, shared by
      * every class that derives from it. Keeps the `_base_` subobject component that
-     * [ghistabs.materialize.abi.GhidraClassNaming.baseFieldName] models inheritance with.
+     * [ghistabs.materialize.cpp.abi.GhidraClassNaming.baseFieldName] models inheritance with.
      */
     SPLIT_BASE,
 }

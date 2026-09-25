@@ -4,7 +4,7 @@ import ghidra.program.model.data.CategoryPath
 import ghistabs.Demangler
 import ghistabs.diagnose.StabsDiagnostics
 import ghistabs.harvest.*
-import ghistabs.materialize.abi.Gcc2
+import ghistabs.materialize.cpp.abi.Gcc2
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.SourceFile
 import ghistabs.parse.TypeDecl

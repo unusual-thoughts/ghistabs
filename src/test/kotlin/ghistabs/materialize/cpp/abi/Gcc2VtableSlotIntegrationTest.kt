@@ -1,4 +1,4 @@
-package ghistabs.materialize.abi
+package ghistabs.materialize.cpp.abi
 
 import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.data.VoidDataType

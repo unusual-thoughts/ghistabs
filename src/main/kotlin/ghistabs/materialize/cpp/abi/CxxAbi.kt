@@ -1,4 +1,4 @@
-package ghistabs.materialize.abi
+package ghistabs.materialize.cpp.abi
 
 import ghidra.app.util.demangler.DemangledObject
 import ghidra.program.model.data.Structure

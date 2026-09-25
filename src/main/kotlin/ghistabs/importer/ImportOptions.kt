@@ -4,7 +4,7 @@ import ghidra.framework.options.Options
 import ghidra.program.model.listing.Program
 import ghistabs.*
 import ghistabs.diagnose.Level
-import ghistabs.materialize.VfptrModel
+import ghistabs.materialize.cpp.VfptrModel
 
 class ImportOptions() : OptionContainer() {
     var applyPlateComments: Boolean by PLATE_COMMENTS

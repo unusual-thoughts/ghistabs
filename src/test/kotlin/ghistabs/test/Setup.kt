@@ -14,7 +14,7 @@ import ghistabs.index.SourceHints
 import ghistabs.index.SourceIndex
 import ghistabs.index.TypeGraph
 import ghistabs.materialize.DataTypeRegistry
-import ghistabs.materialize.VfptrModel
+import ghistabs.materialize.cpp.VfptrModel
 import ghistabs.parse.IdInterface
 import ghistabs.parse.TypeDecl
 import ghistabs.runTransaction

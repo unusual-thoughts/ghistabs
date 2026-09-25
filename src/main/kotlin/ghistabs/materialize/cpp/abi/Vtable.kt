@@ -1,4 +1,4 @@
-package ghistabs.materialize.abi
+package ghistabs.materialize.cpp.abi
 
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.CategoryPath
@@ -96,7 +96,7 @@ private fun Program.shapeOf(start: Address, rttiSlot: Address?): VtableShape {
  *
  * Falls back to the undifferentiated label when the stab declares no virtual base — either the class
  * genuinely has none and this is a swept class we know nothing about, or the count disagrees, which
- * [ghistabs.materialize.ClassBuilder] reports separately.
+ * [ghistabs.materialize.cpp.ClassBuilder] reports separately.
  */
 private fun prefixKind(i: Int, total: Int, virtualBases: List<String>): String {
     val vcalls = total - virtualBases.size

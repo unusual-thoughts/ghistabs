@@ -4,7 +4,7 @@ import ghidra.program.model.address.AddressOutOfBoundsException
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.harvest.LineEntry
 import ghistabs.index.SourceIndex
-import ghistabs.materialize.abi.Itanium
+import ghistabs.materialize.cpp.abi.Itanium
 
 /**
  * Publishes the harvested N_SLINEs as the program's own line map — `SourceFile`s and zero-length
