@@ -1337,8 +1337,8 @@
             "max": 861
         },
         "resolve-ambiguous": {
-            "min": 2409,
-            "max": 2409
+            "min": 1940,
+            "max": 1940
         },
         "rtti-pseudo-substituted": {
             "min": 37,
@@ -1501,20 +1501,14 @@
             "min": 532,
             "max": 532
         },
-        "vtable-abi-assumed": {
-            "min": 10,
-            "max": 10,
+        "vftable-slot-name-collision": {
+            "min": 8,
+            "max": 8,
             "degrades": [
-                "char_producer<char>",
-                "char_producer<wchar_t>",
-                "istringstream",
-                "ostringstream",
-                "stringbuf",
-                "stringstream",
-                "wistringstream",
-                "wostringstream",
-                "wstringbuf",
-                "wstringstream"
+                "do_get_1",
+                "do_get_2",
+                "do_put_1",
+                "do_put_2"
             ]
         },
         "vtable-applied": {

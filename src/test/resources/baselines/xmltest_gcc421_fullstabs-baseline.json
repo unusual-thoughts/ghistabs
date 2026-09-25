@@ -657,8 +657,8 @@
             "max": 169
         },
         "resolve-ambiguous": {
-            "min": 2303,
-            "max": 2303
+            "min": 1854,
+            "max": 1854
         },
         "rtti-pseudo-substituted": {
             "min": 36,
@@ -797,27 +797,14 @@
             "min": 146,
             "max": 146
         },
-        "vtable-abi-assumed": {
-            "min": 17,
-            "max": 17,
+        "vftable-slot-name-collision": {
+            "min": 8,
+            "max": 8,
             "degrades": [
-                "__array_type_info",
-                "__enum_type_info",
-                "__function_type_info",
-                "__fundamental_type_info",
-                "__pbase_type_info",
-                "__pointer_to_member_type_info",
-                "__pointer_type_info",
-                "char_producer<char>",
-                "char_producer<wchar_t>",
-                "istringstream",
-                "ostringstream",
-                "stringbuf",
-                "stringstream",
-                "wistringstream",
-                "wostringstream",
-                "wstringbuf",
-                "wstringstream"
+                "do_get_1",
+                "do_get_2",
+                "do_put_1",
+                "do_put_2"
             ]
         },
         "vtable-applied": {

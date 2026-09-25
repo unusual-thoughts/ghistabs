@@ -519,8 +519,8 @@
             "max": 100
         },
         "resolve-ambiguous": {
-            "min": 1230,
-            "max": 1230
+            "min": 983,
+            "max": 983
         },
         "rtti-pseudo-substituted": {
             "min": 49,
@@ -650,6 +650,16 @@
         "vfptr-split-from-base": {
             "min": 53,
             "max": 53
+        },
+        "vftable-slot-name-collision": {
+            "min": 4,
+            "max": 4,
+            "degrades": [
+                "do_get_1",
+                "do_get_2",
+                "do_put_1",
+                "do_put_2"
+            ]
         },
         "vtable-applied": {
             "min": 61,
