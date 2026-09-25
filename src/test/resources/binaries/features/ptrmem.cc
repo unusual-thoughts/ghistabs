@@ -4,6 +4,11 @@ struct A { int x; double d; char *p; };
 int A::*pmi = &A::x;
 double A::*pmd = &A::d;
 
+// Pointers to a member pointer: through a typedef, and through a cv-qualifier.
+typedef int A::*mp;
+mp *ppm = &pmi;
+int A::*const *pcpm = &pmi;
+
 struct B { int A::*f; char *A::*g; };
 B b = { &A::x, &A::p };
 

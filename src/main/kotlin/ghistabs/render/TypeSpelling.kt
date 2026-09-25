@@ -44,7 +44,7 @@ private class Speller(val types: TypeGraph, val shortener: TemplateNameShortener
         is TypeDecl.Volatile -> spell(t.inner, d, "${quals}volatile ", seen)
 
         // gcc ≤ 3.3's `int A::*` is a pointer to the member type that ≥ 3.4 spells alone.
-        is TypeDecl.Pointer if types.isMember(t.inner) -> spell(t.inner, d, quals, seen)
+        is TypeDecl.Pointer if types.isMemberPointee(t.inner) -> spell(t.inner, d, quals, seen)
 
         is TypeDecl.Pointer -> spell(t.inner, prefix("*", t.inner, d, quals, seen), "", seen)
 

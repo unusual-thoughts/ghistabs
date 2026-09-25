@@ -80,4 +80,12 @@ class TypeSpellingTest {
         declare("pmi:G(0,1)=@(0,2)=xsA:,(0,3)=r(0,3);-2147483648;2147483647;") mustBe "int A::*pmi"
         declare("pmi:G(0,31)=*(0,32)=@(0,24)=xsA:,(0,1)=r(0,1);-2147483648;2147483647;") mustBe "int A::*pmi"
     }
+
+    @Test
+    fun `a pointer to a member pointer keeps its pointer through a typedef or a qualifier`() {
+        // mp *ppm, after `typedef int A::*mp;` — gcc 12 gives the typedef the aliasing id (0,2).
+        declare("ppm:G(0,1)=*(0,2)=(0,3)=@(0,4)=xsA:,(0,5)=r(0,5);-2147483648;2147483647;") mustBe "int A::**ppm"
+        declare("pcpm:G(0,1)=*(0,2)=k(0,3)=@(0,4)=xsA:,(0,5)=r(0,5);-2147483648;2147483647;") mustBe
+            "int A::*const *pcpm"
+    }
 }

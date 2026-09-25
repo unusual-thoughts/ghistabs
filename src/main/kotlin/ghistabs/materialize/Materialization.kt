@@ -342,7 +342,7 @@ private fun DataTypeRegistry.memberPointer(): DataType =
     AbstractIntegerDataType.getSignedDataType(dtm.dataOrganization.pointerSize, null)
 
 private fun DataTypeRegistry.pointerOrOffset(pointee: GlobalTypeDecl, label: String, at: String): DataType =
-    if (types.isMember(pointee)) memberPointer() else pointerTo(pointee, label, at)
+    if (types.isMemberPointee(pointee)) memberPointer() else pointerTo(pointee, label, at)
 
 /**
  * Resolve a TypeDecl reference site to a DataType. Struct/Enum/Method/XRef return null (they
