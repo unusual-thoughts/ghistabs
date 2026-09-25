@@ -136,7 +136,7 @@ fun Type.demangledClassPath(): List<String>? {
     // demangles to one, it would satisfy `none {}` vacuously, and callers take its `last()`.
     val methods = (body as? TypeDecl.Aggregate<GlobalTypeId>)?.methods ?: return null
     return methods.firstNotNullOfOrNull { m ->
-        m.physname?.let(Demangler::namespaces)
+        m.mangled?.let(Demangler::namespaces)
             ?.takeIf { it.isNotEmpty() && it.none(Gcc2::isCompilerGeneratedName) }
     }
 }

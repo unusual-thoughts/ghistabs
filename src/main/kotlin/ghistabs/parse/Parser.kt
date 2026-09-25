@@ -495,11 +495,13 @@ class Parser(src: String) {
     private fun Cursor.parseMethodBlock(name: String): Method<LocalTypeId> {
         val signature = parseType()
 
+        // gcc 2.x leaves the physname field blank far more often than it fills it (98 of tinyxml's
+        // 274 method entries); "" is not a symbol, so blank normalizes to null here.
         val mangled = if (peek() == ':') {
             advance()
             val mangledName = readUntilAny(charArrayOf(';'))
             consume(';')
-            mangledName
+            mangledName.ifEmpty { null }
         } else {
             null
         }

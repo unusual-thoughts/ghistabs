@@ -182,7 +182,7 @@ class ClassBuilder(
      * no mangled member at all falls to [qualifiedClassName], which asks the `_ZTV` symbol.
      */
     private fun LocatedType.ensureClassNamespace(): GhidraClass {
-        val mangled = classBody.methods.firstNotNullOfOrNull { it.physname }
+        val mangled = classBody.methods.firstNotNullOfOrNull { it.mangled }
             ?: classBody.fields.firstNotNullOfOrNull { it.mangled }
         // Filter before the fallback, not after: a chain that is all-empty names is no more usable
         // than an absent one, and buildNamespaceChain has nothing to return for an empty list.
@@ -227,7 +227,7 @@ class ClassBuilder(
                 if (abi.isImplicitMember(m, qualifiedClassName)) {
                     debug("method-implicit-not-emitted")
                 } else {
-                    debug("unresolved-symbol", "method ${m.physname ?: m.name} (in $name)")
+                    debug("unresolved-symbol", "method ${m.mangled ?: m.name} (in $name)")
                 }
                 return
             }

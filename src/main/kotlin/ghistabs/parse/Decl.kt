@@ -268,6 +268,10 @@ sealed interface TypeDecl<out Id : IdInterface> {
         @Serializable
         data class Method<Id : IdInterface>(
             val name: String,
+            /** The stab's physname field, or null when it states none: gcc 2.x leaves this blank far
+             *  more often than it fills it (98 of tinyxml's 274 method entries), and "" is not a
+             *  symbol, so the parser folds blank to null. Not always a complete mangled name either:
+             *  gcc 2.x sometimes fills it with only the mangled argument list. */
             val mangled: String?,
             val signature: TypeDecl<Id>,
             val access: Access,
@@ -277,13 +281,6 @@ sealed interface TypeDecl<out Id : IdInterface> {
             /** Vtable offset in bits when `virt == VIRTUAL`, else null. */
             val vtableOffsetBits: Long?,
         ) {
-            /**
-             * [mangled] as a symbol to look up, or null. gcc 2.x leaves the physname field blank far
-             * more often than it fills it (98 of tinyxml's 274 method entries), and `""` is not a
-             * symbol: resolving one matches whatever happens to sit first in the symbol table.
-             */
-            val physname get() = mangled?.takeIf { it.isNotBlank() }
-
             /** `virtual `/`static ` — Ghidra's prototypeString models neither, so the stab is the only source. */
             val declPrefix get() = when (virt) {
                 VirtKind.VIRTUAL -> "virtual "
