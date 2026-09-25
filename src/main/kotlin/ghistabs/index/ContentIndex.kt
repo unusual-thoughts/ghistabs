@@ -62,7 +62,7 @@ abstract class ContentIndex(val contentCache: MutableMap<GlobalTypeId, LayoutCon
 
         TypeDecl.Void, is TypeDecl.Float, is TypeDecl.Complex, is TypeDecl.Enum, // no children
         is TypeDecl.Pointer, is TypeDecl.Reference, is TypeDecl.Const, is TypeDecl.Volatile, // one child
-        is TypeDecl.Array, is TypeDecl.FreeFunction, // two children
+        is TypeDecl.Array, is TypeDecl.FreeFunction, is TypeDecl.Member, // two children
         is TypeDecl.Method, // three children
         -> layoutContent(visited)
 
