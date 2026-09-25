@@ -1,14 +1,10 @@
 package ghistabs.materialize.cpp
 
-import ghidra.program.model.data.DataTypeComponent
-import ghidra.program.model.data.Pointer
-import ghidra.program.model.data.Structure
-import ghidra.program.model.data.StructureDataType
-import ghidra.program.model.data.Undefined1DataType
+import ghidra.program.model.data.*
 import ghidra.program.model.gclass.ClassUtils
 import ghidra.program.model.listing.Program
 import ghistabs.diagnose.DiagnosticSink
-import ghistabs.materialize.*
+import ghistabs.materialize.DataTypeRegistry
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
 import ghistabs.parse.isVptrFieldName

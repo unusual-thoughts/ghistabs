@@ -15,8 +15,6 @@ import ghistabs.importer.LocalSources
 import ghistabs.index.EffectiveSource
 import ghistabs.index.SourceHints
 import ghistabs.materialize.TemplateNameShortener
-import ghistabs.parse.GlobalTypeDecl
-import ghistabs.parse.TypeDecl
 import ghistabs.render.Renderer.Companion.DECOMPILE_SECONDS
 import ghistabs.runTransaction
 import ghistabs.scan.Definition

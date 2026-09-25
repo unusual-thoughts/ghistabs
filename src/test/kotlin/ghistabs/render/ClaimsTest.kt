@@ -21,7 +21,7 @@ class ClaimsTest {
         val out = allocate(listOf(a, b), range = 1..40)
         out.at(10).range mustBe 10..10
         out.at(12).range mustBe 12..12
-        out.dropped mustBe emptyList<Dropped>()
+        out.dropped mustBe emptyList()
     }
 
     @Test

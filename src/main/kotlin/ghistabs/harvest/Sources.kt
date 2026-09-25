@@ -72,7 +72,7 @@ val GhidraSourceFile.hasArtificialRoot get() = ARTIFICIAL_ROOT.matches(rootSegme
 private val ARTIFICIAL_ROOT = Regex("${STABS_ROOT}(_\\d+)?")
 
 /**
- * The spelling [path] normalises to, as a DTM category prefix: rooted, separators and `..` settled,
+ * The spelling [spelling] normalises to, as a DTM category prefix: rooted, separators and `..` settled,
  * with neither the volume nor the artificial root — a category says which file a declaration belongs
  * to, and `/stabs` is not a place any declaration lives.
  *

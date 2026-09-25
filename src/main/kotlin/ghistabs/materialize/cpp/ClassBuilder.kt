@@ -1,7 +1,6 @@
 package ghistabs.materialize.cpp
 
 import ghidra.app.util.NamespaceUtils
-import ghidra.app.util.demangler.DemangledDataType
 import ghidra.app.util.demangler.DemangledFunction
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.*
@@ -21,12 +20,14 @@ import ghistabs.index.LocatedType
 import ghistabs.index.demangledClassPath
 import ghistabs.isInjected
 import ghistabs.isMethod
-import ghistabs.materialize.*
+import ghistabs.materialize.DataTypeRegistry
+import ghistabs.materialize.buildFunctionDefinition
 import ghistabs.materialize.cpp.abi.*
 import ghistabs.materialize.cpp.abi.CxxAbi.Companion.prevailingAbi
+import ghistabs.materialize.resolveRef
 import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Aggregate.Method
-import java.util.IdentityHashMap
+import java.util.*
 
 /**
  * The C++ pass over the structs [DataTypeRegistry] has already materialized: a class gets its Ghidra
