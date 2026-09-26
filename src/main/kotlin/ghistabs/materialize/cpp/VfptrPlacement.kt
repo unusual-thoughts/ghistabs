@@ -2,7 +2,6 @@ package ghistabs.materialize.cpp
 
 import ghidra.program.model.data.*
 import ghidra.program.model.gclass.ClassUtils
-import ghidra.program.model.listing.Program
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.materialize.DataTypeRegistry
 import ghistabs.parse.GlobalTypeId
@@ -11,27 +10,23 @@ import ghistabs.parse.isVptrFieldName
 
 /**
  * Where a polymorphic class's `{vfptr}` goes, and what happens to the base subobject that would
- * otherwise own it. See [VfptrModel] for what the choice costs a virtual call.
+ * otherwise own it. See [VfptrModel] for what the choice costs a virtual call. [ClassLayout]'s, which
+ * runs it on each class in its turn.
  */
-internal class VfptrPlacement(
-    private val registry: DataTypeRegistry,
-    private val program: Program,
-    private val model: VfptrModel,
-    private val sink: DiagnosticSink,
-) : DiagnosticSink by sink {
+internal class VfptrPlacement(private val registry: DataTypeRegistry, private val model: VfptrModel) :
+    DiagnosticSink by registry {
+    private val dtm = registry.dtm
 
     /**
-     * Put `{vfptr}` where the stab says the vptr is, as [ownVfptr] — a pointer to *this* class's
-     * vftable. [className] and [classBody] are the class being built, [structDt] its materialized
-     * Structure, and [hasPolymorphicBaseSubobject] the caller's answer, so the base graph is walked
-     * once per class rather than once here and again there.
+     * Put `{vfptr}` where the stab says the vptr is, as a pointer to [className]'s own vftable.
+     * [classBody] is the class being laid, [structDt] its Structure, and [hasPolymorphicBaseSubobject]
+     * the caller's answer, so the base graph is walked once per class.
      */
     fun place(
         structDt: Structure,
         className: String,
         classBody: TypeDecl.Aggregate<GlobalTypeId>,
         hasPolymorphicBaseSubobject: Boolean,
-        ownVfptr: () -> Pointer,
     ) {
         val vfptrName = ClassUtils.VFPTR
         val parserVptrOffset = vptrOffsetBytesOf(classBody)
@@ -56,7 +51,7 @@ internal class VfptrPlacement(
         when (action) {
             is VfptrAction.SkipInheritedFromBase ->
                 if (model == VfptrModel.SPLIT_BASE &&
-                    splitBase(structDt, className, targetOffset, existingComp, ownVfptr)
+                    splitBase(structDt, className, targetOffset, existingComp)
                 ) {
                     debug("vfptr-split-from-base")
                 } else {
@@ -66,7 +61,7 @@ internal class VfptrPlacement(
             is VfptrAction.AlreadyCanonical -> return
 
             is VfptrAction.Insert -> {
-                val ptrToVtable = ownVfptr()
+                val ptrToVtable = ownVfptr(className)
                 structDt.insertAtOffset(
                     action.offsetBytes,
                     ptrToVtable,
@@ -78,7 +73,7 @@ internal class VfptrPlacement(
             }
 
             is VfptrAction.Replace -> {
-                val ptrToVtable = ownVfptr()
+                val ptrToVtable = ownVfptr(className)
                 structDt.replaceAtOffset(
                     action.offsetBytes,
                     ptrToVtable,
@@ -97,6 +92,9 @@ internal class VfptrPlacement(
         }
     }
 
+    /** {vfptr} points at the function-pointer array at the vtable's address point, not at the record. */
+    private fun ownVfptr(className: String) = PointerDataType.getPointer(registry.vftableOf(className), dtm)
+
     /**
      * Give this class its own `{vfptr}` where a polymorphic base subobject would otherwise own it:
      * the pointer goes at the vptr offset and the base is re-embedded as its *fields*, the same
@@ -114,10 +112,9 @@ internal class VfptrPlacement(
         className: String,
         vptrOffset: Int,
         baseComp: DataTypeComponent?,
-        ownVfptr: () -> Pointer,
     ): Boolean {
         val baseDt = baseComp?.dataType as? Structure ?: return false
-        val ptr = program.defaultPointerSize
+        val ptr = dtm.dataOrganization.pointerSize
         // Where the vptr sits *within* the base, read off the base itself rather than assumed: the
         // Itanium ABI puts it at 0, gcc 2.x appends it after the class's own fields. Classes are
         // built bases-first, so a polymorphic base already carries its own placed {vfptr}. A base
@@ -133,7 +130,7 @@ internal class VfptrPlacement(
         val tail = split.tail?.let { baseFieldsRun(baseDt, it.from, it.until) }
         if (head == null && tail == null) return false
 
-        val vfptr = ownVfptr()
+        val vfptr = ownVfptr(className)
         return runCatching {
             head?.let { structDt.replaceAtOffset(baseOff, it, it.length, baseComp.fieldName, baseComp.comment) }
             structDt.replaceAtOffset(baseOff + vptrInBase, vfptr, vfptr.length, ClassUtils.VFPTR, "vtable pointer")
@@ -158,7 +155,7 @@ internal class VfptrPlacement(
         if (until <= from) return null
         val name = "${baseDt.name}_fields_${from}_$until"
         return registry.getOrRegister<Structure>(baseDt.categoryPath, name) {
-            StructureDataType(baseDt.categoryPath, name, until - from, program.dataTypeManager).apply {
+            StructureDataType(baseDt.categoryPath, name, until - from, dtm).apply {
                 description = "${baseDt.name} as a base subobject (+$from..$until): its fields " +
                     "without the vptr the deriving class now owns"
                 baseDt.definedComponents

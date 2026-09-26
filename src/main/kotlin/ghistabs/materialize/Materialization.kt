@@ -5,7 +5,6 @@ import ghidra.program.model.lang.CompilerSpec
 import ghistabs.harvest.Type
 import ghistabs.materialize.cpp.fillStructBases
 import ghistabs.materialize.cpp.firstPolymorphicBase
-import ghistabs.materialize.cpp.virtualBases
 import ghistabs.parse.CATEGORY
 import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.GlobalTypeId
@@ -194,7 +193,7 @@ internal fun DataTypeRegistry.fillComposite(
     }
 
     // A class with virtual bases is [layClasses]'s to finish, and to report.
-    if (placeholder is Structure && types.virtualBases(body).isEmpty()) reportHoles(placeholder, qualifiedName)
+    if (placeholder is Structure && !types.hasVirtualBase(body)) reportHoles(placeholder, qualifiedName)
 
     return placeholder
 }

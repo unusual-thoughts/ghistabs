@@ -22,7 +22,7 @@ import ghistabs.parse.nameSegments
  * The class struct is *not* synthesised — this is the vtable level only; §24 covers the same
  * classes at the typeinfo-record level.
  */
-internal fun ClassBuilder.sweepUnclaimedVtables() {
+internal fun ClassApplier.sweepUnclaimedVtables() {
     val unclaimed = symtab.symbolIterator
         .filter { it.address !in claimedVtables }
         .mapNotNull { sym -> ResolvedVtable.fromSymbol(sym) }
@@ -77,7 +77,7 @@ internal fun ClassBuilder.sweepUnclaimedVtables() {
  * Each sub-vtable gets its own `internal_<i>` category, or a thunk sharing its target's leaf name
  * forks a `.conflict` per slot (1874 on crypto_mi).
  */
-internal fun ClassBuilder.laySecondaryVtables(primary: VtableShape, leaf: String, ns: Namespace, abi: CxxAbi) {
+internal fun ClassApplier.laySecondaryVtables(primary: VtableShape, leaf: String, ns: Namespace, abi: CxxAbi) {
     val rtti = program.readWord(primary.rttiHeader) ?: return
     val ptr = program.defaultPointerSize.toLong()
     val slots = program.vtableSlotTargets(primary.addressPoint, resolver).size
@@ -115,7 +115,7 @@ internal fun ClassBuilder.laySecondaryVtables(primary: VtableShape, leaf: String
  * `do_widen`/…, and one name across all of them forks a `.conflict` per slot (32 on unbouniaf).
  * [used] carries the names already spent on this table.
  */
-internal fun ClassBuilder.addSweptSlot(
+internal fun ClassApplier.addSweptSlot(
     vftable: Structure,
     category: CategoryPath,
     target: Address,
@@ -138,7 +138,7 @@ internal fun ClassBuilder.addSweptSlot(
 
 /** FunctionDefinition [name] carrying what [linkage] declares — the only type source for a slot
  *  target that has a linkage name and nothing else. Names but does not type an unmangled one. */
-internal fun ClassBuilder.demangledDefinition(category: CategoryPath, name: String, linkage: String) =
+internal fun ClassApplier.demangledDefinition(category: CategoryPath, name: String, linkage: String) =
     FunctionDefinitionDataType(category, name, dtm).apply {
         fun DemangledDataType.dt() = runCatching { getDataType(dtm) }.getOrNull()
             ?: Undefined4DataType.dataType.also {

@@ -60,7 +60,7 @@ private fun Program.shapeOf(start: Address, rttiSlot: Address?): VtableShape {
  *
  * Falls back to the undifferentiated label when the stab declares no virtual base — either the class
  * genuinely has none and this is a swept class we know nothing about, or the count disagrees, which
- * [ghistabs.materialize.cpp.ClassBuilder] reports separately.
+ * [ghistabs.materialize.cpp.ClassApplier] reports separately.
  */
 private fun prefixKind(i: Int, total: Int, virtualBases: List<String>): String {
     val vcalls = total - virtualBases.size

@@ -70,7 +70,7 @@ class DataTypeRegistry(
 
     /**
      * Every DataType this importer materialized or registered. Recomputed per read, not cached:
-     * [materializeAll] returns its size, and pass C keeps registering after that — ClassBuilder's
+     * [materializeAll] returns its size, and pass C keeps registering after that — ClassApplier's
      * member-method FunctionDefinitions — which a snapshot taken at pass B would miss.
      */
     internal val allCreatedDataTypes get() = buildSet {

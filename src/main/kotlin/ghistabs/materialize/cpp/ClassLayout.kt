@@ -98,7 +98,7 @@ private fun DataTypeRegistry.isEmptyBase(type: GlobalTypeDecl) =
     types.resolveStruct(type)?.sizeBytes?.let { it <= 1 } == true
 
 internal fun DataTypeRegistry.hasVirtualBases(type: GlobalTypeDecl) =
-    types.resolveStruct(type)?.let { types.virtualBases(it).isNotEmpty() } == true
+    types.resolveStruct(type)?.let(types::hasVirtualBase) == true
 
 private fun DataTypeRegistry.placeBase(
     struct: Structure,
@@ -120,6 +120,20 @@ private fun DataTypeRegistry.placeBase(
             degradation(failed, qualifiedName.member(dt.name), it.message)
             if (!base.isVirtual) debug("inheritance-failed")
         }
+}
+
+internal val LocatedType.classBody get() = type.body as TypeDecl.Aggregate<GlobalTypeId>
+internal val LocatedType.className get() = location.name
+
+/**
+ * Every located C++ class, bases before the classes that embed or derive from them: a class's layout
+ * reads its bases' finished ones, and SPLIT_BASE reads a base's own placed `{vfptr}`.
+ */
+internal fun DataTypeRegistry.classesBasesFirst(): List<LocatedType> {
+    val depthMemo = IdentityHashMap<TypeDecl.Aggregate<GlobalTypeId>, Int>()
+    return byLocation.values
+        .filter { (it.type.body as? TypeDecl.Aggregate)?.hasCxxSurface == true }
+        .sortedBy { types.inheritanceDepth(it.classBody, depthMemo) }
 }
 
 /**
@@ -145,12 +159,13 @@ private fun alignUp(n: Int, align: Int) = (n + align - 1) / align * align
  * not where its inheritance line says (gcc ≥ 3.0 writes where in the *vtable* its offset can be found,
  * `!1,12-96,` being −12 bytes; gcc 2.x writes 0 and reaches the base through a `_vb$` field), so it is
  * laid once, in the complete object, after the non-virtual data, and a class embedded as a base
- * contributes only its non-virtual part. With [vfptrs], a polymorphic class then gets its `{vfptr}`.
+ * contributes only its non-virtual part. With a [VfptrModel], a polymorphic class then gets its `{vfptr}`.
  *
  * A class is final once its turn is over: nothing later writes into a base, so the non-virtual part a
  * derived class embeds is copied from a finished class.
  */
-internal fun DataTypeRegistry.layClasses(vfptrs: VfptrPlacement?) = ClassLayout(this, vfptrs).layAll()
+internal fun DataTypeRegistry.layClasses(vfptrModel: VfptrModel?) =
+    ClassLayout(this, vfptrModel?.let { VfptrPlacement(this, it) }).layAll()
 
 private class ClassLayout(val registry: DataTypeRegistry, val vfptrs: VfptrPlacement?) : DiagnosticSink by registry {
     private val types = registry.types
@@ -162,19 +177,15 @@ private class ClassLayout(val registry: DataTypeRegistry, val vfptrs: VfptrPlace
     private val selfBases = IdentityHashMap<DataType, Structure>()
 
     fun layAll() {
-        val depthMemo = IdentityHashMap<TypeDecl.Aggregate<GlobalTypeId>, Int>()
         val laid = IdentityHashMap<Structure, Unit>()
-        val classes = registry.byLocation.values
-            .filter { (it.type.body as? TypeDecl.Aggregate)?.hasCxxSurface == true }
-            .sortedBy { types.inheritanceDepth(it.body, depthMemo) }
-        for (located in classes) {
+        for (located in registry.classesBasesFirst()) {
             val struct = registry.dataTypeFor(located.type.id) as? Structure ?: continue
             runCatching {
                 // Two locations can fill one struct (`/stabs/basic_ostream<…>` and `/std/basic_ostream<…>`),
                 // and a second pass would take the laid virtual base for own data.
-                if (laid.put(struct, Unit) == null && types.virtualBases(located.body).isNotEmpty()) {
+                if (laid.put(struct, Unit) == null && types.hasVirtualBase(located.classBody)) {
                     layVirtualInheritance(
-                        located.body,
+                        located.classBody,
                         struct,
                         "${located.location.category}/${located.type.ghidraName}",
                     )
@@ -184,17 +195,11 @@ private class ClassLayout(val registry: DataTypeRegistry, val vfptrs: VfptrPlace
         }
     }
 
-    private val LocatedType.body get() = type.body as TypeDecl.Aggregate<GlobalTypeId>
-
     private fun placeVfptr(located: LocatedType, struct: Structure) {
         val placement = vfptrs ?: return
-        val hasPolyBase = types.hasPolymorphicBaseSubobject(located.body)
-        if (!hasPolyBase && !located.body.declaresVptr) return
-        val name = located.location.name
-        // {vfptr} points at the function-pointer array at the vtable's address point, not at the record.
-        placement.place(struct, name, located.body, hasPolyBase) {
-            PointerDataType.getPointer(registry.vftableOf(name), registry.dtm)
-        }
+        val hasPolyBase = types.hasPolymorphicBaseSubobject(located.classBody)
+        if (!hasPolyBase && !located.classBody.declaresVptr) return
+        placement.place(struct, located.className, located.classBody, hasPolyBase)
     }
 
     private fun layVirtualInheritance(

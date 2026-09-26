@@ -58,7 +58,7 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
      *
      * Padding goes on the tail, where C++ puts unnamed parameters in practice; an unnamed one in the
      * middle would shift the names after it, but the storage — the part that breaks decompilation —
-     * comes out right either way. `this` is not among the demangled parameters; ClassBuilder owns it.
+     * comes out right either way. `this` is not among the demangled parameters; ClassApplier owns it.
      */
     private fun List<ParameterImpl>.padToMangledArity(mangled: String): List<ParameterImpl> {
         val declared = (Demangler.of(mangled) as? DemangledFunction)?.parameters
@@ -101,7 +101,7 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
                 // from them rather than riding Ghidra's PE symbol (which leaves C names as `_main`
                 // and depends on the COFF symtab being present). Mangled names (`_ZN…`) are set raw
                 // here and resolved to `Class::method` by demangleMangledLabels below — the raw name
-                // is also load-bearing as ClassBuilder's method-address index, which on a stripped
+                // is also load-bearing as ClassApplier's method-address index, which on a stripped
                 // binary has no other symbol to look up (see DemanglerReplacer.dropDisplacedMangledLabels).
                 if (func.name != open.name) {
                     // COMDAT-folded placement `operator new`/`delete` put `open.name` on a *separate*
@@ -120,7 +120,7 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
 
                 // Build params from N_PSYM/N_RSYM. Filter out any N_PSYM literally named
                 // `this`: gcc 3.x emits it for members but often mistypes (seen `int`
-                // instead of `<Class>*`); ClassBuilder.reparentMethod sets __thiscall and
+                // instead of `<Class>*`); ClassApplier.reparentMethod sets __thiscall and
                 // synthesises a typed `this` from the class struct, which is authoritative.
                 // Keeping the N_PSYM one produces duplicate-`this` signatures Ghidra can't evict.
                 val params = open.params
@@ -169,7 +169,7 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
                 // between updateFunction above and this loop, which flipped locals between added
                 // and skipped from run to run. This is `open.params`, before the `this` filter —
                 // gcc also emits `this` as a register local at -O0, and that copy is redundant
-                // once ClassBuilder has synthesised a typed one. A plain function whose own local
+                // once ClassApplier has synthesised a typed one. A plain function whose own local
                 // is called `this` has no such N_PSYM, so it keeps the local.
                 val paramNames = open.params.mapTo(mutableSetOf()) { it.body.name }
                 val firstUse = open.firstUseOffsets(func.entryPoint)
@@ -470,7 +470,7 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
                     // A `:p` + `:r` pair: the argument came in on the stack and was then loaded into
                     // this register. The parameter owns the name and the stack slot, so the register
                     // home can only be a second variable (suffixed to avoid collision). Except a
-                    // `this` that really does shadow a parameter — ClassBuilder synthesises a typed one
+                    // `this` that really does shadow a parameter — ClassApplier synthesises a typed one
                     // already. A plain function whose own local is called `this` has no such N_PSYM,
                     // and keeps its local.
                     val reglocalName = when (body.name) {
