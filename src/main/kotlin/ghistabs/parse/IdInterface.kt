@@ -138,7 +138,7 @@ fun LocalTypeDecl.globalize(g: Globalizer): GlobalTypeDecl = when (this) {
 
     is TypeDecl.FreeFunction -> TypeDecl.FreeFunction(ret.globalize(g), params.map { it.globalize(g) })
 
-    is TypeDecl.Member -> TypeDecl.Member(cls.globalize(g), type.globalize(g))
+    is TypeDecl.Member -> TypeDecl.Member(cls.globalize(g), inner.globalize(g))
 
     is TypeDecl.Method -> TypeDecl.Method(
         cls?.globalize(g),

@@ -318,8 +318,8 @@ sealed interface TypeDecl<out Id : IdInterface> {
      * [Pointer] (`*@A,int`), ≥ 3.4 emits it bare.
      */
     @Serializable
-    data class Member<Id : IdInterface>(val cls: TypeDecl<Id>, val type: TypeDecl<Id>) : TypeDecl<Id> {
-        override val children get() = listOf(listOf(cls, type))
+    data class Member<Id : IdInterface>(val cls: TypeDecl<Id>, val inner: TypeDecl<Id>) : TypeDecl<Id> {
+        override val children get() = listOf(listOf(cls, inner))
     }
 
     /** GCC complex/floating: `R<n>;<size>;0;`. n encodes 3=cfloat, 4=cdouble, 5=cldouble per gcc/dbxout. */

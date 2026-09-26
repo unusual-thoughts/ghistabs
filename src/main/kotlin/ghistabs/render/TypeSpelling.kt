@@ -50,7 +50,7 @@ private class Speller(val types: TypeGraph, val shortener: TemplateNameShortener
 
         is TypeDecl.Reference -> spell(t.inner, prefix("&", t.inner, d, quals, seen), "", seen)
 
-        is TypeDecl.Member -> spell(t.type, prefix("${className(t.cls, seen)}::*", t.type, d, quals, seen), "", seen)
+        is TypeDecl.Member -> spell(t.inner, prefix("${className(t.cls, seen)}::*", t.inner, d, quals, seen), "", seen)
 
         // A qualified array is an array of qualified elements.
         is TypeDecl.Array -> spell(t.element, "$d[${t.declaredElements ?: ""}]", quals, seen)
