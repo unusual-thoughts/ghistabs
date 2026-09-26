@@ -15,6 +15,23 @@ import ghistabs.parse.member
 import java.util.IdentityHashMap
 import ghidra.program.model.data.Array as GhidraArray
 
+/**
+ * A vptr at a base's offset is inherited: it is in the base subobject laid there, or in the non-virtual
+ * part [layClasses] lays for a base with virtual bases of its own. Where no base could be laid, the
+ * bytes stay undefined, so the stab's field is kept. A virtual base's offset is no position.
+ */
+internal fun DataTypeRegistry.inheritedVptrAt(
+    body: TypeDecl.Aggregate<GlobalTypeId>,
+    struct: Structure,
+    offsetBits: Long,
+): Boolean {
+    val bases = body.bases.filter { !it.isVirtual && it.offsetBits == offsetBits }
+    if (bases.isEmpty()) return false
+    val at = (offsetBits / 8).toInt()
+    return struct.definedComponents.any { at in it.offset..<it.offset + it.length } ||
+        bases.any { hasVirtualBases(it.type) }
+}
+
 /** Null [TypeDecl.Method.cls] is gdb's stub method (`##<ret>;`) stating no domain — the normal gcc
  *  2.x encoding, not a failure; only a stated-but-unresolvable cls is a real loss. */
 internal fun DataTypeRegistry.thisTypeFor(body: TypeDecl.Method<GlobalTypeId>, at: String): DataType =

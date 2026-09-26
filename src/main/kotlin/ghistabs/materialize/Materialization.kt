@@ -4,7 +4,7 @@ import ghidra.program.model.data.*
 import ghidra.program.model.lang.CompilerSpec
 import ghistabs.harvest.Type
 import ghistabs.materialize.cpp.fillStructBases
-import ghistabs.materialize.cpp.firstPolymorphicBase
+import ghistabs.materialize.cpp.inheritedVptrAt
 import ghistabs.materialize.cpp.memberPointer
 import ghistabs.materialize.cpp.memberPointerTo
 import ghistabs.materialize.cpp.thisTypeFor
@@ -114,20 +114,10 @@ internal fun DataTypeRegistry.fillComposite(
         fillStructBases(body, placeholder, qualifiedName)
     }
 
-    val polyBase = types.firstPolymorphicBase(body)
-
-    // Any vptr at a base-occupied offset is inherited — base owns it. Skip it.
-    // Catches the unresolved-base case (synthesized _base_unknown_*) where
-    // firstPolymorphicBase returns null but gcc still emitted _vptr$Class at
-    // the base's offset. A virtual base's offset is no position.
-    val baseOffsets = body.bases.filterNot { it.isVirtual }.map { it.offsetBits }.toSet()
-
     for ((name, type, offsetBits, sizeBits, isStatic) in body.fields) {
         if (isStatic) continue
 
-        if (isVptrFieldName(name) &&
-            ((polyBase != null && offsetBits == polyBase.offsetBits) || offsetBits in baseOffsets)
-        ) {
+        if (isVptrFieldName(name) && placeholder is Structure && inheritedVptrAt(body, placeholder, offsetBits)) {
             debug("vptr-skipped-inherited")
             continue
         }
