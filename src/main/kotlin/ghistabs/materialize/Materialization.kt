@@ -3,8 +3,11 @@ package ghistabs.materialize
 import ghidra.program.model.data.*
 import ghidra.program.model.lang.CompilerSpec
 import ghistabs.harvest.Type
-import ghistabs.materialize.cpp.ClassNaming
-import ghistabs.materialize.cpp.firstPolymorphicBase
+import ghistabs.materialize.cpp.fillStructBases
+import ghistabs.materialize.cpp.inheritedVptrAt
+import ghistabs.materialize.cpp.memberPointer
+import ghistabs.materialize.cpp.memberPointerTo
+import ghistabs.materialize.cpp.thisTypeFor
 import ghistabs.parse.CATEGORY
 import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.GlobalTypeId
@@ -16,13 +19,9 @@ import ghidra.program.model.data.Enum as GhidraEnum
 
 internal fun DataTypeRegistry.materializeBody(ast: Type, category: CategoryPath, placeholder: DataType): DataType =
     when (val body = ast.body) {
-        is TypeDecl.Pointer -> pointerTo(body.inner, "body-pointer-pointee", ast.ghidraName)
+        is TypeDecl.Pointer -> pointerOrOffset(body.inner, "body-pointer-pointee", ast.ghidraName)
 
         is TypeDecl.Reference -> pointerTo(body.inner, "body-reference-referent", ast.ghidraName)
-
-        // Transparent wrappers/primitives resolve through resolveRef (which unwraps const/volatile
-        // and routes the builtin-family via BuiltinTable), falling back to the placeholder.
-        is TypeDecl.Const, is TypeDecl.Volatile -> resolveRef(body) ?: stub(ast, placeholder, body)
 
         // gcc emits anonymous nested aggregates as InlineDef(id, <aggregate body>);
         // resolveRef(body) picks up the harvested ast via getOrMaterialize(body.id)
@@ -55,8 +54,11 @@ internal fun DataTypeRegistry.materializeBody(ast: Type, category: CategoryPath,
         // applied to the placeholder in makePlaceholder.
         is TypeDecl.WithSizeAttr if body.inner is TypeDecl.Enum -> body.inner.fillEnum(placeholder as GhidraEnum)
 
-        is TypeDecl.Range, is TypeDecl.Complex, is TypeDecl.Float, is TypeDecl.WithSizeAttr, is TypeDecl.Builtin ->
-            resolveRef(body) ?: stub(ast, placeholder, body)
+        // Transparent wrappers/primitives resolve through resolveRef (which unwraps const/volatile
+        // and routes the builtin-family via BuiltinTable), falling back to the placeholder.
+        is TypeDecl.Const, is TypeDecl.Volatile, is TypeDecl.Member,
+        is TypeDecl.Range, is TypeDecl.Complex, is TypeDecl.Float, is TypeDecl.WithSizeAttr, is TypeDecl.Builtin,
+        -> resolveRef(body) ?: stub(ast, placeholder, body)
 
         is TypeDecl.Aggregate -> fillComposite(body, placeholder as Composite, "$category/${ast.ghidraName}")
 
@@ -107,87 +109,6 @@ internal fun DataTypeRegistry.materializeBody(ast: Type, category: CategoryPath,
             }
     }
 
-/** Splices each base's fields into [placeholder] at the offset the stab's inheritance line gives it. */
-internal fun DataTypeRegistry.fillStructBases(
-    body: TypeDecl.Aggregate<GlobalTypeId>,
-    placeholder: Structure,
-    qualifiedName: String,
-) {
-    // An empty base occupies nothing (EBO) and must not be given the offset it shares with a
-    // space-occupying sibling: cryptopp's `TwoBases<BlockCipher,Rijndael_Info>` declares both at +0,
-    // and the empty one arriving second used to take the slot the 12-byte one had already claimed.
-    val occupying = body.bases.filterNot { types.resolveStruct(it.type)?.sizeBytes?.let { n -> n <= 1 } == true }
-    if (occupying.size < body.bases.size) debug("base-empty-ebo")
-
-    // Layout boundary to infer size of unresolved bases: offset of next
-    // base or first non-static field is where this subobject must end.
-    val sortedBaseOffsetsBytes = occupying.map { (it.offsetBits / 8).toInt() }.toSortedSet()
-    val firstFieldOffsetBytes = body.fields
-        .filter { !it.isStatic }
-        .minOfOrNull { (it.offsetBits / 8).toInt() }
-        ?: body.sizeBytes.toInt()
-
-    for (base in occupying.sortedBy { it.offsetBits }) {
-        val offsetBytes = (base.offsetBits / 8).toInt()
-        // gcc's inheritance line doesn't transmit subobject size — derive
-        // from the consuming struct's own-field offset (bouniaf sees
-        // bouniaf as 192 bytes here even though canonical bouniaf is 328
-        // because another CU saw a richer definition).
-        val gap = (sortedBaseOffsetsBytes.firstOrNull { it > offsetBytes } ?: firstFieldOffsetBytes) - offsetBytes
-        val raw = resolveRef(base.type)
-        // Empty placeholders report length=1 (Ghidra's enforced minimum); isZeroLength gives the
-        // logical truth. `dtm.contains` rejects a cycle-break stub, which [seedPlaceholder]
-        // deliberately keeps out of the DTM: splicing one in makes `replaceAtOffset` resolve it on
-        // the way in, forking a `.conflict` twin of a class we already built properly. Both are
-        // "we have no base type here" for layout purposes.
-        val dt = raw?.takeIf { dtm.contains(it) && !it.isZeroLength && it.length in 1..gap }
-        if (dt == null) {
-            // Unresolved, or larger-than-gap (cross-CU size disagreement). Leave the span as
-            // Ghidra's default Undefined1 fill rather than name a subobject we can't stand behind.
-            if (gap <= 0) {
-                // Unresolved-but-gap-zero: libstdc++ iterator-tag bases living in headers this CU
-                // only forward-declared. Own fields at offset 0 take the slot.
-                debug("base-empty-ebo-inferred")
-            } else {
-                degradation(
-                    "base-synthesized",
-                    "$qualifiedName@+$offsetBytes",
-                    if (raw == null || raw.isZeroLength || raw.length <= 0 || !dtm.contains(raw)) {
-                        "Ref unresolved, $gap-byte subobject left undefined"
-                    } else {
-                        "${raw.name} (${raw.length}b) larger than gap ($gap b); left undefined"
-                    },
-                )
-            }
-            continue
-        }
-        runCatching {
-            placeholder.replaceAtOffset(
-                offsetBytes,
-                dt,
-                dt.length,
-                ClassNaming.baseFieldName(base.isVirtual, dt.name, body.bases.size),
-                ClassNaming.baseComment(base),
-            )
-        }.onSuccess { debug("inheritance-applied") }
-            .onFailure {
-                degradation("base-layout-failed", qualifiedName.member(dt.name), it.message)
-                debug("inheritance-failed")
-            }
-    }
-
-    // Plate-comment summary of base classes on the derived struct.
-    if (body.bases.isNotEmpty()) {
-        val lines = body.bases.sortedBy { it.offsetBits }.joinToString("\n") { base ->
-            val baseName = (resolveRef(base.type)?.name) ?: "<unresolved>"
-            val virt = if (base.isVirtual) " virtual" else ""
-            "inherits ${base.access.name.lowercase()}$virt $baseName @ +${base.offsetBits / 8}"
-        }
-        placeholder.description =
-            if (placeholder.description.isNullOrEmpty()) lines else "${placeholder.description}\n$lines"
-    }
-}
-
 internal fun DataTypeRegistry.fillComposite(
     body: TypeDecl.Aggregate<GlobalTypeId>,
     placeholder: Composite,
@@ -198,20 +119,10 @@ internal fun DataTypeRegistry.fillComposite(
         fillStructBases(body, placeholder, qualifiedName)
     }
 
-    val polyBase = types.firstPolymorphicBase(body)
-
-    // Any vptr at a base-occupied offset is inherited — base owns it. Skip it.
-    // Catches the unresolved-base case (synthesized _base_unknown_*) where
-    // firstPolymorphicBase returns null but gcc still emitted _vptr$Class at
-    // the base's offset. A virtual base's offset is no position.
-    val baseOffsets = body.bases.filterNot { it.isVirtual }.map { it.offsetBits }.toSet()
-
     for ((name, type, offsetBits, sizeBits, isStatic) in body.fields) {
         if (isStatic) continue
 
-        if (isVptrFieldName(name) &&
-            ((polyBase != null && offsetBits == polyBase.offsetBits) || offsetBits in baseOffsets)
-        ) {
+        if (isVptrFieldName(name) && placeholder is Structure && inheritedVptrAt(body, placeholder, offsetBits)) {
             debug("vptr-skipped-inherited")
             continue
         }
@@ -274,37 +185,35 @@ internal fun DataTypeRegistry.fillComposite(
         }
     }
 
-    // Report runs ≥ 4 bytes of unnamed Undefined1 (Ghidra autofills empty bytes
-    // with Undefined1 components so consecutive components are always contiguous —
-    // a naive offset-gap detector never fires).
-    if (placeholder is Structure) {
-        val holes = placeholder.detectUndefinedRuns(minRunBytes = 4)
-        diagnostics.recordStructGaps(qualifiedName, holes)
-        if (holes.isNotEmpty()) {
-            val bytesInHoles = holes.sumOf { (it.lengthBits / 8).toInt() }
-            val totalBytes = placeholder.length
-            if (totalBytes > 0 && bytesInHoles * 4 >= totalBytes) {
-                // ≥25% Undefined1 — catches the bouniaf "base invisible" pattern.
-                degradation(
-                    "struct-mostly-undefined",
-                    qualifiedName,
-                    "$bytesInHoles of $totalBytes bytes are unnamed Undefined1 across ${holes.size} run(s)",
-                )
-            }
-        }
-    }
+    // A class with virtual bases is [layClasses]'s to finish, and to report.
+    if (placeholder is Structure && !types.hasVirtualBase(body)) reportHoles(placeholder, qualifiedName)
 
     return placeholder
 }
 
-/** Null [TypeDecl.Method.cls] is gdb's stub method (`##<ret>;`) stating no domain — the normal gcc
- *  2.x encoding, not a failure; only a stated-but-unresolvable cls is a real loss. */
-private fun DataTypeRegistry.thisTypeFor(body: TypeDecl.Method<GlobalTypeId>, at: String): DataType =
-    body.cls?.let { resolveRef(it) ?: undef("method-this-cls", at, it) } ?: Undefined4DataType.dataType
+/**
+ * Reports runs ≥ 4 bytes of unnamed Undefined1 (Ghidra autofills empty bytes with Undefined1
+ * components so consecutive components are always contiguous — a naive offset-gap detector never fires).
+ */
+internal fun DataTypeRegistry.reportHoles(struct: Structure, qualifiedName: String) {
+    val holes = struct.detectUndefinedRuns(minRunBytes = 4)
+    diagnostics.recordStructGaps(qualifiedName, holes)
+    if (holes.isEmpty()) return
+    val bytesInHoles = holes.sumOf { (it.lengthBits / 8).toInt() }
+    val totalBytes = struct.length
+    if (totalBytes > 0 && bytesInHoles * 4 >= totalBytes) {
+        // ≥25% Undefined1 — catches the bouniaf "base invisible" pattern.
+        degradation(
+            "struct-mostly-undefined",
+            qualifiedName,
+            "$bytesInHoles of $totalBytes bytes are unnamed Undefined1 across ${holes.size} run(s)",
+        )
+    }
+}
 
 /** [fallback] is overridden where an Undefined-family substitute would be re-read by Ghidra — see
  *  the array sites, which pass [ByteDataType]. */
-private fun DataTypeRegistry.undef(
+internal fun DataTypeRegistry.undef(
     category: String,
     at: String,
     decl: GlobalTypeDecl?,
@@ -332,6 +241,9 @@ private fun DataTypeRegistry.stub(ast: Type, placeholder: DataType, body: Global
 private fun DataTypeRegistry.pointerTo(pointee: GlobalTypeDecl, label: String, at: String): PointerDataType =
     PointerDataType(resolveRef(pointee) ?: undef(label, at, pointee), dtm.dataOrganization.pointerSize, dtm)
 
+private fun DataTypeRegistry.pointerOrOffset(pointee: GlobalTypeDecl, label: String, at: String): DataType =
+    memberPointerTo(pointee) ?: pointerTo(pointee, label, at)
+
 /**
  * Resolve a TypeDecl reference site to a DataType. Struct/Enum/Method/XRef return null (they
  * only have identity through their owning TypeAst id; use [DataTypeRegistry.getOrMaterialize] for those).
@@ -346,13 +258,15 @@ fun DataTypeRegistry.resolveRef(decl: GlobalTypeDecl): DataType? = when (decl) {
     is TypeDecl.Range, is TypeDecl.Complex, is TypeDecl.Float, is TypeDecl.WithSizeAttr, is TypeDecl.Builtin ->
         resolveBuiltin(decl)
 
-    is TypeDecl.Pointer -> pointerTo(decl.inner, "pointer-pointee", "(anon)")
+    is TypeDecl.Pointer -> pointerOrOffset(decl.inner, "pointer-pointee", "(anon)")
 
     is TypeDecl.Reference -> pointerTo(decl.inner, "reference-referent", "(anon)")
 
     is TypeDecl.Const -> resolveRef(decl.inner)
 
     is TypeDecl.Volatile -> resolveRef(decl.inner)
+
+    is TypeDecl.Member -> memberPointer()
 
     // ByteDataType (not Undefined1) for unresolved elements: Undefined1 is
     // type-equivalent to Ghidra's auto-analysis "undefined" bytes, so a downstream

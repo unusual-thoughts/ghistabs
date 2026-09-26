@@ -97,17 +97,11 @@
             "max": 16
         },
         "base-synthesized": {
-            "min": 30,
-            "max": 30,
+            "min": 22,
+            "max": 22,
             "degrades": [
-                "/src/allocator-inst.cc/multi/basic_fstream<char,std::char_traits<char>>@+0",
-                "/src/allocator-inst.cc/multi/basic_fstream<wchar_t,std::char_traits<wchar_t>>@+0",
-                "/src/allocator-inst.cc/multi/basic_istream<char,std::char_traits<char>>@+-12",
-                "/src/allocator-inst.cc/multi/basic_istream<wchar_t,std::char_traits<wchar_t>>@+-12",
                 "/src/allocator-inst.cc/multi/basic_istringstream<char,std::char_traits<char>,std::allocator<char>>@+0",
                 "/src/allocator-inst.cc/multi/basic_istringstream<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>@+0",
-                "/src/allocator-inst.cc/multi/basic_ostream<char,std::char_traits<char>>@+-12",
-                "/src/allocator-inst.cc/multi/basic_ostream<wchar_t,std::char_traits<wchar_t>>@+-12",
                 "/src/allocator-inst.cc/multi/basic_ostringstream<char,std::char_traits<char>,std::allocator<char>>@+0",
                 "/src/allocator-inst.cc/multi/basic_ostringstream<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>@+0",
                 "/src/allocator-inst.cc/multi/basic_stringstream<char,std::char_traits<char>,std::allocator<char>>@+0",
@@ -115,9 +109,7 @@
                 "/stabs/basic_iostream<char,std::char_traits<char>>@+0",
                 "/stabs/basic_iostream<char,std::char_traits<char>>@+8",
                 "/stabs/basic_iostream<wchar_t,std::char_traits<wchar_t>>@+0",
-                "/stabs/basic_iostream<wchar_t,std::char_traits<wchar_t>>@+8",
-                "/std/basic_stringstream<char,std::char_traits<char>,std::allocator<char>>@+0",
-                "/std/basic_stringstream<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>@+0"
+                "/stabs/basic_iostream<wchar_t,std::char_traits<wchar_t>>@+8"
             ]
         },
         "canonical-key-merged": {
@@ -397,8 +389,8 @@
             "max": 1
         },
         "inheritance-applied": {
-            "min": 225,
-            "max": 225
+            "min": 229,
+            "max": 229
         },
         "inheritance-pseudo-fields-promoted": {
             "min": 1,
@@ -692,34 +684,26 @@
             "max": 148
         },
         "struct-mostly-undefined": {
-            "min": 13,
-            "max": 13,
+            "min": 11,
+            "max": 11,
             "degrades": [
                 "/libsupc++/del_op.cc/multi/$_2",
                 "/src/allocator-inst.cc/multi/_stati64",
-                "/src/allocator-inst.cc/multi/basic_iostream<char,std::char_traits<char>>",
-                "/src/allocator-inst.cc/multi/basic_iostream<wchar_t,std::char_traits<wchar_t>>",
                 "/stabs/basic_iostream<char,std::char_traits<char>>",
                 "/stabs/basic_iostream<wchar_t,std::char_traits<wchar_t>>",
                 "/std/fpos<int>"
             ]
         },
         "struct-truncated": {
-            "min": 40,
-            "max": 40,
+            "min": 24,
+            "max": 24,
             "degrades": [
                 "TiXmlText",
                 "_Unwind_Exception",
-                "basic_fstream<char,std::char_traits<char>>",
-                "basic_fstream<wchar_t,std::char_traits<wchar_t>>",
-                "basic_ifstream<char,std::char_traits<char>>",
-                "basic_ifstream<wchar_t,std::char_traits<wchar_t>>",
                 "basic_istream<char,std::char_traits<char>>",
                 "basic_istream<wchar_t,std::char_traits<wchar_t>>",
                 "basic_istringstream<char,std::char_traits<char>,std::allocator<char>>",
                 "basic_istringstream<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>",
-                "basic_ofstream<char,std::char_traits<char>>",
-                "basic_ofstream<wchar_t,std::char_traits<wchar_t>>",
                 "basic_ostream<char,std::char_traits<char>>",
                 "basic_ostream<wchar_t,std::char_traits<wchar_t>>",
                 "basic_ostringstream<char,std::char_traits<char>,std::allocator<char>>",
@@ -768,17 +752,21 @@
             "min": 2806,
             "max": 2806
         },
+        "vbase-applied": {
+            "min": 18,
+            "max": 18
+        },
         "vfptr-inherited-from-base": {
-            "min": 30,
-            "max": 30
+            "min": 26,
+            "max": 26
         },
         "vfptr-normalized": {
             "min": 20,
             "max": 20
         },
         "vfptr-split-from-base": {
-            "min": 146,
-            "max": 146
+            "min": 150,
+            "max": 150
         },
         "vftable-slot-name-collision": {
             "min": 8,

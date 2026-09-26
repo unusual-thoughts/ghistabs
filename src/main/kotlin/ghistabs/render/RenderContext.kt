@@ -32,72 +32,8 @@ interface RenderContext {
     fun Int?.indentAt(): Int
     fun Int?.isStale(): Boolean
 
-    /**
-     * Best-effort C-style rendering of a [TypeDecl]. Primitives go
-     * through [resolveBuiltin] so they come out as `int` / `uchar` /
-     * `double` etc; named composite types are looked up by id in
-     * the index. Cycles (gcc's recursive
-     * `std::basic_string<…>::operator=` taking `std::string&`) are broken
-     * with a visited-set of the type ids on the current path — NOT a depth
-     * cap, which the transparent Ref/InlineDef indirections would exhaust
-     * on legitimately deep types (e.g. an array of const char pointers:
-     * Array→InlineDef→Const→Ref→Pointer→Ref→Const→Ref→char).
-     */
-    fun GlobalTypeDecl.render(seen: Set<GlobalTypeId> = emptySet()): String = when (this) {
-        TypeDecl.Void -> "void"
-
-        is TypeDecl.Ref -> {
-            // Named TypeAst → use the name. Anonymous → recurse into its body so the
-            // user sees `int *` rather than a raw GlobalTypeId, unless this id is
-            // already on the path (cycle). Unresolved (cross-CU dangling) → id string.
-            val ast = types.byId(id)
-            val name = ast?.name
-            when {
-                name != null -> shortener?.shortenedOrNull(name) ?: name
-                ast == null -> "T_$id"
-                id in seen -> "…"
-                else -> ast.body.render(seen + id)
-            }
-        }
-
-        is TypeDecl.Pointer -> "${inner.render(seen)} *"
-
-        is TypeDecl.Reference -> "${inner.render(seen)} &"
-
-        is TypeDecl.Const -> "${inner.render(seen)} const"
-
-        is TypeDecl.Volatile -> "${inner.render(seen)} volatile"
-
-        is TypeDecl.Array -> "${element.render(seen)}[${declaredElements ?: ""}]"
-
-        is TypeDecl.Builtin,
-        is TypeDecl.Range,
-        is TypeDecl.Float,
-        is TypeDecl.Complex,
-        is TypeDecl.WithSizeAttr,
-        -> resolveBuiltin()?.name ?: this::class.simpleName?.lowercase() ?: "?"
-
-        is TypeDecl.XRef -> "${kind.cxxKeyword()} ${shortener?.shortenedOrNull(tagName) ?: tagName}"
-
-        is TypeDecl.Aggregate -> cxxKeyword
-
-        is TypeDecl.Enum -> "enum"
-
-        is TypeDecl.FreeFunction -> {
-            val ret = ret.render(seen)
-            val params = params.joinToString(", ") { it.render(seen) }
-            "$ret($params)"
-        }
-
-        is TypeDecl.Method -> {
-            val cls = cls?.render(seen).orEmpty()
-            val ret = ret.render(seen)
-            val params = params.joinToString(", ") { it.render(seen) }
-            "$ret($cls::*)($params)"
-        }
-
-        is TypeDecl.InlineDef -> inner.render(seen + id)
-    }
+    /** The type alone, as C spells it: an abstract declarator (`int (*)()`). See [spell]. */
+    fun GlobalTypeDecl.render(): String = spell("", types, shortener)
 
     /** True if this resolves to a pointer, seeing through refs, cv-qualifiers and typedefs. */
     fun GlobalTypeDecl.isPointer(types: TypeGraph) = types.resolve<TypeDecl.Pointer<GlobalTypeId>>(this) != null
@@ -114,14 +50,17 @@ interface RenderContext {
 
     /** Render a Struct's body members for in-skeleton expansion: one bare C-style decl per entry. */
     fun TypeDecl.Aggregate<GlobalTypeId>.renderFull(owner: String? = null): List<String> {
-        val members = fields.filter { !it.isStatic }.sortedBy { it.offsetBits }.map { f ->
+        val instanceFields = fields.filterNot { it.isStatic }.sortedBy { it.offsetBits }.map { f ->
             f.access to "${f.type.renderDecl(f.name)};  /* +${f.offsetBits / 8}B */"
-        } + fields.filter { it.isStatic }.map { f ->
-            // Static members occupy no storage, so they have no offset to sort by and were dropped
-            // outright. Their linkage name is the only stabs link to the emitted symbol, so show it.
-            val link = f.mangled?.let { "  /* $it */" }.orEmpty()
-            f.access to "static ${f.type.renderDecl(f.name)};$link"
-        } + methods.mapNotNull { m ->
+        }
+        // Static members occupy no storage, so they have no offset to sort by and were dropped outright.
+        // Their linkage name is the only stabs link to the emitted symbol, so show it.
+        val staticFields = fields.filter { it.isStatic }.map { f ->
+            f.access to "static ${f.type.renderDecl(f.name)};${f.mangled?.let { "  /* $it */" }.orEmpty()}"
+        }
+        // gcc emits a stab per aliased copy (ctor C1/C2, dtor D0/D1/D2); once the return type and `this`
+        // are gone they render identically, and a class body cannot declare the same member twice.
+        val methodDecls = methods.mapNotNull { m ->
             m.mangled?.let { sourceIndex.functionsByMangledName[it] }
                 ?.let { program.functionManager.getFunctionAt(it.addr) }
                 ?.let {
@@ -132,9 +71,6 @@ interface RenderContext {
                     val ctor = owner != null && (it.name == owner || it.name == "~$owner")
                     m.access to "${m.declPrefix}${it.prototype(dropThis = true, dropReturnType = ctor)}${m.declSuffix};"
                 }
-            // gcc emits a stab per aliased copy (ctor C1/C2, dtor D0/D1/D2); once the return type and
-            // `this` are gone they render identically, and a class body cannot declare the same member
-            // twice.
         }.distinct()
 
         // C++ access sections: emit an `access:` label only when a member deviates from the running
@@ -142,7 +78,7 @@ interface RenderContext {
         // uniform type stays label-free and only real transitions show.
         return buildList {
             var current = if (isCxxClass) Access.PRIVATE else Access.PUBLIC
-            for ((access, line) in members) {
+            for ((access, line) in instanceFields + staticFields + methodDecls) {
                 if (access != current) {
                     add("${access.name.lowercase()}:")
                     current = access
@@ -170,23 +106,15 @@ interface RenderContext {
         )
     }
 
-    /**
-     * A C declaration of [name] with this type. C is declarator-based: an array's extent goes *after* the
-     * name, so `char const[18] _ZTS7MyKlass` — which is what type-then-name produces, and what clang
-     * rejects with "brackets are not allowed here" — has to be `char const _ZTS7MyKlass[18]`.
-     */
-    fun GlobalTypeDecl.renderDecl(name: String): String = declarator(render(), name)
+    /** A C declaration of [name] with this type — `char (*(*x[3])())[5]`, not type-then-name. */
+    fun GlobalTypeDecl.renderDecl(name: String): String = spell(name, types, shortener)
 
     /** A type body on one line — the appendix form, where alignment to a source line is meaningless. */
     fun Type.oneLineBody(): String = when (val b = body) {
         is TypeDecl.Aggregate -> {
             // Bases too — they are where the instantiations differ most visibly, and dropping them
             // was the one thing the appendix still lost against the pre-rewrite render.
-            val bases = b.bases.takeIf { it.isNotEmpty() }
-                ?.joinToString(", ", prefix = " : ") {
-                    "${it.access.name.lowercase()} ${it.type.render()}"
-                }
-                .orEmpty()
+            val bases = b.spellBases(types, shortener)
             ("${b.cxxKeyword} ${shortener?.shortenedOrNull(name ?: "") ?: name}$bases { ")
                 .asSpecialization(shortener?.shortenedOrNull(name ?: "") ?: name) +
                 b.renderFull(name?.templateLeaf).joinToString(" ") +
@@ -220,9 +148,7 @@ interface RenderContext {
         val tag = if (isTypedef) "typedef " else ""
         val declName = if (isTypedef) "" else " $shortName"
         val openText = when (body) {
-            is TypeDecl.Aggregate -> body.bases.takeIf { it.isNotEmpty() }?.joinToString(", ", prefix = " : ") {
-                "${it.access.name.lowercase()} ${it.type.render()}"
-            }.orEmpty().let { bases ->
+            is TypeDecl.Aggregate -> body.spellBases(types, shortener).let { bases ->
                 "$tag${body.cxxKeyword}$declName$bases {".asSpecialization(shortName)
             }
 

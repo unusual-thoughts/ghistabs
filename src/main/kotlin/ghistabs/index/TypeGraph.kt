@@ -12,6 +12,7 @@ import ghistabs.parse.TypeDecl
 import ghistabs.parse.canonTemplateName
 import ghistabs.parse.isTemplated
 import ghistabs.parse.templateLeaf
+import java.util.IdentityHashMap
 
 /**
  * The type graph: every harvested [Type] indexed by id, by name and by base tag, plus the xref oracle
@@ -73,6 +74,15 @@ class TypeGraph(private val harvest: Harvest, sink: DiagnosticSink = DummySink) 
 
     /** [byXRef]'s answers, misses included: it reports as it resolves, so each xref must resolve once. */
     private val xrefs = HashMap<TypeDecl.XRef<GlobalTypeId>, Type?>()
+
+    private val virtualBaseAnswers = IdentityHashMap<TypeDecl.Aggregate<GlobalTypeId>, Boolean>()
+
+    /** Whether [aggregate] inherits virtually anywhere in its base graph. */
+    fun hasVirtualBase(aggregate: TypeDecl.Aggregate<GlobalTypeId>): Boolean = virtualBaseAnswers[aggregate] ?: run {
+        virtualBaseAnswers[aggregate] = false // a cycle through corrupt stabs answers no
+        aggregate.bases.any { it.isVirtual || resolveStruct(it.type)?.let(::hasVirtualBase) == true }
+            .also { virtualBaseAnswers[aggregate] = it }
+    }
 
     // Pre-warm with empty `visited` so collision classification isn't biased by traversal order.
     // Must stay below definitionsByTag/definitionsByTemplateLeaf: contentHash resolves xrefs through them, and a `by
@@ -189,6 +199,18 @@ class TypeGraph(private val harvest: Harvest, sink: DiagnosticSink = DummySink) 
             else -> null
         }
     }
+
+    /**
+     * Whether a pointer to [decl] is gcc ≤ 3.3's `int A::*` — `*@A,int`, the pointer straight onto the
+     * member type, at most one id between — rather than a pointer to a member pointer. gcc ≤ 3.3 names
+     * the pointer in a typedef and ≥ 3.4 gives one its own id aliasing the type (`mp:t(0,2)` over
+     * `(0,2)=(0,3)=@…`), so an alias or qualifier in between is a real pointer: `mp *`, `int A::*const *`.
+     */
+    fun isMemberPointee(decl: GlobalTypeDecl) = when (decl) {
+        is TypeDecl.InlineDef -> decl.inner
+        is TypeDecl.Ref -> byId(decl.id)?.body
+        else -> decl
+    } is TypeDecl.Member<*>
 
     inline fun resolveAny(decl: GlobalTypeDecl, crossinline predicate: (GlobalTypeDecl) -> Boolean) =
         resolveWith(decl) { decl -> predicate(decl).takeIf { it } } == true
