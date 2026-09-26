@@ -192,27 +192,7 @@ class TypeGraph(private val harvest: Harvest, sink: DiagnosticSink = DummySink) 
 
     fun resolveStruct(typeDecl: GlobalTypeDecl) = resolve<TypeDecl.Aggregate<GlobalTypeId>>(typeDecl)
 
-    /**
-     * Pointee type-id of [fn]'s leading `this` param, else null.
-     *
-     * Which shape gcc emits for the pointer is per-CU history, not meaning: inline
-     * (`InlineDef→Pointer→Ref`), by id (a plain `Ref` to a separately-numbered pointer type), and with a
-     * `Const` wrapper on a const method. Matching only the inline shape missed every by-id and every
-     * const `this` — which is what left `std::ostream::sentry` with no reverse-demangle link.
-     */
-    fun thisParamTypeId(fn: Func): GlobalTypeId? {
-        val p = fn.params.firstOrNull()?.body?.takeIf { it.name == "this" } ?: return null
-        return resolve<TypeDecl.Pointer<GlobalTypeId>>(p.type)?.inner?.let { namedId(it) }
-    }
-
-    /** The id [decl] names, through the same wrappers — without resolving it to a body. */
-    private fun namedId(decl: GlobalTypeDecl) = resolveWith(decl) {
-        when (it) {
-            is TypeDecl.Ref -> it.id
-            is TypeDecl.InlineDef -> it.id
-            else -> null
-        }
-    }
+    fun thisParamTypeId(fn: Func) = fn.thisParamTypeId { byId(it)?.body }
 
     /**
      * Type id → its own fully-qualified C++ path, root-first and class-last, read off an out-of-line

@@ -289,6 +289,25 @@ data class Func(
     fun scopePath(): List<String> = Demangler.namespaces(name).map(::canonTemplateName)
 
     /**
+     * Pointee type-id of the leading `this` param, else null; [bodyOf] looks an id's body up.
+     *
+     * Which shape gcc emits for the pointer is per-CU history, not meaning: inline
+     * (`InlineDef→Pointer→Ref`), by id (a plain `Ref` to a separately-numbered pointer type), and with a
+     * `Const` wrapper on a const method.
+     */
+    fun thisParamTypeId(bodyOf: (GlobalTypeId) -> GlobalTypeDecl?): GlobalTypeId? {
+        val self = params.firstOrNull()?.body?.takeIf { it.name == "this" } ?: return null
+        val pointee = self.type.aliases(bodyOf).firstNotNullOfOrNull { it as? TypeDecl.Pointer }?.inner
+        return pointee?.aliases(bodyOf)?.firstNotNullOfOrNull {
+            when (it) {
+                is TypeDecl.Ref -> it.id
+                is TypeDecl.InlineDef -> it.id
+                else -> null
+            }
+        }
+    }
+
+    /**
      * gcc emits file-scope synthetic init/destruct wrappers
      * (`_GLOBAL__I_<sym>`, `_GLOBAL__D_<sym>`,
      * `__static_initialization_and_destruction_0`) at the CU's
@@ -301,6 +320,21 @@ data class Func(
         name.startsWith("_GLOBAL__N_") ||
         name.startsWith("_Z41__static_initialization_and_destruction_0") ||
         name == "__static_initialization_and_destruction_0"
+}
+
+/** This declaration, then each one it stands for through ids and cv-wrappers. */
+private fun GlobalTypeDecl.aliases(bodyOf: (GlobalTypeId) -> GlobalTypeDecl?): Sequence<GlobalTypeDecl> {
+    val seen = mutableSetOf<GlobalTypeId>()
+    return generateSequence(this) {
+        when (it) {
+            is TypeDecl.Ref -> it.id.takeIf(seen::add)?.let(bodyOf)
+            is TypeDecl.InlineDef -> it.id.takeIf(seen::add)?.let(bodyOf) ?: it.inner
+            is TypeDecl.Const -> it.inner
+            is TypeDecl.Volatile -> it.inner
+            is TypeDecl.WithSizeAttr -> it.inner
+            else -> null
+        }
+    }
 }
 
 /**
