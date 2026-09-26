@@ -37,6 +37,7 @@ import ghistabs.materialize.cpp.abi.Gcc2Abi
 import ghistabs.materialize.cpp.abi.Itanium
 import ghistabs.materialize.cpp.hasPolymorphicBaseSubobject
 import ghistabs.materialize.cpp.isBaseField
+import ghistabs.materialize.cpp.vptrOffsetBytesOf
 import ghistabs.parse.*
 import ghistabs.test.*
 import kotlinx.serialization.ExperimentalSerializationApi
@@ -1075,6 +1076,33 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         vptrless.sorted().take(10).mustBeEmpty(
             "${vptrless.size} of ${secondary.size} polymorphic secondary base subobjects carry no vptr, " +
                 "so a virtual call through that interface has nothing to dereference",
+        )
+    }
+
+    /**
+     * A class that declares its own vptr gets a `{vfptr}` there, typed with a vftable.
+     *
+     * libstdc++'s `basic_istream` is the case that broke it: its only polymorphic base is the virtual
+     * `basic_ios`, whose negative vtable-offset `offsetBits` made it look like the primary base that
+     * owns the vptr, so the class was left with the raw `_vptr$basic_istream` typed `int (**)()` — and
+     * likewise under plain `-gstabs`, where that vbase is a pseudo-field promoted to a base at +8.
+     * A vptr sharing its offset with a non-virtual base is that base's, and is skipped at layout.
+     */
+    @Test
+    fun declaredVptrsBecomeTheClassVfptr() {
+        val declaring = builtClasses().mapNotNull { (body, dt) ->
+            vptrOffsetBytesOf(body)
+                ?.takeUnless { off -> body.bases.any { !it.isVirtual && it.offsetBits / 8 == off.toLong() } }
+                ?.let { Triple(body, dt, it) }
+        }
+        assumeTrue(declaring.isNotEmpty(), "Skipping: no class declares a vptr of its own in this fixture")
+
+        val raw = declaring.filterNot { (_, dt, off) ->
+            dt.getComponentAt(off)?.takeIf { it.offset == off && it.fieldName == ClassUtils.VFPTR }
+                ?.let { (it.dataType as? Pointer)?.dataType?.name?.endsWith("_vftable") } == true
+        }.map { (_, dt, off) -> "${dt.pathName} +$off: ${dt.getComponentAt(off)?.run { "$fieldName $dataType" }}" }
+        raw.sorted().take(10).mustBeEmpty(
+            "${raw.size} of ${declaring.size} classes declaring their own vptr have no {vfptr} of their own there",
         )
     }
 

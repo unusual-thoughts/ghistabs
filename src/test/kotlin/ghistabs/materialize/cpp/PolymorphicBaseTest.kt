@@ -148,6 +148,40 @@ class PolymorphicBaseTest {
         typesOf().virtualBases(derived).size.mustBe(1)
     }
 
+    /** libstdc++'s `basic_istream`: one polymorphic base, virtual, laid at a negative vtable offset,
+     *  and its own `_vptr$` at +0 — the vptr is the class's, not the vbase's. */
+    @Test
+    fun `virtual base - a class declaring its own vptr does not inherit it`() {
+        val vbase = polyStruct(hasVtableMarker = true)
+        fun derived(vptr: Boolean) = TypeDecl.Aggregate(
+            kind = AggrKind.STRUCT,
+            sizeBytes = 144L,
+            bases = listOf(inlineBase(1, vbase).copy(isVirtual = true, offsetBits = -96L)),
+            fields = listOfNotNull(
+                TypeDecl.Aggregate.Field(
+                    name = "_vptr\$basic_istream",
+                    type = TypeDecl.Ref(gid(2)),
+                    offsetBits = 0L,
+                    sizeBits = 32L,
+                    isStatic = false,
+                    access = Access.PRIVATE,
+                    mangled = null,
+                ).takeIf { vptr },
+            ),
+            methods = emptyList(),
+            vptrBasetype = null,
+        )
+        typesOf().mustNot { hasPolymorphicBaseSubobject(derived(vptr = true)) }
+        // Plain `-gstabs`: no base list, so the vbase is a pseudo-field promoted to a non-virtual base at +8.
+        typesOf().mustNot {
+            hasPolymorphicBaseSubobject(
+                derived(vptr = true).run { copy(bases = bases.map { it.copy(isVirtual = false, offsetBits = 64L) }) },
+            )
+        }
+        // libg++'s `ostream`: no vptr of its own, so the one in the virtual `ios` is the class's.
+        typesOf().must { hasPolymorphicBaseSubobject(derived(vptr = false)) }
+    }
+
     @Test
     fun `noBases - empty bases list returns false`() {
         val derived = polyStruct(hasVtableMarker = false)
