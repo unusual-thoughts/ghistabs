@@ -9,6 +9,8 @@ import ghistabs.harvest.Type
 import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
+import ghistabs.parse.canonTemplateName
+import ghistabs.parse.isTemplated
 import ghistabs.parse.templateLeaf
 
 /**
@@ -83,8 +85,9 @@ class TypeGraph(private val harvest: Harvest, sink: DiagnosticSink = DummySink) 
     override fun byId(id: GlobalTypeId): Type? = typeAsts[id]
 
     /**
-     * Resolve [xref] to its canonical [Type]. Tries exact-name, then base-tag fallback
-     * (commits only when all same-kind candidates agree on size). On miss bumps
+     * Resolve [xref] to its canonical [Type]. Tries exact-name, then base-tag fallback: a bare tag
+     * (`xsbasic_istream:`) may take any instantiation, a templated one only its own, and either commits
+     * only when all same-kind candidates agree on size. On miss bumps
      * `xref-undefined` / `xref-kind-mismatch` / `xref-ambiguous` — once per distinct xref, so the
      * counts describe the program rather than how often anything asked.
      */
@@ -97,7 +100,10 @@ class TypeGraph(private val harvest: Harvest, sink: DiagnosticSink = DummySink) 
             ?.let { return it }
 
         val tag = xref.tagName.templateLeaf
-        val sameTagAnyKind = if (tag.isNotEmpty()) definitionsByTemplateLeaf[tag].orEmpty() else emptyList()
+        // A tag that spells its arguments names one instantiation: only another spelling of it may answer.
+        val instantiation = xref.tagName.takeIf { it.isTemplated }?.let(::canonTemplateName)
+        val sameTagAnyKind = tag.takeIf { it.isNotEmpty() }?.let { definitionsByTemplateLeaf[it] }.orEmpty()
+            .filter { instantiation == null || it.name?.let(::canonTemplateName) == instantiation }
         val sameKind = sameTagAnyKind.filter { it.body.matchesXRefKind(xref.kind) }
         val distinctSizes = sameKind.map { it.body.sizeBytes }.toSet()
 

@@ -595,8 +595,8 @@
             ]
         },
         "placeholder-created": {
-            "min": 43364,
-            "max": 43364
+            "min": 43366,
+            "max": 43366
         },
         "placeholder-undefined-fields": {
             "min": 202,
@@ -741,8 +741,8 @@
             "max": 1008
         },
         "unresolved-xref": {
-            "min": 17,
-            "max": 17
+            "min": 19,
+            "max": 19
         },
         "value-dropped-bnsym": {
             "min": 2618,
@@ -817,21 +817,13 @@
             "min": 38,
             "max": 38
         },
-        "xref-ambiguous": {
-            "min": 6,
-            "max": 6
-        },
-        "xref-base-tag-ambiguous": {
-            "min": 6,
-            "max": 6
-        },
         "xref-base-tag-resolved": {
-            "min": 6,
-            "max": 6
+            "min": 4,
+            "max": 4
         },
         "xref-undefined": {
-            "min": 11,
-            "max": 11
+            "min": 19,
+            "max": 19
         }
     },
     "source": "locale_test_customlibstdcxx.exe - generated from snapshotCounters()"

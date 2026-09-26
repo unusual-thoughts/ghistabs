@@ -1142,8 +1142,8 @@
             ]
         },
         "placeholder-created": {
-            "min": 52400,
-            "max": 52400
+            "min": 52414,
+            "max": 52414
         },
         "placeholder-undefined-fields": {
             "min": 960,
@@ -1478,8 +1478,8 @@
             "max": 945
         },
         "unresolved-xref": {
-            "min": 45,
-            "max": 45
+            "min": 47,
+            "max": 47
         },
         "value-dropped-bnsym": {
             "min": 2490,
@@ -2023,21 +2023,13 @@
             "min": 38,
             "max": 38
         },
-        "xref-ambiguous": {
-            "min": 24,
-            "max": 24
-        },
-        "xref-base-tag-ambiguous": {
-            "min": 24,
-            "max": 24
-        },
         "xref-base-tag-resolved": {
-            "min": 4,
-            "max": 4
+            "min": 2,
+            "max": 2
         },
         "xref-undefined": {
-            "min": 21,
-            "max": 21
+            "min": 47,
+            "max": 47
         }
     },
     "source": "crypto_mi_test_gcc421_fullstabs.exe - generated from snapshotCounters()"

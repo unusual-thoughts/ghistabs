@@ -99,8 +99,8 @@
             "max": 23
         },
         "demangler-sole-instantiation-declined": {
-            "min": 8,
-            "max": 8
+            "min": 6,
+            "max": 6
         },
         "demangler-sole-instantiation-match": {
             "min": 1,
@@ -485,8 +485,8 @@
             ]
         },
         "placeholder-created": {
-            "min": 17800,
-            "max": 17800
+            "min": 17812,
+            "max": 17812
         },
         "placeholder-undefined-fields": {
             "min": 16,
@@ -643,8 +643,8 @@
             "max": 1225
         },
         "unresolved-xref": {
-            "min": 23,
-            "max": 23
+            "min": 34,
+            "max": 34
         },
         "vfptr-inherited-from-base": {
             "min": 11,
@@ -690,12 +690,12 @@
             "max": 19
         },
         "xref-base-tag-resolved": {
-            "min": 18,
-            "max": 18
+            "min": 7,
+            "max": 7
         },
         "xref-undefined": {
-            "min": 23,
-            "max": 23
+            "min": 34,
+            "max": 34
         }
     },
     "source": "locale_test_gcc345_fullstabs.exe - generated from snapshotCounters()"

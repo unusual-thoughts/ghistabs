@@ -617,8 +617,8 @@
             ]
         },
         "placeholder-created": {
-            "min": 40854,
-            "max": 40854
+            "min": 40858,
+            "max": 40858
         },
         "placeholder-undefined-fields": {
             "min": 215,
@@ -757,8 +757,8 @@
             "max": 1105
         },
         "unresolved-xref": {
-            "min": 11,
-            "max": 11
+            "min": 15,
+            "max": 15
         },
         "value-dropped-bnsym": {
             "min": 2475,
@@ -926,12 +926,12 @@
             "max": 75
         },
         "xref-base-tag-resolved": {
-            "min": 6,
-            "max": 6
+            "min": 2,
+            "max": 2
         },
         "xref-undefined": {
-            "min": 11,
-            "max": 11
+            "min": 15,
+            "max": 15
         }
     },
     "source": "xmltest_gcc421_fullstabs_stripped.exe - generated from snapshotCounters()"
