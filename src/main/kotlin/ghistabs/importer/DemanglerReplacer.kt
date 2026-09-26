@@ -23,7 +23,9 @@ import ghistabs.materialize.cpp.abi.Rtti
 import ghistabs.materialize.typedefAliases
 import ghistabs.parse.CATEGORY
 import ghistabs.parse.canonTemplateName
-import ghistabs.parse.splitQualified
+import ghistabs.parse.isTemplated
+import ghistabs.parse.nameSegments
+import ghistabs.parse.templateLeaf
 import java.util.*
 
 sealed class Skip(open val reason: String) {
@@ -316,7 +318,7 @@ class DemanglerReplacer(
             }
             val owner = findByExactName(spelling) ?: findByShortenedName(spelling) ?: soleInstantiation[spelling]
             if (owner == null) {
-                val n = instantiationsByBase[spelling.substringBefore('<')].orEmpty().size
+                val n = instantiationsByBase[spelling.templateLeaf].orEmpty().size
                 debug("demangler-retarget-no-type", "$spelling ($n instantiations) <- $at")
                 continue
             }
@@ -357,7 +359,7 @@ class DemanglerReplacer(
         val mangled = mangledFor(f) ?: return Owner.NoMangledName
         val demangled = Demangler.of(mangled) ?: return Owner.DemangleFailed
         val namespace = demangled.namespace ?: return Owner.NoNamespace
-        val leaf = splitQualified(namespace.namespaceString).lastOrNull() ?: return Owner.NoNamespace
+        val leaf = namespace.namespaceString.nameSegments.lastOrNull() ?: return Owner.NoNamespace
         return Owner.Spelled(ourSpelling(leaf))
     }
 
@@ -486,8 +488,8 @@ class DemanglerReplacer(
     /** Every instantiation we materialized, by the bare template name Ghidra's class-owner stub carries. */
     private val instantiationsByBase: Map<String, List<DataType>> by lazy {
         registry.allCreatedDataTypes
-            .filter { it !is Pointer && it !is Array && '<' in it.name }
-            .groupBy { it.name.substringBefore('<') }
+            .filter { it !is Pointer && it !is Array && it.name.isTemplated }
+            .groupBy { it.name.templateLeaf }
             .mapValues { (_, v) -> v.distinctBy { it.pathName } }
     }
 
@@ -509,10 +511,10 @@ class DemanglerReplacer(
                     // Ghidra decorates a scope name with a `-in-<namespace>` disambiguator and pointer
                     // marks; left on, one class counts as three instantiations and vetoes its own bind.
                     // Requiring the leaf to close a template also drops non-class scopes.
-                    val leaf = splitQualified(scope.namespaceString).lastOrNull()
+                    val leaf = scope.namespaceString.nameSegments.lastOrNull()
                         ?.substringBefore("-in-")?.trimEnd('*', '&', ' ')
-                    if (leaf != null && '<' in leaf && leaf.endsWith('>')) {
-                        getOrPut(leaf.substringBefore('<')) { mutableSetOf() }.add(ourSpelling(leaf))
+                    if (leaf != null && leaf.isTemplated && leaf.endsWith('>')) {
+                        getOrPut(leaf.templateLeaf) { mutableSetOf() }.add(ourSpelling(leaf))
                     }
                     scope = scope.namespace
                 }

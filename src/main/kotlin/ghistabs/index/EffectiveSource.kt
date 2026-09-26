@@ -8,6 +8,8 @@ import ghistabs.materialize.cpp.abi.Itanium
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.SymbolDecl
 import ghistabs.parse.TypeDecl
+import ghistabs.parse.isTemplated
+import ghistabs.parse.qualifiedName
 
 /**
  * Which file each harvested type *and function* is attributed to, once a source root has had its say
@@ -49,7 +51,7 @@ class EffectiveSource(
      * `std::locale::facet` → `locale::facet` → `facet`.
      */
     private fun Func.declaringClassSource(): GhidraSourceFile? = scopePath().let { path ->
-        path.indices.firstNotNullOfOrNull { i -> hints.classSourceByName[path.drop(i).joinToString("::")] }
+        path.indices.firstNotNullOfOrNull { i -> hints.classSourceByName[path.drop(i).qualifiedName] }
     }
 
     /** Functions per source — the inverted view render needs, matching `linesBySource`/[staticsBySource]
@@ -162,7 +164,7 @@ class EffectiveSource(
         types.allTypes.groupBy(hints::baseSourceOf)
     }
 
-    private val templateDecls get() = types.allTypes.filter { it.name?.contains('<') == true }
+    private val templateDecls get() = types.allTypes.filter { it.name?.isTemplated == true }
 
     private val typedefDecls get() = types.allTypes.filter {
         it.body !is TypeDecl.Aggregate &&

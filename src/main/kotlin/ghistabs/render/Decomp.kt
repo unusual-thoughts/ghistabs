@@ -6,6 +6,7 @@ import ghidra.program.model.listing.Function
 import ghistabs.harvest.Func
 import ghistabs.harvest.GhidraSourceFile
 import ghistabs.harvest.blockAt
+import ghistabs.parse.templateLeaf
 
 /** The fragments a wrapped logical line was rejoined from, each token at its offset in the join. */
 private fun List<ClangLine>.placed(spell: Spelling): List<Placed> {
@@ -292,7 +293,7 @@ private fun memberCutsOf(tokens: List<Placed>, function: Function?): List<IntRan
             ?.let { add(tokens.extent(it, ",")) }
         // A constructor and a destructor are named for their class; nothing else may drop its return
         // type. For a template it is the *template's* name: `DynArray<char,10ul>`'s ctor is `DynArray`.
-        val cls = owner.name.substringBefore('<')
+        val cls = owner.name.templateLeaf
         if (function.name == cls || function.name == "~$cls") {
             tokens.groupOf(ClangReturnType::class.java) { true }?.let { add(tokens.extent(it, null)) }
         }

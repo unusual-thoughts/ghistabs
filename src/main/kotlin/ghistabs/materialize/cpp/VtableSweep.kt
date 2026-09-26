@@ -8,7 +8,8 @@ import ghidra.program.model.symbol.Namespace
 import ghistabs.Demangler
 import ghistabs.materialize.cpp.abi.*
 import ghistabs.parse.canonTemplateName
-import ghistabs.parse.splitQualified
+import ghistabs.parse.leafName
+import ghistabs.parse.nameSegments
 
 /**
  * Lay every `_ZTV…` symbol no harvested class claimed. `buildAndApplyVtable` runs per group, i.e.
@@ -37,7 +38,7 @@ internal fun ClassBuilder.sweepUnclaimedVtables() {
             degradation("vtable-swept-empty", qualified, "no function pointers", shape.addressPoint)
             continue
         }
-        val leaf = canonTemplateName(splitQualified(qualified).last())
+        val leaf = canonTemplateName(qualified.leafName)
         val category = CategoryPath(ClassNaming.classDataTypesRoot, leaf)
         val vftable = registry.getOrRegister<Structure>(category, "${leaf}_vftable") {
             StructureDataType(category, "${leaf}_vftable", 0, dtm)
@@ -55,7 +56,7 @@ internal fun ClassBuilder.sweepUnclaimedVtables() {
             }
         }
 
-        val ns = buildNamespaceChain(splitQualified(qualified))
+        val ns = buildNamespaceChain(qualified.nameSegments)
         val addressPoint = program.layVtable(shape, vftable, qualified, ns, resolver, abi = abi)
         debug("vtable-reconstructed", "${targets.size} slot(s) typed from targets", addressPoint, qualified)
         // Itanium packs a class's secondaries into the same record, walkable from the primary's

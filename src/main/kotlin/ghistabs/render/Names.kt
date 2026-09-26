@@ -6,6 +6,7 @@ import ghistabs.harvest.segments
 import ghistabs.parse.AggrKind
 import ghistabs.parse.TypeDecl
 import ghistabs.parse.isDriveLetter
+import ghistabs.parse.isTemplated
 import kotlin.io.path.Path
 
 /**
@@ -49,12 +50,7 @@ fun String.asIdentifier() = (if (startsWith("~")) "dtor_" + drop(1) else this).r
  * missing-declaration family a per-file view cannot escape. It is the correct spelling of what the
  * stabs actually say, not a way to quiet the checker.
  */
-fun String.asSpecialization(name: String?) =
-    if (name != null && '<' in name && !name.startsWith("operator")) "template<> $this" else this
-
-// The unqualified spelling of a type name, which is what its constructor and destructor are called:
-// `std::vector<int>::vector`, not `std::vector<int>::std::vector<int>`.
-fun String.simpleTypeName() = substringBefore('<').substringAfterLast("::")
+fun String.asSpecialization(name: String?) = if (name?.isTemplated == true) "template<> $this" else this
 
 private val GhidraSourceFile.sanitizedRoot get() =
     rootSegment?.let { if (it.isDriveLetter) it.removeSuffix(":") else it }

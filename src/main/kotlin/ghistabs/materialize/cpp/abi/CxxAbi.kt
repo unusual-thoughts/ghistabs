@@ -5,6 +5,7 @@ import ghidra.program.model.data.Structure
 import ghidra.program.model.symbol.Symbol
 import ghidra.program.model.symbol.SymbolTable
 import ghistabs.parse.TypeDecl.Aggregate.Method
+import ghistabs.parse.templateLeaf
 
 /**
  * How a C++ ABI spells a *member* — the half of [CxxAbi] that never touches a vtable record. Split
@@ -39,7 +40,7 @@ interface CxxMemberNaming {
      * recognisable by [physnameIsImplicit] even when its source name is spelled unusually.
      */
     fun isImplicitMember(m: Method<*>, className: String): Boolean {
-        val leaf = className.substringAfterLast("::")
+        val leaf = className.templateLeaf
         return m.name == leaf || m.name == "~$leaf" || m.name == assignmentOperatorName ||
             m.mangled?.let(::physnameIsImplicit) == true
     }

@@ -189,7 +189,7 @@ interface RenderContext {
                 .orEmpty()
             ("${b.cxxKeyword} ${shortener?.shortenedOrNull(name ?: "") ?: name}$bases { ")
                 .asSpecialization(shortener?.shortenedOrNull(name ?: "") ?: name) +
-                b.renderFull(name?.simpleTypeName()).joinToString(" ") +
+                b.renderFull(name?.templateLeaf).joinToString(" ") +
                 " }; /* ${b.sizeBytes} bytes */"
         }
 
@@ -210,7 +210,7 @@ interface RenderContext {
         // Struct fields/methods are self-terminated statements; enum members carry a
         // trailing comma so the space-join in layoutBraceBlock reads as a member list.
         val members = when (body) {
-            is TypeDecl.Aggregate -> body.renderFull(name.simpleTypeName())
+            is TypeDecl.Aggregate -> body.renderFull(name.templateLeaf)
             is TypeDecl.Enum -> body.members.map { (mn, mv) -> "$mn = $mv," }
             else -> return null
         }

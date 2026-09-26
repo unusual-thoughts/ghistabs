@@ -104,10 +104,17 @@ data class Type(
 
     fun asStruct() = asType<TypeDecl.Aggregate<GlobalTypeId>>()
 
-    /** A declaration the harvest attributes to a file at a line — what a local file is checked against. */
-    data class Decl(val line: Int, val name: String)
+    /**
+     * A declaration the harvest attributes to a file at a line: what a local file is checked against.
+     * Keyed by [templateName], so every instantiation of one template shares its declaration's key.
+     */
+    data class Decl(val line: Int, val name: String) {
+        companion object {
+            fun at(line: Int?, name: String?) = line?.let { l -> name?.let { Decl(l, it.templateName) } }
+        }
+    }
 
-    fun declKey() = named?.name?.let { n -> line?.let { Decl(it, n.substringBefore('<')) } }
+    fun declKey() = Decl.at(line, named?.name)
 }
 
 /**
@@ -148,7 +155,7 @@ data class Symbol<S : SymbolDecl<GlobalTypeId>>(
     fun <T : SymbolDecl<GlobalTypeId>> retype(body: T) =
         Symbol(recordIndex, recordType, body, rawValue, sourceFile, line, enclosingFunction)
 
-    fun declKey() = line?.let { Type.Decl(it, body.name) }
+    fun declKey() = Type.Decl.at(line, body.name)
 
     val location get() = when (body) {
         is SymbolDecl.Local<*> -> body.location

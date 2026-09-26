@@ -5,6 +5,7 @@ import ghidra.util.task.TaskMonitor
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.materialize.cpp.isBaseField
 import ghistabs.parse.canonTemplateName
+import ghistabs.parse.isTemplated
 
 /** `__x` and `_X` are reserved to the implementation — a name the program never chose. */
 private fun String.isReservedToImplementation() =
@@ -46,9 +47,9 @@ class TemplateNameShortener(aliases: Map<String, String>) {
         Regex("(?<![A-Za-z0-9_])(" + keys.joinToString("|") { Regex.escape(it) } + ")(?![A-Za-z0-9_])")
     }
 
-    // A name with no `<` can't contain any template target, so the fixpoint is a guaranteed no-op — skip
+    // A name with no template arguments can't contain a template target, so the fixpoint is a no-op: skip
     // it (most created types aren't templated). Only valid when every target is itself templated.
-    private val allTargetsTemplated = aliasByTarget.keys.all { '<' in it }
+    private val allTargetsTemplated = aliasByTarget.keys.all { it.isTemplated }
     private val cache = HashMap<String, String>()
 
     val isEmpty get() = aliasByTarget.isEmpty()
@@ -57,13 +58,13 @@ class TemplateNameShortener(aliases: Map<String, String>) {
     fun shorten(name: String): String = cache.getOrPut(name) { substitute(canonTemplateName(name)) }
 
     /**
-     * Substitute aliases through [text] without canonicalising it — for a line of rendered code, where
-     * [canonTemplateName]'s whitespace rule would also close up every `f(a, b)` and `a > b` it met.
-     * Decompiler output already spells template names canonically (they come from the datatypes this
-     * extension created), so the targets still match.
+     * Substitute aliases through [text] without canonicalising it: a decompiler token, which may be a
+     * string literal or comment that [canonTemplateName]'s whitespace rule would rewrite. Decompiler
+     * output already spells template names canonically (they come from the datatypes this extension
+     * created), so the targets still match.
      */
     fun substitute(text: String): String {
-        if (combined == null || (allTargetsTemplated && '<' !in text)) return text
+        if (combined == null || (allTargetsTemplated && !text.isTemplated)) return text
         var s = text
         var prev: String
         do {

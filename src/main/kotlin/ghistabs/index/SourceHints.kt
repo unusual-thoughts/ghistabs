@@ -6,6 +6,8 @@ import ghistabs.harvest.*
 import ghistabs.parse.SourceFile
 import ghistabs.parse.TypeDecl
 import ghistabs.parse.canonTemplateName
+import ghistabs.parse.isTemplated
+import ghistabs.parse.outermostTemplate
 
 /**
  * Where the stabs alone say each type lives — attribution before a source root has a say.
@@ -85,14 +87,14 @@ class SourceHints(
         // belongs. Only stdlib homes seed, and `id.source` rather than the effective source, since
         // this map is what the effective source consults.
         val settled = types.allTypes
-            .mapNotNull { ast -> ast.name?.takeIf { '<' in it }?.let { it to ast.id.source.identity } }
+            .mapNotNull { ast -> ast.name?.takeIf { it.isTemplated }?.let { it to ast.id.source.identity } }
             .filter { (_, home) -> home.path.isStdMarkerPath() }
-        val homeByTemplate = (voted.entries.filter { '<' in it.key }.map { it.key to it.value } + settled)
-            .groupBy({ it.first.substringBefore('<') }, { it.second })
+        val homeByTemplate = (voted.entries.filter { it.key.isTemplated }.map { it.key to it.value } + settled)
+            .groupBy({ it.first.outermostTemplate }, { it.second })
             .mapValues { (_, homes) -> homes.groupingBy { it }.eachCount().maxByOrNull { it.value }!!.key }
         val bySibling = voted + types.definitionsByTag.keys
-            .filter { '<' in it && it !in voted }
-            .mapNotNull { name -> homeByTemplate[name.substringBefore('<')]?.let { name to it } }
+            .filter { it.isTemplated && it !in voted }
+            .mapNotNull { name -> homeByTemplate[name.outermostTemplate]?.let { name to it } }
         // Last resort, and it is structural rather than evidential: a base class inherits where its
         // derived class went. Bases only — extending it to field types moved nothing on the corpus.
         // `_Vector_alloc_base<unsigned short>` declares three pointers, has no methods, and no
@@ -107,7 +109,7 @@ class SourceHints(
                     val home = ast.name?.let { homes[it] } ?: return@flatMap emptyList()
                     (ast.body as? TypeDecl.Aggregate)?.bases.orEmpty().mapNotNull { base ->
                         (base.type as? TypeDecl.Ref)?.id?.let { types.byId(it) }?.name
-                            ?.takeIf { '<' in it && it !in homes }?.let { it to home }
+                            ?.takeIf { it.isTemplated && it !in homes }?.let { it to home }
                     }
                 }
         }
@@ -145,7 +147,7 @@ class SourceHints(
                 // `vector<unsigned short>` inside whichever header first needed it, so image.h — a
                 // header, hence already past this guard — collected 31 rows of libstdc++. Everything
                 // else declared only in headers is left alone, which also bounds what this loop costs.
-                val templated = '<' in name
+                val templated = name.isTemplated
                 if (!templated && defSources.all { it.filename.hasHeaderExtension() }) continue
                 val methods = asts.flatMap { (it.body as? TypeDecl.Aggregate<*>)?.methods.orEmpty() }
                 if (methods.isEmpty()) continue

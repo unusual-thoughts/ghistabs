@@ -155,8 +155,7 @@ class ScopeLocator(val index: TypeGraph) : DiagnosticSink by index {
         // by value, and file it under that template's member category — the slot its qualified,
         // method-bearing sibling already occupies, so the two unify instead of forking a `.conflict`.
         val recovered = (
-            ast.name?.let(::splitQualified)?.takeIf { it.size > 1 }
-                ?.let { it.dropLast(1).joinToString("::") to it.last() }
+            ast.name?.let { n -> n.enclosingName?.let { it to n.leafName } }
                 ?: enclosingByNestedId[ast.id]?.name?.let { it to ast.ghidraName }
             )?.let { (enclosingName, leaf) ->
             memberCategoryByClass[canonTemplateName(enclosingName)]?.let { TypeLocation(it, leaf) }

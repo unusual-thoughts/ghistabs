@@ -16,6 +16,8 @@ import ghistabs.index.EffectiveSource
 import ghistabs.index.SourceHints
 import ghistabs.materialize.TemplateNameShortener
 import ghistabs.parse.TypeDecl
+import ghistabs.parse.isTemplated
+import ghistabs.parse.member
 import ghistabs.render.Renderer.Companion.DECOMPILE_SECONDS
 import ghistabs.runTransaction
 import ghistabs.scan.Definition
@@ -65,7 +67,7 @@ class Renderer(
     val staticMemberNames by lazy {
         types.allTypes.flatMap { t ->
             (t.body as? TypeDecl.Aggregate)?.fields.orEmpty().filter { it.isStatic }
-                .mapNotNull { f -> f.mangled?.let { m -> t.name?.let { m to "$it::${f.name}" } } }
+                .mapNotNull { f -> f.mangled?.let { m -> t.name?.let { m to it.member(f.name) } } }
         }.toMap()
     }
 
@@ -315,7 +317,7 @@ class Renderer(
     fun harvestTemplateShortener(): TemplateNameShortener = TemplateNameShortener(
         types.allTypes.mapNotNull { ast ->
             ast.name?.let { name ->
-                types.targetSpelling(ast.body)?.takeIf { '<' in it && it.length > name.length }?.let { name to it }
+                types.targetSpelling(ast.body)?.takeIf { it.isTemplated && it.length > name.length }?.let { name to it }
             }
         }.toMap(),
     )

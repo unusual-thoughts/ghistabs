@@ -10,6 +10,7 @@ import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
 import ghistabs.parse.isVptrFieldName
+import ghistabs.parse.member
 import ghistabs.runTransaction
 import ghidra.program.model.data.Enum as GhidraEnum
 
@@ -170,7 +171,7 @@ internal fun DataTypeRegistry.fillStructBases(
             )
         }.onSuccess { debug("inheritance-applied") }
             .onFailure {
-                degradation("base-layout-failed", "$qualifiedName::${dt.name}", it.message)
+                degradation("base-layout-failed", qualifiedName.member(dt.name), it.message)
                 debug("inheritance-failed")
             }
     }

@@ -7,7 +7,10 @@ import ghidra.program.model.data.IntegerDataType
 import ghidra.program.model.data.LongLongDataType
 import ghistabs.Demangler
 import ghistabs.namespaces
-import ghistabs.parse.splitQualified
+import ghistabs.parse.isTemplated
+import ghistabs.parse.member
+import ghistabs.parse.nameSegments
+import ghistabs.parse.qualifiedName
 
 /**
  * Single source of Itanium C++ ABI facts for the gcc/Cygwin corpus: mangled names,
@@ -84,7 +87,7 @@ object Itanium : CxxAbi {
         listOf(
             "$VTABLE_PREFIX$it",
             "_$VTABLE_PREFIX$it", // Cygwin/PE leading underscore
-            "$className::$DEMANGLED_VTABLE",
+            className.member(DEMANGLED_VTABLE),
         )
     }
 
@@ -96,12 +99,10 @@ object Itanium : CxxAbi {
 
     fun zti(className: String) = "$TYPEINFO_PREFIX${mangleClassName(className)}"
 
-    fun isTemplated(name: String) = '<' in name
-
     /** Itanium-mangle a nested class name: `Foo`→`3Foo`, `Foo::Bar`→`N3Foo3BarE`. Templates unchanged. */
     fun mangleClassName(name: String): String {
-        if (isTemplated(name)) return name
-        val parts = splitQualified(name)
+        if (name.isTemplated) return name
+        val parts = name.nameSegments
         return if (parts.size == 1) {
             "${parts[0].length}${parts[0]}"
         } else {
@@ -138,7 +139,7 @@ object Itanium : CxxAbi {
      *  not one of [kind]. */
     private fun addressTableClass(obj: DemangledObject, kind: String): String? {
         if (obj !is DemangledAddressTable || obj.name != kind) return null
-        return obj.namespaces.joinToString("::")
+        return obj.namespaces.qualifiedName
     }
 
     override fun isInlineStdMember(name: String): Boolean = INLINE_STD_MEMBER.containsMatchIn(name)

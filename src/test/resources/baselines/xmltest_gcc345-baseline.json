@@ -464,8 +464,8 @@
             ]
         },
         "placeholder-created": {
-            "min": 16650,
-            "max": 16650
+            "min": 16648,
+            "max": 16648
         },
         "placeholder-undefined-fields": {
             "min": 15,
@@ -636,8 +636,8 @@
             "max": 1255
         },
         "unresolved-xref": {
-            "min": 31,
-            "max": 31
+            "min": 27,
+            "max": 27
         },
         "vfptr-inherited-from-base": {
             "min": 10,
@@ -702,21 +702,13 @@
             "min": 19,
             "max": 19
         },
-        "xref-ambiguous": {
-            "min": 1,
-            "max": 1
-        },
-        "xref-base-tag-ambiguous": {
-            "min": 1,
-            "max": 1
-        },
         "xref-base-tag-resolved": {
-            "min": 8,
-            "max": 8
+            "min": 12,
+            "max": 12
         },
         "xref-undefined": {
-            "min": 30,
-            "max": 30
+            "min": 27,
+            "max": 27
         }
     },
     "source": "xmltest_gcc345.exe - generated from snapshotCounters()"
