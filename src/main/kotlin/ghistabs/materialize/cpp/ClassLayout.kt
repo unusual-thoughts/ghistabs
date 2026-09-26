@@ -5,41 +5,22 @@ import ghidra.program.model.gclass.ClassUtils
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.index.LocatedType
 import ghistabs.materialize.DataTypeRegistry
-import ghistabs.materialize.fillFields
 import ghistabs.materialize.reportHoles
 import ghistabs.materialize.resolveRef
+import ghistabs.materialize.undef
 import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
-import ghistabs.parse.isVptrFieldName
 import ghistabs.parse.member
 import java.util.IdentityHashMap
 import ghidra.program.model.data.Array as GhidraArray
-
-/**
- * A C++ class's struct, as far as its own stab takes it: the non-virtual bases [fillStructBases] can lay,
- * then its own fields. A class with virtual bases is [layClasses]'s to finish, and to report.
- */
-internal fun DataTypeRegistry.fillClass(
-    body: TypeDecl.Aggregate<GlobalTypeId>,
-    struct: Structure,
-    qualifiedName: String,
-): DataType {
-    fillStructBases(body, struct, qualifiedName)
-    fillFields(body, struct, qualifiedName) { field ->
-        (isVptrFieldName(field.name) && inheritedVptrAt(body, struct, field.offsetBits))
-            .also { if (it) debug("vptr-skipped-inherited") }
-    }
-    if (!types.hasVirtualBase(body)) reportHoles(struct, qualifiedName)
-    return struct
-}
 
 /**
  * A vptr at a base's offset is inherited: it is in the base subobject laid there, or in the non-virtual
  * part [layClasses] lays for a base with virtual bases of its own. Where no base could be laid, the
  * bytes stay undefined, so the stab's field is kept. A virtual base's offset is no position.
  */
-private fun DataTypeRegistry.inheritedVptrAt(
+internal fun DataTypeRegistry.inheritedVptrAt(
     body: TypeDecl.Aggregate<GlobalTypeId>,
     struct: Structure,
     offsetBits: Long,
@@ -50,6 +31,26 @@ private fun DataTypeRegistry.inheritedVptrAt(
     return struct.definedComponents.any { at in it.offset..<it.offset + it.length } ||
         bases.any { hasVirtualBases(it.type) }
 }
+
+/** Null [TypeDecl.Method.cls] is gdb's stub method (`##<ret>;`) stating no domain — the normal gcc
+ *  2.x encoding, not a failure; only a stated-but-unresolvable cls is a real loss. */
+internal fun DataTypeRegistry.thisTypeFor(body: TypeDecl.Method<GlobalTypeId>, at: String): DataType =
+    body.cls?.let { resolveRef(it) ?: undef("method-this-cls", at, it) } ?: Undefined4DataType.dataType
+
+/**
+ * `int A::*`: an Itanium data-member pointer is a byte offset, one ptrdiff_t wide, and Ghidra has no
+ * pointer-to-member type. gcc ≤ 3.3 spells it as a pointer to the [TypeDecl.Member], ≥ 3.4 as
+ * the Member alone (`build_ptrmem_type` stopped wrapping OFFSET_TYPE in POINTER_TYPE), so both
+ * land here. The stab can't say which gcc wrote it, so ≥ 3.4's `int A::**` comes out one level
+ * short — same width, so no layout moves.
+ */
+internal fun DataTypeRegistry.memberPointer(): DataType =
+    // Unbound, like BuiltinTable's primitives: a program-bound `int` would fork `int.conflict`.
+    AbstractIntegerDataType.getSignedDataType(dtm.dataOrganization.pointerSize, null)
+
+/** [memberPointer] when a pointer to [pointee] is gcc ≤ 3.3's `int A::*`, else null. */
+internal fun DataTypeRegistry.memberPointerTo(pointee: GlobalTypeDecl): DataType? =
+    if (types.isMemberPointee(pointee)) memberPointer() else null
 
 /**
  * Splices each non-virtual base's fields into [placeholder] at the offset the stab's inheritance line
