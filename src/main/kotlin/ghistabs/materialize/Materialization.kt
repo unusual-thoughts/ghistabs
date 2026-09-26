@@ -5,6 +5,7 @@ import ghidra.program.model.lang.CompilerSpec
 import ghistabs.harvest.Type
 import ghistabs.materialize.cpp.ClassNaming
 import ghistabs.materialize.cpp.firstPolymorphicBase
+import ghistabs.materialize.cpp.virtualBases
 import ghistabs.parse.CATEGORY
 import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.GlobalTypeId
@@ -106,7 +107,10 @@ internal fun DataTypeRegistry.materializeBody(ast: Type, category: CategoryPath,
             }
     }
 
-/** Splices each base's fields into [placeholder] at the offset the stab's inheritance line gives it. */
+/**
+ * Splices each non-virtual base's fields into [placeholder] at the offset the stab's inheritance line
+ * gives it. Virtual bases, and bases with virtual bases of their own, are [layVirtualInheritance]'s.
+ */
 internal fun DataTypeRegistry.fillStructBases(
     body: TypeDecl.Aggregate<GlobalTypeId>,
     placeholder: Structure,
@@ -115,8 +119,9 @@ internal fun DataTypeRegistry.fillStructBases(
     // An empty base occupies nothing (EBO) and must not be given the offset it shares with a
     // space-occupying sibling: cryptopp's `TwoBases<BlockCipher,Rijndael_Info>` declares both at +0,
     // and the empty one arriving second used to take the slot the 12-byte one had already claimed.
-    val occupying = body.bases.filterNot { types.resolveStruct(it.type)?.sizeBytes?.let { n -> n <= 1 } == true }
-    if (occupying.size < body.bases.size) debug("base-empty-ebo")
+    val nonVirtual = body.bases.filterNot { it.isVirtual }
+    val occupying = nonVirtual.filterNot { types.resolveStruct(it.type)?.sizeBytes?.let { n -> n <= 1 } == true }
+    if (occupying.size < nonVirtual.size) debug("base-empty-ebo")
 
     // Layout boundary to infer size of unresolved bases: offset of next
     // base or first non-static field is where this subobject must end.
@@ -126,7 +131,7 @@ internal fun DataTypeRegistry.fillStructBases(
         .minOfOrNull { (it.offsetBits / 8).toInt() }
         ?: body.sizeBytes.toInt()
 
-    for (base in occupying.sortedBy { it.offsetBits }) {
+    for (base in occupying.filterNot { hasVirtualBases(it.type) }.sortedBy { it.offsetBits }) {
         val offsetBytes = (base.offsetBits / 8).toInt()
         // gcc's inheritance line doesn't transmit subobject size — derive
         // from the consuming struct's own-field offset (bouniaf sees
@@ -179,8 +184,8 @@ internal fun DataTypeRegistry.fillStructBases(
     if (body.bases.isNotEmpty()) {
         val lines = body.bases.sortedBy { it.offsetBits }.joinToString("\n") { base ->
             val baseName = (resolveRef(base.type)?.name) ?: "<unresolved>"
-            val virt = if (base.isVirtual) " virtual" else ""
-            "inherits ${base.access.name.lowercase()}$virt $baseName @ +${base.offsetBits / 8}"
+            val at = if (base.isVirtual) " virtual $baseName" else " $baseName @ +${base.offsetBits / 8}"
+            "inherits ${base.access.name.lowercase()}$at"
         }
         placeholder.description =
             if (placeholder.description.isNullOrEmpty()) lines else "${placeholder.description}\n$lines"
@@ -273,27 +278,33 @@ internal fun DataTypeRegistry.fillComposite(
         }
     }
 
-    // Report runs ≥ 4 bytes of unnamed Undefined1 (Ghidra autofills empty bytes
-    // with Undefined1 components so consecutive components are always contiguous —
-    // a naive offset-gap detector never fires).
-    if (placeholder is Structure) {
-        val holes = placeholder.detectUndefinedRuns(minRunBytes = 4)
-        diagnostics.recordStructGaps(qualifiedName, holes)
-        if (holes.isNotEmpty()) {
-            val bytesInHoles = holes.sumOf { (it.lengthBits / 8).toInt() }
-            val totalBytes = placeholder.length
-            if (totalBytes > 0 && bytesInHoles * 4 >= totalBytes) {
-                // ≥25% Undefined1 — catches the bouniaf "base invisible" pattern.
-                degradation(
-                    "struct-mostly-undefined",
-                    qualifiedName,
-                    "$bytesInHoles of $totalBytes bytes are unnamed Undefined1 across ${holes.size} run(s)",
-                )
-            }
-        }
+    when {
+        placeholder !is Structure -> {}
+        types.virtualBases(body).isNotEmpty() -> virtualLayouts += VirtualLayout(body, placeholder, qualifiedName)
+        else -> reportHoles(placeholder, qualifiedName)
     }
 
     return placeholder
+}
+
+/**
+ * Reports runs ≥ 4 bytes of unnamed Undefined1 (Ghidra autofills empty bytes with Undefined1
+ * components so consecutive components are always contiguous — a naive offset-gap detector never fires).
+ */
+internal fun DataTypeRegistry.reportHoles(struct: Structure, qualifiedName: String) {
+    val holes = struct.detectUndefinedRuns(minRunBytes = 4)
+    diagnostics.recordStructGaps(qualifiedName, holes)
+    if (holes.isEmpty()) return
+    val bytesInHoles = holes.sumOf { (it.lengthBits / 8).toInt() }
+    val totalBytes = struct.length
+    if (totalBytes > 0 && bytesInHoles * 4 >= totalBytes) {
+        // ≥25% Undefined1 — catches the bouniaf "base invisible" pattern.
+        degradation(
+            "struct-mostly-undefined",
+            qualifiedName,
+            "$bytesInHoles of $totalBytes bytes are unnamed Undefined1 across ${holes.size} run(s)",
+        )
+    }
 }
 
 /** Null [TypeDecl.Method.cls] is gdb's stub method (`##<ret>;`) stating no domain — the normal gcc
@@ -496,6 +507,7 @@ fun DataTypeRegistry.materializeAll(): Int {
             monitor.increment()
             located.materialize()
         }
+        layVirtualInheritance()
 
         materializeTypedefs()
 

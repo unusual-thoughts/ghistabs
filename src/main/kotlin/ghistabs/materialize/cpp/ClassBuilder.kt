@@ -25,6 +25,7 @@ import ghistabs.materialize.buildFunctionDefinition
 import ghistabs.materialize.cpp.abi.*
 import ghistabs.materialize.cpp.abi.CxxAbi.Companion.prevailingAbi
 import ghistabs.materialize.resolveRef
+import ghistabs.materialize.syncSelfBase
 import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Aggregate.Method
 import java.util.*
@@ -216,6 +217,7 @@ class ClassBuilder(
     /** Materialize class struct + namespace + (optional) vtable struct, apply at _ZTV. */
     private fun LocatedClass.build() {
         if (isPoly) vfptrPlacement.place(structDt, name, body, hasPolyBase) { ensureVtableTypeAndPointer() }
+        registry.syncSelfBase(structDt)
 
         // gcc 2.x composes a method's physname from its own class's ABI, so reparenting always
         // resolves through this class's own abi, once its vtable resolves.
