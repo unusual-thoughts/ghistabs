@@ -7,6 +7,7 @@ import ghistabs.harvest.Func
 import ghistabs.harvest.Harvest
 import ghistabs.harvest.Type
 import ghistabs.parse.*
+import java.util.IdentityHashMap
 
 /**
  * The type graph: every harvested [Type] indexed by id, by name and by base tag, plus the xref oracle
@@ -68,6 +69,15 @@ class TypeGraph(private val harvest: Harvest, sink: DiagnosticSink = DummySink) 
 
     /** [byXRef]'s answers, misses included: it reports as it resolves, so each xref must resolve once. */
     private val xrefs = HashMap<TypeDecl.XRef<GlobalTypeId>, Type?>()
+
+    private val virtualBaseAnswers = IdentityHashMap<TypeDecl.Aggregate<GlobalTypeId>, Boolean>()
+
+    /** Whether [aggregate] inherits virtually anywhere in its base graph. */
+    fun hasVirtualBase(aggregate: TypeDecl.Aggregate<GlobalTypeId>): Boolean = virtualBaseAnswers[aggregate] ?: run {
+        virtualBaseAnswers[aggregate] = false // a cycle through corrupt stabs answers no
+        aggregate.bases.any { it.isVirtual || resolveStruct(it.type)?.let(::hasVirtualBase) == true }
+            .also { virtualBaseAnswers[aggregate] = it }
+    }
 
     // Pre-warm with empty `visited` so collision classification isn't biased by traversal order.
     // Must stay below definitionsByTag/definitionsByTemplateLeaf: contentHash resolves xrefs through them, and a `by
