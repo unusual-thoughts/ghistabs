@@ -280,7 +280,10 @@ internal fun DataTypeRegistry.fillComposite(
 
     when {
         placeholder !is Structure -> {}
-        types.virtualBases(body).isNotEmpty() -> virtualLayouts += VirtualLayout(body, placeholder, qualifiedName)
+
+        types.virtualBases(body).isNotEmpty() ->
+            virtualLayouts.putIfAbsent(placeholder, VirtualLayout(body, placeholder, qualifiedName))
+
         else -> reportHoles(placeholder, qualifiedName)
     }
 
