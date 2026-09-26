@@ -4,7 +4,7 @@ import ghidra.program.model.data.*
 import ghidra.program.model.lang.CompilerSpec
 import ghistabs.harvest.Type
 import ghistabs.materialize.cpp.fillStructBases
-import ghistabs.materialize.cpp.firstPolymorphicBase
+import ghistabs.materialize.cpp.hasVirtualBases
 import ghistabs.parse.CATEGORY
 import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.GlobalTypeId
@@ -116,20 +116,23 @@ internal fun DataTypeRegistry.fillComposite(
         fillStructBases(body, placeholder, qualifiedName)
     }
 
-    val polyBase = types.firstPolymorphicBase(body)
-
-    // Any vptr at a base-occupied offset is inherited — base owns it. Skip it.
-    // Catches the unresolved-base case (synthesized _base_unknown_*) where
-    // firstPolymorphicBase returns null but gcc still emitted _vptr$Class at
-    // the base's offset. A virtual base's offset is no position.
-    val baseOffsets = body.bases.filterNot { it.isVirtual }.map { it.offsetBits }.toSet()
+    // A vptr at a base's offset is inherited: it is in the base subobject laid there, or in the
+    // non-virtual part [layClasses] lays for a base with virtual bases of its own. Where no base could
+    // be laid, the bytes stay undefined, so the stab's field is kept. A virtual base's offset is no
+    // position.
+    fun inheritedVptrAt(offsetBits: Long): Boolean {
+        val bases = body.bases.filter { !it.isVirtual && it.offsetBits == offsetBits }
+        if (bases.isEmpty()) return false
+        val at = (offsetBits / 8).toInt()
+        val laid = (placeholder as? Structure)?.definedComponents.orEmpty()
+            .any { at in it.offset..<it.offset + it.length }
+        return laid || bases.any { hasVirtualBases(it.type) }
+    }
 
     for ((name, type, offsetBits, sizeBits, isStatic) in body.fields) {
         if (isStatic) continue
 
-        if (isVptrFieldName(name) &&
-            ((polyBase != null && offsetBits == polyBase.offsetBits) || offsetBits in baseOffsets)
-        ) {
+        if (isVptrFieldName(name) && inheritedVptrAt(offsetBits)) {
             debug("vptr-skipped-inherited")
             continue
         }
