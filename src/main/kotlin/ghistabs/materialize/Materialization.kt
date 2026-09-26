@@ -202,8 +202,8 @@ internal fun DataTypeRegistry.fillComposite(
     // Any vptr at a base-occupied offset is inherited — base owns it. Skip it.
     // Catches the unresolved-base case (synthesized _base_unknown_*) where
     // firstPolymorphicBase returns null but gcc still emitted _vptr$Class at
-    // the base's offset (bouniaf → ios_base cascade).
-    val baseOffsets = body.bases.map { it.offsetBits }.toSet()
+    // the base's offset. A virtual base's offset is no position.
+    val baseOffsets = body.bases.filterNot { it.isVirtual }.map { it.offsetBits }.toSet()
 
     for ((name, type, offsetBits, sizeBits, isStatic) in body.fields) {
         if (isStatic) continue

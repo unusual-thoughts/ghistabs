@@ -26,8 +26,21 @@ fun TypeGraph.hasPolymorphicBaseSubobject(typeDecl: TypeDecl.Aggregate<GlobalTyp
  * at all, so `xmltest_gcc421`'s `TiXmlVisitor:T(0,436)=s4_vptr$TiXmlVisitor:(0,166),0,32;;` is the
  * *only* evidence its bases are polymorphic. Without it every derived class looked non-polymorphic,
  * so nothing ever asked where its vfptr should come from.
+ *
+ * A declared vptr can only belong to a non-virtual base at its offset; any other base leaves it the
+ * class's own. libstdc++'s `basic_istream` is `!1,12-96,(3,2);_vptr$basic_istream:…,0,32`, a vbase
+ * whose `offsetBits` is a negative vtable offset that sorts first, and under plain `-gstabs` the
+ * same vbase is a pseudo-field promoted to a non-virtual base at +8. A class declaring no vptr still
+ * reaches it through a virtual base: libg++'s `ostream`, through `ios`.
  */
 fun TypeGraph.firstPolymorphicBase(typeDecl: TypeDecl.Aggregate<GlobalTypeId>): Base<GlobalTypeId>? = typeDecl.bases
+    .filter {
+        when (val offsetBytes = vptrOffsetBytesOf(typeDecl)) {
+            null -> true
+            else if it.isVirtual -> false
+            else -> offsetBytes.toLong() == it.offsetBits / 8
+        }
+    }
     .sortedBy { it.offsetBits }
     .firstOrNull { base ->
         resolveStruct(base.type)?.run {
