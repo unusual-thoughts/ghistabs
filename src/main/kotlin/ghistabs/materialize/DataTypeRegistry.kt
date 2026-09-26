@@ -5,6 +5,7 @@ import ghidra.program.model.data.CategoryPath
 import ghidra.program.model.data.DataType
 import ghidra.program.model.data.DataTypeConflictHandler
 import ghidra.program.model.data.DataTypeManager
+import ghidra.program.model.data.Structure
 import ghidra.util.task.TaskMonitor
 import ghistabs.Demangler
 import ghistabs.demanglerPath
@@ -17,6 +18,7 @@ import ghistabs.parse.CATEGORY
 import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
+import java.util.IdentityHashMap
 
 /**
  * DataType cache and DTM facade: owns the id→DataType map, resolves types into the DTM under a
@@ -61,6 +63,17 @@ class DataTypeRegistry(
     // harvest doesn't). Ghidra's own analysis may have forked some, so the end-of-import delta
     // ([reportConflictDelta]) attributes only the forks the stabs import introduced.
     internal val conflictsBefore = dtm.conflictPaths()
+
+    /** Classes with a virtual base in their graph, filled but for it; [layVirtualInheritance] finishes them. */
+    internal val virtualLayouts = mutableListOf<VirtualLayout>()
+
+    // Keyed by identity: a DataType hashes by name, and shortening renames.
+
+    /** The non-virtual size of each class [virtualLayouts] laid. */
+    internal val nonVirtualSizes = IdentityHashMap<DataType, Int>()
+
+    /** Each embedded class's non-virtual part, as a struct of its own. */
+    internal val selfBases = IdentityHashMap<DataType, Structure>()
 
     /** XRef stubs that fell through to placeholders. Use sites are flagged via [recordXRefStubAt]. */
     internal val xrefStubs = mutableSetOf<DataType>()
