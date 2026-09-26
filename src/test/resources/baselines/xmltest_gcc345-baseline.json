@@ -96,8 +96,8 @@
             "max": 22
         },
         "demangler-sole-instantiation-declined": {
-            "min": 15,
-            "max": 15
+            "min": 13,
+            "max": 13
         },
         "demangler-unbound-stub": {
             "min": 22,
@@ -464,8 +464,8 @@
             ]
         },
         "placeholder-created": {
-            "min": 16648,
-            "max": 16648
+            "min": 16657,
+            "max": 16657
         },
         "placeholder-undefined-fields": {
             "min": 15,
@@ -636,8 +636,8 @@
             "max": 1255
         },
         "unresolved-xref": {
-            "min": 27,
-            "max": 27
+            "min": 35,
+            "max": 35
         },
         "vfptr-inherited-from-base": {
             "min": 10,
@@ -703,12 +703,12 @@
             "max": 19
         },
         "xref-base-tag-resolved": {
-            "min": 12,
-            "max": 12
+            "min": 4,
+            "max": 4
         },
         "xref-undefined": {
-            "min": 27,
-            "max": 27
+            "min": 35,
+            "max": 35
         }
     },
     "source": "xmltest_gcc345.exe - generated from snapshotCounters()"
