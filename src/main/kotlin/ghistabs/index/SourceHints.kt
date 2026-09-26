@@ -3,6 +3,7 @@ package ghistabs.index
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.DummySink
 import ghistabs.harvest.*
+import ghistabs.parse.SourceFile
 import ghistabs.parse.TypeDecl
 import ghistabs.parse.canonTemplateName
 
@@ -213,13 +214,16 @@ class SourceHints(
         return lo
     }
 
-    // Named types vote via the hint (member-SLINE header); typedefs trust their N_SOL declSourceFile (a
-    // template-instantiation typedef splayed into a CU still names its real header); structs/enums fall
-    // back to id.source (their `:T` body is legitimately CU-emitted, §6).
+    // Named types vote via the hint (member-SLINE header); structs/enums fall back to id.source (their `:T`
+    // body is legitimately CU-emitted, §6). A typedef whose id a BINCL header minted takes that header too:
+    // a header with no code never gets the N_SOL declSourceFile would carry, so `__u_char` read as the CU.
+    // Only a CU-minted typedef trusts declSourceFile — an instantiation splayed into a CU still names its
+    // real header there (§17, §63).
     private fun Type.hinted() = name?.let { multiSourceHeaderHints[it] }
 
-    private fun Type.recorded() =
-        sourceFile?.takeIf { body !is TypeDecl.Aggregate && body !is TypeDecl.Enum } ?: id.source.identity
+    private fun Type.recorded() = sourceFile?.takeIf {
+        body !is TypeDecl.Aggregate && body !is TypeDecl.Enum && id.source !is SourceFile.HeaderSource
+    } ?: id.source.identity
 
     /** [type]'s hint — the header its methods were compiled into — folded, or null if it has none. */
     fun hintedFor(type: Type) = type.hinted()?.let(sources::fold)
