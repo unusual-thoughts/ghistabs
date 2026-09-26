@@ -5,14 +5,51 @@ import ghidra.program.model.gclass.ClassUtils
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.index.LocatedType
 import ghistabs.materialize.DataTypeRegistry
+import ghistabs.materialize.fillFields
 import ghistabs.materialize.reportHoles
 import ghistabs.materialize.resolveRef
 import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
+import ghistabs.parse.isVptrFieldName
 import ghistabs.parse.member
 import java.util.IdentityHashMap
 import ghidra.program.model.data.Array as GhidraArray
+
+/**
+ * A C++ class's struct, as far as its own stab takes it: the non-virtual bases [fillStructBases] can lay,
+ * then its own fields. A class with virtual bases is [layClasses]'s to finish, and to report.
+ */
+internal fun DataTypeRegistry.fillClass(
+    body: TypeDecl.Aggregate<GlobalTypeId>,
+    struct: Structure,
+    qualifiedName: String,
+): DataType {
+    fillStructBases(body, struct, qualifiedName)
+    fillFields(body, struct, qualifiedName) { field ->
+        (isVptrFieldName(field.name) && inheritedVptrAt(body, struct, field.offsetBits))
+            .also { if (it) debug("vptr-skipped-inherited") }
+    }
+    if (!types.hasVirtualBase(body)) reportHoles(struct, qualifiedName)
+    return struct
+}
+
+/**
+ * A vptr at a base's offset is inherited: it is in the base subobject laid there, or in the non-virtual
+ * part [layClasses] lays for a base with virtual bases of its own. Where no base could be laid, the
+ * bytes stay undefined, so the stab's field is kept. A virtual base's offset is no position.
+ */
+private fun DataTypeRegistry.inheritedVptrAt(
+    body: TypeDecl.Aggregate<GlobalTypeId>,
+    struct: Structure,
+    offsetBits: Long,
+): Boolean {
+    val bases = body.bases.filter { !it.isVirtual && it.offsetBits == offsetBits }
+    if (bases.isEmpty()) return false
+    val at = (offsetBits / 8).toInt()
+    return struct.definedComponents.any { at in it.offset..<it.offset + it.length } ||
+        bases.any { hasVirtualBases(it.type) }
+}
 
 /**
  * Splices each non-virtual base's fields into [placeholder] at the offset the stab's inheritance line

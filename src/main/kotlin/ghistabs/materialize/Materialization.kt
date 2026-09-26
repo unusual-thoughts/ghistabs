@@ -1,22 +1,22 @@
 package ghistabs.materialize
 
 import ghidra.program.model.data.*
-import ghidra.program.model.lang.CompilerSpec
 import ghistabs.harvest.Type
-import ghistabs.materialize.cpp.fillStructBases
-import ghistabs.materialize.cpp.hasVirtualBases
+import ghistabs.materialize.cpp.fillClass
+import ghistabs.materialize.cpp.memberPointer
+import ghistabs.materialize.cpp.memberPointerTo
+import ghistabs.materialize.cpp.methodDefinition
 import ghistabs.parse.CATEGORY
 import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
-import ghistabs.parse.isVptrFieldName
-import ghistabs.parse.member
 import ghistabs.runTransaction
 import ghidra.program.model.data.Enum as GhidraEnum
 
 internal fun DataTypeRegistry.materializeBody(ast: Type, category: CategoryPath, placeholder: DataType): DataType =
     when (val body = ast.body) {
-        is TypeDecl.Pointer -> pointerOrOffset(body.inner, "body-pointer-pointee", ast.ghidraName)
+        is TypeDecl.Pointer ->
+            memberPointerTo(body.inner) ?: pointerTo(body.inner, "body-pointer-pointee", ast.ghidraName)
 
         is TypeDecl.Reference -> pointerTo(body.inner, "body-reference-referent", ast.ghidraName)
 
@@ -69,15 +69,7 @@ internal fun DataTypeRegistry.materializeBody(ast: Type, category: CategoryPath,
             at = ast.ghidraName,
         )
 
-        is TypeDecl.Method -> buildFunctionDefinition(
-            category = category,
-            name = ast.ghidraName,
-            ret = body.ret,
-            params = body.params,
-            thisType = thisTypeFor(body, ast.ghidraName),
-            callingConvention = CompilerSpec.CALLING_CONVENTION_thiscall,
-            at = ast.ghidraName,
-        )
+        is TypeDecl.Method -> methodDefinition(category, ast.ghidraName, body)
 
         // Alias to the canonical Struct for (kind, tagName). Without this,
         // gcc's ABI-internal typeinfo helpers (`__si_class_type_info_pseudo`)
@@ -111,31 +103,22 @@ internal fun DataTypeRegistry.fillComposite(
     placeholder: Composite,
     qualifiedName: String,
 ): DataType {
-    // Insert base classes as inlined components.
-    if (placeholder is Structure) {
-        fillStructBases(body, placeholder, qualifiedName)
-    }
+    if (placeholder is Structure && body.hasCxxSurface) return fillClass(body, placeholder, qualifiedName)
+    fillFields(body, placeholder, qualifiedName)
+    if (placeholder is Structure) reportHoles(placeholder, qualifiedName)
+    return placeholder
+}
 
-    // A vptr at a base's offset is inherited: it is in the base subobject laid there, or in the
-    // non-virtual part [layClasses] lays for a base with virtual bases of its own. Where no base could
-    // be laid, the bytes stay undefined, so the stab's field is kept. A virtual base's offset is no
-    // position.
-    fun inheritedVptrAt(offsetBits: Long): Boolean {
-        val bases = body.bases.filter { !it.isVirtual && it.offsetBits == offsetBits }
-        if (bases.isEmpty()) return false
-        val at = (offsetBits / 8).toInt()
-        val laid = (placeholder as? Structure)?.definedComponents.orEmpty()
-            .any { at in it.offset..<it.offset + it.length }
-        return laid || bases.any { hasVirtualBases(it.type) }
-    }
-
-    for ((name, type, offsetBits, sizeBits, isStatic) in body.fields) {
-        if (isStatic) continue
-
-        if (isVptrFieldName(name) && inheritedVptrAt(offsetBits)) {
-            debug("vptr-skipped-inherited")
-            continue
-        }
+/** Places [body]'s non-static fields at their stab offsets, all but those [inherited] says a base holds. */
+internal fun DataTypeRegistry.fillFields(
+    body: TypeDecl.Aggregate<GlobalTypeId>,
+    placeholder: Composite,
+    qualifiedName: String,
+    inherited: (TypeDecl.Aggregate.Field<GlobalTypeId>) -> Boolean = { false },
+) {
+    for (field in body.fields) {
+        val (name, type, offsetBits, sizeBits, isStatic) = field
+        if (isStatic || inherited(field)) continue
 
         val ft = resolveRef(type)?.let { resolvedFt ->
             if (resolvedFt.isUndefined) {
@@ -194,11 +177,6 @@ internal fun DataTypeRegistry.fillComposite(
             )
         }
     }
-
-    // A class with virtual bases is [layClasses]'s to finish, and to report.
-    if (placeholder is Structure && !types.hasVirtualBase(body)) reportHoles(placeholder, qualifiedName)
-
-    return placeholder
 }
 
 /**
@@ -221,14 +199,9 @@ internal fun DataTypeRegistry.reportHoles(struct: Structure, qualifiedName: Stri
     }
 }
 
-/** Null [TypeDecl.Method.cls] is gdb's stub method (`##<ret>;`) stating no domain — the normal gcc
- *  2.x encoding, not a failure; only a stated-but-unresolvable cls is a real loss. */
-private fun DataTypeRegistry.thisTypeFor(body: TypeDecl.Method<GlobalTypeId>, at: String): DataType =
-    body.cls?.let { resolveRef(it) ?: undef("method-this-cls", at, it) } ?: Undefined4DataType.dataType
-
 /** [fallback] is overridden where an Undefined-family substitute would be re-read by Ghidra — see
  *  the array sites, which pass [ByteDataType]. */
-private fun DataTypeRegistry.undef(
+internal fun DataTypeRegistry.undef(
     category: String,
     at: String,
     decl: GlobalTypeDecl?,
@@ -253,22 +226,8 @@ private fun DataTypeRegistry.stub(ast: Type, placeholder: DataType, body: Global
  * (definition sites): wrap the resolved [pointee] in a target-sized [PointerDataType], degrading to
  * [undef] under the caller's [label]/[at] when the pointee doesn't resolve.
  */
-private fun DataTypeRegistry.pointerTo(pointee: GlobalTypeDecl, label: String, at: String): PointerDataType =
+internal fun DataTypeRegistry.pointerTo(pointee: GlobalTypeDecl, label: String, at: String): PointerDataType =
     PointerDataType(resolveRef(pointee) ?: undef(label, at, pointee), dtm.dataOrganization.pointerSize, dtm)
-
-/**
- * `int A::*`: an Itanium data-member pointer is a byte offset, one ptrdiff_t wide, and Ghidra has no
- * pointer-to-member type. gcc ≤ 3.3 spells it as a pointer to the [TypeDecl.Member], ≥ 3.4 as
- * the Member alone (`build_ptrmem_type` stopped wrapping OFFSET_TYPE in POINTER_TYPE), so both
- * land here. The stab can't say which gcc wrote it, so ≥ 3.4's `int A::**` comes out one level
- * short — same width, so no layout moves.
- */
-private fun DataTypeRegistry.memberPointer(): DataType =
-    // Unbound, like BuiltinTable's primitives: a program-bound `int` would fork `int.conflict`.
-    AbstractIntegerDataType.getSignedDataType(dtm.dataOrganization.pointerSize, null)
-
-private fun DataTypeRegistry.pointerOrOffset(pointee: GlobalTypeDecl, label: String, at: String): DataType =
-    if (types.isMemberPointee(pointee)) memberPointer() else pointerTo(pointee, label, at)
 
 /**
  * Resolve a TypeDecl reference site to a DataType. Struct/Enum/Method/XRef return null (they
@@ -284,7 +243,7 @@ fun DataTypeRegistry.resolveRef(decl: GlobalTypeDecl): DataType? = when (decl) {
     is TypeDecl.Range, is TypeDecl.Complex, is TypeDecl.Float, is TypeDecl.WithSizeAttr, is TypeDecl.Builtin ->
         resolveBuiltin(decl)
 
-    is TypeDecl.Pointer -> pointerOrOffset(decl.inner, "pointer-pointee", "(anon)")
+    is TypeDecl.Pointer -> memberPointerTo(decl.inner) ?: pointerTo(decl.inner, "pointer-pointee", "(anon)")
 
     is TypeDecl.Reference -> pointerTo(decl.inner, "reference-referent", "(anon)")
 
