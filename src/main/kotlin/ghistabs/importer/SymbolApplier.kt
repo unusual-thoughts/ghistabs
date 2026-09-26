@@ -21,12 +21,12 @@ import ghistabs.diagnose.ApplyErrorBucket
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.Level
 import ghistabs.forceCreateData
+import ghistabs.fullName
 import ghistabs.harvest.*
 import ghistabs.materialize.DataTypeRegistry
 import ghistabs.materialize.cpp.abi.Itanium.isInlineStdMember
 import ghistabs.materialize.reasonFor
 import ghistabs.materialize.resolveRef
-import ghistabs.namespaces
 import ghistabs.parse.*
 
 /**
@@ -226,10 +226,8 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
             ctx.monitor.increment()
             // demangledName() is the unqualified leaf; rebuild the qualified name from the
             // namespace chain so the equate reads `CryptoPP::INFINITE_TIME`, not `INFINITE_TIME`.
-            val demangled = Demangler.of(name)
-            val ns = demangled?.namespaces.orEmpty()
-            val leaf = demangled?.name ?: name
-            val qualified = (ns + leaf).joinToString("::")
+            val path = Demangler.of(name)?.fullName ?: listOf(name)
+            val qualified = path.qualifiedName
 
             when (val existing = equates.getEquate(qualified)) {
                 null -> runCatching { equates.createEquate(qualified, value) }.onSuccess { applied++ }
@@ -238,9 +236,9 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
                     warn("constant-equate-conflict", "$qualified = ${existing.value} vs $value")
                 }
             }
-            enums.getOrPut(ns to (type.sizeBytes?.toInt() ?: byteSize(value))) {
+            enums.getOrPut(path.dropLast(1) to (type.sizeBytes?.toInt() ?: byteSize(value))) {
                 LinkedHashMap()
-            }.putIfAbsent(leaf, value)
+            }.putIfAbsent(path.last(), value)
         }
 
         val dtm = ctx.program.dataTypeManager

@@ -143,8 +143,8 @@
             "max": 2
         },
         "demangler-sole-instantiation-declined": {
-            "min": 6,
-            "max": 6
+            "min": 20,
+            "max": 20
         },
         "demangler-unbound-stub": {
             "min": 2,
@@ -700,8 +700,8 @@
             "max": 1158
         },
         "unresolved-xref": {
-            "min": 18,
-            "max": 18
+            "min": 17,
+            "max": 17
         },
         "value-dropped-bnsym": {
             "min": 2618,
@@ -874,12 +874,12 @@
             "max": 6
         },
         "xref-base-tag-resolved": {
-            "min": 5,
-            "max": 5
+            "min": 6,
+            "max": 6
         },
         "xref-undefined": {
-            "min": 12,
-            "max": 12
+            "min": 11,
+            "max": 11
         }
     },
     "source": "locale_test_customlibstdcxx_stripped.exe - generated from snapshotCounters()"

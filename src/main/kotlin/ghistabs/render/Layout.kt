@@ -216,5 +216,5 @@ internal fun Int?.beyond(extent: Int?) = this != null && (extent == null || this
 
 /** One stabs variable of a function, declared in this file: where gcc put it and how it renders. */
 data class Var(val line: Int?, val name: String, val text: String, val role: String?) {
-    fun declKey() = line?.let { Type.Decl(it, name) }
+    fun declKey() = Type.Decl.at(line, name)
 }

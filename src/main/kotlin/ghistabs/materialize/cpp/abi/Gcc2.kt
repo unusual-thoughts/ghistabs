@@ -7,7 +7,9 @@ import ghidra.program.model.data.Structure
 import ghistabs.materialize.cpp.abi.Gcc2.DEMANGLED_VTABLE_SUFFIX
 import ghistabs.namespaces
 import ghistabs.parse.TypeDecl.Aggregate.Method
-import ghistabs.parse.splitQualified
+import ghistabs.parse.leafName
+import ghistabs.parse.nameSegments
+import ghistabs.parse.qualifiedName
 
 /**
  * Pre-Itanium gcc 2.x C++ ABI facts: the vtable symbol spellings and what the deprecated demangler
@@ -83,7 +85,7 @@ object Gcc2 {
      */
     fun demangledVtableClass(obj: DemangledObject): String? {
         val leaf = obj.name?.removeSuffix(DEMANGLED_VTABLE_SUFFIX)?.takeIf { it != obj.name } ?: return null
-        return (obj.namespaces + leaf).joinToString("::")
+        return (obj.namespaces + leaf).qualifiedName
     }
 
     /**
@@ -99,7 +101,7 @@ object Gcc2 {
      */
     fun physnamePrefix(memberName: String, className: String, isConst: Boolean, isVolatile: Boolean): String {
         val mangledClass = mangleClassName(className)
-        val leaf = splitQualified(className).last()
+        val leaf = className.leafName
         return when (memberName) {
             leaf -> "__$mangledClass"
             "~$leaf" -> "_._$mangledClass"
@@ -120,7 +122,7 @@ object Gcc2 {
      * the count is bracketed instead (`Q_10_`), which is the same source's `case '_'`.
      */
     fun mangleClassName(name: String): String {
-        val parts = splitQualified(name)
+        val parts = name.nameSegments
         val joined = parts.joinToString("") { "${it.length}$it" }
         return when {
             parts.size == 1 -> joined

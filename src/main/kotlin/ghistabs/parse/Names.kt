@@ -12,53 +12,53 @@ package ghistabs.parse
  */
 fun isVptrFieldName(name: String) = name.startsWith("_vptr$") || name.startsWith("_vptr.") || name == "_vptr"
 
-/** Split a source-form qualified name on `::`, ignoring separators inside `<>` or `()`. */
-fun splitQualified(name: String): List<String> {
-    val parts = mutableListOf<String>()
-    val cur = StringBuilder()
-    var angle = 0
-    var paren = 0
-    var i = 0
-    while (i < name.length) {
-        when (val c = name[i]) {
-            '<' -> {
-                angle++
-                cur.append(c)
-            }
-
-            '>' -> {
-                angle--
-                cur.append(c)
-            }
-
-            '(' -> {
-                paren++
-                cur.append(c)
-            }
-
-            ')' -> {
-                paren--
-                cur.append(c)
-            }
-
-            ':' if angle == 0 && paren == 0 && name.getOrNull(i + 1) == ':' -> {
-                if (cur.isNotEmpty()) parts.add(cur.toString().also { cur.clear() })
-                i++
-            }
-
-            else -> cur.append(c)
-        }
-        i++
+/**
+ * A source-form qualified name split on `::`, except inside `<>` or `()`:
+ * `std::map<int, A::B>::iterator` → `[std, map<int, A::B>, iterator]`. Empty segments drop.
+ */
+val String.nameSegments: List<String> get() = runningFold(0) { d, c ->
+    d + when (c) {
+        '<', '(' -> 1
+        '>', ')' -> -1
+        else -> 0
     }
-    if (cur.isNotEmpty()) parts.add(cur.toString())
-    return parts
+}.withIndex().filter { (i, d) -> d == 0 && startsWith("::", i) }.map { it.index }.let { cuts ->
+    (listOf(-2) + cuts).zip(cuts + length) { from, to -> substring(from + 2, to) }.filter { it.isNotEmpty() }
 }
 
+/** [nameSegments]' inverse: `[std, vector<int>]` → `std::vector<int>`. */
+val List<String>.qualifiedName get() = joinToString("::")
+
+/** A member of this scope: `A<int>` and `f` → `A<int>::f`. */
+fun String.member(name: String) = "$this::$name"
+
+/** Everything but the leaf, or null for an unqualified name: `A<int>::Inner` → `A<int>`. */
+val String.enclosingName get() = nameSegments.dropLast(1).ifEmpty { null }?.qualifiedName
+
+/** The last segment, template arguments kept: `Foo<ns::Bar>`, where a plain `::` cut gives `Bar>`. */
+val String.leafName get() = nameSegments.lastOrNull() ?: this
+
+/** Where a segment's template argument list opens; an `operator<` has none. */
+private val String.argsStart get() = takeUnless { it.startsWith("operator") }?.indexOf('<')?.takeIf { it >= 0 }
+
+/** Template arguments on any segment: `vector<int>`, `A<int>::Inner`, but not `operator<`. */
+val String.isTemplated get() = nameSegments.any { it.argsStart != null }
+
+/** Every segment's arguments dropped: `A<int>::Inner` → `A::Inner`. The template an instantiation spells. */
+val String.templateName get() =
+    nameSegments.map { seg -> seg.argsStart?.let { seg.take(it).trim() } ?: seg }.qualifiedName
+
+/** [templateName]'s leaf: `std::vector<int>::iterator` → `iterator`, `std::vector<int>` → `vector`. */
+val String.templateLeaf get() = leafName.templateName
+
 /**
- * Strip template args + namespace: `std::basic_istream<...>` → `basic_istream`. Used by the XRef
- * base-tag fallback to bridge bare-forward-decl vs template-instantiation.
+ * The outermost template a name sits in: `std::vector<int>::iterator` → `std::vector`. A nested class
+ * is declared inside its template, so this is what shares a header; [templateName] is not.
  */
-fun baseTag(name: String): String = name.substringBefore('<').trim().substringAfterLast("::")
+val String.outermostTemplate: String get() = nameSegments.let { segments ->
+    val first = segments.indexOfFirst { it.argsStart != null }.takeIf { it >= 0 } ?: segments.lastIndex
+    segments.take(first + 1).qualifiedName.templateName
+}
 
 /** Whitespace around template punctuation — gcc is inconsistent (`< `, `, `, ` >`, `> >`). */
 private val TEMPLATE_PUNCT = Regex("""\s*([<>,])\s*""")

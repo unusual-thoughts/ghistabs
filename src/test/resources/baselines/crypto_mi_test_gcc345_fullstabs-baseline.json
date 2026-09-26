@@ -1014,8 +1014,8 @@
             ]
         },
         "placeholder-created": {
-            "min": 25832,
-            "max": 25832
+            "min": 25830,
+            "max": 25830
         },
         "placeholder-undefined-fields": {
             "min": 202,
@@ -1289,8 +1289,8 @@
             "max": 1152
         },
         "unresolved-xref": {
-            "min": 61,
-            "max": 61
+            "min": 57,
+            "max": 57
         },
         "vfptr-inherited-from-base": {
             "min": 98,
@@ -1775,20 +1775,20 @@
             "max": 19
         },
         "xref-ambiguous": {
-            "min": 21,
-            "max": 21
+            "min": 20,
+            "max": 20
         },
         "xref-base-tag-ambiguous": {
-            "min": 21,
-            "max": 21
+            "min": 20,
+            "max": 20
         },
         "xref-base-tag-resolved": {
-            "min": 11,
-            "max": 11
+            "min": 15,
+            "max": 15
         },
         "xref-undefined": {
-            "min": 40,
-            "max": 40
+            "min": 37,
+            "max": 37
         }
     },
     "source": "crypto_mi_test_gcc345_fullstabs.exe - generated from snapshotCounters()"

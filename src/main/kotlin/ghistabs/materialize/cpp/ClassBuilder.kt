@@ -76,7 +76,7 @@ class ClassBuilder(
         get() = qualifiedByType.getOrPut(type.id) {
             (sequenceOf(type) + members.mapNotNull { types.byId(it) })
                 .firstNotNullOfOrNull { it.demangledClassPath() ?: types.classPathByThisParam[it.id] }
-                ?.joinToString("::")
+                ?.qualifiedName
                 ?: vtableClassByLeaf[className]?.also { debug("class-scope-from-vtable", "$className -> $it") }
                 ?: className
         }
@@ -190,7 +190,7 @@ class ClassBuilder(
         // than an absent one, and buildNamespaceChain has nothing to return for an empty list.
         val parts = mangled?.let { Demangler.namespaces(it) }.orEmpty()
             .filter { it.isNotEmpty() }
-            .ifEmpty { splitQualified(qualifiedClassName) }
+            .ifEmpty { qualifiedClassName.nameSegments }
         return buildNamespaceChain(parts)
     }
 
@@ -224,6 +224,7 @@ class ClassBuilder(
     }
 
     private fun LocatedClass.reparentMethod(m: Method<GlobalTypeId>) {
+        val at = name.member(m.name)
         val (mangled, addr) = resolveMember(m) ?: run {
             if (abi.isImplicitMember(m, qualifiedClassName)) {
                 debug("method-implicit-not-emitted")
@@ -253,7 +254,7 @@ class ClassBuilder(
             if (func.name != fallbackName) func.setName(fallbackName, source)
             degradation(
                 "method-demangle-fallback",
-                "$name::${m.name}",
+                at,
                 "demangler did not apply to $mangled",
                 func.entryPoint,
             )
@@ -270,7 +271,7 @@ class ClassBuilder(
 
             else -> return degradation(
                 "method-signature-unwrap-failed",
-                "$name::${m.name}",
+                at,
                 "${m.signature}",
                 func.entryPoint,
             )
@@ -279,7 +280,7 @@ class ClassBuilder(
         registry.resolveRef(retDecl)?.let { func.setReturnType(it, source) }
             ?: degradation(
                 "method-ret-unresolved",
-                "$name::${m.name}",
+                at,
                 retDecl.toString(),
                 func.entryPoint,
             )
@@ -297,7 +298,7 @@ class ClassBuilder(
                 runCatching {
                     func.setCallingConvention(program.compilerSpec.defaultCallingConvention.name)
                 }.onFailure {
-                    degradation("method-calling-convention", "$name::${m.name}", it.message, func.entryPoint)
+                    degradation("method-calling-convention", at, it.message, func.entryPoint)
                 }
             }
             return
@@ -310,7 +311,7 @@ class ClassBuilder(
         // isn't populated yet.
         val thiscallAccepted = runCatching { func.setCallingConvention(CompilerSpec.CALLING_CONVENTION_thiscall) }
             .onFailure {
-                degradation("method-calling-convention", "$name::${m.name}", it.message, func.entryPoint)
+                degradation("method-calling-convention", at, it.message, func.entryPoint)
             }
             .isSuccess
         val ghidraInjectsThis = thiscallAccepted && func.isMethod
@@ -329,7 +330,7 @@ class ClassBuilder(
             if (dt == null) {
                 degradation(
                     "method-param-unresolved",
-                    "$name::${m.name}",
+                    at,
                     decl.toString(),
                     func.entryPoint,
                 )
@@ -345,7 +346,7 @@ class ClassBuilder(
             if (dt is VoidDataType) {
                 degradation(
                     "method-param-void",
-                    "$name::${m.name}",
+                    at,
                     "void at [$i]; substituted Undefined4 to keep arity",
                     func.entryPoint,
                 )
@@ -385,7 +386,7 @@ class ClassBuilder(
         // else, so its parameters survive only in the mangled name. Demangling recovers them.
         // Guarded on emptiness rather than on stub-ness, which costs nothing — a genuinely nil-ary
         // member demangles to no parameters either.
-        val formals = paramTypes.ifEmpty { stubParams(mangled, "$name::${m.name}") }
+        val formals = paramTypes.ifEmpty { stubParams(mangled, at) }
             .mapIndexed { i, pdt ->
                 ParameterImpl(
                     priorNames.getOrNull(i) ?: "arg$i",
@@ -552,11 +553,12 @@ class ClassBuilder(
      * class's pointer or void*; __thiscall is dropped on platforms that lack it.
      */
     private fun LocatedClass.buildVirtualSlotType(m: Method<GlobalTypeId>, fieldName: String): PointerDataType {
+        val at = name.member(m.name)
         val unwrapped = unwrapSignature(m.signature)
         val method = unwrapped as? TypeDecl.Method<GlobalTypeId> ?: run {
             degradation(
                 "vftable-slot-untyped",
-                "$name::${m.name}",
+                at,
                 "signature did not unwrap to a method: unwrapped=${
                     unwrapped?.let {
                         it::class.simpleName
@@ -577,10 +579,10 @@ class ClassBuilder(
             thisType = method.cls?.let { registry.resolveRef(it) }
                 ?: registry.dataTypeFor(located.type.id)?.let { PointerDataType(it, dtm) }
                 ?: PointerDataType(VoidDataType(), dtm).also {
-                    degradation("vftable-slot-this-untyped", "$name::${m.name}", "${method.cls}; used void*")
+                    degradation("vftable-slot-this-untyped", at, "${method.cls}; used void*")
                 },
             callingConvention = CompilerSpec.CALLING_CONVENTION_thiscall,
-            at = "$name::${m.name}",
+            at = at,
         )
         val resolved = registry.register(funcDef) as FunctionDefinition
         return PointerDataType(resolved, dtm)
@@ -606,7 +608,7 @@ class ClassBuilder(
      *  already is the qualified name, so the entry would only make the fallback fire as a no-op. */
     private val vtableClassByLeaf: Map<String, String> by lazy {
         vtableAddressByClass.keys
-            .groupBy { splitQualified(it).last() }
+            .groupBy { it.leafName }
             .mapNotNull { (leaf, qualified) -> qualified.singleOrNull()?.takeIf { it != leaf }?.let { leaf to it } }
             .toMap()
     }

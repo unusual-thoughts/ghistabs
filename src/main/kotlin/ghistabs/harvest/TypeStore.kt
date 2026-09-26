@@ -241,13 +241,12 @@ class TypeStore(
     private fun restoreTemplateArguments(functions: List<Func>) {
         val boundByThis = functions.groupBy({ fn -> fn.thisParamTypeId { byId[it]?.body } }, Func::name)
         for (type in byId.values.toList()) {
-            val name = type.name?.takeUnless { '<' in it } ?: continue
+            val name = type.name?.takeUnless { it.isTemplated } ?: continue
             val methods = (type.body as? TypeDecl.Aggregate)?.methods ?: continue
-            val segments = name.split("::")
+            val depth = name.nameSegments.size
             val restored = (methods.mapNotNull { it.mangled } + boundByThis[type.id].orEmpty()).firstNotNullOfOrNull {
-                Demangler.namespaces(it).takeLast(segments.size)
-                    .takeIf { path -> path.map { seg -> seg.substringBefore('<') } == segments }
-            }?.joinToString("::", transform = ::canonTemplateName)?.takeIf { it != name } ?: continue
+                Demangler.namespaces(it).takeLast(depth).qualifiedName.takeIf { path -> path.templateName == name }
+            }?.let(::canonTemplateName)?.takeIf { it != name } ?: continue
             byId[type.id] = type.copy(named = type.named?.copy(name = restored))
             debug("template-args-restored", "${type.id}: $name → $restored")
         }

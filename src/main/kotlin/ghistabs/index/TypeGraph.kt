@@ -9,7 +9,7 @@ import ghistabs.harvest.Type
 import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
-import ghistabs.parse.baseTag
+import ghistabs.parse.templateLeaf
 
 /**
  * The type graph: every harvested [Type] indexed by id, by name and by base tag, plus the xref oracle
@@ -62,18 +62,18 @@ class TypeGraph(private val harvest: Harvest, sink: DiagnosticSink = DummySink) 
             .groupBy { it.ghidraName }
     }
 
-    /** Base-tag (template args + namespace stripped) → complete definitions only. */
-    private val definitionsByBaseTag: Map<String, List<Type>> by lazy {
+    /** [templateLeaf] → complete definitions only. */
+    private val definitionsByTemplateLeaf: Map<String, List<Type>> by lazy {
         typeAsts.values
             .filter { it.name != null && it.body.canBeXRefTarget && it.body.isComplete }
-            .groupBy { baseTag(it.name!!) }
+            .groupBy { it.name!!.templateLeaf }
     }
 
     /** [byXRef]'s answers, misses included: it reports as it resolves, so each xref must resolve once. */
     private val xrefs = HashMap<TypeDecl.XRef<GlobalTypeId>, Type?>()
 
     // Pre-warm with empty `visited` so collision classification isn't biased by traversal order.
-    // Must stay below definitionsByTag/definitionsByBaseTag: contentHash resolves xrefs through them, and a `by
+    // Must stay below definitionsByTag/definitionsByTemplateLeaf: contentHash resolves xrefs through them, and a `by
     // lazy` delegate field is only assigned when construction reaches its declaration — an init block
     // placed above them reads a still-null delegate (NPE, silently swallowed under CONCURRENT analysis).
     init {
@@ -96,8 +96,8 @@ class TypeGraph(private val harvest: Harvest, sink: DiagnosticSink = DummySink) 
             ?.firstOrNull { it.body.matchesXRefKind(xref.kind) }
             ?.let { return it }
 
-        val tag = baseTag(xref.tagName)
-        val sameTagAnyKind = if (tag.isNotEmpty()) definitionsByBaseTag[tag].orEmpty() else emptyList()
+        val tag = xref.tagName.templateLeaf
+        val sameTagAnyKind = if (tag.isNotEmpty()) definitionsByTemplateLeaf[tag].orEmpty() else emptyList()
         val sameKind = sameTagAnyKind.filter { it.body.matchesXRefKind(xref.kind) }
         val distinctSizes = sameKind.map { it.body.sizeBytes }.toSet()
 
@@ -129,9 +129,9 @@ class TypeGraph(private val harvest: Harvest, sink: DiagnosticSink = DummySink) 
 
     /** One-line snapshot of harvest contents under [xref]'s exact tag and base tag. */
     private fun xrefDiagnosis(xref: TypeDecl.XRef<GlobalTypeId>): String {
-        val tag = baseTag(xref.tagName)
+        val tag = xref.tagName.templateLeaf
         val exact = definitionsByTag[xref.tagName].orEmpty()
-        val byBase = definitionsByBaseTag[tag].orEmpty()
+        val byBase = definitionsByTemplateLeaf[tag].orEmpty()
         fun summarise(asts: List<Type>): String {
             if (asts.isEmpty()) return "0"
             val parts = asts.groupBy { it.body::class.simpleName }
@@ -142,7 +142,7 @@ class TypeGraph(private val harvest: Harvest, sink: DiagnosticSink = DummySink) 
                 }
             return "${asts.size}{${parts.joinToString("; ")}}"
         }
-        return "exact=${summarise(exact)} baseTag='$tag' byBaseTag=${summarise(byBase)}"
+        return "exact=${summarise(exact)} templateLeaf='$tag' byBaseTag=${summarise(byBase)}"
     }
 
     /** Multi-body collisions after content-equivalence filtering — only genuinely divergent ones. */

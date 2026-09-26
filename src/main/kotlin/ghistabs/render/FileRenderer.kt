@@ -7,6 +7,7 @@ import ghistabs.harvest.*
 import ghistabs.index.*
 import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.TypeDecl
+import ghistabs.parse.templateLeaf
 
 /**
  * One source file's render. Each pass (decomp, typedefs, locals, globals, braces, type bodies,
@@ -200,7 +201,7 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
         val blocks = anon.joinToString("\n\n") { ast ->
             when (val body = ast.body) {
                 is TypeDecl.Aggregate -> {
-                    val members = body.renderFull(ast.ghidraName.simpleTypeName())
+                    val members = body.renderFull(ast.ghidraName.templateLeaf)
                         .joinToString("\n    ", prefix = "\n    ", postfix = "\n")
                     "${body.cxxKeyword} ${ast.ghidraName} {$members}; /* ${body.sizeBytes} bytes */"
                         .asSpecialization(ast.ghidraName)
