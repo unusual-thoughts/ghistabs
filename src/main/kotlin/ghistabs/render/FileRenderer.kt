@@ -111,6 +111,7 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
      * and a file where nothing has a usable line is all appendix.
      */
     fun render(): String {
+        displaced += linelessTypes()
         // Nothing sits on a usable line, but the file can still hold anonymous aggregates and
         // declarations whose line is unusable — which is what the appendix is for. libstdc++'s
         // `*-inst.cc` are whole CUs of them, and returning before the claim passes dropped 71 types
@@ -178,10 +179,15 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
         val rows = displaced
             .sortedWith(compareBy({ it.claim.line ?: Int.MAX_VALUE }, { it.claim.rows.first().text }))
             .joinToString("\n") { (claim, reason) ->
-                "${claim.rows.joinToString(" ") { it.text }}  // L ${claim.line} ($reason)"
+                "${claim.rows.joinToString(" ") { it.text }}  // ${claim.line?.let { "L $it " }.orEmpty()}($reason)"
             }
         return "\n\n/* ── displaced declarations (line unusable) ── */\n\n$rows\n"
     }
+
+    /** Declarations gcc gave no line: real, only their row is unknown. See [EffectiveSource.linelessTypes]. */
+    private fun linelessTypes() = attribution.linelessTypes[source].orEmpty()
+        .mapNotNull { it.emitTypeBody(1) }
+        .map { Dropped(it, NO_LINE) }
 
     // Anonymous aggregates carry no source line (line == null), so they can't be placed inline
     // on the line-based canvas. Append them as a skeleton-only diagnostic block under their synthetic

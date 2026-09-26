@@ -3,6 +3,7 @@ package ghistabs.index
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.DummySink
 import ghistabs.harvest.*
+import ghistabs.materialize.cpp.abi.Gcc2
 import ghistabs.materialize.cpp.abi.Itanium
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.SymbolDecl
@@ -108,6 +109,31 @@ class EffectiveSource(
             .filter { it.name == null && it.body.canBeXRefTarget }
             .groupBy { effectiveSourceFor(it) }
             .mapValues { (_, asts) -> asts.distinctBy { it.ghidraName }.sortedBy { it.ghidraName } }
+    }
+
+    /**
+     * Named classes and enums gcc gave no line, under the one file whose appendix lists each. gcc
+     * writes a bare `:T` with desc 0 on every version (`dbxout_finish_symbol (NULL_TREE)`), and every
+     * type without `-gstabs+`, so each CU carries its own lineless copy of a header's types and none
+     * says which header. A distinct type (by content, so two that share a name stay two) goes to a
+     * header holding a copy, else the first file by path. Left out: any type some copy placed at a
+     * line, gcc's placeholders for anonymous types (`$_4`), and `complex int`, the one builtin dbxout
+     * spells as a struct.
+     */
+    val linelessTypes: Map<GhidraSourceFile, List<Type>> by lazy {
+        val placed = types.allTypes.filter { it.line != null }.mapTo(mutableSetOf()) { it.ghidraName }
+        types.allTypes
+            .filter { it.line == null && it.body.canBeXRefTarget }
+            .filter { t -> t.name?.let { !Gcc2.isCompilerGeneratedName(it) && it != "complex int" } == true }
+            .filterNot { it.ghidraName in placed }
+            .groupBy { it.ghidraName to types.content(it.body) }
+            .values
+            .map { copies ->
+                copies.minWith(
+                    compareBy(compareBy({ !it.filename.hasHeaderExtension() }, { "$it" }), ::effectiveSourceFor),
+                )
+            }
+            .groupBy(::effectiveSourceFor)
     }
 
     /**
