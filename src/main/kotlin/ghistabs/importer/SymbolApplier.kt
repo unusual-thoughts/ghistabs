@@ -6,23 +6,18 @@ import ghidra.app.cmd.label.SetLabelPrimaryCmd
 import ghidra.app.util.demangler.DemangledFunction
 import ghidra.program.model.address.Address
 import ghidra.program.model.address.AddressSet
-import ghidra.program.model.data.CategoryPath
-import ghidra.program.model.data.DataType
-import ghidra.program.model.data.DataTypeConflictHandler
-import ghidra.program.model.data.EnumDataType
-import ghidra.program.model.data.Pointer
-import ghidra.program.model.data.Undefined4DataType
+import ghidra.program.model.data.*
 import ghidra.program.model.lang.Register
 import ghidra.program.model.listing.*
 import ghidra.program.model.listing.Function
 import ghidra.program.model.symbol.SourceType
 import ghidra.program.model.symbol.SymbolTable
 import ghistabs.Demangler
-import ghistabs.baseStackParamOffset
 import ghistabs.diagnose.ApplyErrorBucket
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.Level
 import ghistabs.forceCreateData
+import ghistabs.frameBias
 import ghistabs.fullName
 import ghistabs.harvest.*
 import ghistabs.materialize.DataTypeRegistry
@@ -173,8 +168,9 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
                 // is called `this` has no such N_PSYM, so it keeps the local.
                 val paramNames = open.params.mapTo(mutableSetOf()) { it.body.name }
                 val firstUse = open.firstUseOffsets(func.entryPoint)
+                val frameBias = func.frameBias()
                 for (loc in open.locals) {
-                    loc.applyLocal(func, paramNames, firstUse[loc.recordIndex] ?: 0)
+                    loc.applyLocal(func, paramNames, firstUse[loc.recordIndex] ?: 0, frameBias)
                 }
 
                 // Apply scope plate comments.
@@ -419,7 +415,7 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
         source,
     )
 
-    private fun LocalSymbol.applyLocal(func: Function, paramNames: Set<String>, firstUse: Int) {
+    private fun LocalSymbol.applyLocal(func: Function, paramNames: Set<String>, firstUse: Int, frameBias: Int) {
         try {
             when (body.location) {
                 VariableLocation.STACK -> {
@@ -437,8 +433,8 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
                         return
                     }
                     // gcc's frame-pointer-relative offset → Ghidra's SP-at-entry offset via the
-                    // convention-derived [frameBias] (NSA/ghidra#223, #5485).
-                    func.addStack(this, rawValue.toInt() - ctx.program.baseStackParamOffset)
+                    // prologue-derived [frameBias] (NSA/ghidra#223, #5485).
+                    func.addStack(this, rawValue.toInt() - frameBias)
                     debug("local-var-add-success")
                 }
 
