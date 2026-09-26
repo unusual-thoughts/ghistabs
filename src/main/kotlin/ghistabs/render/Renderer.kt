@@ -15,6 +15,7 @@ import ghistabs.importer.LocalSources
 import ghistabs.index.EffectiveSource
 import ghistabs.index.SourceHints
 import ghistabs.materialize.TemplateNameShortener
+import ghistabs.parse.TypeDecl
 import ghistabs.render.Renderer.Companion.DECOMPILE_SECONDS
 import ghistabs.runTransaction
 import ghistabs.scan.Definition
@@ -59,6 +60,14 @@ class Renderer(
     private val harvest = hints.harvest
     val types = hints.types
     val sourceIndex = hints.sources
+
+    /** A static data member's linkage name → `Class::member`: its definition is a global carrying only the former. */
+    val staticMemberNames by lazy {
+        types.allTypes.flatMap { t ->
+            (t.body as? TypeDecl.Aggregate)?.fields.orEmpty().filter { it.isStatic }
+                .mapNotNull { f -> f.mangled?.let { m -> t.name?.let { m to "$it::${f.name}" } } }
+        }.toMap()
+    }
 
     /**
      * Collapses long template spellings (`basic_string<char,…>` → `string`) across *everything* the

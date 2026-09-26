@@ -276,7 +276,7 @@ interface RenderContext {
         // Without -gstabs+ there is no decl line: the claim is band-anchored (Claim.anchoring), so
         // there is no row to indent against and nothing for staleness to be judged past.
         val indent = line.indentAt()
-        val base = body.type.renderDecl(body.name)
+        val base = body.type.renderDecl(renderer.staticMemberNames[body.name] ?: body.name)
         // A string-valued global (pointer-to-string whose slot Ghidra left an untyped
         // scalar, or a char[N] holding an RTTI/string literal) renders as one quoted
         // literal; initializerAt would otherwise miss it or spread a per-byte list.
