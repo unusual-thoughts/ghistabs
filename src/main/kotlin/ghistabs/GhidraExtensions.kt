@@ -2,6 +2,7 @@
 
 package ghistabs
 
+import ghidra.app.cmd.function.CallDepthChangeInfo
 import ghidra.app.util.bin.FileByteProvider
 import ghidra.app.util.bin.InputStreamByteProvider
 import ghidra.app.util.importer.MessageLog
@@ -15,6 +16,7 @@ import ghidra.program.model.data.DataUtilities
 import ghidra.program.model.listing.*
 import ghidra.program.model.listing.Function
 import ghidra.program.model.mem.MemoryBlock
+import ghidra.program.model.pcode.PcodeOp
 import ghidra.util.task.TaskMonitor
 import java.io.File
 import java.nio.file.AccessMode
@@ -176,6 +178,35 @@ val MemoryBlock.byteProvider get() = InputStreamByteProvider(data, size)
  */
 val Program.baseStackParamOffset get() = compilerSpec.defaultCallingConvention.run {
     stackParameterOffset?.toInt() ?: stackshift
+}
+
+/** How many instructions from the entry a prologue may take to set up its frame pointer. */
+private const val PROLOGUE_SCAN = 8
+
+/**
+ * How far below the entry SP this function's prologue set the frame pointer that gcc's stab offsets
+ * count from. On x86 that is usually the one saved-FP push [Program.baseStackParamOffset] implies, but a
+ * realigning `main` (gcc >= 4.1: `lea 4(%esp),%ecx; and $-16,%esp; push -4(%ecx); push %ebp`) sits a copied
+ * return address deeper (Ghidra tracks the `and` at depth 0 as no change), and on SPARC `save` makes the
+ * frame pointer the entry SP itself, nowhere near the convention's stack-parameter offset.
+ */
+fun Function.frameBias(): Int {
+    val sp = program.compilerSpec.stackPointer
+    val setsFp = (program.listing.getInstructions(entryPoint, true) as Iterable<Instruction>).asSequence()
+        .take(PROLOGUE_SCAN)
+        .firstOrNull { ins ->
+            ins.pcode.any { op ->
+                op.opcode == PcodeOp.COPY && program.getRegister(op.getInput(0)) == sp &&
+                    program.getRegister(op.output)?.let { it != sp } == true
+            }
+        } ?: return program.baseStackParamOffset
+    val depth = CallDepthChangeInfo(this, AddressSet(entryPoint, setsFp.address), null, TaskMonitor.DUMMY)
+        .getSPDepth(setsFp.address)
+    return if (depth == Function.INVALID_STACK_DEPTH_CHANGE || depth == Function.UNKNOWN_STACK_DEPTH_CHANGE) {
+        program.baseStackParamOffset
+    } else {
+        -depth
+    }
 }
 
 class LoadedProgram internal constructor(val program: Program, private val consumer: Any) : AutoCloseable {

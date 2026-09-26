@@ -23,6 +23,7 @@ import ghistabs.diagnose.ApplyErrorBucket
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.Level
 import ghistabs.forceCreateData
+import ghistabs.frameBias
 import ghistabs.harvest.*
 import ghistabs.materialize.DataTypeRegistry
 import ghistabs.materialize.cpp.abi.Itanium.isInlineStdMember
@@ -173,8 +174,9 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
                 // is called `this` has no such N_PSYM, so it keeps the local.
                 val paramNames = open.params.mapTo(mutableSetOf()) { it.body.name }
                 val firstUse = open.firstUseOffsets(func.entryPoint)
+                val frameBias = func.frameBias()
                 for (loc in open.locals) {
-                    loc.applyLocal(func, paramNames, firstUse[loc.recordIndex] ?: 0)
+                    loc.applyLocal(func, paramNames, firstUse[loc.recordIndex] ?: 0, frameBias)
                 }
 
                 // Apply scope plate comments.
@@ -432,7 +434,7 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
         source,
     )
 
-    private fun LocalSymbol.applyLocal(func: Function, paramNames: Set<String>, firstUse: Int) {
+    private fun LocalSymbol.applyLocal(func: Function, paramNames: Set<String>, firstUse: Int, frameBias: Int) {
         try {
             when (body.location) {
                 VariableLocation.STACK -> {
@@ -450,8 +452,8 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
                         return
                     }
                     // gcc's frame-pointer-relative offset → Ghidra's SP-at-entry offset via the
-                    // convention-derived [frameBias] (NSA/ghidra#223, #5485).
-                    func.addStack(this, rawValue.toInt() - ctx.program.baseStackParamOffset)
+                    // prologue-derived [frameBias] (NSA/ghidra#223, #5485).
+                    func.addStack(this, rawValue.toInt() - frameBias)
                     debug("local-var-add-success")
                 }
 
