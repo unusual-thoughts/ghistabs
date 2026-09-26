@@ -21,6 +21,17 @@ import ghistabs.parse.TypeDecl
 fun GlobalTypeDecl.spell(name: String, types: TypeGraph, shortener: TemplateNameShortener?): String =
     Speller(types, shortener).spell(this, name, "", emptySet())
 
+/** ` : public virtual Base, private Other`, or nothing: each base named bare, `A` and not `struct A`. */
+fun TypeDecl.Aggregate<GlobalTypeId>.spellBases(types: TypeGraph, shortener: TemplateNameShortener?): String =
+    Speller(types, shortener).let { speller ->
+        bases.takeIf { it.isNotEmpty() }
+            ?.joinToString(", ", prefix = " : ") {
+                val virtual = if (it.isVirtual) "virtual " else ""
+                "${it.access.name.lowercase()} $virtual${speller.className(it.type, emptySet())}"
+            }
+            .orEmpty()
+    }
+
 private class Speller(val types: TypeGraph, val shortener: TemplateNameShortener?) {
     fun spell(t: GlobalTypeDecl, d: String, quals: String, seen: Set<GlobalTypeId>): String = when (t) {
         TypeDecl.Void -> leaf("void", d, quals)
@@ -110,8 +121,8 @@ private class Speller(val types: TypeGraph, val shortener: TemplateNameShortener
         else -> false
     }
 
-    /** A member pointer's class, bare: `A::*`, not `struct A::*`. */
-    private fun className(cls: GlobalTypeDecl, seen: Set<GlobalTypeId>): String = when (cls) {
+    /** A class, bare: `A::*`, not `struct A::*`. */
+    fun className(cls: GlobalTypeDecl, seen: Set<GlobalTypeId>): String = when (cls) {
         is TypeDecl.InlineDef -> className(cls.inner, seen + cls.id)
         is TypeDecl.XRef -> shortener?.shortenedOrNull(cls.tagName) ?: cls.tagName
         else -> spell(cls, "", "", seen)
