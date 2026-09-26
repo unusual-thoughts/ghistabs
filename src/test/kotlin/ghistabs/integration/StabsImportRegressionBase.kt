@@ -2017,10 +2017,14 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             // +0 where the vptr follows them (gcc 2.x appends it) or after the pointer where it
             // precedes them (Itanium). Either way the subobject has to name the base the stab does,
             // which is what an ancestor or a same-sized synthetic standing in for it would fail.
-            // A base with virtual bases of its own is embedded as its non-virtual part, the one
-            // self-base the registry made for it (§64), under either model.
+            // A base with virtual bases of its own is embedded as its non-virtual part, the self-base
+            // filed at the path Ghidra's PDB importer gives it (§64), under either model.
             val ok = field.dataType === baseType ||
-                field.dataType === artifacts.registry.selfBases[baseType] ||
+                (
+                    baseType is Composite && field.dataType.dataTypePath == ClassUtils.getBaseClassDataTypePath(
+                        baseType,
+                    )
+                    ) ||
                 field.dataType.name.startsWith("${baseType.name}_fields_")
             if (ok) {
                 null

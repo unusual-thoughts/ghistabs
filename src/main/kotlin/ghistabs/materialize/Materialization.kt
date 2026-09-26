@@ -3,7 +3,7 @@ package ghistabs.materialize
 import ghidra.program.model.data.*
 import ghidra.program.model.lang.CompilerSpec
 import ghistabs.harvest.Type
-import ghistabs.materialize.cpp.ClassNaming
+import ghistabs.materialize.cpp.fillStructBases
 import ghistabs.materialize.cpp.firstPolymorphicBase
 import ghistabs.materialize.cpp.virtualBases
 import ghistabs.parse.CATEGORY
@@ -107,91 +107,6 @@ internal fun DataTypeRegistry.materializeBody(ast: Type, category: CategoryPath,
             }
     }
 
-/**
- * Splices each non-virtual base's fields into [placeholder] at the offset the stab's inheritance line
- * gives it. Virtual bases, and bases with virtual bases of their own, are [layVirtualInheritance]'s.
- */
-internal fun DataTypeRegistry.fillStructBases(
-    body: TypeDecl.Aggregate<GlobalTypeId>,
-    placeholder: Structure,
-    qualifiedName: String,
-) {
-    // An empty base occupies nothing (EBO) and must not be given the offset it shares with a
-    // space-occupying sibling: cryptopp's `TwoBases<BlockCipher,Rijndael_Info>` declares both at +0,
-    // and the empty one arriving second used to take the slot the 12-byte one had already claimed.
-    val nonVirtual = body.bases.filterNot { it.isVirtual }
-    val occupying = nonVirtual.filterNot { types.resolveStruct(it.type)?.sizeBytes?.let { n -> n <= 1 } == true }
-    if (occupying.size < nonVirtual.size) debug("base-empty-ebo")
-
-    // Layout boundary to infer size of unresolved bases: offset of next
-    // base or first non-static field is where this subobject must end.
-    val sortedBaseOffsetsBytes = occupying.map { (it.offsetBits / 8).toInt() }.toSortedSet()
-    val firstFieldOffsetBytes = body.fields
-        .filter { !it.isStatic }
-        .minOfOrNull { (it.offsetBits / 8).toInt() }
-        ?: body.sizeBytes.toInt()
-
-    for (base in occupying.filterNot { hasVirtualBases(it.type) }.sortedBy { it.offsetBits }) {
-        val offsetBytes = (base.offsetBits / 8).toInt()
-        // gcc's inheritance line doesn't transmit subobject size — derive
-        // from the consuming struct's own-field offset (bouniaf sees
-        // bouniaf as 192 bytes here even though canonical bouniaf is 328
-        // because another CU saw a richer definition).
-        val gap = (sortedBaseOffsetsBytes.firstOrNull { it > offsetBytes } ?: firstFieldOffsetBytes) - offsetBytes
-        val raw = resolveRef(base.type)
-        // Empty placeholders report length=1 (Ghidra's enforced minimum); isZeroLength gives the
-        // logical truth. `dtm.contains` rejects a cycle-break stub, which [seedPlaceholder]
-        // deliberately keeps out of the DTM: splicing one in makes `replaceAtOffset` resolve it on
-        // the way in, forking a `.conflict` twin of a class we already built properly. Both are
-        // "we have no base type here" for layout purposes.
-        val dt = raw?.takeIf { dtm.contains(it) && !it.isZeroLength && it.length in 1..gap }
-        if (dt == null) {
-            // Unresolved, or larger-than-gap (cross-CU size disagreement). Leave the span as
-            // Ghidra's default Undefined1 fill rather than name a subobject we can't stand behind.
-            if (gap <= 0) {
-                // Unresolved-but-gap-zero: libstdc++ iterator-tag bases living in headers this CU
-                // only forward-declared. Own fields at offset 0 take the slot.
-                debug("base-empty-ebo-inferred")
-            } else {
-                degradation(
-                    "base-synthesized",
-                    "$qualifiedName@+$offsetBytes",
-                    if (raw == null || raw.isZeroLength || raw.length <= 0 || !dtm.contains(raw)) {
-                        "Ref unresolved, $gap-byte subobject left undefined"
-                    } else {
-                        "${raw.name} (${raw.length}b) larger than gap ($gap b); left undefined"
-                    },
-                )
-            }
-            continue
-        }
-        runCatching {
-            placeholder.replaceAtOffset(
-                offsetBytes,
-                dt,
-                dt.length,
-                ClassNaming.baseFieldName(base.isVirtual, dt.name, body.bases.size),
-                ClassNaming.baseComment(base),
-            )
-        }.onSuccess { debug("inheritance-applied") }
-            .onFailure {
-                degradation("base-layout-failed", qualifiedName.member(dt.name), it.message)
-                debug("inheritance-failed")
-            }
-    }
-
-    // Plate-comment summary of base classes on the derived struct.
-    if (body.bases.isNotEmpty()) {
-        val lines = body.bases.sortedBy { it.offsetBits }.joinToString("\n") { base ->
-            val baseName = (resolveRef(base.type)?.name) ?: "<unresolved>"
-            val at = if (base.isVirtual) " virtual $baseName" else " $baseName @ +${base.offsetBits / 8}"
-            "inherits ${base.access.name.lowercase()}$at"
-        }
-        placeholder.description =
-            if (placeholder.description.isNullOrEmpty()) lines else "${placeholder.description}\n$lines"
-    }
-}
-
 internal fun DataTypeRegistry.fillComposite(
     body: TypeDecl.Aggregate<GlobalTypeId>,
     placeholder: Composite,
@@ -278,14 +193,8 @@ internal fun DataTypeRegistry.fillComposite(
         }
     }
 
-    when {
-        placeholder !is Structure -> {}
-
-        types.virtualBases(body).isNotEmpty() ->
-            virtualLayouts.putIfAbsent(placeholder, VirtualLayout(body, placeholder, qualifiedName))
-
-        else -> reportHoles(placeholder, qualifiedName)
-    }
+    // A class with virtual bases is [layClasses]'s to finish, and to report.
+    if (placeholder is Structure && types.virtualBases(body).isEmpty()) reportHoles(placeholder, qualifiedName)
 
     return placeholder
 }
@@ -510,7 +419,6 @@ fun DataTypeRegistry.materializeAll(): Int {
             monitor.increment()
             located.materialize()
         }
-        layVirtualInheritance()
 
         materializeTypedefs()
 

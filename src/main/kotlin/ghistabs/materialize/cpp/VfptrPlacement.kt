@@ -173,6 +173,16 @@ internal class VfptrPlacement(
     }
 }
 
+/**
+ * `<Class>_vftable` under `/ClassDataTypes/<Class>/`, the function-pointer array `{vfptr}` points at,
+ * where `RecoveredClassHelper` and shift-S round-trip expect it. Empty until the class pass fills it.
+ */
+internal fun DataTypeRegistry.vftableOf(className: String): Structure {
+    val category = ClassNaming.vftableCategory(className)
+    val name = "${className}_vftable"
+    return getOrRegister<Structure>(category, name) { StructureDataType(category, name, 0, dtm) }
+}
+
 /** A half-open byte range `[from, until)` of a base subobject. */
 data class Run(val from: Int, val until: Int) {
     val length get() = until - from

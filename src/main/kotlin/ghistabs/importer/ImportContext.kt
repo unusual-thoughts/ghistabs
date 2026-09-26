@@ -18,6 +18,7 @@ import ghistabs.index.TypeGraph
 import ghistabs.materialize.DataTypeRegistry
 import ghistabs.materialize.TypedefShortener
 import ghistabs.materialize.cpp.ClassBuilder
+import ghistabs.materialize.cpp.VfptrPlacement
 import ghistabs.parse.StabReader
 import ghistabs.parse.StabRecord
 import org.jetbrains.annotations.TestOnly
@@ -79,8 +80,9 @@ class ImportContext<Terminal : DiagnosticSink>(
     fun hints(harvest: Harvest) = SourceHints(harvest, types(harvest), sources(harvest), this)
     fun demanglerReplacer(registry: DataTypeRegistry) = DemanglerReplacer(program, registry, monitor, this)
     fun typedefShortener(registry: DataTypeRegistry) = TypedefShortener(registry, monitor)
-    fun classBuilder(registry: DataTypeRegistry) =
-        ClassBuilder(registry, program, resolver, monitor, this, options.vfptrModel)
+    fun classBuilder(registry: DataTypeRegistry) = ClassBuilder(registry, program, resolver, monitor, this)
+    internal fun vfptrPlacement(registry: DataTypeRegistry) =
+        VfptrPlacement(registry, program, options.vfptrModel, this)
 }
 
 /**

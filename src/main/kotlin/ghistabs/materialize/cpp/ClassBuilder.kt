@@ -25,7 +25,6 @@ import ghistabs.materialize.buildFunctionDefinition
 import ghistabs.materialize.cpp.abi.*
 import ghistabs.materialize.cpp.abi.CxxAbi.Companion.prevailingAbi
 import ghistabs.materialize.resolveRef
-import ghistabs.materialize.syncSelfBase
 import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Aggregate.Method
 import java.util.*
@@ -48,12 +47,10 @@ class ClassBuilder(
     internal val resolver: AddressResolver,
     internal val monitor: TaskMonitor,
     private val sink: DiagnosticSink,
-    vfptrModel: VfptrModel = VfptrModel.SPLIT_BASE,
 ) : DiagnosticSink by sink {
     private val types = registry.hints.types
     internal val symtab = program.symbolTable
     internal val dtm = program.dataTypeManager
-    private val vfptrPlacement = VfptrPlacement(registry, program, vfptrModel, sink)
 
     companion object {
         private val source = SourceType.IMPORTED
@@ -103,11 +100,7 @@ class ClassBuilder(
         // (gcc 3.4.4: CPackedSegList's GetSeg/AddSeg are `virt=NORMAL`), so a polymorphic base
         // subobject is itself the signal — without it buildAndApplyVtable never runs and _ZTV<class>
         // is left unannotated. Virtuals.process walks bases, so the slots still resolve.
-        val hasPolyBase = types.hasPolymorphicBaseSubobject(body)
-        val isPoly = hasPolyBase ||
-            body.hasVTablePointerMarker ||
-            body.methods.any { it.virt == VirtKind.VIRTUAL } ||
-            body.fields.any { isVptrFieldName(it.name) }
+        val isPoly = types.hasPolymorphicBaseSubobject(body) || body.declaresVptr
         val vtable: ResolvedVtable? by lazy { if (isPoly) resolveVtableAddress() else null }
         val abi: CxxAbi get() = vtable?.abi ?: fallbackAbi
 
@@ -120,19 +113,8 @@ class ClassBuilder(
         // Pointer→FunctionDefinition(<sig>) so the decompiler resolves virtual calls and
         // RecoveredClassHelper / shift-S round-trip. The offset_to_top + rtti header words sit
         // before the address point as plain Data (no enclosing struct — see buildAndApplyVtable).
-        val vftableCategory get() = CategoryPath(ClassNaming.classDataTypesRoot, name)
-        val vftableName get() = "${name}_vftable"
-        val vftable get() = registry.getOrRegister<Structure>(vftableCategory, vftableName) {
-            StructureDataType(vftableCategory, vftableName, 0, dtm)
-        }
-
-        /**
-         * {vfptr} points at the function-pointer array at the vtable's address point
-         * (`_ZTV<class> + 2*ptrSize`), not at the record start. Modelled as `<Class>_vftable*`
-         * under `/ClassDataTypes/<Class>/` so `RecoveredClassHelper` / shift-S round-trip
-         * can find it.
-         */
-        fun ensureVtableTypeAndPointer(): Pointer = PointerDataType.getPointer(vftable, dtm)
+        val vftableCategory get() = ClassNaming.vftableCategory(name)
+        val vftable get() = registry.vftableOf(name)
     }
 
     /**
@@ -216,9 +198,6 @@ class ClassBuilder(
 
     /** Materialize class struct + namespace + (optional) vtable struct, apply at _ZTV. */
     private fun LocatedClass.build() {
-        if (isPoly) vfptrPlacement.place(structDt, name, body, hasPolyBase) { ensureVtableTypeAndPointer() }
-        registry.syncSelfBase(structDt)
-
         // gcc 2.x composes a method's physname from its own class's ABI, so reparenting always
         // resolves through this class's own abi, once its vtable resolves.
         for (m in body.methods) reparentMethod(m)

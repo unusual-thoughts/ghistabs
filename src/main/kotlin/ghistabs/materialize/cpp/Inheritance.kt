@@ -43,13 +43,13 @@ fun TypeGraph.firstPolymorphicBase(typeDecl: TypeDecl.Aggregate<GlobalTypeId>): 
     }
     .sortedBy { it.offsetBits }
     .firstOrNull { base ->
-        resolveStruct(base.type)?.run {
-            hasVTablePointerMarker ||
-                methods.any { it.virt == VirtKind.VIRTUAL } ||
-                fields.any { isVptrFieldName(it.name) } ||
-                firstPolymorphicBase(this) != null
-        } ?: false
+        resolveStruct(base.type)?.let { it.declaresVptr || firstPolymorphicBase(it) != null } ?: false
     }
+
+/** Whether a class says it has a vptr of its own: a vtable marker, a virtual method, or a vptr field. */
+val TypeDecl.Aggregate<*>.declaresVptr
+    get() = hasVTablePointerMarker || methods.any { it.virt == VirtKind.VIRTUAL } ||
+        fields.any { isVptrFieldName(it.name) }
 
 /**
  * Every virtual base in [typeDecl]'s graph, not only the directly-declared ones — a vtable carries one

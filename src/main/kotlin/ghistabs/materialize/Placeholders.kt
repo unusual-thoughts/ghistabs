@@ -26,7 +26,7 @@ internal fun DataTypeRegistry.makePlaceholder(
 
         is TypeDecl.Aggregate -> {
             // A virtual base's bytes are the tail past the last own field, laid later by
-            // [layVirtualInheritance] and checked there against this size, so it is not overshoot.
+            // [ghistabs.materialize.cpp.layClasses] and checked there against this size, so it is not overshoot.
             val sz = if (types.virtualBases(ast.body).isEmpty()) ast.body.usefulStructSize() else ast.body.sizeBytes
             recordTruncation(ast, ast.body.sizeBytes, sz)
             StructureDataType(category, name, sz.toInt(), dtm)
