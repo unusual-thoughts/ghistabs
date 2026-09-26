@@ -105,6 +105,34 @@ class Gcc2Test {
         Itanium.mustNot { isProbablyMangled("_._9TiXmlNode") }
     }
 
+    /** The non-member forms and template classes, as `hello_elf_gcc295` spells them. */
+    @Test
+    fun recognisesFunctionsAndTemplates() {
+        Gcc2.must { isProbablyMangled("sum__Fie") }
+        Gcc2.must { isProbablyMangled("mid__FG5PointT0") }
+        Gcc2.must { isProbablyMangled("max2__H1Zs_X01X01_X01") }
+        Gcc2.must { isProbablyMangled("push__t5Stack2Z5Pointi2RC5Point") }
+        Gcc2.must { isProbablyMangled("__t5Stack2Z5Pointi2") }
+        Gcc2.must { isProbablyMangled("__Q2t5Stack2Zii4_4Iter") }
+        Gcc2.mustNot { isProbablyMangled("___FRAME_END__") }
+        Gcc2.mustNot { isProbablyMangled("my__func") }
+        // A template class claims its length like any other.
+        Gcc2.mustNot { isProbablyMangled("x__t9Stack") }
+    }
+
+    /**
+     * `hello_elf_gcc295` states `push`'s physname as `t5Stack2Z5Pointi2RC5Point`, class included, and
+     * the symbol is `push__t5Stack2Z5Pointi2RC5Point`; composing the class again finds nothing.
+     */
+    @Test
+    fun aTemplateMembersPhysnameAlreadyCarriesItsClass() {
+        Gcc2.classQualifiedPhysname("push", "t5Stack2Z5Pointi2RC5Point", isConst = false, isVolatile = false) mustBe
+            "push__t5Stack2Z5Pointi2RC5Point"
+        Gcc2.classQualifiedPhysname("size", "t5Stack2Z5Pointi2", isConst = true, isVolatile = false) mustBe
+            "size__Ct5Stack2Z5Pointi2"
+        Gcc2.classQualifiedPhysname("FirstChild", "PCc", isConst = true, isVolatile = false) mustBe null
+    }
+
     /**
      * A nested class's mangled name, against the spelling `cv_mscom_elf_i386_gcc281` carries: its
      * stabs state `__class_type_info::base_info`'s ctor as `__Q217__class_type_info9base_info`, and

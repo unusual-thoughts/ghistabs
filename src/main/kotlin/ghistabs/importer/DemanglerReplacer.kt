@@ -17,7 +17,8 @@ import ghistabs.diagnose.DiagnosticSink
 import ghistabs.importer.ImportOptions.Companion.stabsTypedefsShortened
 import ghistabs.materialize.DataTypeRegistry
 import ghistabs.materialize.TemplateNameShortener
-import ghistabs.materialize.cpp.abi.Itanium.isProbablyMangled
+import ghistabs.materialize.cpp.abi.CxxAbi.Companion.prevailingAbi
+import ghistabs.materialize.cpp.abi.Itanium
 import ghistabs.materialize.cpp.abi.Rtti
 import ghistabs.materialize.typedefAliases
 import ghistabs.parse.CATEGORY
@@ -106,6 +107,12 @@ class DemanglerReplacer(
     private val dtm = program.dataTypeManager
 
     /**
+     * The binary's own ABI decides what counts as mangled: gcc 2.x function forms (`sum__Fie`) have no
+     * length to check, and an import like `__imp__FindAtomA@4` in an Itanium binary has their shape.
+     */
+    private val abi by lazy { program.symbolTable.prevailingAbi() ?: Itanium }
+
+    /**
      * Mangled name per address, captured during [demangleMangledLabels] because
      * [dropDisplacedMangledLabels] renames the symbol to its demangled leaf straight after — by the time
      * [retargetStubSites] runs, the template args are gone.
@@ -118,7 +125,7 @@ class DemanglerReplacer(
      * [demangleMangledLabels] to capture — but the harvest kept one.
      */
     private val harvestedMangled by lazy {
-        registry.harvest.functions.filter { isProbablyMangled(it.name) }.associate { it.addr to it.name }
+        registry.harvest.functions.filter { abi.isProbablyMangled(it.name) }.associate { it.addr to it.name }
     }
 
     /**
@@ -136,7 +143,7 @@ class DemanglerReplacer(
         for (sym in program.symbolTable.symbolIterator) {
             monitor.increment()
             val name = sym.name
-            if (!isProbablyMangled(name)) continue
+            if (!abi.isProbablyMangled(name)) continue
             mangledByAddress.putIfAbsent(sym.address, name)
             attempted++
             if (program.applyDemangling(sym.address, name, monitor = monitor)) {
@@ -165,7 +172,7 @@ class DemanglerReplacer(
      */
     private fun dropDisplacedMangledLabels() {
         val displaced = program.symbolTable.symbolIterator
-            .filter { isProbablyMangled(it.name) && !it.parentNamespace.isGlobal }
+            .filter { abi.isProbablyMangled(it.name) && !it.parentNamespace.isGlobal }
             .toList()
         var dropped = 0
         var renamed = 0
@@ -344,7 +351,7 @@ class DemanglerReplacer(
      */
     private fun mangledFor(f: Function): String? = mangledByAddress[f.entryPoint]
         ?: harvestedMangled[f.entryPoint]
-        ?: program.symbolTable.getSymbols(f.entryPoint).firstOrNull { isProbablyMangled(it.name) }?.name
+        ?: program.symbolTable.getSymbols(f.entryPoint).firstOrNull { abi.isProbablyMangled(it.name) }?.name
 
     private fun ownerSpelling(f: Function): Owner {
         val mangled = mangledFor(f) ?: return Owner.NoMangledName
