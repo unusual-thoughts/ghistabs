@@ -546,7 +546,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
 
     /**
      * A static member function takes no `this`. The stabs flag it `?` in the method-block trailer,
-     * and parsing that as pure-virtual made ClassBuilder treat every one as an instance method:
+     * and parsing that as pure-virtual made ClassApplier treat every one as an instance method:
      * forced __thiscall, injected a phantom `<Class> *this`, and replaced the N_PSYM params with the
      * empty list the `f(ret)` signature carries.
      *
@@ -845,7 +845,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
      *     distinct types canonicalize onto one [GlobalTypeId]; before 4b21a6c the loser of that
      *     collision was dropped and its name went with it.
      *  2. **It landed somewhere else.** Attribution and the content-hash dedup have to agree on one
-     *     category, or `ClassBuilder` cannot find the type it just built.
+     *     category, or `ClassApplier` cannot find the type it just built.
      *  3. **It is an empty stub.** A group whose winner has a body must not resolve to a
      *     zero-component Structure — the whole group is then unusable however well it was filed.
      *  4. **Two slots resolved onto one type.** Then one of the two names is simply not in the DTM,
@@ -1427,7 +1427,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         }
         vftables.mustNotBeEmpty("Expected at least one *_vftable struct with components")
         // A derived class inherits its vfptr through its `_base_<Parent>` subobject, so most carry
-        // no pointer directly — but the root of every chain must, or ClassBuilder's vfptr insertion
+        // no pointer directly — but the root of every chain must, or ClassApplier's vfptr insertion
         // is broken end to end.
         val backEdges = vftables.count { vft ->
             program.dataTypeManager.allDataTypes.asSequence()
@@ -1831,7 +1831,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
 
     /**
      * No class method should end up with two `this` parameters. The
-     * historical regression (see ClassBuilder comment around the
+     * historical regression (see ClassApplier comment around the
      * `ghidraInjectsThis` decision) was the importer keeping the stab's
      * explicit leading `this` while Ghidra's `__thiscall` convention also
      * auto-injected one, producing

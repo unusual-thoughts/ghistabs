@@ -3,17 +3,17 @@
   <ManuallySuppressedIssues/>
   <CurrentIssues>
     <ID>CyclomaticComplexMethod:Claims.kt:fun allocate: Allocation</ID>
-    <ID>CyclomaticComplexMethod:ClassBuilder.kt:ClassBuilder$private fun LocatedClass.reparentMethod</ID>
+    <ID>CyclomaticComplexMethod:ClassApplier.kt:ClassApplier$private fun LocatedClass.reparentMethod</ID>
     <ID>CyclomaticComplexMethod:DemanglerReplacer.kt:DemanglerReplacer$private fun retargetStubSites</ID>
     <ID>CyclomaticComplexMethod:FileRenderer.kt:FileRenderer$private fun decompClaims: List&lt;Claim&gt;</ID>
     <ID>CyclomaticComplexMethod:FileRenderer.kt:FileRenderer$private fun reportAnomalies</ID>
     <ID>CyclomaticComplexMethod:Materialization.kt:internal fun DataTypeRegistry.fillComposite: DataType</ID>
-    <ID>CyclomaticComplexMethod:Materialization.kt:internal fun DataTypeRegistry.fillStructBases</ID>
+    <ID>CyclomaticComplexMethod:ClassLayout.kt:internal fun DataTypeRegistry.fillStructBases</ID>
     <ID>CyclomaticComplexMethod:Parser.kt:Parser$private fun Cursor.parseStruct: TypeDecl.Aggregate&lt;LocalTypeId&gt;</ID>
     <ID>CyclomaticComplexMethod:SymbolApplier.kt:SymbolApplier$internal fun applyAllFunctions: Int</ID>
     <ID>CyclomaticComplexMethod:TypeStore.kt:TypeStore$private fun synthesizeXRefStubsForDanglingInheritanceRefs</ID>
     <ID>LongMethod:Claims.kt:fun allocate: Allocation</ID>
-    <ID>LongMethod:ClassBuilder.kt:ClassBuilder$private fun LocatedClass.reparentMethod</ID>
+    <ID>LongMethod:ClassApplier.kt:ClassApplier$private fun LocatedClass.reparentMethod</ID>
     <ID>LongMethod:FileRenderer.kt:FileRenderer$private fun decompClaims: List&lt;Claim&gt;</ID>
     <ID>LongMethod:Materialization.kt:internal fun DataTypeRegistry.fillComposite: DataType</ID>
     <ID>LongMethod:Parser.kt:Parser$private fun Cursor.parseStruct: TypeDecl.Aggregate&lt;LocalTypeId&gt;</ID>

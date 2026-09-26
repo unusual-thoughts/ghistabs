@@ -30,9 +30,10 @@ import ghistabs.parse.TypeDecl.Aggregate.Method
 import java.util.*
 
 /**
- * The C++ pass over the structs [DataTypeRegistry] has already materialized: a class gets its Ghidra
- * identity: a [GhidraClass] namespace with its methods reparented under it, `{vfptr}` as first
- * field, and a `<Class>_vftable` applied at `_ZTV`'s address point so virtual calls resolve.
+ * The C++ pass over the program, once [layClasses] has laid every class struct: a class gets its
+ * Ghidra identity, a [GhidraClass] namespace with its methods reparented under it, and its
+ * `<Class>_vftable` filled and applied at `_ZTV`'s address point so virtual calls resolve. It
+ * writes no class struct.
  *
  * That vftable is named and filed the way Ghidra's own RTTI scripts expect
  * (`/ClassDataTypes/<Class>/<Class>_vftable`), so `RecoveredClassHelper` and shift-S round-trip
@@ -41,26 +42,19 @@ import java.util.*
  * Works in [LocatedType] groups, each the canonical collapse of the N harvested asts a class header
  * included by N CUs produces. One group builds one class, off its most-detailed body.
  */
-class ClassBuilder(
+class ClassApplier(
     internal val registry: DataTypeRegistry,
     internal val program: Program,
     internal val resolver: AddressResolver,
     internal val monitor: TaskMonitor,
     private val sink: DiagnosticSink,
-    vfptrModel: VfptrModel = VfptrModel.SPLIT_BASE,
 ) : DiagnosticSink by sink {
     private val types = registry.hints.types
     internal val symtab = program.symbolTable
     internal val dtm = program.dataTypeManager
-    private val vfptrPlacement = VfptrPlacement(registry, program, vfptrModel, sink)
 
     companion object {
         private val source = SourceType.IMPORTED
-
-        fun LocatedType.isClass() = (type.body as? TypeDecl.Aggregate)?.hasCxxSurface == true
-
-        private val LocatedType.classBody get() = type.body as TypeDecl.Aggregate<GlobalTypeId>
-        private val LocatedType.className get() = location.name
     }
 
     // Fully-qualified C++ name (`std::basic_ostream<char,…>`), for matching a demangled `_ZTV`
@@ -102,11 +96,7 @@ class ClassBuilder(
         // (gcc 3.4.4: CPackedSegList's GetSeg/AddSeg are `virt=NORMAL`), so a polymorphic base
         // subobject is itself the signal — without it buildAndApplyVtable never runs and _ZTV<class>
         // is left unannotated. Virtuals.process walks bases, so the slots still resolve.
-        val hasPolyBase = types.hasPolymorphicBaseSubobject(body)
-        val isPoly = hasPolyBase ||
-            body.hasVTablePointerMarker ||
-            body.methods.any { it.virt == VirtKind.VIRTUAL } ||
-            body.fields.any { isVptrFieldName(it.name) }
+        val isPoly = types.isPolymorphic(body)
         val vtable: ResolvedVtable? by lazy { if (isPoly) resolveVtableAddress() else null }
         val abi: CxxAbi get() = vtable?.abi ?: fallbackAbi
 
@@ -119,19 +109,8 @@ class ClassBuilder(
         // Pointer→FunctionDefinition(<sig>) so the decompiler resolves virtual calls and
         // RecoveredClassHelper / shift-S round-trip. The offset_to_top + rtti header words sit
         // before the address point as plain Data (no enclosing struct — see buildAndApplyVtable).
-        val vftableCategory get() = CategoryPath(ClassNaming.classDataTypesRoot, name)
-        val vftableName get() = "${name}_vftable"
-        val vftable get() = registry.getOrRegister<Structure>(vftableCategory, vftableName) {
-            StructureDataType(vftableCategory, vftableName, 0, dtm)
-        }
-
-        /**
-         * {vfptr} points at the function-pointer array at the vtable's address point
-         * (`_ZTV<class> + 2*ptrSize`), not at the record start. Modelled as `<Class>_vftable*`
-         * under `/ClassDataTypes/<Class>/` so `RecoveredClassHelper` / shift-S round-trip
-         * can find it.
-         */
-        fun ensureVtableTypeAndPointer(): Pointer = PointerDataType.getPointer(vftable, dtm)
+        val vftableCategory get() = ClassNaming.vftableCategory(name)
+        val vftable get() = registry.vftableOf(name)
     }
 
     /**
@@ -141,12 +120,7 @@ class ClassBuilder(
      * once, off the most-detailed body. Returns the number of classes built.
      */
     fun buildAll(): Int {
-        // Bases first: SPLIT_BASE reads a base's materialized layout to build its vptr-less
-        // `<Base>_fields`, which is only correct once the base has had its own vfptr placed.
-        val depthMemo = IdentityHashMap<TypeDecl.Aggregate<GlobalTypeId>, Int>()
-        val classes = registry.byLocation.values
-            .filter { it.isClass() }
-            .sortedBy { types.inheritanceDepth(it.classBody, depthMemo) }
+        val classes = registry.classesBasesFirst()
         monitor.initialize(classes.size.toLong(), "Stabs: building classes")
         var built = 0
         for (group in classes) {
@@ -215,8 +189,6 @@ class ClassBuilder(
 
     /** Materialize class struct + namespace + (optional) vtable struct, apply at _ZTV. */
     private fun LocatedClass.build() {
-        if (isPoly) vfptrPlacement.place(structDt, name, body, hasPolyBase) { ensureVtableTypeAndPointer() }
-
         // gcc 2.x composes a method's physname from its own class's ABI, so reparenting always
         // resolves through this class's own abi, once its vtable resolves.
         for (m in body.methods) reparentMethod(m)

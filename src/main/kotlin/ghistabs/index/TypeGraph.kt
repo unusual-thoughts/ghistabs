@@ -6,12 +6,7 @@ import ghistabs.diagnose.DummySink
 import ghistabs.harvest.Func
 import ghistabs.harvest.Harvest
 import ghistabs.harvest.Type
-import ghistabs.parse.GlobalTypeDecl
-import ghistabs.parse.GlobalTypeId
-import ghistabs.parse.TypeDecl
-import ghistabs.parse.canonTemplateName
-import ghistabs.parse.isTemplated
-import ghistabs.parse.templateLeaf
+import ghistabs.parse.*
 
 /**
  * The type graph: every harvested [Type] indexed by id, by name and by base tag, plus the xref oracle

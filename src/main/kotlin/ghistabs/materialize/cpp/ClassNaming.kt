@@ -27,6 +27,8 @@ object ClassNaming {
 
     fun isBaseField(name: String) = name.startsWith(BASE_PREFIX) || name.startsWith(VBASE_PREFIX)
 
+    fun vftableCategory(className: String) = CategoryPath(classDataTypesRoot, className)
+
     fun baseFieldName(isVirtual: Boolean, simpleName: String, baseCount: Int) =
         (if (isVirtual) VBASE_PREFIX else BASE_PREFIX) + simpleName.takeIf { baseCount > 1 }.orEmpty()
 

@@ -6,6 +6,7 @@ import ghistabs.harvest.Harvester
 import ghistabs.importer.ImportOptions.Companion.markStabsTypedefsShortened
 import ghistabs.index.TypeGraph
 import ghistabs.materialize.DataTypeRegistry
+import ghistabs.materialize.cpp.layClasses
 import ghistabs.materialize.materializeAll
 import ghistabs.materialize.reportConflictDelta
 import ghistabs.materialize.reportSurvivingPlaceholders
@@ -44,6 +45,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
         val materialized = ctx.program.runTransaction("Stabs: materialize types") {
             registry.materializeAll().also {
                 if (ctx.options.shortenTypedefs) ctx.typedefShortener(registry).apply()
+                registry.layClasses(ctx.options.vfptrModel.takeIf { ctx.options.buildClasses })
                 // The render spells types to match the decompiler, and it may run much later from the GUI
                 // against analyzer options that have since been toggled — so record what actually happened.
                 ctx.program.markStabsTypedefsShortened(ctx.options.shortenTypedefs)
@@ -59,7 +61,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
                     constants = applyAllConstants(),
                     staticMembers = applyAllStaticMembers(),
                     classes = when {
-                        ctx.options.buildClasses -> ctx.classBuilder(registry).buildAll()
+                        ctx.options.buildClasses -> ctx.classApplier(registry).buildAll()
                         else -> 0
                     },
                 )
