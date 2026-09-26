@@ -1,5 +1,6 @@
 package ghistabs.harvest
 
+import ghistabs.Demangler
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.DummySink
 import ghistabs.parse.*
@@ -17,8 +18,9 @@ typealias Collisions = MutableMap<GlobalTypeId, NameBuckets>
  * disagrees after that is parked in [collisions] for `Harvest.classifyCollisions` to classify in one
  * pass at the end.
  *
- * [toHarvest] closes the store, running the two repairs that need every CU seen first:
- * [synthesizeXRefStubsForDanglingInheritanceRefs] and [nameAnonymousTypedefTargets].
+ * [toHarvest] closes the store, running the repairs that need every CU seen first:
+ * [synthesizeXRefStubsForDanglingInheritanceRefs], [nameAnonymousTypedefTargets] and
+ * [restoreTemplateArguments].
  */
 class TypeStore(
     private val byId: MutableMap<GlobalTypeId, Type> = mutableMapOf(),
@@ -229,9 +231,31 @@ class TypeStore(
         }
     }
 
+    /**
+     * gcc ≥ 4.3 tags an instantiation by its bare template name (`Stack:Tt(0,177)=s12…`, where 4.1
+     * wrote `Stack<Point,2>`), so every instantiation shares one name. Its members' mangled names
+     * still carry the arguments (`_ZN5StackI5PointLi2EE4pushERKS0_`); adopt that chain's tail when,
+     * arguments dropped, it spells the stab name. Only a class with no member that ever mangles
+     * stays bare.
+     */
+    private fun restoreTemplateArguments() {
+        for (type in byId.values.toList()) {
+            val name = type.name?.takeUnless { '<' in it } ?: continue
+            val methods = (type.body as? TypeDecl.Aggregate)?.methods ?: continue
+            val segments = name.split("::")
+            val restored = methods.firstNotNullOfOrNull { m ->
+                m.mangled?.let(Demangler::namespaces)?.takeLast(segments.size)
+                    ?.takeIf { path -> path.map { it.substringBefore('<') } == segments }
+            }?.joinToString("::", transform = ::canonTemplateName)?.takeIf { it != name } ?: continue
+            byId[type.id] = type.copy(named = type.named?.copy(name = restored))
+            debug("template-args-restored", "${type.id}: $name → $restored")
+        }
+    }
+
     fun toHarvest(): Pair<Map<GlobalTypeId, Type>, Map<GlobalTypeId, Map<String, Set<GlobalTypeDecl>>>> {
         synthesizeXRefStubsForDanglingInheritanceRefs()
         nameAnonymousTypedefTargets()
+        restoreTemplateArguments()
         return byId to collisions
     }
 }
