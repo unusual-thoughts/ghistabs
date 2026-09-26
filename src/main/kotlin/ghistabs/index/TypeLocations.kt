@@ -36,7 +36,7 @@ private fun TypeGraph.byValueStructId(t: GlobalTypeDecl) = resolveWith(t) { d ->
  * are equal and the first criterion ties; the method count is what actually decides. It has to,
  * because methods and static fields are deliberately excluded from [content], so every per-CU copy
  * of a class compares equal however few methods it carries. The winner's body is the one that gets
- * materialized, and ClassBuilder reads its method list for vtable slots, `__thiscall` reparenting
+ * materialized, and ClassApplier reads its method list for vtable slots, `__thiscall` reparenting
  * and the namespace chain — so a method-poor winner silently loses those. Fewest-unresolved then
  * picks the most-resolved variant when CUs disagree on gcc-implicit slots.
  *

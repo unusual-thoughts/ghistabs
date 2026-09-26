@@ -1,10 +1,13 @@
 package ghistabs.materialize.cpp
 
 import ghistabs.index.TypeGraph
-import ghistabs.parse.*
+import ghistabs.parse.GlobalTypeId
+import ghistabs.parse.TypeDecl
 import ghistabs.parse.TypeDecl.Aggregate.Base
 import ghistabs.parse.TypeDecl.Aggregate.Method
-import java.util.IdentityHashMap
+import ghistabs.parse.VirtKind
+import ghistabs.parse.isVptrFieldName
+import java.util.*
 
 /**
  * Byte offset of the vptr [typeDecl] declares, or null if it declares none. The single answer to
@@ -43,13 +46,17 @@ fun TypeGraph.firstPolymorphicBase(typeDecl: TypeDecl.Aggregate<GlobalTypeId>): 
     }
     .sortedBy { it.offsetBits }
     .firstOrNull { base ->
-        resolveStruct(base.type)?.run {
-            hasVTablePointerMarker ||
-                methods.any { it.virt == VirtKind.VIRTUAL } ||
-                fields.any { isVptrFieldName(it.name) } ||
-                firstPolymorphicBase(this) != null
-        } ?: false
+        resolveStruct(base.type)?.let { it.declaresVptr || firstPolymorphicBase(it) != null } ?: false
     }
+
+/** Whether [typeDecl] has a vtable: its own, or one inherited through a polymorphic base subobject. */
+fun TypeGraph.isPolymorphic(typeDecl: TypeDecl.Aggregate<GlobalTypeId>) =
+    hasPolymorphicBaseSubobject(typeDecl) || typeDecl.declaresVptr
+
+/** Whether a class says it has a vptr of its own: a vtable marker, a virtual method, or a vptr field. */
+val TypeDecl.Aggregate<*>.declaresVptr get() = hasVTablePointerMarker ||
+    methods.any { it.virt == VirtKind.VIRTUAL } ||
+    fields.any { isVptrFieldName(it.name) }
 
 /**
  * Every virtual base in [typeDecl]'s graph, not only the directly-declared ones — a vtable carries one
