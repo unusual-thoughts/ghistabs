@@ -148,6 +148,7 @@ const val CONFLICTED_DECL = "this line is claimed by several files"
 const val FOREIGN_RUN = "run crosses this file's code"
 const val OFF_CANVAS = "line outside the file"
 const val MISATTRIBUTED = "stale N_SOL"
+const val NO_LINE = "no declaration line"
 
 /**
  * Assign rows in [range] to [claims].
