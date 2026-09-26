@@ -41,13 +41,10 @@
             "max": 194
         },
         "base-synthesized": {
-            "min": 4,
-            "max": 4,
+            "min": 1,
+            "max": 1,
             "degrades": [
-                "/des.cpp/multi/ClonableImpl<CryptoPP::BlockCipherFinal<ENCRYPTION,CryptoPP::DES::Base>,CryptoPP::DES::Base>@+0",
-                "/std/basic_fstream<char,std::char_traits<char>>@+0",
-                "/std/basic_istream<char,std::char_traits<char>>@+-12",
-                "/std/basic_ostream<char,std::char_traits<char>>@+-12"
+                "/des.cpp/multi/ClonableImpl<CryptoPP::BlockCipherFinal<ENCRYPTION,CryptoPP::DES::Base>,CryptoPP::DES::Base>@+0"
             ]
         },
         "canonical-content-merged": {
@@ -430,8 +427,8 @@
             "max": 1
         },
         "inheritance-applied": {
-            "min": 616,
-            "max": 616
+            "min": 615,
+            "max": 615
         },
         "inheritance-pseudo-fields-promoted": {
             "min": 1,
@@ -1217,14 +1214,13 @@
             "max": 2
         },
         "struct-mostly-undefined": {
-            "min": 20,
-            "max": 20,
+            "min": 19,
+            "max": 19,
             "degrades": [
                 "/CryptoPP/FixedSizeAllocatorWithCleanup<byte,16u,CryptoPP::NullAllocator<byte>,false>",
                 "/CryptoPP/FixedSizeAllocatorWithCleanup<byte,8u,CryptoPP::NullAllocator<byte>,false>",
                 "/build/buildd/mingw32-runtime-3.12/build_dir/src/w32api/include/winnt.h/Anon_winnt_474_bed1a7c2",
                 "/des.cpp/multi/ClonableImpl<CryptoPP::BlockCipherFinal<ENCRYPTION,CryptoPP::DES::Base>,CryptoPP::DES::Base>",
-                "/std/basic_iostream<char,std::char_traits<char>>",
                 "/std/fpos<mbstate_t>",
                 "/std/oaidl/Anon_oaidl_98_47e0d7d0",
                 "/std/oaidl/Anon_oaidl_98_533edd29",
@@ -1243,17 +1239,12 @@
             ]
         },
         "struct-truncated": {
-            "min": 8,
-            "max": 8,
+            "min": 3,
+            "max": 3,
             "degrades": [
                 "AlgorithmParametersTemplate<bool>",
                 "Store",
-                "_Unwind_Exception",
-                "basic_fstream<char,std::char_traits<char>>",
-                "basic_ifstream<char,std::char_traits<char>>",
-                "basic_istream<char,std::char_traits<char>>",
-                "basic_ofstream<char,std::char_traits<char>>",
-                "basic_ostream<char,std::char_traits<char>>"
+                "_Unwind_Exception"
             ]
         },
         "text-boundaries-out-of-order": {
@@ -1292,17 +1283,21 @@
             "min": 61,
             "max": 61
         },
+        "vbase-applied": {
+            "min": 6,
+            "max": 6
+        },
         "vfptr-inherited-from-base": {
-            "min": 98,
-            "max": 98
+            "min": 99,
+            "max": 99
         },
         "vfptr-normalized": {
-            "min": 50,
-            "max": 50
+            "min": 48,
+            "max": 48
         },
         "vfptr-split-from-base": {
-            "min": 374,
-            "max": 374
+            "min": 375,
+            "max": 375
         },
         "vftable-slot-name-collision": {
             "min": 4,

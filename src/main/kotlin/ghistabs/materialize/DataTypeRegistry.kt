@@ -64,8 +64,12 @@ class DataTypeRegistry(
     // ([reportConflictDelta]) attributes only the forks the stabs import introduced.
     internal val conflictsBefore = dtm.conflictPaths()
 
-    /** Classes with a virtual base in their graph, filled but for it; [layVirtualInheritance] finishes them. */
-    internal val virtualLayouts = mutableListOf<VirtualLayout>()
+    /**
+     * Classes with a virtual base in their graph, filled but for it; [layVirtualInheritance] finishes
+     * them. One per struct: two locations can fill the same one (`/stabs/basic_ostream<…>` and
+     * `/std/basic_ostream<…>`), and a second pass would take the laid virtual base for own data.
+     */
+    internal val virtualLayouts = IdentityHashMap<Structure, VirtualLayout>()
 
     // Keyed by identity: a DataType hashes by name, and shortening renames.
 

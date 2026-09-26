@@ -45,7 +45,7 @@ private fun alignUp(n: Int, align: Int) = (n + align - 1) / align * align
  */
 internal fun DataTypeRegistry.layVirtualInheritance() {
     val memo = IdentityHashMap<TypeDecl.Aggregate<GlobalTypeId>, Int>()
-    for ((body, struct, qualifiedName) in virtualLayouts.sortedBy { types.inheritanceDepth(it.body, memo) }) {
+    for ((body, struct, qualifiedName) in virtualLayouts.values.sortedBy { types.inheritanceDepth(it.body, memo) }) {
         embedNonVirtualParts(body, struct, qualifiedName)
         val nv = struct.definedComponents
         val nvEnd = nv.maxOfOrNull { it.offset + it.length } ?: 0

@@ -88,20 +88,6 @@
             "min": 44,
             "max": 44
         },
-        "base-synthesized": {
-            "min": 8,
-            "max": 8,
-            "degrades": [
-                "/src/allocator-inst.cc/multi/basic_fstream<char,std::char_traits<char>>@+0",
-                "/src/allocator-inst.cc/multi/basic_fstream<wchar_t,std::char_traits<wchar_t>>@+0",
-                "/src/allocator-inst.cc/multi/basic_istream<char,std::char_traits<char>>@+-12",
-                "/src/allocator-inst.cc/multi/basic_istream<wchar_t,std::char_traits<wchar_t>>@+-12",
-                "/src/allocator-inst.cc/multi/basic_ostream<char,std::char_traits<char>>@+-12",
-                "/src/allocator-inst.cc/multi/basic_ostream<wchar_t,std::char_traits<wchar_t>>@+-12",
-                "/src/allocator-inst.cc/multi/basic_stringstream<char,std::char_traits<char>,std::allocator<char>>@+0",
-                "/src/allocator-inst.cc/multi/basic_stringstream<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>@+0"
-            ]
-        },
         "canonical-key-merged": {
             "min": 302,
             "max": 302
@@ -353,8 +339,8 @@
             "max": 1
         },
         "inheritance-applied": {
-            "min": 130,
-            "max": 130
+            "min": 134,
+            "max": 134
         },
         "linesource-start": {
             "min": 900,
@@ -640,35 +626,17 @@
             "max": 146
         },
         "struct-mostly-undefined": {
-            "min": 3,
-            "max": 3,
+            "min": 1,
+            "max": 1,
             "degrades": [
-                "/src/allocator-inst.cc/multi/basic_iostream<char,std::char_traits<char>>",
-                "/src/allocator-inst.cc/multi/basic_iostream<wchar_t,std::char_traits<wchar_t>>",
                 "/std/fpos<int>"
             ]
         },
         "struct-truncated": {
-            "min": 17,
-            "max": 17,
+            "min": 1,
+            "max": 1,
             "degrades": [
-                "_Unwind_Exception",
-                "basic_fstream<char,std::char_traits<char>>",
-                "basic_fstream<wchar_t,std::char_traits<wchar_t>>",
-                "basic_ifstream<char,std::char_traits<char>>",
-                "basic_ifstream<wchar_t,std::char_traits<wchar_t>>",
-                "basic_istream<char,std::char_traits<char>>",
-                "basic_istream<wchar_t,std::char_traits<wchar_t>>",
-                "basic_istringstream<char,std::char_traits<char>,std::allocator<char>>",
-                "basic_istringstream<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>",
-                "basic_ofstream<char,std::char_traits<char>>",
-                "basic_ofstream<wchar_t,std::char_traits<wchar_t>>",
-                "basic_ostream<char,std::char_traits<char>>",
-                "basic_ostream<wchar_t,std::char_traits<wchar_t>>",
-                "basic_ostringstream<char,std::char_traits<char>,std::allocator<char>>",
-                "basic_ostringstream<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>",
-                "basic_stringstream<char,std::char_traits<char>,std::allocator<char>>",
-                "basic_stringstream<wchar_t,std::char_traits<wchar_t>,std::allocator<wchar_t>>"
+                "_Unwind_Exception"
             ]
         },
         "text-boundaries-out-of-order": {
@@ -711,6 +679,10 @@
             "min": 2971,
             "max": 2971
         },
+        "vbase-applied": {
+            "min": 18,
+            "max": 18
+        },
         "vfptr-inherited-from-base": {
             "min": 18,
             "max": 18
@@ -720,8 +692,8 @@
             "max": 12
         },
         "vfptr-split-from-base": {
-            "min": 92,
-            "max": 92
+            "min": 96,
+            "max": 96
         },
         "vftable-slot-name-collision": {
             "min": 8,
