@@ -103,7 +103,7 @@ object Gcc2 {
         return when (memberName) {
             leaf -> "__$mangledClass"
             "~$leaf" -> "_._$mangledClass"
-            else -> memberName + "__" + (if (isConst) "C" else "") + (if (isVolatile) "V" else "") + mangledClass
+            else -> memberName + "__" + cv(isConst, isVolatile) + mangledClass
         }
     }
 
@@ -138,16 +138,31 @@ object Gcc2 {
     /**
      * A name gcc 2.x mangled, recognised by mirroring what [physnamePrefix] composes: `__` then the
      * cv-qualifier then the length-prefixed class (`Accept__C12TiXmlElement`, `__as__11TiXmlString`,
-     * `__11TiXmlStringPCc`), or the `_._` dtor form.
+     * `__11TiXmlStringPCc`, a template class's `push__t5Stack2Z5Pointi2RC5Point`), or the `_._` dtor
+     * form. Or a free function, `__F` then its arguments (`sum__Fie`), or a template one, `__H` then
+     * its argument count (`max2__H1Zs_X01X01_X01`).
      *
-     * The length has to be *satisfied*, not merely present. One symbol is enough to settle a whole
-     * binary's ABI (see [CxxAbi.prevailing]), and the shape alone is not rare enough for that:
+     * A member's length has to be *satisfied*, not merely present. One symbol is enough to settle a
+     * whole binary's ABI (see [CxxAbi.prevailing]), and the shape alone is not rare enough for that:
      * `fxwpf_som_parisc_gcc` holds no C++ at all, yet its static-local `initialized___6` matches the
-     * shape while claiming six characters that are not there.
+     * shape while claiming six characters that are not there. A function has no length to check;
+     * across the corpus its shape matches only `__imp__FindAtomA@4`-style imports, in Itanium
+     * binaries that outvote them by thousands.
      */
-    fun isProbablyMangled(name: String) = MANGLED_MEMBER_TAIL.findAll(name).any { m ->
-        m.range.last + 1 + m.groupValues[1].toInt() <= name.length
-    }
+    fun isProbablyMangled(name: String) = MANGLED_FUNCTION_TAIL.containsMatchIn(name) ||
+        MANGLED_MEMBER_TAIL.findAll(name).any { m -> m.range.last + 1 + m.groupValues[1].toInt() <= name.length }
+
+    /**
+     * The symbol for a member whose physname already carries its class, or null for one that does
+     * not. gdb's `gdb_mangle_name`: a physname opening on `t` or `Q` "already includes the class
+     * name", so the symbol is `<name>__<cv>` + physname — `push__t5Stack2Z5Pointi2RC5Point` from
+     * the stated `t5Stack2Z5Pointi2RC5Point`. Those letters also open a template or nested
+     * *argument*, which is why this is one candidate among [physnamePrefix]'s rather than a
+     * replacement for it.
+     */
+    fun classQualifiedPhysname(memberName: String, physname: String, isConst: Boolean, isVolatile: Boolean) =
+        physname.takeIf { it.firstOrNull() == 't' || it.firstOrNull() == 'Q' }
+            ?.let { memberName + "__" + cv(isConst, isVolatile) + it }
 
     /** The mangled class name a gcc 2.x vtable symbol carries, or null if [symbolName] isn't one. */
     private fun vtableTail(symbolName: String): String? = when {
@@ -168,9 +183,15 @@ object Gcc2 {
 
     private val MARKERS = CPLUS_MARKERS.toSet()
 
+    private fun cv(isConst: Boolean, isVolatile: Boolean) = (if (isConst) "C" else "") + (if (isVolatile) "V" else "")
+
     // `Q<n>` counts the nesting components and is not itself length-prefixed — `__Q217__class_type_info…`
     // is Q2 then the 17-character `__class_type_info`, so only the length run after it is checked.
-    private val MANGLED_MEMBER_TAIL = Regex("""(?:_\._|__[CV]*)(?:Q[0-9]_?)?([0-9]+)""")
+    // A template class is `t` before its length, nested or not (`Q2t5Stack2Zii4_4Iter`).
+    private val MANGLED_MEMBER_TAIL = Regex("""(?:_\._|__[CV]*)(?:Q[0-9]_?)?t?([0-9]+)""")
+
+    // The `[^_]` keeps a name that merely starts with underscores (`___FRAME_END__`) out.
+    private val MANGLED_FUNCTION_TAIL = Regex("""[^_]__(?:F.|H[0-9]+Z)""")
 }
 
 /**
@@ -208,6 +229,7 @@ sealed interface Gcc2Abi : CxxAbi {
      */
     override fun physnameCandidates(m: Method<*>, className: String) = listOfNotNull(
         m.mangled,
+        m.mangled?.let { Gcc2.classQualifiedPhysname(m.name, it, m.isConst, m.isVolatile) },
         Gcc2.physnamePrefix(m.name, className, m.isConst, m.isVolatile) + m.mangled.orEmpty(),
     )
 

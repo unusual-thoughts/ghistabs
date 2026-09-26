@@ -9,16 +9,16 @@
             "max": 15
         },
         "demangle-applied": {
-            "min": 0,
-            "max": 0
+            "min": 250,
+            "max": 250
         },
         "demangle-attempted": {
-            "min": 0,
-            "max": 0
+            "min": 250,
+            "max": 250
         },
         "demangle-displaced-function-renamed": {
-            "min": 0,
-            "max": 0
+            "min": 5,
+            "max": 5
         },
         "demangle-displaced-label-dropped": {
             "min": 0,
