@@ -161,7 +161,7 @@ class Harvester(private val monitor: TaskMonitor, private val sink: DiagnosticSi
         }
 
         val (lineEntries, cus, textRanges) = cursor.toHarvest()
-        val (typeAsts, rawCollisions) = store.toHarvest()
+        val (typeAsts, rawCollisions) = store.toHarvest(cus.values.flatMap { it.functions })
         debug("harvest-constants", count = constants.values.sumOf { it.size }.toLong())
         debug("harvest-text-ranges", count = textRanges.size.toLong())
 
