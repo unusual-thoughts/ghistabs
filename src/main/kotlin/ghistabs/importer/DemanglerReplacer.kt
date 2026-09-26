@@ -24,6 +24,7 @@ import ghistabs.materialize.typedefAliases
 import ghistabs.parse.CATEGORY
 import ghistabs.parse.canonTemplateName
 import ghistabs.parse.isTemplated
+import ghistabs.parse.leafName
 import ghistabs.parse.nameSegments
 import ghistabs.parse.templateLeaf
 import java.util.*
@@ -488,7 +489,8 @@ class DemanglerReplacer(
     /** Every instantiation we materialized, by the bare template name Ghidra's class-owner stub carries. */
     private val instantiationsByBase: Map<String, List<DataType>> by lazy {
         registry.allCreatedDataTypes
-            .filter { it !is Pointer && it !is Array && it.name.isTemplated }
+            // A DataType name is qualified (`rope<char,…>::$_19`); only a templated leaf is an instantiation.
+            .filter { it !is Pointer && it !is Array && it.name.leafName.isTemplated }
             .groupBy { it.name.templateLeaf }
             .mapValues { (_, v) -> v.distinctBy { it.pathName } }
     }

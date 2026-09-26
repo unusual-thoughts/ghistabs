@@ -96,8 +96,8 @@
             "max": 22
         },
         "demangler-sole-instantiation-declined": {
-            "min": 16,
-            "max": 16
+            "min": 15,
+            "max": 15
         },
         "demangler-unbound-stub": {
             "min": 22,

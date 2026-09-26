@@ -119,8 +119,8 @@
             "max": 81
         },
         "demangler-sole-instantiation-declined": {
-            "min": 31,
-            "max": 31
+            "min": 30,
+            "max": 30
         },
         "demangler-sole-instantiation-match": {
             "min": 2,
