@@ -48,6 +48,12 @@ private class Speller(val types: TypeGraph, val shortener: TemplateNameShortener
             }
         }
 
+        is TypeDecl.InlineDef if t.inner is TypeDecl.XRef -> leaf(
+            "${t.inner.kind.cxxKeyword()} ${tagName(t.inner, t.id)}",
+            d,
+            quals,
+        )
+
         is TypeDecl.InlineDef -> spell(t.inner, d, quals, seen + t.id)
 
         is TypeDecl.Const -> spell(t.inner, d, "${quals}const ", seen)
@@ -74,11 +80,7 @@ private class Speller(val types: TypeGraph, val shortener: TemplateNameShortener
             spell(t.ret, "($cls::*$d)(${params(t.params, seen)})", "", seen)
         }
 
-        is TypeDecl.XRef -> leaf(
-            "${t.kind.cxxKeyword()} ${shortener?.shortenedOrNull(t.tagName) ?: t.tagName}",
-            d,
-            quals,
-        )
+        is TypeDecl.XRef -> leaf("${t.kind.cxxKeyword()} ${tagName(t)}", d, quals)
 
         is TypeDecl.Aggregate -> leaf(t.cxxKeyword, d, quals)
 
@@ -123,9 +125,19 @@ private class Speller(val types: TypeGraph, val shortener: TemplateNameShortener
 
     /** A class, bare: `A::*`, not `struct A::*`. */
     fun className(cls: GlobalTypeDecl, seen: Set<GlobalTypeId>): String = when (cls) {
+        is TypeDecl.InlineDef if cls.inner is TypeDecl.XRef -> tagName(cls.inner, cls.id)
         is TypeDecl.InlineDef -> className(cls.inner, seen + cls.id)
-        is TypeDecl.XRef -> shortener?.shortenedOrNull(cls.tagName) ?: cls.tagName
+        is TypeDecl.XRef -> tagName(cls)
         else -> spell(cls, "", "", seen)
+    }
+
+    /**
+     * `(0,177)=xsStack:` names the tag, but binds [id], and where this CU defines it the definition's name
+     * is the one to spell: it alone says which instantiation, once gcc ≥ 4.3 drops the tag's arguments.
+     */
+    private fun tagName(xref: TypeDecl.XRef<GlobalTypeId>, id: GlobalTypeId? = null): String {
+        val name = id?.let(types::byId)?.takeIf { it.body !is TypeDecl.XRef }?.name ?: xref.tagName
+        return shortener?.shortenedOrNull(name) ?: name
     }
 
     private fun params(params: List<GlobalTypeDecl>, seen: Set<GlobalTypeId>) =
