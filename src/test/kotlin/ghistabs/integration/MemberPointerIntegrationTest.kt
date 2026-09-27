@@ -53,15 +53,24 @@ class MemberPointerIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         "$what should be a $pointerSize-byte signed integer, got ${this.pathName}",
     ) { this is AbstractIntegerDataType && isSigned && length == pointerSize }
 
+    private fun global(name: String): DataType {
+        val symbol = checkNotNull(program.symbolTable.getSymbols(name).firstOrNull()) { "no symbol $name" }
+        return checkNotNull(program.listing.getDataAt(symbol.address)) { "$name not defined" }.dataType
+    }
+
     @ParameterizedTest
     @ValueSource(strings = ["ptrmem_elf_gcc295", "ptrmem_elf64_gcc12"])
     fun `a pointer to data member is a pointer-sized offset`(fixture: String) {
         load(fixture)
 
-        for (name in listOf("pmi", "pmd")) {
-            val symbol = checkNotNull(program.symbolTable.getSymbols(name).firstOrNull()) { "no symbol $name" }
-            checkNotNull(program.listing.getDataAt(symbol.address)) { "$name not defined" }
-                .dataType.mustBeMemberPointer(name)
+        listOf("pmi", "pmd").forEach { global(it).mustBeMemberPointer(it) }
+
+        // Only the pointer straight onto the member type is gcc ≤ 3.3's `int A::*`; through a typedef or a
+        // qualifier it is a real pointer to one.
+        for (name in listOf("ppm", "pcpm")) {
+            val ptr = global(name).stripTypedefs()
+            ptr.must("$name should be a pointer, got ${ptr.pathName}") { this is Pointer }
+            (ptr as Pointer).dataType.mustBeMemberPointer("*$name")
         }
 
         val b = checkNotNull(
