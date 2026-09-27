@@ -312,6 +312,16 @@ sealed interface TypeDecl<out Id : IdInterface> {
         override val children get() = listOf(listOfNotNull(cls) + ret, params)
     }
 
+    /**
+     * Member type `@<class>,<type>` — gcc's OFFSET_TYPE, the data-member counterpart of [Method]'s `#`.
+     * It makes `int A::*`, a byte offset into [cls] rather than an address: gcc ≤ 3.3 wraps it in a
+     * [Pointer] (`*@A,int`), ≥ 3.4 emits it bare.
+     */
+    @Serializable
+    data class Member<Id : IdInterface>(val cls: TypeDecl<Id>, val inner: TypeDecl<Id>) : TypeDecl<Id> {
+        override val children get() = listOf(listOf(cls, inner))
+    }
+
     /** GCC complex/floating: `R<n>;<size>;0;`. n encodes 3=cfloat, 4=cdouble, 5=cldouble per gcc/dbxout. */
     @Serializable
     data class Complex<Id : IdInterface>(val rCode: Int, override val sizeBytes: Long) : TypeDecl<Id> {

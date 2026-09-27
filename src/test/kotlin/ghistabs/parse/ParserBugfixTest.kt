@@ -60,15 +60,53 @@ class ParserBugfixTest {
 
     /**
      * An unimplemented symbol descriptor must be rejected rather than misread as a stack local
-     * with an array/struct type. `a` (array-arg) is a real gdb descriptor g++/x86 never emits;
+     * with a cross-reference type. `x` (IBM's vector-register variable) is one gcc never emits;
      * if it ever appears we want a hard parse-error, not a silently-wrong type.
      */
     @Test
     fun testUnknownSymbolDescriptorRejected() {
-        val exception = Parser("weird:a(0,1)").parseSymbol().mustBeError()
+        val exception = Parser("weird:x(0,1)").parseSymbol().mustBeError()
         exception.message!!.must("message should name the descriptor: ${exception.message}") {
-            contains("unhandled symbol descriptor 'a'")
+            contains("unhandled symbol descriptor 'x'")
         }
+    }
+
+    /**
+     * A by-value parameter passed by invisible reference states its value type, but its slot holds
+     * the address — reading it as the value would bind a struct to a 4-byte register. `c:a20` is
+     * gcc 2.7.2's output for a `regparm` function taking a class with a copy constructor.
+     */
+    @Test
+    fun `an invisible-reference parameter is a reference`() {
+        val inReg = Parser("c:a20").parseSymbol().mustBeOk() as SymbolDecl.Param
+        inReg.type mustBe TypeDecl.Reference(TypeDecl.Ref(LocalTypeId(0, 20)))
+        inReg.location mustBe VariableLocation.REGISTER
+
+        (Parser("c:v(1,2)").parseSymbol().mustBeOk() as SymbolDecl.Param).location mustBe VariableLocation.STACK
+    }
+
+    /**
+     * `int A::*` — gcc's pointer to an OFFSET_TYPE, whose class here is itself an inline forward
+     * reference (verbatim gcc 2.7.2 output). The `@` must not be taken for a size attribute.
+     */
+    @Test
+    fun `a pointer to data member is a pointer to a member type`() {
+        val sym = Parser("pmi:G20=*21=@22=xsA:,1").parseSymbol().mustBeOk() as SymbolDecl.Static
+        val ptr = (sym.type as TypeDecl.InlineDef).inner as TypeDecl.Pointer
+        (ptr.inner as TypeDecl.InlineDef).inner mustBe TypeDecl.Member(
+            TypeDecl.InlineDef(LocalTypeId(0, 22), TypeDecl.XRef(AggrKind.STRUCT, "A")),
+            TypeDecl.Ref(LocalTypeId(0, 1)),
+        )
+    }
+
+    /**
+     * Type attributes chain, and ones we don't model are skipped rather than rejected (IBM's grammar:
+     * `@a<align>;`, `@p<class>;`, `@P;` packed). Only the size survives into the AST.
+     */
+    @Test
+    fun `unknown type attributes are skipped around the size`() {
+        val sym = Parser("b:t(0,21)=@a8;@s8;@P;-16").parseSymbol().mustBeOk() as SymbolDecl.NamedType
+        sym.type mustBe TypeDecl.WithSizeAttr(8, TypeDecl.Builtin(-16))
     }
 
     /**
