@@ -114,11 +114,7 @@ interface RenderContext {
         is TypeDecl.Aggregate -> {
             // Bases too — they are where the instantiations differ most visibly, and dropping them
             // was the one thing the appendix still lost against the pre-rewrite render.
-            val bases = b.bases.takeIf { it.isNotEmpty() }
-                ?.joinToString(", ", prefix = " : ") {
-                    "${it.access.name.lowercase()} ${it.type.render()}"
-                }
-                .orEmpty()
+            val bases = b.spellBases(types, shortener)
             ("${b.cxxKeyword} ${shortener?.shortenedOrNull(name ?: "") ?: name}$bases { ")
                 .asSpecialization(shortener?.shortenedOrNull(name ?: "") ?: name) +
                 b.renderFull(name?.templateLeaf).joinToString(" ") +
@@ -152,9 +148,7 @@ interface RenderContext {
         val tag = if (isTypedef) "typedef " else ""
         val declName = if (isTypedef) "" else " $shortName"
         val openText = when (body) {
-            is TypeDecl.Aggregate -> body.bases.takeIf { it.isNotEmpty() }?.joinToString(", ", prefix = " : ") {
-                "${it.access.name.lowercase()} ${it.type.render()}"
-            }.orEmpty().let { bases ->
+            is TypeDecl.Aggregate -> body.spellBases(types, shortener).let { bases ->
                 "$tag${body.cxxKeyword}$declName$bases {".asSpecialization(shortName)
             }
 
