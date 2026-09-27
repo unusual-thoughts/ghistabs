@@ -1122,8 +1122,12 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
      */
     @Test
     fun vftableLabelsSitOnTheAddressPoint() {
+        // Primaries only: the struct is found by the class's name, which is the primary's. A secondary
+        // is a different record with its own struct, and a gcc 2.x one's entries carry a live `delta`
+        // (`ios` at -12 in TeeStream) where the primary's are 0, so the word before slot 0 need not
+        // look like a header word at all.
         val labels = program.symbolTable.symbolIterator.iterator().asSequence()
-            .filter { ClassNaming.VFTABLE in it.name && program.memory.getBlock(it.address) != null }
+            .filter { it.name == ClassNaming.VFTABLE && program.memory.getBlock(it.address) != null }
             .map { it.parentSymbol.name to it.address }.distinct().toList()
         assumeTrue(labels.isNotEmpty(), "Skipping: no vftable labels in this fixture")
 
