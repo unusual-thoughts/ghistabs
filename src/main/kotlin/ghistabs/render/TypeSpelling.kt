@@ -63,7 +63,9 @@ private class Speller(val types: TypeGraph, val shortener: TemplateNameShortener
         // gcc ≤ 3.3's `int A::*` is a pointer to the member type that ≥ 3.4 spells alone.
         is TypeDecl.Pointer if types.isMemberPointee(t.inner) -> spell(t.inner, d, quals, seen)
 
-        is TypeDecl.Pointer -> spell(t.inner, prefix("*", t.inner, d, quals, seen), "", seen)
+        is TypeDecl.Pointer -> types.resolve<TypeDecl.Method<GlobalTypeId>>(t.inner)
+            ?.let { memberFunction(it, d, quals, seen) }
+            ?: spell(t.inner, prefix("*", t.inner, d, quals, seen), "", seen)
 
         is TypeDecl.Reference -> spell(t.inner, prefix("&", t.inner, d, quals, seen), "", seen)
 
@@ -75,10 +77,8 @@ private class Speller(val types: TypeGraph, val shortener: TemplateNameShortener
         // Only a method's stab lists its parameters; a plain `f` records none, so `()`: unspecified.
         is TypeDecl.FreeFunction -> spell(t.ret, "$d(${params(t.params, seen)})", "", seen)
 
-        is TypeDecl.Method -> {
-            val cls = t.cls?.let { className(it, seen) }.orEmpty()
-            spell(t.ret, "($cls::*$d)(${params(t.params, seen)})", "", seen)
-        }
+        // Its class belongs to a pointer to it, as `A::*`: alone, a method is its function type.
+        is TypeDecl.Method -> spell(t.ret, "$d(${params(args(t), seen)})", "", seen)
 
         is TypeDecl.XRef -> leaf("${t.kind.cxxKeyword()} ${tagName(t)}", d, quals)
 
@@ -139,6 +139,39 @@ private class Speller(val types: TypeGraph, val shortener: TemplateNameShortener
         val name = id?.let(types::byId)?.takeIf { it.body !is TypeDecl.XRef }?.name ?: xref.tagName
         return shortener?.shortenedOrNull(name) ?: name
     }
+
+    /**
+     * `ret (A::*d)(args)`, a pointer to member function of the method's class. gdb's stub method (`##ret;`)
+     * states no class, so it is spelled as a plain function pointer.
+     */
+    private fun memberFunction(m: TypeDecl.Method<GlobalTypeId>, d: String, quals: String, seen: Set<GlobalTypeId>) =
+        spell(
+            m.ret,
+            prefix(
+                m.cls?.let {
+                    "${className(it, seen)}::*"
+                } ?: "*",
+                m,
+                d,
+                quals,
+                seen,
+            ) + "(${params(args(m), seen)})",
+            "",
+            seen,
+        )
+
+    /** A method's own arguments: gcc lists `this` first where it states the class, and ends the list with `void`. */
+    private fun args(m: TypeDecl.Method<GlobalTypeId>) = m.params
+        .drop(if (m.cls != null) 1 else 0)
+        .let { args ->
+            if (args.lastOrNull()?.let { types.resolveAny(it) { t -> t == TypeDecl.Void } } ==
+                true
+            ) {
+                args.dropLast(1)
+            } else {
+                args
+            }
+        }
 
     private fun params(params: List<GlobalTypeDecl>, seen: Set<GlobalTypeId>) =
         params.joinToString(", ") { spell(it, "", "", seen) }
