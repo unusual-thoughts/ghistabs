@@ -5,18 +5,11 @@ import ghidra.program.model.data.Composite
 import ghidra.program.model.data.DataType
 import ghidra.program.model.data.Pointer
 import ghidra.program.model.data.TypeDef
-import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghistabs.LoadedProgram
-import ghistabs.entrypoints.StabsAnalyzer.Companion.import
-import ghistabs.loadProgram
 import ghistabs.test.*
-import org.junit.jupiter.api.AfterEach
-import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
-import java.io.File
 
 /**
  * `features/ptrmem.cc` compiled and linked by both sides of gcc 3.4's change to pointers to data member:
@@ -31,21 +24,8 @@ import java.io.File
  * where materializing the member type (`int`) instead would be too narrow.
  */
 @Tag("integration")
-class MemberPointerIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
-    private lateinit var loaded: LoadedProgram
-    private val program get() = loaded.program
+class MemberPointerIntegrationTest : FeatureFixtureTest() {
     private val pointerSize get() = program.dataTypeManager.dataOrganization.pointerSize
-
-    private fun load(name: String) {
-        assumeTrue(Fixtures.accepts(name), "excluded by -Pfixture")
-        loaded = loadProgram(File("src/test/resources/binaries/features/$name"))
-        program.defaultContext().import()
-    }
-
-    @AfterEach
-    fun tearDown() {
-        if (::loaded.isInitialized) loaded.close()
-    }
 
     private fun DataType.stripTypedefs(): DataType = (this as? TypeDef)?.baseDataType?.stripTypedefs() ?: this
 
