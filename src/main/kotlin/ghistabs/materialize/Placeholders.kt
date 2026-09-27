@@ -2,6 +2,7 @@ package ghistabs.materialize
 
 import ghidra.program.model.data.*
 import ghistabs.harvest.Type
+import ghistabs.materialize.cpp.hasVirtualBase
 import ghistabs.parse.AggrKind
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
@@ -24,7 +25,9 @@ internal fun DataTypeRegistry.makePlaceholder(
         is TypeDecl.Aggregate if (ast.body.kind == AggrKind.UNION) -> UnionDataType(category, name, dtm)
 
         is TypeDecl.Aggregate -> {
-            val sz = ast.body.usefulStructSize()
+            // A virtual base's bytes are the tail past the last own field, laid later by
+            // [ghistabs.materialize.cpp.layClasses] and checked there against this size, so it is not overshoot.
+            val sz = if (types.hasVirtualBase(ast.body)) ast.body.sizeBytes else ast.body.usefulStructSize()
             recordTruncation(ast, ast.body.sizeBytes, sz)
             StructureDataType(category, name, sz.toInt(), dtm)
         }

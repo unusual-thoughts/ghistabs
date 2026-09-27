@@ -69,6 +69,15 @@ class TypeGraph(private val harvest: Harvest, sink: DiagnosticSink = DummySink) 
     /** [byXRef]'s answers, misses included: it reports as it resolves, so each xref must resolve once. */
     private val xrefs = HashMap<TypeDecl.XRef<GlobalTypeId>, Type?>()
 
+    private val virtualBaseAnswers = mutableMapOf<GlobalTypeDecl, Boolean>()
+
+    /** Whether the struct a base's [decl] names inherits virtually anywhere, answered once per base. */
+    fun inheritsVirtually(decl: GlobalTypeDecl): Boolean = virtualBaseAnswers[decl] ?: run {
+        virtualBaseAnswers[decl] = false // a cycle through corrupt stabs answers no
+        (resolveStruct(decl)?.bases?.any { it.isVirtual || inheritsVirtually(it.type) } == true)
+            .also { virtualBaseAnswers[decl] = it }
+    }
+
     // Pre-warm with empty `visited` so collision classification isn't biased by traversal order.
     // Must stay below definitionsByTag/definitionsByTemplateLeaf: contentHash resolves xrefs through them, and a `by
     // lazy` delegate field is only assigned when construction reaches its declaration — an init block

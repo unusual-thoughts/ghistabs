@@ -81,6 +81,10 @@ fun TypeGraph.virtualBases(typeDecl: TypeDecl.Aggregate<GlobalTypeId>) = buildLi
     walk(typeDecl)
 }
 
+/** Whether [aggregate] inherits virtually anywhere in its base graph. */
+fun TypeGraph.hasVirtualBase(aggregate: TypeDecl.Aggregate<GlobalTypeId>) =
+    aggregate.bases.any { it.isVirtual || inheritsVirtually(it.type) }
+
 /**
  * How deep [typeDecl] sits in its inheritance graph, so a caller can process bases before the
  * classes that embed them. [VfptrModel.SPLIT_BASE] needs that order: it derives a base's

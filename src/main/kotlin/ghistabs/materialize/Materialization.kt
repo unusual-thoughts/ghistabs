@@ -4,7 +4,11 @@ import ghidra.program.model.data.*
 import ghidra.program.model.lang.CompilerSpec
 import ghistabs.harvest.Type
 import ghistabs.materialize.cpp.fillStructBases
-import ghistabs.materialize.cpp.firstPolymorphicBase
+import ghistabs.materialize.cpp.hasVirtualBase
+import ghistabs.materialize.cpp.inheritedVptrAt
+import ghistabs.materialize.cpp.memberPointer
+import ghistabs.materialize.cpp.memberPointerTo
+import ghistabs.materialize.cpp.thisTypeFor
 import ghistabs.parse.*
 import ghistabs.runTransaction
 import ghidra.program.model.data.Enum as GhidraEnum
@@ -111,20 +115,10 @@ internal fun DataTypeRegistry.fillComposite(
         fillStructBases(body, placeholder, qualifiedName)
     }
 
-    val polyBase = types.firstPolymorphicBase(body)
-
-    // Any vptr at a base-occupied offset is inherited — base owns it. Skip it.
-    // Catches the unresolved-base case (synthesized _base_unknown_*) where
-    // firstPolymorphicBase returns null but gcc still emitted _vptr$Class at
-    // the base's offset. A virtual base's offset is no position.
-    val baseOffsets = body.bases.filterNot { it.isVirtual }.map { it.offsetBits }.toSet()
-
     for ((name, type, offsetBits, sizeBits, isStatic) in body.fields) {
         if (isStatic) continue
 
-        if (isVptrFieldName(name) &&
-            ((polyBase != null && offsetBits == polyBase.offsetBits) || offsetBits in baseOffsets)
-        ) {
+        if (isVptrFieldName(name) && placeholder is Structure && inheritedVptrAt(body, placeholder, offsetBits)) {
             debug("vptr-skipped-inherited")
             continue
         }
@@ -187,37 +181,35 @@ internal fun DataTypeRegistry.fillComposite(
         }
     }
 
-    // Report runs ≥ 4 bytes of unnamed Undefined1 (Ghidra autofills empty bytes
-    // with Undefined1 components so consecutive components are always contiguous —
-    // a naive offset-gap detector never fires).
-    if (placeholder is Structure) {
-        val holes = placeholder.detectUndefinedRuns(minRunBytes = 4)
-        diagnostics.recordStructGaps(qualifiedName, holes)
-        if (holes.isNotEmpty()) {
-            val bytesInHoles = holes.sumOf { (it.lengthBits / 8).toInt() }
-            val totalBytes = placeholder.length
-            if (totalBytes > 0 && bytesInHoles * 4 >= totalBytes) {
-                // ≥25% Undefined1 — catches the bouniaf "base invisible" pattern.
-                degradation(
-                    "struct-mostly-undefined",
-                    qualifiedName,
-                    "$bytesInHoles of $totalBytes bytes are unnamed Undefined1 across ${holes.size} run(s)",
-                )
-            }
-        }
-    }
+    // A class with virtual bases is [layClasses]'s to finish, and to report.
+    if (placeholder is Structure && !types.hasVirtualBase(body)) reportHoles(placeholder, qualifiedName)
 
     return placeholder
 }
 
-/** Null [TypeDecl.Method.cls] is gdb's stub method (`##<ret>;`) stating no domain — the normal gcc
- *  2.x encoding, not a failure; only a stated-but-unresolvable cls is a real loss. */
-private fun DataTypeRegistry.thisTypeFor(body: TypeDecl.Method<GlobalTypeId>, at: String): DataType =
-    body.cls?.let { resolveRef(it) ?: undef("method-this-cls", at, it) } ?: Undefined4DataType.dataType
+/**
+ * Reports runs ≥ 4 bytes of unnamed Undefined1 (Ghidra autofills empty bytes with Undefined1
+ * components so consecutive components are always contiguous — a naive offset-gap detector never fires).
+ */
+internal fun DataTypeRegistry.reportHoles(struct: Structure, qualifiedName: String) {
+    val holes = struct.detectUndefinedRuns(minRunBytes = 4)
+    diagnostics.recordStructGaps(qualifiedName, holes)
+    if (holes.isEmpty()) return
+    val bytesInHoles = holes.sumOf { (it.lengthBits / 8).toInt() }
+    val totalBytes = struct.length
+    if (totalBytes > 0 && bytesInHoles * 4 >= totalBytes) {
+        // ≥25% Undefined1 — catches the bouniaf "base invisible" pattern.
+        degradation(
+            "struct-mostly-undefined",
+            qualifiedName,
+            "$bytesInHoles of $totalBytes bytes are unnamed Undefined1 across ${holes.size} run(s)",
+        )
+    }
+}
 
 /** [fallback] is overridden where an Undefined-family substitute would be re-read by Ghidra — see
  *  the array sites, which pass [ByteDataType]. */
-private fun DataTypeRegistry.undef(
+internal fun DataTypeRegistry.undef(
     category: String,
     at: String,
     decl: GlobalTypeDecl?,
@@ -245,19 +237,8 @@ private fun DataTypeRegistry.stub(ast: Type, placeholder: DataType, body: Global
 private fun DataTypeRegistry.pointerTo(pointee: GlobalTypeDecl, label: String, at: String): PointerDataType =
     PointerDataType(resolveRef(pointee) ?: undef(label, at, pointee), dtm.dataOrganization.pointerSize, dtm)
 
-/**
- * `int A::*`: an Itanium data-member pointer is a byte offset, one ptrdiff_t wide, and Ghidra has no
- * pointer-to-member type. gcc ≤ 3.3 spells it as a pointer to the [TypeDecl.Member], ≥ 3.4 as
- * the Member alone (`build_ptrmem_type` stopped wrapping OFFSET_TYPE in POINTER_TYPE), so both
- * land here. The stab can't say which gcc wrote it, so ≥ 3.4's `int A::**` comes out one level
- * short — same width, so no layout moves.
- */
-private fun DataTypeRegistry.memberPointer(): DataType =
-    // Unbound, like BuiltinTable's primitives: a program-bound `int` would fork `int.conflict`.
-    AbstractIntegerDataType.getSignedDataType(dtm.dataOrganization.pointerSize, null)
-
 private fun DataTypeRegistry.pointerOrOffset(pointee: GlobalTypeDecl, label: String, at: String): DataType =
-    if (types.isMemberPointee(pointee)) memberPointer() else pointerTo(pointee, label, at)
+    memberPointerTo(pointee) ?: pointerTo(pointee, label, at)
 
 /**
  * Resolve a TypeDecl reference site to a DataType. Struct/Enum/Method/XRef return null (they
