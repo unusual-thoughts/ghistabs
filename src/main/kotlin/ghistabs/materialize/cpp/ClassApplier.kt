@@ -405,6 +405,11 @@ class ClassApplier(
         val targets = shape?.let { program.vtableSlotTargets(it.addressPoint, abi) }.orEmpty()
         val virtuals = rebaseOffHeader(declared)
         fillVftable(virtuals, targets)
+        // Read off the laid struct, which records where gcc 2.x put the vptr (after the fields). Not
+        // off the record's offset_to_top: a primary's is 0 by definition, and a misread record would
+        // only make it wrong. Itanium puts a primary vptr at 0 whatever the struct managed to hold.
+        val vfptrAt = structDt.vfptrOffset()?.toLong() ?: 0L.takeIf { abi.hasRttiHeader }
+        vftable.describeVxTable(name, ClassNaming.VFTABLE, vfptrAt)
 
         if (shape == null) return
 
