@@ -3,6 +3,7 @@ package ghistabs.harvest
 import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Aggregate.Field
 import ghistabs.test.dummyCursor
+import ghistabs.test.longRange
 import ghistabs.test.mustBe
 import ghistabs.test.mustBeA
 import org.junit.jupiter.api.Test
@@ -251,6 +252,29 @@ class StabCursorGlobalizeTest {
     }
 
     /**
+     * gcc defines an array index's sizetype inline as the base of the index range,
+     * `ar(0,54)=r(0,54);0;037777777777;;0;1;`, and nowhere else: hoisting must reach it through the range.
+     */
+    @Test
+    fun `an inline range base is hoisted`() {
+        val cu = SourceFile.CUSource("cu.c")
+        val store = TypeStore()
+        val sizetype = longRange(GlobalTypeId(cu, 54), 0, 0xFFFFFFFFL)
+        val index = longRange(
+            GlobalTypeId(cu, 54),
+            0,
+            1,
+        ).copy(inner = TypeDecl.InlineDef(GlobalTypeId(cu, 54), sizetype))
+        val array = TypeDecl.Array(TypeDecl.Ref(GlobalTypeId(cu, 1)), null, index)
+        val input =
+            Symbol(1, StabType.N_LSYM, SymbolDecl.Local("a", array, VariableLocation.STACK), 0, sourceFileOf("cu.c"))
+
+        store.hoistInlineDefs(input, cu)
+
+        store.toHarvest().first[GlobalTypeId(cu, 54)]?.body mustBe sizetype
+    }
+
+    /**
      * Test: Ref with file=0 maps to CUSource.
      *
      * Input: Ref(LocalTypeId(0, 5)) in context of CU "cu.c"
@@ -340,7 +364,7 @@ class StabCursorGlobalizeTest {
         )
         val ull = BigInteger.TWO.pow(64) - BigInteger.ONE
 
-        val globalized = TypeDecl.Range(LocalTypeId(0, 1), BigInteger.ZERO, ull).globalize(cursor)
+        val globalized = TypeDecl.Range(TypeDecl.Ref(LocalTypeId(0, 1)), BigInteger.ZERO, ull).globalize(cursor)
 
         (globalized as TypeDecl.Range<GlobalTypeId>).upper mustBe ull
         globalized.sizeBytes mustBe 8L

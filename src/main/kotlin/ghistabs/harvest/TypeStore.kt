@@ -78,7 +78,7 @@ class TypeStore(
             if (incoming.isEmpty()) continue
 
             // Name-promotion: an anonymous InlineDef ast can be superseded by an explicit
-            // named Typedef at the same id. Range's `of` self-ref differs between forms so
+            // named Typedef at the same id. Range's `inner` self-ref differs between forms so
             // we don't require body equality — both non-XRefTarget + existing unnamed.
             val namedIncoming = incoming.firstOrNull { it.name != null && !it.body.canBeXRefTarget }
             if (namedIncoming != null && existing.name == null && !existing.body.canBeXRefTarget) {

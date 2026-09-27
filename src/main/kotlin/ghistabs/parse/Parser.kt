@@ -645,11 +645,9 @@ class Parser(src: String) {
      */
     private fun Cursor.parseRange(): LocalTypeDecl {
         consume('r')
-        val typeId = readTypeId()
-        // GCC may define the base type inline, `r(cu,n)=<inner-type>;lo;hi;`: an index type's sizetype,
-        // `r(0,54)=r(0,54);0;037777777777;`. It is discarded without a note: a Range keeps only the base's
-        // id, and anything else naming that id is reported as a `dangling-ref` where it is materialized.
-        if (consumeIf("=")) parseType()
+        // The base is a type id, which gcc may define inline (`r(cu,n)=<inner-type>;lo;hi;`, an index type's
+        // sizetype): parseType reads either, as gdb re-reads it with read_type.
+        val inner = parseType()
         consume(';')
         val lower = readRangeBound()
         consume(';')
@@ -658,7 +656,7 @@ class Parser(src: String) {
         if (upper.signum() == 0 && lower.signum() > 0) {
             return TypeDecl.Float(lower.toLong())
         }
-        return TypeDecl.Range(typeId, lower, upper)
+        return TypeDecl.Range(inner, lower, upper)
     }
 
     /**

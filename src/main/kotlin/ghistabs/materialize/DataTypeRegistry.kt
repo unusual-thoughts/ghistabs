@@ -201,7 +201,7 @@ class DataTypeRegistry(
      */
     private fun GlobalTypeDecl.atBaseWidth(): GlobalTypeDecl = (this as? TypeDecl.Range)?.takeIf { it.boundsUnfit }
         ?.let { range ->
-            types.byId(range.of)?.body
+            types.resolveWith(range.inner) { it.takeUnless { d -> d is TypeDecl.Ref || d is TypeDecl.InlineDef } }
                 ?.takeUnless { it is TypeDecl.Range && it.boundsUnfit }
                 ?.sizeBits
                 ?.let { TypeDecl.WithSizeAttr(it, range) }

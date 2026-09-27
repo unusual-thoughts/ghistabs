@@ -55,7 +55,11 @@ class BuiltinTableTest {
         // `long long unsigned int:t7=r1;0;01777777777777777777777;`. Both bounds truncate to -1L, so
         // only the literal's width separates four bytes from eight — the base cannot.
         val unfit = longRange(GlobalTypeId(cu, 1), 0L, -1L)
-        val spelledOut = TypeDecl.Range(GlobalTypeId(cu, 1), BigInteger.ZERO, BigInteger.TWO.pow(64) - BigInteger.ONE)
+        val spelledOut = TypeDecl.Range(
+            TypeDecl.Ref(GlobalTypeId(cu, 1)),
+            BigInteger.ZERO,
+            BigInteger.TWO.pow(64) - BigInteger.ONE,
+        )
         // They narrow to the same (min, max) pair, which is exactly why the exact bound is kept.
         (unfit.min to unfit.max) mustBe (spelledOut.min to spelledOut.max)
         TypeDecl.WithSizeAttr(32, unfit).resolveBuiltin().mustBeA<UnsignedIntegerDataType>()
