@@ -1,5 +1,7 @@
 package ghistabs.integration
 
+import ghidra.program.model.data.DataTypeComponent
+import ghidra.program.model.data.Pointer
 import ghidra.program.model.data.Structure
 import ghidra.program.model.gclass.ClassUtils
 import ghistabs.parse.TypeDecl
@@ -64,6 +66,30 @@ class VirtualInheritanceIntegrationTest : FeatureFixtureTest() {
                 .filter { it.offset in at..<at + selfBase.length }
                 .any { it.dataType === selfBase || it.dataType.categoryPath == selfBase.categoryPath }
                 .mustBeTrue("Diamond +$at should hold $name's non-virtual part")
+        }
+    }
+
+    /**
+     * `Diamond`'s own `{vfptr}`, typed to its own vftable, is the one it inherits from its primary
+     * polymorphic base. Under Itanium that is `Left`, dynamic through its virtual base, at +0. Under
+     * gcc 2.x `Left` and `Right` reach `Base` through `_vb$` pointers and have no vtable at all, so it
+     * is `Named`'s, at +16 plus the +8 its fields put it at — and `Left`'s `_vb$` at +0 stays put.
+     */
+    @ParameterizedTest
+    @MethodSource("hellos")
+    fun `a class's own vfptr replaces its primary polymorphic base's, wherever that base sits`(fixture: String) {
+        load(fixture)
+        val diamond = struct("Diamond")
+        val gcc2 = "gcc2" in fixture
+
+        val vfptr = diamond.definedComponents.firstOrNull { it.fieldName == ClassUtils.VFPTR }
+            .mustBeA<DataTypeComponent>("Diamond should own a {vfptr}")
+        vfptr.offset mustBe if (gcc2) 24 else 0
+        (vfptr.dataType as? Pointer)?.dataType?.name mustBe "Diamond_vftable"
+        if (gcc2) {
+            val left = diamond.getComponentAt(0).dataType.mustBeA<Structure>("Diamond +0 should be Left")
+            left.definedComponents.any { it.fieldName.orEmpty().startsWith("_vb$") }
+                .mustBeTrue("Left's `_vb$` should survive in Diamond, not be overwritten by a vptr")
         }
     }
 
