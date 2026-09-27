@@ -2,16 +2,20 @@ package ghistabs.parse
 
 import ghistabs.parse.TypeDecl.Aggregate.*
 
-/** Parse outcome. [Ok.trailing] carries the unconsumed-tail message; reporting is the caller's job. */
+/**
+ * Parse outcome. [Ok.trailing] carries the unconsumed-tail message and [Ok.skipped] what the parser read
+ * past without modelling it; reporting either is the caller's job.
+ */
 sealed interface ParseResult<out T> {
-    data class Ok<T>(val inner: T, val trailing: String? = null) : ParseResult<T>
+    data class Ok<T>(val inner: T, val trailing: String? = null, val skipped: List<String> = emptyList()) :
+        ParseResult<T>
 
     // ParseResult<Nothing>, not Error<T>: covariance then makes an Error usable as any ParseResult<U>,
     // so [map] needs no unchecked cast to re-tag the failure branch.
     data class Error(val ex: StabsParseException) : ParseResult<Nothing>
 
     fun <U> map(transform: (T) -> U): ParseResult<U> = when (this) {
-        is Ok -> Ok(transform(inner), trailing)
+        is Ok -> Ok(transform(inner), trailing, skipped)
         is Error -> this
     }
 }
@@ -58,6 +62,13 @@ class Parser(src: String) {
 
     private val c = Cursor(src)
 
+    // What a production read past without modelling, for [ParseResult.Ok.skipped].
+    private val skipped = mutableListOf<String>()
+
+    private fun Cursor.skip(what: String) {
+        skipped += "$what at +$pos"
+    }
+
     /**
      * A fully-parsed record ends at a terminator run; anything else is an unimplemented section
      * silently dropped by the parser's leniency (the `~%` bug was one such tail, once struct-local).
@@ -74,7 +85,7 @@ class Parser(src: String) {
      */
     fun parseTypeBody(): ParseResult<LocalTypeDecl> = try {
         // Argument order matters: parseType() must run before trailingMessage reads the cursor tail.
-        ParseResult.Ok(c.parseType(), trailingMessage)
+        ParseResult.Ok(c.parseType(), trailingMessage, skipped.toList())
     } catch (e: StabsParseException) {
         ParseResult.Error(e)
     }
@@ -87,7 +98,7 @@ class Parser(src: String) {
      * Mirror of gdb/stabsread.c:define_symbol.
      */
     fun parseSymbol(): ParseResult<SymbolDecl<LocalTypeId>> = try {
-        ParseResult.Ok(c.parseSymbol(), trailingMessage)
+        ParseResult.Ok(c.parseSymbol(), trailingMessage, skipped.toList())
     } catch (e: StabsParseException) {
         ParseResult.Error(e)
     }
@@ -203,13 +214,13 @@ class Parser(src: String) {
      * Parse `:c=<form>` — an addressless compile-time constant. Unlike every other symbol
      * descriptor, `c` is not followed by type information but by `=` and a form letter:
      * `i`/`b`/`c` integral value, `e <type>,<value>` typed integral, `r` real / `s` string /
-     * `S` set (non-integral, unseen from g++/x86 — payload consumed, value 0).
+     * `S` set (non-integral, unseen from g++/x86: payload consumed with a note, value 0).
      * Mirror of gdb/stabsread.c:define_symbol (c case).
      */
     private fun Cursor.parseConstant(name: String): SymbolDecl.Constant<LocalTypeId> {
         consume('c')
         consume('=')
-        return when (advance()) {
+        return when (val form = advance()) {
             'i', 'b', 'c' -> SymbolDecl.Constant(name, TypeDecl.Builtin(BUILTIN_INT), readInt())
 
             'e' -> {
@@ -219,6 +230,7 @@ class Parser(src: String) {
             }
 
             else -> {
+                skip("constant form `$form`, read as 0")
                 readUntilAny(charArrayOf(';'))
                 SymbolDecl.Constant(name, TypeDecl.Builtin(BUILTIN_INT), 0)
             }
@@ -485,7 +497,11 @@ class Parser(src: String) {
 
         return buildList {
             repeat(count) {
-                val virt = advance() == '1'
+                val virt = when (val v = advance()) {
+                    '0' -> false
+                    '1' -> true
+                    else -> false.also { skip("base virtuality `$v`, read as non-virtual") }
+                }
                 val access = accessOf(advance())
                 val offsetBits = readInt()
                 consume(',')
@@ -522,6 +538,7 @@ class Parser(src: String) {
         val access = accessOf(if (peek()?.isDigit() == true) advance() else '2')
         // cv-qualifier letter: A none, B const, C volatile, D const volatile.
         val modifier = advanceOrNull() ?: 'A'
+        if (modifier !in 'A'..'D') skip("method qualifier `$modifier`, read as none")
         val isConst = modifier == 'B' || modifier == 'D'
         val isVolatile = modifier == 'C' || modifier == 'D'
 
@@ -549,7 +566,7 @@ class Parser(src: String) {
                 VirtKind.STATIC
             }
 
-            else -> VirtKind.NORMAL
+            else -> VirtKind.NORMAL.also { skip("no method kind before `${peek() ?: "end"}`, read as normal") }
         }
 
         consumeIf(";")
@@ -629,10 +646,10 @@ class Parser(src: String) {
     private fun Cursor.parseRange(): LocalTypeDecl {
         consume('r')
         val typeId = readTypeId()
-        // GCC may define the base type inline: r(cu,n)=<inner-type>;lo;hi;
-        if (consumeIf("=")) {
-            parseType() // parse and discard the inline base-type definition
-        }
+        // GCC may define the base type inline, `r(cu,n)=<inner-type>;lo;hi;`: an index type's sizetype,
+        // `r(0,54)=r(0,54);0;037777777777;`. It is discarded without a note: a Range keeps only the base's
+        // id, and anything else naming that id is reported as a `dangling-ref` where it is materialized.
+        if (consumeIf("=")) parseType()
         consume(';')
         val lower = readRangeBound()
         consume(';')
@@ -686,8 +703,8 @@ class Parser(src: String) {
      * `@` introduces either gcc's OFFSET_TYPE `@<class>,<member>` — `int A::*`, spelled `*@A,int` up to
      * gcc 3.3 and `@A,int` since — or a type attribute `@<letter><payload>;` qualifying the
      * type that follows. gdb tells them apart the same way, by whether a type id follows. Attributes
-     * chain (`@a32;@s8;…`) and unknown ones are skipped (IBM *AIX Files Reference*, "TypeAttrs");
-     * only `s<bits>` carries anything we use.
+     * chain (`@a32;@s8;…`) and unknown ones are skipped (IBM *AIX Files Reference*, "TypeAttrs"), with a
+     * note: only `s<bits>` carries anything we use.
      *
      * Mirror of gdb/stabsread.c:read_type (`@` case).
      */
@@ -699,11 +716,11 @@ class Parser(src: String) {
             return TypeDecl.Member(cls, parseType())
         }
         val attr = readUntilAny(charArrayOf(';'))
+        val sizeBits = attr.takeIf { it.startsWith('s') }?.drop(1)?.toLongOrNull()
+        if (sizeBits == null) skip("type attribute `@$attr;`")
         consume(';')
         val inner = parseType()
-        return attr.takeIf { it.startsWith('s') }?.drop(1)?.toLongOrNull()
-            ?.let { TypeDecl.WithSizeAttr(it, inner) }
-            ?: inner
+        return sizeBits?.let { TypeDecl.WithSizeAttr(it, inner) } ?: inner
     }
 
     /**
@@ -861,10 +878,10 @@ class Parser(src: String) {
     /**
      * Parse an access specifier: 0=private, 1=protected, 2=public.
      */
-    private fun accessOf(ch: Char): Access = when (ch) {
+    private fun Cursor.accessOf(ch: Char): Access = when (ch) {
         '0' -> Access.PRIVATE
         '1' -> Access.PROTECTED
         '2' -> Access.PUBLIC
-        else -> Access.PUBLIC
+        else -> Access.PUBLIC.also { skip("access `$ch`, read as public") }
     }
 }

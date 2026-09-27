@@ -96,6 +96,7 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
 
         is ParseResult.Ok -> {
             res.trailing?.let { warn("unparsed-trailing", it) }
+            res.skipped.forEach { warn("unparsed-skipped", "@${rec.index} '${rec.name.take(80)}': $it") }
             res.inner
         }
     }
