@@ -272,7 +272,7 @@ class Renderer(
 
     // Each row asks for its tokens' spellings several times over (once to size the row, once per
     // offset, once for the text) and the substitution is a regex sweep.
-    private val spelled = IdentityHashMap<ClangToken, String>()
+    private val spelled = mutableMapOf<ClangToken, String>()
 
     fun renderSkeleton(source: GhidraSourceFile) = FileRenderer(this, source).render()
 

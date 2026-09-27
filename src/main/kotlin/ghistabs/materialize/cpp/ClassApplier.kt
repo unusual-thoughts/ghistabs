@@ -27,7 +27,6 @@ import ghistabs.materialize.cpp.abi.CxxAbi.Companion.prevailingAbi
 import ghistabs.materialize.resolveRef
 import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Aggregate.Method
-import java.util.*
 
 /**
  * The C++ pass over the program, once [layClasses] has laid every class struct: a class gets its
@@ -79,10 +78,6 @@ class ClassApplier(
     // gcc 2.x physname needs the whole path, not the leaf.
     private val qualifiedByType = mutableMapOf<GlobalTypeId, String>()
 
-    // Filled by reparentMethod, read back by the vtable plate-comment pass so a virtual's address
-    // isn't resolved twice.
-    private val resolvedMemberAddresses = IdentityHashMap<Method<GlobalTypeId>, Address>()
-
     /**
      * One class's build state: its [located] group, Ghidra namespace, and struct.
      *
@@ -99,6 +94,10 @@ class ClassApplier(
         val isPoly = types.isPolymorphic(body)
         val vtable: ResolvedVtable? by lazy { if (isPoly) resolveVtableAddress() else null }
         val abi: CxxAbi get() = vtable?.abi ?: fallbackAbi
+
+        // Filled by reparentMethod, read back by the vtable plate-comment pass so a virtual's address
+        // isn't resolved twice.
+        val memberAddresses = mutableMapOf<Method<GlobalTypeId>, Address>()
 
         val name get() = located.className
         val body get() = located.classBody
@@ -205,7 +204,7 @@ class ClassApplier(
             }
             return
         }
-        resolvedMemberAddresses[m] = addr
+        memberAddresses[m] = addr
         val func = program.functionManager.getFunctionAt(addr) ?: run {
             val (tag, level) = if (abi.isInlineStdMember(mangled)) {
                 "unresolved-symbol-inlined-std" to Level.DEBUG
@@ -436,7 +435,7 @@ class ClassApplier(
         // method composes its symbol from the base's name — spelling it with the derived class's
         // invents a symbol that was never emitted. Each base plates its own on its own pass.
         virtuals.filterValues { m -> body.methods.any { it === m } }.forEach { (slot, m) ->
-            val mAddr = resolvedMemberAddresses[m] ?: resolveMember(m)?.second
+            val mAddr = memberAddresses[m] ?: resolveMember(m)?.second
             if (mAddr != null) {
                 val func = program.functionManager.getFunctionAt(mAddr)
                 if (func != null) {

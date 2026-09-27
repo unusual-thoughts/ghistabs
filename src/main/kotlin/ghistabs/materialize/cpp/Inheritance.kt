@@ -1,13 +1,13 @@
 package ghistabs.materialize.cpp
 
 import ghistabs.index.TypeGraph
+import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
 import ghistabs.parse.TypeDecl.Aggregate.Base
 import ghistabs.parse.TypeDecl.Aggregate.Method
 import ghistabs.parse.VirtKind
 import ghistabs.parse.isVptrFieldName
-import java.util.*
 
 /**
  * Byte offset of the vptr [typeDecl] declares, or null if it declares none. The single answer to
@@ -88,20 +88,18 @@ fun TypeGraph.virtualBases(typeDecl: TypeDecl.Aggregate<GlobalTypeId>) = buildLi
  * had its own vfptr placed. Cycles can't arise from well-formed stabs but [memo] makes that true
  * regardless of what the binary declares (a re-entrant lookup mid-walk sees the depth-0 placeholder).
  *
- * [memo] is identity-keyed and safe to share across an entire corpus of classes: bases common to
- * several siblings (a wide multi-inheritance lattice) are then walked once, not once per sibling.
+ * [memo] is keyed by each base's declaration and safe to share across an entire corpus of classes: bases
+ * common to several siblings (a wide multi-inheritance lattice) are then walked once, not once per sibling.
  */
 fun TypeGraph.inheritanceDepth(
     typeDecl: TypeDecl.Aggregate<GlobalTypeId>,
-    memo: IdentityHashMap<TypeDecl.Aggregate<GlobalTypeId>, Int> = IdentityHashMap(),
-): Int {
-    memo[typeDecl]?.let { return it }
-    memo[typeDecl] = 0
-    val depth =
-        1 + (typeDecl.bases.mapNotNull { resolveStruct(it.type) }.maxOfOrNull { inheritanceDepth(it, memo) } ?: -1)
-    memo[typeDecl] = depth
-    return depth
-}
+    memo: MutableMap<GlobalTypeDecl, Int> = mutableMapOf(),
+): Int = typeDecl.bases.maxOfOrNull { base ->
+    memo[base.type] ?: run {
+        memo[base.type] = 0
+        (resolveStruct(base.type)?.let { inheritanceDepth(it, memo) } ?: -1).also { memo[base.type] = it }
+    }
+}?.let { it + 1 } ?: 0
 
 /**
  * A class's virtuals from its whole inheritance chain, keyed by the slot index gcc declares — the
