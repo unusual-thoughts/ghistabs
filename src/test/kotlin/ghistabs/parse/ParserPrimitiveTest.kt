@@ -57,7 +57,7 @@ class ParserPrimitiveTest {
                 // 2^64-1 as written, which `min`/`max` narrow to (0, -1L) for consumers. Keeping
                 // the exact value is the whole point: a literal `-1` narrows to the same pair.
                 inner = TypeDecl.Range(
-                    of = LocalTypeId(0, 6),
+                    inner = TypeDecl.Ref(LocalTypeId(0, 6)),
                     lower = BigInteger.ZERO,
                     upper = BigInteger.TWO.pow(64) - BigInteger.ONE,
                 ),
@@ -80,7 +80,7 @@ class ParserPrimitiveTest {
                 // The literal is 2^95-1, not 2^128-1: it bounds the width from below, and only the
                 // `@s128` above states it. Rounded up, it holds in 16 bytes either way.
                 inner = TypeDecl.Range(
-                    of = LocalTypeId(0, 25),
+                    inner = TypeDecl.Ref(LocalTypeId(0, 25)),
                     lower = BigInteger.ZERO,
                     upper = BigInteger.TWO.pow(95) - BigInteger.ONE,
                 ),
