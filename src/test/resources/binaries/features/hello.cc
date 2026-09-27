@@ -1,7 +1,7 @@
 // One small C++ program touching as many stab forms as fits: builtins, typedefs, enums, bitfields,
-// unions, arrays, function and member pointers, classes with access/static/const/virtual/pure
-// members, single/multiple/virtual inheritance, templates, nested types, by-value struct return,
-// varargs, register/static locals, nested scopes and exceptions.
+// unions (one with methods), arrays, function and member pointers, classes with access/static/const/
+// virtual/pure members, single/multiple/virtual inheritance, templates, nested types, by-value struct
+// return, varargs, register/static locals, nested scopes and exceptions.
 #include <stdarg.h>
 #include <stdio.h>
 
@@ -90,6 +90,16 @@ static int probe(Circle &c, int n)
 
 static int bump(int k, void *ctx) { static int calls; return k + *(int *)ctx + ++calls; }
 
+union Word {
+    Word(unsigned int v) : u(v) {}
+    unsigned char lo() const { return b[0]; }
+    unsigned short hi() const { return h[1]; }
+    unsigned int u;
+    unsigned char b[4];
+private:
+    unsigned short h[2];
+};
+
 int main(int argc, char **argv)
 {
     register int i;
@@ -101,6 +111,7 @@ int main(int argc, char **argv)
     Stack<Point, 2> ps;
     Stack<int, 4>::Iter it = { 0, 0 };
     union { int as_int; float as_float; } pun;
+    Word w(0x3f800000u);
     d.*pm = 7;
     d += 3;
     for (i = 0; i < 2; i++) {
@@ -112,7 +123,7 @@ int main(int argc, char **argv)
     g_cb = bump;
     pun.as_float = 1.0f;
     i64 big = (i64)pun.as_int << 20;
-    printf("%s %g %d %d %lld %d %d %d %s\n", s.name(), c.area(), max2(m.x, m.y), sum(3, 1, 2, 3),
-           big, g_cb(1, &i), it.i, probe(c, argc), argv[0]);
+    printf("%s %g %d %d %lld %d %d %d %d %d %s\n", s.name(), c.area(), max2(m.x, m.y), sum(3, 1, 2, 3),
+           big, g_cb(1, &i), it.i, probe(c, argc), w.lo(), w.hi(), argv[0]);
     return Shape::count + g_color + d.d;
 }
