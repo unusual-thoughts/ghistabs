@@ -5,10 +5,10 @@ import ghistabs.diagnose.DiagnosticSink
 import ghistabs.index.LocatedType
 import ghistabs.materialize.DataTypeRegistry
 import ghistabs.materialize.resolveRef
+import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
 import ghistabs.parse.member
-import java.util.*
 
 /**
  * Splices each non-virtual base's fields into [placeholder] at the offset the stab's inheritance line
@@ -102,7 +102,7 @@ internal val LocatedType.className get() = location.name
  * reads its bases' finished ones, and SPLIT_BASE reads a base's own placed `{vfptr}`.
  */
 internal fun DataTypeRegistry.classesBasesFirst(): List<LocatedType> {
-    val depthMemo = IdentityHashMap<TypeDecl.Aggregate<GlobalTypeId>, Int>()
+    val depthMemo = mutableMapOf<GlobalTypeDecl, Int>()
     return byLocation.values
         .filter { (it.type.body as? TypeDecl.Aggregate)?.hasCxxSurface == true }
         .sortedBy { types.inheritanceDepth(it.classBody, depthMemo) }
