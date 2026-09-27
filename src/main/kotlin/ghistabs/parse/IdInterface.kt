@@ -119,7 +119,7 @@ fun LocalTypeDecl.globalize(g: Globalizer): GlobalTypeDecl = when (this) {
     is TypeDecl.Complex, is TypeDecl.Float, is TypeDecl.Enum, is TypeDecl.XRef, is TypeDecl.Builtin, TypeDecl.Void ->
         this as GlobalTypeDecl
 
-    is TypeDecl.Range -> TypeDecl.Range(g.globalIdFor(of), lower, upper)
+    is TypeDecl.Range -> TypeDecl.Range(inner.globalize(g), lower, upper)
 
     // Negative-id Refs never reach here — parser emits [TypeDecl.Builtin] for those.
     is TypeDecl.Ref -> TypeDecl.Ref(g.globalIdFor(id))

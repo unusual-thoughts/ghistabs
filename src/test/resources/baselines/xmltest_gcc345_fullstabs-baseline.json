@@ -226,8 +226,8 @@
             "max": 665
         },
         "harvest-typeAsts": {
-            "min": 31417,
-            "max": 31417
+            "min": 31432,
+            "max": 31432
         },
         "harvest-typeAsts-Aggregate": {
             "min": 4340,
@@ -270,8 +270,8 @@
             "max": 7193
         },
         "harvest-typeAsts-Range": {
-            "min": 330,
-            "max": 330
+            "min": 345,
+            "max": 345
         },
         "harvest-typeAsts-Ref": {
             "min": 6731,
@@ -302,8 +302,8 @@
             "max": 0
         },
         "harvest-typeAsts-unique-by-id": {
-            "min": 31417,
-            "max": 31417
+            "min": 31432,
+            "max": 31432
         },
         "import": {
             "min": 1,

@@ -455,6 +455,25 @@ class ContentIndexTest {
         oracle.content(wcharRange).mustNotBe(oracle.content(unsignedChar))
     }
 
+    /**
+     * A range with no Ghidra primitive (`@s24;`) is keyed by its structure, base included, and a
+     * self-based one reaches its own id again: that must end at the back-edge, and come out the same in
+     * every CU that declares it.
+     */
+    @Test
+    fun selfBasedRangeWithoutPrimitiveHashesEquallyAcrossCUs() {
+        fun int24(cu: String, n: Int): Type {
+            val id = GlobalTypeId(SourceFile.CUSource(cu), n)
+            val body = TypeDecl.WithSizeAttr(24, longRange(id, 0L, 0xFFFFFFL))
+            return Type(cu = SourceFile.CUSource(cu), id = id, named = binding("int24", body), body = body)
+        }
+        val inA = int24("a.cpp", 40)
+        val inB = int24("b.cpp", 41)
+        val index = TestContentIndex(mapOf(inA.id to inA, inB.id to inB))
+
+        index.content(TypeDecl.Ref(inA.id)) mustBe index.content(TypeDecl.Ref(inB.id))
+    }
+
     @Test
     fun refToSeparatelyEmittedTypeEqualsEquivalentInlineDef() {
         // pair_id is the outer "pair" struct's GlobalTypeId.

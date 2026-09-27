@@ -1,5 +1,6 @@
 package ghistabs.parse
 
+import ghistabs.test.longRange
 import ghistabs.test.mustBe
 import org.junit.jupiter.api.Test
 
@@ -35,9 +36,12 @@ class ParserSkippedTest {
             listOf("no method kind before `;`, read as normal")
     }
 
-    /** gcc's inline sizetype base is discarded quietly: nothing reads a range's base. */
+    /** gcc's inline sizetype base is the only definition of its id, so the range keeps it. */
     @Test
-    fun `an inline range base is no note`() {
-        skipped("c:t(0,1)=r(0,2)=r(0,2);0;127;;0;127;") mustBe emptyList()
+    fun `an inline range base is kept, not skipped`() {
+        val stab = "c:t(0,1)=r(0,2)=r(0,2);0;127;;0;1;"
+        skipped(stab) mustBe emptyList()
+        val range = Parser(stab).parseSymbol().mustBeOk().type as TypeDecl.Range
+        range.inner mustBe TypeDecl.InlineDef(LocalTypeId(0, 2), longRange(LocalTypeId(0, 2), 0, 127))
     }
 }

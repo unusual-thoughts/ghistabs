@@ -64,11 +64,29 @@ sealed interface TypeDecl<out Id : IdInterface> {
      */
     val sizeBits: Long? get() = sizeBytes?.times(8)
 
+    /**
+     * The one type a single-layer node wraps: [Pointer], [Reference], [Const], [Volatile], [WithSizeAttr] and
+     * [InlineDef]. Nothing reads it but the default [children], which it spares those six an override of.
+     */
     val wrapped: TypeDecl<Id>? get() = null
 
-    /** Directly nested TypeDecls, in declaration order */
+    /**
+     * Every TypeDecl nested directly in this one, one list per slot (an [Array]'s element and index type, an
+     * [Aggregate]'s bases, fields, methods and vptr base), each in declaration order. The generic walks over
+     * a type read only this, so a nested type left out is one they never see:
+     * - `TypeStore.hoistInlineDefs` registers each [InlineDef] it reaches, and one it misses leaves its id
+     *   undefined;
+     * - `ContentIndex` keys a type by [layoutData] and these, slot by slot, unless it has a key of its own (a
+     *   Ghidra primitive, an [Aggregate]);
+     * - `TypeLocations` and `FileRenderer`'s include claims follow it to the ids a type names.
+     */
     val children: List<List<TypeDecl<Id>>> get() = wrapped?.let { listOf(listOf(it)) } ?: emptyList()
 
+    /**
+     * What tells two nodes of one class apart besides their [children], for `ContentIndex`'s content key:
+     * bounds, sizes, names, enum members. It must hold only what is the same in every CU that declares the
+     * type, never a [GlobalTypeId], whose source differs per CU.
+     */
     val layoutData: List<Any> get() = emptyList<Nothing>()
 
     /** Forward reference to a type defined elsewhere by id. */
@@ -85,9 +103,13 @@ sealed interface TypeDecl<out Id : IdInterface> {
         override val sizeBytes = 0L
     }
 
-    /** Sun range descriptor: `r<id>;<min>;<max>;` — encodes integer/char widths. */
+    /**
+     * Sun range descriptor: `r<id>;<min>;<max>;` — encodes integer/char widths. [inner] is the base type, a
+     * child: a [Ref], usually to the range itself, or the [InlineDef] gcc writes for an array index's
+     * sizetype, `r(0,54)=r(0,54);0;037777777777;;0;1;`, which is the only definition of that id.
+     */
     @Serializable
-    data class Range<Id : IdInterface>(@Contextual val of: Id, val lower: BigInteger, val upper: BigInteger) :
+    data class Range<Id : IdInterface>(val inner: TypeDecl<Id>, val lower: BigInteger, val upper: BigInteger) :
         TypeDecl<Id> {
         /**
          * The bounds as the low 64 bits every consumer wants — gcc means the wrap (`unsigned long
@@ -99,14 +121,14 @@ sealed interface TypeDecl<out Id : IdInterface> {
 
         /**
          * A literal `0;-1`: unsigned, with a max the emitter didn't state
-         * - gcc means 64 bits and says so by having [of] point to itself
+         * - gcc means 64 bits and says so by having [inner] point to itself
          * - Sun's C compiler writes the same for 32-bit `unsigned int`/`unsigned long` against `int`
          * - gcc 2.6.3 writes it for `unsigned int` while spelling `long long unsigned int` out as 2^64-1.
          */
         val boundsUnfit get() = lower == BigInteger.ZERO && upper == BigInteger.valueOf(-1)
 
         override val sizeBytes = when {
-            // Must resolve [of] with [DataTypeRegistry.resolveBuiltin] to know the upper bound
+            // Must resolve [inner] with [DataTypeRegistry.resolveBuiltin] to know the upper bound
             boundsUnfit -> null
 
             lower == BigInteger.ZERO && upper == BigInteger.ZERO -> 0L
@@ -121,10 +143,11 @@ sealed interface TypeDecl<out Id : IdInterface> {
             else -> 4L
         }
 
-        // Not `of`: every Range resolves to a builtin, so the structural path is unreachable — and
-        // `of` is a GlobalTypeId, whose `source` would make the same range diverge per CU if it ever
-        // were reached. The exact bounds, not [min]/[max]: wrapped, gcc 2.6.3's `unsigned int` and
-        // `long long unsigned int` are both (0, -1) and would hash as one type.
+        override val children get() = listOf(listOf(inner))
+
+        // The exact bounds, not [min]/[max]: narrowed to a Long, gcc 2.6.3's `unsigned int` and `long long
+        // unsigned int` are both (0, -1) and would hash as one type. Only a range with no Ghidra primitive
+        // (an odd stated width, `@s24;`) is keyed by these at all; a self-based [inner] adds just a back-edge.
         override val layoutData get() = listOf(lower, upper)
 
         private companion object {

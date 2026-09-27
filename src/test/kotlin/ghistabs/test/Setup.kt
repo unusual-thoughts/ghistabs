@@ -50,8 +50,8 @@ fun dummyCursor() = StabCursor(GenericAddressResolver, DummySink)
  * Keeping the convenience here rather than as a constructor means production code that rebuilds a Range
  * cannot narrow by accident and still compile.
  */
-fun <Id : IdInterface> longRange(of: Id, min: Long, max: Long) =
-    TypeDecl.Range(of, BigInteger.valueOf(min), BigInteger.valueOf(max))
+fun <Id : IdInterface> longRange(inner: Id, min: Long, max: Long) =
+    TypeDecl.Range(TypeDecl.Ref(inner), BigInteger.valueOf(min), BigInteger.valueOf(max))
 
 // Tests capture at max verbosity — DEBUG and up — so log assertions see every message.
 fun Program.defaultContext(
