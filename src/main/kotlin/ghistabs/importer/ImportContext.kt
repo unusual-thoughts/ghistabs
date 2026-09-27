@@ -80,6 +80,27 @@ class ImportContext<Terminal : DiagnosticSink>(
     fun demanglerReplacer(registry: DataTypeRegistry) = DemanglerReplacer(program, registry, monitor, this)
     fun typedefShortener(registry: DataTypeRegistry) = TypedefShortener(registry, monitor)
     fun classApplier(registry: DataTypeRegistry) = ClassApplier(registry, program, resolver, monitor, this)
+
+    /**
+     * Pass A's input, the raw records — null when the program carries none. Either way, says why a
+     * read that comes back empty-handed did: a linker index in place of the stabs, a string table the
+     * records have lost, names pointing past it.
+     */
+    fun readStabs(): StabReader.Result? {
+        StabReader.verdictOf(program)?.let { (category, message) -> warn(category, message) }
+        val stabs = StabReader.fromProgram(program)?.readAll(monitor) ?: run {
+            warn("no-stabs", "No .stab/.stabstr block found.")
+            return null
+        }
+        if (stabs.unresolvedNames > 0) {
+            warn(
+                "stabstr-out-of-range",
+                "${stabs.unresolvedNames} records name an offset past the string table; read as nameless",
+                count = stabs.unresolvedNames.toLong(),
+            )
+        }
+        return stabs
+    }
 }
 
 /**

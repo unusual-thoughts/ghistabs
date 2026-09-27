@@ -2,19 +2,23 @@ package ghistabs.parse
 
 import ghidra.app.util.bin.BinaryReader
 import ghidra.app.util.bin.ByteArrayProvider
+import ghidra.app.util.opinion.ElfLoader
 import ghidra.program.model.data.*
 import ghidra.program.model.listing.Program
 import ghidra.program.model.mem.MemoryBlock
 import ghidra.util.task.TaskMonitor
 import ghistabs.byteProvider
+import java.io.IOException
 
 /**
  * Reads stab records from raw record/string bytes, tracking per-CU offsets ([Layout.SECTION]) and
- * merging `\`-continuation chains. Truncated tails (size % 12 ≠ 0) surface via [Result.truncatedTail].
+ * merging `\`-continuation chains. Truncated tails (size % 12 ≠ 0) surface via [Result.truncatedTail],
+ * and names [stabStr] cannot resolve (null: the offset is past the string table) via
+ * [Result.unresolvedNames].
  */
 class StabReader(
     private val stab: BinaryReader,
-    private val stabStr: (Long) -> String,
+    private val stabStr: (Long) -> String?,
     private val layout: Layout = Layout.SECTION,
 ) {
     /** Where the records came from, which decides how `n_strx` reads and what else shares the table. */
@@ -35,7 +39,12 @@ class StabReader(
         val totalRecordCount: Int = records.size,
         /** Unprocessed trailing bytes (size % 12 ≠ 0). */
         val truncatedTail: Long = 0,
+        /** Physical records whose `n_strx` lands outside the string table, read as nameless. */
+        val unresolvedNames: Int = 0,
     )
+
+    /** How many records the last walk of [physicalRecords] had to leave nameless. */
+    private var unresolved = 0
 
     constructor(stab: ByteArray, stabStr: ByteArray, layout: Layout = Layout.SECTION) : this(
         BinaryReader(
@@ -43,7 +52,11 @@ class StabReader(
             true,
         ),
         { n ->
-            stabStr.asIterable().drop(n.toInt()).takeWhile { it != 0.toByte() }.toByteArray().toString(Charsets.UTF_8)
+            n.takeIf { it < stabStr.size }?.let {
+                stabStr.asIterable().drop(n.toInt()).takeWhile {
+                    it != 0.toByte()
+                }.toByteArray().toString(Charsets.UTF_8)
+            }
         },
         layout,
     )
@@ -62,6 +75,7 @@ class StabReader(
             records = records,
             totalRecordCount = total,
             truncatedTail = stab.length() - stab.pointerIndex,
+            unresolvedNames = unresolved,
         )
     }
 
@@ -80,6 +94,7 @@ class StabReader(
      */
     fun physicalRecords(): Sequence<StabRecord> = sequence {
         stab.pointerIndex = 0
+        unresolved = 0
         var cuOff = 0L
         var cuSize = 0L
         var index = 0
@@ -96,13 +111,24 @@ class StabReader(
             record.stabstrOffset = cuOff + record.raw.strx.toLong()
             // strx 0 is a.out's "no name" — gcc uses it for the end-of-function and end-of-source
             // markers. Offset 0 is never a string there: it is the string table's own length field.
-            record.name = if (layout == Layout.SYMTAB && record.raw.strx == 0u) "" else stabStr(record.stabstrOffset)
+            // An offset past the table is a wrong header, or not stabs at all: the record still counts.
+            record.name = if (layout == Layout.SYMTAB && record.raw.strx == 0u) {
+                ""
+            } else {
+                stabStr(record.stabstrOffset) ?: "".also { unresolved++ }
+            }
             yield(record)
         }
     }
 
     /** Blocks holding the records and their strings, and how to read them. */
     data class Source(val records: MemoryBlock, val strings: MemoryBlock, val layout: Layout)
+
+    /** One place stabs can live: the records block, the string block it indexes, and their layout. */
+    internal data class Candidate(val records: String, val strings: String, val layout: Layout)
+
+    /** Why a program's stabs read as they do — or not at all — as a diagnostic category and message. */
+    data class Verdict(val category: String, val message: String)
 
     /**
      * *Defined* link-time symbols as name → `n_value`: the half of an a.out symbol table
@@ -119,25 +145,78 @@ class StabReader(
             while (stab.hasNext(STAB_RECORD_SIZE)) {
                 val raw = readHeader()
                 if (raw.isLinkSymbol && raw.isPlaced && raw.strx != 0u) {
-                    putIfAbsent(stabStr(raw.strx.toLong()), raw.value.toLong())
+                    stabStr(raw.strx.toLong())?.let { putIfAbsent(it, raw.value.toLong()) }
                 }
             }
         }
     }
 
     companion object {
-        /** Where the formats keep stabs, in precedence order: ELF/PE sections, then the a.out symtab. */
+        /**
+         * What Sun `ld` emits when `cc` ran without `-xs`: per CU, an `N_UNDF` header naming the file,
+         * its `N_OPT` options, the compile command line (0x34, GNU's `N_NOMAP`), `N_OBJ` object paths and
+         * the odd `N_MAIN` — while the stabs proper stay in the `.o`/`.a` for dbx to fetch. Same record
+         * layout as `.stab`, and nothing to type.
+         */
+        const val INDEX = ".stab.index"
+        private const val INDEX_STRINGS = ".stab.indexstr"
+
+        /**
+         * Where the formats keep stabs, in precedence order: ELF/PE sections, then a Sun linker index —
+         * which a binary carrying real `.stab` has too, and must not win — then the a.out symtab.
+         */
         private val SOURCES = listOf(
-            Triple(".stab", ".stabstr", Layout.SECTION),
-            Triple(".symtab", ".strtab", Layout.SYMTAB),
+            Candidate(".stab", ".stabstr", Layout.SECTION),
+            Candidate(INDEX, INDEX_STRINGS, Layout.SECTION),
+            Candidate(".symtab", ".strtab", Layout.SYMTAB),
         )
 
-        /** Which blocks [program] keeps its stabs in, for callers that need the bytes' addresses. */
-        fun sourceOf(program: Program): Source? = SOURCES.firstNotNullOfOrNull { (records, strings, layout) ->
-            program.memory.getBlock(records)?.let { r ->
-                program.memory.getBlock(strings)?.let { s -> Source(r, s, layout) }
+        /**
+         * The first complete [SOURCES] entry among the blocks [has] names. Never the symtab of an [elf]:
+         * that holds 16-byte `Elf32_Sym`s, which read as 12-byte `nlist`s are garbage records outside
+         * any `N_SO` with string offsets past the table.
+         */
+        internal fun candidate(elf: Boolean, has: (String) -> Boolean) =
+            SOURCES.firstOrNull { (records, strings, layout) ->
+                !(elf && layout == Layout.SYMTAB) && has(records) && has(strings)
+            }
+
+        /**
+         * Why stabs in the blocks [has] names read as nothing: a linker index that holds no types, or a
+         * records block whose string table is missing — `sh_link` past the section count on one Solaris
+         * binary. Null when [candidate] finds real stabs, or there is no trace of any.
+         */
+        internal fun verdict(elf: Boolean, has: (String) -> Boolean): Verdict? {
+            val found = candidate(elf, has)
+            val orphan = SOURCES.filter { it.layout == Layout.SECTION }
+                .firstOrNull { has(it.records) && !has(it.strings) }
+            return when {
+                found?.records == INDEX -> Verdict(
+                    "stab-index-only",
+                    "only a linker $INDEX: its records name each CU's source, options and object file, and " +
+                        "no types — the stabs stayed in the .o/.a files (rebuild with `cc -xs` to keep them)",
+                )
+
+                found == null && orphan != null -> Verdict(
+                    "stab-strings-missing",
+                    "${orphan.records} has no ${orphan.strings} string table, so no record in it can be named" +
+                        if (orphan.records == INDEX) "; and being a linker index, it holds no types anyway" else "",
+                )
+
+                else -> null
             }
         }
+
+        private val Program.isElf get() = executableFormat == ElfLoader.ELF_NAME
+
+        /** Which blocks [program] keeps its stabs in, for callers that need the bytes' addresses. */
+        fun sourceOf(program: Program): Source? = candidate(program.isElf) { program.memory.getBlock(it) != null }
+            ?.let { (records, strings, layout) ->
+                Source(program.memory.getBlock(records), program.memory.getBlock(strings), layout)
+            }
+
+        /** [verdict] for [program]. */
+        fun verdictOf(program: Program): Verdict? = verdict(program.isElf) { program.memory.getBlock(it) != null }
 
         /**
          * Whether [program] carries stabs at all — block lookups only, opening no streams and reading no
@@ -159,7 +238,15 @@ class StabReader(
             val littleEndian = !program.memory.isBigEndian
             StabReader(
                 stab = BinaryReader(records.byteProvider, littleEndian),
-                stabStr = { off: Long -> BinaryReader(strings.byteProvider, littleEndian).readUtf8String(off) },
+                stabStr = { off: Long ->
+                    off.takeIf { it < strings.size }?.let {
+                        try {
+                            BinaryReader(strings.byteProvider, littleEndian).readUtf8String(it)
+                        } catch (_: IOException) {
+                            null
+                        }
+                    }
+                },
                 layout = layout,
             )
         }

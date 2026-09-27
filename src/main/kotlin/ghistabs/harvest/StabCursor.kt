@@ -77,10 +77,14 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
     private val scopesByCu = mutableMapOf<SourceFile.CUSource, MutableList<FunctionScope>>()
     private var currentScope: FunctionScope? = null
 
-    /** [currentCu] where a record can't legally appear outside a CU. */
+    /**
+     * [currentCu] where a record can't legally appear outside a CU. Only read on the far side of a
+     * [parseSymbol] that succeeded, which is what refuses a symbol outside any `N_SO`.
+     */
     val cu get() = checkNotNull(currentCu) { "record outside any N_SO" }
 
-    private val lineSource get() = sourceFileOrNull(currentSourceForLines) ?: cu.identity
+    /** Where N_SLINEs and symbols file: the N_SOL'd header, else the CU; null outside any CU. */
+    private val lineSource get() = sourceFileOrNull(currentSourceForLines) ?: currentCu?.identity
 
     private val currentFunctionName get() = currentScope?.name
 
@@ -88,7 +92,12 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
 
     override fun globalIdFor(id: LocalTypeId) = GlobalTypeId(cuContext?.sourceFor(id) ?: cu, id.n)
 
-    fun parseSymbol(rec: StabRecord) = when (val res = Symbol.parse(rec, this, lineSource, currentFunctionName)) {
+    /** Null for an unparseable symbol, and for one outside any CU — whose type ids have no file to resolve in. */
+    fun parseSymbol(rec: StabRecord) = when (
+        val res = lineSource?.takeIf { currentCu != null }?.let { Symbol.parse(rec, this, it, currentFunctionName) }
+    ) {
+        null -> null.also { outsideCu(rec) }
+
         is ParseResult.Error -> {
             err("parse-error", "@${rec.index} '${rec.name.take(80)}': ${res.ex.message}")
             null
@@ -154,6 +163,13 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
         }
     }
 
+    /**
+     * A record that needs a CU arriving outside every `N_SO` — a stream that never opens one, or
+     * strays past its end. Skipped rather than filed under some other CU's name.
+     */
+    private fun outsideCu(rec: StabRecord) =
+        warn("record-outside-cu", "@${rec.index} ${rec.type} '${rec.name.take(80)}' outside any N_SO; skipped")
+
     /** N_SO: trailing slash = compilation directory, non-empty = CU start, empty = CU end. */
     fun sourceUnit(rec: StabRecord) {
         when {
@@ -218,11 +234,13 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
      * N_SLINE: `desc` is the line, `value` is function-relative (gcc/COFF on PE) or already
      * absolute (gcc/ELF) — [AddressResolver.stabAddress] disambiguates against the function start.
      */
-    fun lineEntry(rec: StabRecord) =
-        LineEntry(rec.desc, resolver.stabAddress(rec.value, currentScope?.addr, this), lineSource).also {
-            lineEntriesByFile.getOrPut(lineSource) { mutableListOf() } += it
+    fun lineEntry(rec: StabRecord): LineEntry? {
+        val source = lineSource ?: return null.also { outsideCu(rec) }
+        return LineEntry(rec.desc, resolver.stabAddress(rec.value, currentScope?.addr, this), source).also {
+            lineEntriesByFile.getOrPut(source) { mutableListOf() } += it
             currentScope?.lineEntries?.add(it)
         }
+    }
 
     /** Named N_FUN: `name` is `mangled:descriptor`, `value` entry address, `desc` declaration line (under -gstabs+) */
     fun openFunction(func: FunctionSymbol) {
