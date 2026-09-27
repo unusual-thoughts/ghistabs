@@ -32,7 +32,8 @@ ignores `regparm` on x86-64.
 The `hello_*` set is one source, `hello.cc`, built with `g++ -gstabs+ -O0 hello.cc -o <fixture>` across every
 gcc generation that still emits stabs, all i386 so only the compiler varies. It packs most stab forms into one
 screen: typedefs, enums, bitfields, unions, multi-dim arrays, function/data/method pointers, access specifiers,
-static/const/virtual/pure members, single + multiple + virtual inheritance, templates with nested types,
+static/const/virtual/pure members, single + multiple + virtual inheritance, templates with nested types, a
+union class (constructor, const methods, a private member),
 by-value struct return, varargs, register/static locals, nested scopes and a throw/catch. Every build prints
 the same line and exits 8. The try/catch lives in its own function because gcc 2.7.2.3 ICEs
 (`unrecognizable insn`) on EH inside `main` next to a `register` local.
