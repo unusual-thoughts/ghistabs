@@ -350,25 +350,14 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
     }
 
     /**
-     * A same-named register home typed as a pointer to the stack parameter's own type: gcc reached the
-     * argument only through that register — passed by invisible reference — and `dbxout_symbol_location`
-     * can say so only by emitting "the variable as a pointer". The slot holds that pointer, not the
-     * value. gcc 12 spells the reference out instead. `dbxout_reg_parms` emits that home at depth 0, so a
-     * same-named register local of a nested block is another variable shadowing the parameter.
+     * A stack `:p` whose function-scope `:r` namesake is a pointer to its type was passed by invisible
+     * reference: `dbxout_symbol_location` can only say so by emitting that register home as a pointer.
      */
-    private fun Func.passedByAddress(param: ParamSymbol, type: DataType): DataType? {
-        if (param.body.location != VariableLocation.STACK) return null
-        fun BlockScope.nested(): List<LocalSymbol> = children.flatMap { it.locals + it.nested() }
-        val shadowing = blocks.flatMap { it.nested() }.mapTo(mutableSetOf()) { it.recordIndex }
-        return locals
-            .firstOrNull {
-                it.recordIndex !in shadowing &&
-                    it.body.name == param.body.name &&
-                    it.body.location == VariableLocation.REGISTER
-            }
-            ?.let { registry.resolveRef(it.body.type) as? Pointer }
-            ?.takeIf { it.dataType.isEquivalent(type) }
-    }
+    private fun Func.passedByAddress(param: ParamSymbol, type: DataType): DataType? = functionScopeLocals
+        .takeIf { param.body.location == VariableLocation.STACK }
+        ?.firstOrNull { it.body.name == param.body.name && it.body.location == VariableLocation.REGISTER }
+        ?.let { registry.resolveRef(it.body.type) as? Pointer }
+        ?.takeIf { it.dataType.isEquivalent(type) }
 
     /**
      * Record where gcc kept a `:P`/`:R` parameter, as a plate comment on the function entry.

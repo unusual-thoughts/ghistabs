@@ -2,6 +2,8 @@ package ghistabs.harvest
 
 import ghistabs.diagnose.CapturingSink
 import ghistabs.diagnose.Level
+import ghistabs.parse.FunctionScope
+import ghistabs.parse.SourceFile
 import ghistabs.parse.StabType
 import ghistabs.parse.SymbolDecl
 import ghistabs.parse.TypeDecl
@@ -178,5 +180,24 @@ class BlockScopesTest {
 
         locals.single { it.body.name == "orphan" }.sourceFile.filename mustBe "main.cpp"
         ("orphan" in flatten(blocks)) mustBe false
+    }
+
+    /**
+     * A `:p` merges only with a same-named `:r` of the function's own scope: the inlined expansions'
+     * `this` locals live in nested blocks and are other variables, however they are named.
+     */
+    @Test
+    fun `the function's own scope is its outermost block and its unclaimed locals`() {
+        val (locals, blocks) = mainBuilder().apply { local("this", 27) }.finish(lines, sourceFileOf("main.cpp"))
+        val main = Func(
+            "main",
+            addr(0),
+            SymbolDecl.Function("main", FunctionScope.GLOBAL, TypeDecl.Void),
+            SourceFile.CUSource("main.cpp"),
+            locals = locals,
+            blocks = blocks,
+        )
+
+        main.functionScopeLocals.map { it.body.name to it.line } mustBe listOf("fs" to 89, "this" to 27)
     }
 }

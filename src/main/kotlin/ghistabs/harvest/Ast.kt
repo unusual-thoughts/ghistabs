@@ -263,6 +263,16 @@ data class Func(
     val demangledName by lazy { Demangler.name(decl.name) }
 
     /**
+     * The locals of the function's own scope: its outermost blocks' and those no bracket claimed, which
+     * include the register homes `dbxout_reg_parms` emits at depth 0. A local of a nested block is not.
+     */
+    val functionScopeLocals: List<LocalSymbol> by lazy {
+        fun BlockScope.nested(): List<LocalSymbol> = children.flatMap { it.locals + it.nested() }
+        val nested = blocks.flatMap { it.nested() }.mapTo(HashSet()) { it.recordIndex }
+        locals.filterNot { it.recordIndex in nested }
+    }
+
+    /**
      * Function signature via Ghidra's API at the function's entry address — Ghidra has
      * already resolved calling convention, parameter names and types from analysis +
      * imported stabs types, so the rendered signature reflects what the binary actually
