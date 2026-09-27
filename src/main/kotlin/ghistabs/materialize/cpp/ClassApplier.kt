@@ -400,9 +400,9 @@ class ClassApplier(
 
         val shape = vtable?.let {
             claimedVtables += it.address
-            program.vtableShape(it.address, resolver, abi)
+            program.vtableShape(it.address, abi)
         }
-        val targets = shape?.let { program.vtableSlotTargets(it.addressPoint, resolver, abi) }.orEmpty()
+        val targets = shape?.let { program.vtableSlotTargets(it.addressPoint, abi) }.orEmpty()
         val virtuals = rebaseOffHeader(declared)
         fillVftable(virtuals, targets)
 
@@ -424,7 +424,7 @@ class ClassApplier(
             )
         }
 
-        val addressPoint = program.layVtable(shape, vftable, name, ns, resolver, virtualBases, abi = abi)
+        val addressPoint = program.layVtable(shape, vftable, name, ns, virtualBases, abi = abi)
         debug("vtable-applied", "class=$name abi=$abi", address = addressPoint)
         if (abi.hasRttiHeader) laySecondaryVtables(shape, name, ns, abi)
 

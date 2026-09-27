@@ -734,8 +734,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
                 ?.removePrefix("${Itanium.RTTI}: ")?.substringBefore(" typeinfo")?.let { named ->
                     // Only a *contradiction* counts: with no symbol at the target there is nothing to
                     // name and the closed form is the honest fallback.
-                    val present = wordAt(rttiHeader)
-                        ?.let { program.addressFactory.defaultAddressSpace.getAddress(it) }
+                    val present = program.readPointer(rttiHeader)
                         ?.let { program.symbolTable.getSymbols(it).map { s -> s.name } }
                         .orEmpty()
                     if (present.isNotEmpty() && named !in present) {
@@ -1145,11 +1144,11 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             when {
                 !pointsIntoCode(at) ->
                     "vftable for $ns@$addr: slot '${slot0.fieldName}' at +${slot0.offset} " +
-                        "holds ${wordAt(at)?.toString(16)}, not a code address"
+                        "holds ${program.readPointer(at)}, not a code address"
 
                 before != null && pointsIntoCode(before) ->
                     "vftable for $ns@$addr: the word before slot '${slot0.fieldName}' at " +
-                        "+${slot0.offset} holds ${wordAt(before)?.toString(16)}, a code address too " +
+                        "+${slot0.offset} holds ${program.readPointer(before)}, a code address too " +
                         "(mislaid on the rtti or vbase-offset word?)"
 
                 else -> null
@@ -1173,8 +1172,7 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     fun noSubVtableInsideAGroupIsLeftUnlabelled() {
         val ptr = program.defaultPointerSize.toLong()
         fun labelsAt(a: Address) = program.symbolTable.getSymbols(a).map { it.name }
-        fun isRttiHeader(a: Address) = wordAt(a)
-            ?.let { program.addressFactory.defaultAddressSpace.getAddress(it) }
+        fun isRttiHeader(a: Address) = program.readPointer(a)
             ?.let { target -> labelsAt(target).any(Itanium::looksLikeZti) } == true
 
         val primaries = program.symbolTable.symbolIterator.iterator().asSequence()
@@ -2237,15 +2235,10 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
     private val harvestsStdString
         get() = artifacts.harvest.types.values.any { it.ghidraName.startsWith("basic_string<") }
 
-    private fun wordAt(a: Address): Long? = runCatching {
-        if (program.defaultPointerSize == 8) program.memory.getLong(a) else program.memory.getInt(a).toLong()
-    }.getOrNull()
-
     /** Whether the pointer stored at [a] targets executable memory — how the address point is told
      *  apart from the rtti / vbase-offset words in front of it. */
-    private fun pointsIntoCode(a: Address) = wordAt(a)
-        ?.takeIf { it != 0L }
-        ?.let { program.addressFactory.defaultAddressSpace.getAddress(it) }
+    private fun pointsIntoCode(a: Address) = program.readPointer(a)
+        ?.takeIf { it.offset != 0L }
         ?.let { program.memory.getBlock(it)?.isExecute } == true
 
     /**
