@@ -38,15 +38,6 @@
             "min": 28,
             "max": 28
         },
-        "base-synthesized": {
-            "min": 3,
-            "max": 3,
-            "degrades": [
-                "/std/basic_fstream<char,std::char_traits<char>>@+0",
-                "/std/basic_istream<char,std::char_traits<char>>@+-12",
-                "/std/basic_ostream<char,std::char_traits<char>>@+-12"
-            ]
-        },
         "canonical-content-merged": {
             "min": 1,
             "max": 1
@@ -295,8 +286,8 @@
             "max": 1
         },
         "inheritance-applied": {
-            "min": 81,
-            "max": 81
+            "min": 82,
+            "max": 82
         },
         "inheritance-pseudo-fields-promoted": {
             "min": 1,
@@ -571,11 +562,10 @@
             "max": 2
         },
         "struct-mostly-undefined": {
-            "min": 14,
-            "max": 14,
+            "min": 13,
+            "max": 13,
             "degrades": [
                 "/build/buildd/mingw32-runtime-3.12/build_dir/src/w32api/include/winnt.h/Anon_winnt_474_bed1a7c2",
-                "/std/basic_iostream<char,std::char_traits<char>>",
                 "/std/fpos<mbstate_t>",
                 "/std/oaidl/Anon_oaidl_98_533edd29",
                 "/std/oaidl/Anon_oaidl_98_83bed669",
@@ -591,16 +581,11 @@
             ]
         },
         "struct-truncated": {
-            "min": 7,
-            "max": 7,
+            "min": 2,
+            "max": 2,
             "degrades": [
                 "TiXmlText",
-                "_Unwind_Exception",
-                "basic_fstream<char,std::char_traits<char>>",
-                "basic_ifstream<char,std::char_traits<char>>",
-                "basic_istream<char,std::char_traits<char>>",
-                "basic_ofstream<char,std::char_traits<char>>",
-                "basic_ostream<char,std::char_traits<char>>"
+                "_Unwind_Exception"
             ]
         },
         "text-boundaries-out-of-order": {
@@ -639,17 +624,21 @@
             "min": 35,
             "max": 35
         },
+        "vbase-applied": {
+            "min": 6,
+            "max": 6
+        },
         "vfptr-inherited-from-base": {
-            "min": 10,
-            "max": 10
+            "min": 9,
+            "max": 9
         },
         "vfptr-normalized": {
             "min": 9,
             "max": 9
         },
         "vfptr-split-from-base": {
-            "min": 53,
-            "max": 53
+            "min": 54,
+            "max": 54
         },
         "vftable-slot-name-collision": {
             "min": 4,
