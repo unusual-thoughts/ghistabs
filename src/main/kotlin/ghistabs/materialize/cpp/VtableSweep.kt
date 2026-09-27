@@ -64,10 +64,15 @@ internal fun ClassApplier.sweepUnclaimedVtables() {
         val addressPoint = program.layVtable(shape, vftable, qualified, ns, abi = abi)
         debug("vtable-reconstructed", "${targets.size} slot(s) typed from targets", addressPoint, qualified)
         // Itanium packs a class's secondaries into the same record, walkable from the primary's
-        // end by their shared rtti word. gcc 2.x gives each its own `_vt.<derived>.<base>`
-        // symbol instead, so there is nothing contiguous to walk — and nothing claims them yet
-        // either, since ResolvedVtable.fromSymbol screens the two-segment names out.
+        // end by their shared rtti word. gcc 2.x gives each its own `_vt.<derived>.<base>` symbol,
+        // laid below whether or not the class has a primary at all.
         if (abi.hasRttiHeader) laySecondaryVtables(shape, leaf, ns, abi)
+    }
+    // What the class pass left: gcc 2.x secondaries of classes linked without stabs. No class struct
+    // to find the base's vptr in, so these go untagged.
+    for ((cls, tables) in gcc2SecondaryVtables) {
+        if (tables.all { it.address in claimedVtables }) continue
+        layGcc2SecondaryVtables(cls, canonTemplateName(cls.leafName), buildNamespaceChain(cls.nameSegments), null)
     }
 }
 
@@ -112,6 +117,57 @@ internal fun ClassApplier.laySecondaryVtables(primary: VtableShape, leaf: String
             label = ClassNaming.INTERNAL_VFTABLE,
         )
         debug("vtable-secondary", "class=$leaf index=$i slots=${sub.targets.size}", address = at)
+    }
+}
+
+/** One gcc 2.x secondary vtable record: its symbol's [base] and ABI, and where it sits. */
+internal data class Gcc2SecondaryVtable(val base: String, val address: Address, val abi: CxxAbi)
+
+/**
+ * [className]'s gcc 2.x secondaries, which are not packed behind a primary: each is its own record
+ * under its own symbol, `_vt<m><class><m><base>` — `_vt$9TeeStream$3ios`, the table TeeStream's
+ * virtual `ios` base points at. A class whose polymorphic bases are all virtual has no primary at
+ * all, only these. Slots are typed off their targets like a swept table's, and the `internal_vftable`
+ * label goes at the record start, which is what a gcc 2.x vptr holds.
+ *
+ * Tagged at that base's vptr in [classStruct], when there is one to look in: the vptr the table is
+ * for belongs to the base, wherever the class lays it.
+ */
+internal fun ClassApplier.layGcc2SecondaryVtables(
+    className: String,
+    leaf: String,
+    ns: Namespace,
+    classStruct: Structure?,
+) {
+    var laid = 0
+    for ((base, at, abi) in gcc2SecondaryVtables[className].orEmpty()) {
+        if (!claimedVtables.add(at)) continue
+        val shape = program.vtableShape(at, abi)
+        val targets = program.vtableSlotTargets(shape.addressPoint, abi)
+        if (targets.isEmpty()) {
+            debug("vtable-secondary-empty", "class=$className base=$base", address = at)
+            continue
+        }
+        val i = laid++
+        val category = CategoryPath(CategoryPath(ClassNaming.classDataTypesRoot, leaf), "internal_$i")
+        val name = "${leaf}_vftable_internal_$i"
+        val vftable = registry.getOrRegister<Structure>(category, name) {
+            StructureDataType(category, name, 0, dtm)
+        }
+        if (vftable.numComponents == 0) {
+            val used = mutableSetOf<String>()
+            with(abi) {
+                vftable.addReservedHeader()
+                targets.forEachIndexed { slot, target ->
+                    vftable.addEntryAdjustment(slot)
+                    addSweptSlot(vftable, category, target, used, abi)
+                }
+            }
+        }
+        val vfptrAt = classStruct?.vfptrOffsetOfBase(base)?.toLong()
+        vftable.describeVxTable(leaf, "${ClassNaming.INTERNAL_VFTABLE} $i, for $base", vfptrAt)
+        program.layVtable(shape, vftable, leaf, ns, label = ClassNaming.INTERNAL_VFTABLE, abi = abi)
+        debug("vtable-secondary", "class=$className index=$i base=$base slots=${targets.size}", address = at)
     }
 }
 

@@ -132,6 +132,51 @@ object Gcc2 {
     }
 
     /**
+     * The class [mangled] spells, the inverse of [mangleClassName]: `3ios` → `ios`, `Q25Outer5Inner` →
+     * `Outer::Inner`. Null for anything else, a template's `t` form included, or for trailing text.
+     */
+    fun unmangleClassName(mangled: String): String? =
+        unmangleClassPrefix(mangled)?.takeIf { (_, end) -> end == mangled.length }?.first
+
+    /**
+     * The class and the base a gcc 2.x *secondary* vtable symbol names — `iostream` and `ios` for
+     * `_vt.8iostream.3ios`, the table iostream's `ios` subobject points at — or null if [symbolName]
+     * is not one. See [looksLikePrimaryVtable] for why the two-segment name is its own table. A class
+     * whose polymorphic bases are all virtual has *only* these: libg++'s `iostream` carries no
+     * `_vt.8iostream` at all.
+     */
+    fun secondaryVtableClasses(symbolName: String): Pair<String, String>? {
+        val tail = vtableTail(symbolName) ?: return null
+        val (derived, end) = unmangleClassPrefix(tail) ?: return null
+        if (tail.getOrNull(end) !in MARKERS) return null
+        return unmangleClassName(tail.substring(end + 1))?.let { derived to it }
+    }
+
+    /** The class spelled at the start of [mangled], and where its spelling ends. */
+    private fun unmangleClassPrefix(mangled: String): Pair<String, Int>? {
+        var at = 0
+        fun digits(): Int? = mangled.drop(at).takeWhile(Char::isDigit).takeIf { it.isNotEmpty() }
+            ?.also { at += it.length }?.toInt()
+        fun part(): String? {
+            val len = digits() ?: return null
+            return mangled.substring(at).take(len).takeIf { it.length == len }?.also { at += len }
+        }
+        val parts = if (mangled.startsWith("Q")) {
+            at = 1
+            val count = if (mangled.getOrNull(1) == '_') {
+                at = 2
+                digits()?.takeIf { mangled.getOrNull(at) == '_' }?.also { at++ }
+            } else {
+                mangled.getOrNull(1)?.digitToIntOrNull()?.also { at = 2 }
+            } ?: return null
+            List(count) { part() ?: return null }
+        } else {
+            listOf(part() ?: return null)
+        }
+        return parts.qualifiedName to at
+    }
+
+    /**
      * A name gcc invented for an anonymous type: `$_0`/`._0`, whose members mangle with it
      * (`lldiv_t`'s ctor is `__3._6`). The scope such a name states is a label, not a namespace.
      */

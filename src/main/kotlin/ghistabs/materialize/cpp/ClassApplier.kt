@@ -191,7 +191,10 @@ class ClassApplier(
         // gcc 2.x composes a method's physname from its own class's ABI, so reparenting always
         // resolves through this class's own abi, once its vtable resolves.
         for (m in body.methods) reparentMethod(m)
-        if (isPoly) buildAndApplyVtable()
+        if (isPoly) {
+            buildAndApplyVtable()
+            layGcc2SecondaryVtables(qualifiedClassName, name, ns, structDt)
+        }
     }
 
     private fun LocatedClass.reparentMethod(m: Method<GlobalTypeId>) {
@@ -566,6 +569,21 @@ class ClassApplier(
 
     /** Vtable records a harvested class claimed, so [sweepUnclaimedVtables] can tell what is left. */
     internal val claimedVtables = mutableSetOf<Address>()
+
+    /**
+     * gcc 2.x secondary vtables (`_vt.<class>.<base>`) by the qualified class they belong to, one per
+     * record in address order: a.out keeps both `_vt$` and its user-label-prefixed `__vt$` at one
+     * address. Empty for any other ABI.
+     */
+    internal val gcc2SecondaryVtables: Map<String, List<Gcc2SecondaryVtable>> by lazy {
+        buildMap<String, MutableList<Gcc2SecondaryVtable>> {
+            for (sym in symtab.symbolIterator) {
+                val (cls, base) = Gcc2.secondaryVtableClasses(sym.name) ?: continue
+                val abi = CxxAbi.ofVtableSymbol(sym.name) ?: continue
+                getOrPut(cls) { mutableListOf() } += Gcc2SecondaryVtable(base, sym.address, abi)
+            }
+        }.mapValues { (_, tables) -> tables.distinctBy { it.address }.sortedBy { it.address } }
+    }
 
     /** `_ZTV<class>` demangled qualified-class-name → address, built once. Replaces the per-class
      *  `O(classes × symbols)` demangle scan that made [resolveVtableAddress] pathological on CryptoPP

@@ -183,4 +183,26 @@ class Gcc2Test {
         Gcc2Thunks.hasRttiHeader mustBe false
         Gcc2Plain.hasRttiHeader mustBe false
     }
+
+    @Test
+    fun unmanglesWhatMangleClassNameSpells() {
+        for (name in listOf("ios", "TiXmlNode", "Outer::Inner", "a::b::c::d::e::f::g::h::i::j")) {
+            Gcc2.unmangleClassName(Gcc2.mangleClassName(name)) mustBe name
+        }
+        // A template's `t` form, a short length, and trailing text are not a class name.
+        Gcc2.unmangleClassName("t5Stack2Zii") mustBe null
+        Gcc2.unmangleClassName("9ios") mustBe null
+        Gcc2.unmangleClassName("3iosX") mustBe null
+    }
+
+    @Test
+    fun readsTheClassAndTheBaseOffASecondaryVtable() {
+        Gcc2.secondaryVtableClasses("_vt.8iostream.3ios") mustBe ("iostream" to "ios")
+        Gcc2.secondaryVtableClasses($$"__vt$9TeeStream$3ios") mustBe ("TeeStream" to "ios")
+        Gcc2.secondaryVtableClasses("_vt.14CExposedStream.11PRevertable") mustBe ("CExposedStream" to "PRevertable")
+        Gcc2.secondaryVtableClasses($$"_vt$Q25Outer5Inner$3ios") mustBe ("Outer::Inner" to "ios")
+        // A class's own table names one class, not two.
+        Gcc2.secondaryVtableClasses("_vt.8iostream") mustBe null
+        Gcc2.secondaryVtableClasses("__vt_9TiXmlNode") mustBe null
+    }
 }
