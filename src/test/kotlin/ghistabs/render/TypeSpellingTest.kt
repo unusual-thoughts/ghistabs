@@ -88,4 +88,29 @@ class TypeSpellingTest {
         declare("pcpm:G(0,1)=*(0,2)=k(0,3)=@(0,4)=xsA:,(0,5)=r(0,5);-2147483648;2147483647;") mustBe
             "int A::*const *pcpm"
     }
+
+    /**
+     * gcc 3.4's `__pfn` of `double (Shape::*pmf)() const`: the method lists `this` and ends with the `void`
+     * sentinel, neither of which a member-function pointer spells.
+     */
+    @Test
+    fun `a pointer to a method is a pointer to member function`() {
+        declare(
+            "pfn:G(0,129)=*(0,130)=#(0,73)=xsShape:,(0,8)=r(0,1);8;0;,(0,131)=*(0,80)=k(0,73),(0,6)=(0,6);",
+        ) mustBe "double (Shape::*pfn)()"
+        declare(
+            "pmf:G(0,1)=*(0,2)=#(0,3)=xsA:,(0,4)=r(0,4);-2147483648;2147483647;,(0,5)=*(0,3)," +
+                "(0,7)=r(0,7);-2147483648;2147483647;,(0,6)=(0,6);",
+        ) mustBe "int (A::*pmf)(int)"
+        declare(
+            "cp:G(0,1)=k(0,2)=*(0,3)=#(0,4)=xsA:,(0,5)=r(0,5);-2147483648;2147483647;,(0,6)=*(0,4)," +
+                "(0,8)=r(0,8);-2147483648;2147483647;,(0,7)=(0,7);",
+        ) mustBe "int (A::*const cp)(int)"
+    }
+
+    /** gdb's stub method states no class, so the pointer spells as a plain function pointer rather than `::*`. */
+    @Test
+    fun `a pointer to a stub method is a function pointer`() {
+        declare("p:G(0,1)=*(0,2)=##(0,3)=r(0,3);-2147483648;2147483647;;") mustBe "int (*p)()"
+    }
 }
