@@ -21,6 +21,17 @@ class LayoutTest {
     }
 
     @Test
+    fun `without provenance a row loses its markers but keeps code and declaration tags`() {
+        val line = TargetLine(17).apply {
+            this += Fragment(code = "x = 1;", note = "L 17", shape = NoteShape.PROVENANCE)
+            this += Fragment(code = "y = 2;", note = "util.h L 4", shape = NoteShape.PROVENANCE)
+            this += Fragment(note = "L 18", shape = NoteShape.PROVENANCE)
+            this += Fragment(code = "int z;", note = "(local)")
+        }
+        line.render(provenance = false) mustBe "x = 1;   y = 2;   int z;  // L  17 (local)"
+    }
+
+    @Test
     fun `indent is a space count from the first fragment and empty lines render blank`() {
         TargetLine(1).render() mustBe ""
         val line = TargetLine(1).apply { this += Fragment(4, code = "return 0;") }
