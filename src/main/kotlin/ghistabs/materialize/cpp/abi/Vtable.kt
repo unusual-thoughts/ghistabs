@@ -5,28 +5,31 @@ import ghidra.program.model.data.PointerDataType
 import ghidra.program.model.data.Structure
 import ghidra.program.model.listing.CommentType
 import ghidra.program.model.listing.Program
+import ghidra.program.model.scalar.Scalar
 import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
 import ghidra.program.model.symbol.Symbol
 import ghistabs.Demangler
 import ghistabs.forceCreateData
-import ghistabs.harvest.AddressResolver
 import ghistabs.materialize.cpp.ClassNaming
+import ghistabs.readAs
+import ghistabs.readPointer
 
 /** Upper bound on vbase/vcall-offset words scanned before giving up on locating the rtti header. */
 private const val MAX_VTABLE_PREFIX_WORDS = 64
 
-/** Pointer-sized word at [a] from initialized memory (endianness-aware), or null if unmapped. */
-internal fun Program.readWord(a: Address): Long? = runCatching {
-    if (defaultPointerSize == 8) memory.getLong(a) else memory.getInt(a).toLong() and 0xFFFFFFFFL
-}.getOrNull()
-
-/** The word at [a] read as an address, or null if it is unmapped or does not point into executable
- *  memory. The one test that separates a vtable's function pointers from its header words — both
- *  scans below turn on it, and neither can use symbol presence, which auto-analysis sprays `PTR_`
- *  labels across. */
-private fun Program.codeTargetAt(a: Address, resolver: AddressResolver): Address? =
-    readWord(a)?.let(resolver::buildAddress)?.takeIf { memory.getBlock(it)?.isExecute == true }
+/**
+ * The pointer at [a], or null if it is unmapped or does not point into executable memory. The one test
+ * that separates a vtable's function pointers from its header words — both scans below turn on it, and
+ * neither can use symbol presence, which auto-analysis sprays `PTR_` labels across. An rtti word can
+ * pass it too: an old i386 ELF links `.rodata`, typeinfo and all, into the R-X text segment, so the
+ * scans exempt the rtti word before asking.
+ *
+ * Read as it stands, never through [ghistabs.harvest.AddressResolver.buildAddress]: that fixup is for
+ * stab values, which nothing relocated, while the loader has already relocated what memory holds — a
+ * PIE loaded at 0x10000 would otherwise have every vtable pointer moved another 0x10000 off its target.
+ */
+private fun Program.codeTargetAt(a: Address) = readPointer(a)?.takeIf { memory.getBlock(it)?.isExecute == true }
 
 /**
  * An Itanium vtable record, decomposed: the [prefix] of vbase/vcall-offset words, then the two fixed
@@ -92,15 +95,15 @@ private fun prefixKind(i: Int, total: Int, virtualBases: List<String>): String {
  * A gcc 2.x record has no typeinfo pointer to search for ([CxxAbi.hasRttiHeader]) and no
  * vbase/vcall prefix either, so its address point is the canonical shape outright.
  */
-fun Program.vtableShape(ztv: Address, resolver: AddressResolver, abi: CxxAbi = Itanium): VtableShape {
+fun Program.vtableShape(ztv: Address, abi: CxxAbi = Itanium): VtableShape {
     if (!abi.hasRttiHeader) return shapeOf(ztv, null)
     val ptr = defaultPointerSize.toLong()
     val rttiSlot = generateSequence(ztv) { it.add(ptr) }
         .take(MAX_VTABLE_PREFIX_WORDS)
-        .takeWhile { codeTargetAt(it, resolver) == null }
+        .takeWhile { codeTargetAt(it) == null }
         .firstOrNull { slot ->
-            readWord(slot)?.let { value ->
-                symbolTable.getSymbols(resolver.buildAddress(value)).any {
+            readPointer(slot)?.let { addr ->
+                symbolTable.getSymbols(addr).any {
                     Itanium.looksLikeZti(it.name) || it.name == Itanium.DEMANGLED_TYPEINFO
                 }
             } == true
@@ -119,23 +122,23 @@ data class SubVtable(val shape: VtableShape, val targets: List<Address>) {
  * a symbol. Nothing delimits the group, so the walk is bounded by the one invariant that does: every
  * record in it describes the same complete object, hence carries the same [rtti] pointer.
  */
-fun Program.secondaryVtables(afterPrimary: Address, rtti: Long, resolver: AddressResolver): List<SubVtable> =
-    generateSequence(subVtableAt(afterPrimary, rtti, resolver)) {
-        subVtableAt(it.endOfSlots(defaultPointerSize), rtti, resolver)
+fun Program.secondaryVtables(afterPrimary: Address, rtti: Address): List<SubVtable> =
+    generateSequence(subVtableAt(afterPrimary, rtti)) {
+        subVtableAt(it.endOfSlots(defaultPointerSize), rtti)
     }.toList()
 
 /** The sub-vtable beginning at [start], or null if what is there does not belong to [rtti]'s group. */
-private fun Program.subVtableAt(start: Address, rtti: Long, resolver: AddressResolver): SubVtable? {
+private fun Program.subVtableAt(start: Address, rtti: Address): SubVtable? {
     val ptr = defaultPointerSize.toLong()
     val rttiSlot = generateSequence(start) { it.add(ptr) }
         .take(MAX_VTABLE_PREFIX_WORDS)
-        .takeWhile { codeTargetAt(it, resolver) == null }
+        .takeWhile { codeTargetAt(it) == null }
         // offset_to_top precedes rtti, so a match on the first word would put the top slot back
         // inside the primary's function array.
-        .firstOrNull { it > start && readWord(it) == rtti }
+        .firstOrNull { it > start && readPointer(it) == rtti }
         ?: return null
     val shape = shapeOf(start, rttiSlot)
-    return vtableSlotTargets(shape.addressPoint, resolver)
+    return vtableSlotTargets(shape.addressPoint)
         .takeIf { it.isNotEmpty() }
         ?.let { SubVtable(shape, it) }
 }
@@ -146,9 +149,9 @@ private fun Program.subVtableAt(start: Address, rtti: Long, resolver: AddressRes
  * `offset_to_top` (0) or rtti pointer (into .data). Walks by [abi]'s entry stride and reads `pfn` at
  * its offset within the entry, which is what separates a gcc 2.x table without thunks from one with.
  */
-fun Program.vtableSlotTargets(addressPoint: Address, resolver: AddressResolver, abi: CxxAbi = Itanium): List<Address> =
+fun Program.vtableSlotTargets(addressPoint: Address, abi: CxxAbi = Itanium): List<Address> =
     generateSequence(addressPoint) { it.add(abi.stride(defaultPointerSize)) }
-        .map { codeTargetAt(it.add(abi.pfnOffset(defaultPointerSize)), resolver) }
+        .map { codeTargetAt(it.add(abi.pfnOffset(defaultPointerSize))) }
         .takeWhile { it != null }
         .filterNotNull()
         .toList()
@@ -160,9 +163,9 @@ fun Program.vtableSlotTargets(addressPoint: Address, resolver: AddressResolver, 
  * linkage name over Ghidra's own demangled label, which is also a symbol at that address and would
  * render as "rtti: typeinfo typeinfo".
  */
-private fun Program.rttiComment(rttiHeader: Address, className: String, resolver: AddressResolver): String {
-    val name = readWord(rttiHeader)
-        ?.let { symbolTable.getSymbols(resolver.buildAddress(it)).map { s -> s.name } }
+private fun Program.rttiComment(rttiHeader: Address, className: String): String {
+    val name = readPointer(rttiHeader)
+        ?.let { symbolTable.getSymbols(it).map { s -> s.name } }
         ?.let { names -> names.firstOrNull(Itanium::looksLikeZti) ?: names.firstOrNull() }
         ?: Itanium.zti(className)
     return "${Itanium.RTTI}: $name typeinfo"
@@ -184,7 +187,6 @@ fun Program.layVtable(
     vftable: Structure,
     className: String,
     ns: Namespace,
-    resolver: AddressResolver,
     virtualBases: List<String> = emptyList(),
     label: String = ClassNaming.VFTABLE,
     abi: CxxAbi = Itanium,
@@ -208,7 +210,7 @@ fun Program.layVtable(
     forceCreateData(topSlot, Itanium.offsetToTopType(defaultPointerSize))
     listing.setComment(topSlot, CommentType.EOL, "${Itanium.OFFSET_TO_TOP} (to top of complete object)")
     forceCreateData(rttiHeader, PointerDataType(dataTypeManager))
-    listing.setComment(rttiHeader, CommentType.EOL, rttiComment(rttiHeader, className, resolver))
+    listing.setComment(rttiHeader, CommentType.EOL, rttiComment(rttiHeader, className))
     forceCreateData(addressPoint, vftable)
     symbolTable.createLabel(addressPoint, label, ns, SourceType.IMPORTED)
     return addressPoint

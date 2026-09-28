@@ -3,7 +3,6 @@ package ghistabs.materialize.cpp.abi
 import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.data.VoidDataType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
-import ghistabs.harvest.ProgramAddressResolver
 import ghistabs.test.mustBe
 import ghistabs.test.mustNotBeNull
 import org.junit.jupiter.api.Tag
@@ -53,16 +52,15 @@ class Gcc2VtableSlotIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
             builder.setBytes("0x${ztvAddr.toString(16)}", record)
 
             val program = builder.program
-            val resolver = ProgramAddressResolver(program)
             val ztv = program.addressFactory.defaultAddressSpace.getAddress(ztvAddr.toLong())
 
-            val shape = program.vtableShape(ztv, resolver, abi)
+            val shape = program.vtableShape(ztv, abi)
             shape.addressPoint.mustBe(
                 ztv.add(abi.headerBytes(4)),
                 "addressPoint should land right after the reserved header",
             )
 
-            val targets = program.vtableSlotTargets(shape.addressPoint, resolver, abi)
+            val targets = program.vtableSlotTargets(shape.addressPoint, abi)
             targets.size.mustBe(2, "expected exactly the two real slots, header excluded")
 
             val firstFunc = program.functionManager.getFunctionAt(targets[0])
