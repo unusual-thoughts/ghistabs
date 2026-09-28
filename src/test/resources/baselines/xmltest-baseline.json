@@ -590,18 +590,11 @@
             "min": 6,
             "max": 6
         },
-        "vtable-skipped": {
-            "min": 13,
-            "max": 13
-        },
-        "vtable-swept-empty": {
-            "min": 18,
-            "max": 18,
+        "vtable-reconstructed": {
+            "min": 15,
+            "max": 15,
             "degrades": [
-                "__cxxabiv1::__class_type_info",
-                "__cxxabiv1::__si_class_type_info",
                 "main::TestUtil",
-                "tinyxml2::MemPool",
                 "tinyxml2::MemPoolT<104ul>",
                 "tinyxml2::MemPoolT<112ul>",
                 "tinyxml2::MemPoolT<120ul>",
@@ -616,6 +609,19 @@
                 "tinyxml2::XMLText",
                 "tinyxml2::XMLUnknown",
                 "tinyxml2::XMLVisitor"
+            ]
+        },
+        "vtable-skipped": {
+            "min": 13,
+            "max": 13
+        },
+        "vtable-swept-empty": {
+            "min": 3,
+            "max": 3,
+            "degrades": [
+                "__cxxabiv1::__class_type_info",
+                "__cxxabiv1::__si_class_type_info",
+                "tinyxml2::MemPool"
             ]
         },
         "xref-stubs-synthesized": {
