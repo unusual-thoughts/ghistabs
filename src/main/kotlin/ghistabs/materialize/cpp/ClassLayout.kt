@@ -243,9 +243,9 @@ private class ClassLayout(val registry: DataTypeRegistry, val vfptrs: VfptrPlace
 
     private fun placeVfptr(located: LocatedType, struct: Structure) {
         val placement = vfptrs ?: return
-        val hasPolyBase = types.hasPolymorphicBaseSubobject(located.classBody)
-        if (!hasPolyBase && !located.classBody.declaresVptr) return
-        placement.place(struct, located.className, located.classBody, hasPolyBase)
+        val polyBase = types.firstPolymorphicBase(located.classBody)
+        if (polyBase == null && !located.classBody.declaresVptr) return
+        placement.place(struct, located.className, located.classBody, polyBase)
     }
 
     private fun layVirtualInheritance(
