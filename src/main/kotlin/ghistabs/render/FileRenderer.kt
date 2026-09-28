@@ -161,7 +161,11 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
         reportAnomalies()
         // Trailing blank/stale lines are trimmed only in decomp mode; skeleton output
         // stays fully source-aligned.
-        val rendered = canvas.render(trim = renderer.decomp != null, compact = !renderer.lineAligned)
+        val rendered = canvas.render(
+            trim = renderer.decomp != null,
+            compact = !renderer.lineAligned,
+            lineNumbers = renderer.lineNumbers,
+        )
         spans.closeAnomalies(rendered.lines()).forEach { degradation("skeleton-close-anomaly", "$source", it) }
         return rendered + anonAggregateAppendix() + instantiationAppendix() + displacedAppendix()
     }
@@ -180,7 +184,8 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
         val rows = displaced
             .sortedWith(compareBy({ it.claim.line ?: Int.MAX_VALUE }, { it.claim.rows.first().text }))
             .joinToString("\n") { (claim, reason) ->
-                "${claim.rows.joinToString(" ") { it.text }}  // ${claim.line?.let { "L $it " }.orEmpty()}($reason)"
+                "${claim.rows.joinToString(" ") { it.text }}  // " +
+                    "${claim.line?.takeIf { renderer.lineNumbers }?.let { "L $it " }.orEmpty()}($reason)"
             }
         return "\n\n/* ── displaced declarations (line unusable) ── */\n\n$rows\n"
     }

@@ -20,6 +20,22 @@ class FormatTest {
         note("(param)", NoteShape.DECLARATION).commentAt(17) mustBe "// L  17 (param)"
     }
 
+    @Test
+    fun `without the line each tag keeps what else it says`() {
+        note("0x1000: mov", NoteShape.SLINE).commentWithoutLine() mustBe "// @ 0x1000: mov"
+        note("opens Foo", NoteShape.DELIMITER).commentWithoutLine() mustBe "/* opens Foo */"
+        note("(param)", NoteShape.DECLARATION).commentWithoutLine() mustBe "// (param)"
+        note("stl_vector.h L 3-5 ×2", NoteShape.PROVENANCE).commentWithoutLine() mustBe "// ⇐ stl_vector.h ×2"
+    }
+
+    /** A bare declaration tag, or a provenance naming only a line (and how often), is only the line. */
+    @Test
+    fun `without the line a tag that was only the line goes`() {
+        note("", NoteShape.DECLARATION).commentWithoutLine() mustBe null
+        note("L 42", NoteShape.PROVENANCE).commentWithoutLine() mustBe null
+        note("L 42 ×3", NoteShape.PROVENANCE).commentWithoutLine() mustBe null
+    }
+
     /** A pure-code fragment has no payload, and a comment shape it never uses spells nothing. */
     @Test
     fun `no note is no comment, whatever the shape`() {

@@ -31,6 +31,17 @@ private fun splitCondition(text: String, span: IntRange, cuts: List<Cut>, minLen
 // "L  17" — the source-line reference stamped on every tag.
 private fun lineRef(line: Int) = "L" + line.toString().padStart(4)
 
+// `L 42`, `L 3-5`: a line reference inside a provenance note, which a region label may put after a filename.
+private val NOTE_LINE_REF = Regex("""\s*\bL \d+(?:-\d+)?""")
+
+/**
+ * A provenance note with its line references taken out, or null where nothing else is left: `L 19`
+ * says only which line, and `L 19 ×2` only how often that line was compiled. A filename is still
+ * worth saying — it is where the code came from, not where it sits.
+ */
+private fun String.withoutLineRefs() =
+    replace(NOTE_LINE_REF, "").trim().takeUnless { it.isEmpty() || it.startsWith("×") }
+
 /**
  * How a row's [note] is spelled once it reaches the page.
  *
@@ -81,6 +92,18 @@ data class Fragment(
         NoteShape.PROVENANCE -> "// ⇐ $note"
         NoteShape.DECLARATION -> "// ${lineRef(line)}" + if (note.isEmpty()) "" else " $note"
     }
+
+    /**
+     * [commentAt] with no line number in it: what is left of each tag once the line is dropped, and
+     * null where the line was all it said — a bare declaration tag, or a provenance naming only a line.
+     */
+    fun commentWithoutLine() = when (shape) {
+        else if note == null -> null
+        NoteShape.SLINE -> "// @ $note"
+        NoteShape.DELIMITER -> "/* $note */"
+        NoteShape.PROVENANCE -> note.withoutLineRefs()?.let { "// ⇐ $it" }
+        NoteShape.DECLARATION -> note.takeIf { it.isNotEmpty() }?.let { "// $it" }
+    }
 }
 
 // An empty block and the markers naming what was inlined out of it: `for (…) { }` followed by
@@ -116,7 +139,8 @@ class TargetLine(val line: Int) {
         fragments += fragment
     }
 
-    fun render(): String {
+    /** [lineNumbers] off drops every line reference from the tags and markers; see [Fragment.commentWithoutLine]. */
+    fun render(lineNumbers: Boolean = true): String {
         if (fragments.isEmpty()) return ""
         // Decompiled code carries its provenance *in front of* the statement it belongs to, as a block
         // comment. A trailing `//` forced this class to emit every fragment's code before any
@@ -126,7 +150,8 @@ class TargetLine(val line: Int) {
         // share a row, and the row stays valid C. Repeats collapse: one marker per distinct line.
         var lastMark: String? = null
         val decomp = fragments.filter { it.shape == NoteShape.PROVENANCE && it.code != null }.map { f ->
-            val mark = f.note?.takeIf { it != lastMark }?.also { lastMark = it }
+            val note = if (lineNumbers) f.note else f.note?.withoutLineRefs()
+            val mark = note?.takeIf { it != lastMark }?.also { lastMark = it }
             mark?.let { "/* ⇐ $it */ " }.orEmpty() + f.code
         }
         val rest = fragments.filterNot { it.shape == NoteShape.PROVENANCE && it.code != null }
@@ -135,7 +160,8 @@ class TargetLine(val line: Int) {
         // line 139 produced `typedef unsigned char _Value_type;   typedef Exclusion _Value_type;
         // // L 139 // L 139`. Only exact repeats collapse — `// L 139` and `// L 139 (param)` say
         // different things and both stay.
-        val comments = rest.mapNotNull { it.commentAt(line) }.distinct().joinToString(" ")
+        val comments = rest.mapNotNull { if (lineNumbers) it.commentAt(line) else it.commentWithoutLine() }
+            .distinct().joinToString(" ")
         val body = when {
             code.isEmpty() -> comments
             comments.isEmpty() -> code
@@ -184,13 +210,13 @@ class Canvas(maxLine: Int?) : ClosedRange<Int> {
      * the `L n` its content was placed at, so the line a row came from survives the collapse even
      * though its position no longer encodes it.
      */
-    fun render(trim: Boolean, compact: Boolean = false) = buildString {
+    fun render(trim: Boolean, compact: Boolean = false, lineNumbers: Boolean = true) = buildString {
         var blank = false
         for (line in lines) {
             if (trim && line.needsTrimming()) {
                 break
             }
-            val text = line.render()
+            val text = line.render(lineNumbers)
             if (compact && text.isBlank()) {
                 if (!blank) append('\n')
                 blank = true

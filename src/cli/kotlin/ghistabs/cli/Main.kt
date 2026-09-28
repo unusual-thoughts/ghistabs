@@ -138,6 +138,11 @@ private class DecompCommand : RenderCommand(name = "decomp") {
     private val elideSjlj by option("--elide-sjlj", help = ELIDE_SJLJ.desc)
         .flag("--no-elide-sjlj", default = ELIDE_SJLJ.default)
     override val mode get() = if (elideSjlj) Renderer.Mode.ELIDE_SJLJ else Renderer.Mode.DECOMPILE
+
+    override val lineNumbers by option(
+        "--line-numbers",
+        help = "Tag declarations and decompiled statements with the source line they came from",
+    ).flag("--no-line-numbers", default = true)
 }
 
 /** Import only, for the JSON/degradation dumps — no decompiler, no rendered output. */
@@ -151,7 +156,7 @@ private class DumpCommand : ImportingCommand(name = "dump") {
         }
     }
 
-    override fun ImportContext<*>.execute() {
+    override fun ImportContext<*>.process() {
         fullImport()
     }
 }
@@ -310,6 +315,24 @@ private abstract class ImportingCommand(name: String) : StabsCommand(name = name
         help = "turn off every analyzer whose name contains this, case-insensitively (repeatable). " +
             "Render the same binary with and without one to A/B what it actually changes.",
     ).multiple()
+    private val saveDb by option(
+        "--save-db",
+        help = "Save the analyzed program to this file as a Ghidra packed database (.gzf), importable into any project",
+    ).file(canBeDir = false)
+
+    /** What this subcommand does with the imported program; [execute] runs it, then saves if asked. */
+    protected abstract fun ImportContext<*>.process()
+
+    final override fun ImportContext<*>.execute() {
+        process()
+        saveDb?.let { file ->
+            file.parentFile?.mkdirs()
+            // saveToPackedFile will not replace a file, and a rerun into the same path is the usual case.
+            file.delete()
+            program.saveToPackedFile(file, monitor)
+            log("save-db", "saved program database to $file")
+        }
+    }
 
     override val options get() = ImportOptions().also { o ->
         o.applyPlateComments = false
@@ -371,9 +394,19 @@ private abstract class RenderCommand(name: String) : ImportingCommand(name = nam
         help = "Render source line n at output line n, blank rows and all, instead of collapsing blank runs",
     ).flag("--no-line-aligned", default = LINE_ALIGNED.default)
 
-    override fun ImportContext<*>.execute() {
+    /** Only decomp exposes it: a skeleton is the line map, so dropping its lines leaves nothing to read. */
+    protected open val lineNumbers = true
+
+    override fun ImportContext<*>.process() {
         val artifacts = fullImport() ?: return
-        Renderer(mode, this, artifacts.hints, showStorage = varStorage, lineAligned = lineAligned).use { renderer ->
+        Renderer(
+            mode,
+            this,
+            artifacts.hints,
+            showStorage = varStorage,
+            lineAligned = lineAligned,
+            lineNumbers = lineNumbers,
+        ).use { renderer ->
             val written = renderer.renderAll(outDir, monitor)
             log("render", "rendered ${renderer.sources.size} sources -> $written files in $outDir")
         }

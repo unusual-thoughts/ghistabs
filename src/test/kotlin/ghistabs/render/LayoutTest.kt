@@ -21,6 +21,17 @@ class LayoutTest {
     }
 
     @Test
+    fun `without line numbers a row loses its line refs and markers but keeps the rest`() {
+        val line = TargetLine(17).apply {
+            this += Fragment(code = "x = 1;", note = "L 17", shape = NoteShape.PROVENANCE)
+            this += Fragment(code = "y = 2;", note = "util.h L 4", shape = NoteShape.PROVENANCE)
+            this += Fragment(code = "int z;", note = "(local)")
+            this += Fragment(code = "int w;", note = "")
+        }
+        line.render(lineNumbers = false) mustBe "x = 1;   /* ⇐ util.h */ y = 2;   int z;   int w;  // (local)"
+    }
+
+    @Test
     fun `indent is a space count from the first fragment and empty lines render blank`() {
         TargetLine(1).render() mustBe ""
         val line = TargetLine(1).apply { this += Fragment(4, code = "return 0;") }
