@@ -102,5 +102,5 @@ tasks.register<Zip>("packageCli") {
     archiveFileName.set("ghistabs-cli_ghidra_$ghidraVersion.zip")
     destinationDirectory.set(layout.projectDirectory.dir("dist"))
     from(cliJar) { into(cliJarDir) }
-    from(buildCli)
+    from(buildCli) { filePermissions { unix("rwxr-xr-x") } }
 }
