@@ -1,6 +1,10 @@
 package ghistabs.materialize.cpp.abi
 
+import ghidra.program.model.address.Address
+import ghidra.program.model.scalar.Scalar
 import ghistabs.integration.FeatureFixtureTest
+import ghistabs.materialize.cpp.ClassNaming
+import ghistabs.readAs
 import ghistabs.readPointer
 import ghistabs.test.*
 import org.junit.jupiter.api.Assumptions.assumeTrue
@@ -37,7 +41,37 @@ class VtableShapeIntegrationTest : FeatureFixtureTest() {
             .mustBeTrue("rtti word should point at _ZTI7Diamond")
     }
 
+    /**
+     * `Diamond : Left, Right, Named` has two secondaries under Itanium: `Right`'s at +8, which has no
+     * virtuals and so no slots, then `Named`'s at +16 with its destructor thunks. The walk has to step
+     * over the first to reach the second: one `internal_vftable` is laid in Diamond, and the record in
+     * front of it says `offset_to_top` -16.
+     */
+    @ParameterizedTest
+    @MethodSource("itaniumHellos")
+    fun `a secondary behind a slotless one is still laid`(fixture: String) {
+        load(fixture)
+        // Cygwin's PE spells it with the leading underscore.
+        val ztv = listOf("_ZTV7Diamond", "__ZTV7Diamond").firstNotNullOfOrNull {
+            program.symbolTable.getSymbols(it).firstOrNull()
+        }
+        assumeTrue(ztv != null, "$fixture has no _ZTV7Diamond")
+        val laid = program.symbolTable.symbolIterator.iterator().asSequence()
+            .filter { it.name == ClassNaming.INTERNAL_VFTABLE && it.parentNamespace.name == "Diamond" }
+            .map { it.address }.distinct().toList()
+
+        val at = laid.singleOrNull().mustBeA<Address>("expected Named's secondary alone laid in Diamond, got $laid")
+        val ptr = program.defaultPointerSize.toLong()
+        program.readAs<Scalar>(at.subtract(2 * ptr), Itanium.offsetToTopType(program.defaultPointerSize))
+            ?.signedValue mustBe -16L
+    }
+
     companion object {
+        @JvmStatic
+        fun itaniumHellos() = FEATURES.list().orEmpty()
+            .filter { it.startsWith("hello_") && "gcc2" !in it }
+            .sorted()
+
         @JvmStatic
         fun itaniumElfHellos() = FEATURES.list().orEmpty()
             .filter { it.startsWith("hello_elf_") && "gcc2" !in it }

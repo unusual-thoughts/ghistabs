@@ -126,7 +126,11 @@ fun Program.secondaryVtables(afterPrimary: Address, rtti: Address): List<SubVtab
         subVtableAt(it.endOfSlots(defaultPointerSize), rtti)
     }.toList()
 
-/** The sub-vtable beginning at [start], or null if what is there does not belong to [rtti]'s group. */
+/**
+ * The sub-vtable beginning at [start], or null if what is there does not belong to [rtti]'s group. One
+ * with no slots is still a record: a base with no virtuals of its own keeps its vptr and header
+ * (`Right` in `Diamond`, ahead of `Named`'s), and stopping at it would lose every record after it.
+ */
 private fun Program.subVtableAt(start: Address, rtti: Address): SubVtable? {
     val ptr = defaultPointerSize.toLong()
     val rttiSlot = generateSequence(start) { it.add(ptr) }
@@ -137,9 +141,7 @@ private fun Program.subVtableAt(start: Address, rtti: Address): SubVtable? {
         .firstOrNull { it > start && readPointer(it) == rtti }
         ?: return null
     val shape = shapeOf(start, rttiSlot)
-    return vtableSlotTargets(shape.addressPoint)
-        .takeIf { it.isNotEmpty() }
-        ?.let { SubVtable(shape, it) }
+    return SubVtable(shape, vtableSlotTargets(shape.addressPoint))
 }
 
 /**

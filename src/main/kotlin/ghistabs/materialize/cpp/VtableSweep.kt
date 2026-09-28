@@ -82,7 +82,10 @@ internal fun ClassApplier.laySecondaryVtables(primary: VtableShape, leaf: String
     val rtti = program.readPointer(primary.rttiHeader) ?: return
     val ptr = program.defaultPointerSize.toLong()
     val slots = program.vtableSlotTargets(primary.addressPoint).size
+    // Only a record with slots is laid: an empty one has no function array to put a struct over.
+    // Numbered over the laid ones, so a table behind an empty record keeps the name it always had.
     val subs = program.secondaryVtables(primary.addressPoint.add(slots * ptr), rtti)
+        .filter { it.targets.isNotEmpty() }
     subs.forEachIndexed { i, sub ->
         val category = CategoryPath(CategoryPath(ClassNaming.classDataTypesRoot, leaf), "internal_$i")
         val name = "${leaf}_vftable_internal_$i"
