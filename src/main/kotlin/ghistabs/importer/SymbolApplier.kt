@@ -15,6 +15,7 @@ import ghidra.program.model.data.Undefined4DataType
 import ghidra.program.model.lang.Register
 import ghidra.program.model.listing.*
 import ghidra.program.model.listing.Function
+import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
 import ghidra.program.model.symbol.SymbolTable
 import ghistabs.Demangler
@@ -619,7 +620,7 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
                     continue
                 }
                 // Names it `Class::member` when the demangler hasn't already; typed below regardless.
-                ensureStabLabel(addr, mangled)
+                ensureMemberLabel(addr, mangled)
                 try {
                     ctx.program.forceCreateData(addr, dt) { debug("code-cleared-for-data", mangled, address = addr) }
                     applied++
@@ -633,20 +634,46 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
     }
 
     /**
-     * Make [name] (demangled source-form) the primary label at [addr]. Otherwise,
+     * [ensureStabLabel] for a static data member, named `member` in its class's namespace rather than
+     * by its linkage name. On Itanium Ghidra's demangler analyzer has usually got there first; gcc 2.x's
+     * `_5Shape.count` it never recognises, so without this the address is labelled `_5Shape.count` and
+     * every decompiled use reads that. [Demangler.of]'s gcc 2.x fallback decodes it, and the chain is
+     * taken exactly as `ClassApplier.ensureClassNamespace` takes it, so both land in one namespace.
+     * A name that doesn't demangle to a scoped one keeps its linkage name.
+     */
+    private fun ensureMemberLabel(addr: Address, mangled: String) {
+        val leaf = Demangler.of(mangled)?.name?.takeIf { it.isNotEmpty() }
+        val parts = Demangler.namespaces(mangled).filter { it.isNotEmpty() }
+        if (leaf == null || parts.isEmpty()) return ensureStabLabel(addr, mangled)
+        // The demangler's own `Class::member`, left primary as [ensureStabLabel] leaves a typeinfo.
+        if (symtab.getSymbols(addr).any { it.name == leaf && !it.parentNamespace.isGlobal }) return
+        val ns = try {
+            parts.fold(null as Namespace?) { parent, part ->
+                symtab.getNamespace(part, parent) ?: symtab.createNameSpace(parent, part, SourceType.IMPORTED)
+            }
+        } catch (e: Exception) {
+            err("symbol-create-error", "namespace ${parts.joinToString("::")}: ${e.message}", addr)
+            return ensureStabLabel(addr, mangled)
+        }
+        ensureStabLabel(addr, leaf, ns)
+    }
+
+    /**
+     * Make [name] (demangled source-form) the primary label at [addr], in [ns] when given. Otherwise,
      * globals/statics keep the PE loader's `_<name>` and the demangled form is never
      * in the symbol table. Idempotent.
      */
-    private fun ensureStabLabel(addr: Address, name: String) {
+    private fun ensureStabLabel(addr: Address, name: String, ns: Namespace? = null) {
         // Compiler-generated globals (typeinfo, typeinfo-name) carry their mangled `_ZTI…`/`_ZTS…`
         // linkage name in the stab. If the demangled label (`EAsm::typeinfo`) is already at this
         // address, leave it primary rather than promoting the raw mangled string over it.
-        val demangledSimple = Demangler.of(name)?.name
+        val demangledSimple = if (ns == null) Demangler.of(name)?.name else null
         if (demangledSimple != null && symtab.getSymbols(addr).any { it.name == demangledSimple }) return
 
-        val existing = symtab.getSymbols(addr).firstOrNull { it.name == name }
+        val existing = symtab.getSymbols(addr)
+            .firstOrNull { it.name == name && (ns == null || it.parentNamespace.id == ns.id) }
         val sym = existing ?: try {
-            symtab.createLabel(addr, name, SourceType.IMPORTED)
+            symtab.createLabel(addr, name, ns, SourceType.IMPORTED)
         } catch (e: Exception) {
             err("symbol-create-error", "$name at $addr: ${e.message}", addr)
             return
