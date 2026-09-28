@@ -1,11 +1,15 @@
 package ghistabs.render
 
+import ghistabs.harvest.NameBinding
+import ghistabs.harvest.Type
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.Globalizer
 import ghistabs.parse.LocalTypeId
 import ghistabs.parse.Parser
 import ghistabs.parse.SourceFile
 import ghistabs.parse.SymbolDecl
+import ghistabs.parse.TypeDecl
+import ghistabs.parse.TypeNameKind
 import ghistabs.parse.globalize
 import ghistabs.parse.mustBeOk
 import ghistabs.test.*
@@ -26,9 +30,18 @@ class TypeSpellingTest {
         override fun globalIdFor(id: LocalTypeId) = GlobalTypeId(cu, id.n)
     }
 
-    private fun declare(stab: String): String {
+    private fun declare(stab: String, vararg types: Type): String {
         val sym = Parser(stab).parseSymbol().mustBeOk() as SymbolDecl.Static
-        return sym.type.globalize(globalizer).spell(sym.name, typesOf(), null)
+        return sym.type.globalize(globalizer).spell(sym.name, typesOf(*types), null)
+    }
+
+    /** gcc 10's `g_ld:G(0,136)=r(0,9);12;0;`, then `long double:t(0,136)` (render-backlog §78). */
+    @Test
+    fun `a base type defined at its first use spells by the name that follows`() {
+        val id = GlobalTypeId(cu, 136)
+        val longDouble = Type(cu, id, NameBinding("long double", TypeNameKind.TYPEDEF), TypeDecl.Float(12))
+        declare("g_ld:G(0,136)=r(0,9);12;0;", longDouble) mustBe "long double g_ld"
+        declare("g_ld:G(0,136)=r(0,9);12;0;") mustBe "longdouble g_ld"
     }
 
     @Test

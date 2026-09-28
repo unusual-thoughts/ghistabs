@@ -54,6 +54,11 @@ private class Speller(val types: TypeGraph, val shortener: TemplateNameShortener
             quals,
         )
 
+        // gcc 10+ define a base type at its first use, `ro:(0,36)=r(0,36);0;037777777777;`, and name
+        // it later: `unsigned int:t(0,36)`.
+        is TypeDecl.InlineDef if t.inner.resolveBuiltin() != null && types.byId(t.id)?.name != null ->
+            spell(TypeDecl.Ref(t.id), d, quals, seen)
+
         is TypeDecl.InlineDef -> spell(t.inner, d, quals, seen + t.id)
 
         is TypeDecl.Const -> spell(t.inner, d, "${quals}const ", seen)
