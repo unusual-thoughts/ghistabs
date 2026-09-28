@@ -116,7 +116,11 @@ class TargetLine(val line: Int) {
         fragments += fragment
     }
 
-    fun render(): String {
+    /**
+     * [provenance] off drops the `⇐` markers — in front of a statement and on a row of their own —
+     * leaving the code and the declaration tags as they are.
+     */
+    fun render(provenance: Boolean = true): String {
         if (fragments.isEmpty()) return ""
         // Decompiled code carries its provenance *in front of* the statement it belongs to, as a block
         // comment. A trailing `//` forced this class to emit every fragment's code before any
@@ -126,7 +130,7 @@ class TargetLine(val line: Int) {
         // share a row, and the row stays valid C. Repeats collapse: one marker per distinct line.
         var lastMark: String? = null
         val decomp = fragments.filter { it.shape == NoteShape.PROVENANCE && it.code != null }.map { f ->
-            val mark = f.note?.takeIf { it != lastMark }?.also { lastMark = it }
+            val mark = f.note?.takeIf { provenance && it != lastMark }?.also { lastMark = it }
             mark?.let { "/* ⇐ $it */ " }.orEmpty() + f.code
         }
         val rest = fragments.filterNot { it.shape == NoteShape.PROVENANCE && it.code != null }
@@ -135,7 +139,8 @@ class TargetLine(val line: Int) {
         // line 139 produced `typedef unsigned char _Value_type;   typedef Exclusion _Value_type;
         // // L 139 // L 139`. Only exact repeats collapse — `// L 139` and `// L 139 (param)` say
         // different things and both stay.
-        val comments = rest.mapNotNull { it.commentAt(line) }.distinct().joinToString(" ")
+        val comments = rest.filter { provenance || it.shape != NoteShape.PROVENANCE }
+            .mapNotNull { it.commentAt(line) }.distinct().joinToString(" ")
         val body = when {
             code.isEmpty() -> comments
             comments.isEmpty() -> code
@@ -184,13 +189,13 @@ class Canvas(maxLine: Int?) : ClosedRange<Int> {
      * the `L n` its content was placed at, so the line a row came from survives the collapse even
      * though its position no longer encodes it.
      */
-    fun render(trim: Boolean, compact: Boolean = false) = buildString {
+    fun render(trim: Boolean, compact: Boolean = false, provenance: Boolean = true) = buildString {
         var blank = false
         for (line in lines) {
             if (trim && line.needsTrimming()) {
                 break
             }
-            val text = line.render()
+            val text = line.render(provenance)
             if (compact && text.isBlank()) {
                 if (!blank) append('\n')
                 blank = true

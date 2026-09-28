@@ -47,6 +47,9 @@ class Renderer(
     // Render source line n at output line n, blank rows and all. Off by default — see [Canvas.render]
     // — but it is what a diff against the real source needs, so it stays one flag away.
     val lineAligned: Boolean = false,
+    // Put a `/* ⇐ L n */` in front of each decompiled statement naming the line its code came from.
+    // On by default; off reads closer to plain source. Declaration tags stay either way.
+    val provenance: Boolean = true,
 ) : Closeable,
     DiagnosticSink by ctx {
     enum class Mode {
