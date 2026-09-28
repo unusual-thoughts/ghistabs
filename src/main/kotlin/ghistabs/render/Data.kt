@@ -1,6 +1,7 @@
 package ghistabs.render
 
 import ghidra.program.model.address.Address
+import ghidra.program.model.data.LongDoubleDataType
 import ghidra.program.model.listing.Data
 import ghidra.program.model.listing.Program
 import ghidra.program.model.scalar.Scalar
@@ -23,6 +24,10 @@ internal fun cStyleNumber(s: String) = when {
 
     else -> s
 }
+
+// Ghidra prints a `long double` as a bare decimal, which C reads as a double: `1.5` → `1.5L`.
+// NaN and the infinities have no literal to suffix.
+internal fun longDoubleLiteral(s: String) = if (s.matches(Regex("-?[0-9.]+([Ee][-+]?[0-9]+)?"))) "${s}L" else s
 
 /**
  * Render a [Data] node to one inline representation, recursing through arrays and
@@ -52,7 +57,7 @@ fun Data.render(program: Program, depth: Int = 0): String? {
         }
         if (parts.isNotEmpty()) return "{ ${parts.joinToString(", ")} }"
     }
-    return repr()
+    return repr()?.let { if (baseDataType is LongDoubleDataType) longDoubleLiteral(it) else it }
 }
 
 /**
