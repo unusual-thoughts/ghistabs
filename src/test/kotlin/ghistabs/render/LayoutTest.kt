@@ -21,14 +21,14 @@ class LayoutTest {
     }
 
     @Test
-    fun `without line numbers a row loses its line refs and markers but keeps the rest`() {
+    fun `without provenance a row loses its markers but keeps code and declaration tags`() {
         val line = TargetLine(17).apply {
             this += Fragment(code = "x = 1;", note = "L 17", shape = NoteShape.PROVENANCE)
             this += Fragment(code = "y = 2;", note = "util.h L 4", shape = NoteShape.PROVENANCE)
+            this += Fragment(note = "L 18", shape = NoteShape.PROVENANCE)
             this += Fragment(code = "int z;", note = "(local)")
-            this += Fragment(code = "int w;", note = "")
         }
-        line.render(lineNumbers = false) mustBe "x = 1;   /* ⇐ util.h */ y = 2;   int z;   int w;  // (local)"
+        line.render(provenance = false) mustBe "x = 1;   y = 2;   int z;  // L  17 (local)"
     }
 
     @Test

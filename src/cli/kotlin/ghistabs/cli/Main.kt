@@ -139,9 +139,9 @@ private class DecompCommand : RenderCommand(name = "decomp") {
         .flag("--no-elide-sjlj", default = ELIDE_SJLJ.default)
     override val mode get() = if (elideSjlj) Renderer.Mode.ELIDE_SJLJ else Renderer.Mode.DECOMPILE
 
-    override val lineNumbers by option(
+    override val provenance by option(
         "--line-numbers",
-        help = "Tag declarations and decompiled statements with the source line they came from",
+        help = "Mark each decompiled statement with the source line its code came from, /* ⇐ L n */",
     ).flag("--no-line-numbers", default = true)
 }
 
@@ -394,8 +394,8 @@ private abstract class RenderCommand(name: String) : ImportingCommand(name = nam
         help = "Render source line n at output line n, blank rows and all, instead of collapsing blank runs",
     ).flag("--no-line-aligned", default = LINE_ALIGNED.default)
 
-    /** Only decomp exposes it: a skeleton is the line map, so dropping its lines leaves nothing to read. */
-    protected open val lineNumbers = true
+    /** Only decomp exposes it: a skeleton has no decompiled statements to mark. */
+    protected open val provenance = true
 
     override fun ImportContext<*>.process() {
         val artifacts = fullImport() ?: return
@@ -405,7 +405,7 @@ private abstract class RenderCommand(name: String) : ImportingCommand(name = nam
             artifacts.hints,
             showStorage = varStorage,
             lineAligned = lineAligned,
-            lineNumbers = lineNumbers,
+            provenance = provenance,
         ).use { renderer ->
             val written = renderer.renderAll(outDir, monitor)
             log("render", "rendered ${renderer.sources.size} sources -> $written files in $outDir")
