@@ -216,6 +216,10 @@
             "min": 71,
             "max": 71
         },
+        "harvest-typeAsts-Builtin": {
+            "min": 5,
+            "max": 5
+        },
         "harvest-typeAsts-Complex": {
             "min": 15,
             "max": 15
@@ -249,10 +253,6 @@
             "max": 280
         },
         "harvest-typeAsts-Void": {
-            "min": 5,
-            "max": 5
-        },
-        "harvest-typeAsts-WithSizeAttr": {
             "min": 5,
             "max": 5
         },
