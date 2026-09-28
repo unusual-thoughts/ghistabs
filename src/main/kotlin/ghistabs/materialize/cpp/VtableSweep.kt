@@ -10,6 +10,7 @@ import ghistabs.materialize.cpp.abi.*
 import ghistabs.parse.canonTemplateName
 import ghistabs.parse.leafName
 import ghistabs.parse.nameSegments
+import ghistabs.readPointer
 
 /**
  * Lay every `_ZTV…` symbol no harvested class claimed. `buildAndApplyVtable` runs per group, i.e.
@@ -32,8 +33,8 @@ internal fun ClassApplier.sweepUnclaimedVtables() {
     monitor.initialize(unclaimed.size.toLong(), "Stabs: sweeping unclaimed vtables")
     for ((qualified, addr, abi) in unclaimed) {
         monitor.increment()
-        val shape = program.vtableShape(addr, resolver, abi)
-        val targets = program.vtableSlotTargets(shape.addressPoint, resolver, abi)
+        val shape = program.vtableShape(addr, abi)
+        val targets = program.vtableSlotTargets(shape.addressPoint, abi)
         if (targets.isEmpty()) {
             degradation("vtable-swept-empty", qualified, "no function pointers", shape.addressPoint)
             continue
@@ -57,7 +58,7 @@ internal fun ClassApplier.sweepUnclaimedVtables() {
         }
 
         val ns = buildNamespaceChain(qualified.nameSegments)
-        val addressPoint = program.layVtable(shape, vftable, qualified, ns, resolver, abi = abi)
+        val addressPoint = program.layVtable(shape, vftable, qualified, ns, abi = abi)
         debug("vtable-reconstructed", "${targets.size} slot(s) typed from targets", addressPoint, qualified)
         // Itanium packs a class's secondaries into the same record, walkable from the primary's
         // end by their shared rtti word. gcc 2.x gives each its own `_vt.<derived>.<base>`
@@ -78,10 +79,10 @@ internal fun ClassApplier.sweepUnclaimedVtables() {
  * forks a `.conflict` per slot (1874 on crypto_mi).
  */
 internal fun ClassApplier.laySecondaryVtables(primary: VtableShape, leaf: String, ns: Namespace, abi: CxxAbi) {
-    val rtti = program.readWord(primary.rttiHeader) ?: return
+    val rtti = program.readPointer(primary.rttiHeader) ?: return
     val ptr = program.defaultPointerSize.toLong()
-    val slots = program.vtableSlotTargets(primary.addressPoint, resolver).size
-    val subs = program.secondaryVtables(primary.addressPoint.add(slots * ptr), rtti, resolver)
+    val slots = program.vtableSlotTargets(primary.addressPoint).size
+    val subs = program.secondaryVtables(primary.addressPoint.add(slots * ptr), rtti)
     subs.forEachIndexed { i, sub ->
         val category = CategoryPath(CategoryPath(ClassNaming.classDataTypesRoot, leaf), "internal_$i")
         val name = "${leaf}_vftable_internal_$i"
@@ -97,7 +98,6 @@ internal fun ClassApplier.laySecondaryVtables(primary: VtableShape, leaf: String
             vftable,
             leaf,
             ns,
-            resolver,
             label = ClassNaming.INTERNAL_VFTABLE,
         )
         debug("vtable-secondary", "class=$leaf index=$i slots=${sub.targets.size}", address = at)

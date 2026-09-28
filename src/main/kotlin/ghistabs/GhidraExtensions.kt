@@ -2,6 +2,7 @@
 
 package ghistabs
 
+import ghidra.app.util.PseudoDisassembler
 import ghidra.app.util.bin.FileByteProvider
 import ghidra.app.util.bin.InputStreamByteProvider
 import ghidra.app.util.importer.MessageLog
@@ -12,9 +13,11 @@ import ghidra.program.model.data.Composite
 import ghidra.program.model.data.DataType
 import ghidra.program.model.data.DataTypeManager
 import ghidra.program.model.data.DataUtilities
+import ghidra.program.model.data.PointerDataType
 import ghidra.program.model.listing.*
 import ghidra.program.model.listing.Function
 import ghidra.program.model.mem.MemoryBlock
+import ghidra.program.model.scalar.Scalar
 import ghidra.util.task.TaskMonitor
 import java.io.File
 import java.nio.file.AccessMode
@@ -162,6 +165,22 @@ fun Program.forceCreateData(
     if (listing.clearAnyDisassembly(addr..<addr + length)) onClearedCode()
     return DataUtilities.createData(this, addr, dt, length, DataUtilities.ClearDataMode.CLEAR_ALL_CONFLICT_DATA)
 }
+
+/**
+ * [dt] read over the bytes at [addr] without laying anything in the listing, or null if they are not
+ * all readable. The data type does the decoding — width, endianness, sign, which address space a
+ * pointer lands in — so a caller never reassembles bytes by hand.
+ */
+fun Program.readAt(addr: Address, dt: DataType): Data? = PseudoDisassembler(this).applyDataType(addr, dt)
+
+/** [readAt]'s value as a [T]: a [Scalar] for an integer type, an [Address] for a pointer. */
+inline fun <reified T> Program.readAs(addr: Address, dt: DataType): T? = readAt(addr, dt)?.value as? T
+
+/**
+ * The pointer stored at [addr], taken as it stands. The loader has already relocated what memory
+ * holds, so this is the address it points at in the program as loaded.
+ */
+fun Program.readPointer(addr: Address): Address? = readAs(addr, PointerDataType(dataTypeManager))
 
 val MemoryBlock.byteProvider get() = InputStreamByteProvider(data, size)
 
