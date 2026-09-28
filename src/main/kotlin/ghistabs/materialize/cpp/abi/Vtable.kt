@@ -98,16 +98,15 @@ private fun prefixKind(i: Int, total: Int, virtualBases: List<String>): String {
 fun Program.vtableShape(ztv: Address, abi: CxxAbi = Itanium): VtableShape {
     if (!abi.hasRttiHeader) return shapeOf(ztv, null)
     val ptr = defaultPointerSize.toLong()
+    fun holdsTypeinfo(slot: Address) = readPointer(slot)?.let { pointee ->
+        symbolTable.getSymbols(pointee).any {
+            Itanium.looksLikeZti(it.name) || it.name == Itanium.DEMANGLED_TYPEINFO
+        }
+    } == true
     val rttiSlot = generateSequence(ztv) { it.add(ptr) }
         .take(MAX_VTABLE_PREFIX_WORDS)
-        .takeWhile { codeTargetAt(it) == null }
-        .firstOrNull { slot ->
-            readPointer(slot)?.let { addr ->
-                symbolTable.getSymbols(addr).any {
-                    Itanium.looksLikeZti(it.name) || it.name == Itanium.DEMANGLED_TYPEINFO
-                }
-            } == true
-        }
+        .takeWhile { holdsTypeinfo(it) || codeTargetAt(it) == null }
+        .firstOrNull(::holdsTypeinfo)
     return shapeOf(ztv, rttiSlot)
 }
 
@@ -132,7 +131,7 @@ private fun Program.subVtableAt(start: Address, rtti: Address): SubVtable? {
     val ptr = defaultPointerSize.toLong()
     val rttiSlot = generateSequence(start) { it.add(ptr) }
         .take(MAX_VTABLE_PREFIX_WORDS)
-        .takeWhile { codeTargetAt(it) == null }
+        .takeWhile { readPointer(it) == rtti || codeTargetAt(it) == null }
         // offset_to_top precedes rtti, so a match on the first word would put the top slot back
         // inside the primary's function array.
         .firstOrNull { it > start && readPointer(it) == rtti }
