@@ -46,6 +46,17 @@ class ParserPrimitiveTest {
     }
 
     @Test
+    fun testOctalSignedBoundsAreTwosComplement() {
+        // gcc 2.95 writes the lower bound as its bit pattern; read as written it is +2^31 and `int` turns unsigned.
+        Parser("int:t(0,1)=r(0,1);0020000000000;0017777777777;").parseSymbol() mustBe
+            Parser("int:t(0,1)=r(0,1);-2147483648;2147483647;").parseSymbol()
+        val longLong = "long long int:t(0,7)=@s64;r(0,7);01000000000000000000000;0777777777777777777777;"
+        val range = ((Parser(longLong).parseSymbol() as ParseResult.Ok).inner as SymbolDecl.NamedType)
+            .type.let { (it as TypeDecl.WithSizeAttr).inner as TypeDecl.Range }
+        range.lower mustBe -BigInteger.TWO.pow(63)
+    }
+
+    @Test
     fun testLongLongIntWithSizeAttrOctal() {
         val input = "long long int:t(0,6)=@s64;r(0,6);0000000000000;01777777777777777777777;"
         val expected = SymbolDecl.NamedType(
