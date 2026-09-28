@@ -28,16 +28,9 @@
             "min": 1,
             "max": 1
         },
-        "dtm-conflicts-created": {
-            "min": 1,
-            "max": 1,
-            "degrades": [
-                "/int.conflict"
-            ]
-        },
         "dtm-conflicts-post": {
-            "min": 1,
-            "max": 1
+            "min": 0,
+            "max": 0
         },
         "dtm-conflicts-pre": {
             "min": 0,
@@ -650,14 +643,6 @@
         "static-member-unresolved": {
             "min": 2,
             "max": 2
-        },
-        "struct-mostly-undefined": {
-            "min": 2,
-            "max": 2,
-            "degrades": [
-                "/std/stdlib/lldiv_t",
-                "/std/types/_G_fpos64_t"
-            ]
         },
         "struct-truncated": {
             "min": 1,
