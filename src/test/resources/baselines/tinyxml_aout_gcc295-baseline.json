@@ -9,12 +9,12 @@
             "max": 15
         },
         "demangle-applied": {
-            "min": 250,
-            "max": 250
+            "min": 254,
+            "max": 254
         },
         "demangle-attempted": {
-            "min": 250,
-            "max": 250
+            "min": 254,
+            "max": 254
         },
         "demangle-displaced-function-renamed": {
             "min": 5,
