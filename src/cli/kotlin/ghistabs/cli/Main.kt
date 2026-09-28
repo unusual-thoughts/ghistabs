@@ -17,7 +17,9 @@ import ghidra.framework.HeadlessGhidraApplicationConfiguration
 import ghidra.framework.options.OptionType
 import ghidra.program.model.listing.Program
 import ghidra.util.Msg
+import ghidra.util.classfinder.ClassSearcher
 import ghistabs.diagnose.*
+import ghistabs.entrypoints.NO_RETURN_ANALYZER_NAME
 import ghistabs.entrypoints.StabsAnalyzer
 import ghistabs.entrypoints.StabsAnalyzer.Companion.import
 import ghistabs.entrypoints.StabsRenderExporter.Companion.ELIDE_SJLJ
@@ -263,6 +265,9 @@ private abstract class StabsCommand(name: String) : CliktCommand(name = name) {
         val monitor = BarLoggerMonitorSink(options.minLogLevel, currentContext.terminal, shared.logGhidra)
         Msg.setErrorLogger(monitor)
         if (!Application.isInitialized()) {
+            // Production-mode ClassSearcher scans only `<X>/(lib|build/libs)/<X>*.jar`, so the cli jar
+            // anywhere but a `ghistabs*` checkout would register none of ghistabs' own analyzers.
+            System.setProperty(ClassSearcher.SEARCH_ALL_JARS_PROPERTY, "true")
             Application.initializeApplication(GhidraApplicationLayout(), HeadlessGhidraApplicationConfiguration())
         }
         val fileWriter = shared.logFile?.also { it.parentFile?.mkdirs() }?.bufferedWriter()
@@ -350,6 +355,9 @@ private abstract class ImportingCommand(name: String) : StabsCommand(name = name
             }
         }
         mgr.initializeOptions()
+        check(NO_RETURN_ANALYZER_NAME in program.getOptions(Program.ANALYSIS_PROPERTIES).optionNames) {
+            "ClassSearcher registered none of ghistabs' analyzers; the cli jar was not scanned"
+        }
         mgr.reAnalyzeAll(null)
         program.runTransaction("cli-auto-analyze") {
             mgr.startAnalysis(monitor)
