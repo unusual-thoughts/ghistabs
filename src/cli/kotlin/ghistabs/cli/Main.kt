@@ -18,6 +18,7 @@ import ghidra.framework.options.OptionType
 import ghidra.program.model.listing.Program
 import ghidra.util.Msg
 import ghistabs.diagnose.*
+import ghistabs.entrypoints.NO_RETURN_ANALYZER_NAME
 import ghistabs.entrypoints.StabsAnalyzer
 import ghistabs.entrypoints.StabsAnalyzer.Companion.import
 import ghistabs.entrypoints.StabsRenderExporter.Companion.ELIDE_SJLJ
@@ -373,6 +374,10 @@ private abstract class ImportingCommand(name: String) : StabsCommand(name = name
             }
         }
         mgr.initializeOptions()
+        // Production-mode ClassSearcher scans a jar only at `<X>/(lib|build/libs)/<X>*.jar`; see buildCli.
+        check(NO_RETURN_ANALYZER_NAME in program.getOptions(Program.ANALYSIS_PROPERTIES).optionNames) {
+            "ClassSearcher registered none of ghistabs' analyzers; the cli jar is not at ghistabs-cli/lib/"
+        }
         mgr.reAnalyzeAll(null)
         program.runTransaction("cli-auto-analyze") {
             mgr.startAnalysis(monitor)
