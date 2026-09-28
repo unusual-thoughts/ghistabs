@@ -12,6 +12,7 @@ import ghistabs.diagnose.Level
 import ghistabs.entrypoints.StabsAnalyzer.Companion.import
 import ghistabs.importer.ImportContext
 import ghistabs.importer.ImportOptions
+import ghistabs.integration.StaticMemberLabelIntegrationTest.Companion.mustHaveNoGcc2StaticMemberPrimary
 import ghistabs.loadProgram
 import ghistabs.test.*
 import org.junit.jupiter.api.AfterEach
@@ -124,6 +125,17 @@ class AoutStabsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
                     true
             }
         }
+    }
+
+    /** `_9TiXmlBase.entity` and its siblings come out as `TiXmlBase::entity`. */
+    @Test
+    fun labelsStaticMembersByTheirClass() {
+        load("tinyxml_aout_gcc295.o")
+        program.defaultContext().import()
+
+        program.mustHaveNoGcc2StaticMemberPrimary()
+        program.symbolTable.getSymbols("entity").map { it.getName(true) }
+            .must("no TiXmlBase::entity label") { "TiXmlBase::entity" in this }
     }
 
     /**

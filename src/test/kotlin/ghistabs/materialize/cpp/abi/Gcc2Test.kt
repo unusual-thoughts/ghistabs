@@ -101,6 +101,10 @@ class Gcc2Test {
         Gcc2.must { isProbablyMangled("__as__11TiXmlStringPCc") }
         Gcc2.must { isProbablyMangled("_._9TiXmlNode") }
         Gcc2.must { isProbablyMangled("__Q217__class_type_info9base_info") }
+        Gcc2.must { isProbablyMangled("_5Shape.count") }
+        Gcc2.must { isProbablyMangled("__9TiXmlBase.entity") }
+        Gcc2.mustNot { isProbablyMangled("_5Shape") }
+        Gcc2.mustNot { isProbablyMangled("_9Shape.c") }
         Itanium.mustNot { isProbablyMangled("__as__11TiXmlStringPCc") }
         Itanium.mustNot { isProbablyMangled("_._9TiXmlNode") }
     }

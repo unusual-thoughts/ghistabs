@@ -142,7 +142,8 @@ object Gcc2 {
      * cv-qualifier then the length-prefixed class (`Accept__C12TiXmlElement`, `__as__11TiXmlString`,
      * `__11TiXmlStringPCc`, a template class's `push__t5Stack2Z5Pointi2RC5Point`), or the `_._` dtor
      * form. Or a free function, `__F` then its arguments (`sum__Fie`), or a template one, `__H` then
-     * its argument count (`max2__H1Zs_X01X01_X01`).
+     * its argument count (`max2__H1Zs_X01X01_X01`). Or a static data member, the length-prefixed
+     * class then `.` and the member (`_5Shape.count`), which Ghidra's demangler analyzer never names.
      *
      * A member's length has to be *satisfied*, not merely present. One symbol is enough to settle a
      * whole binary's ABI (see [CxxAbi.prevailing]), and the shape alone is not rare enough for that:
@@ -152,7 +153,11 @@ object Gcc2 {
      * binaries that outvote them by thousands.
      */
     fun isProbablyMangled(name: String) = MANGLED_FUNCTION_TAIL.containsMatchIn(name) ||
-        MANGLED_MEMBER_TAIL.findAll(name).any { m -> m.range.last + 1 + m.groupValues[1].toInt() <= name.length }
+        MANGLED_MEMBER_TAIL.findAll(name).any { m -> m.range.last + 1 + m.groupValues[1].toInt() <= name.length } ||
+        MANGLED_STATIC_MEMBER.find(name)?.let { m ->
+            val end = m.range.last + 1 + m.groupValues[1].toInt()
+            end < name.length && name.indexOfAny(charArrayOf('.', '$'), end) >= 0
+        } == true
 
     /**
      * The symbol for a member whose physname already carries its class, or null for one that does
@@ -191,6 +196,10 @@ object Gcc2 {
     // is Q2 then the 17-character `__class_type_info`, so only the length run after it is checked.
     // A template class is `t` before its length, nested or not (`Q2t5Stack2Zii4_4Iter`).
     private val MANGLED_MEMBER_TAIL = Regex("""(?:_\._|__[CV]*)(?:Q[0-9]_?)?t?([0-9]+)""")
+
+    // A static data member, `_` then the length-prefixed class, `.` (or `$`) then the member:
+    // `_5Shape.count`, a.out's extra underscore in `__9TiXmlBase.entity`.
+    private val MANGLED_STATIC_MEMBER = Regex("""^__?(?:Q[0-9]_?)?t?([0-9]+)""")
 
     // The `[^_]` keeps a name that merely starts with underscores (`___FRAME_END__`) out.
     private val MANGLED_FUNCTION_TAIL = Regex("""[^_]__(?:F.|H[0-9]+Z)""")
