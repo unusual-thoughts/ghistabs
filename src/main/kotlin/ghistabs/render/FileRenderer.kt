@@ -574,7 +574,9 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
                 .sortedWith(compareBy({ it.role?.startsWith("Stack") != true }, { it.role }, { it.name }))
                 .joinToString { "${it.name}=${it.role}" }
             val member = head.asMemberDefinition()
-            val text = member.text + extra.joinToString("") { " ${it.text}" } +
+            // The decompiler's prototype carries no linkage, so a file-static `f:` loses its `static` there too.
+            val linkage = r.func.decl.scope.storageClass()
+            val text = linkage + member.text + extra.joinToString("") { " ${it.text}" } +
                 storage.takeIf { it.isNotEmpty() }?.let { " /* storage: $it */" }.orEmpty()
 
             // An anchorless region has no line of its own to render at, so as a claim it floats away
@@ -616,7 +618,7 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
                             text + openers
                         },
                         note = "L ${r.start}",
-                        cuts = member.booleanCuts,
+                        cuts = member.booleanCuts.map { it.copy(at = it.at + linkage.length) },
                     ),
                 ),
                 anchoring = Anchoring.AFTER,

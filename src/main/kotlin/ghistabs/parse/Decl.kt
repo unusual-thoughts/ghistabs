@@ -35,10 +35,20 @@ enum class StaticScope {
         FILE -> "file static"
         FUNCTION -> "function static"
     }
+
+    /** The storage class the declaration spells: `S` and `V` have internal linkage, only `G` is extern. */
+    fun storageClass() = if (this == GLOBAL) "" else "static "
 }
 
 @Serializable
-enum class FunctionScope { GLOBAL, FILE }
+enum class FunctionScope {
+    GLOBAL,
+    FILE,
+    ;
+
+    /** The storage class the definition spells: `f` has internal linkage, `F` is extern. */
+    fun storageClass() = if (this == FILE) "static " else ""
+}
 
 @Serializable
 enum class VariableLocation {
