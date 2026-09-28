@@ -17,4 +17,12 @@ class DataTest {
         cStyleNumber("DSP_REVISION_FIRST") mustBe "DSP_REVISION_FIRST"
         cStyleNumber("\"kalimba\"") mustBe "\"kalimba\""
     }
+
+    @Test
+    fun `a long double decimal takes the L suffix, NaN and infinities stay bare`() {
+        longDoubleLiteral("1.5") mustBe "1.5L"
+        longDoubleLiteral("-2.0E-10") mustBe "-2.0E-10L"
+        longDoubleLiteral("NaN") mustBe "NaN"
+        longDoubleLiteral("Infinity") mustBe "Infinity"
+    }
 }
