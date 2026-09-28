@@ -30,12 +30,17 @@ tasks.register<JavaExec>("runCli") {
     args = providers.gradleProperty("args").getOrElse("").split(" ").filter { it.isNotEmpty() }
 }
 
+// Production-mode ClassSearcher only scans a jar at `<X>/(lib|build/libs)/<X>*.jar`, so the jar sits
+// in a directory of its own name: anywhere else ghistabs' analyzers would silently not register.
+val cliJarDir = "ghistabs-cli/lib"
+
 /**
  * Fat CLI JAR, contains all depenedencies except ghidra
  */
 val cliJar = tasks.register<Jar>("cliJar") {
     description = "Generate the JAR for headless skeleton/decomp CLI"
     archiveBaseName.set("ghistabs-cli")
+    destinationDirectory.set(layout.buildDirectory.dir("libs/$cliJarDir"))
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     manifest {
         attributes(mapOf("Main-Class" to cliMain))
@@ -53,7 +58,7 @@ val cliJar = tasks.register<Jar>("cliJar") {
 }.flatMap { it.archiveFile }
 
 /**
- * Standalone launcher at `build/libs/ghistabs` that runs the fat CLI JAR at `build/libs/ghistabs-cli.jar`
+ * Standalone launcher at `build/libs/ghistabs` that runs the fat CLI JAR under [cliJarDir] next to it
  * and builds the classpath with ghidra's jars
  */
 val buildCli = tasks.register("buildCli") {
@@ -79,7 +84,7 @@ val buildCli = tasks.register("buildCli") {
                     appendLine($$"GHIDRA_INSTALL_DIR=\"${GHIDRA_INSTALL_DIR:-$$ghidraRoot}\"")
                     appendLine($$"dir=$(CDPATH= cd -- \"$(dirname -- \"$0\")\" && pwd)")
                     appendLine("exec java ${cliJvmargs.joinToString(" ")} \\")
-                    appendLine($$"  -cp \"$dir/ghistabs-cli.jar:$$classpath\" \\")
+                    appendLine($$"  -cp \"$dir/$$cliJarDir/ghistabs-cli.jar:$$classpath\" \\")
                     appendLine("  $cliMain \"$@\"")
                 },
             )
@@ -96,8 +101,6 @@ tasks.register<Zip>("packageCli") {
     inputs.file(buildCli)
     archiveFileName.set("ghistabs-cli_ghidra_$ghidraVersion.zip")
     destinationDirectory.set(layout.projectDirectory.dir("dist"))
-    from(
-        cliJar,
-        buildCli,
-    )
+    from(cliJar) { into(cliJarDir) }
+    from(buildCli)
 }
