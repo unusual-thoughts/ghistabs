@@ -199,10 +199,9 @@ class DataTypeRegistry(
      * That self-reference *is* gcc's way of saying 64-bit, so leaving such a range alone keeps the
      * 64-bit reading. Anything else already carries its own width and is returned untouched.
      */
-    private fun GlobalTypeDecl.atBaseWidth(): GlobalTypeDecl = (this as? TypeDecl.Range)?.takeIf { it.widthUnstated }
+    private fun GlobalTypeDecl.atBaseWidth(): GlobalTypeDecl = (this as? TypeDecl.Range)?.takeIf { it.sizeBits == null }
         ?.let { range ->
             types.resolveWith(range.inner) { it.takeUnless { d -> d is TypeDecl.Ref || d is TypeDecl.InlineDef } }
-                ?.takeUnless { it is TypeDecl.Range && it.widthUnstated }
                 ?.sizeBits
                 ?.let { range.copy(sizeAttr = it) }
         } ?: this

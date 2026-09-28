@@ -6,13 +6,13 @@ import ghistabs.parse.TypeDecl
 /**
  * Resolves gcc XCOFF builtin slots / primitive ranges / floats / complex to Ghidra [DataType]s.
  * The node is the whole input: a caller holding width the node can't state says so by setting its
- * [TypeDecl.sizeAttr], the same way the stab itself would (see `DataTypeRegistry.resolveBuiltin`).
+ * `sizeAttr`, the same way the stab itself would (see `DataTypeRegistry.resolveBuiltin`).
  */
 fun TypeDecl<*>.resolveBuiltin(): DataType? = when (this) {
     // Legacy form `t<n>=@s<bits>;-<slot>`, reaching here after globalize hoists the negative-id Ref.
     // Bool is the recurring case. A slot names its primitive outright; the width only backs up one
     // the table doesn't know.
-    is TypeDecl.Builtin -> resolveSlot(slot) ?: sizeAttr?.let { resolveSizedRange(it, signed = false) }
+    is TypeDecl.Builtin -> resolveSlot(slot) ?: sizeBits?.let { resolveSizedRange(it, signed = false) }
 
     // gcc's void — a type explicitly defined as itself (`(x,y)=(x,y)`), recognized at parse.
     TypeDecl.Void -> VoidDataType()
