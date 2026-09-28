@@ -50,8 +50,8 @@
             "min": 2,
             "max": 2,
             "degrades": [
-                "Anon_tinyxml2_147_e227832a",
-                "Anon_tinyxml2_148_e227832b"
+                "__uint32_t",
+                "ptrdiff_t"
             ]
         },
         "data-no-coverage": {
@@ -358,6 +358,10 @@
             "min": 708,
             "max": 708
         },
+        "named-typedef-unresolved": {
+            "min": 1,
+            "max": 1
+        },
         "param-unnamed-padded": {
             "min": 20,
             "max": 20,
@@ -492,8 +496,8 @@
             ]
         },
         "placeholder-created": {
-            "min": 220,
-            "max": 220
+            "min": 214,
+            "max": 214
         },
         "placeholder-undefined-fields": {
             "min": 2,
@@ -573,6 +577,10 @@
         "textrange-rejected": {
             "min": 5,
             "max": 5
+        },
+        "typedef-shorten": {
+            "min": 1,
+            "max": 1
         },
         "unresolved-xref": {
             "min": 5,

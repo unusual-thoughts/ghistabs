@@ -70,7 +70,10 @@ class TypeStore(
             // shadow a concrete body: a real incoming supersedes a self-ref `ex` (box2d re-decl over
             // its real struct), and self-ref incomings are dropped when `ex` is already concrete. A
             // lone self-ref (no concrete body at this id) survives and resolves to void downstream.
-            val incoming = incoming.filterNot { it.isSelfRef() }
+            // gcc 10+ name a type after its inline definition, with a bare `unsigned char:t(0,150)`
+            // where gcc ≤ 8 wrote `unsigned char:t(0,11)=r…`: that name is for the body already here.
+            val incoming = incoming.map { if (it.isSelfRef()) it.copy(body = existing.body) else it }
+                .filterNot { it.isSelfRef() }
             if (existing.isSelfRef()) {
                 incoming.firstOrNull()?.let { byId[id] = it }
                 continue
