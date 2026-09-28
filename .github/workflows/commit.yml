@@ -1,4 +1,4 @@
-name: Build and test Ghidra Extension
+name: CI
 
 on:
   push:
