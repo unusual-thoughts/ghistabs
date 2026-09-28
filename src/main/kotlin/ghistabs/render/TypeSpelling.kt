@@ -95,7 +95,6 @@ private class Speller(val types: TypeGraph, val shortener: TemplateNameShortener
         is TypeDecl.Range,
         is TypeDecl.Float,
         is TypeDecl.Complex,
-        is TypeDecl.WithSizeAttr,
         -> leaf(t.resolveBuiltin()?.name ?: t::class.simpleName?.lowercase() ?: "?", d, quals)
     }
 

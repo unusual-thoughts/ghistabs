@@ -34,7 +34,6 @@ abstract class ContentIndex(val contentCache: MutableMap<GlobalTypeId, LayoutCon
         is TypeDecl.Ref -> byId(decl.id)?.name
         is TypeDecl.XRef -> decl.tagName
         is TypeDecl.InlineDef -> targetSpelling(decl.inner)
-        is TypeDecl.WithSizeAttr -> targetSpelling(decl.inner)
         else -> null
     }
 
@@ -67,10 +66,10 @@ abstract class ContentIndex(val contentCache: MutableMap<GlobalTypeId, LayoutCon
         -> layoutContent(visited)
 
         // Source-independent: same slot in every CU = same primitive. Reduce to the Ghidra type the
-        // stab materializes to (see [ghidraClassName]), so char's `Range(0,127)` / `WithSizeAttr(8, …)` /
+        // stab materializes to (see [ghidraClassName]), so char's `Range(0,127)` / `@s8;` Range /
         // `Builtin(-2)` spellings are one value and don't fork a `.conflict`. A shape that maps to no
         // primitive falls through to its structural content.
-        is TypeDecl.Builtin, is TypeDecl.Range, is TypeDecl.WithSizeAttr ->
+        is TypeDecl.Builtin, is TypeDecl.Range ->
             ghidraClass()?.let { LayoutContent(it) } ?: layoutContent(visited)
 
         // The DTM struct has no static members or methods, and both are cycle sources (libstdc++

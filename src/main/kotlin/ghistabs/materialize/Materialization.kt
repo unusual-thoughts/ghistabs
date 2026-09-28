@@ -44,16 +44,13 @@ internal fun DataTypeRegistry.materializeBody(ast: Type, category: CategoryPath,
             buildArray(body, safeElem, ast.ghidraName)
         }
 
+        // An `@s<bits>;e...;` size (stabs.texinfo §"String Field") is already on the placeholder.
         is TypeDecl.Enum -> body.fillEnum(placeholder as GhidraEnum)
-
-        // `@s<bits>;e...;` — explicit enum size (stabs.texinfo §"String Field"); size already
-        // applied to the placeholder in makePlaceholder.
-        is TypeDecl.WithSizeAttr if body.inner is TypeDecl.Enum -> body.inner.fillEnum(placeholder as GhidraEnum)
 
         // Transparent wrappers/primitives resolve through resolveRef (which unwraps const/volatile
         // and routes the builtin-family via BuiltinTable), falling back to the placeholder.
         is TypeDecl.Const, is TypeDecl.Volatile, is TypeDecl.Member,
-        is TypeDecl.Range, is TypeDecl.Complex, is TypeDecl.Float, is TypeDecl.WithSizeAttr, is TypeDecl.Builtin,
+        is TypeDecl.Range, is TypeDecl.Complex, is TypeDecl.Float, is TypeDecl.Builtin,
         -> resolveRef(body) ?: stub(ast, placeholder, body)
 
         is TypeDecl.Aggregate -> fillComposite(body, placeholder as Composite, "$category/${ast.ghidraName}")
@@ -251,7 +248,7 @@ fun DataTypeRegistry.resolveRef(decl: GlobalTypeDecl): DataType? = when (decl) {
 
     is TypeDecl.InlineDef -> getOrMaterialize(decl.id) ?: resolveRef(decl.inner)?.let { cache(decl.id, it) }
 
-    is TypeDecl.Range, is TypeDecl.Complex, is TypeDecl.Float, is TypeDecl.WithSizeAttr, is TypeDecl.Builtin ->
+    is TypeDecl.Range, is TypeDecl.Complex, is TypeDecl.Float, is TypeDecl.Builtin ->
         resolveBuiltin(decl)
 
     is TypeDecl.Pointer -> pointerOrOffset(decl.inner, "pointer-pointee", "(anon)")

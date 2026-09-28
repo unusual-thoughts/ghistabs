@@ -5,31 +5,23 @@ import ghistabs.parse.TypeDecl
 
 /**
  * Resolves gcc XCOFF builtin slots / primitive ranges / floats / complex to Ghidra [DataType]s.
- * The node is the whole input: a caller holding width the node can't state says so by wrapping it
- * in [TypeDecl.WithSizeAttr], the same way the stab itself would (see `DataTypeRegistry.resolveBuiltin`).
+ * The node is the whole input: a caller holding width the node can't state says so by setting its
+ * [TypeDecl.sizeAttr], the same way the stab itself would (see `DataTypeRegistry.resolveBuiltin`).
  */
 fun TypeDecl<*>.resolveBuiltin(): DataType? = when (this) {
-    is TypeDecl.Builtin -> resolveSlot(slot)
+    // Legacy form `t<n>=@s<bits>;-<slot>`, reaching here after globalize hoists the negative-id Ref.
+    // Bool is the recurring case. A slot names its primitive outright; the width only backs up one
+    // the table doesn't know.
+    is TypeDecl.Builtin -> resolveSlot(slot) ?: sizeAttr?.let { resolveSizedRange(it, signed = false) }
 
     // gcc's void — a type explicitly defined as itself (`(x,y)=(x,y)`), recognized at parse.
     TypeDecl.Void -> VoidDataType()
 
-    // `@s<n>` outranks the inner descriptor for *width*: gcc emits it exactly where the inner's
-    // own bounds can't carry the answer — `@s128;r(0,25);0;0377…;` truncates to -1L and would
-    // otherwise classify __int128 as an 8-byte ulonglong. Identity still comes from the inner:
-    // a slot names its primitive outright, and a char range stays char (`@s8;r(0,10);-128;127;`).
-    is TypeDecl.WithSizeAttr -> when (inner) {
-        // Legacy form `t<n>=@s<bits>;-<slot>`, reaching here after globalize hoists the
-        // negative-id Ref. Bool is the recurring case.
-        is TypeDecl.Builtin -> resolveSlot(inner.slot) ?: resolveSizedRange(sizeBits, signed = false)
-
-        is TypeDecl.Range -> inner.asChar() ?: resolveSizedRange(sizeBits, signed = inner.min < 0)
-
-        else -> inner.resolveBuiltin()
-    }
-
-    // `0;-1` states no width at all; unwrapped, it means gcc's 64 bits — the reading its
-    // self-referential base encodes. A narrower base arrives here as a WithSizeAttr above.
+    // `@s<n>` ([sizeBits]) outranks the bounds for *width*: gcc emits it exactly where the bounds
+    // can't carry the answer — `@s128;r(0,25);0;0377…;` truncates to -1L and would otherwise
+    // classify __int128 as an 8-byte ulonglong. A char range stays char (`@s8;r(0,10);-128;127;`).
+    // `0;-1` with no `@s` states no width at all; it means gcc's 64 bits — the reading its
+    // self-referential base encodes. A narrower base arrives here with its width as the `@s`.
     is TypeDecl.Range -> if (sizeBytes == 0L) {
         VoidDataType()
     } else {
@@ -56,7 +48,7 @@ fun TypeDecl<*>.resolveBuiltin(): DataType? = when (this) {
 /**
  * Stable identity of the Ghidra primitive [this] would materialize to via [resolve], or null
  * when [this] isn't a primitive. `ghistabs.harvest.contentHash` hashes builtins by this so the
- * several stab spellings of one primitive — `char` as `Range(0,127)`, `WithSizeAttr(8, …)`, or
+ * several stab spellings of one primitive — `char` as `Range(0,127)`, an `@s8;` range, or
  * `Builtin(-2)` — collapse to one content hash instead of forking a `.conflict` in the DTM.
  * Distinct primitives keep distinct keys: `unsigned char` (`Range(0,255)` → byte) stays apart
  * from `char`.

@@ -43,8 +43,8 @@ class BuiltinTableTest {
     }
 
     @Test
-    fun testClassifyWithSizeAttr64ULL() {
-        val kind = TypeDecl.WithSizeAttr(64, longRange(GlobalTypeId(cu, 6), 0L, -1L)).resolveBuiltin()
+    fun testClassifySizeAttr64ULL() {
+        val kind = longRange(GlobalTypeId(cu, 6), 0L, -1L).copy(sizeAttr = 64).resolveBuiltin()
         kind.mustBeA<UnsignedLongLongDataType>()
         kind?.length mustBe 8
     }
@@ -62,7 +62,7 @@ class BuiltinTableTest {
         )
         // They narrow to the same (min, max) pair, which is exactly why the exact bound is kept.
         (unfit.min to unfit.max) mustBe (spelledOut.min to spelledOut.max)
-        TypeDecl.WithSizeAttr(32, unfit).resolveBuiltin().mustBeA<UnsignedIntegerDataType>()
+        unfit.copy(sizeAttr = 32).resolveBuiltin().mustBeA<UnsignedIntegerDataType>()
         spelledOut.resolveBuiltin().mustBeA<UnsignedLongLongDataType>()
         // ...and they must not hash as one type.
         (unfit.layoutData == spelledOut.layoutData) mustBe false
@@ -75,7 +75,7 @@ class BuiltinTableTest {
         // resolved it (the `int` at (0,1)) restates it as `@s32`, which must outrank the 8 the bounds
         // alone imply — see `DataTypeRegistry.atBaseWidth`.
         val range = longRange(GlobalTypeId(cu, 1), 0L, -1L)
-        TypeDecl.WithSizeAttr(32, range).resolveBuiltin().mustBeA<UnsignedIntegerDataType>()
+        range.copy(sizeAttr = 32).resolveBuiltin().mustBeA<UnsignedIntegerDataType>()
         // No base resolved → gcc's reading, which is what the self-referential form means.
         range.resolveBuiltin().mustBeA<UnsignedLongLongDataType>()
     }
@@ -84,7 +84,7 @@ class BuiltinTableTest {
     fun testSizeAttrOutranksRangeBounds() {
         // `@s128;r(0,25);0;0377…;` — the 128-bit max truncates to -1L, so the bounds alone claim
         // 8 bytes. The attribute must win, or __int128 materializes at half its width.
-        val kind = TypeDecl.WithSizeAttr(128, longRange(GlobalTypeId(cu, 25), 0L, -1L)).resolveBuiltin()
+        val kind = longRange(GlobalTypeId(cu, 25), 0L, -1L).copy(sizeAttr = 128).resolveBuiltin()
         kind.mustBeA<UnsignedInteger16DataType>()
         kind?.length mustBe 16
     }
@@ -92,7 +92,7 @@ class BuiltinTableTest {
     @Test
     fun testSizeAttrKeepsCharIdentity() {
         // `@s8;r(0,10);-128;127;` — the attribute governs width, not identity: still char, not int8.
-        val kind = TypeDecl.WithSizeAttr(8, longRange(GlobalTypeId(cu, 10), -128L, 127L)).resolveBuiltin()
+        val kind = longRange(GlobalTypeId(cu, 10), -128L, 127L).copy(sizeAttr = 8).resolveBuiltin()
         kind.mustBeA<CharDataType>()
         kind?.length mustBe 1
     }
@@ -102,14 +102,14 @@ class BuiltinTableTest {
         // gdb stabs encodes _Bool as (0,-16); after globalize the inner Ref to
         // a negative slot is hoisted into [TypeDecl.Builtin] so cross-CU
         // bool slots share one canonical hash and one Ghidra DataType.
-        val kind = TypeDecl.WithSizeAttr<GlobalTypeId>(8, TypeDecl.Builtin(-16)).resolveBuiltin()
+        val kind = TypeDecl.Builtin<GlobalTypeId>(-16, sizeAttr = 8).resolveBuiltin()
         kind.mustBeA<BooleanDataType>()
         kind?.length mustBe 1
     }
 
     @Test
     fun testClassifyBuiltinSlotDirect() {
-        // Builtin slot resolved standalone (no WithSizeAttr wrapper) — gcc
+        // Builtin slot resolved standalone (no `@s` size) — gcc
         // sometimes emits a bare `(0,-N)` Ref as a typedef body.
         TypeDecl.Builtin<GlobalTypeId>(-1).resolveBuiltin().mustBeA<IntegerDataType>()
         TypeDecl.Builtin<GlobalTypeId>(-16).resolveBuiltin().mustBeA<BooleanDataType>()
