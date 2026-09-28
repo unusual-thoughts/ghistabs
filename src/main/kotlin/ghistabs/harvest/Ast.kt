@@ -285,12 +285,7 @@ data class Func(
      * no linkage, so its prototypeString can't carry it and a file-static renders like any other
      * free function — the stab is the only place that distinction survives.
      */
-    fun sourceSignature(program: Program) = signature(program).let {
-        when (decl.scope) {
-            FunctionScope.FILE -> "static $it"
-            FunctionScope.GLOBAL -> it
-        }
-    }
+    fun sourceSignature(program: Program) = decl.scope.storageClass() + signature(program)
 
     /**
      * Scope chain the linkage name declares, root-first and canonically spelled
