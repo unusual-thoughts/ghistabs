@@ -1,6 +1,7 @@
 package ghistabs.parse
 
 import ghistabs.parse.TypeDecl.Aggregate.*
+import java.math.BigInteger
 
 /**
  * Parse outcome. [Ok.trailing] carries the unconsumed-tail message and [Ok.skipped] what the parser read
@@ -649,13 +650,17 @@ class Parser(src: String) {
         // sizetype): parseType reads either, as gdb re-reads it with read_type.
         val inner = parseType()
         consume(';')
-        val lower = readRangeBound()
+        var lower = readRangeBound()
         consume(';')
         val upper = readRangeBound()
         consume(';')
         if (upper.signum() == 0 && lower.signum() > 0) {
             return TypeDecl.Float(lower.toLong())
         }
+        // gcc 2.95 writes `int` as `0020000000000;0017777777777;`: an octal lower bound is the two's-complement
+        // bit pattern at the upper bound's width plus its sign bit (gdb's read_huge_number).
+        val width = upper.bitLength() + 1
+        if (upper.signum() > 0 && lower > upper && lower.bitLength() == width) lower -= BigInteger.ONE.shiftLeft(width)
         return TypeDecl.Range(inner, lower, upper)
     }
 
