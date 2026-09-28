@@ -195,7 +195,7 @@ class TypeStore(
     }
 
     /**
-     * Returns `anonymous-aggregate-id → name` for every anonymous Struct/Enum that a typedef targets,
+     * Returns `anonymous-aggregate-id → typedef` for every anonymous Struct/Enum that a typedef targets,
      * when **exactly one** typedef name claims it (ambiguous multi-name targets are left anonymous).
      * Two stab encodings qualify: the inline form `t3=4=s…` (`InlineDef`, gcc's usual for `typedef
      * struct {…} Name`) and the separate-then-reference form `t2=1` with `1=e…` (`Ref`, gcc's usual for
@@ -203,9 +203,9 @@ class TypeStore(
      * already-named type is skipped by the target-name guard, and a builtin/pointer target by the kind
      * guard.
      */
-    internal fun anonymousTypedefTargetNames() = buildMap {
+    internal fun anonymousTypedefTargets() = buildMap {
         for (td in byId.values) {
-            val name = td.name ?: continue
+            if (td.name == null) continue
             val targetId = when (val body = td.body) {
                 is TypeDecl.InlineDef -> body.id
                 is TypeDecl.Ref -> body.id
@@ -214,23 +214,30 @@ class TypeStore(
             val target = byId[targetId] ?: continue
             if (target.name != null) continue
             if (target.body !is TypeDecl.Aggregate && target.body !is TypeDecl.Enum) continue
-            getOrPut(targetId) { mutableSetOf() }.add(name)
+            getOrPut(targetId) { mutableListOf<Type>() }.add(td)
         }
-    }.filterValues { it.size == 1 }.mapValues { it.value.single() }
+    }.filterValues { tds -> tds.distinctBy { it.name }.size == 1 }.mapValues { it.value.first() }
 
     /**
      * `typedef struct {…} Name;` reaches us as an anonymous aggregate + a same-named typedef that
      * inline-defines it. C-semantically the aggregate's name *is* the typedef's, so adopt it, so the
      * anonymous struct/enum carries the real name and `DataTypeRegistry.byLocation` can merge it with
      * the named copy from another header spelling (render-backlog §20).
+     *
+     * The aggregate's `line` and `sourceFile` are its first use's, which gcc 12 C makes a parameter,
+     * local or global ahead of the typedef (`g_spinnerData:G(0,77)=(0,78)=s8…`, then
+     * `SpinnerData:t(0,77)`): the typedef's are where the source wrote it.
      */
     private fun nameAnonymousTypedefTargets() {
-        val renames = anonymousTypedefTargetNames()
-        for ((id, name) in renames) {
+        for ((id, typedef) in anonymousTypedefTargets()) {
             // Adopting the typedef's name means adopting its binding: the source wrote
             // `typedef struct {…} Name;`, and [Type.kind] is what lets the render say so.
-            byId[id] = byId.getValue(id).copy(named = NameBinding(name, TypeNameKind.TYPEDEF))
-            debug("typedef-named-anon-aggregate", "$id → $name")
+            byId[id] = byId.getValue(id).copy(
+                named = typedef.named?.copy(kind = TypeNameKind.TYPEDEF),
+                line = typedef.line,
+                sourceFile = typedef.sourceFile,
+            )
+            debug("typedef-named-anon-aggregate", "$id → ${typedef.name}")
         }
     }
 
