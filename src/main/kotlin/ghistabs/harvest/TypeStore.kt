@@ -66,27 +66,28 @@ class TypeStore(
         for ((id, incoming) in colliding.groupBy { it.id }) {
             val existing = byId[id]!!
 
-            // Name-promotion: an anonymous InlineDef ast can be superseded by an explicit
-            // named Typedef at the same id. Range's `inner` self-ref differs between forms so
-            // we don't require body equality — both non-XRefTarget + existing unnamed. gcc 10+
-            // name every type after its inline definition, with a bare `unsigned char:t(0,150)`
-            // where gcc ≤ 8 wrote `unsigned char:t(0,11)=r…`: that name keeps the body.
-            val namedIncoming = incoming.firstOrNull { it.name != null && !it.body.canBeXRefTarget }
-            if (namedIncoming != null && existing.name == null && !existing.body.canBeXRefTarget) {
-                byId[id] = if (namedIncoming.isSelfRef()) namedIncoming.copy(body = existing.body) else namedIncoming
-                continue
-            }
-
             // `void:t(0,20)=(0,20)` and bare re-declarations parse as self-refs. They must never
             // shadow a concrete body: a real incoming supersedes a self-ref `ex` (box2d re-decl over
             // its real struct), and self-ref incomings are dropped when `ex` is already concrete. A
             // lone self-ref (no concrete body at this id) survives and resolves to void downstream.
-            val incoming = incoming.filterNot { it.isSelfRef() }
+            // gcc 10+ name a type after its inline definition, with a bare `unsigned char:t(0,150)`
+            // where gcc ≤ 8 wrote `unsigned char:t(0,11)=r…`: that name is for the body already here.
+            val incoming = incoming.map { if (it.isSelfRef()) it.copy(body = existing.body) else it }
+                .filterNot { it.isSelfRef() }
             if (existing.isSelfRef()) {
                 incoming.firstOrNull()?.let { byId[id] = it }
                 continue
             }
             if (incoming.isEmpty()) continue
+
+            // Name-promotion: an anonymous InlineDef ast can be superseded by an explicit
+            // named Typedef at the same id. Range's `inner` self-ref differs between forms so
+            // we don't require body equality — both non-XRefTarget + existing unnamed.
+            val namedIncoming = incoming.firstOrNull { it.name != null && !it.body.canBeXRefTarget }
+            if (namedIncoming != null && existing.name == null && !existing.body.canBeXRefTarget) {
+                byId[id] = namedIncoming
+                continue
+            }
 
             // Structural-equality skip (no Ref-walk): literal re-emissions aren't worth
             // recording. classifyCollisions does the deeper check for survivors.
