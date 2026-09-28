@@ -19,14 +19,14 @@ internal class VfptrPlacement(private val registry: DataTypeRegistry, private va
 
     /**
      * Put `{vfptr}` where the stab says the vptr is, as a pointer to [className]'s own vftable.
-     * [classBody] is the class being laid, [structDt] its Structure, and [hasPolymorphicBaseSubobject]
-     * the caller's answer, so the base graph is walked once per class.
+     * [classBody] is the class being laid, [structDt] its Structure, and [polyBase] the caller's
+     * [ghistabs.index.TypeGraph.firstPolymorphicBase], so the base graph is walked once per class.
      */
     fun place(
         structDt: Structure,
         className: String,
         classBody: TypeDecl.Aggregate<GlobalTypeId>,
-        hasPolymorphicBaseSubobject: Boolean,
+        polyBase: TypeDecl.Aggregate.Base<GlobalTypeId>?,
     ) {
         val vfptrName = ClassUtils.VFPTR
         val parserVptrOffset = vptrOffsetBytesOf(classBody)
@@ -42,21 +42,24 @@ internal class VfptrPlacement(private val registry: DataTypeRegistry, private va
         }
 
         val action = chooseVfptrAction(
-            hasPolymorphicBaseSubobject = hasPolymorphicBaseSubobject,
+            hasPolymorphicBaseSubobject = polyBase != null,
             parserVptrOffsetBytes = parserVptrOffset,
             componentAtTargetOffset = snapshot,
             canonicalVfptrFieldName = vfptrName,
         )
 
         when (action) {
-            is VfptrAction.SkipInheritedFromBase ->
-                if (model == VfptrModel.SPLIT_BASE &&
-                    splitBase(structDt, className, targetOffset, existingComp)
-                ) {
-                    debug("vfptr-split-from-base")
-                } else {
-                    debug("vfptr-inherited-from-base")
-                }
+            is VfptrAction.SkipInheritedFromBase -> if (model == VfptrModel.SPLIT_BASE && splitBase(
+                    structDt,
+                    className,
+                    targetOffset,
+                    polyBase?.ownerOfInheritedVptr(structDt) ?: existingComp,
+                )
+            ) {
+                debug("vfptr-split-from-base")
+            } else {
+                debug("vfptr-inherited-from-base")
+            }
 
             is VfptrAction.AlreadyCanonical -> return
 
@@ -90,6 +93,20 @@ internal class VfptrPlacement(private val registry: DataTypeRegistry, private va
                 "cannot place {vfptr} at +${action.offsetBytes} (occupied by ${action.occupantFieldName})",
             )
         }
+    }
+
+    /**
+     * The base subobject whose vptr this class inherits: [polyBase]'s own component. Not whatever
+     * sits at the class's declared vptr offset, which a class that declares none puts at 0 — gcc 2.x
+     * `Diamond : Left, Right, Named` inherits Named's vptr at +24, and splitting `Left` at 0 instead
+     * wrote the pointer over its `_vb$`. Null for a virtual base, whose stab offset is not where its
+     * component sits (0 under gcc 2.x, a vtable offset under Itanium).
+     */
+    private fun TypeDecl.Aggregate.Base<GlobalTypeId>.ownerOfInheritedVptr(structDt: Structure) = when {
+        isVirtual -> null
+
+        else -> runCatching { structDt.getComponentAt((offsetBits / 8).toInt()) }.getOrNull()
+            ?.takeIf(DataTypeComponent::isBaseField)
     }
 
     /** {vfptr} points at the function-pointer array at the vtable's address point, not at the record. */
