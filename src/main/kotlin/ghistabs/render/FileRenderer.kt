@@ -1,10 +1,8 @@
 package ghistabs.render
 
 import ghidra.program.model.address.Address
-import ghistabs.baseStackParamOffset
 import ghistabs.chunkOf
 import ghistabs.diagnose.DiagnosticSink
-import ghistabs.frameBias
 import ghistabs.harvest.*
 import ghistabs.index.*
 import ghistabs.parse.GlobalTypeDecl
@@ -389,11 +387,9 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
     private fun Type.Decl?.dedup() = this != null && name != "this" && seenDecls.add(Type.Decl(line, name))
 
     private fun Func.vars(): List<Var> {
-        val frameBias by lazy {
-            program.functionManager.getFunctionAt(addr)?.frameBias() ?: program.baseStackParamOffset
-        }
+        val bias by lazy { frameBias(program) }
         return (params + locals).filter { it.sourceFile == source }.mapNotNull {
-            it.renderVar(renderer.showStorage) { frameBias }
+            it.renderVar(renderer.showStorage) { bias }
         }
     }
 

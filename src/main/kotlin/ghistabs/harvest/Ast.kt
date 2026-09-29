@@ -11,6 +11,7 @@ import ghidra.program.model.sourcemap.SourceMapEntry
 import ghidra.program.model.symbol.SymbolUtilities
 import ghistabs.Demangler
 import ghistabs.baseStackParamOffset
+import ghistabs.frameBias
 import ghistabs.parse.*
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
@@ -287,6 +288,10 @@ data class Func(
      * free function — the stab is the only place that distinction survives.
      */
     fun sourceSignature(program: Program) = decl.scope.storageClass() + signature(program)
+
+    /** [ghistabs.frameBias] of the Ghidra function at [addr], or the convention's when there is none. */
+    fun frameBias(program: Program) = program.functionManager.getFunctionAt(addr)?.frameBias()
+        ?: program.baseStackParamOffset
 
     /**
      * Scope chain the linkage name declares, root-first and canonically spelled
