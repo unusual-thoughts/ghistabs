@@ -1,6 +1,7 @@
 package ghistabs.index
 
 import ghistabs.harvest.GhidraSourceFile
+import ghistabs.harvest.Origin
 import ghistabs.harvest.Type
 import ghistabs.harvest.binding
 import ghistabs.harvest.sourceFileOf
@@ -31,8 +32,7 @@ class SourceRootAttributionTest {
         id = GlobalTypeId(cu, nextId++),
         named = binding(name, TypeDecl.Ref(GlobalTypeId(cu, 0))),
         body = TypeDecl.Ref(GlobalTypeId(cu, 0)),
-        line = line,
-        sourceFile = declaredIn,
+        origin = Origin(0, declaredIn, line),
     )
 
     private fun tag(name: String, line: Int, declaredIn: GhidraSourceFile) = Type(
@@ -40,8 +40,7 @@ class SourceRootAttributionTest {
         id = GlobalTypeId(cu, nextId++),
         named = binding(name, TypeDecl.Aggregate(AggrKind.STRUCT, 4L, emptyList(), emptyList(), emptyList(), null)),
         body = TypeDecl.Aggregate(AggrKind.STRUCT, 4L, emptyList(), emptyList(), emptyList(), null),
-        line = line,
-        sourceFile = declaredIn,
+        origin = Origin(0, declaredIn, line),
     )
 
     /** [EffectiveSource] over [types], with [declarers] as the source root's answer. */

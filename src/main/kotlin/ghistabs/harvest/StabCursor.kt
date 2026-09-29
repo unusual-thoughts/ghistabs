@@ -67,7 +67,7 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
             // bracket can join a function once the next one opens.
             val extent = sizeBytes ?: blocks.lastClose?.let { (it.offset - addr.offset).toULong() }
             val (locals, attributedBlocks) = blocks.finish(lineEntries, source)
-            val attributedParams = params.map { it.copy(sourceFile = source) }
+            val attributedParams = params.map { it.withSource(source) }
             return Func(
                 name, addr, decl, cu, locals, attributedParams, attributedBlocks, lineEntries, extent, declLine,
             )

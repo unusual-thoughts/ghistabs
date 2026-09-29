@@ -210,7 +210,6 @@ class StabCursorGlobalizeTest {
         val store = TypeStore()
 
         val input = Symbol(
-            1,
             StabType.N_LSYM,
             SymbolDecl.Local(
                 "local",
@@ -238,7 +237,7 @@ class StabCursorGlobalizeTest {
                 VariableLocation.STACK,
             ),
             0,
-            sourceFile,
+            Origin(1, sourceFile),
         )
 
         // walkDefinitions should extract the emitted TypeAst
@@ -267,7 +266,12 @@ class StabCursorGlobalizeTest {
         ).copy(inner = TypeDecl.InlineDef(GlobalTypeId(cu, 54), sizetype))
         val array = TypeDecl.Array(TypeDecl.Ref(GlobalTypeId(cu, 1)), null, index)
         val input =
-            Symbol(1, StabType.N_LSYM, SymbolDecl.Local("a", array, VariableLocation.STACK), 0, sourceFileOf("cu.c"))
+            Symbol(
+                StabType.N_LSYM,
+                SymbolDecl.Local("a", array, VariableLocation.STACK),
+                0,
+                Origin(1, sourceFileOf("cu.c")),
+            )
 
         store.hoistInlineDefs(input, cu)
 

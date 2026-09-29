@@ -46,7 +46,32 @@ value class LineNumber(val inner: UInt) : Comparable<LineNumber> {
  * typedef wrapping it.
  */
 @Serializable
-data class NameBinding(val name: String, val kind: TypeNameKind)
+data class NameBinding(
+    val name: String,
+    val kind: TypeNameKind,
+    /** The record that bound the name, null when the harvest made the name up. */
+    val origin: Origin? = null,
+)
+
+/**
+ * Where one stab record sat: its stream position, the N_SOL in effect, the line from its `desc` (null
+ * when the emitter left it 0, as without -gstabs+) and the function whose records surrounded it.
+ * A [Symbol] is one record, so it has one; a [Type] can be built from several, so its body and its
+ * name each keep their own.
+ */
+@Serializable
+data class Origin(
+    val recordIndex: Int,
+    /** N_SOL in effect when the record was read — except for function-scope symbols, where the N_SOL
+     *  is meaningless, so [BlockTreeBuilder.finish] rebuilds them with the block's real source. */
+    val sourceFile: GhidraSourceFile,
+    val line: Int? = null,
+    /** Enclosing function (mangled/linkage name) when read inside a function scope, null at file scope. */
+    val enclosingFunction: String? = null,
+) {
+    constructor(record: StabRecord, sourceFile: GhidraSourceFile, enclosingFunction: String? = null) :
+        this(record.index, sourceFile, record.desc.takeIf { it > 0 }, enclosingFunction)
+}
 
 /**
  * One type as the harvest holds it: the body parsed out of a `:T`/`:t` stab, under the id the
@@ -65,12 +90,21 @@ data class Type(
      *  [ghistabs.harvest.Harvester] folds that in, so "anonymous" has one spelling. */
     val named: NameBinding?,
     val body: GlobalTypeDecl,
-    /** Source line from N_LSYM `desc`, null when the emitter left it 0 (no -gstabs+). */
-    val line: Int? = null,
-    /** N_SOL-effective source at definition time (header for stdlib, CU for app-local). */
-    val sourceFile: GhidraSourceFile? = null,
+    /** The record that defined [id]'s body. Null for a type the harvest synthesized. */
+    val origin: Origin? = null,
 ) {
     val name: String? get() = named?.name
+
+    /** Where the source declared this type: its name's record when it has one, else its body's. */
+    private val declaredAt get() = named?.origin ?: origin
+
+    /** Source line from N_LSYM `desc`, null when the emitter left it 0 (no -gstabs+). */
+    val line get() = declaredAt?.line
+
+    /** N_SOL-effective source at definition time (header for stdlib, CU for app-local). */
+    val sourceFile get() = declaredAt?.sourceFile
+
+    val enclosingFunction get() = declaredAt?.enclosingFunction
 
     /** How the source introduced [name]: a `:T` tag or a `:t` typedef. Null iff [name] is. */
     val kind: TypeNameKind? get() = named?.kind
@@ -117,43 +151,35 @@ data class Type(
     fun declKey() = Decl.at(line, named?.name)
 }
 
-/**
- * One symbol stab. `recordIndex` is the stream position (for scope filtering); `line` comes
- * from the stab's `desc` field (0 when emitter omits it); `sourceFile` is the N_SOL-effective name.
- */
+/** One symbol stab: its parsed body, its raw `value`, and the [Origin] of its record. */
 @Serializable
 data class Symbol<S : SymbolDecl<GlobalTypeId>>(
-    val recordIndex: Int,
     val recordType: StabType,
     val body: S,
     val rawValue: Long,
-    /** N_SOL in effect when the record was read — except for function-scope symbols, where the N_SOL
-     *  is meaningless, so [BlockTreeBuilder.finish] rebuilds them with the block's real source. */
-    val sourceFile: GhidraSourceFile,
-    val line: Int? = null,
-    /** Enclosing function (mangled/linkage name) when harvested inside a function scope — set for
-     *  procedure-scope (`V`) statics so the applier can annotate which function owns them. */
-    val enclosingFunction: String? = null,
+    val origin: Origin,
 ) {
     constructor(
         record: StabRecord,
         decl: S,
         sourceFile: GhidraSourceFile,
         enclosingFunction: String? = null,
-    ) : this(
-        record.index,
-        record.type,
-        decl,
-        record.value,
-        sourceFile,
-        record.desc.takeIf { it > 0 },
-        enclosingFunction,
-    )
+    ) : this(record.type, decl, record.value, Origin(record, sourceFile, enclosingFunction))
+
+    /** Stream position, for scope filtering. */
+    val recordIndex get() = origin.recordIndex
+    val sourceFile get() = origin.sourceFile
+    val line get() = origin.line
+
+    /** Set for procedure-scope (`V`) statics too, so the applier can annotate which function owns them. */
+    val enclosingFunction get() = origin.enclosingFunction
+
+    /** The same symbol attributed to [sourceFile]. */
+    fun withSource(sourceFile: GhidraSourceFile) = copy(origin = origin.copy(sourceFile = sourceFile))
 
     /** The same symbol with its body narrowed, for a `when (val decl = sym.body)` arm: smart-casting
      *  the body doesn't narrow the Symbol around it, and casting it would be unchecked. */
-    fun <T : SymbolDecl<GlobalTypeId>> retype(body: T) =
-        Symbol(recordIndex, recordType, body, rawValue, sourceFile, line, enclosingFunction)
+    fun <T : SymbolDecl<GlobalTypeId>> retype(body: T) = Symbol(recordType, body, rawValue, origin)
 
     fun declKey() = Type.Decl.at(line, body.name)
 
