@@ -229,20 +229,23 @@ class Renderer(
     class Decompiled(val lines: List<DecompLine>, val flow: VarFlow)
 
     /**
-     * Functions Ghidra was given [DECOMPILE_SECONDS] for and did not finish. Without this the render
-     * simply has no body for them and falls back to the skeleton's `sig {` — indistinguishable from a
-     * function with nothing in it, and it moves with machine load, so two renders of one commit can
-     * differ. `xmltest.cpp`'s `main` sits on the boundary and flips run to run (§40).
+     * Functions Ghidra did not decompile, with its reason: out of [DECOMPILE_SECONDS], or an error
+     * (`Overlapping input varnodes` on box2d's `b2CollideCircles`, §62). The render keeps going and
+     * falls back to the skeleton's `sig {`, which without this is indistinguishable from a function
+     * with nothing in it. A timeout moves with machine load, so two renders of one commit can differ:
+     * `xmltest.cpp`'s `main` sits on the boundary and flips run to run (§40).
      */
-    val undecompiled = mutableSetOf<Address>()
+    val undecompiled = mutableMapOf<Address, String>()
 
     fun decompile(func: Func) = decompiled.getOrPut(func.addr) {
         val results = program.functionManager.getFunctionAt(func.addr)?.let { ghFunc ->
             runCatching { decomp?.decompileFunction(ghFunc, DECOMPILE_SECONDS, TaskMonitor.DUMMY) }.getOrNull()
         }
         if (decomp != null && results?.decompileCompleted() != true) {
-            undecompiled += func.addr
-            error("render[${func.demangledName}]: ${results?.errorMessage ?: "no decompilation"}")
+            val reason = results?.errorMessage?.trim()?.ifEmpty { null } ?: "no decompilation"
+            undecompiled[func.addr] = reason
+            warn("render-undecompiled", "${func.demangledName}: $reason")
+            return@getOrPut Decompiled(emptyList(), VarFlow(emptyMap(), emptyMap()))
         }
         // Folded onto the function's *own* source, not the file asking: that only governs which locals
         // drop out of the head fold, and the head is used only where the function is defined.

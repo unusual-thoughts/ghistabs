@@ -471,10 +471,10 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
             val sig = r.func.sourceSignature(program)
             val name = r.func.demangledName
             val openText = if (r.isSingleLine) "$sig;" else "$sig {"
-            // Say when the body is missing because Ghidra ran out of time, rather than leaving a
-            // bodiless `sig {` that reads like a function with nothing in it (§40).
-            val timedOut = if (r.func.addr in renderer.undecompiled) ", decompilation did not finish" else ""
-            val openNote = if (r.isSingleLine) name else "opens $name$timedOut"
+            // Say why the body is missing, rather than leaving a bodiless `sig {` that reads like a
+            // function with nothing in it (§40).
+            val undecompiled = renderer.undecompiled[r.func.addr]?.let { ", not decompiled: $it" }.orEmpty()
+            val openNote = if (r.isSingleLine) name else "opens $name$undecompiled"
             this += Claim(Owner.FUNC_DELIM, r.start, listOf(Row(openText, note = openNote)))
             val closeLine = with(spans) { r.closeLine } ?: continue
             if (closeLine !in canvas) continue
