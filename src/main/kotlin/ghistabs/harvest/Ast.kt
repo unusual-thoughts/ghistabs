@@ -166,14 +166,14 @@ data class Symbol<S : SymbolDecl<GlobalTypeId>>(
     }
 
     /**
-     * A stack slot is biased by the enclosing [func]'s [Func.frameBias], asked only then; without a [func],
-     * by the convention's [baseStackParamOffset].
+     * A stack slot is biased by the enclosing [func]'s [Func.frameBias]; without a [func], by the
+     * convention's [baseStackParamOffset].
      */
     fun storage(program: Program, func: Func? = null) = location?.let {
         program.dbxArch?.storagename(
             rawValue.toInt(),
             it == VariableLocation.REGISTER,
-            if (it == VariableLocation.STACK) func?.frameBias(program) ?: program.baseStackParamOffset else 0,
+            func?.frameBias(program) ?: program.baseStackParamOffset,
         )
     }
 
@@ -297,8 +297,8 @@ data class Func(
     @Transient private var frameBiasMemo: Int? = null
 
     /**
-     * [ghistabs.frameBias] of the Ghidra function at [addr], or the convention's when there is none. Asked
-     * only once a stack local needs it, then kept.
+     * [ghistabs.frameBias] of the Ghidra function at [addr], or the convention's when there is none. Worked
+     * out on first use, then kept.
      */
     fun frameBias(program: Program) = frameBiasMemo
         ?: (program.functionManager.getFunctionAt(addr)?.frameBias() ?: program.baseStackParamOffset)
