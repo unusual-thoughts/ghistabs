@@ -203,6 +203,11 @@ val Program.baseStackParamOffset get() = compilerSpec.defaultCallingConvention.r
  */
 private const val PROLOGUE_SCAN = 32
 
+private val Program.stackPointer get() = compilerSpec.stackPointer
+
+/** The register gcc's stab frame offsets count from, or null when [dbxArch] doesn't know this processor. */
+private val Program.framePointer get() = dbxArch?.frameRegister?.let(::getRegister)
+
 /**
  * How far below the entry SP this function's prologue set the frame pointer that gcc's stab offsets
  * count from. On x86 that is usually the one saved-FP push [Program.baseStackParamOffset] implies, but a
@@ -215,15 +220,14 @@ private const val PROLOGUE_SCAN = 32
  * program whose [ghistabs.parse.dbxArch] is unknown keeps the convention-derived bias.
  */
 fun Function.frameBias(monitor: TaskMonitor = TaskMonitor.DUMMY): Int {
-    val sp = program.compilerSpec.stackPointer
-    val fp = program.dbxArch?.frameRegister?.let(program::getRegister) ?: return program.baseStackParamOffset
+    val fp = program.framePointer ?: return program.baseStackParamOffset
     return program.listing
         .getInstructions(entryPoint, true).iterator().asSequence()
         .take(PROLOGUE_SCAN)
         .takeWhile { it.flowType.isFallthrough }
         .firstOrNull { ins ->
             ins.pcode.any { op ->
-                op.opcode == PcodeOp.COPY && program.getRegister(op.getInput(0)) == sp &&
+                op.opcode == PcodeOp.COPY && program.getRegister(op.getInput(0)) == program.stackPointer &&
                     program.getRegister(op.output) == fp
             }
         }?.let { setsFp ->
