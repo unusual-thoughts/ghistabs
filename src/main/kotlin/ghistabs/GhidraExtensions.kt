@@ -2,6 +2,7 @@
 
 package ghistabs
 
+import ghidra.app.cmd.function.CallDepthChangeInfo
 import ghidra.app.util.PseudoDisassembler
 import ghidra.app.util.bin.FileByteProvider
 import ghidra.app.util.bin.InputStreamByteProvider
@@ -9,16 +10,15 @@ import ghidra.app.util.importer.MessageLog
 import ghidra.app.util.opinion.LoaderTier
 import ghidra.program.database.data.DataTypeUtilities
 import ghidra.program.model.address.*
-import ghidra.program.model.data.Composite
-import ghidra.program.model.data.DataType
-import ghidra.program.model.data.DataTypeManager
-import ghidra.program.model.data.DataUtilities
-import ghidra.program.model.data.PointerDataType
+import ghidra.program.model.data.*
 import ghidra.program.model.listing.*
 import ghidra.program.model.listing.Function
 import ghidra.program.model.mem.MemoryBlock
+import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.scalar.Scalar
 import ghidra.util.task.TaskMonitor
+import ghistabs.parse.dbxArch
+import ghistabs.parse.frameRegister
 import java.io.File
 import java.nio.file.AccessMode
 
@@ -196,6 +196,46 @@ val MemoryBlock.byteProvider get() = InputStreamByteProvider(data, size)
 val Program.baseStackParamOffset get() = compilerSpec.defaultCallingConvention.run {
     stackParameterOffset?.toInt() ?: stackshift
 }
+
+/**
+ * How many instructions from the entry a prologue may take to set up its frame pointer. The scan also
+ * stops at the first instruction that does not simply fall through, so this only bounds a straight run.
+ */
+private const val PROLOGUE_SCAN = 32
+
+private val Program.stackPointer get() = compilerSpec.stackPointer
+
+/** The register gcc's stab frame offsets count from, or null when [dbxArch] doesn't know this processor. */
+private val Program.framePointer get() = dbxArch?.frameRegister?.let(::getRegister)
+
+/**
+ * How far below the entry SP this function's prologue set the frame pointer that gcc's stab offsets
+ * count from. On x86 that is usually the one saved-FP push [Program.baseStackParamOffset] implies, but a
+ * realigning `main` (gcc >= 4.1: `lea 4(%esp),%ecx; and $-16,%esp; push -4(%ecx); push %ebp`) sits a copied
+ * return address deeper (Ghidra tracks the `and` at depth 0 as no change). On SPARC, `save`'s p-code copies
+ * `fp = sp` before it moves `sp`, so the depth at the `save` is 0: the frame pointer is the entry SP itself,
+ * nowhere near the convention's stack-parameter offset.
+ *
+ * Only a copy of SP into the architecture's frame register ([ghistabs.parse.frameRegister]) counts; a
+ * program whose [ghistabs.parse.dbxArch] is unknown keeps the convention-derived bias.
+ */
+fun Function.frameBias(monitor: TaskMonitor = TaskMonitor.DUMMY): Int = program.framePointer?.let { fp ->
+    program.listing
+        .getInstructions(entryPoint, true).iterator().asSequence()
+        .take(PROLOGUE_SCAN)
+        .takeWhile { it.flowType.isFallthrough }
+        .firstOrNull { ins ->
+            ins.pcode.any { op ->
+                op.opcode == PcodeOp.COPY && program.getRegister(op.getInput(0)) == program.stackPointer &&
+                    program.getRegister(op.output) == fp
+            }
+        }?.let { setsFp ->
+            CallDepthChangeInfo(this, AddressSet(entryPoint..setsFp.address), null, monitor)
+                .getSPDepth(setsFp.address).takeIf {
+                    it != Function.INVALID_STACK_DEPTH_CHANGE && it != Function.UNKNOWN_STACK_DEPTH_CHANGE
+                }?.let { -it }
+        }
+} ?: program.baseStackParamOffset
 
 class LoadedProgram internal constructor(val program: Program, private val consumer: Any) : AutoCloseable {
     override fun close() {

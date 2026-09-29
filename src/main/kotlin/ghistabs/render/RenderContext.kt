@@ -3,6 +3,7 @@ package ghistabs.render
 import ghidra.program.model.data.ByteDataType
 import ghidra.program.model.data.CharDataType
 import ghidra.program.model.data.SignedByteDataType
+import ghistabs.harvest.Func
 import ghistabs.harvest.GhidraSourceFile
 import ghistabs.harvest.StaticSymbol
 import ghistabs.harvest.Symbol
@@ -93,8 +94,9 @@ interface RenderContext {
     // be one. A local's storage is real but is a fact about the compiled code rather than the
     // source being reconstructed, so it is opt-in — and spelled by the same [dbxStorageName] the
     // scope plate comments use, so `EBX` and `Stack[-0x38]` mean there exactly what they mean here.
-    fun Symbol<*>.renderVar(showStorage: Boolean) = when (body) {
-        is SymbolDecl.Local -> body.name to if (showStorage) storage(program) else null
+    // [func] is the enclosing function, whose frame bias a stack local's slot is spelled with.
+    fun Symbol<*>.renderVar(showStorage: Boolean, func: Func? = null) = when (body) {
+        is SymbolDecl.Local -> body.name to if (showStorage) storage(program, func) else null
         is SymbolDecl.Param -> body.name to null
         else -> null
     }?.let { (name, role) ->

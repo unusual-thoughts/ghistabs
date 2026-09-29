@@ -35,6 +35,16 @@ val Program.dbxArch: DbxArch? get() = when (language.processor.toString()) {
 }
 
 /**
+ * The register gcc's stab frame offsets count from (`HARD_FRAME_POINTER_REGNUM`), in Ghidra's spelling:
+ * %ebp, %rbp, and SPARC's %i6, which Ghidra names `fp`.
+ */
+val DbxArch.frameRegister get() = when (this) {
+    DbxArch.X86 -> "EBP"
+    DbxArch.X86_64 -> "RBP"
+    DbxArch.SPARC -> "fp"
+}
+
+/**
  * Map a dbx register number to its architecture register name (gcc/config/<arch>/<arch>.h
  * `DBX_REGISTER_NUMBER`). i386: 0..7 = eax,ecx,edx,ebx,ebp,esp,esi,edi. x86_64 (SysV+Win64 agree):
  * 0..7 = rax,rdx,rcx,rbx,rsi,rdi,rbp,rsp; 8..15 = r8..r15. SPARC: identity over %g/%o/%l/%i.
@@ -58,13 +68,15 @@ fun Program.dbxRegisterName(dbxNum: Int) = dbxArch?.registerName(dbxNum)
 
 /**
  * Where the compiler put a variable, as the scope plate comments spell it: `EBX` for a register,
- * `Stack[-0x38]` for a frame slot. [rawValue] is the stab's value field — a dbx register number or a
- * frame offset — and [frameBias] converts the latter to Ghidra's origin.
+ * `Stack[-0x80-8]` for a frame slot. [rawValue] is the stab's value field — a dbx register number or a
+ * frame offset from the frame pointer — and a non-zero [frameBias], how far below the entry SP the prologue
+ * left that frame pointer, follows it in decimal, so the sum is Ghidra's entry-SP offset.
  *
  * Shared so the render and the plate comments cannot drift into two spellings of one fact.
  */
 fun DbxArch.storagename(rawValue: Int, register: Boolean, frameBias: Int): String = if (register) {
     registerName(rawValue) ?: "r$rawValue"
 } else {
-    (rawValue - frameBias).let { if (it < 0) "Stack[-0x${(-it).toString(16)}]" else "Stack[0x${it.toString(16)}]" }
+    val slot = if (rawValue < 0) "-0x${(-rawValue).toString(16)}" else "0x${rawValue.toString(16)}"
+    "Stack[$slot${if (frameBias == 0) "" else "%+d".format(-frameBias)}]"
 }
