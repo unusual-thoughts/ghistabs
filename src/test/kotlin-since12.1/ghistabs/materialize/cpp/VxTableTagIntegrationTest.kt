@@ -2,13 +2,18 @@ package ghistabs.materialize.cpp
 
 import ghidra.program.model.data.Structure
 import ghidra.program.model.gclass.ClassUtils
+import ghistabs.entrypoints.StabsAnalyzer.Companion.import
 import ghistabs.integration.FeatureFixtureTest
+import ghistabs.integration.Fixtures
+import ghistabs.loadProgram
 import ghistabs.parse.TypeDecl
 import ghistabs.test.*
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
+import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
+import java.io.File
 
 /**
  * Every `<Class>_vftable` the import fills carries the offset tag `ClassUtils.isVTable` (12.1+)
@@ -56,6 +61,40 @@ class VxTableTagIntegrationTest : FeatureFixtureTest() {
             .map { ClassUtils.validateVtableDescriptionOffsetTag(it.description) }
             .toList()
         secondaries mustBe listOf(16L)
+    }
+
+    /**
+     * A gcc 2.x secondary (`_vt$<class>$<base>`) is tagged at its base's vptr inside the class, which
+     * for libg++'s streams is `ios`'s, wherever each class lays its virtual `ios` subobject.
+     */
+    @Test
+    fun `a gcc 2 secondary is tagged at its base's vptr in the class`() {
+        val fixture = "iostream_test_aout_gcc263_fullstabs"
+        assumeTrue(Fixtures.accepts(fixture), "excluded by -Pfixture")
+        loadProgram(File("src/test/resources/binaries/$fixture")).use { loaded ->
+            val program = loaded.program
+            val artifacts = checkNotNull(program.defaultContext().import().artifacts)
+            val classes = artifacts.harvest.types.values
+                .filter { it.body is TypeDecl.Aggregate }
+                .mapNotNull { t -> (artifacts.registry.dataTypeFor(t.id) as? Structure)?.let { t.name to it } }
+                .toMap()
+            val tagged = program.dataTypeManager.allDataTypes.asSequence().filterIsInstance<Structure>()
+                .filter { it.name.endsWith("_vftable_internal_0") }
+                .mapNotNull { vft -> ClassUtils.validateVtableDescriptionOffsetTag(vft.description)?.let { vft to it } }
+                .toList()
+            tagged.mustNotBeEmpty("expected tagged gcc 2.x secondaries in $fixture")
+            val misplaced = tagged.filterNot { (vft, at) ->
+                classes[vft.name.removeSuffix("_vftable_internal_0")]?.vfptrAt(at.toInt()) == true
+            }.map { (vft, at) -> "${vft.name} tagged +$at" }
+            misplaced.mustBeEmpty("tags that do not land on a {vfptr} in their class")
+        }
+    }
+
+    /** Whether a `{vfptr}` sits at [offset], looking into the base subobject that covers it. */
+    private fun Structure.vfptrAt(offset: Int): Boolean {
+        val c = runCatching { getComponentContaining(offset) }.getOrNull() ?: return false
+        return (c.offset == offset && c.fieldName == ClassUtils.VFPTR) ||
+            (c.dataType as? Structure)?.vfptrAt(offset - c.offset) == true
     }
 
     private fun filledVftables() = program.dataTypeManager.allDataTypes.asSequence()

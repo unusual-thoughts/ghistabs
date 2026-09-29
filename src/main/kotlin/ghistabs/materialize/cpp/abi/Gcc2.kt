@@ -4,6 +4,7 @@ import ghidra.app.util.demangler.DemangledObject
 import ghidra.program.model.data.IntegerDataType
 import ghidra.program.model.data.ShortDataType
 import ghidra.program.model.data.Structure
+import ghistabs.Demangler
 import ghistabs.materialize.cpp.abi.Gcc2.DEMANGLED_VTABLE_SUFFIX
 import ghistabs.namespaces
 import ghistabs.parse.TypeDecl.Aggregate.Method
@@ -129,6 +130,35 @@ object Gcc2 {
             parts.size <= 9 -> "Q${parts.size}$joined"
             else -> "Q_${parts.size}_$joined"
         }
+    }
+
+    /**
+     * The class and the base a gcc 2.x *secondary* vtable symbol names — `iostream` and `ios` for
+     * `_vt.8iostream.3ios`, the table iostream's `ios` subobject points at — or null if [symbolName]
+     * is not one. See [looksLikePrimaryVtable] for why the two-segment name is its own table. A class
+     * whose polymorphic bases are all virtual has *only* these: libg++'s `iostream` carries no
+     * `_vt.8iostream` at all.
+     *
+     * The names come from [Demangler], which reads a template's `t` form too (`_vt.t5Stack1Zi.3ios`).
+     * Where the class ends is read off the mangled form: the demangled one cannot tell `Outer::Inner`'s
+     * `ios` table from `Outer`'s `Inner::ios` one. A tail with a third segment is a path through
+     * bases, not a class, and is left alone.
+     */
+    fun secondaryVtableClasses(symbolName: String): Pair<String, String>? {
+        val tail = vtableTail(symbolName) ?: return null
+        val cls = tail.takeWhile { it !in MARKERS }
+        if (cls == tail || tail.substring(cls.length + 1).any { it in MARKERS }) return null
+        val scopes = scopeCount(cls) ?: return null
+        val names = Demangler.of("$VTABLE_PREFIX.$tail")?.let(::demangledVtableClass)?.nameSegments
+            ?.takeIf { it.size > scopes } ?: return null
+        return names.take(scopes).qualifiedName to names.drop(scopes).qualifiedName
+    }
+
+    /** How many scopes the mangled class [mangled] spells: the count of a `Q<n>` or `Q_<n>_`, else one. */
+    private fun scopeCount(mangled: String): Int? = when {
+        !mangled.startsWith("Q") -> 1
+        mangled.getOrNull(1) == '_' -> mangled.drop(2).takeWhile(Char::isDigit).toIntOrNull()
+        else -> mangled.getOrNull(1)?.digitToIntOrNull()
     }
 
     /**
