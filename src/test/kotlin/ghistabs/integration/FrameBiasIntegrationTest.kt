@@ -18,7 +18,7 @@ import java.io.File
  * `lea 4(%esp),%ecx; and $-16,%esp; push -4(%ecx); push %ebp`) leaves it a copied return address deeper
  * than the one push the calling convention implies. `doc` is `-0x80(%ebp)` in both stab and code of the
  * gcc 4.2.1 `main`, `-0x68(%ebp)` in the gcc 3.4.5 one, which does not realign. The scope plate comment
- * keeps the convention's slot and appends how far the realignment moved it.
+ * spells the stab offset, then the frame bias.
  */
 @Tag("integration")
 class FrameBiasIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
@@ -31,7 +31,7 @@ class FrameBiasIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     }
 
     @ParameterizedTest
-    @CsvSource("xmltest_gcc421.exe, -136, Stack[-0x84-4]", "xmltest_gcc345.exe, -108, Stack[-0x6c]")
+    @CsvSource("xmltest_gcc421.exe, -136, Stack[-0x80-8]", "xmltest_gcc345.exe, -108, Stack[-0x68-4]")
     fun `a local sits at its stab offset from where the prologue left the frame pointer`(
         fixture: String,
         offset: Int,

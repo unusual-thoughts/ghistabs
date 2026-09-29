@@ -13,7 +13,6 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.symbol.SourceType
 import ghidra.program.model.symbol.SymbolTable
 import ghistabs.Demangler
-import ghistabs.baseStackParamOffset
 import ghistabs.diagnose.ApplyErrorBucket
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.Level
@@ -520,8 +519,7 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
         val rows = (stack.sortedBy { it.rawValue } + registers.sortedBy { it.body.name }).map { loc ->
             val type = registry.resolveRef(loc.body.type)?.displayName ?: "?"
             val origin = loc.line?.let { "[${loc.sourceFile.filename}:$it]" } ?: "[${loc.sourceFile.filename}]"
-            val storage = loc.storage(ctx.program) { frameBias.value - ctx.program.baseStackParamOffset }
-            Triple("$type ${loc.body.name}", storage.orEmpty(), origin)
+            Triple("$type ${loc.body.name}", loc.storage(ctx.program) { frameBias.value }.orEmpty(), origin)
         }
         val declWidth = rows.maxOf { it.first.length }
         val storageWidth = rows.maxOf { it.second.length }

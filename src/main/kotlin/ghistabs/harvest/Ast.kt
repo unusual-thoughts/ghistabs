@@ -163,13 +163,12 @@ data class Symbol<S : SymbolDecl<GlobalTypeId>>(
         else -> null
     }
 
-    /** [skew] is the enclosing function's (see [ghistabs.parse.storagename]), asked only for a stack slot. */
-    fun storage(program: Program, skew: () -> Int = { 0 }) = location?.let {
+    /** [frameBias] is the enclosing function's ([ghistabs.frameBias]), asked only for a stack slot. */
+    fun storage(program: Program, frameBias: () -> Int = { program.baseStackParamOffset }) = location?.let {
         program.dbxArch?.storagename(
             rawValue.toInt(),
             it == VariableLocation.REGISTER,
-            program.baseStackParamOffset,
-            if (it == VariableLocation.STACK) skew() else 0,
+            if (it == VariableLocation.STACK) frameBias() else 0,
         )
     }
 

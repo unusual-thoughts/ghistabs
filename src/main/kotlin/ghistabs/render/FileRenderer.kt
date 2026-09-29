@@ -389,11 +389,11 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
     private fun Type.Decl?.dedup() = this != null && name != "this" && seenDecls.add(Type.Decl(line, name))
 
     private fun Func.vars(): List<Var> {
-        val skew by lazy {
-            program.functionManager.getFunctionAt(addr)?.let { it.frameBias() - program.baseStackParamOffset } ?: 0
+        val frameBias by lazy {
+            program.functionManager.getFunctionAt(addr)?.frameBias() ?: program.baseStackParamOffset
         }
         return (params + locals).filter { it.sourceFile == source }.mapNotNull {
-            it.renderVar(renderer.showStorage) { skew }
+            it.renderVar(renderer.showStorage) { frameBias }
         }
     }
 
