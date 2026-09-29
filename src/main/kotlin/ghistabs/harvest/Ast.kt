@@ -15,6 +15,7 @@ import ghistabs.frameBias
 import ghistabs.parse.*
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 import kotlinx.serialization.UseSerializers
 import kotlinx.serialization.descriptors.PrimitiveKind.STRING
 import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
@@ -289,9 +290,16 @@ data class Func(
      */
     fun sourceSignature(program: Program) = decl.scope.storageClass() + signature(program)
 
-    /** [ghistabs.frameBias] of the Ghidra function at [addr], or the convention's when there is none. */
-    fun frameBias(program: Program) = program.functionManager.getFunctionAt(addr)?.frameBias()
-        ?: program.baseStackParamOffset
+    // A Func is serializable and holds no Program, so [frameBias] memoizes by hand rather than by lazy.
+    @Transient private var frameBiasMemo: Int? = null
+
+    /**
+     * [ghistabs.frameBias] of the Ghidra function at [addr], or the convention's when there is none. Asked
+     * only once a stack local needs it, then kept.
+     */
+    fun frameBias(program: Program) = frameBiasMemo
+        ?: (program.functionManager.getFunctionAt(addr)?.frameBias() ?: program.baseStackParamOffset)
+            .also { frameBiasMemo = it }
 
     /**
      * Scope chain the linkage name declares, root-first and canonically spelled

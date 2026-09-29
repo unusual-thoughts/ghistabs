@@ -17,7 +17,6 @@ import ghistabs.diagnose.ApplyErrorBucket
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.Level
 import ghistabs.forceCreateData
-import ghistabs.frameBias
 import ghistabs.fullName
 import ghistabs.harvest.*
 import ghistabs.materialize.DataTypeRegistry
@@ -168,13 +167,12 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
                 // is called `this` has no such N_PSYM, so it keeps the local.
                 val paramNames = open.params.mapTo(mutableSetOf()) { it.body.name }
                 val firstUse = open.firstUseOffsets(func.entryPoint)
-                val frameBias = lazy { func.frameBias() }
                 for (loc in open.locals) {
-                    loc.applyLocal(func, paramNames, firstUse[loc.recordIndex] ?: 0, frameBias)
+                    loc.applyLocal(func, open, paramNames, firstUse[loc.recordIndex] ?: 0)
                 }
 
                 // Apply scope plate comments.
-                if (ctx.options.applyPlateComments) applyScopeComments(func, open, frameBias)
+                if (ctx.options.applyPlateComments) applyScopeComments(func, open)
 
                 functions++
             } catch (t: Throwable) {
@@ -415,7 +413,7 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
         source,
     )
 
-    private fun LocalSymbol.applyLocal(func: Function, paramNames: Set<String>, firstUse: Int, frameBias: Lazy<Int>) {
+    private fun LocalSymbol.applyLocal(func: Function, open: Func, paramNames: Set<String>, firstUse: Int) {
         try {
             when (body.location) {
                 VariableLocation.STACK -> {
@@ -433,8 +431,8 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
                         return
                     }
                     // gcc's frame-pointer-relative offset → Ghidra's SP-at-entry offset via the
-                    // prologue-derived [frameBias] (NSA/ghidra#223, #5485).
-                    func.addStack(this, rawValue.toInt() - frameBias.value)
+                    // prologue-derived [Func.frameBias] (NSA/ghidra#223, #5485).
+                    func.addStack(this, rawValue.toInt() - open.frameBias(ctx.program))
                     debug("local-var-add-success")
                 }
 
@@ -489,14 +487,14 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
         }
     }
 
-    private fun applyScopeComments(func: Function, open: Func, frameBias: Lazy<Int>) {
+    private fun applyScopeComments(func: Function, open: Func) {
         fun comment(blocks: List<BlockScope>) {
             for ((start, _, locals, children) in blocks) {
                 try {
                     if (locals.isEmpty()) {
                         debug("empty-scope", "function=${func.name}", address = start)
                     } else {
-                        ctx.program.listing.setComment(start, CommentType.PLATE, scopeCommentText(locals, frameBias))
+                        ctx.program.listing.setComment(start, CommentType.PLATE, scopeCommentText(locals, open))
                     }
                 } catch (e: Exception) {
                     degradation("scope-comment-dropped", "${func.name}", e.message, start)
@@ -514,12 +512,12 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
      * variable — Ghidra's frame maps an offset to at most one — so for everything shadowed there,
      * this comment is the only surviving record of the name, type and slot.
      */
-    private fun scopeCommentText(locals: List<LocalSymbol>, frameBias: Lazy<Int>): String {
+    private fun scopeCommentText(locals: List<LocalSymbol>, open: Func): String {
         val (stack, registers) = locals.partition { it.body.location == VariableLocation.STACK }
         val rows = (stack.sortedBy { it.rawValue } + registers.sortedBy { it.body.name }).map { loc ->
             val type = registry.resolveRef(loc.body.type)?.displayName ?: "?"
             val origin = loc.line?.let { "[${loc.sourceFile.filename}:$it]" } ?: "[${loc.sourceFile.filename}]"
-            Triple("$type ${loc.body.name}", loc.storage(ctx.program) { frameBias.value }.orEmpty(), origin)
+            Triple("$type ${loc.body.name}", loc.storage(ctx.program) { open.frameBias(ctx.program) }.orEmpty(), origin)
         }
         val declWidth = rows.maxOf { it.first.length }
         val storageWidth = rows.maxOf { it.second.length }
