@@ -17,6 +17,8 @@ import ghidra.program.model.mem.MemoryBlock
 import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.scalar.Scalar
 import ghidra.util.task.TaskMonitor
+import ghistabs.parse.dbxArch
+import ghistabs.parse.frameRegister
 import java.io.File
 import java.nio.file.AccessMode
 
@@ -195,30 +197,42 @@ val Program.baseStackParamOffset get() = compilerSpec.defaultCallingConvention.r
     stackParameterOffset?.toInt() ?: stackshift
 }
 
-/** How many instructions from the entry a prologue may take to set up its frame pointer. */
-private const val PROLOGUE_SCAN = 8
+/**
+ * How many instructions from the entry a prologue may take to set up its frame pointer. The scan also
+ * stops at the first instruction that does not simply fall through, so this only bounds a straight run.
+ */
+private const val PROLOGUE_SCAN = 32
 
 /**
  * How far below the entry SP this function's prologue set the frame pointer that gcc's stab offsets
  * count from. On x86 that is usually the one saved-FP push [Program.baseStackParamOffset] implies, but a
  * realigning `main` (gcc >= 4.1: `lea 4(%esp),%ecx; and $-16,%esp; push -4(%ecx); push %ebp`) sits a copied
- * return address deeper (Ghidra tracks the `and` at depth 0 as no change), and on SPARC `save` makes the
- * frame pointer the entry SP itself, nowhere near the convention's stack-parameter offset.
+ * return address deeper (Ghidra tracks the `and` at depth 0 as no change). On SPARC, `save`'s p-code copies
+ * `fp = sp` before it moves `sp`, so the depth at the `save` is 0: the frame pointer is the entry SP itself,
+ * nowhere near the convention's stack-parameter offset.
+ *
+ * Only a copy of SP into the architecture's frame register ([ghistabs.parse.frameRegister]) counts; a
+ * program whose [ghistabs.parse.dbxArch] is unknown keeps the convention-derived bias.
  */
-fun Function.frameBias(monitor: TaskMonitor = TaskMonitor.DUMMY): Int = program.listing
-    .getInstructions(entryPoint, true).iterator().asSequence()
-    .take(PROLOGUE_SCAN)
-    .firstOrNull { ins ->
-        ins.pcode.any { op ->
-            op.opcode == PcodeOp.COPY && program.getRegister(op.getInput(0)) == program.compilerSpec.stackPointer &&
-                program.getRegister(op.output)?.let { it != program.compilerSpec.stackPointer } == true
-        }
-    }?.let { setsFp ->
-        CallDepthChangeInfo(this, AddressSet(entryPoint..setsFp.address), null, monitor)
-            .getSPDepth(setsFp.address).takeIf {
-                it != Function.INVALID_STACK_DEPTH_CHANGE && it != Function.UNKNOWN_STACK_DEPTH_CHANGE
-            }?.let { -it }
-    } ?: program.baseStackParamOffset
+fun Function.frameBias(monitor: TaskMonitor = TaskMonitor.DUMMY): Int {
+    val sp = program.compilerSpec.stackPointer
+    val fp = program.dbxArch?.frameRegister?.let(program::getRegister) ?: return program.baseStackParamOffset
+    return program.listing
+        .getInstructions(entryPoint, true).iterator().asSequence()
+        .take(PROLOGUE_SCAN)
+        .takeWhile { it.flowType.isFallthrough }
+        .firstOrNull { ins ->
+            ins.pcode.any { op ->
+                op.opcode == PcodeOp.COPY && program.getRegister(op.getInput(0)) == sp &&
+                    program.getRegister(op.output) == fp
+            }
+        }?.let { setsFp ->
+            CallDepthChangeInfo(this, AddressSet(entryPoint..setsFp.address), null, monitor)
+                .getSPDepth(setsFp.address).takeIf {
+                    it != Function.INVALID_STACK_DEPTH_CHANGE && it != Function.UNKNOWN_STACK_DEPTH_CHANGE
+                }?.let { -it }
+        } ?: program.baseStackParamOffset
+}
 
 class LoadedProgram internal constructor(val program: Program, private val consumer: Any) : AutoCloseable {
     override fun close() {

@@ -35,6 +35,16 @@ val Program.dbxArch: DbxArch? get() = when (language.processor.toString()) {
 }
 
 /**
+ * The register gcc's stab frame offsets count from (`HARD_FRAME_POINTER_REGNUM`), in Ghidra's spelling:
+ * %ebp, %rbp, and SPARC's %i6, which Ghidra names `fp`.
+ */
+val DbxArch.frameRegister get() = when (this) {
+    DbxArch.X86 -> "EBP"
+    DbxArch.X86_64 -> "RBP"
+    DbxArch.SPARC -> "fp"
+}
+
+/**
  * Map a dbx register number to its architecture register name (gcc/config/<arch>/<arch>.h
  * `DBX_REGISTER_NUMBER`). i386: 0..7 = eax,ecx,edx,ebx,ebp,esp,esi,edi. x86_64 (SysV+Win64 agree):
  * 0..7 = rax,rdx,rcx,rbx,rsi,rdi,rbp,rsp; 8..15 = r8..r15. SPARC: identity over %g/%o/%l/%i.

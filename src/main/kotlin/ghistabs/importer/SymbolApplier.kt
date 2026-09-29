@@ -168,7 +168,7 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
                 // is called `this` has no such N_PSYM, so it keeps the local.
                 val paramNames = open.params.mapTo(mutableSetOf()) { it.body.name }
                 val firstUse = open.firstUseOffsets(func.entryPoint)
-                val frameBias = func.frameBias()
+                val frameBias = lazy { func.frameBias() }
                 for (loc in open.locals) {
                     loc.applyLocal(func, paramNames, firstUse[loc.recordIndex] ?: 0, frameBias)
                 }
@@ -415,7 +415,7 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
         source,
     )
 
-    private fun LocalSymbol.applyLocal(func: Function, paramNames: Set<String>, firstUse: Int, frameBias: Int) {
+    private fun LocalSymbol.applyLocal(func: Function, paramNames: Set<String>, firstUse: Int, frameBias: Lazy<Int>) {
         try {
             when (body.location) {
                 VariableLocation.STACK -> {
@@ -434,7 +434,7 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
                     }
                     // gcc's frame-pointer-relative offset → Ghidra's SP-at-entry offset via the
                     // prologue-derived [frameBias] (NSA/ghidra#223, #5485).
-                    func.addStack(this, rawValue.toInt() - frameBias)
+                    func.addStack(this, rawValue.toInt() - frameBias.value)
                     debug("local-var-add-success")
                 }
 
