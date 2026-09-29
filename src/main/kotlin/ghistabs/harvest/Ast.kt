@@ -11,6 +11,7 @@ import ghidra.program.model.sourcemap.SourceMapEntry
 import ghidra.program.model.symbol.SymbolUtilities
 import ghistabs.Demangler
 import ghistabs.baseStackParamOffset
+import ghistabs.frameBias
 import ghistabs.parse.*
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
@@ -165,14 +166,14 @@ data class Symbol<S : SymbolDecl<GlobalTypeId>>(
     }
 
     /**
-     * A stack slot is biased by the enclosing [func]'s [Func.frameBias]; without a [func], by the
-     * convention's [baseStackParamOffset].
+     * A stack slot is biased by the enclosing [func]'s [Func.frameBias], asked only then; without a [func],
+     * by the convention's [baseStackParamOffset].
      */
     fun storage(program: Program, func: Func? = null) = location?.let {
         program.dbxArch?.storagename(
             rawValue.toInt(),
             it == VariableLocation.REGISTER,
-            func?.frameBias?.value ?: program.baseStackParamOffset,
+            if (it == VariableLocation.STACK) func?.frameBias(program) ?: program.baseStackParamOffset else 0,
         )
     }
 
@@ -264,8 +265,6 @@ data class Func(
     val sizeBytes: ULong? = null,
     // N_FUN's desc: DECL_SOURCE_LINE, null unless built with -gstabs+.
     val declLine: Int? = null,
-    // [ghistabs.frameBias] of the function at [addr], from the harvest's resolver; null without a program.
-    @Transient val frameBias: Lazy<Int>? = null,
 ) {
     val demangledName by lazy { Demangler.name(decl.name) }
 
@@ -293,6 +292,17 @@ data class Func(
      * free function — the stab is the only place that distinction survives.
      */
     fun sourceSignature(program: Program) = decl.scope.storageClass() + signature(program)
+
+    // A Func is serializable and holds no Program, so [frameBias] memoizes by hand rather than by lazy.
+    @Transient private var frameBiasMemo: Int? = null
+
+    /**
+     * [ghistabs.frameBias] of the Ghidra function at [addr], or the convention's when there is none. Asked
+     * only once a stack local needs it, then kept.
+     */
+    fun frameBias(program: Program) = frameBiasMemo
+        ?: (program.functionManager.getFunctionAt(addr)?.frameBias() ?: program.baseStackParamOffset)
+            .also { frameBiasMemo = it }
 
     /**
      * Scope chain the linkage name declares, root-first and canonically spelled

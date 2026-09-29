@@ -70,7 +70,6 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
             val attributedParams = params.map { it.copy(sourceFile = source) }
             return Func(
                 name, addr, decl, cu, locals, attributedParams, attributedBlocks, lineEntries, extent, declLine,
-                resolver.frameBias(addr),
             )
         }
     }

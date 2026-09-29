@@ -7,7 +7,6 @@ import ghidra.program.model.listing.Program
 import ghistabs.baseStackParamOffset
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.DummySink
-import ghistabs.frameBias
 import ghistabs.parse.*
 import ghistabs.plus
 
@@ -28,9 +27,6 @@ interface AddressResolver {
 
     /** Inclusive end of the memory block holding [addr] — where a range with no successor stops. */
     fun blockEnd(addr: Address): Address? = null
-
-    /** [ghistabs.frameBias] of the function at [addr], worked out on first use; null without a program. */
-    fun frameBias(addr: Address): Lazy<Int>? = null
     fun forSymbol(sym: Symbol<*>): Address? = when (val decl = sym.body) {
         is SymbolDecl.Static if decl.scope == StaticScope.GLOBAL -> resolve(decl.name)
         is SymbolDecl.Function, is SymbolDecl.Static -> buildAddress(sym.rawValue)
@@ -116,11 +112,6 @@ class ProgramAddressResolver(private val program: Program, private val sink: Dia
     }
 
     override fun blockEnd(addr: Address) = program.memory.getBlock(addr)?.end
-
-    // Lazy because the importer creates the function only after the harvest; asked first by applyLocal.
-    override fun frameBias(addr: Address) = lazy {
-        program.functionManager.getFunctionAt(addr)?.frameBias() ?: program.baseStackParamOffset
-    }
 
     /**
      * Where gcc put this local, as an address the decompiler indexes storage by: the register itself, or
