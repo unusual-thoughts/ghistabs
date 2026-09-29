@@ -284,6 +284,33 @@ class TypeStoreTest {
     }
 
     /**
+     * gcc 10+ define `Vec` inline at its first use (`v:(0,9)=(0,10)=s8…`) and name it later with a bare
+     * `Vec:t(0,9)`, carrying the header's line (§85). The body keeps the use's record, the name its own,
+     * and that split is what makes the name late. `Vec:t(0,9)=(0,10)=s8…` names it in the same record.
+     */
+    @Test
+    fun `a bare typedef after the inline definition is a late name`() {
+        val cu = SourceFile.CUSource("latetypedef.c")
+        val id = GlobalTypeId(cu, 9)
+        val body = TypeDecl.InlineDef(GlobalTypeId(cu, 10), TypeDecl.Builtin(-1))
+        val use = Origin(cu, 3, sourceFileOf("latetypedef.c"), 20, "useLocal")
+        val typedef = Origin(cu, 7, sourceFileOf("latetypedef.c"), 9, "useLocal")
+        val name = NameBinding("Vec", TypeNameKind.TYPEDEF, typedef)
+
+        val late = TypeStore().apply {
+            this += Type(id, null, body, use)
+            this += Type(id, name, TypeDecl.Ref(id), typedef)
+        }.toHarvest().first.getValue(id)
+        late.body mustBe body
+        late.origin mustBe use
+        late.line mustBe 9
+        late.lateName.must("a bare typedef after the use is late") { this }
+
+        val inSameRecord = Type(id, name, body, typedef)
+        inSameRecord.lateName.mustNot("a typedef defining its body in the same record is not late") { this }
+    }
+
+    /**
      * Test: Same type twice from same CU (duplicate with same hash).
      *
      * This mirrors the same-hash pattern from the corpus. Two stabs records in the same CU

@@ -14,7 +14,13 @@ and exercised by their own integration test.
 | `hello_elf_gcc33`, `_gcc34` | gcc 3.3.5 / 3.4.4, i386 | `docker run --platform linux/386 debian/eol:sarge` (`g++`, `g++-3.4`) | — |
 | `hello_elf_gcc41` … `_gcc8` | gcc 4.1.2 / 4.3.2 / 4.4.5 / 4.7.2 / 4.9.2 / 6.3.0 / 8.3.0, i386 | `debian/eol:` etch / lenny / squeeze / wheezy / jessie / stretch / buster | — |
 | `hello_elf_gcc10`, `_gcc12` | gcc 10.2.1 / 12.2.0, i386 PIE | `debian/eol:bullseye` (security via its snapshot.debian.org line), `debian:bookworm` | — |
+| `latetypedef_elf64_gcc9`, `_gcc10`, `_gcc12` | gcc 9.5.0 / 10.5.0 / 12.4.0, x86-64 PIE | Ubuntu 24.04 `apt-get install gcc-9 gcc-10 gcc-12` | `LateTypedefIntegrationTest` |
 | `hello_gcc345.exe`, `hello_gcc421.exe` | MinGW gcc 3.4.5 / 4.2.1, PE32 | `debian/eol:etch` / `lenny`, package `mingw32`, `-static`; 4.2.1 then `objcopy --remove-section='.debug_*'` | — |
+
+The `latetypedef` set from `latetypedef.c` + `latetypedef.h` with `gcc-N -gstabs+ -O0 -fdebug-prefix-map=$PWD=/src
+latetypedef.c`. From gcc 10, `-feliminate-unused-debug-symbols` is on by default: each header struct is defined
+inline at its first use and named by a bare `Name:t(id)` afterwards, with the header's line and no N_BINCL. gcc 9
+opens `N_BINCL latetypedef.h` and defines them there (render-backlog §85).
 
 The `ptrmem` pair from `ptrmem.cc` with `g++ -gstabs+ -O0 ptrmem.cc -o <fixture>`, linked.
 
