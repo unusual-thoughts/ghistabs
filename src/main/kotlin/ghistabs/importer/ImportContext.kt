@@ -81,18 +81,25 @@ class ImportContext<Terminal : DiagnosticSink>(
     fun typedefShortener(registry: DataTypeRegistry) = TypedefShortener(registry, monitor)
     fun classApplier(registry: DataTypeRegistry) = ClassApplier(registry, program, resolver, monitor, this)
 
-    /** Pass A's input, the raw records: null when the program carries none. */
-    fun readStabs(): StabReader.Result? = StabReader.fromProgram(program)?.readAll(monitor)?.also { stabs ->
-        stabs.unresolvedNames.takeIf { it > 0 }?.let {
-            warn(
-                "stabstr-out-of-range",
-                "$it records name an offset past the string table; read as nameless",
-                count = it.toLong(),
-            )
+    /**
+     * Pass A's input, the raw records: null when the program carries none. Either way, says why a read
+     * that comes back empty-handed did: a linker index in place of the stabs, a string table the
+     * records have lost, names pointing past it.
+     */
+    fun readStabs(): StabReader.Result? {
+        StabReader.verdictOf(program)?.let { (category, message) -> warn(category, message) }
+        return StabReader.fromProgram(program)?.readAll(monitor)?.also { stabs ->
+            stabs.unresolvedNames.takeIf { it > 0 }?.let {
+                warn(
+                    "stabstr-out-of-range",
+                    "$it records name an offset past the string table; read as nameless",
+                    count = it.toLong(),
+                )
+            }
+        } ?: run {
+            warn("no-stabs", "No .stab/.stabstr block found.")
+            null
         }
-    } ?: run {
-        warn("no-stabs", "No .stab/.stabstr block found.")
-        null
     }
 }
 

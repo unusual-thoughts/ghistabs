@@ -14,9 +14,9 @@ import java.nio.ByteOrder
 
 /**
  * The SunPro binaries whose linker kept only a per-CU `.stab.index` (the `_indexonly` samples in
- * the wp-unix corpus): each must read to zero types rather than throw, and never fall through to
- * the ELF `.symtab`. Plus the two ways a wrong source used to crash: records outside any `N_SO`,
- * and `n_strx` past the table.
+ * the wp-unix corpus): each must read to zero types rather than throw, with a verdict saying why,
+ * and never fall through to the ELF `.symtab`. Plus the two ways a wrong source used to crash:
+ * records outside any `N_SO`, and `n_strx` past the table.
  */
 class IndexOnlyStabsTest {
     private fun record(strx: Int, type: StabType, desc: Int = 0, value: Int = 0): ByteArray =
@@ -30,7 +30,7 @@ class IndexOnlyStabsTest {
     /**
      * `inww8_elf_{sparc,i386}_*_indexonly`: an `N_UNDF` header naming each CU, then its `N_OPT`, the
      * compile command line (0x34) and an `N_MAIN`. No `N_SO` anywhere, and nothing to type — so it
-     * reads, and harvests to nothing.
+     * reads, harvests to nothing, and the verdict says the stabs stayed in the objects.
      */
     @Test
     fun indexReadsToZeroTypes() {
@@ -53,13 +53,15 @@ class IndexOnlyStabsTest {
 
         val elf = blocks(".symtab", ".strtab", ".stab.index", ".stab.indexstr")
         StabReader.candidate(elf = true, elf)?.records mustBe ".stab.index"
+        StabReader.verdict(elf = true, elf)?.category mustBe "stab-index-only"
     }
 
-    /** A binary with real stabs and an index too keeps reading the stabs. */
+    /** A binary with real stabs and an index too keeps reading the stabs, and needs no verdict. */
     @Test
     fun realStabsOutrankTheIndex() {
         val both = blocks(".stab", ".stabstr", ".stab.index", ".stab.indexstr")
         StabReader.candidate(elf = true, both)?.records mustBe ".stab"
+        StabReader.verdict(elf = true, both).mustBeNull()
     }
 
     /**
@@ -70,6 +72,7 @@ class IndexOnlyStabsTest {
     fun indexWithoutStringsLocatesNothing() {
         val elf = blocks(".symtab", ".strtab", ".stab.index")
         StabReader.candidate(elf = true, elf).mustBeNull()
+        StabReader.verdict(elf = true, elf)?.category mustBe "stab-strings-missing"
 
         // The same symtab on a.out is the stab table, and still read.
         StabReader.candidate(elf = false, elf)?.layout mustBe Layout.SYMTAB
