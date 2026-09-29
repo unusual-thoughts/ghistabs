@@ -2,6 +2,7 @@ package ghistabs.parse
 
 import ghidra.app.util.bin.BinaryReader
 import ghidra.app.util.bin.ByteArrayProvider
+import ghidra.app.util.opinion.ElfLoader
 import ghidra.program.model.data.*
 import ghidra.program.model.listing.Program
 import ghidra.program.model.mem.MemoryBlock
@@ -104,6 +105,9 @@ class StabReader(
     /** Blocks holding the records and their strings, and how to read them. */
     data class Source(val records: MemoryBlock, val strings: MemoryBlock, val layout: Layout)
 
+    /** One place stabs can live: the records block, the string block it indexes, and their layout. */
+    internal data class Candidate(val records: String, val strings: String, val layout: Layout)
+
     /**
      * *Defined* link-time symbols as name → `n_value`: the half of an a.out symbol table
      * [physicalRecords] skips. An `N_GSYM` carries no address of its own — the format keeps it in
@@ -126,18 +130,37 @@ class StabReader(
     }
 
     companion object {
-        /** Where the formats keep stabs, in precedence order: ELF/PE sections, then the a.out symtab. */
+        /**
+         * Where the formats keep stabs, in precedence order: ELF/PE sections, then a Sun linker index —
+         * which a binary carrying real `.stab` has too, and must not win — then the a.out symtab.
+         */
         private val SOURCES = listOf(
-            Triple(".stab", ".stabstr", Layout.SECTION),
-            Triple(".symtab", ".strtab", Layout.SYMTAB),
+            Candidate(".stab", ".stabstr", Layout.SECTION),
+            // What Sun `ld` emits when `cc` ran without `-xs`: per CU, an `N_UNDF` header naming the file,
+            // its `N_OPT` options, the compile command line (0x34, GNU's `N_NOMAP`), `N_OBJ` object paths
+            // and the odd `N_MAIN` — while the stabs proper stay in the `.o`/`.a` for dbx to fetch. Same
+            // record layout as `.stab`, and nothing to type.
+            Candidate(".stab.index", ".stab.indexstr", Layout.SECTION),
+            Candidate(".symtab", ".strtab", Layout.SYMTAB),
         )
 
-        /** Which blocks [program] keeps its stabs in, for callers that need the bytes' addresses. */
-        fun sourceOf(program: Program): Source? = SOURCES.firstNotNullOfOrNull { (records, strings, layout) ->
-            program.memory.getBlock(records)?.let { r ->
-                program.memory.getBlock(strings)?.let { s -> Source(r, s, layout) }
+        /**
+         * The first complete [SOURCES] entry among the blocks [has] names. Never the symtab of an [elf]:
+         * that holds 16-byte `Elf32_Sym`s, which read as 12-byte `nlist`s are garbage records outside
+         * any `N_SO` with string offsets past the table.
+         */
+        internal fun candidate(elf: Boolean, has: (String) -> Boolean) =
+            SOURCES.firstOrNull { (records, strings, layout) ->
+                !(elf && layout == Layout.SYMTAB) && has(records) && has(strings)
             }
-        }
+
+        private val Program.isElf get() = executableFormat == ElfLoader.ELF_NAME
+
+        /** Which blocks [program] keeps its stabs in, for callers that need the bytes' addresses. */
+        fun sourceOf(program: Program): Source? = candidate(program.isElf) { program.memory.getBlock(it) != null }
+            ?.let { (records, strings, layout) ->
+                Source(program.memory.getBlock(records), program.memory.getBlock(strings), layout)
+            }
 
         /**
          * Whether [program] carries stabs at all — block lookups only, opening no streams and reading no
