@@ -412,7 +412,7 @@ class ContentIndexTest {
 
         // Pre-populate the cache the same way the dump test does:
         // hash every TypeAst.body top-level, then store under its id.
-        for ((_, id, _, body) in store.values) {
+        for ((id, _, body) in store.values) {
             storeOracle.contentCache[id] = storeOracle.content(body)
         }
 

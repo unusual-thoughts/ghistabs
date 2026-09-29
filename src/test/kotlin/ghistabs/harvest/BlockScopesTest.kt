@@ -26,13 +26,11 @@ class BlockScopesTest {
 
     private fun BlockTreeBuilder.local(name: String, declLine: Int) = local(
         Symbol(
-            recordIndex = nextIndex++,
             recordType = StabType.N_LSYM,
             body = SymbolDecl.Local(name, TypeDecl.Complex(0, 1), VariableLocation.STACK),
             rawValue = 0,
-            line = declLine,
             // The trailing N_SOL gcc leaves in effect — always the CU, never the local's own file.
-            sourceFile = sourceFileOf("main.cpp"),
+            origin = Origin(SourceFile.CUSource("main.cpp"), nextIndex++, sourceFileOf("main.cpp"), declLine),
         ),
     )
 

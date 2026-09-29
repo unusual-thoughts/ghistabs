@@ -555,15 +555,9 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
             )
         }
 
-        if (ctx.options.applyPlateComments &&
-            decl.scope == StaticScope.FUNCTION &&
-            sym.enclosingFunction != null
-        ) {
-            ctx.program.listing.setComment(
-                addr,
-                CommentType.PLATE,
-                "static local of ${Demangler.name(sym.enclosingFunction)}()",
-            )
+        val owner = sym.enclosingFunction
+        if (ctx.options.applyPlateComments && decl.scope == StaticScope.FUNCTION && owner != null) {
+            ctx.program.listing.setComment(addr, CommentType.PLATE, "static local of ${Demangler.name(owner)}()")
             debug("static-local-plate", address = addr)
         }
 
