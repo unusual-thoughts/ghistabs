@@ -31,7 +31,7 @@ class FrameBiasIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
     }
 
     @ParameterizedTest
-    @CsvSource("xmltest_gcc421.exe, -136, Stack[-0x84]-0x4", "xmltest_gcc345.exe, -108, Stack[-0x6c]")
+    @CsvSource("xmltest_gcc421.exe, -136, Stack[-0x84-4]", "xmltest_gcc345.exe, -108, Stack[-0x6c]")
     fun `a local sits at its stab offset from where the prologue left the frame pointer`(
         fixture: String,
         offset: Int,
