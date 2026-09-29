@@ -343,7 +343,6 @@ private fun GlobalTypeDecl.aliases(bodyOf: (GlobalTypeId) -> GlobalTypeDecl?): S
             is TypeDecl.InlineDef -> it.id.takeIf(seen::add)?.let(bodyOf) ?: it.inner
             is TypeDecl.Const -> it.inner
             is TypeDecl.Volatile -> it.inner
-            is TypeDecl.WithSizeAttr -> it.inner
             else -> null
         }
     }

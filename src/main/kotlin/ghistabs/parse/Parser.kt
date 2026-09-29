@@ -250,7 +250,7 @@ class Parser(src: String) {
      * Parse a type descriptor by lookahead character.
      * Dispatches to specific productions: Pointer (*), Reference (&), Const (k),
      * Volatile (B), Array (a), Enum (e), Struct (s/u/Y), FunctionT (f), Method (#),
-     * Range (r), Complex (R), XRef (x), WithSizeAttr/Member (@), or forward reference.
+     * Range (r), Complex (R), XRef (x), size attribute/Member (@), or forward reference.
      *
      * Mirror of gdb/stabsread.c:read_type.
      */
@@ -613,7 +613,7 @@ class Parser(src: String) {
      * way at least every occurrence agrees rather than half of them.
      */
     private fun boolOrEnum(body: TypeDecl.Enum<LocalTypeId>): LocalTypeDecl = if (body.members == BOOL_ENUM_MEMBERS) {
-        TypeDecl.WithSizeAttr(BITS_PER_BYTE, TypeDecl.Builtin(BUILTIN_BOOL))
+        TypeDecl.Builtin(BUILTIN_BOOL, sizeAttr = BITS_PER_BYTE)
     } else {
         body
     }
@@ -723,7 +723,18 @@ class Parser(src: String) {
         if (sizeBits == null) skip("type attribute `@$attr;`")
         consume(';')
         val inner = parseType()
-        return sizeBits?.let { TypeDecl.WithSizeAttr(it, inner) } ?: inner
+        return sizeBits?.let { sized(inner, it) } ?: inner
+    }
+
+    /**
+     * [inner] carrying `@s<bits>`. gcc's dbxout writes one only before an integer range, a bool or an
+     * enum; before anything else it is skipped like an unknown attribute, with a note.
+     */
+    private fun Cursor.sized(inner: LocalTypeDecl, bits: Long): LocalTypeDecl = when (inner) {
+        is TypeDecl.Range -> inner.copy(sizeAttr = bits)
+        is TypeDecl.Builtin -> inner.copy(sizeAttr = bits)
+        is TypeDecl.Enum -> inner.copy(sizeAttr = bits)
+        else -> inner.also { skip("size attribute `@s$bits;` on ${inner::class.simpleName}") }
     }
 
     /**

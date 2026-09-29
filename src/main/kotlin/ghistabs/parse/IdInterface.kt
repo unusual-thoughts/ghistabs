@@ -119,7 +119,7 @@ fun LocalTypeDecl.globalize(g: Globalizer): GlobalTypeDecl = when (this) {
     is TypeDecl.Complex, is TypeDecl.Float, is TypeDecl.Enum, is TypeDecl.XRef, is TypeDecl.Builtin, TypeDecl.Void ->
         this as GlobalTypeDecl
 
-    is TypeDecl.Range -> TypeDecl.Range(inner.globalize(g), lower, upper)
+    is TypeDecl.Range -> TypeDecl.Range(inner.globalize(g), lower, upper, sizeAttr)
 
     // Negative-id Refs never reach here — parser emits [TypeDecl.Builtin] for those.
     is TypeDecl.Ref -> TypeDecl.Ref(g.globalIdFor(id))
@@ -127,8 +127,6 @@ fun LocalTypeDecl.globalize(g: Globalizer): GlobalTypeDecl = when (this) {
     is TypeDecl.Const -> TypeDecl.Const(inner.globalize(g))
 
     is TypeDecl.Volatile -> TypeDecl.Volatile(inner.globalize(g))
-
-    is TypeDecl.WithSizeAttr -> TypeDecl.WithSizeAttr(sizeBits, inner.globalize(g))
 
     is TypeDecl.Pointer -> TypeDecl.Pointer(inner.globalize(g))
 

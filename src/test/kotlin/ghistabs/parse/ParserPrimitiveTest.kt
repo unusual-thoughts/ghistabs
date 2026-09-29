@@ -12,19 +12,16 @@ import java.math.BigInteger
  */
 class ParserPrimitiveTest {
     @Test
-    fun testBoolWithSizeAttr() {
+    fun testBoolSizeAttr() {
         val input = "_Bool:t(0,21)=@s8;-16"
         val expected = SymbolDecl.NamedType(
             kind = TypeNameKind.TYPEDEF,
             name = "_Bool",
             id = LocalTypeId(0, 21),
-            type = TypeDecl.WithSizeAttr(
-                sizeBits = 8,
-                // Parser hoists `(0,-N)` Refs to [TypeDecl.Builtin] directly
-                // — the stabs spec says no stab defines these slots, so
-                // they're builtin from the moment they're read.
-                inner = TypeDecl.Builtin(-16),
-            ),
+            // Parser hoists `(0,-N)` Refs to [TypeDecl.Builtin] directly
+            // — the stabs spec says no stab defines these slots, so
+            // they're builtin from the moment they're read.
+            type = TypeDecl.Builtin(-16, sizeAttr = 8),
         )
         Parser(input).parseSymbol() mustBe ParseResult.Ok(expected)
     }
@@ -52,33 +49,31 @@ class ParserPrimitiveTest {
             Parser("int:t(0,1)=r(0,1);-2147483648;2147483647;").parseSymbol()
         val longLong = "long long int:t(0,7)=@s64;r(0,7);01000000000000000000000;0777777777777777777777;"
         val range = ((Parser(longLong).parseSymbol() as ParseResult.Ok).inner as SymbolDecl.NamedType)
-            .type.let { (it as TypeDecl.WithSizeAttr).inner as TypeDecl.Range }
+            .type as TypeDecl.Range
         range.lower mustBe -BigInteger.TWO.pow(63)
     }
 
     @Test
-    fun testLongLongIntWithSizeAttrOctal() {
+    fun testLongLongIntSizeAttrOctal() {
         val input = "long long int:t(0,6)=@s64;r(0,6);0000000000000;01777777777777777777777;"
         val expected = SymbolDecl.NamedType(
             kind = TypeNameKind.TYPEDEF,
             name = "long long int",
             id = LocalTypeId(0, 6),
-            type = TypeDecl.WithSizeAttr(
-                sizeBits = 64,
-                // 2^64-1 as written, which `min`/`max` narrow to (0, -1L) for consumers. Keeping
-                // the exact value is the whole point: a literal `-1` narrows to the same pair.
-                inner = TypeDecl.Range(
-                    inner = TypeDecl.Ref(LocalTypeId(0, 6)),
-                    lower = BigInteger.ZERO,
-                    upper = BigInteger.TWO.pow(64) - BigInteger.ONE,
-                ),
+            // 2^64-1 as written, which `min`/`max` narrow to (0, -1L) for consumers. Keeping
+            // the exact value is the whole point: a literal `-1` narrows to the same pair.
+            type = TypeDecl.Range(
+                inner = TypeDecl.Ref(LocalTypeId(0, 6)),
+                lower = BigInteger.ZERO,
+                upper = BigInteger.TWO.pow(64) - BigInteger.ONE,
+                sizeAttr = 64,
             ),
         )
         Parser(input).parseSymbol() mustBe ParseResult.Ok(expected)
     }
 
     @Test
-    fun testInt128WithSizeAttrOctal() {
+    fun testInt128SizeAttrOctal() {
         // gcc 3.4.5 emits 128-bit types with a 96+-bit octal upper bound that overflows a
         // 64-bit parse; it must survive as written rather than throw or saturate.
         val input = "__int128:t(0,25)=@s128;r(0,25);000000000000000000000000;037777777777777777777777777777777;"
@@ -86,18 +81,24 @@ class ParserPrimitiveTest {
             kind = TypeNameKind.TYPEDEF,
             name = "__int128",
             id = LocalTypeId(0, 25),
-            type = TypeDecl.WithSizeAttr(
-                sizeBits = 128,
-                // The literal is 2^95-1, not 2^128-1: it bounds the width from below, and only the
-                // `@s128` above states it. Rounded up, it holds in 16 bytes either way.
-                inner = TypeDecl.Range(
-                    inner = TypeDecl.Ref(LocalTypeId(0, 25)),
-                    lower = BigInteger.ZERO,
-                    upper = BigInteger.TWO.pow(95) - BigInteger.ONE,
-                ),
+            // The literal is 2^95-1, not 2^128-1: it bounds the width from below, and only the
+            // `@s128` states it. Rounded up, it holds in 16 bytes either way.
+            type = TypeDecl.Range(
+                inner = TypeDecl.Ref(LocalTypeId(0, 25)),
+                lower = BigInteger.ZERO,
+                upper = BigInteger.TWO.pow(95) - BigInteger.ONE,
+                sizeAttr = 128,
             ),
         )
         Parser(input).parseSymbol() mustBe ParseResult.Ok(expected)
+    }
+
+    @Test
+    fun testShortEnumSizeAttr() {
+        // `-fshort-enums`: the stated width replaces the sizeof(int) an enum otherwise takes.
+        val type = (Parser("Color:T(0,30)=@s8;eRed:0,Blue:1,;").parseSymbol().mustBeOk() as SymbolDecl.NamedType).type
+        type mustBe TypeDecl.Enum(listOf("Red" to 0L, "Blue" to 1L), sizeAttr = 8)
+        type.sizeBytes mustBe 1L
     }
 
     @Test

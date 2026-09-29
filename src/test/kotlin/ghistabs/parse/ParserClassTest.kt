@@ -432,7 +432,7 @@ class ParserClassTest {
     @Test
     fun testBoolSpelledAsEnumDecodesToTheBuiltin() {
         val enumForm = (Parser("bool:t(0,4)=eFalse:0,True:1,;").parseSymbol().mustBeOk() as SymbolDecl.NamedType).type
-        val extensionForm = TypeDecl.WithSizeAttr<LocalTypeId>(8, TypeDecl.Builtin(-16))
+        val extensionForm = TypeDecl.Builtin<LocalTypeId>(-16, sizeAttr = 8)
         enumForm mustBe extensionForm
     }
 
@@ -444,7 +444,7 @@ class ParserClassTest {
      */
     @Test
     fun testTheSameSpellingDecodesWhereverItAppears() {
-        val decoded = TypeDecl.WithSizeAttr<LocalTypeId>(8, TypeDecl.Builtin(-16))
+        val decoded = TypeDecl.Builtin<LocalTypeId>(-16, sizeAttr = 8)
         val named = (Parser("bool:t(0,4)=eFalse:0,True:1,;").parseSymbol().mustBeOk() as SymbolDecl.NamedType).type
         named mustBe decoded
         // An inline `(cu,n)=<body>` keeps its id binding; the body is what must match.

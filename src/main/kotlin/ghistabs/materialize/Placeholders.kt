@@ -36,10 +36,7 @@ internal fun DataTypeRegistry.makePlaceholder(
         // same registered object in place (like structs), so a wrong kind/size would leave a
         // colliding `.conflict` second type. Size per gdb's stabsread.c::read_enum_type —
         // sizeof(int) unless gcc emits an explicit `@s<bits>` (`-fshort-enums`).
-        is TypeDecl.Enum -> EnumDataType(category, name, 4, dtm)
-
-        is TypeDecl.WithSizeAttr if ast.body.inner is TypeDecl.Enum ->
-            EnumDataType(category, name, ast.body.sizeBytes.toInt(), dtm)
+        is TypeDecl.Enum -> EnumDataType(category, name, (ast.body.sizeBits / 8).toInt(), dtm)
 
         // An unresolved enum XRef (gcc only forward-referenced it, e.g. `vm_image_type`) must
         // stub as an Enum, not a Structure: a struct stub is a Composite, so StructReturnAnalyzer

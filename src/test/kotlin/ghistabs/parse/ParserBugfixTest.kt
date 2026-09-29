@@ -106,7 +106,7 @@ class ParserBugfixTest {
     @Test
     fun `unknown type attributes are skipped around the size`() {
         val sym = Parser("b:t(0,21)=@a8;@s8;@P;-16").parseSymbol().mustBeOk() as SymbolDecl.NamedType
-        sym.type mustBe TypeDecl.WithSizeAttr(8, TypeDecl.Builtin(-16))
+        sym.type mustBe TypeDecl.Builtin(-16, sizeAttr = 8)
     }
 
     /**

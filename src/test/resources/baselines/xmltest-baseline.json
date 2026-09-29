@@ -220,6 +220,10 @@
             "min": 33,
             "max": 33
         },
+        "harvest-typeAsts-Builtin": {
+            "min": 2,
+            "max": 2
+        },
         "harvest-typeAsts-Enum": {
             "min": 15,
             "max": 15
@@ -249,10 +253,6 @@
             "max": 21
         },
         "harvest-typeAsts-Void": {
-            "min": 2,
-            "max": 2
-        },
-        "harvest-typeAsts-WithSizeAttr": {
             "min": 2,
             "max": 2
         },

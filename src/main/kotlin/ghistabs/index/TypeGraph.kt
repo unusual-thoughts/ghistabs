@@ -189,7 +189,6 @@ class TypeGraph(private val harvest: Harvest, sink: DiagnosticSink = DummySink) 
             is TypeDecl.InlineDef -> stepId(decl.id) ?: step(decl.inner)
             is TypeDecl.Const -> step(decl.inner)
             is TypeDecl.Volatile -> step(decl.inner)
-            is TypeDecl.WithSizeAttr -> step(decl.inner)
             else -> null
         }
     }

@@ -84,11 +84,11 @@ class ContentIndexTest {
     }
 
     /**
-     * Per-CU `bool` slots are encoded as `WithSizeAttr(8, Builtin(-16))`
+     * Per-CU `bool` slots are encoded as `Builtin(-16, sizeAttr = 8)`
      * after [globalize] hoists the negative-id Ref. Two CUs
-     * therefore both encode `bool` as `WithSizeAttr(8, Builtin(-16))`
+     * therefore both encode `bool` as `Builtin(-16, sizeAttr = 8)`
      * — same content, must hash equally. Before the Builtin hoist this
-     * was `WithSizeAttr(8, Ref([CU_X, -16]))`, which fell through to
+     * was an `@s8` wrapper around `Ref([CU_X, -16])`, which fell through to
      * [ContentIndex]'s `unresolved` fallback and baked the source CU
      * into the hash → per-CU divergence → 3 spurious "real" collisions
      * in the corpus.
@@ -98,14 +98,14 @@ class ContentIndexTest {
         val boolInCU1 = Type(
             cu = SourceFile.CUSource("a.cpp"),
             id = GlobalTypeId(SourceFile.CUSource("a.cpp"), 21),
-            named = binding("bool", TypeDecl.WithSizeAttr(8, TypeDecl.Builtin(-16))),
-            body = TypeDecl.WithSizeAttr(8, TypeDecl.Builtin(-16)),
+            named = binding("bool", TypeDecl.Builtin(-16, sizeAttr = 8)),
+            body = TypeDecl.Builtin(-16, sizeAttr = 8),
         )
         val boolInCU2 = Type(
             cu = SourceFile.CUSource("b.cpp"),
             id = GlobalTypeId(SourceFile.CUSource("b.cpp"), 21),
-            named = binding("bool", TypeDecl.WithSizeAttr(8, TypeDecl.Builtin(-16))),
-            body = TypeDecl.WithSizeAttr(8, TypeDecl.Builtin(-16)),
+            named = binding("bool", TypeDecl.Builtin(-16, sizeAttr = 8)),
+            body = TypeDecl.Builtin(-16, sizeAttr = 8),
         )
         val store = mapOf(boolInCU1.id to boolInCU1, boolInCU2.id to boolInCU2)
         val o = TestContentIndex(store)
@@ -422,7 +422,7 @@ class ContentIndexTest {
     }
 
     /**
-     * gcc spells `char` three ways across CUs — `Range(0,127)`, `WithSizeAttr(8, Range(0,127))`,
+     * gcc spells `char` three ways across CUs — `Range(0,127)`, `Range(0,127)` with `@s8`,
      * and the hoisted `Builtin(-2)` slot — all of which [ghistabs.materialize.resolveBuiltin]
      * materializes to `CharDataType`. They must share one content hash, else a struct carrying a
      * bare `char` (char_type/traits in `basic_ios<char>` &co.) forks a `.conflict` per spelling.
@@ -432,7 +432,7 @@ class ContentIndexTest {
     @Test
     fun charBuiltinSpellingsHashEqual() {
         val range = longRange(GlobalTypeId(SourceFile.CUSource("a.cpp"), 2), 0L, 127L)
-        val sized = TypeDecl.WithSizeAttr(8, range)
+        val sized = range.copy(sizeAttr = 8)
         val slot = TypeDecl.Builtin<GlobalTypeId>(-2)
         val signedCharRange = longRange(GlobalTypeId(SourceFile.CUSource("a.cpp"), 14), -128L, 127L)
         oracle.content(sized) mustBe oracle.content(range)
@@ -464,7 +464,7 @@ class ContentIndexTest {
     fun selfBasedRangeWithoutPrimitiveHashesEquallyAcrossCUs() {
         fun int24(cu: String, n: Int): Type {
             val id = GlobalTypeId(SourceFile.CUSource(cu), n)
-            val body = TypeDecl.WithSizeAttr(24, longRange(id, 0L, 0xFFFFFFL))
+            val body = longRange(id, 0L, 0xFFFFFFL).copy(sizeAttr = 24)
             return Type(cu = SourceFile.CUSource(cu), id = id, named = binding("int24", body), body = body)
         }
         val inA = int24("a.cpp", 40)
