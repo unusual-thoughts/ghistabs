@@ -237,6 +237,10 @@
             "min": 641,
             "max": 641
         },
+        "harvest-typeAsts-Builtin": {
+            "min": 57,
+            "max": 57
+        },
         "harvest-typeAsts-Complex": {
             "min": 171,
             "max": 171
@@ -270,8 +274,8 @@
             "max": 7193
         },
         "harvest-typeAsts-Range": {
-            "min": 345,
-            "max": 345
+            "min": 806,
+            "max": 806
         },
         "harvest-typeAsts-Ref": {
             "min": 6731,
@@ -288,10 +292,6 @@
         "harvest-typeAsts-Volatile": {
             "min": 12,
             "max": 12
-        },
-        "harvest-typeAsts-WithSizeAttr": {
-            "min": 518,
-            "max": 518
         },
         "harvest-typeAsts-XRef": {
             "min": 188,

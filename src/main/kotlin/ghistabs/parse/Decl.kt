@@ -60,23 +60,20 @@ enum class VariableLocation {
 @Serializable
 sealed interface TypeDecl<out Id : IdInterface> {
     /**
-     * Width in bytes as stated or implied by the stab itself, or null when the stab doesn't
+     * Width in bits as stated or implied by the stab itself, or null when the stab doesn't
      * determine it — [Pointer]/[Reference] (program address size) and unresolved [Ref]/[XRef].
      * Never guesses a target ABI; callers that need a concrete size for those must ask the
-     * program's data organization.
+     * program's data organization. gcc's `@s<n>;` attribute, the one width a stab states outright
+     * rather than implying, is the `sizeAttr` of the only nodes it precedes: [Range], [Builtin], [Enum].
      */
-    val sizeBytes: Long? get() = null
+    val sizeBits: Long? get() = null
+
+    /** [sizeBits] in whole bytes. */
+    val sizeBytes: Long? get() = sizeBits?.let { (it + 7) / 8 }
 
     /**
-     * Width in bits, and the authoritative one: [WithSizeAttr] overrides it with gcc's exact
-     * `@s<n>`, the one width a stab states outright rather than implying from bounds. Everything
-     * else derives it from [sizeBytes]×8.
-     */
-    val sizeBits: Long? get() = sizeBytes?.times(8)
-
-    /**
-     * The one type a single-layer node wraps: [Pointer], [Reference], [Const], [Volatile], [WithSizeAttr] and
-     * [InlineDef]. Nothing reads it but the default [children], which it spares those six an override of.
+     * The one type a single-layer node wraps: [Pointer], [Reference], [Const], [Volatile] and [InlineDef].
+     * Nothing reads it but the default [children], which it spares those five an override of.
      */
     val wrapped: TypeDecl<Id>? get() = null
 
@@ -110,7 +107,7 @@ sealed interface TypeDecl<out Id : IdInterface> {
      */
     @Serializable
     data object Void : TypeDecl<Nothing> {
-        override val sizeBytes = 0L
+        override val sizeBits = 0L
     }
 
     /**
@@ -119,8 +116,12 @@ sealed interface TypeDecl<out Id : IdInterface> {
      * sizetype, `r(0,54)=r(0,54);0;037777777777;;0;1;`, which is the only definition of that id.
      */
     @Serializable
-    data class Range<Id : IdInterface>(val inner: TypeDecl<Id>, val lower: BigInteger, val upper: BigInteger) :
-        TypeDecl<Id> {
+    data class Range<Id : IdInterface>(
+        val inner: TypeDecl<Id>,
+        val lower: BigInteger,
+        val upper: BigInteger,
+        val sizeAttr: Long? = null,
+    ) : TypeDecl<Id> {
         /**
          * The bounds as the low 64 bits every consumer wants — gcc means the wrap (`unsigned long
          * long`'s max *is* -1L to it), and the exact value stays in [lower]/[upper] for the one
@@ -137,7 +138,7 @@ sealed interface TypeDecl<out Id : IdInterface> {
          */
         val boundsUnfit get() = lower == BigInteger.ZERO && upper == BigInteger.valueOf(-1)
 
-        override val sizeBytes = when {
+        override val sizeBits = sizeAttr ?: when {
             // Must resolve [inner] with [DataTypeRegistry.resolveBuiltin] to know the upper bound
             boundsUnfit -> null
 
@@ -151,14 +152,14 @@ sealed interface TypeDecl<out Id : IdInterface> {
 
             // A true subrange (`1;10`) states an interval, not a width; gcc gives it an int.
             else -> 4L
-        }
+        }?.times(8)
 
         override val children get() = listOf(listOf(inner))
 
         // The exact bounds, not [min]/[max]: narrowed to a Long, gcc 2.6.3's `unsigned int` and `long long
         // unsigned int` are both (0, -1) and would hash as one type. Only a range with no Ghidra primitive
         // (an odd stated width, `@s24;`) is keyed by these at all; a self-based [inner] adds just a back-edge.
-        override val layoutData get() = listOf(lower, upper)
+        override val layoutData get() = listOfNotNull(lower, upper, sizeAttr)
 
         private companion object {
             /**
@@ -178,10 +179,11 @@ sealed interface TypeDecl<out Id : IdInterface> {
      */
     @Serializable
     data class Float<Id : IdInterface>(override val sizeBytes: Long) : TypeDecl<Id> {
+        override val sizeBits get() = sizeBytes * 8
         override val layoutData get() = listOf(sizeBytes)
     }
 
-    // Both are address-sized, which the stab never states — leave sizeBytes null
+    // Both are address-sized, which the stab never states — leave sizeBits null
     @Serializable
     data class Pointer<Id : IdInterface>(val inner: TypeDecl<Id>) : TypeDecl<Id> {
         override val wrapped get() = inner
@@ -196,13 +198,13 @@ sealed interface TypeDecl<out Id : IdInterface> {
     @Serializable
     data class Const<Id : IdInterface>(val inner: TypeDecl<Id>) : TypeDecl<Id> {
         override val wrapped get() = inner
-        override val sizeBytes get() = inner.sizeBytes
+        override val sizeBits get() = inner.sizeBits
     }
 
     @Serializable
     data class Volatile<Id : IdInterface>(val inner: TypeDecl<Id>) : TypeDecl<Id> {
         override val wrapped get() = inner
-        override val sizeBytes get() = inner.sizeBytes
+        override val sizeBits get() = inner.sizeBits
     }
 
     @Serializable
@@ -214,14 +216,15 @@ sealed interface TypeDecl<out Id : IdInterface> {
 
         override val children get() = listOf(listOf(element), listOfNotNull(indexType))
         override val layoutData get() = listOfNotNull(length)
-        override val sizeBytes get() = element.sizeBytes?.let { elementSize -> length?.let { it * elementSize } }
+        override val sizeBits get() = element.sizeBits?.let { elementSize -> length?.let { it * elementSize } }
     }
 
     @Serializable
-    data class Enum<Id : IdInterface>(val members: List<Pair<String, Long>>) : TypeDecl<Id> {
-        // GCC default
-        override val sizeBytes = 4L
-        override val layoutData get() = listOf(members)
+    data class Enum<Id : IdInterface>(val members: List<Pair<String, Long>>, val sizeAttr: Long? = null) :
+        TypeDecl<Id> {
+        // sizeof(int), as gdb's read_enum_type has it, unless gcc states `@s<n>` (`-fshort-enums`)
+        override val sizeBits = sizeAttr ?: 32L
+        override val layoutData get() = listOfNotNull(members, sizeAttr)
     }
 
     @Serializable
@@ -269,6 +272,7 @@ sealed interface TypeDecl<out Id : IdInterface> {
             listOfNotNull(vptrBasetype),
         )
 
+        override val sizeBits get() = sizeBytes * 8
         override val layoutData get() = listOf(kind, sizeBytes)
 
         @Serializable
@@ -358,6 +362,7 @@ sealed interface TypeDecl<out Id : IdInterface> {
     /** GCC complex/floating: `R<n>;<size>;0;`. n encodes 3=cfloat, 4=cdouble, 5=cldouble per gcc/dbxout. */
     @Serializable
     data class Complex<Id : IdInterface>(val rCode: Int, override val sizeBytes: Long) : TypeDecl<Id> {
+        override val sizeBits get() = sizeBytes * 8
         override val layoutData get() = listOf(rCode, sizeBytes)
     }
 
@@ -367,22 +372,15 @@ sealed interface TypeDecl<out Id : IdInterface> {
         override val layoutData get() = listOf(kind, tagName)
     }
 
-    /** Wrapper carrying an `@s<n>;` size attribute around an inner type. */
-    @Serializable
-    data class WithSizeAttr<Id : IdInterface>(override val sizeBits: Long, val inner: TypeDecl<Id>) : TypeDecl<Id> {
-        override val wrapped get() = inner
-        override val layoutData get() = listOf(sizeBits)
-
-        override val sizeBytes get() = (sizeBits + 7) / 8
-    }
-
     /**
      * gcc/XCOFF builtin slot (`(0,-N)`). No defining stab — same slot means same primitive
-     * in every CU (`-1`=int, `-2`=char, `-16`=bool, …). Hashed by [slot] alone.
+     * in every CU (`-1`=int, `-2`=char, `-16`=bool, …). Only the legacy `@s<n>;-<slot>` form states a
+     * width, in [sizeAttr]; bool's is the recurring one.
      */
     @Serializable
-    data class Builtin<Id : IdInterface>(val slot: Int) : TypeDecl<Id> {
-        override val layoutData get() = listOf(slot)
+    data class Builtin<Id : IdInterface>(val slot: Int, val sizeAttr: Long? = null) : TypeDecl<Id> {
+        override val sizeBits get() = sizeAttr
+        override val layoutData get() = listOfNotNull(slot, sizeAttr)
     }
 
     /** Inline type definition: `(cu,n)=<body>` where the binding `(cu,n)` is preserved for Phase 3. */
