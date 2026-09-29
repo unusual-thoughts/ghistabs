@@ -165,12 +165,19 @@ data class Symbol<S : SymbolDecl<GlobalTypeId>>(
         else -> null
     }
 
-    /** [frameBias] is the enclosing function's ([ghistabs.frameBias]), asked only for a stack slot. */
-    fun storage(program: Program, frameBias: () -> Int = { program.baseStackParamOffset }) = location?.let {
+    /**
+     * A stack slot is biased by the enclosing [func]'s [Func.frameBias], asked only then; without a [func],
+     * by the convention's [baseStackParamOffset].
+     */
+    fun storage(program: Program, func: Func? = null) = location?.let {
         program.dbxArch?.storagename(
             rawValue.toInt(),
             it == VariableLocation.REGISTER,
-            if (it == VariableLocation.STACK) frameBias() else 0,
+            when {
+                it != VariableLocation.STACK -> 0
+                func != null -> func.frameBias(program)
+                else -> program.baseStackParamOffset
+            },
         )
     }
 
