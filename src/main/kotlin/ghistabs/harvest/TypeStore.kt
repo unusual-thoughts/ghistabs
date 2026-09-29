@@ -32,20 +32,13 @@ class TypeStore(
      * Gather TypeAsts for every InlineDef in [sym]. The nested asts inherit the
      * enclosing declaration's source location.
      */
-    fun hoistInlineDefs(sym: Symbol<*>, cu: SourceFile.CUSource) {
+    fun hoistInlineDefs(sym: Symbol<*>) {
         fun GlobalTypeDecl.walk(): List<Type> = when (this) {
             // Emit the InlineDef ast AND recurse — gcc nests them (e.g. Method whose
             // return is an inline-defined Pointer-to-X). Without recursion the inner
             // ids are referenced but never registered → dangling Refs + false collisions.
             is TypeDecl.InlineDef -> listOf(
-                Type(
-                    cu,
-                    id,
-                    null,
-                    inner,
-                    line = sym.line,
-                    sourceFile = sym.sourceFile,
-                ),
+                Type(id, null, inner, sym.origin),
             ) + inner.walk()
 
             else -> children.flatMap { field -> field.flatMap { it.walk() } }
@@ -71,8 +64,10 @@ class TypeStore(
             // its real struct), and self-ref incomings are dropped when `ex` is already concrete. A
             // lone self-ref (no concrete body at this id) survives and resolves to void downstream.
             // gcc 10+ name a type after its inline definition, with a bare `unsigned char:t(0,150)`
-            // where gcc ≤ 8 wrote `unsigned char:t(0,11)=r…`: that name is for the body already here.
-            val incoming = incoming.map { if (it.isSelfRef()) it.copy(body = existing.body) else it }
+            // where gcc ≤ 8 wrote `unsigned char:t(0,11)=r…`: that name is for the body already here,
+            // so the body keeps the origin of the record that defined it.
+            val incoming = incoming
+                .map { if (it.isSelfRef()) it.copy(body = existing.body, origin = existing.origin) else it }
                 .filterNot { it.isSelfRef() }
             if (existing.isSelfRef()) {
                 incoming.firstOrNull()?.let { byId[id] = it }

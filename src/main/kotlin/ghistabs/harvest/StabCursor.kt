@@ -67,7 +67,7 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
             // bracket can join a function once the next one opens.
             val extent = sizeBytes ?: blocks.lastClose?.let { (it.offset - addr.offset).toULong() }
             val (locals, attributedBlocks) = blocks.finish(lineEntries, source)
-            val attributedParams = params.map { it.copy(sourceFile = source) }
+            val attributedParams = params.map { it.withSource(source) }
             return Func(
                 name, addr, decl, cu, locals, attributedParams, attributedBlocks, lineEntries, extent, declLine,
             )
@@ -88,7 +88,7 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
 
     override fun globalIdFor(id: LocalTypeId) = GlobalTypeId(cuContext?.sourceFor(id) ?: cu, id.n)
 
-    fun parseSymbol(rec: StabRecord) = when (val res = Symbol.parse(rec, this, lineSource, currentFunctionName)) {
+    fun parseSymbol(rec: StabRecord) = when (val res = Parser(rec.name).parseSymbol()) {
         is ParseResult.Error -> {
             err("parse-error", "@${rec.index} '${rec.name.take(80)}': ${res.ex.message}")
             null
@@ -97,7 +97,7 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
         is ParseResult.Ok -> {
             res.trailing?.let { warn("unparsed-trailing", it) }
             res.skipped.forEach { warn("unparsed-skipped", "@${rec.index} '${rec.name.take(80)}': $it") }
-            res.inner
+            Symbol(rec, res.inner.globalize(this), cu, lineSource, currentFunctionName)
         }
     }
 

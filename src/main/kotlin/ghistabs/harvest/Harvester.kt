@@ -103,15 +103,13 @@ class Harvester(private val monitor: TaskMonitor, private val sink: DiagnosticSi
                 // Bare `name:t(cu,n)` forward-declarations (body = self-Ref) are stored
                 // unfiltered; AstStore lets a real definition at the same id supersede them.
                 is SymbolDecl.NamedType -> store += Type(
-                    cursor.cu,
                     decl.id,
                     // gcc gives a tagless, typedef-less `enum { A, B };` a single-space symbol name,
                     // which the parser normalizes to "". At this layer that is simply anonymous, and
                     // one representation of it (null) is enough — see [Type.named].
-                    decl.name.ifEmpty { null }?.let { NameBinding(it, decl.kind) },
+                    decl.name.ifEmpty { null }?.let { NameBinding(it, decl.kind, sym.origin) },
                     decl.type,
-                    line = sym.line,
-                    sourceFile = sym.sourceFile,
+                    sym.origin,
                 )
 
                 is SymbolDecl.Local -> cursor.local(sym.retype(decl))
@@ -193,5 +191,5 @@ class Harvester(private val monitor: TaskMonitor, private val sink: DiagnosticSi
     }
 
     /** Parses a symbol record then hoist any contained inline type definitions */
-    private fun StabRecord.harvestSymbol() = cursor.parseSymbol(this)?.also { store.hoistInlineDefs(it, cursor.cu) }
+    private fun StabRecord.harvestSymbol() = cursor.parseSymbol(this)?.also { store.hoistInlineDefs(it) }
 }

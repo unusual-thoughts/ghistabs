@@ -112,7 +112,7 @@ internal class BlockTreeBuilder(sink: DiagnosticSink = DummySink) : DiagnosticSi
             val blockSource = ownLines.map { it.source }.toSet().singleOrNull() ?: inherited
             val attributed = locals.map { local ->
                 val sourcesAtLine = ownLines.filter { it.line == local.line }.map { it.source }.toSet()
-                local.copy(sourceFile = sourcesAtLine.singleOrNull() ?: blockSource).also { flat += it }
+                local.withSource(sourcesAtLine.singleOrNull() ?: blockSource).also { flat += it }
             }
             return copy(
                 locals = attributed,
@@ -122,7 +122,7 @@ internal class BlockTreeBuilder(sink: DiagnosticSink = DummySink) : DiagnosticSi
         }
 
         val blocks = roots.map { it.attribute(functionSource) }
-        pending.mapTo(flat) { it.copy(sourceFile = functionSource) }
+        pending.mapTo(flat) { it.withSource(functionSource) }
         return flat to blocks
     }
 }

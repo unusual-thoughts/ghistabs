@@ -83,7 +83,7 @@ class TypeGraph(private val harvest: Harvest, sink: DiagnosticSink = DummySink) 
     // lazy` delegate field is only assigned when construction reaches its declaration — an init block
     // placed above them reads a still-null delegate (NPE, silently swallowed under CONCURRENT analysis).
     init {
-        for ((_, id, _, body) in typeAsts.values) contentCache[id] = content(body)
+        for ((id, _, body) in typeAsts.values) contentCache[id] = content(body)
     }
 
     override fun byId(id: GlobalTypeId): Type? = typeAsts[id]
