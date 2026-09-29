@@ -55,6 +55,9 @@ internal fun ClassApplier.sweepUnclaimedVtables() {
                     addSweptSlot(vftable, category, target, used, abi)
                 }
             }
+            // Itanium puts a primary vptr at 0. gcc 2.x puts it after the fields, and with no class
+            // struct here to read that off, it gets no tag.
+            vftable.describeVxTable(leaf, ClassNaming.VFTABLE, 0L.takeIf { abi.hasRttiHeader })
         }
 
         val ns = buildNamespaceChain(qualified.nameSegments)
@@ -96,6 +99,11 @@ internal fun ClassApplier.laySecondaryVtables(primary: VtableShape, leaf: String
             val used = mutableSetOf<String>()
             for (target in sub.targets) addSweptSlot(vftable, category, target, used, abi)
         }
+        vftable.describeVxTable(
+            leaf,
+            "${ClassNaming.INTERNAL_VFTABLE} $i",
+            with(abi) { sub.shape.vfptrOffset(program) },
+        )
         val at = program.layVtable(
             sub.shape,
             vftable,

@@ -2,6 +2,7 @@ package ghistabs.materialize.cpp.abi
 
 import ghidra.app.util.demangler.DemangledObject
 import ghidra.program.model.data.Structure
+import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Symbol
 import ghidra.program.model.symbol.SymbolTable
 import ghistabs.parse.TypeDecl.Aggregate.Method
@@ -60,6 +61,7 @@ interface CxxMemberNaming {
  * names — on top of [CxxMemberNaming]'s answers about members. Sealed, because [ofVtableSymbol]
  * enumerates the spellings: a symbol either matches one of these ABIs or names no vtable at all.
  */
+@Suppress("TooManyFunctions")
 sealed interface CxxAbi : CxxMemberNaming {
     /** Bytes between consecutive entries. */
     fun stride(ptrSize: Int): Long
@@ -121,6 +123,14 @@ sealed interface CxxAbi : CxxMemberNaming {
      * `movswl` and adds it to `this` before the call — so it is a signed short and worth naming.
      */
     fun Structure.addEntryAdjustment(slot: Int) = Unit
+
+    /**
+     * Where the `{vfptr}` holding this record's address point sits in the complete object, as far as
+     * the record itself says: Itanium's `offset_to_top`, negated — 0 for a primary, the subobject's
+     * offset for a secondary. A gcc 2.x record states no such word; its tables are placed by the
+     * symbol that names them and the class struct.
+     */
+    fun VtableShape.vfptrOffset(program: Program): Long? = null
 
     companion object {
         /**

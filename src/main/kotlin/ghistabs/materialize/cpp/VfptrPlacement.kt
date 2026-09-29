@@ -197,6 +197,34 @@ internal fun DataTypeRegistry.vftableOf(className: String): Structure {
     return getOrRegister<Structure>(category, name) { StructureDataType(category, name, 0, dtm) }
 }
 
+/**
+ * Describe [this] as [owner]'s [table], the one the `{vfptr}` at [vfptrOffset] in the class points at.
+ * The description leads with the offset tag `ClassUtils.isVTable` (12.1+) recognises a table by, one
+ * per table at its own `{vfptr}`'s offset, so a secondary carries the offset of the subobject it
+ * serves. No offset, no tag: a guessed one would point Ghidra's vxtable replacement at the wrong word,
+ * and a negative one can only come from a misread record.
+ */
+internal fun Structure.describeVxTable(owner: String, table: String, offset: Long?) {
+    val vfptrOffset = offset?.takeIf { it >= 0 }
+    val text = "$owner's $table: what its {${ClassUtils.VFPTR}}" +
+        vfptrOffset?.let { " at +$it" }.orEmpty() + " points at"
+    val tag = vfptrOffset?.let { ClassUtils::class.createVxTableDescriptionOffsetTag(it) }
+    description = listOfNotNull(tag, text).joinToString(" ")
+}
+
+/**
+ * Offset of the first `{vfptr}` in [this], looking through base subobjects in layout order — so it
+ * finds the pointer a class inherits through its primary base as well as one it owns, wherever the
+ * ABI put it (gcc 2.x appends it after the class's own fields).
+ */
+internal fun Structure.vfptrOffset(): Int? = definedComponents.firstNotNullOfOrNull { c ->
+    when {
+        c.fieldName == ClassUtils.VFPTR -> c.offset
+        c.isBaseField() -> (c.dataType as? Structure)?.vfptrOffset()?.let { c.offset + it }
+        else -> null
+    }
+}
+
 /** A half-open byte range `[from, until)` of a base subobject. */
 data class Run(val from: Int, val until: Int) {
     val length get() = until - from

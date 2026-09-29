@@ -5,12 +5,15 @@ import ghidra.app.util.demangler.DemangledObject
 import ghidra.program.model.data.DataType
 import ghidra.program.model.data.IntegerDataType
 import ghidra.program.model.data.LongLongDataType
+import ghidra.program.model.listing.Program
+import ghidra.program.model.scalar.Scalar
 import ghistabs.Demangler
 import ghistabs.namespaces
 import ghistabs.parse.isTemplated
 import ghistabs.parse.member
 import ghistabs.parse.nameSegments
 import ghistabs.parse.qualifiedName
+import ghistabs.readAs
 
 /**
  * Single source of Itanium C++ ABI facts for the gcc/Cygwin corpus: mangled names,
@@ -96,6 +99,9 @@ object Itanium : CxxAbi {
     /** Type of the `offset_to_top` header word (a signed pointer-sized integer). */
     fun offsetToTopType(ptrSize: Int): DataType =
         if (ptrSize == 8) LongLongDataType.dataType else IntegerDataType.dataType
+
+    override fun VtableShape.vfptrOffset(program: Program): Long? =
+        program.readAs<Scalar>(topSlot, offsetToTopType(program.defaultPointerSize))?.signedValue?.let { -it }
 
     fun zti(className: String) = "$TYPEINFO_PREFIX${mangleClassName(className)}"
 

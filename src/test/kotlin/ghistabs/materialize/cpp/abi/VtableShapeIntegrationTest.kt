@@ -34,7 +34,7 @@ class VtableShapeIntegrationTest : FeatureFixtureTest() {
         val shape = program.vtableShape(ztv!!)
 
         shape.prefix.size mustBe 1
-        program.readPointer(shape.topSlot)?.offset mustBe 0L
+        with(Itanium) { shape.vfptrOffset(program) } mustBe 0L
         program.readPointer(shape.rttiHeader)
             ?.let { program.symbolTable.getSymbols(it) }
             .orEmpty().any { it.name == "_ZTI7Diamond" }
