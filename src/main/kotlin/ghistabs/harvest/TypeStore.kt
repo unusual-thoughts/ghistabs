@@ -32,19 +32,13 @@ class TypeStore(
      * Gather TypeAsts for every InlineDef in [sym]. The nested asts inherit the
      * enclosing declaration's source location.
      */
-    fun hoistInlineDefs(sym: Symbol<*>, cu: SourceFile.CUSource) {
+    fun hoistInlineDefs(sym: Symbol<*>) {
         fun GlobalTypeDecl.walk(): List<Type> = when (this) {
             // Emit the InlineDef ast AND recurse — gcc nests them (e.g. Method whose
             // return is an inline-defined Pointer-to-X). Without recursion the inner
             // ids are referenced but never registered → dangling Refs + false collisions.
             is TypeDecl.InlineDef -> listOf(
-                Type(
-                    cu,
-                    id,
-                    null,
-                    inner,
-                    sym.origin,
-                ),
+                Type(id, null, inner, sym.origin),
             ) + inner.walk()
 
             else -> children.flatMap { field -> field.flatMap { it.walk() } }

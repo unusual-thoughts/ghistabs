@@ -60,7 +60,7 @@ class TemplateArgumentsTest : AbstractGhidraHeadlessIntegrationTest() {
                 StabType.N_PSYM,
                 SymbolDecl.Param("this", self, VariableLocation.STACK),
                 0,
-                Origin(0, sourceFileOf("hello.cc")),
+                Origin(cu, 0, sourceFileOf("hello.cc")),
             ),
         ),
     )

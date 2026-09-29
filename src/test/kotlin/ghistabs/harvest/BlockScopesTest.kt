@@ -30,7 +30,7 @@ class BlockScopesTest {
             body = SymbolDecl.Local(name, TypeDecl.Complex(0, 1), VariableLocation.STACK),
             rawValue = 0,
             // The trailing N_SOL gcc leaves in effect — always the CU, never the local's own file.
-            origin = Origin(nextIndex++, sourceFileOf("main.cpp"), declLine),
+            origin = Origin(SourceFile.CUSource("main.cpp"), nextIndex++, sourceFileOf("main.cpp"), declLine),
         ),
     )
 

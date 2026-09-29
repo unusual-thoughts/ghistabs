@@ -54,13 +54,14 @@ data class NameBinding(
 )
 
 /**
- * Where one stab record sat: its stream position, the N_SOL in effect, the line from its `desc` (null
- * when the emitter left it 0, as without -gstabs+) and the function whose records surrounded it.
+ * Where one stab record sat: its CU, its stream position, the N_SOL in effect, the line from its `desc`
+ * (null when the emitter left it 0, as without -gstabs+) and the function whose records surrounded it.
  * A [Symbol] is one record, so it has one; a [Type] can be built from several, so its body and its
  * name each keep their own.
  */
 @Serializable
 data class Origin(
+    val cu: SourceFile.CUSource,
     val recordIndex: Int,
     /** N_SOL in effect when the record was read — except for function-scope symbols, where the N_SOL
      *  is meaningless, so [BlockTreeBuilder.finish] rebuilds them with the block's real source. */
@@ -69,8 +70,12 @@ data class Origin(
     /** Enclosing function (mangled/linkage name) when read inside a function scope, null at file scope. */
     val enclosingFunction: String? = null,
 ) {
-    constructor(record: StabRecord, sourceFile: GhidraSourceFile, enclosingFunction: String? = null) :
-        this(record.index, sourceFile, record.desc.takeIf { it > 0 }, enclosingFunction)
+    constructor(
+        record: StabRecord,
+        cu: SourceFile.CUSource,
+        sourceFile: GhidraSourceFile,
+        enclosingFunction: String? = null,
+    ) : this(cu, record.index, sourceFile, record.desc.takeIf { it > 0 }, enclosingFunction)
 }
 
 /**
@@ -83,28 +88,30 @@ data class Origin(
  */
 @Serializable
 data class Type(
-    val cu: SourceFile.CUSource,
     val id: GlobalTypeId,
     /** The `T`/`t` symbol that named this type. Null exactly when it has none of its own: born inside
      *  a descriptor tree, or a tagless anonymous `enum { … }`. Never an empty name —
      *  [ghistabs.harvest.Harvester] folds that in, so "anonymous" has one spelling. */
     val named: NameBinding?,
     val body: GlobalTypeDecl,
-    /** The record that defined [id]'s body. Null for a type the harvest synthesized. */
-    val origin: Origin? = null,
+    /** The record that defined [id]'s body. A stub the harvest synthesizes keeps the origin of the
+     *  type it was synthesized for. */
+    val origin: Origin,
 ) {
+    val cu get() = origin.cu
+
     val name: String? get() = named?.name
 
     /** Where the source declared this type: its name's record when it has one, else its body's. */
     private val declaredAt get() = named?.origin ?: origin
 
     /** Source line from N_LSYM `desc`, null when the emitter left it 0 (no -gstabs+). */
-    val line get() = declaredAt?.line
+    val line get() = declaredAt.line
 
     /** N_SOL-effective source at definition time (header for stdlib, CU for app-local). */
-    val sourceFile get() = declaredAt?.sourceFile
+    val sourceFile get() = declaredAt.sourceFile
 
-    val enclosingFunction get() = declaredAt?.enclosingFunction
+    val enclosingFunction get() = declaredAt.enclosingFunction
 
     /** How the source introduced [name]: a `:T` tag or a `:t` typedef. Null iff [name] is. */
     val kind: TypeNameKind? get() = named?.kind
@@ -162,9 +169,12 @@ data class Symbol<S : SymbolDecl<GlobalTypeId>>(
     constructor(
         record: StabRecord,
         decl: S,
+        cu: SourceFile.CUSource,
         sourceFile: GhidraSourceFile,
         enclosingFunction: String? = null,
-    ) : this(record.type, decl, record.value, Origin(record, sourceFile, enclosingFunction))
+    ) : this(record.type, decl, record.value, Origin(record, cu, sourceFile, enclosingFunction))
+
+    val cu get() = origin.cu
 
     /** Stream position, for scope filtering. */
     val recordIndex get() = origin.recordIndex
@@ -195,22 +205,6 @@ data class Symbol<S : SymbolDecl<GlobalTypeId>>(
             it == VariableLocation.REGISTER,
             program.baseStackParamOffset,
         )
-    }
-
-    companion object {
-        fun parse(
-            rec: StabRecord,
-            globalizer: Globalizer,
-            sourceFile: GhidraSourceFile,
-            enclosingFunction: String? = null,
-        ) = Parser(rec.name).parseSymbol().map {
-            Symbol(
-                rec,
-                it.globalize(globalizer),
-                sourceFile,
-                enclosingFunction,
-            )
-        }
     }
 }
 

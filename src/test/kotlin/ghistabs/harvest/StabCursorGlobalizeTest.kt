@@ -237,11 +237,11 @@ class StabCursorGlobalizeTest {
                 VariableLocation.STACK,
             ),
             0,
-            Origin(1, sourceFile),
+            Origin(cu, 1, sourceFile),
         )
 
         // walkDefinitions should extract the emitted TypeAst
-        store.hoistInlineDefs(input, cu)
+        store.hoistInlineDefs(input)
         val (asts, _) = store.toHarvest()
 
         asts.size.mustBe(1, "walkDefinitions should return exactly one TypeAst from InlineDef")
@@ -270,10 +270,10 @@ class StabCursorGlobalizeTest {
                 StabType.N_LSYM,
                 SymbolDecl.Local("a", array, VariableLocation.STACK),
                 0,
-                Origin(1, sourceFileOf("cu.c")),
+                Origin(cu, 1, sourceFileOf("cu.c")),
             )
 
-        store.hoistInlineDefs(input, cu)
+        store.hoistInlineDefs(input)
 
         store.toHarvest().first[GlobalTypeId(cu, 54)]?.body mustBe sizetype
     }

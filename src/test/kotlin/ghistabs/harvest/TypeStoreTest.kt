@@ -323,3 +323,13 @@ class TypeStoreTest {
  *  a tag definition is a `:T`, anything else names a type defined elsewhere, i.e. a `:t`. */
 internal fun binding(name: String?, body: GlobalTypeDecl) =
     name?.let { NameBinding(it, if (body.canBeXRefTarget) TypeNameKind.TAG else TypeNameKind.TYPEDEF) }
+
+/** A [Type] as if record 0 of [cu] had defined and named it, [sourceFile] defaulting to the CU's own. */
+internal fun Type(
+    cu: SourceFile.CUSource,
+    id: GlobalTypeId,
+    named: NameBinding?,
+    body: GlobalTypeDecl,
+    line: Int? = null,
+    sourceFile: GhidraSourceFile = sourceFileOf(cu.filename),
+) = Type(id, named, body, Origin(cu, 0, sourceFile, line))
