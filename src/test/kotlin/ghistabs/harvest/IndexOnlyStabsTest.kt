@@ -48,14 +48,14 @@ class IndexOnlyStabsTest {
         val (_, harvester) = dummyHarvester()
         harvester.harvest(stabs.records).types.mustBeEmpty()
 
-        val elf = blocks(".symtab", ".strtab", StabReader.INDEX, ".stab.indexstr")
-        StabReader.candidate(elf = true, elf)?.records mustBe StabReader.INDEX
+        val elf = blocks(".symtab", ".strtab", ".stab.index", ".stab.indexstr")
+        StabReader.candidate(elf = true, elf)?.records mustBe ".stab.index"
     }
 
     /** A binary with real stabs and an index too keeps reading the stabs. */
     @Test
     fun realStabsOutrankTheIndex() {
-        val both = blocks(".stab", ".stabstr", StabReader.INDEX, ".stab.indexstr")
+        val both = blocks(".stab", ".stabstr", ".stab.index", ".stab.indexstr")
         StabReader.candidate(elf = true, both)?.records mustBe ".stab"
     }
 
@@ -65,7 +65,7 @@ class IndexOnlyStabsTest {
      */
     @Test
     fun indexWithoutStringsLocatesNothing() {
-        val elf = blocks(".symtab", ".strtab", StabReader.INDEX)
+        val elf = blocks(".symtab", ".strtab", ".stab.index")
         StabReader.candidate(elf = true, elf).mustBeNull()
 
         // The same symtab on a.out is the stab table, and still read.

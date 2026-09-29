@@ -131,21 +131,16 @@ class StabReader(
 
     companion object {
         /**
-         * What Sun `ld` emits when `cc` ran without `-xs`: per CU, an `N_UNDF` header naming the file,
-         * its `N_OPT` options, the compile command line (0x34, GNU's `N_NOMAP`), `N_OBJ` object paths and
-         * the odd `N_MAIN` — while the stabs proper stay in the `.o`/`.a` for dbx to fetch. Same record
-         * layout as `.stab`, and nothing to type.
-         */
-        const val INDEX = ".stab.index"
-        private const val INDEX_STRINGS = ".stab.indexstr"
-
-        /**
          * Where the formats keep stabs, in precedence order: ELF/PE sections, then a Sun linker index —
          * which a binary carrying real `.stab` has too, and must not win — then the a.out symtab.
          */
         private val SOURCES = listOf(
             Candidate(".stab", ".stabstr", Layout.SECTION),
-            Candidate(INDEX, INDEX_STRINGS, Layout.SECTION),
+            // What Sun `ld` emits when `cc` ran without `-xs`: per CU, an `N_UNDF` header naming the file,
+            // its `N_OPT` options, the compile command line (0x34, GNU's `N_NOMAP`), `N_OBJ` object paths
+            // and the odd `N_MAIN` — while the stabs proper stay in the `.o`/`.a` for dbx to fetch. Same
+            // record layout as `.stab`, and nothing to type.
+            Candidate(".stab.index", ".stab.indexstr", Layout.SECTION),
             Candidate(".symtab", ".strtab", Layout.SYMTAB),
         )
 
