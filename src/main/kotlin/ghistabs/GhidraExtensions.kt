@@ -219,9 +219,8 @@ private val Program.framePointer get() = dbxArch?.frameRegister?.let(::getRegist
  * Only a copy of SP into the architecture's frame register ([ghistabs.parse.frameRegister]) counts; a
  * program whose [ghistabs.parse.dbxArch] is unknown keeps the convention-derived bias.
  */
-fun Function.frameBias(monitor: TaskMonitor = TaskMonitor.DUMMY): Int {
-    val fp = program.framePointer ?: return program.baseStackParamOffset
-    return program.listing
+fun Function.frameBias(monitor: TaskMonitor = TaskMonitor.DUMMY): Int = program.framePointer?.let { fp ->
+    program.listing
         .getInstructions(entryPoint, true).iterator().asSequence()
         .take(PROLOGUE_SCAN)
         .takeWhile { it.flowType.isFallthrough }
@@ -235,8 +234,8 @@ fun Function.frameBias(monitor: TaskMonitor = TaskMonitor.DUMMY): Int {
                 .getSPDepth(setsFp.address).takeIf {
                     it != Function.INVALID_STACK_DEPTH_CHANGE && it != Function.UNKNOWN_STACK_DEPTH_CHANGE
                 }?.let { -it }
-        } ?: program.baseStackParamOffset
-}
+        }
+} ?: program.baseStackParamOffset
 
 class LoadedProgram internal constructor(val program: Program, private val consumer: Any) : AutoCloseable {
     override fun close() {
