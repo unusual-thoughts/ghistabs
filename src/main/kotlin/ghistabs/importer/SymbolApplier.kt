@@ -13,7 +13,6 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.symbol.SourceType
 import ghidra.program.model.symbol.SymbolTable
 import ghistabs.Demangler
-import ghistabs.baseStackParamOffset
 import ghistabs.diagnose.ApplyErrorBucket
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.Level
@@ -433,7 +432,7 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
                     }
                     // gcc's frame-pointer-relative offset → Ghidra's SP-at-entry offset via the
                     // prologue-derived [Func.frameBias] (NSA/ghidra#223, #5485).
-                    func.addStack(this, rawValue.toInt() - (open.frameBias ?: ctx.program.baseStackParamOffset))
+                    func.addStack(this, rawValue.toInt() - open.frameBias(ctx.program))
                     debug("local-var-add-success")
                 }
 

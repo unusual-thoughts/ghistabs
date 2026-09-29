@@ -20,9 +20,6 @@ import ghistabs.plus
  * all: its address comes from the linker symbol of that name ([resolve]).
  */
 interface AddressResolver {
-    /** The program the addresses are in, when there is one. */
-    val program: Program? get() = null
-
     fun buildAddress(offset: Long): Address
 
     /** Where the link-time symbol [name] ended up; the first bearer where several carry it. */
@@ -55,7 +52,7 @@ interface AddressResolver {
 /**
  * Address resolver that searches program symbols and builds addresses in the default program address space.
  */
-class ProgramAddressResolver(override val program: Program, private val sink: DiagnosticSink = DummySink) :
+class ProgramAddressResolver(private val program: Program, private val sink: DiagnosticSink = DummySink) :
     AddressResolver {
     // Stab values are link-time vaddrs. Ghidra relocates a PIE/ET_DYN ELF to its load
     // base (default 0x100000) without rewriting the stabs, so every address is off by

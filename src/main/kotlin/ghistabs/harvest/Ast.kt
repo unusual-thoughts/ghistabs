@@ -173,7 +173,7 @@ data class Symbol<S : SymbolDecl<GlobalTypeId>>(
         program.dbxArch?.storagename(
             rawValue.toInt(),
             it == VariableLocation.REGISTER,
-            func?.frameBias ?: program.baseStackParamOffset,
+            func?.frameBias(program) ?: program.baseStackParamOffset,
         )
     }
 
@@ -265,8 +265,6 @@ data class Func(
     val sizeBytes: ULong? = null,
     // N_FUN's desc: DECL_SOURCE_LINE, null unless built with -gstabs+.
     val declLine: Int? = null,
-    // The program this was harvested against, which [frameBias] reads; a harvest without one leaves it null.
-    @Transient val program: Program? = null,
 ) {
     val demangledName by lazy { Demangler.name(decl.name) }
 
@@ -295,13 +293,16 @@ data class Func(
      */
     fun sourceSignature(program: Program) = decl.scope.storageClass() + signature(program)
 
+    // A Func is serializable and holds no Program, so [frameBias] memoizes by hand rather than by lazy.
+    @Transient private var frameBiasMemo: Int? = null
+
     /**
-     * [ghistabs.frameBias] of the Ghidra function at [addr], or the convention's when there is none; null
-     * without a [program]. Worked out on first use, by which time the importer has created the function.
+     * [ghistabs.frameBias] of the Ghidra function at [addr], or the convention's when there is none. Worked
+     * out on first use, then kept.
      */
-    val frameBias: Int? by lazy {
-        program?.let { it.functionManager.getFunctionAt(addr)?.frameBias() ?: it.baseStackParamOffset }
-    }
+    fun frameBias(program: Program) = frameBiasMemo
+        ?: (program.functionManager.getFunctionAt(addr)?.frameBias() ?: program.baseStackParamOffset)
+            .also { frameBiasMemo = it }
 
     /**
      * Scope chain the linkage name declares, root-first and canonically spelled
