@@ -116,7 +116,7 @@ data class Type(
     /** Named by a later record than the one that defined the body: a bare `name:t(id)` after the body
      *  was defined inline at a use. gcc ≥ 10 emits such a typedef wherever the queue is flushed, with its
      *  header's [line] and no N_SOL naming the header (§85). */
-    val lateName get() = named?.origin.let { it != null && it.recordIndex != origin.recordIndex }
+    val lateName get() = named?.origin?.let { it.recordIndex == origin.recordIndex } == false
 
     /** How the source introduced [name]: a `:T` tag or a `:t` typedef. Null iff [name] is. */
     val kind: TypeNameKind? get() = named?.kind
