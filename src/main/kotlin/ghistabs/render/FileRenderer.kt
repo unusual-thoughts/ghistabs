@@ -328,11 +328,26 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
                     Owner.TYPEDEF,
                     line,
                     listOf(Row("typedef $rendered;", line.indentAt(), note = "")),
-                    stale = line.isStale() || key in splayed || ast.misfiled(),
+                    stale = line.isStale() || key in splayed || ast.misfiled() || ast.borrowedLine(),
                 )
             }
         }
         return claims
+    }
+
+    /**
+     * A typedef whose line belongs to another file. gcc ≥ 10 names a typedef'd struct late, wherever its
+     * queue is flushed, with the typedef's line in its header and no N_SOL naming that header (§85):
+     * `Vec:t(0,9)` among `useLocal`'s records carries `latetypedef.h`'s L9. That line can't be told from
+     * one in this file, except when it lands in a function it wasn't emitted in: no typedef there is
+     * declared inside another function. Only a late name says so, because gcc 3.4 emits a function's
+     * own typedefs at file scope (`locale::_Impl::num_cache_c` at `locale_init.cc` L277, inside
+     * `_Impl`'s constructor).
+     */
+    private fun Type.borrowedLine(): Boolean {
+        if (!lateName || line == null) return false
+        val emittedIn = spans.ranges.filter { it.func.name == enclosingFunction && it.func.cu == cu }
+        return spans.ranges.any { r -> r !in emittedIn && with(spans) { line in r.span } }
     }
 
     /**
