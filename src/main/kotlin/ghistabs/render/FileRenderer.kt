@@ -1,8 +1,10 @@
 package ghistabs.render
 
 import ghidra.program.model.address.Address
+import ghistabs.baseStackParamOffset
 import ghistabs.chunkOf
 import ghistabs.diagnose.DiagnosticSink
+import ghistabs.frameBias
 import ghistabs.harvest.*
 import ghistabs.index.*
 import ghistabs.parse.GlobalTypeDecl
@@ -386,8 +388,13 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
     // the canvas — a declaration past it is the allocator's to turn away, and the appendix's to show.
     private fun Type.Decl?.dedup() = this != null && name != "this" && seenDecls.add(Type.Decl(line, name))
 
-    private fun Func.vars(): List<Var> = (params + locals).filter { it.sourceFile == source }.mapNotNull {
-        it.renderVar(renderer.showStorage)
+    private fun Func.vars(): List<Var> {
+        val skew by lazy {
+            program.functionManager.getFunctionAt(addr)?.let { it.frameBias() - program.baseStackParamOffset } ?: 0
+        }
+        return (params + locals).filter { it.sourceFile == source }.mapNotNull {
+            it.renderVar(renderer.showStorage) { skew }
+        }
     }
 
     private fun localClaims(): List<Claim> {

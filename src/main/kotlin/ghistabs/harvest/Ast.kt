@@ -163,11 +163,13 @@ data class Symbol<S : SymbolDecl<GlobalTypeId>>(
         else -> null
     }
 
-    fun storage(program: Program) = location?.let {
+    /** [skew] is the enclosing function's (see [ghistabs.parse.storagename]), asked only for a stack slot. */
+    fun storage(program: Program, skew: () -> Int = { 0 }) = location?.let {
         program.dbxArch?.storagename(
             rawValue.toInt(),
             it == VariableLocation.REGISTER,
             program.baseStackParamOffset,
+            if (it == VariableLocation.STACK) skew() else 0,
         )
     }
 

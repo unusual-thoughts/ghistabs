@@ -93,8 +93,9 @@ interface RenderContext {
     // be one. A local's storage is real but is a fact about the compiled code rather than the
     // source being reconstructed, so it is opt-in — and spelled by the same [dbxStorageName] the
     // scope plate comments use, so `EBX` and `Stack[-0x38]` mean there exactly what they mean here.
-    fun Symbol<*>.renderVar(showStorage: Boolean) = when (body) {
-        is SymbolDecl.Local -> body.name to if (showStorage) storage(program) else null
+    // [skew] is the enclosing function's, asked only for a stack local.
+    fun Symbol<*>.renderVar(showStorage: Boolean, skew: () -> Int = { 0 }) = when (body) {
+        is SymbolDecl.Local -> body.name to if (showStorage) storage(program, skew) else null
         is SymbolDecl.Param -> body.name to null
         else -> null
     }?.let { (name, role) ->

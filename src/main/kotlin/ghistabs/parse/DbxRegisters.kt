@@ -69,12 +69,19 @@ fun Program.dbxRegisterName(dbxNum: Int) = dbxArch?.registerName(dbxNum)
 /**
  * Where the compiler put a variable, as the scope plate comments spell it: `EBX` for a register,
  * `Stack[-0x38]` for a frame slot. [rawValue] is the stab's value field — a dbx register number or a
- * frame offset — and [frameBias] converts the latter to Ghidra's origin.
+ * frame offset — and [frameBias] converts the latter to Ghidra's origin. [skew] is how much deeper this
+ * function's prologue put the frame pointer than [frameBias] assumes ([ghistabs.frameBias] less it); a
+ * non-zero one is appended, `Stack[-0x84]-0x4` for a slot really at `Stack[-0x88]`.
  *
  * Shared so the render and the plate comments cannot drift into two spellings of one fact.
  */
-fun DbxArch.storagename(rawValue: Int, register: Boolean, frameBias: Int): String = if (register) {
+fun DbxArch.storagename(rawValue: Int, register: Boolean, frameBias: Int, skew: Int = 0): String = if (register) {
     registerName(rawValue) ?: "r$rawValue"
 } else {
-    (rawValue - frameBias).let { if (it < 0) "Stack[-0x${(-it).toString(16)}]" else "Stack[0x${it.toString(16)}]" }
+    (rawValue - frameBias).let { if (it < 0) "Stack[-0x${(-it).toString(16)}]" else "Stack[0x${it.toString(16)}]" } +
+        when {
+            skew > 0 -> "-0x${skew.toString(16)}"
+            skew < 0 -> "+0x${(-skew).toString(16)}"
+            else -> ""
+        }
 }
