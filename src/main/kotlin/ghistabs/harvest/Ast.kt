@@ -173,11 +173,7 @@ data class Symbol<S : SymbolDecl<GlobalTypeId>>(
         program.dbxArch?.storagename(
             rawValue.toInt(),
             it == VariableLocation.REGISTER,
-            when {
-                it != VariableLocation.STACK -> 0
-                func != null -> func.frameBias(program)
-                else -> program.baseStackParamOffset
-            },
+            if (it == VariableLocation.STACK) func?.frameBias(program) ?: program.baseStackParamOffset else 0,
         )
     }
 
