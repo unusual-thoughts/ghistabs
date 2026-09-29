@@ -7,6 +7,7 @@ import ghistabs.materialize.DataTypeRegistry
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
 import ghistabs.parse.isVptrFieldName
+import ghistabs.parse.leafName
 
 /**
  * Where a polymorphic class's `{vfptr}` goes, and what happens to the base subobject that would
@@ -222,6 +223,21 @@ internal fun Structure.vfptrOffset(): Int? = definedComponents.firstNotNullOfOrN
         c.fieldName == ClassUtils.VFPTR -> c.offset
         c.isBaseField() -> (c.dataType as? Structure)?.vfptrOffset()?.let { c.offset + it }
         else -> null
+    }
+}
+
+/**
+ * Offset in [this] of the `{vfptr}` inside the base subobject [base] names, looking through base
+ * subobjects in layout order — where a gcc 2.x secondary vtable's pointer sits in the class. The base
+ * is found by name, whole: a primary base [VfptrModel.SPLIT_BASE] took apart is a `_fields_` run
+ * with no vptr left, and its table is the class's own.
+ */
+internal fun Structure.vfptrOffsetOfBase(base: String): Int? = definedComponents.firstNotNullOfOrNull { c ->
+    val dt = c.dataType as? Structure
+    when {
+        !c.isBaseField() || dt == null -> null
+        dt.name == base.leafName -> dt.vfptrOffset()?.let { c.offset + it }
+        else -> dt.vfptrOffsetOfBase(base)?.let { c.offset + it }
     }
 }
 
