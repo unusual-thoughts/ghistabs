@@ -172,7 +172,7 @@ internal class VfptrPlacement(private val registry: DataTypeRegistry, private va
     private fun baseFieldsRun(baseDt: Structure, from: Int, until: Int): Structure? {
         if (until <= from) return null
         val name = "${baseDt.name}_fields_${from}_$until"
-        return registry.getOrRegisterByName<Structure>(baseDt.categoryPath, name) {
+        return registry.getOrRegister<Structure>(baseDt.categoryPath, name) {
             StructureDataType(baseDt.categoryPath, name, until - from, dtm).apply {
                 description = "${baseDt.name} as a base subobject (+$from..$until): its fields " +
                     "without the vptr the deriving class now owns"
@@ -195,7 +195,7 @@ internal class VfptrPlacement(private val registry: DataTypeRegistry, private va
 internal fun DataTypeRegistry.vftableOf(className: String): Structure {
     val category = ClassNaming.vftableCategory(className)
     val name = "${className}_vftable"
-    return getOrRegisterByName<Structure>(category, name) { StructureDataType(category, name, 0, dtm) }
+    return getOrRegister<Structure>(category, name) { StructureDataType(category, name, 0, dtm) }
 }
 
 /**

@@ -163,7 +163,7 @@ fun typedefShorteningRenames(aliases: Map<String, String>, typeNames: Set<String
  * `basic_string<char, std::char_traits<char>, …>` spelling. Pure rename computation lives in
  * [typedefShorteningRenames]; this reads the aliases and names off the registry and applies them.
  *
- * Scoped to [DataTypeRegistry.allCreatedDataTypes] rather than the whole DTM: shortening
+ * Scoped to [DataTypeRegistry.allRegistered] rather than the whole DTM: shortening
  * `unsigned char` to `BYTE` because Ghidra's PE loader applied `windows_vs12_32`, or renaming a
  * `/Demangler` stub out from under [ghistabs.importer.DemanglerReplacer], is not our business.
  */
@@ -172,7 +172,7 @@ class TypedefShortener(private val registry: DataTypeRegistry, private val monit
     private val dtm = registry.dtm
 
     // Recomputed per read on the registry (pass C keeps registering) — snapshot once for this pass.
-    private val byName by lazy { registry.allCreatedDataTypes.groupBy { it.name } }
+    private val byName by lazy { registry.allRegistered.groupBy { it.name } }
 
     fun renames(): List<TypedefRename> = typedefShorteningRenames(
         registry.typedefAliases(),

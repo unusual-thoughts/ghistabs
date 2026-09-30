@@ -30,8 +30,8 @@ import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Aggregate.Method
 
 /**
- * The C++ pass over the program, once [ghistabs.materialize.cpp.layClasses] has laid every class struct: a class gets its
- * Ghidra identity, a [GhidraClass] namespace with its methods reparented under it, and its
+ * The C++ pass over the program, once [ghistabs.materialize.cpp.layClasses] has laid every class struct: a
+ * class gets its Ghidra identity, a [GhidraClass] namespace with its methods reparented under it, and its
  * `<Class>_vftable` filled and applied at `_ZTV`'s address point so virtual calls resolve. It
  * writes no class struct.
  *
@@ -496,7 +496,7 @@ class ClassApplier(
                 // here reads as a failure to type a slot rather than as a slot we never saw.
                 else -> "slot_$slot".let { name ->
                     used += name
-                    val fd = registry.registerByNameOver(FunctionDefinitionDataType(vftableCategory, name, dtm))
+                    val fd = registry.registerAgain(FunctionDefinitionDataType(vftableCategory, name, dtm))
                     vftable.add(PointerDataType(fd, dtm), name, "inherited virtual, not declared here")
                 }
             }
@@ -564,7 +564,7 @@ class ClassApplier(
             callingConvention = CompilerSpec.CALLING_CONVENTION_thiscall,
             at = at,
         )
-        val resolved = registry.registerByNameOver(funcDef) as FunctionDefinition
+        val resolved = registry.registerAgain(funcDef) as FunctionDefinition
         return PointerDataType(resolved, dtm)
     }
 

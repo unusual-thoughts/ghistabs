@@ -67,15 +67,15 @@ class DemanglerReplaceIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
             dtm.addDataType(stubDt, DataTypeConflictHandler.KEEP_HANDLER)
 
             // Seed /proj/Foo as non-empty structure with one int32 field (replacement).
-            // Route through registry.registerByName so it lands in byName, which
-            // is what DemanglerReplacer's authoritative findByName consults.
+            // Route through registry.register so it counts as ours (allRegistered),
+            // which is what DemanglerReplacer's authoritative findByExactName consults.
             val projPath = CategoryPath("/proj")
             val projDt = StructureDataType(projPath, "Foo", 4)
             val intType = dtm.getDataType(CategoryPath("/"), "int")
             if (intType != null) {
                 projDt.add(intType, 4, "fieldA", "first int")
             }
-            registry.registerByName(projDt)
+            registry.register(projDt)
         }
 
         // Run DemanglerReplacer inside a transaction — `dtm.replaceDataType`
@@ -158,11 +158,11 @@ class DemanglerReplaceIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
             val structDt = StructureDataType(CategoryPath("/std/stringfwd"), "string", 0)
             val intType = dtm.getDataType(CategoryPath("/"), "int")
             if (intType != null) structDt.add(intType, 4, "_M_p", null)
-            val registeredStruct = registry.registerByName(structDt)
+            val registeredStruct = registry.register(structDt)
 
             // The surviving `string` typedef pointing at that struct — same name, other category.
             val typedef = TypedefDataType(CategoryPath("/stabs"), "string", registeredStruct)
-            registry.registerByName(typedef)
+            registry.register(typedef)
 
             // Ghidra's on-demand demangler stub.
             val stub = StructureDataType(CategoryPath("/Demangler/std"), "string", 0, dtm)
@@ -199,8 +199,8 @@ class DemanglerReplaceIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
         program.runTransaction("setup-test") {
             val real = StructureDataType(CategoryPath("/src/codecvt.cc/multi"), "codecvt<char,char,int>", 0)
             dtm.getDataType(CategoryPath("/"), "int")?.let { real.add(it, 4, "_M_c", null) }
-            registry.registerByName(real)
-            registry.registerByName(StructureDataType(CategoryPath("/stabs"), "codecvt<char,char,int>", 0))
+            registry.register(real)
+            registry.register(StructureDataType(CategoryPath("/stabs"), "codecvt<char,char,int>", 0))
 
             val stub = StructureDataType(CategoryPath("/Demangler/std"), "codecvt<char,char,int>", 0, dtm)
             dtm.createCategory(CategoryPath("/Demangler/std")).addDataType(stub, DataTypeConflictHandler.KEEP_HANDLER)

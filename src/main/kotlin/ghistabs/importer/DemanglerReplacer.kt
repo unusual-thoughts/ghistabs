@@ -36,7 +36,7 @@ sealed class Skip(open val reason: String) {
 
 /**
  * Replaces empty `/Demangler/...` stubs with our registered types. Candidates come from
- * [DataTypeRegistry.allCreatedDataTypes] only — no DTM-wide heuristics. The stub's path (sans `/Demangler`)
+ * [DataTypeRegistry.allRegistered] only — no DTM-wide heuristics. The stub's path (sans `/Demangler`)
  * acts as the preferred-category hint when multiple candidates share a simple name.
  */
 class DemanglerReplacer(
@@ -459,7 +459,7 @@ class DemanglerReplacer(
      * Every datatype the registry materialized, by name (checked first, so exact names never go
      * through normalization).
      */
-    private val byExactName = registry.allCreatedDataTypes.groupBy { it.name }.mapValues { it.value.toSet() }
+    private val byExactName = registry.allRegistered.groupBy { it.name }.mapValues { it.value.toSet() }
 
     /**
      * Shortening renames a datatype off the spelling the demangler produces — we call it
@@ -488,7 +488,7 @@ class DemanglerReplacer(
 
     /** Every instantiation we materialized, by the bare template name Ghidra's class-owner stub carries. */
     private val instantiationsByBase: Map<String, List<DataType>> by lazy {
-        registry.allCreatedDataTypes
+        registry.allRegistered
             // A DataType name is qualified (`rope<char,…>::$_19`); only a templated leaf is an instantiation.
             .filter { it !is Pointer && it !is Array && it.name.leafName.isTemplated }
             .groupBy { it.name.templateLeaf }
