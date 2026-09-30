@@ -50,12 +50,10 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
      */
     private var currentSourceForLines: String? = null
 
-    private val currentCu get() = cuContext?.cu
-
     private var currentScope: FuncBuilder? = null
 
-    /** [currentCu] where a record can't legally appear outside a CU. */
-    private val cu get() = checkNotNull(currentCu) { "record outside any N_SO" }
+    /** The open CU, where a record can't legally appear outside one. */
+    private val cu get() = checkNotNull(cuContext) { "record outside any N_SO" }.cu
 
     private val lineSource get() = sourceFileOrNull(currentSourceForLines) ?: cu.identity
 
@@ -64,7 +62,7 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
     override fun globalIdFor(id: LocalTypeId) = GlobalTypeId(cuContext?.sourceFor(id) ?: cu, id.n)
 
     /** Null for an unparseable symbol, and for one outside any CU — whose type ids have no file to resolve in. */
-    fun parseSymbol(rec: StabRecord) = when (val res = currentCu?.let { Parser(rec.name).parseSymbol() }) {
+    fun parseSymbol(rec: StabRecord) = when (val res = cuContext?.let { Parser(rec.name).parseSymbol() }) {
         null -> null.also { outsideCu(rec) }
 
         is ParseResult.Error -> {
@@ -185,7 +183,7 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
         when {
             type == StabType.N_SOL -> debug("linesource-start", "source switches to $source", address = addr)
             source != null -> debug("file-start", "$source starts here", address = addr)
-            else -> debug("file-start", "${currentCu?.filename} ends here", address = addr)
+            else -> debug("file-start", "${cuContext?.cu?.filename} ends here", address = addr)
         }
     }
 
@@ -198,7 +196,7 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
     private val StabRecord.language get() = Language.fromCode(desc)
 
     /** A `../`-relative spelling anchored to this CU's compilation directory. */
-    private fun resolved(name: String) = name.resolveAgainstDirectory(currentCu?.directory)
+    private fun resolved(name: String) = name.resolveAgainstDirectory(cuContext?.cu?.directory)
 
     /**
      * N_SLINE: `desc` is the line, `value` is function-relative (gcc/COFF on PE) or already
