@@ -11,6 +11,7 @@ and exercised by their own integration test.
 | `reloc_elf64_gcc12.o` | gcc 12.2.0, x86-64 | `docker run debian:bookworm` + `apt-get install g++` | `RelocatableObjectIntegrationTest` |
 | `hello_elf_gcc272` | gcc 2.7.2.3, i386, static | natively, `~/machines/old-gcc` (see `elfbuild/build.sh`), `-fhandle-exceptions` | — |
 | `hello_elf_gcc295` | gcc 2.95.2, i386 | Debian potato (`~/machines/potato`, systemd-nspawn) | — |
+| `hello_elf_gcc32` | gcc 3.2.3, i386 | chroot of sarge's `libc6`, `libc6-dev`, `binutils` and `dash` plus Debian's `gcc-3.2`/`g++-3.2` 3.2.3-9 debs (snapshot.debian.org; sarge dropped 3.2), `g++-3.2` run from `/out` | — |
 | `hello_elf_gcc33`, `_gcc34` | gcc 3.3.5 / 3.4.4, i386 | `docker run --platform linux/386 debian/eol:sarge` (`g++`, `g++-3.4`) | — |
 | `hello_elf_gcc41` … `_gcc8` | gcc 4.1.2 / 4.3.2 / 4.4.5 / 4.7.2 / 4.9.2 / 6.3.0 / 8.3.0, i386 | `debian/eol:` etch / lenny / squeeze / wheezy / jessie / stretch / buster | — |
 | `hello_elf_gcc10`, `_gcc12` | gcc 10.2.1 / 12.2.0, i386 PIE | `debian/eol:bullseye` (security via its snapshot.debian.org line), `debian:bookworm` | — |
@@ -43,3 +44,5 @@ union class (constructor, const methods, a private member),
 by-value struct return, varargs, register/static locals, nested scopes and a throw/catch. Every build prints
 the same line and exits 8. The try/catch lives in its own function because gcc 2.7.2.3 ICEs
 (`unrecognizable insn`) on EH inside `main` next to a `register` local.
+
+gcc 3.1 to 3.3 open every CU with an N_BINCL of the main file, spelled as given on the command line (`hello.cc`): `c-lex.c` calls the `start_source_file` debug hook for the primary file before parsing. gcc 3.4 dropped that call, so `hello_elf_gcc32` and `_gcc33` have it and no other build does.
