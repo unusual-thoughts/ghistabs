@@ -79,7 +79,7 @@ class Renderer(
 
     /** CUs that open N_BINCL scopes for their headers: their header types carry the header's file number, so
      *  what is left at the CU's own file number is the CU's own. An N_BINCL naming the CU's own file is the
-     *  CU, not a header, so it doesn't count. gcc 3.3 spells that one by bare filename (`hello.cc` for
+     *  CU, not a header, so it doesn't count. gcc 3.1 to 3.3 spell that one by bare filename (`hello.cc` for
      *  `/out/hello.cc`), where the double-N_SO idiom gives the CU its directory. */
     val binclCus by lazy {
         types.allTypes.filterNot { it.id.source.namesCu(it.cu) }.mapTo(HashSet()) { it.cu }
