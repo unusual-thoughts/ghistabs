@@ -29,6 +29,16 @@ data class BlockScope(
     /** Innermost block covering [addr], or null when [addr] lies outside this one. */
     fun blockAt(addr: Address): BlockScope? =
         if (addr in this) children.firstNotNullOfOrNull { it.blockAt(addr) } ?: this else null
+
+    /**
+     * Outermost block from [source] covering [addr], or null where none does. Where gcc bracketed an
+     * inlined body, that is the copy [addr] lies in, whatever blocks the body nests inside itself.
+     */
+    fun outermostAt(addr: Address, source: GhidraSourceFile): BlockScope? = when {
+        addr !in this -> null
+        this.source == source -> this
+        else -> children.firstNotNullOfOrNull { it.outermostAt(addr, source) }
+    }
 }
 
 /**
@@ -131,6 +141,10 @@ internal class BlockTreeBuilder(sink: DiagnosticSink = DummySink) : DiagnosticSi
 
 /** Innermost lexical block covering [addr], or null when no block does (code outside every N_LBRAC). */
 fun Func.blockAt(addr: Address) = blocks.firstNotNullOfOrNull { it.blockAt(addr) }
+
+/** [BlockScope.outermostAt] over the function's blocks. */
+fun Func.outermostAt(addr: Address, source: GhidraSourceFile) =
+    blocks.firstNotNullOfOrNull { it.outermostAt(addr, source) }
 
 /**
  * Local `recordIndex` → the offset from [entry] at which its block opens. gcc's lexical scope *is*

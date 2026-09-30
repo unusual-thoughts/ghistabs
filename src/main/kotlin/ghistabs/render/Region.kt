@@ -6,6 +6,7 @@ import ghistabs.harvest.Func
 import ghistabs.harvest.GhidraSourceFile
 import ghistabs.harvest.LineEntry
 import ghistabs.harvest.blockAt
+import ghistabs.harvest.outermostAt
 
 /**
  * One inlined region, or the statements of one this-file source line. [file] is the file an inlined
@@ -41,6 +42,12 @@ class Region(private val ctx: RenderContext, val file: GhidraSourceFile?) {
         ?.takeIf { it.source == (file ?: ctx.source) }
         ?.locals.orEmpty()
         .sortedBy { it.recordIndex }
+
+    /**
+     * The copy of an inlined body this stretch is part of: the block gcc bracketed around it, null
+     * where it bracketed none. One caller can inline the same lines several times, once per block.
+     */
+    fun copyIn(inliner: Func) = entries.minOfOrNull { it.addr }?.let { inliner.outermostAt(it, origin) }
 
     /** How many identical copies of this region the binary holds — one per site it was inlined at. */
     var copies = 1
@@ -297,8 +304,10 @@ fun FileRenderer.dropInlined(regions: List<Region>, func: Func): List<Region> = 
 fun List<Region>.wrapAsDefinition(func: Func): List<Region> =
     // One wrapper per pseudo-function, not per run: the stretches gcc bracketed together are the
     // body of one inline function, and the call site in the .cpp names it. Consecutive stretches
-    // of the *same* one still share a wrapper, which is what the run-grouping was for.
-    chunkedBy { it.pseudoName() }.flatMap { run ->
+    // of the *same* one still share a wrapper, which is what the run-grouping was for — but only
+    // within one copy: gz_open inlines stdlib.h L 222 four times, and one wrapper over all four
+    // took in the caller's code between them.
+    chunkedBy { it.pseudoName() to it.copyIn(func) }.flatMap { run ->
         val first = run.first()
         for (r in run) r.lines.replaceAll { it.copy(text = it.renameThis(SELF)) }
         first.lines.add(0, DecompLine.synthetic(first.definitionHead(func)))
