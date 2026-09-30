@@ -199,7 +199,6 @@ class DataTypeRegistry(
             else -> register(build()) as T
         }
 
-    @PublishedApi
     internal fun isRegistered(dt: DataType) = extrasByName[dt.name]?.contains(dt) == true
 
     /**
@@ -207,7 +206,6 @@ class DataTypeRegistry(
      * point at. Kept rather than rebuilt: a swept vftable slot is typed off its target's signature,
      * which the earlier import has since typed, so rebuilding it would not give back what it was.
      */
-    @PublishedApi
     internal fun <T : DataType> adopt(existing: T): T = existing.also {
         adopted += it
         extrasByName.getOrPut(it.name) { LinkedHashSet() }.add(it)
