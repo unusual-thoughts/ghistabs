@@ -124,6 +124,9 @@ class StabReader(
     /** One place stabs can live: the records block, the string block it indexes, and their layout. */
     internal data class Candidate(val records: String, val strings: String, val layout: Layout)
 
+    /** Why a program's stabs read as they do — or not at all — as a diagnostic category and message. */
+    data class Verdict(val category: String, val message: String)
+
     /**
      * *Defined* link-time symbols as name → `n_value`: the half of an a.out symbol table
      * [physicalRecords] skips. An `N_GSYM` carries no address of its own — the format keeps it in
@@ -170,6 +173,36 @@ class StabReader(
                 !(elf && layout == Layout.SYMTAB) && has(records) && has(strings)
             }
 
+        /**
+         * Why stabs in the blocks [has] names read as nothing: a linker index that holds no types, or a
+         * records block whose string table is missing — `sh_link` past the section count on one Solaris
+         * binary. Null when [candidate] finds real stabs, or there is no trace of any.
+         */
+        internal fun verdict(elf: Boolean, has: (String) -> Boolean): Verdict? {
+            val found = candidate(elf, has)
+            val orphan = SOURCES.filter { it.layout == Layout.SECTION }
+                .firstOrNull { has(it.records) && !has(it.strings) }
+            return when {
+                found?.records == ".stab.index" -> Verdict(
+                    "stab-index-only",
+                    "only a linker .stab.index: its records name each CU's source, options and object file, and " +
+                        "no types — the stabs stayed in the .o/.a files (rebuild with `cc -xs` to keep them)",
+                )
+
+                found == null && orphan != null -> Verdict(
+                    "stab-strings-missing",
+                    "${orphan.records} has no ${orphan.strings} string table, so no record in it can be named" +
+                        if (orphan.records == ".stab.index") {
+                            "; and being a linker index, it holds no types anyway"
+                        } else {
+                            ""
+                        },
+                )
+
+                else -> null
+            }
+        }
+
         private val Program.isElf get() = executableFormat == ElfLoader.ELF_NAME
 
         /** Which blocks [program] keeps its stabs in, for callers that need the bytes' addresses. */
@@ -177,6 +210,9 @@ class StabReader(
             ?.let { (records, strings, layout) ->
                 Source(program.memory.getBlock(records), program.memory.getBlock(strings), layout)
             }
+
+        /** [verdict] for [program]. */
+        fun verdictOf(program: Program): Verdict? = verdict(program.isElf) { program.memory.getBlock(it) != null }
 
         /**
          * Whether [program] carries stabs at all — block lookups only, opening no streams and reading no
