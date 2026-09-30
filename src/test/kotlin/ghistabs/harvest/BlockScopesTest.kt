@@ -2,12 +2,7 @@ package ghistabs.harvest
 
 import ghistabs.diagnose.CapturingSink
 import ghistabs.diagnose.Level
-import ghistabs.parse.FunctionScope
-import ghistabs.parse.SourceFile
-import ghistabs.parse.StabType
-import ghistabs.parse.SymbolDecl
-import ghistabs.parse.TypeDecl
-import ghistabs.parse.VariableLocation
+import ghistabs.parse.*
 import ghistabs.test.GenericAddressResolver
 import ghistabs.test.mustBe
 import org.junit.jupiter.api.Test
@@ -79,11 +74,11 @@ class BlockScopesTest {
 
         val root = blocks.single()
         root.locals.map { it.body.name } mustBe listOf("fs")
-        (root.start to root.end) mustBe (addr(0x5d) to addr(0xad2))
+        (root.start to root.endExclusive) mustBe (addr(0x5d) to addr(0xad2))
 
         names(root.children) mustBe listOf(listOf("this"), listOf("__str"))
         val (first, second) = root.children
-        (first.start to first.end) mustBe (addr(0x11f) to addr(0x122))
+        (first.start to first.endExclusive) mustBe (addr(0x11f) to addr(0x122))
         names(second.children) mustBe listOf(listOf("this"), listOf("__val"))
     }
 
@@ -109,6 +104,35 @@ class BlockScopesTest {
 
         locals.first { it.line == 664 }.sourceFile.filename mustBe "stl_alloc.h"
         locals.first { it.body.name == "fs" }.sourceFile.filename mustBe "main.cpp"
+    }
+
+    /**
+     * gcc 2.6.3 puts the call site's lines at the address the inlined body starts. `zlib_aout_gcc263.o`
+     * `zcalloc` (records 4218–4236): zutil.c 213 and 214, then `N_SOL stdlib.h` 215 and 217, all at
+     * 0x8dee, and the brackets 0x8dee–0x8e0a twice. Only 217 covers any bytes.
+     */
+    @Test
+    fun `a line that covers no bytes does not decide its block's file`() {
+        val lines = listOf(
+            line(212, 0x8de8, "zutil.c"),
+            line(213, 0x8dee, "zutil.c"),
+            line(214, 0x8dee, "zutil.c"),
+            line(215, 0x8dee, "stdlib.h"),
+            line(217, 0x8dee, "stdlib.h"),
+            line(218, 0x8e0a, "stdlib.h"),
+            line(214, 0x8e0a, "zutil.c"),
+            line(215, 0x8e0a, "zutil.c"),
+        )
+        val (_, blocks) = BlockTreeBuilder().apply {
+            openAt(0x8dee)
+            openAt(0x8dee)
+            closeAt(0x8e0a)
+            closeAt(0x8e0a)
+        }.finish(lines, sourceFileOf("zutil.c"))
+
+        val outer = blocks.single()
+        outer.source?.filename mustBe "zutil.c"
+        outer.children.single().source?.filename mustBe "stdlib.h"
     }
 
     /**
