@@ -36,7 +36,8 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
     private var pendingDirectory: String? = null
 
     /**
-     * Active filename for N_SLINE attribution. N_SOL switches it; N_SO end-of-CU clears.
+     * Active filename for N_SLINE attribution. N_SOL switches it; any N_SO opening or ending a CU
+     * clears it. gcc 2.6.3 a.out has no end-of-CU N_SO, so the next CU's start is the only reset.
      * Without this, lines inside #include'd headers would file under the enclosing CU.
      */
     private var currentSourceForLines: String? = null
@@ -163,6 +164,7 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
             rec.name.isNotEmpty() -> {
                 currentCu = SourceFile.CUSource(rec.name, pendingDirectory)
                 pendingDirectory = null
+                currentSourceForLines = null
                 rec.boundary(cu.identity)
             }
 
