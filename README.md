@@ -218,6 +218,8 @@ build/libs/ghistabs decomp myprogram.gzf -d out/decomps
 ```
 
 The snapshot holds what this build's analyzers did, so re-save it after changing one.
+`--save-db-full FILE` saves the program as the command leaves it instead, stabs import included,
+for opening in Ghidra. Given back to the CLI it is imported again, with the same result.
 
 `harvest`, `parse` and `decode` stop earlier still, and **skip auto-analysis entirely**.
 They are three stages of the same pipeline:
@@ -244,15 +246,16 @@ command takes them after its own name, and `ghistabs --help` lists them as well 
 
 Import options, on the commands that actually import (`dump`, `skeleton`, `decomp`):
 
-| Option                    | Default      | Effect                                                                                                                                                                |
-| ------------------------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--classes`               | on           | See "Reconstruct C++ classes" above                                                                                                                                   |
-| `--shorten-typedefs`      | off          | See "Shorten templated names via typedefs" above                                                                                                                      |
-| `--fold-sources`          | on           | See "Fold source-file spellings" above                                                                                                                                |
-| `--vfptr-model MODEL`     | `SPLIT_BASE` | `SPLIT_BASE` or `INHERITED`; see "Virtual function pointer model" above                                                                                               |
-| `--source-root DIR`       |              | Local checkout of sources the binary was built from, to correlate against (repeatable).                                                                               |
-| `--disable-analyzer NAME` |              | Turn off every analyzer whose name contains `NAME` (repeatable). Render the same binary with and without one to A/B what it changes.                                  |
-| `--save-db FILE`          |              | Save the program as auto-analysis left it, before the stabs import, as a Ghidra packed database (`.gzf`). Pass that file in place of the binary to skip the analysis. |
+| Option                    | Default      | Effect                                                                                                                                                                                        |
+| ------------------------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--classes`               | on           | See "Reconstruct C++ classes" above                                                                                                                                                           |
+| `--shorten-typedefs`      | off          | See "Shorten templated names via typedefs" above                                                                                                                                              |
+| `--fold-sources`          | on           | See "Fold source-file spellings" above                                                                                                                                                        |
+| `--vfptr-model MODEL`     | `SPLIT_BASE` | `SPLIT_BASE` or `INHERITED`; see "Virtual function pointer model" above                                                                                                                       |
+| `--source-root DIR`       |              | Local checkout of sources the binary was built from, to correlate against (repeatable).                                                                                                       |
+| `--disable-analyzer NAME` |              | Turn off every analyzer whose name contains `NAME` (repeatable). Render the same binary with and without one to A/B what it changes.                                                          |
+| `--save-db FILE`          |              | Save the program as auto-analysis left it, before the stabs import, as a Ghidra packed database (`.gzf`). Pass that file in place of the binary to skip the analysis.                         |
+| `--save-db-full FILE`     |              | Save the program once the command is done with it, import and render included, as a `.gzf` to open in Ghidra. Passed back in place of the binary, it is imported again, with the same result. |
 
 Render options (`skeleton` and `decomp` only):
 
