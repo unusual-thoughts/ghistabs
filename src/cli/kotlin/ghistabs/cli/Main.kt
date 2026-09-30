@@ -36,7 +36,6 @@ import ghistabs.importer.ImportOptions.Companion.SHORTEN_TYPEDEFS
 import ghistabs.importer.ImportOptions.Companion.VFPTR_MODEL
 import ghistabs.materialize.cpp.VfptrModel
 import ghistabs.parse.GlobalTypeId
-import ghistabs.parse.StabReader
 import ghistabs.parse.StabRecord
 import ghistabs.parse.SymbolDecl
 import ghistabs.render.Renderer
@@ -250,13 +249,6 @@ private abstract class StabsCommand(name: String) : CliktCommand(name = name) {
 
     /** What this subcommand runs against the loaded program, dumps included. */
     protected abstract fun ImportContext<*>.execute()
-
-    /** Pass A's input: the raw records. Null when the program carries no stabs. */
-    protected fun ImportContext<*>.readStabs(): StabReader.Result? = StabReader.fromProgram(program)?.readAll(monitor)
-        ?: run {
-            err("no-stabs", "No .stab/.stabstr block found.")
-            null
-        }
 
     /** Checked before Ghidra boots, so a misuse fails in milliseconds rather than after a full analysis. */
     protected open fun validate() = Unit

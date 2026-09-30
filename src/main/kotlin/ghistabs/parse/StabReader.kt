@@ -11,11 +11,13 @@ import ghistabs.byteProvider
 
 /**
  * Reads stab records from raw record/string bytes, tracking per-CU offsets ([Layout.SECTION]) and
- * merging `\`-continuation chains. Truncated tails (size % 12 ≠ 0) surface via [Result.truncatedTail].
+ * merging `\`-continuation chains. Truncated tails (size % 12 ≠ 0) surface via [Result.truncatedTail],
+ * and names [stabStr] cannot resolve (null: the offset is past the string table) via
+ * [Result.unresolvedNames].
  */
 class StabReader(
     private val stab: BinaryReader,
-    private val stabStr: (Long) -> String,
+    private val stabStr: (Long) -> String?,
     private val layout: Layout = Layout.SECTION,
 ) {
     /** Where the records came from, which decides how `n_strx` reads and what else shares the table. */
@@ -36,7 +38,12 @@ class StabReader(
         val totalRecordCount: Int = records.size,
         /** Unprocessed trailing bytes (size % 12 ≠ 0). */
         val truncatedTail: Long = 0,
+        /** Physical records whose `n_strx` lands outside the string table, read as nameless. */
+        val unresolvedNames: Int = 0,
     )
+
+    /** How many records the last walk of [physicalRecords] had to leave nameless. */
+    private var unresolved = 0
 
     constructor(stab: ByteArray, stabStr: ByteArray, layout: Layout = Layout.SECTION) : this(
         BinaryReader(
@@ -44,7 +51,11 @@ class StabReader(
             true,
         ),
         { n ->
-            stabStr.asIterable().drop(n.toInt()).takeWhile { it != 0.toByte() }.toByteArray().toString(Charsets.UTF_8)
+            n.takeIf { it < stabStr.size }?.let {
+                stabStr.asIterable().drop(n.toInt()).takeWhile {
+                    it != 0.toByte()
+                }.toByteArray().toString(Charsets.UTF_8)
+            }
         },
         layout,
     )
@@ -63,6 +74,7 @@ class StabReader(
             records = records,
             totalRecordCount = total,
             truncatedTail = stab.length() - stab.pointerIndex,
+            unresolvedNames = unresolved,
         )
     }
 
@@ -81,6 +93,7 @@ class StabReader(
      */
     fun physicalRecords(): Sequence<StabRecord> = sequence {
         stab.pointerIndex = 0
+        unresolved = 0
         var cuOff = 0L
         var cuSize = 0L
         var index = 0
@@ -97,7 +110,10 @@ class StabReader(
             record.stabstrOffset = cuOff + record.raw.strx.toLong()
             // strx 0 is a.out's "no name" — gcc uses it for the end-of-function and end-of-source
             // markers. Offset 0 is never a string there: it is the string table's own length field.
-            record.name = if (layout == Layout.SYMTAB && record.raw.strx == 0u) "" else stabStr(record.stabstrOffset)
+            // An offset past the table is a wrong header, or not stabs at all: the record still counts.
+            record.name = record.stabstrOffset.takeUnless { layout == Layout.SYMTAB && record.raw.strx == 0u }
+                ?.let { stabStr(it) ?: "".also { unresolved++ } }
+                .orEmpty()
             yield(record)
         }
     }
@@ -123,7 +139,7 @@ class StabReader(
             while (stab.hasNext(STAB_RECORD_SIZE)) {
                 val raw = readHeader()
                 if (raw.isLinkSymbol && raw.isPlaced && raw.strx != 0u) {
-                    putIfAbsent(stabStr(raw.strx.toLong()), raw.value.toLong())
+                    stabStr(raw.strx.toLong())?.let { putIfAbsent(it, raw.value.toLong()) }
                 }
             }
         }
@@ -182,7 +198,11 @@ class StabReader(
             val littleEndian = !program.memory.isBigEndian
             StabReader(
                 stab = BinaryReader(records.byteProvider, littleEndian),
-                stabStr = { off: Long -> BinaryReader(strings.byteProvider, littleEndian).readUtf8String(off) },
+                stabStr = { off: Long ->
+                    off.takeIf { it < strings.size }?.let {
+                        runCatching { BinaryReader(strings.byteProvider, littleEndian).readUtf8String(it) }.getOrNull()
+                    }
+                },
                 layout = layout,
             )
         }
