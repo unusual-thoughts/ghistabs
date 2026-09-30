@@ -753,7 +753,7 @@ class HarvesterTest {
 
         val func = harvester.harvest(records).functions.single()
 
-        func.blocks.map { it.start.offset to it.end.offset } mustBe listOf(0x160L to 0x1e8L)
+        func.blocks.map { it.start.offset to it.endExclusive.offset } mustBe listOf(0x160L to 0x1e8L)
         func.sizeBytes mustBe 0xa0uL
     }
 
@@ -774,7 +774,7 @@ class HarvesterTest {
 
         val func = harvester.harvest(records).functions.single()
 
-        func.blocks.map { it.start.offset to it.end.offset } mustBe listOf(0x36L to 0x5fL)
+        func.blocks.map { it.start.offset to it.endExclusive.offset } mustBe listOf(0x36L to 0x5fL)
     }
 
     /**
