@@ -10,8 +10,6 @@ import ghistabs.parse.Language
 import ghistabs.parse.LocalTypeId
 import ghistabs.parse.SourceFile
 import ghistabs.rangeUntil
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.Transient
 import java.util.*
 
 /** Cross-CU dedup of header files via (filename, checksum) so BINCL/EXCL share one [HeaderFile]. */
@@ -44,16 +42,27 @@ class HeaderRegistry(sink: DiagnosticSink = DummySink) : DiagnosticSink by sink 
  * One CU's scope: the text it declared between its opening and closing N_SO, its `fileNum → header`
  * map, and the BINCL/EINCL/EXCL stack that fills it.
  */
-@Serializable
 class CuContext(
     val cu: SourceFile.CUSource,
-    @Transient private val sink: DiagnosticSink = DummySink,
-    @Transient val registry: HeaderRegistry = HeaderRegistry(sink),
+    private val sink: DiagnosticSink = DummySink,
+    val registry: HeaderRegistry = HeaderRegistry(sink),
     val language: Language? = null,
     /** Where this CU's text began — the `Ltext0` its opening N_SO carries, absent when it carries 0. */
     val start: Address? = null,
 ) : DiagnosticSink by sink {
     private var end: Address? = null
+
+    /** Its functions, in N_FUN order. */
+    internal val functions = mutableListOf<FuncBuilder>()
+
+    /**
+     * N_SLINEs waiting for the N_FUN that follows them, once this CU's first N_SLINE came before its
+     * first function: gcc emits a function's stab after its code unless the target defines
+     * `DBX_FUNCTION_FIRST` (dbxout.c `dbxout_function`), which 2.6.3's svr4.h sets and no a.out config
+     * does. Null while the CU puts each N_FUN first. A CU with lines and no function (MinGW 3.4.5's
+     * `cygwin.asm`) also lands here, its lines joining no function either way.
+     */
+    internal var linesAhead: MutableList<LineEntry>? = null
 
     /** The closing (empty-name) N_SO's `Ltext`, absent when it carries 0. */
     fun endAt(addr: Address?) {
@@ -62,7 +71,6 @@ class CuContext(
 
     private val fileNumToHeader: MutableMap<Int, HeaderFile> = mutableMapOf()
 
-    @Transient
     private val includeStack: ArrayDeque<Int> = ArrayDeque()
     private var nextFileNum: Int = 1
 
