@@ -38,11 +38,14 @@ interface AddressResolver {
      * stabs-in-sections are offsets from [funcStart] (a genuine offset stays below it; an already
      * absolute value doesn't). Pass a null [funcStart] for records that are always absolute. Tallies
      * which branch it took on [sink] (`stab-value-func-relative` vs `stab-value-absolute`).
+     *
+     * A relative value counts from [base] when given, instead of the function: a.out's unrelocated
+     * brackets are offsets into their object's text (`stab-value-cu-relative`).
      */
-    fun stabAddress(value: Long, funcStart: Address?, sink: DiagnosticSink = DummySink) =
+    fun stabAddress(value: Long, funcStart: Address?, sink: DiagnosticSink = DummySink, base: Address? = null) =
         if (funcStart != null && value < funcStart.offset) {
-            sink.debug("stab-value-func-relative")
-            funcStart + value
+            sink.debug(if (base == null) "stab-value-func-relative" else "stab-value-cu-relative")
+            (base ?: funcStart) + value
         } else {
             sink.debug("stab-value-absolute")
             buildAddress(value)

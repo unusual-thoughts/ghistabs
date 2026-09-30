@@ -731,6 +731,53 @@ class HarvesterTest {
     }
 
     /**
+     * Without `DBX_FUNCTION_FIRST` gcc also leaves `DBX_BLOCKS_FUNCTION_RELATIVE` off (dbxelf.h: "to make
+     * this work, functions must appear prior to line info"), so a bracket is a bare `LBB` label. ld
+     * relocates an a.out stab by its type's `N_TYPE` bits, which are `N_UNDF` for N_LBRAC/N_RBRAC, so
+     * the label stays an offset into its object's text, where the CU's N_SO sits.
+     * `zlib_aout_gcc263.o`, records 82–161: `compress.c` at 0x138, `compress2` at 0x148, brackets
+     * 0x28/0xb0 — the function's lines run 0x160–0x1e8.
+     */
+    @Test
+    fun `a bracket below its function in a lines-ahead CU counts from the CU's N_SO`() {
+        val (_, harvester) = dummyHarvester()
+        val records = listOf(
+            StabRecord(81, StabType.N_SO, 0, 0, 0x138L, "/zlib/"),
+            StabRecord(82, StabType.N_SO, 0, 0, 0x138L, "compress.c"),
+            StabRecord(124, StabType.N_SLINE, 0, 27, 0x148L, ""),
+            StabRecord(146, StabType.N_SLINE, 0, 57, 0x1e8L, ""),
+            StabRecord(147, StabType.N_FUN, 0, 22, 0x148L, "compress2:F1"),
+            StabRecord(160, StabType.N_LBRAC, 0, 0, 0x28L, ""),
+            StabRecord(161, StabType.N_RBRAC, 0, 0, 0xb0L, ""),
+        )
+
+        val func = harvester.harvest(records).functions.single()
+
+        func.blocks.map { it.start.offset to it.end.offset } mustBe listOf(0x160L to 0x1e8L)
+        func.sizeBytes mustBe 0xa0uL
+    }
+
+    /**
+     * Where the N_FUN comes first, the brackets are `LBB-func` (`hello_aout_gcc295.o`: `emit` at 0x30 in
+     * `hello.c` at 0, N_LBRAC 0x6 / N_RBRAC 0x2f).
+     */
+    @Test
+    fun `a bracket in a function-first CU counts from its function`() {
+        val (_, harvester) = dummyHarvester()
+        val records = listOf(
+            StabRecord(2, StabType.N_SO, 0, 0, 0L, "hello.c"),
+            StabRecord(57, StabType.N_FUN, 0, 25, 0x30L, "emit:F1"),
+            StabRecord(61, StabType.N_SLINE, 0, 25, 0x0L, ""),
+            StabRecord(77, StabType.N_LBRAC, 0, 0, 0x6L, ""),
+            StabRecord(78, StabType.N_RBRAC, 0, 0, 0x2fL, ""),
+        )
+
+        val func = harvester.harvest(records).functions.single()
+
+        func.blocks.map { it.start.offset to it.end.offset } mustBe listOf(0x36L to 0x5fL)
+    }
+
+    /**
      * libgcc2.c is one source compiled once per `L_` object, so `xmltest_aout_gcc263` opens the same
      * `N_SO /usr/src/aout-gcc-2.6.3/./` + `N_SO libgcc2.c` pair several times. Each opening is its own CU:
      * the second's lines ahead of its first N_FUN go to that function, not to the first copy's.

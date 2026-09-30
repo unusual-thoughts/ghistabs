@@ -245,9 +245,17 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
         currentScope = null
     }
 
+    /**
+     * N_LBRAC/N_RBRAC: `value` is `LBB-func` where the CU puts each N_FUN first, else a bare `LBB`
+     * label (gcc sets `DBX_BLOCKS_FUNCTION_RELATIVE` only alongside `DBX_FUNCTION_FIRST`). a.out ld
+     * leaves that label unrelocated — it relocates a stab by its type's `N_TYPE` bits, `N_UNDF` here —
+     * so below its function it is an offset into the object's text, which starts at the CU's N_SO.
+     */
     fun bracket(rec: StabRecord) {
         currentScope?.apply {
-            val addr = resolver.stabAddress(rec.value, func.addr, this@StabCursor)
+            // A CU at 0 needs no rebasing: its labels are already addresses, at or past the function.
+            val cuStart = cuContext?.takeIf { it.linesAhead != null }?.start
+            val addr = resolver.stabAddress(rec.value, func.addr, this@StabCursor, base = cuStart)
             val level = rec.desc.takeIf { it > 0 }
             when (rec.type) {
                 // open a lexical scope, which owns the locals emitted just before it.
