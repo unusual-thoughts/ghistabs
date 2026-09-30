@@ -112,6 +112,35 @@ class BlockScopesTest {
     }
 
     /**
+     * gcc 2.6.3 puts the call site's lines at the address the inlined body starts. `zlib_aout_gcc263.o`
+     * `zcalloc` (records 4218–4236): zutil.c 213 and 214, then `N_SOL stdlib.h` 215 and 217, all at
+     * 0x8dee, and the brackets 0x8dee–0x8e0a twice. Only 217 covers any bytes.
+     */
+    @Test
+    fun `a line that covers no bytes does not decide its block's file`() {
+        val lines = listOf(
+            line(212, 0x8de8, "zutil.c"),
+            line(213, 0x8dee, "zutil.c"),
+            line(214, 0x8dee, "zutil.c"),
+            line(215, 0x8dee, "stdlib.h"),
+            line(217, 0x8dee, "stdlib.h"),
+            line(218, 0x8e0a, "stdlib.h"),
+            line(214, 0x8e0a, "zutil.c"),
+            line(215, 0x8e0a, "zutil.c"),
+        )
+        val (_, blocks) = BlockTreeBuilder().apply {
+            openAt(0x8dee)
+            openAt(0x8dee)
+            closeAt(0x8e0a)
+            closeAt(0x8e0a)
+        }.finish(lines, sourceFileOf("zutil.c"))
+
+        val outer = blocks.single()
+        outer.source?.filename mustBe "zutil.c"
+        outer.children.single().source?.filename mustBe "stdlib.h"
+    }
+
+    /**
      * Sun's C compiler numbers lexical depth in each bracket's `n_desc` — 2 for a function's outermost
      * block, and it counts scopes that emitted no brackets, so the number runs ahead of the pairing
      * depth (sibling blocks at level 5 where pairing says 3, in `graphcnv.SUN4`'s `wpsio.c`). The
