@@ -32,7 +32,7 @@ data class BlockScope(
 
     /**
      * Outermost block from [source] covering [addr], or null where none does. Where gcc bracketed an
-     * inlined body, that is the copy [addr] lies in, whatever blocks the body nests inside itself.
+     * inlined body, that is the instance [addr] lies in, whatever blocks the body nests inside itself.
      */
     fun outermostAt(addr: Address, source: GhidraSourceFile): BlockScope? = when {
         addr !in this -> null

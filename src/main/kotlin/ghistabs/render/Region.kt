@@ -37,20 +37,23 @@ class Region(private val ctx: RenderContext, val file: GhidraSourceFile?) {
      * body, so its source is the file the stretch came from; anything else is the caller's own
      * block and owns the caller's own locals.
      */
-    fun inlineParams(inliner: Func) = entries.minOfOrNull { it.addr }
+    fun inlineParams(inliner: Func) = firstAddr
         ?.let { inliner.blockAt(it) }
         ?.takeIf { it.source == (file ?: ctx.source) }
         ?.locals.orEmpty()
         .sortedBy { it.recordIndex }
 
     /**
-     * The copy of an inlined body this stretch is part of: the block gcc bracketed around it, null
+     * The instance of an inlined body this stretch is part of: the block gcc bracketed around it, null
      * where it bracketed none. One caller can inline the same lines several times, once per block.
      */
-    fun copyIn(inliner: Func) = entries.minOfOrNull { it.addr }?.let { inliner.outermostAt(it, origin) }
+    fun instanceBlock(inliner: Func) = firstAddr?.let { inliner.outermostAt(it, origin) }
 
-    /** How many identical copies of this region the binary holds — one per site it was inlined at. */
-    var copies = 1
+    /** The stretch's lowest N_SLINE address, where its block is looked up; null for an empty stretch. */
+    private val firstAddr get() = entries.minOfOrNull { it.addr }
+
+    /** How many identical instances of this region the binary holds — one per site it was inlined at. */
+    var instances = 1
     val foreign get() = file != null
 
     /** The this-file line the region belongs on. Inlined code has none; it rides its call site. */
@@ -69,7 +72,7 @@ class Region(private val ctx: RenderContext, val file: GhidraSourceFile?) {
 
     /** [labelOrNull], falling back to the line the region is anchored at — null where it has none. */
     fun label(fallback: Int?) = (labelOrNull() ?: fallback?.let { "L $it" })
-        ?.plus(if (copies > 1) " ×$copies" else "")
+        ?.plus(if (instances > 1) " ×$instances" else "")
 
     /**
      * `_M_deallocate__stl_vector_h_123`, or `__inline_stl_iterator_h_633` where the function that
@@ -149,8 +152,7 @@ class Region(private val ctx: RenderContext, val file: GhidraSourceFile?) {
         val extent = entries.mapTo(mutableSetOf()) { it.addr }
         val (crossingIn, crossingOut) = flow.crossing { entryAddrOf(it) in extent }
         val assign = crossingOut.firstOrNull()?.let { "$it = " }.orEmpty()
-        val start = entries.minOfOrNull { it.addr }
-            ?: return "$assign$id(${crossingIn.joinToString()});"
+        val start = firstAddr ?: return "$assign$id(${crossingIn.joinToString()});"
         val args = inlineParams(inliner)
             .ifEmpty { return "$assign$id(${crossingIn.joinToString()});" }
             .map { p -> ctx.resolver.forSymbol(p)?.let { flow.nameAt(it, start) } ?: p.body.name }
@@ -305,9 +307,9 @@ fun List<Region>.wrapAsDefinition(func: Func): List<Region> =
     // One wrapper per pseudo-function, not per run: the stretches gcc bracketed together are the
     // body of one inline function, and the call site in the .cpp names it. Consecutive stretches
     // of the *same* one still share a wrapper, which is what the run-grouping was for — but only
-    // within one copy: gz_open inlines stdlib.h L 222 four times, and one wrapper over all four
+    // within one instance: gz_open inlines stdlib.h L 222 four times, and one wrapper over all four
     // took in the caller's code between them.
-    chunkedBy { it.pseudoName() to it.copyIn(func) }.flatMap { run ->
+    chunkedBy { it.pseudoName() to it.instanceBlock(func) }.flatMap { run ->
         val first = run.first()
         for (r in run) r.lines.replaceAll { it.copy(text = it.renameThis(SELF)) }
         first.lines.add(0, DecompLine.synthetic(first.definitionHead(func)))
