@@ -33,11 +33,11 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
     }
 
     internal fun runOnRecords(stabs: StabReader.Result): ImportResult {
-        if (stabs.unresolvedNames > 0) {
+        stabs.unresolvedNames.takeIf { it > 0 }?.let {
             warn(
                 "stabstr-out-of-range",
-                "${stabs.unresolvedNames} records name an offset past the string table; read as nameless",
-                count = stabs.unresolvedNames.toLong(),
+                "$it records name an offset past the string table; read as nameless",
+                count = it.toLong(),
             )
         }
         // Pass A — parse + harvest

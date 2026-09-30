@@ -8,7 +8,6 @@ import ghidra.program.model.listing.Program
 import ghidra.program.model.mem.MemoryBlock
 import ghidra.util.task.TaskMonitor
 import ghistabs.byteProvider
-import java.io.IOException
 
 /**
  * Reads stab records from raw record/string bytes, tracking per-CU offsets ([Layout.SECTION]) and
@@ -112,11 +111,9 @@ class StabReader(
             // strx 0 is a.out's "no name" — gcc uses it for the end-of-function and end-of-source
             // markers. Offset 0 is never a string there: it is the string table's own length field.
             // An offset past the table is a wrong header, or not stabs at all: the record still counts.
-            record.name = if (layout == Layout.SYMTAB && record.raw.strx == 0u) {
-                ""
-            } else {
-                stabStr(record.stabstrOffset) ?: "".also { unresolved++ }
-            }
+            record.name = record.stabstrOffset.takeUnless { layout == Layout.SYMTAB && record.raw.strx == 0u }
+                ?.let { stabStr(it) ?: "".also { unresolved++ } }
+                .orEmpty()
             yield(record)
         }
     }
@@ -203,11 +200,7 @@ class StabReader(
                 stab = BinaryReader(records.byteProvider, littleEndian),
                 stabStr = { off: Long ->
                     off.takeIf { it < strings.size }?.let {
-                        try {
-                            BinaryReader(strings.byteProvider, littleEndian).readUtf8String(it)
-                        } catch (_: IOException) {
-                            null
-                        }
+                        runCatching { BinaryReader(strings.byteProvider, littleEndian).readUtf8String(it) }.getOrNull()
                     }
                 },
                 layout = layout,
