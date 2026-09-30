@@ -198,9 +198,12 @@ fun allocate(claims: List<Claim>, range: ClosedRange<Int>): Allocation {
         { it.first.stale },
         { it.first.owner.ordinal },
         { it.first.line ?: Int.MAX_VALUE },
-        // Rigid before elastic among peers: a function's signature is one row and must open the row
-        // its body shares, and a one-row typedef keeps its line under an expanding initializer.
-        { if (it.first.fit == Fit.ELASTIC) 1 else 0 },
+        // Rigid before elastic among declaration peers: a one-row typedef keeps its line under an
+        // expanding initializer. Not among bodies, where the rigid claim is a function's head: gcc
+        // dates a class's implicit members all at the class's line, and heads first put the second
+        // one's `{` between the first one's `{` and its statements. Arrival order already puts each
+        // head before its own body.
+        { if (it.first.fit == Fit.ELASTIC && it.first.owner.group != "body") 1 else 0 },
         { it.first.tie(-it.first.rows.size) },
         { if (it.first.fit == Fit.ELASTIC && it.first.owner.group != "body") it.first.rows.first().text else "" },
     )
@@ -266,8 +269,15 @@ fun allocate(claims: List<Claim>, range: ClosedRange<Int>): Allocation {
         for (r in line..end) held[r] = claim.owner.group
         placed += Placement(claim, line..end, copies)
     }
-    // Peers take exactly the row they share, never the extent its holder expanded to.
-    shared.mapTo(placed) { (claim, copies, row) -> Placement(claim, row..row, copies) }
+    // Peers take exactly the row they share, never the extent its holder expanded to. A holder that
+    // expanded opens on that row and closes below it, so its peers go in front: gcc 2.95 dates
+    // `__vt_5Shape[6] = {` and `class Shape` both at L29, and after the vtable's `{` the class was
+    // inside its initializer.
+    val opening = placed.filter { it.range.count() > 1 }.mapTo(mutableSetOf()) { it.range.first }
+    val (before, after) = shared.map { (claim, copies, row) -> Placement(claim, row..row, copies) }
+        .partition { it.range.first in opening }
+    placed.addAll(0, before)
+    placed += after
 
     // The band above the first anchored row, one floating claim per row, in priority order.
     var next = 1

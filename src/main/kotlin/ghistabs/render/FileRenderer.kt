@@ -373,11 +373,12 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
      */
     private fun write(allocation: Allocation) {
         for ((claim, range, copies) in allocation.placed) {
-            val free = range.filter { canvas[it].isEmpty() }.ifEmpty { listOf(range.first) }
+            // The whole range, a first row a peer already wrote to included: the allocator made the
+            // rows it gave exclusive, and peers of an expanding holder are written ahead of it.
             val rows = when {
                 // Spare rows: break an over-long condition at its top-level `&&`/`||` so it fills the
                 // space instead of running to 300 chars.
-                claim.owner == Owner.FUNCTION_BODY && free.size > claim.rows.size ->
+                claim.owner == Owner.FUNCTION_BODY && range.count() > claim.rows.size ->
                     claim.rows.flatMap { r ->
                         wrapDecompLine(r.text, r.indent, r.cuts).map { (d, t) -> Row(t, d, r.note) }
                     }
@@ -386,7 +387,7 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
             }
             var prev = -1
             var prevIndent = 0
-            for ((row, content) in fitRows(rows, free.first()..free.last())) {
+            for ((row, content) in fitRows(rows, range)) {
                 // Everything crammed onto one row keeps the indent of the statement that opens it —
                 // TargetLine takes the shallowest, which let a trailing `}` drag the row to column 0.
                 val indent = if (row == prev) prevIndent else content.indent
