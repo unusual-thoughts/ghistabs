@@ -2,12 +2,7 @@ package ghistabs.harvest
 
 import ghistabs.diagnose.CapturingSink
 import ghistabs.diagnose.Level
-import ghistabs.parse.FunctionScope
-import ghistabs.parse.SourceFile
-import ghistabs.parse.StabType
-import ghistabs.parse.SymbolDecl
-import ghistabs.parse.TypeDecl
-import ghistabs.parse.VariableLocation
+import ghistabs.parse.*
 import ghistabs.test.GenericAddressResolver
 import ghistabs.test.mustBe
 import org.junit.jupiter.api.Test
@@ -79,11 +74,11 @@ class BlockScopesTest {
 
         val root = blocks.single()
         root.locals.map { it.body.name } mustBe listOf("fs")
-        (root.start to root.end) mustBe (addr(0x5d) to addr(0xad2))
+        (root.start to root.endExclusive) mustBe (addr(0x5d) to addr(0xad2))
 
         names(root.children) mustBe listOf(listOf("this"), listOf("__str"))
         val (first, second) = root.children
-        (first.start to first.end) mustBe (addr(0x11f) to addr(0x122))
+        (first.start to first.endExclusive) mustBe (addr(0x11f) to addr(0x122))
         names(second.children) mustBe listOf(listOf("this"), listOf("__val"))
     }
 

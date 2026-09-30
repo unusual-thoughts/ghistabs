@@ -19,16 +19,16 @@ import kotlinx.serialization.UseSerializers
  */
 @Serializable
 data class BlockScope(
-    val start: Address,
-    val end: Address,
+    override val start: Address,
+    override val endExclusive: Address,
     val locals: List<LocalSymbol>,
     val children: List<BlockScope> = emptyList(),
     // Resolved by BlockTreeBuilder.finish; null until then. See [finish] for how it is derived.
     val source: GhidraSourceFile? = null,
-) {
+) : OpenEndRange<Address> {
     /** Innermost block covering [addr], or null when [addr] lies outside this one. */
     fun blockAt(addr: Address): BlockScope? =
-        if (addr in start..<end) children.firstNotNullOfOrNull { it.blockAt(addr) } ?: this else null
+        if (addr in this) children.firstNotNullOfOrNull { it.blockAt(addr) } ?: this else null
 }
 
 /**
@@ -109,7 +109,7 @@ internal class BlockTreeBuilder(sink: DiagnosticSink = DummySink) : DiagnosticSi
         // corrected copies, so they cannot disagree, and a Symbol stays immutable — it is reachable
         // from BlockScope, from StabFunction.locals, and from maps keyed on either.
         fun BlockScope.attribute(inherited: GhidraSourceFile): BlockScope {
-            fun LineEntry.own() = addr in start..<end && children.none { addr in it.start..<it.end }
+            fun LineEntry.own() = contains(addr) && children.none { addr in it }
             val ownLines = lines.filter { it.own() }
             val blockSource = covering.filter { it.own() }.map { it.source }.toSet().singleOrNull() ?: inherited
             val attributed = locals.map { local ->
