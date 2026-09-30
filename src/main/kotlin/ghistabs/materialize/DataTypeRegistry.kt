@@ -14,22 +14,22 @@ import ghistabs.parse.CATEGORY
 import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
-import ghidra.program.model.data.Enum as GhidraEnum
 
 /**
- * DataType cache and DTM facade: owns the id→DataType map, resolves types into the DTM under a
- * shared conflict handler, and hands back placeholders for cycle-breaking. The TypeDecl/TypeAst
+ * Stabs id → DataType cache over [DtmRegistry]: owns the id→DataType map and hands back placeholders
+ * for cycle-breaking; resolving into the DTM and the id-less types are [DtmRegistry]'s. The TypeDecl/TypeAst
  * interpreters live in `Materialization.kt` ([resolveRef]/[materializeBody]/[materializeAll]),
  * placeholder construction in `Placeholders.kt` ([makePlaceholder]), and degradation reporting in
  * `TypeDiagnostics.kt`.
  */
 class DataTypeRegistry(
-    internal val dtm: DataTypeManager,
+    dtm: DataTypeManager,
     sink: DiagnosticSink,
     internal val diagnostics: StabsDiagnostics,
     internal val hints: SourceHints,
     internal val monitor: TaskMonitor = TaskMonitor.DUMMY,
-) : DiagnosticSink by sink {
+) : DtmRegistry(dtm),
+    DiagnosticSink by sink {
     internal val harvest = hints.harvest
     internal val types = hints.types
 
@@ -70,7 +70,7 @@ class DataTypeRegistry(
      */
     internal val allCreatedDataTypes get() = buildSet {
         addAll(byId.values)
-        addAll(registered)
+        addAll(registeredTypes)
     }
 
     /**
@@ -79,51 +79,6 @@ class DataTypeRegistry(
      * [byId] and [xrefStubs].
      */
     internal val degradedBy: Map<DataType, String> by lazy { computeDegraded() }
-
-    // Replace-empty, not keep: when we file a type under its namespace category (scope attribution), it
-    // collides with the empty this-param shadow Ghidra's demangler forged there (`std::X::method` → empty
-    // `/std/X`). KEEP_HANDLER would return that empty shadow and discard our filled type, so every
-    // reference resolves to undefined; REPLACE_EMPTY_STRUCTS fills the shadow with ours (and still
-    // RENAME_AND_ADDs two genuinely-distinct non-empty types, like DEFAULT_HANDLER).
-    private val conflictHandler = DataTypeConflictHandler.REPLACE_EMPTY_STRUCTS_OR_RENAME_AND_ADD_HANDLER
-
-    /** Ids of the types in the DTM before this import: an earlier import's, and analysis's own. */
-    private val preexisting = dtm.allDataTypes.asSequence().mapTo(HashSet()) { dtm.getID(it) }
-
-    /**
-     * [conflictHandler], except against a type of the same kind that predates this import. That is an
-     * earlier import's: a re-import (`Tools > Stabs > Re-import`, or a saved program run again) builds
-     * the same types again, and [conflictHandler] would fork a `.conflict` beside each, which every use
-     * then points at. A struct, union or enum is reset in place to what this import builds. A function
-     * definition is kept as it stands: a swept vftable slot is typed off its target's signature, which
-     * that import has since typed, so what this one builds is not what it was.
-     *
-     * Only the type being resolved gets this: its dependencies go through [conflictHandler].
-     */
-    private val overHandler = object : DataTypeConflictHandler() {
-        override fun resolveConflict(added: DataType, existing: DataType): ConflictResult = when {
-            dtm.getID(existing) !in preexisting -> conflictHandler.resolveConflict(added, existing)
-            added is FunctionDefinition && existing is FunctionDefinition -> ConflictResult.USE_EXISTING
-            existing.isSameKindAs(added) -> ConflictResult.REPLACE_EXISTING
-            else -> conflictHandler.resolveConflict(added, existing)
-        }
-
-        override fun shouldUpdate(source: DataType, local: DataType) = false
-
-        override fun getSubsequentHandler() = conflictHandler
-    }
-
-    /** Resolve [this] into the DTM under the shared conflict handler; returns the DTM-resident instance
-     *  (may differ from [this]). No id/name bookkeeping — for stubs whose id lands in [byId] later. */
-    private fun DataType.resolveIntoDtm(handler: DataTypeConflictHandler = conflictHandler): DataType =
-        dtm.resolve(this, handler)
-
-    private fun DataType.isSameKindAs(other: DataType) = when (other) {
-        is Structure -> this is Structure
-        is Union -> this is Union
-        is GhidraEnum -> this is GhidraEnum
-        else -> false
-    }
 
     internal val rttiStructs by lazy { Rtti(dtm) }
 
@@ -171,9 +126,6 @@ class DataTypeRegistry(
     }
 
     internal fun DataType.markXRefStub(): DataType = apply { xrefStubs.add(this) }
-
-    /** [resolveIntoDtm] over an earlier import's type of the same kind: see [overHandler]. */
-    private fun DataType.resolveOver(): DataType = resolveIntoDtm(overHandler)
 
     /** [resolveIntoDtm], cached under [id] for [dataTypeFor]. Returns the DTM-resolved instance (may differ). */
     internal fun registerById(dt: DataType, id: GlobalTypeId) = dt.resolveIntoDtm().also { cache(id, it) }
@@ -258,48 +210,6 @@ class DataTypeRegistry(
                     Demangler.of(mangled)?.namespace?.let { putIfAbsent(it.demanglerPath.path, dt) }
                 }
             }
-        }
-    }
-
-    // ── Without an id: types with no stabs id of their own — typedefs, vftable and base-subobject
-    // structs, vftable slot FunctionDefinitions. Found through the DTM (by path, in [getOrRegister]);
-    // [registered] only records that this import made or adopted them, for [allCreatedDataTypes]. ──
-
-    /**
-     * What this import registered without an id. Provenance only, never looked up by name: the DTM
-     * can't answer "is this ours". Types from analysis, the loader's archives and the demangler share
-     * its categories, and a re-import's type replaced or adopted in place keeps its earlier DTM id.
-     */
-    private val registered = LinkedHashSet<DataType>()
-
-    /** [resolveIntoDtm], recorded in [registered]. Returns the DTM-resolved instance (may differ). */
-    internal fun register(dt: DataType, handler: DataTypeConflictHandler = conflictHandler) =
-        dt.resolveIntoDtm(handler).also { registered.add(it) }
-
-    /** [register] for a vftable slot's function definition, over an earlier import's: see [overHandler]. */
-    internal fun registerOver(dt: DataType): DataType = register(dt, overHandler)
-
-    /**
-     * Get-or-create a DTM-resident DataType of type [T] at `(category, name)`. One found there is
-     * returned as it stands, and one an earlier import left is registered as this one's, with the slot
-     * definitions it points at, so a re-import's registry reads as the first's did.
-     */
-    internal inline fun <reified T : DataType> getOrRegister(category: CategoryPath, name: String, build: () -> T): T =
-        when (val dt = dtm.getDataType(category, name)) {
-            is T -> adopt(dt)
-            else -> register(build()) as T
-        }
-
-    /**
-     * [existing] registered as this import's, as it stands, with the function definitions its slots
-     * point at. Kept rather than rebuilt: a swept vftable slot is typed off its target's signature,
-     * which the earlier import has since typed, so rebuilding it would not give back what it was.
-     */
-    internal fun <T : DataType> adopt(existing: T): T = existing.also {
-        if (!registered.add(it)) return it
-        for (c in (it as? Composite)?.definedComponents.orEmpty()) {
-            val fd = (c.dataType as? Pointer)?.dataType as? FunctionDefinition ?: continue
-            if (fd.categoryPath == it.categoryPath) adopt(fd)
         }
     }
 }
