@@ -22,24 +22,15 @@ import java.nio.file.Path
  */
 class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx {
     fun run(): ImportResult {
-        val reader = StabReader.fromProgram(ctx.program)
-        if (reader == null) {
-            log("no-stabs", "No .stab/.stabstr block found; skipping import.")
+        val stabs = ctx.readStabs() ?: run {
             ctx.diagnostics.writeSummary(ctx.terminal)
             return ImportResult()
         }
 
-        return runOnRecords(reader.readAll(ctx.monitor))
+        return runOnRecords(stabs)
     }
 
     internal fun runOnRecords(stabs: StabReader.Result): ImportResult {
-        stabs.unresolvedNames.takeIf { it > 0 }?.let {
-            warn(
-                "stabstr-out-of-range",
-                "$it records name an offset past the string table; read as nameless",
-                count = it.toLong(),
-            )
-        }
         // Pass A — parse + harvest
         val harvest = ctx.harvester().harvest(stabs.records)
         // The three indexes over it, constructed together and handed out by half: resolution to the

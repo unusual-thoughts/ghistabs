@@ -78,14 +78,10 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
     private val scopesByCu = mutableMapOf<SourceFile.CUSource, MutableList<FunctionScope>>()
     private var currentScope: FunctionScope? = null
 
-    /**
-     * [currentCu] where a record can't legally appear outside a CU. Only read on the far side of a
-     * [parseSymbol] that succeeded, which is what refuses a symbol outside any `N_SO`.
-     */
-    val cu get() = checkNotNull(currentCu) { "record outside any N_SO" }
+    /** [currentCu] where a record can't legally appear outside a CU. */
+    private val cu get() = checkNotNull(currentCu) { "record outside any N_SO" }
 
-    /** Where N_SLINEs and symbols file: the N_SOL'd header, else the CU; null outside any CU. */
-    private val lineSource get() = sourceFileOrNull(currentSourceForLines) ?: currentCu?.identity
+    private val lineSource get() = sourceFileOrNull(currentSourceForLines) ?: cu.identity
 
     private val currentFunctionName get() = currentScope?.name
 
@@ -105,7 +101,7 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
         is ParseResult.Ok -> {
             res.trailing?.let { warn("unparsed-trailing", it) }
             res.skipped.forEach { warn("unparsed-skipped", "@${rec.index} '${rec.name.take(80)}': $it") }
-            Symbol(rec, res.inner.globalize(this), cu, checkNotNull(lineSource), currentFunctionName)
+            Symbol(rec, res.inner.globalize(this), cu, lineSource, currentFunctionName)
         }
     }
 
@@ -235,13 +231,12 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
      * N_SLINE: `desc` is the line, `value` is function-relative (gcc/COFF on PE) or already
      * absolute (gcc/ELF) — [AddressResolver.stabAddress] disambiguates against the function start.
      */
-    fun lineEntry(rec: StabRecord): LineEntry? {
-        val source = lineSource ?: return null.also { outsideCu(rec) }
-        return LineEntry(rec.desc, resolver.stabAddress(rec.value, currentScope?.addr, this), source).also {
-            lineEntriesByFile.getOrPut(source) { mutableListOf() } += it
+    fun lineEntry(rec: StabRecord) = currentCu?.let {
+        LineEntry(rec.desc, resolver.stabAddress(rec.value, currentScope?.addr, this), lineSource).also {
+            lineEntriesByFile.getOrPut(lineSource) { mutableListOf() } += it
             currentScope?.lineEntries?.add(it)
         }
-    }
+    } ?: null.also { outsideCu(rec) }
 
     /** Named N_FUN: `name` is `mangled:descriptor`, `value` entry address, `desc` declaration line (under -gstabs+) */
     fun openFunction(func: FunctionSymbol) {

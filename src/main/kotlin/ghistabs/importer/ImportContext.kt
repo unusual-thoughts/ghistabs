@@ -80,6 +80,20 @@ class ImportContext<Terminal : DiagnosticSink>(
     fun demanglerReplacer(registry: DataTypeRegistry) = DemanglerReplacer(program, registry, monitor, this)
     fun typedefShortener(registry: DataTypeRegistry) = TypedefShortener(registry, monitor)
     fun classApplier(registry: DataTypeRegistry) = ClassApplier(registry, program, resolver, monitor, this)
+
+    /** Pass A's input, the raw records: null when the program carries none. */
+    fun readStabs(): StabReader.Result? = StabReader.fromProgram(program)?.readAll(monitor)?.also { stabs ->
+        stabs.unresolvedNames.takeIf { it > 0 }?.let {
+            warn(
+                "stabstr-out-of-range",
+                "$it records name an offset past the string table; read as nameless",
+                count = it.toLong(),
+            )
+        }
+    } ?: run {
+        warn("no-stabs", "No .stab/.stabstr block found.")
+        null
+    }
 }
 
 /**
