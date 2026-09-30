@@ -14,6 +14,7 @@ import ghistabs.importer.ImportContext
 import ghistabs.importer.ImportOptions
 import ghistabs.integration.StaticMemberLabelIntegrationTest.Companion.mustHaveNoGcc2StaticMemberPrimary
 import ghistabs.loadProgram
+import ghistabs.render.Renderer
 import ghistabs.test.*
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assumptions.assumeTrue
@@ -166,5 +167,33 @@ class AoutStabsIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
         // zlib also gives a divergent cross-CU definition for free: `internal_state` is a 4-byte
         // opaque stub in zlib.h but the real 5816-byte struct inside deflate.c. Not asserted here —
         // which of the two should win is a question about collision policy, not about a.out.
+    }
+
+    /**
+     * `gz_open` inlines `stdlib.h` L 222 (`malloc`) four times, `gzerror` once with the `if (__size == 0) {`
+     * that opens it in the L 220 stretch before. In `stdlib.h`'s view each copy is a wrapper holding
+     * that copy's code: the caller's code between the copies, dropped from this view, must leave no
+     * braces on them (it did, `{{{ }}}}`), and the wrapper's own `{` must stay open to its end rather
+     * than being closed by the copy's `}` (backlog §92).
+     */
+    @Test
+    fun headerWrappersCarryOnlyTheirOwnBraces() {
+        load("zlib_aout_gcc263.o")
+        val ctx = program.defaultContext()
+        val artifacts = checkNotNull(ctx.import().artifacts)
+        val out = File("build/test-output/header-wrappers").apply { deleteRecursively() }
+        Renderer(Renderer.Mode.DECOMPILE, ctx, artifacts.hints).use { it.renderAll(out) }
+        val stdlib = out.walk().single { it.name == "stdlib.h" }.readText()
+            .replace(Regex("""/\*.*?\*/"""), "")
+
+        val wrappers = stdlib.split("void __inline_stdlib_h_222(").drop(1)
+        wrappers.size mustBe 7
+        for (w in wrappers.map { it.substringBefore("void ").trim() }) {
+            w.must("caller braces carried: $w") { "{{" !in this && "}}" !in this }
+            val braces = w.filter { it in "{}" }
+            val closesHead = braces.runningFold(0) { d, c -> if (c == '{') d + 1 else d - 1 }.drop(1)
+            w.must("wrapper ends before its code: $w") { endsWith("}") }
+            closesHead.dropLast(1).must("head closed before the wrapper ends: $w") { none { it == 0 } }
+        }
     }
 }
