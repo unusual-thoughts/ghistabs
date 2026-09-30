@@ -35,6 +35,7 @@ import ghistabs.importer.ImportOptions.Companion.FOLD_SOURCES
 import ghistabs.importer.ImportOptions.Companion.SHORTEN_TYPEDEFS
 import ghistabs.importer.ImportOptions.Companion.VFPTR_MODEL
 import ghistabs.importer.ImportOptions.Companion.isStabsDone
+import ghistabs.importer.ImportOptions.Companion.markStabsDone
 import ghistabs.isPackedProgram
 import ghistabs.loadPackedProgram
 import ghistabs.loadProgram
@@ -337,15 +338,14 @@ private abstract class ImportingCommand(name: String) : StabsCommand(name = name
 
     /**
      * Full auto-analysis, then the whole import, then every dump. A program that comes in analyzed —
-     * a `.gzf` from `--save-db` — skips the analysis. `--save-db` snapshots the point between the
-     * two, as the tests' AnalysisCache does: the only point a later run can resume from, since
-     * importing again on top of an import degrades it (`TiXmlString.conflict` in every signature).
+     * a `.gzf` from `--save-db` — skips the analysis, and one that comes in imported is imported
+     * again, as `Tools > Stabs > Re-import` does. `--save-db` snapshots the point between the two, as
+     * the tests' AnalysisCache does.
      */
     protected fun ImportContext<*>.fullImport(): ImportArtifacts? {
         if (program.isStabsDone) {
-            throw CliktError(
-                "${program.name} already carries a stabs import; load the binary, or a .gzf saved by --save-db",
-            )
+            log("import", "program already carries a stabs import; importing again")
+            program.markStabsDone(false)
         }
         if (program.getOptions(Program.PROGRAM_INFO).getBoolean(Program.ANALYZED_OPTION_NAME, false)) {
             log("analysis", "program is already analyzed; skipping auto-analysis")

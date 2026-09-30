@@ -191,7 +191,7 @@ internal fun ClassApplier.addSweptSlot(
     val funcDef = program.functionManager.getFunctionAt(target)
         ?.let { FunctionDefinitionDataType(category, name, it.signature, dtm) }
         ?: demangledDefinition(category, name, linkage)
-    vftable.add(PointerDataType(registry.register(funcDef), dtm), name, "$target")
+    vftable.add(PointerDataType(registry.registerOver(funcDef), dtm), name, "$target")
 }
 
 /** FunctionDefinition [name] carrying what [linkage] declares — the only type source for a slot

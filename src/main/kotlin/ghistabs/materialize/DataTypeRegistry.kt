@@ -5,6 +5,10 @@ import ghidra.program.model.data.CategoryPath
 import ghidra.program.model.data.DataType
 import ghidra.program.model.data.DataTypeConflictHandler
 import ghidra.program.model.data.DataTypeManager
+import ghidra.program.model.data.FunctionDefinition
+import ghidra.program.model.data.Pointer
+import ghidra.program.model.data.Structure
+import ghidra.program.model.data.Union
 import ghidra.util.task.TaskMonitor
 import ghistabs.Demangler
 import ghistabs.demanglerPath
@@ -17,6 +21,7 @@ import ghistabs.parse.CATEGORY
 import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
+import ghidra.program.model.data.Enum as GhidraEnum
 
 /**
  * DataType cache and DTM facade: owns the id→DataType map, resolves types into the DTM under a
@@ -126,7 +131,7 @@ class DataTypeRegistry(
      * the group's member ids so a Ref resolved before the winner materializes pulls in that one.
      */
     internal fun LocatedType.seedPlaceholder() {
-        val placeholder = makePlaceholder(type, location.category, "fwd-decl", location.name).resolveIntoDtm()
+        val placeholder = makePlaceholder(type, location.category, "fwd-decl", location.name).resolveOver()
         for (m in members) placeholders.putIfAbsent(m, placeholder)
     }
 
@@ -144,6 +149,35 @@ class DataTypeRegistry(
     internal fun DataType.resolveIntoDtm(): DataType = dtm.resolve(this, conflictHandler)
 
     /**
+     * [resolveIntoDtm], except that a type of the same kind already at this path is reset to [this] in
+     * place and returned. That type is an earlier import's: a re-import (`Tools > Stabs > Re-import`,
+     * or a saved program run again) builds the same types again, and resolving an empty cycle-break
+     * stub over the filled one takes RENAME_AND_ADD — a `.conflict` every use then points at.
+     */
+    internal fun DataType.resolveOver(): DataType = dtm.getDataType(categoryPath, name)
+        ?.takeIf { it.isSameKindAs(this) }
+        ?.also { it.replaceWith(this) }
+        ?: resolveIntoDtm()
+
+    /**
+     * [register] for a vftable slot's function definition. One an earlier import left at the same path
+     * is [adopt]ed as it stands: a swept slot is typed off its target's signature, which that import has
+     * since typed, so [register] would fork a `.conflict` beside it.
+     */
+    internal fun registerOver(dt: DataType): DataType = dtm.getDataType(dt.categoryPath, dt.name)
+        ?.takeIf { it.isSameKindAs(dt) && (it in adopted || !isRegistered(it)) }
+        ?.let { adopt(it) }
+        ?: register(dt)
+
+    private fun DataType.isSameKindAs(other: DataType) = when (other) {
+        is Structure -> this is Structure
+        is Union -> this is Union
+        is GhidraEnum -> this is GhidraEnum
+        is FunctionDefinition -> this is FunctionDefinition
+        else -> false
+    }
+
+    /**
      * [resolveIntoDtm] + remember. Returns the DTM-resolved instance (may differ). With an [id],
      * caches it under [id] for [dataTypeFor]; id-less, buckets it by name in extrasByName.
      */
@@ -154,12 +188,37 @@ class DataTypeRegistry(
         }
     }
 
-    /** Get-or-create a DTM-resident DataType of type [T] at `(category, name)`. */
+    /**
+     * Get-or-create a DTM-resident DataType of type [T] at `(category, name)`. One found there is
+     * returned as it stands, and one an earlier import left is registered as this one's, with the slot
+     * definitions it points at, so a re-import's registry reads as the first's did.
+     */
     internal inline fun <reified T : DataType> getOrRegister(category: CategoryPath, name: String, build: () -> T): T =
         when (val dt = dtm.getDataType(category, name)) {
-            is T -> dt
+            is T -> dt.also { if (!isRegistered(it)) adopt(it) }
             else -> register(build()) as T
         }
+
+    @PublishedApi
+    internal fun isRegistered(dt: DataType) = extrasByName[dt.name]?.contains(dt) == true
+
+    /**
+     * [existing] registered as this import's, as it stands, with the function definitions its slots
+     * point at. Kept rather than rebuilt: a swept vftable slot is typed off its target's signature,
+     * which the earlier import has since typed, so rebuilding it would not give back what it was.
+     */
+    @PublishedApi
+    internal fun <T : DataType> adopt(existing: T): T = existing.also {
+        adopted += it
+        extrasByName.getOrPut(it.name) { LinkedHashSet() }.add(it)
+        for (c in (it as? Structure)?.definedComponents.orEmpty()) {
+            val fd = (c.dataType as? Pointer)?.dataType as? FunctionDefinition ?: continue
+            if (fd.categoryPath == it.categoryPath) adopt(fd)
+        }
+    }
+
+    /** What [adopt] took over from an earlier import, which a later [registerOver] may take again. */
+    private val adopted = mutableSetOf<DataType>()
 
     /**
      * Id → DataType, resolved lazily. Returns the cached type or its in-flight cycle-break
