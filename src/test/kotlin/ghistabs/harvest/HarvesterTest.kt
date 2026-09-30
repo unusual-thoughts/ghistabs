@@ -651,4 +651,31 @@ class HarvesterTest {
         harvest.sources[sourceFileOf("a.c")].must("a.c should be harvested as a CU") { this?.cu != null }
         harvest.sources[sourceFileOf("b.c")].must("b.c should be harvested as a CU") { this?.cu != null }
     }
+
+    /**
+     * gcc 2.6.3 a.out opens each CU with `N_SO /zlib/` + `N_SO name.c` and never emits the empty
+     * end marker, so the next CU's named N_SO is the only record that ends the last N_SOL
+     * (`zlib_aout_gcc263.o`: `gzio.c`'s trailing `N_SOL /zlib/gzio.c`, then `N_SO infblock.c`).
+     */
+    @Test
+    fun `a named N_SO ends the previous CU's N_SOL`() {
+        val (_, harvester) = dummyHarvester()
+        val records = listOf(
+            StabRecord(0, StabType.N_SO, 0, 0, 0L, "/zlib/"),
+            StabRecord(1, StabType.N_SO, 0, 0, 0L, "gzio.c"),
+            StabRecord(2, StabType.N_SOL, 0, 0, 0L, "/usr/include/stdlib.h"),
+            StabRecord(3, StabType.N_SOL, 0, 0, 0L, "/zlib/gzio.c"),
+            StabRecord(4, StabType.N_GSYM, 0, 0, 0L, "z_errmsg:G(0,1)"),
+            StabRecord(5, StabType.N_SO, 0, 0, 0L, "/zlib/"),
+            StabRecord(6, StabType.N_SO, 0, 0, 0L, "infblock.c"),
+            StabRecord(7, StabType.N_GSYM, 0, 0, 0L, "inflate_mask:G(0,1)"),
+        )
+
+        val harvest = harvester.harvest(records)
+
+        harvest.statics.map { it.body.name to it.sourceFile } mustBe listOf(
+            "z_errmsg" to sourceFileOf("/zlib/gzio.c"),
+            "inflate_mask" to sourceFileOf("/zlib/infblock.c"),
+        )
+    }
 }
