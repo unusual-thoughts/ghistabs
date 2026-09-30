@@ -67,7 +67,7 @@ class DemanglerReplaceIntegrationTest : AbstractGhidraHeadlessIntegrationTest() 
             dtm.addDataType(stubDt, DataTypeConflictHandler.KEEP_HANDLER)
 
             // Seed /proj/Foo as non-empty structure with one int32 field (replacement).
-            // Route through registry.register so it counts as ours (allCreatedDataTypes),
+            // Route through registry.register so it counts as ours (allRegistered),
             // which is what DemanglerReplacer's authoritative findByExactName consults.
             val projPath = CategoryPath("/proj")
             val projDt = StructureDataType(projPath, "Foo", 4)

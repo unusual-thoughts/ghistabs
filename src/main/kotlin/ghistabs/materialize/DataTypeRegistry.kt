@@ -68,7 +68,7 @@ class DataTypeRegistry(
      * [materializeAll] returns its size, and pass C keeps registering after that — ClassApplier's
      * member-method FunctionDefinitions — which a snapshot taken at pass B would miss.
      */
-    internal val allCreatedDataTypes get() = buildSet {
+    internal val allRegistered get() = buildSet {
         addAll(byId.values)
         addAll(registeredTypes)
     }

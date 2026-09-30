@@ -396,7 +396,7 @@ fun DataTypeRegistry.materializeAll(): Int {
             materializeTopLevel(ast)
         }
     }
-    return allCreatedDataTypes.size
+    return allRegistered.size
 }
 
 /**
