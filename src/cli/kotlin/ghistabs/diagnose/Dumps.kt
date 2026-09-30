@@ -144,16 +144,16 @@ private fun ImportArtifacts.registryDump(): RegistryDump {
             )
         }
         .sortedBy { it.distinctNames.joinToString() }
-    val duplicateNamed = registry.allCreatedDataTypes
+    val duplicateNamed = registry.allRegistered
         .groupBy { it.name.substringBefore(".conflict") }
         .filterValues { it.size > 1 }
         .mapValues { (_, dts) -> dts.map { it.pathName }.sorted() }
         .toSortedMap()
-    // One entry per (category, name). `allCreatedDataTypes` can hold >1 DataType for a key (a stale
+    // One entry per (category, name). `allRegistered` can hold >1 DataType for a key (a stale
     // pre-conflict object plus its DTM-live replacement); the duplicates are surfaced in
     // `duplicateNamed` above, so keep the first deterministically here rather than `single()` (which
     // threw on duplicate-heavy fixtures and aborted the whole AFTER-mode dump).
-    val allTypes = registry.allCreatedDataTypes.groupBy { TypeLocation(it.categoryPath, it.name) }
+    val allTypes = registry.allRegistered.groupBy { TypeLocation(it.categoryPath, it.name) }
         .mapValues { RegistryDump.Type(it.value.first()) }
     val divergent = types.divergentCollisions.entries
         .sortedBy { it.key.toString() }
