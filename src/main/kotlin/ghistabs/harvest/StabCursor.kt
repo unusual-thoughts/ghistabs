@@ -23,14 +23,17 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
     Globalizer {
 
     /**
-     * One per named N_SO, in stream order: two CUs can share a [SourceFile.CUSource] (libgcc2.c, once
-     * per `L_` object).
+     * One per named N_SO, keyed by its record index: two CUs can share a [SourceFile.CUSource]
+     * (libgcc2.c, once per `L_` object).
      */
-    private val cuContexts = mutableListOf<CuContext>()
+    private val cuContexts = mutableMapOf<Int, CuContext>()
 
-    /** The open CU's context. [preSeedHeaders] appends them, the second pass steps through them by [cusOpened]. */
-    private var cuContext: CuContext? = null
-    private var cusOpened = 0
+    /**
+     * The open CU: the record index of the N_SO that opened it, which keys [cuContexts] in both passes.
+     * A list position would need a counter surviving the empty N_SO that closes a CU.
+     */
+    private var cuIndex: Int? = null
+    private val cuContext get() = cuIndex?.let { cuContexts[it] }
     private val sharedHeaderRegistry = HeaderRegistry(this)
     private val lineEntriesByFile = mutableMapOf<GhidraSourceFile, MutableList<LineEntry>>()
 
@@ -88,14 +91,14 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
 
                 StabType.N_SO if rec.name.isNotEmpty() -> {
                     val cu = SourceFile.CUSource(rec.name, pendingDirectory)
-                    cuContext = CuContext(cu, this, sharedHeaderRegistry, rec.language, rec.boundaryAddress)
-                        .also { cuContexts += it }
+                    cuContexts[rec.index] = CuContext(cu, this, sharedHeaderRegistry, rec.language, rec.boundaryAddress)
+                    cuIndex = rec.index
                     pendingDirectory = null
                 }
 
                 StabType.N_SO -> {
                     cuContext?.endAt(rec.boundaryAddress)
-                    cuContext = null
+                    cuIndex = null
                     pendingDirectory = null
                 }
 
@@ -145,7 +148,7 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
             rec.name.isDirectory -> {}
 
             rec.name.isNotEmpty() -> {
-                cuContext = cuContexts[cusOpened++]
+                cuIndex = rec.index
                 currentSourceForLines = null
                 rec.boundary(cu.identity)
             }
@@ -154,7 +157,7 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
                 // dbxcoff.h's `Letext`: the end of this object's plain .text. What follows is not the
                 // COMDAT region — CU spans abut, 53 bytes of alignment apart on one PE fixture (§39).
                 rec.boundary(null)
-                cuContext = null
+                cuIndex = null
                 currentSourceForLines = null
             }
         }
@@ -265,7 +268,7 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
      * `mapKeys` would silently keep the last of them.
      */
     fun toHarvest(): HarvestedStream {
-        val contexts = cuContexts.groupBy { it.cu.identity }
+        val contexts = cuContexts.values.groupBy { it.cu.identity }
         // Eager, not `firstNotNullOfOrNull`: `addressRange()` files the verdict that explains a null
         // one, and short-circuiting would leave every context after the first unexplained.
         val spans = contexts.mapValues { (_, cs) -> cs.mapNotNull { it.addressRange() }.firstOrNull() }
