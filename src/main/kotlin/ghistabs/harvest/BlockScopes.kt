@@ -19,16 +19,16 @@ import kotlinx.serialization.UseSerializers
  */
 @Serializable
 data class BlockScope(
-    val start: Address,
-    val end: Address,
+    override val start: Address,
+    override val endExclusive: Address,
     val locals: List<LocalSymbol>,
     val children: List<BlockScope> = emptyList(),
     // Resolved by BlockTreeBuilder.finish; null until then. See [finish] for how it is derived.
     val source: GhidraSourceFile? = null,
-) {
+) : OpenEndRange<Address> {
     /** Innermost block covering [addr], or null when [addr] lies outside this one. */
     fun blockAt(addr: Address): BlockScope? =
-        if (addr in start..<end) children.firstNotNullOfOrNull { it.blockAt(addr) } ?: this else null
+        if (addr in this) children.firstNotNullOfOrNull { it.blockAt(addr) } ?: this else null
 }
 
 /**
@@ -90,10 +90,11 @@ internal class BlockTreeBuilder(sink: DiagnosticSink = DummySink) : DiagnosticSi
      * built from one walk so they can't disagree.
      *
      * A block's file is the one whose N_SLINEs in its *own* code (its range minus its children's)
-     * carry the local's decl line, else the file of that own code when it is all one, else the
-     * enclosing block's answer. Records no block claimed — gcc's `dbxout_reg_parms` emits register
-     * parameters at depth 0 without setting `did_output`, so in a C++ function, whose depth-0 block
-     * never owns variables, they trail with no N_LBRAC — belong to the function, like params.
+     * carry the local's decl line, else the file of that own code when it is all one (counting only
+     * lines that cover bytes), else the enclosing block's answer. Records no block claimed — gcc's
+     * `dbxout_reg_parms` emits register parameters at depth 0 without setting `did_output`, so in a
+     * C++ function, whose depth-0 block never owns variables, they trail with no N_LBRAC — belong to
+     * the function, like params.
      *
      * The record's own N_SOL says nothing: gcc emits the whole block tree from `dbxout_function_decl`
      * *after* the body, so every function-scope symbol carries whichever file the last line note in
@@ -101,15 +102,16 @@ internal class BlockTreeBuilder(sink: DiagnosticSink = DummySink) : DiagnosticSi
      */
     fun finish(lines: List<LineEntry>, functionSource: GhidraSourceFile): Pair<List<LocalSymbol>, List<BlockScope>> {
         val flat = mutableListOf<LocalSymbol>()
+        // gcc 2.6.3 puts an inline call site's lines at the address its body starts, so they cover no bytes.
+        val covering = lines.filterIndexed { i, entry -> lines.getOrNull(i + 1)?.addr != entry.addr }
 
         // Rebuilds rather than repointing in place: the tree and the flat list hand out the *same*
         // corrected copies, so they cannot disagree, and a Symbol stays immutable — it is reachable
         // from BlockScope, from StabFunction.locals, and from maps keyed on either.
         fun BlockScope.attribute(inherited: GhidraSourceFile): BlockScope {
-            val ownLines = lines.filter { entry ->
-                entry.addr in start..<end && children.none { entry.addr in it.start..<it.end }
-            }
-            val blockSource = ownLines.map { it.source }.toSet().singleOrNull() ?: inherited
+            fun LineEntry.own() = contains(addr) && children.none { addr in it }
+            val ownLines = lines.filter { it.own() }
+            val blockSource = covering.filter { it.own() }.map { it.source }.toSet().singleOrNull() ?: inherited
             val attributed = locals.map { local ->
                 val sourcesAtLine = ownLines.filter { it.line == local.line }.map { it.source }.toSet()
                 local.withSource(sourcesAtLine.singleOrNull() ?: blockSource).also { flat += it }
