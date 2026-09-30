@@ -215,16 +215,18 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
         }
     } ?: null.also { outsideCu(rec) }
 
+    private fun FunctionSymbol.builder() =
+        FuncBuilder(Func(body.name, resolver.forSymbol(this)!!, body, origin), this@StabCursor)
+
     /** Named N_FUN: `name` is `mangled:descriptor`, `value` entry address, `desc` declaration line (under -gstabs+) */
     fun openFunction(func: FunctionSymbol) = cuContext?.let { context ->
-        currentScope = FuncBuilder(Func(func.body.name, resolver.forSymbol(func)!!, func.body, func.origin), this)
-            .also { scope ->
-                context.functions += scope
-                context.linesAhead?.let {
-                    scope.lines += it
-                    it.clear()
-                }
+        currentScope = func.builder().also { scope ->
+            context.functions += scope
+            context.linesAhead?.let {
+                scope.lines += it
+                it.clear()
             }
+        }
     }
 
     /** N_PSYM / register-param N_RSYM: the function's own, so no block resolution needed. */
