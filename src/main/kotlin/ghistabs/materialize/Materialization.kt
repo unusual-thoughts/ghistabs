@@ -436,7 +436,7 @@ private fun DataTypeRegistry.materializeTypedefs() {
         } else {
             CATEGORY
         }
-        val typedef = registerExtra(TypedefDataType(category, ghidraName, typedefTarget, dtm))
+        val typedef = registerByName(TypedefDataType(category, ghidraName, typedefTarget, dtm))
         // A typedef has its own id (`ofstream:t(28,23)=(28,24)=xs…`), so `ofstream os` is emitted as
         // `os:(28,23)` — resolving that to the target is what made the decompiler print
         // `basic_ofstream<char,…>` for it. The declared type is the typedef, so this is unconditional.

@@ -495,7 +495,7 @@ class ClassApplier(
                 // here reads as a failure to type a slot rather than as a slot we never saw.
                 else -> "slot_$slot".let { name ->
                     used += name
-                    val fd = registry.registerExtraOver(FunctionDefinitionDataType(vftableCategory, name, dtm))
+                    val fd = registry.registerByNameOver(FunctionDefinitionDataType(vftableCategory, name, dtm))
                     vftable.add(PointerDataType(fd, dtm), name, "inherited virtual, not declared here")
                 }
             }
@@ -563,7 +563,7 @@ class ClassApplier(
             callingConvention = CompilerSpec.CALLING_CONVENTION_thiscall,
             at = at,
         )
-        val resolved = registry.registerExtraOver(funcDef) as FunctionDefinition
+        val resolved = registry.registerByNameOver(funcDef) as FunctionDefinition
         return PointerDataType(resolved, dtm)
     }
 

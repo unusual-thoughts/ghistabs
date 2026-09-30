@@ -78,7 +78,7 @@ class DataTypeRegistry(
      */
     internal val allCreatedDataTypes get() = buildSet {
         addAll(byId.values)
-        for (bucket in extrasByName.values) addAll(bucket)
+        for (bucket in byName.values) addAll(bucket)
     }
 
     /**
@@ -135,12 +135,12 @@ class DataTypeRegistry(
 
     internal val rttiStructs by lazy { Rtti(dtm) }
 
-    // ── Stabs types: keyed by their GlobalTypeId in [byId], which only the functions below write.
+    // ── By id: stabs types, keyed by their GlobalTypeId in [byId], which only the functions below write.
     // [cache] sets the authoritative resolution for an id; [cacheIfAbsent] is the alias/member fan-out
     // that must not clobber a winner already in the slot; [seedPlaceholder] builds an empty cycle-break
     // stub that [materializeAll] later fills in place, fanning it out across a group's member ids;
     // [markXRefStub] tags a placeholder that never resolved, for degradation reporting. Each returns its
-    // dt so it composes inside a resolution chain. ([registerStab] layers [resolveIntoDtm] + [cache] for
+    // dt so it composes inside a resolution chain. ([registerById] layers [resolveIntoDtm] + [cache] for
     // freshly-built types — the DTM-registering counterpart to bare [cache].) ──
 
     internal fun <T : DataType> cache(id: GlobalTypeId, dt: T): T = dt.also { byId[id] = it }
@@ -174,7 +174,7 @@ class DataTypeRegistry(
     internal fun LocatedType.materialize() {
         val placeholder = placeholders[type.id]!!
         val materialized = materializeBody(type, location.category, placeholder)
-        if (materialized === placeholder) cache(type.id, placeholder) else registerStab(materialized, type.id)
+        if (materialized === placeholder) cache(type.id, placeholder) else registerById(materialized, type.id)
         for (memberId in members) cacheIfAbsent(memberId, materialized)
     }
 
@@ -184,7 +184,7 @@ class DataTypeRegistry(
     private fun DataType.resolveOver(): DataType = resolveIntoDtm(overHandler)
 
     /** [resolveIntoDtm], cached under [id] for [dataTypeFor]. Returns the DTM-resolved instance (may differ). */
-    internal fun registerStab(dt: DataType, id: GlobalTypeId) = dt.resolveIntoDtm().also { cache(id, it) }
+    internal fun registerById(dt: DataType, id: GlobalTypeId) = dt.resolveIntoDtm().also { cache(id, it) }
 
     /**
      * Id → DataType, resolved lazily. Returns the cached type or its in-flight cycle-break
@@ -269,45 +269,45 @@ class DataTypeRegistry(
         }
     }
 
-    // ── Extras: the id-less types this import makes itself — typedefs, vftable and base-subobject
-    // structs, vftable slot FunctionDefinitions — keyed by name in [extrasByName]. ──
+    // ── By name: types with no stabs id of their own — typedefs, vftable and base-subobject structs,
+    // vftable slot FunctionDefinitions — keyed by name in [byName]. ──
 
-    /** Name → the extras registered under it; a name can hold several (overloads, `.conflict` forks). */
-    private val extrasByName = LinkedHashMap<String, LinkedHashSet<DataType>>()
+    /** Name → the types registered under it; a name can hold several (overloads, `.conflict` forks). */
+    private val byName = LinkedHashMap<String, LinkedHashSet<DataType>>()
 
-    /** [resolveIntoDtm], filed by name in [extrasByName]. Returns the DTM-resolved instance (may differ). */
-    internal fun registerExtra(dt: DataType, handler: DataTypeConflictHandler = conflictHandler) =
-        dt.resolveIntoDtm(handler).also { extrasByName.getOrPut(it.name) { LinkedHashSet() }.add(it) }
+    /** [resolveIntoDtm], filed by name in [byName]. Returns the DTM-resolved instance (may differ). */
+    internal fun registerByName(dt: DataType, handler: DataTypeConflictHandler = conflictHandler) =
+        dt.resolveIntoDtm(handler).also { byName.getOrPut(it.name) { LinkedHashSet() }.add(it) }
 
-    /** [registerExtra] for a vftable slot's function definition, over an earlier import's: see [overHandler]. */
-    internal fun registerExtraOver(dt: DataType): DataType = registerExtra(dt, overHandler)
+    /** [registerByName] for a vftable slot's function definition, over an earlier import's: see [overHandler]. */
+    internal fun registerByNameOver(dt: DataType): DataType = registerByName(dt, overHandler)
 
     /**
      * Get-or-create a DTM-resident DataType of type [T] at `(category, name)`. One found there is
      * returned as it stands, and one an earlier import left is registered as this one's, with the slot
      * definitions it points at, so a re-import's registry reads as the first's did.
      */
-    internal inline fun <reified T : DataType> getOrRegisterExtra(
+    internal inline fun <reified T : DataType> getOrRegisterByName(
         category: CategoryPath,
         name: String,
         build: () -> T,
     ): T = when (val dt = dtm.getDataType(category, name)) {
-        is T -> dt.also { if (!isExtra(it)) adoptExtra(it) }
-        else -> registerExtra(build()) as T
+        is T -> dt.also { if (!isRegisteredByName(it)) adoptByName(it) }
+        else -> registerByName(build()) as T
     }
 
-    internal fun isExtra(dt: DataType) = extrasByName[dt.name]?.contains(dt) == true
+    internal fun isRegisteredByName(dt: DataType) = byName[dt.name]?.contains(dt) == true
 
     /**
      * [existing] registered as this import's, as it stands, with the function definitions its slots
      * point at. Kept rather than rebuilt: a swept vftable slot is typed off its target's signature,
      * which the earlier import has since typed, so rebuilding it would not give back what it was.
      */
-    internal fun <T : DataType> adoptExtra(existing: T): T = existing.also {
-        extrasByName.getOrPut(it.name) { LinkedHashSet() }.add(it)
+    internal fun <T : DataType> adoptByName(existing: T): T = existing.also {
+        byName.getOrPut(it.name) { LinkedHashSet() }.add(it)
         for (c in (it as? Composite)?.definedComponents.orEmpty()) {
             val fd = (c.dataType as? Pointer)?.dataType as? FunctionDefinition ?: continue
-            if (fd.categoryPath == it.categoryPath) adoptExtra(fd)
+            if (fd.categoryPath == it.categoryPath) adoptByName(fd)
         }
     }
 }
