@@ -116,7 +116,7 @@ class Harvester(private val monitor: TaskMonitor, private val sink: DiagnosticSi
 
                 // Addressless compile-time constant — no address, so it's applied as an
                 // equate + synthetic enum catalog rather than data (see SymbolApplier).
-                is SymbolDecl.Constant -> constants.getOrPut(cursor.cu.identity) { mutableListOf() } += decl
+                is SymbolDecl.Constant -> constants.getOrPut(sym.cu.identity) { mutableListOf() } += decl
 
                 is SymbolDecl.Function, is SymbolDecl.Param, is SymbolDecl.Static ->
                     warn("unexpected-lsym", "$sym")
@@ -163,8 +163,9 @@ class Harvester(private val monitor: TaskMonitor, private val sink: DiagnosticSi
         debug("harvest-constants", count = constants.values.sumOf { it.size }.toLong())
         debug("harvest-text-ranges", count = textRanges.size.toLong())
 
-        // `cus` alone decides CU-ness: statics and constants key off `cursor.cu`, which `preSeedHeaders`
-        // built a CuContext for from the same N_SO record, so their keys cannot reach outside it.
+        // `cus` alone decides CU-ness: statics and constants key off their symbol's `cu`, which
+        // `preSeedHeaders` built a CuContext for from the same N_SO record, so their keys cannot reach
+        // outside it.
         return Harvest(
             typeAsts,
             rawCollisions,
@@ -187,7 +188,7 @@ class Harvester(private val monitor: TaskMonitor, private val sink: DiagnosticSi
     }
 
     private fun harvestStatic(sym: StaticSymbol) {
-        staticsByCu.getOrPut(cursor.cu.identity) { mutableListOf() } += sym
+        staticsByCu.getOrPut(sym.cu.identity) { mutableListOf() } += sym
     }
 
     /** Parses a symbol record then hoist any contained inline type definitions */

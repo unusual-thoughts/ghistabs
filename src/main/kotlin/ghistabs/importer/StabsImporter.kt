@@ -22,14 +22,12 @@ import java.nio.file.Path
  */
 class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx {
     fun run(): ImportResult {
-        val reader = StabReader.fromProgram(ctx.program)
-        if (reader == null) {
-            log("no-stabs", "No .stab/.stabstr block found; skipping import.")
+        val stabs = ctx.readStabs() ?: run {
             ctx.diagnostics.writeSummary(ctx.terminal)
             return ImportResult()
         }
 
-        return runOnRecords(reader.readAll(ctx.monitor))
+        return runOnRecords(stabs)
     }
 
     internal fun runOnRecords(stabs: StabReader.Result): ImportResult {
