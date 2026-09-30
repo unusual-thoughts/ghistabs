@@ -146,7 +146,7 @@ class DataTypeRegistry(
 
     /** Resolve [this] into the DTM under the shared conflict handler; returns the DTM-resident instance
      *  (may differ from [this]). No id/name bookkeeping — for stubs whose id lands in [byId] later. */
-    internal fun DataType.resolveIntoDtm(): DataType = dtm.resolve(this, conflictHandler)
+    private fun DataType.resolveIntoDtm(): DataType = dtm.resolve(this, conflictHandler)
 
     /**
      * [resolveIntoDtm], except that a type of the same kind already at this path is reset to [this] in
@@ -154,7 +154,7 @@ class DataTypeRegistry(
      * or a saved program run again) builds the same types again, and resolving an empty cycle-break
      * stub over the filled one takes RENAME_AND_ADD — a `.conflict` every use then points at.
      */
-    internal fun DataType.resolveOver(): DataType = dtm.getDataType(categoryPath, name)
+    private fun DataType.resolveOver(): DataType = dtm.getDataType(categoryPath, name)
         ?.takeIf { it.isSameKindAs(this) }
         ?.also { it.replaceWith(this) }
         ?: resolveIntoDtm()
