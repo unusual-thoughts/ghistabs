@@ -2,6 +2,7 @@ package ghistabs.materialize
 
 import ghidra.app.util.demangler.Demangled
 import ghidra.program.model.data.CategoryPath
+import ghidra.program.model.data.Composite
 import ghidra.program.model.data.DataType
 import ghidra.program.model.data.DataTypeConflictHandler
 import ghidra.program.model.data.DataTypeManager
@@ -220,7 +221,7 @@ class DataTypeRegistry(
      */
     internal fun <T : DataType> adopt(existing: T): T = existing.also {
         extrasByName.getOrPut(it.name) { LinkedHashSet() }.add(it)
-        for (c in (it as? Structure)?.definedComponents.orEmpty()) {
+        for (c in (it as? Composite)?.definedComponents.orEmpty()) {
             val fd = (c.dataType as? Pointer)?.dataType as? FunctionDefinition ?: continue
             if (fd.categoryPath == it.categoryPath) adopt(fd)
         }
