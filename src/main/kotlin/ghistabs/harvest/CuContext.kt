@@ -39,8 +39,10 @@ class HeaderRegistry(sink: DiagnosticSink = DummySink) : DiagnosticSink by sink 
 }
 
 /**
- * One CU's scope: the text it declared between its opening and closing N_SO, its `fileNum → header`
- * map, and the BINCL/EINCL/EXCL stack that fills it.
+ * One CU, opened by one named N_SO: the text it declared between that N_SO and the closing one, its
+ * `fileNum → header` map and the BINCL/EINCL/EXCL stack that fills it, and the functions it opened.
+ * [StabCursor.preSeedHeaders] builds one per N_SO, so two CUs sharing a [cu] (libgcc2.c, once per
+ * `L_` object) keep separate header numbers and functions.
  */
 class CuContext(
     val cu: SourceFile.CUSource,
