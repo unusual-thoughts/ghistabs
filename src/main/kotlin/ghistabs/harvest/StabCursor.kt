@@ -216,14 +216,15 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
     } ?: null.also { outsideCu(rec) }
 
     /** Named N_FUN: `name` is `mangled:descriptor`, `value` entry address, `desc` declaration line (under -gstabs+) */
-    fun openFunction(func: FunctionSymbol) {
-        val context = checkNotNull(cuContext) { "N_FUN outside any N_SO" }
+    fun openFunction(func: FunctionSymbol) = cuContext?.let { context ->
         currentScope = FuncBuilder(Func(func.body.name, resolver.forSymbol(func)!!, func.body, func.origin), this)
-            .also { context.functions += it }
-        context.linesAhead?.let {
-            currentScope?.lines?.addAll(it)
-            it.clear()
-        }
+            .also { scope ->
+                context.functions += scope
+                context.linesAhead?.let {
+                    scope.lines += it
+                    it.clear()
+                }
+            }
     }
 
     /** N_PSYM / register-param N_RSYM: the function's own, so no block resolution needed. */
