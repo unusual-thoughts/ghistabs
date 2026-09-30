@@ -1,25 +1,20 @@
 package ghistabs.importer
 
-import ghidra.app.util.NamespaceUtils
 import ghidra.app.util.demangler.DemangledFunction
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.*
 import ghidra.program.model.lang.CompilerSpec
 import ghidra.program.model.listing.*
 import ghidra.program.model.listing.Function
-import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
 import ghidra.program.model.symbol.SymbolUtilities
 import ghidra.util.task.TaskMonitor
-import ghistabs.Demangler
-import ghistabs.applyDemangling
+import ghistabs.*
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.Level
 import ghistabs.harvest.AddressResolver
 import ghistabs.index.LocatedType
 import ghistabs.index.demangledClassPath
-import ghistabs.isInjected
-import ghistabs.isMethod
 import ghistabs.materialize.DataTypeRegistry
 import ghistabs.materialize.buildFunctionDefinition
 import ghistabs.materialize.cpp.*
@@ -165,26 +160,7 @@ class ClassApplier(
         val parts = mangled?.let { Demangler.namespaces(it) }.orEmpty()
             .filter { it.isNotEmpty() }
             .ifEmpty { qualifiedClassName.nameSegments }
-        return buildNamespaceChain(parts)
-    }
-
-    internal fun buildNamespaceChain(parts: List<String>): GhidraClass {
-        var parent: Namespace? = null
-        for ((i, part) in parts.withIndex()) {
-            val isLast = i == parts.lastIndex
-            val existing = symtab.getNamespace(part, parent)
-            parent = when (existing) {
-                null if isLast -> symtab.createClass(parent, part, source)
-
-                null -> symtab.createNameSpace(parent, part, source)
-
-                else if (isLast && existing !is GhidraClass) ->
-                    NamespaceUtils.convertNamespaceToClass(existing)
-
-                else -> existing
-            }
-        }
-        return parent as GhidraClass
+        return symtab.buildClassNamespaces(parts)
     }
 
     /** Materialize class struct + namespace + (optional) vtable struct, apply at _ZTV. */
