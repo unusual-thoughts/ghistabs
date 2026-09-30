@@ -30,8 +30,8 @@ import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Aggregate.Method
 
 /**
- * The C++ pass over the program, once [ghistabs.materialize.cpp.layClasses] has laid every class struct: a class gets its
- * Ghidra identity, a [GhidraClass] namespace with its methods reparented under it, and its
+ * The C++ pass over the program, once [ghistabs.materialize.cpp.layClasses] has laid every class struct: a
+ * class gets its Ghidra identity, a [GhidraClass] namespace with its methods reparented under it, and its
  * `<Class>_vftable` filled and applied at `_ZTV`'s address point so virtual calls resolve. It
  * writes no class struct.
  *
