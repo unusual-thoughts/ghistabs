@@ -666,7 +666,7 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
 
         // The code this file contributed to *other* files' functions. gcc inlined it from here, so
         // its N_SLINEs name this file and its lines belong on this canvas; a header line compiled
-        // into every call site collapses to one copy tagged `×N`. Each function's stretches are
+        // into every call site collapses to one instance tagged `×N`. Each function's stretches are
         // wrapped in that function's own definition — bare, they are statements at file scope, which
         // no C++ construct admits and nothing can brace-match.
         val inlined = sourceIndex.functions
@@ -682,7 +682,7 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
             // share it; where the text differs — a template instantiated per element type — the
             // definitions differ in their parameters too and stand as legal overloads.
             .groupBy { (_, r) -> r.anchor to r.lines.map { it.text } }
-            .map { (_, copies) -> copies.first().also { (_, r) -> r.copies = copies.size } }
+            .map { (_, instances) -> instances.first().also { (_, r) -> r.instances = instances.size } }
             .sortedBy { (_, r) -> r.anchor }
             // Adjacent stretches of one function share a wrapper. They cannot interleave with another
             // function's by definition, so nesting is safe, and one `vector<Exclusion,…>::operator=`
