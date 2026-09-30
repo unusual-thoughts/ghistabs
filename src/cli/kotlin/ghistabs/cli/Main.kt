@@ -34,13 +34,16 @@ import ghistabs.importer.ImportOptions.Companion.CLASSES
 import ghistabs.importer.ImportOptions.Companion.FOLD_SOURCES
 import ghistabs.importer.ImportOptions.Companion.SHORTEN_TYPEDEFS
 import ghistabs.importer.ImportOptions.Companion.VFPTR_MODEL
+import ghistabs.importer.ImportOptions.Companion.isStabsDone
+import ghistabs.isPackedProgram
+import ghistabs.loadPackedProgram
+import ghistabs.loadProgram
 import ghistabs.materialize.cpp.VfptrModel
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.StabRecord
 import ghistabs.parse.SymbolDecl
 import ghistabs.render.Renderer
 import ghistabs.runTransaction
-import ghistabs.withProgram
 import java.io.File
 
 fun main(args: Array<String>) = Ghistabs()
@@ -148,15 +151,15 @@ private class DecompCommand : RenderCommand(name = "decomp") {
 /** Import only, for the JSON/degradation dumps — no decompiler, no rendered output. */
 private class DumpCommand : ImportingCommand(name = "dump") {
     override fun help(context: Context) =
-        "Import and write the requested dumps only (at least one of --records/--harvest/--registry/--degradation-log)."
+        "Import and write the requested dumps only (at least one of --records/--harvest/--registry/--degradation-log/--save-db)."
 
     override fun validate() = with(shared) {
-        if (listOfNotNull(recordsJson, harvestJson, registryJson, degradationLog).isEmpty()) {
-            throw UsageError("nothing to dump: pass --records, --harvest, --registry or --degradation-log")
+        if (listOfNotNull(recordsJson, harvestJson, registryJson, degradationLog, this@DumpCommand.saveDb).isEmpty()) {
+            throw UsageError("nothing to dump: pass --records, --harvest, --registry, --degradation-log or --save-db")
         }
     }
 
-    override fun ImportContext<*>.process() {
+    override fun ImportContext<*>.execute() {
         fullImport()
     }
 }
@@ -244,7 +247,9 @@ private class DecodeCommand : StabsCommand(name = "decode") {
 private abstract class StabsCommand(name: String) : CliktCommand(name = name) {
     protected val shared by SharedOptions()
 
-    private val binary by argument(help = "ELF/PE binary carrying .stab/.stabstr debug info (gcc 3.2–12)")
+    private val binary by argument(
+        help = "ELF/PE binary carrying .stab/.stabstr debug info (gcc 3.2–12), or a .gzf saved by --save-db",
+    )
         .file(mustExist = true, canBeDir = false, mustBeReadable = true)
 
     /** What this subcommand runs against the loaded program, dumps included. */
@@ -273,8 +278,13 @@ private abstract class StabsCommand(name: String) : CliktCommand(name = name) {
         Msg.setErrorLogger(monitor)
         val msgLog = MessageLog()
         try {
-            withProgram(binary, log = msgLog, monitor = monitor) { program ->
-                val ctx = ImportContext(program, monitor, TeeSink(monitor, fileSink), options)
+            val loaded = if (isPackedProgram(binary)) {
+                loadPackedProgram(binary, monitor)
+            } else {
+                loadProgram(binary, log = msgLog, monitor = monitor)
+            }
+            loaded.use {
+                val ctx = ImportContext(it.program, monitor, TeeSink(monitor, fileSink), options)
                 ctx.execute()
                 fileWriter?.apply {
                     msgLog.toString().takeIf { it.isNotBlank() }?.let { append("--- loader MessageLog ---\n$it\n") }
@@ -308,24 +318,11 @@ private abstract class ImportingCommand(name: String) : StabsCommand(name = name
         help = "turn off every analyzer whose name contains this, case-insensitively (repeatable). " +
             "Render the same binary with and without one to A/B what it actually changes.",
     ).multiple()
-    private val saveDb by option(
+    protected val saveDb by option(
         "--save-db",
-        help = "Save the analyzed program to this file as a Ghidra packed database (.gzf), importable into any project",
+        help = "Save the program as auto-analysis left it, before the stabs import, to this file as a Ghidra " +
+            "packed database (.gzf). Pass that file instead of the binary to skip the analysis next time.",
     ).file(canBeDir = false)
-
-    /** What this subcommand does with the imported program; [execute] runs it, then saves if asked. */
-    protected abstract fun ImportContext<*>.process()
-
-    final override fun ImportContext<*>.execute() {
-        process()
-        saveDb?.let { file ->
-            file.parentFile?.mkdirs()
-            // saveToPackedFile will not replace a file, and a rerun into the same path is the usual case.
-            file.delete()
-            program.saveToPackedFile(file, monitor)
-            log("save-db", "saved program database to $file")
-        }
-    }
 
     override val options get() = ImportOptions().also { o ->
         o.applyPlateComments = false
@@ -338,9 +335,33 @@ private abstract class ImportingCommand(name: String) : StabsCommand(name = name
         o.sourceRoots = sourceRoots.map { it.path }
     }
 
-    /** Full auto-analysis, then the whole import, then every dump. */
+    /**
+     * Full auto-analysis, then the whole import, then every dump. A program that comes in analyzed —
+     * a `.gzf` from `--save-db` — skips the analysis. `--save-db` snapshots the point between the
+     * two, as the tests' AnalysisCache does: the only point a later run can resume from, since
+     * importing again on top of an import degrades it (`TiXmlString.conflict` in every signature).
+     */
     protected fun ImportContext<*>.fullImport(): ImportArtifacts? {
-        autoAnalyze()
+        if (program.isStabsDone) {
+            throw CliktError(
+                "${program.name} already carries a stabs import; load the binary, or a .gzf saved by --save-db",
+            )
+        }
+        if (program.getOptions(Program.PROGRAM_INFO).getBoolean(Program.ANALYZED_OPTION_NAME, false)) {
+            log("analysis", "program is already analyzed; skipping auto-analysis")
+            if (disableAnalyzers.isNotEmpty()) {
+                warn("analysis", "--disable-analyzer has no effect on an analyzed program")
+            }
+        } else {
+            autoAnalyze()
+        }
+        saveDb?.let { file ->
+            file.parentFile?.mkdirs()
+            // saveToPackedFile will not replace a file, and a rerun into the same path is the usual case.
+            file.delete()
+            program.saveToPackedFile(file, monitor)
+            log("save-db", "saved the analyzed program to $file")
+        }
         return import().artifacts?.also {
             shared.dumpRecords(it.records)
             shared.dumpHarvest(it.harvest)
@@ -394,7 +415,7 @@ private abstract class RenderCommand(name: String) : ImportingCommand(name = nam
     /** Only decomp exposes it: a skeleton has no decompiled statements to mark. */
     protected open val provenance = true
 
-    override fun ImportContext<*>.process() {
+    override fun ImportContext<*>.execute() {
         val artifacts = fullImport() ?: return
         Renderer(
             mode,
