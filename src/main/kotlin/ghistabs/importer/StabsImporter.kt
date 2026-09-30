@@ -59,7 +59,7 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
                     constants = applyAllConstants(),
                     staticMembers = applyAllStaticMembers(),
                     classes = when {
-                        ctx.options.buildClasses -> ctx.classApplier(registry).buildAll()
+                        ctx.options.buildClasses -> ctx.classApplier(registry).applyAll()
                         else -> 0
                     },
                 )

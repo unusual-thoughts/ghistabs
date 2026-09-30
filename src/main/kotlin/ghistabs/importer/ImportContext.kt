@@ -17,7 +17,6 @@ import ghistabs.index.SourceIndex
 import ghistabs.index.TypeGraph
 import ghistabs.materialize.DataTypeRegistry
 import ghistabs.materialize.TypedefShortener
-import ghistabs.materialize.cpp.ClassApplier
 import ghistabs.parse.StabReader
 import ghistabs.parse.StabRecord
 import org.jetbrains.annotations.TestOnly

@@ -1,4 +1,4 @@
-package ghistabs.materialize.cpp
+package ghistabs.importer
 
 import ghidra.app.util.NamespaceUtils
 import ghidra.app.util.demangler.DemangledFunction
@@ -22,6 +22,7 @@ import ghistabs.isInjected
 import ghistabs.isMethod
 import ghistabs.materialize.DataTypeRegistry
 import ghistabs.materialize.buildFunctionDefinition
+import ghistabs.materialize.cpp.*
 import ghistabs.materialize.cpp.abi.*
 import ghistabs.materialize.cpp.abi.CxxAbi.Companion.prevailingAbi
 import ghistabs.materialize.resolveRef
@@ -29,7 +30,7 @@ import ghistabs.parse.*
 import ghistabs.parse.TypeDecl.Aggregate.Method
 
 /**
- * The C++ pass over the program, once [layClasses] has laid every class struct: a class gets its
+ * The C++ pass over the program, once [ghistabs.materialize.cpp.layClasses] has laid every class struct: a class gets its
  * Ghidra identity, a [GhidraClass] namespace with its methods reparented under it, and its
  * `<Class>_vftable` filled and applied at `_ZTV`'s address point so virtual calls resolve. It
  * writes no class struct.
@@ -118,7 +119,7 @@ class ClassApplier(
      * materializeAll already collapsed by name, and iterating canonical groups builds each class
      * once, off the most-detailed body. Returns the number of classes built.
      */
-    fun buildAll(): Int {
+    fun applyAll(): Int {
         val classes = registry.classesBasesFirst()
         monitor.initialize(classes.size.toLong(), "Stabs: building classes")
         var built = 0
@@ -126,7 +127,7 @@ class ClassApplier(
             monitor.increment()
             try {
                 group.resolve()?.apply {
-                    build()
+                    buildAndApply()
                     built++
                 }
             } catch (t: Throwable) {
@@ -187,7 +188,7 @@ class ClassApplier(
     }
 
     /** Materialize class struct + namespace + (optional) vtable struct, apply at _ZTV. */
-    private fun LocatedClass.build() {
+    private fun LocatedClass.buildAndApply() {
         // gcc 2.x composes a method's physname from its own class's ABI, so reparenting always
         // resolves through this class's own abi, once its vtable resolves.
         for (m in body.methods) reparentMethod(m)
