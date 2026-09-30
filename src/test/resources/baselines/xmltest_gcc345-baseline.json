@@ -477,20 +477,20 @@
             "max": 30
         },
         "reglocal-add-success": {
-            "min": 3463,
-            "max": 3463
+            "min": 3455,
+            "max": 3455
         },
         "reglocal-param-home": {
             "min": 485,
             "max": 485
         },
         "reglocal-renamed-scope": {
-            "min": 2177,
-            "max": 2177
+            "min": 2171,
+            "max": 2171
         },
         "reglocal-skipped-dup-local": {
-            "min": 211,
-            "max": 211
+            "min": 219,
+            "max": 219
         },
         "reglocal-skipped-dup-param": {
             "min": 1003,

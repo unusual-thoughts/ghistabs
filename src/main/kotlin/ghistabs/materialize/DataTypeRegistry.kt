@@ -1,10 +1,7 @@
 package ghistabs.materialize
 
 import ghidra.app.util.demangler.Demangled
-import ghidra.program.model.data.CategoryPath
-import ghidra.program.model.data.DataType
-import ghidra.program.model.data.DataTypeConflictHandler
-import ghidra.program.model.data.DataTypeManager
+import ghidra.program.model.data.*
 import ghidra.util.task.TaskMonitor
 import ghistabs.Demangler
 import ghistabs.demanglerPath
@@ -17,6 +14,7 @@ import ghistabs.parse.CATEGORY
 import ghistabs.parse.GlobalTypeDecl
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
+import ghidra.program.model.data.Enum as GhidraEnum
 
 /**
  * DataType cache and DTM facade: owns the id→DataType map, resolves types into the DTM under a
@@ -65,9 +63,6 @@ class DataTypeRegistry(
     /** XRef stubs that fell through to placeholders. Use sites are flagged via [recordXRefStubAt]. */
     internal val xrefStubs = mutableSetOf<DataType>()
 
-    /** Id-less DataType registrations (typedefs, vftable/vtable composites, FunctionDefinitions). */
-    private val extrasByName = LinkedHashMap<String, LinkedHashSet<DataType>>()
-
     /**
      * Every DataType this importer materialized or registered. Recomputed per read, not cached:
      * [materializeAll] returns its size, and pass C keeps registering after that — ClassApplier's
@@ -75,7 +70,7 @@ class DataTypeRegistry(
      */
     internal val allCreatedDataTypes get() = buildSet {
         addAll(byId.values)
-        for (bucket in extrasByName.values) addAll(bucket)
+        for (bucket in byName.values) addAll(bucket)
     }
 
     /**
@@ -92,15 +87,53 @@ class DataTypeRegistry(
     // RENAME_AND_ADDs two genuinely-distinct non-empty types, like DEFAULT_HANDLER).
     private val conflictHandler = DataTypeConflictHandler.REPLACE_EMPTY_STRUCTS_OR_RENAME_AND_ADD_HANDLER
 
+    /** Ids of the types in the DTM before this import: an earlier import's, and analysis's own. */
+    private val preexisting = dtm.allDataTypes.asSequence().mapTo(HashSet()) { dtm.getID(it) }
+
+    /**
+     * [conflictHandler], except against a type of the same kind that predates this import. That is an
+     * earlier import's: a re-import (`Tools > Stabs > Re-import`, or a saved program run again) builds
+     * the same types again, and [conflictHandler] would fork a `.conflict` beside each, which every use
+     * then points at. A struct, union or enum is reset in place to what this import builds. A function
+     * definition is kept as it stands: a swept vftable slot is typed off its target's signature, which
+     * that import has since typed, so what this one builds is not what it was.
+     *
+     * Only the type being resolved gets this: its dependencies go through [conflictHandler].
+     */
+    private val overHandler = object : DataTypeConflictHandler() {
+        override fun resolveConflict(added: DataType, existing: DataType): ConflictResult = when {
+            dtm.getID(existing) !in preexisting -> conflictHandler.resolveConflict(added, existing)
+            added is FunctionDefinition && existing is FunctionDefinition -> ConflictResult.USE_EXISTING
+            existing.isSameKindAs(added) -> ConflictResult.REPLACE_EXISTING
+            else -> conflictHandler.resolveConflict(added, existing)
+        }
+
+        override fun shouldUpdate(source: DataType, local: DataType) = false
+
+        override fun getSubsequentHandler() = conflictHandler
+    }
+
+    /** Resolve [this] into the DTM under the shared conflict handler; returns the DTM-resident instance
+     *  (may differ from [this]). No id/name bookkeeping — for stubs whose id lands in [byId] later. */
+    private fun DataType.resolveIntoDtm(handler: DataTypeConflictHandler = conflictHandler): DataType =
+        dtm.resolve(this, handler)
+
+    private fun DataType.isSameKindAs(other: DataType) = when (other) {
+        is Structure -> this is Structure
+        is Union -> this is Union
+        is GhidraEnum -> this is GhidraEnum
+        else -> false
+    }
+
     internal val rttiStructs by lazy { Rtti(dtm) }
 
-    // ── The only writers of byId / placeholders / xrefStubs. [cache] sets the authoritative
-    // resolution for an id; [cacheIfAbsent] is the alias/member fan-out that must not clobber a
-    // winner already in the slot; [seedPlaceholder] builds an empty cycle-break stub that
-    // [materializeAll] later fills in place, fanning it out across a group's member ids;
-    // [markXRefStub] tags a placeholder that never resolved, for degradation reporting. Each
-    // returns its dt so it composes inside a resolution chain. ([register] layers [resolveIntoDtm] +
-    // [cache] for freshly-built types — the DTM-registering counterpart to bare [cache].) ──
+    // ── By id: stabs types, keyed by their GlobalTypeId in [byId], which only the functions below write.
+    // [cache] sets the authoritative resolution for an id; [cacheIfAbsent] is the alias/member fan-out
+    // that must not clobber a winner already in the slot; [seedPlaceholder] builds an empty cycle-break
+    // stub that [materializeAll] later fills in place, fanning it out across a group's member ids;
+    // [markXRefStub] tags a placeholder that never resolved, for degradation reporting. Each returns its
+    // dt so it composes inside a resolution chain. ([registerById] layers [resolveIntoDtm] + [cache] for
+    // freshly-built types — the DTM-registering counterpart to bare [cache].) ──
 
     internal fun <T : DataType> cache(id: GlobalTypeId, dt: T): T = dt.also { byId[id] = it }
 
@@ -126,40 +159,24 @@ class DataTypeRegistry(
      * the group's member ids so a Ref resolved before the winner materializes pulls in that one.
      */
     internal fun LocatedType.seedPlaceholder() {
-        val placeholder = makePlaceholder(type, location.category, "fwd-decl", location.name).resolveIntoDtm()
+        val placeholder = makePlaceholder(type, location.category, "fwd-decl", location.name).resolveOver()
         for (m in members) placeholders.putIfAbsent(m, placeholder)
     }
 
     internal fun LocatedType.materialize() {
         val placeholder = placeholders[type.id]!!
         val materialized = materializeBody(type, location.category, placeholder)
-        if (materialized === placeholder) cache(type.id, placeholder) else register(materialized, type.id)
+        if (materialized === placeholder) cache(type.id, placeholder) else registerById(materialized, type.id)
         for (memberId in members) cacheIfAbsent(memberId, materialized)
     }
 
     internal fun DataType.markXRefStub(): DataType = apply { xrefStubs.add(this) }
 
-    /** Resolve [this] into the DTM under the shared conflict handler; returns the DTM-resident instance
-     *  (may differ from [this]). No id/name bookkeeping — for stubs whose id lands in [byId] later. */
-    internal fun DataType.resolveIntoDtm(): DataType = dtm.resolve(this, conflictHandler)
+    /** [resolveIntoDtm] over an earlier import's type of the same kind: see [overHandler]. */
+    private fun DataType.resolveOver(): DataType = resolveIntoDtm(overHandler)
 
-    /**
-     * [resolveIntoDtm] + remember. Returns the DTM-resolved instance (may differ). With an [id],
-     * caches it under [id] for [dataTypeFor]; id-less, buckets it by name in extrasByName.
-     */
-    internal fun register(dt: DataType, id: GlobalTypeId? = null) = dt.resolveIntoDtm().also { resolved ->
-        when (id) {
-            null -> extrasByName.getOrPut(resolved.name) { LinkedHashSet() }.add(resolved)
-            else -> cache(id, resolved)
-        }
-    }
-
-    /** Get-or-create a DTM-resident DataType of type [T] at `(category, name)`. */
-    internal inline fun <reified T : DataType> getOrRegister(category: CategoryPath, name: String, build: () -> T): T =
-        when (val dt = dtm.getDataType(category, name)) {
-            is T -> dt
-            else -> register(build()) as T
-        }
+    /** [resolveIntoDtm], cached under [id] for [dataTypeFor]. Returns the DTM-resolved instance (may differ). */
+    internal fun registerById(dt: DataType, id: GlobalTypeId) = dt.resolveIntoDtm().also { cache(id, it) }
 
     /**
      * Id → DataType, resolved lazily. Returns the cached type or its in-flight cycle-break
@@ -241,6 +258,48 @@ class DataTypeRegistry(
                     Demangler.of(mangled)?.namespace?.let { putIfAbsent(it.demanglerPath.path, dt) }
                 }
             }
+        }
+    }
+
+    // ── By name: types with no stabs id of their own — typedefs, vftable and base-subobject structs,
+    // vftable slot FunctionDefinitions — keyed by name in [byName]. ──
+
+    /** Name → the types registered under it; a name can hold several (overloads, `.conflict` forks). */
+    private val byName = LinkedHashMap<String, LinkedHashSet<DataType>>()
+
+    /** [resolveIntoDtm], filed by name in [byName]. Returns the DTM-resolved instance (may differ). */
+    internal fun registerByName(dt: DataType, handler: DataTypeConflictHandler = conflictHandler) =
+        dt.resolveIntoDtm(handler).also { byName.getOrPut(it.name) { LinkedHashSet() }.add(it) }
+
+    /** [registerByName] for a vftable slot's function definition, over an earlier import's: see [overHandler]. */
+    internal fun registerByNameOver(dt: DataType): DataType = registerByName(dt, overHandler)
+
+    /**
+     * Get-or-create a DTM-resident DataType of type [T] at `(category, name)`. One found there is
+     * returned as it stands, and one an earlier import left is registered as this one's, with the slot
+     * definitions it points at, so a re-import's registry reads as the first's did.
+     */
+    internal inline fun <reified T : DataType> getOrRegisterByName(
+        category: CategoryPath,
+        name: String,
+        build: () -> T,
+    ): T = when (val dt = dtm.getDataType(category, name)) {
+        is T -> dt.also { if (!isRegisteredByName(it)) adoptByName(it) }
+        else -> registerByName(build()) as T
+    }
+
+    internal fun isRegisteredByName(dt: DataType) = byName[dt.name]?.contains(dt) == true
+
+    /**
+     * [existing] registered as this import's, as it stands, with the function definitions its slots
+     * point at. Kept rather than rebuilt: a swept vftable slot is typed off its target's signature,
+     * which the earlier import has since typed, so rebuilding it would not give back what it was.
+     */
+    internal fun <T : DataType> adoptByName(existing: T): T = existing.also {
+        byName.getOrPut(it.name) { LinkedHashSet() }.add(it)
+        for (c in (it as? Composite)?.definedComponents.orEmpty()) {
+            val fd = (c.dataType as? Pointer)?.dataType as? FunctionDefinition ?: continue
+            if (fd.categoryPath == it.categoryPath) adoptByName(fd)
         }
     }
 }

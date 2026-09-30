@@ -1,4 +1,4 @@
-package ghistabs.test
+package ghistabs
 
 import db.DBHandle
 import ghidra.framework.data.OpenMode
