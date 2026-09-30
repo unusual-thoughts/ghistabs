@@ -9,12 +9,14 @@ import ghistabs.diagnose.DiagnosticSink
 import ghistabs.harvest.Func
 import ghistabs.harvest.GhidraSourceFile
 import ghistabs.harvest.Type
+import ghistabs.harvest.identity
 import ghistabs.importer.ImportContext
 import ghistabs.importer.ImportOptions.Companion.stabsTypedefsShortened
 import ghistabs.importer.LocalSources
 import ghistabs.index.EffectiveSource
 import ghistabs.index.SourceHints
 import ghistabs.materialize.TemplateNameShortener
+import ghistabs.parse.SourceFile
 import ghistabs.parse.TypeDecl
 import ghistabs.parse.isTemplated
 import ghistabs.parse.member
@@ -65,6 +67,26 @@ class Renderer(
     private val harvest = hints.harvest
     val types = hints.types
     val sourceIndex = hints.sources
+
+    /** Each CU's functions in stream order, for [nextFunctionIn]. */
+    private val functionsInStreamOrder by lazy {
+        sourceIndex.functions.groupBy { it.cu }.mapValues { (_, fs) -> fs.sortedBy { it.origin.recordIndex } }
+    }
+
+    /** The first function [cu] opens after record [recordIndex], if any. */
+    fun nextFunctionIn(cu: SourceFile.CUSource, recordIndex: Int) =
+        functionsInStreamOrder[cu]?.firstOrNull { it.origin.recordIndex > recordIndex }
+
+    /** CUs that open N_BINCL scopes for their headers: their header types carry the header's file number, so
+     *  what is left at the CU's own file number is the CU's own. An N_BINCL naming the CU's own file is the
+     *  CU, not a header, so it doesn't count. gcc 3.3 spells that one by bare filename (`hello.cc` for
+     *  `/out/hello.cc`), where the double-N_SO idiom gives the CU its directory. */
+    val binclCus by lazy {
+        types.allTypes.filterNot { it.id.source.namesCu(it.cu) }.mapTo(HashSet()) { it.cu }
+    }
+
+    private fun SourceFile.namesCu(cu: SourceFile.CUSource) = identity == cu.identity ||
+        ('/' !in filename && filename == cu.identity.path.substringAfterLast('/'))
 
     /** A static data member's linkage name → `Class::member`: its definition is a global carrying only the former. */
     val staticMemberNames by lazy {

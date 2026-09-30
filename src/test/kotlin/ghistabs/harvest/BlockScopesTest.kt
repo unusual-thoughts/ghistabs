@@ -191,7 +191,7 @@ class BlockScopesTest {
             "main",
             addr(0),
             SymbolDecl.Function("main", FunctionScope.GLOBAL, TypeDecl.Void),
-            SourceFile.CUSource("main.cpp"),
+            Origin(SourceFile.CUSource("main.cpp"), 0, sourceFileOf("main.cpp")),
             locals = locals,
             blocks = blocks,
         )

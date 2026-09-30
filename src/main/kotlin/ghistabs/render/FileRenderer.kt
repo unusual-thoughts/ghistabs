@@ -336,18 +336,34 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
     }
 
     /**
-     * A typedef whose line belongs to another file. gcc ≥ 10 names a typedef'd struct late, wherever its
-     * queue is flushed, with the typedef's line in its header and no N_SOL naming that header (§85):
-     * `Vec:t(0,9)` among `useLocal`'s records carries `latetypedef.h`'s L9. That line can't be told from
-     * one in this file, except when it lands in a function it wasn't emitted in: no typedef there is
-     * declared inside another function. Only a late name says so, because gcc 3.4 emits a function's
-     * own typedefs at file scope (`locale::_Impl::num_cache_c` at `locale_init.cc` L277, inside
-     * `_Impl`'s constructor).
+     * A typedef whose line belongs to another file, which no N_SOL names (§85). Such a line can't be told
+     * from one in this file, except when it lands in a function no typedef there could be declared in.
+     * - gcc ≥ 10 names a typedef'd struct late, wherever its queue is flushed, with its header's line:
+     *   `Vec:t(0,9)` among `useLocal`'s records carries `latetypedef.h`'s L9. Only the function it was
+     *   emitted in can hold it.
+     * - Without N_BINCL, header typedefs sit at CU scope with the header's line: gcc 2.6.3's
+     *   `tinyxml.cpp` carries `stdlib.h`'s `__compar_fn_t` L282 inside `InsertAfterChild`, gcc 8's
+     *   `hello.cc` `sys/types.h`'s `__u_short` L31 inside `Circle`'s constructor. A file-scope typedef
+     *   can't be declared in any of its CU's functions, except one opened right after it.
+     * - gcc 3.4 emits a function's own typedefs at file scope, before its N_FUN
+     *   (`locale::_Impl::num_cache_c` at `locale_init.cc` L277, inside `_Impl`'s constructor) or before
+     *   the CU's first function (`int_type` at `c++locale.cc` L127, in the third `__convert_to_v`). It
+     *   uses N_BINCL, so a CU that does keeps its CU-scope typedefs where they are.
      */
     private fun Type.borrowedLine(): Boolean {
-        if (!lateName || line == null) return false
-        val emittedIn = spans.ranges.filter { it.func.name == enclosingFunction && it.func.cu == cu }
-        return spans.ranges.any { r -> r !in emittedIn && with(spans) { line in r.span } }
+        val line = line ?: return false
+        val (candidates, home) = when {
+            lateName -> spans.ranges to spans.ranges.filter { it.func.name == enclosingFunction && it.func.cu == cu }
+
+            enclosingFunction == null && cu !in renderer.binclCus -> {
+                val own = spans.ranges.filter { it.func.cu == cu }
+                val next = renderer.nextFunctionIn(cu, declaredAt.recordIndex)
+                own to own.filter { it.func === next }
+            }
+
+            else -> return false
+        }
+        return with(spans) { candidates.any { line in it.span } && home.none { line in it.span } }
     }
 
     /**

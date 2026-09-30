@@ -2,6 +2,7 @@ package ghistabs.render
 
 import ghistabs.harvest.Func
 import ghistabs.harvest.LineEntry
+import ghistabs.harvest.Origin
 import ghistabs.harvest.sourceFileOf
 import ghistabs.parse.FunctionScope
 import ghistabs.parse.SourceFile
@@ -20,11 +21,11 @@ import org.junit.jupiter.api.Test
 class FunctionSpansTest {
     // Line entries are addressed at `base + <position>` so the first-listed line is the
     // lowest-address entry, i.e. the prologue; `lines` order therefore sets the prologue.
-    private fun fn(name: String, base: Long, source: String, lines: List<Int>) = Func(
+    private fun fn(name: String, base: Long, source: String, lines: List<Int>, declLine: Int? = null) = Func(
         name = name,
         addr = GenericAddressResolver.buildAddress(base),
         decl = SymbolDecl.Function(name, FunctionScope.GLOBAL, TypeDecl.Builtin(-1)),
-        cu = SourceFile.CUSource(source),
+        origin = Origin(SourceFile.CUSource(source), 0, sourceFileOf(source), declLine),
         lineEntries = lines.mapIndexed { i, l ->
             LineEntry(l, GenericAddressResolver.buildAddress(base + i), sourceFileOf(source))
         }
@@ -65,6 +66,23 @@ class FunctionSpansTest {
 
         val bRange = spans.ranges.single { it.func === b }
         bRange.start mustBe 40 // clamped to prologue, not 5
+    }
+
+    /**
+     * gcc 2.7.2 dates an implicit destructor at its class's closing `};` (§75), and its only lines are an
+     * inlined base's: `~TiXmlPrinter` in `tinyxml.h` is declared L1798 with every line at L21. Opening there
+     * made one span of L21–1798 that swallowed every method in between. A declaration can't come after
+     * its function's last line, so that span opens at its lines instead.
+     */
+    @Test
+    fun `a declared line past the function's last line doesn't open its span`() {
+        val dtor = fn("dtor", 0x1000, "t.h", listOf(21, 21), declLine = 1798)
+        val ctor = fn("ctor", 0x2000, "t.h", listOf(21, 151, 21), declLine = 151)
+        val method = fn("method", 0x3000, "t.h", listOf(1771, 1772, 1773), declLine = 1771)
+        val spans = FunctionSpans.of(listOf(dtor, ctor, method), sourceFileOf("t.h"))
+
+        spans.ranges.map { it.func.name to it.lines } mustBe
+            listOf("dtor" to 21..21, "ctor" to 151..151, "method" to 1771..1773)
     }
 
     @Test

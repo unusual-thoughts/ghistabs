@@ -102,14 +102,12 @@ class FunctionSpans(val ranges: List<FuncRange>) {
             val sameSource = lineEntries.filter { it.source == source }
             val inside = sameSource.ifEmpty { if (isSyntheticInit) emptyList() else lineEntries }
 
-            return inside.minByOrNull { it.addr.offset }?.line ?.let { entryLine ->
-                RawSpan(
-                    this,
-                    addr,
-                    entryLine,
-                    declLine ?: sameSource.minOfOrNull { it.line },
-                    sameSource.maxOfOrNull { it.line } ?: inside.maxBy { it.addr.offset }.line,
-                )
+            return inside.entry?.line?.let { entryLine ->
+                val end = sameSource.maxOfOrNull { it.line } ?: inside.maxBy { it.addr.offset }.line
+                // A declaration can't follow its function's last line: gcc 2.x dates an implicit member
+                // at its class's closing `};` (§75), which may lie past every line the member has.
+                val openLine = declLine?.takeIf { it <= end } ?: sameSource.minOfOrNull { it.line }
+                RawSpan(this, addr, entryLine, openLine, end)
             }
         }
     }

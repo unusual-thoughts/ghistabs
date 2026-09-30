@@ -17,11 +17,11 @@ import java.io.File
  */
 @Tag("integration")
 class LateTypedefIntegrationTest : FeatureFixtureTest() {
-    private fun skeleton(fixture: String): String {
+    private fun skeleton(fixture: String, file: String = "latetypedef.c"): String {
         load(fixture)
         val out = File("build/test-output/latetypedef/$fixture").apply { deleteRecursively() }
         Renderer(Mode.SKELETON, program.defaultContext(), artifacts.hints).use { it.renderAll(out) }
-        return out.walk().single { it.name == "latetypedef.c" }.readText()
+        return out.walk().single { it.name == file }.readText()
     }
 
     @ParameterizedTest
@@ -39,5 +39,20 @@ class LateTypedefIntegrationTest : FeatureFixtureTest() {
     fun `a typedef in its header's N_BINCL stays out of the including file`(fixture: String) {
         val rendered = skeleton(fixture)
         rendered.lines().filter { "typedef" in it }.mustBeEmpty("header typedefs rendered in latetypedef.c")
+    }
+
+    /**
+     * gcc 8 opens no N_BINCL for `hello.cc`'s headers, so `sys/types.h`'s typedefs sit at CU scope with
+     * their own lines: `__u_short` L31 would land in `Circle`'s copy constructor. A file-scope typedef
+     * can't be declared inside one of its CU's functions, so it goes to the appendix.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = ["hello_elf_gcc8"])
+    fun `a CU-scope header typedef is not laid out inside a function`(fixture: String) {
+        val (laidOut, appendix) = skeleton(fixture, "hello.cc").split("displaced declarations").also {
+            it.size mustBe 2
+        }
+        laidOut.lines().filter { "typedef short unsigned int __u_short;" in it }.mustBeEmpty("__u_short laid out")
+        appendix.must("__u_short not in the appendix") { "typedef short unsigned int __u_short;" in this }
     }
 }

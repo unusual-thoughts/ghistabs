@@ -2,6 +2,7 @@ package ghistabs.render
 
 import ghistabs.harvest.Func
 import ghistabs.harvest.LineEntry
+import ghistabs.harvest.Origin
 import ghistabs.harvest.sourceFileOf
 import ghistabs.parse.FunctionScope
 import ghistabs.parse.SourceFile
@@ -57,7 +58,7 @@ class NestingTest {
         name = name,
         addr = GenericAddressResolver.buildAddress(base),
         decl = SymbolDecl.Function(name, FunctionScope.GLOBAL, TypeDecl.Builtin(-1)),
-        cu = SourceFile.CUSource("s.cpp"),
+        origin = Origin(SourceFile.CUSource("s.cpp"), 0, sourceFileOf("s.cpp")),
         lineEntries = lines.mapIndexed { i, l ->
             LineEntry(l, GenericAddressResolver.buildAddress(base + i), sourceFileOf("s.cpp"))
         }

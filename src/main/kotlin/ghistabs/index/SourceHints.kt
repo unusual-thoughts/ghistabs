@@ -3,11 +3,7 @@ package ghistabs.index
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.diagnose.DummySink
 import ghistabs.harvest.*
-import ghistabs.parse.SourceFile
-import ghistabs.parse.TypeDecl
-import ghistabs.parse.canonTemplateName
-import ghistabs.parse.isTemplated
-import ghistabs.parse.outermostTemplate
+import ghistabs.parse.*
 
 /**
  * Where the stabs alone say each type lives — attribution before a source root has a say.
@@ -163,7 +159,7 @@ class SourceHints(
                 // bursts inside the bodies — the only evidence an out-of-line class ever produces.
                 val merged = methods.mapNotNull { m ->
                     val copies = comdatCopiesByMangled[m.mangled ?: return@mapNotNull null].orEmpty()
-                    copies.mapNotNull { c -> c.lineEntries.minByOrNull { it.addr.offset }?.source }
+                    copies.mapNotNull { it.entry?.source }
                         .distinct().singleOrNull()
                 }
                 val bursts = mutableListOf<GhidraSourceFile>()
@@ -223,7 +219,7 @@ class SourceHints(
     // real header there (§17, §63).
     private fun Type.hinted() = name?.let { multiSourceHeaderHints[it] }
 
-    private fun Type.recorded() = sourceFile?.takeIf {
+    private fun Type.recorded() = sourceFile.takeIf {
         body !is TypeDecl.Aggregate && body !is TypeDecl.Enum && id.source !is SourceFile.HeaderSource
     } ?: id.source.identity
 

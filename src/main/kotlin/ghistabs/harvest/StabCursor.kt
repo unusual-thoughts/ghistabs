@@ -47,30 +47,34 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
     /**
      * A function being accumulated: its record-order params and its block tree
      */
-    private inner class FunctionScope(func: FunctionSymbol, val cu: SourceFile.CUSource) {
-        val blocks = BlockTreeBuilder(this@StabCursor)
+    private inner class FunctionScope(val func: Func) {
+        val blockBuilder = BlockTreeBuilder(this@StabCursor)
         val params = mutableListOf<ParamSymbol>()
-        val lineEntries = mutableListOf<LineEntry>()
+        val lines = mutableListOf<LineEntry>()
         var sizeBytes: ULong? = null
-        val decl = func.body
-        val name = func.body.name.substringBefore(':')
-        val addr = resolver.forSymbol(func)!!
-        val declLine = func.line
 
-        fun toHarvested(): Func {
-            // The function's own file: its lowest-address line entry, matching TypeResolver.functionSource.
-            // Not the N_SO/N_SOL partition at the entry — measured at 1155 overrides on locale_test,
-            // and wrong where it fires (`std::_Destroy` reads stl_construct.h by its lines and
-            // `iomanip` by the partition, the label having been planted mid-symbol-flush).
-            val source = lineEntries.minByOrNull { it.addr.offset }?.source ?: cu.identity
-            // gcc 12 and modern ELF emitters omit the empty-name N_FUN end marker and delimit with
-            // the outermost N_RBRAC instead. Read here rather than at every context switch: no
-            // bracket can join a function once the next one opens.
-            val extent = sizeBytes ?: blocks.lastClose?.let { (it.offset - addr.offset).toULong() }
-            val (locals, attributedBlocks) = blocks.finish(lineEntries, source)
-            val attributedParams = params.map { it.withSource(source) }
-            return Func(
-                name, addr, decl, cu, locals, attributedParams, attributedBlocks, lineEntries, extent, declLine,
+        constructor(symbol: FunctionSymbol) :
+            this(Func(symbol.body.name, resolver.forSymbol(symbol)!!, symbol.body, symbol.origin))
+
+        /**
+         * The function's own file is its entry's. Not the N_SO/N_SOL partition at the entry — measured
+         * at 1155 overrides on locale_test, and wrong where it fires (`std::_Destroy` reads
+         * stl_construct.h by its lines and `iomanip` by the partition, the label having been planted
+         * mid-symbol-flush).
+         */
+        val Func.source get() = lines.entry?.source ?: origin.cu.identity
+
+        fun toHarvested(): Func = blockBuilder.finish(lines, func.source).let { (locals, blocks) ->
+            func.copy(
+                origin = func.origin.copy(sourceFile = func.source),
+                lineEntries = lines,
+                locals = locals,
+                params = params.map { it.withSource(func.source) },
+                blocks = blocks,
+                // gcc 12 and modern ELF emitters omit the empty-name N_FUN end marker and delimit with
+                // the outermost N_RBRAC instead. Read here rather than at every context switch: no
+                // bracket can join a function once the next one opens.
+                sizeBytes = sizeBytes ?: blockBuilder.lastClose?.let { (it.offset - func.addr.offset).toULong() },
             )
         }
     }
@@ -83,7 +87,7 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
 
     private val lineSource get() = sourceFileOrNull(currentSourceForLines) ?: cu.identity
 
-    private val currentFunctionName get() = currentScope?.name
+    private val currentFunctionName get() = currentScope?.func?.name
 
     private val cuContext get() = cuContexts[currentCu]
 
@@ -220,7 +224,7 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
     // function has a section of its own, planting `Ltext<n>` inside that section instead — 178 such
     // boundaries on one PE fixture, each an offset within its own function's body.
     private val StabRecord.boundaryAddress get() = value.takeIf { it != 0L }
-        ?.let { resolver.stabAddress(it, currentScope?.addr, sink = this@StabCursor) }
+        ?.let { resolver.stabAddress(it, currentScope?.func?.addr, sink = this@StabCursor) }
 
     private val StabRecord.language get() = Language.fromCode(desc)
 
@@ -232,15 +236,15 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
      * absolute (gcc/ELF) — [AddressResolver.stabAddress] disambiguates against the function start.
      */
     fun lineEntry(rec: StabRecord) = currentCu?.let {
-        LineEntry(rec.desc, resolver.stabAddress(rec.value, currentScope?.addr, this), lineSource).also {
+        LineEntry(rec.desc, resolver.stabAddress(rec.value, currentScope?.func?.addr, this), lineSource).also {
             lineEntriesByFile.getOrPut(lineSource) { mutableListOf() } += it
-            currentScope?.lineEntries?.add(it)
+            currentScope?.lines?.add(it)
         }
     } ?: null.also { outsideCu(rec) }
 
     /** Named N_FUN: `name` is `mangled:descriptor`, `value` entry address, `desc` declaration line (under -gstabs+) */
     fun openFunction(func: FunctionSymbol) {
-        currentScope = FunctionScope(func, cu).also { scopesByCu.getOrPut(cu) { mutableListOf() } += it }
+        currentScope = FunctionScope(func).also { scopesByCu.getOrPut(cu) { mutableListOf() } += it }
     }
 
     /** N_PSYM / register-param N_RSYM: the function's own, so no block resolution needed. */
@@ -250,7 +254,7 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
 
     /** N_LSYM / N_RSYM local: held by the block builder until a bracket claims it. */
     fun local(record: LocalSymbol) {
-        currentScope?.blocks?.local(record)
+        currentScope?.blockBuilder?.local(record)
     }
 
     /** Empty-name N_FUN end marker: `value` is the size relative to the function start. */
@@ -261,14 +265,14 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
 
     fun bracket(rec: StabRecord) {
         currentScope?.apply {
-            val addr = resolver.stabAddress(rec.value, addr, this@StabCursor)
+            val addr = resolver.stabAddress(rec.value, func.addr, this@StabCursor)
             val level = rec.desc.takeIf { it > 0 }
             when (rec.type) {
                 // open a lexical scope, which owns the locals emitted just before it.
-                StabType.N_LBRAC -> blocks.open(addr, level)
+                StabType.N_LBRAC -> blockBuilder.open(addr, level)
 
                 // close the innermost lexical scope.
-                StabType.N_RBRAC -> blocks.close(addr, level)
+                StabType.N_RBRAC -> blockBuilder.close(addr, level)
 
                 else -> {}
             }
