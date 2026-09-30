@@ -224,18 +224,23 @@ class BlockScopesTest {
     }
 
     /**
-     * `zlib_aout_gcc263.o`'s `gz_open` brackets four copies of `stdlib.h`'s inlines inside its own
-     * outer block, each copy a block of its own.
+     * `zlib_aout_gcc263.o`'s `gz_open` brackets four instances of `stdlib.h`'s inlines inside its own
+     * outer block, each instance a block of its own.
      */
     @Test
-    fun `each bracketed copy of an inline is its own outermost block`() {
+    fun `each bracketed instance of an inline is its own outermost block`() {
         val stdlib = sourceFileOf("/usr/i486-linuxaout/include/stdlib.h")
-        fun copy(start: Long, end: Long) = BlockScope(addr(start), addr(end), emptyList(), source = stdlib)
-        val copies = listOf(copy(0x1fc2, 0x1fce), copy(0x2057, 0x207d), copy(0x212c, 0x213c), copy(0x2158, 0x2165))
-        val gzOpen = BlockScope(addr(0x1fa1), addr(0x223f), emptyList(), copies, sourceFileOf("/zlib/gzio.c"))
+        fun instance(start: Long, end: Long) = BlockScope(addr(start), addr(end), emptyList(), source = stdlib)
+        val instances = listOf(
+            instance(0x1fc2, 0x1fce),
+            instance(0x2057, 0x207d),
+            instance(0x212c, 0x213c),
+            instance(0x2158, 0x2165),
+        )
+        val gzOpen = BlockScope(addr(0x1fa1), addr(0x223f), emptyList(), instances, sourceFileOf("/zlib/gzio.c"))
 
         listOf(0x1fc2L, 0x1fcdL, 0x2060L, 0x2158L).map { gzOpen.outermostAt(addr(it), stdlib) } mustBe
-            listOf(copies[0], copies[0], copies[1], copies[3])
+            listOf(instances[0], instances[0], instances[1], instances[3])
         gzOpen.outermostAt(addr(0x1fd0), stdlib) mustBe null
     }
 }
