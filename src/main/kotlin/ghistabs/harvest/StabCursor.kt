@@ -22,7 +22,18 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
     DiagnosticSink by sink,
     Globalizer {
 
-    private val cuContexts = mutableMapOf<SourceFile.CUSource, CuContext>()
+    /**
+     * One per named N_SO, keyed by its record index: two CUs can share a [SourceFile.CUSource]
+     * (libgcc2.c, once per `L_` object).
+     */
+    private val cuContexts = mutableMapOf<Int, CuContext>()
+
+    /**
+     * The open CU: the record index of the N_SO that opened it, which keys [cuContexts] in both passes.
+     * A list position would need a counter surviving the empty N_SO that closes a CU.
+     */
+    private var cuIndex: Int? = null
+    private val cuContext get() = cuIndex?.let { cuContexts[it] }
     private val sharedHeaderRegistry = HeaderRegistry(this)
     private val lineEntriesByFile = mutableMapOf<GhidraSourceFile, MutableList<LineEntry>>()
 
@@ -42,68 +53,19 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
      */
     private var currentSourceForLines: String? = null
 
-    private var currentCu: SourceFile.CUSource? = null
+    private var currentScope: FuncBuilder? = null
 
-    /**
-     * N_SLINEs waiting for the N_FUN that follows them, once this CU's first N_SLINE came before its
-     * first function: gcc emits a function's stab after its code unless the target defines
-     * `DBX_FUNCTION_FIRST` (dbxout.c `dbxout_function`), which 2.6.3's svr4.h sets and no a.out config
-     * does. Null while the CU puts each N_FUN first. A CU with lines and no function (MinGW 3.4.5's
-     * `cygwin.asm`) also lands here, its lines joining no function either way.
-     */
-    private var linesAhead: MutableList<LineEntry>? = null
-
-    /**
-     * A function being accumulated: its record-order params and its block tree
-     */
-    private inner class FunctionScope(val func: Func) {
-        val blockBuilder = BlockTreeBuilder(this@StabCursor)
-        val params = mutableListOf<ParamSymbol>()
-        val lines = mutableListOf<LineEntry>()
-        var sizeBytes: ULong? = null
-
-        constructor(symbol: FunctionSymbol) :
-            this(Func(symbol.body.name, resolver.forSymbol(symbol)!!, symbol.body, symbol.origin))
-
-        /**
-         * The function's own file is its entry's. Not the N_SO/N_SOL partition at the entry — measured
-         * at 1155 overrides on locale_test, and wrong where it fires (`std::_Destroy` reads
-         * stl_construct.h by its lines and `iomanip` by the partition, the label having been planted
-         * mid-symbol-flush).
-         */
-        val Func.source get() = lines.entry?.source ?: origin.cu.identity
-
-        fun toHarvested(): Func = blockBuilder.finish(lines, func.source).let { (locals, blocks) ->
-            func.copy(
-                origin = func.origin.copy(sourceFile = func.source),
-                lineEntries = lines,
-                locals = locals,
-                params = params.map { it.withSource(func.source) },
-                blocks = blocks,
-                // gcc 12 and modern ELF emitters omit the empty-name N_FUN end marker and delimit with
-                // the outermost N_RBRAC instead. Read here rather than at every context switch: no
-                // bracket can join a function once the next one opens.
-                sizeBytes = sizeBytes ?: blockBuilder.lastClose?.let { (it.offset - func.addr.offset).toULong() },
-            )
-        }
-    }
-
-    private val scopesByCu = mutableMapOf<SourceFile.CUSource, MutableList<FunctionScope>>()
-    private var currentScope: FunctionScope? = null
-
-    /** [currentCu] where a record can't legally appear outside a CU. */
-    private val cu get() = checkNotNull(currentCu) { "record outside any N_SO" }
+    /** The open CU, where a record can't legally appear outside one. */
+    private val cu get() = checkNotNull(cuContext) { "record outside any N_SO" }.cu
 
     private val lineSource get() = sourceFileOrNull(currentSourceForLines) ?: cu.identity
 
     private val currentFunctionName get() = currentScope?.func?.name
 
-    private val cuContext get() = cuContexts[currentCu]
-
     override fun globalIdFor(id: LocalTypeId) = GlobalTypeId(cuContext?.sourceFor(id) ?: cu, id.n)
 
     /** Null for an unparseable symbol, and for one outside any CU — whose type ids have no file to resolve in. */
-    fun parseSymbol(rec: StabRecord) = when (val res = currentCu?.let { Parser(rec.name).parseSymbol() }) {
+    fun parseSymbol(rec: StabRecord) = when (val res = cuContext?.let { Parser(rec.name).parseSymbol() }) {
         null -> null.also { outsideCu(rec) }
 
         is ParseResult.Error -> {
@@ -128,15 +90,15 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
                 StabType.N_SO if rec.name.isDirectory -> pendingDirectory = rec.name
 
                 StabType.N_SO if rec.name.isNotEmpty() -> {
-                    currentCu = SourceFile.CUSource(rec.name, pendingDirectory).also {
-                        cuContexts[it] = CuContext(it, this, sharedHeaderRegistry, rec.language, rec.boundaryAddress)
-                    }
+                    val cu = SourceFile.CUSource(rec.name, pendingDirectory)
+                    cuContexts[rec.index] = CuContext(cu, this, sharedHeaderRegistry, rec.language, rec.boundaryAddress)
+                    cuIndex = rec.index
                     pendingDirectory = null
                 }
 
                 StabType.N_SO -> {
                     cuContext?.endAt(rec.boundaryAddress)
-                    currentCu = null
+                    cuIndex = null
                     pendingDirectory = null
                 }
 
@@ -182,13 +144,12 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
     /** N_SO: trailing slash = compilation directory, non-empty = CU start, empty = CU end. */
     fun sourceUnit(rec: StabRecord) {
         when {
-            rec.name.isDirectory -> pendingDirectory = rec.name
+            // Paired with its filename N_SO in [preSeedHeaders], into the context's CUSource.
+            rec.name.isDirectory -> {}
 
             rec.name.isNotEmpty() -> {
-                currentCu = SourceFile.CUSource(rec.name, pendingDirectory)
-                pendingDirectory = null
+                cuIndex = rec.index
                 currentSourceForLines = null
-                linesAhead = null
                 rec.boundary(cu.identity)
             }
 
@@ -196,8 +157,7 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
                 // dbxcoff.h's `Letext`: the end of this object's plain .text. What follows is not the
                 // COMDAT region — CU spans abut, 53 bytes of alignment apart on one PE fixture (§39).
                 rec.boundary(null)
-                currentCu = null
-                pendingDirectory = null
+                cuIndex = null
                 currentSourceForLines = null
             }
         }
@@ -226,7 +186,7 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
         when {
             type == StabType.N_SOL -> debug("linesource-start", "source switches to $source", address = addr)
             source != null -> debug("file-start", "$source starts here", address = addr)
-            else -> debug("file-start", "${currentCu?.filename} ends here", address = addr)
+            else -> debug("file-start", "${cuContext?.cu?.filename} ends here", address = addr)
         }
     }
 
@@ -239,28 +199,33 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
     private val StabRecord.language get() = Language.fromCode(desc)
 
     /** A `../`-relative spelling anchored to this CU's compilation directory. */
-    private fun resolved(name: String) = name.resolveAgainstDirectory(currentCu?.directory)
+    private fun resolved(name: String) = name.resolveAgainstDirectory(cuContext?.cu?.directory)
 
     /**
      * N_SLINE: `desc` is the line, `value` is function-relative (gcc/COFF on PE) or already
      * absolute (gcc/ELF) — [AddressResolver.stabAddress] disambiguates against the function start.
      */
-    fun lineEntry(rec: StabRecord) = currentCu?.let {
-        if (linesAhead == null && scopesByCu[cu].isNullOrEmpty()) linesAhead = mutableListOf()
+    fun lineEntry(rec: StabRecord) = cuContext?.let { context ->
+        if (context.linesAhead == null && context.functions.isEmpty()) context.linesAhead = mutableListOf()
         // Ahead of its function, a value can't be relative to it.
-        val scope = currentScope.takeIf { linesAhead == null }
+        val scope = currentScope.takeIf { context.linesAhead == null }
         LineEntry(rec.desc, resolver.stabAddress(rec.value, scope?.func?.addr, this), lineSource).also {
             lineEntriesByFile.getOrPut(lineSource) { mutableListOf() } += it
-            (linesAhead ?: scope?.lines)?.add(it)
+            (context.linesAhead ?: scope?.lines)?.add(it)
         }
     } ?: null.also { outsideCu(rec) }
 
+    private fun FunctionSymbol.builder() =
+        FuncBuilder(Func(body.name, resolver.forSymbol(this)!!, body, origin), this@StabCursor)
+
     /** Named N_FUN: `name` is `mangled:descriptor`, `value` entry address, `desc` declaration line (under -gstabs+) */
-    fun openFunction(func: FunctionSymbol) {
-        currentScope = FunctionScope(func).also { scopesByCu.getOrPut(cu) { mutableListOf() } += it }
-        linesAhead?.let {
-            currentScope?.lines?.addAll(it)
-            it.clear()
+    fun openFunction(func: FunctionSymbol) = cuContext?.let { context ->
+        currentScope = func.builder().also { scope ->
+            context.functions += scope
+            context.linesAhead?.let {
+                scope.lines += it
+                it.clear()
+            }
         }
     }
 
@@ -307,9 +272,6 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
      */
     fun toHarvest(): HarvestedStream {
         val contexts = cuContexts.values.groupBy { it.cu.identity }
-        // Every open function's CU came from an N_SO, so `preSeedHeaders` already gave it a context —
-        // measured 0 strays across the fixtures, hence no key of its own here.
-        val functions = scopesByCu.entries.groupBy({ it.key.identity }) { it.value }
         // Eager, not `firstNotNullOfOrNull`: `addressRange()` files the verdict that explains a null
         // one, and short-circuiting would leave every context after the first unexplained.
         val spans = contexts.mapValues { (_, cs) -> cs.mapNotNull { it.addressRange() }.firstOrNull() }
@@ -319,7 +281,7 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
             },
             cus = contexts.mapValues { (file, cs) ->
                 CursorCu(
-                    functions[file].orEmpty().flatten().map { it.toHarvested() },
+                    cs.flatMap { it.functions }.map { it.toHarvested() },
                     spans[file],
                     cs.firstNotNullOfOrNull { it.language },
                 )

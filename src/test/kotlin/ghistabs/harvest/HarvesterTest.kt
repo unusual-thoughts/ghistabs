@@ -729,4 +729,31 @@ class HarvesterTest {
             "compress" to listOf(66 to sourceFileOf("/zlib/compress.c"), 68 to sourceFileOf("/zlib/compress.c")),
         )
     }
+
+    /**
+     * libgcc2.c is one source compiled once per `L_` object, so `xmltest_aout_gcc263` opens the same
+     * `N_SO /usr/src/aout-gcc-2.6.3/./` + `N_SO libgcc2.c` pair several times. Each opening is its own CU:
+     * the second's lines ahead of its first N_FUN go to that function, not to the first copy's.
+     */
+    @Test
+    fun `a repeated N_SO opens a CU of its own`() {
+        val (_, harvester) = dummyHarvester()
+        val records = listOf(
+            StabRecord(0, StabType.N_SO, 0, 0, 0L, "/usr/src/aout-gcc-2.6.3/./"),
+            StabRecord(1, StabType.N_SO, 0, 0, 0L, "libgcc2.c"),
+            StabRecord(2, StabType.N_SLINE, 0, 10, 0x0L, ""),
+            StabRecord(3, StabType.N_FUN, 0, 9, 0x0L, "__muldi3:F1"),
+            StabRecord(4, StabType.N_SO, 0, 0, 0x40L, "/usr/src/aout-gcc-2.6.3/./"),
+            StabRecord(5, StabType.N_SO, 0, 0, 0x40L, "libgcc2.c"),
+            StabRecord(6, StabType.N_SLINE, 0, 20, 0x40L, ""),
+            StabRecord(7, StabType.N_FUN, 0, 19, 0x40L, "__divdi3:F1"),
+        )
+
+        val harvest = harvester.harvest(records)
+
+        harvest.functions.associate { f -> f.name to f.lineEntries.map { it.line } } mustBe mapOf(
+            "__muldi3" to listOf(10),
+            "__divdi3" to listOf(20),
+        )
+    }
 }
