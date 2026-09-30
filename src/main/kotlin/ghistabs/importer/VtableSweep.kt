@@ -44,7 +44,7 @@ internal fun ClassApplier.sweepUnclaimedVtables() {
         }
         val leaf = canonTemplateName(qualified.leafName)
         val category = CategoryPath(ClassNaming.classDataTypesRoot, leaf)
-        val vftable = registry.getOrRegisterByName<Structure>(category, "${leaf}_vftable") {
+        val vftable = registry.getOrRegister<Structure>(category, "${leaf}_vftable") {
             StructureDataType(category, "${leaf}_vftable", 0, dtm)
         }
         // A class whose own group failed to resolve its vtable left its stab-typed slots here;
@@ -141,7 +141,7 @@ internal fun ClassApplier.layGcc2SecondaryVtables(
 private fun ClassApplier.internalVftable(leaf: String, i: Int, targets: List<Address>, abi: CxxAbi): Structure {
     val category = CategoryPath(CategoryPath(ClassNaming.classDataTypesRoot, leaf), "internal_$i")
     val name = "${leaf}_vftable_internal_$i"
-    val vftable = registry.getOrRegisterByName<Structure>(category, name) {
+    val vftable = registry.getOrRegister<Structure>(category, name) {
         StructureDataType(category, name, 0, dtm)
     }
     if (vftable.numComponents == 0) addSweptSlots(vftable, category, targets, abi)
@@ -194,7 +194,7 @@ internal fun ClassApplier.addSweptSlot(
     val funcDef = program.functionManager.getFunctionAt(target)
         ?.let { FunctionDefinitionDataType(category, name, it.signature, dtm) }
         ?: demangledDefinition(category, name, linkage)
-    vftable.add(PointerDataType(registry.registerByNameOver(funcDef), dtm), name, "$target")
+    vftable.add(PointerDataType(registry.registerOver(funcDef), dtm), name, "$target")
 }
 
 /** FunctionDefinition [name] carrying what [linkage] declares — the only type source for a slot

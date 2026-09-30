@@ -70,7 +70,7 @@ class DataTypeRegistry(
      */
     internal val allCreatedDataTypes get() = buildSet {
         addAll(byId.values)
-        for (bucket in byName.values) addAll(bucket)
+        addAll(registered)
     }
 
     /**
@@ -261,45 +261,48 @@ class DataTypeRegistry(
         }
     }
 
-    // ── By name: types with no stabs id of their own — typedefs, vftable and base-subobject structs,
-    // vftable slot FunctionDefinitions — keyed by name in [byName]. ──
+    // ── Without an id: types with no stabs id of their own — typedefs, vftable and base-subobject
+    // structs, vftable slot FunctionDefinitions. Found through the DTM (by path, in [getOrRegister]);
+    // [registered] only records that this import made or adopted them, for [allCreatedDataTypes]. ──
 
-    /** Name → the types registered under it; a name can hold several (overloads, `.conflict` forks). */
-    private val byName = LinkedHashMap<String, LinkedHashSet<DataType>>()
+    /**
+     * What this import registered without an id. Provenance only, never looked up by name: the DTM
+     * can't answer "is this ours". Types from analysis, the loader's archives and the demangler share
+     * its categories, and a re-import's type replaced or adopted in place keeps its earlier DTM id.
+     */
+    private val registered = LinkedHashSet<DataType>()
 
-    /** [resolveIntoDtm], filed by name in [byName]. Returns the DTM-resolved instance (may differ). */
-    internal fun registerByName(dt: DataType, handler: DataTypeConflictHandler = conflictHandler) =
-        dt.resolveIntoDtm(handler).also { byName.getOrPut(it.name) { LinkedHashSet() }.add(it) }
+    /** [resolveIntoDtm], recorded in [registered]. Returns the DTM-resolved instance (may differ). */
+    internal fun register(dt: DataType, handler: DataTypeConflictHandler = conflictHandler) =
+        dt.resolveIntoDtm(handler).also { registered.add(it) }
 
-    /** [registerByName] for a vftable slot's function definition, over an earlier import's: see [overHandler]. */
-    internal fun registerByNameOver(dt: DataType): DataType = registerByName(dt, overHandler)
+    /** [register] for a vftable slot's function definition, over an earlier import's: see [overHandler]. */
+    internal fun registerOver(dt: DataType): DataType = register(dt, overHandler)
 
     /**
      * Get-or-create a DTM-resident DataType of type [T] at `(category, name)`. One found there is
      * returned as it stands, and one an earlier import left is registered as this one's, with the slot
      * definitions it points at, so a re-import's registry reads as the first's did.
      */
-    internal inline fun <reified T : DataType> getOrRegisterByName(
+    internal inline fun <reified T : DataType> getOrRegister(
         category: CategoryPath,
         name: String,
         build: () -> T,
     ): T = when (val dt = dtm.getDataType(category, name)) {
-        is T -> dt.also { if (!isRegisteredByName(it)) adoptByName(it) }
-        else -> registerByName(build()) as T
+        is T -> adopt(dt)
+        else -> register(build()) as T
     }
-
-    internal fun isRegisteredByName(dt: DataType) = byName[dt.name]?.contains(dt) == true
 
     /**
      * [existing] registered as this import's, as it stands, with the function definitions its slots
      * point at. Kept rather than rebuilt: a swept vftable slot is typed off its target's signature,
      * which the earlier import has since typed, so rebuilding it would not give back what it was.
      */
-    internal fun <T : DataType> adoptByName(existing: T): T = existing.also {
-        byName.getOrPut(it.name) { LinkedHashSet() }.add(it)
+    internal fun <T : DataType> adopt(existing: T): T = existing.also {
+        if (!registered.add(it)) return it
         for (c in (it as? Composite)?.definedComponents.orEmpty()) {
             val fd = (c.dataType as? Pointer)?.dataType as? FunctionDefinition ?: continue
-            if (fd.categoryPath == it.categoryPath) adoptByName(fd)
+            if (fd.categoryPath == it.categoryPath) adopt(fd)
         }
     }
 }
