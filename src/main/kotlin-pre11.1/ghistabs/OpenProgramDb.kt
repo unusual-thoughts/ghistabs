@@ -1,4 +1,4 @@
-package ghistabs.test
+package ghistabs
 
 import db.DBConstants
 import db.DBHandle

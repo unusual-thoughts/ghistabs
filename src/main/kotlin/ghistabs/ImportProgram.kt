@@ -2,6 +2,7 @@ package ghistabs
 
 import ghidra.app.util.importer.MessageLog
 import ghidra.app.util.importer.ProgramLoader
+import ghidra.framework.store.db.PackedDatabase
 import ghidra.util.task.TaskMonitor
 import java.io.File
 
@@ -27,3 +28,20 @@ fun Any.loadProgram(binary: File, compiler: String? = "gcc", log: MessageLog? = 
                 LoadedProgram(program, this)
             }
         }
+
+/**
+ * Opens a packed program database (`.gzf`) as it was saved, analysis and all. Not through Ghidra's
+ * GzfLoader: that opens for upgrade, whose source-archive pass swaps any root typedef named `int`,
+ * `long`, `bool`… for the built-in and does it without the lock, so such a program never loads.
+ *
+ * `neverCache`: the database is unpacked to a private temp copy, so two runs can open one file.
+ */
+fun Any.loadPackedProgram(file: File, monitor: TaskMonitor = TaskMonitor.DUMMY): LoadedProgram {
+    val packed = PackedDatabase.getPackedDatabase(file, true, monitor)
+    return runCatching { LoadedProgram(openProgramDb(packed.open(monitor), this), this) }
+        .onFailure { packed.dispose() }
+        .getOrThrow()
+}
+
+/** Whether [file] is a packed database rather than a binary to import. */
+fun isPackedProgram(file: File) = file.extension.equals("gzf", ignoreCase = true)
