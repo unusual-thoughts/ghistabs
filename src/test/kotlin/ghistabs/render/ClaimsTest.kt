@@ -183,4 +183,49 @@ class ClaimsTest {
         // Three rows for five claims: 10, 11, 12, then the rest pile onto 12.
         out.placed.map { it.range.first }.sorted() mustBe listOf(10, 11, 12, 12, 12)
     }
+
+    /** Each row's text as the renderer writes it: placements in order, a row's fragments joined. */
+    private fun Allocation.text(): Map<Int, String> = placed
+        .flatMap { p -> fitRows(p.claim.rows, p.range).map { (row, r) -> row to r.text } }
+        .groupBy({ it.first }, { it.second })
+        .mapValues { (_, texts) -> texts.joinToString(" ") }
+
+    private fun body(line: Int, text: String, fit: Fit) =
+        Claim(Owner.FUNCTION_BODY, line, listOf(Row(text)), fit, anchoring = Anchoring.AFTER, limit = 32)
+
+    @Test
+    fun `two functions opening on one line are laid one after the other, not nested`() {
+        // gcc 12 dates Circle's implicit copy constructor and destructor both at the class's line, L31.
+        // Each is a one-row head and its statements; the heads used to reserve first, which put the
+        // destructor's `{` between the copy constructor's `{` and its body.
+        val claims = listOf(
+            body(31, "Circle::Circle(Circle *param_1) {", Fit.RIGID),
+            body(31, "Shape::Shape(this,param_1); return; }", Fit.ELASTIC),
+            body(31, "Circle::~Circle() {", Fit.RIGID),
+            body(31, "Shape::~Shape(this); return; }", Fit.ELASTIC),
+        )
+        allocate(claims, range = 1..40).text() mustBe mapOf(
+            31 to "Circle::Circle(Circle *param_1) {",
+            32 to "Shape::Shape(this,param_1); return; } Circle::~Circle() { Shape::~Shape(this); return; }",
+        )
+    }
+
+    @Test
+    fun `a declaration sharing an initializer's first row goes before it, not inside it`() {
+        // gcc 2.95 dates Shape's vtable and Shape's class record both at L29. The two are peers, so they
+        // share the row; the class used to land after `= {`, inside the brace-initializer.
+        val vtable = Claim(
+            Owner.GLOBAL,
+            29,
+            listOf(Row("__vtbl_ptr_type __vt_5Shape[3] = {"), Row("0x00000000,"), Row("0x08048e50, };")),
+            Fit.ELASTIC,
+        )
+        val shape = Claim(Owner.TYPE_BODY, 29, listOf(Row("class Shape { Kind kind; };")))
+        allocate(listOf(vtable, shape, claim(Owner.TYPEDEF, 33)), range = 1..40).text() mustBe mapOf(
+            29 to "class Shape { Kind kind; }; __vtbl_ptr_type __vt_5Shape[3] = {",
+            30 to "0x00000000,",
+            31 to "0x08048e50, };",
+            33 to "r0",
+        )
+    }
 }
