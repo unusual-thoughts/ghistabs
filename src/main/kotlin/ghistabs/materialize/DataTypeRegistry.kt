@@ -114,7 +114,7 @@ class DataTypeRegistry(
      * the group's member ids so a Ref resolved before the winner materializes pulls in that one.
      */
     internal fun LocatedType.seedPlaceholder() {
-        val placeholder = makePlaceholder(type, location.category, "fwd-decl", location.name).resolveOver()
+        val placeholder = makePlaceholder(type, location.category, "fwd-decl", location.name).resolveAgain()
         for (m in members) placeholders.putIfAbsent(m, placeholder)
     }
 

@@ -31,7 +31,7 @@ open class DtmRegistry(internal val dtm: DataTypeManager) {
      *
      * Only the type being resolved gets this: its dependencies go through [conflictHandler].
      */
-    private val overHandler = object : DataTypeConflictHandler() {
+    private val reimportHandler = object : DataTypeConflictHandler() {
         override fun resolveConflict(added: DataType, existing: DataType): ConflictResult = when {
             dtm.getID(existing) !in preexisting -> conflictHandler.resolveConflict(added, existing)
             added is FunctionDefinition && existing is FunctionDefinition -> ConflictResult.USE_EXISTING
@@ -56,8 +56,8 @@ open class DtmRegistry(internal val dtm: DataTypeManager) {
     protected fun DataType.resolveIntoDtm(handler: DataTypeConflictHandler = conflictHandler): DataType =
         dtm.resolve(this, handler)
 
-    /** [resolveIntoDtm] over an earlier import's type of the same kind: see [overHandler]. */
-    protected fun DataType.resolveOver(): DataType = resolveIntoDtm(overHandler)
+    /** [resolveIntoDtm] over an earlier import's type of the same kind: see [reimportHandler]. */
+    protected fun DataType.resolveAgain(): DataType = resolveIntoDtm(reimportHandler)
 
     /** What this import registered here: typedefs, vftable and base-subobject structs, slot definitions. */
     private val registered = LinkedHashSet<DataType>()
@@ -69,8 +69,8 @@ open class DtmRegistry(internal val dtm: DataTypeManager) {
     internal fun register(dt: DataType, handler: DataTypeConflictHandler = conflictHandler) =
         dt.resolveIntoDtm(handler).also { registered.add(it) }
 
-    /** [register] for a vftable slot's function definition, over an earlier import's: see [overHandler]. */
-    internal fun registerOver(dt: DataType): DataType = register(dt, overHandler)
+    /** [register] for a vftable slot's function definition, over an earlier import's: see [reimportHandler]. */
+    internal fun registerAgain(dt: DataType): DataType = register(dt, reimportHandler)
 
     /**
      * Get-or-create a DTM-resident DataType of type [T] at `(category, name)`. One found there is
