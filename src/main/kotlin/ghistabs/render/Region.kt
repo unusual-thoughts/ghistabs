@@ -127,7 +127,20 @@ class Region(private val ctx: RenderContext, val file: GhidraSourceFile?) {
             with(ctx) { p.body.type.renderDecl(asFree(p.body.name)) }
         }
         val list = params.joinToString().ifEmpty { definition()?.params.orEmpty() }
-        return "void $id($list) { " + "/* inlined into ${inliner.name} */"
+        val site = callSite(inliner)?.let { " at $it" }.orEmpty()
+        return "void $id($list) { " + "/* inlined into ${inliner.name}$site */"
+    }
+
+    /**
+     * `gzio.c:89`: the [inliner]'s own line gcc was on where this stretch starts, which is the line
+     * that called it. One caller can inline the same lines several times; this tells the instances
+     * apart. Null where the inliner has no N_SLINE of its own before it.
+     */
+    private fun callSite(inliner: Func): String? {
+        val own = with(ctx.renderer.effectiveSource) { inliner.source() } ?: return null
+        val start = firstAddr ?: return null
+        val line = inliner.lineEntries.filter { it.source == own && it.addr <= start }.maxByOrNull { it.addr }
+        return line?.let { "${own.filename}:${it.line}" }
     }
 
     /**
