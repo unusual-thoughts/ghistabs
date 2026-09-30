@@ -45,6 +45,15 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
     private var currentCu: SourceFile.CUSource? = null
 
     /**
+     * N_SLINEs waiting for the N_FUN that follows them, once this CU's first N_SLINE came before its
+     * first function: gcc emits a function's stab after its code unless the target defines
+     * `DBX_FUNCTION_FIRST` (dbxout.c `dbxout_function`), which 2.6.3's svr4.h sets and no a.out config
+     * does. Null while the CU puts each N_FUN first. A CU with lines and no function (MinGW 3.4.5's
+     * `cygwin.asm`) also lands here, its lines joining no function either way.
+     */
+    private var linesAhead: MutableList<LineEntry>? = null
+
+    /**
      * A function being accumulated: its record-order params and its block tree
      */
     private inner class FunctionScope(val func: Func) {
@@ -179,6 +188,7 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
                 currentCu = SourceFile.CUSource(rec.name, pendingDirectory)
                 pendingDirectory = null
                 currentSourceForLines = null
+                linesAhead = null
                 rec.boundary(cu.identity)
             }
 
@@ -236,15 +246,22 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
      * absolute (gcc/ELF) — [AddressResolver.stabAddress] disambiguates against the function start.
      */
     fun lineEntry(rec: StabRecord) = currentCu?.let {
-        LineEntry(rec.desc, resolver.stabAddress(rec.value, currentScope?.func?.addr, this), lineSource).also {
+        if (linesAhead == null && scopesByCu[cu].isNullOrEmpty()) linesAhead = mutableListOf()
+        // Ahead of its function, a value can't be relative to it.
+        val scope = currentScope.takeIf { linesAhead == null }
+        LineEntry(rec.desc, resolver.stabAddress(rec.value, scope?.func?.addr, this), lineSource).also {
             lineEntriesByFile.getOrPut(lineSource) { mutableListOf() } += it
-            currentScope?.lines?.add(it)
+            (linesAhead ?: scope?.lines)?.add(it)
         }
     } ?: null.also { outsideCu(rec) }
 
     /** Named N_FUN: `name` is `mangled:descriptor`, `value` entry address, `desc` declaration line (under -gstabs+) */
     fun openFunction(func: FunctionSymbol) {
         currentScope = FunctionScope(func).also { scopesByCu.getOrPut(cu) { mutableListOf() } += it }
+        linesAhead?.let {
+            currentScope?.lines?.addAll(it)
+            it.clear()
+        }
     }
 
     /** N_PSYM / register-param N_RSYM: the function's own, so no block resolution needed. */
