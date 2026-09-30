@@ -52,7 +52,6 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
      * `cygwin.asm`) also lands here, its lines joining no function either way.
      */
     private var linesAhead: MutableList<LineEntry>? = null
-    private var cuOpenedFunction = false
 
     /**
      * A function being accumulated: its record-order params and its block tree
@@ -190,7 +189,6 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
                 pendingDirectory = null
                 currentSourceForLines = null
                 linesAhead = null
-                cuOpenedFunction = false
                 rec.boundary(cu.identity)
             }
 
@@ -248,7 +246,7 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
      * absolute (gcc/ELF) — [AddressResolver.stabAddress] disambiguates against the function start.
      */
     fun lineEntry(rec: StabRecord) = currentCu?.let {
-        if (!cuOpenedFunction && linesAhead == null) linesAhead = mutableListOf()
+        if (linesAhead == null && scopesByCu[cu].isNullOrEmpty()) linesAhead = mutableListOf()
         // Ahead of its function, a value can't be relative to it.
         val scope = currentScope.takeIf { linesAhead == null }
         LineEntry(rec.desc, resolver.stabAddress(rec.value, scope?.func?.addr, this), lineSource).also {
@@ -260,7 +258,6 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
     /** Named N_FUN: `name` is `mangled:descriptor`, `value` entry address, `desc` declaration line (under -gstabs+) */
     fun openFunction(func: FunctionSymbol) {
         currentScope = FunctionScope(func).also { scopesByCu.getOrPut(cu) { mutableListOf() } += it }
-        cuOpenedFunction = true
         linesAhead?.let {
             currentScope?.lines?.addAll(it)
             it.clear()
