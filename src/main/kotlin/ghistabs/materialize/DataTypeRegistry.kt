@@ -1,15 +1,7 @@
 package ghistabs.materialize
 
 import ghidra.app.util.demangler.Demangled
-import ghidra.program.model.data.CategoryPath
-import ghidra.program.model.data.Composite
-import ghidra.program.model.data.DataType
-import ghidra.program.model.data.DataTypeConflictHandler
-import ghidra.program.model.data.DataTypeManager
-import ghidra.program.model.data.FunctionDefinition
-import ghidra.program.model.data.Pointer
-import ghidra.program.model.data.Structure
-import ghidra.program.model.data.Union
+import ghidra.program.model.data.*
 import ghidra.util.task.TaskMonitor
 import ghistabs.Demangler
 import ghistabs.demanglerPath
