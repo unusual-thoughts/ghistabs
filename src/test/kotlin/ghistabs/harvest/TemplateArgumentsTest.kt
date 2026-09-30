@@ -54,7 +54,7 @@ class TemplateArgumentsTest : AbstractGhidraHeadlessIntegrationTest() {
         name = mangled,
         addr = GenericAddressResolver.buildAddress(0x1000),
         decl = SymbolDecl.Function(mangled, FunctionScope.GLOBAL, TypeDecl.Builtin(-1)),
-        cu = cu,
+        origin = Origin(cu, 0, sourceFileOf("hello.cc")),
         params = listOf(
             Symbol(
                 StabType.N_PSYM,

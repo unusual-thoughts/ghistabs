@@ -105,7 +105,7 @@ data class Type(
     val name: String? get() = named?.name
 
     /** Where the source declared this type: its name's record when it has one, else its body's. */
-    private val declaredAt get() = named?.origin ?: origin
+    val declaredAt get() = named?.origin ?: origin
 
     /** Source line from N_LSYM `desc`, null when the emitter left it 0 (no -gstabs+). */
     val line get() = declaredAt.line
@@ -272,7 +272,9 @@ data class Func(
     val name: String,
     val addr: Address,
     val decl: SymbolDecl.Function<GlobalTypeId>,
-    val cu: SourceFile.CUSource,
+    /** The N_FUN's record, with the function's own file: its [entry]'s, which is
+     *  where [declLine] (the N_FUN's desc) counts from. Not the N_SOL in effect at the N_FUN. */
+    val origin: Origin,
     // Both assigned once, by BlockTreeBuilder.finish, when the function's last record has been seen:
     // a function-scope symbol's source isn't knowable until then, so there is no window in which
     // these hold records that are about to be corrected.
@@ -288,9 +290,19 @@ data class Func(
     // null = size not derivable from stabs (no N_LBRAC/N_RBRAC scope, no end-marker N_FUN).
     // Distinct from a genuine 0. Used by TypeResolver for header-hint address ranges.
     val sizeBytes: ULong? = null,
-    // N_FUN's desc: DECL_SOURCE_LINE, null unless built with -gstabs+.
-    val declLine: Int? = null,
 ) {
+    val cu get() = origin.cu
+
+    /** N_FUN's desc: DECL_SOURCE_LINE, null unless built with -gstabs+. */
+    val declLine get() = origin.line
+
+    /** The line entry at the N_FUN's address (the lowest-address one when none sits there), whose source is
+     *  the function's own file. Its line is where the body opens, not [declLine]. */
+    val entry get() = lineEntries.entry
+
+    /** Of these line entries (this function's, or a subset), the one at [addr], else the lowest-address one. */
+    val List<LineEntry>.entry get() = firstOrNull { it.addr == addr } ?: minByOrNull { it.addr.offset }
+
     val demangledName by lazy { Demangler.name(decl.name) }
 
     /**

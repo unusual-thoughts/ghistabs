@@ -151,6 +151,23 @@ class HarvesterTest {
         func.sizeBytes.mustBe(100UL, "Function size should be 100")
     }
 
+    /** gcc 12 and modern ELF emitters write no end-marker N_FUN: the outermost N_RBRAC sizes the function. */
+    @Test
+    fun `a function without an end marker is sized by its last N_RBRAC`() {
+        val (sink, harvester) = dummyHarvester()
+        val records = listOf(
+            StabRecord(index = 0, type = StabType.N_SO, other = 0, desc = 0, value = 0L, name = "foo.c"),
+            StabRecord(index = 1, type = StabType.N_FUN, other = 0, desc = 0, value = 0L, name = "f:F(0,1)"),
+            StabRecord(index = 2, type = StabType.N_LBRAC, other = 0, desc = 0, value = 0L, name = ""),
+            StabRecord(index = 3, type = StabType.N_RBRAC, other = 0, desc = 0, value = 0x40L, name = ""),
+        )
+
+        val harvest = harvester.harvest(records)
+
+        sink.parseErrors mustBe 0
+        harvest.functions.single().sizeBytes mustBe 0x40UL
+    }
+
     /**
      * Test: N_LSYM tagged type (T prefix) goes to typeAsts, not to symbolsByCu.
      *

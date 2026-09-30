@@ -36,12 +36,10 @@ class EffectiveSource(
 
     private fun declarerOf(type: Type) = type.declKey()?.let { declarers(it) }
 
-    /** A function's source: lowest-address SLINE, else the class-decl source (gcc-implicit methods). */
+    /** A function's source: its [Func.entry]'s, else the class-decl source (gcc-implicit methods). */
     fun Func.source() = when {
         isSyntheticInit -> sources.fold(cu.identity)
-
-        else -> lineEntries.minByOrNull { it.addr.offset }?.source
-            ?: declaringClassSource()?.let(sources::fold)
+        else -> entry?.source ?: declaringClassSource()?.let(sources::fold)
     }
 
     /**
