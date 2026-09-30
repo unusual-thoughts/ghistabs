@@ -3,6 +3,7 @@
 package ghistabs
 
 import ghidra.app.cmd.function.CallDepthChangeInfo
+import ghidra.app.util.NamespaceUtils
 import ghidra.app.util.PseudoDisassembler
 import ghidra.app.util.bin.FileByteProvider
 import ghidra.app.util.bin.InputStreamByteProvider
@@ -16,6 +17,9 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.mem.MemoryBlock
 import ghidra.program.model.pcode.PcodeOp
 import ghidra.program.model.scalar.Scalar
+import ghidra.program.model.symbol.Namespace
+import ghidra.program.model.symbol.SourceType
+import ghidra.program.model.symbol.SymbolTable
 import ghidra.util.task.TaskMonitor
 import ghistabs.parse.dbxArch
 import ghistabs.parse.frameRegister
@@ -98,6 +102,28 @@ fun FunctionManager.getFunctionWrapping(addr: Address) = getFunctionContaining(a
 fun FunctionManager.inHull(addr: Address) = getFunctionWrapping(addr) != null
 
 val Function.isMethod get() = parentNamespace is GhidraClass
+
+/** Creates a hierarchy of namespaces, named [parts], in [parent] or Global namespace, with [sourceType],
+ *  the final of which will be a [GhidraClass]
+ */
+fun SymbolTable.buildClassNamespaces(
+    parts: List<String>,
+    sourceType: SourceType = SourceType.IMPORTED,
+    parent: Namespace? = null,
+): GhidraClass {
+    var ns = parent
+    for ((i, part) in parts.withIndex()) {
+        val isLast = i == parts.lastIndex
+        val existing = getNamespace(part, ns)
+        ns = when (existing) {
+            null if isLast -> createClass(ns, part, sourceType)
+            null -> createNameSpace(ns, part, sourceType)
+            else if (isLast && existing !is GhidraClass) -> NamespaceUtils.convertNamespaceToClass(existing)
+            else -> existing
+        }
+    }
+    return ns as GhidraClass
+}
 
 /**
  * [Program] rather than `DomainObject`: 11.1 folded `UndoableDomainObject`'s transaction API into

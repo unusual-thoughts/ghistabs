@@ -6,6 +6,7 @@ import ghidra.program.model.address.Address
 import ghidra.program.model.data.*
 import ghidra.program.model.symbol.Namespace
 import ghistabs.Demangler
+import ghistabs.buildClassNamespaces
 import ghistabs.materialize.cpp.ClassNaming
 import ghistabs.materialize.cpp.abi.*
 import ghistabs.materialize.cpp.describeVxTable
@@ -56,7 +57,7 @@ internal fun ClassApplier.sweepUnclaimedVtables() {
             vftable.describeVxTable(leaf, ClassNaming.VFTABLE, 0L.takeIf { abi.hasRttiHeader })
         }
 
-        val ns = buildNamespaceChain(qualified.nameSegments)
+        val ns = symtab.buildClassNamespaces(qualified.nameSegments)
         val addressPoint = program.layVtable(shape, vftable, qualified, ns, abi = abi)
         debug("vtable-reconstructed", "${targets.size} slot(s) typed from targets", addressPoint, qualified)
         // Itanium packs a class's secondaries into the same record, walkable from the primary's
@@ -68,7 +69,12 @@ internal fun ClassApplier.sweepUnclaimedVtables() {
     // to find the base's vptr in, so these go untagged.
     for ((cls, tables) in gcc2SecondaryVtables) {
         if (tables.all { it.address in claimedVtables }) continue
-        layGcc2SecondaryVtables(cls, canonTemplateName(cls.leafName), buildNamespaceChain(cls.nameSegments), null)
+        layGcc2SecondaryVtables(
+            cls,
+            canonTemplateName(cls.leafName),
+            symtab.buildClassNamespaces(cls.nameSegments),
+            null,
+        )
     }
 }
 
