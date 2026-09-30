@@ -33,6 +33,13 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
     }
 
     internal fun runOnRecords(stabs: StabReader.Result): ImportResult {
+        if (stabs.unresolvedNames > 0) {
+            warn(
+                "stabstr-out-of-range",
+                "${stabs.unresolvedNames} records name an offset past the string table; read as nameless",
+                count = stabs.unresolvedNames.toLong(),
+            )
+        }
         // Pass A — parse + harvest
         val harvest = ctx.harvester().harvest(stabs.records)
         // The three indexes over it, constructed together and handed out by half: resolution to the
