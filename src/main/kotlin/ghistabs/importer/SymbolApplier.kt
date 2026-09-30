@@ -468,7 +468,9 @@ class SymbolApplier(private val ctx: ImportContext<*>, private val registry: Dat
                     }
 
                     val name = scopedName(func, reglocalName) {
-                        it.firstUseOffset == firstUse && it.register == reg
+                        // Base registers: Ghidra narrows a register variable to its type's width, so the
+                        // `CL` an earlier import left for a `char` in ECX is this same slot.
+                        it.firstUseOffset == firstUse && it.register?.baseRegister == reg.baseRegister
                     } ?: run {
                         debug("reglocal-skipped-dup-local")
                         return

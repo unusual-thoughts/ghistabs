@@ -7,6 +7,7 @@ import ghidra.program.model.listing.Program
 import ghidra.util.Msg
 import ghidra.util.task.TaskMonitor
 import ghistabs.LoadedProgram
+import ghistabs.loadPackedProgram
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption.ATOMIC_MOVE
@@ -37,16 +38,10 @@ object AnalysisCache {
     fun restore(fixture: File, consumer: Any): LoadedProgram? {
         val file = entry(fixture)
         if (policy != "auto" || !file.exists()) return null
-        // neverCache: parallel forks share the packed file, not an unpacking of it that one of them
-        // would hold the lock on.
-        val packed = runCatching { PackedDatabase.getPackedDatabase(file, true, TaskMonitor.DUMMY) }
-            .onFailure { Msg.warn(this, "analysis cache: cannot unpack $file, re-analyzing ($it)") }
-            .getOrNull() ?: return null
-        return runCatching { LoadedProgram(openProgramDb(packed.open(TaskMonitor.DUMMY), consumer), consumer) }
-            .onFailure {
-                packed.dispose()
-                Msg.warn(this, "analysis cache: cannot open $file, re-analyzing ($it)")
-            }
+        // neverCache (in loadPackedProgram): parallel forks share the packed file, not an unpacking
+        // of it that one of them would hold the lock on.
+        return runCatching { consumer.loadPackedProgram(file) }
+            .onFailure { Msg.warn(this, "analysis cache: cannot open $file, re-analyzing ($it)") }
             .onSuccess {
                 Msg.info(this, "analysis cache: restored $file")
             }
