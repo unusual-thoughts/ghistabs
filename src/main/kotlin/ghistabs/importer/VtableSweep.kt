@@ -1,4 +1,4 @@
-package ghistabs.materialize.cpp
+package ghistabs.importer
 
 import ghidra.app.util.demangler.DemangledDataType
 import ghidra.app.util.demangler.DemangledFunction
@@ -6,7 +6,10 @@ import ghidra.program.model.address.Address
 import ghidra.program.model.data.*
 import ghidra.program.model.symbol.Namespace
 import ghistabs.Demangler
+import ghistabs.materialize.cpp.ClassNaming
 import ghistabs.materialize.cpp.abi.*
+import ghistabs.materialize.cpp.describeVxTable
+import ghistabs.materialize.cpp.vfptrOffsetOfBase
 import ghistabs.parse.canonTemplateName
 import ghistabs.parse.leafName
 import ghistabs.parse.nameSegments

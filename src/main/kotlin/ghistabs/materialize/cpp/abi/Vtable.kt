@@ -5,14 +5,12 @@ import ghidra.program.model.data.PointerDataType
 import ghidra.program.model.data.Structure
 import ghidra.program.model.listing.CommentType
 import ghidra.program.model.listing.Program
-import ghidra.program.model.scalar.Scalar
 import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.SourceType
 import ghidra.program.model.symbol.Symbol
 import ghistabs.Demangler
 import ghistabs.forceCreateData
 import ghistabs.materialize.cpp.ClassNaming
-import ghistabs.readAs
 import ghistabs.readPointer
 
 /** Upper bound on vbase/vcall-offset words scanned before giving up on locating the rtti header. */
@@ -63,7 +61,7 @@ private fun Program.shapeOf(start: Address, rttiSlot: Address?): VtableShape {
  *
  * Falls back to the undifferentiated label when the stab declares no virtual base — either the class
  * genuinely has none and this is a swept class we know nothing about, or the count disagrees, which
- * [ghistabs.materialize.cpp.ClassApplier] reports separately.
+ * [ghistabs.importer.ClassApplier] reports separately.
  */
 private fun prefixKind(i: Int, total: Int, virtualBases: List<String>): String {
     val vcalls = total - virtualBases.size
