@@ -222,6 +222,14 @@ fun FileRenderer.regionsOf(func: Func, cLines: List<DecompLine>): List<Region> =
  * body, not of any one file — gcc gives a brace row no N_SLINE, and the block it closes may have
  * been opened by code from any file the function inlined — so every view can carry it, and every
  * view balances, because the body they were split out of did.
+ *
+ * Except in the view of a file [func] merely inlined from. There the dropped regions are the caller's
+ * code around each stretch, and the blocks they open and close are the caller's: folded on, zlib's
+ * `gz_open` left `stdlib.h`'s `_malloc` copies ending `{{{ }}}}` once [wrapAsDefinition] balanced
+ * them. Keeping only the regions inside the stretch's block doesn't do: stabs gives a block one
+ * address range, and where gcc 3.4 scheduled the caller's code into it that range takes in caller
+ * code too, one `streambuf` L 315 copy going from `{{{` to `{{{{{{{{{{{{`. [wrapAsDefinition] pads
+ * whatever the stretch's own rows leave open.
  */
 fun FileRenderer.dropInlined(regions: List<Region>, func: Func): List<Region> = buildList {
     var marks = ""
@@ -286,7 +294,9 @@ fun FileRenderer.dropInlined(regions: List<Region>, func: Func): List<Region> = 
             // contended for rows and, outranking declarations, evicted them: a
             // `class iterator_traits<…>` lost its line to an `inlines atomicity.h L 51`. Left
             // anchorless instead it sorted to the end of the file, 200 rows of bare markers.
-            depth += r.lines.sumOf { l -> l.braces.sumOf { if (it.char == '{') 1 else -1 } }
+            if (calls) {
+                depth += r.lines.sumOf { l -> l.braces.sumOf { if (it.char == '{') 1 else -1 } }
+            }
             val call = if (calls) r.pseudoCall(func, renderer.decompile(func).flow, ::entryAddrOf) else null
             (call ?: r.labelOrNull()?.let { "/* ⇐ inlines $it */" })?.let { marks += " $it" }
             continue
@@ -325,14 +335,16 @@ fun List<Region>.wrapAsDefinition(func: Func): List<Region> =
     chunkedBy { it.pseudoName() to it.instanceBlock(func) }.flatMap { run ->
         val first = run.first()
         for (r in run) r.lines.replaceAll { it.copy(text = it.renameThis(SELF)) }
-        first.lines.add(0, DecompLine.synthetic(first.definitionHead(func)))
+        // The body balanced on its own, the head's `{` left out: counted in, a stretch opening
+        // `__size = 1; }` closed the head there and left the rest of the stretch at file scope.
         val (openers, closers) = braceFix(
             run.asSequence().flatMap { r ->
                 r.lines.asSequence().flatMap { it.braces }.map { it.char }
             },
         )
+        first.lines.add(0, DecompLine.synthetic(first.definitionHead(func)))
         if (openers > 0) first.lines.add(1, DecompLine.synthetic("{".repeat(openers)))
-        if (closers > 0) run.last().lines += DecompLine.synthetic("}".repeat(closers))
+        run.last().lines += DecompLine.synthetic("}".repeat(closers + 1))
         run
     }
 
