@@ -97,6 +97,32 @@ class DataTypeRegistry(
     // RENAME_AND_ADDs two genuinely-distinct non-empty types, like DEFAULT_HANDLER).
     private val conflictHandler = DataTypeConflictHandler.REPLACE_EMPTY_STRUCTS_OR_RENAME_AND_ADD_HANDLER
 
+    /** Ids of the types in the DTM before this import: an earlier import's, and analysis's own. */
+    private val preexisting = dtm.allDataTypes.asSequence().mapTo(HashSet()) { dtm.getID(it) }
+
+    /**
+     * [conflictHandler], except against a type of the same kind that predates this import. That is an
+     * earlier import's: a re-import (`Tools > Stabs > Re-import`, or a saved program run again) builds
+     * the same types again, and [conflictHandler] would fork a `.conflict` beside each, which every use
+     * then points at. A struct, union or enum is reset in place to what this import builds. A function
+     * definition is kept as it stands: a swept vftable slot is typed off its target's signature, which
+     * that import has since typed, so what this one builds is not what it was.
+     *
+     * Only the type being resolved gets this: its dependencies go through [conflictHandler].
+     */
+    private val overHandler = object : DataTypeConflictHandler() {
+        override fun resolveConflict(added: DataType, existing: DataType): ConflictResult = when {
+            dtm.getID(existing) !in preexisting -> conflictHandler.resolveConflict(added, existing)
+            added is FunctionDefinition && existing is FunctionDefinition -> ConflictResult.USE_EXISTING
+            existing.isSameKindAs(added) -> ConflictResult.REPLACE_EXISTING
+            else -> conflictHandler.resolveConflict(added, existing)
+        }
+
+        override fun shouldUpdate(source: DataType, local: DataType) = false
+
+        override fun getSubsequentHandler() = conflictHandler
+    }
+
     internal val rttiStructs by lazy { Rtti(dtm) }
 
     // ── The only writers of byId / placeholders / xrefStubs. [cache] sets the authoritative
@@ -146,34 +172,19 @@ class DataTypeRegistry(
 
     /** Resolve [this] into the DTM under the shared conflict handler; returns the DTM-resident instance
      *  (may differ from [this]). No id/name bookkeeping — for stubs whose id lands in [byId] later. */
-    private fun DataType.resolveIntoDtm(): DataType = dtm.resolve(this, conflictHandler)
+    private fun DataType.resolveIntoDtm(handler: DataTypeConflictHandler = conflictHandler): DataType =
+        dtm.resolve(this, handler)
 
-    /**
-     * [resolveIntoDtm], except that a type of the same kind already at this path is reset to [this] in
-     * place and returned. That type is an earlier import's: a re-import (`Tools > Stabs > Re-import`,
-     * or a saved program run again) builds the same types again, and resolving an empty cycle-break
-     * stub over the filled one takes RENAME_AND_ADD — a `.conflict` every use then points at.
-     */
-    private fun DataType.resolveOver(): DataType = dtm.getDataType(categoryPath, name)
-        ?.takeIf { it.isSameKindAs(this) }
-        ?.also { it.replaceWith(this) }
-        ?: resolveIntoDtm()
+    /** [resolveIntoDtm] over an earlier import's type of the same kind: see [overHandler]. */
+    private fun DataType.resolveOver(): DataType = resolveIntoDtm(overHandler)
 
-    /**
-     * [register] for a vftable slot's function definition. One an earlier import left at the same path
-     * is [adopt]ed as it stands: a swept slot is typed off its target's signature, which that import has
-     * since typed, so [register] would fork a `.conflict` beside it.
-     */
-    internal fun registerOver(dt: DataType): DataType = dtm.getDataType(dt.categoryPath, dt.name)
-        ?.takeIf { it.isSameKindAs(dt) && (it in adopted || !isRegistered(it)) }
-        ?.let { adopt(it) }
-        ?: register(dt)
+    /** [register] for a vftable slot's function definition, over an earlier import's: see [overHandler]. */
+    internal fun registerOver(dt: DataType): DataType = register(dt, handler = overHandler)
 
     private fun DataType.isSameKindAs(other: DataType) = when (other) {
         is Structure -> this is Structure
         is Union -> this is Union
         is GhidraEnum -> this is GhidraEnum
-        is FunctionDefinition -> this is FunctionDefinition
         else -> false
     }
 
@@ -181,12 +192,13 @@ class DataTypeRegistry(
      * [resolveIntoDtm] + remember. Returns the DTM-resolved instance (may differ). With an [id],
      * caches it under [id] for [dataTypeFor]; id-less, buckets it by name in extrasByName.
      */
-    internal fun register(dt: DataType, id: GlobalTypeId? = null) = dt.resolveIntoDtm().also { resolved ->
-        when (id) {
-            null -> extrasByName.getOrPut(resolved.name) { LinkedHashSet() }.add(resolved)
-            else -> cache(id, resolved)
+    internal fun register(dt: DataType, id: GlobalTypeId? = null, handler: DataTypeConflictHandler = conflictHandler) =
+        dt.resolveIntoDtm(handler).also { resolved ->
+            when (id) {
+                null -> extrasByName.getOrPut(resolved.name) { LinkedHashSet() }.add(resolved)
+                else -> cache(id, resolved)
+            }
         }
-    }
 
     /**
      * Get-or-create a DTM-resident DataType of type [T] at `(category, name)`. One found there is
@@ -207,16 +219,12 @@ class DataTypeRegistry(
      * which the earlier import has since typed, so rebuilding it would not give back what it was.
      */
     internal fun <T : DataType> adopt(existing: T): T = existing.also {
-        adopted += it
         extrasByName.getOrPut(it.name) { LinkedHashSet() }.add(it)
         for (c in (it as? Structure)?.definedComponents.orEmpty()) {
             val fd = (c.dataType as? Pointer)?.dataType as? FunctionDefinition ?: continue
             if (fd.categoryPath == it.categoryPath) adopt(fd)
         }
     }
-
-    /** What [adopt] took over from an earlier import, which a later [registerOver] may take again. */
-    private val adopted = mutableSetOf<DataType>()
 
     /**
      * Id → DataType, resolved lazily. Returns the cached type or its in-flight cycle-break
