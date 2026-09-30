@@ -695,4 +695,38 @@ class HarvesterTest {
             "inflate_mask" to sourceFileOf("/zlib/infblock.c"),
         )
     }
+
+    /**
+     * gcc 2.6.3 a.out writes a function's N_SLINEs before its N_FUN: `final` emits the code and its
+     * lines, then `dbxout_function` the N_FUN, since no a.out config defines `DBX_FUNCTION_FIRST`.
+     * `zlib_aout_gcc263.o`, records 46–66 and 124–166: `adler32`'s lines, `N_FUN adler32`, then the
+     * next CU's `compress2` and `compress` the same way.
+     */
+    @Test
+    fun `N_SLINEs ahead of the first N_FUN of a CU belong to the N_FUN that follows them`() {
+        val (_, harvester) = dummyHarvester()
+        val records = listOf(
+            StabRecord(3, StabType.N_SO, 0, 0, 0L, "/zlib/"),
+            StabRecord(4, StabType.N_SO, 0, 0, 0L, "adler32.c"),
+            StabRecord(46, StabType.N_SLINE, 0, 25, 0x0L, ""),
+            StabRecord(65, StabType.N_SLINE, 0, 48, 0x12cL, ""),
+            StabRecord(66, StabType.N_FUN, 0, 22, 0x0L, "adler32:F5"),
+            StabRecord(81, StabType.N_SO, 0, 0, 0x138L, "/zlib/"),
+            StabRecord(82, StabType.N_SO, 0, 0, 0x138L, "compress.c"),
+            StabRecord(124, StabType.N_SLINE, 0, 27, 0x148L, ""),
+            StabRecord(125, StabType.N_SLINE, 0, 28, 0x160L, ""),
+            StabRecord(147, StabType.N_FUN, 0, 22, 0x148L, "compress2:F1"),
+            StabRecord(163, StabType.N_SLINE, 0, 66, 0x1f8L, ""),
+            StabRecord(165, StabType.N_SLINE, 0, 68, 0x213L, ""),
+            StabRecord(166, StabType.N_FUN, 0, 62, 0x1f8L, "compress:F1"),
+        )
+
+        val harvest = harvester.harvest(records)
+
+        harvest.functions.associate { f -> f.name to f.lineEntries.map { it.line to it.source } } mustBe mapOf(
+            "adler32" to listOf(25 to sourceFileOf("/zlib/adler32.c"), 48 to sourceFileOf("/zlib/adler32.c")),
+            "compress2" to listOf(27 to sourceFileOf("/zlib/compress.c"), 28 to sourceFileOf("/zlib/compress.c")),
+            "compress" to listOf(66 to sourceFileOf("/zlib/compress.c"), 68 to sourceFileOf("/zlib/compress.c")),
+        )
+    }
 }
