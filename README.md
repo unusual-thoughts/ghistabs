@@ -152,14 +152,15 @@ questions. Requires the importer to have run first.
 
 - **Stabs Decompilation** (`.decomp`) is the *readable* view, and declarations give way to code.
   Within each function's line span, Ghidra's decompiled statements are laid out K&R-indented, each
-  tagged `// ⇐ L NN` with the source line its instructions came from - and everything the
+  tagged `/* ⇐ L NN */` with the source line its instructions came from - and everything the
   decompilation already shows is cleared out: address annotations, brace delimiters and local
   declarations are dropped outright, stale fragments sharing a line with real content are purged,
   and anything else stranded on those lines (a type gcc mis-filed here) is demoted to a
   `// stray:` comment carrying its original line's provenance, never code. Real file-scope globals
   keep their line. `#include` lines are reconstructed and trailing blank lines trimmed.
   `--elide-sjlj` (default) additionally strips gcc's SjLj exception scaffolding; `--no-elide-sjlj`
-  keeps it. Both are no-ops on DWARF-EH (ELF) binaries.
+  keeps it. Both are no-ops on DWARF-EH (ELF) binaries. `--no-line-numbers` drops the `⇐` tags,
+  leaving declarations' trailing `// L NN` tags as they are.
 
 So a line that carried three speculative declarations in the skeleton typically carries one
 statement of decompilation in `decomp`, with the rest either gone or demoted to comments. Read the
@@ -240,15 +241,17 @@ Import options, on the commands that actually import (`dump`, `skeleton`, `decom
 | `--vfptr-model MODEL`     | `SPLIT_BASE` | `SPLIT_BASE` or `INHERITED`; see "Virtual function pointer model" above                                                              |
 | `--source-root DIR`       |              | Local checkout of sources the binary was built from, to correlate against (repeatable).                                              |
 | `--disable-analyzer NAME` |              | Turn off every analyzer whose name contains `NAME` (repeatable). Render the same binary with and without one to A/B what it changes. |
+| `--save-db FILE`          |              | Save the analyzed program, after the render if any, as a Ghidra packed database (`.gzf`) to open or import in Ghidra.                |
 
 Render options (`skeleton` and `decomp` only):
 
-| Option               | Default  | Effect                                                                          |
-| -------------------- | -------- | ------------------------------------------------------------------------------- |
-| `-d`, `--target-dir` | required | Output directory; one file per source, named from the source path.              |
-| `--var-storage`      | off      | Annotate locals and parameters with their storage.                              |
-| `--line-aligned`     | off      | Source line n at output line n, blank rows and all, instead of collapsing runs. |
-| `--elide-sjlj`       | on       | `decomp` only; see above.                                                       |
+| Option               | Default  | Effect                                                                                              |
+| -------------------- | -------- | --------------------------------------------------------------------------------------------------- |
+| `-d`, `--target-dir` | required | Output directory; one file per source, named from the source path.                                  |
+| `--var-storage`      | off      | Annotate locals and parameters with their storage.                                                  |
+| `--line-aligned`     | off      | Source line n at output line n, blank rows and all, instead of collapsing runs.                     |
+| `--elide-sjlj`       | on       | `decomp` only; see above.                                                                           |
+| `--line-numbers`     | on       | `decomp` only. `--no-line-numbers` drops the `/* ⇐ L NN */` tags in front of decompiled statements. |
 
 ## Bibliography
 ### Stabs format
