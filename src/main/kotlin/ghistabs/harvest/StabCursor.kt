@@ -4,7 +4,6 @@ import ghidra.program.model.address.Address
 import ghidra.program.model.address.AddressRange
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.parse.*
-import ghistabs.plus
 import ghistabs.rangeUntil
 
 /**
@@ -254,12 +253,9 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
      */
     fun bracket(rec: StabRecord) {
         currentScope?.apply {
-            val cuStart = cuContext?.takeIf { it.linesAhead != null && rec.value < func.addr.offset }
-                ?.let { it.start ?: resolver.buildAddress(0) }
-            val addr = cuStart?.let {
-                debug("stab-value-cu-relative")
-                it + rec.value
-            } ?: resolver.stabAddress(rec.value, func.addr, this@StabCursor)
+            // A CU at 0 needs no rebasing: its labels are already addresses, at or past the function.
+            val cuStart = cuContext?.takeIf { it.linesAhead != null }?.start
+            val addr = resolver.stabAddress(rec.value, func.addr, this@StabCursor, base = cuStart)
             val level = rec.desc.takeIf { it > 0 }
             when (rec.type) {
                 // open a lexical scope, which owns the locals emitted just before it.
