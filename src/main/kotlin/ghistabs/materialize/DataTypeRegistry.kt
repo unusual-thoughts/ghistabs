@@ -128,7 +128,7 @@ class DataTypeRegistry(
     internal fun DataType.markXRefStub(): DataType = apply { xrefStubs.add(this) }
 
     /** [resolveIntoDtm], cached under [id] for [dataTypeFor]. Returns the DTM-resolved instance (may differ). */
-    internal fun registerById(dt: DataType, id: GlobalTypeId) = dt.resolveIntoDtm().also { cache(id, it) }
+    private fun registerById(dt: DataType, id: GlobalTypeId) = dt.resolveIntoDtm().also { cache(id, it) }
 
     /**
      * Id → DataType, resolved lazily. Returns the cached type or its in-flight cycle-break
