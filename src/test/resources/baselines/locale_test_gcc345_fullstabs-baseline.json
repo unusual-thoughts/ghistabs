@@ -203,8 +203,8 @@
             "max": 40618
         },
         "harvest-sources": {
-            "min": 130,
-            "max": 130
+            "min": 122,
+            "max": 122
         },
         "harvest-statics": {
             "min": 18,
@@ -533,12 +533,12 @@
             "max": 9551
         },
         "sourcemap-files": {
-            "min": 244,
-            "max": 244
+            "min": 236,
+            "max": 236
         },
         "sourcemap-folded-files": {
-            "min": 17,
-            "max": 17
+            "min": 9,
+            "max": 9
         },
         "stab-value-absolute": {
             "min": 785,

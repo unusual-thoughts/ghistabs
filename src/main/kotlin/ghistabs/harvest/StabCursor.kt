@@ -163,9 +163,12 @@ class StabCursor(private val resolver: AddressResolver, sink: DiagnosticSink) :
         }
     }
 
-    /** N_SOL: switch the file N_SLINEs are attributed to, without leaving the CU. */
+    /**
+     * N_SOL: switch the file N_SLINEs are attributed to, without leaving the CU. gcc spells the main
+     * file as its filename N_SO did, without the directory N_SO, so that spelling is the CU itself.
+     */
     fun switchSource(rec: StabRecord) {
-        currentSourceForLines = resolved(rec.name)
+        currentSourceForLines = rec.name.takeUnless { it == cuContext?.cu?.filename }?.let(::resolved)
         rec.boundary(lineSource)
     }
 

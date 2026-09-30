@@ -697,6 +697,34 @@ class HarvesterTest {
     }
 
     /**
+     * gcc spells the main file in an N_SOL as it spelled the filename N_SO, without the directory
+     * N_SO before it. `zlib_aout_gcc263.o`, records 1580–1629: `gzseek` inlines `stdlib.h`, then
+     * `N_SOL gzio.c`.
+     */
+    @Test
+    fun `an N_SOL spelling the CU's filename returns to the CU`() {
+        val (_, harvester) = dummyHarvester()
+        val records = listOf(
+            StabRecord(993, StabType.N_SO, 0, 0, 0x1f78L, "/zlib/"),
+            StabRecord(994, StabType.N_SO, 0, 0, 0x1f78L, "gzio.c"),
+            StabRecord(1580, StabType.N_SLINE, 0, 683, 0x2b59L, ""),
+            StabRecord(1581, StabType.N_SOL, 0, 0, 0x2b59L, "/usr/i486-linuxaout/include/stdlib.h"),
+            StabRecord(1582, StabType.N_SLINE, 0, 220, 0x2b59L, ""),
+            StabRecord(1585, StabType.N_SOL, 0, 0, 0x2b66L, "gzio.c"),
+            StabRecord(1586, StabType.N_SLINE, 0, 683, 0x2b66L, ""),
+            StabRecord(1629, StabType.N_FUN, 0, 661, 0x2b08L, "gzseek:F3"),
+        )
+
+        val harvest = harvester.harvest(records)
+
+        harvest.functions.single().lineEntries.map { it.line to it.source } mustBe listOf(
+            683 to sourceFileOf("/zlib/gzio.c"),
+            220 to sourceFileOf("/usr/i486-linuxaout/include/stdlib.h"),
+            683 to sourceFileOf("/zlib/gzio.c"),
+        )
+    }
+
+    /**
      * gcc 2.6.3 a.out writes a function's N_SLINEs before its N_FUN: `final` emits the code and its
      * lines, then `dbxout_function` the N_FUN, since no a.out config defines `DBX_FUNCTION_FIRST`.
      * `zlib_aout_gcc263.o`, records 46–66 and 124–166: `adler32`'s lines, `N_FUN adler32`, then the
