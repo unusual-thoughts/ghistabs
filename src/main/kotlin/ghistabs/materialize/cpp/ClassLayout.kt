@@ -4,6 +4,8 @@ import ghidra.program.model.data.*
 import ghidra.program.model.gclass.ClassUtils
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.index.LocatedType
+import ghistabs.index.TypeGraph
+import ghistabs.index.demangledClassPath
 import ghistabs.materialize.DataTypeRegistry
 import ghistabs.materialize.reportHoles
 import ghistabs.materialize.resolveRef
@@ -171,6 +173,21 @@ internal val LocatedType.classBody get() = type.body as TypeDecl.Aggregate<Globa
 internal val LocatedType.className get() = location.name
 
 /**
+ * The namespace chain gcc *stated* for this class, the class itself last: off a member's mangled name,
+ * or the `this` parameter of an out-of-line one, on any of the types located here. Null when none says.
+ */
+internal fun LocatedType.statedClassPath(types: TypeGraph): List<String>? =
+    (sequenceOf(type) + members.mapNotNull { types.byId(it) })
+        .firstNotNullOfOrNull { it.demangledClassPath() ?: types.classPathByThisParam[it.id] }
+
+/**
+ * Where this class's vftable goes, as [ClassNaming.vftableCategory] takes it: the stated scope, or none,
+ * and then [className]. The class pass refiles it if the namespace it builds says otherwise.
+ */
+internal fun LocatedType.vftablePath(types: TypeGraph): List<String> =
+    statedClassPath(types)?.dropLast(1).orEmpty() + className
+
+/**
  * Every located C++ class, bases before the classes that embed or derive from them: a class's layout
  * reads its bases' finished ones, and SPLIT_BASE reads a base's own placed `{vfptr}`.
  */
@@ -245,7 +262,7 @@ private class ClassLayout(val registry: DataTypeRegistry, val vfptrs: VfptrPlace
         val placement = vfptrs ?: return
         val polyBase = types.firstPolymorphicBase(located.classBody)
         if (polyBase == null && !located.classBody.declaresVptr) return
-        placement.place(struct, located.className, located.classBody, polyBase)
+        placement.place(struct, located.vftablePath(types), located.classBody, polyBase)
     }
 
     private fun layVirtualInheritance(

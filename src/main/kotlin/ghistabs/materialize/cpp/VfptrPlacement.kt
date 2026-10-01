@@ -19,16 +19,18 @@ internal class VfptrPlacement(private val registry: DataTypeRegistry, private va
     private val dtm = registry.dtm
 
     /**
-     * Put `{vfptr}` where the stab says the vptr is, as a pointer to [className]'s own vftable.
+     * Put `{vfptr}` where the stab says the vptr is, as a pointer to the own vftable of the class
+     * [classPath] names, its namespace path with the class itself last.
      * [classBody] is the class being laid, [structDt] its Structure, and [polyBase] the caller's
      * [ghistabs.index.TypeGraph.firstPolymorphicBase], so the base graph is walked once per class.
      */
     fun place(
         structDt: Structure,
-        className: String,
+        classPath: List<String>,
         classBody: TypeDecl.Aggregate<GlobalTypeId>,
         polyBase: TypeDecl.Aggregate.Base<GlobalTypeId>?,
     ) {
+        val className = classPath.last()
         val vfptrName = ClassUtils.VFPTR
         val parserVptrOffset = vptrOffsetBytesOf(classBody)
 
@@ -52,7 +54,7 @@ internal class VfptrPlacement(private val registry: DataTypeRegistry, private va
         when (action) {
             is VfptrAction.SkipInheritedFromBase -> if (model == VfptrModel.SPLIT_BASE && splitBase(
                     structDt,
-                    className,
+                    classPath,
                     targetOffset,
                     polyBase?.ownerOfInheritedVptr(structDt) ?: existingComp,
                 )
@@ -65,7 +67,7 @@ internal class VfptrPlacement(private val registry: DataTypeRegistry, private va
             is VfptrAction.AlreadyCanonical -> return
 
             is VfptrAction.Insert -> {
-                val ptrToVtable = ownVfptr(className)
+                val ptrToVtable = ownVfptr(classPath)
                 structDt.insertAtOffset(
                     action.offsetBytes,
                     ptrToVtable,
@@ -77,7 +79,7 @@ internal class VfptrPlacement(private val registry: DataTypeRegistry, private va
             }
 
             is VfptrAction.Replace -> {
-                val ptrToVtable = ownVfptr(className)
+                val ptrToVtable = ownVfptr(classPath)
                 structDt.replaceAtOffset(
                     action.offsetBytes,
                     ptrToVtable,
@@ -111,7 +113,7 @@ internal class VfptrPlacement(private val registry: DataTypeRegistry, private va
     }
 
     /** {vfptr} points at the function-pointer array at the vtable's address point, not at the record. */
-    private fun ownVfptr(className: String) = PointerDataType.getPointer(registry.vftableOf(className), dtm)
+    private fun ownVfptr(classPath: List<String>) = PointerDataType.getPointer(registry.vftableOf(classPath), dtm)
 
     /**
      * Give this class its own `{vfptr}` where a polymorphic base subobject would otherwise own it:
@@ -127,10 +129,11 @@ internal class VfptrPlacement(private val registry: DataTypeRegistry, private va
      */
     private fun splitBase(
         structDt: Structure,
-        className: String,
+        classPath: List<String>,
         vptrOffset: Int,
         baseComp: DataTypeComponent?,
     ): Boolean {
+        val className = classPath.last()
         val baseDt = baseComp?.dataType as? Structure ?: return false
         val ptr = dtm.dataOrganization.pointerSize
         // Where the vptr sits *within* the base, read off the base itself rather than assumed: the
@@ -148,7 +151,7 @@ internal class VfptrPlacement(private val registry: DataTypeRegistry, private va
         val tail = split.tail?.let { baseFieldsRun(baseDt, it.from, it.until) }
         if (head == null && tail == null) return false
 
-        val vfptr = ownVfptr(className)
+        val vfptr = ownVfptr(classPath)
         return runCatching {
             head?.let { structDt.replaceAtOffset(baseOff, it, it.length, baseComp.fieldName, baseComp.comment) }
             structDt.replaceAtOffset(baseOff + vptrInBase, vfptr, vfptr.length, ClassUtils.VFPTR, "vtable pointer")
@@ -189,12 +192,13 @@ internal class VfptrPlacement(private val registry: DataTypeRegistry, private va
 }
 
 /**
- * `<Class>_vftable` under `/ClassDataTypes/<Class>/`, the function-pointer array `{vfptr}` points at,
- * where `RecoveredClassHelper` and shift-S round-trip expect it. Empty until the class pass fills it.
+ * `<Class>_vftable` under `/ClassDataTypes/<ns>/<Class>/`, the function-pointer array `{vfptr}` points
+ * at, where `RecoveredClassHelper` and shift-S round-trip expect it. [classPath] is the class's
+ * namespace path, the class itself last. Empty until the class pass fills it.
  */
-internal fun DataTypeRegistry.vftableOf(className: String): Structure {
-    val category = ClassNaming.vftableCategory(className)
-    val name = "${className}_vftable"
+internal fun DataTypeRegistry.vftableOf(classPath: List<String>): Structure {
+    val category = ClassNaming.vftableCategory(classPath)
+    val name = "${classPath.last()}_vftable"
     return getOrRegister<Structure>(category, name) { StructureDataType(category, name, 0, dtm) }
 }
 

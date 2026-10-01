@@ -85,14 +85,14 @@ open class DtmRegistry(internal val dtm: DataTypeManager) {
 
     /**
      * [existing] registered as this import's, as it stands, with the function definitions its slots
-     * point at. Kept rather than rebuilt: a swept vftable slot is typed off its target's signature,
+     * point at in its category or below it (a secondary's sit in an `internal_<i>` one). Kept rather than rebuilt: a swept vftable slot is typed off its target's signature,
      * which the earlier import has since typed, so rebuilding it would not give back what it was.
      */
     internal fun <T : DataType> adopt(existing: T): T = existing.also {
         if (!registered.add(it)) return it
         for (c in (it as? Composite)?.definedComponents.orEmpty()) {
             val fd = (c.dataType as? Pointer)?.dataType as? FunctionDefinition ?: continue
-            if (fd.categoryPath == it.categoryPath) adopt(fd)
+            if (fd.categoryPath.isAncestorOrSelf(it.categoryPath)) adopt(fd)
         }
     }
 }
