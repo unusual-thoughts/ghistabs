@@ -41,24 +41,27 @@ class Rtti(private val dtm: DataTypeManager) {
     private fun StructureDataType.intoDtm(): DataType =
         dtm.getDataType(categoryPath, name) ?: dtm.resolve(this, DataTypeConflictHandler.KEEP_HANDLER)
 
-    val classTypeInfoStructure by lazy { classTypeInfo().intoDtm() }
-    val siClassTypeInfoStructure by lazy { siClassTypeInfo(classTypeInfoStructure).intoDtm() }
-    val baseClassTypeInfoStructure by lazy { baseClassTypeInfo(classTypeInfoStructure).intoDtm() }
-
-    fun vmiClassTypeInfoStructure(numBaseClasses: Int) =
-        vmiClassTypeInfo(numBaseClasses, baseClassTypeInfoStructure).intoDtm()
-
     /**
-     * The same layouts left out of the DTM, for reading a typeinfo object off memory ([RttiReader],
-     * through [ghistabs.readAt]) without the write a resolve is.
+     * The layouts left out of the DTM, for reading a typeinfo object off memory ([RttiReader], through
+     * [ghistabs.readAt]) without the write a resolve is. The `*Structure`s below are these resolved.
      */
     inner class Unresolved {
-        private val classTi = classTypeInfo()
-        val siClassTypeInfo = siClassTypeInfo(classTi)
-        private val baseClassTi = baseClassTypeInfo(classTi)
+        val classTypeInfo = classTypeInfo()
+        val siClassTypeInfo = siClassTypeInfo(classTypeInfo)
+        val baseClassTypeInfo = baseClassTypeInfo(classTypeInfo)
 
-        fun vmiClassTypeInfo(numBaseClasses: Int) = vmiClassTypeInfo(numBaseClasses, baseClassTi)
+        fun vmiClassTypeInfo(numBaseClasses: Int) = vmiClassTypeInfo(numBaseClasses, baseClassTypeInfo)
     }
+
+    val unresolved by lazy { Unresolved() }
+
+    // Resolving a layout resolves the unresolved ones it points at too, onto the copy already in the
+    // DTM when there is one (KEEP_HANDLER).
+    val classTypeInfoStructure by lazy { unresolved.classTypeInfo.intoDtm() }
+    val siClassTypeInfoStructure by lazy { unresolved.siClassTypeInfo.intoDtm() }
+    val baseClassTypeInfoStructure by lazy { unresolved.baseClassTypeInfo.intoDtm() }
+
+    fun vmiClassTypeInfoStructure(numBaseClasses: Int) = unresolved.vmiClassTypeInfo(numBaseClasses).intoDtm()
 
     private fun classTypeInfo() =
         StructureDataType(ClassNaming.classDataTypesRoot, "ClassTypeInfoStructure", 0, dtm).apply {

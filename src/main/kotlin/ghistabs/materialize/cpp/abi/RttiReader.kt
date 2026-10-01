@@ -1,10 +1,11 @@
 package ghistabs.materialize.cpp.abi
 
 import ghidra.program.model.address.Address
-import ghidra.program.model.listing.Data
 import ghidra.program.model.listing.Program
 import ghidra.program.model.scalar.Scalar
 import ghidra.program.model.symbol.Symbol
+import ghistabs.flag
+import ghistabs.get
 import ghistabs.parse.Access
 import ghistabs.readAt
 import ghistabs.readPointer
@@ -30,14 +31,14 @@ class RttiReader(private val program: Program) {
     private val ptr = program.defaultPointerSize
     private val symtab = program.symbolTable
 
-    private val layouts = Rtti(program.dataTypeManager).Unresolved()
+    private val layouts = Rtti(program.dataTypeManager).unresolved
 
     /** Null when [zti] isn't a class typeinfo this can read, rather than a class with no bases. */
     fun basesOf(zti: Address): List<Base>? = runCatching {
         when (kindOf(zti)) {
             TypeinfoKind.CLASS -> emptyList()
 
-            TypeinfoKind.SI -> program.readAt(zti, layouts.siClassTypeInfo)?.field(Rtti.BASE_TYPE)
+            TypeinfoKind.SI -> program.readAt(zti, layouts.siClassTypeInfo)?.get(Rtti.BASE_TYPE)
                 ?.let { classAt(it.address) }
                 ?.let { listOf(Base(it, isVirtual = false, access = Access.PUBLIC)) }
 
@@ -48,24 +49,19 @@ class RttiReader(private val program: Program) {
     }.getOrNull()
 
     private fun vmiBases(zti: Address): List<Base>? {
-        val count = program.readAt(zti, layouts.vmiClassTypeInfo(1))?.field(Rtti.NUM_BASES)
+        val count = program.readAt(zti, layouts.vmiClassTypeInfo(1))?.get(Rtti.NUM_BASES)
             ?.let { (it.value as? Scalar)?.unsignedValue?.toInt() }
         if (count == null || count !in 1..MAX_BASES) return null
-        val array = program.readAt(zti, layouts.vmiClassTypeInfo(count))?.field(Rtti.BASES) ?: return null
+        val array = program.readAt(zti, layouts.vmiClassTypeInfo(count))?.get(Rtti.BASES) ?: return null
         return (0 until array.numComponents).map { i ->
-            val entry = array.getComponent(i)
+            val entry = array[i] ?: return null
             Base(
-                entry.field(Rtti.BASE_TYPE_IN_ENTRY)?.let { classAt(it.address) } ?: return null,
+                entry[Rtti.BASE_TYPE_IN_ENTRY]?.let { classAt(it.address) } ?: return null,
                 isVirtual = entry.flag(Rtti.IS_VIRTUAL),
                 access = if (entry.flag(Rtti.IS_PUBLIC)) Access.PUBLIC else Access.PRIVATE,
             )
         }
     }
-
-    private fun Data.field(name: String): Data? =
-        (0 until numComponents).asSequence().mapNotNull { getComponent(it) }.firstOrNull { it.fieldName == name }
-
-    private fun Data.flag(name: String) = (field(name)?.value as? Scalar)?.unsignedValue == 1L
 
     // The vptr is the vtable's address point, two words past its `_ZTV` label.
     private fun kindOf(zti: Address) =
