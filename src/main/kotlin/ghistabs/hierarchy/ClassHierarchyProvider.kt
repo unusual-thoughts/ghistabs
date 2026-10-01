@@ -199,17 +199,21 @@ class ClassHierarchyProvider(private val plugin: Plugin) :
     }
 
     private fun openSelected() {
-        val selected = tree.selectionPath?.lastPathComponent
-        if (selected is MemberNode) {
-            tool.getService(GoToService::class.java)?.goTo(selected.member.address)
-            return
-        }
-        val info = (selected as? ClassNode)?.info ?: return
-        val struct = info.struct
-        val address = info.address
-        when {
-            struct != null -> tool.getService(DataTypeManagerService::class.java)?.edit(struct)
-            address != null -> tool.getService(GoToService::class.java)?.goTo(address)
+        val p = program ?: return
+        fun goTo(at: String?) = at?.let(p.addressFactory::getAddress)
+            ?.let { tool.getService(GoToService::class.java)?.goTo(it) }
+        when (val selected = tree.selectionPath?.lastPathComponent) {
+            is MemberNode -> goTo(selected.member.address)
+
+            is ClassNode -> {
+                val info = selected.info ?: return
+                val struct = info.structId?.let(p.dataTypeManager::getDataType)
+                if (struct != null) {
+                    tool.getService(DataTypeManagerService::class.java)?.edit(struct)
+                } else {
+                    goTo(info.address)
+                }
+            }
         }
     }
 

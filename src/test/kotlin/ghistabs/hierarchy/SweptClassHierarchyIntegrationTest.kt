@@ -83,7 +83,7 @@ class SweptClassHierarchyIntegrationTest : AbstractGhidraHeadlessIntegrationTest
         }
         val hierarchy = ClassHierarchy.of(program)
         fun cls(name: String) = hierarchy.classes.single { it.qualifiedName == name }
-        fun bases(name: String) = cls(name).bases.map { Triple(it.target?.qualifiedName, it.isVirtual, it.access) }
+        fun bases(name: String) = cls(name).bases.map { Triple(hierarchy[it]?.qualifiedName, it.isVirtual, it.access) }
 
         for (name in listOf("Foo", "Bar", "Baz")) cls(name).origin mustBe Origin.SWEPT_RTTI
         bases("Foo") mustBe emptyList()

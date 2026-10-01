@@ -8,6 +8,7 @@ import ghistabs.integration.FeatureFixtureTest
 import ghistabs.parse.Access
 import ghistabs.runTransaction
 import ghistabs.test.*
+import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.Assertions.fail
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.params.ParameterizedTest
@@ -43,14 +44,14 @@ class ClassHierarchyIntegrationTest : FeatureFixtureTest() {
         val diamond = hierarchy.cls("Diamond")
         diamond.origin mustBe Origin.STABS
         diamond.baseSpelling() mustBe listOf("public Left", "public Right", "public Named")
-        diamond.bases.all { it.target != null }.mustBeTrue("Diamond's bases resolve to classes: ${diamond.bases}")
+        diamond.bases.all { hierarchy[it] != null }.mustBeTrue("Diamond's bases resolve to classes: ${diamond.bases}")
 
         for (side in listOf("Left", "Right")) hierarchy.cls(side).baseSpelling() mustBe listOf("virtual public Base")
-        hierarchy.cls("Circle").bases.map { it.target?.qualifiedName to it.access } mustBe
+        hierarchy.cls("Circle").bases.map { hierarchy[it]?.qualifiedName to it.access } mustBe
             listOf("Shape" to Access.PUBLIC)
         // `Base` has no member functions, so the stabs make it a plain struct, not a class: gcc ≥ 4.1
         // emits no typeinfo for it either, and the base is only a name.
-        hierarchy.cls("Left").bases.single().target?.qualifiedName mustBeIn setOf(null, "Base")
+        hierarchy[hierarchy.cls("Left").bases.single()]?.qualifiedName mustBeIn setOf(null, "Base")
     }
 
     /**
@@ -132,6 +133,16 @@ class ClassHierarchyIntegrationTest : FeatureFixtureTest() {
             "derives virtually" mustBeIn left.toolTip
         }
         left.children.map { it.name } mustBe listOf("Diamond")
+    }
+
+    @ParameterizedTest
+    @MethodSource("hellos")
+    fun `the hierarchy serializes and reads back equal`(fixture: String) {
+        load(fixture)
+        val hierarchy = ClassHierarchy.of(program)
+        val json = Json.encodeToString(hierarchy)
+        Json.decodeFromString<ClassHierarchy>(json) mustBe hierarchy
+        "\"Diamond\"" mustBeIn json
     }
 
     /** What [replaceRoot] carries over: a path by names, found again in the rebuilt tree. */

@@ -33,9 +33,9 @@ class ClassHierarchyRootNode(
     val inverted: Boolean = false,
 ) : GTreeNode() {
     init {
-        val filed = if (inverted) hierarchy.classes.filter { it.isBasal } else hierarchy.classes
+        val filed = if (inverted) hierarchy.classes.filter(hierarchy::isBasal) else hierarchy.classes
         val classNodes = filed.associate {
-            it.path to ClassNode(it, inverted).also { n -> n.showMembers = showMembers }
+            it.path to ClassNode(hierarchy, it, inverted).also { n -> n.showMembers = showMembers }
         }
         val folders = mutableMapOf<List<String>, NamespaceNode>()
         val children = mutableMapOf<List<String>, MutableList<GTreeNode>>()
@@ -85,19 +85,23 @@ class NamespaceNode(private val name: String) : GTreeNode() {
  * virtuality and access after its name (`Left (virtual)`).
  */
 class ClassNode private constructor(
+    private val hierarchy: ClassHierarchy,
     val info: ClassInfo?,
     val edge: ClassHierarchy.BaseRef?,
     private val inverted: Boolean,
 ) : GTreeLazyNode() {
-    constructor(info: ClassInfo, inverted: Boolean = false) : this(info, null, inverted)
+    constructor(hierarchy: ClassHierarchy, info: ClassInfo, inverted: Boolean = false) :
+        this(hierarchy, info, null, inverted)
 
     /** Classes declared inside this one; only a class filed under its namespace has them. */
     internal val nested = mutableListOf<GTreeNode>()
 
     private fun linked(): List<ClassNode> = if (inverted) {
-        info?.derived.orEmpty().map { ClassNode(it.cls, it.clause, true).also { n -> n.showMembers = showMembers } }
+        info?.let(hierarchy::derivedOf).orEmpty().map {
+            ClassNode(hierarchy, it.cls, it.clause, true).also { n -> n.showMembers = showMembers }
+        }
     } else {
-        info?.bases.orEmpty().map { ClassNode(it.target, it, false) }
+        info?.bases.orEmpty().map { ClassNode(hierarchy, hierarchy[it], it, false) }
     }
 
     /** Set off by a root built without members. */
@@ -139,7 +143,7 @@ class ClassNode private constructor(
         append("<html>")
         append(escape(info?.qualifiedName ?: edge?.name.orEmpty()))
         // The typedef shortening pass renamed its struct; the namespace keeps the long spelling.
-        info?.struct?.name?.takeIf { it != info.name }?.let { append("<br>shortened: ").append(escape(it)) }
+        info?.structName?.takeIf { it != info.name }?.let { append("<br>shortened: ").append(escape(it)) }
         val origin = when (info?.origin) {
             Origin.STABS -> "bases from the stabs"
             Origin.SWEPT_RTTI -> "no stabs: vtable swept, bases from its typeinfo"
@@ -156,8 +160,9 @@ class ClassNode private constructor(
         if (info?.vftable == null) info?.typeinfo?.let { append("<br>typeinfo at ").append(it) }
     }
 
-    override fun isLeaf() = (if (inverted) info?.derived.isNullOrEmpty() else info?.bases.isNullOrEmpty()) &&
-        membersOf().isEmpty() && nested.isEmpty()
+    override fun isLeaf() =
+        (if (inverted) info?.let(hierarchy::derivedOf).isNullOrEmpty() else info?.bases.isNullOrEmpty()) &&
+            membersOf().isEmpty() && nested.isEmpty()
 
     // Two bases of one class can share a name (a direct and an indirect `Base`); never merge them.
     override fun equals(other: Any?) = this === other

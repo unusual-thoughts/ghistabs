@@ -24,6 +24,7 @@ import ghistabs.materialize.cpp.abi.typeinfoClass
 import ghistabs.parse.Access
 import ghistabs.parse.nameSegments
 import ghistabs.readPointer
+import kotlinx.serialization.Serializable
 
 /**
  * Every class the program knows, with its direct bases, as the Class Hierarchy window shows them.
@@ -32,8 +33,12 @@ import ghistabs.readPointer
  * virtuality and access, gcc 2.x included; and, for a class the stabs never described but the vtable
  * sweep laid a `vftable` for, its Itanium typeinfo, when the program has one. A class with neither is
  * still listed, as a root, so the sweep's finds all show.
+ *
+ * Plain data, so it serializes: classes name each other by namespace id ([get] resolves one), and the
+ * program's objects are kept as what finds them again, an address's text and a datatype id.
  */
-class ClassHierarchy private constructor(val classes: List<ClassInfo>) {
+@Serializable
+data class ClassHierarchy(val classes: List<ClassInfo>) {
     enum class Origin {
         /** Described by the stabs: the import recorded its bases. */
         STABS,
@@ -45,16 +50,18 @@ class ClassHierarchy private constructor(val classes: List<ClassInfo>) {
         SWEPT,
     }
 
-    /** A direct base: the class it names, if the program has one for it, else only its [name]. */
-    data class BaseRef(val name: String, val target: ClassInfo?, val isVirtual: Boolean, val access: Access?)
+    /** A direct base: the class it names ([targetId]), if the program has one for it, else only its [name]. */
+    @Serializable
+    data class BaseRef(val name: String, val targetId: Long?, val isVirtual: Boolean, val access: Access?)
 
     /**
      * A function or label in the class's namespace, as the Symbol Tree lists it. An overloaded function
      * is spelled with its [parameters], `this` and the return type left out so overloads line up.
      */
+    @Serializable
     data class Member(
         val name: String,
-        val address: Address,
+        val address: String,
         val kind: MemberKind,
         val signature: String? = null,
         val parameters: String? = null,
@@ -77,41 +84,54 @@ class ClassHierarchy private constructor(val classes: List<ClassInfo>) {
     /** A class deriving from another, by the base clause naming that other. */
     data class Derived(val cls: ClassInfo, val clause: BaseRef)
 
-    class ClassInfo(
-        val namespace: GhidraClass,
+    @Serializable
+    data class ClassInfo(
+        /** Its [GhidraClass] namespace's id. */
+        val id: Long,
+        /** That namespace's path, outermost first. */
+        val path: List<String>,
         val origin: Origin,
         /** Where its primary `vftable` label sits, for a polymorphic class. */
-        val vftable: Address?,
+        val vftable: String?,
         /** Its `_ZTI` typeinfo object, when the binary has one. */
-        val typeinfo: Address?,
-        /** The struct the stabs laid for it, under the class's own name. */
-        val struct: DataType?,
+        val typeinfo: String?,
+        /** The struct the stabs laid for it, by datatype id, and its name (shorter, once typedef shortening ran). */
+        val structId: Long?,
+        val structName: String?,
         /** A vftable slot holds `__cxa_pure_virtual` (gcc 2.x: `__pure_virtual`). */
         val isAbstract: Boolean,
         /** Its functions and labels: vtables first, then the other ABI objects, then the rest by name. */
         val members: List<Member>,
+        /** Its direct bases, in declaration order. */
+        val bases: List<BaseRef>,
     ) {
-        val path: List<String> = namespace.getPathList(true).toList()
-        val name: String get() = namespace.name
-        val qualifiedName: String get() = namespace.getName(true)
-
-        var bases: List<BaseRef> = emptyList()
-            internal set
-
-        /** The classes that name this one as a direct base, each with that base clause. */
-        var derived: List<Derived> = emptyList()
-            internal set
-
-        /** No base the program has a class for: a root of the inverted tree. */
-        val isBasal: Boolean get() = bases.none { it.target != null }
+        val name: String get() = path.last()
+        val qualifiedName: String get() = path.joinToString("::")
 
         /** Where a double-click goes: the vtable, else the typeinfo. */
-        val address: Address? get() = vftable ?: typeinfo
+        val address: String? get() = vftable ?: typeinfo
 
         override fun toString() = qualifiedName
     }
 
-    val byNamespaceId: Map<Long, ClassInfo> = classes.associateBy { it.namespace.id }
+    private val byId by lazy { classes.associateBy { it.id } }
+
+    operator fun get(id: Long): ClassInfo? = byId[id]
+
+    /** The class [base] names, when the program has one. */
+    operator fun get(base: BaseRef): ClassInfo? = base.targetId?.let(byId::get)
+
+    private val derived by lazy {
+        classes.flatMap { cls -> cls.bases.mapNotNull { b -> this[b]?.let { it.id to Derived(cls, b) } } }
+            .groupBy({ it.first }, { it.second })
+            .mapValues { (_, list) -> list.sortedBy { it.cls.qualifiedName } }
+    }
+
+    /** The classes that name [cls] as a direct base, each with that base clause. */
+    fun derivedOf(cls: ClassInfo): List<Derived> = derived[cls.id].orEmpty()
+
+    /** No base the program has a class for: a root of the inverted tree. */
+    fun isBasal(cls: ClassInfo) = cls.bases.none { this[it] != null }
 
     companion object {
         fun of(program: Program): ClassHierarchy = Builder(program).build()
@@ -136,52 +156,48 @@ class ClassHierarchy private constructor(val classes: List<ClassInfo>) {
         }
 
         fun build(): ClassHierarchy {
-            val infos = linkedMapOf<Long, ClassInfo>()
+            val namespaces = linkedMapOf<Long, GhidraClass>()
+            val typeinfos = mutableMapOf<Long, Address>()
             for (ns in classNamespaces()) {
-                val origin = when {
-                    ns.id in record -> Origin.STABS
-                    else -> null
-                }
-                val vftable = vftableOf(ns)
                 val typeinfo = typeinfoByClass[ns.getPathList(true).toList()]
-                if (origin == null && vftable == null && typeinfo == null) continue
-                infos[ns.id] = ClassInfo(
-                    ns,
-                    origin ?: if (typeinfo != null) Origin.SWEPT_RTTI else Origin.SWEPT,
-                    vftable,
-                    typeinfo,
-                    structOf(ns),
-                    vftable?.let(::hasPureVirtualSlot) == true,
-                    membersOf(ns),
+                if (ns.id !in record && vftableOf(ns) == null && typeinfo == null) continue
+                namespaces[ns.id] = ns
+                typeinfo?.let { typeinfos[ns.id] = it }
+            }
+            val byPath = namespaces.values.associateBy { it.getPathList(true).toList() }
+            val classes = namespaces.values.map { ns ->
+                val vftable = vftableOf(ns)
+                val typeinfo = typeinfos[ns.id]
+                val struct = structOf(ns)
+                ClassInfo(
+                    id = ns.id,
+                    path = ns.getPathList(true).toList(),
+                    origin = when {
+                        ns.id in record -> Origin.STABS
+                        typeinfo != null -> Origin.SWEPT_RTTI
+                        else -> Origin.SWEPT
+                    },
+                    vftable = vftable?.toString(),
+                    typeinfo = typeinfo?.toString(),
+                    structId = struct?.let(program.dataTypeManager::getID)?.takeIf { it >= 0 },
+                    structName = struct?.name,
+                    isAbstract = vftable?.let(::hasPureVirtualSlot) == true,
+                    members = membersOf(ns),
+                    bases = basesOf(ns, typeinfo, namespaces.keys) { path -> byPath[path]?.id },
                 )
             }
-            val byPath = infos.values.associateBy { it.path }
-            for (info in infos.values) {
-                info.bases = when (info.origin) {
-                    Origin.STABS -> record.getValue(info.namespace.id).map { base ->
-                        val target = base.namespaceId?.let { infos[it] }
-                        val name = target?.qualifiedName
-                            ?: base.namespaceId?.let { (symtab.getSymbol(it)?.`object` as? Namespace)?.getName(true) }
-                            ?: base.name ?: "?"
-                        BaseRef(name, target, base.isVirtual, base.access)
-                    }
-
-                    else -> info.typeinfo?.let(rtti::basesOf).orEmpty().map { base ->
-                        BaseRef(base.className, byPath[base.className.nameSegments], base.isVirtual, base.access)
-                    }
-                }
-            }
-            linkDerived(infos.values)
-            return ClassHierarchy(infos.values.sortedBy { it.qualifiedName })
+            return ClassHierarchy(classes.sortedBy { it.qualifiedName })
         }
 
-        fun linkDerived(infos: Collection<ClassInfo>) {
-            val derived = infos.flatMap { info ->
-                info.bases.mapNotNull { b -> b.target?.let { it to Derived(info, b) } }
+        fun basesOf(ns: GhidraClass, typeinfo: Address?, classIds: Set<Long>, idOf: (List<String>) -> Long?) =
+            record[ns.id]?.map { base ->
+                val target = base.namespaceId?.takeIf { it in classIds }
+                val name = base.namespaceId?.let { (symtab.getSymbol(it)?.`object` as? Namespace)?.getName(true) }
+                    ?: base.name ?: "?"
+                BaseRef(name, target, base.isVirtual, base.access)
+            } ?: typeinfo?.let(rtti::basesOf).orEmpty().map { base ->
+                BaseRef(base.className, idOf(base.className.nameSegments), base.isVirtual, base.access)
             }
-                .groupBy({ it.first }, { it.second })
-            for ((base, list) in derived) base.derived = list.sortedBy { it.cls.qualifiedName }
-        }
 
         fun classNamespaces(): Sequence<GhidraClass> = symtab.classNamespaces.asSequence()
 
@@ -200,10 +216,16 @@ class ClassHierarchy private constructor(val classes: List<ClassInfo>) {
                 when (sym.symbolType) {
                     SymbolType.FUNCTION -> (sym.`object` as? Function)?.let { fn ->
                         val kind = if (fn.isThunk || isThunkLinkage(fn)) MemberKind.THUNK else MemberKind.FUNCTION
-                        Member(sym.name, sym.address, kind, fn.getPrototypeString(false, false), parametersOf(fn))
+                        Member(
+                            sym.name,
+                            sym.address.toString(),
+                            kind,
+                            fn.getPrototypeString(false, false),
+                            parametersOf(fn),
+                        )
                     }
 
-                    SymbolType.LABEL -> Member(sym.name, sym.address, labelKind(sym))
+                    SymbolType.LABEL -> Member(sym.name, sym.address.toString(), labelKind(sym))
 
                     else -> null
                 }
