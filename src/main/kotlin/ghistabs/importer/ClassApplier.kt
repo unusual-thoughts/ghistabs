@@ -106,8 +106,11 @@ class ClassApplier(
     }
 
     /**
-     * The class layout filed [this] off the scope the stabs state; [ns] can know better (the `_ZTV`
-     * symbol is the only thing that spells some classes' scope). Moved rather than rebuilt: the
+     * The class layout filed [this] under the class's stab name; the class's namespace can be named
+     * otherwise, and shift-D reads the class back off the category. libstdc++'s stream classes are
+     * the case: `basic_ostream<char,std::char_traits<char>>` is the stab, but the demangler spells
+     * `_ZNSo…` members `std::ostream::…`, so the namespace, and the category, is `std/ostream` (14 on
+     * crypto_mi gcc421 fullstabs, 20 on locale_test customlibstdcxx). Moved rather than rebuilt: the
      * class's `{vfptr}` already points at this one. Left where it is if [category] holds one already.
      */
     private fun Structure.refiledUnder(category: CategoryPath): Structure = also {
