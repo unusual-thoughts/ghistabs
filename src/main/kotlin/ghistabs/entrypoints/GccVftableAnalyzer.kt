@@ -16,10 +16,11 @@ import ghistabs.importer.VtableSweeper.Companion.isVtablesSwept
 import ghistabs.materialize.DtmRegistry
 import ghistabs.parse.StabReader
 
-const val VFTABLE_ANALYZER_NAME = "C++ vftables from vtable symbols"
+const val GCC_VFTABLE_ANALYZER_NAME = "GCC C++ vftables"
 
 /**
- * Lay a `<Class>_vftable` at every `_ZTV…` (Itanium) or `_vt…` (gcc 2.x) symbol, typed off the
+ * Lay a `<Class>_vftable` at every gcc vtable symbol, Itanium `_ZTV…` (gcc 3 and later, the record
+ * behind an rtti header) or gcc 2.x `_vt…` (the record behind a reserved entry), typed off the
  * functions its slots point at, with the class namespace and `vftable` label Ghidra's RTTI scripts
  * expect. Needs nothing but the symbol table and memory, so it earns its keep on a binary with no
  * stabs at all: every virtual call through such a table then resolves to a named slot.
@@ -42,10 +43,11 @@ const val VFTABLE_ANALYZER_NAME = "C++ vftables from vtable symbols"
  * whose stabs are not imported yet, or whose import already swept ([isVtablesSwept]). What is left is
  * an import run with class reconstruction off, which sweeps nothing, and a binary with no stabs.
  */
-class VftableAnalyzer :
+class GccVftableAnalyzer :
     AbstractAnalyzer(
-        VFTABLE_ANALYZER_NAME,
-        "Lay vftable structs at C++ vtable symbols, typed from the functions their slots point at.",
+        GCC_VFTABLE_ANALYZER_NAME,
+        "Lay a typed <Class>_vftable at every gcc C++ vtable symbol: Itanium `_ZTV…` (gcc 3 and later) " +
+            "and gcc 2.x `_vt…`, with each slot typed from the function it points at.",
         AnalyzerType.BYTE_ANALYZER,
     ) {
     init {
@@ -66,7 +68,7 @@ class VftableAnalyzer :
         val sink = TeeSink(BookmarkSink(program), log?.let(::MessageLogSink))
         val sweeper = VtableSweeper(DtmRegistry(program.dataTypeManager), program, monitor ?: TaskMonitor.DUMMY, sink)
         val laid = sweeper.sweepUnclaimedVtables()
-        if (laid > 0) log?.appendMsg(VFTABLE_ANALYZER_NAME, "laid $laid vtable(s)")
+        if (laid > 0) log?.appendMsg(GCC_VFTABLE_ANALYZER_NAME, "laid $laid vtable(s)")
         return true
     }
 }

@@ -182,8 +182,8 @@ Independent of stabs, enabled by default, each re-runnable and available as one-
   unwinding. Only runs where every byte of the gap decodes cleanly.
 - **Filler Byte Condenser** - collapses GAS `.p2align` padding in code (NOP idioms and the
   jump-over-fill form) into `Alignment` data, so it isn't mistaken for undescribed data.
-- **C++ vftables from vtable symbols** - lays a `<Class>_vftable` at every `_ZTV…` (Itanium) or
-  `_vt…` (gcc 2.x) symbol, each slot typed off the function it points at, under the class
+- **GCC C++ vftables** - lays a `<Class>_vftable` at every gcc vtable symbol, Itanium `_ZTV…` (gcc 3+) or
+  gcc 2.x `_vt…`, each slot typed off the function it points at, under the class
   namespace with the `vftable` label Ghidra's RTTI scripts expect, so virtual calls resolve to
   named slots even with no stabs. On a binary with stabs it defers to the importer, which runs
   the same sweep after its class pass has typed the classes the stabs describe.
