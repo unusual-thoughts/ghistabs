@@ -1,15 +1,15 @@
-package ghistabs.hierarchy
+package ghistabs.materialize.cpp.abi
 
 import ghidra.program.model.address.Address
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Symbol
-import ghistabs.materialize.cpp.abi.Itanium
 import ghistabs.parse.Access
 import ghistabs.readPointer
 
 /**
- * Reads a class's direct bases off its Itanium `_ZTI` typeinfo object (ABI §2.9.5), straight from
- * memory: the bytes are the same whether or not anything typed them.
+ * Reads a class's direct bases off its Itanium `_ZTI` typeinfo object (ABI §2.9.5): [Rtti]'s
+ * layouts read rather than laid, straight from memory, since the bytes are the same whether or not
+ * anything typed them. A read-only caller can't have [Rtti] resolve its layouts into the DTM.
  *
  * The object's first word is the address point of one of three `__cxxabiv1` vtables, which says the
  * layout that follows: `__class_type_info` (no bases), `__si_class_type_info` (one public non-virtual
@@ -18,7 +18,11 @@ import ghistabs.readPointer
  * relocation to libstdc++, so it's named by the reference Ghidra made for it, as is each base's
  * typeinfo when it lives in a shared library (`std::exception`).
  */
-class ItaniumTypeinfo(private val program: Program) {
+/*
+ * gcc 2.x has nothing to read: `__ti<class>` sits in .bss, filled at run time by its `__tf<class>`
+ * function (`__ti4Base` is `B` in hello_elf_gcc295's symbols), so only the stabs give its bases.
+ */
+class RttiReader(private val program: Program) {
     data class Base(val className: String, val isVirtual: Boolean, val access: Access)
 
     private val ptr = program.defaultPointerSize
@@ -26,19 +30,23 @@ class ItaniumTypeinfo(private val program: Program) {
 
     private enum class Kind { CLASS, SI, VMI }
 
+    // vptr then the name: what every class typeinfo opens with ([Rtti.classTypeInfoStructure]).
+    private val header = 2L * ptr
+
     /** Null when [zti] isn't a class typeinfo this can read, rather than a class with no bases. */
     fun basesOf(zti: Address): List<Base>? = when (kindOf(zti)) {
         Kind.CLASS -> emptyList()
-        Kind.SI -> classAt(zti.add(2L * ptr))?.let { listOf(Base(it, isVirtual = false, access = Access.PUBLIC)) }
+        Kind.SI -> classAt(zti.add(header))?.let { listOf(Base(it, isVirtual = false, access = Access.PUBLIC)) }
         Kind.VMI -> vmiBases(zti)
         null -> null
     }
 
     private fun vmiBases(zti: Address): List<Base>? = runCatching {
-        // `__flags` and `__base_count` are both `unsigned int`, then the pointer-aligned array.
-        val count = program.memory.getInt(zti.add(2L * ptr + 4))
+        // [Rtti.vmiClassTypeInfoStructure]: `flags` and `numBaseClasses` are both `unsigned int`, then
+        // the `baseClassPtrArray` of {base typeinfo pointer, `long` offset+flags}.
+        val count = program.memory.getInt(zti.add(header + 4))
         if (count !in 1..MAX_BASES) return null
-        val first = zti.add(2L * ptr + 8)
+        val first = zti.add(header + 8)
         val stride = 2L * ptr
         (0 until count).map { i ->
             val entry = first.add(i * stride)
@@ -50,8 +58,8 @@ class ItaniumTypeinfo(private val program: Program) {
             }
             Base(
                 classAt(entry) ?: return null,
-                isVirtual = flags and VIRTUAL_MASK != 0L,
-                access = if (flags and PUBLIC_MASK != 0L) Access.PUBLIC else Access.PRIVATE,
+                isVirtual = flags and Itanium.VIRTUAL_BASE_MASK != 0L,
+                access = if (flags and Itanium.PUBLIC_BASE_MASK != 0L) Access.PUBLIC else Access.PRIVATE,
             )
         }
     }.getOrNull()
@@ -59,8 +67,8 @@ class ItaniumTypeinfo(private val program: Program) {
     private fun kindOf(zti: Address): Kind? {
         val names = namesAt(zti) { target ->
             // The vptr is the vtable's address point, two words past its `_ZTV` label.
-            symtab.getSymbols(target).toList() + runCatching { symtab.getSymbols(target.subtract(2L * ptr)).toList() }
-                .getOrDefault(emptyList())
+            val ztv = runCatching { target.subtract(Itanium.vtablePrefixBytes(ptr)) }.getOrNull()
+            symtab.getSymbols(target).toList() + ztv?.let { symtab.getSymbols(it).toList() }.orEmpty()
         }
         return when {
             names.any { VMI in it } -> Kind.VMI
@@ -96,15 +104,12 @@ class ItaniumTypeinfo(private val program: Program) {
     }
 
     private companion object {
-        const val VIRTUAL_MASK = 0x1L
-        const val PUBLIC_MASK = 0x2L
-
         // Arbitrary sanity bound: a garbage count must not read megabytes.
         const val MAX_BASES = 256
 
         // As they appear in both the mangled `_ZTVN10__cxxabiv120__si_class_type_infoE` and a demangled label.
-        const val VMI = "__vmi_class_type_info"
-        const val SI = "__si_class_type_info"
-        const val CLASS = "__class_type_info"
+        const val VMI = Itanium.VMI_CLASS_TYPE_INFO
+        const val SI = Itanium.SI_CLASS_TYPE_INFO
+        const val CLASS = Itanium.CLASS_TYPE_INFO
     }
 }

@@ -39,6 +39,11 @@ object Itanium : CxxAbi {
     const val VMI_CLASS_TYPE_INFO = "__vmi_class_type_info"
     const val BASE_CLASS_TYPE_INFO = "__base_class_type_info"
 
+    // `__base_class_type_info::__offset_flags_masks` (ABI §2.9.5): the low bits of `__offset_flags`,
+    // [Rtti.baseClassTypeInfoStructure]'s isVirtualBase and isPublicBase bitfields.
+    const val VIRTUAL_BASE_MASK = 0x1L
+    const val PUBLIC_BASE_MASK = 0x2L
+
     // gcc's internal per-typeinfo "pseudo" struct types (rtti.c create_pseudo_type_info): a
     // typeinfo-vtable ptr + the __*_type_info members. Emitted alongside each _ZTI global but
     // never given a debug definition, so they arrive as unresolved XRefs. VMI appends the base

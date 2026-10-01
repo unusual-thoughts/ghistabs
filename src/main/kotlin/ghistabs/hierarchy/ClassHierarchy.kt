@@ -11,6 +11,7 @@ import ghistabs.importer.ClassHierarchyRecord
 import ghistabs.materialize.cpp.ClassNaming
 import ghistabs.materialize.cpp.abi.CxxAbi
 import ghistabs.materialize.cpp.abi.Itanium
+import ghistabs.materialize.cpp.abi.RttiReader
 import ghistabs.parse.Access
 import ghistabs.parse.nameSegments
 import ghistabs.readPointer
@@ -72,7 +73,7 @@ class ClassHierarchy private constructor(val classes: List<ClassInfo>) {
     private class Builder(val program: Program) {
         val symtab = program.symbolTable
         val record = ClassHierarchyRecord.read(program).orEmpty()
-        val rtti = ItaniumTypeinfo(program)
+        val rtti = RttiReader(program)
 
         // `_ZTI` objects by the class they describe, off the mangled label: the demangler's `typeinfo`
         // label in the class's namespace only exists once Ghidra's demangler has run.
