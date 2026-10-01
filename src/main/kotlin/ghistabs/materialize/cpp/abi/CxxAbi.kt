@@ -145,6 +145,14 @@ sealed interface CxxAbi : CxxMemberNaming {
             else -> null
         }
 
+        /**
+         * Data the compiler generated for a class, in either ABI's spelling: Itanium's vtables and
+         * typeinfo ([Itanium.isGeneratedData]), gcc 2.x's vtables and typeinfo objects. None of it is
+         * written in the source.
+         */
+        fun isGeneratedData(name: String) =
+            Itanium.isGeneratedData(name) || ofVtableSymbol(name) != null || Gcc2.isTypeinfoName(name)
+
         /** Every ABI's spelling for [className]'s vtable, Itanium first. */
         fun vtableCandidates(className: String) = buildList {
             addAll(Itanium.vtableCandidates(className))

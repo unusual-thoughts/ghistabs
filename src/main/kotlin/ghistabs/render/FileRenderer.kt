@@ -1,12 +1,19 @@
 package ghistabs.render
 
 import ghidra.program.model.address.Address
+import ghistabs.Demangler
 import ghistabs.chunkOf
 import ghistabs.diagnose.DiagnosticSink
 import ghistabs.harvest.*
 import ghistabs.index.*
+import ghistabs.materialize.cpp.abi.CxxAbi
+import ghistabs.materialize.cpp.abi.Gcc2
+import ghistabs.materialize.cpp.abi.Itanium
 import ghistabs.parse.GlobalTypeDecl
+import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
+import ghistabs.parse.VirtKind
+import ghistabs.parse.qualifiedName
 import ghistabs.parse.templateLeaf
 
 /**
@@ -27,7 +34,27 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
     private val statics = attribution.staticsBySource[source].orEmpty()
 
     private val spans = FunctionSpans.of(rawFuncs, source)
-    override fun Int?.indentAt() = if (this != null && spans.inFunction(this)) 4 else 0
+
+    /**
+     * What the compiler wrote rather than the source (§82). Decomp keeps it off the canvas, where it
+     * read as written and took rows the source's own declarations needed: an implicit copy
+     * constructor dated at its class's line evicted the class. It goes to its own appendix instead.
+     * Skeleton shows everything where gcc put it.
+     *
+     * Its code is still code at those lines, so [spans] keeps it as evidence: a header typedef gcc
+     * dated inside it is still borrowed.
+     */
+    private val compilerWritten = if (renderer.decomp == null) {
+        emptySet()
+    } else {
+        rawFuncs.filterTo(mutableSetOf()) { Gcc2.isTypeinfoName(it.name) || it.isImplicitMember() }
+    }
+    private val generatedData = statics.filterTo(mutableSetOf()) {
+        renderer.decomp != null && CxxAbi.isGeneratedData(it.body.name)
+    }
+
+    private val laidOut = FunctionSpans.of(rawFuncs - compilerWritten, source)
+    override fun Int?.indentAt() = if (this != null && laidOut.inFunction(this)) 4 else 0
 
     private val lineExtent = lines.maxOfOrNull { it.lineNumber }
     private val codeExtent = extentOf(lineExtent, spans.maxStabLine)
@@ -119,7 +146,7 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
         // and 80 typedefs from the xmltest render without a word.
         if (canvas.isEmpty()) {
             displaced += (typedefClaims() + globalClaims() + typeBodyClaims()).map { Dropped(it, MISATTRIBUTED) }
-            return anonAggregateAppendix() + instantiationAppendix() + displacedAppendix()
+            return anonAggregateAppendix() + instantiationAppendix() + displacedAppendix() + compilerWrittenAppendix()
         }
 
         // One allocation for the whole file. Every pass declares what it wants and writes nothing;
@@ -167,7 +194,8 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
             provenance = renderer.provenance,
         )
         spans.closeAnomalies(rendered.lines()).forEach { degradation("skeleton-close-anomaly", "$source", it) }
-        return rendered + anonAggregateAppendix() + instantiationAppendix() + displacedAppendix()
+        return rendered + anonAggregateAppendix() + instantiationAppendix() + displacedAppendix() +
+            compilerWrittenAppendix()
     }
 
     private val displaced = mutableListOf<Dropped>()
@@ -188,6 +216,85 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
             }
         return "\n\n/* ── displaced declarations (line unusable) ── */\n\n$rows\n"
     }
+
+    /** [compilerWritten] and [generatedData], one line each, with the line gcc dated it at. */
+    private fun compilerWrittenAppendix(): String {
+        val rows = compilerWritten.map { f ->
+            val kind = if (Gcc2.isTypeinfoName(f.name)) "typeinfo function" else "implicit member"
+            Triple(f.declLine, f.oneLineBody(), kind)
+        } + generatedData.map { s ->
+            Triple(s.line, s.emitGlobal().rows.joinToString(" ") { it.text }, "generated data")
+        }
+        val text = rows
+            .sortedWith(compareBy({ it.first ?: Int.MAX_VALUE }, { it.second }))
+            .map { (line, text, kind) -> "$text  // ${line?.let { "L $it " }.orEmpty()}($kind)" }
+            .distinct()
+            .joinToString("\n")
+            .ifEmpty { return "" }
+        return "\n\n/* ── compiler-generated (not in the source) ── */\n\n$text\n"
+    }
+
+    /** The decompiled function on one line, as the appendix lists it. */
+    private fun Func.oneLineBody(): String {
+        val lines = renderer.decompile(this).lines.ifEmpty { return "${sourceSignature(program)};" }
+        return (listOf(lines.first().asMemberDefinition().text) + lines.drop(1).map { it.text.trim() })
+            .filter { it.isNotEmpty() }
+            .joinToString(" ")
+    }
+
+    /**
+     * A constructor, destructor or assignment operator the class did not declare, which gcc defined
+     * for it. Stabs don't say so: the method entry (`__ct_base ::(0,12)=…;:_ZN5ShapeC2ERKS_;2A.`)
+     * reads like a written one's, and the `N_FUN` like any other. What tells is the line gcc dates it at:
+     * - gcc 2.95 and gcc ≥ 4.1 date it at its class's own line. gcc 4.1–12 `implicitly_declare_fn`
+     *   and `synthesize_method` set `DECL_SOURCE_LOCATION (TYPE_NAME (type))`; gcc 2.95 builds it at
+     *   `finish_struct`, at the class's closing `};`, where it dates the class too.
+     * - gcc 3.3 and 3.4 `synthesize_method` date it where it was first needed (`input_location`), so
+     *   it lands inside the body of the function that needed it: `Circle(const Circle&)` at L87,
+     *   inside `probe`, which throws a `Circle` by value.
+     *
+     * A written member can sit on its class's line too: `struct Named { virtual ~Named() {} … };`.
+     * A destructor is caught there by C++'s own rule: an implicit one is virtual only when a base's
+     * is, so one the class declares virtual with no such base was written.
+     */
+    private fun Func.isImplicitMember(): Boolean {
+        val line = declLine ?: return false
+        val member = Demangler.of(name)?.name ?: return false
+        val scope = Demangler.namespaces(name).qualifiedName
+        val cls = typeDecls.firstOrNull { it.body is TypeDecl.Aggregate && it.name == scope } ?: return false
+        val body = cls.body as TypeDecl.Aggregate
+        val leaf = cls.name?.templateLeaf
+        return when {
+            member != leaf && member != "~$leaf" && member != "operator=" -> false
+
+            member.startsWith("~") && body.declaresVirtualDtor() &&
+                body.bases.none { types.resolveStruct(it.type)?.hasVirtualDtor() == true } -> false
+
+            line == cls.line -> true
+
+            else -> spans.ranges.any { r ->
+                with(spans) { r.interior }?.let { line in it && cls.line !in it } == true
+            }
+        }
+    }
+
+    /**
+     * Whether the method list has a virtual destructor. Its name varies (`__comp_dtor` in gcc 3.3–4.x,
+     * `__dt_comp` in gcc 12, the class's own name in gcc 2.95), its physname doesn't: Itanium's
+     * `D0`/`D1`/`D2`, gcc 2.x's `_._5Named`.
+     */
+    private fun TypeDecl.Aggregate<GlobalTypeId>.declaresVirtualDtor() = methods.any { m ->
+        val physname = m.mangled ?: return@any false
+        val dtor = Itanium.specialMemberDisplayName(physname, "") == "~" || Gcc2.isDtorName(physname)
+        m.virt == VirtKind.VIRTUAL && dtor
+    }
+
+    /** Whether the class's destructor is virtual, declared so or inherited: a base's may not be listed. */
+    private fun TypeDecl.Aggregate<GlobalTypeId>.hasVirtualDtor(seen: MutableSet<Any> = mutableSetOf()): Boolean =
+        seen.add(this) && (
+            declaresVirtualDtor() ||
+                bases.any { types.resolveStruct(it.type)?.hasVirtualDtor(seen) == true }
+            )
 
     /** Declarations gcc gave no line: real, only their row is unknown. See [EffectiveSource.linelessTypes]. */
     private fun linelessTypes() = attribution.linelessTypes[source].orEmpty()
@@ -427,7 +534,7 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
         // A bodied function declares its variables in the body's folded head, where [decompClaims]
         // merges them. Claiming a row here too duplicated every one Ghidra had also recovered, and the
         // rest lost the contested row to the body and left the file entirely.
-        return rawFuncs.filterNot { it in bodied }.flatMap { f ->
+        return rawFuncs.filterNot { it in bodied || it in compilerWritten }.flatMap { f ->
             val span = with(spans) { rangeByFunc[f]?.span }
             f.vars().filter { it.declKey().dedup() }.map {
                 Claim(
@@ -447,7 +554,7 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
     // global landing inside a function's braces has a wrong line, not a wrong home — it goes to the
     // appendix like any claim that lost its row. A real one carries `enclosingFunction` and stays.
     private fun globalClaims(): List<Claim> {
-        val claims = statics.mapNotNull { s ->
+        val claims = (statics - generatedData).mapNotNull { s ->
             s.takeIf { s.declKey().dedup() }?.let { s.emitGlobal() to s }
         }
         val reasons = claims.mapNotNull { (claim, s) ->
@@ -499,7 +606,7 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
             // what merely decompiles: an aliased copy decompiles fine and is deliberately left to the
             // skeleton's side-by-side decls, and skipping its braces on that basis left its `}`
             // behind with no `{` (file.cpp reached depth -3).
-            if (r.func in bodied) continue
+            if (r.func in bodied || r.func in compilerWritten) continue
             val sig = r.func.sourceSignature(program)
             val name = r.func.demangledName
             val openText = if (r.isSingleLine) "$sig;" else "$sig {"
@@ -573,6 +680,7 @@ class FileRenderer(override val renderer: Renderer, override val source: GhidraS
         // the locals per copy.
         val seenHeads = mutableSetOf<Pair<Int, String>>()
         for (r in spans.ranges) {
+            if (r.func in compilerWritten) continue
             val closeLine = with(spans) { r.span.last }
             val cLines = renderer.decompile(r.func).lines
             val head = cLines.firstOrNull() ?: continue
