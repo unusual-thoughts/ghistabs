@@ -96,11 +96,8 @@ private fun prefixKind(i: Int, total: Int, virtualBases: List<String>): String {
 fun Program.vtableShape(ztv: Address, abi: CxxAbi = Itanium): VtableShape {
     if (!abi.hasRttiHeader) return shapeOf(ztv, null)
     val ptr = defaultPointerSize.toLong()
-    fun holdsTypeinfo(slot: Address) = readPointer(slot)?.let { pointee ->
-        symbolTable.getSymbols(pointee).any {
-            Itanium.looksLikeZti(it.name) || it.name == Itanium.DEMANGLED_TYPEINFO
-        }
-    } == true
+    fun holdsTypeinfo(slot: Address) =
+        readPointer(slot)?.let { pointee -> symbolTable.getSymbols(pointee).any { it.isTypeinfo } } == true
     val rttiSlot = generateSequence(ztv) { it.add(ptr) }
         .take(MAX_VTABLE_PREFIX_WORDS)
         .takeWhile { holdsTypeinfo(it) || codeTargetAt(it) == null }

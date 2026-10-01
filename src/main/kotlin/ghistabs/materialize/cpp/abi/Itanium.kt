@@ -7,6 +7,7 @@ import ghidra.program.model.data.IntegerDataType
 import ghidra.program.model.data.LongLongDataType
 import ghidra.program.model.listing.Program
 import ghidra.program.model.scalar.Scalar
+import ghidra.program.model.symbol.Symbol
 import ghistabs.Demangler
 import ghistabs.namespaces
 import ghistabs.parse.isTemplated
@@ -38,11 +39,6 @@ object Itanium : CxxAbi {
     const val SI_CLASS_TYPE_INFO = "__si_class_type_info"
     const val VMI_CLASS_TYPE_INFO = "__vmi_class_type_info"
     const val BASE_CLASS_TYPE_INFO = "__base_class_type_info"
-
-    // `__base_class_type_info::__offset_flags_masks` (ABI §2.9.5): the low bits of `__offset_flags`,
-    // [Rtti.baseClassTypeInfoStructure]'s isVirtualBase and isPublicBase bitfields.
-    const val VIRTUAL_BASE_MASK = 0x1L
-    const val PUBLIC_BASE_MASK = 0x2L
 
     // gcc's internal per-typeinfo "pseudo" struct types (rtti.c create_pseudo_type_info): a
     // typeinfo-vtable ptr + the __*_type_info members. Emitted alongside each _ZTI global but
@@ -167,3 +163,50 @@ object Itanium : CxxAbi {
         else -> null
     }
 }
+
+/** Which `__cxxabiv1` typeinfo class lays out a class's typeinfo object: what [Rtti] has a layout for. */
+enum class TypeinfoKind(private val abiClass: String) {
+    /** `__class_type_info`: no bases. */
+    CLASS(Itanium.CLASS_TYPE_INFO),
+
+    /** `__si_class_type_info`: one public, non-virtual base at offset 0. */
+    SI(Itanium.SI_CLASS_TYPE_INFO),
+
+    /** `__vmi_class_type_info`: anything else, each base with its own offset and flags. */
+    VMI(Itanium.VMI_CLASS_TYPE_INFO),
+    ;
+
+    companion object {
+        /** The kind whose vtable is [vtableClass]'s, or null for any other class's. */
+        fun ofVtableClass(vtableClass: String) = entries.firstOrNull {
+            "${Itanium.ABI_NAMESPACE}::${it.abiClass}" ==
+                vtableClass
+        }
+    }
+}
+
+/** A typeinfo object's label: its `_ZTI` linkage name, or the demangler's `typeinfo` for it. */
+val Symbol.isTypeinfo get() = Itanium.looksLikeZti(name) || name == Itanium.DEMANGLED_TYPEINFO
+
+/**
+ * [Itanium.typeinfoClassOf] off a symbol rather than a name: an external's linkage name too, which
+ * survives only as its imported name once demangled, and else the namespace of the demangler's label.
+ */
+val Symbol.typeinfoClass: String?
+    get() = linkageNames.firstNotNullOfOrNull(Itanium::typeinfoClassOf) ?: classOfLabel(Itanium.DEMANGLED_TYPEINFO)
+
+/** The class a `_ZTV` symbol is the vtable of, as [typeinfoClass] reads a `_ZTI` one. */
+val Symbol.vtableClass: String?
+    get() = linkageNames.filter(Itanium::looksLikeVtable)
+        .firstNotNullOfOrNull { Demangler.of(it)?.let(Itanium::demangledVtableClass) }
+        ?: classOfLabel(Itanium.DEMANGLED_VTABLE)
+
+private val Symbol.linkageNames
+    get() = listOfNotNull(
+        name,
+        program.externalManager.getExternalLocation(this)?.originalImportedName.takeIf {
+            isExternal
+        },
+    )
+
+private fun Symbol.classOfLabel(label: String) = parentNamespace.takeIf { name == label && !it.isGlobal }?.getName(true)

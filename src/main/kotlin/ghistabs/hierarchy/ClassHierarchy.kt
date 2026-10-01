@@ -12,6 +12,8 @@ import ghistabs.materialize.cpp.ClassNaming
 import ghistabs.materialize.cpp.abi.CxxAbi
 import ghistabs.materialize.cpp.abi.Itanium
 import ghistabs.materialize.cpp.abi.RttiReader
+import ghistabs.materialize.cpp.abi.isTypeinfo
+import ghistabs.materialize.cpp.abi.typeinfoClass
 import ghistabs.parse.Access
 import ghistabs.parse.nameSegments
 import ghistabs.readPointer
@@ -75,13 +77,13 @@ class ClassHierarchy private constructor(val classes: List<ClassInfo>) {
         val record = ClassHierarchyRecord.read(program).orEmpty()
         val rtti = RttiReader(program)
 
-        // `_ZTI` objects by the class they describe, off the mangled label: the demangler's `typeinfo`
-        // label in the class's namespace only exists once Ghidra's demangler has run.
+        // `_ZTI` objects by the class they describe, off the mangled label or, once Ghidra's demangler
+        // ran, its `typeinfo` label in the class's namespace.
         val typeinfoByClass: Map<List<String>, Address> by lazy {
             buildMap {
                 for (sym in symtab.getSymbolIterator(true)) {
-                    if (!Itanium.looksLikeZti(sym.name)) continue
-                    val cls = Itanium.typeinfoClassOf(sym.name) ?: continue
+                    if (!sym.isTypeinfo) continue
+                    val cls = sym.typeinfoClass ?: continue
                     putIfAbsent(cls.nameSegments, sym.address)
                 }
             }
