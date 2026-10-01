@@ -89,16 +89,17 @@ class ClassNode private constructor(val info: ClassInfo?, val base: ClassHierarc
     /** Set on a class filed under the class it's declared in. */
     internal var isNested = false
 
+    // SWEPT only for a class the sweep found: a base with no class at all stays a plain class.
     private val kind
         get() = when {
             isNested -> Kind.NESTED
             base?.isVirtual == true -> if (info?.isAbstract == true) Kind.VIRTUAL_ABSTRACT else Kind.VIRTUAL
             info?.isAbstract == true -> Kind.ABSTRACT
+            info != null && info.origin != Origin.STABS -> Kind.SWEPT
             else -> Kind.NORMAL
         }
 
-    // Greyed only for a class the sweep found: a base with no class at all keeps its kind's colour.
-    override fun getIcon(expanded: Boolean): Icon = kind.icon(swept = info != null && info.origin != Origin.STABS)
+    override fun getIcon(expanded: Boolean): Icon = kind.icon
 
     override fun getToolTip(): String = buildString {
         append("<html>")
@@ -110,7 +111,7 @@ class ClassNode private constructor(val info: ClassInfo?, val base: ClassHierarc
             null -> "no class built for it: a plain struct, or only declared"
         }
         append("<br>").append(origin)
-        if (kind != Kind.NORMAL) append("<br>").append(kind.label)
+        if (kind != Kind.NORMAL && kind != Kind.SWEPT) append("<br>").append(kind.label)
         info?.vftable?.let { append("<br>vftable at ").append(it) }
         if (info?.vftable == null) info?.typeinfo?.let { append("<br>typeinfo at ").append(it) }
     }
@@ -124,7 +125,7 @@ class ClassNode private constructor(val info: ClassInfo?, val base: ClassHierarc
 
 /**
  * Upstream's icon per kind of class: its green class icon with two colour channels swapped, so the
- * shape stays and the hue says the kind. A class without stabs is the greyscale of the same.
+ * shape stays and the hue says the kind. A swept class with nothing more to say is the same in grey.
  */
 private enum class Kind(val label: String, private val recolor: (Int, Int, Int) -> Triple<Int, Int, Int>) {
     NORMAL("class", { r, g, b -> Triple(r, g, b) }),
@@ -132,13 +133,11 @@ private enum class Kind(val label: String, private val recolor: (Int, Int, Int) 
     VIRTUAL("virtual base class", { r, g, b -> Triple(r, b, g) }),
     VIRTUAL_ABSTRACT("virtual abstract base class", { r, g, _ -> Triple(g, r, g) }),
     NESTED("nested class", { _, g, b -> Triple(g, g, b) }),
+    SWEPT("class without stabs", ::greyscale),
     ;
 
     // Lazy: painting a themed icon needs the theme up, which a headless test that never draws skips.
-    private val stabs: Icon by lazy { if (this == NORMAL) CLASS_ICON else CLASS_ICON.recolored(recolor) }
-    private val swept: Icon by lazy { stabs.recolored(::greyscale) }
-
-    fun icon(swept: Boolean) = if (swept) this.swept else stabs
+    val icon: Icon by lazy { if (this == NORMAL) CLASS_ICON else CLASS_ICON.recolored(recolor) }
 }
 
 /** Rec. 601 luma, as a grey. */
