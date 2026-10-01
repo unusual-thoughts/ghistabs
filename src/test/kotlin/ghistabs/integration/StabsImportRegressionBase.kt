@@ -1,6 +1,7 @@
 package ghistabs.integration
 
 import ghidra.app.plugin.core.analysis.AutoAnalysisManager
+import ghidra.app.util.demangler.gnu.GnuDemangler
 import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.*
@@ -1514,6 +1515,14 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
         conflicts.must(
             "Suspiciously many .conflict-renamed types: $conflicts (expected < 25)",
         ) { this < 25 }
+    }
+
+    /** Every fixture is gcc's, so [GccVftableAnalyzer] has to take it: MinGW and Cygwin PEs included. */
+    @Test
+    fun gccVftableAnalyzerTakesTheFixture() {
+        GnuDemangler().must("${program.executableFormat} (${program.compilerSpec.compilerSpecID}) not read as gcc") {
+            canDemangle(program)
+        }
     }
 
     /**

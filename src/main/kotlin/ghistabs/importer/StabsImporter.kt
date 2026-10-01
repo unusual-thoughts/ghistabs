@@ -1,6 +1,7 @@
 package ghistabs.importer
 
 import ghistabs.diagnose.DiagnosticSink
+import ghistabs.entrypoints.GccVftableAnalyzer
 import ghistabs.harvest.Harvest
 import ghistabs.harvest.Harvester
 import ghistabs.importer.ImportOptions.Companion.markStabsTypedefsShortened
@@ -64,6 +65,11 @@ class StabsImporter(internal val ctx: ImportContext<*>) : DiagnosticSink by ctx 
                     },
                 )
             }.also {
+                // The classes the stabs describe are laid; the analyzer's sweep takes the rest now, on
+                // this import's registry and diagnostics, ahead of the demangler stub replacement.
+                if (GccVftableAnalyzer.isEnabled(ctx.program)) {
+                    GccVftableAnalyzer.sweep(ctx.program, registry, ctx.monitor, ctx)
+                }
                 ctx.demanglerReplacer(registry).replace()
             }
         }
