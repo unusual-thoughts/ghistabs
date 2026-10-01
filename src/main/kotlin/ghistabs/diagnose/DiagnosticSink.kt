@@ -108,7 +108,11 @@ class TeeSink(private vararg val sinks: DiagnosticSink?) : DiagnosticSink {
 }
 
 /** Writes message-bearing diagnostics at/above [minLevel] to Ghidra's [MessageLog]. */
-class MessageLogSink(private val messageLog: MessageLog, private val minLevel: Level = Level.INFO) : DiagnosticSink {
+class MessageLogSink(
+    private val messageLog: MessageLog,
+    private val minLevel: Level = Level.INFO,
+    private val originator: String = "Stabs",
+) : DiagnosticSink {
     override fun log(
         category: String,
         message: String?,
@@ -119,9 +123,10 @@ class MessageLogSink(private val messageLog: MessageLog, private val minLevel: L
     ) {
         val text = diagnosticText(degrades, message)
         if (text == null || level < minLevel) return
-        val prefix = "[Stabs][${level.name}]"
+        val prefix = "[${level.name}]"
         val line = if (address != null) "$prefix $category at $address: $text" else "$prefix $category: $text"
-        if (level == Level.ERROR) messageLog.appendMsg("ERROR: $line") else messageLog.appendMsg(line)
+
+        messageLog.appendMsg(originator, if (level == Level.ERROR) "ERROR: $line" else line)
     }
 }
 
