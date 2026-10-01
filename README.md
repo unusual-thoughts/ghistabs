@@ -259,6 +259,10 @@ command takes them after its own name, and `ghistabs --help` lists them as well 
 
 `--registry` and `--degradation-log` are products of materialization, so only `dump`, `skeleton` and `decomp` write them.
 
+`--class-hierarchy FILE` (on `dump`, `skeleton` and `decomp`) writes the classes the `Window > Class Hierarchy`
+tree shows as JSON: each class's namespace path and id, origin, vtable/typeinfo addresses, struct, abstractness,
+bases (by namespace id) and members.
+
 Import options, on the commands that actually import (`dump`, `skeleton`, `decomp`):
 
 | Option                    | Default      | Effect                                                                                                                                                                                        |

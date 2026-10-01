@@ -12,9 +12,11 @@ import ghidra.app.plugin.core.analysis.AutoAnalysisManager
 import ghidra.framework.options.OptionType
 import ghidra.program.model.listing.Program
 import ghidra.program.util.GhidraProgramUtilities
+import ghistabs.diagnose.dumpJson
 import ghistabs.entrypoints.NO_RETURN_ANALYZER_NAME
 import ghistabs.entrypoints.StabsAnalyzer
 import ghistabs.entrypoints.StabsAnalyzer.Companion.import
+import ghistabs.hierarchy.ClassHierarchy
 import ghistabs.importer.ImportArtifacts
 import ghistabs.importer.ImportContext
 import ghistabs.importer.ImportOptions
@@ -52,6 +54,10 @@ internal abstract class ImportingCommand(name: String) : StabsCommand(name = nam
         "--save-db",
         help = "Save the program as auto-analysis left it, before the stabs import, to this file as a Ghidra " +
             "packed database (.gzf). Pass that file instead of the binary to skip the analysis next time.",
+    ).file(canBeDir = false)
+    protected val classHierarchyJson by option(
+        "--class-hierarchy",
+        help = "Dump the classes the Class Hierarchy window shows, with their bases and members, as JSON",
     ).file(canBeDir = false)
     protected val saveDbFull by option(
         "--save-db-full",
@@ -95,6 +101,12 @@ internal abstract class ImportingCommand(name: String) : StabsCommand(name = nam
             shared.dumpHarvest(it.harvest)
             shared.dumpRegistry(it)
             shared.dumpDegradations(diagnostics)
+            classHierarchyJson?.let { file ->
+                file.parentFile?.mkdirs()
+                val hierarchy = ClassHierarchy.of(program)
+                file.writeText(dumpJson.encodeToString(hierarchy))
+                log("class-hierarchy", "wrote ${hierarchy.classes.size} classes to $file")
+            }
         }
     }
 
@@ -146,13 +158,18 @@ internal abstract class ImportingCommand(name: String) : StabsCommand(name = nam
 internal class DumpCommand : ImportingCommand(name = "dump") {
     override fun help(context: Context) =
         "Import and write the requested dumps only (at least one of --records/--harvest/--registry/" +
-            "--degradation-log/--save-db/--save-db-full)."
+            "--degradation-log/--class-hierarchy/--save-db/--save-db-full)."
 
     override fun validate() = with(shared) {
-        val saves = listOfNotNull(this@DumpCommand.saveDb, this@DumpCommand.saveDbFull)
+        val saves = listOfNotNull(
+            this@DumpCommand.saveDb,
+            this@DumpCommand.saveDbFull,
+            this@DumpCommand.classHierarchyJson,
+        )
         if (listOfNotNull(recordsJson, harvestJson, registryJson, degradationLog).isEmpty() && saves.isEmpty()) {
             throw UsageError(
-                "nothing to dump: pass --records, --harvest, --registry, --degradation-log, --save-db or --save-db-full",
+                "nothing to dump: pass --records, --harvest, --registry, --degradation-log, --class-hierarchy, " +
+                    "--save-db or --save-db-full",
             )
         }
     }
