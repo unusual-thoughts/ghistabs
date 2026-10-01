@@ -199,7 +199,7 @@ class ClassHierarchy private constructor(val classes: List<ClassInfo>) {
             val members = symtab.getSymbols(ns).mapNotNull { sym ->
                 when (sym.symbolType) {
                     SymbolType.FUNCTION -> (sym.`object` as? Function)?.let { fn ->
-                        val kind = if (fn.isThunk) MemberKind.THUNK else MemberKind.FUNCTION
+                        val kind = if (fn.isThunk || isThunkLinkage(fn)) MemberKind.THUNK else MemberKind.FUNCTION
                         Member(sym.name, sym.address, kind, fn.getPrototypeString(false, false), parametersOf(fn))
                     }
 
@@ -225,8 +225,18 @@ class ClassHierarchy private constructor(val classes: List<ClassInfo>) {
                     ?.map { it.signature }
             } else {
                 null
-            } ?: fn.parameters.filterNot { it.isInjected }.map { it.dataType.displayName }
+            } ?: fn.parameters.filterNot { it.isInjected || it.name == GCC2_IN_CHARGE }.map { it.dataType.displayName }
             return (if (fn.hasVarArgs()) types + "..." else types).joinToString(", ", "(", ")")
+        }
+
+        /**
+         * A this-adjusting thunk by its linkage name: gcc 2.x `__thunk_<delta>_<target>` (cp/method.c
+         * make_thunk), Itanium `_ZTh`/`_ZTv`/`_ZTc`. Ghidra makes it a plain function, not a thunk of its target.
+         */
+        fun isThunkLinkage(fn: Function) = symtab.getSymbols(fn.entryPoint).any { sym ->
+            // Leading underscores off: the PE loader prefixes one more.
+            val name = sym.name.trimStart('_')
+            THUNK_LINKAGE.any(name::startsWith)
         }
 
         fun labelKind(sym: Symbol): MemberKind {
@@ -285,5 +295,11 @@ private val VTABLE_LABELS = setOf(
     "construction-vtable",
 )
 private val ABI_LABELS = setOf(Itanium.DEMANGLED_TYPEINFO, "typeinfo-name")
+private val THUNK_LINKAGE = listOf("thunk_", "ZTh", "ZTv", "ZTc")
+
+// gcc 2.x's artificial `int __in_chrg` on constructors of classes with virtual bases and on destructors
+// (cp-tree.h IN_CHARGE_NAME), like `this` not the source's.
+private const val GCC2_IN_CHARGE = "__in_chrg"
+
 private val VTABLE_MANGLED = listOf("_ZTV", "_ZTT", "_ZTC")
 private val ABI_MANGLED = listOf("_ZT", "_ZG")

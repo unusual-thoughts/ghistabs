@@ -98,6 +98,11 @@ class ClassHierarchyIntegrationTest : FeatureFixtureTest() {
             m.label.startsWith(m.name + "(").mustBeTrue("${m.label} spells its parameters")
             ("this" in m.label).mustBeFalse()
         }
+        // gcc 2.x: a destructor's `int __in_chrg` is no more the source's than `this`, and 2.95's
+        // `__thunk_16__._7Diamond` is a thunk.
+        val diamond = hierarchy.cls("Diamond").members.filter { it.name == "~Diamond" }
+        diamond.all { it.label in setOf("~Diamond", "~Diamond()") }.mustBeTrue("${diamond.map { it.label }}")
+        if (fixture == "hello_elf_gcc295") diamond.count { it.kind == MemberKind.THUNK } mustBe 1
 
         val node = ClassHierarchyRootNode(program.name, hierarchy).children.single { it.name == "Circle" }
         node.children.first().name mustBe "Shape"

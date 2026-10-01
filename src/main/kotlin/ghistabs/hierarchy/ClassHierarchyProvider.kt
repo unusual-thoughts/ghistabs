@@ -55,6 +55,7 @@ class ClassHierarchyProvider(private val plugin: Plugin) :
     private var shown: ClassHierarchy? = null
     private var showMembers = true
     private var inverted = false
+    private var expandAll = false
     private val builder = Executors.newSingleThreadExecutor {
         Thread(it, "Stabs class hierarchy").apply {
             isDaemon =
@@ -103,6 +104,23 @@ class ClassHierarchyProvider(private val plugin: Plugin) :
                 toolBarData = ToolBarData(GIcon("icon.plugin.symboltree.node.function"), null)
                 description = "Show each class's functions and labels, or only the classes"
                 isSelected = true
+                helpLocation = HelpLocation("Stabs", "Stabs_Class_Hierarchy")
+            },
+        )
+        addLocalAction(
+            object : ToggleDockingAction("Expand All Classes", plugin.name) {
+                override fun actionPerformed(context: ActionContext?) {
+                    expandAll = isSelected
+                    if (expandAll) {
+                        tree.expandAll()
+                    } else {
+                        tree.collapseAll(tree.viewRoot)
+                        tree.expandPath(tree.viewRoot)
+                    }
+                }
+            }.apply {
+                toolBarData = ToolBarData(GIcon("icon.expand.all"), null)
+                description = "Keep every class expanded, through rebuilds too"
                 helpLocation = HelpLocation("Stabs", "Stabs_Class_Hierarchy")
             },
         )
@@ -177,6 +195,7 @@ class ClassHierarchyProvider(private val plugin: Plugin) :
         val p = program ?: return
         val h = shown ?: return
         tree.replaceRoot(ClassHierarchyRootNode(p.name, h, showMembers, inverted))
+        if (expandAll) tree.expandAll()
     }
 
     private fun openSelected() {
