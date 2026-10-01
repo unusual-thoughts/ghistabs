@@ -2,12 +2,13 @@ package ghistabs.materialize.cpp
 
 import ghidra.program.model.data.CategoryPath
 import ghidra.program.model.data.DataTypeComponent
+import ghidra.program.model.symbol.Namespace
 import ghistabs.parse.GlobalTypeId
 import ghistabs.parse.TypeDecl
 
 /**
  * Names Ghidra's own class-recovery machinery round-trips on. None of it is an ABI's decision:
- * `RecoveredClassHelper` and shift-S look for `<Class>_vftable` under `/ClassDataTypes/<Class>/`
+ * `RecoveredClassHelper` and shift-S look for `<Class>_vftable` under `/ClassDataTypes/<ns>/<Class>/`
  * whatever compiler produced the record, and `RTTIGccClassRecoverer` spells a non-primary table
  * `internal_vftable`.
  */
@@ -27,7 +28,17 @@ object ClassNaming {
 
     fun isBaseField(name: String) = name.startsWith(BASE_PREFIX) || name.startsWith(VBASE_PREFIX)
 
-    fun vftableCategory(className: String) = CategoryPath(classDataTypesRoot, className)
+    /**
+     * Where a class's vftables go: `/ClassDataTypes/` and then its namespace path, the class itself
+     * last, as `ExtendedFlatProgramAPI.createDataTypeCategoryPath` files them. shift-D
+     * (`RecoveredClassHelper.getClassNamespace`) reads the class back by turning that path into
+     * `a::b::Class`, so a table filed under its leaf alone is skipped for any scoped class.
+     */
+    fun vftableCategory(classPath: List<String>): CategoryPath =
+        classPath.fold(classDataTypesRoot) { path, seg -> CategoryPath(path, seg) }
+
+    /** [vftableCategory] of the class [ns] is. */
+    fun vftableCategory(ns: Namespace) = vftableCategory(ns.getPathList(true).toList())
 
     fun baseFieldName(isVirtual: Boolean, simpleName: String, baseCount: Int) =
         (if (isVirtual) VBASE_PREFIX else BASE_PREFIX) + simpleName.takeIf { baseCount > 1 }.orEmpty()
