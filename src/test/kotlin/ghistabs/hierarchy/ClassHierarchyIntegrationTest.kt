@@ -1,6 +1,7 @@
 package ghistabs.hierarchy
 
 import docking.widgets.tree.GTreeNode
+import ghistabs.hierarchy.ClassHierarchy.MemberKind
 import ghistabs.hierarchy.ClassHierarchy.Origin
 import ghistabs.integration.FeatureFixtureTest
 import ghistabs.parse.Access
@@ -73,10 +74,28 @@ class ClassHierarchyIntegrationTest : FeatureFixtureTest() {
         load(fixture)
         val root = ClassHierarchyRootNode(program.name, ClassHierarchy.of(program))
         val diamond = root.children.single { it.name == "Diamond" }
-        diamond.children.map(GTreeNode::getName) mustBe listOf("Left", "Right", "Named")
+        diamond.children.filterIsInstance<ClassNode>().map(GTreeNode::getName) mustBe listOf("Left", "Right", "Named")
         diamond.children.first().children.map(GTreeNode::getName) mustBe listOf("virtual Base")
         diamond.children.first().children.single().isLeaf.mustBeTrue()
         "virtual base class" mustBeIn diamond.children.first().children.single().toolTip
+    }
+
+    @ParameterizedTest
+    @MethodSource("hellos")
+    fun `a class lists its functions and labels, its vtable first`(fixture: String) {
+        load(fixture)
+        val hierarchy = ClassHierarchy.of(program)
+        val circle = hierarchy.cls("Circle").members
+        circle.first().kind mustBe MemberKind.VTABLE
+        circle.single { it.name == "name" }.kind mustBe MemberKind.FUNCTION
+        // A static data member is a plain label, mangled or not.
+        hierarchy.cls("Shape").members.single { it.name == "count" }.kind mustBe MemberKind.LABEL
+
+        val node = ClassHierarchyRootNode(program.name, hierarchy).children.single { it.name == "Circle" }
+        node.children.first().name mustBe "Shape"
+        node.children.filterIsInstance<MemberNode>().map { it.member } mustBe circle
+        // Under a base, a class shows only its own bases.
+        node.children.first().children.none { it is MemberNode }.mustBeTrue()
     }
 
     companion object {

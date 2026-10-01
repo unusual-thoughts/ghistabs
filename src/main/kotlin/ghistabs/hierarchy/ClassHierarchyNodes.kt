@@ -4,6 +4,7 @@ import docking.widgets.tree.GTreeLazyNode
 import docking.widgets.tree.GTreeNode
 import generic.theme.GIcon
 import ghistabs.hierarchy.ClassHierarchy.ClassInfo
+import ghistabs.hierarchy.ClassHierarchy.MemberKind
 import ghistabs.hierarchy.ClassHierarchy.Origin
 import ghistabs.parse.Access
 import java.awt.image.BufferedImage
@@ -13,7 +14,8 @@ import javax.swing.ImageIcon
 /*
  * The tree astrelsky's Ghidra-Cpp-Class-Analyzer docks as its "ClassTypeInfo Tree": classes filed under
  * their namespaces, and each class's children its direct bases, which expand into theirs in turn, then
- * the classes nested in it. Read-only, and over [ClassHierarchy] instead of a typeinfo database.
+ * its functions and labels as the Symbol Tree shows them, then the classes nested in it. Read-only, and
+ * over [ClassHierarchy] instead of a typeinfo database.
  */
 
 internal val CLASS_ICON: Icon = GIcon("icon.plugin.symboltree.node.class")
@@ -76,7 +78,11 @@ class ClassNode private constructor(val info: ClassInfo?, val base: ClassHierarc
 
     private fun basesOf() = info?.bases.orEmpty()
 
-    override fun generateChildren(): List<GTreeNode> = basesOf().map { ClassNode(it.target, it) } + nested
+    // Only the class filed under its namespace lists its members: under a base, they'd repeat.
+    private fun membersOf() = if (base == null) info?.members.orEmpty() else emptyList()
+
+    override fun generateChildren(): List<GTreeNode> =
+        basesOf().map { ClassNode(it.target, it) } + membersOf().map(::MemberNode) + nested
 
     override fun getName(): String = base?.let { b ->
         buildString {
@@ -104,6 +110,8 @@ class ClassNode private constructor(val info: ClassInfo?, val base: ClassHierarc
     override fun getToolTip(): String = buildString {
         append("<html>")
         append(escape(info?.qualifiedName ?: base?.name.orEmpty()))
+        // The typedef shortening pass renamed its struct; the namespace keeps the long spelling.
+        info?.struct?.name?.takeIf { it != info.name }?.let { append("<br>shortened: ").append(escape(it)) }
         val origin = when (info?.origin) {
             Origin.STABS -> "bases from the stabs"
             Origin.SWEPT_RTTI -> "no stabs: vtable swept, bases from its typeinfo"
@@ -116,12 +124,37 @@ class ClassNode private constructor(val info: ClassInfo?, val base: ClassHierarc
         if (info?.vftable == null) info?.typeinfo?.let { append("<br>typeinfo at ").append(it) }
     }
 
-    override fun isLeaf() = basesOf().isEmpty() && nested.isEmpty()
+    override fun isLeaf() = basesOf().isEmpty() && membersOf().isEmpty() && nested.isEmpty()
 
     // Two bases of one class can share a name (a direct and an indirect `Base`); never merge them.
     override fun equals(other: Any?) = this === other
     override fun hashCode() = System.identityHashCode(this)
 }
+
+/** A function or label of the class above it. */
+class MemberNode(val member: ClassHierarchy.Member) : GTreeNode() {
+    override fun getName() = member.name
+    override fun getIcon(expanded: Boolean): Icon = MEMBER_ICONS.getValue(member.kind)
+    override fun getToolTip(): String = buildString {
+        append("<html>").append(escape(member.signature ?: member.name))
+        append("<br>at ").append(member.address)
+    }
+
+    override fun isLeaf() = true
+
+    // Overloads share a name.
+    override fun equals(other: Any?) = this === other
+    override fun hashCode() = System.identityHashCode(this)
+}
+
+// The Symbol Tree's own icons, but for the ABI's objects: a table for a vtable, an info sign for the rest.
+private val MEMBER_ICONS: Map<MemberKind, Icon> = mapOf(
+    MemberKind.VTABLE to GIcon("icon.table"),
+    MemberKind.ABI to GIcon("icon.information"),
+    MemberKind.FUNCTION to GIcon("icon.plugin.symboltree.node.function"),
+    MemberKind.THUNK to GIcon("icon.plugin.symboltree.node.function.thunk"),
+    MemberKind.LABEL to GIcon("icon.plugin.symboltree.node.code"),
+)
 
 /**
  * Upstream's icon per kind of class: its green class icon with two colour channels swapped, so the

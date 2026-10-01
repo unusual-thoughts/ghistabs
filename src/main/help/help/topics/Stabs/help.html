@@ -214,8 +214,10 @@
     <P>A read-only tree of the program's C++ classes, after the <I>ClassTypeInfo Tree</I> of
     astrelsky's Ghidra-Cpp-Class-Analyzer. Each class sits under its namespace, and expands into
     its direct bases, spelled as the base clause would (<CODE>virtual Base</CODE>,
-    <CODE>private Impl</CODE>), each of which expands into its own; a class's nested classes follow
-    its bases. Double-click a class, or press Enter, to go to its vtable, else its typeinfo, else
+    <CODE>private Impl</CODE>), each of which expands into its own. After its bases come the class's
+    functions and labels, as the Symbol Tree lists them but with its vtables first (a table icon) and
+    its other ABI objects next (typeinfo, its name, the VTT: an information icon), then its nested
+    classes. Double-click a member to go to it. Double-click a class, or press Enter, to go to its vtable, else its typeinfo, else
     to select its struct in the Data Type Manager.</P>
 
     <P>A class the stabs describe takes its bases from them, exactly as gcc stated them, gcc 2.x
@@ -225,7 +227,7 @@
     stabs (libstdc++ and libsupc++ classes, or a binary with none), takes its bases
     from its Itanium typeinfo where the binary has one, and is a root otherwise. A base
     the program built no class for, such as a plain struct, is a leaf. The tooltip says which
-    source each class came from. As upstream, the icon's colour gives the kind: red for an abstract class (a vtable slot holds
+    source each class came from, and the struct's shorter name when typedef shortening renamed it. As upstream, the icon's colour gives the kind: red for an abstract class (a vtable slot holds
     <CODE>__cxa_pure_virtual</CODE>), blue for a virtual base, purple for both, yellow for a nested class,
     and grey for any other class only the sweep found.</P>
 

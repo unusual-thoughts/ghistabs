@@ -33,7 +33,7 @@ import javax.swing.SwingUtilities
 /**
  * The docked Class Hierarchy window: [ClassHierarchyRootNode] over the current program, rebuilt off the
  * Swing thread when the program changes while the window shows. Double-click (or Enter) goes to a
- * class's vtable, else its typeinfo, else selects its struct in the Data Type Manager.
+ * member, or to a class's vtable, else its typeinfo, else selects its struct in the Data Type Manager.
  */
 class ClassHierarchyProvider(private val plugin: Plugin) :
     ComponentProviderAdapter(plugin.tool, NAME, plugin.name),
@@ -141,7 +141,12 @@ class ClassHierarchyProvider(private val plugin: Plugin) :
     }
 
     private fun goToSelected() {
-        val node = tree.selectionPath?.lastPathComponent as? ClassNode ?: return
+        val selected = tree.selectionPath?.lastPathComponent
+        if (selected is MemberNode) {
+            tool.getService(GoToService::class.java)?.goTo(selected.member.address)
+            return
+        }
+        val node = selected as? ClassNode ?: return
         val info = node.info ?: return
         val address = info.address
         when {

@@ -4,9 +4,12 @@ import ghidra.program.model.address.Address
 import ghidra.program.model.data.CategoryPath
 import ghidra.program.model.data.DataType
 import ghidra.program.model.data.Structure
+import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Namespace
+import ghidra.program.model.symbol.Symbol
+import ghidra.program.model.symbol.SymbolType
 import ghistabs.importer.ClassHierarchyRecord
 import ghistabs.materialize.cpp.ClassNaming
 import ghistabs.materialize.cpp.abi.CxxAbi
@@ -41,6 +44,20 @@ class ClassHierarchy private constructor(val classes: List<ClassInfo>) {
     /** A direct base: the class it names, if the program has one for it, else only its [name]. */
     data class BaseRef(val name: String, val target: ClassInfo?, val isVirtual: Boolean, val access: Access?)
 
+    /** A function or label in the class's namespace, as the Symbol Tree lists it. */
+    data class Member(val name: String, val address: Address, val kind: MemberKind, val signature: String?)
+
+    enum class MemberKind {
+        /** A vtable: our `vftable` / `internal_vftable`, or the demangler's `vtable`, `VTT`, `construction-vtable`. */
+        VTABLE,
+
+        /** Any other Itanium special name (`_ZT*`, `_ZG*`): `typeinfo`, `typeinfo-name`, guard variables. */
+        ABI,
+        FUNCTION,
+        THUNK,
+        LABEL,
+    }
+
     class ClassInfo(
         val namespace: GhidraClass,
         val origin: Origin,
@@ -52,6 +69,8 @@ class ClassHierarchy private constructor(val classes: List<ClassInfo>) {
         val struct: DataType?,
         /** A vftable slot holds `__cxa_pure_virtual` (gcc 2.x: `__pure_virtual`). */
         val isAbstract: Boolean,
+        /** Its functions and labels: vtables first, then the other ABI objects, then the rest by name. */
+        val members: List<Member>,
     ) {
         val path: List<String> = namespace.getPathList(true).toList()
         val name: String get() = namespace.name
@@ -75,6 +94,7 @@ class ClassHierarchy private constructor(val classes: List<ClassInfo>) {
     private class Builder(val program: Program) {
         val symtab = program.symbolTable
         val record = ClassHierarchyRecord.read(program).orEmpty()
+        val structIds = ClassHierarchyRecord.readStructs(program)
         val rtti = RttiReader(program)
 
         // `_ZTI` objects by the class they describe, off the mangled label or, once Ghidra's demangler
@@ -106,6 +126,7 @@ class ClassHierarchy private constructor(val classes: List<ClassInfo>) {
                     typeinfo,
                     structOf(ns),
                     vftable?.let(::hasPureVirtualSlot) == true,
+                    membersOf(ns),
                 )
             }
             val byPath = infos.values.associateBy { it.path }
@@ -131,10 +152,35 @@ class ClassHierarchy private constructor(val classes: List<ClassInfo>) {
 
         fun vftableOf(ns: Namespace): Address? = symtab.getSymbols(ClassNaming.VFTABLE, ns).firstOrNull()?.address
 
-        fun structOf(ns: GhidraClass): DataType? = ns.getPathList(true).toList().let { path ->
-            val scope = path.dropLast(1)
-            val category = if (scope.isEmpty()) CategoryPath.ROOT else CategoryPath(CategoryPath.ROOT, scope)
-            program.dataTypeManager.getDataType(category, path.last()) as? Structure
+        // By the id the import recorded, since typedef shortening may have renamed it; else by name.
+        fun structOf(ns: GhidraClass): DataType? = structIds[ns.id]?.let(program.dataTypeManager::getDataType)
+            ?: ns.getPathList(true).toList().let { path ->
+                val scope = path.dropLast(1)
+                val category = if (scope.isEmpty()) CategoryPath.ROOT else CategoryPath(CategoryPath.ROOT, scope)
+                program.dataTypeManager.getDataType(category, path.last()) as? Structure
+            }
+
+        fun membersOf(ns: Namespace): List<Member> = symtab.getSymbols(ns).mapNotNull { sym ->
+            when (sym.symbolType) {
+                SymbolType.FUNCTION -> (sym.`object` as? Function)?.let { fn ->
+                    val kind = if (fn.isThunk) MemberKind.THUNK else MemberKind.FUNCTION
+                    Member(sym.name, sym.address, kind, fn.getPrototypeString(false, false))
+                }
+
+                SymbolType.LABEL -> Member(sym.name, sym.address, labelKind(sym), null)
+
+                else -> null
+            }
+        }.sortedWith(MEMBER_ORDER)
+
+        fun labelKind(sym: Symbol): MemberKind {
+            val mangled = (sequenceOf(sym) + symtab.getSymbols(sym.address).asSequence())
+                .map { it.name }.firstOrNull { it.startsWith("_Z") }.orEmpty()
+            return when {
+                sym.name in VTABLE_LABELS || VTABLE_MANGLED.any(mangled::startsWith) -> MemberKind.VTABLE
+                sym.name in ABI_LABELS || ABI_MANGLED.any(mangled::startsWith) -> MemberKind.ABI
+                else -> MemberKind.LABEL
+            }
         }
 
         fun hasPureVirtualSlot(vftable: Address): Boolean = slotTargets(vftable).any { target ->
@@ -163,3 +209,24 @@ class ClassHierarchy private constructor(val classes: List<ClassInfo>) {
 }
 
 private val PURE_VIRTUAL = setOf("cxa_pure_virtual", "pure_virtual")
+
+// Vtables, then the other ABI objects, then functions and labels mixed by name, as the Symbol Tree.
+private val MEMBER_ORDER = compareBy<ClassHierarchy.Member>(
+    { minOf(it.kind, ClassHierarchy.MemberKind.FUNCTION) },
+    { it.name },
+    { it.address },
+)
+
+// The demangler's labels for Itanium special names, and those names' mangled prefixes: `_ZTV` vtable,
+// `_ZTT` VTT, `_ZTC` construction vtable; `_ZTI` typeinfo, `_ZTS` its name, `_ZG*` guard variables
+// and reference temporaries. A static data member (`_ZN…E`) stays a plain label.
+private val VTABLE_LABELS = setOf(
+    ClassNaming.VFTABLE,
+    ClassNaming.INTERNAL_VFTABLE,
+    Itanium.DEMANGLED_VTABLE,
+    "VTT",
+    "construction-vtable",
+)
+private val ABI_LABELS = setOf(Itanium.DEMANGLED_TYPEINFO, "typeinfo-name")
+private val VTABLE_MANGLED = listOf("_ZTV", "_ZTT", "_ZTC")
+private val ABI_MANGLED = listOf("_ZT", "_ZG")

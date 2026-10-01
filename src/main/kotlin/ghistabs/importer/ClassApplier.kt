@@ -145,7 +145,7 @@ class ClassApplier(
                 err("class-apply-error", "${group.location}: ${t.message}")
             }
         }
-        ClassHierarchyRecord.write(program, hierarchy)
+        ClassHierarchyRecord.write(program, hierarchy, structIds)
         return built
     }
 
@@ -153,6 +153,7 @@ class ClassApplier(
     // come first ([classesBasesFirst]), so a base built at all is here by the time anything names it.
     private val namespaceByStruct = mutableMapOf<DataTypePath, GhidraClass>()
     private val hierarchy = linkedMapOf<Long, List<ClassHierarchyRecord.Base>>()
+    private val structIds = linkedMapOf<Long, Long>()
 
     /**
      * [ClassHierarchyRecord]'s entry for this class. Two groups can build one namespace (a class the
@@ -160,6 +161,7 @@ class ClassApplier(
      */
     private fun LocatedClass.recordBases() {
         namespaceByStruct[structDt.dataTypePath] = ns
+        program.dataTypeManager.getID(structDt).takeIf { it >= 0 }?.let { structIds.putIfAbsent(ns.id, it) }
         val bases = body.bases.map { base ->
             val dt = registry.resolveRef(base.type)?.let { DataTypeUtilities.getBaseDataType(it) }
             val baseNs = dt?.let { namespaceByStruct[it.dataTypePath] }

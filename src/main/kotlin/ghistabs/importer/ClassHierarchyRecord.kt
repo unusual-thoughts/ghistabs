@@ -16,11 +16,15 @@ import ghistabs.parse.Access
  * name spells. One line per class: its id, then a tab-separated entry per base in declaration order,
  * `[v]<access><id>`, or `[v]<access>=<name>` for a base no class was built for (a forward declaration).
  * Access is `+` public, `#` protected, `-` private.
+ *
+ * Beside it, [STRUCTS] holds each class's struct by datatype id, `<namespace id>\t<datatype id>` a line:
+ * the typedef shortening pass renames a struct (`map<int, Foo*>`) away from its class's namespace name.
  */
 object ClassHierarchyRecord {
     /** A program options category of its own, so the record doesn't crowd Program Information. */
     const val CATEGORY = "Stabs Class Hierarchy"
     private const val BASES = "Bases"
+    private const val STRUCTS = "Structs"
 
     /** A direct base: the class built for it ([namespaceId]), or only its [name] when none was. */
     data class Base(val namespaceId: Long?, val name: String?, val isVirtual: Boolean, val access: Access)
@@ -57,10 +61,21 @@ object ClassHierarchyRecord {
         }
     }
 
-    fun write(program: Program, record: Map<Long, List<Base>>) =
-        program.getOptions(CATEGORY).setString(BASES, encode(record))
+    fun write(program: Program, record: Map<Long, List<Base>>, structs: Map<Long, Long>) =
+        program.getOptions(CATEGORY).run {
+            setString(BASES, encode(record))
+            setString(STRUCTS, structs.entries.joinToString("\n") { (ns, dt) -> "$ns\t$dt" })
+        }
 
     /** Null when no stabs import recorded one: a program imported before the record existed, or with none. */
     fun read(program: Program): Map<Long, List<Base>>? =
         program.getOptions(CATEGORY).getString(BASES, null)?.let(::decode)
+
+    /** Each class's struct, as a datatype id, by namespace id. */
+    fun readStructs(program: Program): Map<Long, Long> = buildMap {
+        for (line in program.getOptions(CATEGORY).getString(STRUCTS, null).orEmpty().lineSequence()) {
+            val (ns, dt) = line.split('\t').takeIf { it.size == 2 } ?: continue
+            put(ns.toLongOrNull() ?: continue, dt.toLongOrNull() ?: continue)
+        }
+    }
 }
