@@ -3,14 +3,14 @@ package ghistabs.entrypoints
 import ghidra.app.services.AbstractAnalyzer
 import ghidra.app.services.AnalysisPriority
 import ghidra.app.services.AnalyzerType
+import ghidra.app.util.demangler.gnu.GnuDemangler
 import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.address.AddressSetView
 import ghidra.program.model.listing.Program
 import ghidra.util.task.TaskMonitor
-import ghistabs.diagnose.BookmarkSink
 import ghistabs.diagnose.DiagnosticSink
+import ghistabs.diagnose.DummySink
 import ghistabs.diagnose.MessageLogSink
-import ghistabs.diagnose.TeeSink
 import ghistabs.importer.ImportOptions.Companion.isStabsDone
 import ghistabs.importer.VtableSweeper
 import ghistabs.importer.VtableSweeper.Companion.isVtablesSwept
@@ -60,14 +60,21 @@ class GccVftableAnalyzer :
         setSupportsOneTimeAnalysis()
     }
 
-    override fun canAnalyze(program: Program) = !program.isVtablesSwept
+    /**
+     * gcc's, as the Demangler analyzer decides it ([GnuDemangler.canDemangle]): ELF, Mach-O, a
+     * compiler Ghidra recognised as gcc (MinGW, Cygwin), or anything not built for Windows. An MSVC PE
+     * has no `_ZTV`/`_vt` symbols to find, so this only saves the symbol walk.
+     */
+    override fun canAnalyze(program: Program) = !program.isVtablesSwept && GnuDemangler().canDemangle(program)
 
     override fun added(program: Program, set: AddressSetView?, monitor: TaskMonitor?, log: MessageLog?): Boolean {
         if (program.isVtablesSwept) return false
         // Not imported yet: the import sweeps once its classes have claimed their tables.
         if (!program.isStabsDone && StabReader.hasStabs(program)) return false
 
-        val sink = TeeSink(BookmarkSink(program), log?.let(::MessageLogSink))
+        // The log only, at INFO and up: no bookmarks. Every table laid would get an Analysis one, and its
+        // label and struct already mark it; what goes wrong (an empty table) is a WARN, so it is logged.
+        val sink = log?.let(::MessageLogSink) ?: DummySink
         val laid = sweep(program, DtmRegistry(program.dataTypeManager), monitor ?: TaskMonitor.DUMMY, sink)
         if (laid > 0) log?.appendMsg(GCC_VFTABLE_ANALYZER_NAME, "laid $laid vtable(s)")
         return true

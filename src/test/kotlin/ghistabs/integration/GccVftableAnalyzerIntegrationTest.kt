@@ -44,7 +44,7 @@ class GccVftableAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTest(
 
     @BeforeEach
     fun setUp() {
-        builder = ProgramBuilder("vtable-sweep", ProgramBuilder._X86)
+        builder = ProgramBuilder("vtable-sweep", ProgramBuilder._X86, "gcc", this)
         builder.setExecute(builder.createMemory(".text", hex(fooA), 0x200), true)
         builder.createEmptyFunction("_ZN3Foo1aEv", hex(fooA), 1, VoidDataType.dataType)
         builder.createEmptyFunction("_ZN3Foo1bEv", hex(fooB), 1, VoidDataType.dataType)
@@ -110,5 +110,17 @@ class GccVftableAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTest(
         program.runTransaction("stabs-done") { program.markStabsDone(true) }
         runAnalyzer().mustBe(true)
         program.fooVftable().mustNotBeNull("not swept after an import that left it")
+    }
+
+    /** An MSVC-built PE is not gcc's, however its symbols read: the Demangler analyzer's own test. */
+    @Test
+    fun leavesAWindowsProgramAlone() {
+        val msvc = ProgramBuilder("msvc", ProgramBuilder._X86, "windows", this)
+        try {
+            GccVftableAnalyzer().mustNot("a windows program must not be analyzable") { canAnalyze(msvc.program) }
+        } finally {
+            msvc.dispose()
+        }
+        GccVftableAnalyzer().must("a gcc program must be analyzable") { canAnalyze(program) }
     }
 }
