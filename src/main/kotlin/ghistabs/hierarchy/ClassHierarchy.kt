@@ -11,6 +11,7 @@ import ghidra.program.model.symbol.Namespace
 import ghidra.program.model.symbol.Symbol
 import ghidra.program.model.symbol.SymbolType
 import ghistabs.importer.ClassHierarchyRecord
+import ghistabs.isInjected
 import ghistabs.materialize.cpp.ClassNaming
 import ghistabs.materialize.cpp.abi.CxxAbi
 import ghistabs.materialize.cpp.abi.Itanium
@@ -44,8 +45,20 @@ class ClassHierarchy private constructor(val classes: List<ClassInfo>) {
     /** A direct base: the class it names, if the program has one for it, else only its [name]. */
     data class BaseRef(val name: String, val target: ClassInfo?, val isVirtual: Boolean, val access: Access?)
 
-    /** A function or label in the class's namespace, as the Symbol Tree lists it. */
-    data class Member(val name: String, val address: Address, val kind: MemberKind, val signature: String?)
+    /**
+     * A function or label in the class's namespace, as the Symbol Tree lists it. An overloaded function
+     * is spelled with its [parameters], `this` and the return type left out so overloads line up.
+     */
+    data class Member(
+        val name: String,
+        val address: Address,
+        val kind: MemberKind,
+        val signature: String? = null,
+        val parameters: String? = null,
+        val isOverloaded: Boolean = false,
+    ) {
+        val label: String get() = if (isOverloaded && parameters != null) name + parameters else name
+    }
 
     enum class MemberKind {
         /** A vtable: our `vftable` / `internal_vftable`, or the demangler's `vtable`, `VTT`, `construction-vtable`. */
@@ -160,18 +173,29 @@ class ClassHierarchy private constructor(val classes: List<ClassInfo>) {
                 program.dataTypeManager.getDataType(category, path.last()) as? Structure
             }
 
-        fun membersOf(ns: Namespace): List<Member> = symtab.getSymbols(ns).mapNotNull { sym ->
-            when (sym.symbolType) {
-                SymbolType.FUNCTION -> (sym.`object` as? Function)?.let { fn ->
-                    val kind = if (fn.isThunk) MemberKind.THUNK else MemberKind.FUNCTION
-                    Member(sym.name, sym.address, kind, fn.getPrototypeString(false, false))
+        fun membersOf(ns: Namespace): List<Member> {
+            val members = symtab.getSymbols(ns).mapNotNull { sym ->
+                when (sym.symbolType) {
+                    SymbolType.FUNCTION -> (sym.`object` as? Function)?.let { fn ->
+                        val kind = if (fn.isThunk) MemberKind.THUNK else MemberKind.FUNCTION
+                        Member(sym.name, sym.address, kind, fn.getPrototypeString(false, false), parametersOf(fn))
+                    }
+
+                    SymbolType.LABEL -> Member(sym.name, sym.address, labelKind(sym))
+
+                    else -> null
                 }
-
-                SymbolType.LABEL -> Member(sym.name, sym.address, labelKind(sym), null)
-
-                else -> null
             }
-        }.sortedWith(MEMBER_ORDER)
+            val overloaded = members.filter { it.parameters != null }.groupingBy { it.name }.eachCount()
+                .filterValues { it > 1 }.keys
+            return members.map { if (it.name in overloaded) it.copy(isOverloaded = true) else it }
+                .sortedWith(MEMBER_ORDER)
+        }
+
+        fun parametersOf(fn: Function) = fn.parameters.filterNot { it.isInjected }
+            .map { it.dataType.displayName }
+            .let { if (fn.hasVarArgs()) it + "..." else it }
+            .joinToString(", ", "(", ")")
 
         fun labelKind(sym: Symbol): MemberKind {
             val mangled = (sequenceOf(sym) + symtab.getSymbols(sym.address).asSequence())
@@ -214,6 +238,7 @@ private val PURE_VIRTUAL = setOf("cxa_pure_virtual", "pure_virtual")
 private val MEMBER_ORDER = compareBy<ClassHierarchy.Member>(
     { minOf(it.kind, ClassHierarchy.MemberKind.FUNCTION) },
     { it.name },
+    { it.label },
     { it.address },
 )
 

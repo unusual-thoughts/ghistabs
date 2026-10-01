@@ -133,7 +133,7 @@ class ClassNode private constructor(val info: ClassInfo?, val base: ClassHierarc
 
 /** A function or label of the class above it. */
 class MemberNode(val member: ClassHierarchy.Member) : GTreeNode() {
-    override fun getName() = member.name
+    override fun getName() = member.label
     override fun getIcon(expanded: Boolean): Icon = MEMBER_ICONS.getValue(member.kind)
     override fun getToolTip(): String = buildString {
         append("<html>").append(escape(member.signature ?: member.name))

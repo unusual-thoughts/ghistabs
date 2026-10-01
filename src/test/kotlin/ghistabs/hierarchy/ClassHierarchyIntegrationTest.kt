@@ -90,6 +90,12 @@ class ClassHierarchyIntegrationTest : FeatureFixtureTest() {
         circle.single { it.name == "name" }.kind mustBe MemberKind.FUNCTION
         // A static data member is a plain label, mangled or not.
         hierarchy.cls("Shape").members.single { it.name == "count" }.kind mustBe MemberKind.LABEL
+        // Only an overloaded function spells its parameters.
+        circle.single { it.name == "name" }.label mustBe "name"
+        for (m in hierarchy.classes.flatMap { it.members }.filter { it.isOverloaded }) {
+            m.label.startsWith(m.name + "(").mustBeTrue("${m.label} spells its parameters")
+            ("this" in m.label).mustBeFalse()
+        }
 
         val node = ClassHierarchyRootNode(program.name, hierarchy).children.single { it.name == "Circle" }
         node.children.first().name mustBe "Shape"
