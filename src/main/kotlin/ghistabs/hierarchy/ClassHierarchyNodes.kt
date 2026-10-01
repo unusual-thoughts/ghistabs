@@ -42,7 +42,7 @@ class ClassHierarchyRootNode(
 
         // A namespace that is a class files what it holds as the class's nested classes.
         fun ensure(path: List<String>) {
-            if (path.isEmpty() || (!inverted && path in classNodes) || path in folders) return
+            if (path.isEmpty() || path in classNodes || path in folders) return
             folders[path] = NamespaceNode(path.last())
             ensure(path.dropLast(1))
             children.getOrPut(path.dropLast(1)) { mutableListOf() } += folders.getValue(path)
@@ -53,7 +53,7 @@ class ClassHierarchyRootNode(
         }
         for ((path, kids) in children) {
             val sorted = kids.sortedWith(NODE_ORDER)
-            when (val container = classNodes[path]?.takeIf { !inverted }) {
+            when (val container = classNodes[path]) {
                 null -> (folders[path] ?: this).setChildren(sorted)
 
                 else -> {
