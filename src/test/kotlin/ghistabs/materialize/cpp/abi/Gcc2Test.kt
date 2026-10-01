@@ -187,4 +187,35 @@ class Gcc2Test {
         Gcc2Thunks.hasRttiHeader mustBe false
         Gcc2Plain.hasRttiHeader mustBe false
     }
+
+    /** `hello_elf_gcc295`'s typeinfo objects and functions, `cp/rtti.c`'s `__ti`/`__tf` + mangled type. */
+    @Test
+    fun recognisesTypeinfoNames() {
+        Gcc2.must { isTypeinfoName("__ti4Base") }
+        Gcc2.must { isTypeinfoName("__ti7Diamond") }
+        Gcc2.must { isTypeinfoName("__tf5Shape") }
+        Gcc2.must { isTypeinfoName("___ti5Shape") }
+        Gcc2.mustNot { isTypeinfoName("__tiger") }
+        Gcc2.mustNot { isTypeinfoName("g_names") }
+    }
+
+    @Test
+    fun recognisesDtorNames() {
+        Gcc2.must { isDtorName("_._5Named") }
+        Gcc2.must { isDtorName($$"_$_5Named") }
+        Gcc2.mustNot { isDtorName("__5Named") }
+        Gcc2.mustNot { isDtorName("_5Shape.count") }
+    }
+
+    /** What `hello.cc` gets generated for its classes, by gcc 2.95 (`__vt_`, `__ti`) and gcc ≥ 3 (`_ZT*`). */
+    @Test
+    fun generatedDataIsEitherAbisVtableOrTypeinfo() {
+        val gcc2 = listOf("__vt_5Shape", "_vt.5Shape", $$"__vt$5Shape", "__ti6Circle")
+        for (name in gcc2 + listOf("_ZTI5Shape", "_ZTS5Shape", "_ZTV5Shape")) {
+            CxxAbi.must(name) { isGeneratedData(name) }
+        }
+        for (name in listOf("g_names", "matrix", "_5Shape.count", "_ZN5Shape5countE")) {
+            CxxAbi.mustNot(name) { isGeneratedData(name) }
+        }
+    }
 }

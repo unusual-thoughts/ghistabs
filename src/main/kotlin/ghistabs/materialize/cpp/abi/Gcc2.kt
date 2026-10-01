@@ -44,6 +44,16 @@ object Gcc2 {
     fun looksLikeVtable(symbolName: String) = vtableTail(symbolName) != null
 
     /**
+     * A gcc 2.x typeinfo object or the function returning it: `cp/rtti.c` names them `__ti` and `__tf`
+     * followed by the mangled type (`build_overload_with_type`), so `__ti4Base` and `__tf5Shape`. Only a
+     * class's mangling is matched (a length, `Q` or `t`), which is what a program's own classes get.
+     */
+    fun isTypeinfoName(name: String) = TYPEINFO_NAME.matches(name)
+
+    /** A gcc 2.x destructor's linkage name: `_` then a cplus_marker, `_`, and the class (`_._5Named`). */
+    fun isDtorName(name: String) = name.length > 3 && name[0] == '_' && name[1] in MARKERS && name[2] == '_'
+
+    /**
      * The `-fvtable-thunks` spelling, which decides the *entry width*. gcc 2.95.3 `cp/decl.c`: with
      * thunks an entry is a bare function pointer, the `this` adjustment having moved into a thunk;
      * without them it is the record `{short delta; short index; void *pfn;}`, twice as wide. The
@@ -219,6 +229,9 @@ object Gcc2 {
         ?.substring(VTABLE_PREFIX.length + 1)
 
     private val MARKERS = CPLUS_MARKERS.toSet()
+
+    // The optional leading `_` is a.out's [USER_LABEL_PREFIX].
+    private val TYPEINFO_NAME = Regex("_?__t[if][0-9Qt].*")
 
     private fun cv(isConst: Boolean, isVolatile: Boolean) = (if (isConst) "C" else "") + (if (isVolatile) "V" else "")
 
