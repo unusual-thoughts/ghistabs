@@ -102,6 +102,8 @@ class ClassHierarchyIntegrationTest : FeatureFixtureTest() {
         node.children.filterIsInstance<MemberNode>().map { it.member } mustBe circle
         // Under a base, a class shows only its own bases.
         node.children.first().children.none { it is MemberNode }.mustBeTrue()
+        ClassHierarchyRootNode(program.name, hierarchy, showMembers = false).children.single { it.name == "Circle" }
+            .children.none { it is MemberNode }.mustBeTrue()
     }
 
     companion object {

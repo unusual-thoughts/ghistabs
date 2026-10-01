@@ -1,5 +1,6 @@
 package ghistabs.hierarchy
 
+import ghidra.app.util.demangler.DemangledFunction
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.CategoryPath
 import ghidra.program.model.data.DataType
@@ -8,8 +9,10 @@ import ghidra.program.model.listing.Function
 import ghidra.program.model.listing.GhidraClass
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Namespace
+import ghidra.program.model.symbol.SourceType
 import ghidra.program.model.symbol.Symbol
 import ghidra.program.model.symbol.SymbolType
+import ghistabs.Demangler
 import ghistabs.importer.ClassHierarchyRecord
 import ghistabs.isInjected
 import ghistabs.materialize.cpp.ClassNaming
@@ -192,10 +195,20 @@ class ClassHierarchy private constructor(val classes: List<ClassInfo>) {
                 .sortedWith(MEMBER_ORDER)
         }
 
-        fun parametersOf(fn: Function) = fn.parameters.filterNot { it.isInjected }
-            .map { it.dataType.displayName }
-            .let { if (fn.hasVarArgs()) it + "..." else it }
-            .joinToString(", ", "(", ")")
+        /**
+         * With no signature yet (a swept class's functions, before the demangler analyzer applied one),
+         * the parameters its mangled name declares, off the linkage label beside it.
+         */
+        fun parametersOf(fn: Function): String {
+            val types = if (fn.signatureSource == SourceType.DEFAULT && fn.parameterCount == 0) {
+                symtab.getSymbols(fn.entryPoint).firstNotNullOfOrNull { Demangler.of(it.name) as? DemangledFunction }
+                    ?.parameters?.map { it.type }?.filterNot { it.isVoid && it.pointerLevels == 0 && !it.isReference }
+                    ?.map { it.signature }
+            } else {
+                null
+            } ?: fn.parameters.filterNot { it.isInjected }.map { it.dataType.displayName }
+            return (if (fn.hasVarArgs()) types + "..." else types).joinToString(", ", "(", ")")
+        }
 
         fun labelKind(sym: Symbol): MemberKind {
             val mangled = (sequenceOf(sym) + symtab.getSymbols(sym.address).asSequence())

@@ -21,10 +21,17 @@ import javax.swing.ImageIcon
 internal val CLASS_ICON: Icon = GIcon("icon.plugin.symboltree.node.class")
 private val NAMESPACE_ICON: Icon = GIcon("icon.plugin.symboltree.node.namespace")
 
-/** The program's classes, filed by namespace. */
-class ClassHierarchyRootNode(private val programName: String, hierarchy: ClassHierarchy) : GTreeNode() {
+/** The program's classes, filed by namespace, with their members unless [showMembers] is off. */
+class ClassHierarchyRootNode(
+    private val programName: String,
+    hierarchy: ClassHierarchy,
+    val showMembers: Boolean = true,
+) : GTreeNode() {
     init {
-        val classNodes = hierarchy.classes.associate { it.path to ClassNode(it) }
+        val classNodes = hierarchy.classes.associate {
+            it.path to
+                ClassNode(it).also { n -> n.showMembers = showMembers }
+        }
         val folders = mutableMapOf<List<String>, NamespaceNode>()
         val children = mutableMapOf<List<String>, MutableList<GTreeNode>>()
 
@@ -78,8 +85,11 @@ class ClassNode private constructor(val info: ClassInfo?, val base: ClassHierarc
 
     private fun basesOf() = info?.bases.orEmpty()
 
+    /** Set off by a root built without members. */
+    internal var showMembers = true
+
     // Only the class filed under its namespace lists its members: under a base, they'd repeat.
-    private fun membersOf() = if (base == null) info?.members.orEmpty() else emptyList()
+    private fun membersOf() = info?.members?.takeIf { base == null && showMembers }.orEmpty()
 
     override fun generateChildren(): List<GTreeNode> =
         basesOf().map { ClassNode(it.target, it) } + membersOf().map(::MemberNode) + nested

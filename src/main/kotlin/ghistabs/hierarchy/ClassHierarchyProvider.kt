@@ -2,9 +2,11 @@ package ghistabs.hierarchy
 
 import docking.ActionContext
 import docking.action.DockingAction
+import docking.action.ToggleDockingAction
 import docking.action.ToolBarData
 import docking.widgets.tree.GTree
 import docking.widgets.tree.GTreeNode
+import generic.theme.GIcon
 import ghidra.app.services.DataTypeManagerService
 import ghidra.app.services.GoToService
 import ghidra.framework.model.DomainObjectChangedEvent
@@ -32,8 +34,8 @@ import javax.swing.SwingUtilities
 
 /**
  * The docked Class Hierarchy window: [ClassHierarchyRootNode] over the current program, rebuilt off the
- * Swing thread when the program changes while the window shows. Double-click (or Enter) goes to a
- * member, or to a class's vtable, else its typeinfo, else selects its struct in the Data Type Manager.
+ * Swing thread when the program changes while the window shows. Double-click (or Enter) on a member
+ * goes to it; on a class, opens its struct in the structure editor, else goes to its vtable or typeinfo.
  */
 class ClassHierarchyProvider(private val plugin: Plugin) :
     ComponentProviderAdapter(plugin.tool, NAME, plugin.name),
@@ -50,6 +52,8 @@ class ClassHierarchyProvider(private val plugin: Plugin) :
     }
 
     private var program: Program? = null
+    private var shown: ClassHierarchy? = null
+    private var showMembers = true
     private val builder = Executors.newSingleThreadExecutor {
         Thread(it, "Stabs class hierarchy").apply {
             isDaemon =
@@ -70,13 +74,13 @@ class ClassHierarchyProvider(private val plugin: Plugin) :
             override fun mouseClicked(e: MouseEvent) {
                 if (!e.isConsumed && SwingUtilities.isLeftMouseButton(e) && e.clickCount == 2) {
                     e.consume()
-                    goToSelected()
+                    openSelected()
                 }
             }
         })
         tree.addKeyListener(object : KeyAdapter() {
             override fun keyPressed(e: KeyEvent) {
-                if (e.keyCode == KeyEvent.VK_ENTER) goToSelected()
+                if (e.keyCode == KeyEvent.VK_ENTER) openSelected()
             }
         })
         addLocalAction(
@@ -88,6 +92,21 @@ class ClassHierarchyProvider(private val plugin: Plugin) :
                 helpLocation = HelpLocation("Stabs", "Stabs_Class_Hierarchy")
             },
         )
+        addLocalAction(
+            object : ToggleDockingAction("Show Class Members", plugin.name) {
+                override fun actionPerformed(context: ActionContext?) {
+                    showMembers = isSelected
+                    val p = program
+                    val h = shown
+                    if (p != null && h != null) tree.setRootNode(ClassHierarchyRootNode(p.name, h, showMembers))
+                }
+            }.apply {
+                toolBarData = ToolBarData(GIcon("icon.plugin.symboltree.node.function"), null)
+                description = "Show each class's functions and labels, or only the classes"
+                isSelected = true
+                helpLocation = HelpLocation("Stabs", "Stabs_Class_Hierarchy")
+            },
+        )
     }
 
     override fun getComponent(): JComponent = panel
@@ -96,6 +115,7 @@ class ClassHierarchyProvider(private val plugin: Plugin) :
         if (newProgram === program) return
         program?.removeListener(this)
         program = newProgram
+        shown = null
         newProgram?.addListener(this)
         rebuild()
     }
@@ -127,7 +147,8 @@ class ClassHierarchyProvider(private val plugin: Plugin) :
     }
 
     private fun show(p: Program, hierarchy: ClassHierarchy) {
-        tree.setRootNode(ClassHierarchyRootNode(p.name, hierarchy))
+        shown = hierarchy
+        tree.setRootNode(ClassHierarchyRootNode(p.name, hierarchy, showMembers))
         val counts = hierarchy.classes.groupingBy { it.origin }.eachCount()
         val stabs = counts[ClassHierarchy.Origin.STABS] ?: 0
         val swept = hierarchy.classes.size - stabs
@@ -140,24 +161,25 @@ class ClassHierarchyProvider(private val plugin: Plugin) :
         }
     }
 
-    private fun goToSelected() {
+    private fun openSelected() {
         val selected = tree.selectionPath?.lastPathComponent
         if (selected is MemberNode) {
             tool.getService(GoToService::class.java)?.goTo(selected.member.address)
             return
         }
-        val node = selected as? ClassNode ?: return
-        val info = node.info ?: return
+        val info = (selected as? ClassNode)?.info ?: return
+        val struct = info.struct
         val address = info.address
         when {
+            struct != null -> tool.getService(DataTypeManagerService::class.java)?.edit(struct)
             address != null -> tool.getService(GoToService::class.java)?.goTo(address)
-            info.struct != null -> tool.getService(DataTypeManagerService::class.java)?.setDataTypeSelected(info.struct)
         }
     }
 
     fun dispose() {
         program?.removeListener(this)
         program = null
+        shown = null
         updater.dispose()
         builder.shutdownNow()
         tree.dispose()

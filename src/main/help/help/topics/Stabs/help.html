@@ -217,8 +217,10 @@
     <CODE>private Impl</CODE>), each of which expands into its own. After its bases come the class's
     functions and labels, as the Symbol Tree lists them but with its vtables first (a table icon) and
     its other ABI objects next (typeinfo, its name, the VTT: an information icon), then its nested
-    classes. Double-click a member to go to it. Double-click a class, or press Enter, to go to its vtable, else its typeinfo, else
-    to select its struct in the Data Type Manager.</P>
+    classes; the toolbar's function button hides the members, leaving only the classes. An overloaded
+    function is spelled with its parameter types. Double-click a member (or
+    press Enter) to go to it; double-click a class to open its struct in the structure editor, or,
+    for a class with no struct, to go to its vtable, else its typeinfo.</P>
 
     <P>A class the stabs describe takes its bases from them, exactly as gcc stated them, gcc 2.x
     included. The import records them in the program (the <CODE>Stabs Class Hierarchy</CODE>
