@@ -5,8 +5,10 @@ import ghidra.program.database.ProgramBuilder
 import ghidra.program.model.data.Structure
 import ghidra.program.model.data.VoidDataType
 import ghidra.program.model.listing.Program
+import ghidra.program.model.symbol.SourceType
 import ghidra.test.AbstractGhidraHeadlessIntegrationTest
 import ghidra.util.task.TaskMonitor
+import ghistabs.buildClassNamespaces
 import ghistabs.entrypoints.GccVftableAnalyzer
 import ghistabs.importer.ImportOptions.Companion.markStabsDone
 import ghistabs.importer.VtableSweeper.Companion.isVtablesSwept
@@ -33,6 +35,8 @@ class GccVftableAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTest(
     private val zti = 0x401100
     private val fooA = 0x402000
     private val fooB = 0x402100
+
+    private val addressPoint get() = program.addressFactory.defaultAddressSpace.getAddress(ztv + 8L)
 
     private fun hex(v: Int) = "0x${v.toString(16)}"
 
@@ -73,14 +77,25 @@ class GccVftableAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTest(
         vftable.mustNotBeNull("no Foo_vftable swept")
         vftable!!.definedComponents.map { it.fieldName }.mustBe(listOf("a", "b"))
 
-        val addressPoint = program.addressFactory.defaultAddressSpace.getAddress(ztv + 8L)
         program.listing.getDataAt(addressPoint)?.dataType?.name.mustBe("Foo_vftable")
-        program.symbolTable.getSymbols(addressPoint)
-            .map { it.getName(true) }
-            .must("the address point must carry Foo::vftable") { contains("Foo::${ClassNaming.VFTABLE}") }
+        val label = program.symbolTable.getSymbols(addressPoint).single { it.name == ClassNaming.VFTABLE }
+        label.getName(true).mustBe("Foo::${ClassNaming.VFTABLE}")
+        // ANALYSIS, not IMPORTED: a class laying this table later has to be able to claim it.
+        label.source.mustBe(SourceType.ANALYSIS)
 
         program.must("the sweep must mark the program swept") { isVtablesSwept }
         analyzer.mustNot("a swept program must not be swept again") { canAnalyze(program) }
+    }
+
+    /** The label a class's own `layVtable` leaves is the claim: the sweep must not lay that table again. */
+    @Test
+    fun leavesATableAClassLaid() {
+        program.runTransaction("class-pass") {
+            val ns = program.symbolTable.buildClassNamespaces(listOf("Foo"))
+            program.symbolTable.createLabel(addressPoint, ClassNaming.VFTABLE, ns, SourceType.IMPORTED)
+        }
+        runAnalyzer().mustBe(true)
+        program.fooVftable().mustBe(null, "swept a table a class had claimed")
     }
 
     @Test
@@ -91,7 +106,7 @@ class GccVftableAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTest(
         runAnalyzer().mustBe(false)
         program.fooVftable().mustBe(null, "swept ahead of the stabs import")
 
-        // An import with class reconstruction off marks the program imported but sweeps nothing.
+        // An import with this analyzer disabled marks the program imported but sweeps nothing.
         program.runTransaction("stabs-done") { program.markStabsDone(true) }
         runAnalyzer().mustBe(true)
         program.fooVftable().mustNotBeNull("not swept after an import that left it")

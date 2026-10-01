@@ -185,8 +185,8 @@ Independent of stabs, enabled by default, each re-runnable and available as one-
 - **GCC C++ vftables** - lays a `<Class>_vftable` at every gcc vtable symbol, Itanium `_ZTV…` (gcc 3+) or
   gcc 2.x `_vt…`, each slot typed off the function it points at, under the class
   namespace with the `vftable` label Ghidra's RTTI scripts expect, so virtual calls resolve to
-  named slots even with no stabs. On a binary with stabs it defers to the importer, which runs
-  the same sweep after its class pass has typed the classes the stabs describe.
+  named slots even with no stabs. On a binary with stabs the importer runs this sweep as soon
+  as its class pass has laid the classes the stabs describe, and the sweep leaves those alone.
 
 The Gap Disassembler and Filler Byte Condenser run before the importer, mostly so its data-coverage report doesn't flag
 compiler scaffolding as missing.

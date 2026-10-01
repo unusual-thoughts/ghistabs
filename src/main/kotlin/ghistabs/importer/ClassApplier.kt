@@ -111,6 +111,9 @@ class ClassApplier(
      * with distinct ids but identical ghidraName (one PE fixture: 86 names duplicated up to 11x);
      * materializeAll already collapsed by name, and iterating canonical groups builds each class
      * once, off the most-detailed body. Returns the number of classes built.
+     *
+     * The vtables of classes no stab describes are left to [ghistabs.entrypoints.GccVftableAnalyzer]'s
+     * sweep, which knows the ones laid here by their `vftable` labels.
      */
     fun applyAll(): Int {
         val classes = registry.classesBasesFirst()
@@ -127,7 +130,6 @@ class ClassApplier(
                 err("class-apply-error", "${group.location}: ${t.message}")
             }
         }
-        sweepUnclaimedVtables()
         return built
     }
 
@@ -376,10 +378,7 @@ class ClassApplier(
             return
         }
 
-        val shape = vtable?.let {
-            claimedVtables += it.address
-            program.vtableShape(it.address, abi)
-        }
+        val shape = vtable?.let { program.vtableShape(it.address, abi) }
         val targets = shape?.let { program.vtableSlotTargets(it.addressPoint, abi) }.orEmpty()
         val virtuals = rebaseOffHeader(declared)
         fillVftable(virtuals, targets)

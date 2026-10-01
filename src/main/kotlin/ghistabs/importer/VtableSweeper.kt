@@ -6,6 +6,7 @@ import ghidra.program.model.address.Address
 import ghidra.program.model.data.*
 import ghidra.program.model.listing.Program
 import ghidra.program.model.symbol.Namespace
+import ghidra.program.model.symbol.SourceType
 import ghidra.util.task.TaskMonitor
 import ghistabs.BoolOption
 import ghistabs.Demangler
@@ -29,10 +30,10 @@ internal data class Gcc2SecondaryVtable(val base: String, val address: Address, 
 
 /**
  * Lays the vtables of classes nothing describes: every `_ZTV…` (and gcc 2.x `_vt…`) symbol whose record
- * no one [claimedVtables], typed off whatever sits at the addresses its slots hold. Needs only the
- * symbol table and memory, so it runs on its own as [ghistabs.entrypoints.GccVftableAnalyzer] on a
- * binary with no stabs at all; [ClassApplier] extends it to claim the classes the stabs describe first
- * and sweep what they leave.
+ * no class has claimed ([isVtableClaimed]), typed off whatever sits at the addresses its slots hold.
+ * Needs only the symbol table and memory: [ghistabs.entrypoints.GccVftableAnalyzer] runs the sweep,
+ * on a binary with no stabs at all as much as after a stabs import. [ClassApplier] extends it only for
+ * the table-laying helpers, which it uses on the classes the stabs describe, and never sweeps.
  */
 open class VtableSweeper(
     internal open val registry: DtmRegistry,
@@ -44,6 +45,9 @@ open class VtableSweeper(
     internal val dtm = program.dataTypeManager
 
     companion object {
+        /** What a swept table's labels carry, so a class laying it later claims it ([isVtableClaimed]). */
+        private val SWEPT = SourceType.ANALYSIS
+
         val VTABLES_SWEPT = BoolOption("Vtables Swept", "Unclaimed vtables already swept.", false)
 
         /** Whether a sweep already ran here: the stabs import's, or [ghistabs.entrypoints.GccVftableAnalyzer]'s. */
@@ -53,9 +57,6 @@ open class VtableSweeper(
             this[VTABLES_SWEPT] = true
         }
     }
-
-    /** Vtable records a harvested class claimed, so [sweepUnclaimedVtables] can tell what is left. */
-    protected val claimedVtables = mutableSetOf<Address>()
 
     /**
      * gcc 2.x secondary vtables (`_vt.<class>.<base>`) by the qualified class they belong to, one per
@@ -73,7 +74,7 @@ open class VtableSweeper(
     }
 
     /**
-     * Lay every `_ZTV…` symbol no harvested class claimed. `buildAndApplyVtable` runs per group, i.e.
+     * Lay every `_ZTV…` symbol no class claimed. `buildAndApplyVtable` runs per group, i.e.
      * only for a class we have a `T`-stab body for; libsupc++ and libstdc++ link without stabs, so
      * their polymorphic classes (`__cxxabiv1::__si_class_type_info`, `std::basic_filebuf<char,…>`)
      * own a real vtable that nothing ever visits — 53 of unbouniaf's 58 `_ZTV` symbols.
@@ -87,9 +88,9 @@ open class VtableSweeper(
      */
     internal fun sweepUnclaimedVtables(): Int {
         val unclaimed = symtab.symbolIterator
-            .filter { it.address !in claimedVtables }
             .mapNotNull { sym -> ResolvedVtable.fromSymbol(sym) }
             .distinctBy { it.address }
+            .filterNot { (_, addr, abi) -> program.isVtableClaimed(program.vtableShape(addr, abi), abi) }
             .toList()
 
         monitor.initialize(unclaimed.size.toLong(), "Sweeping unclaimed vtables")
@@ -117,23 +118,23 @@ open class VtableSweeper(
             }
 
             val ns = symtab.buildClassNamespaces(qualified.nameSegments)
-            val addressPoint = program.layVtable(shape, vftable, qualified, ns, abi = abi)
+            val addressPoint = program.layVtable(shape, vftable, qualified, ns, abi = abi, source = SWEPT)
             debug("vtable-reconstructed", "${targets.size} slot(s) typed from targets", addressPoint, qualified)
             laid++
             // Itanium packs a class's secondaries into the same record, walkable from the primary's
             // end by their shared rtti word. gcc 2.x gives each its own `_vt.<derived>.<base>` symbol,
             // laid below whether or not the class has a primary at all.
-            if (abi.hasRttiHeader) laySecondaryVtables(shape, leaf, ns, abi)
+            if (abi.hasRttiHeader) laySecondaryVtables(shape, leaf, ns, abi, SWEPT)
         }
         // What the class pass left: gcc 2.x secondaries of classes linked without stabs. No class struct
         // to find the base's vptr in, so these go untagged.
-        for ((cls, tables) in gcc2SecondaryVtables) {
-            if (tables.all { it.address in claimedVtables }) continue
+        for (cls in gcc2SecondaryVtables.keys) {
             layGcc2SecondaryVtables(
                 cls,
                 canonTemplateName(cls.leafName),
                 symtab.buildClassNamespaces(cls.nameSegments),
                 null,
+                SWEPT,
             )
         }
         program.markVtablesSwept()
@@ -147,7 +148,13 @@ open class VtableSweeper(
      * Where the primary ends is read off memory, not off the vftable laid there — `CryptoPP::Base`
      * declares fewer virtuals than its table holds, which put the walk inside the function array.
      */
-    internal fun laySecondaryVtables(primary: VtableShape, leaf: String, ns: Namespace, abi: CxxAbi) {
+    internal fun laySecondaryVtables(
+        primary: VtableShape,
+        leaf: String,
+        ns: Namespace,
+        abi: CxxAbi,
+        source: SourceType = SourceType.IMPORTED,
+    ) {
         val rtti = program.readPointer(primary.rttiHeader) ?: return
         val ptr = program.defaultPointerSize.toLong()
         val slots = program.vtableSlotTargets(primary.addressPoint).size
@@ -159,7 +166,15 @@ open class VtableSweeper(
             val vftable = internalVftable(leaf, i, sub.targets, abi)
             val vfptrAt = with(abi) { sub.shape.vfptrOffset(program) }
             vftable.describeVxTable(leaf, "${ClassNaming.INTERNAL_VFTABLE} $i", vfptrAt)
-            val at = program.layVtable(sub.shape, vftable, leaf, ns, label = ClassNaming.INTERNAL_VFTABLE, abi = abi)
+            val at = program.layVtable(
+                sub.shape,
+                vftable,
+                leaf,
+                ns,
+                label = ClassNaming.INTERNAL_VFTABLE,
+                abi = abi,
+                source = source,
+            )
             debug("vtable-secondary", "class=$leaf index=$i slots=${sub.targets.size}", address = at)
         }
     }
@@ -172,13 +187,19 @@ open class VtableSweeper(
      * vptr holds.
      *
      * Tagged at that base's vptr in [classStruct], when there is one to look in: the vptr the table is
-     * for belongs to the base, wherever the class lays it.
+     * for belongs to the base, wherever the class lays it. A record a class already laid is skipped.
      */
-    internal fun layGcc2SecondaryVtables(className: String, leaf: String, ns: Namespace, classStruct: Structure?) {
+    internal fun layGcc2SecondaryVtables(
+        className: String,
+        leaf: String,
+        ns: Namespace,
+        classStruct: Structure?,
+        source: SourceType = SourceType.IMPORTED,
+    ) {
         var laid = 0
         for ((base, at, abi) in gcc2SecondaryVtables[className].orEmpty()) {
-            if (!claimedVtables.add(at)) continue
             val shape = program.vtableShape(at, abi)
+            if (program.isVtableClaimed(shape, abi)) continue
             val targets = program.vtableSlotTargets(shape.addressPoint, abi)
             if (targets.isEmpty()) {
                 debug("vtable-secondary-empty", "class=$className base=$base", address = at)
@@ -188,7 +209,15 @@ open class VtableSweeper(
             val vftable = internalVftable(leaf, i, targets, abi)
             val vfptrAt = classStruct?.vfptrOffsetOfBase(base)?.toLong()
             vftable.describeVxTable(leaf, "${ClassNaming.INTERNAL_VFTABLE} $i, for $base", vfptrAt)
-            program.layVtable(shape, vftable, leaf, ns, label = ClassNaming.INTERNAL_VFTABLE, abi = abi)
+            program.layVtable(
+                shape,
+                vftable,
+                leaf,
+                ns,
+                label = ClassNaming.INTERNAL_VFTABLE,
+                abi = abi,
+                source = source,
+            )
             debug("vtable-secondary", "class=$className index=$i base=$base slots=${targets.size}", address = at)
         }
     }

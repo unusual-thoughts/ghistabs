@@ -189,6 +189,7 @@ fun Program.layVtable(
     virtualBases: List<String> = emptyList(),
     label: String = ClassNaming.VFTABLE,
     abi: CxxAbi = Itanium,
+    source: SourceType = SourceType.IMPORTED,
 ): Address {
     val (prefix, topSlot, rttiHeader, addressPoint) = shape
 
@@ -198,7 +199,7 @@ fun Program.layVtable(
     // vfptr's pointee type rather than off whatever data is applied at the target.
     if (abi.vptrAtRecordStart) {
         listing.setComment(topSlot, CommentType.EOL, "gcc 2.x vtable: reserved entry, then the slots")
-        symbolTable.createLabel(topSlot, label, ns, SourceType.IMPORTED)
+        labelVtable(topSlot, label, ns, source)
         return topSlot
     }
 
@@ -211,9 +212,30 @@ fun Program.layVtable(
     forceCreateData(rttiHeader, PointerDataType(dataTypeManager))
     listing.setComment(rttiHeader, CommentType.EOL, rttiComment(rttiHeader, className))
     forceCreateData(addressPoint, vftable)
-    symbolTable.createLabel(addressPoint, label, ns, SourceType.IMPORTED)
+    labelVtable(addressPoint, label, ns, source)
     return addressPoint
 }
+
+/**
+ * `createLabel` hands back a label already there as it stands, so a class laying a table an earlier
+ * sweep labelled has to raise the label's source itself: that source is what [isVtableClaimed] reads.
+ */
+private fun Program.labelVtable(at: Address, label: String, ns: Namespace, source: SourceType) {
+    val sym = symbolTable.createLabel(at, label, ns, source)
+    if (source == SourceType.IMPORTED && sym.source != source) sym.source = source
+}
+
+/**
+ * Whether a class that describes the record at [shape] already laid it: [layVtable] with
+ * [SourceType.IMPORTED] left a `vftable` or `internal_vftable` label where its `{vfptr}` points. This
+ * is how a sweep tells what is left without the class pass's own bookkeeping. A swept table is
+ * labelled [SourceType.ANALYSIS], so a later sweep lays it again rather than skipping it.
+ */
+fun Program.isVtableClaimed(shape: VtableShape, abi: CxxAbi): Boolean =
+    symbolTable.getSymbols(if (abi.vptrAtRecordStart) shape.topSlot else shape.addressPoint)
+        .any { it.source == SourceType.IMPORTED && it.name in claimLabels }
+
+private val claimLabels = setOf(ClassNaming.VFTABLE, ClassNaming.INTERNAL_VFTABLE)
 
 /** Where a class's vtable record sits, and which ABI lays it out past the header. */
 data class ResolvedVtable(val className: String, val address: Address, val abi: CxxAbi) {
