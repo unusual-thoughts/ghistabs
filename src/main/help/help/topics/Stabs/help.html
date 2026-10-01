@@ -209,6 +209,25 @@
       both modes, with the same render options exposed as flags. See the project README.</P>
     </BLOCKQUOTE>
 
+    <H2><A name="Stabs_Class_Hierarchy"></A>Window &rarr; Class Hierarchy</H2>
+
+    <P>A read-only tree of the program's C++ classes, after the <I>ClassTypeInfo Tree</I> of
+    astrelsky's Ghidra-Cpp-Class-Analyzer. Each class sits under its namespace, and expands into
+    its direct bases, spelled as the base clause would (<CODE>virtual Base</CODE>,
+    <CODE>private Impl</CODE>), each of which expands into its own; a class's nested classes follow
+    its bases. Double-click a class, or press Enter, to go to its vtable, else its typeinfo, else
+    to select its struct in the Data Type Manager.</P>
+
+    <P>A class the stabs describe takes its bases from them, exactly as gcc stated them, gcc 2.x
+    included. The import records them in the program (the <CODE>Stabs Class Hierarchy</CODE>
+    options), so a program imported before this window existed shows its stabs classes only
+    after <A href="#Stabs_Reimport">Re-import</A>. A class only the vtable sweep found, with no
+    stabs (libstdc++ and libsupc++ classes, or a binary with none), is shown greyed: its bases
+    come from its Itanium typeinfo where the binary has one, and it is a root otherwise. A base
+    the program built no class for, such as a plain struct, is a leaf. The tooltip says which
+    source each class came from, and whether a vtable slot holds
+    <CODE>__cxa_pure_virtual</CODE> (abstract).</P>
+
     <H2><A name="Stabs_Supporting_Analyzers"></A>Supporting Analyzers</H2>
 
     <P>Three analyzers ship with the extension that do not read stabs at all. They are enabled

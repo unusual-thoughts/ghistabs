@@ -1,6 +1,7 @@
 package ghistabs.importer
 
 import ghidra.app.util.demangler.DemangledFunction
+import ghidra.program.database.data.DataTypeUtilities
 import ghidra.program.model.address.Address
 import ghidra.program.model.data.*
 import ghidra.program.model.lang.CompilerSpec
@@ -137,13 +138,45 @@ class ClassApplier(
             try {
                 group.resolve()?.apply {
                     buildAndApply()
+                    recordBases()
                     built++
                 }
             } catch (t: Throwable) {
                 err("class-apply-error", "${group.location}: ${t.message}")
             }
         }
+        ClassHierarchyRecord.write(program, hierarchy)
         return built
+    }
+
+    // The namespace each class struct was built under, for its derived classes' base entries: bases
+    // come first ([classesBasesFirst]), so a base built at all is here by the time anything names it.
+    private val namespaceByStruct = mutableMapOf<DataTypePath, GhidraClass>()
+    private val hierarchy = linkedMapOf<Long, List<ClassHierarchyRecord.Base>>()
+
+    /**
+     * [ClassHierarchyRecord]'s entry for this class. Two groups can build one namespace (a class the
+     * stabs spell two ways, refiled under the same demangled scope); their bases are merged.
+     */
+    private fun LocatedClass.recordBases() {
+        namespaceByStruct[structDt.dataTypePath] = ns
+        val bases = body.bases.map { base ->
+            val dt = registry.resolveRef(base.type)?.let { DataTypeUtilities.getBaseDataType(it) }
+            val baseNs = dt?.let { namespaceByStruct[it.dataTypePath] }
+            ClassHierarchyRecord.Base(
+                baseNs?.id,
+                if (baseNs ==
+                    null
+                ) {
+                    dt?.name ?: "?"
+                } else {
+                    null
+                },
+                base.isVirtual,
+                base.access,
+            )
+        }
+        hierarchy.merge(ns.id, bases) { old, new -> (old + new).distinct() }
     }
 
     private fun LocatedType.resolve(): LocatedClass? = when (val structDt = registry.dataTypeFor(type.id)) {

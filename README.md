@@ -138,6 +138,16 @@ end of the import.
   runs again over the current program. Use it after changing analyzer options. Enabled only
   when the program actually has `.stab`/`.stabstr` blocks.
 
+### `Window > Class Hierarchy`
+
+A read-only tree of the C++ classes, ported from the *ClassTypeInfo Tree* of
+[astrelsky/Ghidra-Cpp-Class-Analyzer](https://github.com/astrelsky/Ghidra-Cpp-Class-Analyzer):
+each class under its namespace, expanding into its direct bases (`virtual Base`, `private Impl`)
+and theirs. Bases come from the stabs, exact down to virtuality and access, gcc 2.x included;
+classes the vtable sweep found without stabs show greyed, with bases read off their Itanium
+typeinfo where there is one. Double-click goes to the vtable. Programs imported before this
+window existed need a **Re-import** for their stabs bases.
+
 ### `File > Export Program…`
 
 Two formats write the reconstructed sources, one file per source file, and they answer different
