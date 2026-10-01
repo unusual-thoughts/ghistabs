@@ -104,7 +104,8 @@ open class VtableSweeper(
                 continue
             }
             val leaf = canonTemplateName(qualified.leafName)
-            val category = CategoryPath(ClassNaming.classDataTypesRoot, leaf)
+            val ns = symtab.buildClassNamespaces(qualified.nameSegments)
+            val category = ClassNaming.vftableCategory(ns)
             val vftable = registry.getOrRegister<Structure>(category, "${leaf}_vftable") {
                 StructureDataType(category, "${leaf}_vftable", 0, dtm)
             }
@@ -117,7 +118,6 @@ open class VtableSweeper(
                 vftable.describeVxTable(leaf, ClassNaming.VFTABLE, 0L.takeIf { abi.hasRttiHeader })
             }
 
-            val ns = symtab.buildClassNamespaces(qualified.nameSegments)
             val addressPoint = program.layVtable(shape, vftable, qualified, ns, abi = abi, source = SWEPT)
             debug("vtable-reconstructed", "${targets.size} slot(s) typed from targets", addressPoint, qualified)
             laid++
@@ -163,7 +163,7 @@ open class VtableSweeper(
         val subs = program.secondaryVtables(primary.addressPoint.add(slots * ptr), rtti)
             .filter { it.targets.isNotEmpty() }
         subs.forEachIndexed { i, sub ->
-            val vftable = internalVftable(leaf, i, sub.targets, abi)
+            val vftable = internalVftable(leaf, ns, i, sub.targets, abi)
             val vfptrAt = with(abi) { sub.shape.vfptrOffset(program) }
             vftable.describeVxTable(leaf, "${ClassNaming.INTERNAL_VFTABLE} $i", vfptrAt)
             val at = program.layVtable(
@@ -206,7 +206,7 @@ open class VtableSweeper(
                 continue
             }
             val i = laid++
-            val vftable = internalVftable(leaf, i, targets, abi)
+            val vftable = internalVftable(leaf, ns, i, targets, abi)
             val vfptrAt = classStruct?.vfptrOffsetOfBase(base)?.toLong()
             vftable.describeVxTable(leaf, "${ClassNaming.INTERNAL_VFTABLE} $i, for $base", vfptrAt)
             program.layVtable(
@@ -224,16 +224,17 @@ open class VtableSweeper(
 
     /**
      * [leaf]'s secondary [i], `<leaf>_vftable_internal_<i>`, typed off its [targets] like a swept table.
-     * Each gets its own `internal_<i>` category, or a thunk sharing its target's leaf name forks a
-     * `.conflict` per slot (1874 on crypto_mi).
+     * The table sits beside the primary in [ns]'s category, where shift-D finds the class it belongs
+     * to. Its slot definitions each get their own `internal_<i>` category, or a thunk sharing its
+     * target's leaf name forks a `.conflict` per slot (1874 on crypto_mi).
      */
-    private fun internalVftable(leaf: String, i: Int, targets: List<Address>, abi: CxxAbi): Structure {
-        val category = CategoryPath(CategoryPath(ClassNaming.classDataTypesRoot, leaf), "internal_$i")
+    private fun internalVftable(leaf: String, ns: Namespace, i: Int, targets: List<Address>, abi: CxxAbi): Structure {
+        val category = ClassNaming.vftableCategory(ns)
         val name = "${leaf}_vftable_internal_$i"
         val vftable = registry.getOrRegister<Structure>(category, name) {
             StructureDataType(category, name, 0, dtm)
         }
-        if (vftable.numComponents == 0) addSweptSlots(vftable, category, targets, abi)
+        if (vftable.numComponents == 0) addSweptSlots(vftable, CategoryPath(category, "internal_$i"), targets, abi)
         return vftable
     }
 

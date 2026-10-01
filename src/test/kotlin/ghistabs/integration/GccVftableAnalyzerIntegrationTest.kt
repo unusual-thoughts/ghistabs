@@ -1,7 +1,11 @@
 package ghistabs.integration
 
+import ghidra.app.util.NamespaceUtils
 import ghidra.app.util.importer.MessageLog
 import ghidra.program.database.ProgramBuilder
+import ghidra.program.model.data.CategoryPath
+import ghidra.program.model.data.FunctionDefinition
+import ghidra.program.model.data.Pointer
 import ghidra.program.model.data.Structure
 import ghidra.program.model.data.VoidDataType
 import ghidra.program.model.listing.Program
@@ -24,7 +28,8 @@ import org.junit.jupiter.api.Test
  * [GccVftableAnalyzer] over one hand-built Itanium record, `_ZTV3Foo` = `{0, &_ZTI3Foo, Foo::a,
  * Foo::b}`, with no stabs to describe `Foo`: the symbols alone must give it a two-slot
  * `Foo_vftable` at the address point. With stab sections present it must leave the table to the
- * stabs import, and it must not sweep a program twice.
+ * stabs import, and it must not sweep a program twice. A scoped class's tables go where Ghidra's class
+ * scripts read its namespace back from.
  */
 @Tag("integration")
 class GccVftableAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTest() {
@@ -61,7 +66,7 @@ class GccVftableAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTest(
     fun tearDown() = builder.dispose()
 
     private fun Program.fooVftable() =
-        dataTypeManager.getDataType(ClassNaming.vftableCategory("Foo"), "Foo_vftable") as? Structure
+        dataTypeManager.getDataType(ClassNaming.vftableCategory(listOf("Foo")), "Foo_vftable") as? Structure
 
     private fun runAnalyzer() = program.runTransaction("vtable-sweep") {
         GccVftableAnalyzer().added(program, program.memory, TaskMonitor.DUMMY, MessageLog())
@@ -123,4 +128,48 @@ class GccVftableAnalyzerIntegrationTest : AbstractGhidraHeadlessIntegrationTest(
         }
         GccVftableAnalyzer().must("a gcc program must be analyzable") { canAnalyze(program) }
     }
+
+    /**
+     * `ns::Bar`, a primary and one secondary: both tables go under `/ClassDataTypes/ns/Bar/`, which
+     * `RecoveredClassHelper.getClassNamespace` turns back into the namespace that holds their labels.
+     * Under the leaf alone shift-D finds no `Bar` namespace and skips them.
+     */
+    @Test
+    fun filesAScopedClassUnderItsNamespace() {
+        val ztv = 0x401040
+        val zti = 0x401140
+        val (a, b, thunk) = listOf(0x402040, 0x402140, 0x402180)
+        builder.createEmptyFunction("_ZN2ns3Bar1aEv", hex(a), 1, VoidDataType.dataType)
+        builder.createEmptyFunction("_ZN2ns3Bar1bEv", hex(b), 1, VoidDataType.dataType)
+        builder.createEmptyFunction("_ZThn8_N2ns3Bar1aEv", hex(thunk), 1, VoidDataType.dataType)
+        // The primary {a, b}, then the secondary at -8 with the thunk, then the end of the record.
+        builder.setBytes(hex(ztv), le(0) + le(zti) + le(a) + le(b) + le(-8) + le(zti) + le(thunk) + le(0))
+        builder.createLabel(hex(ztv), "_ZTVN2ns3BarE")
+        builder.createLabel(hex(zti), "_ZTIN2ns3BarE")
+
+        runAnalyzer().mustBe(true)
+
+        val category = ClassNaming.vftableCategory(listOf("ns", "Bar"))
+        category.path.mustBe("/ClassDataTypes/ns/Bar")
+        val dtm = program.dataTypeManager
+        val primary = dtm.getDataType(category, "Bar_vftable") as? Structure
+        primary.mustNotBeNull("no ns::Bar vftable under $category")
+        val secondary = dtm.getDataType(category, "Bar_vftable_internal_0") as? Structure
+        secondary.mustNotBeNull("no ns::Bar secondary under $category")
+        // Its slot definitions keep a category of their own, or the thunk's would collide with `a`'s.
+        val thunkSlot = secondary!!.definedComponents.mapNotNull { (it.dataType as? Pointer)?.dataType }
+            .filterIsInstance<FunctionDefinition>().single()
+        thunkSlot.categoryPath.mustBe(CategoryPath(category, "internal_0"))
+
+        val addressPoint = program.addressFactory.defaultAddressSpace.getAddress(ztv + 8L)
+        val label = program.symbolTable.getSymbols(addressPoint).single { it.name == ClassNaming.VFTABLE }
+        program.namespaceOf(primary!!).mustBe(label.parentNamespace)
+        program.namespaceOf(secondary).mustBe(label.parentNamespace)
+    }
+
+    /** What `RecoveredClassHelper.getClassNamespace` makes of [vftable]'s category. */
+    private fun Program.namespaceOf(vftable: Structure) =
+        vftable.categoryPath.path.removePrefix(ClassNaming.classDataTypesRoot.path + "/").replace("/", "::")
+            .let { NamespaceUtils.getNamespaceByPath(this, null, it) }
+            .firstOrNull { !it.isExternal }
 }

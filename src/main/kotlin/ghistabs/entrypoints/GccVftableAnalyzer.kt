@@ -32,7 +32,7 @@ import ghistabs.parse.StabReader
  *   (`PEUtil.isVisualStudioOrClangPe`), so never on a gcc or MinGW binary.
  * - RecoverClassesFromRTTIScript` finds  vtables through the typeinfo graph, so needs Itanium RTTI
  *   and finds nothing in gcc 2.x or under `-fno-rtti`, and recovers whole classes from their
- *   constructors with the decompiler. The `<Class>_vftable` under `/ClassDataTypes/<Class>/`
+ *   constructors with the decompiler. The `<Class>_vftable` under `/ClassDataTypes/<ns>/<Class>/`
  *   and the `vftable` label laid here are the names it uses, so it runs over these tables
  *   rather than beside them.
  *

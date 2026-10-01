@@ -1,6 +1,7 @@
 package ghistabs.integration
 
 import ghidra.app.plugin.core.analysis.AutoAnalysisManager
+import ghidra.app.util.NamespaceUtils
 import ghidra.app.util.demangler.gnu.GnuDemangler
 import ghidra.app.util.importer.MessageLog
 import ghidra.program.model.address.Address
@@ -1558,6 +1559,34 @@ abstract class StabsImportRegressionBase(val binaryName: String, val mode: Mode)
             "${vft.name}: $typed/$slots slots typed"
         }
         untyped.take(10).mustBeEmpty("${untyped.size} of ${vftables.size} vftables are mostly untyped slots")
+    }
+
+    /**
+     * shift-D (`ApplyClassFunctionDefinitionUpdatesScript`) finds the class a vftable belongs to by
+     * reading its category back as a namespace (`RecoveredClassHelper.getClassNamespace`:
+     * `/ClassDataTypes/a/b/C` → `a::b::C`), and then the table among that namespace's `vftable`
+     * labels. So every laid table's category has to name the namespace of the label it is laid under.
+     * Itanium only: a gcc 2.x table gets a label and no struct, its stab's array wins the bytes.
+     */
+    @Test
+    fun laidVftablesMapBackToTheirClass() {
+        val laid = program.symbolTable.symbolIterator.iterator().asSequence()
+            .filter { it.name == ClassNaming.VFTABLE || it.name == ClassNaming.INTERNAL_VFTABLE }
+            .mapNotNull { sym ->
+                val vft = program.listing.getDataAt(sym.address)?.dataType as? Structure ?: return@mapNotNull null
+                (sym.parentNamespace to vft).takeIf { vft.name.contains("_vftable") }
+            }.toList()
+        assumeTrue(laid.isNotEmpty(), "Skipping: no vftable struct laid in this fixture")
+
+        val root = ClassNaming.classDataTypesRoot.path + "/"
+        val astray = laid.mapNotNull { (ns, vft) ->
+            val path = vft.categoryPath.path.takeIf { it.startsWith(root) }?.removePrefix(root)?.replace("/", "::")
+            val back = path?.let { NamespaceUtils.getNamespaceByPath(program, null, it) }.orEmpty()
+                .firstOrNull { !it.isExternal }
+            "${vft.pathName} laid under ${ns.getName(true)} reads back as ${back?.getName(true)}"
+                .takeIf { back != ns }
+        }
+        astray.sorted().take(10).mustBeEmpty("${astray.size} of ${laid.size} vftables don't read back as their class")
     }
 
     /**

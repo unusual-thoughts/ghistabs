@@ -61,9 +61,7 @@ class ClassApplier(
     // before the by-leaf guess, which can only ever be a guess.
     private val LocatedType.qualifiedClassName: String
         get() = qualifiedByType.getOrPut(type.id) {
-            (sequenceOf(type) + members.mapNotNull { types.byId(it) })
-                .firstNotNullOfOrNull { it.demangledClassPath() ?: types.classPathByThisParam[it.id] }
-                ?.qualifiedName
+            statedClassPath(types)?.qualifiedName
                 ?: vtableClassByLeaf[className]?.also { debug("class-scope-from-vtable", "$className -> $it") }
                 ?: className
         }
@@ -97,13 +95,28 @@ class ClassApplier(
         val body get() = located.classBody
         val qualifiedClassName get() = located.qualifiedClassName
 
-        // <Class>_vftable under /ClassDataTypes/<Class>/ — the function-pointer array {vfptr}
+        // <Class>_vftable under /ClassDataTypes/<ns>/<Class>/ — the function-pointer array {vfptr}
         // points at, laid at the vtable's address point (_ZTV + 2*ptrSize). Each slot is
         // Pointer→FunctionDefinition(<sig>) so the decompiler resolves virtual calls and
-        // RecoveredClassHelper / shift-S round-trip. The offset_to_top + rtti header words sit
-        // before the address point as plain Data (no enclosing struct — see buildAndApplyVtable).
-        val vftableCategory get() = ClassNaming.vftableCategory(name)
-        val vftable get() = registry.vftableOf(name)
+        // RecoveredClassHelper / shift-S / shift-D round-trip, which read the class back off the
+        // category. The offset_to_top + rtti header words sit before the address point as plain Data
+        // (no enclosing struct — see buildAndApplyVtable).
+        val vftableCategory by lazy { ClassNaming.vftableCategory(ns) }
+        val vftable: Structure by lazy { registry.vftableOf(located.vftablePath(types)).refiledUnder(vftableCategory) }
+    }
+
+    /**
+     * The class layout filed [this] under the class's stab name; the class's namespace can be named
+     * otherwise, and shift-D reads the class back off the category. libstdc++'s stream classes are
+     * the case: `basic_ostream<char,std::char_traits<char>>` is the stab, but the demangler spells
+     * `_ZNSo…` members `std::ostream::…`, so the namespace, and the category, is `std/ostream` (14 on
+     * crypto_mi gcc421 fullstabs, 20 on locale_test customlibstdcxx). Moved rather than rebuilt: the
+     * class's `{vfptr}` already points at this one. Left where it is if [category] holds one already.
+     */
+    private fun Structure.refiledUnder(category: CategoryPath): Structure = also {
+        if (categoryPath == category) return@also
+        runCatching { setCategoryPath(category) }
+            .onFailure { degradation("vftable-refile-failed", name, "$categoryPath -> $category: ${it.message}") }
     }
 
     /**
